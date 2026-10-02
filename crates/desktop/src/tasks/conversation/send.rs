@@ -65,12 +65,16 @@ pub fn send_in(
 pub fn send_after_turn_in(repo_root: &Path, task: TaskId, id: MessageId) -> Result<Message, SendError> {
   let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
   let stored = db.messages(task).map_err(SendError::Store)?;
-  let mut message = stored
+  let before = stored
     .into_iter()
     .find(|message| message.id() == id)
     .ok_or(SendError::NotUndelivered)?;
+  let mut message = before.clone();
   message.send_after_turn().map_err(|_| SendError::NotUndelivered)?;
-  db.save_deliveries(std::slice::from_ref(&message))
-    .map_err(SendError::Store)?;
+  // The runner may deliver it meanwhile, when the CLI takes it late after all: then it was not sent
+  // again.
+  if !db.change_delivery(&before, &message).map_err(SendError::Store)? {
+    return Err(SendError::NotUndelivered);
+  }
   Ok(message)
 }

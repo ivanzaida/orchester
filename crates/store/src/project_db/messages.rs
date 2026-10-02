@@ -91,6 +91,37 @@ impl ConversationStore for ProjectDb {
     Ok(())
   }
 
+  fn change_delivery(&mut self, before: &Message, changed: &Message) -> Result<bool, StoreError> {
+    let (Some(was), Some(delivery)) = (before.delivery(), changed.delivery()) else {
+      return Err(StoreError::Unrepresentable("an agent's message as delivered"));
+    };
+    let (was, columns) = (DeliveryColumns::of(was), DeliveryColumns::of(delivery));
+    let updated = self.connection.execute(
+      "UPDATE messages SET run_id = ?2, step_execution_id = ?3, invocation_id = ?4, delivered_at = ?5, \
+       acknowledged_at = ?6, arrival = ?7, undelivered_execution = ?8, undelivered_at = ?9, \
+       undelivered_reason = ?10, timing = ?11 WHERE id = ?1 AND delivered_at IS ?12 AND acknowledged_at IS ?13 \
+       AND undelivered_at IS ?14 AND timing = ?15",
+      params![
+        changed.id().to_string(),
+        changed.run().map(|run| run.to_string()),
+        columns.execution,
+        columns.invocation,
+        columns.delivered_at,
+        columns.acknowledged_at,
+        columns.arrival,
+        columns.undelivered_execution,
+        columns.undelivered_at,
+        columns.undelivered_reason,
+        timing_text(changed.timing()),
+        was.delivered_at,
+        was.acknowledged_at,
+        was.undelivered_at,
+        timing_text(before.timing()),
+      ],
+    )?;
+    Ok(updated == 1)
+  }
+
   fn messages(&self, task: TaskId) -> Result<Vec<Message>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
       "SELECT {COLUMNS} FROM messages WHERE task_id = ?1 ORDER BY created_at, rowid"
