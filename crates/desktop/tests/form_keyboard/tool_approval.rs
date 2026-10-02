@@ -3,13 +3,25 @@
 //! transcript's command box, which scrolls instead of cutting it; Copy takes the value as recorded;
 //! and Approve and Deny stay in view in the smallest window.
 
+use std::sync::Arc;
+
 use lurq::{
   app::events::ScrollPhase,
   clipboard::{copy_to_clipboard, read_from_clipboard},
 };
-use orchester_core::run::{CommandShell, NativeCommandAsk, PendingToolApproval};
+use orchester_core::{
+  command::SecretVariable,
+  connection::{
+    claude_approval::{ClaudeApprovalScope, ClaudeAsk},
+    mcp::McpServerName,
+  },
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  run::{ARGUMENTS_CEILING, CommandShell, NativeCommandAsk, PendingToolApproval, recorded_arguments},
+  secret::SecretValue,
+};
 use orchester_desktop::theme::{APPROVAL_VALUE_MAX_HEIGHT, STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT};
 use orchester_store::ProjectDb;
+use serde_json::{Value, json};
 
 use crate::{github::shows, harness::Desktop, native_run::native_run, unreadable_run::at};
 
@@ -78,12 +90,11 @@ const ARGUMENTS_SHOWN: &str = concat!(
 );
 
 /// What an agent asks about; `native` for an agent Orchester runs itself.
-#[derive(Clone, Copy)]
 struct Request {
   command: bool,
   action: &'static str,
   target: Option<&'static str>,
-  scope: Option<&'static str>,
+  scope: Option<String>,
   native: Option<NativeCommandAsk>,
 }
 
@@ -98,7 +109,7 @@ fn approval_dialog(request: Request) -> Desktop {
       invocation: invocation.id,
       agent: "Builder".to_owned(),
       command: request.command,
-      scope: request.scope.map(str::to_owned),
+      scope: request.scope,
       server: "pencil".to_owned(),
       action: request.action.to_owned(),
       target: request.target.map(str::to_owned),
@@ -215,7 +226,7 @@ fn heredoc() -> Desktop {
     command: true,
     action: HEREDOC,
     target: Some(".orchester/worktrees/01J8Z9B2"),
-    scope: Some("Write the shortcut table."),
+    scope: Some("Write the shortcut table.".to_owned()),
     native: None,
   })
 }
@@ -225,7 +236,7 @@ fn large_arguments() -> Desktop {
     command: false,
     action: "batch_design",
     target: Some("H:\\projects\\orchester\\data\\orchester.pen"),
-    scope: Some(ARGUMENTS_RAW),
+    scope: Some(ARGUMENTS_RAW.to_owned()),
     native: None,
   })
 }
@@ -268,13 +279,13 @@ fn tool_approval_large_arguments_read_one_member_a_line_and_scroll() {
 
 #[test]
 fn tool_approval_arguments_that_are_not_json_are_shown_as_recorded() {
-  // Arguments longer than the runner records are cut with an ellipsis and no longer parse.
+  // Before arguments were recorded whole, they were cut with an ellipsis and no longer parse.
   let cut = r#"{"filePath":"H:\\projects\\orchester\\data\\orchester.pen","input":"lbl=I(\"x\"…"#;
   let mut desktop = approval_dialog(Request {
     command: false,
     action: "batch_design",
     target: None,
-    scope: Some(cut),
+    scope: Some(cut.to_owned()),
     native: None,
   });
   assert_whole(&mut desktop, ARGUMENTS, cut);
@@ -318,4 +329,69 @@ fn tool_approval_native_shell_script_and_long_folder_keep_the_buttons_in_view() 
     details.height > viewport.height,
     "the details run past the dialog's middle"
   );
+}
+
+/// The arguments Claude Code's permission prompt records for a `pencil` call with `input`, with
+/// `secret` removed, as the runner stores them.
+fn recorded_for(input: &Value, secret: &str) -> String {
+  let mut permissions = AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::On);
+  permissions.set_interactive_tool_approvals(true);
+  let server = McpServerName::new("pencil").expect("server name");
+  let secret = SecretVariable::new(
+    "PENCIL_TOKEN",
+    Arc::new(SecretValue::new(secret.to_owned()).expect("secret")),
+  );
+  let scope = ClaudeApprovalScope::of(&permissions, &[server])
+    .expect("the step asks before MCP actions")
+    .with_secrets(vec![secret]);
+  let call = json!({"tool_name": "mcp__pencil__batch_design", "input": input, "tool_use_id": "toolu_1"});
+  let ClaudeAsk::Person(request) = scope.classify(&call) else {
+    panic!("the call goes to a person");
+  };
+  request.scope().expect("arguments").to_owned()
+}
+
+fn mcp_arguments(scope: String) -> Desktop {
+  approval_dialog(Request {
+    command: false,
+    action: "batch_design",
+    target: None,
+    scope: Some(scope),
+    native: None,
+  })
+}
+
+#[test]
+fn tool_approval_five_kilobytes_of_arguments_arrive_whole_laid_out_and_without_the_secret() {
+  let token = "pencil-live-7f3a9c2e5b1d";
+  let operations: Vec<String> = (0..100)
+    .map(|line| format!("op{line:03}=I(\"frame\",{{name:\"Row {line}\",width:\"fill_container\"}})"))
+    .collect();
+  let input = json!({
+    "filePath": r"H:\projects\orchester\data\orchester.pen",
+    "operations": operations,
+    "headers": {"Authorization": format!("Bearer {token}")},
+  });
+  let recorded = recorded_for(&input, token);
+  assert!(recorded.len() > 5 * 1024, "{} bytes", recorded.len());
+  assert!(!recorded.contains(token), "the secret is removed before it is recorded");
+  let mut desktop = mcp_arguments(recorded.clone());
+  // The dialog lays out exactly what was recorded: the same JSON, pretty-printed.
+  let value: Value = serde_json::from_str(&recorded).expect("recorded arguments are JSON");
+  let laid_out = serde_json::to_string_pretty(&value).expect("pretty JSON");
+  assert_whole(&mut desktop, ARGUMENTS, &laid_out);
+  assert!(laid_out.contains("op099=I"), "the last operation is shown");
+  assert!(laid_out.contains("\"Authorization\": \"Bearer <redacted>\""));
+  assert!(!shows(&mut desktop, DIALOG, token), "the secret is not in the dialog");
+  assert_scrolls_down(&mut desktop, ARGUMENTS);
+  assert_buttons_in_view_at_minimum_size(&mut desktop);
+}
+
+#[test]
+fn tool_approval_arguments_cut_at_the_ceiling_say_so_under_what_was_kept() {
+  let recorded = recorded_arguments(format!("{{\"text\":\"{}\"}}", "x".repeat(ARGUMENTS_CEILING)));
+  let mut desktop = mcp_arguments(recorded);
+  let kept = format!("{{\n  \"text\": \"{}", "x".repeat(ARGUMENTS_CEILING - 9));
+  assert_whole(&mut desktop, ARGUMENTS, &format!("{kept}\n… cut at 256 KB"));
+  assert_buttons_in_view_at_minimum_size(&mut desktop);
 }

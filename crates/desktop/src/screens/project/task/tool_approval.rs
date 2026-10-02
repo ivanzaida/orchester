@@ -309,8 +309,8 @@ fn cli_details(values: &ValueRows<'_>, column: Column, approval: &PendingToolApp
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP
-/// call, its arguments as one line of JSON, secret values removed and cut at 600 characters when
-/// recorded, shown here in full under their label.
+/// call, its arguments as one line of JSON with secret values removed, recorded whole up to
+/// `ARGUMENTS_CEILING` and shown here in full under their label.
 fn scope_row(values: &ValueRows<'_>, command: bool, scope: &str) -> Element {
   let ctx = values.ctx();
   if command {

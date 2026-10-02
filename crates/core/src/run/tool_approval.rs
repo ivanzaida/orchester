@@ -1,5 +1,6 @@
 //! A single tool call waiting for a person's decision while its agent waits for it. The record
-//! contains only display metadata; it never stores tool arguments or credentials.
+//! holds what the person decides about: the command or tool, its target, and an MCP call's
+//! arguments with secret values removed; never credentials.
 
 use std::str::FromStr;
 
@@ -10,6 +11,33 @@ use crate::{
   time::Timestamp,
 };
 
+/// The most of an MCP call's arguments an approval records, in bytes. Arguments are recorded whole,
+/// so the person reads everything they approve; only a pathological call is cut, and visibly.
+pub const ARGUMENTS_CEILING: usize = 256 * 1024;
+/// Ends arguments cut at [`ARGUMENTS_CEILING`], on a line of its own after the part kept.
+const ARGUMENTS_CUT_MARK: &str = "\n… cut at 256 KB";
+
+/// `arguments` as an approval records them: whole when they fit in [`ARGUMENTS_CEILING`] bytes,
+/// otherwise cut at the last character that fits and marked. Secret values must already be
+/// removed: a cut must never split one.
+pub fn recorded_arguments(mut arguments: String) -> String {
+  if arguments.len() <= ARGUMENTS_CEILING {
+    return arguments;
+  }
+  let end = (0..=ARGUMENTS_CEILING)
+    .rev()
+    .find(|end| arguments.is_char_boundary(*end))
+    .expect("offset 0 is a character boundary");
+  arguments.truncate(end);
+  arguments.push_str(ARGUMENTS_CUT_MARK);
+  arguments
+}
+
+/// The part of recorded arguments kept before their cut, or `None` when they were recorded whole.
+pub fn cut_arguments(recorded: &str) -> Option<&str> {
+  recorded.strip_suffix(ARGUMENTS_CUT_MARK)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingToolApproval {
   pub id: String,
@@ -18,6 +46,8 @@ pub struct PendingToolApproval {
   pub invocation: InvocationId,
   pub agent: String,
   pub command: bool,
+  /// For a command, the reason the agent gave; for an MCP call, its arguments as
+  /// [`recorded_arguments`] keeps them.
   pub scope: Option<String>,
   pub server: String,
   pub action: String,

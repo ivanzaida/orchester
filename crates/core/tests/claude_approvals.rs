@@ -18,6 +18,7 @@ use orchester_core::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess, claude::PermissionFolders,
   },
   resource::CommandEnvironment,
+  run::{ARGUMENTS_CEILING, cut_arguments, recorded_arguments},
 };
 use serde_json::{Value, json};
 
@@ -68,15 +69,8 @@ fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
   assert!(!tool.is_command());
   assert_eq!((tool.server(), tool.action()), ("docs__v2", "write"));
   assert_eq!(tool.target(), Some("notes.md"));
-  // The person sees the arguments too, cut when they are long.
+  // The person sees the arguments too, whole.
   assert_eq!(tool.scope(), Some(r#"{"filePath":"notes.md","text":"x"}"#));
-  let long = call("mcp__docs__write", &json!({"text": "y".repeat(2_000)}));
-  let ClaudeAsk::Person(long) = scope(false, true).classify(&long) else {
-    panic!("a tool of an invocation server goes to a person");
-  };
-  let shown = long.scope().expect("arguments");
-  assert_eq!(shown.chars().count(), 601);
-  assert!(shown.ends_with('…'));
   assert_eq!(scope(true, false).classify(&write), ClaudeAsk::Refused);
   assert_eq!(
     scope(true, true).classify(&call("mcp__other__write", &json!({}))),
@@ -98,31 +92,81 @@ fn claude_approvals_route_only_what_the_permissions_leave_to_a_person() {
   };
 }
 
+fn secret(name: &str, value: &str) -> SecretVariable {
+  SecretVariable::new(
+    name,
+    std::sync::Arc::new(orchester_core::secret::SecretValue::new(value.to_owned()).expect("secret")),
+  )
+}
+
+/// The arguments a person is shown for an MCP call with `input`, `secrets` removed.
+fn shown_with(secrets: Vec<SecretVariable>, input: &Value) -> String {
+  let ClaudeAsk::Person(request) = scope(false, true)
+    .with_secrets(secrets)
+    .classify(&call("mcp__docs__write", input))
+  else {
+    panic!("a tool of an invocation server goes to a person");
+  };
+  request.scope().expect("arguments").to_owned()
+}
+
 #[test]
-fn claude_approvals_show_mcp_arguments_without_secrets_that_json_escapes_or_the_cut_splits() {
-  let secret = |name: &str, value: &str| {
-    SecretVariable::new(
-      name,
-      std::sync::Arc::new(orchester_core::secret::SecretValue::new(value.to_owned()).expect("secret")),
-    )
-  };
+fn claude_approvals_record_long_mcp_arguments_whole() {
+  let lines: Vec<String> = (0..100)
+    .map(|line| format!("line {line:02}: {}", "x".repeat(50)))
+    .collect();
+  let input = json!({"filePath": "notes.md", "lines": lines, "depth": 3});
+  let raw = input.to_string();
+  assert!(raw.len() > 5 * 1024, "{} bytes", raw.len());
+  let shown = shown_with(Vec::new(), &input);
+  assert_eq!(shown, raw, "5 KB of arguments arrive whole");
+  assert_eq!(cut_arguments(&shown), None);
+}
+
+#[test]
+fn claude_approvals_show_mcp_arguments_without_secrets_that_json_escapes() {
   let quoted = r#"to"k\en"#;
-  let long = "s".repeat(40);
-  let scope = scope(false, true).with_secrets(vec![secret("QUOTED", quoted), secret("LONG", &long)]);
-  let shown = |input: &Value| {
-    let ClaudeAsk::Person(request) = scope.classify(&call("mcp__docs__write", input)) else {
-      panic!("a tool of an invocation server goes to a person");
-    };
-    request.scope().expect("arguments").to_owned()
-  };
-  let escaped = shown(&json!({"header": format!("Bearer {quoted}")}));
+  let escaped = shown_with(
+    vec![secret("QUOTED", quoted)],
+    &json!({"header": format!("Bearer {quoted}")}),
+  );
   assert_eq!(escaped, r#"{"header":"Bearer <redacted>"}"#);
-  // The secret starts before the cut and ends after it: none of it is shown.
-  let text = format!("{}{long}", "x".repeat(580));
-  let cut = shown(&json!({"text": text}));
-  assert!(cut.ends_with('…'), "{cut}");
-  assert!(!cut.contains("ssss"), "no part of the secret remains: {cut}");
-  assert!(cut.contains("<redacted>") || !cut.contains('s'), "{cut}");
+}
+
+#[test]
+fn claude_approvals_remove_a_secret_deep_inside_long_arguments() {
+  let token = "sk-live-0123456789abcdef";
+  let text = format!(
+    "{}Authorization: Bearer {token}{}",
+    "a".repeat(8_000),
+    "b".repeat(8_000)
+  );
+  let shown = shown_with(vec![secret("TOKEN", token)], &json!({"request": text}));
+  assert!(!shown.contains(token), "the secret is not shown");
+  assert!(shown.contains("Authorization: Bearer <redacted>"));
+  assert!(
+    shown.ends_with(&format!("{}\"}}", "b".repeat(8_000))),
+    "nothing after it is lost"
+  );
+}
+
+#[test]
+fn claude_approvals_cut_only_pathological_arguments_visibly_and_never_inside_a_secret() {
+  let long = "s".repeat(40);
+  // The secret starts before the ceiling and ends after it: it is removed before the cut.
+  let text = format!("{}{long}{}", "x".repeat(ARGUMENTS_CEILING - 30), "y".repeat(1_000));
+  let shown = shown_with(vec![secret("LONG", &long)], &json!({"text": text}));
+  let kept = cut_arguments(&shown).expect("arguments past the ceiling are cut");
+  assert!(shown.ends_with("\n… cut at 256 KB"), "the cut is marked");
+  assert!(kept.len() <= ARGUMENTS_CEILING && kept.len() > ARGUMENTS_CEILING - 4);
+  assert!(kept.contains("<redacted>"));
+  assert!(!shown.contains("ssss"), "no part of the secret remains");
+  // A cut never splits a character.
+  let wide = recorded_arguments("é".repeat(ARGUMENTS_CEILING));
+  assert_eq!(cut_arguments(&wide).expect("cut").len(), ARGUMENTS_CEILING);
+  let odd = recorded_arguments(format!("x{}", "é".repeat(ARGUMENTS_CEILING)));
+  assert_eq!(cut_arguments(&odd).expect("cut").len(), ARGUMENTS_CEILING - 1);
+  assert_eq!(recorded_arguments("{}".to_owned()), "{}");
 }
 
 #[test]

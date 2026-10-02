@@ -320,11 +320,15 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
 - Design: no frame draws a long value; the block follows 04.H9 `bwWuT` in `coKjY` (label above a canvas box). A
   designer should draw it.
-- Left: the runner still cuts MCP arguments at 600 characters when it records them
-  (`claude_approval::SHOWN_ARGUMENTS`), so very long arguments show cut and raw; a command's *Agent's note* still cuts
-  with an ellipsis.
+- MCP arguments are recorded whole (they were cut at 600 characters): Claude Code's permission prompt removes secret
+  values from every text in them first, then `run::recorded_arguments` keeps them whole up to `ARGUMENTS_CEILING`
+  (256 KB). Past it they are cut at a character boundary and end with a visible `… cut at 256 KB` line; the dialog lays
+  out the part kept and ends it with that line (`runs.toolApproval.argumentsCut`). Activity never showed MCP
+  arguments (it names a tool by its file path), and the approval row's `scope` column has no size limit, so neither
+  changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
+- Left: a command's *Agent's note* still cuts with an ellipsis.
 - Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
-  writes the clipboard and restores it).
+  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`.
 
 ORC-57 · Native agent P1b: core native module
 

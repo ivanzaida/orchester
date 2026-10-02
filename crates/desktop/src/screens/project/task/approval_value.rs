@@ -13,6 +13,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::run::{ARGUMENTS_CEILING, cut_arguments};
 
 use crate::ui::{
   command_row::{CommandPlace, Copied, command_row, laid_out_row},
@@ -64,10 +65,20 @@ impl<'a> ValueRows<'a> {
   }
 
   /// An MCP call's arguments under `label`: JSON one member a line when they parse, otherwise as
-  /// recorded (they are cut when longer than the runner records). Copy takes them as recorded.
+  /// recorded. Arguments cut when they were recorded keep the part before the cut laid out, and
+  /// say where they were cut. Copy takes them as recorded.
   pub(super) fn arguments(&self, label: &str, arguments: &str) -> Element {
     let id = Self::ARGUMENTS;
-    let readable = readable_json(arguments);
+    let readable = match cut_arguments(arguments) {
+      Some(kept) => {
+        let kilobytes = (ARGUMENTS_CEILING / 1024).to_string();
+        let cut = self
+          .ctx
+          .t_args("runs.toolApproval.argumentsCut", [("kilobytes", kilobytes.as_str())]);
+        Some(format!("{}\n{cut}", lay_out_json(kept)))
+      }
+      None => readable_json(arguments),
+    };
     let row = laid_out_row(
       self.ctx,
       (id.into(), format!("{id}-copy").into()),
@@ -104,8 +115,15 @@ fn fits_inline(value: &str) -> bool {
 /// level, a space after each colon. Only the whitespace between tokens changes, so every key,
 /// string and number reads exactly as recorded and in its recorded order.
 fn readable_json(raw: &str) -> Option<String> {
-  // What does not parse, such as arguments cut when they were recorded, is shown as recorded.
+  // What does not parse, such as arguments an older version cut when it recorded them, is shown
+  // as recorded.
   serde_json::from_str::<serde_json::Value>(raw).ok()?;
+  Some(lay_out_json(raw))
+}
+
+/// [`readable_json`]'s layout of `raw`, which need not be whole: the part of JSON before a cut is
+/// laid out as far as it goes.
+fn lay_out_json(raw: &str) -> String {
   let mut layout = JsonLayout::default();
   let mut chars = raw.chars().peekable();
   while let Some(c) = chars.next() {
@@ -135,7 +153,7 @@ fn readable_json(raw: &str) -> Option<String> {
       c => layout.text.push(c),
     }
   }
-  Some(layout.text)
+  layout.text
 }
 
 /// The text [`readable_json`] writes, and where it is in it.
