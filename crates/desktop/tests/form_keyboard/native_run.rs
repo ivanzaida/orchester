@@ -3,9 +3,16 @@
 //! not be enforced. Native agents do not run in this version, so the run, its invocation, its transcript
 //! and its pending approval are seeded into the project database as the runner would record them.
 
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use std::{
+  collections::BTreeMap,
+  fs,
+  path::{Path, PathBuf},
+  sync::Arc,
+  time::Duration,
+};
 
 use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentProvider, EndpointPreset, ModelSource, NativeModels,
     invocation::Platform,
@@ -26,12 +33,14 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
+use orchester_desktop::programs::Programs;
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
   native_connections::{NativeSeed, key_secret, model, native_connection, profile},
+  task_run::has,
   unreadable_run::{at, name, started},
 };
 
@@ -321,26 +330,51 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
   assert!(shows(
     &mut desktop,
     "activity-step-header",
-    "DeepSeek / deepseek-v4-pro · native"
+    "OpenAI API / deepseek-v4-pro · native"
   ));
   assert!(shows(&mut desktop, panel, "Builder · deepseek-v4-pro"));
   assert!(shows(&mut desktop, panel, "This computer (Orchester)"));
+  assert!(shows(&mut desktop, panel, "Endpoint now"));
   assert!(shows(&mut desktop, panel, "https://api.deepseek.com"));
   assert!(shows(&mut desktop, panel, "Stays on · off not enforceable"));
   assert!(shows(&mut desktop, panel, "3 · 1 denied"));
   assert!(shows(&mut desktop, panel, "the usage the endpoint reports"));
 }
 
+/// Git as the Summary of a finished run asks it what the run left behind: no worktree, no branch.
+/// Any other program was never meant to run.
+struct NothingLeft;
+
+impl CommandRunner for NothingLeft {
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    let git = command
+      .program()
+      .file_stem()
+      .is_some_and(|program| program.eq_ignore_ascii_case("git"));
+    assert!(git, "`{}` is not git", command.program().display());
+    Ok(CommandOutput {
+      code: Some(0),
+      stdout: String::new(),
+      stderr: String::new(),
+    })
+  }
+}
+
 #[test]
 fn native_run_summary_says_what_orchester_could_not_enforce() {
-  let mut desktop = Desktop::with_seeded_project(|repo| {
-    let (mut run, invocation) = native_run(repo);
-    let mut db = ProjectDb::open(repo).expect("open the project");
-    let events = run
-      .complete_step(invocation.execution, at(40))
-      .expect("complete the step");
-    db.append_events(&run, &events).expect("append");
-  });
+  let mut desktop = Desktop::with_runner_and_programs(
+    PathBuf::from("no-runner.exe"),
+    Programs::with_runner(Arc::new(NothingLeft)),
+    |repo| fs::create_dir_all(repo.join(".git")).expect("create .git"),
+    |repo| {
+      let (mut run, invocation) = native_run(repo);
+      let mut db = ProjectDb::open(repo).expect("open the project");
+      let events = run
+        .complete_step(invocation.execution, at(40))
+        .expect("complete the step");
+      db.append_events(&run, &events).expect("append");
+    },
+  );
   open_task(&mut desktop);
   desktop.wait_for("task-not-enforced");
   let note = "task-not-enforced";
@@ -364,5 +398,7 @@ fn native_run_summary_says_what_orchester_could_not_enforce() {
   let (ready, card) = (desktop.bounds("task-ready-notice"), desktop.bounds(note));
   assert!(card.y > ready.y, "the note follows the readiness card");
   desktop.click("task-not-enforced-profile");
-  desktop.wait_until("the profile opens", |desktop| shows(desktop, "agent-editor", "Builder"));
+  desktop.wait_until("the profile opens", |desktop| {
+    has(desktop, "agent-editor") && shows(desktop, "agent-editor", "Builder")
+  });
 }

@@ -22,10 +22,10 @@
 //!   files.
 //! - Native agents (`docs/architecture/native-agent.md` §5.4) are enforced by Orchester itself, alike on Windows and
 //!   macOS: its file tools stay in the worktree (and the writable folders), its write tools are withheld from a
-//!   read-only step, and every command outside the allowed list and the known-safe read-only ones asks a person. It has
-//!   no sandbox for commands, so it can neither confine any command to the worktree nor keep commands off the network.
-//!   Native agents do not run in this version yet ([`AgentProvider::runs_agents`]); these rows say how they are
-//!   enforced once they do.
+//!   read-only step, and every command outside the allowed list asks a person, except known-safe read-only ones once
+//!   the list has an entry. It has no sandbox for commands, so it can neither confine any command to the worktree nor
+//!   keep commands off the network. Native agents do not run in this version yet ([`AgentProvider::runs_agents`]);
+//!   these rows say how they are enforced once they do.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -151,8 +151,9 @@ pub enum Mechanism {
   NativeFileScopeFolders,
   /// Orchester asks a person before every command.
   NativeCommandApprovals,
-  /// Orchester runs the listed and the known-safe read-only commands, unconfined, and asks a person
-  /// about any other.
+  /// Orchester runs the listed commands, unconfined, and asks a person about any other. Known-safe
+  /// read-only commands run too once the list has an entry; with an empty list every command asks
+  /// (`crate::native::command::CommandPolicy`).
   NativeCommandList,
   /// Commands the native agent runs reach the network as the OS lets them.
   NativeNetworkUnrestricted,

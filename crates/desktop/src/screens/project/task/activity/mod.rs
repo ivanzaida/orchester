@@ -30,10 +30,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  connection::{AgentProvider, EndpointPreset},
-  id::StepExecutionId,
-};
+use orchester_core::{connection::AgentProvider, id::StepExecutionId};
 use parking_lot::Mutex;
 
 use self::{
@@ -359,16 +356,14 @@ impl ActivityTab {
 }
 
 /// The CLI or model API and the model an agent runs on, as the design writes it ("Codex / Sol",
-/// "DeepSeek / deepseek-v4-pro"); the model alone once the profile's connection is gone.
-pub(super) fn engine(
-  ctx: &Ctx,
-  (provider, preset): (Option<AgentProvider>, Option<EndpointPreset>),
-  model: &str,
-) -> Arc<str> {
-  let name = match (provider, preset) {
-    (Some(_), Some(EndpointPreset::DeepSeek)) => ctx.t("connections.native.preset.deepseekTitle"),
-    (Some(provider), _) => ctx.t(provider_short_key(provider)),
-    (None, _) => return model.into(),
-  };
-  ctx.t_args("runs.activity.engine", [("provider", &*name), ("model", model)])
+/// "OpenAI API / deepseek-v4-pro"); the model alone once the profile's connection is gone. A
+/// connection keeps its provider, so naming it from the connection as it is now names what ran.
+pub(super) fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
+  match provider {
+    Some(provider) => ctx.t_args(
+      "runs.activity.engine",
+      [("provider", &*ctx.t(provider_short_key(provider))), ("model", model)],
+    ),
+    None => model.into(),
+  }
 }

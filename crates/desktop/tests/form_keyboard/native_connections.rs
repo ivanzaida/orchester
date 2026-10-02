@@ -457,12 +457,10 @@ fn native_profile_permissions_read_enforced_by_orchester() {
   assert!(!shows(&mut desktop, ENFORCEMENT, "Not enforced yet"));
   // Ask before commands is available; any command is not, with the reason; network is locked on.
   assert!(has(&mut desktop, "agent-permission-ask"));
-  assert!(
-    desktop
-      .tree
-      .root()
-      .is_some_and(|root| contains_text(root, "Listed and known-safe read-only commands run."))
-  );
+  assert!(desktop.tree.root().is_some_and(|root| contains_text(
+    root,
+    "Listed commands run, and once a command is listed, known-safe read-only ones too."
+  )));
   assert!(desktop.tree.root().is_some_and(|root| contains_text(
     root,
     "Unavailable on this connection: Anthropic API (native) can’t confine commands to the worktree."
@@ -537,4 +535,42 @@ fn native_connection_keeps_a_run_from_starting() {
   for task in db.tasks().expect("tasks") {
     assert!(db.runs_of_task(task.id()).expect("runs").is_empty(), "no run started");
   }
+}
+
+/// With nothing listed every command asks, known-safe ones too: the panel does not say they run.
+#[test]
+fn native_profile_with_no_listed_command_says_every_command_asks() {
+  let mut seeded = None;
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let key = key_secret(&mut db, "ANTHROPIC_API_KEY", Environment::Development, false);
+    let connection = native_connection(
+      &mut db,
+      NativeSeed {
+        name: "Claude API · Kontur",
+        provider: AgentProvider::AnthropicApi,
+        preset: EndpointPreset::Official,
+        url: "https://api.anthropic.com",
+        key,
+        models: official_models(),
+        check: None,
+      },
+    );
+    seeded = Some(profile(&mut db, "Reviewer", connection, "claude-opus-5-5", read_only()));
+  });
+  let reviewer = seeded.expect("seeded");
+  desktop.wait_for("nav-agents");
+  desktop.click("nav-agents");
+  let item = format!("agent-{reviewer}");
+  desktop.wait_for(&item);
+  desktop.click(&item);
+  desktop.wait_for(BLOCKED);
+  desktop.press("agent-tab-permissions");
+  desktop.wait_for(ENFORCEMENT);
+  assert!(shows(
+    &mut desktop,
+    ENFORCEMENT,
+    "no command listed · every command asks you"
+  ));
+  assert!(!shows(&mut desktop, ENFORCEMENT, "known-safe commands run"));
 }

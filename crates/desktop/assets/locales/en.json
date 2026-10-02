@@ -882,7 +882,7 @@
         "cachedAtMost": "≤ {{count}} · not counted",
         "runs": "Runs",
         "runsHere": "This computer (Orchester)",
-        "endpoint": "Endpoint",
+        "endpointNow": "Endpoint now",
         "network": "Network",
         "networkStaysOn": "Stays on · off not enforceable",
         "networkOn": "On",
@@ -1678,7 +1678,7 @@
           "title": "Allowed commands",
           "detail": "Only these commands run. Anything else is denied and the agent is told why.",
           "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first.",
-          "nativeDetail": "Listed and known-safe read-only commands run. Every other command asks you first."
+          "nativeDetail": "Listed commands run, and once a command is listed, known-safe read-only ones too. Every other command asks you first."
         },
         "any": {
           "title": "Any command in the worktree",
@@ -1860,6 +1860,7 @@
         "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
         "nativeCommandApprovals": "Orchester asks you before each command",
         "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
+        "nativeCommandListEmpty": "no command listed · every command asks you",
         "nativeNetwork": "commands keep the network · no web tools"
       },
       "problem": {
@@ -2148,6 +2149,9 @@
       "inUse": "{{profiles}} uses {{model}}. Switch to another model before removing it.",
       "idInUse": "{{profile}} uses {{model}}. Switch to another model before changing its id.",
       "usedDropped": "{{profile}} uses {{model}}, which is no longer listed. Switch to another model first.",
+      "idInUseByStep": "Step {{step}} of {{pipeline}} runs on {{model}}. Switch it to another model before changing its id.",
+      "usedDroppedByStep": "Step {{step}} of {{pipeline}} runs on {{model}}, which is no longer listed. Switch it to another model first.",
+      "stepUser": "{{pipeline}} · {{step}}",
       "invalidId": "Enter the model id as the API names it, without spaces.",
       "listedAlready": "{{model}} is listed already.",
       "invalidTokens": "Enter a whole number of tokens, or leave it empty.",

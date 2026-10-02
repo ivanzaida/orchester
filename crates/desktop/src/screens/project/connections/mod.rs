@@ -73,7 +73,7 @@ use super::{
 use crate::{
   activity::{OperationSpec, operations},
   background,
-  connections::data::{ProfileUse, ProjectConnections},
+  connections::{data::ProjectConnections, model_uses::ModelUse},
   messages::{self, Message},
   navigation::route::{ConnectionTab, Page, Route},
   secrets::Vault,
@@ -166,8 +166,8 @@ pub struct DialogContext {
   pub mcp_taken: Vec<McpServerName>,
   /// The secrets an MCP server or a native connection's key can come from.
   pub secrets: Arc<Vec<Secret>>,
-  /// The profiles that use the connections, with their models.
-  pub uses: Arc<Vec<ProfileUse>>,
+  /// Who runs on which model of each agent connection.
+  pub model_uses: Arc<Vec<ModelUse>>,
   /// Where a native connection's new key secret goes.
   pub vault: Vault,
   /// The project's repository link, if it has one.
@@ -405,8 +405,8 @@ impl ConnectionsScreen {
         self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<NativeDialog>(&key, ())
       }
-      DialogMode::NativeModels(connection) => {
-        let key = format!("native-models-{}", connection.id());
+      DialogMode::NativeModels(_) => {
+        let key = dialog_key(&mode);
         self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<ModelsDialog>(&key, ())
       }
@@ -469,7 +469,7 @@ impl ConnectionsScreen {
       taken,
       mcp_taken,
       secrets: data.secrets.clone(),
-      uses: data.uses.clone(),
+      model_uses: data.model_uses.clone(),
       vault,
       link: data.link.clone(),
       close: Arc::new(move || close.set(DialogMode::Closed)),
@@ -526,9 +526,8 @@ impl ConnectionsScreen {
 fn dialog_key(mode: &DialogMode) -> String {
   match mode {
     DialogMode::EditAgent(connection) => format!("connection-dialog-{}", connection.id()),
-    DialogMode::EditNative(connection) | DialogMode::NativeModels(connection) => {
-      format!("native-dialog-{}", connection.id())
-    }
+    DialogMode::EditNative(connection) => format!("native-dialog-{}", connection.id()),
+    DialogMode::NativeModels(connection) => format!("native-models-{}", connection.id()),
     DialogMode::AddNative(provider) => format!("native-dialog-add-{provider:?}"),
     DialogMode::EditGitHub(connection) => format!("github-dialog-{}", connection.id()),
     DialogMode::AddGitHub => "github-dialog-add".to_owned(),

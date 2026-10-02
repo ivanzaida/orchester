@@ -1,6 +1,6 @@
 //! What the invocation panel adds for an agent Orchester runs itself (04.H10 `f0xJK`): that it ran on
-//! this computer and which model API it reached, whether network stayed on, and its tool calls with
-//! those that were denied. Its agent reads with its model only: the endpoint row names the API.
+//! this computer, the endpoint its connection names now (an invocation records none), whether network
+//! stayed on, and its tool calls with those that were denied. Its agent reads with its model only.
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{connection::stream::CommandStatus, id::InvocationId};
@@ -24,13 +24,13 @@ pub(super) fn launch_rows(ctx: &Ctx, step: &StepView) -> Vec<Element> {
     &ctx.t("runs.activity.panel.runs"),
     &ctx.t("runs.activity.panel.runsHere"),
   )];
-  rows.extend(step.endpoint.as_ref().map(|endpoint| {
-    styled_property(
-      &ctx.t("runs.activity.panel.endpoint"),
-      &endpoint.base_url,
-      ValueStyle::Path,
-    )
-  }));
+  // The invocation records no endpoint: the row says it is the connection's, as it is now.
+  rows.extend(
+    step
+      .endpoint
+      .as_ref()
+      .map(|endpoint| styled_property(&ctx.t("runs.activity.panel.endpointNow"), endpoint, ValueStyle::Path)),
+  );
   rows
 }
 

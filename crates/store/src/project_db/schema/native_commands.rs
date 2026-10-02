@@ -10,5 +10,5 @@ WHEN NEW.native_shell IS NOT NULL AND NEW.native_time_limit IS NULL
 BEGIN SELECT RAISE(ABORT, 'a native shell needs a native time limit'); END;
 CREATE TRIGGER native_command_approvals_immutable BEFORE UPDATE ON tool_approvals
 WHEN NEW.native_shell IS NOT OLD.native_shell OR NEW.native_time_limit IS NOT OLD.native_time_limit
-BEGIN SELECT RAISE(ABORT, 'approval scope cannot change'); END;
+BEGIN SELECT RAISE(ABORT, 'a native command keeps the shell and time limit it was requested with'); END;
 ";

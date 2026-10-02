@@ -24,7 +24,7 @@ use orchester_core::{
 
 use super::{dialog_frame::BUTTON_HEIGHT, model_text};
 use crate::{
-  connections::native::{ModelUse, keep_used},
+  connections::model_uses::{ModelUse, ModelUser, UsedKeys, keep_used},
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -36,6 +36,12 @@ use crate::{
     pressable::{Ring, keyboard_stop},
     status_label::compact_status_label,
   },
+};
+
+/// What the open row says when it would change the id of a model something uses.
+const ID_KEYS: UsedKeys = UsedKeys {
+  profile: "connections.models.idInUse",
+  step: "connections.models.idInUseByStep",
 };
 
 /// Height of an effort chip and of a row's Edit and Remove (`bpmzN`).
@@ -171,11 +177,11 @@ impl ModelEditor {
   /// A model as it reads: id, default label, source, limits and efforts, Edit and Remove.
   fn row(&self, ctx: &Ctx, props: &ModelEditorProps, model: &NativeModel, actions: bool) -> Element {
     let id = model.id().as_str();
-    let users: Vec<&str> = props
+    let users: Vec<Arc<str>> = props
       .uses
       .iter()
       .filter(|used| &used.model == model.id())
-      .map(|used| &*used.role)
+      .map(|used| user_name(ctx, &used.user))
       .collect();
     let title = Row::new()
       .spacing(SpacingSize::Sm)
@@ -300,7 +306,14 @@ impl ModelEditor {
           .id("model-remove")
           .in_form()
           .height(Dimension::Px(BUTTON_HEIGHT))
-          .on_click(remove(&props.models, id.clone()))
+          .on_click({
+            // The row being edited is gone with its model, so nothing is open for editing.
+            let (remove, editing) = (remove(&props.models, id.clone()), self.editing.clone());
+            move || {
+              remove();
+              editing.set(Editing::None);
+            }
+          })
           .render(ctx),
       ),
       _ => None,
@@ -385,7 +398,7 @@ impl ModelEditor {
       .iter()
       .map(|row| if row.id() == edited { model.clone() } else { row.clone() })
       .collect();
-    keep_used(&after, uses, "connections.models.idInUse").map_err(Some)?;
+    keep_used(&after, uses, ID_KEYS).map_err(Some)?;
     Ok(model)
   }
 }
@@ -405,6 +418,17 @@ fn tokens(text: &str) -> Result<Option<NonZeroU32>, Option<Message>> {
 fn remove(models: &Signal<ModelRows>, id: ModelId) -> impl Fn() + Send + Sync + 'static {
   let models = models.clone();
   move || models.update(|rows| rows.0.retain(|model| model.id() != &id))
+}
+
+/// A profile by its role, a pipeline step as "Feature delivery · Implement".
+fn user_name(ctx: &Ctx, user: &ModelUser) -> Arc<str> {
+  match user {
+    ModelUser::Profile(role) => role.clone(),
+    ModelUser::Step { pipeline, step } => ctx.t_args(
+      "connections.models.stepUser",
+      [("pipeline", &**pipeline), ("step", &**step)],
+    ),
+  }
 }
 
 fn small_button(ctx: &Ctx, id: String, key: &str, glyph: Icon) -> ActionButton {

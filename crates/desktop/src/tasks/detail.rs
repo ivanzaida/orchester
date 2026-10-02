@@ -6,7 +6,7 @@
 use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind, EndpointPreset},
+  connection::{AgentProvider, ConnectionKind},
   conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -43,8 +43,9 @@ pub struct StepView {
   pub tool_step: bool,
   /// The agent CLI of the profile version's connection, while that connection exists.
   pub provider: Option<AgentProvider>,
-  /// The model API of that connection when it is a native one.
-  pub endpoint: Option<NativeEndpoint>,
+  /// The base URL of that connection's model API, as the connection is now, when it is a native one:
+  /// an invocation does not record the endpoint it reached.
+  pub endpoint: Option<Arc<str>>,
   pub model: Option<Arc<str>>,
   /// What the step's agent may do in this run; `None` for a tool step, or when its profile version
   /// is gone.
@@ -57,13 +58,6 @@ pub struct StepView {
   pub failure: Option<StepFailure>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
-}
-
-/// The model API a native connection reaches, as the task page names it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativeEndpoint {
-  pub preset: EndpointPreset,
-  pub base_url: Arc<str>,
 }
 
 /// The latest run of a task.
@@ -383,8 +377,8 @@ fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreErro
   )
 }
 
-/// The agent CLI of a connection and, for a native one, its model API.
-type Reached = (Option<AgentProvider>, Option<NativeEndpoint>);
+/// The agent CLI of a connection and, for a native one, the base URL of its model API.
+type Reached = (Option<AgentProvider>, Option<Arc<str>>);
 
 /// An agent step's role, CLI and model API, and permissions.
 type AgentStep = (Option<Arc<str>>, Reached, Option<RunPermissions>);
@@ -414,10 +408,7 @@ fn reached(db: &ProjectDb, connection: ConnectionId) -> Result<Reached, StoreErr
     ConnectionKind::Agent(provider) => Some(*provider),
     ConnectionKind::GitHub { .. } => None,
   };
-  let endpoint = connection.endpoint().api().map(|api| NativeEndpoint {
-    preset: api.preset(),
-    base_url: api.base_url().as_str().into(),
-  });
+  let endpoint = connection.endpoint().api().map(|api| api.base_url().as_str().into());
   Ok((provider, endpoint))
 }
 

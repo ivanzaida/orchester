@@ -22,7 +22,10 @@ use orchester_exec::launch::{self, Launch};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::probe;
+use super::{
+  model_uses::{self, ModelUse},
+  probe,
+};
 use crate::{
   agents::data::profiles,
   messages::{self, Message},
@@ -49,6 +52,8 @@ pub struct ProjectConnections {
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<ProfileUse>>,
+  /// Who runs on which model of each agent connection.
+  pub model_uses: Arc<Vec<ModelUse>>,
   pub link: Option<Arc<RepositoryLink>>,
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
 }
@@ -99,6 +104,7 @@ impl ProjectConnections {
       mcp: Arc::new(store.mcp_servers()?),
       secrets: Arc::new(store.secrets()?),
       uses: Arc::new(uses),
+      model_uses: Arc::new(model_uses::load(store)?),
       link: store.repository_link()?.map(Arc::new),
       launches: Arc::new(launches),
     })

@@ -23,7 +23,9 @@ impl ProjectDb {
 
   fn pending_tool_approvals_for(&self, run: Option<RunId>) -> Result<Vec<PendingToolApproval>, StoreError> {
     let mut query = self.connection.prepare(
-      "SELECT id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, command,        scope, native_shell, native_time_limit        FROM tool_approvals WHERE state = 'pending' AND (?1 IS NULL OR run_id = ?1) ORDER BY requested_at, id",
+      "SELECT id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, command, \
+       scope, native_shell, native_time_limit \
+       FROM tool_approvals WHERE state = 'pending' AND (?1 IS NULL OR run_id = ?1) ORDER BY requested_at, id",
     )?;
     let rows = query
       .query_map([run.map(|id| id.to_string())], |row| {
@@ -52,7 +54,9 @@ impl ProjectDb {
   pub fn request_tool_approval(&mut self, approval: &PendingToolApproval) -> Result<(), StoreError> {
     let native = approval.native.as_ref();
     self.connection.execute(
-      "INSERT INTO tool_approvals (id, run_id, step_execution_id, invocation_id, agent, server, action,        target, requested_at, command, scope, native_shell, native_time_limit)        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+      "INSERT INTO tool_approvals (id, run_id, step_execution_id, invocation_id, agent, server, action, \
+       target, requested_at, command, scope, native_shell, native_time_limit) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
       params![
         approval.id,
         approval.run.to_string(),

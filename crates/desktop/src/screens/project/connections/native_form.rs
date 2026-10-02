@@ -28,7 +28,7 @@ use super::{
   status::status_label,
 };
 use crate::{
-  connections::native::model_uses,
+  connections::model_uses::of_connection,
   messages::Message,
   screens::project::secrets::labels::environment_key,
   theme::{ExtraSpacing, ExtraTypography},
@@ -312,7 +312,7 @@ impl NativeDialog {
   /// test.
   fn models_section(&self, ctx: &mut Ctx) -> Element {
     let uses = match &self.context.mode {
-      DialogMode::EditNative(connection) => model_uses(&self.context.uses, connection.id()),
+      DialogMode::EditNative(connection) => of_connection(&self.context.model_uses, connection.id()),
       _ => Vec::new(),
     };
     let editor = ctx.mount_keyed::<ModelEditor>(

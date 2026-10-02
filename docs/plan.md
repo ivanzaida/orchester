@@ -242,25 +242,41 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
   start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
   what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`, §7; it records
   `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
-  `ModelSource::Endpoint`). A native command's approval is recorded with `PendingToolApproval::native` (the
-  `CommandShell` and the time limit), which 04.H9 shows. The prompt must honour
-  `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel already shows.
+  `ModelSource::Endpoint`). Further notes for this task:
+  - A native command's approval is recorded with `PendingToolApproval::native` (the `CommandShell` and the time
+    limit), which 04.H9 shows. Its `action` (the full shell string) and `target` are redacted as the CLI path does
+    with `self.redact` in `step/approval.rs` before they are stored.
+  - The connection's models and the loop's types meet here: `connection::Effort` (`as_str`) becomes the
+    `effort: Option<String>` of `native::model::ModelRequest` and `native::session::LoopSettings`, from the profile's
+    effort or the connection's `NativeModels::default_effort`; a fetched `native::model::RemoteModel` (`efforts:
+    Vec<String>`, `context_window: Option<u64>`) becomes a `NativeModel` with `ModelSource::Endpoint`, dropping
+    effort names `Effort` does not know and limits that do not fit `NonZeroU32`; `NativeModel::context_window`
+    becomes `LoopSettings::context_window` (`DEFAULT_CONTEXT_WINDOW` when unknown).
+  - The invocation records the endpoint and the effort it used, so 04.H10's panel can show what the run used
+    instead of the connection as it is now (*Endpoint now*), and its *Effort* row.
+  - The transcript rows of 04.H10 `IcGvI`, moved here from P1e by the user's decision of 2026-10-02, with the
+    `AgentEvent` data they need (§2.2): a native tool call's kind (read_file, list_files, search, edit_file,
+    write_file, run_command), the lines read and the size, the search scope and its match and file counts, an edit's
+    added and removed lines, the shell a command ran in (*shell · pwsh*), an approval (*Approved by you · approve once
+    · waited 48 s*), a denial by a person (*Denied by a person · the agent continues*, told apart from a refusal, so
+    the panel can say *denied by you*) and the result the agent was given for it.
+  - The prompt must honour `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel
+    already shows.
 - **P1e · ORC-60 (in progress):** connections UI, 04.H1–H11 (group `PNDQm`). Built: Add connection's four kinds
   (OpenAI API locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3),
   Advanced base URL, the key secret picked or created with the connection in the environment chosen (Development by
   default, as in Secrets), models added by hand with default model and effort, provider fallback (04.H1–H3); the
   native inspector with its statuses, key missing derived from the project's secrets (04.H4, H5); the models dialog
-  (04.H6), where a model a profile uses keeps its id and is never dropped (core `ensure_used_listed`); the §5.4
-  capability rows with *Enforced by Orchester* (04.H8); the approval of a native command with its shell, full
-  string, working directory and time limit (04.H9); in Activity, the step header and the invocation panel of a
-  native invocation (04.H10: runs on this computer, endpoint, network, tool calls); and the note of what Orchester
-  could not enforce under the readiness card (04.H11). Test connection and Fetch models are visibly unavailable.
-  Not built yet: 04.H7, and the transcript rows of 04.H10 (file tool rows with their own glyph and meta, *shell ·
-  pwsh* on a command, *Approved by you* and *Denied by a person* entries with the result the agent was given): the
-  Activity events P1b emits for a native tool call (`CommandStarted`/`CommandFinished` with a label, and
-  `PermissionDenied`) do not carry what they show. Tests: `form_keyboard native_` (`native_connections`,
-  `native_dialog`, `native_models`, `native_run`), core `native_connection`/`native_setup`, store `connections
-  native`, `tool_approvals native_`.
+  (04.H6), where a model in use keeps its id and is never dropped: core `ensure_used_listed` over every published
+  profile version and draft and every published step that overrides the model; the §5.4 capability rows with
+  *Enforced by Orchester* (04.H8); the approval of a native command with its shell, full string, working directory
+  and time limit (04.H9); in Activity, the step header and the invocation panel of a native invocation (04.H10: runs
+  on this computer, the connection's endpoint now, network, tool calls); and the note of what Orchester could not
+  enforce under the readiness card (04.H11). Test connection and Fetch models are visibly unavailable. Not built:
+  04.H7; the *Effort* row of 04.H10's panel (the invocation records no effort yet, P1d). The transcript rows of
+  04.H10 moved to P1d by the user's decision of 2026-10-02 (see P1d). Tests: `form_keyboard native_`
+  (`native_connections`, `native_dialog`, `native_models`, `native_run`), core `native_connection`/`native_setup`,
+  store `connections native`, `tool_approvals native_`.
 
 ## L · After lurq 0.30.0
 

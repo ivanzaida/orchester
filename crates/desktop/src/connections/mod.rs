@@ -4,5 +4,6 @@
 pub mod data;
 pub mod github;
 pub mod mcp;
+pub mod model_uses;
 pub mod native;
 pub mod probe;

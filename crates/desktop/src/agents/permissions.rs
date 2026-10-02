@@ -112,6 +112,9 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::NativeFileScope => "agents.permissions.mechanism.nativeFileScope",
     Mechanism::NativeFileScopeFolders => "agents.permissions.mechanism.nativeFileScopeFolders",
     Mechanism::NativeCommandApprovals => "agents.permissions.mechanism.nativeCommandApprovals",
+    Mechanism::NativeCommandList if lists_no_command(permissions) => {
+      "agents.permissions.mechanism.nativeCommandListEmpty"
+    }
     Mechanism::NativeCommandList => "agents.permissions.mechanism.nativeCommandList",
     Mechanism::NativeNetworkUnrestricted => "agents.permissions.mechanism.nativeNetwork",
     Mechanism::ClaudeAllowedTools => {

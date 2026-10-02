@@ -3,11 +3,20 @@
 //! changes nothing keeps where the model came from; a key secret created with the connection goes to the
 //! environment chosen, Development unless another is.
 
+use std::path::Path;
+
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CheckResult, Effort, EndpointPreset, ModelSource, NativeModels},
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
+  id::ConnectionId,
+  name::Name,
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess, StepPermissions,
+  },
+  resource::{
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, ResourceKind, Slug, Step, StepKey, StepKind,
+  },
   secret::Environment,
-  store::{ConnectionStore, SecretStore},
+  store::{ConnectionStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_desktop::connections::native::save_models_in;
@@ -194,5 +203,166 @@ fn native_key_secret_goes_to_the_environment_chosen() {
     &mut desktop,
     "connection-inspector",
     "API key · ANTHROPIC_API_KEY (Staging)"
+  ));
+}
+
+#[test]
+fn native_models_editor_closes_when_its_model_is_removed() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    seed_lab_gateway(repo);
+  });
+  open_models(&mut desktop);
+  desktop.press("model-edit-lab-large-70b");
+  desktop.wait_for("model-editor");
+  desktop.click("model-remove");
+  assert!(!has(&mut desktop, "model-row-lab-large-70b"));
+  assert!(!has(&mut desktop, "model-editor"), "nothing is left open for editing");
+  // Adding and editing work again.
+  desktop.click("model-add");
+  desktop.wait_for("model-editor");
+  desktop.click("model-cancel");
+  desktop.press("model-edit-lab-mini-8b");
+  desktop.wait_for("model-editor");
+  assert_eq!(desktop.value("model-id"), "lab-mini-8b");
+}
+
+/// Planner's draft moves to lab-large-70b while its published version keeps lab-mini-8b.
+fn draft_on_large(repo: &Path, connection: ConnectionId) {
+  let mut db = ProjectDb::open(repo).expect("open the project");
+  let planner = db
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "Planner")
+    .expect("Planner")
+    .id();
+  let published = db
+    .latest_version::<AgentProfile>(planner)
+    .expect("read")
+    .expect("published");
+  let body = AgentProfile::new(
+    Name::new("Planner").expect("role"),
+    String::new(),
+    PromptText::new("Work carefully.").expect("prompt"),
+    connection,
+    ModelId::new("lab-large-70b").expect("model"),
+    ProviderSettings::default(),
+  );
+  db.save_draft(planner, &Draft::new(body, Some(published.number()), Timestamp::now()))
+    .expect("draft");
+}
+
+#[test]
+fn native_models_keep_what_a_published_version_and_a_draft_use() {
+  let mut seeded = None;
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let id = seed_lab_gateway(repo);
+    draft_on_large(repo, id);
+    seeded = Some(id);
+  });
+  let id = seeded.expect("seeded");
+  open_models(&mut desktop);
+  // The published version still runs on lab-mini-8b, the draft on lab-large-70b.
+  assert!(!has(&mut desktop, "model-remove-lab-mini-8b"));
+  assert!(!has(&mut desktop, "model-remove-lab-large-70b"));
+  assert!(shows(&mut desktop, "model-row-lab-mini-8b", "Planner uses lab-mini-8b"));
+  assert!(shows(
+    &mut desktop,
+    "model-row-lab-large-70b",
+    "Planner uses lab-large-70b"
+  ));
+  let only =
+    |kept: &str| NativeModels::new(vec![model(kept, None, &[], ModelSource::Manual)], None, None).expect("models");
+  for (kept, dropped) in [("lab-large-70b", "lab-mini-8b"), ("lab-mini-8b", "lab-large-70b")] {
+    let refused = save_models_in(desktop.repo(), id, only(kept)).expect_err("a version of Planner uses it");
+    assert_eq!(refused.key, "connections.models.usedDropped");
+    assert!(refused.args.contains(&("model", dropped.to_owned())), "{dropped}");
+  }
+}
+
+#[test]
+fn native_models_keep_what_a_published_step_overrides_with() {
+  let mut seeded = None;
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let id = seed_lab_gateway(repo);
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let planner = db
+      .resources(ResourceKind::AgentProfile)
+      .expect("profiles")
+      .into_iter()
+      .find(|resource| resource.name().as_str() == "Planner")
+      .expect("Planner")
+      .id();
+    let step = Step {
+      key: StepKey::new("plan").expect("key"),
+      name: Name::new("Plan").expect("name"),
+      kind: StepKind::Agent {
+        profile: Some(planner),
+        repository: RepositoryAccess::ReadOnly,
+        model: Some(ModelId::new("lab-large-70b").expect("model")),
+        permissions: StepPermissions::default(),
+      },
+      instructions: PromptText::new("").expect("prompt"),
+      depends_on: Default::default(),
+      approval_gate: false,
+      on_failure: None,
+      budget: None,
+    };
+    let pipeline = Pipeline::new(vec![step]).expect("pipeline");
+    let delivery = db
+      .create_resource(
+        Slug::new("feature-delivery").expect("slug"),
+        Name::new("Feature delivery").expect("name"),
+        &pipeline,
+        Timestamp::now(),
+      )
+      .expect("pipeline")
+      .id();
+    db.publish_draft::<Pipeline>(delivery, Timestamp::now())
+      .expect("publish the pipeline");
+    seeded = Some(id);
+  });
+  let id = seeded.expect("seeded");
+  open_models(&mut desktop);
+  assert!(!has(&mut desktop, "model-remove-lab-large-70b"));
+  assert!(shows(
+    &mut desktop,
+    "model-row-lab-large-70b",
+    "Feature delivery · Plan uses lab-large-70b"
+  ));
+  let only_mini =
+    NativeModels::new(vec![model("lab-mini-8b", None, &[], ModelSource::Manual)], None, None).expect("models");
+  let refused = save_models_in(desktop.repo(), id, only_mini).expect_err("the step runs on lab-large-70b");
+  assert_eq!(refused.key, "connections.models.usedDroppedByStep");
+  assert!(refused.args.contains(&("pipeline", "Feature delivery".to_owned())));
+  assert!(refused.args.contains(&("step", "Plan".to_owned())));
+}
+
+#[test]
+fn native_default_effort_is_cleared_when_its_model_no_longer_takes_it() {
+  let mut desktop = Desktop::with_project_named("Kontur");
+  add_native(&mut desktop);
+  desktop.click("model-add");
+  desktop.wait_for("model-editor");
+  set(&mut desktop, "model-id", "claude-opus-5-5");
+  desktop.click("model-effort-high");
+  desktop.click("model-effort-max");
+  desktop.click("model-save");
+  desktop.wait_for("model-row-claude-opus-5-5");
+  choose(&mut desktop, "native-default-model-select", "claude-opus-5-5");
+  choose(&mut desktop, "native-default-effort-select", "high");
+  assert!(shows(&mut desktop, "native-default-effort", "high"));
+  // The default model stays; editing it in place takes away the default effort.
+  desktop.click("model-edit-claude-opus-5-5");
+  desktop.wait_for("model-editor");
+  desktop.click("model-effort-high");
+  desktop.click("model-save");
+  desktop.wait_for("model-row-claude-opus-5-5");
+  assert!(shows(&mut desktop, "native-default-model", "claude-opus-5-5"));
+  assert!(shows(&mut desktop, "native-default-effort", "The model’s own"));
+  assert!(!shows(
+    &mut desktop,
+    "connection-dialog",
+    "Choose the default model and effort again."
   ));
 }

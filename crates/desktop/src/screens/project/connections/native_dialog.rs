@@ -16,7 +16,9 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, BaseUrl, Effort, EndpointError, EndpointPreset, NativeModels},
+  connection::{
+    AgentConnection, AgentProvider, BaseUrl, Effort, EndpointError, EndpointPreset, NativeModel, NativeModels,
+  },
   id::{ConnectionId, SecretId},
   resource::ModelId,
   secret::{self, Environment, NewSecret, SecretKind, SecretName, SecretValue},
@@ -33,7 +35,10 @@ use super::{
 use crate::{
   activity::{Activity, operations},
   background,
-  connections::native::{KeySecret, NativeDraft, keep_used, model_uses, save_native_in},
+  connections::{
+    model_uses::{keep_used, of_connection},
+    native::{DROPPED_KEYS, KeySecret, NativeDraft, save_native_in},
+  },
   messages::Message,
   secrets::Vault,
   ui::form::Submit,
@@ -240,26 +245,22 @@ impl NativeDialog {
         saved(id);
       }
     });
-    let default_model = self.default_model.clone();
+    // Editing the default model in place can take away the default effort without changing which
+    // model is the default, so a change of the models checks both.
+    let (default_model, effort) = (self.default_model.clone(), self.default_effort.clone());
     ctx.watch(&self.models, move |rows| {
       let current = default_model.get_untracked().0;
-      if current.is_some_and(|id| !rows.0.iter().any(|model| model.id() == &id)) {
+      if current
+        .as_ref()
+        .is_some_and(|id| !rows.0.iter().any(|model| model.id() == id))
+      {
         default_model.set(DefaultModel(None));
       }
+      clear_unoffered_effort(&rows.0, &default_model.get_untracked(), &effort);
     });
     let (models, effort) = (self.models.clone(), self.default_effort.clone());
     ctx.watch(&self.default_model, move |chosen| {
-      let offered = |wanted: Effort| {
-        models.with_untracked(|rows| {
-          rows
-            .0
-            .iter()
-            .any(|model| Some(model.id()) == chosen.0.as_ref() && model.efforts().contains(&wanted))
-        })
-      };
-      if effort.get_untracked().0.is_some_and(|wanted| !offered(wanted)) {
-        effort.set(DefaultEffort(None));
-      }
+      models.with_untracked(|rows| clear_unoffered_effort(&rows.0, chosen, &effort));
     });
   }
 
@@ -273,11 +274,13 @@ impl NativeDialog {
       DialogMode::EditNative(connection) => Some(connection.id()),
       _ => None,
     };
-    let uses = id.map(|id| model_uses(&self.context.uses, id)).unwrap_or_default();
+    let uses = id
+      .map(|id| of_connection(&self.context.model_uses, id))
+      .unwrap_or_default();
     let models = if rows.is_empty() {
       Err(Message::new("connections.native.save.noModels"))
     } else {
-      keep_used(&rows, &uses, "connections.models.usedDropped").and_then(|()| {
+      keep_used(&rows, &uses, DROPPED_KEYS).and_then(|()| {
         // The defaults are cleared as soon as they no longer fit the models (`watch`).
         NativeModels::new(rows, self.default_model.get().0, self.default_effort.get().0)
           .map_err(|_| Message::new("connections.native.save.defaultsInvalid"))
@@ -372,6 +375,18 @@ impl NativeDialog {
         value,
       });
     }))
+  }
+}
+
+/// Clears the default effort when the default model `chosen` among `models` does not take it.
+fn clear_unoffered_effort(models: &[NativeModel], chosen: &DefaultModel, effort: &Signal<DefaultEffort>) {
+  let offered = |wanted: Effort| {
+    models
+      .iter()
+      .any(|model| Some(model.id()) == chosen.0.as_ref() && model.efforts().contains(&wanted))
+  };
+  if effort.get_untracked().0.is_some_and(|wanted| !offered(wanted)) {
+    effort.set(DefaultEffort(None));
   }
 }
 

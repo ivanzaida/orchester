@@ -27,7 +27,10 @@ use super::{
 use crate::{
   activity::{Activity, operations},
   background,
-  connections::native::{keep_used, model_uses, save_models_in},
+  connections::{
+    model_uses::{keep_used, of_connection},
+    native::{DROPPED_KEYS, save_models_in},
+  },
   messages::Message,
   theme::{ExtraColor, gutter_scrollbar},
   ui::{
@@ -89,7 +92,7 @@ impl Component for ModelsDialog {
     let models = self.models_to_save();
     let submit = self.save(&save, models.as_ref().ok());
     let current = self.connection.api().map(|api| api.models());
-    let uses = model_uses(&self.context.uses, self.connection.id());
+    let uses = of_connection(&self.context.model_uses, self.connection.id());
     let editor = ctx.mount_keyed::<ModelEditor>(
       "models-dialog-editor",
       ModelEditorProps {
@@ -146,8 +149,8 @@ impl ModelsDialog {
     }
     keep_used(
       &rows,
-      &model_uses(&self.context.uses, self.connection.id()),
-      "connections.models.usedDropped",
+      &of_connection(&self.context.model_uses, self.connection.id()),
+      DROPPED_KEYS,
     )?;
     let current = self.connection.api().map(|api| api.models());
     let default_model = current

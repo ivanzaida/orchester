@@ -3,65 +3,26 @@
 //! and saving the models added by hand. The key's value goes to the keychain only and is never read
 //! back here. Every function blocks on SQLite or on the keychain; the UI calls them off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, ConnectionError, EndpointPreset, NativeModel, NativeModels,
-    NativeModelsError, ensure_used_listed,
-  },
+  connection::{AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, ConnectionError, EndpointPreset, NativeModels},
   id::{ConnectionId, SecretId},
   name::Name,
-  resource::ModelId,
   secret::{self, NewSecret, SecretValue, SecretVault},
   store::ConnectionStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::ProfileUse;
-use crate::{
-  agents::data::profiles,
-  messages::{self, Message},
+use super::model_uses::{self, UsedKeys, keep_used};
+use crate::messages::{self, Message};
+
+/// What a save refused for a model something still uses says.
+pub const DROPPED_KEYS: UsedKeys = UsedKeys {
+  profile: "connections.models.usedDropped",
+  step: "connections.models.usedDroppedByStep",
 };
-
-/// A profile on a native connection and the model it runs with.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ModelUse {
-  pub role: Arc<str>,
-  pub model: ModelId,
-}
-
-/// The profiles among `uses` that run on `connection`, with their models.
-pub fn model_uses(uses: &[ProfileUse], connection: ConnectionId) -> Vec<ModelUse> {
-  uses
-    .iter()
-    .filter(|used| used.connection == connection)
-    .map(|used| ModelUse {
-      role: used.role.clone(),
-      model: used.model.clone(),
-    })
-    .collect()
-}
-
-/// Refuses `models` while a profile in `uses` runs on a model they no longer list (core's
-/// [`ensure_used_listed`]); `key` says so, naming the first such profile and its model.
-pub fn keep_used(models: &[NativeModel], uses: &[ModelUse], key: &'static str) -> Result<(), Message> {
-  let Err(NativeModelsError::UsedModelDropped(model)) = ensure_used_listed(models, uses.iter().map(|used| &used.model))
-  else {
-    return Ok(());
-  };
-  let profile = uses
-    .iter()
-    .find(|used| used.model == model)
-    .map(|used| used.role.to_string())
-    .unwrap_or_default();
-  Err(
-    Message::new(key)
-      .with("profile", profile)
-      .with("model", model.as_str().to_owned()),
-  )
-}
 
 /// The project secret holding the key: one the project has, or one created with the connection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -159,20 +120,12 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
   db.save_connection(&connection).map_err(|error| store_failure(&error))
 }
 
-/// Refuses `models` for connection `id` while a profile that runs on it, as stored now, uses a model
-/// they no longer list.
+/// Refuses `models` for connection `id` while a profile version or draft, or a published pipeline step,
+/// as stored now, runs on a model they no longer list.
 fn ensure_kept(db: &ProjectDb, id: ConnectionId, models: &NativeModels) -> Result<(), Message> {
-  let uses: Vec<ModelUse> = profiles(db)
-    .map_err(|error| store_failure(&error))?
-    .into_iter()
-    .filter(|entry| entry.profile.connection() == id)
-    .map(|entry| ModelUse {
-      role: entry.profile.role().as_str().into(),
-      model: entry.profile.model().clone(),
-    })
-    .collect();
-  keep_used(models.models(), &uses, "connections.models.usedDropped").inspect_err(|_| {
-    tracing::warn!(connection = %id, "a profile still uses a model the saved models leave out");
+  let uses = model_uses::load(db).map_err(|error| store_failure(&error))?;
+  keep_used(models.models(), &model_uses::of_connection(&uses, id), DROPPED_KEYS).inspect_err(|_| {
+    tracing::warn!(connection = %id, "something still uses a model the saved models leave out");
   })
 }
 
