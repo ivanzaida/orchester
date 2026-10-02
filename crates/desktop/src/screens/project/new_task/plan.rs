@@ -466,11 +466,11 @@ fn save_button(ctx: &Ctx, state: &FormState, save: Submit) -> Button {
     (false, false) => ctx.t("tasks.new.create"),
   };
   // Save changes reads in `$text` while it can be pressed (`PCXbi` in `ctHXE`), `$muted` while
-  // it cannot (`fNWfv` in `E1o77O`).
-  let color = match (state.editing, save.is_some()) {
-    (true, true) => PaletteColor::TextPrimary,
-    (true, false) => PaletteColor::TextSecondary,
-    (false, _) => PaletteColor::TextMuted,
+  // it cannot (`fNWfv` in `E1o77O`); Create always reads in `$muted` (`Q4xE7q` in `l2YA4`).
+  let color = if state.editing && save.is_some() {
+    PaletteColor::TextPrimary
+  } else {
+    PaletteColor::TextSecondary
   };
   let text = Text::new(&label).variant(TypographyStyle::Caption).color(color);
   // No vertical padding: the label itself sits 16 under Create & run and, without it, at the
