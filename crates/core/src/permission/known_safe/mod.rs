@@ -22,6 +22,7 @@
 //! with any program, so they ask like any other command.
 
 mod git;
+mod head_tail;
 mod options;
 mod tables;
 
@@ -46,6 +47,7 @@ pub fn readable_arguments(argv: &[String]) -> Option<Vec<&str>> {
   }
   match program.as_str() {
     "git" => git::readable(args),
+    "head" | "tail" => head_tail::readable(args),
     "find" => tables::find(args),
     "where" => tables::where_(args),
     name => tables::OPTION_PROGRAMS

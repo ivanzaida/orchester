@@ -1,6 +1,8 @@
 //! Native commands: splitting a command line on each platform, the git a command runs with, and which
 //! commands run, ask a person or are refused.
 
+use std::process::Command;
+
 use orchester_core::{
   native::{
     command::{
@@ -116,6 +118,8 @@ fn native_command_hardened_git() {
       "git",
       "-c",
       "core.fsmonitor=false",
+      "-c",
+      "safe.bareRepository=explicit",
       "--no-pager",
       "--no-optional-locks",
       "status",
@@ -128,6 +132,8 @@ fn native_command_hardened_git() {
       "git",
       "-c",
       "core.fsmonitor=false",
+      "-c",
+      "safe.bareRepository=explicit",
       "--no-pager",
       "--no-optional-locks",
       "diff",
@@ -142,6 +148,8 @@ fn native_command_hardened_git() {
       "git",
       "-c",
       "core.fsmonitor=false",
+      "-c",
+      "safe.bareRepository=explicit",
       "--no-pager",
       "--no-optional-locks",
       "blame",
@@ -180,6 +188,8 @@ fn native_command_hardened_git_in_any_case() {
       "Git",
       "-c",
       "core.fsmonitor=false",
+      "-c",
+      "safe.bareRepository=explicit",
       "--no-pager",
       "--no-optional-locks",
       "status"
@@ -256,5 +266,43 @@ fn native_command_shell_and_refusals() {
   assert_eq!(
     CommandPolicy::new(&CommandPermission::AnyInWorktree),
     Err(CommandPolicyError::AnyCommandUnavailable)
+  );
+}
+
+/// A bare repository the agent lays out in a worktree folder is not used by the git it runs from
+/// there: its `config` could set a pager, an editor or hooks.
+#[test]
+fn native_command_git_ignores_a_planted_bare_repository() {
+  let layout = Layout::new();
+  let planted = layout.worktree.join("src/planted");
+  let init = Command::new("git")
+    .args(["init", "--quiet", "--bare"])
+    .arg(&planted)
+    .status()
+    .expect("git init");
+  assert!(init.success());
+  let scope = layout.scope(RepositoryAccess::Write);
+  let command = ParsedCommand::parse(
+    &run_command(&json!({"command": "git rev-parse --git-dir", "workdir": "src/planted"})),
+    CommandSyntax::Posix,
+    &scope,
+  )
+  .expect("parsed");
+  let unhardened = Command::new("git")
+    .args(["rev-parse", "--git-dir"])
+    .current_dir(command.workdir())
+    .output()
+    .expect("git");
+  assert!(unhardened.status.success(), "plain git takes the planted repository");
+  let args = command.program_args().expect("direct");
+  let hardened = Command::new(&args[0])
+    .args(&args[1..])
+    .current_dir(command.workdir())
+    .output()
+    .expect("git");
+  assert!(!hardened.status.success(), "{hardened:?}");
+  assert!(
+    String::from_utf8_lossy(&hardened.stderr).contains("safe.bareRepository"),
+    "{hardened:?}"
   );
 }

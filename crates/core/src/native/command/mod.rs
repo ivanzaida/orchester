@@ -19,10 +19,20 @@ use super::{
 };
 use crate::permission::known_safe;
 
-/// Global options every git call gets: an fsmonitor setting could start a program on `git status`, a
-/// pager would wait for input that never comes, and `--no-optional-locks` keeps `git status` from
-/// rewriting `.git/index` to refresh its cached file stamps.
-const GIT_GLOBAL: [&str; 4] = ["-c", "core.fsmonitor=false", "--no-pager", "--no-optional-locks"];
+/// Global options every git call gets: an fsmonitor setting could start a program on `git status`; a
+/// bare repository the agent lays out in a worktree folder would be found from a working folder inside
+/// it, with its own `config`, so only a repository with a `.git` (which the scope protects) is used
+/// (git 2.38 and later; an older git ignores the setting); a pager would wait for input that never
+/// comes; and `--no-optional-locks` keeps `git status` from rewriting `.git/index` to refresh its
+/// cached file stamps.
+const GIT_GLOBAL: [&str; 6] = [
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "safe.bareRepository=explicit",
+  "--no-pager",
+  "--no-optional-locks",
+];
 /// Git subcommands that print diffs, and the options that keep configured diff programs from running.
 const GIT_DIFFS: [&str; 3] = ["diff", "log", "show"];
 const GIT_DIFF_OPTIONS: [&str; 2] = ["--no-ext-diff", "--no-textconv"];

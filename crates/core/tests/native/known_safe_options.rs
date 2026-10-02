@@ -91,3 +91,37 @@ fn native_known_safe_where_takes_bare_names() {
     assert!(!safe(command), "{command}");
   }
 }
+
+#[test]
+fn native_known_safe_head_tail_counts() {
+  for command in [
+    "tail -n 20 a",
+    "tail -n20 a",
+    "tail -n +5 a",
+    "tail -20 a",
+    "head -c 1K a",
+    "head -n -5 a",
+    "head --lines=10 a",
+    "tail --bytes 2KiB a",
+    "tail -qn5 a b",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+  for command in [
+    "tail -cf a",
+    "tail -nf a",
+    "tail -c f a",
+    "tail --lines=1f a",
+    "tail --bytes x a",
+    "tail +1f a",
+    "tail +f a",
+    "tail -1cf a",
+    "tail -- +5lf",
+    "head -n 1x a",
+  ] {
+    assert!(
+      !safe(command),
+      "{command}: a count that is not a number, or the follow form"
+    );
+  }
+}

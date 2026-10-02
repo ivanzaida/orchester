@@ -38,13 +38,6 @@ const CAT: Options = Options {
   valued: "",
 };
 
-/// `head` and `tail`, also with a count alone (`-20`); `tail` without `-f`, which waits for more.
-const HEAD_TAIL: Options = Options {
-  long: &[&["lines", "bytes", "quiet", "silent", "verbose", "zero-terminated"]],
-  flags: "0123456789qvz",
-  valued: "nc",
-};
-
 /// `wc` without `--files0-from`, which reads the files a file names.
 const WC: Options = Options {
   long: &[&["bytes", "chars", "lines", "words", "max-line-length"]],
@@ -171,12 +164,10 @@ const RG: Options = Options {
   valued: "ABCdeEfgjmMrtT",
 };
 
-/// The programs read by [`Options`], with `git`, `find` and `where` ruled separately.
-pub(super) const OPTION_PROGRAMS: [(&str, Options); 11] = [
+/// The programs read by [`Options`], with `git`, `head`, `tail`, `find` and `where` ruled separately.
+pub(super) const OPTION_PROGRAMS: [(&str, Options); 9] = [
   ("ls", LS),
   ("cat", CAT),
-  ("head", HEAD_TAIL),
-  ("tail", HEAD_TAIL),
   ("wc", WC),
   ("pwd", PWD),
   ("echo", ECHO),

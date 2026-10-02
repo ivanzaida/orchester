@@ -619,8 +619,10 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
    the command ask. The lists leave out every option that starts a program, writes a file, reads a file of paths, or
    follows links into folders the path check does not see:
    - `git` with `status`, `log`, `diff`, `show`, `rev-parse`, `ls-files`, `branch` (list only), `blame` or `grep`.
-     Every git call gets `-c core.fsmonitor=false --no-pager --no-optional-locks` (an fsmonitor setting can run a
-     program on `git status`; the last keeps `git status` from rewriting `.git/index`). `diff`, `log` and `show` also
+     Every git call gets `-c core.fsmonitor=false -c safe.bareRepository=explicit --no-pager --no-optional-locks`
+     (an fsmonitor setting can run a program on `git status`; a bare repository the agent lays out in a worktree
+     folder would otherwise be found from a working folder inside it, with its own `config`; the last keeps `git
+     status` from rewriting `.git/index`). `diff`, `log` and `show` also
      get `--no-ext-diff --no-textconv`, and `blame`, which runs a textconv program by default, `--no-textconv`. Not
      listed are, among others, `--help` (starts a help viewer: a browser on Windows, `man` on macOS), `-c`,
      `--output`, `--ext-diff`, `--textconv`, `--open-files-in-pager` (`-O`) and `--show-signature`; the `%G…`
@@ -628,7 +630,8 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
      its own files: `git diff` refreshes the file stamps cached in `.git/index`, without changing what the index
      holds.
    - `rg`, without `--pre`, `--pre-glob`, `--search-zip` (`-z`), `--hostname-bin` or `--follow` (`-L`).
-   - `ls` (without `-L`), `cat`, `head`, `tail` (without `-f`), `wc` (without `--files0-from`), `pwd`, `echo`,
+   - `ls` (without `-L`), `cat`, `head`, `tail` (without `-f`; every count a number, and no argument in GNU's
+     obsolete follow form such as `+1f`), `wc` (without `--files0-from`), `pwd`, `echo`,
      `which`, `file` (without `-f`/`--files-from`, `-m`, `-C`, `-z`, `-s`, `-p`), `stat`.
    - Windows `where` with bare name patterns and `/Q`, `/F`, `/T` only: `$VAR:pattern` and `folder:pattern` search
      folders the path check does not see, and `/R` searches a folder tree.
