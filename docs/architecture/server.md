@@ -1,9 +1,10 @@
 # Orchester — shared server
 
-Date: 2026-10-02. Status: **proposed, not started**. The user's decisions are recorded in
-[Decisions (2026-10-02)](#decisions-2026-10-02); the rows marked *proposed* are the architect's recommendations,
-which the user has not objected to and still has to confirm. [Open questions](#open-questions) lists what is not
-decided. Nothing here changes the local (single-user) version in `storage.md` except where a section says so.
+Date: 2026-10-02. Status: **agreed direction, not started**. The user's decisions, including the answers to the
+first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Rows marked *proposed*
+are the architect's recommendations: the user has not objected to them, but has not confirmed them one by one either.
+[Open questions](#open-questions) lists what still needs the user. Nothing here changes the local (single-user)
+version in `storage.md` except where a section says so.
 
 **Goal (user, 2026-10-02).** Several people work on one project in Orchester. They share the task list and can see
 who took a task into work.
@@ -14,21 +15,33 @@ run working on it. Runs themselves (worktrees, agents, transcripts) stay on the 
 
 ## Decisions (2026-10-02)
 
+The user set rows 1–3 and answered the first draft's open questions on 2026-10-02 (rows 15–22); those answers also
+settle rows 5, 6, 10 and 12. The other rows are the architect's recommendations, still *proposed*.
+
 | # | Topic | Decision | State |
 | --- | --- | --- | --- |
 | 1 | Hosting | Self-hosted: one server binary a team runs itself, Docker is fine. No cloud service, no GitHub OAuth | user |
 | 2 | Accounts | Accounts live on the server; an admin creates users. A user signs in from the desktop and receives a token, kept in the OS keychain like every secret. Passwords are hashed with argon2id; tokens can be revoked; the first admin is created on the server host ([Accounts](#accounts-and-tokens)) | user |
 | 3 | Transport security | HTTPS, from a reverse proxy or the server's own TLS. The desktop accepts `http://` only for a loopback host, or for another host after an explicit opt-in for that server | user |
 | 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline by name, limits, status), the claim, a short live run status per task. The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, secrets, agent profiles and pipelines. The domain has no priority or tags, so none are shared | proposed |
-| 5 | Claim | Atomic "take if free" on the server. Starting work on a task takes the claim. Heartbeat every 60 s; no heartbeat for 15 min makes it stale; a stale claim can be taken over after confirmation, and the takeover is recorded. Manual Take and Release exist. When the claim ends is set out in [Claims](#claims) | proposed |
-| 6 | Concurrency | Every shared task has a revision. A change names the revision it was made on; a mismatch returns a conflict with the current task, and the desktop shows the other person's change instead of overwriting it | proposed |
+| 5 | Claim | Atomic "take if free" on the server. Starting work on a task takes the claim. Heartbeat every 60 s; no heartbeat for 15 min makes it stale; a stale claim can be taken over after confirmation, and the takeover is recorded. Manual Take and Release exist ([Claims](#claims)) | user |
+| 6 | Concurrency | Every shared task has a revision. A change names the revision it was made on; a mismatch returns a conflict with the current task, and the desktop shows the other person's change instead of overwriting it | user |
 | 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)) | proposed |
 | 8 | Offline | Without the server, a shared project's task list is read-only from the local cache, in a visible offline state. Changes wait for the connection; nothing is queued silently | proposed |
 | 9 | Configuration | Application level: Settings › Servers (several servers, each signed in; the status bar shows the connection). Project level: Project settings › Sharing, *Local only* (default) or *Shared on <server>* | proposed |
-| 10 | Project identity | A shared project is bound by the normalized URL of the repository's `origin` remote | proposed |
+| 10 | Project identity | A server project is identified by the normalized URL of the repository's `origin` remote, unique per server; the server enforces it | user |
 | 11 | Discovery | An optional committed `orchester.toml` at the repository root (`server = "https://…"`, no secrets) offers *Sign in and join*. Adding a server by hand always works | proposed |
-| 12 | Numbers on Share | Sharing a project keeps its task numbers; the server continues after the highest. Local tasks of a person who joins a project shared already get new numbers ([Migration](#migration)) | proposed |
+| 12 | Numbers on Share | The first person to share keeps their task numbers; the server continues after the highest | user |
 | 13 | Framework, storage | `axum` on the workspace's tokio; SQLite through rusqlite for v1 | proposed |
+| 14 | Trait boundary | `TaskStore`, with a revision on updates; no new core trait ([The desktop's trait boundary](#the-desktops-trait-boundary)) | proposed |
+| 15 | Claim after a run ends | Kept when the run succeeds or fails (review, merge and recovery happen on the holder's computer); released on cancel; completed on merge | user |
+| 16 | Who may share | Any user. The first to share a repository creates its server project and becomes its owner; everyone after joins it ([Two people share one repository](#two-people-share-one-repository)) | user |
+| 17 | Visibility | Explicit membership per project. Owners and admins add members by username | user |
+| 18 | Editing a claimed task | Any member may edit any task; revisions prevent overwriting | user |
+| 19 | Removing a server project | Not in v1 | user |
+| 20 | Joining with local tasks | A review list of the joiner's local tasks, all ticked; ticked ones are uploaded with new numbers and keep their id and former key; unticked ones are archived as *Not shared* ([Two people share one repository](#two-people-share-one-repository)) | user (flow); archive: architect's choice |
+| 21 | Token | The server generates it at sign-in; nobody is shown it; the desktop keeps it in the keychain; when it expires, the person signs in again with their password. Expiry after 30 days without use | user; expiry *proposed* |
+| 22 | Two computers, retention | A heartbeat from any of a person's computers keeps their claims fresh. Events are kept 30 days; an older cursor makes the desktop reload the full list | user |
 
 ## Processes and crates
 
@@ -151,9 +164,14 @@ A claim says who has taken a task into work. A task has at most one; the server 
 | Run succeeded or failed | The claim is **kept**: review and merge, Send & continue and Run again all happen on the holder's computer, where the run's worktree is. The holder releases it if they leave it |
 | Member removed or user disabled | Their claims are released, and the release is recorded |
 
-The last two rows differ from the recommendation "released when the run ends". A succeeded run can only be merged
-from the computer that ran it, so releasing the claim there would invite a second person to redo finished work.
-This is marked for the user in [Open questions](#open-questions).
+A succeeded run can only be merged from the computer that ran it, so releasing the claim there would invite a second
+person to redo finished work (decision 15).
+
+**Two computers.** A heartbeat from any computer where the person has joined the project keeps all their claims in
+it fresh, even while the run is on another computer that is off (decision 22).
+
+**Editing.** A claim does not lock the task: any member may edit it, and the revision keeps two edits from
+overwriting each other (decision 18).
 
 **Lost claim while working.** A person offline for more than 15 minutes can find their claim taken over. Their local
 run goes on: Orchester never stops work on its own. Their desktop tells them who took it, and the server refuses their
@@ -225,7 +243,8 @@ Project     { id, key, name, remote, role: "owner"|"member", next_number }
 Member      { user: UserRef, role, added_at }
 TaskContent { title, brief, criteria: [string], pipeline: slug|null,
               limits: { budget_tokens, max_duration_ms }|null }
-Task        { id, number, key: "ORC-42", revision, ...TaskContent, status: "draft"|"queued", has_run: bool,
+Task        { id, number, key: "ORC-42", former_key: "KON-12"|null, revision, ...TaskContent,
+              status: "draft"|"queued", has_run: bool,
               created: { by: UserRef, at }, updated: { by: UserRef, at },
               claim: Claim|null, run: RunStatus|null }
 Claim       { id, holder: UserRef, kind: "manual"|"run", since, heartbeat_at, stale: bool,
@@ -252,7 +271,7 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` |
 | `POST /auth/password` | user | `{ current_password, new_password }` | `204`; the user's other sessions are revoked | `401 invalid_credentials`, `422 invalid` |
 | `GET /projects?remote=<identity>` | user | | `{ projects: [Project] }` the user is a member of | `403 not_member { owners: [UserRef] }` when a project for that remote exists |
-| `POST /projects` | user | `{ idempotency_key, name, key, remote, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is owner | `409 remote_taken`, `422 invalid` |
+| `POST /projects` | user | `{ idempotency_key, name, key, remote, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is owner | `409 remote_taken { project: id, member: bool, owners: [UserRef] }` (the desktop goes on with Join), `422 invalid` |
 | `GET /projects/{id}` | member | | `{ project }` | `404` |
 | `PATCH /projects/{id}` | owner | `{ name?, key? }` | `{ project }` | `422 invalid` |
 | `GET /projects/{id}/members` | member | | `{ members: [Member] }` | |
@@ -261,7 +280,7 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `GET /projects/{id}/tasks` | member | | `{ tasks: [Task], cursor }` | |
 | `GET /projects/{id}/tasks/{task}` | member | | `{ task }` | `404` |
 | `POST /projects/{id}/tasks` | member | `{ idempotency_key, tasks: [TaskContent] }` | `201 { tasks: [Task] }`, consecutive numbers; a repeated key returns the first result | `422 invalid` |
-| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task] }`, new numbers, ids kept | `409 id_taken`, `422 invalid` |
+| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task] }`, new numbers, ids and former keys kept | `409 id_taken`, `422 invalid` |
 | `PATCH /projects/{id}/tasks/{task}` | member | `{ revision, changes: Changes }` | `{ task }` | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 invalid` |
 | `POST /projects/{id}/tasks/{task}/claim` | member | `{ kind }` | `{ task }`; also when the caller holds it already | `409 claim_held { claim }`, `409 task_merged` |
 | `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }` |
@@ -275,9 +294,11 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `POST /admin/users/{id}/password` | admin | | `{ initial_password }`; revokes the user's sessions | |
 | `DELETE /admin/users/{id}/sessions` | admin | | `204` | |
 
-`UploadTask` is `{ id, number?, ...TaskContent, status, created_at, claim: bool }`. `number` is only used when a
-project is created: Share keeps numbers, import does not. `claim: true` claims the task for the uploader in the same
-transaction; the desktop sets it for tasks with a run that has not ended on its computer.
+`UploadTask` is `{ id, number?, former_key?, ...TaskContent, status, created_at, claim: bool }`. `number` is only
+used when a project is created: Share keeps numbers. Import ignores numbers and assigns new ones, and keeps
+`former_key`, the key the task had on the uploader's computer (`KON-12`), for everyone to see. `claim: true` claims the
+task for the uploader in the same transaction; the desktop sets it for tasks with a run that has not ended on its
+computer.
 
 `not_editable` reasons come from core's `EditError`. A queued task with no run is locked; a task with a run must stay
 complete. "Has a run" is `has_run` on the server: someone took a `run` claim on the task, which starting work always
@@ -289,6 +310,12 @@ expired token), `403 password_change_required` (a session from an initial passwo
 the caller is not a member of.
 
 ## Accounts and tokens
+
+**Where the token comes from.** The server generates it when the person signs in with username and password, and
+returns it once, in the sign-in response, to the desktop. Nobody is shown it: not the person, not an admin, not a
+log. The desktop puts it straight into the OS keychain and sends it with every request. When it expires or is
+revoked, the server answers `401`, the desktop shows the server as *signed out*, and the person simply signs in again
+with their password, which issues a new token. There is nothing to copy, paste or rotate by hand.
 
 - **Passwords.** argon2id with the OWASP parameters (19 MiB, 2 iterations, 1 lane) and a random salt, in the PHC
   string format. 12 to 256 characters, no composition rules. Hashing runs in `spawn_blocking` behind a small semaphore,
@@ -341,9 +368,9 @@ UUIDv7 ids, UTC milliseconds.
 | `meta` | schema version |
 | `users` | id, username (unique, case-insensitive), display name, password hash, admin, disabled at, must change password, created / password changed |
 | `sessions` | id, user, token hash (unique), device, created / last used / revoked, from an initial password |
-| `projects` | id, key, name, remote identity (unique), next task number, created by / at |
+| `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at |
 | `memberships` | project, user, role (owner, member), added by / at; unique (project, user) |
-| `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, revision, has run, created by / at, updated by / at |
+| `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), former key, title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, revision, has run, created by / at, updated by / at |
 | `task_batches` | project, idempotency key, user, task ids; unique (project, key): a repeated create or upload returns the first result |
 | `claims` | the current claim per task: id, task (unique), holder, kind, since, last heartbeat, taken over from |
 | `claim_events` | append-only: task, claim, action (taken, released, completed, taken over), by, from (for a takeover), at |
@@ -369,7 +396,7 @@ name, plain HTTP allowed, the signed-in user (id, username, display name), signe
 
 | Table | Purpose |
 | --- | --- |
-| `tasks` (changed) | adds `revision`, and for a shared project the pipeline slug, created by and updated by (name and time) |
+| `tasks` (changed) | adds `revision`, and for a shared project the pipeline slug, former key, created by and updated by (name and time), and `sharing` (`shared` or `not_shared`; numbers are unique among the shared tasks) |
 | `sharing` | at most one row: server id, server project id, server key, joined at, event cursor, last synced at. Without it the project is local |
 | `task_claims` | the cached current claim per task |
 | `task_run_status` | the cached run status per task |
@@ -384,11 +411,13 @@ name, plain HTTP allowed, the signed-in user (id, username, display name), signe
   has *Sign out* and the person's sessions. An admin sees the server's users there: create (showing the initial
   password once), disable, reset password.
 - **Project settings › Sharing.** *Local only* (default) or *Shared on <server>*. Actions: *Share on…* (choose a
-  signed-in server), *Join*, *Make local* (leave). Owners manage members by username.
+  signed-in server), *Join* when the repository is shared already (with the review list), the not-a-member state with
+  *Check again*, *Make local* (leave), and the former-key mapping. Owners and admins manage members by username.
 - **Discovery.** A local project whose checkout has `orchester.toml` with a server URL offers *Sign in and join* in
   that project; it adds the server, signs in and joins, each step confirmed.
 - **Status bar.** One item for the connection to the servers of open shared projects.
-- **Tasks.** Holder and claim state on rows and the task page; *Take*, *Release*, *Take over* (with its
+- **Tasks.** The *Not shared* filter and *Share task*; *was KON-12* on the task page; holder and claim state on rows
+  and the task page; *Take*, *Release*, *Take over* (with its
   confirmation); the conflict state of the task editor; the offline notice; the notice that a claim was taken over.
 
 ## Migration
@@ -399,19 +428,69 @@ highest number, so branches (`orchester/orc-14-run-1`), conversations and memory
 Tasks with a run that has not ended are claimed for the uploader. The desktop then writes the `sharing` row and offers
 to write `orchester.toml` into the checkout. It never commits it; the person does.
 
-**Join (a colleague).** The project must already be shared and the person must be a member. Otherwise the desktop says
-the owners must add them. The desktop takes the server's project key and tasks into its cache. If the colleague's
-local project has tasks of its own, the join confirmation lists them. Joining uploads them with `POST …/tasks/import`:
-ids are kept, so their local runs stay attached, and they get **new numbers** from the server. The confirmation shows
-each old and new key. New runs use the new key for their branches; existing branches keep their names. Nothing is
-dropped. The local project id does not change, since the keychain names project secrets by it (`storage.md`,
-"Secrets").
+**Join (a colleague).** See [Two people share one repository](#two-people-share-one-repository). The local project
+id does not change, since the keychain names project secrets by it (`storage.md`, "Secrets").
 
 **Make local (any member, on their own computer).** The person's claims are released first when the server can be
 reached; otherwise they go stale on their own. The `sharing` row is removed. The cached tasks, everyone's, become the
 project's local tasks with their ids and numbers; the local counter continues after the highest. Claims and other
-people's run statuses are dropped from the cache. The server project is unchanged for everyone else. Bringing a
-local copy back is a Join, in which tasks created locally meanwhile are imported with new numbers.
+people's run statuses are dropped from the cache. *Not shared* tasks return to the list with new numbers after the
+highest, and the desktop shows the mapping. The server project is unchanged for everyone else. Bringing a local copy
+back is a Join, with the same review of the tasks created locally meanwhile.
+
+### Two people share one repository
+
+Two users of one server each have the same repository checked out, each with different local tasks, and both want to
+share it.
+
+**Identity and creation.** A server project is identified by the normalized `origin` URL
+([Project identity](#server-data-model)), and the server holds at most one project per identity (a unique column).
+The first person to share creates it and becomes its owner, keeping their numbers. If two people share at the same
+moment, the server's uniqueness decides: the second `POST /projects` gets `409 remote_taken`, changes nothing, and
+the second desktop goes on with Join.
+
+**Finding the project.** When a person chooses *Share on…*, and whenever a local project is opened, the desktop asks
+the servers the person is signed in to, plus the one named in `orchester.toml` once added, whether a project exists
+for the repository's identity (`GET /projects?remote=`). The identity goes only to servers the person added. If one
+exists, Project settings › Sharing offers **Join** instead of *Share*, and the project shows that it is shared there.
+
+**Membership.** Joining needs membership (decision 17). An owner of the project, or an admin, adds a member by exact
+username in Project settings › Sharing › Members (`POST …/members`). A person who is not a member sees, in place of
+*Join*, that the repository is shared on that server, the owners' names, the username to give them, and *Check again*.
+Their project stays local and nothing is uploaded. v1 has no access requests or invitations, since there are no
+notifications; the owner is told by other means. Once added, *Check again* or the next opening of the project offers
+Join.
+
+**Review before joining.** If the joiner's local project has tasks, Join opens a review list of them, all ticked.
+
+- Each row shows the local key and title. Below it, as a hint only, the server's tasks with similar titles, from a
+  pure function in core (`sharing::similar_titles`: case-folded words, a large share of them in common). Nothing is
+  merged automatically.
+- The person unticks tasks that duplicate tasks already on the server.
+- A task with a run that has not ended cannot be unticked: work on a shared task needs a claim. Its row says why, and
+  it is uploaded claimed for the joiner.
+
+**Upload and numbers.** Confirming joins and uploads the ticked tasks in one `POST …/tasks/import`. Each gets a new
+number from the server, keeps its local id, and records its former key (`former_key`, e.g. `KON-12`). The task page
+shows it to every member as *was KON-12*. The local project takes the server project's key. After the join the desktop
+shows the old-to-new mapping (`KON-12 → ORC-41`), which stays reachable from the project's sharing settings. What
+carries the old key keeps working:
+
+| Carries the old key | What happens |
+| --- | --- |
+| Local runs, their checkpoints, conversation and memory | Attached by task id, so unchanged |
+| Run branches (`orchester/kon-12-run-1`) | Keep their names: a branch is named once, when its run starts, and the run stores it. The next run is `orchester/orc-41-run-2`, since runs of a task are numbered on (`BranchName::for_next_run`). A merge after the join is titled with the new key |
+| Worktrees | Named by run id (`.orchester/worktrees/<run-id>/`), so unaffected |
+| References in briefs, criteria and messages (`see KON-12`) | Orchester does not rewrite text. The task's *was KON-12* and the mapping explain them, and searching the task list for a former key finds the task |
+
+**Unticked tasks: archived as *Not shared*.** They stay in the project database with their runs, conversation and
+memory, read-only and out of the task list, behind a *Not shared* filter, with their old key. They cannot be edited,
+run or claimed. *Share task* on one of them uploads it later through the same import, with a new number.
+
+The other option was to keep them as live local-only tasks beside the shared list. That was rejected: a shared
+project's list then has two sources, and the rules for them have no good answers. Could such a task run without a
+claim? Which numbers may it use? Is it editable offline? What does Make local merge? The person unticked these tasks
+as duplicates, so archiving loses nothing, keeps every run readable, and can be undone one task at a time.
 
 **Not shared in v1:** daily token budgets and usage (per computer, as today), conversations and memory (tied to local
 runs), pipelines, profiles, instructions, tools, connections, secrets, environment and limits settings.
@@ -454,10 +533,11 @@ directory.
 - [ ] Core: `sharing` (claim rules and staleness with tests over explicit times), `RepositoryIdentity` (HTTPS, SSH
   and scp-like forms of one repository match; local paths refused).
 - [ ] Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`not_member` with
-  owners), members, `404` for non-members.
+  owners), members added and removed by owners and admins only, `404` for non-members. Two simultaneous creates for
+  one repository: exactly one succeeds; the other gets `409 remote_taken` and changes nothing.
 - [ ] Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate. A repeated batch key
   returns the first tasks. A stale revision gets `409 revision_conflict` with the current task. The edit lock and
-  queueing follow core's rules. Import gives new numbers and keeps ids.
+  queueing follow core's rules. Import gives new numbers and keeps ids and former keys.
 - [ ] Claims: of two simultaneous claims exactly one wins. A heartbeat refreshes and reports lost claims. A claim is
   stale after 15 minutes of test clock. Take-over is refused while fresh or changed, and recorded when done.
   Removing a member or disabling a user releases their claims.
@@ -472,18 +552,31 @@ directory.
 - [ ] The status bar shows each server's connection. Admins can create, disable and reset users.
 - [ ] Client tests against a real `orchester-server` on loopback; the token never appears in `Debug` output or logs.
 
-**S2b · Share, join and make local.**
+**S2b · Share and make local.**
 - [ ] `TaskRevision` and `TaskUpdate` in core, in `ProjectDb` and in `RemoteTaskStore`; the cache tables.
-- [ ] Share uploads with numbers kept; Join imports local tasks with new numbers and shows the old and new keys; Make
-  local keeps every cached task. A shared project's runner starts runs from cached tasks unchanged.
+- [ ] Share uploads with numbers kept; Make local keeps every cached task. A shared project's runner starts runs from
+  cached tasks unchanged.
 - [ ] Pipelines are sent and stored by slug; a missing local pipeline shows as missing; an edit does not clear it.
-- [ ] Project settings › Sharing with members; `orchester.toml` offers *Sign in and join* only after confirmation.
+- [ ] Project settings › Sharing with members (owners and admins add by username); `orchester.toml` offers *Sign in
+  and join* only after confirmation.
 - [ ] Starting or continuing work on a shared task takes a run claim first and names the holder when it cannot;
   heartbeats run every minute.
 - [ ] Offline: the list is read-only from the cache with the offline notice and the last sync time; no change is
   sent later without the person.
 
-**S2c · Live task list and claims.**
+**S2c · Join a shared repository.**
+- [ ] Opening a local project, or *Share on…*, finds an existing server project for its identity and offers Join; a
+  `409 remote_taken` on Share leads to the same place.
+- [ ] A non-member sees the owners, their own username and *Check again*; nothing is uploaded.
+- [ ] The review list shows every local task ticked, with the server's similar titles as a hint (core
+  `sharing::similar_titles`, tested in core); tasks with a run that has not ended cannot be unticked.
+- [ ] Ticked tasks are imported with new numbers, ids and former keys; the mapping is shown after the join and stays
+  in the sharing settings; the task page shows *was KON-12*; searching a former key finds the task. Local runs stay
+  attached, and the next run's branch uses the new key.
+- [ ] Unticked tasks are *Not shared*: read-only, out of the list, behind the filter; *Share task* uploads one later.
+  Make local returns them with new numbers.
+
+**S2d · Live task list and claims.**
 - [ ] One SSE stream per open shared project, resumed from the cached cursor, with backoff and `reset` handled; two
   desktops on one project see each other's changes within a second on loopback.
 - [ ] A conflicting edit shows the other person's change, and the person's own text is kept until they choose.
@@ -503,17 +596,10 @@ tasks; notifications; Postgres for several server instances; single sign-on, if 
 
 ## Open questions
 
-1. **Claim after a run ends.** This document keeps the claim after a run succeeds or fails, and releases it only on
-   cancel or merge ([Claims](#claims)), because review, merge and recovery happen on the holder's computer. The
-   recommendation said "released when the run ends". Confirm or overrule.
-2. **Who may share a project.** Proposed: any user, who becomes its owner. Alternative: admins only.
-3. **Visibility.** Proposed: explicit membership per project. Alternative: every user of the server sees every
-   project.
-4. **Editing a claimed task.** Proposed: any member may edit any task; the revision prevents overwriting. Alternative:
-   only the holder edits a claimed task.
-5. **Removing a server project.** Not in v1: leaving keeps it for others, and nothing archives or deletes it. Should
-   owners be able to archive it?
-6. **Token lifetime.** Proposed: 30 days without use. Confirm, or choose no expiry.
-7. **One person, two computers.** A heartbeat from either computer keeps the person's claims fresh, even when the run
-   is on the computer that is off. Acceptable for v1?
-8. **Event retention.** Proposed: 30 days, after which a desktop reloads the full list. Confirm.
+1. **Token expiry.** Proposed: a token expires after 30 days without use, and the person signs in again
+   (decision 21). Confirm, or choose no expiry.
+2. **Unticked tasks.** Archived as *Not shared* is the architect's choice
+   ([Two people share one repository](#two-people-share-one-repository)); the user asked for one to be picked, not
+   yet confirmed it.
+3. **Rows marked *proposed*** in [Decisions](#decisions-2026-10-02) (scope, SSE, offline, configuration, discovery,
+   framework and storage, trait boundary): the user has not objected; a confirmation settles them.
