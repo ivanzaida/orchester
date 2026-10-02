@@ -3,6 +3,11 @@
 //! worktree, and that read a credential store, with the modules for files, the network, git, `gh`,
 //! PowerShell and package managers. Only what is understood is classified: a program none of them
 //! knows, or an option of a known one that is not listed, is Unknown.
+//!
+//! The one place that is not an allow-list: the reading programs of [`READS`] (and PowerShell's reading
+//! cmdlets in [`powershell`]) are taken with any option but those known to write a file, start a
+//! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
+//! credential location asks.
 
 use super::{files, gh, git, network, packages, powershell};
 use crate::permission::known_safe;

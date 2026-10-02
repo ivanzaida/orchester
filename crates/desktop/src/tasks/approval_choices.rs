@@ -3,7 +3,10 @@
 //! add and where, and who that affects. Whether each is available is core's decision
 //! (`orchester_core::run`); this only gathers the names the dialog shows.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use orchester_core::{
   connection::mcp::McpToolName,
@@ -87,15 +90,15 @@ pub struct ApprovalChoices {
 
 impl ApprovalChoices {
   /// The choices of `approval`, made in step profile `profile` (pinned at `pinned`) whose agent works in
-  /// `writable` besides its worktree; `codex` when Codex asks.
+  /// `worktree` and may also write to `writable`; `codex` when Codex asks. A command is classified as the
+  /// runner classifies it: in that worktree, from the working folder the request reports.
   pub fn read(
     db: &ProjectDb,
     approval: &PendingToolApproval,
     (profile, pinned): (Option<ResourceId>, Option<VersionNumber>),
-    (writable, codex): (&[PathBuf], bool),
+    (worktree, writable, codex): (&Path, &[PathBuf], bool),
   ) -> Self {
-    let worktree = approval.target.as_deref().map(PathBuf::from).unwrap_or_default();
-    let subject = ApprovalSubject::of(approval, &CommandScope::on_host(&worktree, writable));
+    let subject = ApprovalSubject::of(approval, &CommandScope::on_host(worktree, writable));
     let similar = RuleScope::similar(&subject).and_then(|scope| match scope {
       RuleScope::SimilarCommand { command } => Ok(SimilarShown::Command {
         words: command.words().into(),

@@ -10,9 +10,15 @@ use crate::permission::canonical::{existing, normalize};
 /// curl's `.netrc` on Windows).
 const SECRET_HOME_FILES: [&str; 2] = ["_netrc", "ntuser.dat"];
 
-/// Under `AppData/Roaming/Microsoft` and `AppData/Local/Microsoft`, the folders Windows keeps
-/// credentials and their keys in.
-const SECRET_APPDATA: [&str; 3] = ["credentials", "vault", "protect"];
+/// The folders of the home folder where applications keep their data, credentials and tokens among
+/// it: Windows' `AppData` (`Roaming` and `Local`: the credential and vault folders, `gcloud`, `GitHub
+/// CLI`, `pip`, browser and editor profiles, …) and macOS' `Library` (the keychains, `Application
+/// Support` with the same profiles, cookies, containers). The command-line tools' own files are dot
+/// files and folders of the home folder (`.aws`, `.azure`, `.kube`, `.docker/config.json`,
+/// `.config/gh/hosts.yml`, `.config/gcloud`, `.npmrc`, `.yarnrc`, `.pypirc`, `.netrc`,
+/// `.cargo/credentials.toml`, `.git-credentials`, `.codex`, `.claude.json`), which are all credential
+/// locations too.
+const APPLICATION_DATA: [&str; 2] = ["appdata", "library"];
 
 /// Where commands run and may write.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,31 +96,16 @@ impl CommandScope {
     Place::Outside
   }
 
-  /// Whether a folder's entries may be credential locations: the home folder and the folders above
-  /// it, `AppData` down to its `Microsoft` folders, and `Library`.
+  /// Whether a folder's entries may be credential locations: the home folder and the folders above it
+  /// (the folders in it are [`Self::secret`] themselves).
   fn may_hold_secrets(&self, folder: &Path) -> bool {
-    let Some(home) = self.home.as_ref() else {
-      return false;
-    };
-    if home.starts_with(folder) {
-      return true;
-    }
-    let Ok(rest) = folder.strip_prefix(home) else {
-      return false;
-    };
-    let names: Vec<String> = rest
-      .components()
-      .map(|part| part.as_os_str().to_string_lossy().to_lowercase())
-      .collect();
-    matches!(
-      names.iter().map(String::as_str).collect::<Vec<_>>().as_slice(),
-      ["appdata"] | ["appdata", _] | ["appdata", _, "microsoft"] | ["library"]
-    )
+    self.home.as_ref().is_some_and(|home| home.starts_with(folder))
   }
 
   /// Whether `path` is a credential location of the home folder: a dot file or folder in it (the agent
   /// CLIs' `.claude.json`, `.claude` and `.codex`, `.ssh`, `.aws`, `.netrc`, `.config` with its tokens,
-  /// …), the Windows credential folders, or the macOS keychains.
+  /// …), or anything in the applications' data ([`APPLICATION_DATA`]) but the temporary folder, which
+  /// Windows keeps in `AppData/Local/Temp`.
   fn secret(&self, path: &Path) -> bool {
     let Some(rest) = self.home.as_ref().and_then(|home| path.strip_prefix(home).ok()) else {
       return false;
@@ -125,8 +116,9 @@ impl CommandScope {
       .collect();
     match names.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
       [] => false,
-      ["appdata", _, "microsoft", folder, ..] => SECRET_APPDATA.contains(folder),
-      ["library", "keychains", ..] => true,
+      [folder, ..] if APPLICATION_DATA.contains(folder) => {
+        !self.temp.as_ref().is_some_and(|temp| path.starts_with(temp))
+      }
       [first, ..] => first.starts_with('.') || SECRET_HOME_FILES.contains(first),
     }
   }
@@ -141,8 +133,8 @@ pub(super) enum Place {
   Temp,
   /// Anywhere else.
   Outside,
-  /// A credential location of the home folder: its dot files and folders, the Windows credential
-  /// folders and the macOS keychains.
+  /// A credential location of the home folder: its dot files and folders, and the applications' data
+  /// in `AppData` and `Library`.
   Secret,
 }
 

@@ -175,6 +175,31 @@ const ASKS: &[&str] = &[
   "rg -uu password {HOME}",
   "ls /",
   "cat ~root/.ssh/id_rsa",
+  // Command-line tools' credentials, application and browser data, on Windows and macOS.
+  "cat {HOME}/AppData/Roaming/gcloud/credentials.db",
+  "cat '{HOME}/AppData/Roaming/GitHub CLI/hosts.yml'",
+  "cat {HOME}/AppData/Roaming/pip/pip.ini",
+  "cat '{HOME}/AppData/Local/Google/Chrome/User Data/Default/Login Data'",
+  "ls {HOME}/AppData/Roaming/Mozilla/Firefox/Profiles",
+  "cat {HOME}/AppData/Roaming/Microsoft/Credentials/x",
+  "cat '{HOME}/Library/Application Support/Google/Chrome/Default/Cookies'",
+  "cat {HOME}/Library/Keychains/login.keychain-db",
+  "cat {HOME}/.config/gcloud/credentials.db",
+  "cat {HOME}/.config/gh/hosts.yml",
+  "cat {HOME}/.azure/msal_token_cache.json",
+  "cat {HOME}/.aws/credentials",
+  "cat {HOME}/.kube/config",
+  "cat {HOME}/.docker/config.json",
+  "cat {HOME}/.npmrc",
+  "cat {HOME}/.yarnrc",
+  "cat {HOME}/.pypirc",
+  "cat {HOME}/.netrc",
+  "cat {HOME}/_netrc",
+  "cat {HOME}/.cargo/credentials.toml",
+  "cat {HOME}/.git-credentials",
+  "cat {HOME}/.codex/auth.json",
+  "cat {HOME}/.claude/.credentials.json",
+  "cat {HOME}/AppData/*/gcloud/credentials.db",
   // PowerShell cmdlets, their aliases and providers.
   "pwsh -Command 'Remove-Item -Path:{HOME}/x -Recurse'",
   "pwsh -Command 'rm -Path:{HOME}/x'",
@@ -385,4 +410,21 @@ fn command_fail_closed_classify_in_the_reported_folder() {
   let outside = fixture.worktree.parent().expect("projects").to_path_buf();
   let elsewhere = ClassifiedCommand::classify_in("touch notes.txt", &outside, &fixture.scope);
   assert_eq!(elsewhere.category(), CommandCategory::OutsideWrite);
+}
+
+#[test]
+fn command_fail_closed_application_data_is_a_credential_location_but_temp() {
+  let root = tempfile::tempdir().expect("temporary folder");
+  let home = root.path().join("home");
+  let worktree = home.join("projects").join("kontur");
+  // Windows keeps the temporary folder in the applications' data.
+  let temp = home.join("AppData").join("Local").join("Temp");
+  for folder in [&worktree, &temp] {
+    std::fs::create_dir_all(folder).expect("folder");
+  }
+  let scope = CommandScope::new(&worktree, &[], Some(&home), Some(&temp));
+  let read = |path: &Path| ClassifiedCommand::classify(&format!("cat {}", slashed(path)), &scope);
+  assert!(!read(&temp.join("notes.txt")).reads_secrets());
+  assert!(read(&home.join("AppData").join("Local").join("gcloud").join("x")).reads_secrets());
+  assert!(read(&home.join("Library").join("Cookies").join("Cookies.binarycookies")).reads_secrets());
 }

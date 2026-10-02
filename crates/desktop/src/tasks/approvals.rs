@@ -12,6 +12,7 @@ use std::{
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
   id::TaskId,
+  integration::WORKTREES_DIR,
   permission::{LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId},
   run::{PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor},
@@ -21,6 +22,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
+use super::changes::run_worktree;
 
 /// A pending request and the CLI of its agent; `None` when that cannot be read any more.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,7 +96,11 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
       step.as_ref().map(|step| step.profile.resource),
       step.as_ref().map(|step| step.profile.number),
     ),
-    (&writable, provider == Some(AgentProvider::CodexCli)),
+    (
+      &agent_worktree(repo_root, &approval),
+      &writable,
+      provider == Some(AgentProvider::CodexCli),
+    ),
   );
   let task = run.as_ref().and_then(|run| db.task(run.task()).ok().flatten());
   ShownApproval {
@@ -112,6 +118,17 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
       .flatten(),
     choices,
     approval,
+  }
+}
+
+/// The worktree the asking agent works in, as the runner made it: its step execution's own when the step
+/// runs beside others of its run, else the run's.
+fn agent_worktree(repo_root: &Path, approval: &PendingToolApproval) -> PathBuf {
+  let step = repo_root.join(WORKTREES_DIR).join(approval.execution.to_string());
+  if step.is_dir() {
+    step
+  } else {
+    run_worktree(repo_root, approval.run)
   }
 }
 

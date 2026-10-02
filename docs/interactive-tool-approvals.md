@@ -184,8 +184,9 @@ profile setting *Approve automatically (don't ask me)* (`AgentPermissions::auto_
 version). It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
 `run::auto_verdict` leaves to a person: a command that reaches the network, a write, move or delete outside the worktree and its writable folders (the
 temporary folder too: Run temp is not told apart yet), a read of a credential location (dot files and folders of
-the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, the Windows credential folders, the macOS
-keychains, or a credential store program), an install of software or packages (`npm install`, `cargo add`,
+the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, everything under `AppData` and `Library` but
+the temporary folder (CLI tokens, the Windows credential folders, the macOS keychains, browser and editor
+profiles), or a credential store program), an install of software or packages (`npm install`, `cargo add`,
 `pip install`, `npx`, global installs, …), History / destructive commands (whose category cannot be allowed) and
 anything not read to the end. What the step's permissions refuse never reaches a person, so it stays refused.
 Answers read *auto-approved · <category>* (or the MCP tool). The per-category Allow / Ask me / Deny policy of
