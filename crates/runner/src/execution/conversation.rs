@@ -209,13 +209,15 @@ impl RunTask {
       };
       let steered: Vec<Message> = messages
         .iter()
-        .filter(|message| message.steers(self.run.id(), profile) && !self.steered.contains(&message.id()))
+        .filter(|message| message.steers(self.run.id(), profile) && !self.steered.contains_key(&message.id()))
         .cloned()
         .collect();
       if steered.is_empty() {
         continue;
       }
-      self.steered.extend(steered.iter().map(Message::id));
+      self
+        .steered
+        .extend(steered.iter().map(|message| (message.id(), execution)));
       tracing::info!(run = %self.run.id(), %execution, count = steered.len(), "messages sent now go to the agent");
       if let Some(steers) = self.agents.get(&execution).and_then(|active| active.steers.as_ref())
         && steers.send(steered).is_err()
@@ -239,7 +241,8 @@ impl RunTask {
       })
   }
 
-  /// People's messages queued for `execution`'s agent: to Orchestrator or to its profile.
+  /// People's messages queued for `execution`'s agent: to Orchestrator or to its profile, except
+  /// the ones sent now that an agent at work has on their way to it.
   pub(super) fn queued_for(&self, execution: StepExecutionId) -> Result<Vec<Message>, ExecutionError> {
     let Some(profile) = self.profile_of(execution) else {
       return Ok(Vec::new());
@@ -248,9 +251,15 @@ impl RunTask {
     Ok(
       messages
         .into_iter()
-        .filter(|message| message.reaches(self.run.id(), profile))
+        .filter(|message| message.reaches(self.run.id(), profile) && !self.steered.contains_key(&message.id()))
         .collect(),
     )
+  }
+
+  /// `execution`'s agent ended: the messages sent now that it had and did not take are queued for
+  /// any agent again, its own end first.
+  pub(super) fn release_steered(&mut self, execution: StepExecutionId) {
+    self.steered.retain(|_, holder| *holder != execution);
   }
 
   /// `messages` went to `execution`'s agent with `invocation`, which started with them, as

@@ -6,7 +6,7 @@
 //! (pause, cancel, the runner stopping) arrive as [`Control`]s.
 
 use std::{
-  collections::{HashMap, HashSet},
+  collections::HashMap,
   path::PathBuf,
   sync::{
     Arc,
@@ -113,8 +113,9 @@ pub(super) struct RunTask {
   events: mpsc::UnboundedReceiver<WorkerEvent>,
   /// The memory records were scanned for unreadable ones: once per run task is enough.
   pub(super) memory_scanned: bool,
-  /// People's messages sent now that went to an agent at work, each once.
-  pub(super) steered: HashSet<MessageId>,
+  /// People's messages sent now that went to an agent at work, each once, by the execution whose
+  /// agent has them until it ends: no other agent's prompt takes them meanwhile.
+  pub(super) steered: HashMap<MessageId, StepExecutionId>,
 }
 
 impl RunTask {
@@ -142,7 +143,7 @@ impl RunTask {
       worker_events,
       events,
       memory_scanned: false,
-      steered: HashSet::new(),
+      steered: HashMap::new(),
     }
   }
 

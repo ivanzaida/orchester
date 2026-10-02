@@ -15,6 +15,10 @@
 //! before `turn/completed` (Codex's `on_task_finished`). Such a message is delivered at the turn's
 //! end then, so it is never queued for the next turn as well; only a turn interrupted before taking it
 //! leaves it queued (`Update::TurnEnded`), as does a process that ends without completing its turn.
+//! Codex may answer a steer after `turn/completed`: an acceptance read then is delivered at the turn's
+//! end too, since Codex accepts only while the turn runs. A steer still unanswered when the process
+//! ends stays queued and goes to the next turn: it may then reach Codex twice, which is safer than a
+//! message shown as delivered that Codex never had.
 
 use std::{io, time::Duration};
 
@@ -45,6 +49,8 @@ pub(in super::super) struct Steering {
   sent: Vec<Sent>,
   /// Messages for a Codex turn that has not started yet.
   early: Vec<Message>,
+  /// Codex's turn ended and kept the input it had accepted.
+  kept_at_end: bool,
 }
 
 struct Sent {
@@ -159,6 +165,9 @@ impl Worker {
       };
       let Some(reason) = answer.refused else {
         watch.steering.accept(id);
+        if watch.steering.kept_at_end {
+          self.kept_at_turn_end(watch)?;
+        }
         continue;
       };
       let Some(sent) = watch.steering.take(id) else {
@@ -194,6 +203,7 @@ impl Worker {
   /// Codex's turn ended and kept the messages it accepted but did not show it took: they are
   /// delivered at the turn's end, and not queued for the next turn as well.
   pub(super) fn kept_at_turn_end(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    watch.steering.kept_at_end = true;
     let (run, execution, invocation) = (watch.invocation.run, watch.invocation.execution, watch.invocation.id);
     for sent in watch.steering.take_accepted() {
       self.record(watch, sent.message.id(), |message| {
@@ -228,15 +238,21 @@ impl Worker {
         Some(Delivery::Queued | Delivery::NotDelivered { .. })
       )
     };
-    let Some(mut message) = stored.filter(pending) else {
+    let Some(before) = stored.filter(pending) else {
       tracing::debug!(message = %id, "the message was delivered already");
       return Ok(());
     };
+    let mut message = before.clone();
     if let Err(error) = change(&mut message) {
       tracing::warn!(message = %id, %error, "the message's delivery does not change");
       return Ok(());
     }
-    watch.db.save_deliveries(&[message])?;
+    // The person may send it after the turn meanwhile; whoever writes first wins, and the other
+    // change is left out.
+    if !watch.db.change_delivery(&before, &message)? {
+      tracing::info!(message = %id, "the message changed meanwhile; its delivery is left as it is");
+      return Ok(());
+    }
     self.notifier.send(Event::RunChanged {
       run: watch.invocation.run,
       task: self.task,
