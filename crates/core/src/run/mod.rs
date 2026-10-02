@@ -60,7 +60,7 @@ pub use self::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
     StepFailure, StepStatus, WaitReason,
   },
-  tool_approval::{PendingToolApproval, ToolApprovalDecision},
+  tool_approval::{CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell},
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},

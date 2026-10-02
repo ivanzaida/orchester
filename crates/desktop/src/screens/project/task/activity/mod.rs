@@ -8,6 +8,7 @@ mod first_edit;
 mod footer;
 mod mcp;
 mod mcp_call;
+mod native;
 mod panel;
 mod problem;
 mod rows;
@@ -29,7 +30,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::AgentProvider, id::StepExecutionId};
+use orchester_core::{connection::EngineVendor, id::StepExecutionId};
 use parking_lot::Mutex;
 
 use self::{
@@ -37,12 +38,12 @@ use self::{
   footer::{LiveFooter, LiveFooterProps},
   rows::{OpenRows, Toggles, TranscriptRow},
 };
-use super::tab_state;
+use super::{super::ProjectNav, tab_state};
 use crate::{
   background, messages,
   messages::Message,
   runner::Runners,
-  screens::project::connections::status::short_key as provider_short_key,
+  screens::project::connections::status::{preset_name_key, short_key as provider_short_key},
   tasks::{
     detail::{RunView, TaskDetail, activity_in},
     transcript::{Entry, entries},
@@ -142,12 +143,21 @@ impl Component for ActivityTab {
         );
       }
     };
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     Row::new()
       .id("activity")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(self.transcript(ctx, run, &transcript.0, props.live))
-      .child(panel::invocation_panel(ctx, run, self.filter.get().0))
+      .child(panel::invocation_panel(
+        ctx,
+        &nav,
+        run,
+        &transcript.0,
+        self.filter.get().0,
+      ))
       .into()
   }
 }
@@ -354,14 +364,15 @@ impl ActivityTab {
   }
 }
 
-/// The CLI and model an agent runs on, as the design writes it ("Codex / Sol"); the model alone
-/// once the profile's connection is gone.
-pub(super) fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
-  match provider {
-    Some(provider) => ctx.t_args(
-      "runs.activity.engine",
-      [("provider", &*ctx.t(provider_short_key(provider))), ("model", model)],
-    ),
-    None => model.into(),
-  }
+/// Who receives an agent's prompts and the model it runs on, as the design writes it ("Codex / Sol",
+/// "DeepSeek / deepseek-v4-pro", "gateway.kontur.lan / lab-coder-32b"); the model alone once the
+/// profile's connection is gone. Who that is follows core's `AgentConnection::vendor`.
+pub(super) fn engine(ctx: &Ctx, vendor: Option<&EngineVendor>, model: &str) -> Arc<str> {
+  let name = match vendor {
+    Some(EngineVendor::Provider(provider)) => ctx.t(provider_short_key(*provider)),
+    Some(EngineVendor::Preset(preset)) => ctx.t(preset_name_key(*preset)),
+    Some(EngineVendor::Host(host)) => host.as_str().into(),
+    None => return model.into(),
+  };
+  ctx.t_args("runs.activity.engine", [("provider", &*name), ("model", model)])
 }

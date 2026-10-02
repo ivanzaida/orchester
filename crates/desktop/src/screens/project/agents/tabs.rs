@@ -25,6 +25,7 @@ use orchester_core::{
 use super::{Editing, editor::ProfileEditor};
 use crate::{
   agents::permissions::{Length, enforced_summary, option_title, problem},
+  screens::project::connections::status::program_key,
   theme::{ExtraColor, ExtraSpacing},
   ui::{
     button::ActionButton,
@@ -144,6 +145,14 @@ impl ProfileEditor {
     self.enforcement()?.err()
   }
 
+  /// The chosen connection is to a native agent, which this version runs no agent on, so the profile
+  /// is neither published nor run there.
+  pub(super) fn on_native_connection(&self) -> bool {
+    self
+      .selected_connection()
+      .is_some_and(|connection| !connection.provider().runs_agents())
+  }
+
   /// The permissions in one line, as the connection runs them (`haXji`).
   fn permission_summary(&self, ctx: &Ctx) -> Arc<str> {
     let enforcement = self.enforcement();
@@ -155,20 +164,22 @@ impl ProfileEditor {
   /// this is the one notice saying that the profile can't run there yet.
   pub(super) fn permission_notices(&self, ctx: &Ctx) -> Vec<Element> {
     let mut notices = Vec::new();
-    if let (Some(problem), Some(connection)) = (self.permission_problem(), self.selected_connection()) {
-      let title = match problem {
-        PermissionProblem::NativeNotAvailable => "agents.permissions.nativeBlockedTitle",
-        PermissionProblem::NoEnforceableOption { .. } | PermissionProblem::NotEnforceable { .. } => {
-          "agents.permissions.blockedTitle"
-        }
-      };
-      let mut notice = Notice::new(
-        Icon::Lock,
-        ctx.t(title),
+    let blocked = self.selected_connection().and_then(|connection| {
+      let cli = ctx.t(program_key(connection.provider()));
+      if self.on_native_connection() {
+        let detail = ctx.t_args("agents.permissions.problem.nativeNotAvailable", [("cli", &*cli)]);
+        return Some((ctx.t("agents.permissions.nativeBlockedTitle"), detail));
+      }
+      let problem = self.permission_problem()?;
+      Some((
+        ctx.t("agents.permissions.blockedTitle"),
         self::problem(ctx, &problem, connection.provider()),
-      )
-      .emphasized()
-      .id("agent-permissions-blocked");
+      ))
+    });
+    if let Some((title, detail)) = blocked {
+      let mut notice = Notice::new(Icon::Lock, title, detail)
+        .emphasized()
+        .id("agent-permissions-blocked");
       if self.tab.get() != EditorTab::Profile {
         let tab = self.tab.clone();
         notice = notice.action(

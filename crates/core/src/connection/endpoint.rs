@@ -11,7 +11,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::http_url::{self, HostError, Scheme, ZoneId};
+use super::{
+  AgentProvider,
+  http_url::{self, HostError, Scheme, ZoneId},
+  native_models::NativeModels,
+};
 use crate::id::SecretId;
 
 /// Longest base URL, in characters.
@@ -86,17 +90,89 @@ pub enum EndpointPreset {
   Custom,
 }
 
-/// A model API: its preset, base URL and the project secret holding its key.
+impl EndpointPreset {
+  pub const ALL: [Self; 3] = [Self::Official, Self::DeepSeek, Self::Custom];
+
+  /// Whether `provider` offers the preset at all: DeepSeek's preset uses OpenAI Responses.
+  pub fn offered_on(self, provider: AgentProvider) -> bool {
+    !(self == Self::DeepSeek && provider == AgentProvider::AnthropicApi)
+  }
+
+  /// Whether a connection can be set up with the preset in this version: only the providers' own APIs
+  /// (§9, P1); DeepSeek and other compatible servers come with their quirks (P3).
+  pub const fn is_available(self) -> bool {
+    matches!(self, Self::Official)
+  }
+
+  /// The base URL the preset sets on `provider`; `None` for [`Self::Custom`], or where the preset is
+  /// not offered.
+  pub fn base_url(self, provider: AgentProvider) -> Option<BaseUrl> {
+    let url = match (self, provider) {
+      (Self::Official, AgentProvider::AnthropicApi) => "https://api.anthropic.com",
+      (Self::Official, AgentProvider::OpenAiApi) => "https://api.openai.com/v1",
+      (Self::DeepSeek, AgentProvider::OpenAiApi) => "https://api.deepseek.com",
+      _ => return None,
+    };
+    Some(BaseUrl::new(url).expect("the preset base URLs are valid"))
+  }
+
+  /// Whether the preset sends data where a notice about its location is due (§7, decision 10).
+  pub const fn has_data_notice(self) -> bool {
+    matches!(self, Self::DeepSeek)
+  }
+}
+
+/// Whether a connection of `provider` on `preset` can turn on the provider's fallback to another model
+/// (§3.1): the official Anthropic API only.
+pub fn offers_provider_fallback(provider: AgentProvider, preset: EndpointPreset) -> bool {
+  provider == AgentProvider::AnthropicApi && preset == EndpointPreset::Official
+}
+
+/// A model API: its preset, base URL and the project secret holding its key, the models it offers and
+/// whether declined requests are retried on another model (off unless a person turns it on, decision
+/// 4).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiEndpoint {
   preset: EndpointPreset,
   base_url: BaseUrl,
   key: SecretId,
+  #[serde(default, skip_serializing_if = "NativeModels::is_empty")]
+  models: NativeModels,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  provider_fallback: bool,
 }
 
 impl ApiEndpoint {
-  pub const fn new(preset: EndpointPreset, base_url: BaseUrl, key: SecretId) -> Self {
-    Self { preset, base_url, key }
+  /// An endpoint without models and with provider fallback off.
+  pub fn new(preset: EndpointPreset, base_url: BaseUrl, key: SecretId) -> Self {
+    Self {
+      preset,
+      base_url,
+      key,
+      models: NativeModels::default(),
+      provider_fallback: false,
+    }
+  }
+
+  #[must_use]
+  pub fn with_models(mut self, models: NativeModels) -> Self {
+    self.models = models;
+    self
+  }
+
+  /// Turns provider fallback on or off; [`super::Connection`] refuses it where it is not offered.
+  #[must_use]
+  pub const fn with_provider_fallback(mut self, on: bool) -> Self {
+    self.provider_fallback = on;
+    self
+  }
+
+  pub const fn models(&self) -> &NativeModels {
+    &self.models
+  }
+
+  pub const fn provider_fallback(&self) -> bool {
+    self.provider_fallback
   }
 
   pub const fn preset(&self) -> EndpointPreset {

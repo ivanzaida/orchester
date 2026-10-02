@@ -22,6 +22,7 @@ use super::{
   DialogMode, KindChoice,
   dialog::{ConnectionDialog, PickAction, Program, ProviderChoice, Verification},
   inspector::model_chips,
+  kind::kind_field,
   status::{CHECKING, program_key, status_label},
 };
 use crate::{
@@ -57,13 +58,13 @@ impl ConnectionDialog {
         .into(),
     };
     let project = self.context.project.project.name().as_str();
+    let editing = matches!(self.context.mode, DialogMode::EditAgent(_));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Form.role())
-      .child(pair(
-        self.name_field(ctx),
-        type_field(ctx, &self.kind, matches!(self.context.mode, DialogMode::EditAgent(_))),
-      ))
+      .overflow_visible()
+      .child(pair(self.name_field(ctx), type_field(ctx, &self.kind, editing)))
+      .with_children((!editing).then(|| kind_field(ctx, program.provider, &self.choose_kind())))
       .child(pair(
         self.provider_field(ctx, program.provider),
         fixed(
@@ -111,16 +112,23 @@ impl ConnectionDialog {
     field(&ctx.t("connections.dialog.name"), input.into(), note)
   }
 
-  /// The provider select; fixed while editing, since a connection keeps its provider.
+  /// The provider, chosen with the kind cards of a new connection; a connection keeps its provider.
   fn provider_field(&self, ctx: &Ctx, provider: AgentProvider) -> Element {
-    let label = ctx.t("connections.dialog.provider");
-    if matches!(self.context.mode, DialogMode::EditAgent(_)) {
-      let value = ctx.t(program_key(provider));
-      let control = value_box(ctx, "connection-provider", &value, ValueTone::Value, None);
-      return field(&label, control, FieldNote::None);
-    }
-    let options = AgentProvider::CLI.map(|provider| (ProviderChoice(provider), ctx.t(program_key(provider))));
-    select_field(ctx, "connection-provider", &label, self.provider.clone(), options)
+    let value = ctx.t(program_key(provider));
+    let control = value_box(ctx, "connection-provider", &value, ValueTone::Value, None);
+    field(&ctx.t("connections.dialog.provider"), control, FieldNote::None)
+  }
+
+  /// Choosing a kind: the other CLI is set up in this dialog, a native API in its own.
+  fn choose_kind(&self) -> Arc<dyn Fn(AgentProvider) + Send + Sync> {
+    let (provider, switch) = (self.provider.clone(), self.context.provider.clone());
+    Arc::new(move |chosen: AgentProvider| {
+      if chosen.is_native() {
+        switch(chosen);
+      } else {
+        provider.set(ProviderChoice(chosen));
+      }
+    })
   }
 
   /// The program file: found on the `PATH`, or chosen with the file picker.

@@ -30,7 +30,7 @@ use crate::{
     escalations, file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
   },
   messages::Message,
-  theme::{ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     command_chip::CommandChip,
     field::{field_error, text_input},
@@ -39,6 +39,7 @@ use crate::{
     message_text,
     option_card::unavailable_reason,
     pressable::{Ring, keyboard_stop},
+    radio::Radio,
     switch::Switch,
   },
 };
@@ -130,37 +131,12 @@ fn radio(
   available: bool,
   choose: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let (glyph, color) = if selected {
-    (Icon::CircleDot, PaletteColor::TextPrimary)
+  let radio = Radio::new(id, ctx.t(option_title(option)), selected);
+  if available {
+    radio.render(choose)
   } else {
-    (Icon::Circle, PaletteColor::TextSecondary)
-  };
-  let row = Button::empty()
-    .button()
-    .id(id)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Sm)
-    .describe("selected", if selected { "true" } else { "false" })
-    .child(icon(glyph, IconSize::Event, color.clone()))
-    .child(
-      Text::new(&ctx.t(option_title(option)))
-        .variant(TypographyStyle::FieldLabel)
-        .color(color),
-    );
-  if !available {
-    return row
-      .focusable(false)
-      .cursor(CursorIcon::NotAllowed)
-      .opacity(UNAVAILABLE_OPTION_OPACITY)
-      .describe("state", "unavailable")
-      .into();
+    radio.unavailable()
   }
-  keyboard_stop(row, Ring::Outer)
-    .cursor(CursorIcon::Pointer)
-    .describe("state", "available")
-    .on_click(move |_| choose())
-    .into()
 }
 
 fn options(options: Vec<Element>) -> Element {

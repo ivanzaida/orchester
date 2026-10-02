@@ -72,12 +72,17 @@ pub(super) fn dialog(
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),
     )
-    .child(actions(ctx, context, bar));
+    .child(actions(ctx, context, bar, CONNECTION_SAVE, None));
   backdrop(ctx, form(submit, dialog))
 }
 
+/// The save button of an action bar: its id and its label.
+pub(super) type SaveButton = (&'static str, &'static str);
+
+const CONNECTION_SAVE: SaveButton = ("connection-save", "connections.dialog.save");
+
 /// The form's padding: 28 all round but 16 at the right, beside the 12px gutter (`cJGKL`).
-fn padded(fields: Element) -> Element {
+pub(super) fn padded(fields: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_vertical(ExtraSpacing::Rail.role())
@@ -88,7 +93,7 @@ fn padded(fields: Element) -> Element {
     .into()
 }
 
-fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
+pub(super) fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
   let close = context.close.clone();
   let owner = ctx.t_args(
     "connections.dialog.owner",
@@ -120,16 +125,34 @@ fn header(ctx: &Ctx, title: &str, context: &DialogContext) -> Element {
     .into()
 }
 
-fn actions(ctx: &Ctx, context: &DialogContext, bar: SaveBar) -> Element {
-  let label = if bar.saving {
-    "connections.dialog.saving"
-  } else {
-    "connections.dialog.save"
-  };
+/// Header of a dialog that explains itself instead of naming its project (`vnIxL` in 04.H6): the
+/// title over `explanation`, without Close; Cancel closes it.
+pub(super) fn explained_header(title: &str, explanation: &str) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_vertical(SpacingSize::Lg)
+    .padding_horizontal(ExtraSpacing::Rail.role())
+    .spacing(SpacingSize::Sm)
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(Text::new(title).variant(ExtraTypography::DialogTitle.role()))
+    .child(Text::new(explanation).variant(ExtraTypography::Explanation.role()))
+    .into()
+}
+
+/// The action bar: why saving is not possible, else `note` (`FU7e7` in 04.H6), then Cancel and the
+/// save button.
+pub(super) fn actions(
+  ctx: &Ctx,
+  context: &DialogContext,
+  bar: SaveBar,
+  (id, save): SaveButton,
+  note: Option<&str>,
+) -> Element {
+  let label = if bar.saving { "connections.dialog.saving" } else { save };
   let save_button = ActionButton::new(ctx.t(label))
     .primary()
     .icon(Icon::Check)
-    .id("connection-save")
+    .id(id)
     .in_form()
     .height(Dimension::Px(BUTTON_HEIGHT));
   let save_button = match bar.submit {
@@ -145,7 +168,11 @@ fn actions(ctx: &Ctx, context: &DialogContext, bar: SaveBar) -> Element {
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(bar.reason.map(|reason| save_reason(ctx, &reason)))
+    .with_children(match (bar.reason, note) {
+      (Some(reason), _) => Some(save_reason(ctx, &reason)),
+      (None, Some(note)) => Some(Text::new(note).variant(TypographyStyle::Caption).into()),
+      (None, None) => None,
+    })
     .child(Spacer::new().flex(1.0))
     .child(
       ActionButton::new(ctx.t("common.cancel"))

@@ -25,7 +25,7 @@ use orchester_core::{
 use super::editor::{ProfileEditor, Resets};
 use crate::{
   agents::permissions::{
-    file_command_hints, native_unavailable, option_detail, option_title, unavailable, with_command, without_command,
+    file_command_hints, native_mcp_unavailable, option_detail, option_title, unavailable, with_command, without_command,
   },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -93,7 +93,7 @@ impl ProfileEditor {
     );
     // Both CLIs route approvals to Orchester; a profile without a connection cannot choose, nor can
     // one on a native connection, which runs no agent yet.
-    let native = native_unavailable(ctx, provider);
+    let native = native_mcp_unavailable(ctx, provider);
     let control = if native.is_none() && (provider.is_some() || enabled) {
       let permissions = self.permissions.clone();
       switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
@@ -294,8 +294,7 @@ impl ProfileEditor {
 
   /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced
   /// (`lW7Sp`). It shows the network access a run gets, which is on wherever off cannot be
-  /// enforced, whatever was chosen. On a native connection, where no run starts, it shows the chosen
-  /// access, locked with the reason, as the permission summary does.
+  /// enforced, whatever was chosen.
   fn network_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let chosen = self.permissions.get();
     let network = provider.map_or(chosen.network(), |provider| {

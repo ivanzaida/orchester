@@ -19,6 +19,7 @@ use orchester_core::{
     mcp::{McpServer, McpTransport},
   },
   id::ConnectionId,
+  secret::Secret,
 };
 
 use super::{
@@ -61,7 +62,12 @@ struct RowContent {
 
 /// An agent connection: a CLI (`d9bo3`), or a native one with its provider, preset and host (`Df2af` in
 /// 04.H4 `lJG42`).
-pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState, link: Link) -> Element {
+pub fn connection_row(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  (state, secrets): (&RowState, &[Secret]),
+  link: Link,
+) -> Element {
   let (glyph, kind) = if connection.provider().is_native() {
     (Icon::Cpu, "connections.type.native")
   } else {
@@ -75,7 +81,7 @@ pub fn connection_row(ctx: &Ctx, connection: &AgentConnection, state: &RowState,
   let (status_icon, status_key) = if state.checking {
     CHECKING
   } else {
-    agent_status_label(connection)
+    agent_status_label(connection, secrets)
   };
   let content = RowContent {
     id: connection.id(),
