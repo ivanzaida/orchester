@@ -43,8 +43,9 @@ pub enum ComposerMode {
 pub enum Queued {
   /// A tool step runs, not an agent.
   ToolStep,
-  /// `0` does not work now: it reads the message at its next turn.
-  NextTurn(Arc<str>),
+  /// The agent the message is for does not work now: it reads the message at its next turn. `0`
+  /// names it while the run's pipeline still offers it as a recipient.
+  NextTurn(Option<Arc<str>>),
   /// The run is paused, stopped at a limit or interrupted.
   Suspended,
   /// The run waits for the person's decision on its Summary, after a step's retries ran out or it
@@ -95,8 +96,7 @@ fn live(conversation: &Conversation, run: Option<&RunView>, recipient: Recipient
         .recipients
         .iter()
         .find(|choice| choice.recipient == Recipient::Agent(profile))
-        .and_then(|choice| choice.agent.clone())
-        .unwrap_or_default();
+        .and_then(|choice| choice.agent.clone());
       ComposerMode::Queue(Queued::NextTurn(agent))
     }
     Recipient::Orchestrator if tool_step => ComposerMode::Queue(Queued::ToolStep),

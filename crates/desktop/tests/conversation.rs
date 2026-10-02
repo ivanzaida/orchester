@@ -10,7 +10,7 @@ mod support;
 use orchester_core::{
   connection::stream::InvocationOutcome,
   conversation::{AgentMessage, Arrival, Message, MessageBody, Recipient, Timing, Undelivered},
-  id::{IdempotencyKey, InvocationId, StepExecutionId, TaskId},
+  id::{IdempotencyKey, InvocationId, ResourceId, StepExecutionId, TaskId},
   integration::{LeftWorktree, Leftovers, WorktreeOwner},
   resource::ModelId,
   run::{InterruptCause, Run, RunLimit, WaitReason},
@@ -276,7 +276,12 @@ fn conversation_the_composer_offers_what_the_run_state_allows() {
   }
   assert_eq!(
     mode(&fixture, task, reviewer),
-    ComposerMode::Queue(Queued::NextTurn("Reviewer".into()))
+    ComposerMode::Queue(Queued::NextTurn(Some("Reviewer".into())))
+  );
+  // A recipient the run's pipeline does not offer is not named with an empty name.
+  assert_eq!(
+    mode(&fixture, task, Recipient::Agent(ResourceId::generate())),
+    ComposerMode::Queue(Queued::NextTurn(None))
   );
 
   let execution = first_execution(&run);

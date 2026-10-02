@@ -81,7 +81,8 @@ pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) 
 fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
   match queued {
     Queued::ToolStep => ctx.t("runs.conversation.hint.toolStep"),
-    Queued::NextTurn(agent) => ctx.t_args("runs.conversation.hint.nextTurn", [("agent", &**agent)]),
+    Queued::NextTurn(Some(agent)) => ctx.t_args("runs.conversation.hint.nextTurn", [("agent", &**agent)]),
+    Queued::NextTurn(None) => ctx.t("runs.conversation.hint.nextTurnUnnamed"),
     Queued::Checkpoint => ctx.t("conversation.explanation.checkpoint"),
     Queued::Decision => ctx.t("conversation.explanation.deciding"),
     Queued::Suspended => ctx.t(match state {
