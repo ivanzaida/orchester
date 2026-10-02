@@ -75,6 +75,9 @@ impl ProjectDb {
 impl RunStore for ProjectDb {
   type Error = RunStoreError;
 
+  /// Records the run without checking the task's status, which tests use to set up runs of
+  /// drafts. Production code records runs with [`ProjectDb::create_run_of_queued_task`], which
+  /// rechecks that the task is still queued.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
     self.record_run(key, new, now, false)
   }

@@ -86,6 +86,15 @@ fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
   assert_eq!(cap, Some(GroupHold::GroupCap));
   assert!(cap.is_some_and(|hold| hold.releases_unstarted()));
   assert!(!GroupHold::SessionEnded.clears_on_its_own() && !GroupHold::SessionEnded.releases_unstarted());
+  // Only a failed task and the spent cap outlive a session; a start to fix waits for Start run.
+  assert!(GroupHold::FailedTask.outlives_session() && GroupHold::GroupCap.outlives_session());
+  for hold in [
+    GroupHold::StartFailed,
+    GroupHold::Preflight(Vec::new()),
+    GroupHold::PreviousTask,
+  ] {
+    assert!(!hold.outlives_session());
+  }
   // Nothing is left to start, and nothing holds the group: no hold.
   let done = Some(RunStatus::Succeeded);
   assert_eq!(

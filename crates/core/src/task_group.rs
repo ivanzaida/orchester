@@ -48,6 +48,13 @@ impl GroupHold {
   pub const fn releases_unstarted(&self) -> bool {
     !self.clears_on_its_own() && !matches!(self, Self::SessionEnded)
   }
+
+  /// Whether the hold stays when the project is reopened: a failed task or the spent cap holds
+  /// the group whatever the session. Every other hold of unstarted tasks becomes the session hold,
+  /// so they start again only through an explicit Start run (a failed start included).
+  pub const fn outlives_session(&self) -> bool {
+    matches!(self, Self::FailedTask | Self::GroupCap)
+  }
 }
 
 /// The immutable published pipeline shown for one task in the scheduling review.

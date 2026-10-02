@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use rusqlite::{OptionalExtension, params};
 
-use super::{ProjectDb, tasks::update_task};
+use super::{ProjectDb, consistent, tasks::update_task};
 use crate::{
   StoreError,
   rows::{budget_value, corrupt, decode_json, encode_json, parse, tokens_column},
@@ -135,7 +135,12 @@ impl ProjectDb {
     Ok(group.clone())
   }
 
+  /// The group of `key` with its members, read together in one consistent read.
   pub fn task_group(&self, key: IdempotencyKey) -> Result<Option<TaskGroup>, StoreError> {
+    consistent::read(&self.connection, || self.load_group(key))
+  }
+
+  fn load_group(&self, key: IdempotencyKey) -> Result<Option<TaskGroup>, StoreError> {
     let stored: Option<(String, i64)> = self
       .connection
       .query_row(
@@ -214,19 +219,20 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// The groups `query` lists, with their members, in one consistent read. A group removed
+  /// meanwhile (its last task taken back to the drafts) is left out.
   fn groups_where(&self, query: &str) -> Result<Vec<TaskGroup>, StoreError> {
-    let mut statement = self.connection.prepare(query)?;
-    let keys = statement
-      .query_map([], |row| row.get::<_, String>(0))?
-      .collect::<Result<Vec<_>, _>>()?;
-    keys
-      .into_iter()
-      .map(|key| {
-        self
-          .task_group(parse("group key", &key)?)?
-          .ok_or_else(|| corrupt("task group", "group disappeared"))
-      })
-      .collect()
+    consistent::read(&self.connection, || {
+      let mut statement = self.connection.prepare(query)?;
+      let keys = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+      let mut groups = Vec::new();
+      for key in keys {
+        groups.extend(self.load_group(parse("group key", &key)?)?);
+      }
+      Ok(groups)
+    })
   }
 
   pub fn task_group_usage(&self, group: &TaskGroup) -> Result<TokensUsed, crate::RunStoreError> {

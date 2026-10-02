@@ -23,9 +23,13 @@ use super::{Scheduler, read_failed};
 const RETRY_FIRST: Duration = Duration::from_secs(2);
 const RETRY_MAX: Duration = Duration::from_secs(60);
 
-/// When each group whose next start failed may try again.
+/// When each group whose next start failed may try again, and the last error each group's pass
+/// ended with, so a lasting error is logged once rather than every pass.
 #[derive(Default)]
-pub(super) struct GroupRetries(Mutex<HashMap<IdempotencyKey, Retry>>);
+pub(super) struct GroupRetries {
+  retries: Mutex<HashMap<IdempotencyKey, Retry>>,
+  errors: Mutex<HashMap<IdempotencyKey, Rejection>>,
+}
 
 #[derive(Clone, Copy)]
 struct Retry {
@@ -36,14 +40,14 @@ struct Retry {
 impl GroupRetries {
   fn due(&self, group: IdempotencyKey) -> bool {
     self
-      .0
+      .retries
       .lock()
       .get(&group)
       .is_none_or(|retry| Instant::now() >= retry.due)
   }
 
   fn failed(&self, group: IdempotencyKey) {
-    let mut retries = self.0.lock();
+    let mut retries = self.retries.lock();
     let wait = retries
       .get(&group)
       .map_or(Duration::ZERO, |retry| (retry.wait * 2).clamp(RETRY_FIRST, RETRY_MAX));
@@ -57,7 +61,23 @@ impl GroupRetries {
   }
 
   fn clear(&self, group: IdempotencyKey) {
-    self.0.lock().remove(&group);
+    self.retries.lock().remove(&group);
+  }
+
+  /// Records how the group's pass ended; returns its error when it differs from the last pass's.
+  fn passed(&self, group: IdempotencyKey, outcome: Result<(), Rejection>) -> Option<Rejection> {
+    let mut errors = self.errors.lock();
+    match outcome {
+      Ok(()) => {
+        errors.remove(&group);
+        None
+      }
+      Err(error) if errors.get(&group) == Some(&error) => None,
+      Err(error) => {
+        errors.insert(group, error.clone());
+        Some(error)
+      }
+    }
   }
 }
 
@@ -174,8 +194,10 @@ impl Scheduler {
       .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
-      // One group's failure leaves the others to go on; the next pass tries it again.
-      if let Err(error) = self.advance_group(&db, &group).await {
+      // One group's failure leaves the others to go on; the next pass tries it again, and the
+      // same failure again is not logged again.
+      let outcome = self.advance_group(&db, &group).await;
+      if let Some(error) = self.inner.group_retries.passed(group.key(), outcome) {
         tracing::error!(?error, group = %group.key(), "cannot advance a reviewed task group");
       }
     }
@@ -259,9 +281,9 @@ impl Scheduler {
     Ok(())
   }
 
-  /// Holds the unstarted tasks of every group until a person starts one again. A group a person
-  /// must already act on (a failed task, the spent cap, a start to fix) keeps that hold, so its
-  /// tasks can still be taken back to the drafts.
+  /// Holds the unstarted tasks of every group until a person starts one again. A group held by a
+  /// failed task or its spent cap keeps that hold, so its tasks can still be taken back to the
+  /// drafts.
   pub(super) fn hold_groups_after_session_end(&self, db: &ProjectDb) -> Result<(), Rejection> {
     for group in db
       .unfinished_task_groups()
@@ -274,11 +296,11 @@ impl Scheduler {
       if !unstarted {
         continue;
       }
-      let for_a_person = group
+      let lasting = group
         .hold(&statuses(&runs), usage(&runs))
-        .filter(GroupHold::releases_unstarted)
-        .or(Self::stored_hold(db, &group)?.filter(GroupHold::releases_unstarted));
-      let hold = for_a_person.unwrap_or(GroupHold::SessionEnded);
+        .filter(GroupHold::outlives_session)
+        .or(Self::stored_hold(db, &group)?.filter(GroupHold::outlives_session));
+      let hold = lasting.unwrap_or(GroupHold::SessionEnded);
       self.group_hold(db, &group, Some(&hold))?;
     }
     Ok(())

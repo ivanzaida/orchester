@@ -174,16 +174,7 @@ async fn task_group_fresh_pending_first_recovery_reuses_id_key_snapshot_and_hist
   drop(original);
   drop(db);
   let db = ProjectDb::open(root).expect("reopened");
-  let (fresh, _) = scheduler(root);
-  fresh
-    .attach(
-      AttachSession::Fresh {
-        previous_end: orchester_ipc::SessionEnd::QuitNow,
-      },
-      slots,
-    )
-    .await
-    .expect("fresh");
+  let (fresh, _) = reopen(root, slots).await;
   fresh.advance_task_groups().await.expect("still held");
   assert_eq!(db.run(pending.id()).expect("run").expect("exists"), pending);
   assert_eq!(
@@ -192,18 +183,17 @@ async fn task_group_fresh_pending_first_recovery_reuses_id_key_snapshot_and_hist
   );
   fresh.stop_all(InterruptCause::QuitNow).await;
   drop(fresh);
-  let (reopened, mut events) = scheduler(root);
-  reopened
-    .attach(
-      AttachSession::Fresh {
-        previous_end: orchester_ipc::SessionEnd::QuitNow,
-      },
-      slots,
-    )
-    .await
-    .expect("second fresh");
+  // The Pending first run's start had failed before the project closed: reopening does not retry
+  // it on its own either.
+  db.set_task_group_hold(group.key(), Some(&GroupHold::StartFailed))
+    .expect("failed start");
+  let (reopened, mut events) = reopen(root, slots).await;
   reopened.advance_task_groups().await.expect("still held");
   assert_eq!(db.run(pending.id()).expect("run").expect("exists"), pending);
+  assert_eq!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
   let recovered = reopened
     .start_requested_run(task.first_run_key(), task)
     .await
@@ -227,6 +217,27 @@ async fn task_group_fresh_pending_first_recovery_reuses_id_key_snapshot_and_hist
     db.task_group_hold(group.key()).expect("hold"),
     Some(GroupHold::SessionEnded)
   );
+}
+
+/// A runner of the project reopened after Quit now, attached with `slots`.
+async fn reopen(
+  root: &std::path::Path,
+  slots: NonZeroU32,
+) -> (
+  orchester_runner::execution::Scheduler,
+  tokio::sync::mpsc::UnboundedReceiver<orchester_ipc::Event>,
+) {
+  let (reopened, events) = scheduler(root);
+  reopened
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      slots,
+    )
+    .await
+    .expect("fresh attach");
+  (reopened, events)
 }
 
 fn record_pending_member(

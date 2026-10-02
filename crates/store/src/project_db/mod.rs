@@ -3,6 +3,7 @@ mod agent_files;
 mod blobs;
 mod code_index;
 mod connections;
+mod consistent;
 mod environment;
 mod import;
 mod invocation_prompts;

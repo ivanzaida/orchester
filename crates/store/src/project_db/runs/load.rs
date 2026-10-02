@@ -42,23 +42,15 @@ const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_re
 /// fails the listing: it cannot be told which run it is.
 ///
 /// A run is stored in several tables (its row, attempts, step executions, checkpoints, events),
-/// read by separate statements. Outside a caller's transaction they are read in one read
-/// transaction, so another connection committing between two statements (the runner recording an
-/// attempt while the desktop reads) cannot pair a run row with rows written after it.
+/// read by separate statements in one [consistent read](super::super::consistent::read), so a run
+/// row is never paired with rows written after it (the runner recording an attempt while the
+/// desktop reads).
 pub(super) fn load_runs(
   connection: &Connection,
   clause: &str,
   params: impl Params,
 ) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
-  let snapshot = connection
-    .is_autocommit()
-    .then(|| connection.unchecked_transaction())
-    .transpose()?;
-  let runs = read_runs(connection, clause, params)?;
-  if let Some(snapshot) = snapshot {
-    snapshot.commit()?;
-  }
-  Ok(runs)
+  super::super::consistent::read(connection, || read_runs(connection, clause, params))
 }
 
 fn read_runs(
