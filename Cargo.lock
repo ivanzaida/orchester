@@ -1911,9 +1911,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.33.0"
+version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d751994efec7324afe716564d1d92f5338bb05d00b80a28e69a87cd9bc20dac7"
+checksum = "a2b41926c5d56476e3a1e24e94271e5f91c2f1f297e813d0e7578a4e7ed247d3"
 dependencies = [
  "arboard",
  "base64 0.22.1",
