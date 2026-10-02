@@ -126,7 +126,7 @@ pub struct Credits {
   pub balance: Option<String>,
 }
 
-/// One CLI report; Claude reports one window at a time, Codex replaces both.
+/// One CLI report: Claude Code reports one window at a time, Codex App Server the windows it knows.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanLimits {
   pub windows: Vec<LimitWindow>,
@@ -160,12 +160,18 @@ impl PlanReadings {
     if old.at > reading.at {
       return false;
     }
-    if reading.provider == AgentProvider::ClaudeCodeCli {
-      for window in &old.limits.windows {
-        if !reading.limits.windows.iter().any(|new| new.minutes == window.minutes) {
-          reading.limits.windows.push(window.clone());
-        }
+    // Both CLIs report sparsely: Claude Code one window per event, Codex App Server's update
+    // leaves out what it does not know, which does not clear what was read before.
+    for window in &old.limits.windows {
+      if !reading.limits.windows.iter().any(|new| new.minutes == window.minutes) {
+        reading.limits.windows.push(window.clone());
       }
+    }
+    if reading.limits.plan.is_none() {
+      reading.limits.plan.clone_from(&old.limits.plan);
+    }
+    if reading.limits.credits.is_none() {
+      reading.limits.credits.clone_from(&old.limits.credits);
     }
     if old == &reading {
       return false;

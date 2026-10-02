@@ -9,7 +9,7 @@ use lurq::{
 };
 use orchester_core::connection::plan_limits::{LimitState, LimitWindow};
 
-use super::{Entry, metadata, text};
+use super::{Cli, Entry, metadata, text};
 use crate::theme::{
   ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, PLAN_HAIRLINE, PLAN_HINT_WIDTH, PLAN_METER_HEIGHT,
   PLAN_METER_WIDTH, PLAN_WINDOW_LABEL,
@@ -56,7 +56,7 @@ fn section(ctx: &Ctx, entry: &Entry<'_>) -> Element {
   let mut windows: Vec<_> = reading.limits.windows.iter().map(|window| window.minutes()).collect();
   // The weekly Claude report leaves its expected five-hour window unknown (`mFTm5`).
   // A five-hour-only or Codex report uses only the rows actually reported (`b3WD6`).
-  if entry.provider == orchester_core::connection::AgentProvider::ClaudeCodeCli && windows.contains(&10080) {
+  if entry.cli == Cli::Claude && windows.contains(&10080) {
     windows.push(300);
   }
   windows.sort_unstable();
@@ -78,7 +78,7 @@ fn section(ctx: &Ctx, entry: &Entry<'_>) -> Element {
     section = section.child(
       Text::new(&ctx.t_args(
         "statusBar.planLimits.refuses",
-        [("cli", &*text::name(ctx, entry.provider)), ("time", at.as_str())],
+        [("cli", &*text::name(ctx, entry.cli)), ("time", at.as_str())],
       ))
       .variant(TypographyStyle::Caption),
     );

@@ -16,7 +16,10 @@ use lurq::{
 };
 use orchester_core::{
   connection::invocation::Platform,
-  permission::capability::{EnforcedPermissions, PermissionProblem},
+  permission::{
+    AgentPermissions,
+    capability::{EnforcedPermissions, PermissionOption, PermissionProblem, PermissionSetting},
+  },
 };
 
 use super::{Editing, editor::ProfileEditor};
@@ -148,13 +151,20 @@ impl ProfileEditor {
     enforced_summary(ctx, &self.permissions.get(), enforced, Length::Long)
   }
 
-  /// What blocks publishing, and what the last connection change reset.
+  /// What blocks publishing, and what the last connection change reset. On a native connection
+  /// this is the one notice saying that the profile can't run there yet.
   pub(super) fn permission_notices(&self, ctx: &Ctx) -> Vec<Element> {
     let mut notices = Vec::new();
     if let (Some(problem), Some(connection)) = (self.permission_problem(), self.selected_connection()) {
+      let title = match problem {
+        PermissionProblem::NativeNotAvailable => "agents.permissions.nativeBlockedTitle",
+        PermissionProblem::NoEnforceableOption { .. } | PermissionProblem::NotEnforceable { .. } => {
+          "agents.permissions.blockedTitle"
+        }
+      };
       let mut notice = Notice::new(
         Icon::Lock,
-        ctx.t("agents.permissions.blockedTitle"),
+        ctx.t(title),
         self::problem(ctx, &problem, connection.provider()),
       )
       .emphasized()
@@ -173,7 +183,12 @@ impl ProfileEditor {
     }
     let resets = self.resets.get();
     if let (false, Some(connection)) = (resets.0.is_empty(), self.selected_connection()) {
-      let options: Vec<Arc<str>> = resets.0.iter().map(|option| ctx.t(option_title(*option))).collect();
+      let permissions = self.permissions.get();
+      let changes: Vec<Arc<str>> = resets
+        .0
+        .iter()
+        .map(|from| reset_change(ctx, *from, &permissions))
+        .collect();
       let separator = ctx.t("common.listSeparator");
       notices.push(
         Notice::new(
@@ -184,7 +199,7 @@ impl ProfileEditor {
           ),
           ctx.t_args(
             "agents.permissions.resetDetail",
-            [("options", options.join(&separator).as_str())],
+            [("changes", changes.join(&separator).as_str())],
           ),
         )
         .id("agent-permissions-reset")
@@ -193,4 +208,18 @@ impl ProfileEditor {
     }
     notices
   }
+}
+
+/// "Allowed commands became Any command in the worktree": an option the connection cannot enforce
+/// and the one now chosen for its setting in `permissions`.
+fn reset_change(ctx: &Ctx, from: PermissionOption, permissions: &AgentPermissions) -> Arc<str> {
+  let to = match from.setting() {
+    PermissionSetting::Repository => PermissionOption::of_repository(permissions.repository()),
+    PermissionSetting::Commands => PermissionOption::of_commands(permissions.commands()),
+    PermissionSetting::Network => PermissionOption::of_network(permissions.network()),
+  };
+  ctx.t_args(
+    "agents.permissions.resetChange",
+    [("from", &*ctx.t(option_title(from))), ("to", &*ctx.t(option_title(to)))],
+  )
 }

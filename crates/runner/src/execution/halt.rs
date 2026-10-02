@@ -1,6 +1,7 @@
 //! How a running run stops: requests (pause, cancel, the runner stopping) and limits (tokens,
 //! active time, the project's daily budget, a step's budget). A pause lets every agent finish its
-//! invocation; a cancel or the runner stopping ends them; a reached run limit ends them once their
+//! invocation, checkpointing a pending tool decision without granting it. A cancel or the runner
+//! stopping ends them; a reached run limit ends them once their
 //! turn is over (time: at once). A step's budget ends only that step's agent once its turn is
 //! over and lets the others finish their invocations, like a pause. The run settles only after its
 //! last agent has ended, and then stops at the limit it reached.
@@ -21,12 +22,15 @@ use super::{
 };
 
 impl RunTask {
-  /// Handles a request. A pause is recorded at once and takes effect when the agents have ended;
-  /// a cancel or the runner stopping ends the agents.
+  /// A pause waits for ordinary work or checkpoints a pending tool decision. Cancel and
+  /// interruption end the agents immediately.
   pub(super) fn control(&mut self, control: Control) -> Result<(), ExecutionError> {
     match control {
       Control::Pause(ack) => {
         let requested = self.transition(|run, now| run.request_pause(now));
+        if requested.is_ok() {
+          self.stop_agents(Stop::AtApproval);
+        }
         let result = match &requested {
           Ok(()) => Ok(()),
           Err(error) => Err(Rejection::Failed {

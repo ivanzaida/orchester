@@ -9,11 +9,11 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  connection::{AgentProvider, ConnectionStatus, plan_limits::LimitState},
+  connection::{ConnectionStatus, plan_limits::LimitState},
   time::Timestamp,
 };
 
-use super::{Entry, text};
+use super::{Cli, Entry, text};
 use crate::{
   display,
   theme::{ExtraSpacing, ExtraTypography},
@@ -22,13 +22,13 @@ use crate::{
 
 pub fn header(ctx: &Ctx, entry: &Entry<'_>) -> Element {
   let mut row = Row::new()
-    .id(match entry.provider {
-      AgentProvider::CodexCli => "status-plan-limits-codex-heading",
-      AgentProvider::ClaudeCodeCli => "status-plan-limits-claude-heading",
+    .id(match entry.cli {
+      Cli::Codex => "status-plan-limits-codex-heading",
+      Cli::Claude => "status-plan-limits-claude-heading",
     })
     .spacing(ExtraSpacing::PlanRows.role())
     .align_items(Alignment::Center)
-    .child(Text::new(&text::hint_name(ctx, entry.provider)).variant(ExtraTypography::StatusLabel.role()));
+    .child(Text::new(&text::hint_name(ctx, entry.cli)).variant(ExtraTypography::StatusLabel.role()));
   if let Some(plan) = entry.reading.and_then(|reading| reading.limits.plan.as_deref()) {
     row = row.child(Text::new(&text::plan(ctx, plan)).variant(TypographyStyle::Caption));
   }
@@ -93,7 +93,7 @@ pub fn unavailable(ctx: &Ctx, entry: &Entry<'_>) -> Element {
   let body = ctx.t_args(
     key,
     [
-      ("cli", &*text::hint_name(ctx, entry.provider)),
+      ("cli", &*text::hint_name(ctx, entry.cli)),
       ("connection", entry.connection.name().as_str()),
       ("project", entry.project_name),
       ("time", checked.as_str()),
@@ -199,7 +199,7 @@ fn source(ctx: &Ctx, entry: &Entry<'_>, at: Timestamp, minutes: Option<u64>) -> 
   let copy = ctx.t_args(
     "statusBar.planLimits.source",
     [
-      ("cli", &*text::name(ctx, entry.provider)),
+      ("cli", &*text::name(ctx, entry.cli)),
       ("time", text::clock(at, false).as_str()),
       ("age", &*age),
     ],

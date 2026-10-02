@@ -6,6 +6,7 @@ mod support;
 use std::{future::Future, num::NonZeroU32, task::Poll, time::Duration};
 
 use orchester_core::{
+  connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{PauseReason, PermissionsApply, PlanDecision, PlanVersion, RaisedLimits, RunLimit, RunStatus},
@@ -99,6 +100,7 @@ async fn assert_other_requests_wait(scheduler: &Scheduler, run: RunId, builder: 
 async fn requests_wait_while_a_limit_raise_starts_the_next_task() {
   let project = project(&Setup {
     budget: 5_000,
+    provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
   let root = project.repo.path();

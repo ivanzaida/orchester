@@ -120,13 +120,10 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
   };
   if state == LimitState::Reached {
     return vec![
-      Text::new(&ctx.t_args(
-        "statusBar.planLimits.reached",
-        [("cli", &*text::name(ctx, entry.provider))],
-      ))
-      .variant(ExtraTypography::StatusLabel.role())
-      .nowrap()
-      .into(),
+      Text::new(&ctx.t_args("statusBar.planLimits.reached", [("cli", &*text::name(ctx, entry.cli))]))
+        .variant(ExtraTypography::StatusLabel.role())
+        .nowrap()
+        .into(),
       value(
         &text::reset(ctx, entry.window().and_then(|window| window.resets()), entry.now, false),
         PaletteColor::TextPrimary,
@@ -145,7 +142,7 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
     ExtraTypography::MonoValue
   };
   vec![
-    label(&text::name(ctx, entry.provider), color),
+    label(&text::name(ctx, entry.cli), color),
     Text::new(&percent.unwrap_or_else(|| ctx.t("statusBar.counts.unknown")))
       .variant(variant.role())
       .color(value_color)
@@ -154,8 +151,26 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
   ]
 }
 
+/// The agent CLIs that report their account's limits; native providers have no plan to report.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Cli {
+  Codex,
+  Claude,
+}
+
+impl Cli {
+  const ALL: [Self; 2] = [Self::Codex, Self::Claude];
+
+  const fn provider(self) -> AgentProvider {
+    match self {
+      Self::Codex => AgentProvider::CodexCli,
+      Self::Claude => AgentProvider::ClaudeCodeCli,
+    }
+  }
+}
+
 pub(super) struct Entry<'a> {
-  provider: AgentProvider,
+  cli: Cli,
   project_name: &'a str,
   connection: &'a AgentConnection,
   reading: Option<&'a LimitReading>,
@@ -180,9 +195,10 @@ impl Entry<'_> {
 }
 
 fn entries(props: &Props, now: Timestamp) -> Vec<Entry<'_>> {
-  AgentProvider::ALL
+  Cli::ALL
     .into_iter()
-    .filter_map(|provider| {
+    .filter_map(|cli| {
+      let provider = cli.provider();
       let connection = props
         .connections
         .iter()
@@ -199,7 +215,7 @@ fn entries(props: &Props, now: Timestamp) -> Vec<Entry<'_>> {
           .is_some_and(|check| check.at > reading.at && !check.result.status().is_usable())
       });
       Some(Entry {
-        provider,
+        cli,
         project_name: &props.project_name,
         connection,
         reading,

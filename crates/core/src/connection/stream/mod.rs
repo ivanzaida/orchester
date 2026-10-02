@@ -1,17 +1,15 @@
-//! What an agent CLI reports while it works, as provider-neutral [`AgentEvent`]s. Each provider
-//! has a parser for its own output format; lines a parser does not understand are kept as
+//! What an agent CLI reports while it works, as provider-neutral [`AgentEvent`]s: Claude Code's
+//! `stream-json` lines are read by [`ClaudeStream`], Codex App Server's JSON-RPC messages by
+//! [`crate::connection::app_server`]. Lines a parser does not understand are kept as
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
 mod claude;
-mod codex;
+mod redaction;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::{claude::ClaudeStream, codex::parse_codex_line};
-use crate::{
-  connection::{AgentProvider, mcp::McpServerProblem},
-  run::TokenUsage,
-};
+pub use self::claude::ClaudeStream;
+use crate::{code_index::RipgrepFallback, connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// Which output of the CLI a line came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -119,6 +117,36 @@ pub enum AgentEvent {
     server: Option<String>,
     problem: McpServerProblem,
   },
+  /// The agent called `tool` of MCP server `server` (as tool call `item`), and nobody was asked: the step asks
+  /// before MCP actions, and the server lists the tool among those that run without asking.
+  McpToolNotAsked {
+    item: String,
+    server: String,
+    tool: String,
+  },
+  /// `tool` of MCP server `server` is listed to run without asking, but Claude Code would name it as
+  /// it could name a tool of `other`, so it got no allow rule and asks like any other tool.
+  McpExemptionNotApplied {
+    server: String,
+    tool: String,
+    other: String,
+  },
+  /// Codex App Server's MCP call `item` of `tool` of server `server` ended as `status`; `asked` when
+  /// Codex asked for approval of it first.
+  McpToolFinished {
+    item: String,
+    server: String,
+    tool: String,
+    status: CommandStatus,
+    asked: bool,
+  },
+  /// Codex asked for approval of the call `item` of `tool` of MCP server `server` in a step that does
+  /// not ask before MCP actions; Orchester declined it at once, without asking anyone.
+  McpToolDeclined {
+    item: String,
+    server: String,
+    tool: String,
+  },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
   ToolCommandStarted {
@@ -169,6 +197,56 @@ pub enum RunnerProblem {
   StepBudgetReached { budget: u64 },
   /// A command tool's `program` is no file on the `PATH` or in the worktree; it was not started.
   ProgramNotFound { program: String },
+  /// Claude Code's permission prompt never reached the runner, so no action could be approved:
+  /// every call it asked about was denied as unavailable.
+  PermissionPromptUnreachable,
+  /// The provider's API refused `model` to the CLI's version `installed`: it needs `required` or
+  /// newer.
+  CliTooOld {
+    model: String,
+    installed: String,
+    required: String,
+  },
+  /// The codebase index of the run's base revision could not be built; the agent works without it.
+  CodebaseIndexUnavailable { detail: String },
+  /// ripgrep was found neither on the agent's `PATH` nor with an agent CLI; `fallback` says how the
+  /// agent searches instead.
+  RipgrepNotFound {
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
+  /// ripgrep was found but could not be copied where the agent can run it; `fallback` says how the
+  /// agent searches instead.
+  RipgrepUnavailable {
+    detail: String,
+    #[serde(default)]
+    fallback: RipgrepFallback,
+  },
+  /// The step's handoff was not kept as task memory.
+  MemoryNotSaved { reason: MemoryNotSavedReason },
+  /// `records` task or project memory records could not be read back; agents get the others.
+  MemoryUnreadable { records: u64 },
+  /// Memory could not be checked for unreadable records; `detail` is the storage error. The agent
+  /// started all the same.
+  MemoryScanFailed { detail: String },
+  /// The worktree has the repository's own Codex settings in `folder` (`.codex\` in the worktree),
+  /// which Codex did not load for the agent; the agent started all the same.
+  CodexSettingsIgnored { folder: String },
+  /// The CLI wrote `lines` more lines to standard error than the activity keeps; they were left out.
+  StderrLeftOut { lines: u64 },
+}
+
+/// Why a step's handoff was not kept as task memory. It names a secret, never its value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum MemoryNotSavedReason {
+  /// It holds the value of secret `secret`.
+  ContainsSecret { secret: String },
+  /// The keychain could not be read to check it for the value of secret `secret`.
+  KeychainUnavailable { secret: String },
+  /// The project database could not store it; `detail` is the storage error, which never holds a
+  /// record's text.
+  StorageFailed { detail: String },
 }
 
 impl AgentEvent {
@@ -191,6 +269,10 @@ impl AgentEvent {
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",
       Self::McpServer { .. } => "mcp_server",
+      Self::McpToolNotAsked { .. } => "mcp_tool_not_asked",
+      Self::McpExemptionNotApplied { .. } => "mcp_exemption_not_applied",
+      Self::McpToolDeclined { .. } => "mcp_tool_declined",
+      Self::McpToolFinished { .. } => "mcp_tool_finished",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }
@@ -301,29 +383,4 @@ impl InvocationTracker {
 enum Failure {
   Turn(String),
   NotSignedIn(String),
-}
-
-/// Reads one invocation's output into [`AgentEvent`]s with the parser of its CLI.
-#[derive(Clone, Debug)]
-pub enum AgentStream {
-  Codex,
-  Claude(ClaudeStream),
-}
-
-impl AgentStream {
-  pub fn new(provider: AgentProvider) -> Self {
-    match provider {
-      AgentProvider::CodexCli => Self::Codex,
-      AgentProvider::ClaudeCodeCli => Self::Claude(ClaudeStream::default()),
-    }
-  }
-
-  /// The events one line of output reports, in order; a line the parser does not understand is
-  /// one [`AgentEvent::Raw`].
-  pub fn parse(&mut self, stream: OutputStream, line: &str) -> Vec<AgentEvent> {
-    match self {
-      Self::Codex => vec![parse_codex_line(stream, line)],
-      Self::Claude(claude) => claude.parse(stream, line),
-    }
-  }
 }

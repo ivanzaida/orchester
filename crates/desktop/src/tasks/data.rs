@@ -7,7 +7,7 @@ use orchester_core::{
   conversation::{Message, latest_question},
   id::{IdempotencyKey, ResourceId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{PendingToolApproval, Run, RunEvent, StepExecutor},
+  run::{Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
   time::Timestamp,
@@ -16,6 +16,7 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{
+  approvals::{self, ShownApproval},
   detail::run_store_error,
   list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases},
   unreadable::Unreadable,
@@ -49,7 +50,7 @@ pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
-  pub pending_tool_approvals: Arc<Vec<PendingToolApproval>>,
+  pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// Runs started in the project, of every task, that can be read.
@@ -80,7 +81,7 @@ impl ProjectTasks {
     Ok(Self {
       tasks: Arc::new(tasks),
       pipelines: Arc::new(published_pipelines(&db)?),
-      pending_tool_approvals: Arc::new(db.pending_tool_approvals_all()?),
+      pending_tool_approvals: Arc::new(approvals::pending(&db)?),
       phases: Arc::new(phases),
       runs: count,
       lost_to_runner: 0,
@@ -284,19 +285,16 @@ pub enum TaskDraftSaveError {
   DetailsMismatch,
 }
 
-/// [`save_to`] in the project database of `repo_root`, confirmed as the requested details.
-pub fn save_draft_in(
-  repo_root: &Path,
-  target: SaveTarget,
-  details: TaskDetails,
-) -> Result<TaskDetails, TaskDraftSaveError> {
+/// [`save_to`] in the project database of `repo_root`, confirmed as the requested details: the
+/// saved task.
+pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails) -> Result<Task, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
   if matches!(target, SaveTarget::New(_)) && saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }
-  if saved.details() != &details {
+  if saved.details() != details {
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
-  Ok(details)
+  Ok(saved)
 }

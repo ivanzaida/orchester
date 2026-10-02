@@ -214,6 +214,15 @@ impl ConnectionsScreen {
     work: &WorkAction,
     busy: bool,
   ) -> InspectorActions {
+    // A native connection is neither checked nor edited in this version; the inspector says why.
+    if !connection.provider().runs_agents() {
+      let nav = self.nav.clone();
+      return InspectorActions {
+        check: None,
+        edit: None,
+        profile: Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile)))),
+      };
+    }
     let check = (!busy).then(|| {
       let spec = operations::connection_check(open, connection.name().as_str());
       actions::start(
@@ -229,7 +238,7 @@ impl ConnectionsScreen {
     let nav = self.nav.clone();
     InspectorActions {
       check,
-      edit: Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone()))),
+      edit: Some(Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone())))),
       profile: Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile)))),
     }
   }

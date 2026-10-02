@@ -6,7 +6,10 @@
 mod support;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  connection::{
+    AgentProvider,
+    stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  },
   id::IdempotencyKey,
   resource::StepKey,
   run::{PauseReason, RaisedLimits, Run, RunLimit, RunStatus, StepStatus},
@@ -48,6 +51,7 @@ fn stopped(run: &Run) -> bool {
 async fn step_budget_stops_the_run_at_its_limit_and_a_raise_continues_the_session() {
   let project = project(&Setup {
     steps: vec![StepSpec::new("implement", "Implement", "Work in turns.", &[]).budget(1_000)],
+    provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Say hello.")
   });
   let root = project.repo.path();
@@ -119,12 +123,10 @@ async fn step_budget_stops_the_run_at_its_limit_and_a_raise_continues_the_sessio
   let invocations = db.invocations(id).expect("invocations");
   assert_eq!(invocations.len(), 2);
   assert_eq!(invocations[0].execution, invocations[1].execution);
-  assert_eq!(invocations[1].session.as_deref(), Some("fake-thread-1"));
+  let session = invocations[0].session.clone().expect("the session");
+  assert_eq!(invocations[1].session.as_deref(), Some(session.as_str()));
   let argv = reported(&db, id, "argv: ");
-  assert!(
-    argv[1].contains("exec resume") && argv[1].ends_with("fake-thread-1 -"),
-    "{argv:?}"
-  );
+  assert!(argv[1].ends_with(&format!("--resume {session}")), "{argv:?}");
   assert_eq!(
     git(root, &["show", &format!("{}:README.md", run.branch())]),
     "hi\ndraft\ncontinued"
@@ -141,6 +143,7 @@ async fn step_budget_lets_a_parallel_step_finish_and_takes_no_retry() {
         .budget(1_000),
       StepSpec::new("checks", "Checks", "Work slowly. Write own file.", &["implement"]),
     ],
+    provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Say hello.")
   });
   let root = project.repo.path();

@@ -86,8 +86,10 @@ fn skills_import_creates_drafts_and_leaves_the_repository_unchanged() {
   let before = snapshot(desktop.repo());
   open_skills(&mut desktop);
   desktop.click("skills-import");
-  desktop.wait_for("repository-import-create");
-  assert!(shows(&mut desktop, "2 of 4 selected · 1 instruction, 1 skill"));
+  // The dialog opens while it reads the repository; the choice is shown once it is read.
+  desktop.wait_until("the repository read", |desktop| {
+    shows(desktop, "2 of 4 selected · 1 instruction, 1 skill")
+  });
   // The checks of what can be imported, Cancel and Create; CLAUDE.md and the folder without a
   // SKILL.md cannot be chosen.
   assert_eq!(

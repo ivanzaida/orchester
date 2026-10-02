@@ -25,11 +25,14 @@ pub(super) fn preflight(db: &ProjectDb, root: &Path) -> Result<(), Rejection> {
   if !target.is_absolute() {
     return Ok(());
   }
-  let state = target_state(target).map_err(|error| unavailable(target, &error))?;
+  if target.try_exists().map_err(|error| unavailable(target, &error))? {
+    // Validate the configured root even though every new worktree starts a cold target below it.
+    fs::read_dir(target).map_err(|error| unavailable(target, &error))?;
+  }
   let ancestor = existing_ancestor(target).map_err(|error| unavailable(target, &error))?;
   let resolved = fs::canonicalize(ancestor).map_err(|error| unavailable(target, &error))?;
   let available = available_space(target, &resolved).map_err(|error| unavailable(target, &error))?;
-  if let Some(problem) = build_space_problem(target.to_path_buf(), available, state) {
+  if let Some(problem) = build_space_problem(target.to_path_buf(), available, BuildTargetState::Empty) {
     return Err(Rejection::Preflight {
       problems: vec![problem],
     });
@@ -54,33 +57,6 @@ fn available_space(target: &Path, resolved: &Path) -> io::Result<u64> {
   #[cfg(not(feature = "test-agent"))]
   let _ = target;
   fs4::available_space(resolved)
-}
-
-fn target_state(target: &Path) -> io::Result<BuildTargetState> {
-  if !target.try_exists()? {
-    return Ok(BuildTargetState::Empty);
-  }
-  for entry in fs::read_dir(target)? {
-    let entry = entry?;
-    if !entry.file_type()?.is_dir() {
-      continue;
-    }
-    if has_compiled_deps(&entry.path())? {
-      return Ok(BuildTargetState::Populated);
-    }
-    for profile in fs::read_dir(entry.path())? {
-      let profile = profile?;
-      if profile.file_type()?.is_dir() && has_compiled_deps(&profile.path())? {
-        return Ok(BuildTargetState::Populated);
-      }
-    }
-  }
-  Ok(BuildTargetState::Empty)
-}
-
-fn has_compiled_deps(profile: &Path) -> io::Result<bool> {
-  let deps = profile.join("deps");
-  Ok(deps.try_exists()? && fs::read_dir(deps)?.next().transpose()?.is_some())
 }
 
 fn existing_ancestor(target: &Path) -> io::Result<&Path> {

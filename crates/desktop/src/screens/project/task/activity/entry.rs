@@ -15,14 +15,16 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
   tokens::compact_tokens,
 };
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine,
+  engine, first_edit,
   mcp::mcp_server_text,
+  mcp_call,
+  problem::problem_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -66,8 +68,9 @@ impl Component for TranscriptRowView {
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
-/// tool step names its tool and runs, and has no model and no tokens.
+/// Disclosure, step number, step and agent, model and time span, tokens with those before the
+/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
+/// tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let meta = header_meta(ctx, header);
   let title = ctx.t_args(
@@ -79,6 +82,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       "runs.tokens",
       [("count", compact_tokens(header.usage.counted()).as_str())],
     );
+    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
     Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
   });
   let (glyph, state) = step_state(header.status);
@@ -144,7 +148,7 @@ fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
 }
 
 /// What an entry shows, apart from its time and whether it is open.
-struct Shown {
+pub(super) struct Shown {
   glyph: Icon,
   title: Arc<str>,
   meta: Arc<str>,
@@ -157,6 +161,22 @@ struct Shown {
   collapsible: bool,
   /// The repository path a press opens in the Changes tab.
   opens: Option<Arc<str>>,
+}
+
+impl Shown {
+  /// One line of `title` and `meta`, with `body` under it.
+  pub(super) const fn plain(glyph: Icon, title: Arc<str>, meta: Arc<str>, body: Option<Arc<str>>) -> Self {
+    Self {
+      glyph,
+      title,
+      meta,
+      body,
+      output: None,
+      omitted: None,
+      collapsible: false,
+      opens: None,
+    }
+  }
 }
 
 fn entry_row(
@@ -308,16 +328,7 @@ fn output(ctx: &Ctx, lines: &[Arc<str>], omitted: Option<&str>) -> Element {
 }
 
 fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
-  let plain = |glyph, title: Arc<str>, meta: Arc<str>, body| Shown {
-    glyph,
-    title,
-    meta,
-    body,
-    output: None,
-    omitted: None,
-    collapsible: false,
-    opens: None,
-  };
+  let plain = Shown::plain;
   match &entry.kind {
     EntryKind::Message(text) => plain(
       Icon::MessageSquare,
@@ -336,11 +347,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     },
     EntryKind::Command(entry) => command(ctx, entry),
     EntryKind::FileChange(change) => {
-      let (glyph, key) = match change.kind {
-        FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
-        FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
-        FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
-      };
+      let (glyph, key) = file_change_kind(change.kind);
       // Git's paths use `/` whatever the CLI reported.
       let path: Arc<str> = in_worktree(&change.path).replace('\\', "/").into();
       let meta = ctx.t_args("runs.activity.fileMeta", [("status", &*ctx.t(key))]);
@@ -389,6 +396,19 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
+    EntryKind::McpTool(call) => mcp_call::call(ctx, call),
+    EntryKind::ExemptionNotApplied { server, tool, other } => {
+      mcp_call::exemption_not_applied(ctx, (server, tool, other))
+    }
+  }
+}
+
+/// A file change's glyph and the key of its status.
+fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
+  match kind {
+    FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
+    FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
+    FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
   }
 }
 
@@ -439,6 +459,10 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       (Icon::Terminal, meta, None)
     }
   };
+  let meta = match &entry.mark {
+    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
+    None => meta,
+  };
   Shown {
     glyph,
     title: entry.command.clone(),
@@ -485,48 +509,6 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
 fn tenths_of_seconds(millis: i64) -> String {
   let tenths = millis.max(0) / 100;
   format!("{}.{}", tenths / 10, tenths % 10)
-}
-
-fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
-  match problem {
-    RunnerProblem::UnavailableVariable { variable } => (
-      ctx.t_args(
-        "runs.activity.problem.unavailableVariable",
-        [("variable", variable.as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::CouldNotStart { detail } => (
-      ctx.t("runs.activity.problem.couldNotStart"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::CheckpointFailed { detail } => (
-      ctx.t("runs.activity.problem.checkpointFailed"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::MergeConflict { branch, files } => (
-      ctx.t_args("runs.activity.problem.mergeConflict", [("branch", branch.as_str())]),
-      Some(
-        files
-          .join(
-            "
-",
-          )
-          .into(),
-      ),
-    ),
-    RunnerProblem::StepBudgetReached { budget } => (
-      ctx.t_args(
-        "runs.activity.problem.stepBudgetReached",
-        [("budget", compact_tokens(*budget).as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
-    ),
-  }
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree

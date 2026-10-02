@@ -1,9 +1,9 @@
 //! Add MCP server, also used to edit one (04.E `yRb2k`, 04.E2 `Qvhc6`, 04.E3 `Hpycl`, in the
 //! connection dialog frame `IAN4P`). A server needs a name the agent CLIs know it by and a transport: a
 //! program the agent's CLI starts, with its arguments, folder and variables, or a URL with an
-//! optional bearer token from a project secret. Nothing is started or reached while it is set up;
-//! the agent's CLI starts or reaches it when an agent that gets it starts. The fields are in
-//! `mcp_form`; a new connection's type can be switched to the other kinds.
+//! optional bearer token from a project secret; and, for either, the tools that run without asking. Nothing is started
+//! or reached while it is set up; the agent's CLI starts or reaches it when an agent that gets it starts. The fields
+//! are in `mcp_form`; a new connection's type can be switched to the other kinds.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -59,6 +59,7 @@ pub struct McpDialog {
   pub(super) variables: Signal<String>,
   pub(super) url: Signal<String>,
   pub(super) bearer: Signal<BearerChoice>,
+  pub(super) exempt_tools: Signal<String>,
   pub(super) insert: Signal<InsertSecret>,
   /// Focused when the dialog opens so that Tab starts at its first control.
   frame: ElementRef,
@@ -85,6 +86,7 @@ impl Component for McpDialog {
       variables: ctx.signal(text.variables),
       url: ctx.signal(text.url),
       bearer: ctx.signal(BearerChoice(text.bearer)),
+      exempt_tools: ctx.signal(text.exempt_tools),
       insert: ctx.signal(InsertSecret(None)),
       frame: ElementRef::new(),
       context,
@@ -167,6 +169,7 @@ impl McpDialog {
       variables: self.variables.get(),
       url: self.url.get(),
       bearer: self.bearer.get().0,
+      exempt_tools: self.exempt_tools.get(),
     }
   }
 
@@ -193,6 +196,7 @@ fn first_error(errors: &McpServerErrors) -> Message {
     &errors.arguments,
     &errors.variables,
     &errors.url,
+    &errors.exempt_tools,
   ]
   .into_iter()
   .find_map(Clone::clone)

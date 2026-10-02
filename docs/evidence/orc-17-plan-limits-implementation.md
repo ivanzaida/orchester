@@ -5,6 +5,14 @@ The earlier Verify result is FAIL; its findings are not closed until independent
 re-verification passes. The implementer did not perform design verification or
 take app/design screenshots.
 
+**Merged onto master 2026-10-02.** Master runs every Codex step through App Server and has no
+`codex exec` JSON path, so the Codex session-log reader (`crates/runner/src/codex_limits.rs`), the
+session `token_count` parser, its fake session log and the runner's optional `chrono` and tokio
+`fs` feature were removed. Codex limits now come only from App Server's
+`account/rateLimits/updated` notification, read against the v2 schema of codex-cli 0.159.2
+(`windowDurationMins` nullable, sparse updates merged into the last reading, only the `codex`
+bucket). The sections below describe the run as it was before the merge.
+
 ## Behavior
 
 - The runner parses Codex session `token_count.rate_limits`, Codex App Server

@@ -3,10 +3,13 @@
 use std::{ops::Deref, path::PathBuf};
 
 use super::{
-  AgentProvider, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn,
+  AgentEndpoint, AgentProvider, ApiEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck,
+  SignIn,
   catalog::{CatalogModel, ModelCatalog},
+  compare_versions,
+  model_requirements::CliTooOld,
 };
-use crate::{id::ConnectionId, name::Name, time::Timestamp};
+use crate::{id::ConnectionId, name::Name, resource::ModelId, time::Timestamp};
 
 /// What running an agent CLI's read-only commands found.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -67,7 +70,7 @@ pub struct AgentConnection {
 }
 
 impl AgentConnection {
-  /// A connection that has not been checked yet.
+  /// A connection to the agent CLI at `executable` that has not been checked yet.
   pub fn new(
     id: ConnectionId,
     name: Name,
@@ -75,7 +78,21 @@ impl AgentConnection {
     executable: PathBuf,
     created_at: Timestamp,
   ) -> Result<Self, ConnectionError> {
-    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), executable, created_at)?;
+    let endpoint = AgentEndpoint::Program(executable);
+    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), endpoint, created_at)?;
+    Ok(Self { connection, provider })
+  }
+
+  /// A connection to a native `provider` at the model API `api`.
+  pub fn native(
+    id: ConnectionId,
+    name: Name,
+    provider: AgentProvider,
+    api: ApiEndpoint,
+    created_at: Timestamp,
+  ) -> Result<Self, ConnectionError> {
+    let endpoint = AgentEndpoint::Api(api);
+    let connection = Connection::new(id, name, ConnectionKind::Agent(provider), endpoint, created_at)?;
     Ok(Self { connection, provider })
   }
 
@@ -103,8 +120,9 @@ impl AgentConnection {
     }
   }
 
-  pub fn record_check(&mut self, check: ConnectionCheck) {
-    self.connection.last_check = Some(LastCheck::Agent(check));
+  /// See [`Connection::record_check`]: a native connection refuses the check.
+  pub fn record_check(&mut self, check: ConnectionCheck) -> Result<(), ConnectionError> {
+    self.connection.record_check(LastCheck::Agent(check))
   }
 
   /// Models found by the last successful check.
@@ -113,6 +131,26 @@ impl AgentConnection {
       CheckResult::Available { catalog, .. } => Some(catalog),
       _ => None,
     }
+  }
+
+  /// Records what a refusal said: `model` needs version `required` of this CLI or newer.
+  pub fn record_model_requirement(&mut self, model: &ModelId, required: &str) {
+    self.connection.model_requirements.record(model, required);
+  }
+
+  /// Why the checked CLI cannot run `model`: its version is below the one a refusal recorded.
+  /// `None` when nothing was recorded, the CLI is new enough, or its version is unknown.
+  pub fn cannot_run(&self, model: &ModelId) -> Option<CliTooOld> {
+    let required = self.connection.model_requirements.required(model)?;
+    let CheckResult::Available { version, .. } = &self.last_check()?.result else {
+      return None;
+    };
+    compare_versions(Some(version), Some(required))
+      .is_lt()
+      .then(|| CliTooOld {
+        installed: version.clone(),
+        required: required.to_owned(),
+      })
   }
 
   /// Models a profile can choose from on this connection, in catalog order.

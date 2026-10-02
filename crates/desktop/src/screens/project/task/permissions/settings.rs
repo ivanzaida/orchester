@@ -26,7 +26,9 @@ use orchester_core::{
 
 use super::RunPermissionsProps;
 use crate::{
-  agents::permissions::{option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    escalations, file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
+  },
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
   ui::{
@@ -91,6 +93,7 @@ pub(super) fn settings(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draf
     repository(ctx, edit, provider, draft),
     commands(ctx, edit, props, draft),
     network(ctx, edit, provider, draft),
+    tool_approvals(ctx, edit, props, draft),
   ]
 }
 
@@ -212,32 +215,83 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
   let kept = listed.clone().unwrap_or_default();
   let allowed_why = reason(ctx, provider, PermissionOption::AllowedCommands);
   let any_why = reason(ctx, provider, PermissionOption::AnyCommand);
+  let ask_why = reason(ctx, provider, PermissionOption::AskBeforeCommands);
+  let ask_edit = edit.clone();
   let (allowed_edit, any_edit) = (edit.clone(), edit.clone());
-  let mut content = vec![options(vec![
-    radio(
-      ctx,
-      ("task-permissions-allowed", PermissionOption::AllowedCommands),
-      listed.is_some(),
-      allowed_why.is_none(),
-      move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
-    ),
-    radio(
-      ctx,
-      ("task-permissions-any", PermissionOption::AnyCommand),
-      *draft.commands() == CommandPermission::AnyInWorktree,
-      any_why.is_none(),
-      move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
-    ),
-  ])];
-  content.extend(reasons([allowed_why, any_why]));
+  let mut content = vec![
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .overflow_visible()
+      .with_children(vec![
+        radio(
+          ctx,
+          ("task-permissions-ask", PermissionOption::AskBeforeCommands),
+          *draft.commands() == CommandPermission::AskBefore,
+          ask_why.is_none(),
+          move || ask_edit.change(|draft| draft.set_commands(CommandPermission::AskBefore)),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-allowed", PermissionOption::AllowedCommands),
+          listed.is_some(),
+          allowed_why.is_none(),
+          move || allowed_edit.change(|draft| draft.set_commands(CommandPermission::Allowed(kept.clone()))),
+        ),
+        radio(
+          ctx,
+          ("task-permissions-any", PermissionOption::AnyCommand),
+          *draft.commands() == CommandPermission::AnyInWorktree,
+          any_why.is_none(),
+          move || any_edit.change(|draft| draft.set_commands(CommandPermission::AnyInWorktree)),
+        ),
+      ])
+      .into(),
+  ];
+  content.extend(reasons([ask_why, allowed_why, any_why]));
+  content.extend(escalations(ctx, provider, draft.commands()).map(|note| hint(&note)));
+  // App Server cannot leave out the user's execpolicy rules (`docs/interactive-tool-approvals.md`).
+  if provider == Some(AgentProvider::CodexCli) {
+    content.push(warning(&ctx.t("agents.permissions.codexRulesNote")));
+  }
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
     content.extend(changed_note(ctx, &list, props));
     if let Some(error) = edit.command_error.get() {
       content.push(field_error(&message_text(ctx, &error)));
     }
+    content.extend(file_command_hints(ctx, &list).iter().map(|note| hint(note)));
+    content.extend(unlisted_commands(ctx, provider, &list).map(|note| hint(&note)));
   }
   group(ctx, "agents.permissions.commands", content)
+}
+
+fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPermissions) -> Element {
+  let provider = props.step.provider;
+  let required = props.permissions.tool_approvals_required;
+  let enabled = required || draft.interactive_tool_approvals();
+  let switch = Switch::new(
+    "task-permissions-tool-approvals",
+    ctx.t("agents.permissions.toolApprovals"),
+    enabled,
+  );
+  let control = if !required && (provider.is_some() || enabled) {
+    let edit = edit.clone();
+    switch.render(move || edit.change(|draft| draft.set_interactive_tool_approvals(!enabled)))
+  } else {
+    switch.locked()
+  };
+  let mut controls = vec![control];
+  let transport = match provider {
+    Some(AgentProvider::CodexCli) => Some("agents.permissions.transport"),
+    Some(AgentProvider::ClaudeCodeCli) => Some("agents.permissions.claudeTransport"),
+    // A native agent runs in no version yet, so no transport asks for it.
+    Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None => None,
+  };
+  if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
+    controls.push(hint(&ctx.t(transport)));
+  }
+  group(ctx, "agents.permissions.toolApprovalsHeading", controls)
 }
 
 /// The profile version's allowed commands; none when it allows no list.
@@ -358,15 +412,32 @@ fn changed_note(ctx: &Ctx, list: &AllowedCommands, props: &RunPermissionsProps) 
       [("commands", join(removed).as_str())],
     ));
   }
-  notes
-    .into_iter()
-    .map(|note| {
-      Text::new(&note)
+  notes.iter().map(|note| hint(note)).collect()
+}
+
+/// A note under a setting, in the style of the unavailable reasons (`W29Od2`).
+fn hint(note: &str) -> Element {
+  Text::new(note)
+    .variant(ExtraTypography::Hint.role())
+    .color(PaletteColor::TextMuted)
+    .into()
+}
+
+/// A hint that limits what the settings above promise, after a warning icon.
+fn warning(note: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Start)
+    .describe("role", "codex-rules")
+    .child(icon(Icon::TriangleAlert, IconSize::Reason, PaletteColor::TextMuted))
+    .child(
+      Text::new(note)
         .variant(ExtraTypography::Hint.role())
         .color(PaletteColor::TextMuted)
-        .into()
-    })
-    .collect()
+        .flex(1.0),
+    )
+    .into()
 }
 
 /// Network (`q4Nelz`): a switch, locked on with the reason when off cannot be enforced.

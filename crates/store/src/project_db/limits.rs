@@ -1,9 +1,11 @@
 //! Project settings › Limits, one row; a project that never changed them uses the defaults. The
 //! environment additions of Project settings › Environment are in [`super::environment`], the
-//! repository agent files setting of General in [`super::agent_files`].
+//! repository agent files setting of General in [`super::agent_files`], the code index setting in
+//! [`super::code_index`].
 
 use orchester_core::{
-  agent_files::RepositoryAgentFiles, limits::ProjectLimits, resource::CommandEnvironment, store::SettingsStore,
+  agent_files::RepositoryAgentFiles, code_index::CodeIndexSetting, limits::ProjectLimits, resource::CommandEnvironment,
+  store::SettingsStore,
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -67,5 +69,13 @@ impl SettingsStore for ProjectDb {
 
   fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), StoreError> {
     super::agent_files::save(&self.connection, setting)
+  }
+
+  fn code_index(&self) -> Result<CodeIndexSetting, StoreError> {
+    super::code_index::load_setting(&self.connection)
+  }
+
+  fn save_code_index(&mut self, setting: CodeIndexSetting) -> Result<(), StoreError> {
+    super::code_index::save_setting(&self.connection, setting)
   }
 }

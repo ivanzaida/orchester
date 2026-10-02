@@ -7,13 +7,15 @@ use std::{collections::BTreeMap, ffi::OsString, path::Path};
 use orchester_core::{
   connection::{
     AgentProvider,
-    invocation::{ClaudeInvocation, ClaudeSession, Platform},
+    claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
+    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, result_schema},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
-    capability::EnforcedPermissions,
+    capability::{EnforcedPermissions, Mechanism, PermissionSetting},
   },
   resource::{CommandEnvironment, VariableName},
+  run::STEP_RESULT_SCHEMA,
 };
 use uuid::Uuid;
 
@@ -43,7 +45,12 @@ fn enforced(
     .expect("enforceable on Claude Code")
 }
 
+/// The permission prompt's configuration file, for the invocations that ask a person.
+const APPROVALS: &str = "/tmp/approvals.json";
+
+/// An invocation with `permissions`, given the permission prompt when they ask a person.
 fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
+  let asks = ClaudeApprovalScope::of(permissions.permissions(), &[]).is_some();
   ClaudeInvocation {
     executable: Path::new("/bin/claude"),
     model: "haiku",
@@ -54,6 +61,8 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     session: ClaudeSession::New(SESSION),
     mcp: None,
     skills: None,
+    code_index: None,
+    approvals: asks.then_some(Path::new(APPROVALS)),
   }
 }
 
@@ -80,10 +89,19 @@ const BASE: [&str; 12] = [
   "--disable-slash-commands",
 ];
 
-/// [`BASE`], `permissions`, then the new session.
-fn expected(permissions: &[&str]) -> Vec<String> {
+/// [`BASE`], the result schema, the permission prompt when the step `asks` a person, `permissions`,
+/// then the new session.
+fn expected(asks: bool, permissions: &[&str]) -> Vec<String> {
+  let schema = result_schema();
+  let prompt: &[&str] = if asks {
+    &["--mcp-config", APPROVALS, "--permission-prompt-tool", PROMPT_TOOL]
+  } else {
+    &[]
+  };
   BASE
     .iter()
+    .chain(&["--json-schema", schema.as_str()])
+    .chain(prompt)
     .chain(permissions)
     .chain(&["--session-id", "0199a0a0-0000-7000-8000-000000000001"])
     .map(|arg| (*arg).to_owned())
@@ -91,30 +109,59 @@ fn expected(permissions: &[&str]) -> Vec<String> {
 }
 
 #[test]
-fn claude_invocation_read_only_without_commands_offers_no_tool_that_can_change_files() {
+fn claude_invocation_passes_the_step_result_schema_as_one_json_argument() {
+  let permissions = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::current(),
+  );
+  for session in [ClaudeSession::New(SESSION), ClaudeSession::Resume("5f0c2a1e")] {
+    let mut current = invocation(&permissions);
+    current.session = session;
+    let args = args(&current);
+    let at = args
+      .iter()
+      .position(|arg| arg == "--json-schema")
+      .expect("the schema flag");
+    let schema: serde_json::Value = serde_json::from_str(&args[at + 1]).expect("one JSON argument");
+    let original: serde_json::Value = serde_json::from_str(STEP_RESULT_SCHEMA).expect("JSON");
+    assert_eq!(schema, original);
+    assert!(!args[at + 1].contains('\n'));
+  }
+}
+
+/// Agents ask: without a listed command every command reaches a person; the edit tools stay removed.
+#[test]
+fn claude_invocation_read_only_without_commands_asks_about_every_command() {
   for platform in PLATFORMS {
     let permissions = enforced(RepositoryAccess::ReadOnly, allowed(&[]), NetworkAccess::Off, platform);
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite",
-        "--permission-mode",
-        "dontAsk",
-        "--disallowedTools",
-        "Edit",
-        "Write",
-        "NotebookEdit",
-        "Bash",
-        "WebFetch",
-        "WebSearch",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Bash",
+          "--permission-mode",
+          "default",
+          "--settings",
+          r#"{"permissions":{"ask":["Bash"]}}"#,
+          "--disallowedTools",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "WebFetch",
+          "WebSearch",
+        ]
+      )
     );
   }
 }
 
+/// The listed commands run; any other asks a person, which `dontAsk` would deny before asking.
 #[test]
-fn claude_invocation_read_only_runs_only_the_listed_commands() {
+fn claude_invocation_read_only_runs_the_listed_commands_and_asks_for_others() {
   for platform in PLATFORMS {
     let permissions = enforced(
       RepositoryAccess::ReadOnly,
@@ -124,25 +171,28 @@ fn claude_invocation_read_only_runs_only_the_listed_commands() {
     );
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
-        "--permission-mode",
-        "dontAsk",
-        "--disallowedTools",
-        "Edit",
-        "Write",
-        "NotebookEdit",
-        "--allowedTools",
-        "Bash(git log:*)",
-        "Bash(rg:*)",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Bash,WebFetch,WebSearch",
+          "--permission-mode",
+          "default",
+          "--disallowedTools",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "--allowedTools",
+          "Bash(git log:*)",
+          "Bash(rg:*)",
+        ]
+      )
     );
   }
 }
 
 #[test]
-fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
+fn claude_invocation_write_allows_the_listed_commands_and_asks_for_others() {
   for platform in PLATFORMS {
     let permissions = enforced(
       RepositoryAccess::Write,
@@ -154,20 +204,128 @@ fn claude_invocation_write_accepts_edits_and_allows_the_listed_commands() {
     assert!(permissions.network_stays_on().is_some());
     assert_eq!(
       args(&invocation(&permissions)),
-      expected(&[
-        "--tools",
-        "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
-        "--permission-mode",
-        "acceptEdits",
-        "--disallowedTools",
-        "WebFetch",
-        "WebSearch",
-        "--allowedTools",
-        "Bash(git:*)",
-        "Bash(pnpm test:*)",
-      ])
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash",
+          "--permission-mode",
+          "default",
+          "--disallowedTools",
+          "WebFetch",
+          "WebSearch",
+          "--allowedTools",
+          "Bash(git:*)",
+          "Bash(pnpm test:*)",
+          "Edit(//repo/.orchester/worktrees/run/**)",
+        ]
+      )
     );
   }
+}
+
+/// `acceptEdits` would run `rm`, `sed` and the other file commands in any form, so a step with
+/// allowed commands edits by rule instead.
+#[test]
+fn claude_invocation_edits_by_rule_whenever_commands_are_listed() {
+  for platform in PLATFORMS {
+    let repository = |repository, commands| {
+      enforced(repository, commands, NetworkAccess::On, platform).mechanism(PermissionSetting::Repository)
+    };
+    for listed in [&["git", "sed -n"][..], &["rm -f build/x"], &["git", "pnpm test"]] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, allowed(listed)),
+        Mechanism::ClaudeEditRules,
+        "{listed:?}"
+      );
+    }
+    for commands in [allowed(&[]), CommandPermission::AskBefore] {
+      assert_eq!(
+        repository(RepositoryAccess::Write, commands),
+        Mechanism::ClaudeAcceptEdits
+      );
+    }
+    assert_eq!(
+      repository(RepositoryAccess::ReadOnly, allowed(&["sed -n"])),
+      Mechanism::ClaudeEditToolsRemoved
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_write_runs_listed_file_commands_in_their_listed_forms_only() {
+  for platform in PLATFORMS {
+    let permissions = enforced(
+      RepositoryAccess::Write,
+      allowed(&["sed -n", "rm -f build/x"]),
+      NetworkAccess::On,
+      platform,
+    );
+    // No deny rule: every other form asks a person, as any unlisted command does.
+    assert_eq!(
+      args(&invocation(&permissions)),
+      expected(
+        true,
+        &[
+          "--tools",
+          "Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash,WebFetch,WebSearch",
+          "--permission-mode",
+          "default",
+          "--allowedTools",
+          "Bash(sed -n:*)",
+          "Bash(rm -f build/x:*)",
+          "Edit(//repo/.orchester/worktrees/run/**)",
+        ]
+      )
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
+  let share = Path::new(r"\\server\share\repo\.orchester\worktrees\run");
+  let start = |permissions: &EnforcedPermissions, worktree, roots: &[std::path::PathBuf]| {
+    ClaudeInvocation {
+      worktree,
+      writable_roots: roots,
+      ..invocation(permissions)
+    }
+    .command("Do it".into(), Vec::new(), &CommandEnvironment::default())
+    .err()
+  };
+  let by_rule = enforced(
+    RepositoryAccess::Write,
+    allowed(&["rm -f build/x"]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  // No `Edit` rule can name a network share, so every edit there would be denied unseen.
+  assert_eq!(
+    start(&by_rule, share, &[]),
+    Some(InvocationError::NoEditRule(share.to_path_buf()))
+  );
+  let accepting = enforced(
+    RepositoryAccess::Write,
+    allowed(&[]),
+    NetworkAccess::On,
+    Platform::Windows,
+  );
+  assert_eq!(start(&accepting, share, &[]), None, "acceptEdits needs no rule");
+
+  let mut with_folder = AgentPermissions::new(RepositoryAccess::Write, allowed(&["rm -f build/x"]), NetworkAccess::On);
+  with_folder.set_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  let with_folder = with_folder
+    .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+    .expect("enforceable");
+  let cache = std::path::PathBuf::from(r"\\server\share\cache");
+  assert_eq!(
+    start(
+      &with_folder,
+      Path::new("/repo/.orchester/worktrees/run"),
+      std::slice::from_ref(&cache)
+    ),
+    Some(InvocationError::NoEditRule(cache))
+  );
 }
 
 #[test]
@@ -221,9 +379,29 @@ fn claude_invocation_resume_continues_the_reported_session() {
     ["--resume", "5f0c2a1e-7b3d-4c8e-9a61-2d4b8e0f1a37"]
   );
   assert!(!args.contains(&"--session-id".to_owned()));
-  assert!(args.contains(&"acceptEdits".to_owned()), "permissions are given again");
+  assert!(args.contains(&"default".to_owned()), "permissions are given again");
+  assert!(args.contains(&PROMPT_TOOL.to_owned()), "so is the permission prompt");
   assert!(matches!(ClaudeSession::continuing(None), ClaudeSession::New(_)));
   assert_eq!(ClaudeSession::continuing(Some("s")), ClaudeSession::Resume("s"));
+}
+
+#[test]
+fn claude_invocation_passes_a_full_model_id_to_new_and_resumed_sessions() {
+  let permissions = enforced(
+    RepositoryAccess::Write,
+    allowed(&["git"]),
+    NetworkAccess::On,
+    Platform::current(),
+  );
+  for session in [ClaudeSession::New(SESSION), ClaudeSession::Resume("5f0c2a1e")] {
+    let mut current = invocation(&permissions);
+    current.model = "claude-opus-5-5";
+    current.effort = Some("max");
+    current.session = session;
+    let args = args(&current);
+    assert_eq!(&args[4..8], ["--model", "claude-opus-5-5", "--effort", "max"]);
+    assert_eq!(args.iter().filter(|arg| *arg == "--model").count(), 1);
+  }
 }
 
 #[test]
@@ -292,4 +470,82 @@ fn claude_invocation_command_adds_the_project_variables() {
       ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
     ]
   );
+}
+
+#[test]
+fn claude_invocation_reads_the_code_index_but_may_not_edit_it() {
+  let index = [
+    (
+      Path::new("/repo/.orchester/index/4d2b8e0"),
+      "Edit(//repo/.orchester/index/4d2b8e0/**)",
+    ),
+    (
+      Path::new(r"C:\repo\.orchester\index\4d2b8e0"),
+      "Edit(//c/repo/.orchester/index/4d2b8e0/**)",
+    ),
+  ];
+  for (folder, rule) in index {
+    let writing = enforced(
+      RepositoryAccess::Write,
+      allowed(&["git"]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let given = ClaudeInvocation {
+      code_index: Some(folder),
+      ..invocation(&writing)
+    };
+    let given_args = args(&given);
+    let added = given_args
+      .windows(2)
+      .any(|pair| pair[0] == "--add-dir" && pair[1] == folder.to_string_lossy());
+    assert!(added, "{given_args:?}");
+    assert_eq!(
+      given_args
+        .iter()
+        .filter(|arg| arg.as_str() == "--disallowedTools")
+        .count(),
+      1,
+      "{given_args:?}"
+    );
+    assert!(given_args.iter().any(|arg| arg == rule), "{given_args:?}");
+
+    let reading = enforced(
+      RepositoryAccess::ReadOnly,
+      allowed(&["git"]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let read_only = ClaudeInvocation {
+      code_index: Some(folder),
+      ..invocation(&reading)
+    };
+    assert!(
+      !args(&read_only).iter().any(|arg| arg.starts_with("Edit(")),
+      "every edit tool is denied already"
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_gets_no_edit_rule_for_a_code_index_on_a_network_share() {
+  // How Claude Code writes a network path in its patterns is not documented: the index's files
+  // are read-only instead.
+  for folder in [
+    r"\\server\share\repo\.orchester\index\4d2b8e0",
+    r"\\?\UNC\server\share\repo\.orchester\index\4d2b8e0",
+  ] {
+    let writing = enforced(
+      RepositoryAccess::Write,
+      allowed(&[]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let given = ClaudeInvocation {
+      code_index: Some(Path::new(folder)),
+      ..invocation(&writing)
+    };
+    let given_args = args(&given);
+    assert!(!given_args.iter().any(|arg| arg.starts_with("Edit(")), "{given_args:?}");
+  }
 }

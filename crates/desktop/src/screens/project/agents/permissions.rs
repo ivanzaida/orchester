@@ -24,7 +24,9 @@ use orchester_core::{
 
 use super::editor::{ProfileEditor, Resets};
 use crate::{
-  agents::permissions::{option_detail, option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    file_command_hints, native_unavailable, option_detail, option_title, unavailable, with_command, without_command,
+  },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -62,6 +64,7 @@ impl ProfileEditor {
       .child(self.folders_setting(ctx))
       .child(self.commands_setting(ctx, provider))
       .child(self.network_setting(ctx, provider))
+      .child(self.tool_approvals_setting(ctx, provider))
       .child(self.mcp_setting(ctx, provider));
     let body = Row::new()
       .width(Dimension::Pct(100.0))
@@ -81,6 +84,29 @@ impl ProfileEditor {
     ]
   }
 
+  fn tool_approvals_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
+    let enabled = self.permissions.get().interactive_tool_approvals();
+    let switch = Switch::new(
+      "agent-tool-approvals",
+      ctx.t("agents.permissions.toolApprovals"),
+      enabled,
+    );
+    // Both CLIs route approvals to Orchester; a profile without a connection cannot choose, nor can
+    // one on a native connection, which runs no agent yet.
+    let native = native_unavailable(ctx, provider);
+    let control = if native.is_none() && (provider.is_some() || enabled) {
+      let permissions = self.permissions.clone();
+      switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
+    } else {
+      switch.locked()
+    };
+    let content = Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(control)
+      .with_children(native.map(|reason| unavailable_reason(&reason)));
+    setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
+  }
+
   /// An option card for `option`, chosen by `choose`, or disabled with the reason when the
   /// connection cannot enforce it.
   fn option(
@@ -94,7 +120,7 @@ impl ProfileEditor {
     let card = OptionCard::new(
       option_id(option),
       ctx.t(option_title(option)),
-      ctx.t(option_detail(option)),
+      ctx.t(option_detail(option, provider)),
       selected,
     );
     let Some(provider) = provider else {
@@ -236,6 +262,7 @@ impl ProfileEditor {
       // Enter in the command field adds the command rather than saving the draft.
       .child(form(add, entries))
       .child(note)
+      .with_children(file_command_hints(ctx, list).iter().map(|text| hint_text(text)))
       .into()
   }
 
@@ -267,7 +294,8 @@ impl ProfileEditor {
 
   /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced
   /// (`lW7Sp`). It shows the network access a run gets, which is on wherever off cannot be
-  /// enforced, whatever was chosen.
+  /// enforced, whatever was chosen. On a native connection, where no run starts, it shows the chosen
+  /// access, locked with the reason, as the permission summary does.
   fn network_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let chosen = self.permissions.get();
     let network = provider.map_or(chosen.network(), |provider| {
@@ -319,7 +347,11 @@ fn setting(ctx: &Ctx, label: &str, control: Element) -> Element {
 }
 
 fn hint(ctx: &Ctx, key: &str) -> Element {
-  Text::new(&ctx.t(key))
+  hint_text(&ctx.t(key))
+}
+
+fn hint_text(text: &str) -> Element {
+  Text::new(text)
     .variant(ExtraTypography::Hint.role())
     .color(PaletteColor::TextMuted)
     .into()

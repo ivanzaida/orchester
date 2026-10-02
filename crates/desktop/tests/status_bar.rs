@@ -186,7 +186,7 @@ fn cli(provider: orchester_core::connection::AgentProvider) -> orchester_core::c
     provider,
     std::env::current_dir()
       .expect("workspace")
-      .join(provider.program_name()),
+      .join(provider.program_name().expect("an agent CLI")),
     Timestamp::now(),
   )
   .expect("connection")
@@ -203,7 +203,7 @@ fn limits_readings(percent: f64, extra: bool, expired: bool) -> orchester_core::
   let now = Timestamp::now();
   let reset = Timestamp::from_unix_millis(now.unix_millis() + if expired { -1000 } else { 7_200_000 });
   let mut readings = PlanReadings::default();
-  for provider in AgentProvider::ALL {
+  for provider in AgentProvider::CLI {
     readings.observe(LimitReading {
       provider,
       at: now,
@@ -264,7 +264,7 @@ fn status_bar_plan_limits_960_preserves_limits_and_drops_labels_when_reached() {
   use orchester_core::connection::AgentProvider;
   for reached in [false, true] {
     let readings = limits_readings(if reached { 100.0 } else { 65.0 }, true, false);
-    let (mut app, mut tree) = with_limits(960, readings, AgentProvider::ALL.into_iter().map(cli).collect());
+    let (mut app, mut tree) = with_limits(960, readings, AgentProvider::CLI.into_iter().map(cli).collect());
     assert!(tree.get_element_by_id("status-version").is_none());
     assert!(tree.get_element_by_id("status-tokens").is_none());
     let limits = bounds(&mut tree, "status-plan-limits");
@@ -297,14 +297,16 @@ fn status_bar_plan_limits_unknown_signed_out_and_expired() {
   };
   let codex = cli(AgentProvider::CodexCli);
   let mut claude = cli(AgentProvider::ClaudeCodeCli);
-  claude.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "2.1.89".into(),
-      sign_in: SignIn::SignedOut,
-      catalog: ModelCatalog::new(orchester_core::connection::CatalogSource::DocumentedAliases, Vec::new()),
-    },
-  });
+  claude
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "2.1.89".into(),
+        sign_in: SignIn::SignedOut,
+        catalog: ModelCatalog::new(orchester_core::connection::CatalogSource::DocumentedAliases, Vec::new()),
+      },
+    })
+    .expect("an agent CLI's check");
   let (mut app, mut tree) = with_limits(1440, Default::default(), vec![codex, claude]);
   assert_eq!(
     item_texts(&mut tree, "status-plan-limits"),
@@ -345,10 +347,12 @@ fn status_bar_plan_limits_unavailable_names_connection_and_project() {
     time::Timestamp,
   };
   let mut connection = cli(AgentProvider::ClaudeCodeCli);
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::CouldNotRun,
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::CouldNotRun,
+    })
+    .expect("an agent CLI's check");
   let (mut app, mut tree) = with_limits(1440, Default::default(), vec![connection]);
   hover(&mut app, &mut tree, "status-plan-limits");
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
@@ -454,7 +458,7 @@ fn status_bar_plan_limits_headers_order_and_combined_account_rows() {
       },
     });
   }
-  let (mut app, mut tree) = with_limits(1440, readings, AgentProvider::ALL.into_iter().map(cli).collect());
+  let (mut app, mut tree) = with_limits(1440, readings, AgentProvider::CLI.into_iter().map(cli).collect());
   hover(&mut app, &mut tree, "status-plan-limits");
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
   assert!(copy.contains("Codex Plus plan"));

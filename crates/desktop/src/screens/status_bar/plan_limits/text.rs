@@ -2,19 +2,21 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Local};
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::AgentProvider, time::Timestamp};
+use orchester_core::time::Timestamp;
 
-pub fn name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
-  ctx.t(match provider {
-    AgentProvider::CodexCli => "statusBar.planLimits.codex",
-    AgentProvider::ClaudeCodeCli => "statusBar.planLimits.claude",
+use super::Cli;
+
+pub fn name(ctx: &Ctx, cli: Cli) -> Arc<str> {
+  ctx.t(match cli {
+    Cli::Codex => "statusBar.planLimits.codex",
+    Cli::Claude => "statusBar.planLimits.claude",
   })
 }
 
-pub fn hint_name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
-  match provider {
-    AgentProvider::CodexCli => name(ctx, provider),
-    AgentProvider::ClaudeCodeCli => ctx.t("statusBar.planLimits.claudeFull"),
+pub fn hint_name(ctx: &Ctx, cli: Cli) -> Arc<str> {
+  match cli {
+    Cli::Codex => name(ctx, cli),
+    Cli::Claude => ctx.t("statusBar.planLimits.claudeFull"),
   }
 }
 

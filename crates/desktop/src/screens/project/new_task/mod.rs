@@ -1,6 +1,7 @@
 //! New task (02.09 `l2YA4`): brief and acceptance criteria on the left, pipeline and limits
-//! on the right. The task is saved as a draft, incomplete if need be, under a key generated
-//! when the form opens: a failed save keeps the form, and retrying cannot create a second task.
+//! on the right. Create saves the task as a draft without running it, incomplete if need be, under
+//! a key generated when the form opens, and returns to the task list, where the new task is
+//! highlighted: a failed save keeps the form, and retrying cannot create a second task.
 //! Create & run checks that the run can start, saves and queues the task and asks the runner to
 //! start its run under a second key generated when the form opens, so a retry after a failure
 //! never starts a second run; it then opens the task page. Opened on a saved draft, the same form
@@ -9,6 +10,7 @@
 
 mod brief;
 mod edit;
+mod header;
 mod plan;
 mod start;
 
@@ -22,19 +24,19 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
   limits::ProjectLimits,
   repository::RepositoryLink,
   store::RepositoryStore,
-  task::{MissingDetail, Task, TaskDetails, TaskStatus},
+  task::{MissingDetail, Task, TaskDetails},
   tokens::grouped,
 };
 use orchester_store::ProjectDb;
@@ -56,18 +58,14 @@ use crate::{
     list::missing_key,
     run::StartOutcome,
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, gutter_width},
   ui::{
     form::{Submit, form},
     icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
     unit_input::FocusedInput,
   },
   workspace::OpenProject,
 };
-
-/// Topbar height (`dWjfr`).
-const TOPBAR_HEIGHT: f32 = 64.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NewTaskProps {
@@ -90,9 +88,13 @@ pub struct PipelineSelection(pub Option<ResourceId>);
 
 impl lurq::app::component::DevtoolsInspectable for PipelineSelection {}
 
-/// Details of the latest draft save that completed successfully.
+/// The latest draft save that completed successfully.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SavedDraft(TaskDetails);
+pub struct SavedDraft {
+  details: TaskDetails,
+  /// The task Create made; `None` when the form saved over a task it edits.
+  created: Option<TaskId>,
+}
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
@@ -173,8 +175,15 @@ impl FormState {
     self.missing.contains(&detail)
   }
 
-  /// Whether Save as draft can be pressed: not while a save or Create & run is under way or the
-  /// task is queued, and for a draft being edited not while it holds what is stored.
+  /// The task is queued and no run is recorded for it: its details are locked until the runner
+  /// starts its first run.
+  const fn awaits_first_run(&self) -> bool {
+    self.queued && !self.started
+  }
+
+  /// Whether Create, or Save changes for a draft being edited, can be pressed: not while a save or
+  /// Create & run is under way or the task is queued, and for a draft being edited not while it
+  /// holds what is stored.
   const fn can_save(&self) -> bool {
     !(self.saving
       || self.starting
@@ -216,8 +225,12 @@ impl Component for NewTaskForm {
     let save = save_action(ctx);
     let saved = nav.clone();
     ctx.watch(&save.state(), move |state| {
-      if state.data.is_some() && !state.is_pending() {
-        saved.tasks_changed();
+      let Some(draft) = state.data.as_ref().filter(|_| !state.is_pending()) else {
+        return;
+      };
+      saved.tasks_changed();
+      if let Some(task) = draft.created {
+        saved.show_created(task);
       }
     });
     let queued_task = ctx.signal(None);
@@ -264,10 +277,11 @@ impl Component for NewTaskForm {
     let link = repository_link(ctx, &props.project);
     let limits = props.limits.unwrap_or_default();
     self.seed(ctx, props.limits, props.editing.as_ref(), props.recovering.as_ref());
-    let editing = props.editing.as_ref().map(|editing| &*editing.task);
+    let edited = props.editing.as_ref();
+    let editing = edited.map(|editing| &*editing.task);
     let recovered = props.recovering.as_ref().map(|recovering| &*recovering.task);
     let separator = ctx.t("number.groupSeparator");
-    let state = self.state(&save, &run, &separator, (limits, editing), recovered.is_some());
+    let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
     self.mark_unsaved(&state, editing);
     let target = self.target(editing.or(recovered));
     let submit = self
@@ -286,14 +300,16 @@ impl Component for NewTaskForm {
       .filter(|_| !state.saving && !state.starting && (state.queued_task.is_some() || state.missing.is_empty()));
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
-    let brief_left = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0)
-      - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
+    let indent = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0);
+    let brief_left = indent - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_top(ExtraSpacing::Inline.role())
       .padding_left(Dimension::Px(brief_left))
-      .padding_right(ExtraSpacing::Indent.role())
+      // The plan's scroll gutter sits in the right padding, so its content ends at the designed
+      // inset (`HVSv5`).
+      .padding_right(Dimension::Px(indent - gutter_width()))
       .padding_bottom(SpacingSize::Section)
       .spacing(ExtraSpacing::Indent.role())
       .child(brief::brief_form(ctx, self, &props.project, link.as_deref(), &state))
@@ -305,17 +321,23 @@ impl Component for NewTaskForm {
         submit.clone(),
         start,
       ));
+    // A draft this form queued reads as the queued task of D5 (`WOdDe`, `T6bVyU`) until its run
+    // starts, whether the form was opened on the draft or reopened on the queued task.
+    let (still_editing, retried) = match editing {
+      Some(task) if state.awaits_first_run() => (None, Some(task)),
+      _ => (editing, recovered),
+    };
     Column::new()
       .id("task-form")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(topbar(
+      .child(header::topbar(
         ctx,
         props.project.project.name().as_str(),
         &self.nav,
-        (&state, editing, recovered),
+        (&state, still_editing, retried),
       ))
-      .child(heading(ctx, editing, &state))
+      .child(header::heading(ctx, still_editing, &state))
       .child(form(submit, content))
   }
 }
@@ -374,7 +396,7 @@ impl NewTaskForm {
     save: &SaveAction,
     run: &RunAction,
     separator: &str,
-    (limits, editing): (ProjectLimits, Option<&Task>),
+    (limits, editing): (ProjectLimits, Option<&Editing>),
     recovered: bool,
   ) -> FormState {
     let criteria: Vec<String> = self
@@ -410,14 +432,16 @@ impl NewTaskForm {
     let stored = saving
       .data
       .as_ref()
-      .map(|saved| &saved.0)
-      .or_else(|| editing.map(Task::details));
+      .map(|saved| &saved.details)
+      .or_else(|| editing.map(|editing| editing.task.details()));
     FormState {
       errors,
       missing: form.missing(),
       saved: !queued && ready.as_ref().is_some_and(|details| stored == Some(details)),
       editing: editing.is_some(),
-      started: editing.is_some_and(|task| task.status() == TaskStatus::Queued),
+      // A task this form queued has no run until the runner starts one; until then it keeps
+      // Retry run.
+      started: editing.is_some_and(|editing| editing.has_run),
       queued,
       recovered,
       ready,
@@ -434,7 +458,8 @@ impl NewTaskForm {
     }
   }
 
-  /// Saves the valid form under the form's key; `None` while it cannot be saved.
+  /// Saves the valid form: Create under the form's key, or over the task it edits; `None` while it
+  /// cannot be saved.
   fn save_handler(
     &self,
     save: &SaveAction,
@@ -478,103 +503,25 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
     let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
     async move {
       let save = async move {
-        let saved = background::run(move || save_draft_in(&repo_root, target, details)).await?;
-        saved.map(SavedDraft).map_err(|error| {
-          tracing::error!(%error, "cannot save the task draft");
-          match error {
-            TaskDraftSaveError::Store(error) => messages::store_error(&error),
-            TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
-            TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
-          }
-        })
+        let created = matches!(target, SaveTarget::New(_));
+        let saved = background::run(move || save_draft_in(&repo_root, target, &details)).await?;
+        saved
+          .map(|task| SavedDraft {
+            created: created.then(|| task.id()),
+            details: task.details().clone(),
+          })
+          .map_err(|error| {
+            tracing::error!(%error, "cannot save the task draft");
+            match error {
+              TaskDraftSaveError::Store(error) => messages::store_error(&error),
+              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
+              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+            }
+          })
       };
       activity.track(spec, save).await
     }
   })
-}
-
-/// Back to the task list, or to the task being edited, the breadcrumb and the persisted task state
-/// (`dWjfr`, `kTm0n`): a draft being edited reads *Unsaved changes* once it differs from the
-/// saved one.
-fn topbar(
-  ctx: &Ctx,
-  project: &str,
-  nav: &ProjectNav,
-  (form, editing, recovered): (&FormState, Option<&Task>, Option<&Task>),
-) -> Element {
-  let nav = nav.clone();
-  let back_to = editing.or(recovered).map_or(Page::TASKS, |task| Page::task(task.id()));
-  let back = pressable(surface().id("new-task-back"), move || nav.leave(back_to))
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
-  let state = if form.starting {
-    ctx.t("tasks.new.starting")
-  } else if form.saving {
-    ctx.t(if form.editing {
-      "tasks.edit.savingChanges"
-    } else {
-      "tasks.new.saving"
-    })
-  } else if let Some(queued) = form.queued_task.as_ref() {
-    ctx.t(queued.outcome.status_key())
-  } else if form.saved {
-    ctx.t(if form.started {
-      "tasks.edit.saved"
-    } else {
-      "tasks.new.saved"
-    })
-  } else if form.editing {
-    ctx.t("tasks.edit.unsaved")
-  } else {
-    ctx.t("tasks.new.notSaved")
-  };
-  let state = Text::new(&state).variant(TypographyStyle::Caption).id("new-task-state");
-  // Changes to a saved draft that are not saved yet read in `$text` (`ctHXE`).
-  let state = if form.editing && !form.saved && !form.saving && !form.starting && !form.queued {
-    state.color(PaletteColor::TextPrimary)
-  } else {
-    state
-  };
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TOPBAR_HEIGHT))
-    .padding_horizontal(SpacingSize::Section)
-    .spacing(ExtraSpacing::Stack.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(back)
-    .child(Text::new(&edit::breadcrumb(ctx, project, editing, recovered)).variant(TypographyStyle::Description))
-    .child(Spacer::new().flex(1.0))
-    .child(state)
-    .into()
-}
-
-/// Heading (`hkWbp`; `h79DDd` while editing).
-fn heading(ctx: &Ctx, editing: Option<&Task>, state: &FormState) -> Element {
-  let (title, description) = edit::heading_texts(ctx, editing);
-  let description = if state.starting && state.queued_task.is_some() && !state.retrying {
-    ctx.t("tasks.new.firstStartQueuedDescription")
-  } else if state.recovered && state.run_problems.is_none() {
-    ctx.t("tasks.new.recoveredDescription")
-  } else if let Some(queued) = state.queued_task.as_ref() {
-    ctx.t(queued.outcome.description_key())
-  } else {
-    description
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_top(SpacingSize::Section)
-    .padding_horizontal(ExtraSpacing::Indent.role())
-    .padding_bottom(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Inline.role())
-    .child(Text::new(&title).variant(ExtraTypography::ScreenTitle.role()))
-    .child(
-      Text::new(&description)
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary),
-    )
-    .into()
 }
 
 /// The detail is needed before the task can run; a draft may still be saved without it.

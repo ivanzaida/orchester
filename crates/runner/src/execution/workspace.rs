@@ -72,7 +72,7 @@ impl Workspace {
           owner: earlier,
         });
       }
-      previous = run.previous_execution(earlier);
+      previous = run.recovered_execution(earlier);
     }
     let path = worktrees.step_path(execution);
     let branch = branch(run, execution);

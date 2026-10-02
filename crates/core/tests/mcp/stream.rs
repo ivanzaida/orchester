@@ -1,7 +1,6 @@
 use orchester_core::connection::{
-  AgentProvider,
   mcp::McpServerProblem,
-  stream::{AgentEvent, AgentStream, CommandStatus, InvocationTracker, OutputStream, parse_codex_line},
+  stream::{AgentEvent, ClaudeStream, CommandStatus, OutputStream},
 };
 
 fn failed(server: Option<&str>, detail: Option<&str>) -> AgentEvent {
@@ -19,7 +18,7 @@ const INIT: &str = r#"{"type":"system","subtype":"init","cwd":"w","session_id":"
 
 #[test]
 fn mcp_claude_reports_each_server_that_did_not_start() {
-  let mut stream = AgentStream::new(AgentProvider::ClaudeCodeCli);
+  let mut stream = ClaudeStream::default();
   assert_eq!(
     stream.parse(OutputStream::Stdout, INIT),
     vec![
@@ -35,7 +34,7 @@ fn mcp_claude_reports_each_server_that_did_not_start() {
 #[test]
 fn mcp_claude_signed_in_allow_rule_permits_the_probe_call() {
   let fixture = include_str!("fixtures/claude-signed-in-mcp.jsonl");
-  let mut stream = AgentStream::new(AgentProvider::ClaudeCodeCli);
+  let mut stream = ClaudeStream::default();
   let mut lines = fixture.lines();
   let init = stream.parse(OutputStream::Stdout, lines.next().expect("session init line"));
   assert_eq!(
@@ -67,72 +66,10 @@ fn mcp_claude_signed_in_allow_rule_permits_the_probe_call() {
     AgentEvent::Message { text } if text.contains("M1_TOOL_OK")
   )));
   let done = stream.parse(OutputStream::Stdout, lines.next().expect("successful turn line"));
-  assert!(done.is_empty(), "the result repeats the already parsed model answer");
-  assert!(lines.next().is_none());
-}
-
-#[test]
-fn mcp_codex_reports_a_server_that_did_not_start_without_failing_the_turn() {
-  let named = r#"{"type":"error","message":"MCP client for `docs` failed to start: program not found"}"#;
-  let event = parse_codex_line(OutputStream::Stdout, named);
-  assert_eq!(event, failed(Some("docs"), Some("program not found")));
-  let logged = "2026-09-28T11:01:24.796533Z  WARN session_loop{thread_id=01a0}: codex_mcp::rmcp_client: failed to \
-                initialize MCP client during shutdown: MCP startup failed: program not found";
-  assert_eq!(
-    parse_codex_line(OutputStream::Stderr, logged),
-    failed(None, Some("program not found"))
-  );
-  let mut tracker = InvocationTracker::default();
-  tracker.observe(&event);
-  tracker.observe(&AgentEvent::TurnCompleted {
-    usage: Default::default(),
-  });
+  // The probe asked for no step result, so its answer ends the turn without one.
   assert!(
-    tracker.outcome(Some(0)).is_success(),
-    "a server that did not start is not the turn's failure"
+    matches!(done.as_slice(), [AgentEvent::TurnFailed { .. }]),
+    "the result repeats the already parsed model answer: {done:?}"
   );
-  let other = r#"{"type":"error","message":"Reconnecting... 2/5"}"#;
-  assert!(matches!(
-    parse_codex_line(OutputStream::Stdout, other),
-    AgentEvent::Error { .. }
-  ));
-}
-
-#[test]
-fn mcp_codex_signed_in_startup_fixture_is_an_unnamed_server_problem() {
-  let warning = include_str!("fixtures/codex-signed-in-startup.stderr").trim();
-  assert_eq!(
-    parse_codex_line(OutputStream::Stderr, warning),
-    failed(None, Some("The system cannot find the file specified. (os error 2)"))
-  );
-  let completed = include_str!("fixtures/codex-signed-in-startup.jsonl").trim();
-  assert!(matches!(
-    parse_codex_line(OutputStream::Stdout, completed),
-    AgentEvent::TurnCompleted { .. }
-  ));
-}
-
-#[test]
-fn mcp_codex_signed_in_tool_fixture_preserves_the_call_and_excluded_shell_result() {
-  let fixture = include_str!("fixtures/codex-signed-in-mcp.jsonl");
-  let mut lines = fixture.lines();
-  let call = lines.next().expect("MCP tool call line");
-  assert!(matches!(
-    parse_codex_line(OutputStream::Stdout, call),
-    AgentEvent::Raw {
-      stream: OutputStream::Stdout,
-      ..
-    }
-  ));
-  let shell = lines.next().expect("shell result line");
-  assert!(matches!(
-    parse_codex_line(OutputStream::Stdout, shell),
-    AgentEvent::CommandFinished {
-      output,
-      exit_code: Some(0),
-      status: CommandStatus::Completed,
-      ..
-    } if output.trim() == "False"
-  ));
   assert!(lines.next().is_none());
 }

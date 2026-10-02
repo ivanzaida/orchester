@@ -5,10 +5,11 @@
 //! Orchester itself never talks to a server.
 //!
 //! A server has a name, a transport, variables for a stdio server's program whose values may come
-//! from project secrets, and an enabled flag. Its id is a [`ConnectionId`]: the Connections screen
-//! lists servers beside the other connections.
+//! from project secrets, the tools that run without asking ([`ExemptTools`]), and an enabled flag. Its id is a
+//! [`ConnectionId`]: the Connections screen lists servers beside the other connections.
 
 mod environment;
+mod exempt;
 mod name;
 mod problem;
 mod transport;
@@ -18,6 +19,7 @@ use thiserror::Error;
 
 pub use self::{
   environment::{McpEnvValue, McpEnvironment, McpEnvironmentError},
+  exempt::{ExemptTools, ExemptToolsError, InvocationExemptions, McpToolName, McpToolNameError, UnappliedExemption},
   name::{McpServerName, McpServerNameError},
   problem::McpServerProblem,
   transport::{HttpServer, McpTransport, McpUrl, StdioServer, TransportError, WorkingDirectory},
@@ -34,6 +36,19 @@ pub enum McpServerError {
   EnvironmentOnHttp,
 }
 
+/// A stored MCP server that cannot be read back, for example because its URL breaks a rule added
+/// after it was saved: listings leave it out, so it never hides the other servers, and
+/// [`crate::store::McpServerStore::unreadable_mcp_servers`] reports it. The store keeps the row
+/// unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnreadableMcpServer {
+  /// The id and name as stored; either may be what cannot be read.
+  pub id: String,
+  pub name: String,
+  /// What is wrong with the row.
+  pub detail: String,
+}
+
 /// A project's MCP server.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpServer {
@@ -41,6 +56,7 @@ pub struct McpServer {
   name: McpServerName,
   transport: McpTransport,
   environment: McpEnvironment,
+  exempt_tools: ExemptTools,
   enabled: bool,
   created_at: Timestamp,
 }
@@ -60,6 +76,7 @@ impl McpServer {
       name,
       transport,
       environment,
+      exempt_tools: ExemptTools::default(),
       enabled: true,
       created_at,
     })
@@ -93,6 +110,11 @@ impl McpServer {
     &self.environment
   }
 
+  /// The tools that run without asking when a profile asks before MCP actions.
+  pub const fn exempt_tools(&self) -> &ExemptTools {
+    &self.exempt_tools
+  }
+
   /// A disabled server is given to no agent, whichever profiles choose it.
   pub const fn enabled(&self) -> bool {
     self.enabled
@@ -104,6 +126,10 @@ impl McpServer {
 
   pub const fn set_enabled(&mut self, enabled: bool) {
     self.enabled = enabled;
+  }
+
+  pub fn set_exempt_tools(&mut self, tools: ExemptTools) {
+    self.exempt_tools = tools;
   }
 
   /// Replaces the name, transport and variables together, as the edit dialog saves them.
@@ -180,6 +206,16 @@ impl McpServerSelection {
 
   pub fn contains(&self, server: ConnectionId) -> bool {
     self.0.contains(&server)
+  }
+
+  /// The servers of `servers` this selection gives an agent (chosen and on) that list tools to run
+  /// without asking, in `servers`' order, with those tools.
+  pub fn exempt_tools<'a>(&self, servers: &'a [McpServer]) -> Vec<(&'a McpServerName, &'a ExemptTools)> {
+    servers
+      .iter()
+      .filter(|server| server.enabled() && self.contains(server.id()) && !server.exempt_tools().is_empty())
+      .map(|server| (server.name(), server.exempt_tools()))
+      .collect()
   }
 
   /// This selection with `server` chosen or not.

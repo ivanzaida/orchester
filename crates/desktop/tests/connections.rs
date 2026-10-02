@@ -98,7 +98,8 @@ fn editing_a_connection_keeps_its_id_and_rejects_taken_names() {
   assert_eq!(save(&mut db, edited, now()).expect("edit"), claude);
   let stored = db.connection(claude).expect("read").expect("exists");
   assert_eq!(stored.name().as_str(), "Claude · Kontur");
-  assert!(stored.executable().ends_with("bin/claude.exe") || stored.executable().ends_with("bin\\claude.exe"));
+  let executable = stored.executable().expect("a CLI connection has a program");
+  assert!(executable.ends_with("bin/claude.exe") || executable.ends_with("bin\\claude.exe"));
   let taken = ConnectionDraft {
     id: Some(claude),
     ..draft(&repo, "Claude 2", signed_out())
@@ -273,4 +274,51 @@ fn connections_know_what_their_launcher_scripts_start() {
   let via = |id| connections.launch_of(id).map(|launch| launch.via().clone());
   assert_eq!(via(launched), Some(Via::NodeScript { script }));
   assert_eq!(via(direct), Some(Via::Direct));
+}
+
+/// An npm launcher of a program file (Claude Code's `claude.cmd` since 2.1) is shown as that
+/// program, which is what starts.
+#[cfg(windows)]
+#[test]
+fn connections_know_the_program_their_launcher_starts() {
+  use orchester_exec::launch::Via;
+
+  let (repo, mut db) = project_db();
+  let program = repo.path().join("node_modules").join("claude.exe");
+  fs::create_dir_all(program.parent().expect("a folder")).expect("program folder");
+  fs::write(&program, "").expect("program");
+  let shim = repo.path().join("claude.cmd");
+  fs::write(&shim, "@SETLOCAL\r\n\"%~dp0\\node_modules\\claude.exe\" %*\r\n").expect("launcher");
+  let launcher = ConnectionDraft {
+    executable: shim,
+    ..draft(&repo, "Claude", signed_out())
+  };
+  let id = save(&mut db, launcher, now()).expect("saved");
+  let connections = ProjectConnections::load(&db).expect("load");
+  let launch = connections.launch_of(id).expect("a launch");
+  assert_eq!(launch.via(), &Via::LauncherProgram);
+  assert_eq!(launch.program(), program);
+}
+
+#[test]
+fn editing_or_checking_a_connection_keeps_the_versions_its_models_need() {
+  let (repo, mut db) = project_db();
+  let id = save(&mut db, draft(&repo, "Claude", signed_out()), now()).expect("saved");
+  let mut stored =
+    orchester_core::connection::AgentConnection::try_from(db.connection(id).expect("read").expect("exists"))
+      .expect("an agent connection");
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  stored.record_model_requirement(&opus, "2.1.280");
+  db.save_connection(&stored).expect("recorded");
+  let mut edit = draft(&repo, "Claude · new", signed_out());
+  edit.id = Some(id);
+  save(&mut db, edit, now()).expect("edited");
+  let edited = orchester_core::connection::AgentConnection::try_from(db.connection(id).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(edited.model_requirements().required(&opus), Some("2.1.280"));
+  assert_eq!(
+    edited.cannot_run(&opus).map(|too_old| too_old.required),
+    Some("2.1.280".to_owned()),
+    "2.1.89 is too old"
+  );
 }
