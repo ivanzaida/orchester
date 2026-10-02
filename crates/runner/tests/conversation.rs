@@ -392,7 +392,7 @@ async fn conversation_messages_to_a_merged_failed_or_cancelled_run_stay_queued_w
       merged_at: Timestamp::now(),
     })
     .expect("merged");
-  let (failed, failed_scheduler, _, failure) = ended_run("Please fail.").await;
+  let (failed, failed_scheduler, _, failure) = ended_run("Report failure.").await;
   assert!(matches!(failure.status(), RunStatus::Failed(_)));
   let (cancelled, cancelled_scheduler, mut events, waiting) = {
     let project = codex("Ask first.");

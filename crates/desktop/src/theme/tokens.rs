@@ -207,6 +207,16 @@ pub const TASK_REVIEW_BACK_WIDTH: f32 = 132.0;
 /// order column of 440 (its rows and its Move and Undo buttons), the 32 gap, the 520 settings with
 /// their gutter and 20 padding. Narrower, the settings go under the order (not drawn yet).
 pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
+/// The narrowest window that holds the retry limit's evidence beside its 360 decision panel
+/// (`Q4LnK`, `Bi6pU` in 02.B3): the 216 sidebar, the evidence's 64 padding, a check row of 560 (its
+/// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
+/// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
+pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
+/// The narrowest window whose Activity toolbar (`c1dmZ`) holds everything on one line: the 216
+/// sidebar, the 320 invocation inspector, the transcript's 64 padding, the 240 step filter, Show
+/// raw lines and the widest live state ("Waits for your decision") with their gaps. Narrower, Show
+/// raw lines goes to a second line (not drawn yet).
+pub const ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1240.0;
 /// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
 /// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
 /// column is left out so the title keeps its room (not drawn yet).

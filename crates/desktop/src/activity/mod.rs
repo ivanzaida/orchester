@@ -105,6 +105,18 @@ impl Activity {
       .send_modify(|log| log.record(project, title, target, SystemTime::now()));
   }
 
+  /// A run of `project` waits for the user's decision.
+  pub fn record_needs_you(&self, project: Option<Arc<str>>, title: Message, target: Target) {
+    self
+      .log
+      .send_modify(|log| log.record_needs_you(project, title, target, SystemTime::now()));
+  }
+
+  /// A run at `target` no longer waits for the user's decision: its item goes.
+  pub fn settle_needs_you(&self, target: &Target) {
+    self.log.send_if_modified(|log| log.settle_needs_you(target));
+  }
+
   /// The user opened the failure's object or dismissed it.
   pub fn resolve(&self, id: OperationId) {
     self.log.send_modify(|log| log.resolve(id));

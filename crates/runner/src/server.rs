@@ -12,8 +12,8 @@ use std::{
 };
 
 use orchester_core::{
-  id::RunId,
-  run::{InterruptCause, RaisedLimits},
+  id::{RunId, StepExecutionId},
+  run::{InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
 use orchester_ipc::{
   Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
@@ -328,12 +328,8 @@ async fn answer(
       execution,
       version,
       ref decision,
-    } => {
-      let decision = decision.clone();
-      return later.answer(run, async move {
-        handle.decide_plan(run, execution, version, decision).await
-      });
-    }
+    } => return answer_plan(&later, handle, (run, execution, version), decision.clone()),
+    Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
     Command::DecideToolApproval {
       run,
       ref approval,
@@ -351,6 +347,21 @@ fn answer_tool_approval(later: &Later<'_>, scheduler: Scheduler, run: RunId, app
   later.answer(run, async move {
     scheduler.decide_tool_approval(run, approval, approve).await
   })
+}
+
+fn answer_plan(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  (run, execution, version): (RunId, StepExecutionId, PlanVersion),
+  decision: PlanDecision,
+) -> Answer {
+  later.answer(run, async move {
+    scheduler.decide_plan(run, execution, version, decision).await
+  })
+}
+
+fn answer_stuck(later: &Later<'_>, scheduler: Scheduler, run: RunId, decision: StuckDecision) -> Answer {
+  later.answer(run, async move { scheduler.decide_stuck(run, decision).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

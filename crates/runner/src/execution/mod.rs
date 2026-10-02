@@ -31,6 +31,7 @@ mod record;
 mod recovery;
 mod run;
 mod step;
+mod stuck;
 mod task_groups;
 mod tool;
 mod tool_approval;

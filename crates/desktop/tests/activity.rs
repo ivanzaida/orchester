@@ -79,6 +79,52 @@ fn activity_failure_outranks_running_operations_until_dismissed() {
   assert!(matches!(log.slot(), Slot::Running { count: 1, .. }));
 }
 
+/// A run that waits for the user's decision holds the slot like a failure (02.B6 `K8VQRC`), until
+/// its task is opened or it is dismissed.
+#[test]
+fn activity_run_waiting_for_a_decision_holds_the_slot_until_handled() {
+  let mut log = ActivityLog::default();
+  let target = Target::Project {
+    repo_root: PathBuf::from("repo"),
+    place: Place::Tasks,
+  };
+  log.record_needs_you(None, Message::new("waits"), target.clone(), at(1));
+  log.start(spec("running"), Instant::now());
+  let waiting = match log.slot() {
+    Slot::Failure(event) => event.clone(),
+    other => panic!("the waiting run holds the slot: {other:?}"),
+  };
+  assert_eq!(waiting.outcome(), &Outcome::NeedsYou { resolved: false });
+  log.record(None, Message::new("later"), target, at(2));
+  assert_eq!(title(&log.slot()), "waits");
+  log.resolve(waiting.id());
+  assert!(matches!(log.slot(), Slot::Running { count: 1, .. }));
+  assert_eq!(log.recent()[1].outcome(), &Outcome::NeedsYou { resolved: true });
+}
+
+/// The waiting run's item goes once the run no longer waits, without anyone dismissing it.
+#[test]
+fn activity_run_waiting_for_a_decision_leaves_the_slot_once_the_run_goes_on() {
+  let mut log = ActivityLog::default();
+  let task = Target::Project {
+    repo_root: PathBuf::from("repo"),
+    place: Place::Tasks,
+  };
+  let other = Target::Project {
+    repo_root: PathBuf::from("other"),
+    place: Place::Tasks,
+  };
+  log.record(None, Message::new("earlier"), other.clone(), at(1));
+  log.record_needs_you(None, Message::new("waits"), task.clone(), at(2));
+  assert!(!log.settle_needs_you(&other), "another task's change leaves it");
+  assert_eq!(title(&log.slot()), "waits");
+  assert!(log.settle_needs_you(&task));
+  // The stale text is gone from the slot and the list: the slot reads what happened before.
+  assert_eq!(title(&log.slot()), "earlier");
+  assert!(log.recent().iter().all(|event| event.title().key != "waits"));
+  assert!(!log.settle_needs_you(&task), "nothing more to settle");
+}
+
 #[test]
 fn activity_resolved_failure_stays_in_the_recent_list_unpinned() {
   let mut log = ActivityLog::default();

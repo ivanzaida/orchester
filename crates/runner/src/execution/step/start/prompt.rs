@@ -2,7 +2,8 @@
 //! the whole prompt with the instructions injected at start, the outputs of the steps it runs after
 //! (and, for Codex, the result schema); for a session that resumes the continue prompt with the
 //! instructions injected at resume. A gated step a reviewer sent back is told what should change
-//! instead (the plan revision).
+//! instead (the plan revision). A new session of an attempt a failure sent back is told that
+//! failure ([`super::retry`]).
 
 use std::num::NonZeroU32;
 
@@ -53,6 +54,7 @@ impl RunTask {
       .plans(self.run.id())
       .map_err(|error| problem(error.to_string()))?;
     let dependencies = dependencies(&self.run, step, &outputs, &plans);
+    let retry = self.retry_report(execution, &outputs)?;
     let instructions = self.pinned_instructions()?;
     let sources: Vec<InstructionSource<'_>> = instructions
       .iter()
@@ -96,6 +98,7 @@ impl RunTask {
         },
       ),
       memory,
+      retry: retry.as_ref().map(|loaded| loaded.report(self)),
     }
     .assemble(event)
     .map_err(

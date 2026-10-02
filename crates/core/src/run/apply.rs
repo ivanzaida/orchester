@@ -116,10 +116,12 @@ impl Run {
         }
         self.expect_settled()
       }
-      RunEventKind::Failed { .. } => {
+      RunEventKind::Failed { reason } => self.check_failed(kind, reason),
+      RunEventKind::WaitingForPerson { .. } => {
         self.expect_status(kind, self.status == RunStatus::Running)?;
         self.expect_settled()
       }
+      RunEventKind::RetryAllowed => self.expect_status(kind, matches!(self.status, RunStatus::WaitingForPerson(_))),
       RunEventKind::Cancelled => {
         self.expect_status(kind, !self.status.is_terminal())?;
         self.expect_settled()
@@ -178,7 +180,7 @@ impl Run {
     }
   }
 
-  fn expect_status(&self, kind: &RunEventKind, allowed: bool) -> Result<(), RunError> {
+  pub(super) fn expect_status(&self, kind: &RunEventKind, allowed: bool) -> Result<(), RunError> {
     if allowed {
       Ok(())
     } else {
@@ -189,7 +191,7 @@ impl Run {
     }
   }
 
-  fn expect_settled(&self) -> Result<(), RunError> {
+  pub(super) fn expect_settled(&self) -> Result<(), RunError> {
     if self.has_open_executions() {
       Err(RunError::OpenExecutions)
     } else {
@@ -306,6 +308,8 @@ impl Run {
       (false, AttemptReason::Retry { .. }) => Ok(()),
       (false, AttemptReason::FollowUp { step }) => self.check_follow_up(step, executions),
       (false, AttemptReason::Recovery { step }) => self.check_recovery(step, executions),
+      (false, AttemptReason::Restart { step }) => self.check_restart(step, executions),
+      (false, AttemptReason::Returned { return_to, .. }) => self.check_returned(return_to, executions),
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }
@@ -342,13 +346,18 @@ impl Run {
       | RunEventKind::Resumed
       | RunEventKind::Continued { .. }
       | RunEventKind::Reopened
-      | RunEventKind::RecoveryRequested => {
+      | RunEventKind::RecoveryRequested
+      | RunEventKind::RetryAllowed => {
         self.status = RunStatus::Running;
       }
       RunEventKind::FollowUpFailed => self.end(RunStatus::Succeeded, AttemptStatus::Failed),
       RunEventKind::PauseRequested => self.pause_requested = true,
       RunEventKind::Paused { reason } => {
         self.status = RunStatus::Paused(*reason);
+        self.pause_requested = false;
+      }
+      RunEventKind::WaitingForPerson { reason } => {
+        self.status = RunStatus::WaitingForPerson(reason.clone());
         self.pause_requested = false;
       }
       RunEventKind::Interrupted { cause } => {

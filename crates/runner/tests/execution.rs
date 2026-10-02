@@ -160,25 +160,6 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn execution_fails_the_run_when_the_turn_fails() {
-  let project = project(&Setup::new("Please fail."));
-  let root = project.repo.path();
-  let (scheduler, mut events) = scheduler(root);
-  let id = scheduler
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("the run starts");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)));
-  let db = ProjectDb::open(root).expect("open");
-  let invocation = &db.invocations(id).expect("invocations")[0];
-  assert!(
-    matches!(&invocation.outcome, Some(InvocationOutcome::TurnFailed { message }) if message.contains("not supported"))
-  );
-  assert!(run.last_checkpoint().is_none());
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn execution_stops_the_agent_and_interrupts_the_run() {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();

@@ -13,10 +13,11 @@ use orchester_core::{
   id::StepExecutionId,
   memory::StepFate,
   revision::Revision,
-  run::{Checkpoint, RunLimit, StepFailure, StepOutcome, StepOutput},
+  run::{Checkpoint, RunLimit, RunStatus, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
   time::Timestamp,
 };
+use orchester_ipc::Event;
 
 use super::{
   Active,
@@ -101,8 +102,9 @@ impl RunTask {
 
   /// An agent that exited on its own. A turn that ended acknowledges the messages it read. The
   /// step then waits for the answer to the agent's question, or continues to read messages queued
-  /// for its agent meanwhile; otherwise it passes if the CLI succeeded and the agent did not report
-  /// a failure, and its work joins the run's branch. A follow-up leaves no output: its answer is its
+  /// for its agent meanwhile; otherwise it fails when the agent reported `failed` — also when its
+  /// turn failed afterwards — or when the turn failed, and passes otherwise; a step that passes
+  /// joins its work to the run's branch. A follow-up leaves no output: its answer is its
   /// reply in the conversation, and the step's output stays what it was.
   fn finish(&mut self, execution: StepExecutionId, active: &Active, finished: &Finished) -> Result<(), ExecutionError> {
     let step = self
@@ -119,13 +121,7 @@ impl RunTask {
       Timestamp::now(),
     );
     self.note_cli_too_old(execution, active, &finished.outcome)?;
-    let failure = if !finished.outcome.is_success() {
-      Some(StepFailure::AgentFailed)
-    } else if output.outcome == Some(StepOutcome::Failed) {
-      Some(StepFailure::ReportedFailed)
-    } else {
-      None
-    };
+    let failure = output.failure(finished.outcome.is_success());
     if finished.outcome.is_success() {
       self.acknowledge(execution, &active.invocation, &output)?;
     }
@@ -248,6 +244,7 @@ impl RunTask {
     failure: StepFailure,
   ) -> Result<(), ExecutionError> {
     self.transition(|run, now| run.fail_step(execution, failure, now))?;
+    self.announce_waiting();
     let run = &self.run;
     for (id, active) in &mut self.agents {
       let open = run
@@ -259,6 +256,25 @@ impl RunTask {
       }
     }
     Ok(())
+  }
+
+  /// Tells the desktop that the run waits for a person's decision, if a failure just made it wait.
+  fn announce_waiting(&self) {
+    let RunStatus::WaitingForPerson(stuck) = self.run.status() else {
+      return;
+    };
+    let step = self
+      .run
+      .snapshot()
+      .body()
+      .step(stuck.step())
+      .map_or_else(|| stuck.step().to_string(), |step| step.name.as_str().to_owned());
+    self.notifier.send(Event::RunWaitsForPerson {
+      run: self.run.id(),
+      task: self.run.task(),
+      task_key: self.task.key().to_string(),
+      step,
+    });
   }
 
   /// "ORC-129: Implement (run 128)", or with `what` happened: "ORC-129: Implement, step failed

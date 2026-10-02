@@ -6,13 +6,9 @@ use super::{
   event::{PlannedExecution, RunEvent, RunEventKind},
   plan::{Plan, PlanDecision, PlanReview},
   state::Run,
-  status::{AttemptReason, RunFailure, StepFailure, StepStatus, WaitReason},
+  status::{StepFailure, StepStatus, WaitReason},
 };
-use crate::{
-  id::{AttemptId, StepExecutionId},
-  resource::StepKey,
-  time::Timestamp,
-};
+use crate::{id::StepExecutionId, resource::StepKey, time::Timestamp};
 
 impl Run {
   /// Starts a pending execution of the current attempt whose dependencies have passed.
@@ -111,11 +107,11 @@ impl Run {
     Ok(events)
   }
 
-  /// Fails an active step for `reason` and routes the failure: with a failure route that has
-  /// retries left, a new attempt re-executes the route's target and everything downstream of it;
-  /// otherwise the run fails. Open executions of the ending attempt — steps running in parallel
-  /// included — are skipped either way, so their agents must be ended. A follow-up that fails is
-  /// not routed: the run is succeeded again with the result it had.
+  /// Fails an active step for `reason` and routes the failure ([`Run::after_failure`]): a verdict
+  /// follows the step's failure route while it has retries left, a breakage restarts the step once,
+  /// and with no route left the run fails or waits for a person. Open executions of the ending
+  /// attempt — steps running in parallel included — are skipped either way, so their agents must be
+  /// ended. A follow-up that fails is not routed: the run is succeeded again with the result it had.
   pub fn fail_step(
     &mut self,
     execution: StepExecutionId,
@@ -132,36 +128,13 @@ impl Run {
       if follow_up {
         return transition.record(RunEventKind::FollowUpFailed);
       }
-      let run = &transition.run;
-      let step = run
+      let step = transition
+        .run
         .execution(execution)
         .expect("StepFailed was accepted for this execution")
         .step()
         .clone();
-      let route = run
-        .snapshot()
-        .body()
-        .step(&step)
-        .expect("executions name snapshot steps")
-        .on_failure
-        .clone();
-      let next = match route {
-        None => RunEventKind::Failed {
-          reason: RunFailure::StepFailed(step),
-        },
-        Some(route) if run.retries_taken(&step) >= route.max_retries.get() => RunEventKind::Failed {
-          reason: RunFailure::RetriesExhausted(step),
-        },
-        Some(route) => RunEventKind::AttemptStarted {
-          attempt: AttemptId::generate(),
-          number: run.next_attempt_number(),
-          executions: run.retry_executions(&route.return_to),
-          reason: AttemptReason::Retry {
-            failed_step: step,
-            return_to: route.return_to,
-          },
-        },
-      };
+      let next = transition.run.after_failure(&step, reason);
       transition.record(next)
     })
   }
