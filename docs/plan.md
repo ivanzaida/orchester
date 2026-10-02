@@ -197,7 +197,12 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
-### Useful automatic retries · branch `claude/retry-feedback` (built 2026-10-02, UI verification pending)
+### Useful automatic retries · branch `claude/retry-feedback` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of 02.B3–B7 passed. Noted, not fixed: retries are counted
+over the whole run, so after a person returns the work a later verdict failure of that step waits at once; a member
+of a task group that waits for a person keeps Return to drafts unavailable for the group until it is stopped or
+retried; the Conversation tab's progress column at 960 loses step names (ORC-61 rewrites that tab).
 
 Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
 failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
