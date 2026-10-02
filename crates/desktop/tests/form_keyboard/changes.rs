@@ -2,17 +2,20 @@
 //! real runner and `orchester-fake-codex`: the files of the run's diff to its latest checkpoint and
 //! of its worktree beyond it, a new checkpoint shown while the tab is open, the empty tab before
 //! the first checkpoint, an Activity file change opening its file, and the state of a run whose
-//! every step passed.
+//! every step passed. The tab's label counts the files the tab lists, and follows new checkpoints
+//! and, while an agent works, its worktree.
 
-use std::fs;
+use std::{fs, path::PathBuf};
 
+use lurq::node::element::ElementRef;
 use orchester_core::run::RunStatus;
 
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
   task_run::{
-    agent_started, create_and_run, finished_on_page, has, init_repository, latest_run, programs, run_finished, seed,
+    agent_started, agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs,
+    run_finished, seed, seed_steps,
   },
 };
 
@@ -22,6 +25,33 @@ fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
     .tree
     .get_element_by_id(id)
     .is_some_and(|element| contains_text(element, text))
+}
+
+/// The worktree of the latest run.
+fn run_worktree(desktop: &Desktop) -> PathBuf {
+  let run = latest_run(desktop.repo()).expect("run");
+  desktop
+    .repo()
+    .join(".orchester")
+    .join("worktrees")
+    .join(run.id().to_string())
+}
+
+/// The count on the Changes tab's label, when it shows one.
+fn label_count(desktop: &mut Desktop) -> Option<String> {
+  let tab = desktop.tree.get_element_by_id("task-tab-changes")?;
+  let mut texts = Vec::new();
+  collect_texts(tab, &mut texts);
+  texts
+    .into_iter()
+    .find(|text| !text.is_empty() && text.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn collect_texts(element: ElementRef<'_>, texts: &mut Vec<String>) {
+  texts.extend(element.text_content().map(|text| text.trim().to_owned()));
+  for child in element.children() {
+    collect_texts(child, texts);
+  }
 }
 
 #[test]
@@ -48,7 +78,7 @@ fn changes_tab_follows_new_checkpoints_and_lists_work_not_checkpointed() {
   });
   assert!(shows(&mut desktop, "diff-files", "FILES  1"));
   assert!(shows(&mut desktop, "diff-files", "NOT CHECKPOINTED  1"));
-  assert!(shows(&mut desktop, "task-tab-changes", "1"));
+  assert_eq!(label_count(&mut desktop).as_deref(), Some("2"));
   assert!(shows(&mut desktop, "changes-toolbar", "Checkpointed"));
   assert!(shows(
     &mut desktop,
@@ -153,5 +183,81 @@ fn changes_tab_opens_on_the_file_an_activity_entry_changed() {
     .mouse_up(720.0, 480.0, lurq::app::events::MouseButton::Other(4));
   desktop.wait_until("the transcript again", |desktop| {
     has(desktop, "activity-step-header") && !has(desktop, "task-changes")
+  });
+}
+
+#[test]
+fn changes_label_counts_the_files_the_tab_lists_and_follows_new_checkpoints() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "implement", "Implement", "Append one line.", &[]),
+        agent_step(builder, "review", "Review", "Write own file.", &["implement"]),
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Work slowly.", "1400000");
+  desktop.wait_until("Pause run while the agent works", |desktop| {
+    has(desktop, "task-pause-run") && agent_started(desktop.repo())
+  });
+  desktop.click("task-pause-run");
+  desktop.wait_until("Resume run", |desktop| has(desktop, "task-resume-run"));
+  // Implement's checkpoint changed README.md; two files beyond it are not checkpointed.
+  let worktree = run_worktree(&desktop);
+  fs::write(worktree.join("notes.md"), "notes\n").expect("write into the worktree");
+  fs::write(worktree.join("todo.md"), "todo\n").expect("write into the worktree");
+  desktop.click("task-tab-changes");
+  desktop.wait_until("the three files the tab lists", |desktop| {
+    has(desktop, "diff-file:README.md")
+      && has(desktop, "diff-worktree-file:notes.md")
+      && has(desktop, "diff-worktree-file:todo.md")
+  });
+  assert!(shows(&mut desktop, "diff-files", "FILES  1"));
+  assert!(shows(&mut desktop, "diff-files", "NOT CHECKPOINTED  2"));
+  assert_eq!(label_count(&mut desktop).as_deref(), Some("3"));
+  // Review writes review.txt, and its checkpoint takes it with the two files.
+  desktop.click("task-resume-run");
+  desktop.wait_until("the new checkpoint on the label", |desktop| {
+    holds(desktop, "diff-files", "FILES  4")
+      && !has(desktop, "diff-worktree-file:notes.md")
+      && label_count(desktop).as_deref() == Some("4")
+  });
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+#[test]
+fn changes_label_follows_the_worktree_while_the_agent_works() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![agent_step(
+        builder,
+        "implement",
+        "Implement",
+        "Wait for release. Draft first. Then keep working.",
+        &[],
+      )]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  // No checkpoint yet, and the Summary open: the label counts README.md, which the agent changed
+  // in its worktree.
+  desktop.wait_until("the agent's change on the label", |desktop| {
+    label_count(desktop).as_deref() == Some("1")
+  });
+  fs::write(run_worktree(&desktop).join("notes.md"), "notes\n").expect("write into the worktree");
+  desktop.wait_until("the new file on the label", |desktop| {
+    label_count(desktop).as_deref() == Some("2")
+  });
+  desktop.click("task-tab-changes");
+  desktop.wait_until("the two files the tab lists", |desktop| {
+    has(desktop, "diff-worktree-file:README.md") && has(desktop, "diff-worktree-file:notes.md")
+  });
+  assert!(shows(&mut desktop, "diff-files", "NOT CHECKPOINTED  2"));
+  assert_eq!(label_count(&mut desktop).as_deref(), Some("2"));
+  desktop.click("task-cancel-run");
+  desktop.wait_until("the run to be cancelled", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Cancelled)
   });
 }

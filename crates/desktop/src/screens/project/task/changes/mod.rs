@@ -1,21 +1,15 @@
 //! The Changes tab of the task page: what the latest run changed, as the pull request screen shows
 //! a pull request's changes (`Rrmhf`: the file list `h8PZJa` beside the selected file's diff
 //! `rz27k`). The files are the run's diff from its base to its latest checkpoint, then what its
-//! worktree holds beyond that, listed apart as not checkpointed. A new checkpoint reads the diff
-//! again; while an agent works, the worktree is read again every few seconds. The file shown is
-//! part of the path, so an Activity entry can open it and going back returns to it.
+//! worktree holds beyond that, listed apart as not checkpointed. The task page reads both
+//! (`load`), so the count on the tab's label is of the files listed here. The file shown is part
+//! of the path, so an Activity entry can open it and going back returns to it.
 
 mod listed;
+mod load;
 mod toolbar;
 
-use std::{
-  path::PathBuf,
-  sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-  },
-  time::Duration,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -25,19 +19,18 @@ use lurq::{
 };
 use orchester_core::{
   diff::{Changes, MAX_DIFF_FILES, MAX_DIFF_LINES},
-  id::{RunId, TaskId},
+  id::TaskId,
 };
 use parking_lot::Mutex;
 
+pub(super) use self::load::{RunChanges, checkpointed, not_checkpointed};
 use self::{listed::Listed, toolbar::toolbar};
 use super::{super::ProjectNav, tab_state::state};
 use crate::{
-  background,
   messages::Message,
   navigation::route::ChangedFile,
-  programs::Programs,
   tasks::{
-    changes::{Checkpointed, NotCheckpointed, ReadChanges, not_checkpointed_in},
+    changes::{Checkpointed, NotCheckpointed, ReadChanges},
     detail::TaskDetail,
   },
   ui::{
@@ -49,12 +42,10 @@ use crate::{
   },
 };
 
-/// How often the worktree is read again while an agent works in it.
-const WORKTREE_REFRESH: Duration = Duration::from_secs(3);
-
 /// The run's checkpointed changes as the task page read them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) enum CheckpointedLoad {
+  #[default]
   Loading,
   Ready(Checkpointed),
   Failed(Message),
@@ -64,11 +55,9 @@ pub(super) enum CheckpointedLoad {
 pub(super) struct ChangesProps {
   pub(super) repo_root: PathBuf,
   pub(super) detail: Arc<TaskDetail>,
-  pub(super) checkpointed: CheckpointedLoad,
+  pub(super) changes: RunChanges,
   /// The file the path names.
   pub(super) file: Option<ChangedFile>,
-  /// An agent is at work on the run: its worktree changes.
-  pub(super) live: bool,
   /// Reads the checkpointed changes again, after they could not be read.
   pub(super) retry: Signal<u64>,
 }
@@ -77,9 +66,8 @@ impl PartialEq for ChangesProps {
   fn eq(&self, other: &Self) -> bool {
     self.repo_root == other.repo_root
       && self.detail == other.detail
-      && self.checkpointed == other.checkpointed
+      && self.changes == other.changes
       && self.file == other.file
-      && self.live == other.live
   }
 }
 
@@ -87,9 +75,6 @@ impl lurq::app::component::DevtoolsInspectable for ChangesProps {}
 
 pub(super) struct ChangesTab {
   nav: ProjectNav,
-  /// Counts the worktree reads while an agent works.
-  tick: Signal<u64>,
-  live: Arc<AtomicBool>,
   /// The list of the diffs on screen, kept while they stay, so the list sees the same groups.
   listed: Arc<Mutex<Option<Listed>>>,
 }
@@ -98,29 +83,16 @@ impl Component for ChangesTab {
   type Props = ChangesProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let tick = ctx.signal(0_u64);
-    let live = Arc::new(AtomicBool::new(false));
-    let (next, working) = (tick.clone(), live.clone());
-    ctx
-      .create_interval(WORKTREE_REFRESH, move || {
-        if working.load(Ordering::Relaxed) {
-          next.update(|tick| *tick += 1);
-        }
-      })
-      .start();
     Self {
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
-      tick,
-      live,
       listed: Arc::new(Mutex::new(None)),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ChangesProps>().clone();
-    self.live.store(props.live, Ordering::Relaxed);
     let Some(run) = props.detail.run.as_ref() else {
       let text = ctx.t("runs.changes.noRunDetail");
       return state(
@@ -131,8 +103,8 @@ impl Component for ChangesTab {
         Vec::new(),
       );
     };
-    let worktree = self.worktree(ctx, &props, run.id());
-    let checkpointed = match &props.checkpointed {
+    let worktree = &props.changes.worktree;
+    let checkpointed = match &props.changes.checkpointed {
       CheckpointedLoad::Loading => return loading(ctx),
       CheckpointedLoad::Failed(error) => return failed(ctx, error, &props.retry),
       CheckpointedLoad::Ready(Checkpointed::TooLarge { size, .. }) => {
@@ -144,7 +116,7 @@ impl Component for ChangesTab {
       Checkpointed::Read { changes, .. } => Some(changes.clone()),
       Checkpointed::NoCheckpoint | Checkpointed::TooLarge { .. } => None,
     };
-    let (uncommitted, notice) = match &worktree {
+    let (uncommitted, notice) = match worktree {
       Some(Ok(NotCheckpointed::Read(changes))) => (Some(changes.clone()), None),
       Some(Ok(NotCheckpointed::TooLarge { size, .. })) => (None, Some(worktree_too_large(ctx, *size))),
       Some(Err(error)) => (None, Some(worktree_failed(ctx, error))),
@@ -153,7 +125,7 @@ impl Component for ChangesTab {
     };
     let listed = self.listed(ctx, committed.as_deref(), uncommitted.as_deref());
     if listed.is_empty() {
-      let empty = match (checkpointed, &worktree) {
+      let empty = match (checkpointed, worktree) {
         (_, None) => loading(ctx),
         (Checkpointed::NoCheckpoint, _) => no_checkpoint(ctx, run.run.number().get()),
         _ => no_changes(ctx),
@@ -200,43 +172,6 @@ impl Component for ChangesTab {
 }
 
 impl ChangesTab {
-  /// What the run's worktree holds beyond its commit, read again after a checkpoint and, while an
-  /// agent works, every [`WORKTREE_REFRESH`]. `None` until first read.
-  fn worktree(&self, ctx: &mut Ctx, props: &ChangesProps, run: RunId) -> Option<Result<NotCheckpointed, Message>> {
-    let programs = ctx
-      .use_context::<Programs>()
-      .expect("the root provides Programs before mounting screens");
-    let head = props.detail.run.as_ref().and_then(|run| {
-      run
-        .run
-        .last_checkpoint()
-        .map(|checkpoint| checkpoint.revision().clone())
-    });
-    let ended = props
-      .detail
-      .run
-      .as_ref()
-      .is_some_and(|run| run.run.status().is_terminal());
-    let deps = (props.repo_root.clone(), (run, ended), head, self.tick.get());
-    let load = ctx.future(deps, move |(repo_root, run, ..)| {
-      let programs = programs.clone();
-      async move {
-        background::run(move || not_checkpointed_in(&repo_root, &programs, run))
-          .await?
-          .map_err(|error| {
-            tracing::warn!(%error, "cannot read the run's worktree");
-            error.message()
-          })
-      }
-    });
-    let state = load.state().get();
-    match (state.data, state.error) {
-      (_, Some(error)) => Some(Err(error)),
-      (Some(changes), None) => Some(Ok(changes)),
-      (None, None) => None,
-    }
-  }
-
   /// The list of `committed` and `uncommitted` changes: the same groups while the diffs stay.
   fn listed(&self, ctx: &Ctx, committed: Option<&ReadChanges>, uncommitted: Option<&ReadChanges>) -> Listed {
     let keys = (
