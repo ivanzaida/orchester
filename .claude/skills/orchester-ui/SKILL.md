@@ -126,6 +126,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | macOS traffic lights #FF5F57 / #FEBC2E / #28C840 (`R3RtGs` in `V70DN`) | `ExtraColor::TrafficClose` / `TrafficMinimize` / `TrafficZoom` |
 | title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
 | switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
+| conversation *Show* segment radius 5, usage period style (toolbar of `RrScB`) | `ExtraRadius::Segment.role()` |
+| conversation tool group and card body, indented 36 to a message's text (`uoK7y`) | `ExtraSpacing::TimelineIndent.role()` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -195,6 +197,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::AgentText.role()` | 12, 1.6 | text an agent wrote: a message body, a plan under review (`FP6BD` in `J5MIT`); also the Markdown body |
 | `ExtraTypography::TabInitial.role()` | 9/600 | a project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`) |
 | `ExtraTypography::Criterion.role()` | 12, 1.5 | an acceptance criterion and its number (`TextMuted`) on a task's Summary (`j0Ye4t`, `a88TT` in `tqn5P`) |
+| `ExtraTypography::TimelineMessage.role()` | 13, 1.6 | what a message in the conversation timeline says, a person's or an agent's (`V17jfc`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

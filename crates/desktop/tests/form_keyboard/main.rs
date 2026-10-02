@@ -14,6 +14,7 @@ mod claude_run;
 mod code_index;
 mod command_approvals;
 mod conversation;
+mod conversation_composer;
 mod dialogs;
 mod draft_autosave;
 mod edit_task;

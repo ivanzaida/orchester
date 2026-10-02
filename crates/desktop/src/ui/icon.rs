@@ -100,7 +100,9 @@ icons! {
   LayoutTemplate => '\u{e207}',
   Lightbulb => '\u{e1c2}',
   Link => '\u{e102}',
+  List => '\u{e106}',
   ListChecks => '\u{e1d0}',
+  ListFilter => '\u{e460}',
   ListPlus => '\u{e23f}',
   Loader => '\u{e109}',
   Lock => '\u{e10b}',
@@ -111,6 +113,8 @@ icons! {
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
   OctagonPause => '\u{e21b}',
+  PanelRight => '\u{e431}',
+  PanelRightClose => '\u{e432}',
   Paperclip => '\u{e12d}',
   Pause => '\u{e12e}',
   Pencil => '\u{e1f9}',
@@ -148,6 +152,7 @@ icons! {
   Undo2 => '\u{e2a1}',
   Unplug => '\u{e45d}',
   Upload => '\u{e19e}',
+  User => '\u{e19f}',
   UserCheck => '\u{e1a0}',
   UserCog => '\u{e342}',
   UserX => '\u{e1a3}',
@@ -155,6 +160,7 @@ icons! {
   Workflow => '\u{e425}',
   Wrench => '\u{e1b1}',
   X => '\u{e1b2}',
+  Zap => '\u{e1b4}',
 }
 
 /// Icon sizes used by the design, from the 11px lock of an unavailable option's reason to the

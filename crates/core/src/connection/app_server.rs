@@ -126,7 +126,13 @@ pub enum Update {
   Approval(PendingApproval),
   /// A request declined at once: this JSON-RPC response answers it.
   Declined(String),
-  TurnEnded,
+  /// The running turn took a person's message: a `userMessage` item with this text completed.
+  InputTaken(String),
+  /// The turn ended; `input_kept`: Codex kept in the thread any `turn/steer` input it had accepted but
+  /// not given the model yet, as it does unless the turn was interrupted.
+  TurnEnded {
+    input_kept: bool,
+  },
 }
 
 #[derive(Clone)]
@@ -425,6 +431,18 @@ impl AppServerStream {
         .unwrap_or_default(),
       Some("commandExecution") => command_finished(item),
       Some("fileChange") => file_changed(item),
+      Some("userMessage") => item
+        .get("content")
+        .and_then(Value::as_array)
+        .map(|parts| {
+          parts
+            .iter()
+            .filter_map(|part| string(part, "text"))
+            .collect::<Vec<_>>()
+            .join("\n")
+        })
+        .map(|text| vec![Update::InputTaken(text)])
+        .unwrap_or_default(),
       _ => Vec::new(),
     }
   }
@@ -444,16 +462,18 @@ impl AppServerStream {
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
     let turn = params.get("turn").unwrap_or(&Value::Null);
+    let status = turn.get("status").and_then(Value::as_str);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
     self.usage = TokenUsage::default();
-    if turn.get("status").and_then(Value::as_str) != Some("completed") {
+    if status != Some("completed") {
       let message = turn
         .get("error")
         .and_then(|error| string(error, "message"))
         .unwrap_or_else(|| "Codex turn did not complete".to_owned());
       updates.push(Update::Activity(AgentEvent::TurnFailed { message }));
     }
-    updates.push(Update::TurnEnded);
+    let input_kept = status != Some("interrupted");
+    updates.push(Update::TurnEnded { input_kept });
     updates
   }
 }

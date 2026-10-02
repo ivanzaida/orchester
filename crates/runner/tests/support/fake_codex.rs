@@ -120,6 +120,9 @@ pub struct Session {
   pub approved_tools: BTreeSet<String>,
   /// The person's decisions the turn waits on, if any.
   pub approvals: Option<fake_app_server::Approvals>,
+  /// The turn waits for a message sent now (`turn/steer`): its prompt, whether it has an output
+  /// schema, and whether the steer is refused.
+  pub awaits_message: Option<fake_codex_work::AwaitsMessage>,
 }
 
 impl Session {
@@ -134,6 +137,7 @@ impl Session {
       user_server_off: false,
       approved_tools: BTreeSet::new(),
       approvals: None,
+      awaits_message: None,
     }
   }
 
@@ -150,6 +154,7 @@ impl Session {
       }
       Some("mcpServerStatus/list") => emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}})),
       Some("turn/start") => return self.turn(params),
+      Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None => return fake_app_server::answered(self, message),
       Some(other) => {
         eprintln!("unexpected request: {other}");

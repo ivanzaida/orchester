@@ -169,6 +169,37 @@ at work takes one.
   run keeps messages queued until it continues; a failed run needs an explicit recovery message (below), while a
   cancelled run takes none.
   *DeliverMessages* only wakes a run; what is queued is read from the database.
+- **Send now (ORC-61).** A person's message is sent after the turn (`timing = 'after_turn'`, as above)
+  or now (`'now'`). The runner gives each message sent now and still queued, once, to the first agent at
+  work it reaches, while its turn runs: Codex with App Server's `turn/steer` (`expectedTurnId` the running
+  turn), Claude Code as another stream-json user message on its standard input (Claude Code now runs
+  with `--input-format stream-json --replay-user-messages`; the prompt is its first input line, and the
+  input closes once a turn ends). Both take it after the tool call that is running (checked live
+  2026-10-02, `docs/evidence/orc-61-send-now-2026-10-02.md`). It is *delivered* when the CLI shows it
+  took it — Codex's `userMessage` item, Claude Code printing it back — with `arrival = 'mid_turn'`, or
+  `'turn_end'` when Claude Code ended its turn first and takes it as its next turn. A message the turn
+  ended before (Codex: *no active turn to steer*; Claude Code: its input already closed) stays queued and
+  is delivered when the session continues to read it (`arrival = 'turn_end'`, as for every message the
+  continued session takes; `'prompt'` for one a new invocation started with). One the CLI refuses
+  (`undelivered_reason = 'refused'`) or that cannot be written to it within five seconds
+  (`'unwritable'`) is *not delivered*: it is kept, goes no further, and is queued again only when the
+  person chooses *Send after this turn* (the desktop's write; `timing` then becomes `'after_turn'`). If
+  the CLI takes one late after all, it is delivered then. Codex keeps a message it accepted (`turn/steer`
+  answered with the turn): it gives it to the model at its next sampling or, when the turn finishes
+  first, records it into the thread before `turn/completed` (Codex's `on_task_finished`). Such a message
+  is delivered at that `turn/completed` (`arrival = 'turn_end'`) unless the turn was interrupted, so it
+  is never queued for a next turn as well; an interrupted turn, or a process that ends without
+  `turn/completed`, leaves it queued. An acceptance read after `turn/completed` (Codex may answer the
+  steer late) delivers it at the turn's end too, since Codex accepts only while the turn runs. A steer
+  still unanswered when the process ends stays queued and goes to the next turn: Codex may then read
+  it twice, which is chosen over a message shown as delivered that Codex never had. While a message
+  is on its way to one agent at work, no other agent's prompt takes it (parallel steps); it is queued
+  for any agent again once that agent ends without taking it. The desktop's *Send after this turn*
+  and the runner's late delivery change a message only while it still stands as each read it
+  (`change_delivery`): the first wins, the other is told and leaves it (the desktop says it moved
+  on), never failing the step. Known limit: Claude Code's printed-back message is matched to what
+  was written by its exact text; if Claude Code ever printed several messages back as one, none
+  would match and they would stay queued and be given again at the turn's end.
 - **Questions.** A result with the outcome `question` asks the person before the step can go on: its
   work is committed, the question is the agent's message, and the step waits for a message (like a
   plan, a run that only waits holds no agent slot and no active time). A message that reaches it

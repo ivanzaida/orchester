@@ -189,25 +189,22 @@ fn merge_moves_main_to_the_run_and_clears_its_worktree_and_branch() {
   assert!(shows(&mut desktop, "task-row-KON-1", "Merged"));
 }
 
-/// The Conversation tab of the merged run (02.S2 `m3gLZ`): the notice says where the work went, no
-/// agent reads messages, so the recipient cannot be chosen and the policy about when agents read
-/// is left out, and the permissions, which cannot change any more, have no link.
+/// The Conversation tab of the merged run: the timeline ends with the merge, no agent reads
+/// messages, so the composer takes none and its recipient cannot be chosen, and the line under it
+/// says why.
 fn merged_conversation_takes_no_messages(desktop: &mut Desktop) {
   desktop.click("task-tab-conversation");
-  desktop.wait_for("task-conversation-panel");
-  assert!(shows(desktop, "conversation-status", "Merged"));
-  desktop.wait_until("what is left of the run", |desktop| {
-    holds(
-      desktop,
-      "task-notice",
-      "Its worktrees and merged branches were removed.",
-    )
+  desktop.wait_for("conversation-composer");
+  desktop.wait_until("the run's end", |desktop| {
+    has(desktop, "conversation-end") && holds(desktop, "conversation-end", "was merged into main")
   });
-  assert!(shows(desktop, "task-notice", "Merged into main"));
-  assert!(!has(desktop, "task-conversation-policy"));
-  assert!(shows(desktop, "task-working-context", "Last ran with"));
-  assert!(!has(desktop, "task-permissions-view"), "nothing to change");
   assert!(has(desktop, "conversation-input-closed"));
+  assert!(shows(
+    desktop,
+    "conversation-explanation",
+    "This run's work was merged."
+  ));
+  assert!(!has(desktop, "conversation-send-now"), "no agent works");
   desktop.press("conversation-recipient");
   let open = desktop
     .tree
@@ -313,7 +310,7 @@ fn merge_failure_survives_switching_to_conversation_and_back() {
   desktop.click("task-merge");
   desktop.wait_until("merge to start", |_| gate.entered.load(Ordering::SeqCst));
   desktop.click("task-tab-conversation");
-  desktop.wait_for("task-conversation-panel");
+  desktop.wait_for("conversation-composer");
   gate.release();
   desktop.wait_until("merge failure", |desktop| {
     holds(desktop, "status-activity", "not merged")
@@ -477,23 +474,11 @@ fn agent_cannot_be_asked_without_its_worktree(desktop: &mut Desktop) {
   assert!(shows(desktop, "task-ready-notice", "The worktree was removed"));
   assert!(has(desktop, "task-merge"), "the run can still be merged");
   desktop.press("task-ask-agent");
-  assert!(!has(desktop, "task-conversation-panel"), "pressing it does nothing");
+  assert!(!has(desktop, "conversation-composer"), "pressing it does nothing");
   desktop.click("task-tab-conversation");
-  desktop.wait_for("task-conversation-panel");
-  assert!(shows(desktop, "task-notice", "The run’s worktree was removed"));
-  assert!(
-    !has(desktop, "task-permissions-view"),
-    "the run's permissions are now read-only"
-  );
-  assert!(shows(desktop, "conversation-status", "Ready for review"));
-  assert!(shows(desktop, "conversation-participants", "Builder cannot continue"));
-  assert!(shows(
-    desktop,
-    "conversation-empty",
-    "No messages were sent before this run’s worktree was removed."
-  ));
+  desktop.wait_for("conversation-composer");
+  assert!(shows(desktop, "conversation-end", "is ready for your review"));
   assert!(has(desktop, "conversation-input-closed"));
-  assert!(!has(desktop, "task-conversation-policy"));
   assert!(shows(
     desktop,
     "conversation-explanation",

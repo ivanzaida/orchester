@@ -126,6 +126,15 @@ impl FromStr for CommandShell {
   }
 }
 
+/// A request that is no longer pending: decided at `decided_at`, or interrupted (`decision` is
+/// `None`) when the agent ended before the decision was carried out.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecidedToolApproval {
+  pub request: PendingToolApproval,
+  pub decision: Option<ToolApprovalDecision>,
+  pub decided_at: Timestamp,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolApprovalDecision {
   Approved,

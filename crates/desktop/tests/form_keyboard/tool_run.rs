@@ -15,6 +15,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use crate::{
+  conversation::open_group,
   github::shows,
   harness::Desktop,
   task_run::{agent_step, create_and_run, finished_on_page, has, init_repository, programs, seed_steps},
@@ -83,12 +84,12 @@ fn tool_run_shows_the_command_step_and_its_output() {
   finished_on_page(&mut desktop);
   assert!(shows(&mut desktop, "task-progress-steps", "Checks · Print lines"));
   assert!(!shows(&mut desktop, "task-progress-steps", "0 tokens"));
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the transcript", |desktop| {
-    has(desktop, "activity-step-header") && shows(desktop, "activity", "Checks · Print lines")
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| {
+    has(desktop, "activity-step-header") && shows(desktop, "conversation", "Checks · Print lines")
   });
-  assert!(shows(&mut desktop, "activity", "Command tool · 1 run"));
-  // Narrowed to the tool step, its header opens on the command.
+  assert!(shows(&mut desktop, "conversation", "Command tool · 1 run"));
+  // Narrowed to the tool step, the step opens on its command's group.
   let labels = desktop
     .tree
     .get_element_by_id_mut("activity-step-filter")
@@ -106,8 +107,8 @@ fn tool_run_shows_the_command_step_and_its_output() {
     .expect("the step filter")
     .commit(checks);
   desktop.pass();
-  desktop.click("activity-step-header");
+  open_group(&mut desktop, "Ran ");
   desktop.wait_until("the command entry", |desktop| has(desktop, "activity-entry"));
-  assert!(shows(&mut desktop, "activity", "exit 0"));
-  assert!(shows(&mut desktop, "activity", "orchester-test-command"));
+  assert!(shows(&mut desktop, "conversation", "exit 0"));
+  assert!(shows(&mut desktop, "conversation", "orchester-test-command"));
 }

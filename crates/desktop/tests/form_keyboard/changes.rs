@@ -11,6 +11,7 @@ use lurq::node::element::ElementRef;
 use orchester_core::run::RunStatus;
 
 use crate::{
+  conversation::open_group,
   github::{contains_text, shows},
   harness::Desktop,
   task_run::{
@@ -129,7 +130,7 @@ fn ready_for_review(desktop: &mut Desktop) {
   desktop.click("task-review-pull-request");
   assert!(has(desktop, "task-ready"));
   desktop.click("task-ask-agent");
-  desktop.wait_for("task-conversation-panel");
+  desktop.wait_for("conversation-composer");
 }
 
 #[test]
@@ -154,16 +155,15 @@ fn changes_tab_is_empty_before_the_first_checkpoint() {
 }
 
 #[test]
-fn changes_tab_opens_on_the_file_an_activity_entry_changed() {
+fn changes_tab_opens_on_the_file_a_timeline_entry_changed() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  // Its step starts collapsed only once the page shows the run finished: pressing the header of
-  // a step the page still shows at work would close it.
+  // The step the run ended on stays open once the page shows the run finished.
   finished_on_page(&mut desktop);
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
-  desktop.click("activity-step-header");
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
+  open_group(&mut desktop, "edited 1 file");
   desktop.wait_until("the file change", |desktop| {
     has(desktop, "activity-open-file:README.md")
   });
@@ -177,11 +177,11 @@ fn changes_tab_opens_on_the_file_an_activity_entry_changed() {
     has(desktop, "task-changes") && holds(desktop, "diff-file-header", "README.md")
   });
   assert!(shows(&mut desktop, "diff-view", "hello"));
-  // Back returns to the transcript.
+  // Back returns to the timeline.
   desktop
     .tree
     .mouse_up(720.0, 480.0, lurq::app::events::MouseButton::Other(4));
-  desktop.wait_until("the transcript again", |desktop| {
+  desktop.wait_until("the timeline again", |desktop| {
     has(desktop, "activity-step-header") && !has(desktop, "task-changes")
   });
 }

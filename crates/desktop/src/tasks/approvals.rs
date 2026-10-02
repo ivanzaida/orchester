@@ -1,16 +1,20 @@
 //! Tool requests awaiting a person's decision, with the CLI of the agent that asks and whether its
 //! step only reads: the approval dialog says what an approval means for that CLI (an approved
 //! Codex command runs outside its sandbox, Claude Code has none) and that it can change files in a
-//! step that only reads.
+//! step that only reads. Each names its task: on that task's Conversation tab the request is a card
+//! of the timeline, and the dialog does not open.
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
+  id::TaskId,
   permission::RepositoryAccess,
   resource::{AgentProfile, ModelId},
   run::{PendingToolApproval, PinnedVersion, StepExecutor},
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
 };
 use orchester_store::{ProjectDb, StoreError};
+
+use crate::navigation::route::{Page, TaskPageTab};
 
 /// A pending request and the CLI of its agent; `None` when that cannot be read any more.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +27,16 @@ pub struct ShownApproval {
   pub model: Option<ModelId>,
   /// The asking invocation launched read-only, by its recorded launch permissions.
   pub read_only: bool,
+  /// The task of the run that asks; `None` when its run cannot be read.
+  pub task: Option<TaskId>,
+}
+
+impl ShownApproval {
+  /// Whether the dialog opens for it on `page`: everywhere but its task's Conversation tab, which
+  /// shows it inline.
+  pub fn opens_on(&self, page: Option<Page>) -> bool {
+    !matches!((page, self.task), (Some(Page::Task(shown, TaskPageTab::Conversation)), Some(task)) if shown == task)
+  }
 }
 
 /// The project's pending requests, oldest first, each with its agent's CLI.
@@ -34,12 +48,15 @@ pub fn pending(db: &ProjectDb) -> Result<Vec<ShownApproval>, StoreError> {
         let (connection, model) =
           engine(db, &approval).map_or((None, None), |(connection, model)| (connection, Some(model)));
         let read_only = launched_read_only(db, &approval);
+        // `.ok()`: as for the provider, an unreadable run only loses where the request shows inline.
+        let task = db.run(approval.run).ok().flatten().map(|run| run.task());
         ShownApproval {
           approval,
           provider: connection.as_ref().map(AgentConnection::provider),
           vendor: connection.as_ref().map(AgentConnection::vendor),
           model,
           read_only,
+          task,
         }
       })
       .collect(),

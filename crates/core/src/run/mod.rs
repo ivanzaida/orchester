@@ -63,8 +63,8 @@ pub use self::{
   },
   stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{
-    ARGUMENTS_CEILING, CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell,
-    cut_arguments, recorded_arguments,
+    ARGUMENTS_CEILING, CommandShell, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision,
+    UnknownShell, cut_arguments, recorded_arguments,
   },
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,

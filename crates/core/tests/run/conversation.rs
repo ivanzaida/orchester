@@ -1,11 +1,13 @@
 //! The task conversation: a person's messages move from queued to delivered to acknowledged and
 //! reach the agent they are for; an agent's question makes its step wait for the answer; a run that
 //! succeeded is followed up in an attempt of its own and is succeeded again after it, whether the
-//! follow-up passes or fails; messages reach prompts introduced by why they are read now.
+//! follow-up passes or fails; messages reach prompts introduced by why they are read now. A message
+//! sent now is for the agent at work; one its CLI did not take is kept and may be sent after the turn.
 
 use orchester_core::{
   conversation::{
-    AgentMessage, Delivery, Message, MessageBody, MessageError, Recipient, Sender, follow_up_step, latest_question,
+    AgentMessage, Arrival, Delivery, Message, MessageBody, MessageError, Recipient, Sender, Timing, Undelivered,
+    follow_up_step, latest_question,
   },
   id::{InvocationId, ResourceId, RunId, StepExecutionId, TaskId},
   resource::InjectionEvent,
@@ -75,7 +77,7 @@ fn conversation_delivery_moves_from_queued_to_delivered_to_acknowledged() {
   assert_eq!(message.delivery(), Some(Delivery::Queued));
   assert_eq!(message.acknowledge(at(41)), Err(MessageError::NotDelivered));
   message
-    .deliver(run, (execution, invocation), at(41))
+    .deliver(run, (execution, invocation), at(41), Arrival::Prompt)
     .expect("delivered");
   assert_eq!(
     message.run(),
@@ -87,7 +89,8 @@ fn conversation_delivery_moves_from_queued_to_delivered_to_acknowledged() {
     Some(Delivery::Delivered {
       execution,
       invocation,
-      at: at(41)
+      at: at(41),
+      arrival: Arrival::Prompt,
     })
   );
   assert!(
@@ -95,7 +98,7 @@ fn conversation_delivery_moves_from_queued_to_delivered_to_acknowledged() {
     "a delivered message is not delivered again"
   );
   assert_eq!(
-    message.deliver(run, (execution, invocation), at(42)),
+    message.deliver(run, (execution, invocation), at(42), Arrival::Prompt),
     Err(MessageError::AlreadyDelivered)
   );
   message.acknowledge(at(43)).expect("acknowledged");
@@ -105,12 +108,13 @@ fn conversation_delivery_moves_from_queued_to_delivered_to_acknowledged() {
       execution,
       invocation,
       delivered_at: at(41),
-      at: at(43)
+      at: at(43),
+      arrival: Arrival::Prompt,
     })
   );
   let mut other = from_person(Some(RunId::generate()), Recipient::Orchestrator, "Hi.");
   assert_eq!(
-    other.deliver(run, (execution, invocation), at(41)),
+    other.deliver(run, (execution, invocation), at(41), Arrival::Prompt),
     Err(MessageError::OtherRun)
   );
   let mut reply = Message::from_agent(
@@ -123,6 +127,69 @@ fn conversation_delivery_moves_from_queued_to_delivered_to_acknowledged() {
   );
   assert_eq!(reply.delivery(), None);
   assert_eq!(reply.acknowledge(at(45)), Err(MessageError::NotFromAPerson));
+}
+
+#[test]
+fn conversation_a_message_sent_now_is_for_the_agent_at_work() {
+  let run = RunId::generate();
+  let (builder, reviewer) = (ResourceId::generate(), ResourceId::generate());
+  let (execution, invocation) = (StepExecutionId::generate(), InvocationId::generate());
+  let after_turn = from_person(Some(run), Recipient::Agent(builder), "Also cover cancel.");
+  assert_eq!(after_turn.timing(), Timing::AfterTurn);
+  assert!(
+    !after_turn.steers(run, builder),
+    "sent after the turn, it waits for the turn's end"
+  );
+  let mut now = from_person(Some(run), Recipient::Agent(builder), "Stop editing the parser.")
+    .sent(Timing::Now)
+    .expect("a person's message");
+  assert!(now.steers(run, builder) && !now.steers(run, reviewer));
+  now
+    .deliver(run, (execution, invocation), at(41), Arrival::MidTurn)
+    .expect("delivered mid-turn");
+  assert!(!now.steers(run, builder), "taken once");
+  now.acknowledge(at(42)).expect("acknowledged");
+  assert_eq!(now.delivery().and_then(Delivery::arrival), Some(Arrival::MidTurn));
+  let reply = Message::from_agent(
+    TaskId::generate(),
+    run,
+    (execution, invocation),
+    AgentMessage::Reply,
+    body("Kept."),
+    at(44),
+  );
+  assert_eq!(reply.sent(Timing::Now).err(), Some(MessageError::NotFromAPerson));
+}
+
+#[test]
+fn conversation_a_message_the_cli_did_not_take_is_kept_and_sent_after_the_turn() {
+  let run = RunId::generate();
+  let builder = ResourceId::generate();
+  let execution = StepExecutionId::generate();
+  let mut message = from_person(None, Recipient::Agent(builder), "Use the new API.")
+    .sent(Timing::Now)
+    .expect("a person's message");
+  assert_eq!(message.send_after_turn(), Err(MessageError::NotUndelivered));
+  message
+    .not_delivered(run, execution, at(41), Undelivered::Refused)
+    .expect("not delivered");
+  assert_eq!(message.run(), Some(run));
+  assert_eq!(
+    message.delivery(),
+    Some(Delivery::NotDelivered {
+      execution,
+      at: at(41),
+      reason: Undelivered::Refused
+    })
+  );
+  assert!(!message.reaches(run, builder), "it goes no further on its own");
+  assert_eq!(
+    message.not_delivered(run, execution, at(42), Undelivered::Unwritable),
+    Err(MessageError::AlreadyDelivered)
+  );
+  message.send_after_turn().expect("sent after the turn");
+  assert_eq!(message.timing(), Timing::AfterTurn);
+  assert!(message.reaches(run, builder) && !message.steers(run, builder));
 }
 
 #[test]

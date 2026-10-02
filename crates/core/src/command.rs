@@ -160,6 +160,15 @@ impl Command {
     self
   }
 
+  /// Keeps standard input open for a line protocol whose first line is `first`, written as the
+  /// child starts.
+  #[must_use]
+  pub fn with_interactive_input(mut self, first: String) -> Self {
+    self.stdin = Some(first);
+    self.interactive_stdin = true;
+    self
+  }
+
   pub fn program(&self) -> &Path {
     &self.program
   }

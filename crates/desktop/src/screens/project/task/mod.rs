@@ -1,12 +1,12 @@
 //! A task and its latest run (02.10 `RD4pc`, paused 02.A `Oqmog`, stopped at limit 02.L
 //! `D6Nwxz`): the topbar with the way back to the task list and the run controls, the heading,
 //! the tabs, and the Summary (`uVIxb`, `F5Lsi`; the plan review 02.11 `x3lVC` while a plan waits for
-//! a decision), Conversation (02.12 `jgqPe`), Changes or Activity (02.I `SfXU1`) tab. The run is
-//! read from the project database and read again whenever the runner reports a change or a message
-//! is sent; its changes up to its latest checkpoint are read again when it records a new one, and
-//! what its worktree holds beyond that while an agent works, for the Changes tab and its count. Once
-//! the run ended, what it left in the repository is read too: Ready for review merges it, and
-//! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
+//! a decision), Conversation (merged with Activity, group `fTfl8`) or Changes tab. The run is read
+//! from the project database and read again whenever the runner reports a change or a message is
+//! sent; its changes up to its latest checkpoint are read again when it records a new one, and what
+//! its worktree holds beyond that while an agent works, for the Changes tab and its count. Once the
+//! run ended, what it left in the repository is read too: Ready for review merges it, and *Remove
+//! worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
 mod approval_arguments;
@@ -58,7 +58,6 @@ use orchester_core::{
 pub(super) use tool_approval::modal as tool_approval_modal;
 
 use self::{
-  activity::{ActivityProps, ActivityTab},
   changes::{ChangesProps, ChangesTab, RunChanges},
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
@@ -157,8 +156,6 @@ pub(super) struct TaskScrolls {
   pub(super) this_run: ScrollState,
   /// The Summary of a run that cannot be read (02.R).
   pub(super) unreadable: ScrollState,
-  /// The Conversation tab's active work.
-  pub(super) work: ScrollState,
 }
 
 impl Component for TaskScreen {
@@ -186,7 +183,6 @@ impl Component for TaskScreen {
         progress: ScrollState::new(),
         this_run: ScrollState::new(),
         unreadable: ScrollState::new(),
-        work: ScrollState::new(),
       },
     }
   }
@@ -246,13 +242,7 @@ impl Component for TaskScreen {
     let files = changes.as_ref().and_then(RunChanges::listed_files);
     let leftovers = self.leftovers(ctx, &props, &detail);
     let again = run_again::offer(ctx, &props.project, &detail, props.revision, leftovers.as_ref());
-    let body = self.body(
-      ctx,
-      &props,
-      &detail,
-      (lost, files, again.reason),
-      (changes, leftovers.clone()),
-    );
+    let body = self.body(ctx, &props, &detail, (lost, again.reason), (changes, leftovers.clone()));
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = self.error_rows(ctx, &control);
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
@@ -288,7 +278,7 @@ impl TaskScreen {
     ctx: &mut Ctx,
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
-    (lost, files, reason): (Option<Lost>, Option<usize>, Option<Element>),
+    (lost, reason): (Option<Lost>, Option<Element>),
     (changes, leftovers): (Option<RunChanges>, Option<Result<Leftovers, Message>>),
   ) -> Element {
     if let Some(run) = &detail.latest_unreadable {
@@ -296,10 +286,8 @@ impl TaskScreen {
         TaskPageTab::Summary => unreadable::summary(ctx, (run, &self.scrolls.unreadable), &detail.earlier),
         TaskPageTab::Conversation => tab_state::unreadable(ctx, "conversation-unreadable", run),
         TaskPageTab::Changes => tab_state::unreadable(ctx, "changes-unreadable", run),
-        TaskPageTab::Activity => tab_state::unreadable(ctx, "activity-unreadable", run),
       };
     }
-    let live = agent_at_work(detail, lost.is_some());
     if props.tab == TaskPageTab::Summary
       && let Some(run) = detail.run.as_ref()
       && let Some(review) = PlanReview::of(run)
@@ -323,12 +311,10 @@ impl TaskScreen {
         &conversation::TabContext {
           repo_root: &props.project.repo_root,
           lost,
-          files,
           leftovers: leftovers.as_ref().and_then(|leftovers| leftovers.as_ref().ok()),
-          nav: &self.nav,
           focus: &self.focus_composer,
           reload: &self.reload,
-          scroll: &self.scrolls.work,
+          revision: props.revision,
         },
       ),
       (TaskPageTab::Summary, _) => summary::summary(
@@ -337,15 +323,6 @@ impl TaskScreen {
         (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
         (&props.project.repo_root, &self.scrolls),
         reason,
-      ),
-      (TaskPageTab::Activity, _) => ctx.mount_keyed::<ActivityTab>(
-        "task-activity",
-        ActivityProps {
-          repo_root: props.project.repo_root.clone(),
-          detail: detail.clone(),
-          revision: props.revision,
-          live,
-        },
       ),
       (TaskPageTab::Changes, _) => ctx.mount_keyed::<ChangesTab>(
         "task-changes",
@@ -489,14 +466,16 @@ impl TaskScreen {
     let edit = detail
       .filter(|_| open.is_none())
       .and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
+    // On the Conversation tab it would open the tab itself.
+    let open = open.filter(|_| props.tab != TaskPageTab::Conversation);
     page::topbar_with(
       breadcrumb.into(),
       open.into_iter().chain(buttons).chain(ended).chain(edit),
     )
   }
 
-  /// Summary, Changes with the count of the files it lists, and Activity; the others need later
-  /// milestones (`X7jYe`, `kUKxD`).
+  /// Summary, Conversation and Changes with the count of the files it lists; Artifacts needs a later
+  /// milestone (`X7jYe`, `kUKxD`).
   fn tabs(&self, ctx: &Ctx, props: &TaskProps, files: Option<usize>) -> Element {
     let height = Dimension::Pct(100.0);
     let tab = |id, key, value: Option<TaskPageTab>| {
@@ -520,11 +499,6 @@ impl TaskScreen {
           Some(TaskPageTab::Conversation),
         ),
         tab("task-tab-changes", "runs.page.tabs.changes", Some(TaskPageTab::Changes)).count(files),
-        tab(
-          "task-tab-activity",
-          "runs.page.tabs.activity",
-          Some(TaskPageTab::Activity),
-        ),
         tab("task-tab-artifacts", "runs.page.tabs.artifacts", None),
       ],
     )
