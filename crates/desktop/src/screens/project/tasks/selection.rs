@@ -17,16 +17,30 @@ use crate::{
 #[derive(Clone)]
 pub struct TaskSelection(pub Signal<Selection>);
 
+/// How much of what a box stands for is selected: nothing, part of it or all of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Marked {
+  None,
+  Some,
+  All,
+}
+
 pub fn checkbox(id: impl Into<String>, checked: bool, toggle: impl Fn() + Send + Sync + 'static) -> Element {
+  marked_box(id, if checked { Marked::All } else { Marked::None }, toggle)
+}
+
+/// A selection box: square, square-minus for a partial selection, square-check.
+pub fn marked_box(id: impl Into<String>, marked: Marked, toggle: impl Fn() + Send + Sync + 'static) -> Element {
+  let (glyph, described) = match marked {
+    Marked::None => (Icon::Square, "false"),
+    Marked::Some => (Icon::SquareMinus, "partly"),
+    Marked::All => (Icon::SquareCheck, "true"),
+  };
   pressable(surface(), toggle)
     .id(id.into())
-    .describe("selected", if checked { "true" } else { "false" })
+    .describe("selected", described)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .child(icon(
-      if checked { Icon::SquareCheck } else { Icon::Square },
-      IconSize::Option,
-      PaletteColor::TextSecondary,
-    ))
+    .child(icon(glyph, IconSize::Option, PaletteColor::TextSecondary))
     .into()
 }
 

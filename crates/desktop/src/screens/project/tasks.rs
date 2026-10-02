@@ -4,6 +4,7 @@
 
 mod bulk;
 mod controls;
+mod outcome;
 mod review;
 pub(super) mod selection;
 
@@ -60,7 +61,6 @@ const TAB_ROW_HEIGHT: f32 = 42.0;
 const FILTER_HEIGHT: f32 = 36.0;
 const PIPELINE_FILTER_WIDTH: f32 = 184.0;
 const SORT_WIDTH: f32 = 164.0;
-const SELECTION_HEIGHT: f32 = 44.0;
 const SELECTION_BUTTON_HEIGHT: f32 = 32.0;
 const RUN_SELECTED_WIDTH: f32 = 158.0;
 const FOOTER_HEIGHT: f32 = 30.0;
@@ -339,6 +339,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
   let reveal = created
     .filter(|task| rows.iter().any(|row| row.id == *task))
     .map(|task| task.to_string());
+  let row_height = super::task_rows::table_row_height(ctx);
   let table: Element = if rows.is_empty() {
     empty_rows(ctx, screen)
   } else {
@@ -346,7 +347,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
       .list_key("task-rows")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .max_height(Dimension::Px(super::task_rows::TABLE_ROW_HEIGHT * rows.len() as f32))
+      .max_height(Dimension::Px(row_height * rows.len() as f32))
       .reveal_key(reveal)
       .mount_keyed::<QueueRow, _, _, _>(
         |row| row.id,
@@ -359,7 +360,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
   let content = body()
     .child(controls::filters(ctx, screen, tasks))
     .child(organization_filters(ctx, screen, tasks))
-    .child(controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
+    .with_children(controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
     .with_children(
       screen
         .assigning
@@ -408,7 +409,7 @@ fn table_column(ctx: &Ctx, table: Element, rows: usize) -> Element {
   column
     .flex(1.0)
     .max_height(Dimension::Px(
-      super::task_rows::HEADING_HEIGHT + super::task_rows::TABLE_ROW_HEIGHT * rows as f32,
+      super::task_rows::HEADING_HEIGHT + super::task_rows::table_row_height(ctx) * rows as f32,
     ))
     .into()
 }

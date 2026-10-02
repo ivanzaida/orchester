@@ -144,6 +144,7 @@ icons! {
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
   SquareCheck => '\u{e559}',
+  SquareMinus => '\u{e171}',
   SquarePlus => '\u{e173}',
   Star => '\u{e176}',
   Terminal => '\u{e181}',

@@ -370,6 +370,48 @@
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks."
       },
+      "heldLine": {
+        "sessionEnded": {
+          "one": "{{task}} held after the project was reopened · Start run goes on",
+          "other": "{{count}} tasks held after the project was reopened · Start run goes on"
+        },
+        "capacity": {
+          "one": "{{task}} waits for an agent slot",
+          "other": "{{count}} tasks wait for an agent slot"
+        },
+        "dailyBudget": {
+          "one": "{{task}} waits for the daily budget",
+          "other": "{{count}} tasks wait for the daily budget"
+        },
+        "groupCap": {
+          "one": "{{task}} held at the group token cap · Return to drafts",
+          "other": "{{count}} tasks held at the group token cap · Return to drafts"
+        },
+        "previous": {
+          "one": "{{task}} waits for the previous task",
+          "other": "{{count}} tasks wait for the previous task"
+        },
+        "concurrency": {
+          "one": "{{task}} waits for a task slot",
+          "other": "{{count}} tasks wait for a task slot"
+        },
+        "failure": {
+          "one": "{{task}} held after a task failed · Return to drafts",
+          "other": "{{count}} tasks held after a task failed · Return to drafts"
+        },
+        "preflight": {
+          "one": "{{task}} held: it cannot start yet · Return to drafts",
+          "other": "{{count}} tasks held: they cannot start yet · Return to drafts"
+        },
+        "startFailed": {
+          "one": "{{task}} held after a start failed · Return to drafts",
+          "other": "{{count}} tasks held after a start failed · Return to drafts"
+        },
+        "blocked": {
+          "one": "{{task}} waits for its blocking tasks",
+          "other": "{{count}} tasks wait for their blocking tasks"
+        }
+      },
       "held": {
         "sessionEnded": "Held · project reopened",
         "capacity": "Waiting for an agent slot",
@@ -492,7 +534,22 @@
       "setPriority": "Set priority",
       "addTag": "Add tag",
       "removeTag": "Remove tag",
-      "changed": "{{task}} updated.",
+      "statusSet": {
+        "one": "Status set to {{status}} for {{count}} task.",
+        "other": "Status set to {{status}} for {{count}} tasks."
+      },
+      "prioritySet": {
+        "one": "Priority set to {{priority}} for {{count}} task.",
+        "other": "Priority set to {{priority}} for {{count}} tasks."
+      },
+      "tagsAdded": {
+        "one": "Added {{tags}} to {{count}} task.",
+        "other": "Added {{tags}} to {{count}} tasks."
+      },
+      "tagsRemoved": {
+        "one": "Removed {{tags}} from {{count}} task.",
+        "other": "Removed {{tags}} from {{count}} tasks."
+      },
       "failed": "{{task}} could not be updated: {{reason}}",
       "run": "Run",
       "tagMembership": "{{tag}} · on {{count}} of {{total}} tasks",

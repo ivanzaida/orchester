@@ -102,7 +102,6 @@ fn organization_bulk_status_priority_and_filters() {
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
-  let ids: Vec<_> = tasks(&desktop.repo).iter().map(|task| task.id()).collect();
   for task in tasks(&desktop.repo) {
     desktop.press(&format!("task-select-{}", task.key()));
   }
@@ -114,7 +113,12 @@ fn organization_bulk_status_priority_and_filters() {
       .iter()
       .all(|task| task.organization().status() == WorkflowStatus::InReview)
   });
-  desktop.wait_for(&format!("bulk-outcome-{}", ids[0]));
+  desktop.wait_for("bulk-outcome");
+  assert!(crate::github::shows(
+    &mut desktop,
+    "bulk-outcome",
+    "Status set to In review for 2 tasks."
+  ));
   desktop.press("bulk-priority");
   desktop.wait_for("bulk-priority-Urgent");
   desktop.press("bulk-priority-Urgent");
@@ -378,7 +382,6 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
     .project_tags()
     .expect("tags")[0]
     .id();
-  let ids: Vec<_> = tasks(&desktop.repo).iter().map(|task| task.id()).collect();
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
@@ -396,7 +399,7 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
       .iter()
       .all(|task| task.organization().tags() == [tag])
   });
-  desktop.wait_for(&format!("bulk-outcome-{}", ids[0]));
+  desktop.wait_for("bulk-outcome");
   desktop.wait_until("tag chips refreshed", |desktop| {
     crate::github::shows(desktop, "task-row-KON-1", "Desktop")
   });

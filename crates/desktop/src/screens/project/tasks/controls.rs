@@ -11,21 +11,21 @@ use lurq::{
 };
 use orchester_core::{
   id::TaskId,
+  task_group::GroupHold,
   task_selection::{self, SelectionProblem},
 };
 
 use super::{
-  FILTER_HEIGHT, PIPELINE_FILTER_WIDTH, RUN_SELECTED_WIDTH, SELECTION_BUTTON_HEIGHT, SELECTION_HEIGHT, SORT_WIDTH,
-  TasksScreen,
+  FILTER_HEIGHT, PIPELINE_FILTER_WIDTH, RUN_SELECTED_WIDTH, SELECTION_BUTTON_HEIGHT, SORT_WIDTH, TasksScreen,
   bulk::{BulkOrganization, BulkProps},
-  selection::checkbox,
+  selection::{Marked, marked_box},
 };
 use crate::{
   messages::Message,
   tasks::{
     browse::{PipelineFilter, TaskSort},
     data::ProjectTasks,
-    group::{self, hold_messages, problem_message},
+    group::{self, held_line_keys, hold_row_message, problem_message},
     list::TaskRow,
   },
   theme::ExtraSpacing,
@@ -139,19 +139,22 @@ fn readiness(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> (usize, A
   (ready, text)
 }
 
-/// The selection bar (`OjUxo` in `J9467`, `EpDpS` in `HI91q`): the selection and its readiness
-/// with the run actions at the right (Run selected, Set pipeline, Return to drafts), and under them
-/// the organization group (Set status, Set priority, Add tag, Remove tag). The readiness gives way
-/// with an ellipsis; the actions keep their width. In a window narrower than
-/// `TASK_TABLE_PIPELINE_MIN_WINDOW` the run actions go on a line of their own, right-aligned, above
-/// the organization group (implemented, not drawn yet).
+/// The selection bar (`task-selection`, 02.03C `DWqjc`, 02.03E `t7ETG`), shown while tasks are
+/// selected: padded 12, lines 32 high and 8 apart. Line 1 is the selection and its readiness (which
+/// gives way with an ellipsis), with the run actions at the right: Return to drafts, Set pipeline
+/// and Run selected last. Line 2 is the organization group, with the outcome of its last change
+/// under it. In a window narrower than `TASK_TABLE_PIPELINE_MIN_WINDOW` the run actions take a line
+/// of their own, right-aligned, between the two.
 pub fn selection_bar(
   ctx: &mut Ctx,
   screen: &TasksScreen,
   root: &Path,
   tasks: &ProjectTasks,
   visible: Arc<Vec<TaskRow>>,
-) -> Element {
+) -> Option<Element> {
+  if screen.selected.get().0.is_empty() {
+    return None;
+  }
   let (ready, readiness) = readiness(ctx, screen, tasks);
   let summary = selection_summary(ctx, screen, &readiness, visible);
   let actions = selection_actions(ctx, screen, root, tasks, ready);
@@ -163,60 +166,47 @@ pub fn selection_bar(
       selected: screen.selected.clone(),
     },
   );
+  let line = || {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(SELECTION_BUTTON_HEIGHT))
+      .align_items(lurq::layout::Alignment::Center)
+  };
   // Reading the window's width re-renders the bar as the window resizes.
   let narrow = ctx.window().logical_width() < crate::theme::TASK_TABLE_PIPELINE_MIN_WINDOW;
-  let lines = Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding_bottom(SpacingSize::Sm)
-    .spacing(SpacingSize::Sm);
-  let lines = if narrow {
-    lines
-      .padding_top(SpacingSize::Sm)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(SELECTION_BUTTON_HEIGHT))
-          .align_items(lurq::layout::Alignment::Center)
-          .child(summary),
-      )
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .justify(lurq::layout::layout_kind::Justify::End)
-          .child(actions),
-      )
-  } else {
-    lines.child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(SELECTION_HEIGHT))
-        .spacing(ExtraSpacing::Group.role())
-        .align_items(lurq::layout::Alignment::Center)
-        .child(summary)
-        .child(actions),
-    )
-  };
-  Column::new()
+  let bar = Column::new()
     .id("task-selection")
     .width(Dimension::Pct(100.0))
-    .padding_horizontal(ExtraSpacing::Stack.role())
+    .padding(ExtraSpacing::Stack.role())
+    .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfaceRaised)
-    .rounded(RadiusSize::Sm)
-    .child(lines.child(organization))
-    .into()
+    .rounded(RadiusSize::Sm);
+  let bar = if narrow {
+    bar
+      .child(line().child(summary))
+      .child(line().justify(lurq::layout::layout_kind::Justify::End).child(actions))
+  } else {
+    bar.child(line().spacing(ExtraSpacing::Group.role()).child(summary).child(actions))
+  };
+  Some(bar.child(organization).into())
 }
 
 /// Select all, the count and how the selection stands; the last gives way with an ellipsis.
 fn selection_summary(ctx: &Ctx, screen: &TasksScreen, readiness: &str, visible: Arc<Vec<TaskRow>>) -> Element {
   let selected = screen.selected.get();
-  let all = !visible.is_empty() && visible.iter().all(|row| selected.0.contains(&row.id));
+  let shown = visible.iter().filter(|row| selected.0.contains(&row.id)).count();
+  let marked = match shown {
+    0 => Marked::None,
+    shown if shown == visible.len() => Marked::All,
+    _ => Marked::Some,
+  };
   let selection = screen.selected.clone();
   Row::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Group.role())
     .align_items(lurq::layout::Alignment::Center)
-    .child(checkbox("tasks-select-all", all, move || {
+    .child(marked_box("tasks-select-all", marked, move || {
       selection.update(|s| s.toggle_all(&visible))
     }))
     .child(
@@ -237,7 +227,7 @@ fn selection_summary(ctx: &Ctx, screen: &TasksScreen, readiness: &str, visible: 
     .into()
 }
 
-/// Run selected, Set pipeline and, when it applies, Return to drafts, each at its full width.
+/// Return to drafts when it applies, Set pipeline and Run selected last, each at its full width.
 fn selection_actions(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks, ready: usize) -> Element {
   let selected = screen.selected.get();
   let count = selected.0.len();
@@ -247,6 +237,17 @@ fn selection_actions(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &Proje
   Row::new()
     .spacing(ExtraSpacing::Group.role())
     .align_items(lurq::layout::Alignment::Center)
+    .with_children((!releasable.is_empty()).then(|| release_button(ctx, screen, root, releasable)))
+    .child(
+      ActionButton::new(ctx.t("tasks.selection.setPipeline"))
+        .icon(Icon::Workflow)
+        .id("set-pipeline")
+        .in_form()
+        .height(Dimension::Px(SELECTION_BUTTON_HEIGHT))
+        .on_click(move || assign.set(true))
+        .enabled(count > 0 && !pending)
+        .render(ctx),
+    )
     .child(
       ActionButton::new(ctx.t_args("tasks.bulk.runSelected", [("count", count.to_string())]))
         .primary()
@@ -261,22 +262,11 @@ fn selection_actions(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &Proje
         .enabled(count > 0 && count == ready && !pending)
         .render(ctx),
     )
-    .child(
-      ActionButton::new(ctx.t("tasks.selection.setPipeline"))
-        .icon(Icon::Workflow)
-        .id("set-pipeline")
-        .in_form()
-        .height(Dimension::Px(SELECTION_BUTTON_HEIGHT))
-        .on_click(move || assign.set(true))
-        .enabled(count > 0 && !pending)
-        .render(ctx),
-    )
-    .with_children((!releasable.is_empty()).then(|| release_button(ctx, screen, root, releasable)))
     .into()
 }
 
 /// Takes the selected tasks a held group keeps from starting back to the drafts (implemented,
-/// not drawn yet; the secondary selection-bar button after Set pipeline).
+/// the secondary selection-bar button before Set pipeline, `IYlGK`).
 fn release_button(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: Vec<TaskId>) -> Element {
   let (action, root) = (screen.release.clone(), root.to_path_buf());
   ActionButton::new(ctx.t("tasks.bulk.releaseHeld"))
@@ -342,6 +332,8 @@ pub fn assignment(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectT
 struct Reason {
   message: Message,
   problem: Option<SelectionProblem>,
+  /// The hold of the group the tasks wait in, which their line names in a few words.
+  hold: Option<GroupHold>,
   tasks: Vec<String>,
 }
 
@@ -352,6 +344,13 @@ impl Reason {
     let reason = message_text(ctx, &self.message).to_string();
     if matches!(self.problem, Some(SelectionProblem::Blocked { .. })) {
       return reason.into();
+    }
+    if let Some(hold) = &self.hold {
+      let (one, many) = held_line_keys(hold);
+      return match self.tasks.as_slice() {
+        [task] => ctx.t_args(one, [("task", task.clone())]),
+        tasks => ctx.t_args(many, [("count", tasks.len().to_string())]),
+      };
     }
     let [task] = self.tasks.as_slice() else {
       let count = [("count", self.tasks.len().to_string())];
@@ -375,12 +374,9 @@ fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>, separator: &str) -
   let mut reasons: Vec<Reason> = Vec::new();
   for task in tasks.tasks.iter().filter(|t| selected.contains(&t.id())) {
     let has_run = tasks.phases.contains_key(&task.id());
-    let held = (!has_run)
-      .then(|| tasks.group_holds.get(&task.id()))
-      .flatten()
-      .and_then(|hold| hold_messages(hold).into_iter().next());
+    let held = (!has_run).then(|| tasks.group_holds.get(&task.id())).flatten();
     let found: Vec<_> = match held {
-      Some(reason) => vec![(reason, None)],
+      Some(hold) => vec![(hold_row_message(hold), None, Some(hold.clone()))],
       None => task_selection::problems(task, has_run, &published, blocked_by(tasks, task.id()))
         .into_iter()
         .map(|problem| {
@@ -388,17 +384,18 @@ fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>, separator: &str) -
             SelectionProblem::Blocked { by } => blocked_message(tasks, task, by, separator),
             other => problem_message(other),
           };
-          (message, Some(problem))
+          (message, Some(problem), None)
         })
         .collect(),
     };
-    for (message, problem) in found {
+    for (message, problem, hold) in found {
       let key = task.key().to_string();
       match reasons.iter_mut().find(|reason| reason.message == message) {
         Some(reason) => reason.tasks.push(key),
         None => reasons.push(Reason {
           message,
           problem,
+          hold,
           tasks: vec![key],
         }),
       }

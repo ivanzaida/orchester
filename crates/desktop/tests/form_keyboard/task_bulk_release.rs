@@ -76,11 +76,11 @@ fn task_bulk_release_returns_held_queued_tasks_to_the_drafts() {
     "task-selection",
     "0 ready to queue · 1 incomplete · 2 already queued or started"
   ));
-  // The two held tasks share one line with the group's full reason.
+  // The two held tasks share one short line (02.03D `IYlGK`).
   assert!(shows(
     &mut desktop,
     "task-problems",
-    "2 tasks: Held after a task failed or was cancelled."
+    "2 tasks held after a task failed · Return to drafts"
   ));
   desktop.press("tasks-release-held");
   desktop.settle("the released drafts", |tree| {
@@ -126,9 +126,102 @@ fn task_bulk_release_actions_fit_the_narrowest_window() {
     (desktop.bounds("set-pipeline").width - wide).abs() < 0.5,
     "Set pipeline keeps its width"
   );
-  assert!(shows(
-    &mut desktop,
-    "task-problems",
-    "2 tasks: Held after a task failed"
-  ));
+  assert!(shows(&mut desktop, "task-problems", "2 tasks held after a task failed"));
+}
+
+/// The selection bar is hidden while nothing is selected; once tasks are, its run actions end with
+/// Run selected at the right of the selection's line, above the organization group (02.03D).
+#[test]
+fn task_bulk_bar_hidden_without_a_selection_and_run_selected_last_at_1440() {
+  let mut desktop = Desktop::with_seeded_project(held_group);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-select-KON-2");
+  assert!(desktop.tree.get_element_by_id("task-selection").is_none());
+  desktop.press("task-select-KON-1");
+  desktop.press("task-select-KON-2");
+  desktop.wait_for("tasks-release-held");
+  let (bar, select_all) = (desktop.bounds("task-selection"), desktop.bounds("tasks-select-all"));
+  let (release, pipeline, run) = (
+    desktop.bounds("tasks-release-held"),
+    desktop.bounds("set-pipeline"),
+    desktop.bounds("run-selected"),
+  );
+  assert!(
+    release.x < pipeline.x && pipeline.x < run.x,
+    "Return to drafts, Set pipeline, Run selected"
+  );
+  assert!(
+    (bar.x + bar.width - 12.0 - (run.x + run.width)).abs() < 0.5,
+    "Run selected ends 12 from the bar's edge"
+  );
+  let middle = |rect: &lurq::core::ElementRect| rect.y + rect.height / 2.0;
+  assert!(
+    (middle(&run) - middle(&select_all)).abs() < 1.0,
+    "one line with the selection"
+  );
+  assert!(
+    (run.y - bar.y - 12.0).abs() < 0.5 && (run.height - 32.0).abs() < 0.5,
+    "padded 12, 32 high"
+  );
+  let status = desktop.bounds("bulk-status");
+  assert!(
+    (status.y - (run.y + run.height + 8.0)).abs() < 0.5,
+    "the organization line 8 below"
+  );
+  desktop.press("task-select-KON-1");
+  desktop.press("task-select-KON-2");
+  desktop.settle("the hidden bar", |tree| {
+    tree.get_element_by_id("task-selection").is_none()
+  });
+}
+
+/// At 960 the run actions take a line of their own, right-aligned, between the selection and the
+/// organization group, and nothing leaves the window (02.03E `t7ETG`).
+#[test]
+fn task_bulk_bar_three_lines_at_960() {
+  let mut desktop = Desktop::with_seeded_project(held_group);
+  desktop.tree.resize(960, 960);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-select-KON-2");
+  desktop.press("task-select-KON-1");
+  desktop.press("task-select-KON-2");
+  desktop.wait_for("tasks-release-held");
+  let (bar, select_all) = (desktop.bounds("task-selection"), desktop.bounds("tasks-select-all"));
+  let (release, run, status) = (
+    desktop.bounds("tasks-release-held"),
+    desktop.bounds("run-selected"),
+    desktop.bounds("bulk-status"),
+  );
+  assert!(
+    run.y > select_all.y + select_all.height,
+    "the run actions under the selection"
+  );
+  assert!(
+    status.y > run.y + run.height,
+    "the organization group under the run actions"
+  );
+  assert!(
+    (bar.x + bar.width - 12.0 - (run.x + run.width)).abs() < 0.5,
+    "right-aligned"
+  );
+  assert!(release.x < run.x && bar.x + bar.width <= 960.0);
+}
+
+/// Rows are 76 high with their tag chips at 1440 and 60 high at 960, where the chips are gone.
+#[test]
+fn task_bulk_rows_76_high_at_1440_and_60_at_960() {
+  let mut desktop = Desktop::with_seeded_project(held_group);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  assert!((desktop.bounds("task-row-KON-1").height - 76.0).abs() < 0.5);
+  desktop.tree.resize(960, 960);
+  desktop.settle("the narrow table", |tree| {
+    tree
+      .get_element_by_id_mut("task-row-KON-1")
+      .and_then(|row| row.bounds())
+      .is_some_and(|row| (row.height - 60.0).abs() < 0.5)
+  });
 }

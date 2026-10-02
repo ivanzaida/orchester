@@ -49,7 +49,10 @@ const TITLE_MIN_WIDTH: f32 = 120.0;
 /// the title keeps `TITLE_MIN_WIDTH` in a 960 window.
 const NARROW_STATUS_WIDTH: f32 = 164.0;
 pub(super) const HEADING_HEIGHT: f32 = 28.0;
-pub(super) const TABLE_ROW_HEIGHT: f32 = 76.0;
+/// A row with tag chips under its title, and one without them once the window drops the chips
+/// (`clVjO`, 02.03E `t7ETG`).
+const TABLE_ROW_HEIGHT: f32 = 76.0;
+const NARROW_TABLE_ROW_HEIGHT: f32 = 60.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
 // DtpHJ full-width overview task specimen.
@@ -141,6 +144,15 @@ impl Columns {
     }
   }
 
+  /// Rows are lower once their tag chips are gone.
+  const fn row_height(self) -> f32 {
+    if self.tags {
+      TABLE_ROW_HEIGHT
+    } else {
+      NARROW_TABLE_ROW_HEIGHT
+    }
+  }
+
   /// Workflow / run is narrower once Priority is gone.
   const fn status_width(self) -> f32 {
     if self.priority {
@@ -149,6 +161,11 @@ impl Columns {
       NARROW_STATUS_WIDTH
     }
   }
+}
+
+/// The height of a task table row in the window as it is now.
+pub(super) fn table_row_height(ctx: &Ctx) -> f32 {
+  Columns::of(ctx).row_height()
 }
 
 fn column_label(text: &str) -> Text {
@@ -222,7 +239,7 @@ impl Component for QueueRow {
     let columns = Columns::of(ctx);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(TABLE_ROW_HEIGHT))
+      .height(Dimension::Px(columns.row_height()))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))

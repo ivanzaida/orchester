@@ -190,6 +190,12 @@ busy only while a blocking task runs; rows keep the blocked text over the hold. 
 takes 13). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
 another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
 
+The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ETG` and F `lRbit`: the selection bar
+is hidden without a selection, padded 12 with 32-high lines 8 apart, Return to drafts, Set pipeline and Run selected
+last; select-all shows square-minus for a partial selection; a bulk change reads as one summary line with a line per
+failed task; held tasks read "2 tasks held after a task failed · Return to drafts"; rows are 60 high once the tag
+chips are dropped.
+
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,
 Tasks) and of J9467 at 1440 and 960. Move this entry to Done after they pass.

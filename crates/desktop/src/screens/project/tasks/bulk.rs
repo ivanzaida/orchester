@@ -59,15 +59,19 @@ enum Menu {
   RemoveTags,
 }
 impl lurq::app::component::DevtoolsInspectable for Menu {}
-#[derive(Clone)]
-enum Mutation {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Mutation {
   Status(WorkflowStatus),
   Priority(Priority),
   AddTags(Vec<TagId>),
   RemoveTags(Vec<TagId>),
 }
+/// The change a bulk action made and how it went for each selected task.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Outcomes(Vec<(TaskId, Result<(), Message>)>);
+pub(super) struct Outcomes {
+  pub mutation: Mutation,
+  pub results: Vec<(TaskId, Result<(), Message>)>,
+}
 impl lurq::app::component::DevtoolsInspectable for Outcomes {}
 type Action = FutureAction<(Vec<TaskId>, Mutation, bool), Outcomes, Message>;
 
@@ -100,9 +104,10 @@ impl Component for BulkOrganization {
     let action = action(ctx, &props);
     let selected = props.selected.get().0;
     let pending = action.state().get().is_pending();
+    // The organization group (`EpDpS`): 32 high, 12 apart.
     let row = Row::new()
       .wrap()
-      .spacing(ExtraSpacing::Group.role())
+      .spacing(ExtraSpacing::Stack.role())
       .align_items(Alignment::Center);
     let row = self.buttons(ctx, &props, row, pending);
     let mut column = Column::new().spacing(SpacingSize::Sm).child(row);
@@ -120,7 +125,13 @@ impl Component for BulkOrganization {
           .placement(Placement::BottomStart),
       );
     }
-    column = column.child(results(ctx, &props, &action));
+    let state = action.state().get();
+    column = column.child(super::outcome::outcome(
+      ctx,
+      &props.tasks,
+      state.data.as_ref(),
+      state.is_pending(),
+    ));
     column.child(self.confirmation(ctx, &props, &action))
   }
 }
@@ -179,7 +190,7 @@ impl BulkOrganization {
     let (confirm, open) = (self.confirm.clone(), self.open.clone());
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     ctx.watch(&action.state(), move |state| {
-      if let Some(Outcomes(outcomes)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+      if let Some(Outcomes { results: outcomes, .. }) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
         confirm.set(!outcomes.iter().all(|(_, result)| result.is_ok()) && confirm.get_untracked());
         open.set(false);
         nav.tasks_changed();
@@ -381,7 +392,7 @@ impl BulkOrganization {
               .render(ctx),
           ),
       );
-    if let Some(Outcomes(outcomes)) = action.state().get().data {
+    if let Some(Outcomes { results: outcomes, .. }) = action.state().get().data {
       for (_, result) in outcomes {
         if let Err(error) = result {
           content = content.child(field_error(&message_text(ctx, &error)));
@@ -441,35 +452,6 @@ fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
   }
 }
 
-fn results(ctx: &Ctx, props: &BulkProps, action: &Action) -> Element {
-  let mut column = Column::new().spacing(SpacingSize::Sm);
-  if let Some(Outcomes(outcomes)) = action.state().get().data {
-    for (id, result) in outcomes {
-      let key = props
-        .tasks
-        .tasks
-        .iter()
-        .find(|task| task.id() == id)
-        .map(|task| task.key().to_string())
-        .unwrap_or_else(|| id.to_string());
-      let outcome: Element = match result {
-        Ok(()) => Text::new(&ctx.t_args("tasks.selection.changed", [("task", key.as_str())]))
-          .variant(TypographyStyle::Caption)
-          .into(),
-        Err(error) => field_error(&ctx.t_args(
-          "tasks.selection.failed",
-          [("task", key.as_str()), ("reason", &message_text(ctx, &error))],
-        )),
-      };
-      column = column.child(outcome.id(format!("bulk-outcome-{id}")));
-    }
-  }
-  if action.state().get().is_pending() {
-    column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
-  }
-  column.into()
-}
-
 /// Applies one change to each selected task in turn, recording each task's outcome; the call in
 /// `create` and every `render` refer to the same action.
 fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
@@ -478,12 +460,12 @@ fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
   ctx.future_action(move |(tasks, mutation, confirmed): (Vec<TaskId>, Mutation, bool)| {
     let (root, runners) = (root.clone(), runners.clone());
     async move {
-      let mut outcomes = Vec::new();
+      let mut results = Vec::new();
       for task in tasks {
         let result = apply(&root, task, mutation.clone(), confirmed, &runners).await;
-        outcomes.push((task, result));
+        results.push((task, result));
       }
-      Ok(Outcomes(outcomes))
+      Ok(Outcomes { mutation, results })
     }
   })
 }
