@@ -1,6 +1,6 @@
 //! Task organization after a change: a failed save does not pass for the last one that
-//! succeeded, the task header's pickers follow the task as it is now, and the locked Retry form
-//! keeps the stored organization.
+//! succeeded, the task header's pickers follow the task as it is now, the locked Retry form keeps
+//! the stored organization, and a tag picker that cannot be used creates no tag.
 
 use std::{path::Path, time::Duration};
 
@@ -261,3 +261,36 @@ fn organization_locked_retry_form_keeps_the_stored_organization() {
   assert_eq!(organization.status(), WorkflowStatus::InProgress);
   assert_eq!(organization.priority(), Priority::High);
 }
+
+/// R4: while the header saves a choice its tag picker is unavailable, inline creation included.
+#[test]
+fn organization_header_tag_picker_creates_no_tag_while_saving() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    seed_active(repo);
+    let mut db = ProjectDb::open(repo).expect("open");
+    db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
+  });
+  open_task(&mut desktop);
+  let tag = ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags")[0].id();
+  desktop.press("task-tags-picker");
+  desktop.wait_for("tag-search");
+  // The header's save waits for the write lock: it stays under way until the lock is released,
+  // and a creation pressed meanwhile would complete after it.
+  let connection = rusqlite::Connection::open(desktop.repo.join(".orchester/orchester.db")).expect("connection");
+  connection.execute_batch("BEGIN IMMEDIATE").expect("hold the write lock");
+  desktop.press(&format!("picker-tag-{tag}"));
+  set_text(&mut desktop, "tag-search", "Client");
+  desktop.wait_for("tag-create-inline");
+  desktop.press("tag-create-inline");
+  connection.execute_batch("ROLLBACK").expect("release the write lock");
+  desktop.wait_until("the tag saved", |desktop| {
+    tasks(&desktop.repo)[0].organization().tags() == [tag]
+  });
+  assert_eq!(
+    ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags").len(),
+    1,
+    "no tag was created"
+  );
+}
+
+

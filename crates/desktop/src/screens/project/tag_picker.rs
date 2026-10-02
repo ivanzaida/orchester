@@ -222,7 +222,7 @@ impl TagPicker {
           .id("tag-create-inline")
           .in_form()
           .on_click(move || create.run(typed.get()))
-          .enabled(!pending)
+          .enabled(props.enabled && !pending)
           .render(ctx),
       );
     }
