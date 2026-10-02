@@ -86,7 +86,7 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 28] = [
+  const ALL: [Self; 29] = [
     Self::Hair,
     Self::PlanRows,
     Self::Mark,
