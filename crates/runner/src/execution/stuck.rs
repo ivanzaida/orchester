@@ -14,8 +14,13 @@ use orchester_store::ProjectDb;
 use super::{Scheduler, idle};
 
 impl Scheduler {
-  /// Carries out `decision` on `run`, which waits for a person.
+  /// Carries out `decision` on `run`, which waits for a person. A run its task executes does not
+  /// wait for one: a second decision while the first one's attempt runs is refused as such.
   pub async fn decide_stuck(&self, run: RunId, decision: StuckDecision) -> Result<(), Rejection> {
+    let executing = |rejection| match rejection {
+      Rejection::RunNotPaused => Rejection::RunNotWaiting,
+      other => other,
+    };
     if decision != StuckDecision::Stop {
       return self
         .continue_settled(run, |db, root| {
@@ -25,9 +30,10 @@ impl Scheduler {
             .map_err(idle::rejection)?;
           idle::store_continuation(db, root, stored, &events)
         })
-        .await;
+        .await
+        .map_err(executing);
     }
-    self.settled(run).await?;
+    self.settled(run).await.map_err(executing)?;
     let _one_at_a_time = self.inner.continuing.lock().await;
     let mut db = self.open()?;
     let mut stored = waiting(&db, run)?;

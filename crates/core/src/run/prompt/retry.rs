@@ -36,6 +36,9 @@ pub struct RetryReport<'a> {
 }
 
 /// What the failed step left: an agent's structured result or final message, or how its command ended.
+/// A command's output goes into another agent's prompt as it was printed, without redaction: that is
+/// safe because a command tool's process gets no secret variable (`tests/command_tool.rs`,
+/// `command_tool_process_gets_no_secret_variable`). Redact it here before tools get secrets.
 #[derive(Clone, Copy, Debug)]
 pub enum FailureReport<'a> {
   Result(&'a StepResult),

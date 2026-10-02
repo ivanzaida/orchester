@@ -35,9 +35,8 @@ enum LoadedFailure {
 }
 
 impl LoadedReport {
-  /// The report as the prompt takes it; `None` when the failed step left the run's snapshot, which
-  /// no run does.
-  pub(super) fn report<'a>(&'a self, task: &'a RunTask) -> Option<RetryReport<'a>> {
+  /// The report as the prompt takes it.
+  pub(super) fn report<'a>(&'a self, task: &'a RunTask) -> RetryReport<'a> {
     let failure = match &self.failure {
       LoadedFailure::Result(result) => FailureReport::Result(result),
       LoadedFailure::Message(message) => FailureReport::Message(message),
@@ -55,12 +54,17 @@ impl LoadedReport {
         omitted_bytes: *omitted_bytes,
       },
     };
-    Some(RetryReport {
-      failed_step: task.run.snapshot().body().step(&self.failed_step)?,
+    RetryReport {
+      failed_step: task
+        .run
+        .snapshot()
+        .body()
+        .step(&self.failed_step)
+        .expect("the failed execution names a step of the run's snapshot"),
       attempt: self.attempt,
       failure,
       note: self.note.as_ref(),
-    })
+    }
   }
 }
 
@@ -112,7 +116,9 @@ impl RunTask {
     })
   }
 
-  /// How the command ended and what it printed, else what the step left for the steps after it.
+  /// How the command ended and what it printed, else what the step left for the steps after it. Its
+  /// output reaches another agent's prompt unredacted, which is safe while tools get no secrets
+  /// (see `orchester_core::run::FailureReport`).
   fn command_failure(&self, failed: StepExecutionId, outputs: &[StepOutput]) -> Result<LoadedFailure, RunnerProblem> {
     let finished = self
       .db

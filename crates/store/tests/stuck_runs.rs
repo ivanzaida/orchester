@@ -64,8 +64,12 @@ fn stuck_runs_round_trip_waiting_restarted_and_returned() {
     Some(AttemptReason::Returned { note: kept, .. }) if *kept == note
   ));
 
+  // Implement has not passed since it first broke: breaking again waits at once.
   fail(&mut db, &mut run, StepFailure::AgentFailed, 30);
-  fail(&mut db, &mut run, StepFailure::AgentFailed, 32);
+  assert!(matches!(
+    run.status(),
+    RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))
+  ));
   let events = run.decide_stuck(&StuckDecision::Stop, at(40)).expect("stopped");
   db.append_events(&run, &events).expect("stored stop");
   assert!(matches!(run.status(), RunStatus::Failed(RunFailure::StepFailed(_))));
@@ -75,24 +79,49 @@ fn stuck_runs_round_trip_waiting_restarted_and_returned() {
 
 #[test]
 fn stuck_runs_migration_keeps_runs_that_failed_after_their_retries_failed() {
-  let (repo, mut db, mut run, _) = started_run();
-  fail(&mut db, &mut run, StepFailure::ReportedFailed, 10);
+  let (repo, db, run, execution) = started_run();
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
-  // As versions before runs waited for a person recorded a run whose retries ran out.
-  Connection::open(&current)
-    .expect("open")
-    .execute(
-      "UPDATE runs SET status_reason = 'retries_exhausted' WHERE id = ?1",
-      [run.id().to_string()],
-    )
-    .expect("an earlier failure");
   let old = copied_at_version(&current, BEFORE_STUCK_RUNS);
+  let path = old.path().join(".orchester").join("orchester.db");
+  let v33 = Connection::open(&path).expect("open the schema 33 database");
+  // Schema 33 knows no waiting run and no restart attempt.
+  let id = run.id().to_string();
+  assert!(
+    v33
+      .execute(
+        "UPDATE runs SET status = 'waiting', status_reason = 'broke_again', failed_step = 'implement' WHERE id = ?1",
+        [&id],
+      )
+      .is_err()
+  );
+  assert!(
+    v33
+      .execute(
+        "UPDATE attempts SET reason = 'restart', return_to = 'implement' WHERE run_id = ?1",
+        [&id]
+      )
+      .is_err()
+  );
+  // A run whose retries ran out, as schema 33 recorded it: failed, with its reason and step.
+  v33
+    .execute_batch(&format!(
+      "UPDATE step_executions SET status = 'failed', failure = 'reported_failed' WHERE id = '{execution}';
+       UPDATE attempts SET status = 'failed' WHERE run_id = '{id}';
+       UPDATE runs SET status = 'failed', status_reason = 'retries_exhausted', failed_step = 'implement'
+         WHERE id = '{id}';"
+    ))
+    .expect("a run that failed after its retries");
+  drop(v33);
   let db = ProjectDb::open(old.path()).expect("migrate existing project");
   let migrated = reloaded(&db, &run);
   assert_eq!(
     migrated.status(),
     &RunStatus::Failed(RunFailure::RetriesExhausted(implement()))
   );
-  assert_eq!(migrated.attempts(), run.attempts());
+  assert_eq!(migrated.attempts().len(), 1);
+  assert_eq!(
+    migrated.attempts()[0].executions()[0].failure(),
+    Some(StepFailure::ReportedFailed)
+  );
 }

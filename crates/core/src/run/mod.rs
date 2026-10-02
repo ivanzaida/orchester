@@ -61,7 +61,7 @@ pub use self::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
     StepFailure, StepStatus, Stuck, WaitReason,
   },
-  stuck::{RetryReportSource, StuckDecision},
+  stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell},
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,

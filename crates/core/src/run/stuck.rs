@@ -49,11 +49,18 @@ pub struct RetryReportSource<'a> {
   pub note: Option<&'a ReviewNote>,
 }
 
+/// The most automatic attempts — retries of a failure route and restarts after a breakage — a run
+/// starts since its last attempt that was not automatic (the first, or one a person started by
+/// returning the work or recovering the run). Any failure after them waits for a person, so steps
+/// that fail in turn never retry each other without end.
+pub const MAX_AUTOMATIC_ATTEMPTS: usize = 10;
+
 impl Run {
   /// What follows the failure of `step` for `reason` in an attempt that is not a follow-up.
   pub(super) fn after_failure(&self, step: &StepKey, reason: StepFailure) -> RunEventKind {
     if !reason.is_verdict() {
-      return if self.restarts(step) {
+      // The failure just recorded counts: a second breakage since the step last passed waits.
+      return if self.breakages_since_passed(step) >= 2 || self.automatic_attempts() >= MAX_AUTOMATIC_ATTEMPTS {
         RunEventKind::WaitingForPerson {
           reason: Stuck::BrokeAgain(step.clone()),
         }
@@ -72,9 +79,14 @@ impl Run {
       None => RunEventKind::Failed {
         reason: RunFailure::StepFailed(step.clone()),
       },
-      Some(route) if self.retries_taken(step) >= route.max_retries.get() => RunEventKind::WaitingForPerson {
-        reason: Stuck::RetriesExhausted(step.clone()),
-      },
+      Some(route)
+        if self.retries_taken(step) >= route.max_retries.get()
+          || self.automatic_attempts() >= MAX_AUTOMATIC_ATTEMPTS =>
+      {
+        RunEventKind::WaitingForPerson {
+          reason: Stuck::RetriesExhausted(step.clone()),
+        }
+      }
       Some(route) => self.attempt(
         AttemptReason::Retry {
           failed_step: step.clone(),
@@ -85,11 +97,52 @@ impl Run {
     }
   }
 
-  /// Whether the current attempt is the restart of `step` after it broke.
-  fn restarts(&self, step: &StepKey) -> bool {
-    self.current_attempt().is_some_and(
-      |attempt| matches!(attempt.reason(), AttemptReason::Restart { step: restarted } if restarted == step),
-    )
+  /// How often `step` broke — failed without a verdict on its work — since it last passed, across
+  /// attempts.
+  fn breakages_since_passed(&self, step: &StepKey) -> usize {
+    self
+      .attempts()
+      .iter()
+      .filter(|attempt| attempt.counts())
+      .flat_map(|attempt| attempt.executions())
+      .filter(|execution| execution.step() == step)
+      .fold(0, |broken, execution| match execution.status() {
+        StepStatus::Passed => 0,
+        StepStatus::Failed if !execution.failure().is_some_and(StepFailure::is_verdict) => broken + 1,
+        _ => broken,
+      })
+  }
+
+  /// Automatic attempts since the run's last attempt that was not automatic.
+  fn automatic_attempts(&self) -> usize {
+    self
+      .attempts()
+      .iter()
+      .rev()
+      .take_while(|attempt| {
+        matches!(
+          attempt.reason(),
+          AttemptReason::Retry { .. } | AttemptReason::Restart { .. }
+        )
+      })
+      .count()
+  }
+
+  /// The step one more retry of a waiting run starts from: the failure route's target after used-up
+  /// retries, the step itself after it broke again. `None` for a run that does not wait.
+  pub fn retry_from(&self) -> Option<&StepKey> {
+    let RunStatus::WaitingForPerson(stuck) = self.status() else {
+      return None;
+    };
+    Some(match stuck {
+      Stuck::RetriesExhausted(step) => self
+        .snapshot()
+        .body()
+        .step(step)
+        .and_then(|pinned| pinned.on_failure.as_ref())
+        .map_or(step, |route| &route.return_to),
+      Stuck::BrokeAgain(step) => step,
+    })
   }
 
   /// A new attempt for `reason` that executes `from` again and everything after it.
@@ -225,14 +278,18 @@ impl Run {
 
   /// The failure the prompt of `execution` reports, when it belongs to an attempt that a failure
   /// sent back: the step the work returned to learns why, and the step that failed gets its own
-  /// earlier result to check against. Any other execution reports none.
+  /// earlier result to check against. A restart after a breakage reports what the attempt it
+  /// restarts reported. Any other execution reports none.
   pub fn retry_report(&self, execution: StepExecutionId) -> Option<RetryReportSource<'_>> {
     let position = self
       .attempts()
       .iter()
       .position(|attempt| attempt.execution(execution).is_some())?;
-    let attempt = &self.attempts()[position];
-    let (failed_step, return_to, note) = match attempt.reason() {
+    let step = self.attempts()[position].execution(execution)?.step();
+    let origin = self.attempts()[..=position]
+      .iter()
+      .rposition(|attempt| !matches!(attempt.reason(), AttemptReason::Restart { .. }))?;
+    let (failed_step, return_to, note) = match self.attempts()[origin].reason() {
       AttemptReason::Retry { failed_step, return_to } => (failed_step, return_to, None),
       AttemptReason::Returned {
         failed_step,
@@ -241,11 +298,10 @@ impl Run {
       } => (failed_step, return_to, Some(note)),
       _ => return None,
     };
-    let step = attempt.execution(execution)?.step();
     if step != failed_step && step != return_to {
       return None;
     }
-    let (earlier, failed) = self.attempts()[..position].iter().rev().find_map(|earlier| {
+    let (earlier, failed) = self.attempts()[..origin].iter().rev().find_map(|earlier| {
       earlier
         .executions()
         .iter()
@@ -258,4 +314,29 @@ impl Run {
       note: note.filter(|_| step == return_to),
     })
   }
+}
+
+/// When an attempt started, and whether a person's decision started it (a retry or return they
+/// chose for a run that waited for them) rather than the run by itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AttemptStart {
+  pub attempt: AttemptId,
+  pub at: Timestamp,
+  pub by_person: bool,
+}
+
+/// The start of every attempt in `events`, a run's log in sequence order.
+pub fn attempt_starts(events: &[RunEvent]) -> Vec<AttemptStart> {
+  events
+    .iter()
+    .enumerate()
+    .filter_map(|(index, event)| match event.kind() {
+      RunEventKind::AttemptStarted { attempt, .. } => Some(AttemptStart {
+        attempt: *attempt,
+        at: event.at(),
+        by_person: index > 0 && matches!(events[index - 1].kind(), RunEventKind::RetryAllowed),
+      }),
+      _ => None,
+    })
+    .collect()
 }

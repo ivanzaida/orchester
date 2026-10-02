@@ -12,7 +12,7 @@ use orchester_core::{
   run::{AttemptReason, ReviewNote, Run, RunFailure, RunStatus, StepFailure, Stuck, StuckDecision},
   store::ActivityStore,
 };
-use orchester_ipc::Event;
+use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
@@ -111,20 +111,30 @@ async fn retries_a_turn_that_fails_without_a_result_restarts_its_step_once_then_
     &RunStatus::Failed(RunFailure::StepFailed(key("implement")))
   );
   assert_eq!(stopped.attempts().len(), run.attempts().len());
-  assert!(scheduler.decide_stuck(id, StuckDecision::Retry).await.is_err());
+  assert_eq!(
+    scheduler.decide_stuck(id, StuckDecision::Retry).await,
+    Err(Rejection::RunNotWaiting)
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn retries_exhausted_wait_and_a_person_returns_the_work_with_a_note() {
   let setup = Setup {
     steps: vec![
-      StepSpec::new("implement", "Implement", "Change README.md.", &[]),
+      StepSpec::new("implement", "Implement", "Change README.md. Wait for release.", &[]),
       StepSpec::new("review", "Review", "Report failure.", &["implement"]).retry("implement", 1),
     ],
     ..Setup::new("Say hello.")
   };
-  let (project, scheduler, mut events, id) = started(&setup).await;
+  let project = project(&setup);
   let root = project.repo.path();
+  let release = root.join(".orchester").join("fake-release");
+  std::fs::write(&release, "").expect("Implement finishes at once");
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
   let run = wait_for(root, &mut events, id, waits).await;
   wait_for_idle(&scheduler).await;
   assert_eq!(
@@ -147,7 +157,14 @@ async fn retries_exhausted_wait_and_a_person_returns_the_work_with_a_note() {
     step: key("implement"),
     note,
   };
+  std::fs::remove_file(&release).expect("Implement waits now");
   scheduler.decide_stuck(id, decision).await.expect("returned");
+  // While the returned attempt runs, the run waits for no decision.
+  assert_eq!(
+    scheduler.decide_stuck(id, StuckDecision::Retry).await,
+    Err(Rejection::RunNotWaiting)
+  );
+  std::fs::write(&release, "").expect("Implement finishes");
   let again = wait_for(root, &mut events, id, |run| waits(run) && run.attempts().len() == 3).await;
   assert!(matches!(
     again.attempts()[2].reason(),

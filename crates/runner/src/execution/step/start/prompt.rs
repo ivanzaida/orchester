@@ -98,7 +98,7 @@ impl RunTask {
         },
       ),
       memory,
-      retry: retry.as_ref().and_then(|loaded| loaded.report(self)),
+      retry: retry.as_ref().map(|loaded| loaded.report(self)),
     }
     .assemble(event)
     .map_err(
