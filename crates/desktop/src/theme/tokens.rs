@@ -132,6 +132,10 @@ pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
 /// Width of the lifecycle dialogs at most: close with active work, waiting and start-up
 /// recovery (`um9B1`, `KS2RU`, `BovYZ`).
 pub const LIFECYCLE_DIALOG_WIDTH: f32 = 880.0;
+/// The tallest a long value's box in the approval dialog grows before its lines scroll inside it:
+/// 12 lines with the box's padding (`E5NBo` in `bjrgu`, "Approval choices"). The full shell string
+/// of 04.H9 (`bwWuT` in `coKjY`) shares it.
+pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = 232.0;
 
 /// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
 /// no spread. The only shadow in the design.
@@ -163,6 +167,9 @@ pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
 /// bottom of the box, and starting where the text does, 12px in.
 pub const COMMAND_SCROLLBAR_EDGE_INSET: f32 = 1.0;
 pub const COMMAND_SCROLLBAR_END_INSET: f32 = 12.0;
+/// Thumbs of a capped value box in the approval dialog (`e0vyng` in `bjrgu`): from the very start
+/// of the viewport, which the box's 6px padding already holds off its border.
+pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;

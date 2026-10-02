@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, Spacer, Text},
+  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -22,20 +22,22 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
-use super::native_approval;
+use super::{approval_arguments::ArgumentsCache, approval_value::ValueRows, native_approval};
 use crate::{
   messages::Message,
   runner::Runners,
   tasks::{approvals::ShownApproval, run::control_message},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, select_menu_scrollbar},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
+    command_row::Copied,
     field::wrapping_field_error,
     form::form,
     icon::Icon,
     message_text,
     property::{ValueStyle, property, styled_property},
+    value_box::CopyState,
   },
 };
 
@@ -101,17 +103,46 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   })
 }
 
-pub(super) struct ToolApprovalDialog {
-  requested: Signal<Option<Choice>>,
-}
+/// The dialog's layer: the modal over the window and its backdrop. Everything that changes while the
+/// dialog is open lives in [`ToolApprovalPanel`] inside it, so the layer itself renders again only
+/// for another request. lurq lays out a `Modal` at a window size from before the last resize when
+/// the component that renders it renders again on its own (seen with lurq 0.33.1).
+pub(super) struct ToolApprovalDialog;
 
 impl Component for ToolApprovalDialog {
+  type Props = ToolApprovalProps;
+
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<ToolApprovalProps>().clone();
+    let panel = ctx.mount::<ToolApprovalPanel>(props);
+    let content = backdrop(ctx, form(None, panel));
+    Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
+  }
+}
+
+/// The dialog itself: the request, the decision being sent and the state of its Copy buttons.
+struct ToolApprovalPanel {
+  requested: Signal<Option<Choice>>,
+  copy: CopyState,
+  arguments: ArgumentsCache,
+}
+
+impl Component for ToolApprovalPanel {
   type Props = ToolApprovalProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     decision_action(ctx);
     Self {
       requested: ctx.signal(None),
+      copy: CopyState {
+        copied: ctx.signal(Copied::default()),
+        hovered: ctx.signal(None),
+      },
+      arguments: ArgumentsCache::default(),
     }
   }
 
@@ -122,7 +153,7 @@ impl Component for ToolApprovalDialog {
     let busy = state.is_pending() || state.data.is_some();
     let requested = self.requested.get();
     let error = state.error.filter(|_| !busy);
-    let content = dialog(
+    dialog(
       ctx,
       &DialogState {
         props: &props,
@@ -131,9 +162,10 @@ impl Component for ToolApprovalDialog {
         error: error.as_ref(),
         action: &action,
         requested_signal: &self.requested,
+        copy: &self.copy,
+        arguments: &self.arguments,
       },
-    );
-    Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
+    )
   }
 }
 
@@ -160,6 +192,8 @@ struct DialogState<'a> {
   error: Option<&'a Message>,
   action: &'a DecisionAction,
   requested_signal: &'a Signal<Option<Choice>>,
+  copy: &'a CopyState,
+  arguments: &'a ArgumentsCache,
 }
 
 fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
@@ -167,16 +201,24 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     Some(_) => native_approval::DIALOG_WIDTH,
     None => DIALOG_WIDTH,
   };
-  let panel = Column::new()
+  // No taller than the screen: the details scroll between the header and the buttons, so Approve
+  // and Deny stay in view however long the values are.
+  let details = ScrollVertical::new(details(&ValueRows::new(ctx, state.copy, state.arguments), state.props))
+    .id("tool-approval-details-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex_shrink(1.0)
+    .scrollbar(select_menu_scrollbar());
+  Column::new()
     .id("tool-approval-dialog")
     .width(Dimension::Px(width))
+    .max_height(Dimension::Pct(100.0))
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(header(ctx, state.props))
-    .child(details(ctx, state.props))
-    .child(actions(ctx, state));
-  backdrop(ctx, form(None, panel))
+    .child(details)
+    .child(actions(ctx, state))
+    .into()
 }
 
 fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
@@ -234,7 +276,8 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     .into()
 }
 
-fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
+fn details(values: &ValueRows<'_>, props: &ToolApprovalProps) -> Element {
+  let ctx = values.ctx();
   let approval = &props.approval;
   let column = Column::new()
     .id("tool-approval-details")
@@ -244,12 +287,12 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     .spacing(ExtraSpacing::Stack.role());
   let column = match approval.native {
     Some(native) => column.with_children(native_approval::details(
-      ctx,
+      values,
       approval,
       native,
       (props.vendor.as_ref(), props.model.as_ref()),
     )),
-    None => cli_details(ctx, column, approval),
+    None => cli_details(values, column, approval),
   };
   // A native request's scope line is the smaller 11/1.5 of `W30mF` in 04.H9.
   let scope = match approval.native {
@@ -269,45 +312,51 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
 }
 
 /// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
-/// what the agent said about it.
-fn cli_details(ctx: &Ctx, column: Column, approval: &PendingToolApproval) -> Column {
+/// what the agent said about it. A command, action or target that does not fit beside its label
+/// moves under it, whole. A command comes after its working directory, as the box it may need
+/// closes the details (`Grcu7`); a CLI's request does not say which shell runs it.
+fn cli_details(values: &ValueRows<'_>, column: Column, approval: &PendingToolApproval) -> Column {
+  let ctx = values.ctx();
   let command = approval.command;
-  column
-    .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
-    .with_children(
-      (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
-    )
-    .child(styled_property(
-      &ctx.t(if command {
-        "runs.toolApproval.command"
-      } else {
-        "runs.toolApproval.action"
-      }),
-      &approval.action,
-      ValueStyle::Mono,
-    ))
-    .with_children(approval.target.as_deref().map(|target| {
-      styled_property(
-        &ctx.t(if command {
-          "runs.toolApproval.cwd"
-        } else {
-          "runs.toolApproval.target"
-        }),
-        target,
+  let target_key = if command {
+    "runs.toolApproval.cwd"
+  } else {
+    "runs.toolApproval.target"
+  };
+  let target = approval
+    .target
+    .as_deref()
+    .map(|value| values.value(ValueRows::TARGET, &ctx.t(target_key), value));
+  let column = column.child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent));
+  let column = if command {
+    column.with_children(target).child(values.command(&approval.action))
+  } else {
+    column
+      .child(styled_property(
+        &ctx.t("runs.toolApproval.server"),
+        &approval.server,
         ValueStyle::Mono,
-      )
-    }))
-    .with_children(approval.scope.as_deref().map(|scope| scope_row(ctx, command, scope)))
+      ))
+      .child(values.value(ValueRows::ACTION, &ctx.t("runs.toolApproval.action"), &approval.action))
+      .with_children(target)
+  };
+  column.with_children(
+    approval
+      .scope
+      .as_deref()
+      .map(|scope| scope_row(values, approval, scope)),
+  )
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP
-/// call, its arguments as one line of JSON, secret values removed and cut at 600 characters when
-/// recorded, and cut here with an ellipsis where the row ends.
-fn scope_row(ctx: &Ctx, command: bool, scope: &str) -> Element {
-  if command {
+/// call, its arguments as one line of JSON with secret values removed, recorded whole up to
+/// `ARGUMENTS_CEILING` and shown here in full under their label.
+fn scope_row(values: &ValueRows<'_>, approval: &PendingToolApproval, scope: &str) -> Element {
+  let ctx = values.ctx();
+  if approval.command {
     property(&ctx.t("runs.toolApproval.note"), scope)
   } else {
-    styled_property(&ctx.t("runs.toolApproval.arguments"), scope, ValueStyle::Mono)
+    values.arguments(&ctx.t("runs.toolApproval.arguments"), &approval.id, scope)
   }
 }
 
@@ -325,11 +374,17 @@ fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    // Why the decision did not go through takes the room left of the buttons and wraps there: the
+    // buttons keep their size and stay in the dialog however long the reason is.
     .child(
-      state
-        .error
-        .map(|error| wrapping_field_error(&message_text(ctx, error)))
-        .unwrap_or_else(|| Element::from(Spacer::new().flex(1.0))),
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .with_children(
+          state
+            .error
+            .map(|error| wrapping_field_error(&message_text(ctx, error))),
+        ),
     )
     .child(
       ActionButton::new(deny_label)

@@ -1129,9 +1129,15 @@
       "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
       "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
+      "commandLines": {
+        "one": "Command · {{lines}} line, as recorded",
+        "other": "Command · {{lines}} lines, as recorded"
+      },
       "cwd": "Working directory",
       "note": "Agent’s note",
       "arguments": "Arguments",
+      "argumentsCut": "… cut at {{kilobytes}} KB",
+      "argumentsAsRecorded": "Shown as recorded: laid out one member a line, these arguments would be too large to read.",
       "scope": "One requested action only; no session or permanent grant",
       "native": {
         "explanation": "{{agent}} asks to run this command in the task worktree. It is not on the allowed list and not known to be safe, so it asks you. Deny tells the agent, and it continues without the command; the step does not fail.",

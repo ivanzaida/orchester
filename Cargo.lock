@@ -2550,6 +2550,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "rusqlite",
+ "serde",
  "serde_json",
  "syntect",
  "tempfile",

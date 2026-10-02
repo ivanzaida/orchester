@@ -8,6 +8,8 @@
 //! *Remove worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
+mod approval_arguments;
+mod approval_value;
 mod brief;
 mod changes;
 mod controls;

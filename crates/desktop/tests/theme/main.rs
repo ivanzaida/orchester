@@ -51,6 +51,13 @@ fn window_chrome_follows_pencil() {
 }
 
 #[test]
+fn approval_values_scroll_past_twelve_lines() {
+  // A long value's box in the approval dialog is at most 12 lines with its padding, 232 (`E5NBo`
+  // in `bjrgu`); the full shell string of 04.H9 (`bwWuT`) shares the cap.
+  assert_eq!(theme::APPROVAL_VALUE_MAX_HEIGHT, 232.0);
+}
+
+#[test]
 fn disabled_buttons_follow_pencil() {
   // A button that cannot be pressed, primary or secondary, at 40 % (`kLJJb`, `HN7cO`).
   assert_eq!(theme::DISABLED_OPACITY, 0.4);
