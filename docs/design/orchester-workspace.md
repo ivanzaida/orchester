@@ -959,7 +959,8 @@ every task, as the review's per-task fields show). The runner retries a start th
 wait (2 s, doubling to 1 min) and stops treating a group as work once it is held for good or every first run ended.
 **Narrow windows and empty searches (implemented, not drawn yet):** below a 1260 window the scheduling review puts
 the settings under the order, both as wide as the page, and the page scrolls; below 1152 the task table leaves out its
-Pipeline column so the title keeps at least 120 (the fixed column widths otherwise leave the title nothing at 960).
+Pipeline column so the title keeps at least 120 (the fixed column widths otherwise leave the title nothing at 960). Below the same width the selection bar puts its actions (Return to drafts, Set pipeline, Run selected) on a second
+line, right-aligned; at any width they keep their full width and the readiness summary gives way with an ellipsis.
 When the search or pipeline filter hides every row of a tab, the table says *No tasks in this tab match the search or
 pipeline filter.* with a *Clear search and filter* button. The drawn copy that names merge dependencies (selection
 summary, sequential hint and notice, branch note) is not used: dependencies are not built, so the app does not claim

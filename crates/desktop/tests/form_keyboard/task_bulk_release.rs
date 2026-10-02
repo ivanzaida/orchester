@@ -96,3 +96,39 @@ fn task_bulk_release_returns_held_queued_tasks_to_the_drafts() {
   }
   assert!(db.task_groups().expect("groups").is_empty());
 }
+
+#[test]
+fn task_bulk_release_actions_fit_the_narrowest_window() {
+  let mut desktop = Desktop::with_seeded_project(held_group);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-select-KON-2");
+  desktop.press("task-select-KON-1");
+  desktop.press("task-select-KON-2");
+  desktop.wait_for("tasks-release-held");
+  let wide = desktop.bounds("set-pipeline").width;
+  desktop.tree.resize(960, 960);
+  desktop.settle("the narrow selection bar", |tree| {
+    tree
+      .get_element_by_id_mut("tasks-release-held")
+      .and_then(|button| button.bounds())
+      .is_some_and(|bounds| bounds.x + bounds.width <= 960.0)
+  });
+  let bar = desktop.bounds("task-selection");
+  for id in ["tasks-release-held", "set-pipeline", "run-selected"] {
+    let button = desktop.bounds(id);
+    assert!(
+      button.x >= bar.x && button.x + button.width <= bar.x + bar.width && button.x + button.width <= 960.0,
+      "{id} is inside the bar and the window: {button:?}"
+    );
+  }
+  assert!(
+    (desktop.bounds("set-pipeline").width - wide).abs() < 0.5,
+    "Set pipeline keeps its width"
+  );
+  assert!(shows(
+    &mut desktop,
+    "task-problems",
+    "2 tasks: Held after a task failed"
+  ));
+}
