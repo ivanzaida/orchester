@@ -6,14 +6,17 @@ use std::sync::Arc;
 
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind},
-  id::{InvocationId, StepExecutionId},
-  run::{ActivityEntry, StepStatus, TokenUsage},
+  conversation::Arrival,
+  id::{InvocationId, MessageId, RunId, StepExecutionId},
+  run::{ActivityEntry, PendingToolApproval, StepStatus, TokenUsage},
   time::Timestamp,
 };
 use orchester_desktop::tasks::{
+  conversation::{Author, Entry as MessageEntry, EntryState},
   timeline::{
-    Item, ItemKind, StepHead, ToolGroup,
+    ApprovalCard, Item, ItemKind, StepHead, ToolGroup,
     group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+    interleaved,
     mark::{Mark, MarkKind},
     view::{Choice, Row, Show, shown},
   },
@@ -332,6 +335,148 @@ fn timeline_step_filter_shows_one_step_open_and_names_the_others() {
   assert_eq!(kinds(&only.rows), ["step", "item", "group"], "the step picked is open");
   assert_eq!(only.hidden_steps.len(), 1);
   assert_eq!(&*only.hidden_steps[0].step, "Implement");
+}
+
+/// Two commands of one execution, A at 1 s and B at 3 s, and something else at `between`.
+fn around(execution: StepExecutionId, between: Item) -> Vec<Item> {
+  let mut events = Vec::new();
+  events.extend(command("1", "pnpm test", 0));
+  events.extend(command("2", "pnpm lint", 0));
+  let agent: Arc<str> = "Builder".into();
+  let step: Arc<str> = "Implement".into();
+  interleaved(
+    &transcript(execution, events),
+    execution,
+    (&agent, &step),
+    vec![between],
+  )
+}
+
+fn at_millis(millis: i64) -> Timestamp {
+  Timestamp::from_unix_millis(millis)
+}
+
+/// A person's message sent now at `at`, delivered mid-turn to `execution`.
+fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
+  Item {
+    key: "message".into(),
+    execution: Some(execution),
+    at,
+    kind: ItemKind::Message(MessageEntry {
+      id: MessageId::generate(),
+      author: Author::You,
+      at,
+      body: "Also cover the cancelled dialog.".into(),
+      state: EntryState::Delivered {
+        agent: "Builder".into(),
+        at,
+        arrival: Arrival::MidTurn,
+        sent_now: true,
+      },
+      execution: Some(execution),
+      sent_now: true,
+    }),
+  }
+}
+
+fn kinds_of(items: &[Item]) -> Vec<&str> {
+  items
+    .iter()
+    .map(|item| match &item.kind {
+      ItemKind::Tools(_) => "tools",
+      ItemKind::Message(_) => "message",
+      ItemKind::Approval(_) => "approval",
+      _ => "other",
+    })
+    .collect()
+}
+
+#[test]
+fn timeline_a_message_between_two_tool_calls_splits_their_group() {
+  let execution = StepExecutionId::generate();
+  let items = around(execution, sent_now(execution, at_millis(2_500)));
+  assert_eq!(kinds_of(&items), ["tools", "message", "tools"]);
+  let ItemKind::Tools(first) = &items[0].kind else {
+    panic!("the group before the message");
+  };
+  assert_eq!(first.summary.named, [Arc::<str>::from("pnpm test")]);
+
+  // Of two at the same time, the message comes first.
+  let items = around(execution, sent_now(execution, at(3)));
+  assert_eq!(kinds_of(&items), ["tools", "message", "tools"]);
+}
+
+#[test]
+fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
+  let execution = StepExecutionId::generate();
+  let request = PendingToolApproval {
+    id: "approval-1".into(),
+    run: RunId::generate(),
+    execution,
+    invocation: InvocationId::generate(),
+    agent: "Builder".into(),
+    command: true,
+    scope: None,
+    server: "Codex".into(),
+    action: "pnpm lint".into(),
+    target: None,
+    requested_at: at_millis(2_500),
+    native: None,
+  };
+  let card = Item {
+    key: "approval-1".into(),
+    execution: Some(execution),
+    at: request.requested_at,
+    kind: ItemKind::Approval(ApprovalCard { request, decided: None }),
+  };
+  assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);
+}
+
+#[test]
+fn timeline_tools_view_keeps_a_message_between_the_tool_calls_around_it() {
+  let execution = StepExecutionId::generate();
+  let mut items = vec![item("step", execution, ItemKind::Step(head(execution, 1, "Implement")))];
+  items.extend(around(execution, sent_now(execution, at_millis(2_500))));
+  let tools = shown(
+    &items,
+    &Choice {
+      show: Show::Tools,
+      ..Choice::default()
+    },
+    &|_, _| true,
+  );
+  assert_eq!(kinds(&tools.rows), ["step", "entry", "line", "entry"]);
+}
+
+#[test]
+fn timeline_a_declined_memory_call_is_a_problem_row() {
+  let execution = StepExecutionId::generate();
+  let declined = transcript(
+    execution,
+    vec![AgentEvent::McpToolDeclined {
+      item: "1".into(),
+      server: "orchester-memory".into(),
+      tool: "memory_search".into(),
+    }],
+  );
+  assert_eq!(declined.iter().map(tool_kind).collect::<Vec<_>>(), [None]);
+}
+
+#[test]
+fn timeline_messages_view_counts_only_the_matches_it_shows() {
+  let (items, ..) = two_steps();
+  let messages = shown(
+    &items,
+    &Choice {
+      show: Show::Messages,
+      query: "cancel".into(),
+      ..Choice::default()
+    },
+    &|_, default| default,
+  );
+  // The message matches; the read in the hidden group matches too, but is not shown.
+  assert_eq!(messages.matches, 1);
+  assert_eq!(messages.hidden_tools, (2, 1));
 }
 
 #[test]

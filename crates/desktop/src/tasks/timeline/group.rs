@@ -13,7 +13,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use crate::tasks::transcript::{Entry, EntryKind};
+use crate::tasks::transcript::{CommandMark, Entry, EntryKind};
 
 /// Commands a group names before it only counts them.
 const NAMED_COMMANDS: usize = 2;
@@ -71,13 +71,12 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
     EntryKind::Command(command) => Some(command_kind(&command.command)),
     EntryKind::ToolCommand(_) => Some(ToolKind::Command),
     EntryKind::FileChange(_) => Some(ToolKind::Edit),
+    // A declined call is a problem row whatever it calls, a memory tool too, and however it ended.
+    EntryKind::McpTool(call) if matches!(call.mark, Some(CommandMark::Declined { .. })) => None,
     EntryKind::McpTool(call) if call.tool.contains("memory") => Some(ToolKind::Memory),
-    EntryKind::McpTool(call) if !entry.is_failure() || call.status == Some(CommandStatus::Failed) => {
-      Some(ToolKind::Mcp)
-    }
+    EntryKind::McpTool(_) => Some(ToolKind::Mcp),
     EntryKind::Reasoning(_) | EntryKind::Usage(_) | EntryKind::Raw(_) => Some(ToolKind::Note),
-    EntryKind::McpTool(_)
-    | EntryKind::Message(_)
+    EntryKind::Message(_)
     | EntryKind::Error(_)
     | EntryKind::NotSignedIn(_)
     | EntryKind::Problem(_)

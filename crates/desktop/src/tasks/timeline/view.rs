@@ -198,7 +198,10 @@ fn tools(
   if needle.is_some() && matching.is_empty() {
     return;
   }
-  shown.matches += if needle.is_some() { matching.len() } else { 0 };
+  // Messages hides the group, so its matches are not among what the view shows.
+  if needle.is_some() && show != Show::Messages {
+    shown.matches += matching.len();
+  }
   match show {
     Show::Messages => {
       shown.hidden_tools.0 += group.summary.calls;

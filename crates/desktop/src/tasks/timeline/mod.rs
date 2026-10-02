@@ -1,10 +1,11 @@
 //! The Conversation tab's timeline (`docs/design/orchester-workspace.md`, "Conversation (merged
 //! with Activity)"): one run's transcript and conversation in the order they happened, step by step.
-//! Each step execution that ran has its header, then its agent's messages, the person's messages it
-//! took, its tool groups ([`group`]), the cards that wait for or record a person's decision
-//! (question, plan, tool approval), its problems on their own and its result; an attempt that
-//! returned or restarted the work starts with its mark ([`mark`]). Messages that wait for a step
-//! follow, and a run that ended closes with its end. What is shown of it is [`view`]'s.
+//! Each step execution that ran has its header, then in the order they happened its agent's
+//! messages, the person's messages it took, its tool groups ([`group`]), the cards that wait for or
+//! record a person's decision (question, plan, tool approval) and its problems on their own; its
+//! result closes it. An attempt that returned or restarted the work starts with its mark ([`mark`]).
+//! Messages that wait for a step follow, and a run that ended closes with its end. What is shown of
+//! it is [`view`]'s.
 
 pub mod group;
 pub mod load;
@@ -139,9 +140,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
       at,
       kind: ItemKind::Step(head),
     });
-    let mut own = execution_items(sources, execution);
-    own.sort_by_key(|item| item.at);
-    items.extend(own);
+    items.extend(execution_items(sources, execution));
   }
   items.extend(StepHead::not_started(run).into_iter().map(|head| Item {
     key: format!("not-started-{}", head.number).into(),
@@ -181,37 +180,47 @@ fn executions(run: &RunView) -> Vec<(usize, bool, StepExecutionId)> {
     .collect()
 }
 
-/// Everything of `execution` but its header.
+/// Everything of `execution` but its header: its transcript with the messages and cards in between,
+/// in the order they happened, then its result.
 fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Item> {
   let run = sources.run;
   let step = run.step_of(execution);
   let agent: Arc<str> = step.and_then(|step| step.agent.clone()).unwrap_or_else(|| "".into());
   let name: Arc<str> = step.map(|step| step.name.clone()).unwrap_or_else(|| "".into());
-  let mut items = transcript_items(sources.entries, execution, (&agent, &name));
-  items.extend(
-    sources
-      .conversation
-      .entries
-      .iter()
-      .filter(|entry| entry.execution == Some(execution))
-      .filter(|entry| !matches!(entry.state, EntryState::Reply { .. }))
-      .map(message_item),
-  );
-  items.extend(
+  let mut between: Vec<Item> = sources
+    .conversation
+    .entries
+    .iter()
+    .filter(|entry| entry.execution == Some(execution))
+    .filter(|entry| !matches!(entry.state, EntryState::Reply { .. }))
+    .map(message_item)
+    .collect();
+  between.extend(
     run
       .plans
       .iter()
       .filter(|plan| plan.execution == execution)
       .map(|plan| plan_item(run, plan, (&agent, &name))),
   );
-  items.extend(approval_items(sources, execution));
+  between.extend(approval_items(sources, execution));
+  let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, execution));
   items
 }
 
-/// The transcript of `execution`: agent messages, tool groups and problems in order. A step result
-/// the agent wrote is its result card's, not a message.
-fn transcript_items(entries: &[Entry], execution: StepExecutionId, (agent, step): (&Arc<str>, &Arc<str>)) -> Vec<Item> {
+/// The transcript of `execution` with `between` (its messages and cards) in time order: agent
+/// messages, tool groups, problems, messages and cards. Anything that is not a tool event ends the
+/// tool group before it, so a message sent between two tool calls splits their group. Of two at the
+/// same time, the message or card comes first. A step result the agent wrote is its result card's,
+/// not a message.
+pub fn interleaved(
+  entries: &[Entry],
+  execution: StepExecutionId,
+  (agent, step): (&Arc<str>, &Arc<str>),
+  mut between: Vec<Item>,
+) -> Vec<Item> {
+  between.sort_by_key(|item| item.at);
+  let mut between = between.into_iter().peekable();
   let mut items = Vec::new();
   let mut tools: Vec<Entry> = Vec::new();
   let flush = |tools: &mut Vec<Entry>, items: &mut Vec<Item>| {
@@ -225,6 +234,10 @@ fn transcript_items(entries: &[Entry], execution: StepExecutionId, (agent, step)
     }
   };
   for entry in entries.iter().filter(|entry| entry.execution == execution) {
+    while let Some(item) = between.next_if(|item| item.at <= entry.at) {
+      flush(&mut tools, &mut items);
+      items.push(item);
+    }
     if group::tool_kind(entry).is_some() {
       tools.push(entry.clone());
       continue;
@@ -247,6 +260,7 @@ fn transcript_items(entries: &[Entry], execution: StepExecutionId, (agent, step)
     });
   }
   flush(&mut tools, &mut items);
+  items.extend(between);
   items
 }
 
