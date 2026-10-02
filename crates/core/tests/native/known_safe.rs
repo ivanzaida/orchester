@@ -1,0 +1,226 @@
+//! The known-safe read-only command table, by its argument rules.
+
+use orchester_core::permission::known_safe::readable_arguments;
+
+pub fn safe(command: &str) -> bool {
+  let argv: Vec<String> = command.split(' ').map(str::to_owned).collect();
+  readable_arguments(&argv).is_some()
+}
+
+#[test]
+fn native_known_safe_plain_programs() {
+  for command in [
+    "ls -la src",
+    "cat src/main.rs",
+    "head -n 20 a",
+    "tail a",
+    "wc -l a",
+    "pwd",
+    "echo hi",
+    "which git",
+    "where git",
+    "file a",
+    "stat a",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+  for command in [
+    "rm -rf a",
+    "sed -i s/a/b/ a",
+    "cp a b",
+    "python -c x",
+    "./cat a",
+    "bin/ls",
+    "npm test",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+}
+
+#[test]
+fn native_known_safe_git() {
+  for command in [
+    "git status --short",
+    "git log --oneline -5",
+    "git diff HEAD~1",
+    "git show HEAD:src/main.rs",
+    "git rev-parse HEAD",
+    "git ls-files",
+    "git blame src/main.rs",
+    "git grep -n needle",
+    "git branch",
+    "git branch -a -v",
+    "git branch --list feature/*",
+    "git --version",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+  for command in [
+    "git",
+    "git commit -m x",
+    "git push",
+    "git -c core.pager=evil log",
+    "git -C .. status",
+    "git log -c",
+    "git diff --output=x",
+    "git log --output x",
+    "git diff --ext-diff",
+    "git show --textconv",
+    "git grep -O needle",
+    "git grep -iO needle",
+    "git grep --open-files-in-pager=vim x",
+    "git branch new-branch",
+    "git branch -D main",
+    "git branch --sort=x",
+    "git config core.pager",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+}
+
+#[test]
+fn native_known_safe_rg_and_find() {
+  for command in [
+    "rg needle src",
+    "rg -n -i needle",
+    "rg --files",
+    "find . -name *.rs",
+    "find src -type f",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+  for command in [
+    "rg --pre cat x",
+    "rg --pre=cat x",
+    "rg --pre-glob *.gz x",
+    "rg --search-zip x",
+    "rg -z x",
+    "rg -iz x",
+    "rg --hostname-bin=x y",
+    "find . -exec rm {}",
+    "find . -execdir x",
+    "find . -ok x",
+    "find . -delete",
+    "find . -fprint out",
+    "find . -fls out",
+    "file -C -m magic",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+}
+
+#[test]
+fn native_known_safe_leaves_out_cargo() {
+  for command in ["cargo metadata", "cargo tree", "cargo --version", "cargo build"] {
+    assert!(
+      !safe(command),
+      "{command}: rustc and the toolchain file can be replaced from the worktree"
+    );
+  }
+}
+
+#[cfg(windows)]
+#[test]
+fn native_known_safe_windows_program_names() {
+  assert!(safe("GIT.EXE status"));
+  assert!(safe("Cat.exe a"));
+  assert!(!safe(r"C:\tools\cat.exe a"));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn native_known_safe_macos_program_names() {
+  assert!(safe("Git status"));
+  assert!(safe("CAT a"));
+  assert!(!safe("Git grep --op=sh x"));
+}
+
+#[test]
+fn native_known_safe_path_candidates() {
+  let argv: Vec<String> = ["rg", "--ignore-file=/etc/x", "-f/etc/y", "needle", "--", "-n"]
+    .map(str::to_owned)
+    .into();
+  assert_eq!(
+    readable_arguments(&argv).expect("known-safe"),
+    [
+      "--ignore-file=/etc/x",
+      "/etc/x",
+      "-f/etc/y",
+      "/etc/y",
+      "needle",
+      "--",
+      "-n"
+    ]
+  );
+}
+
+#[test]
+fn native_known_safe_refuses_abbreviated_options() {
+  for command in [
+    "git grep --op=sh x",
+    "git grep --open-files=sh x",
+    "git grep --open-files-in=sh x",
+    "git grep --ope x",
+    "git diff --outp=x",
+    "git log --out=x",
+    "git show --ou x",
+    "git diff --ext-d",
+    "git log --ext",
+    "git show --textc",
+    "git blame --tex a",
+    "git log --show-sig",
+    "git log --pag",
+    "rg --pr=cat x",
+    "rg --search x",
+    "rg --fol x",
+    "file --comp -m magic",
+    "ls --deref -R",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+  for command in [
+    "git diff --text",
+    "git grep --text x",
+    "git log --oneline",
+    "git diff --output-indicator-new=+",
+    "git diff --no-ext-diff",
+    "git log --no-textconv",
+    "rg --no-follow x",
+    "ls --directory a",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+}
+
+#[test]
+fn native_known_safe_refuses_signature_checks() {
+  for command in [
+    "git log --show-signature",
+    "git show --show-signature HEAD",
+    "git log --format=%G?",
+    "git log --pretty=format:%h%x20%GS",
+  ] {
+    assert!(!safe(command), "{command}: gpg would run");
+  }
+}
+
+#[test]
+fn native_known_safe_refuses_following_links() {
+  for command in [
+    "rg -L x",
+    "rg -nL x",
+    "rg --follow x",
+    "find -L .",
+    "find -HL .",
+    "find . -follow",
+    "ls -RL",
+    "ls -laL src",
+    "ls --dereference -R",
+    "file -bC -m magic",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+  for command in ["find . -name *.rs -type l", "ls -la", "rg -n x"] {
+    assert!(safe(command), "{command}");
+  }
+}

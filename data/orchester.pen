@@ -36122,7 +36122,7 @@
       "y": 0,
       "name": "02 / Tasks & runs",
       "width": 4896,
-      "height": 56624,
+      "height": 57672,
       "fill": "$canvas",
       "layout": "none",
       "children": [
@@ -37355,7 +37355,7 @@
           "y": 1376,
           "name": "Screens · Task management",
           "width": 4896,
-          "height": 2168,
+          "height": 3216,
           "layout": "none",
           "children": [
             {
@@ -43252,6 +43252,937 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "SrUNX",
+              "x": 48,
+              "y": 2164,
+              "name": "02.03B · Tasks / Created task highlighted label",
+              "fill": "$muted",
+              "content": "02.03B · Tasks / Created task highlighted · the highlight lasts while the list stays shown",
+              "fontFamily": "$font",
+              "fontSize": 14,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "rFh79",
+              "x": 48,
+              "y": 2196,
+              "name": "02.03B · Tasks / Created task highlighted",
+              "clip": true,
+              "width": 1440,
+              "height": 960,
+              "fill": "$surface",
+              "children": [
+                {
+                  "id": "Mru1v",
+                  "type": "ref",
+                  "ref": "zo9Py",
+                  "name": "Sidebar / Tasks",
+                  "height": "fill_container",
+                  "descendants": {
+                    "JI3gd": {
+                      "fill": "$sidebar"
+                    },
+                    "JI3gd/sQnmq": {
+                      "fill": "$muted"
+                    },
+                    "JI3gd/YWsP0": {
+                      "fill": "$muted"
+                    },
+                    "KYnRz": {
+                      "fill": "$hover"
+                    },
+                    "KYnRz/sQnmq": {
+                      "fill": "$text"
+                    },
+                    "KYnRz/YWsP0": {
+                      "fill": "$text"
+                    },
+                    "KYnRz/LTXft": {
+                      "content": "11"
+                    },
+                    "tGGua": {
+                      "content": "0 of 4 agent slots in use"
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "EOM6x",
+                  "name": "Task workspace",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "S57V5",
+                      "name": "Topbar",
+                      "width": "fill_container",
+                      "height": 64,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 12,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "WV6Xd",
+                          "name": "Breadcrumb",
+                          "fill": "$muted",
+                          "content": "Kontur / Tasks",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "k1tDoh",
+                          "name": "Topbar space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "id": "RBgJc",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "Create multiple",
+                          "height": 36,
+                          "width": 142,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "list-plus"
+                            },
+                            "Y7HQGw": {
+                              "content": "Create multiple"
+                            }
+                          }
+                        },
+                        {
+                          "id": "Jioc4",
+                          "type": "ref",
+                          "ref": "u1XBP",
+                          "name": "New task",
+                          "height": 36,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "width": 116,
+                          "descendants": {
+                            "xfnek": {
+                              "icon": "plus",
+                              "fill": "$inverse-text"
+                            },
+                            "Y7HQGw": {
+                              "content": "New task",
+                              "fill": "$inverse-text"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "f7ZLoX",
+                      "name": "Page heading",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        26,
+                        32,
+                        22,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OEBFU",
+                          "name": "Page title",
+                          "fill": "$text",
+                          "content": "Tasks",
+                          "fontFamily": "$font",
+                          "fontSize": 28,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "NZ5N0",
+                          "name": "Page description",
+                          "fill": "$muted",
+                          "content": "Prepare your backlog, then choose what agents should work on.",
+                          "fontFamily": "$font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Y0oes",
+                      "name": "Task tabs",
+                      "width": "fill_container",
+                      "height": 42,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "id": "i9MNyT",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "All tasks tab",
+                          "width": 124,
+                          "height": 42,
+                          "stroke": "$text",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "All tasks",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "content": "11",
+                              "enabled": true
+                            }
+                          }
+                        },
+                        {
+                          "id": "oxtXD",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Drafts tab",
+                          "width": 110,
+                          "height": 42,
+                          "stroke": "$text",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Drafts",
+                              "fill": "$text"
+                            },
+                            "tidLB": {
+                              "content": "11",
+                              "enabled": true
+                            }
+                          }
+                        },
+                        {
+                          "id": "ap2s3",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Queue tab",
+                          "width": 106,
+                          "height": 42,
+                          "stroke": "$text",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Queue",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "content": "0",
+                              "enabled": true
+                            }
+                          }
+                        },
+                        {
+                          "id": "rqlOd",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Needs review tab",
+                          "width": 150,
+                          "height": 42,
+                          "stroke": "$text",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Needs review",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "content": "0",
+                              "enabled": true
+                            }
+                          }
+                        },
+                        {
+                          "id": "bblc3",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Done tab",
+                          "width": 102,
+                          "height": 42,
+                          "stroke": "$text",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Done",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "content": "0",
+                              "enabled": true
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "R52Yt",
+                      "name": "Task selection and library",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": [
+                        20,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "i3hGw",
+                          "name": "Task filters",
+                          "width": "fill_container",
+                          "height": 36,
+                          "gap": 12,
+                          "children": [
+                            {
+                              "id": "UN7pa",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Search tasks",
+                              "width": "fill_container",
+                              "height": 36,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Search tasks…"
+                                },
+                                "eASPF": {
+                                  "icon": "search"
+                                }
+                              }
+                            },
+                            {
+                              "id": "jbH79",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Filter pipeline",
+                              "width": 184,
+                              "height": 36,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "All pipelines",
+                                  "fontSize": 12
+                                }
+                              }
+                            },
+                            {
+                              "id": "c5FvG",
+                              "type": "ref",
+                              "ref": "ZGwlv",
+                              "name": "Task sort",
+                              "width": 164,
+                              "height": 36,
+                              "descendants": {
+                                "ObbY7": {
+                                  "content": "Manual order",
+                                  "fontSize": 12
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "TmMk9",
+                          "name": "Selected task actions",
+                          "width": "fill_container",
+                          "height": 44,
+                          "fill": "$raised",
+                          "cornerRadius": 6,
+                          "gap": 14,
+                          "padding": [
+                            4,
+                            12
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "oAH3z",
+                              "name": "Select all tasks",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "square-minus",
+                              "library": "lucide",
+                              "fill": "$text"
+                            },
+                            {
+                              "type": "text",
+                              "id": "eUjBr",
+                              "name": "Selected task count",
+                              "fill": "$text",
+                              "content": "10 selected",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e88aCz",
+                              "name": "Selection readiness",
+                              "fill": "$muted",
+                              "content": "10 briefs ready · 1 task has a dependency",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "f5wVs3",
+                              "name": "Selection action space",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "id": "O3hFn",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Set pipeline",
+                              "height": 32,
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "workflow"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Set pipeline"
+                                }
+                              }
+                            },
+                            {
+                              "id": "U83i0",
+                              "type": "ref",
+                              "ref": "u1XBP",
+                              "name": "Run selected · 10",
+                              "height": 32,
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "width": 158,
+                              "descendants": {
+                                "xfnek": {
+                                  "icon": "play",
+                                  "fill": "$inverse-text"
+                                },
+                                "Y7HQGw": {
+                                  "content": "Run selected · 10",
+                                  "fill": "$inverse-text"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "b0Ybhp",
+                          "name": "Project task table",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "PLp5X",
+                              "name": "Task table heading",
+                              "width": "fill_container",
+                              "height": 28,
+                              "gap": 16,
+                              "padding": [
+                                0,
+                                12
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Kwza1",
+                                  "name": " header cell",
+                                  "width": 18,
+                                  "height": 20,
+                                  "alignItems": "center"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "GOZ9L",
+                                  "name": "ID header cell",
+                                  "width": 72,
+                                  "height": 20,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "z8Gozn",
+                                      "name": "ID column label",
+                                      "fill": "$muted",
+                                      "content": "ID",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "e2Xlgv",
+                                  "name": "Task header cell",
+                                  "width": "fill_container",
+                                  "height": 20,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "D40gx",
+                                      "name": "Task column label",
+                                      "fill": "$muted",
+                                      "content": "Task",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "tR8ax",
+                                  "name": "Pipeline header cell",
+                                  "width": 136,
+                                  "height": 20,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "CIipA",
+                                      "name": "Pipeline column label",
+                                      "fill": "$muted",
+                                      "content": "Pipeline",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "H5pAex",
+                                  "name": "Status header cell",
+                                  "width": 128,
+                                  "height": 20,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "kmrTo",
+                                      "name": "Status column label",
+                                      "fill": "$muted",
+                                      "content": "Status",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "jVFw8",
+                                  "name": "Dependency / readiness header cell",
+                                  "width": 184,
+                                  "height": 20,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ucwUT",
+                                      "name": "Dependency / readiness column label",
+                                      "fill": "$muted",
+                                      "content": "Dependency / readiness",
+                                      "fontFamily": "$font",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "GnntO",
+                                  "name": " header cell",
+                                  "width": 14,
+                                  "height": 20,
+                                  "alignItems": "center"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "YmByO",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-129 Add repository switcher",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-129"
+                                },
+                                "vKxgR": {
+                                  "content": "Add repository switcher"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "ZQjTT",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-130 Add task search",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-130"
+                                },
+                                "vKxgR": {
+                                  "content": "Add task search"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "wik4k",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-131 Add switcher keyboard shortcuts",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-131"
+                                },
+                                "vKxgR": {
+                                  "content": "Add switcher keyboard shortcuts"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "After ORC-129 merge"
+                                }
+                              }
+                            },
+                            {
+                              "id": "FwzHA",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-132 Add empty states",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-132"
+                                },
+                                "vKxgR": {
+                                  "content": "Add empty states"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "Lj3Ug",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-133 Add runner status badge",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-133"
+                                },
+                                "vKxgR": {
+                                  "content": "Add runner status badge"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "HnskZ",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-134 Add task activity filters",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-134"
+                                },
+                                "vKxgR": {
+                                  "content": "Add task activity filters"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "D1PHV",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-135 Add task token breakdown",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-135"
+                                },
+                                "vKxgR": {
+                                  "content": "Add task token breakdown"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "zeURj",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-136 Add context attachments",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-136"
+                                },
+                                "vKxgR": {
+                                  "content": "Add context attachments"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "LdPSA",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-137 Add notification preferences",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-137"
+                                },
+                                "vKxgR": {
+                                  "content": "Add notification preferences"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "OeZ4u",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-138 Add setup resumption",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "icon": "square-check"
+                                },
+                                "nK730": {
+                                  "content": "ORC-138"
+                                },
+                                "vKxgR": {
+                                  "content": "Add setup resumption"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            },
+                            {
+                              "id": "F2qLt",
+                              "type": "ref",
+                              "ref": "clVjO",
+                              "name": "ORC-139 Add GitHub authentication · created, highlighted",
+                              "fill": "$hover",
+                              "width": "fill_container",
+                              "descendants": {
+                                "R7idX": {
+                                  "fill": "$muted",
+                                  "icon": "square"
+                                },
+                                "nK730": {
+                                  "content": "ORC-139"
+                                },
+                                "vKxgR": {
+                                  "content": "Add GitHub authentication"
+                                },
+                                "JIbWj/bhGXK": {
+                                  "icon": "pencil"
+                                },
+                                "JIbWj/JuW4o": {
+                                  "content": "Draft"
+                                },
+                                "idhE5": {
+                                  "content": "Ready to queue"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "tTfqC",
+                          "name": "Draft status",
+                          "width": "fill_container",
+                          "height": 30,
+                          "gap": 16,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "uBboM",
+                              "name": "Task count",
+                              "fill": "$muted",
+                              "content": "11 tasks · no runs started",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "l0UBaN",
+                              "name": "Draft status space",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "ewUPO",
+                              "name": "Row editing hint",
+                              "fill": "$muted",
+                              "content": "Open a task to edit its brief, criteria or dependencies.",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -43259,7 +44190,7 @@
           "type": "frame",
           "id": "D4pfd",
           "x": 0,
-          "y": 3640,
+          "y": 4688,
           "name": "Screens · Desktop 1440",
           "width": 4896,
           "height": 2168,
@@ -44328,7 +45259,7 @@
                           "id": "XvUAH",
                           "name": "Draft state",
                           "fill": "$muted",
-                          "content": "Draft saved locally",
+                          "content": "Not saved yet",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -45201,11 +46132,11 @@
                             {
                               "type": "text",
                               "id": "Q4xE7q",
-                              "name": "Save draft option",
+                              "name": "Create option",
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "Save as draft",
+                              "content": "Create",
                               "textAlign": "center",
                               "fontFamily": "$font",
                               "fontSize": 11,
@@ -48123,7 +49054,7 @@
           "type": "frame",
           "id": "O4vgKt",
           "x": 0,
-          "y": 11480,
+          "y": 12528,
           "name": "States · Run controls",
           "width": 4896,
           "height": 1120,
@@ -49934,7 +50865,7 @@
           "type": "frame",
           "id": "y8TKW8",
           "x": 0,
-          "y": 12696,
+          "y": 13744,
           "name": "States · Recovery & status",
           "width": 4896,
           "height": 1000,
@@ -50280,7 +51211,7 @@
           "type": "frame",
           "id": "Z7Fyr8",
           "x": 0,
-          "y": 13792,
+          "y": 14840,
           "name": "States · Application lifecycle",
           "width": 4896,
           "height": 2520,
@@ -58370,7 +59301,7 @@
           "type": "frame",
           "id": "BnxJ1",
           "x": 0,
-          "y": 16408,
+          "y": 17456,
           "name": "States · Agent execution",
           "width": 4896,
           "height": 5324,
@@ -68552,7 +69483,7 @@
           "type": "frame",
           "id": "gdgT2",
           "x": 0,
-          "y": 21828,
+          "y": 22876,
           "name": "States · Review, merge & worktrees",
           "width": 4896,
           "height": 4300,
@@ -79692,7 +80623,7 @@
           "type": "frame",
           "id": "GvUXd",
           "x": 0,
-          "y": 26224,
+          "y": 27272,
           "name": "States · Unreadable run & task conversation",
           "width": 4896,
           "height": 4300,
@@ -85319,7 +86250,7 @@
           "type": "frame",
           "id": "F3fEH",
           "x": 0,
-          "y": 5904,
+          "y": 6952,
           "name": "States · New task truthful states & build space (D4, D5)",
           "width": 4896,
           "height": 2168,
@@ -85344,7 +86275,7 @@
               "y": 68,
               "name": "02.09A label",
               "fill": "$muted",
-              "content": "02.09A · D4 · New task / Draft saved, approval gate named",
+              "content": "02.09A · D4 · New task / Creating, approval gate named",
               "fontFamily": "$font",
               "fontSize": 14,
               "fontWeight": "normal"
@@ -85402,7 +86333,7 @@
               "id": "m82tU",
               "x": 48,
               "y": 100,
-              "name": "02.09A · D4 · New task / Draft saved, approval gate named",
+              "name": "02.09A · D4 · New task / Creating, approval gate named",
               "clip": true,
               "width": 1440,
               "height": 960,
@@ -85490,9 +86421,9 @@
                         {
                           "type": "text",
                           "id": "oAuAk",
-                          "name": "Draft state",
+                          "name": "Task state",
                           "fill": "$muted",
-                          "content": "Draft saved locally",
+                          "content": "Creating the task…",
                           "fontFamily": "$font",
                           "fontSize": 11,
                           "fontWeight": "normal"
@@ -86414,11 +87345,12 @@
                               "id": "OWFwY",
                               "type": "ref",
                               "ref": "u1XBP",
-                              "name": "Create and run",
+                              "name": "Create and run · disabled",
                               "width": "fill_container",
                               "height": 42,
                               "fill": "$accent",
                               "stroke": "$accent",
+                              "opacity": 0.4,
                               "descendants": {
                                 "xfnek": {
                                   "icon": "play",
@@ -86434,11 +87366,11 @@
                             {
                               "type": "text",
                               "id": "c5JtE",
-                              "name": "Save draft option",
+                              "name": "Create option · in progress",
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "Save as draft",
+                              "content": "Creating the task…",
                               "textAlign": "center",
                               "fontFamily": "$font",
                               "fontSize": 11,
@@ -87516,11 +88448,11 @@
                             {
                               "type": "text",
                               "id": "oGVZb",
-                              "name": "Save draft option",
+                              "name": "Create option",
                               "fill": "$muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "Save as draft",
+                              "content": "Create",
                               "textAlign": "center",
                               "fontFamily": "$font",
                               "fontSize": 11,
@@ -91865,7 +92797,7 @@
           "type": "frame",
           "id": "AmJPj",
           "x": 0,
-          "y": 8168,
+          "y": 9216,
           "name": "States · ORC-12 · Draft summary and editing",
           "width": 4896,
           "height": 3216,
@@ -99115,7 +100047,7 @@
           "type": "frame",
           "id": "nNtAZ",
           "x": 0,
-          "y": 29572,
+          "y": 30620,
           "name": "States · ORC-16 · Run again",
           "width": 4896,
           "height": 2168,
@@ -102989,7 +103921,7 @@
           "type": "frame",
           "id": "AAdQb",
           "x": 0,
-          "y": 31786,
+          "y": 32834,
           "name": "States · Overview Failed",
           "width": 4896,
           "height": 1120,
@@ -104650,7 +105582,7 @@
           "type": "frame",
           "id": "sJeSn",
           "x": 0,
-          "y": 33052,
+          "y": 34100,
           "name": "States · ORC-41 · Interactive tool approval",
           "width": 4896,
           "height": 1120,
@@ -134822,7 +135754,7 @@
           "type": "frame",
           "id": "HBQJY",
           "x": -26,
-          "y": 34268,
+          "y": 35316,
           "name": "States · Code index",
           "width": 4896,
           "height": 3216,
@@ -141634,7 +142566,7 @@
           "type": "frame",
           "id": "b9V39h",
           "x": 0,
-          "y": 37580,
+          "y": 38628,
           "name": "Screens · Usage dashboard",
           "width": 4896,
           "height": 4287,
@@ -187628,7 +188560,7 @@
           "type": "frame",
           "id": "K4KyPj",
           "x": 15,
-          "y": 41963,
+          "y": 43011,
           "name": "States · Memory",
           "width": 4896,
           "height": 4408,
@@ -202878,7 +203810,7 @@
           "type": "frame",
           "id": "i2o8ko",
           "x": 0,
-          "y": 46467,
+          "y": 47515,
           "name": "States · Delivery & merge queue",
           "width": 4896,
           "height": 5312,
@@ -249675,7 +250607,7 @@
           "type": "frame",
           "id": "fTfl8",
           "x": 0,
-          "y": 51875,
+          "y": 52923,
           "name": "States · Merged conversation",
           "width": 4896,
           "height": 4749,

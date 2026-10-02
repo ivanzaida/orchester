@@ -285,19 +285,16 @@ pub enum TaskDraftSaveError {
   DetailsMismatch,
 }
 
-/// [`save_to`] in the project database of `repo_root`, confirmed as the requested details.
-pub fn save_draft_in(
-  repo_root: &Path,
-  target: SaveTarget,
-  details: TaskDetails,
-) -> Result<TaskDetails, TaskDraftSaveError> {
+/// [`save_to`] in the project database of `repo_root`, confirmed as the requested details: the
+/// saved task.
+pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails) -> Result<Task, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
   if matches!(target, SaveTarget::New(_)) && saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }
-  if saved.details() != &details {
+  if saved.details() != details {
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
-  Ok(details)
+  Ok(saved)
 }

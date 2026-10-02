@@ -103,3 +103,7 @@ define_id!(
   /// One record of task or project memory.
   MemoryId
 );
+define_id!(
+  /// One native agent conversation: the items of one step execution, shared by its invocations.
+  ConversationId
+);

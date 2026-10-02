@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use lurq::app::Tree;
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
@@ -12,7 +13,7 @@ use orchester_desktop::tasks::data::{SaveTarget, TaskDraftSaveError, save_draft,
 use orchester_store::ProjectDb;
 
 use crate::{
-  github::shows,
+  github::{contains_text, shows},
   harness::{Desktop, expected},
 };
 
@@ -23,6 +24,8 @@ const SECOND_CRITERION: &str = "criterion-1";
 const ADD_CRITERION: &str = "add-criterion";
 const BUDGET: &str = "task-budget";
 const TIME_LIMIT: &str = "task-time-limit";
+/// Create: saves the task without running it.
+const CREATE: &str = "save-draft";
 /// More than the window has stops on this screen.
 const MAX_STOPS: usize = 30;
 
@@ -48,8 +51,8 @@ fn new_task() -> Desktop {
 fn new_task_tab_passes_through_the_form_in_window_order() {
   let mut desktop = new_task();
   // Only the form: the sidebar, back and the status bar are pointer-only. Attach context, the
-  // pipeline selector without pipelines, Create & run and Save as draft (no title yet) cannot
-  // be used and are skipped. After the form Tab wraps to its first field.
+  // pipeline selector without pipelines, Create & run and Create (no title yet) cannot be used
+  // and are skipped. After the form Tab wraps to its first field.
   assert_eq!(
     desktop.stops(7, false),
     expected(&[
@@ -104,57 +107,85 @@ fn new_task_enter_in_the_brief_adds_a_line() {
   assert!(desktop.tree.get_element_by_id(TITLE).is_some());
 }
 
+/// Whether Create can be pressed: Tab skips it while it cannot.
+fn create_available(desktop: &mut Desktop) -> bool {
+  desktop.stops(MAX_STOPS, false).contains(&Some(CREATE.to_owned()))
+}
+
+/// Whether the task list highlights the row of `key`, and only it, as the task Create just made.
+pub(crate) fn highlighted(tree: &mut Tree, key: &str) -> bool {
+  let mut rows = tree.get_elements_by_class_name("created").into_iter();
+  rows.next().is_some_and(|row| contains_text(row, key)) && rows.next().is_none()
+}
+
 #[test]
-fn new_task_enter_saves_only_a_valid_draft() {
+fn new_task_enter_creates_only_a_valid_task() {
   let mut desktop = new_task();
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.type_text("Add switcher");
   desktop.tab_to(BUDGET, MAX_STOPS);
   desktop.type_text("x");
   assert_eq!(desktop.value(BUDGET), "1,400,000x");
-  // The budget is not a number: Save as draft is disabled and Enter saves nothing.
+  // The budget is not a number: Create is disabled and Enter creates nothing.
   desktop.enter();
   desktop.settle("the form to stay", |tree| tree.get_element_by_id(TITLE).is_some());
   desktop.key("Backspace", "Backspace");
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.enter();
-  desktop.settle("the saved draft in the form", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
+  desktop.settle("the new task in the list", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
   });
-  assert!(desktop.tree.get_element_by_id(TITLE).is_some());
   let db = ProjectDb::open(&desktop.repo).expect("open project");
   assert_eq!(db.tasks().expect("read tasks").len(), 1);
 }
 
 #[test]
-fn new_task_saved_state_tracks_edits_and_resave() {
+fn new_task_create_returns_to_the_list_with_the_task_highlighted() {
   let mut desktop = new_task();
+  assert!(shows(&mut desktop, CREATE, "Create"));
   desktop.tab_to(TITLE, MAX_STOPS);
   desktop.type_text("Add switcher");
-  desktop.press("save-draft");
-  desktop.settle("first draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
-  });
   desktop.tab_to(BRIEF, MAX_STOPS);
   desktop.type_text("Add a switcher to the project.");
-  assert!(shows(&mut desktop, "new-task-state", "Not saved yet"));
-  desktop.press("save-draft");
-  desktop.settle("edited draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
+  desktop.press(CREATE);
+  desktop.settle("the new task in the list", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
   });
+  assert!(shows(&mut desktop, "task-row-KON-1", "Add switcher"));
+  assert!(shows(&mut desktop, "task-row-KON-1", "Draft"));
   let db = ProjectDb::open(&desktop.repo).expect("open project");
   let tasks = db.tasks().expect("read tasks");
   assert_eq!(tasks.len(), 1);
+  assert_eq!(tasks[0].status(), TaskStatus::Draft, "Create does not run the task");
   assert_eq!(tasks[0].details().brief, "Add a switcher to the project.");
+  // The highlight marks only the task just made: opening the list again shows none.
+  desktop.press("nav-overview");
+  desktop.wait_for("new-task");
+  desktop.press("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  assert!(desktop.tree.get_elements_by_class_name("created").is_empty());
+}
+
+#[test]
+fn new_task_create_is_unavailable_while_the_form_is_invalid() {
+  let mut desktop = new_task();
+  // No title yet.
+  assert!(!create_available(&mut desktop));
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Add switcher");
+  assert!(create_available(&mut desktop));
+  desktop.tab_to(TIME_LIMIT, MAX_STOPS);
+  desktop.type_text("x");
+  assert!(!create_available(&mut desktop));
+  assert!(shows(
+    &mut desktop,
+    "execution-plan",
+    "Correct the run budget and time limit to save the task."
+  ));
+  desktop.click(CREATE);
+  desktop.settle("the form to stay", |tree| tree.get_element_by_id(TITLE).is_some());
+  let db = ProjectDb::open(&desktop.repo).expect("open project");
+  assert!(db.tasks().expect("read tasks").is_empty());
 }
 
 #[test]
@@ -178,7 +209,7 @@ fn queued_task_cannot_be_reported_as_a_saved_draft() {
     .expect("complete task queues");
   db.save_task(&task).expect("persist queued task");
   assert_eq!(task.status(), TaskStatus::Queued);
-  let result = save_draft_in(&desktop.repo, SaveTarget::New(batch), details);
+  let result = save_draft_in(&desktop.repo, SaveTarget::New(batch), &details);
   assert!(matches!(result, Err(TaskDraftSaveError::NotDraft(TaskStatus::Queued))));
 }
 

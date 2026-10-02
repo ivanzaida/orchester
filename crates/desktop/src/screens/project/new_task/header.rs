@@ -45,7 +45,7 @@ pub(super) fn topbar(
     ctx.t(if form.editing {
       "tasks.edit.savingChanges"
     } else {
-      "tasks.new.saving"
+      "tasks.new.creating"
     })
   } else if let Some(queued) = form.queued_task.as_ref() {
     ctx.t(queued.outcome.status_key())

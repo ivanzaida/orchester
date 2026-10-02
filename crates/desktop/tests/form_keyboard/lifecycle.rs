@@ -392,10 +392,6 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   // New work waits too: Create & run queues the task, and the runner refuses its run.
   desktop.click("task-breadcrumb");
   fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
-  desktop.click("save-draft");
-  desktop.wait_until("the saved draft", |desktop| {
-    text_of(desktop, "new-task-state", "Draft saved locally")
-  });
   desktop.click("create-and-run");
   desktop.wait_until("the refusal in New task", |desktop| {
     desktop.tree.root().is_some_and(|root| contains_text(root, refusal)) && has(desktop, "create-and-run")
