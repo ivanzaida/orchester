@@ -7,7 +7,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
   resource::{StepKey, VersionNumber},
-  run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
+  run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -18,8 +18,7 @@ use crate::{
   tasks::{data::PipelineChoice, unreadable::Unreadable},
 };
 
-/// Tabs of the task list. Only tabs whose tasks can be told apart today are available;
-/// queueing, review and completion do not exist yet.
+/// Tabs of the task list; run-backed tabs use the latest phase in [`rows`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTab {
   All,
@@ -34,10 +33,6 @@ impl lurq::app::component::DevtoolsInspectable for TaskTab {}
 impl TaskTab {
   pub const ALL: [Self; 5] = [Self::All, Self::Drafts, Self::Queue, Self::NeedsReview, Self::Done];
 
-  pub const fn is_available(self) -> bool {
-    matches!(self, Self::All | Self::Drafts)
-  }
-
   pub const fn label_key(self) -> &'static str {
     match self {
       Self::All => "tasks.tabs.all",
@@ -47,27 +42,13 @@ impl TaskTab {
       Self::Done => "tasks.tabs.done",
     }
   }
-
-  /// Whether `task` belongs to this tab; unavailable tabs contain nothing.
-  pub fn includes(self, task: &Task) -> bool {
-    match self {
-      Self::All => true,
-      Self::Drafts => task.status() == TaskStatus::Draft,
-      Self::Queue | Self::NeedsReview | Self::Done => false,
-    }
-  }
-
-  /// Number of tasks in the tab, or `None` for a tab that cannot be counted yet.
-  pub fn count(self, tasks: &[Task]) -> Option<usize> {
-    self
-      .is_available()
-      .then(|| tasks.iter().filter(|task| self.includes(task)).count())
-  }
 }
 
 /// Where a task's latest run stands, for its row's status and its dependency / readiness cell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LatestRun {
+  /// The configuration the latest readable run actually executes.
+  pub pipeline: PinnedVersion,
   pub phase: TaskPhase,
   /// The run's number in the project, e.g. 128 for "Run #128".
   pub number: RunNumber,
@@ -129,6 +110,7 @@ impl LatestRun {
   /// `updated_at`, with the plan or the question it waits on, if any.
   pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
+      pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       number: run.number(),
@@ -350,7 +332,7 @@ impl TaskRow {
       id: task.id(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
-      pipeline: PipelineLabel::of(task.details().pipeline, published),
+      pipeline: task_pipeline_label(task, published, latest),
       phase,
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
@@ -360,11 +342,44 @@ impl TaskRow {
   }
 }
 
+fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> PipelineLabel {
+  let pinned = latest
+    .map(|run| (run.pipeline.resource, run.pipeline.number))
+    .or_else(|| task.details().pipeline.zip(task.pipeline_version()));
+  let id = pinned.map(|(id, _)| id).or(task.details().pipeline);
+  let mut label = PipelineLabel::of(id, published);
+  if let PipelineLabel::Published { version, .. } = &mut label
+    && let Some((_, number)) = pinned
+  {
+    *version = number;
+  }
+  label
+}
+
 /// Rows of `tab`, in task number order.
 pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: TaskTab) -> Vec<TaskRow> {
   tasks
     .iter()
-    .filter(|task| tab.includes(task))
+    .filter(|task| match tab {
+      TaskTab::All => true,
+      TaskTab::Drafts => task.status() == TaskStatus::Draft,
+      TaskTab::Queue => matches!(
+        phase_of(task, phases),
+        Some(
+          TaskPhase::Queued
+            | TaskPhase::Running
+            | TaskPhase::Waiting
+            | TaskPhase::Paused
+            | TaskPhase::StoppedAtLimit
+            | TaskPhase::Interrupted
+        )
+      ),
+      TaskTab::NeedsReview => phase_of(task, phases) == Some(TaskPhase::Succeeded),
+      TaskTab::Done => matches!(
+        phase_of(task, phases),
+        Some(TaskPhase::Merged | TaskPhase::Failed | TaskPhase::Cancelled)
+      ),
+    })
     .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()
 }

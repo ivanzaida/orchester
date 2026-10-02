@@ -40,7 +40,20 @@ const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_re
 
 /// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
 /// fails the listing: it cannot be told which run it is.
+///
+/// A run is stored in several tables (its row, attempts, step executions, checkpoints, events),
+/// read by separate statements in one [consistent read](super::super::consistent::read), so a run
+/// row is never paired with rows written after it (the runner recording an attempt while the
+/// desktop reads).
 pub(super) fn load_runs(
+  connection: &Connection,
+  clause: &str,
+  params: impl Params,
+) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
+  super::super::consistent::read(connection, || read_runs(connection, clause, params))
+}
+
+fn read_runs(
   connection: &Connection,
   clause: &str,
   params: impl Params,

@@ -74,9 +74,14 @@ impl lurq::app::component::DevtoolsInspectable for RaiseLimitProps {}
 impl RaiseLimitProps {
   /// `None` for a stop at a step's budget when the step has none, which no runner records.
   pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits) -> Option<Self> {
+    if limit == RunLimit::GroupBudget {
+      return None;
+    }
     let (used, budget) = match limit {
       RunLimit::StepBudget { execution } => run.step_budget_use(execution)?,
-      RunLimit::Tokens | RunLimit::Time | RunLimit::DailyBudget => (run.run.used(), run.run.budget()),
+      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::Time | RunLimit::DailyBudget => {
+        (run.run.used(), run.run.budget())
+      }
     };
     Some(Self {
       run: run.id(),
@@ -118,7 +123,9 @@ impl RaiseLimitProps {
   fn suggested_time(&self) -> Duration {
     let limit = match self.limit {
       RunLimit::Time => self.max_duration + self.max_duration / 2,
-      RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => self.max_duration,
+      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
+        self.max_duration
+      }
     };
     let minutes = limit
       .as_secs()
@@ -226,7 +233,9 @@ impl RaiseLimitPanel {
     self.budget.set(grouped(props.suggested_budget(), separator));
     self.minutes.set(minutes_text(props.suggested_time()));
     ctx.focus(match props.limit {
-      RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => &self.budget_input,
+      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
+        &self.budget_input
+      }
       RunLimit::Time => &self.time_input,
     });
   }
@@ -454,7 +463,7 @@ fn continue_button(
 ) -> Element {
   let label = match (pending, props.limit, budget, time) {
     (true, ..) => ctx.t("runs.limit.continuing"),
-    (false, RunLimit::Tokens | RunLimit::StepBudget { .. }, Some(budget), _) => ctx.t_args(
+    (false, RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::StepBudget { .. }, Some(budget), _) => ctx.t_args(
       "runs.limit.continueWith",
       [("count", compact_tokens(budget.get()).as_str())],
     ),

@@ -197,6 +197,34 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
+### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
+
+**Done 2026-10-02.** Independent review (four rounds) and design verification (1440 and 960) passed.
+Built in Orchester run #10 (`orchester/orc-30-run-2`, on the old base `37716df`) and merged with master on
+`claude/orc30` (merges `162206c`, `69677c9` for lurq 0.33.0). Row and select-all selection with the ready / incomplete /
+already queued or started split, readiness reasons, Set pipeline (published pipelines, drafts only, skipped tasks
+explained), search by title/id/brief, the pipeline filter and sort combined with the tabs (an empty result says so and
+can be cleared), and Run selected opening the parallel/sequential scheduling review (editable order, shared task
+limits, aggregate token cap) that queues each task exactly once: groups are stored atomically and first runs use
+stable first-run keys, so a retry never starts a task twice; the runner keeps the reviewed concurrency and its agent
+slots. A group held for good (failed task, spent cap, a start to fix) leaves the runner idle; its unstarted tasks go
+back to the drafts with *Return to drafts* in the selection bar. Finished groups are no longer polled, and failing
+starts back off. The row of the task New task's Create just made stays highlighted next to the selection checkboxes.
+Narrow windows: the review stacks its columns below 1260, the table drops its Pipeline column below 1152.
+Undrawn states are listed in the design doc as implemented, not drawn yet. The drawn copy that names merge
+dependencies is deliberately not used: dependencies are outside ORC-30 and not built.
+History: the run passed Implement, Check and Review; its Verify failed (order 12px high, settings too dense), fixed
+in `9971dbf`. An independent review of `4b507a3` failed on runner idleness, group polling, errors and dead code,
+fixed in the review follow-ups; an independent verification of `4b507a3` passed at 1440 and failed at 960, fixed in
+the design follow-ups.
+Tests: `cargo test -p orchester-core --test task_groups task_group`, `cargo test -p orchester-store --test
+task_groups task_group`, `cargo test -p orchester-runner --features test-agent --test task_groups task_group`,
+`cargo test -p orchester-desktop --test form_keyboard task_bulk`, `cargo test -p orchester-desktop --test tasks task`.
+
+**Done when** an independent re-review and design verifier report no blocking or major findings against Tasks
+`J9467` and the scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential), at 1440 and 960; then move this entry
+to *Done*. Not verified yet after the follow-ups.
+
 ## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible

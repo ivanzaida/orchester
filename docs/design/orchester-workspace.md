@@ -906,6 +906,90 @@ The user explicitly requested creating ten tasks and letting agents work on them
 
 Tasks (`J9467`) is the main backlog, with All tasks, Drafts, Queue, Needs review and Done tabs. New task opens the existing single-task form, whose *Create* returns here with the new task's row scrolled into view and highlighted in `$hover` (no frame draws this state yet); Create multiple opens `OqmXc`. Rows expose task ID, title, published pipeline, status and readiness/dependency, with selection and direct entry to task details/conversation. Run selected opens a scheduling review rather than immediately starting work.
 
+**ORC-30 implementation (2026-09-30; independent design verification pending).** Checkboxes select rows without
+opening their task. Select all affects the visible filtered rows; selections hidden by a query remain selected and
+counted. Search matches title, task key, internal ID and brief, combined with the pipeline filter, sort and tab.
+The selection bar counts ready and incomplete selections and lists each selected task's readiness problems.
+Run selected requires every selected task to be a complete draft with a published pipeline and no previous run.
+The review permits dragging or keyboard editing of task order, parallel concurrency or sequential scheduling, per-task token/time
+limits and the aggregate cap; cancelling returns to the selection without scheduling work. Queue saves the whole
+group atomically, pins pipeline versions, and the runner starts one idempotent first run per task. Waiting for input
+or approval occupies a task slot. Sequential scheduling waits until the previous run succeeds (ready for review).
+The aggregate cap applies only to the group's first runs, including further attempts of those same runs. Cancel
+followed by Run again creates a separate run with its own limits; it neither inherits the exhausted group cap nor
+contributes usage to that group. Original group membership remains stored for first-run idempotency and history.
+An unrecovered failure or cancellation holds unstarted members; existing agents retain their normal controls.
+The open review retains the published pipeline versions and task order it displays. Submission and preflight use
+those exact immutable versions, even if a newer publication appears in the meantime; atomic submission rejects a
+changed task pipeline assignment and asks for a renewed review. First-run snapshots use the queued reviewed versions.
+On a Fresh attachment after a desktop session ends, unstarted members (including Pending first runs) receive a
+persisted scheduling hold before agent slots become available. Reconnect does not clear that hold. Open a queued
+member and explicitly start its reviewed first run, or explicitly continue an interrupted first run, to release the
+group's session hold. Existing concurrency, cap, preflight and previous-task checks still apply. A later Run again
+cannot release the old group's hold. These recovery reasons reuse the task list's waiting text (implemented, not
+drawn yet); they preserve group order, original run keys, checkpoints and snapshots rather than creating a new group.
+A recorded Pending original first run exposes Start run in its Summary topbar (implemented, not drawn yet), using
+that existing run's stable first-run key. It retries worktree/start preparation with the recorded ID and snapshot,
+not a new run or the latest publication. Its Summary notice and heading explicitly name a session scheduling hold;
+a Pending record without that hold says it has not started. The list's pipeline column uses the latest readable
+run's pinned pipeline/version, otherwise the queued task's reviewed version, and the latest publication for a draft.
+All five task tabs round-trip through navigation routes; search, pipeline filter and sort remain combined when
+switching tabs. Unknown task-tab routes still fall back to All.
+
+**Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
+runs are changed); empty search results and non-fixture filter/sort combinations; review validation, offline runner,
+pending/error and queued-success states; one selected task; group waiting reasons for concurrency, previous task,
+agent capacity, daily/shared budgets, preflight or start failure. These reuse existing fields, buttons, notices and
+error text. Values are derived from real selections, never the illustrative ten-task defaults. Group caps stop
+agents at turn boundaries and can overshoot by already-running turns. Queue editing, pause scheduling and explicit
+task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
+enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
+cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
+**Held groups (implemented, not drawn yet; to be drawn in J9467's selection bar):** a failed or cancelled task, the
+spent group cap, or a start the person must fix (preflight problems, a failed start) holds a group's unstarted tasks
+for good; their rows say so (*Held after a task failed or was cancelled. Select the waiting tasks and choose Return to
+drafts to schedule them again.*, and the same for the cap). Selecting any of them adds a secondary **Return to
+drafts** button (undo-2 icon, 32px like Set pipeline) to the selection bar, left of Set pipeline. It takes the
+selected held, never-started tasks back to the drafts and out of their group, together; the group keeps its started
+members, and a group left without members is removed. The drafts can then be reviewed and queued again. The
+selection bar's split names tasks that are neither ready nor incomplete: *0 ready to queue · 1 incomplete · 2 already
+queued or started*. When the selected tasks had different budgets or time limits, the review says under its token
+fields that *These limits replace each selected task’s own token budget and time limit.* (the shared limits apply to
+every task, as the review's per-task fields show). The runner retries a start the person must fix with a growing
+wait (2 s, doubling to 1 min) and stops treating a group as work once it is held for good or every first run ended.
+**Narrow windows and empty searches (implemented, not drawn yet):** below a 1260 window the scheduling review puts
+the settings under the order, both as wide as the page, and the page scrolls; below 1152 the task table leaves out its
+Pipeline column so the title keeps at least 120 (the fixed column widths otherwise leave the title nothing at 960). Below the same width the selection bar puts its actions (Return to drafts, Set pipeline, Run selected) on a second
+line, right-aligned; at any width they keep their full width and the readiness summary gives way with an ellipsis.
+When the search or pipeline filter hides every row of a tab, the table says *No tasks in this tab match the search or
+pipeline filter.* with a *Clear search and filter* button. The drawn copy that names merge dependencies (selection
+summary, sequential hint and notice, branch note) is not used: dependencies are not built, so the app does not claim
+them.
+The scheduling-review order column includes a Task to reorder selector and keyboard-reachable Move up, Move down
+and Undo buttons beneath the scrolling rows (implemented, not drawn yet). Select a task with the picker, then use
+Tab and Enter on its move action. Boundary moves and actions after submission are disabled. Each real keyboard
+move or drag replaces the single Undo snapshot; Undo restores that snapshot once. Choosing a task or attempting
+a no-op move does not replace history. Both review modes share this behavior and queue the resulting order.
+
+**After the failed 2026-09-30 visual review:** scheduling reviews now show the task-count/concurrency footer,
+token units and compact readbacks, the selected published pipeline versions, and compact active-time properties.
+Activating the time property opens a minutes field and Done button (implemented, not drawn yet). Mixed pipeline
+versions are listed explicitly in a wrapping property; pipelines without plan gates keep the generic approvals
+notice. Gate and failure selects offer only the scheduler's supported policy. Actual runner slots appear when
+reported. The footer follows the visible task rows, including the draft-editing hint. Independent re-verification
+is still required. Order counts stay unpadded under the shared counts rule. Create multiple and Orchestrator remain
+visibly unavailable; their implementation is outside ORC-30. The older frames omit the existing Skills sidebar
+entry. The person's scope decision retains existing global navigation and records this omission as a pre-existing
+design/state difference, consistent with runtime UI verification. Fresh independent Verify compares the changed
+task-list and scheduling-review regions against their references; ORC-30 does not remove Skills navigation.
+
+**Scheduling-review recheck corrections:** settings keep the 32px inset after the divider and 508px controls
+width at 1440px. Their reserved 12px scrollbar gutter occupies part of the page's right padding, preserving
+the controls' right edge. Execution-mode cards use the drawn 88px height and 12px gap (`YZcH2`, `jPX6u`).
+Order titles keep the 12px field typography with primary text color; subtitles remain muted. These corrections
+apply to both W1Dq6 and IyJ5a and require a fresh independent visual comparison. The original evidence in
+`.tmp/verify/recheck/report.md` remains preserved.
+
 **Task rows by run state (`r2al55`, drawn 2026-09-27 from the app).** A task with a run shows the run's state as the status label and, in the last column (and after the key in the Overview list `zemhy`), what that means for the task now:
 
 | Status (icon) | Last column |
