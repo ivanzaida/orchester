@@ -1,3 +1,7 @@
+//! The task page's status, priority and tag pickers (`gNExS`, `Sd5qt`) and the confirmation that
+//! Canceled stops the task's active run (`N1vwaM`). A choice saves at once; the pickers then show
+//! what is stored.
+
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -11,8 +15,8 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  id::TagId,
-  task::organization::{ChangeActor, Priority, WorkflowStatus},
+  id::{TagId, TaskId},
+  task::organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
   time::Timestamp,
 };
 use orchester_ipc::Command;
@@ -54,31 +58,36 @@ pub(super) struct OrganizationHeader {
   status: Signal<WorkflowChoice>,
   priority: Signal<PriorityChoice>,
   value: Signal<OrganizationValue>,
-  source: Signal<Option<OrganizationValue>>,
+  /// The organization the task's detail last showed; when the detail changes, the pickers follow.
+  shown: Signal<Option<OrganizationValue>>,
+  /// What is stored: the detail's organization, or what the latest change saved before the detail
+  /// is read again. A choice equal to it saves nothing.
+  stored: Signal<OrganizationValue>,
+  /// The task has a run that has not ended, which Canceled stops.
+  active: Signal<bool>,
   confirm: Signal<bool>,
 }
 impl Component for OrganizationHeader {
   type Props = OrganizationProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let header = Self {
       status: ctx.signal(WorkflowChoice(WorkflowStatus::Backlog)),
       priority: ctx.signal(PriorityChoice(Priority::None)),
       value: ctx.signal(OrganizationValue::default()),
-      source: ctx.signal(None),
+      shown: ctx.signal(None),
+      stored: ctx.signal(OrganizationValue::default()),
+      active: ctx.signal(false),
       confirm: ctx.signal(false),
-    }
+    };
+    let action = action(ctx);
+    header.observe(ctx, &action);
+    header
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<OrganizationProps>().clone();
+    let action = action(ctx);
+    self.follow(&props.detail);
     let current = props.detail.task.organization();
-    if self.source.get_untracked().as_ref().map(|source| &source.0) != Some(current) {
-      self.source.set(Some(OrganizationValue(current.clone())));
-      self.status.set(WorkflowChoice(current.status()));
-      self.priority.set(PriorityChoice(current.priority()));
-      self.value.set(OrganizationValue(current.clone()));
-    }
-    let action = self.action(ctx, &props);
-    self.watch_choices(ctx, &props, &action);
     let state = action.state().get();
     let mut column = Column::new()
       .padding_horizontal(SpacingSize::Section)
@@ -134,91 +143,160 @@ impl Component for OrganizationHeader {
     if state.is_pending() {
       column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
     }
-    if let Some(error) = state.error {
+    // Refused because the task has an active run: the confirmation that opened says so.
+    if let Some(error) = state.error.filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED) {
       column = column.child(field_error(&message_text(ctx, &error)));
     }
     column.child(self.confirmation(ctx, &props, &action))
   }
 }
 
+/// Saves one choice for the task the page shows. The call in the header's `create` and every
+/// `render` refer to the same action; each render points it at the current task.
+fn action(ctx: &mut Ctx) -> Action {
+  let props = ctx.props::<OrganizationProps>();
+  let (root, task) = (props.root.clone(), props.detail.task.id());
+  let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  ctx.future_action(move |mutation: Mutation| {
+    let (root, runners) = (root.clone(), runners.clone());
+    async move {
+      if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled, true)) {
+        stop_active_run(&root, task, &runners).await?;
+      }
+      background::run(move || {
+        let mut db = ProjectDb::open(&root)?;
+        let value = db.task_organization(task)?;
+        let value = match mutation {
+          Mutation::Status(status, _) => value.with_status(status),
+          Mutation::Priority(priority) => value.with_priority(priority),
+          Mutation::Tags(tags) => value.with_tags(tags),
+        };
+        db.set_task_organization(task, &value, ChangeActor::Person, Timestamp::now())?;
+        Ok::<_, orchester_store::StoreError>(OrganizationValue(value))
+      })
+      .await?
+      .map_err(|error| messages::store_error(&error))
+    }
+  })
+}
+
+/// Cancels the task's active run through the runner, as the run's own Cancel does; the run's work
+/// stays on its branch.
+async fn stop_active_run(root: &std::path::Path, task: TaskId, runners: &Runners) -> Result<(), Message> {
+  let root = root.to_path_buf();
+  let run = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
+    .await?
+    .map_err(|error| messages::store_error(&error))?;
+  if let Some(run) = run {
+    runners
+      .control_run(Command::CancelRun { run })
+      .await
+      .map_err(|error| crate::tasks::run::control_message(&error))?;
+  }
+  Ok(())
+}
+
+/// The header's signals, shared with the observers registered in `create`.
+#[derive(Clone)]
+struct Choices {
+  status: Signal<WorkflowChoice>,
+  priority: Signal<PriorityChoice>,
+  value: Signal<OrganizationValue>,
+  stored: Signal<OrganizationValue>,
+  confirm: Signal<bool>,
+}
+
+impl Choices {
+  /// Records `stored` as what is stored before the pickers show it, so showing it saves nothing.
+  fn show_stored(&self, stored: TaskOrganization) {
+    self.stored.set(OrganizationValue(stored.clone()));
+    self.status.set(WorkflowChoice(stored.status()));
+    self.priority.set(PriorityChoice(stored.priority()));
+    self.value.set(OrganizationValue(stored));
+  }
+}
+
 impl OrganizationHeader {
-  fn action(&self, ctx: &mut Ctx, props: &OrganizationProps) -> Action {
-    let (root, task) = (props.root.clone(), props.detail.task.id());
-    let runners = ctx.use_context::<Runners>().expect("root provides runners");
-    let action = ctx.future_action(move |mutation: Mutation| {
-      let (root, runners) = (root.clone(), runners.clone());
-      async move {
-        if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled, true)) {
-          let read_root = root.clone();
-          let run = background::run(move || ProjectDb::open(&read_root).and_then(|db| db.active_task_run(task)))
-            .await?
-            .map_err(|error| messages::store_error(&error))?;
-          if let Some(run) = run {
-            runners
-              .control_run(Command::CancelRun { run })
-              .await
-              .map_err(|error| crate::tasks::run::control_message(&error))?;
-          }
-        }
-        background::run(move || {
-          let mut db = ProjectDb::open(&root)?;
-          let value = db.task_organization(task)?;
-          let value = match mutation {
-            Mutation::Status(status, _) => value.with_status(status),
-            Mutation::Priority(priority) => value.with_priority(priority),
-            Mutation::Tags(tags) => value.with_tags(tags),
-          };
-          db.set_task_organization(task, &value, ChangeActor::Person, Timestamp::now())?;
-          Ok::<_, orchester_store::StoreError>(OrganizationValue(value))
-        })
-        .await?
-        .map_err(|error| messages::store_error(&error))
-      }
-    });
-    let confirm = self.confirm.clone();
-    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
-    ctx.watch(&action.state(), move |state| {
-      if state.data.is_some() && !state.is_pending() {
-        confirm.set(false);
-        nav.tasks_changed();
-      }
-    });
-    action
+  fn choices(&self) -> Choices {
+    Choices {
+      status: self.status.clone(),
+      priority: self.priority.clone(),
+      value: self.value.clone(),
+      stored: self.stored.clone(),
+      confirm: self.confirm.clone(),
+    }
   }
 
-  fn watch_choices(&self, ctx: &mut Ctx, props: &OrganizationProps, action: &Action) {
-    let current = props.detail.task.organization().clone();
-    let active = props
-      .detail
-      .run
-      .as_ref()
-      .is_some_and(|run| !run.run.status().is_terminal());
-    let (confirm, submit, status) = (self.confirm.clone(), action.clone(), self.status.clone());
-    let expected = current.status();
+  /// Seeds the pickers when the detail shows another organization, and notes whether the task
+  /// has an active run.
+  fn follow(&self, detail: &TaskDetail) {
+    let current = detail.task.organization();
+    if self.shown.get_untracked().as_ref().map(|shown| &shown.0) != Some(current) {
+      self.shown.set(Some(OrganizationValue(current.clone())));
+      self.choices().show_stored(current.clone());
+    }
+    let active = detail.run.as_ref().is_some_and(|run| !run.run.status().is_terminal());
+    if self.active.get_untracked() != active {
+      self.active.set(active);
+    }
+  }
+
+  /// Registered once, in `create`: each observer compares a choice with what is stored when the
+  /// choice is made.
+  fn observe(&self, ctx: &mut Ctx, action: &Action) {
+    self.observe_saves(ctx, action);
+    let (choices, submit, active) = (self.choices(), action.clone(), self.active.clone());
     ctx.watch(&self.status, move |choice| {
+      let expected = choices.stored.get_untracked().0.status();
       if choice.0 == expected {
         return;
       }
-      if choice.0 == WorkflowStatus::Canceled && active {
-        confirm.set(true);
-        status.set(WorkflowChoice(expected));
+      if choice.0 == WorkflowStatus::Canceled && active.get_untracked() {
+        choices.confirm.set(true);
+        choices.status.set(WorkflowChoice(expected));
       } else {
         submit.run(Mutation::Status(choice.0, false));
       }
     });
-    let submit = action.clone();
-    let expected = current.priority();
+    let (submit, stored) = (action.clone(), self.stored.clone());
     ctx.watch(&self.priority, move |choice| {
-      if choice.0 != expected {
+      if choice.0 != stored.get_untracked().0.priority() {
         submit.run(Mutation::Priority(choice.0));
       }
     });
-    let submit = action.clone();
-    let expected = current.tags().to_vec();
+    let (submit, stored) = (action.clone(), self.stored.clone());
     ctx.watch(&self.value, move |value| {
-      if value.0.tags() != expected {
+      if value.0.tags() != stored.get_untracked().0.tags() {
         submit.run(Mutation::Tags(value.0.tags().to_vec()));
       }
+    });
+  }
+
+  /// A change that has just been saved closes the confirmation and becomes what is stored. A failed
+  /// change keeps the data of the last one that succeeded: it leaves the confirmation open with its
+  /// error and puts the pickers back on what is stored. Canceled refused for an active run the
+  /// detail did not show yet asks as well.
+  fn observe_saves(&self, ctx: &mut Ctx, action: &Action) {
+    let choices = self.choices();
+    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
+    ctx.watch(&action.state(), move |state| {
+      if state.is_rejected() {
+        if state
+          .error
+          .as_ref()
+          .is_some_and(|error| error.key == messages::CANCEL_CONFIRM_REQUIRED)
+        {
+          choices.confirm.set(true);
+        }
+        choices.show_stored(choices.stored.get_untracked().0);
+        return;
+      }
+      let Some(saved) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
+        return;
+      };
+      choices.confirm.set(false);
+      choices.show_stored(saved.0.clone());
+      nav.tasks_changed();
     });
   }
 
@@ -276,7 +354,12 @@ impl OrganizationHeader {
             .render(ctx),
           ),
       );
-    if let Some(error) = action.state().get().error {
+    if let Some(error) = action
+      .state()
+      .get()
+      .error
+      .filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED)
+    {
       content = content.child(field_error(&message_text(ctx, &error)));
     }
     Modal::new(backdrop(ctx, form(None, content)))

@@ -37,6 +37,7 @@ mod native_run;
 mod new_task;
 mod organization;
 mod organization_layout;
+mod organization_review;
 mod organization_tag_manager;
 mod pipeline_editor;
 mod pipeline_history;

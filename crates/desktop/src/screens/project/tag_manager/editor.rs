@@ -76,12 +76,6 @@ impl TagManager {
           }),
       );
     }
-    let editing = self.editing.clone();
-    ctx.watch(&self.open, move |open| {
-      if !*open {
-        editing.set(None);
-      }
-    });
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)
       .open(self.open.clone())

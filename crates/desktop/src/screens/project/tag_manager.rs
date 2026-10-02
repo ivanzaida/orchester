@@ -67,17 +67,21 @@ pub struct TagManager {
 impl Component for TagManager {
   type Props = OpenProject;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let manager = Self {
       editing: ctx.signal(None),
       open: ctx.signal(false),
       revision: ctx.signal(0),
       name: ctx.signal(String::new()),
       target: ctx.signal(Target(None)),
-    }
+    };
+    let root = ctx.props::<OpenProject>().repo_root.clone();
+    let action = action(ctx, &root);
+    manager.watch(ctx, &action);
+    manager
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<OpenProject>().clone();
-    let action = self.action(ctx, &props);
+    let action = action(ctx, &props.repo_root);
     self.open.set(self.editing.get().is_some());
     let load = ctx.future((props.repo_root.clone(), self.revision.get()), |(root, _)| async move {
       background::run(move || {
@@ -137,26 +141,39 @@ impl Component for TagManager {
   }
 }
 
+/// Applies a change to the project's tags; the call in the manager's `create` and every `render`
+/// refer to the same action.
+fn action(ctx: &mut Ctx, root: &std::path::Path) -> Action {
+  let root = root.to_path_buf();
+  ctx.future_action(move |mutation: Mutation| {
+    let root = root.clone();
+    async move {
+      background::run(move || mutate(&root, mutation)).await??;
+      Ok(Changed)
+    }
+  })
+}
+
 impl TagManager {
-  fn action(&self, ctx: &mut Ctx, props: &OpenProject) -> Action {
-    let root = props.repo_root.clone();
-    let action = ctx.future_action(move |mutation: Mutation| {
-      let root = root.clone();
-      async move {
-        background::run(move || mutate(&root, mutation)).await??;
-        Ok(Changed)
-      }
-    });
+  /// Registered once: a change that has just succeeded closes its editor and rereads the tags. A
+  /// failed change keeps the data of the last one that succeeded, so it leaves the editor open
+  /// with its error. Closing the delete confirmation's modal ends the delete.
+  fn watch(&self, ctx: &mut Ctx, action: &Action) {
     let (revision, editing) = (self.revision.clone(), self.editing.clone());
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     ctx.watch(&action.state(), move |state| {
-      if state.data.is_some() && !state.is_pending() {
+      if state.is_fulfilled() {
         revision.update(|value| *value += 1);
         editing.set(None);
         nav.tasks_changed();
       }
     });
-    action
+    let editing = self.editing.clone();
+    ctx.watch(&self.open, move |open| {
+      if !*open {
+        editing.set(None);
+      }
+    });
   }
 
   fn list_actions(&self, ctx: &mut Ctx, pending: bool) -> Element {

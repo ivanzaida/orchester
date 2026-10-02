@@ -234,10 +234,15 @@ impl Component for NewTaskForm {
     let cancel_confirmation = ctx.signal(false);
     let confirm = cancel_confirmation.clone();
     ctx.watch(&save.state(), move |state| {
-      if state.error.as_ref().is_some_and(persistence::needs_cancel_confirmation) && !state.is_pending() {
-        confirm.set(true);
+      if state.is_rejected() {
+        if state.error.as_ref().is_some_and(persistence::needs_cancel_confirmation) {
+          confirm.set(true);
+        }
+        return;
       }
-      let Some(draft) = state.data.as_ref().filter(|_| !state.is_pending()) else {
+      // A failed save keeps the data of the last one that succeeded: only a save that has just
+      // succeeded closes the confirmation and reports the change.
+      let Some(draft) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
         return;
       };
       confirm.set(false);

@@ -14,7 +14,7 @@ use orchester_store::ProjectDb;
 
 use crate::{harness::Desktop, task_run::set_text};
 
-fn choose(desktop: &mut Desktop, id: &str, label: &str) {
+pub(crate) fn choose(desktop: &mut Desktop, id: &str, label: &str) {
   let mut select = desktop
     .tree
     .get_element_by_id_mut(id)
@@ -28,7 +28,7 @@ fn choose(desktop: &mut Desktop, id: &str, label: &str) {
   select.commit(index);
   desktop.pass();
 }
-fn tasks(repo: &Path) -> Vec<orchester_core::task::Task> {
+pub(crate) fn tasks(repo: &Path) -> Vec<orchester_core::task::Task> {
   ProjectDb::open(repo).expect("open").tasks().expect("tasks")
 }
 

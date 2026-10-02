@@ -37,6 +37,7 @@ type CreateAction = FutureAction<String, CreatedTag, Message>;
 #[derive(Clone)]
 pub struct TagPickerProps {
   pub root: PathBuf,
+  /// The tags being chosen; the owner keeps the same signal for the picker's lifetime.
   pub selected: Signal<OrganizationValue>,
   pub enabled: bool,
   pub appearance: PickerAppearance,
@@ -57,16 +58,20 @@ pub struct TagPicker {
 impl Component for TagPicker {
   type Props = TagPickerProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let picker = Self {
       open: ctx.signal(false),
       anchor: ElementRef::default(),
       query: ctx.signal(String::new()),
       revision: ctx.signal(0),
-    }
+    };
+    let props = ctx.props::<TagPickerProps>().clone();
+    let action = create_action(ctx, &props.root);
+    picker.select_created(ctx, &action, props.selected);
+    picker
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TagPickerProps>().clone();
-    let action = self.create_action(ctx, &props);
+    let action = create_action(ctx, &props.root);
     let shown = ctx
       .use_context::<super::pages::Shown>()
       .expect("shell provides project data");
@@ -124,36 +129,44 @@ impl Component for TagPicker {
   }
 }
 
+/// Creates a project tag from the typed name; the first call in a picker's `create` and every
+/// `render` refer to the same action.
+fn create_action(ctx: &mut Ctx, root: &std::path::Path) -> CreateAction {
+  let root = root.to_path_buf();
+  ctx.future_action(move |input: String| {
+    let root = root.clone();
+    async move {
+      let name = Name::new(&input).map_err(|error| messages::name_error(&error))?;
+      background::run(move || ProjectDb::open(&root).and_then(|mut db| db.create_project_tag(name)))
+        .await?
+        .map(CreatedTag)
+        .map_err(|error| messages::store_error(&error))
+    }
+  })
+}
+
 impl TagPicker {
-  fn create_action(&self, ctx: &mut Ctx, props: &TagPickerProps) -> CreateAction {
-    let root = props.root.clone();
-    let action = ctx.future_action(move |input: String| {
-      let root = root.clone();
-      async move {
-        let name = Name::new(&input).map_err(|error| messages::name_error(&error))?;
-        background::run(move || ProjectDb::open(&root).and_then(|mut db| db.create_project_tag(name)))
-          .await?
-          .map(CreatedTag)
-          .map_err(|error| messages::store_error(&error))
-      }
-    });
-    let (selected, revision, query) = (props.selected.clone(), self.revision.clone(), self.query.clone());
+  /// Selects a tag once its creation has just succeeded, registered once per picker. A failed
+  /// creation keeps the tag of the last one that succeeded as its data, which must not be
+  /// selected again.
+  fn select_created(&self, ctx: &mut Ctx, action: &CreateAction, selected: Signal<OrganizationValue>) {
+    let (revision, query) = (self.revision.clone(), self.query.clone());
     let nav = ctx.use_context::<ProjectNav>().expect("the shell provides navigation");
     ctx.watch(&action.state(), move |state| {
-      if let Some(CreatedTag(tag)) = &state.data
-        && !state.is_pending()
-      {
-        selected.update(|value| {
-          let mut tags = value.0.tags().to_vec();
+      let Some(CreatedTag(tag)) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
+        return;
+      };
+      selected.update(|value| {
+        let mut tags = value.0.tags().to_vec();
+        if !tags.contains(&tag.id()) {
           tags.push(tag.id());
-          value.0 = value.0.clone().with_tags(tags);
-        });
-        query.set(String::new());
-        revision.update(|revision| *revision += 1);
-        nav.tasks_changed();
-      }
+        }
+        value.0 = value.0.clone().with_tags(tags);
+      });
+      query.set(String::new());
+      revision.update(|revision| *revision += 1);
+      nav.tasks_changed();
     });
-    action
   }
 
   fn menu(&self, ctx: &mut Ctx, props: &TagPickerProps, tags: &[Tag], action: &CreateAction) -> Element {
@@ -209,7 +222,7 @@ impl TagPicker {
           .id("tag-create-inline")
           .in_form()
           .on_click(move || create.run(typed.get()))
-          .enabled(!pending && !lower.is_empty() && !tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower))
+          .enabled(!pending)
           .render(ctx),
       );
     }

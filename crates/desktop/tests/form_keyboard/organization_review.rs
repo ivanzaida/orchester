@@ -1,0 +1,214 @@
+//! Task organization after a change: a failed save does not pass for the last one that
+//! succeeded, and the task header's pickers follow the task as it is now.
+
+use std::{path::Path, time::Duration};
+
+use orchester_core::{
+  id::{IdempotencyKey, ResourceId},
+  name::Name,
+  resource::ResourceKind,
+  store::{ResourceStore, TaskStore},
+  task::{
+    TaskDetails, TaskLimits,
+    organization::{Priority, WorkflowStatus},
+  },
+  tokens::TokenBudget,
+};
+use orchester_store::ProjectDb;
+
+use crate::{
+  harness::Desktop,
+  organization::{choose, tasks},
+  task_run::set_text,
+  unreadable_run::{at, delivery, started},
+};
+
+/// Tab stops enough to pass every control of the task page and the form.
+const STOPS: usize = 60;
+
+fn complete(pipeline: ResourceId) -> TaskDetails {
+  TaskDetails {
+    title: Name::new("Organized").expect("title"),
+    brief: "Implement.".into(),
+    acceptance_criteria: vec!["Complete.".into()],
+    pipeline: Some(pipeline),
+    limits: Some(
+      TaskLimits::new(
+        TokenBudget::new(10_000).expect("budget"),
+        Duration::from_secs(1_800),
+      )
+      .expect("limits"),
+    ),
+  }
+}
+
+/// KON-1, complete, with run #1 started and not ended.
+fn seed_active(repo: &Path) {
+  let mut db = ProjectDb::open(repo).expect("open");
+  let snapshot = delivery(&mut db);
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  let task = db
+    .create_tasks(IdempotencyKey::generate(), vec![complete(pipeline)], at(10))
+    .expect("task")[0]
+    .id();
+  started(&mut db, (task, &snapshot), 1, 11);
+}
+
+fn open_task(desktop: &mut Desktop) {
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.press("task-row-KON-1");
+  desktop.wait_for("task-header-status");
+}
+
+fn stored_status(desktop: &Desktop) -> WorkflowStatus {
+  tasks(&desktop.repo)[0].organization().status()
+}
+
+fn stored_priority(desktop: &Desktop) -> Priority {
+  tasks(&desktop.repo)[0].organization().priority()
+}
+
+fn reachable(desktop: &mut Desktop, id: &str) -> bool {
+  desktop.stops(STOPS, false).contains(&Some(id.into()))
+}
+
+/// Presses Save changes once the form can be saved: not while an earlier save is under way.
+fn save_changes(desktop: &mut Desktop) {
+  desktop.wait_until("Save changes available", |desktop| reachable(desktop, "save-draft"));
+  desktop.tab_to("save-draft", STOPS);
+  desktop.enter();
+}
+
+/// Chooses `label` in the header picker `id` and waits until the header saved it: its tag
+/// picker, the header's one tab stop, can be used again.
+fn choose_in_header(desktop: &mut Desktop, id: &str, label: &str, saved: impl Fn(&Desktop) -> bool) {
+  choose(desktop, id, label);
+  desktop.wait_until(label, |desktop| saved(desktop) && reachable(desktop, "task-tags-picker"));
+}
+
+/// R1: after one successful save, Canceled for a task with an active run keeps the confirmation
+/// open instead of taking the earlier save's data for its own success.
+#[test]
+fn organization_edit_form_keeps_the_cancel_confirmation_after_an_earlier_save() {
+  let mut desktop = Desktop::with_seeded_project(seed_active);
+  open_task(&mut desktop);
+  desktop.wait_for("task-edit");
+  desktop.click("task-edit");
+  desktop.wait_for("task-workflow-field");
+  desktop.wait_until("the form filled with the task", |desktop| {
+    desktop.value("task-title") == "Organized"
+  });
+  choose(&mut desktop, "task-priority-field", "High");
+  save_changes(&mut desktop);
+  desktop.wait_until("the first save", |desktop| stored_priority(desktop) == Priority::High);
+  choose(&mut desktop, "task-workflow-field", "Canceled");
+  save_changes(&mut desktop);
+  desktop.wait_for("edit-task-cancel-confirmation");
+  for _ in 0..5 {
+    desktop.pass();
+  }
+  assert!(
+    desktop.tree.get_element_by_id("edit-task-cancel-confirmation").is_some(),
+    "the confirmation stays open until it is answered"
+  );
+  assert_ne!(stored_status(&desktop), WorkflowStatus::Canceled);
+}
+
+/// R1: stopping the run fails without a runner; the confirmation stays open with the failure
+/// although an earlier change of the header succeeded.
+#[test]
+fn organization_header_keeps_a_failed_cancellation_open() {
+  let mut desktop = Desktop::with_seeded_project(seed_active);
+  open_task(&mut desktop);
+  choose_in_header(&mut desktop, "task-header-priority", "High", |desktop| {
+    stored_priority(desktop) == Priority::High
+  });
+  choose(&mut desktop, "task-header-status", "Canceled");
+  desktop.wait_for("task-cancel-stop");
+  desktop.tab_to("task-cancel-stop", 5);
+  desktop.enter();
+  desktop.wait_until("the failed stop", |desktop| reachable(desktop, "task-cancel-stop"));
+  assert!(desktop.tree.get_element_by_id("task-cancel-confirmation").is_some());
+  assert_ne!(stored_status(&desktop), WorkflowStatus::Canceled);
+}
+
+/// R1: a failed rename after a successful creation keeps its editor open with the failure.
+#[test]
+fn organization_tag_manager_keeps_the_editor_of_a_failed_change() {
+  let mut desktop = Desktop::with_project();
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("project-tags-manage");
+  desktop.press("project-tags-manage");
+  desktop.wait_for("project-tag-new");
+  desktop.press("project-tag-new");
+  desktop.wait_for("project-tag-name");
+  set_text(&mut desktop, "project-tag-name", "Desktop");
+  desktop.tab_to("tag-editor-confirm", 12);
+  desktop.enter();
+  desktop.wait_until("the created tag", |desktop| {
+    desktop.tree.get_element_by_id("project-tag-name").is_none()
+  });
+  let tag = ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags")[0].id();
+  desktop.press(&format!("project-tag-rename-{tag}"));
+  desktop.wait_for("project-tag-name");
+  set_text(&mut desktop, "project-tag-name", "Client");
+  // Held past the store's busy timeout, so the rename fails.
+  let connection = rusqlite::Connection::open(desktop.repo.join(".orchester/orchester.db")).expect("connection");
+  connection.execute_batch("BEGIN IMMEDIATE").expect("hold the write lock");
+  desktop.tab_to("tag-editor-confirm", 12);
+  desktop.enter();
+  desktop.wait_until("the failed rename", |desktop| {
+    desktop.tree.get_element_by_id("project-tag-name").is_none() || reachable(desktop, "tag-editor-confirm")
+  });
+  connection.execute_batch("ROLLBACK").expect("release the write lock");
+  assert!(
+    desktop.tree.get_element_by_id("project-tag-name").is_some(),
+    "the editor stays open with its error"
+  );
+  let names: Vec<String> = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags")
+    .iter()
+    .map(|tag| tag.name().as_str().to_owned())
+    .collect();
+  assert_eq!(names, ["Desktop"]);
+}
+
+/// R2: the header compares a choice with the task as it is now. Once its run has ended, Canceled
+/// saves without asking, and no observer left from a render while the run was active reopens the
+/// confirmation or puts the picker back.
+#[test]
+fn organization_header_follows_the_run_ending() {
+  use crate::task_run::{create_and_run, init_repository, latest_run, programs, seed};
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  create_and_run(&mut desktop, "Keep working.", "1400000");
+  desktop.wait_until("an active run", |desktop| {
+    latest_run(&desktop.repo).is_some_and(|run| !run.status().is_terminal())
+  });
+  desktop.wait_for("task-header-status");
+  choose(&mut desktop, "task-header-status", "Canceled");
+  desktop.wait_for("task-cancel-stop");
+  desktop.tab_to("task-cancel-stop", 5);
+  desktop.enter();
+  desktop.wait_until("the run stopped and the task canceled", |desktop| {
+    stored_status(desktop) == WorkflowStatus::Canceled
+      && desktop.tree.get_element_by_id("task-cancel-confirmation").is_none()
+      && crate::github::shows(desktop, "task-page", "Cancelled")
+  });
+  choose_in_header(&mut desktop, "task-header-status", "Todo", |desktop| {
+    stored_status(desktop) == WorkflowStatus::Todo
+  });
+  choose_in_header(&mut desktop, "task-header-status", "Canceled", |desktop| {
+    stored_status(desktop) == WorkflowStatus::Canceled
+  });
+  for _ in 0..5 {
+    desktop.pass();
+  }
+  assert!(desktop.tree.get_element_by_id("task-cancel-confirmation").is_none());
+  assert_eq!(stored_status(&desktop), WorkflowStatus::Canceled);
+}
