@@ -284,6 +284,7 @@ impl Worker {
       Awaiting::Claude { call, reply } => {
         let prompt = match &answer.told {
           Some(told) if !approve => PromptAnswer::Deny(told.clone()),
+          None if !approve => PromptAnswer::Repeated,
           _ => PromptAnswer::Allow,
         };
         reply

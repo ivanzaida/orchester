@@ -1073,7 +1073,7 @@
       "queuePosition": "{{position}} of {{count}} waiting",
       "agentValue": "{{agent}} · {{step}} · Run {{run}} · {{task}}",
       "denyTells": "Deny tells {{agent}}: “{{message}}”",
-      "denyTellsCodex": "Deny declines it: Codex tells {{agent}} in its own words that the request was declined, and {{agent}} goes on.",
+      "denyTellsCodex": "Deny declines it, and Codex tells {{agent}}: “{{message}}”",
       "wider": {
         "heading": "Or answer more widely",
         "similar": "Approve similar in this run",

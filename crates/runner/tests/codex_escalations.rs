@@ -135,6 +135,17 @@ async fn codex_escalations_declined_go_on_without_the_command() {
   assert_eq!(reported(&started.db(), started.id, "escalation: "), ["decline"]);
   let readme = std::fs::read_to_string(started.worktree().join("README.md")).expect("README");
   assert!(!readme.contains("escalated") && readme.contains("went on"), "{readme}");
+  let told: Vec<String> = started
+    .db()
+    .activity(started.id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      orchester_core::connection::stream::AgentEvent::ToolDecided { decision, .. } => decision.told,
+      _ => None,
+    })
+    .collect();
+  assert_eq!(told, [orchester_core::run::codex_denial(true)]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

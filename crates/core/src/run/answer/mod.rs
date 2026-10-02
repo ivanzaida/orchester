@@ -149,9 +149,20 @@ pub struct ToolDecision {
   pub told: Option<String>,
 }
 
+/// What Codex App Server tells its model when Orchester declines a request (`decline`), word for word:
+/// an MCP call ends with this error, a command with this failed `exec_command` output. Checked with
+/// Codex 0.159.2 against a local mock of the Responses API; in both cases the turn went on.
+pub const fn codex_denial(command: bool) -> &'static str {
+  if command {
+    r#"exec_command failed: CreateProcess { message: "Rejected("rejected by user")" }"#
+  } else {
+    "user rejected MCP tool call"
+  }
+}
+
 /// What an agent is told when a person denies `approval`: the call does not run, and the agent goes on
 /// without it. Claude Code hands it to the agent as the permission prompt's message; Codex declines
-/// the request and tells the agent in its own words.
+/// the request and tells the agent in its own words ([`codex_denial`]).
 pub fn denial_message(approval: &PendingToolApproval) -> String {
   if approval.command {
     "Denied by the person reviewing this run. Continue without it.".to_owned()

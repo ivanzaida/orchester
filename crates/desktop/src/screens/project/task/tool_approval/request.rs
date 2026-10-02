@@ -260,10 +260,12 @@ fn scope_row(values: &ValueRows<'_>, approval: &PendingToolApproval, scope: &str
 /// declines and tells it in its own words.
 fn denial(ctx: &Ctx, shown: &ShownApproval) -> Element {
   let agent = shown.approval.agent.as_str();
-  let text = match &shown.choices.told {
-    Some(told) => ctx.t_args("runs.toolApproval.denyTells", [("agent", agent), ("message", told)]),
-    None => ctx.t_args("runs.toolApproval.denyTellsCodex", [("agent", agent)]),
+  let key = if shown.choices.codex {
+    "runs.toolApproval.denyTellsCodex"
+  } else {
+    "runs.toolApproval.denyTells"
   };
+  let text = ctx.t_args(key, [("agent", agent), ("message", &*shown.choices.told)]);
   Row::new()
     .id("tool-approval-deny-tells")
     .width(Dimension::Pct(100.0))

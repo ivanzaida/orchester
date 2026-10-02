@@ -39,7 +39,7 @@ pub use self::{
   answer::{
     AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
     AutoVerdict, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer, allowing_command,
-    allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, denial_message, listing,
+    allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, codex_denial, denial_message, listing,
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},

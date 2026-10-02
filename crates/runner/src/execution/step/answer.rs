@@ -12,7 +12,8 @@ use orchester_core::{
   permission::category::CommandCategory,
   run::{
     ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
-    ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, denial_message,
+    ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, codex_denial,
+    denial_message,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -117,8 +118,13 @@ impl Worker {
     match answer {
       ApprovalAnswer::Once => {}
       ApprovalAnswer::Deny => {
+        // Claude Code hands the agent Orchester's message; Codex tells it in its own words.
+        let told = match self.app_server() {
+          Some(_) => codex_denial(approval.command).to_owned(),
+          None => denial_message(approval),
+        };
         return Ok(Ok(Settled {
-          told: Some(denial_message(approval)),
+          told: Some(told),
           ..settled
         }));
       }

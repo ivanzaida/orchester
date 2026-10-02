@@ -15,7 +15,7 @@ use orchester_core::{
   resource::{AgentProfile, Pipeline, ResourceKind, StepKind, VersionNumber},
   run::{
     AlwaysUnavailable, ApprovalSubject, PendingToolApproval, RuleScope, SimilarUnavailable, always_prefixes,
-    denial_message,
+    codex_denial, denial_message,
   },
   store::{McpServerStore, ResourceStore},
 };
@@ -77,9 +77,10 @@ pub enum AlwaysBlocked {
 pub struct ApprovalChoices {
   pub similar: Result<SimilarShown, SimilarUnavailable>,
   pub always: Result<AlwaysShown, AlwaysBlocked>,
-  /// What a denial tells the agent: Orchester's words for Claude Code, `None` for Codex, which tells it in
-  /// its own.
-  pub told: Option<Arc<str>>,
+  /// What a denial tells the agent: Orchester's words for Claude Code, Codex's own for Codex.
+  pub told: Arc<str>,
+  /// Codex asks: it declines a denied request and tells the agent in its own words.
+  pub codex: bool,
 }
 
 impl ApprovalChoices {
@@ -126,7 +127,12 @@ impl ApprovalChoices {
     Self {
       similar,
       always,
-      told: (!codex).then(|| denial_message(approval).into()),
+      told: if codex {
+        codex_denial(approval.command).into()
+      } else {
+        denial_message(approval).into()
+      },
+      codex,
     }
   }
 }
