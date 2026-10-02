@@ -282,6 +282,36 @@ admits it) and, to keep naming the version in use, this line.
 
 ## Done
 
+Approval choices, waiting requests and auto-approval · branch `claude/approval-choices`
+
+- **Built 2026-10-02 (user decisions of that day), design verification below.** Four answers for commands and MCP
+  tools alike, and auto-approval: `docs/interactive-tool-approvals.md`, "Answers and waiting requests"; design doc,
+  "Approval choices and waiting requests" (with the auto-approval decision and the states built without frames).
+- Core: `permission::category` (commands split into simple commands, bash and PowerShell quoting, shells followed;
+  categories by program, subcommand, options and written paths; credential reads and installs noted),
+  `run::answer` (`ApprovalAnswer`, `DecidedBy`, run rules and their matching, Always allow targets, `auto_verdict`,
+  `denial_message`), `AgentPermissions::auto_approve` (profile version). Store migration `approval_choices`
+  (`tool_approvals.decided_by`/`rule_id`, `approval_rules`, `runs.auto_approve`; rules survive a runner restart),
+  `publish_allowed_command`. IPC protocol **12** (`DecideToolApproval { answer }`; master is at 10 and
+  `claude/retry-feedback` takes 11). Runner answers itself what a rule, Always allow or auto-approval covers, and a
+  person's Deny tells the agent and lets the turn go on (Claude Code: deny with the message; Codex: `decline`).
+- Desktop: the 720 dialog with *1 of N* and ‹ ›, the wider answers as tiles plus *Approve everything in this run*,
+  the scope of Approve similar on hover or focus, the Always allow step, Decide later (Esc), Deny's text; Needs you
+  counts waiting requests; status bar approvals with Review and *Auto-approving* with Stop; the Summary's Review
+  request card, the run's Approvals section (switch, counts, rules with Revoke, always allowed), *Auto-approving*
+  under the task heading; the profile's *Approve automatically (don't ask me)*; activity marks.
+- Not built: the per-category Allow / Ask me / Deny policy of "Command categories and approval policy" (so no
+  category can be Deny, and the Always allow step leaves out *A denied Network still wins*); Run temp (temporary
+  files count as outside the worktree); Undo of a revoked rule; the Conversation tab's inline request card (no
+  inline card exists yet); the dialog's category chip and policy line (`Cv2MG`). A Codex rule prompt that offers
+  only `cancel` interrupts the turn on Deny, as Codex does.
+- `crates/desktop/src/screens/project/task/mod.rs` is at 599 lines: split it before it grows.
+- Tests: `cargo test -p orchester-core --test command_categories command_categories`, `--test approval_answers
+  approval_answers`, `--test claude_approvals claude_approvals`; `-p orchester-store --test approval_rules
+  approval_rules`; `-p orchester-runner --features test-agent --test approval_choices approval_choices` (and the
+  updated `claude_approvals`, `claude_unlisted`, `codex_escalations`, `command_approvals`); `-p orchester-desktop
+  --test form_keyboard approval_choices_` and `tool_approval`.
+
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
 - **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
