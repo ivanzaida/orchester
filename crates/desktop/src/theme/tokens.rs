@@ -176,5 +176,33 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
+/// Scheduling review (02.05 `W1Dq6`, 02.06 `IyJ5a`): a task in the order (`gj5Cf`, a `zemhy` row).
+pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
+/// The 508px execution settings (`qdApo`) plus their reserved scroll gutter, which sits in the
+/// page padding.
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = 508.0 + SPACE_STACK;
+/// Execution-mode cards (`YZcH2`, `jPX6u`).
+pub const TASK_REVIEW_MODE_HEIGHT: f32 = 88.0;
+/// The settings' selects and token fields (`gIQBb`, `MUKob`, `dMiX2`, `XZCQ5`).
+pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
+/// The drag handle tile of an order row (`aqRNL` in `gj5Cf`).
+pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;
+/// The action strip under the review (`JV6sD`).
+pub const TASK_REVIEW_FOOTER_HEIGHT: f32 = 76.0;
+/// Queue N tasks, the strip's primary action (`QAYeP`).
+pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
+pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
+/// A key/value setting: time limit and pipeline version (`U673I`, `RG0FF`, `tfGRt`).
+pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;
+/// Back to tasks in the review's topbar (`uBqK9`).
+pub const TASK_REVIEW_BACK_WIDTH: f32 = 132.0;
+/// The narrowest window that holds the review's two columns: the 216 sidebar, 32 page padding, an
+/// order column of 440 (its rows and its Move and Undo buttons), the 32 gap, the 520 settings with
+/// their gutter and 20 padding. Narrower, the settings go under the order (not drawn yet).
+pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
+/// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
+/// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
+/// column is left out so the title keeps its room (not drawn yet).
+pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1152.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

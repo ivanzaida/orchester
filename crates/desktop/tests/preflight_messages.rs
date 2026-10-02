@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, path::PathBuf};
+use std::num::NonZeroU32;
 
 use orchester_core::run::PreflightProblem;
 use orchester_desktop::{
@@ -9,39 +9,10 @@ use orchester_desktop::{
 use orchester_ipc::Rejection;
 use serde_json::Value;
 
-const GIB: u64 = 1024 * 1024 * 1024;
-
 #[test]
 fn preflight_unpinned_queued_pipeline_has_a_specific_message() {
   let message = preflight_message(&PreflightProblem::PipelineVersionNotPinned);
   assert_eq!(message.key, "runs.preflight.pipelineVersionNotPinned");
-}
-
-#[test]
-fn preflight_low_space_message_does_not_round_up_to_the_required_amount() {
-  let target = PathBuf::from("/build/target");
-  let message = preflight_message(&PreflightProblem::BuildSpaceLow {
-    target: target.clone(),
-    available: 10 * GIB - 1,
-    required: 10 * GIB,
-  });
-  assert_eq!(message.key, "runs.preflight.buildSpaceLow");
-  assert_eq!(
-    message.args,
-    vec![
-      ("target", target.display().to_string()),
-      ("available", "9.9".to_owned()),
-      ("required", "10.0".to_owned()),
-    ]
-  );
-}
-
-#[test]
-fn preflight_inaccessible_target_message_names_the_configured_folder() {
-  let target = PathBuf::from("/build/target");
-  let message = preflight_message(&PreflightProblem::BuildSpaceUnavailable { target: target.clone() });
-  assert_eq!(message.key, "runs.preflight.buildSpaceUnavailable");
-  assert_eq!(message.args, vec![("target", target.display().to_string())]);
 }
 
 #[test]

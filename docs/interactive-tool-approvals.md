@@ -186,12 +186,9 @@ before they reach activity tracking or storage, including their JSON-escaped for
 
 ## Build directories
 
-An absolute project `CARGO_TARGET_DIR` is a build root. Agents and command steps in a worktree receive
-`<root>/worktrees/<worktree-directory>`, and a command tool's own absolute override is scoped the same
-way. Sequential steps and resumed invocations in one worktree reuse that directory; parallel
-worktrees use distinct directories. Relative values already resolve inside a worktree and are kept.
-The configured project environment is not rewritten. New worktrees start cold, so the host preflight
-requires the cold-target free-space reserve even when the build root contains other cached artifacts.
+Project Environment variables reach agents and command tools as written; nothing is rewritten per
+worktree, whatever a variable names. A build tool that writes into the worktree by default keeps
+its output there, and it goes away with the worktree.
 
 ## Interrupted decisions
 

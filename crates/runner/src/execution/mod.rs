@@ -16,7 +16,6 @@
 mod again;
 mod attach;
 mod board;
-mod build_space;
 mod checkpoint;
 mod codebase_index;
 mod control;
@@ -32,6 +31,7 @@ mod record;
 mod recovery;
 mod run;
 mod step;
+mod task_groups;
 mod tool;
 mod tool_approval;
 mod work;
@@ -117,6 +117,7 @@ struct Inner {
   /// Serializes requests that start a task or change a run while its task may end. A fallback
   /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
+  group_retries: task_groups::GroupRetries,
 }
 
 impl Scheduler {
@@ -130,6 +131,7 @@ impl Scheduler {
         notifier,
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
+        group_retries: task_groups::GroupRetries::default(),
       }),
     }
   }
@@ -166,7 +168,16 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    self.active_runs().is_empty() && self.inner.continuing.try_lock().is_ok()
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() {
+      return false;
+    }
+    match self.has_pending_task_groups() {
+      Ok(pending) => !pending,
+      Err(error) => {
+        tracing::error!(?error, "cannot establish whether queued groups are idle");
+        false
+      }
+    }
   }
 
   /// Creates and starts the run of queued task `task`, or finds the one an earlier request with
@@ -181,12 +192,13 @@ impl Scheduler {
       .map_err(|error| read_failed("cannot read runs", error))?
     {
       if recorded.status() == &RunStatus::Pending {
+        self.check_group_start(&db, task, Some(&recorded))?;
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
     }
+    self.check_group_start(&db, task, None)?;
     self.admit(&db)?;
     let prepared = prepare::prepare_first(&mut db, root, key, task)?;
     self.begin(db, prepared)
@@ -231,7 +243,6 @@ impl Scheduler {
     if let Some(recorded) = recorded {
       if recorded.status() == &RunStatus::Pending {
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
@@ -242,9 +253,6 @@ impl Scheduler {
     if let Some(confirmed) = &remove_worktrees {
       again::remove_worktrees(root, &previous, confirmed)?;
     }
-    // The confirmed cleanup can free the shared build target's volume. Check after it, but
-    // before recording this run or creating its worktree.
-    build_space::preflight(&db, root)?;
     let prepared = prepare::record(&mut db, root, key, checked)?;
     self.begin(db, prepared)
   }

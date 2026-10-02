@@ -109,7 +109,7 @@ fn load_pipeline(
 
 /// Problems the runner would refuse the run for, as far as the configuration shows them. The
 /// runner checks again and also checks the repository.
-fn check(
+pub(crate) fn check(
   db: &ProjectDb,
   details: &TaskDetails,
   selected_version: VersionNumber,
@@ -171,23 +171,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     }
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
-    PreflightProblem::BuildSpaceLow {
-      target,
-      available,
-      required,
-    } => Message::new("runs.preflight.buildSpaceLow")
-      .with("target", target.display().to_string())
-      .with("available", gib(*available))
-      .with("required", gib(*required)),
-    PreflightProblem::BuildSpaceUnavailable { target } => {
-      Message::new("runs.preflight.buildSpaceUnavailable").with("target", target.display().to_string())
-    }
   }
-}
-
-fn gib(bytes: u64) -> String {
-  let tenths = u128::from(bytes) * 10 / (1024_u128 * 1024 * 1024);
-  format!("{}.{}", tenths / 10, tenths % 10)
 }
 
 /// What a person reads when the start request fails, including an unconfirmed outcome.
@@ -198,6 +182,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
+    RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => vec![Message::new("runs.unreadable.rejected")],
     RunRequestError::Rejected(
       rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
@@ -278,6 +263,10 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
     RunRequestError::Rejected(Rejection::WorktreeRemoved) => Message::new("runs.control.worktreeRemoved"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
+    RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold)
+      .into_iter()
+      .next()
+      .unwrap_or_else(|| Message::new("runs.control.failed")),
     RunRequestError::Rejected(Rejection::RunUnreadable { .. }) => Message::new("runs.unreadable.rejected"),
     RunRequestError::Rejected(
       rejection @ (Rejection::DailyBudgetUsed { .. } | Rejection::NoAgentSlot { .. } | Rejection::ShuttingDown),
@@ -306,7 +295,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun
       | Rejection::LimitNotAboveUsed {
-        limit: RunLimit::DailyBudget,
+        limit: RunLimit::DailyBudget | RunLimit::GroupBudget,
       }
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued

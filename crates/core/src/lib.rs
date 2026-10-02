@@ -28,5 +28,7 @@ pub mod run;
 pub mod secret;
 pub mod store;
 pub mod task;
+pub mod task_group;
+pub mod task_selection;
 pub mod time;
 pub mod tokens;

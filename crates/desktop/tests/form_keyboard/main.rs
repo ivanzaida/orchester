@@ -52,6 +52,7 @@ mod tab_links;
 mod tabs;
 mod tabs_live;
 mod tabs_window;
+mod task_bulk;
 mod task_graph;
 mod task_run;
 mod tool_run;

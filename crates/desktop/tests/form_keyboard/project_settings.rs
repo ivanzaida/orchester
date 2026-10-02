@@ -2,9 +2,14 @@
 //! settings form's buttons take Tab stops; the tabs are pointer-only. Buttons that run `gh` or
 //! `git` are not pressed: the tests never run the real programs.
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
-use orchester_core::{limits::ProjectLimits, store::SettingsStore, tokens::TokenBudget};
+use orchester_core::{
+  limits::ProjectLimits,
+  resource::{CommandEnvironment, VariableName},
+  store::SettingsStore,
+  tokens::TokenBudget,
+};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -234,6 +239,13 @@ fn set_variables(desktop: &mut Desktop, text: &str) {
   desktop.pass();
 }
 
+/// The variables field is the form's only stop, so Tab keeps the focus there: the field is left by
+/// pressing elsewhere, which saves it.
+fn leave_variables(desktop: &mut Desktop) {
+  desktop.press("settings-environment-notice");
+  assert_ne!(desktop.focused().as_deref(), Some(VARIABLES));
+}
+
 fn stored_environment(repo: &Path) -> Vec<(String, String)> {
   ProjectDb::open(repo)
     .expect("open")
@@ -245,54 +257,55 @@ fn stored_environment(repo: &Path) -> Vec<(String, String)> {
 }
 
 #[test]
-fn project_settings_environment_saves_valid_variables_and_suggests_a_shared_build_folder() {
+fn project_settings_environment_saves_valid_variables() {
   let mut desktop = Desktop::with_project();
-  std::fs::write(desktop.repo().join("Cargo.toml"), "[workspace]\n").expect("a Rust repository");
+  let stored = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("LOG_LEVEL").expect("name"),
+    "debug".to_owned(),
+  )]))
+  .expect("environment");
+  ProjectDb::open(desktop.repo())
+    .expect("open")
+    .save_project_environment(&stored)
+    .expect("saved");
   settings(&mut desktop);
   desktop.click("settings-tab-environment");
-  desktop.wait_for("settings-environment-target");
-  assert!(shows(
-    &mut desktop,
-    "settings-environment-target",
-    "Share one build folder between run worktrees"
-  ));
+  desktop.wait_until("the stored variables", |desktop| {
+    desktop.tree.get_element_by_id(VARIABLES).is_some() && desktop.value(VARIABLES) == "LOG_LEVEL=debug"
+  });
   // A line that is not NAME=value says so and saves nothing when the field is left.
   desktop.tab_to(VARIABLES, 5);
-  set_variables(&mut desktop, "RUST_LOG info");
-  desktop.tab();
+  set_variables(&mut desktop, "LOG_LEVEL info");
+  leave_variables(&mut desktop);
   assert!(shows(
     &mut desktop,
     "settings-environment",
-    "Write each variable as NAME=value: RUST_LOG info"
+    "Write each variable as NAME=value: LOG_LEVEL info"
   ));
-  assert!(stored_environment(desktop.repo()).is_empty());
+  assert_eq!(
+    stored_environment(desktop.repo()),
+    [("LOG_LEVEL".to_owned(), "debug".to_owned())]
+  );
   desktop.tab_to(VARIABLES, 5);
-  set_variables(&mut desktop, "RUST_LOG=info");
-  desktop.tab();
+  set_variables(&mut desktop, "LOG_LEVEL=info");
+  leave_variables(&mut desktop);
   let repo = desktop.repo().to_path_buf();
-  desktop.settle("the saved variable", |_| stored_environment(&repo).len() == 1);
-  // The suggestion adds the shared folder beside the worktrees and saves it.
-  desktop.click("settings-environment-add-target");
-  let target = repo.join(".orchester").join("target").to_string_lossy().into_owned();
-  desktop.settle("the saved build folder", |_| stored_environment(&repo).len() == 2);
+  desktop.settle("the saved variable", |_| {
+    stored_environment(&repo) == [("LOG_LEVEL".to_owned(), "info".to_owned())]
+  });
+  // A variable that names a folder is stored as written, like any other.
+  let folder = repo.join(".orchester").join("build").to_string_lossy().into_owned();
+  desktop.tab_to(VARIABLES, 5);
+  set_variables(&mut desktop, &format!("LOG_LEVEL=info\nBUILD_DIR={folder}"));
+  leave_variables(&mut desktop);
+  desktop.settle("the saved folder variable", |_| stored_environment(&repo).len() == 2);
   assert_eq!(
     stored_environment(&repo),
     [
-      ("CARGO_TARGET_DIR".to_owned(), target.clone()),
-      ("RUST_LOG".to_owned(), "info".to_owned())
+      ("BUILD_DIR".to_owned(), folder),
+      ("LOG_LEVEL".to_owned(), "info".to_owned())
     ]
   );
-  assert!(desktop.value(VARIABLES).contains(&format!("CARGO_TARGET_DIR={target}")));
-  desktop.settle("the suggestion to go", |tree| {
-    tree.get_element_by_id("settings-environment-target").is_none()
-  });
-  // Once it is set, agents that edit files are said to need the folder among their writable folders.
-  desktop.wait_for("settings-environment-agents");
-  assert!(shows(
-    &mut desktop,
-    "settings-environment-agents",
-    "Agents need permission to write to CARGO_TARGET_DIR"
-  ));
   desktop.settle("the saved status", |tree| {
     tree
       .get_element_by_id("settings-save-status")

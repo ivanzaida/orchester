@@ -17,7 +17,11 @@ use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{ProjectDb, plans, resources::version_number, tasks::snapshot_new_run};
+use super::{
+  ProjectDb, plans,
+  resources::version_number,
+  tasks::{is_queued, snapshot_new_run},
+};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, millis_column, tokens_column},
@@ -28,15 +32,34 @@ const PERMISSIONS_SCHEMA: u32 = 1;
 /// Schema 2: token budgets. Schema 1 logs are upgraded when read (`legacy`).
 const EVENT_SCHEMA: u32 = 2;
 
-impl RunStore for ProjectDb {
-  type Error = RunStoreError;
+impl ProjectDb {
+  /// [`RunStore::create_run`] for a task the caller found queued: the task must still be queued
+  /// when the run is recorded, in the same transaction. A person may have taken it back to the
+  /// drafts since the caller checked it (a held group's task), and a draft never has a run.
+  pub fn create_run_of_queued_task(
+    &mut self,
+    key: IdempotencyKey,
+    new: NewRun,
+    now: Timestamp,
+  ) -> Result<Run, RunStoreError> {
+    self.record_run(key, new, now, true)
+  }
 
-  fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
+  fn record_run(
+    &mut self,
+    key: IdempotencyKey,
+    new: NewRun,
+    now: Timestamp,
+    queued: bool,
+  ) -> Result<Run, RunStoreError> {
     let key = key.to_string();
     let project = self.project.key().clone();
     let transaction = self.connection.transaction()?;
     if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
+    }
+    if queued && !is_queued(&transaction, new.task)? {
+      return Err(RunStoreError::TaskNotQueued(new.task));
     }
     let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
     let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
@@ -46,6 +69,17 @@ impl RunStore for ProjectDb {
     transaction.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [number + 1])?;
     transaction.commit()?;
     Ok(run)
+  }
+}
+
+impl RunStore for ProjectDb {
+  type Error = RunStoreError;
+
+  /// Records the run without checking the task's status, which tests use to set up runs of
+  /// drafts. Production code records runs with [`ProjectDb::create_run_of_queued_task`], which
+  /// rechecks that the task is still queued.
+  fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
+    self.record_run(key, new, now, false)
   }
 
   fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {
