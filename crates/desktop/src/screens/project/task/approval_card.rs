@@ -84,10 +84,10 @@ pub(super) fn review_card(ctx: &mut Ctx, run: &RunView) -> Option<Element> {
   )
 }
 
-/// What step `step` waits on, as its progress row says it (*Waiting for you · pencil batch_design ·
+/// What the step keyed `step` waits on, as its progress row says it (*Waiting for you · pencil batch_design ·
 /// since 14:06*); `None` when no request of `waiting` is the step's.
 pub(super) fn waiting_on(ctx: &Ctx, waiting: &[ShownApproval], step: &str) -> Option<Arc<str>> {
-  let shown = waiting.iter().find(|shown| shown.step.as_deref() == Some(step))?;
+  let shown = waiting.iter().find(|shown| shown.step_key.as_deref() == Some(step))?;
   let approval = &shown.approval;
   let subject = if approval.command {
     let (line, more) = shown.first_line();

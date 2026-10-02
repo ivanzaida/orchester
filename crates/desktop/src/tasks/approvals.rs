@@ -12,7 +12,7 @@ use std::{
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, EngineVendor},
-  id::TaskId,
+  id::{StepExecutionId, TaskId},
   integration::WORKTREES_DIR,
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId, VersionNumber},
@@ -76,6 +76,8 @@ pub struct ShownApproval {
   pub task: Option<Arc<str>>,
   pub task_id: Option<TaskId>,
   pub step: Option<Arc<str>>,
+  /// The asking step's key, which its progress row is named by.
+  pub step_key: Option<Arc<str>>,
   /// A command's working folder relative to the repository when it lies in it, else as recorded.
   pub cwd: Option<String>,
   pub choices: ApprovalChoices,
@@ -162,7 +164,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
       step.as_ref().map(|step| step.profile.number),
     ),
     (
-      &agent_worktree(repo_root, &approval),
+      &agent_worktree(repo_root, run.as_ref(), &approval),
       &writable,
       provider == Some(AgentProvider::CodexCli),
     ),
@@ -176,6 +178,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
     run: run.as_ref().map(Run::number),
     task_id: task.as_ref().map(Task::id),
     task: task.map(|task| Arc::from(task.key().to_string())),
+    step_key: step.as_ref().map(|step| step.key.clone()),
     step: step.map(|step| step.name),
     cwd: approval
       .command
@@ -188,12 +191,21 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
   }
 }
 
-/// The worktree the asking agent works in, as the runner made it: its step execution's own when the step
-/// runs beside others of its run, else the run's.
-fn agent_worktree(repo_root: &Path, approval: &PendingToolApproval) -> PathBuf {
-  let step = repo_root.join(WORKTREES_DIR).join(approval.execution.to_string());
-  if step.is_dir() {
-    step
+/// The worktree the asking agent works in, as the runner picks it (`execution::workspace`): the
+/// worktree of the execution it recovers, or of the one that recovered, as far back as one exists; else
+/// its step execution's own, when the step runs beside others of its run; else the run's.
+pub fn agent_worktree(repo_root: &Path, run: Option<&Run>, approval: &PendingToolApproval) -> PathBuf {
+  let worktrees = repo_root.join(WORKTREES_DIR);
+  let own = |execution: StepExecutionId| worktrees.join(execution.to_string());
+  let mut previous = run.and_then(|run| run.recovered_execution(approval.execution));
+  while let Some(earlier) = previous {
+    if own(earlier).is_dir() {
+      return own(earlier);
+    }
+    previous = run.and_then(|run| run.recovered_execution(earlier));
+  }
+  if own(approval.execution).is_dir() {
+    own(approval.execution)
   } else {
     run_worktree(repo_root, approval.run)
   }
@@ -210,6 +222,7 @@ fn relative_cwd(repo_root: &Path, target: Option<&str>) -> Option<String> {
 
 /// The asking step as the run pinned it.
 struct PinnedStep {
+  key: Arc<str>,
   name: Arc<str>,
   profile: PinnedVersion,
   model: ModelId,
@@ -223,6 +236,7 @@ fn step_of(run: &Run, approval: &PendingToolApproval) -> Option<PinnedStep> {
   };
   let name = run.snapshot().body().step(&key)?.name.as_str().into();
   Some(PinnedStep {
+    key: key.as_str().into(),
     name,
     profile: *profile,
     model: model.clone(),

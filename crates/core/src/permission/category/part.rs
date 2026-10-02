@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
   CommandCategory,
+  install::InstallSource,
   programs::{Judged, Kind},
 };
 use crate::permission::CommandPrefix;
@@ -73,7 +74,7 @@ pub struct CommandPart {
   pub(super) outside_write: Option<String>,
   pub(super) outside_delete: Option<String>,
   /// Where an install comes from and the first package named ([`Judged::source`]).
-  pub(super) source: Option<(String, Option<String>)>,
+  pub(super) source: Option<InstallSource>,
   /// The folders outside the worktree and its writable folders that the part names or writes.
   pub(super) outside: Vec<PathBuf>,
   /// A later part of the same program and subcommand can be alike ([`Judged::alike`]).

@@ -307,3 +307,22 @@ async fn approval_choices_auto_approval_still_asks_about_a_write_outside() {
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(started.decisions(), [DecidedBy::PersonDeny]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_a_credential_read_is_marked_as_one() {
+  // A dot file of the home folder that does not exist: a credential location by where it lies.
+  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"], false)).await;
+  let run = started.answer_first(ApprovalAnswer::Once).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let secrets: Vec<bool> = started
+    .db()
+    .activity(started.id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::ToolDecided { decision, .. } => Some(decision.secrets),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(secrets, [true]);
+}

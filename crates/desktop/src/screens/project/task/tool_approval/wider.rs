@@ -161,15 +161,17 @@ fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
   })
 }
 
-/// *Approve everything in this run*; while the run already auto-approves it is on, and this request
-/// reached you because auto-approval leaves it to a person.
+/// *Approve everything in this run*; while the run already auto-approves it is on, and says why this
+/// request waits: auto-approval leaves it to a person, or it came before auto-approval was on.
 fn approve_run(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
+  let on_key = if shown.choices.auto_asks {
+    "runs.toolApproval.wider.runOn"
+  } else {
+    "runs.toolApproval.wider.runOnEarlier"
+  };
   let (covers, offer) = if shown.auto_approving {
-    (
-      ctx.t_args("runs.toolApproval.wider.runOn", [("run", run.as_str())]),
-      Offer::Unavailable,
-    )
+    (ctx.t_args(on_key, [("run", run.as_str())]), Offer::Unavailable)
   } else {
     (
       ctx.t_args("runs.toolApproval.wider.runCovers", [("run", run.as_str())]),

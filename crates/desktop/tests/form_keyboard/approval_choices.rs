@@ -7,9 +7,12 @@
 //! bar shows that problem in place of the waiting requests (`tests/status_bar/approvals.rs` shows them).
 
 use orchester_core::{
-  id::RunId,
-  run::{PendingToolApproval, RuleScope},
+  id::{InvocationId, RunId, StepExecutionId},
+  resource::ModelId,
+  run::{Invocation, PendingToolApproval, RuleScope, Run, WaitReason},
+  store::{ActivityStore, RunStore},
 };
+use orchester_desktop::tasks::approvals::agent_worktree;
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -17,7 +20,7 @@ use crate::{
   harness::{Desktop, expected},
   native_run::native_run,
   task_run::has,
-  unreadable_run::at,
+  unreadable_run::{at, started},
 };
 
 const DIALOG: &str = "tool-approval-dialog";
@@ -229,4 +232,124 @@ fn open_task(desktop: &mut Desktop) {
   desktop.wait_for("task-row-KON-1");
   desktop.click("task-row-KON-1");
   desktop.wait_for("task-page");
+}
+
+/// An MCP request of `run`'s `invocation`, the `number`th.
+fn mcp_request(run: &Run, invocation: &Invocation, number: i64) -> PendingToolApproval {
+  PendingToolApproval {
+    id: format!("{}:call_{number}", invocation.id),
+    run: run.id(),
+    execution: invocation.execution,
+    invocation: invocation.id,
+    agent: "Designer".to_owned(),
+    command: false,
+    scope: None,
+    server: "pencil".to_owned(),
+    action: format!("batch_design_{number}"),
+    target: None,
+    requested_at: at(20 + number),
+    native: None,
+  }
+}
+
+/// KON-1's run #1 waiting on one request, and run #2, which the task page shows, whose step waits for
+/// one request of its own.
+fn two_runs_waiting() -> Desktop {
+  Desktop::with_seeded_project(|repo| {
+    let (first, invocation) = native_run(repo);
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    db.request_tool_approval(&mcp_request(&first, &invocation, 0))
+      .expect("pending approval");
+    let mut second = started(&mut db, (first.task(), first.snapshot()), 2, 30);
+    let execution = second.attempts()[0].executions()[0].id();
+    let mut events = second.start_step(execution, at(31)).expect("start the step");
+    events.extend(
+      second
+        .wait_step(execution, WaitReason::Approval, at(33))
+        .expect("waits"),
+    );
+    db.append_events(&second, &events).expect("append");
+    let invocation = db
+      .start_invocation(
+        second.id(),
+        execution,
+        &ModelId::new("deepseek-v4-pro").expect("model"),
+        at(32),
+      )
+      .expect("invocation");
+    db.request_tool_approval(&mcp_request(&second, &invocation, 9))
+      .expect("pending approval");
+  })
+}
+
+#[test]
+fn approval_choices_subject_line_names_the_server_policy_and_wait() {
+  let (mut desktop, _) = open(1);
+  assert!(shows(&mut desktop, "tool-approval-category", "pencil"));
+  assert!(shows(&mut desktop, "tool-approval-policy", "Asks before MCP actions"));
+  assert!(shows(&mut desktop, "tool-approval-waiting", "waiting since"));
+}
+
+#[test]
+fn approval_choices_approve_everything_shows_on_while_the_run_auto_approves() {
+  let (mut desktop, run) = waiting(1);
+  ProjectDb::open(desktop.repo())
+    .expect("open")
+    .set_run_auto_approve(run, Some(true))
+    .expect("auto-approves");
+  desktop.wait_for(DIALOG);
+  // Auto-approval would answer an MCP call, so this one came before it was on.
+  desktop.wait_until("the tile says the run auto-approves", |desktop| {
+    shows(desktop, "tool-approval-approve-run", "came before it was on")
+  });
+}
+
+#[test]
+fn approval_choices_waiting_step_and_requests_in_other_runs() {
+  let mut desktop = two_runs_waiting();
+  desktop.wait_for(DIALOG);
+  desktop.press("tool-approval-decide-later");
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
+  open_task(&mut desktop);
+  desktop.wait_for("task-approval-card");
+  assert!(shows(
+    &mut desktop,
+    "task-approval-card",
+    "1 more request waits in another run"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "task-progress-steps",
+    "Waiting for you · pencil batch_design_9 · since"
+  ));
+}
+
+#[test]
+fn approval_choices_agent_worktree_is_the_step_executions_own_or_the_runs() {
+  let repo = tempfile::tempdir().expect("repository");
+  let (run, execution) = (RunId::generate(), StepExecutionId::generate());
+  let approval = PendingToolApproval {
+    id: "invocation:1".to_owned(),
+    run,
+    execution,
+    invocation: InvocationId::generate(),
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "cargo test".to_owned(),
+    target: None,
+    requested_at: at(1),
+    native: None,
+  };
+  let worktrees = repo.path().join(".orchester").join("worktrees");
+  assert_eq!(
+    agent_worktree(repo.path(), None, &approval),
+    worktrees.join(run.to_string())
+  );
+  std::fs::create_dir_all(worktrees.join(execution.to_string())).expect("the step's own worktree");
+  assert_eq!(
+    agent_worktree(repo.path(), None, &approval),
+    worktrees.join(execution.to_string())
+  );
 }

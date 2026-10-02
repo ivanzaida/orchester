@@ -130,6 +130,34 @@ struct Words {
 }
 
 impl Words {
+  /// An install from `registry`: of the packages file `listed_in` lists, else of `package`.
+  fn installs(ctx: &Ctx, registry: &str, package: Option<&str>, listed_in: Option<&str>) -> Self {
+    let (line, label, named) = match listed_in {
+      Some(file) => (
+        "runs.toolApproval.reason.installsListed",
+        "runs.toolApproval.commandBecause.installsListed",
+        Some(file),
+      ),
+      None => (
+        "runs.toolApproval.reason.installs",
+        "runs.toolApproval.commandBecause.installs",
+        package,
+      ),
+    };
+    let value = match named {
+      Some(named) => ctx.t_args(
+        "runs.toolApproval.reason.installsSource",
+        [("registry", registry), ("package", named)],
+      ),
+      None => registry.into(),
+    };
+    Self {
+      line,
+      label: Some(label),
+      value: Some(value),
+    }
+  }
+
   fn of(ctx: &Ctx, reason: &CommandReason) -> Self {
     let (line, label, value): (_, _, &str) = match reason {
       CommandReason::Unknown => {
@@ -139,20 +167,11 @@ impl Words {
           value: None,
         };
       }
-      CommandReason::Installs { registry, package } => {
-        let value = match package {
-          Some(package) => ctx.t_args(
-            "runs.toolApproval.reason.installsSource",
-            [("registry", registry.as_str()), ("package", package.as_str())],
-          ),
-          None => registry.as_str().into(),
-        };
-        return Self {
-          line: "runs.toolApproval.reason.installs",
-          label: Some("runs.toolApproval.commandBecause.installs"),
-          value: Some(value),
-        };
-      }
+      CommandReason::Installs {
+        registry,
+        package,
+        listed_in,
+      } => return Self::installs(ctx, registry, package.as_deref(), listed_in.as_deref()),
       CommandReason::DeletesOutside { path } => (
         "runs.toolApproval.reason.deletesOutside",
         "runs.toolApproval.commandBecause.deletesOutside",

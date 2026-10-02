@@ -9,7 +9,7 @@
 //! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
 //! credential location asks.
 
-use super::{files, gh, git, network, packages, powershell};
+use super::{files, gh, git, install::InstallSource, network, packages, powershell};
 use crate::permission::known_safe;
 
 /// What a command is by its words.
@@ -44,7 +44,7 @@ pub(super) struct Judged {
   /// It reads a credential store (a keychain, Windows credentials, a password manager, a token).
   pub(super) secret_store: bool,
   /// For an install, where the software comes from and the first package named.
-  pub(super) source: Option<(String, Option<String>)>,
+  pub(super) source: Option<InstallSource>,
   /// The subcommand, and where it starts among the arguments, for a program that has them.
   pub(super) subcommand: Option<(usize, String)>,
   /// A later command of the same program and subcommand can be alike; not when the arguments are a
@@ -111,9 +111,9 @@ impl Judged {
     self
   }
 
-  /// An install from `registry` of `package`.
-  pub(super) fn installed_from(mut self, registry: &str, package: Option<String>) -> Self {
-    self.source = Some((registry.to_owned(), package));
+  /// An install, from `source`.
+  pub(super) fn installed_from(mut self, source: InstallSource) -> Self {
+    self.source = Some(source);
     self
   }
 

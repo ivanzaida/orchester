@@ -15,8 +15,13 @@ pub enum CommandReason {
   RewritesHistory { command: String },
   /// It reads a credential location (`~/.ssh/id_rsa`) or a credential store (`security`).
   ReadsCredentials { what: String },
-  /// It installs software from `registry` (`crates.io`), naming `package` first when it names one.
-  Installs { registry: String, package: Option<String> },
+  /// It installs software from `registry` (`crates.io`, or one an option names): `package` first
+  /// when it names one, or the packages the file `listed_in` lists (`pip install -r requirements.txt`).
+  Installs {
+    registry: String,
+    package: Option<String>,
+    listed_in: Option<String>,
+  },
   /// It writes `path` outside the worktree.
   WritesOutside { path: String },
   /// It reaches the network (`command`: `git fetch`, `curl`).
@@ -44,7 +49,11 @@ impl ClassifiedCommand {
       (_, Some(part), _) => CommandReason::ReadsCredentials {
         what: part.secret_word.clone().unwrap_or_else(|| part.named()),
       },
-      (_, None, Some((registry, package))) => CommandReason::Installs { registry, package },
+      (_, None, Some(source)) => CommandReason::Installs {
+        registry: source.registry,
+        package: source.package,
+        listed_in: source.listed_in,
+      },
       (CommandCategory::OutsideWrite, ..) => CommandReason::WritesOutside {
         path: forcing.outside_write.clone().unwrap_or_else(|| forcing.named()),
       },

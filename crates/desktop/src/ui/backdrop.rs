@@ -4,9 +4,10 @@
 //! only the dialog and the title bar work: the title bar above keeps its drag and window controls,
 //! so the pointer passes through that band, while the status bar below is covered by a clear band
 //! that takes the pointer, so it shows no hover and takes no clicks. It never takes the focus, so
-//! Tab stays in the dialog. A dialog never touches the left and right window edges: a dialog that
-//! can shrink keeps `ExtraSpacing::DialogMargin` from them in a narrow window. The title bar's
-//! tabs, + and tab list do not react while a dialog is open ([`DialogLayer`]): the dialog belongs
+//! Tab stays in the dialog. A dialog never touches the window edges: a dialog that can shrink keeps
+//! `ExtraSpacing::DialogMargin` from the left and right in a narrow window, and from the scrim's top
+//! and bottom in a short one. The title bar's tabs, + and tab list do not react while a dialog is
+//! open ([`DialogLayer`]): the dialog belongs
 //! to its tab's page, and switching away would hide it.
 
 use std::sync::Arc;

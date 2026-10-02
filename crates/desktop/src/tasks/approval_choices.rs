@@ -17,8 +17,8 @@ use orchester_core::{
   },
   resource::{AgentProfile, Pipeline, ResourceKind, StepKind, VersionNumber},
   run::{
-    AlwaysUnavailable, ApprovalSubject, PendingToolApproval, RuleScope, SimilarUnavailable, always_prefixes,
-    codex_denial, denial_message,
+    AlwaysUnavailable, ApprovalSubject, AutoVerdict, PendingToolApproval, RuleScope, SimilarUnavailable,
+    always_prefixes, auto_verdict, codex_denial, denial_message,
   },
   store::{McpServerStore, ResourceStore},
 };
@@ -90,6 +90,9 @@ pub struct ApprovalChoices {
   pub secrets: bool,
   /// Why a command asks, from the classifier; `None` for an MCP call.
   pub reason: Option<CommandReason>,
+  /// Auto-approval would leave it to a person; otherwise it waits only because it came before the run
+  /// auto-approved, as auto-approval answers a request when it arrives.
+  pub auto_asks: bool,
 }
 
 impl ApprovalChoices {
@@ -147,6 +150,7 @@ impl ApprovalChoices {
         ApprovalSubject::McpTool { .. } => None,
       },
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      auto_asks: matches!(auto_verdict(&subject), AutoVerdict::Ask(_)),
       reason: match &subject {
         ApprovalSubject::Command(command) => command.reason(),
         ApprovalSubject::McpTool { .. } => None,

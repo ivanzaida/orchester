@@ -43,6 +43,7 @@ fn waiting(number: usize) -> ShownApproval {
     task: Some("ORC-146".into()),
     task_id: Some(TaskId::generate()),
     step: Some("Design".into()),
+    step_key: Some("design".into()),
     cwd: None,
     choices: ApprovalChoices {
       similar: Err(SimilarUnavailable::Unknown),
@@ -52,6 +53,7 @@ fn waiting(number: usize) -> ShownApproval {
       category: None,
       secrets: false,
       reason: None,
+      auto_asks: false,
     },
     asking: None,
     auto_approving: false,

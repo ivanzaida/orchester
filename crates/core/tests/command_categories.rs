@@ -212,6 +212,31 @@ fn command_categories_reason_names_what_asks() {
       CommandReason::Installs {
         registry: "crates.io".to_owned(),
         package: Some("serde".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "cargo add --features derive serde".to_owned(),
+      CommandReason::Installs {
+        registry: "crates.io".to_owned(),
+        package: Some("serde".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "pip install -r requirements.txt".to_owned(),
+      CommandReason::Installs {
+        registry: "PyPI".to_owned(),
+        package: None,
+        listed_in: Some("requirements.txt".to_owned()),
+      },
+    ),
+    (
+      "npm install --registry https://registry.example left-pad".to_owned(),
+      CommandReason::Installs {
+        registry: "https://registry.example".to_owned(),
+        package: Some("left-pad".to_owned()),
+        listed_in: None,
       },
     ),
     (

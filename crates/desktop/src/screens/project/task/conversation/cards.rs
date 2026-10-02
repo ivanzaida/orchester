@@ -281,9 +281,27 @@ pub(super) struct ApprovalCardProps {
 
 impl lurq::app::component::DevtoolsInspectable for ApprovalCardProps {}
 
+/// The answers the inline card gives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CardAnswer {
+  Once,
+  Deny,
+}
+
+impl lurq::app::component::DevtoolsInspectable for CardAnswer {}
+
+impl CardAnswer {
+  const fn answer(self) -> ApprovalAnswer {
+    match self {
+      Self::Once => ApprovalAnswer::Once,
+      Self::Deny => ApprovalAnswer::Deny,
+    }
+  }
+}
+
 /// A tool request (ORC-41) inline: who asks for what, and *Deny* and *Approve once* while it waits.
 pub(super) struct ApprovalCardView {
-  requested: Signal<Option<ApprovalAnswer>>,
+  requested: Signal<Option<CardAnswer>>,
 }
 
 impl Component for ApprovalCardView {
@@ -363,45 +381,45 @@ impl ApprovalCardView {
     let state = action.state().get();
     let busy = state.is_pending() || state.data.is_some();
     let requested = self.requested.get();
-    let press = |answer: ApprovalAnswer| {
+    let press = |answer: CardAnswer| {
       let (action, requested) = (action.clone(), self.requested.clone());
       let decision = ApprovalDecision {
         run: card.request.run,
         approval: card.request.id.clone(),
-        answer: answer.clone(),
+        answer: answer.answer(),
         command: card.request.command,
       };
       move || {
-        requested.set(Some(answer.clone()));
+        requested.set(Some(answer));
         action.run(decision.clone());
       }
     };
     // The answer under way says so on its button.
-    let label = |answer: ApprovalAnswer, idle: &str, under_way: &str| {
-      ctx.t(if busy && requested.as_ref() == Some(&answer) {
+    let label = |answer: CardAnswer, idle: &str, under_way: &str| {
+      ctx.t(if busy && requested == Some(answer) {
         under_way
       } else {
         idle
       })
     };
     let deny = ActionButton::new(label(
-      ApprovalAnswer::Deny,
+      CardAnswer::Deny,
       "runs.toolApproval.deny",
       "runs.toolApproval.denying",
     ))
     .id("conversation-approval-deny")
     .icon(Icon::X)
-    .on_click(press(ApprovalAnswer::Deny))
+    .on_click(press(CardAnswer::Deny))
     .enabled(!busy);
     let approve = ActionButton::new(label(
-      ApprovalAnswer::Once,
+      CardAnswer::Once,
       "runs.toolApproval.approveOnce",
       "runs.toolApproval.approving",
     ))
     .id("conversation-approval-approve")
     .icon(Icon::Check)
     .primary()
-    .on_click(press(ApprovalAnswer::Once))
+    .on_click(press(CardAnswer::Once))
     .enabled(!busy);
     Column::new()
       .spacing(SpacingSize::Sm)

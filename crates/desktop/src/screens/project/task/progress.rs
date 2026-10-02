@@ -32,7 +32,7 @@ pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool, waiting: &[Sho
     .spacing(SpacingSize::Sm)
     .with_children(rows.iter().map(|row| {
       let waiting_on = (row.state == ProgressState::NeedsYou)
-        .then(|| waiting_on(ctx, waiting, &row.step))
+        .then(|| waiting_on(ctx, waiting, &row.id))
         .flatten();
       progress_row(ctx, row, waiting_on)
     }))

@@ -13,6 +13,7 @@
 mod files;
 mod gh;
 mod git;
+mod install;
 mod network;
 mod network_tables;
 mod options;

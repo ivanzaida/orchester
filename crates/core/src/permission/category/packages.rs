@@ -5,7 +5,10 @@
 //! build, test or read must name only paths inside (`--target-dir`, `--manifest-path`, `-o`), else it
 //! is Unknown.
 
-use super::programs::{Judged, Kind, has_option};
+use super::{
+  install::InstallSource,
+  programs::{Judged, Kind, has_option},
+};
 
 /// A program's subcommands by what they do.
 struct Manager {
@@ -142,8 +145,11 @@ const FETCH_AND_RUN: [&str; 4] = ["npx", "pnpx", "bunx", "uvx"];
 pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   if FETCH_AND_RUN.contains(&program) {
     let registry = if program == "uvx" { "PyPI" } else { "npm" };
-    let package = args.iter().find(|arg| !arg.starts_with('-')).cloned();
-    return Some(Judged::of(Kind::Network).installing().installed_from(registry, package));
+    return Some(
+      Judged::of(Kind::Network)
+        .installing()
+        .installed_from(InstallSource::of(registry, args)),
+    );
   }
   let manager = MANAGERS.iter().find(|manager| manager.programs.contains(&program))?;
   let Some((at, sub)) = subcommand(args) else {
@@ -151,7 +157,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     return Some(if program == "yarn" {
       Judged::of(Kind::Network)
         .installing()
-        .installed_from(manager.registry.unwrap_or(program), None)
+        .installed_from(InstallSource::of(manager.registry.unwrap_or(program), &[]))
     } else {
       Judged::of(Kind::ReadOnly)
     });
@@ -160,11 +166,10 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   // Installs and builds run the packages' and the worktree's own code whatever their arguments, so a
   // prefix of them allows nothing more; `clean` deletes the folder it is given.
   let judged = if has_option(args, &["-g", "--global", "--location=global"]) || manager.installs.contains(&sub) {
-    let package = rest.iter().find(|arg| !arg.starts_with('-')).cloned();
     Judged::of(Kind::Network)
       .installing()
       .prefix_stays()
-      .installed_from(manager.registry.unwrap_or(program), package)
+      .installed_from(InstallSource::of(manager.registry.unwrap_or(program), rest))
   } else if manager.builds.contains(&sub) {
     let judged = Judged::of(Kind::Worktree).inside_all(rest);
     if sub == "clean" { judged } else { judged.prefix_stays() }
