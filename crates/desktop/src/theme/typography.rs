@@ -174,10 +174,12 @@ pub enum ExtraTypography {
   Criterion,
   /// A project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`): 9/600.
   TabInitial,
+  /// What a message in the conversation timeline says, a person's or an agent's (`V17jfc`).
+  TimelineMessage,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 79] = [
+  const ALL: [Self; 80] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -257,6 +259,7 @@ impl ExtraTypography {
     Self::ChangeLine,
     Self::Criterion,
     Self::TabInitial,
+    Self::TimelineMessage,
   ];
 
   fn name(self) -> &'static str {
@@ -351,6 +354,7 @@ impl ExtraTypography {
       Self::ChangeLine => "change-line",
       Self::Criterion => "criterion",
       Self::TabInitial => "tab-initial",
+      Self::TimelineMessage => "timeline-message",
       icon => icon.icon_name().expect("every role without a text name is an icon"),
     }
   }
@@ -511,6 +515,7 @@ impl ExtraTypography {
       Self::ChangeLine => leading(1.4, style(12.0, FontWeight::Normal, TEXT)),
       Self::Criterion => leading(1.5, style(12.0, FontWeight::Normal, TEXT)),
       Self::TabInitial => style(9.0, FontWeight::SemiBold, TEXT),
+      Self::TimelineMessage => leading(1.6, style(13.0, FontWeight::Normal, TEXT)),
       icon_role => icon(
         icon_role
           .icon_size()

@@ -1,11 +1,18 @@
 //! How an agent step starts the Claude Code CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
 //!
-//! `claude -p --output-format stream-json --verbose --model <model> [--effort <e>]
+//! `claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages
+//!  --model <model> [--effort <e>]
 //!  --strict-mcp-config --setting-sources "" --disable-slash-commands [--mcp-config <file> [<approvals>]]
 //!  [--permission-prompt-tool mcp__Orchester__approve] <permissions> [--add-dir <folder>]... [--add-dir <skills>]
 //!  (--session-id <new uuid> | --resume <session>)`
 //!
-//! in the worktree as the process's working directory, with the prompt on standard input.
+//! in the worktree as the process's working directory, with the prompt as the first stream-json user
+//! message on standard input ([`input_line`]).
+//!
+//! - Input: standard input stays open while the agent works, so that a person's message sent now reaches it as another
+//!   user message (`docs/design/orchester-workspace.md`, "Conversation (merged with Activity)"); the CLI prints each
+//!   message back as it takes it (`--replay-user-messages`). The runner closes the input once a turn ends, and the CLI
+//!   exits after the turns it was given.
 //!
 //! - `stream-json` needs `--verbose` in print mode; without it the CLI exits with an error.
 //! - Isolation from the user's own setup: `--strict-mcp-config` loads no MCP server but the invocation's own,
@@ -74,6 +81,12 @@ pub fn result_schema() -> String {
   schema.to_string()
 }
 
+/// `text` as a stream-json user message, one line of the CLI's input.
+pub fn input_line(text: &str) -> String {
+  serde_json::json!({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
+    .to_string()
+}
+
 /// Which session an invocation works in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClaudeSession<'a> {
@@ -130,9 +143,12 @@ impl ClaudeInvocation<'_> {
   pub fn args(&self) -> Vec<OsString> {
     let mut args: Vec<String> = [
       "-p",
+      "--input-format",
+      "stream-json",
       "--output-format",
       "stream-json",
       "--verbose",
+      "--replay-user-messages",
       "--model",
       self.model,
     ]
@@ -210,11 +226,11 @@ impl ClaudeInvocation<'_> {
     }
   }
 
-  /// The command that runs the step: in the worktree, with `prompt` on standard input, the
-  /// allowed part of `environment` and the variables the project adds (`project`).
+  /// The command that runs the step: in the worktree, with `prompt` as the first line of its
+  /// input, the allowed part of `environment` and the variables the project adds (`project`).
   pub fn command(
     &self,
-    prompt: String,
+    prompt: &str,
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
@@ -233,7 +249,7 @@ impl ClaudeInvocation<'_> {
       self.executable,
       self.args(),
       self.worktree,
-      prompt,
+      input_line(prompt),
       (environment, project, &[]),
     )
   }

@@ -250,3 +250,15 @@ fn a_completed_patch_reports_the_files_it_changed() {
   }}});
   assert!(stream.parse(&declined.to_string()).expect("item").is_empty());
 }
+
+#[test]
+fn a_user_message_the_turn_took_is_reported_with_its_text() {
+  // Codex 0.159.2 (probe 2026-10-02): a message added with `turn/steer` while a command ran became a
+  // `userMessage` item right after the command completed.
+  let mut stream = AppServerStream::default();
+  let taken = json!({"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{
+    "id":"item-9","type":"userMessage","content":[{"type":"text","text":"Also cover cancel.","text_elements":[]}]
+  }}});
+  let updates = stream.parse(&taken.to_string()).expect("item");
+  assert!(matches!(updates.as_slice(), [Update::InputTaken(text)] if text == "Also cover cancel."));
+}

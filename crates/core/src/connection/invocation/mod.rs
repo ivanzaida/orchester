@@ -12,7 +12,7 @@ use std::{
 };
 
 pub use self::{
-  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, result_schema},
+  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, input_line, result_schema},
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
 };
@@ -129,14 +129,14 @@ fn unicode_folders(folders: &[PathBuf]) -> Result<(), InvocationError> {
   }
 }
 
-/// The command of an agent CLI: `args` after the program, in the worktree, with `prompt` on
-/// standard input, the allowed part of `environment`, the variables the project adds (`project`)
-/// and `secrets`, each replacing ones of the same name.
+/// The command of an agent CLI: `args` after the program, in the worktree, reading a line protocol
+/// on standard input that starts with `first` and stays open, the allowed part of `environment`, the variables the
+/// project adds (`project`) and `secrets`, each replacing ones of the same name.
 fn agent_command(
   executable: &Path,
   args: Vec<OsString>,
   worktree: &Path,
-  prompt: String,
+  first: String,
   (environment, project, secrets): (
     impl IntoIterator<Item = (OsString, OsString)>,
     &CommandEnvironment,
@@ -156,6 +156,6 @@ fn agent_command(
   let command = Command::new(executable, args)
     .with_current_dir(worktree)
     .with_environment(variables)
-    .with_stdin(prompt);
+    .with_interactive_input(first);
   Ok(secrets.iter().cloned().fold(command, Command::with_secret_env))
 }

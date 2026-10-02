@@ -30,7 +30,7 @@ use crate::{
 const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
-pub(super) fn invocation_panel(
+pub(in crate::screens::project::task) fn invocation_panel(
   ctx: &Ctx,
   nav: &ProjectNav,
   run: &RunView,

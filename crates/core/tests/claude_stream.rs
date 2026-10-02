@@ -328,3 +328,30 @@ fn claude_stream_never_counts_a_message_twice_when_its_usage_repeats_or_shrinks(
     }
   );
 }
+
+#[test]
+fn claude_stream_keeps_what_the_cli_took_from_its_input_out_of_the_transcript() {
+  // Shaped like Claude Code 2.1.286 with `--replay-user-messages` (probe 2026-10-02): the prompt is
+  // printed back as it starts, a message sent during a tool call right after that call's result.
+  let mut stream = ClaudeStream::default();
+  let lines = [
+    r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Do it"}]},"isReplay":true}"#,
+    r#"{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pnpm test"}}],"usage":{"input_tokens":1,"output_tokens":1}}}"#,
+    r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok","is_error":false}]}}"#,
+    r#"{"type":"user","message":{"role":"user","content":"Also cover cancel."},"isReplay":true}"#,
+  ];
+  let events: Vec<AgentEvent> = lines
+    .iter()
+    .flat_map(|line| stream.parse(OutputStream::Stdout, line))
+    .collect();
+  assert!(
+    !events.iter().any(|event| matches!(event, AgentEvent::Raw { .. })),
+    "{events:?}"
+  );
+  assert_eq!(stream.take_replayed(), ["Do it", "Also cover cancel."]);
+  assert!(stream.take_replayed().is_empty(), "taken once");
+  assert_eq!(stream.results(), 0);
+  let result = r#"{"type":"result","subtype":"success","is_error":false,"result":"{\"outcome\":\"done\",\"summary\":\"Done\"}","usage":{"input_tokens":0,"output_tokens":0},"permission_denials":[]}"#;
+  stream.parse(OutputStream::Stdout, result);
+  assert_eq!(stream.results(), 1, "a result ends a turn");
+}

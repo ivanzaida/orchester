@@ -68,7 +68,8 @@ pub struct Supervised {
 
 impl Supervised {
   /// Starts `command` as [`orchester_exec::prepare`] builds it, writing its standard input, if
-  /// any, then closing it. Must be called within a Tokio runtime.
+  /// any, then closing it; an interactive one gets its first line, if any, and stays open. Must be
+  /// called within a Tokio runtime.
   pub fn start(command: &Command) -> Result<Self, SupervisorError> {
     let program = command.program().to_path_buf();
     let process = orchester_exec::prepare(command).map_err(|source| SupervisorError::Launch {
@@ -89,6 +90,18 @@ impl Supervised {
         source: io::Error::new(io::ErrorKind::BrokenPipe, "interactive child has no stdin"),
       })?;
       let (sender, receiver) = mpsc::channel(32);
+      if let Some(first) = command.stdin() {
+        let (ack, written) = oneshot::channel();
+        sender
+          .try_send((first.to_owned(), ack))
+          .expect("a new input channel has room for its first line");
+        // A first line the child does not take shows in how it ends.
+        tokio::spawn(async move {
+          if let Ok(Err(error)) = written.await {
+            tracing::warn!(%error, "cannot write the program's first input line");
+          }
+        });
+      }
       tokio::spawn(write_lines(stdin, receiver));
       Some(sender)
     } else {
@@ -126,6 +139,17 @@ impl Supervised {
     done
       .await
       .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "child stdin writer ended"))?
+  }
+
+  /// Closes an interactive child's standard input once the lines sent before have been written, so
+  /// that it sees the end of its input; later lines are refused.
+  pub fn close_input(&mut self) {
+    self.input = None;
+  }
+
+  /// Whether an interactive child's standard input is still open for lines.
+  pub const fn takes_input(&self) -> bool {
+    self.input.is_some()
   }
 
   /// Ends the process and everything it started. Its exit is reported as

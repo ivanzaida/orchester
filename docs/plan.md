@@ -308,6 +308,24 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
+`orchester/orc-61-run-1`
+
+- **Done 2026-10-02.** The task page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent
+  and person messages, tool groups, question, plan and tool-approval cards, problem rows, result cards, the run's end),
+  with the step filter, *Show* (All, Messages, Tools), search, the Details pane (closed by default, remembered),
+  following live with *Jump to latest · N new*, and the composer in every state (steer, queue, answer, plan changes,
+  follow-up, continue with instructions, not started, closed). The Activity tab is gone. *Send now* reaches the agent
+  at work after its running tool call: Codex through `turn/steer`, Claude Code through stream-json input (Claude Code
+  now always runs with `--input-format stream-json --replay-user-messages`); messages are queued, delivered mid-turn,
+  delivered at the end of the turn, or not delivered and kept (`docs/architecture/storage.md`, "Send now"). Live checks
+  on both CLIs: `docs/evidence/orc-61-send-now-2026-10-02.md`. Tests: `cargo test -p orchester-runner --features
+  test-agent --test send_now send_`, `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation
+  conversation`, `--test form_keyboard conversation` and `composer_`.
+- **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
+  Summary only; a failed step starts open; matched words are not highlighted. Design verification against `fTfl8` is the
+  pipeline's next step.
+
 ORC-57 · Native agent P1b: core native module
 
 - **Done 2026-10-02.** `orchester_core::native`: conversation items (`item`), the `ModelClient` boundary (`model`),

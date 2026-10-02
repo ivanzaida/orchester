@@ -76,6 +76,9 @@ pub const RADIUS_MARK: f32 = 2.0;
 pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 /// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
+/// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
+/// style (toolbar of `RrScB`).
+pub const RADIUS_SEGMENT: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
@@ -119,6 +122,9 @@ pub const SPACE_CHECK_INDENT: f32 = 28.0;
 /// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
 /// `L1B0m` in 04.B `W0Owo`).
 pub const SPACE_REASON_INDENT: f32 = 22.0;
+/// A tool group and a card's body in the conversation timeline start where a message's text does:
+/// past its 24px glyph and the 12px gap (`uoK7y`, the cards of `ZxYGh`, `haIEI`).
+pub const SPACE_TIMELINE_INDENT: f32 = 36.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;

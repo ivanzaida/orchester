@@ -141,6 +141,22 @@ at work takes one.
   run keeps messages queued until it continues; a failed run needs an explicit recovery message (below), while a
   cancelled run takes none.
   *DeliverMessages* only wakes a run; what is queued is read from the database.
+- **Send now (ORC-61).** A person's message is sent after the turn (`timing = 'after_turn'`, as above)
+  or now (`'now'`). The runner gives each message sent now and still queued, once, to the first agent at
+  work it reaches, while its turn runs: Codex with App Server's `turn/steer` (`expectedTurnId` the running
+  turn), Claude Code as another stream-json user message on its standard input (Claude Code now runs
+  with `--input-format stream-json --replay-user-messages`; the prompt is its first input line, and the
+  input closes once a turn ends). Both take it after the tool call that is running (checked live
+  2026-10-02, `docs/evidence/orc-61-send-now-2026-10-02.md`). It is *delivered* when the CLI shows it
+  took it — Codex's `userMessage` item, Claude Code printing it back — with `arrival = 'mid_turn'`, or
+  `'turn_end'` when Claude Code ended its turn first and takes it as its next turn. A message the turn
+  ended before (Codex: *no active turn to steer*; Claude Code: its input already closed) stays queued and
+  is delivered when the session continues to read it (`arrival = 'turn_end'`, as for every message the
+  continued session takes; `'prompt'` for one a new invocation started with). One the CLI refuses
+  (`undelivered_reason = 'refused'`) or that cannot be written to it within five seconds
+  (`'unwritable'`) is *not delivered*: it is kept, goes no further, and is queued again only when the
+  person chooses *Send after this turn* (the desktop's write; `timing` then becomes `'after_turn'`). If
+  the CLI takes one late after all, it is delivered then.
 - **Questions.** A result with the outcome `question` asks the person before the step can go on: its
   work is committed, the question is the agent's message, and the step waits for a message (like a
   plan, a run that only waits holds no agent slot and no active time). A message that reaches it

@@ -1,173 +1,331 @@
-//! The task conversation (02.12 `jgqPe`) end to end, headlessly, on the real runner and
-//! `orchester-fake-codex`: an agent's question shows in the conversation, in Needs you and in the
-//! status bar, and a reply written in the composer (Enter adds a line, Ctrl+Enter sends) resumes its
-//! session; Ask agent on a run ready for review puts the focus in the composer, and the message
-//! sent follows the run up until it is ready for review again.
+//! The Conversation tab's timeline (merged with Activity, ORC-61) end to end, headlessly, on the
+//! real runner and `orchester-fake-codex`: a step's tool events fold into one group between its
+//! agent's messages, with what the group did; *Show* narrows the timeline to messages or tools; a
+//! search keeps what matches and opens a group on its matching entries, or says it found nothing;
+//! the step filter says what it hides; the Details pane opens on demand; and while an agent works the
+//! timeline follows it, stops following when scrolled up and *Jump to latest* counts what came since.
 
-use orchester_core::{
-  run::{AttemptReason, RunStatus},
-  store::{ConversationStore, TaskStore},
-};
+use orchester_core::{connection::stream::AgentEvent, store::ActivityStore, time::Timestamp};
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, run_finished, seed},
+  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed, set_text},
 };
 
-fn desktop() -> Desktop {
+fn desktop(review: bool) -> Desktop {
   let (runner, fake) = programs();
-  Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false))
+  Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, review))
 }
 
-fn asked_in_status_bar(desktop: &mut Desktop) -> bool {
-  has(desktop, "status-activity") && shows(desktop, "status-activity", "Builder asks · KON-1")
-}
-
-/// Ctrl+Enter in the focused field.
-fn send_with_keyboard(desktop: &mut Desktop) {
+/// The finished run's Conversation tab, with its one step open.
+fn finished_conversation(review: bool) -> Desktop {
+  let mut desktop = desktop(review);
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  finished_on_page(&mut desktop);
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
   desktop
+}
+
+/// Presses the header of the Conversation tab's tool group whose summary says `text`: the fake CLIs'
+/// standard error is a group of unparsed lines of its own.
+pub(crate) fn open_group(desktop: &mut Desktop, text: &str) {
+  desktop.wait_until("the tool group", |desktop| {
+    desktop
+      .tree
+      .find_element(|element| {
+        element.id() == Some("conversation-group-toggle") && crate::github::contains_text(element, text)
+      })
+      .is_some()
+  });
+  let (x, y) = desktop
     .tree
-    .key_down("Enter".into(), "Enter".into(), false, true, false);
+    .find_element_mut(|element| {
+      element.id() == Some("conversation-group-toggle") && crate::github::contains_text(element, text)
+    })
+    .expect("the tool group")
+    .bounds()
+    .center();
+  desktop.tree.mouse_down(x, y, lurq::app::events::MouseButton::Left);
+  desktop.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
   desktop.pass();
 }
 
-/// The messages of the project's only task, a person's and the agent's.
-fn messages(desktop: &Desktop) -> usize {
+fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+  has(desktop, id) && shows(desktop, id, text)
+}
+
+/// The text of every element with `id`, in order.
+fn texts(desktop: &Desktop, id: &str) -> Vec<String> {
+  fn walk(element: lurq::node::element::ElementRef<'_>, id: &str, out: &mut Vec<String>) {
+    if element.id() == Some(id) {
+      out.push(text_of(element));
+    }
+    for child in element.children() {
+      walk(child, id, out);
+    }
+  }
+  fn text_of(element: lurq::node::element::ElementRef<'_>) -> String {
+    let own = element.text_content().unwrap_or_default().to_owned();
+    element
+      .children()
+      .into_iter()
+      .fold(own, |text, child| text + &text_of(child))
+  }
+  let mut out = Vec::new();
+  if let Some(root) = desktop.tree.root() {
+    walk(root, id, &mut out);
+  }
+  out
+}
+
+fn search(desktop: &mut Desktop, query: &str) {
+  set_text(desktop, "conversation-search", query);
+}
+
+#[test]
+fn conversation_timeline_folds_tool_events_into_a_group_between_messages() {
+  let mut desktop = finished_conversation(false);
+  // A finished step folds to its header; its tokens are in it, and Details is closed.
+  assert!(shows(&mut desktop, "activity-step-header", "Implement · Builder"));
+  assert!(shows(&mut desktop, "activity-step-header", "tokens"));
+  assert!(!has(&mut desktop, "conversation-agent-message"));
+  assert!(!has(&mut desktop, "activity-invocation"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-end",
+    "Run 1 is ready for your review"
+  ));
+  desktop.click("activity-step-header");
+  desktop.wait_until("the step's items", |desktop| has(desktop, "conversation-agent-message"));
+  assert!(shows(&mut desktop, "conversation-agent-message", "Appending the line."));
+  // The command and the file change are one group, named by what they did, after the message; the
+  // fake CLI's standard error, unparsed lines, is a group before it. The step result the agent wrote
+  // is its result card, not a message.
+  let summaries = texts(&desktop, "conversation-group-summary");
+  assert_eq!(summaries.len(), 2, "{summaries:?}");
+  assert!(summaries[0].ends_with("unparsed lines"), "{summaries:?}");
+  assert_eq!(summaries[1], "Ran echo hello >> README.md · edited 1 file");
+  let toggles = texts(&desktop, "conversation-group-toggle");
+  assert!(toggles[1].contains("2 tool calls"), "{toggles:?}");
+  assert!(!has(&mut desktop, "activity-entry"), "a group starts closed");
+  assert!(!shows(&mut desktop, "conversation", "\"outcome\""));
+  assert!(holds(&mut desktop, "conversation-main", "Implement done"));
+  assert!(shows(&mut desktop, "conversation-main", "Finished Implement"));
+  open_group(&mut desktop, "Ran echo");
+  desktop.wait_until("the group's entries", |desktop| {
+    has(desktop, "activity-open-file:README.md")
+  });
+  assert!(shows(&mut desktop, "conversation", "echo hello >> README.md"));
+  // Choosing the step's tokens opens Details on it.
+  desktop.click("activity-step-tokens");
+  desktop.wait_for("activity-invocation");
+  assert!(shows(&mut desktop, "activity-invocation-title", "Implement · Builder"));
+  desktop.click("conversation-details");
+  desktop.wait_until("Details closes", |desktop| !has(desktop, "activity-invocation"));
+}
+
+#[test]
+fn conversation_show_narrows_the_timeline_to_messages_or_tools() {
+  let mut desktop = finished_conversation(false);
+  desktop.click("activity-step-header");
+  desktop.wait_for("conversation-group-toggle");
+
+  desktop.click("conversation-show-1");
+  desktop.wait_until("the messages", |desktop| !has(desktop, "conversation-group-toggle"));
+  assert!(has(&mut desktop, "conversation-agent-message"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-tools-readback",
+    "2 tool calls in 2 groups hidden"
+  ));
+  assert!(!has(&mut desktop, "activity-raw"), "raw lines belong to Tools");
+
+  desktop.click("conversation-show-2");
+  desktop.wait_until("the tools", |desktop| has(desktop, "activity-entry"));
+  assert!(
+    !has(&mut desktop, "conversation-group-toggle"),
+    "every tool event on its own line"
+  );
+  assert!(!has(&mut desktop, "conversation-agent-message"));
+  assert!(holds(&mut desktop, "conversation-line", "Builder: Appending the line."));
+  assert!(shows(&mut desktop, "conversation", "echo hello >> README.md"));
+  assert!(has(&mut desktop, "activity-raw"));
+
+  desktop.click("conversation-show-1");
+  desktop.wait_for("conversation-show-all");
+  desktop.click("conversation-show-all");
+  desktop.wait_until("everything again", |desktop| has(desktop, "conversation-group-toggle"));
+}
+
+#[test]
+fn conversation_search_keeps_what_matches_and_says_when_nothing_does() {
+  let mut desktop = finished_conversation(false);
+  search(&mut desktop, "echo");
+  desktop.wait_until("the matches", |desktop| has(desktop, "conversation-search-readback"));
+  assert!(shows(
+    &mut desktop,
+    "conversation-search-readback",
+    "1 match for “echo” in 01 Implement · items without a match are hidden."
+  ));
+  // The step and the group with the match open on it; what does not match is left out.
+  assert!(!has(&mut desktop, "conversation-agent-message"));
+  assert!(shows(&mut desktop, "conversation", "echo hello >> README.md"));
+  assert!(!has(&mut desktop, "activity-open-file:README.md"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-group-more",
+    "Show 2 without a match · 1 edit, 1 note"
+  ));
+  desktop.click("conversation-group-more");
+  desktop.wait_until("the whole group", |desktop| {
+    has(desktop, "activity-open-file:README.md")
+  });
+
+  search(&mut desktop, "refresh token");
+  desktop.wait_until("nothing found", |desktop| has(desktop, "conversation-nothing-found"));
+  assert!(shows(
+    &mut desktop,
+    "conversation-nothing-found",
+    "Nothing in Run 1 matches “refresh token”"
+  ));
+  desktop.click("conversation-clear-search");
+  desktop.wait_until("the timeline again", |desktop| {
+    has(desktop, "activity-step-header") && !has(desktop, "conversation-nothing-found")
+  });
+  assert_eq!(desktop.value("conversation-search"), "");
+}
+
+#[test]
+fn conversation_step_filter_says_which_steps_it_hides() {
+  let mut desktop = finished_conversation(true);
+  desktop
+    .tree
+    .get_element_by_id_mut("activity-step-filter")
+    .and_then(|element| element.as_select())
+    .expect("the step filter")
+    .commit(1);
+  desktop.pass();
+  desktop.wait_until("the read-back", |desktop| has(desktop, "conversation-step-readback"));
+  assert!(shows(
+    &mut desktop,
+    "conversation-step-readback",
+    "Showing 01 Implement only · 02 Review is hidden."
+  ));
+  // The step picked is open.
+  assert!(has(&mut desktop, "conversation-agent-message"));
+  assert!(
+    !has(&mut desktop, "conversation-end"),
+    "the run's end is not of the step"
+  );
+
+  // What only the other step's result says.
+  search(&mut desktop, "Finished Review");
+  desktop.wait_until("nothing in the step", |desktop| {
+    has(desktop, "conversation-nothing-found")
+  });
+  assert!(shows(
+    &mut desktop,
+    "conversation-nothing-found",
+    "Nothing in 01 Implement matches “Finished Review”"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "conversation-nothing-found",
+    "1 match in 02 Review."
+  ));
+  search(&mut desktop, "");
+  desktop.click("conversation-show-all-steps");
+  desktop.wait_until("both steps", |desktop| {
+    !has(desktop, "conversation-step-readback") && has(desktop, "conversation-end")
+  });
+}
+
+/// Appends `count` agent messages to the transcript of the run's live invocation, as if the agent
+/// had written them.
+fn notes(desktop: &Desktop, count: usize) {
   let db = ProjectDb::open(desktop.repo()).expect("open the project");
-  let task = db.tasks().expect("tasks").remove(0);
-  db.messages(task.id()).expect("messages").len()
+  let run = latest_run(desktop.repo()).expect("the run");
+  let invocation = db
+    .invocations(run.id())
+    .expect("invocations")
+    .into_iter()
+    .find(|invocation| invocation.ended_at.is_none())
+    .expect("an agent at work");
+  let events: Vec<(Timestamp, AgentEvent)> = (0..count)
+    .map(|note| {
+      (
+        Timestamp::now(),
+        AgentEvent::Message {
+          text: format!("Note {note} while the tests run."),
+        },
+      )
+    })
+    .collect();
+  let mut db = db;
+  db.append_activity(&invocation, &events).expect("notes");
+}
+
+/// A wheel turn up over the timeline.
+fn scroll_up(desktop: &mut Desktop) {
+  let bounds = desktop.bounds("conversation-main");
+  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 3.0);
+  desktop
+    .tree
+    .scroll(x, y, 0.0, 0.0, lurq::app::events::ScrollPhase::Start);
+  desktop
+    .tree
+    .scroll(x, y, 0.0, 600.0, lurq::app::events::ScrollPhase::Scroll);
+  desktop.tree.scroll(x, y, 0.0, 0.0, lurq::app::events::ScrollPhase::End);
+  desktop.pass();
+}
+
+fn release(desktop: &Desktop) {
+  std::fs::write(desktop.repo().join(".orchester").join("fake-release"), "go").expect("release");
 }
 
 #[test]
-fn conversation_layout_matches_pencil_rhythm() {
-  let mut desktop = desktop();
-  create_and_run(&mut desktop, "Say hello.", "1400000");
-  finished_on_page(&mut desktop);
-  desktop.click("task-tab-conversation");
-  desktop.wait_for("conversation-composer");
-
-  // `C3nu0z` is 83 high; `Lr8Dg` is 42 below the Budget row `yT3k7` in 02.S `JOG1i`.
-  let composer_height = desktop.bounds("conversation-composer").height;
-  assert!((composer_height - 83.0).abs() < 1.0, "composer: {composer_height}px");
-  let budget = desktop.bounds("task-conversation-budget");
-  let permissions = desktop.bounds("task-permissions");
-  assert_eq!(permissions.y - budget.y, 42.0);
-}
-
-#[test]
-fn conversation_a_question_is_answered_from_the_composer() {
-  let mut desktop = desktop();
-  create_and_run(&mut desktop, "Ask first.", "1400000");
-  desktop.wait_until("the question", |desktop| {
-    has(desktop, "task-notice") && shows(desktop, "task-notice", "Builder asks you a question")
-  });
-  desktop.wait_until("the status bar", |desktop| {
-    shows(desktop, "status-needs-you", "1") && asked_in_status_bar(desktop)
-  });
-  desktop.click("task-tab-conversation");
-  desktop.wait_for("conversation-reply");
-  assert!(shows(&mut desktop, "task-conversation-panel", "Keep email sign-in?"));
-  assert!(shows(
+fn conversation_follows_live_and_jump_to_latest_counts_what_came_since() {
+  let mut desktop = desktop(false);
+  create_and_run(
     &mut desktop,
-    "task-conversation-panel",
-    "Question · waiting for your answer"
-  ));
-  assert!(shows(&mut desktop, "conversation-status", "Waiting for you"));
-  assert!(shows(
-    &mut desktop,
-    "conversation-explanation",
-    "Your reply resumes Builder's session."
-  ));
-  // Nothing to send yet: Send does nothing.
-  desktop.click("conversation-send");
-  assert_eq!(messages(&desktop), 1, "the question only");
-
-  // Reply puts the focus in the composer; Enter adds a line, Ctrl+Enter sends.
-  desktop.click("conversation-reply");
-  assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
-  desktop.type_text("Yes");
-  desktop.enter();
-  desktop.type_text("keep it");
-  assert_eq!(desktop.value("conversation-input"), "Yes\nkeep it");
-  send_with_keyboard(&mut desktop);
-  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
-  desktop.wait_until("the acknowledged answer", |desktop| {
-    shows(desktop, "task-conversation-panel", "Acknowledged by Builder")
-      && shows(desktop, "task-conversation-panel", "Reply · Implement")
-      && shows(desktop, "conversation-status", "Ready for review")
-  });
-  assert!(shows(&mut desktop, "task-conversation-panel", "Question · answered"));
-  // The run's readiness replaces the question as the latest event.
-  desktop.wait_until("the ready event", |desktop| {
-    shows(desktop, "status-activity", "Run #1 ready for review")
-  });
-  assert_eq!(desktop.value("conversation-input"), "");
-  desktop.wait_until("Needs you", |desktop| shows(desktop, "status-needs-you", "0"));
-}
-
-#[test]
-fn conversation_ask_agent_follows_up_a_run_ready_for_review() {
-  let mut desktop = desktop();
-  create_and_run(&mut desktop, "Say hello.", "1400000");
-  finished_on_page(&mut desktop);
-  desktop.click("task-ask-agent");
-  desktop.wait_for("task-conversation-panel");
-  assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
-  assert!(shows(&mut desktop, "conversation-status", "Ready for review"));
-  assert!(shows(
-    &mut desktop,
-    "conversation-explanation",
-    "Asking continues Builder's session in the run's worktree."
-  ));
-  desktop.type_text("Add a second line.");
-  desktop.click("conversation-send");
-  desktop.wait_until("the follow-up to finish", |desktop| {
+    "Wait for release. Then keep working. Note the release.",
+    "1400000",
+  );
+  desktop.wait_until("the agent's command", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| {
-      run.status() == &RunStatus::Succeeded
-        && matches!(
-          run.current_attempt().map(|attempt| attempt.reason()),
-          Some(AttemptReason::FollowUp { .. })
-        )
+      ProjectDb::open(desktop.repo())
+        .and_then(|db| db.activity(run.id(), 0))
+        .is_ok_and(|activity| {
+          activity
+            .iter()
+            .any(|entry| matches!(entry.event, AgentEvent::CommandStarted { .. }))
+        })
     })
   });
-  desktop.wait_until("the reply", |desktop| {
-    shows(desktop, "task-conversation-panel", "Acknowledged by Builder")
-      && shows(desktop, "task-conversation-panel", "Reply · Implement")
-      && shows(desktop, "conversation-status", "Ready for review")
-  });
-  // Open conversation on the Summary goes back to it.
-  desktop.click("task-tab-summary");
-  finished_on_page(&mut desktop);
-  desktop.click("task-open-conversation");
-  desktop.wait_for("task-conversation-panel");
-}
-
-#[test]
-fn conversation_failed_run_continues_from_the_composer_without_run_again() {
-  let mut desktop = desktop();
-  create_and_run(&mut desktop, "Report failure.", "1400000");
-  desktop.wait_until("failed run on the page", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| matches!(run.status(), RunStatus::Failed(_)))
-      && shows(desktop, "task-notice", "The run failed at Implement")
-  });
-  let failed = latest_run(desktop.repo()).expect("failed run");
-  assert!(matches!(failed.status(), RunStatus::Failed(_)));
+  notes(&desktop, 40);
   desktop.click("task-tab-conversation");
-  desktop.wait_for("conversation-composer");
-  assert!(shows(&mut desktop, "conversation-status", "Failed"));
-  assert!(shows(&mut desktop, "conversation-send", "Send & continue"));
-  desktop.click("conversation-input");
-  desktop.type_text("Continue with the corrected instruction.");
-  send_with_keyboard(&mut desktop);
-  desktop.wait_until("recovered run to succeed", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Succeeded && run.attempts().len() == 2)
+  // It opens at the end and follows, the agent at work under it.
+  desktop.wait_until("the live timeline", |desktop| holds(desktop, "conversation", "Note 39"));
+  assert!(shows(&mut desktop, "conversation-toolbar", "Following live"));
+  assert!(holds(&mut desktop, "activity-live", "Builder is working"));
+  assert!(!has(&mut desktop, "conversation-jump"));
+
+  scroll_up(&mut desktop);
+  desktop.wait_until("not following", |desktop| has(desktop, "conversation-jump"));
+  assert!(shows(&mut desktop, "conversation-toolbar", "Not following"));
+  assert!(shows(&mut desktop, "conversation-jump", "Jump to latest"));
+
+  // The agent's command ends and it writes again, still at work.
+  release(&desktop);
+  desktop.wait_until("what came since", |desktop| {
+    holds(desktop, "conversation-jump", "Jump to latest · 1 new")
   });
-  let done = latest_run(desktop.repo()).expect("recovered");
-  assert_eq!(done.id(), failed.id());
-  assert_eq!(done.branch(), failed.branch());
-  desktop.wait_until("delivered instructions", |desktop| {
-    shows(desktop, "task-conversation-panel", "Acknowledged by Builder")
+  desktop.click("conversation-jump");
+  desktop.wait_until("following again", |desktop| {
+    !has(desktop, "conversation-jump") && holds(desktop, "conversation-toolbar", "Following live")
   });
+  assert!(shows(&mut desktop, "conversation", "Released."));
 }

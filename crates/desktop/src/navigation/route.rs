@@ -48,6 +48,8 @@ const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
 const QUEUED: &str = "queued";
 const FAILED: &str = "failed";
+/// The Activity tab's path before it was merged into the Conversation tab (ORC-61); a saved tab
+/// or link with it opens the conversation.
 const ACTIVITY: &str = "activity";
 const CHANGES: &str = "changes";
 const CONVERSATION: &str = "conversation";
@@ -146,9 +148,9 @@ pub enum ToolSelection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskPageTab {
   Summary,
+  /// The run's timeline and conversation, merged with what was the Activity tab (ORC-61).
   Conversation,
   Changes,
-  Activity,
 }
 
 /// The scope tabs of Instructions (`GfEHL`).
@@ -420,9 +422,8 @@ const fn task_query(tab: TaskTab) -> Option<&'static str> {
 
 fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
   match tab {
-    Some(CONVERSATION) => TaskPageTab::Conversation,
+    Some(CONVERSATION | ACTIVITY) => TaskPageTab::Conversation,
     Some(CHANGES) => TaskPageTab::Changes,
-    Some(ACTIVITY) => TaskPageTab::Activity,
     _ => TaskPageTab::Summary,
   }
 }
@@ -432,7 +433,6 @@ const fn task_page_query(tab: TaskPageTab) -> Option<&'static str> {
     TaskPageTab::Summary => None,
     TaskPageTab::Conversation => Some(CONVERSATION),
     TaskPageTab::Changes => Some(CHANGES),
-    TaskPageTab::Activity => Some(ACTIVITY),
   }
 }
 

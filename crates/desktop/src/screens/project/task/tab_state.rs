@@ -1,5 +1,6 @@
 //! A task page tab without its content (`hig8O`): an icon, a title and an explanation centered in
-//! the tab, e.g. no activity yet, loading, couldn't load; the Changes tab's states are drawn alike.
+//! the tab, e.g. a run that has not started, loading, couldn't load; the Changes tab's states are
+//! drawn alike.
 
 use lurq::{
   app::{
@@ -10,9 +11,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
+use orchester_core::run::RunStatus;
 
 use crate::{
-  tasks::unreadable::Unreadable,
+  tasks::{detail::RunView, unreadable::Unreadable},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -57,13 +59,53 @@ pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Eleme
   )
 }
 
-/// No activity has been reported yet, with why.
-pub(super) fn empty_activity(ctx: &Ctx, text: &str) -> Element {
+/// The timeline has nothing yet, with why: the task has no run, its run has not started (with the
+/// steps it will run, `zxIMy`), or its agents have reported nothing so far.
+pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
+  let Some(run) = run else {
+    return state(
+      "conversation-empty",
+      Icon::Clock3,
+      &ctx.t("runs.conversation.empty.noRun"),
+      &ctx.t("runs.activity.emptyNoRun"),
+      Vec::new(),
+    );
+  };
+  if run.run.status() != &RunStatus::Pending {
+    let key = if run.run.status().is_terminal() {
+      "runs.activity.emptyNone"
+    } else {
+      "runs.activity.emptyStarting"
+    };
+    return state(
+      "activity-empty",
+      Icon::Activity,
+      &ctx.t("runs.activity.emptyTitle"),
+      &ctx.t(key),
+      Vec::new(),
+    );
+  }
+  let number = run.run.number().get().to_string();
+  let steps = Column::new()
+    .id("conversation-empty-steps")
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .with_children(run.steps.iter().map(|step| {
+      Text::new(&ctx.t_args(
+        "runs.activity.stepOption",
+        [
+          ("number", format!("{:02}", step.number).as_str()),
+          ("step", &*step.name),
+          ("agent", step.agent.as_deref().unwrap_or_default()),
+        ],
+      ))
+      .variant(lurq::app::theme::TypographyStyle::Caption)
+    }));
   state(
-    "activity-empty",
-    Icon::Activity,
-    &ctx.t("runs.activity.emptyTitle"),
-    text,
-    Vec::new(),
+    "conversation-empty",
+    Icon::Clock3,
+    &ctx.t_args("runs.conversation.empty.notStartedTitle", [("run", number.as_str())]),
+    &ctx.t("runs.conversation.empty.notStarted"),
+    vec![steps.into()],
   )
 }

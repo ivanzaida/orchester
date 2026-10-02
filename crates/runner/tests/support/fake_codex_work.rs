@@ -5,7 +5,13 @@
 //! - "Work slowly": waits a moment, then works as below;
 //! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
-//!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
+//!   then it waits until it is ended when the prompt also says "Then keep working" (writing "Released." first when it
+//!   also says "Note the release"), else works as below;
+//! - "Wait for a message": runs a command (`pnpm test`) until a message sent now arrives (`turn/steer`), answers it,
+//!   completes the command, reports the message as a `userMessage` item and writes "Noted: <message>", as Codex 0.159.2
+//!   did in the probe of 2026-10-02; then works as below. "Refuse a message" refuses the steer instead ("steering is
+//!   not available for this turn") and works as below. A steer while no turn waits for one is answered "no active turn
+//!   to steer", as Codex answers it while no turn runs;
 //! - "Report failure": works as below, but its result says it failed;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
@@ -31,7 +37,7 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, complete, fake_app_server, notify};
+use super::{HELPER, Session, Step, complete, emit, fake_app_server, notify};
 
 /// What an unsupported model's turn failed with.
 const UNSUPPORTED: &str = "The 'no-such-model-probe' model is not supported when using Codex with a ChatGPT account.";
@@ -45,8 +51,28 @@ pub struct StepReport {
   handoff: bool,
 }
 
+/// A turn that waits for a message sent now.
+pub struct AwaitsMessage {
+  prompt: String,
+  structured: bool,
+  refuse: bool,
+}
+
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   let worktree = session.cwd.clone();
+  if !session.resumed && (prompt.contains("Wait for a message") || prompt.contains("Refuse a message")) {
+    notify(
+      session,
+      "item/started",
+      json!({"item": {"id": "item_8", "type": "commandExecution", "command": "pnpm test"}}),
+    );
+    session.awaits_message = Some(AwaitsMessage {
+      prompt: prompt.to_owned(),
+      structured,
+      refuse: prompt.contains("Refuse a message"),
+    });
+    return Step::Go;
+  }
   if prompt.contains("Please fail") {
     notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
     complete(session, Some(UNSUPPORTED));
@@ -83,6 +109,36 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     "hello".to_owned()
   };
   finish(session, &line, &result)
+}
+
+/// A message sent now (`turn/steer` with `id`): taken after the running command, or refused; then the
+/// turn works as usual.
+pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_json::Value) -> Step {
+  let Some(awaits) = session.awaits_message.take() else {
+    emit(&json!({"id": id, "error": {"code": -32600, "message": "no active turn to steer"}}));
+    return Step::Go;
+  };
+  let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
+  if awaits.refuse {
+    emit(&json!({"id": id, "error": {"code": -32600, "message": "steering is not available for this turn"}}));
+  } else {
+    emit(&json!({"id": id, "result": {"turnId": params["expectedTurnId"]}}));
+  }
+  notify(
+    session,
+    "item/completed",
+    json!({"item": {"id": "item_8", "type": "commandExecution", "command": "pnpm test", "status": "completed", "exitCode": 0, "aggregatedOutput": "ok"}}),
+  );
+  if !awaits.refuse {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "item_7", "type": "userMessage", "content": [{"type": "text", "text": text, "text_elements": []}]}}),
+    );
+    message(session, "item_6", &format!("Noted: {text}"));
+  }
+  let result = report_of(&awaits.prompt, awaits.structured);
+  finish(session, "hello", &result)
 }
 
 /// What App Server writes when the user's configuration has a setting it does not know, then more
@@ -200,6 +256,9 @@ fn before_finishing(session: &Session, prompt: &str) {
   if prompt.contains("Wait for release") {
     wait_for_release(session, prompt.contains("Draft first"));
     if prompt.contains("Then keep working") {
+      if prompt.contains("Note the release") {
+        message(session, "item_r", "Released.");
+      }
       wait_to_be_ended();
     }
   }

@@ -415,3 +415,20 @@ fn tab_roles_follow_pencil() {
     assert_eq!(theme.palette_color(light.role()), Color::from_hex(hex));
   }
 }
+
+#[test]
+fn conversation_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // A timeline message's text (`V17jfc`): 13 at 1.6 in `$text`.
+  let message = theme.typography_style(ExtraTypography::TimelineMessage.role());
+  assert_eq!((message.font_size, message.line_height), (13.0, 1.6));
+  assert_eq!(message.color, Color::from_hex("#EEEEEE"));
+  // A tool group and a card's body start where a message's text does (`uoK7y`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::TimelineIndent.role()),
+    Dimension::Px(36.0)
+  );
+  // A segment of the Show control, in the usage period style.
+  assert_eq!(theme.radius_value(ExtraRadius::Segment.role()), 5.0);
+}

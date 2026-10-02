@@ -17,7 +17,7 @@ pub(super) mod worker;
 
 use orchester_core::{
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
-  conversation::{Message, latest_question},
+  conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
   resource::ModelId,
@@ -68,6 +68,14 @@ pub(super) enum Occasion {
 }
 
 impl Occasion {
+  /// How the messages an invocation started for this occasion reach its agent.
+  const fn arrival(&self) -> Arrival {
+    match self {
+      Self::AfterTurn => Arrival::TurnEnd,
+      Self::Written | Self::Answer(_) | Self::FollowUp | Self::Recovery(_) => Arrival::Prompt,
+    }
+  }
+
   pub(super) fn as_prompt(&self) -> MessageOccasion<'_> {
     match self {
       Self::Written => MessageOccasion::Written,
@@ -83,6 +91,8 @@ impl Occasion {
 pub(super) struct Active {
   stops: mpsc::UnboundedSender<Stop>,
   pub(super) approvals: Option<mpsc::UnboundedSender<worker::ApprovalDecision>>,
+  /// Where people's messages sent now go to the agent; `None` for a command tool.
+  pub(super) steers: Option<mpsc::UnboundedSender<Vec<Message>>>,
   pub(super) workspace: Workspace,
   /// The invocation as it started, for reporting problems around it.
   pub(super) invocation: Invocation,
@@ -105,6 +115,7 @@ impl Active {
     Self {
       stops,
       approvals: None,
+      steers: None,
       workspace,
       invocation,
       budget: None,
@@ -249,7 +260,13 @@ impl RunTask {
       }
     };
     // Messages that never reached a started agent stay queued.
-    self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
+    let arrival = continuation.occasion.arrival();
+    self.deliver(
+      execution,
+      &invocation,
+      std::mem::take(&mut continuation.messages),
+      arrival,
+    )?;
     self.spawn(execution, invocation, (process, start), workspace)?;
     Ok(true)
   }
@@ -280,13 +297,14 @@ impl RunTask {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
+    let (steers, steered) = mpsc::unbounded_channel();
     let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
     let worker = Worker {
       root: self.root.clone(),
       invocation: invocation.clone(),
       transport: match start.app_server {
         Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
-        None => Transport::Claude(ClaudeStream::with_exemptions(start.claude_exemptions)),
+        None => Transport::Claude(Box::new(ClaudeStream::with_exemptions(start.claude_exemptions))),
       },
       process,
       notifier: self.notifier.clone(),
@@ -298,6 +316,7 @@ impl RunTask {
       agent: start.agent,
       task: self.task.id(),
       decisions,
+      steers: steered,
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
@@ -311,6 +330,7 @@ impl RunTask {
       Active {
         stops,
         approvals: interactive.then_some(approvals),
+        steers: Some(steers),
         workspace,
         invocation,
         budget,

@@ -78,7 +78,8 @@ pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav
 }
 
 /// A run waiting for the user: its plan to review (`dpeD7`), or else what it waits for (`Mt22P`):
-/// the question an agent asked, with the way to the task's conversation, or its task.
+/// the question an agent asked or a tool request, both with the way to the task's conversation,
+/// where the request is a card of the timeline.
 fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
   if let Some(plan) = &row.plan {
     return plan_decision(ctx, row, plan, nav);
@@ -103,7 +104,7 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
         [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
       ),
       ctx.t("overview.attention.open"),
-      Page::task(task),
+      Page::Task(task, TaskPageTab::Conversation),
     ),
   };
   nav

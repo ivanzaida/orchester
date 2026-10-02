@@ -126,6 +126,8 @@ pub enum Update {
   Approval(PendingApproval),
   /// A request declined at once: this JSON-RPC response answers it.
   Declined(String),
+  /// The running turn took a person's message: a `userMessage` item with this text completed.
+  InputTaken(String),
   TurnEnded,
 }
 
@@ -420,6 +422,18 @@ impl AppServerStream {
         .unwrap_or_default(),
       Some("commandExecution") => command_finished(item),
       Some("fileChange") => file_changed(item),
+      Some("userMessage") => item
+        .get("content")
+        .and_then(Value::as_array)
+        .map(|parts| {
+          parts
+            .iter()
+            .filter_map(|part| string(part, "text"))
+            .collect::<Vec<_>>()
+            .join("\n")
+        })
+        .map(|text| vec![Update::InputTaken(text)])
+        .unwrap_or_default(),
       _ => Vec::new(),
     }
   }

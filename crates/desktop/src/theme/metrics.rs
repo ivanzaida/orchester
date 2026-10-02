@@ -5,11 +5,12 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_ROW_ACTION,
-  RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_COMMAND_LINES,
-  SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR,
-  SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG,
-  SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT, SPACE_SECTION,
-  SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  RADIUS_SEGMENT, RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS,
+  SPACE_COMMAND_LINES, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP,
+  SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE,
+  SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT,
+  SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT,
+  SPACE_TIMELINE_INDENT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -81,10 +82,12 @@ pub enum ExtraSpacing {
   /// Why an option cannot be chosen starts past a compact radio and its gap (`J5RohL`, `L1B0m` in
   /// 04.B `W0Owo`).
   ReasonIndent,
+  /// A tool group and a card's body start where a timeline message's text does (`uoK7y`).
+  TimelineIndent,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 28] = [
+  const ALL: [Self; 29] = [
     Self::Hair,
     Self::Mark,
     Self::Tight,
@@ -113,6 +116,7 @@ impl ExtraSpacing {
     Self::BesideGutter,
     Self::CheckIndent,
     Self::ReasonIndent,
+    Self::TimelineIndent,
   ];
 
   fn name(self) -> &'static str {
@@ -145,6 +149,7 @@ impl ExtraSpacing {
       Self::BesideGutter => "beside-gutter",
       Self::CheckIndent => "check-indent",
       Self::ReasonIndent => "reason-indent",
+      Self::TimelineIndent => "timeline-indent",
     }
   }
 
@@ -178,6 +183,7 @@ impl ExtraSpacing {
       Self::BesideGutter => SPACE_BESIDE_GUTTER,
       Self::CheckIndent => SPACE_CHECK_INDENT,
       Self::ReasonIndent => SPACE_REASON_INDENT,
+      Self::TimelineIndent => SPACE_TIMELINE_INDENT,
     }
   }
 
@@ -202,16 +208,19 @@ pub enum ExtraRadius {
   TabControl,
   /// The *Open in new tab* button of a project switcher row (`NcJQ0`).
   RowAction,
+  /// A segment of the conversation's *Show* control (toolbar of `RrScB`).
+  Segment,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 6] = [
+  const ALL: [Self; 7] = [
     Self::Notice,
     Self::Mark,
     Self::SelectMenu,
     Self::Pill,
     Self::TabControl,
     Self::RowAction,
+    Self::Segment,
   ];
 
   fn name(self) -> &'static str {
@@ -222,6 +231,7 @@ impl ExtraRadius {
       Self::Pill => "pill",
       Self::TabControl => "tab-control",
       Self::RowAction => "row-action",
+      Self::Segment => "segment",
     }
   }
 
@@ -233,6 +243,7 @@ impl ExtraRadius {
       Self::Pill => RADIUS_PILL,
       Self::TabControl => RADIUS_TAB_CONTROL,
       Self::RowAction => RADIUS_ROW_ACTION,
+      Self::Segment => RADIUS_SEGMENT,
     }
   }
 

@@ -11,7 +11,9 @@
 //! (`orchester_core::connection::app_server_config`). A step that asks before MCP
 //! actions needs its project-selected servers connected before the turn begins, any other step works
 //! without one that is not and its activity says so. Codex's standard error is kept in the activity
-//! as raw lines, bounded and without its echo of the user's settings (`super::stderr`).
+//! as raw lines, bounded and without its echo of the user's settings (`super::stderr`). A person's
+//! message sent now joins the running turn with `turn/steer` ([`AppServerSession::steer`]); Codex
+//! answers at once and gives it to the model after the tool call that runs (`super::worker::steer`).
 
 use std::{
   collections::BTreeSet,
@@ -42,6 +44,15 @@ use crate::supervisor::Supervised;
 
 /// Characters kept of Codex's reason for refusing to resume a session.
 const REASON_CHARS: usize = 300;
+/// How the ids of the runner's `turn/steer` requests start; the rest names the message.
+pub(super) const STEER_REQUEST: &str = "steer-";
+
+/// Codex's answer to a `turn/steer` request.
+pub(super) struct SteerAnswer {
+  pub id: String,
+  /// Codex's reason when it did not add the message to the turn.
+  pub refused: Option<String>,
+}
 
 #[derive(Debug, Error)]
 pub(super) enum AppServerFailure {
@@ -109,6 +120,8 @@ pub(super) struct AppServerSession {
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
   stderr: StderrLog,
+  /// Answers to `turn/steer` requests not taken yet.
+  steer_answers: Vec<SteerAnswer>,
 }
 
 impl AppServerSession {
@@ -117,6 +130,7 @@ impl AppServerSession {
       phase: Phase::Initialize,
       turned_off: Vec::new(),
       stderr: StderrLog::default(),
+      steer_answers: Vec::new(),
       thread: None,
       turn: None,
       stream: AppServerStream::with_exemptions(setup.exemptions.clone()),
@@ -137,6 +151,33 @@ impl AppServerSession {
 
   pub fn complete(&self) -> bool {
     self.phase == Phase::Complete
+  }
+
+  /// Whether a turn runs that a message can join.
+  pub fn turn_working(&self) -> bool {
+    matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()
+  }
+
+  /// Whether the turn has not started yet, but will.
+  pub fn awaits_turn(&self) -> bool {
+    self.phase != Phase::Complete && !self.turn_working()
+  }
+
+  /// Adds `text` to the running turn as request `id` (`turn/steer`, `expectedTurnId` the running
+  /// turn); its answer comes with [`Self::take_steer_answers`].
+  pub async fn steer(&self, process: &Supervised, id: &str, text: &str) -> io::Result<()> {
+    send(
+      process,
+      json!({"id":id,"method":"turn/steer","params":{
+        "threadId":self.thread,"input":[{"type":"text","text":text}],"expectedTurnId":self.turn
+      }}),
+    )
+    .await
+  }
+
+  /// Codex's answers to `turn/steer` requests since the last call.
+  pub fn take_steer_answers(&mut self) -> Vec<SteerAnswer> {
+    std::mem::take(&mut self.steer_answers)
   }
 
   pub fn has_active_tools(&self) -> bool {
@@ -177,6 +218,26 @@ impl AppServerSession {
         self.phase = Phase::Complete;
       }
       return Ok(updates);
+    }
+    if let Some(id) = value
+      .get("id")
+      .and_then(Value::as_str)
+      .filter(|id| id.starts_with(STEER_REQUEST))
+    {
+      let refused = value.get("error").map(|error| {
+        error
+          .get("message")
+          .and_then(Value::as_str)
+          .unwrap_or("no reason given")
+          .chars()
+          .take(REASON_CHARS)
+          .collect()
+      });
+      self.steer_answers.push(SteerAnswer {
+        id: id.to_owned(),
+        refused,
+      });
+      return Ok(Vec::new());
     }
     self.response(&value, process).await
   }

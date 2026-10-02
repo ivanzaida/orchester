@@ -5,6 +5,13 @@
 //! (delivered), and acknowledged once that agent ended a turn after reading it: it answered or
 //! acted on it. Acknowledgement does not prove that a requested change was applied.
 //!
+//! A message for an agent at work is sent after its turn ([`Timing::AfterTurn`]): the agent reads
+//! it when the turn ends. One sent now ([`Timing::Now`], `docs/design/orchester-workspace.md`,
+//! "Conversation (merged with Activity)") is given to the agent while its turn runs, after the tool
+//! call it is running ([`Arrival::MidTurn`]); a turn that ends first takes it at its end
+//! ([`Arrival::TurnEnd`]). One the agent's CLI could not take is not delivered
+//! ([`Delivery::NotDelivered`]) and is kept: the person may send it after the turn instead.
+//!
 //! An agent writes back in two ways: the reply that ends the turn a message was delivered in, and a
 //! question — a step result that asks the person before the step can go on
 //! ([`crate::run::StepOutcome::Question`]); its step waits for a message
@@ -44,6 +51,8 @@ pub enum MessageError {
   OtherRun,
   #[error("an agent's message and a delivered one belong to a run")]
   WithoutRun,
+  #[error("only a message that was not delivered is sent again")]
+  NotUndelivered,
 }
 
 impl MessageBody {
@@ -91,16 +100,49 @@ pub enum Recipient {
   Agent(ResourceId),
 }
 
-/// Where a person's message stands: queued → delivered → acknowledged.
+/// When a person's message reaches an agent that is at work.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Timing {
+  /// When the agent's turn ends (*Send after this turn*, and every message before ORC-61).
+  #[default]
+  AfterTurn,
+  /// While its turn runs, after the tool call it is running (*Send now*).
+  Now,
+}
+
+/// How a delivered message reached its agent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Arrival {
+  /// With the prompt of an invocation that started: a step's start, an answer, a follow-up or a run
+  /// that continued.
+  #[default]
+  Prompt,
+  /// In the agent's running turn, after the tool call it was running.
+  MidTurn,
+  /// When the agent's turn ended: the session continued to read it.
+  TurnEnd,
+}
+
+/// Why the agent's CLI did not take a message sent now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Undelivered {
+  /// The CLI refused to add it to the running turn.
+  Refused,
+  /// It could not be written to the CLI, or the CLI did not read it in time.
+  Unwritable,
+}
+
+/// Where a person's message stands: queued → delivered → acknowledged, or not delivered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Delivery {
-  /// Waiting for an invocation to start with it.
+  /// Waiting for an invocation to start with it, or for the agent to take it mid-turn.
   Queued,
-  /// Invocation `invocation` of `execution` started with it in its prompt at `at`.
+  /// Invocation `invocation` of `execution` took it at `at`, as `arrival` says.
   Delivered {
     execution: StepExecutionId,
     invocation: InvocationId,
     at: Timestamp,
+    arrival: Arrival,
   },
   /// `execution`'s agent ended a turn after reading it, at `at`.
   Acknowledged {
@@ -108,6 +150,14 @@ pub enum Delivery {
     invocation: InvocationId,
     delivered_at: Timestamp,
     at: Timestamp,
+    arrival: Arrival,
+  },
+  /// Sent now, the CLI of `execution`'s agent did not take it, at `at`. It is kept and goes no further
+  /// unless the person sends it after the turn.
+  NotDelivered {
+    execution: StepExecutionId,
+    at: Timestamp,
+    reason: Undelivered,
   },
 }
 
@@ -115,8 +165,16 @@ impl Delivery {
   /// The execution it was delivered to, once it was.
   pub const fn execution(self) -> Option<StepExecutionId> {
     match self {
-      Self::Queued => None,
+      Self::Queued | Self::NotDelivered { .. } => None,
       Self::Delivered { execution, .. } | Self::Acknowledged { execution, .. } => Some(execution),
+    }
+  }
+
+  /// How it reached its agent, once it did.
+  pub const fn arrival(self) -> Option<Arrival> {
+    match self {
+      Self::Queued | Self::NotDelivered { .. } => None,
+      Self::Delivered { arrival, .. } | Self::Acknowledged { arrival, .. } => Some(arrival),
     }
   }
 }
@@ -158,6 +216,8 @@ pub struct Message {
   body: MessageBody,
   created_at: Timestamp,
   recovery_after: Option<EventSequence>,
+  /// When a person's message reaches an agent at work; [`Timing::AfterTurn`] for an agent's.
+  timing: Timing,
 }
 
 impl Message {
@@ -180,6 +240,7 @@ impl Message {
       body,
       created_at: now,
       recovery_after: None,
+      timing: Timing::AfterTurn,
     }
   }
 
@@ -204,10 +265,11 @@ impl Message {
       body,
       created_at: now,
       recovery_after: None,
+      timing: Timing::AfterTurn,
     }
   }
 
-  /// Rebuilds a stored message; an agent's message and a delivered one always name their run.
+  /// Rebuilds a stored message; an agent's message and one that is no longer queued always name their run.
   pub fn restore(
     id: MessageId,
     task: TaskId,
@@ -218,7 +280,7 @@ impl Message {
   ) -> Result<Self, MessageError> {
     let in_run = match sender {
       Sender::Agent { .. } => true,
-      Sender::Person { delivery, .. } => delivery.execution().is_some(),
+      Sender::Person { delivery, .. } => delivery != Delivery::Queued,
     };
     if in_run && run.is_none() {
       return Err(MessageError::WithoutRun);
@@ -231,6 +293,7 @@ impl Message {
       body,
       created_at,
       recovery_after: None,
+      timing: Timing::AfterTurn,
     })
   }
 
@@ -262,6 +325,19 @@ impl Message {
   /// failure cannot retry it; another failure requires another explicit choice.
   pub const fn recovery_after(&self) -> Option<EventSequence> {
     self.recovery_after
+  }
+
+  pub const fn timing(&self) -> Timing {
+    self.timing
+  }
+
+  /// A person's message sent as `timing` says.
+  pub fn sent(mut self, timing: Timing) -> Result<Self, MessageError> {
+    if !matches!(self.sender, Sender::Person { .. }) {
+      return Err(MessageError::NotFromAPerson);
+    }
+    self.timing = timing;
+    Ok(self)
   }
 
   pub fn recovering_after(mut self, failure: EventSequence) -> Result<Self, MessageError> {
@@ -305,12 +381,47 @@ impl Message {
     }
   }
 
-  /// The message went to `execution`'s agent of `run` with `invocation`, started at `at`.
+  /// Whether this is a person's message sent now and still queued that the agent of `profile` at
+  /// work in `run` is to take mid-turn.
+  pub fn steers(&self, run: RunId, profile: ResourceId) -> bool {
+    self.timing == Timing::Now && self.reaches(run, profile)
+  }
+
+  /// The message went to `execution`'s agent of `run` with `invocation` at `at`, as `arrival` says.
+  /// One its CLI did not take in time that it took after all is delivered too.
   pub fn deliver(
     &mut self,
     run: RunId,
     (execution, invocation): (StepExecutionId, InvocationId),
     at: Timestamp,
+    arrival: Arrival,
+  ) -> Result<(), MessageError> {
+    let Sender::Person { delivery, .. } = &mut self.sender else {
+      return Err(MessageError::NotFromAPerson);
+    };
+    if !matches!(delivery, Delivery::Queued | Delivery::NotDelivered { .. }) {
+      return Err(MessageError::AlreadyDelivered);
+    }
+    if self.run.is_some_and(|own| own != run) {
+      return Err(MessageError::OtherRun);
+    }
+    *delivery = Delivery::Delivered {
+      execution,
+      invocation,
+      at,
+      arrival,
+    };
+    self.run = Some(run);
+    Ok(())
+  }
+
+  /// Sent now to `execution`'s agent of `run`, its CLI did not take it at `at`, for `reason`.
+  pub fn not_delivered(
+    &mut self,
+    run: RunId,
+    execution: StepExecutionId,
+    at: Timestamp,
+    reason: Undelivered,
   ) -> Result<(), MessageError> {
     let Sender::Person { delivery, .. } = &mut self.sender else {
       return Err(MessageError::NotFromAPerson);
@@ -321,12 +432,22 @@ impl Message {
     if self.run.is_some_and(|own| own != run) {
       return Err(MessageError::OtherRun);
     }
-    *delivery = Delivery::Delivered {
-      execution,
-      invocation,
-      at,
-    };
+    *delivery = Delivery::NotDelivered { execution, at, reason };
     self.run = Some(run);
+    Ok(())
+  }
+
+  /// A message that was not delivered, queued again for when its agent's turn ends: the person
+  /// chose *Send after this turn*.
+  pub fn send_after_turn(&mut self) -> Result<(), MessageError> {
+    let Sender::Person { delivery, .. } = &mut self.sender else {
+      return Err(MessageError::NotFromAPerson);
+    };
+    if !matches!(delivery, Delivery::NotDelivered { .. }) {
+      return Err(MessageError::NotUndelivered);
+    }
+    *delivery = Delivery::Queued;
+    self.timing = Timing::AfterTurn;
     Ok(())
   }
 
@@ -339,6 +460,7 @@ impl Message {
       execution,
       invocation,
       at: delivered_at,
+      arrival,
     } = *delivery
     else {
       return Err(MessageError::NotDelivered);
@@ -348,6 +470,7 @@ impl Message {
       invocation,
       delivered_at,
       at,
+      arrival,
     };
     Ok(())
   }

@@ -1,25 +1,27 @@
-//! The task conversation as the Conversation tab shows it (02.12 `jgqPe`: the panel `kjsmd`, its
-//! messages `J5MIT`): each message with who wrote it and where it stands, whom a new message can
-//! go to, which agents take part, and what the run's state means for a message written now. The
-//! messages come from the project database: a person's are written here, their delivery and the
-//! agents' replies and questions by the runner. Sending blocks on SQLite, so the UI calls it off
-//! the UI thread.
+//! The task conversation as the Conversation tab shows it (`docs/design/orchester-workspace.md`,
+//! "Conversation (merged with Activity)"): each message with who wrote it, the step it belongs to and
+//! where it stands (sending now, queued, delivered mid-turn or at the end of a turn, not delivered),
+//! whom a new message can go to, which agents take part and work now, and what the run's state means
+//! for a message written now. The messages come from the project database: a person's are written
+//! here, their delivery and the agents' replies and questions by the runner. Sending blocks on
+//! SQLite, so the UI calls it off the UI thread.
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use orchester_core::{
-  conversation::{AgentMessage, Delivery, Message, MessageBody, MessageError, Recipient, Sender},
-  id::{IdempotencyKey, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  conversation::{AgentMessage, Arrival, Delivery, Message, Recipient, Sender, Timing, Undelivered},
+  id::{MessageId, ResourceId, StepExecutionId},
   integration::Leftovers,
   resource::StepKey,
-  run::{EventSequence, PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, WaitReason},
-  store::ConversationStore,
+  run::{EventSequence, PauseReason, RunStatus, StepExecutor, TaskPhase},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
 
+pub use self::send::{SendError, send_after_turn_in, send_in};
 use super::detail::{RunView, TaskDetail};
-use crate::messages::{self, Message as UiMessage};
+
+pub mod composer;
+mod send;
 
 /// Where the task's conversation stands, for the panel's status label.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,30 +88,34 @@ pub enum Author {
   Agent(Arc<str>),
 }
 
-/// Where an entry stands, as its last line says.
+/// Where an entry stands, as its delivery line says. A delivered message keeps its line once its
+/// agent read it: the agent's reply shows in the timeline.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EntryState {
   /// A person's message no agent read yet, and when one will.
   Queued(Queue),
+  /// It reached `agent` at `at`, as `arrival` says; `sent_now`: the person sent it now.
   Delivered {
     agent: Arc<str>,
+    at: Timestamp,
+    arrival: Arrival,
+    sent_now: bool,
   },
-  Acknowledged {
-    agent: Arc<str>,
-  },
+  /// Sent now, `agent`'s CLI did not take it; it is kept and goes no further on its own.
+  NotDelivered { agent: Arc<str>, reason: Undelivered },
   /// An agent's reply at the end of a turn of `step`.
-  Reply {
-    step: Arc<str>,
-  },
+  Reply { step: Arc<str> },
   /// An agent's question; `open` while its step waits for the answer.
-  Question {
-    open: bool,
-  },
+  Question { open: bool },
 }
 
 /// When a queued message reaches an agent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Queue {
+  /// Sent now to `0`, which works: it gets it at its next tool call.
+  SendingNow(Arc<str>),
+  /// Sent after the turn to `0`, which works: it reads it when its turn ends.
+  AfterTurn(Arc<str>),
   /// At the next checkpoint of an agent at work, or the next one to start.
   NextCheckpoint,
   /// Once the task's run starts.
@@ -118,15 +124,15 @@ pub enum Queue {
   RunResumes,
   /// Once the paused, stopped or interrupted run continues.
   RunContinues,
-  /// At a direct recipient's next turn, rather than the current agent's checkpoint.
-  AgentNextTurn,
+  /// At the next turn of `0`, a direct recipient that does not work now.
+  AgentNextTurn(Arc<str>),
   /// Never: the run it was written for has ended.
   RunEnded,
   /// Never: the run's worktree was removed, so its agent cannot continue.
   WorktreeRemoved,
 }
 
-/// One message of the conversation as the panel shows it.
+/// One message of the conversation as the timeline shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
   pub id: MessageId,
@@ -134,6 +140,21 @@ pub struct Entry {
   pub at: Timestamp,
   pub body: Arc<str>,
   pub state: EntryState,
+  /// The step execution it belongs to: the one it reached or did not, or whose agent wrote it;
+  /// `None` while it waits for one.
+  pub execution: Option<StepExecutionId>,
+  /// A person's message sent now.
+  pub sent_now: bool,
+}
+
+/// An agent at work on the run: its profile, its role, the execution it works on and whether its
+/// connection takes a message while its turn runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkingAgent {
+  pub profile: ResourceId,
+  pub agent: Arc<str>,
+  pub execution: StepExecutionId,
+  pub mid_turn: bool,
 }
 
 /// Whom a new message can go to: Orchestrator, or an agent of the run's pipeline.
@@ -144,14 +165,6 @@ pub struct RecipientChoice {
   pub agent: Option<Arc<str>>,
 }
 
-/// The agents of the run, by what they do now.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Participants {
-  pub working: Vec<Arc<str>>,
-  pub asking: Vec<Arc<str>>,
-  pub available: Vec<Arc<str>>,
-}
-
 /// The task's conversation, ready to show.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Conversation {
@@ -159,14 +172,13 @@ pub struct Conversation {
   pub recovery_after: Option<EventSequence>,
   pub entries: Vec<Entry>,
   pub recipients: Vec<RecipientChoice>,
-  pub participants: Participants,
-  /// An agent CLI invocation is still running and can end its current turn.
-  pub active_agent_turn: bool,
-  /// The agent whose work was suspended by a pause, limit or interruption.
-  pub suspended_agent: Option<Arc<str>>,
   /// The agent a message to Orchestrator reaches next when the run is ready for review or waits
   /// for an answer; `None` otherwise.
   pub next_agent: Option<Arc<str>>,
+  /// The agents at work now, in pipeline order: a message for one of them can be sent now.
+  pub working: Vec<WorkingAgent>,
+  /// The agent of the run's first step, which a message reaches when the run starts.
+  pub first_agent: Option<Arc<str>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Conversation {}
@@ -194,10 +206,14 @@ impl Conversation {
       state => state,
     };
     let run = detail.run.as_ref();
+    let working = run
+      .filter(|_| state == PanelState::Live)
+      .map(working_agents)
+      .unwrap_or_default();
     let entries = detail
       .messages
       .iter()
-      .map(|message| entry(message, run, &detail.messages, state))
+      .map(|message| entry(message, (run, &working), &detail.messages, state))
       .collect();
     Self {
       state,
@@ -206,16 +222,17 @@ impl Conversation {
         .map(|run| run.run.last_sequence()),
       entries,
       recipients: run.map(recipients).unwrap_or_else(|| vec![orchestrator()]),
-      participants: run.map(participants).unwrap_or_default(),
-      active_agent_turn: matches!(state, PanelState::Live | PanelState::Waiting)
-        && run.is_some_and(|run| {
-          run
-            .invocations
-            .iter()
-            .any(|invocation| invocation.model().is_some() && invocation.ended_at.is_none())
-        }),
-      suspended_agent: run.and_then(|run| suspended_agent(run, state)),
       next_agent: run.and_then(|run| next_agent(run, state)),
+      working,
+      first_agent: run.and_then(|run| run.steps.iter().find_map(|step| step.agent.clone())),
+    }
+  }
+
+  /// The agent at work that a message to `recipient` reaches now, if one does.
+  pub fn working_for(&self, recipient: Recipient) -> Option<&WorkingAgent> {
+    match recipient {
+      Recipient::Orchestrator => self.working.first(),
+      Recipient::Agent(profile) => self.working.iter().find(|working| working.profile == profile),
     }
   }
 
@@ -228,13 +245,28 @@ impl Conversation {
   }
 }
 
-fn suspended_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
-  let step = match state {
-    PanelState::Paused | PanelState::Interrupted => run.current_step(),
-    PanelState::Stopped => run.stopped_step().or_else(|| run.current_step()),
-    _ => return None,
-  };
-  step.and_then(|step| step.agent.clone())
+/// The agents whose invocation runs now, in pipeline order, each once.
+fn working_agents(run: &RunView) -> Vec<WorkingAgent> {
+  let mut working: Vec<WorkingAgent> = Vec::new();
+  for step in run.working_steps().filter(|step| !step.tool_step) {
+    let (Some(profile), Some(agent), Some(execution)) =
+      (profile_of(run, &step.key), step.agent.clone(), step.execution)
+    else {
+      continue;
+    };
+    let at_work = run
+      .invocations_of(execution)
+      .any(|invocation| invocation.model().is_some() && invocation.ended_at.is_none());
+    if at_work && !working.iter().any(|known| known.profile == profile) {
+      working.push(WorkingAgent {
+        profile,
+        agent,
+        execution,
+        mid_turn: step.provider.is_some_and(|provider| provider.takes_messages_mid_turn()),
+      });
+    }
+  }
+  working
 }
 
 fn orchestrator() -> RecipientChoice {
@@ -275,33 +307,6 @@ fn profile_of(run: &RunView, step: &StepKey) -> Option<ResourceId> {
   }
 }
 
-/// The run's agents, each once: working when a step of theirs runs, asking when one waits for an
-/// answer, available otherwise.
-fn participants(run: &RunView) -> Participants {
-  let mut participants = Participants::default();
-  for step in run.steps.iter().filter(|step| !step.tool_step) {
-    let Some(agent) = step.agent.clone() else {
-      continue;
-    };
-    let group = match step.status {
-      Some(StepStatus::Running) if run.run.status() == &RunStatus::Running => &mut participants.working,
-      Some(StepStatus::Waiting(WaitReason::Message)) => &mut participants.asking,
-      _ => &mut participants.available,
-    };
-    if !group.contains(&agent) {
-      group.push(agent);
-    }
-  }
-  let busy: Vec<Arc<str>> = participants
-    .working
-    .iter()
-    .chain(&participants.asking)
-    .cloned()
-    .collect();
-  participants.available.retain(|agent| !busy.contains(agent));
-  participants
-}
-
 /// The agent a message reaches next: the one that asked, or the one a follow-up would ask.
 fn next_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
   let execution = match state {
@@ -319,29 +324,53 @@ fn next_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
   run.step_of(execution).and_then(|step| step.agent.clone())
 }
 
-fn entry(message: &Message, run: Option<&RunView>, messages: &[Message], state: PanelState) -> Entry {
+fn entry(
+  message: &Message,
+  (run, working): (Option<&RunView>, &[WorkingAgent]),
+  messages: &[Message],
+  state: PanelState,
+) -> Entry {
   let agent_of = |execution: StepExecutionId| -> Arc<str> {
     run
       .and_then(|run| run.step_of(execution))
       .map(|step| step.agent.clone().unwrap_or_else(|| step.name.clone()))
       .unwrap_or_default()
   };
-  let (author, state) = match *message.sender() {
+  let sent_now = message.timing() == Timing::Now;
+  let (author, state, execution) = match *message.sender() {
     Sender::Person { recipient, delivery } => {
       let author = match recipient {
         Recipient::Orchestrator => Author::You,
         Recipient::Agent(profile) => Author::YouTo(role_of(run, profile)),
       };
-      let state = match delivery {
-        Delivery::Queued => EntryState::Queued(queue(message, run, state)),
-        Delivery::Delivered { execution, .. } => EntryState::Delivered {
-          agent: agent_of(execution),
-        },
-        Delivery::Acknowledged { execution, .. } => EntryState::Acknowledged {
-          agent: agent_of(execution),
-        },
+      let (state, execution) = match delivery {
+        Delivery::Queued => (EntryState::Queued(queue(message, (run, working), state)), None),
+        Delivery::Delivered {
+          execution, at, arrival, ..
+        }
+        | Delivery::Acknowledged {
+          execution,
+          delivered_at: at,
+          arrival,
+          ..
+        } => (
+          EntryState::Delivered {
+            agent: agent_of(execution),
+            at,
+            arrival,
+            sent_now,
+          },
+          Some(execution),
+        ),
+        Delivery::NotDelivered { execution, reason, .. } => (
+          EntryState::NotDelivered {
+            agent: agent_of(execution),
+            reason,
+          },
+          Some(execution),
+        ),
       };
-      (author, state)
+      (author, state, execution)
     }
     Sender::Agent { execution, kind, .. } => {
       let state = match kind {
@@ -355,7 +384,7 @@ fn entry(message: &Message, run: Option<&RunView>, messages: &[Message], state: 
           open: run.is_some_and(|run| message.awaits_answer(&run.run, messages)),
         },
       };
-      (Author::Agent(agent_of(execution)), state)
+      (Author::Agent(agent_of(execution)), state, Some(execution))
     }
   };
   Entry {
@@ -364,6 +393,8 @@ fn entry(message: &Message, run: Option<&RunView>, messages: &[Message], state: 
     at: message.created_at(),
     body: message.body().as_str().into(),
     state,
+    execution,
+    sent_now,
   }
 }
 
@@ -380,29 +411,44 @@ fn role_of(run: Option<&RunView>, profile: ResourceId) -> Arc<str> {
     .unwrap_or_default()
 }
 
-/// When a queued message reaches an agent, given the run it was written for.
-fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
+/// When a queued message reaches an agent, given the run it was written for and the agents at work.
+fn queue(message: &Message, (run, working): (Option<&RunView>, &[WorkingAgent]), state: PanelState) -> Queue {
   let Some(run) = run else {
     return Queue::RunStarts;
   };
   if message.run().is_some_and(|own| own != run.id()) {
     return Queue::RunEnded;
   }
+  let recipient = message.queued_for(run.id()).unwrap_or_default();
+  let at_work = match recipient {
+    Recipient::Orchestrator => working.first(),
+    Recipient::Agent(profile) => working.iter().find(|working| working.profile == profile),
+  };
+  if let Some(working) = at_work {
+    return match message.timing() {
+      Timing::Now => Queue::SendingNow(working.agent.clone()),
+      Timing::AfterTurn => Queue::AfterTurn(working.agent.clone()),
+    };
+  }
   let later_agent = direct_recipient_waits_for_later_turn(message, run, state);
+  let next_turn = || match recipient {
+    Recipient::Agent(profile) => Queue::AgentNextTurn(role_of(Some(run), profile)),
+    Recipient::Orchestrator => Queue::NextCheckpoint,
+  };
   match run.run.status() {
     RunStatus::Pending => Queue::RunStarts,
-    RunStatus::Paused(PauseReason::Requested) if later_agent => Queue::AgentNextTurn,
+    RunStatus::Paused(PauseReason::Requested) if later_agent => next_turn(),
     RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => Queue::AgentNextTurn,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => next_turn(),
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
     RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,
     // A run recorded as running without a runner is interrupted until one is back.
-    RunStatus::Running if state == PanelState::Interrupted && later_agent => Queue::AgentNextTurn,
+    RunStatus::Running if state == PanelState::Interrupted && later_agent => next_turn(),
     RunStatus::Running if state == PanelState::Interrupted => Queue::RunContinues,
     RunStatus::Succeeded if state == PanelState::WorktreeRemoved => Queue::WorktreeRemoved,
-    RunStatus::Running | RunStatus::Succeeded if later_agent => Queue::AgentNextTurn,
+    RunStatus::Running | RunStatus::Succeeded if later_agent => next_turn(),
     RunStatus::Running | RunStatus::Succeeded => Queue::NextCheckpoint,
   }
 }
@@ -416,44 +462,4 @@ fn direct_recipient_waits_for_later_turn(message: &Message, run: &RunView, state
     _ => run.current_step(),
   };
   step.and_then(|step| profile_of(run, &step.key)) != Some(profile)
-}
-
-/// Why a message was not sent.
-#[derive(Debug)]
-pub enum SendError {
-  Blank,
-  InvalidRecovery,
-  Store(StoreError),
-}
-
-impl SendError {
-  pub fn message(&self) -> UiMessage {
-    match self {
-      Self::Blank => UiMessage::new("conversation.errors.blank"),
-      Self::InvalidRecovery => UiMessage::new("conversation.errors.invalidRecovery"),
-      Self::Store(error) => messages::store_error(error),
-    }
-  }
-}
-
-/// Stores a person's message `text` to `recipient` for `task`'s latest run (`run`, if it has one),
-/// once per `key`: a retry after an unclear failure returns the message stored the first time.
-pub fn send_in(
-  repo_root: &Path,
-  key: IdempotencyKey,
-  (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
-  recipient: Recipient,
-  text: &str,
-) -> Result<Message, SendError> {
-  // A new message's text is only checked for being blank.
-  let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
-  let message = Message::from_person(task, run, recipient, body, Timestamp::now());
-  let message = match recovery_after {
-    Some(sequence) => message
-      .recovering_after(sequence)
-      .map_err(|_| SendError::InvalidRecovery)?,
-    None => message,
-  };
-  let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
-  db.send_message(key, &message).map_err(SendError::Store)
 }

@@ -63,18 +63,18 @@ impl lurq::app::component::DevtoolsInspectable for Choice {}
 
 /// A decision on one plan, as the runner takes it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decision {
-  run: RunId,
-  execution: StepExecutionId,
-  version: PlanVersion,
-  decision: PlanDecision,
+pub(in crate::screens::project::task) struct Decision {
+  pub(in crate::screens::project::task) run: RunId,
+  pub(in crate::screens::project::task) execution: StepExecutionId,
+  pub(in crate::screens::project::task) version: PlanVersion,
+  pub(in crate::screens::project::task) decision: PlanDecision,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
 
-type DecisionAction = FutureAction<Decision, (), Message>;
+pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
 
-fn decision_action(ctx: &mut Ctx) -> DecisionAction {
+pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");

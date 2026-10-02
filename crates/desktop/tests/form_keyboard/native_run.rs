@@ -326,7 +326,9 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
       .expect("transcript");
   });
   open_task(&mut desktop);
-  desktop.click("task-tab-activity");
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-details");
+  desktop.click("conversation-details");
   desktop.wait_for("activity-invocation");
   let panel = "activity-invocation";
   assert!(shows(

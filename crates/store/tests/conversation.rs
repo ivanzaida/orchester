@@ -5,7 +5,7 @@
 mod support;
 
 use orchester_core::{
-  conversation::{AgentMessage, Delivery, Message, MessageBody, Recipient, Sender},
+  conversation::{AgentMessage, Arrival, Delivery, Message, MessageBody, Recipient, Sender, Timing, Undelivered},
   id::{IdempotencyKey, InvocationId, StepExecutionId},
   run::{AttemptReason, Run, RunStatus},
   store::{ActivityStore, ConversationStore, RunStore},
@@ -70,7 +70,7 @@ fn conversation_delivery_is_stored_and_moves_forward_only() {
   let mut message = Message::from_person(run.task(), None, Recipient::Orchestrator, body("Keep email."), at(10));
   db.send_message(IdempotencyKey::generate(), &message).expect("stored");
   message
-    .deliver(run.id(), (execution, invocation), at(12))
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::Prompt)
     .expect("delivered");
   db.save_deliveries(std::slice::from_ref(&message)).expect("saved");
   assert_eq!(db.messages(run.task()).expect("messages"), [message.clone()]);
@@ -117,11 +117,71 @@ fn conversation_runs_with_queued_messages_are_the_runs_they_were_written_for() {
   assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()], "listed once");
   for message in &mut queued {
     message
-      .deliver(run.id(), (execution, invocation), at(13))
+      .deliver(run.id(), (execution, invocation), at(13), Arrival::Prompt)
       .expect("delivered");
   }
   db.save_deliveries(&queued).expect("saved");
   assert!(db.runs_with_queued_messages().expect("runs").is_empty());
+}
+
+#[test]
+fn conversation_a_message_sent_now_keeps_how_it_arrived_or_why_it_did_not() {
+  let (repo, mut db, run, execution, invocation) = working();
+  let send_now = |text: &str, millis| {
+    Message::from_person(
+      run.task(),
+      Some(run.id()),
+      Recipient::Orchestrator,
+      body(text),
+      at(millis),
+    )
+    .sent(Timing::Now)
+    .expect("a person's message")
+  };
+  let mut steered = send_now("Stop editing the parser.", 10);
+  let mut refused = send_now("Use the new API.", 11);
+  for message in [&steered, &refused] {
+    db.send_message(IdempotencyKey::generate(), message).expect("stored");
+  }
+  assert_eq!(
+    db.messages(run.task()).expect("messages"),
+    [steered.clone(), refused.clone()]
+  );
+  steered
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::MidTurn)
+    .expect("delivered");
+  refused
+    .not_delivered(run.id(), execution, at(13), Undelivered::Refused)
+    .expect("not delivered");
+  db.save_deliveries(&[steered.clone(), refused.clone()]).expect("saved");
+  assert_eq!(
+    db.messages(run.task()).expect("messages"),
+    [steered.clone(), refused.clone()]
+  );
+  assert!(
+    db.runs_with_queued_messages().expect("runs").is_empty(),
+    "a message that was not delivered is not queued"
+  );
+  // The person sends it after the turn: queued again.
+  refused.send_after_turn().expect("sent after the turn");
+  db.save_deliveries(std::slice::from_ref(&refused)).expect("saved");
+  let stored = db.messages(run.task()).expect("messages");
+  assert_eq!(stored[1], refused);
+  assert_eq!(
+    (stored[1].timing(), stored[1].delivery()),
+    (Timing::AfterTurn, Some(Delivery::Queued))
+  );
+  assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()]);
+  let connection = raw(db, repo.path());
+  assert!(
+    connection
+      .execute(
+        "UPDATE messages SET timing = 'now' WHERE id = ?1",
+        [refused.id().to_string()]
+      )
+      .is_err(),
+    "a message sent after the turn is not sent now again"
+  );
 }
 
 #[test]
@@ -211,7 +271,7 @@ fn conversation_recovery_intent_round_trips_and_cannot_be_rewritten() {
   db.append_events(&run, &events).expect("stored attempt");
   assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
   message
-    .deliver(run.id(), (execution, invocation), at(22))
+    .deliver(run.id(), (execution, invocation), at(22), Arrival::Prompt)
     .expect("delivered");
   db.save_deliveries(std::slice::from_ref(&message)).expect("delivery");
   message.acknowledge(at(23)).expect("acknowledge");

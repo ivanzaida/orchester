@@ -7,14 +7,17 @@
 //! turn that ends after messages were delivered acknowledges them, and its final message is the
 //! agent's reply. What people wrote while no runner was attached is delivered once one attaches.
 //!
+//! A message sent now goes to the agent at work it reaches while its turn runs
+//! ([`RunTask::steer`]); one its turn ended before is read at the turn's end like any other.
+//!
 //! [`Command::DeliverMessages`](orchester_ipc::Command) only wakes the run: what is queued is read
 //! from the database.
 
 use std::path::Path;
 
 use orchester_core::{
-  conversation::{self, AgentMessage, Delivery, Message, MessageBody},
-  id::{RunId, StepExecutionId},
+  conversation::{self, AgentMessage, Arrival, Delivery, Message, MessageBody},
+  id::{ResourceId, RunId, StepExecutionId},
   run::{Invocation, Run, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
   store::{ConversationStore, MergeStore},
   time::Timestamp,
@@ -180,22 +183,65 @@ fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Pre
 }
 
 impl RunTask {
-  /// A person's messages were stored: they are picked up as the run's agents reach a boundary.
-  pub(super) fn deliver_messages(ack: Ack) {
+  /// A person's messages were stored: the ones sent now go to the agents at work they reach, the
+  /// others are picked up as the run's agents reach a boundary.
+  pub(super) fn deliver_messages(&mut self, ack: Ack) -> Result<(), ExecutionError> {
     answer(ack, Ok(()));
+    self.steer()
   }
 
-  /// People's messages queued for `execution`'s agent: to Orchestrator or to its profile.
-  pub(super) fn queued_for(&self, execution: StepExecutionId) -> Result<Vec<Message>, ExecutionError> {
-    let profile = self
+  /// Hands each message sent now and still queued to the first agent at work it reaches, once.
+  pub(super) fn steer(&mut self) -> Result<(), ExecutionError> {
+    let mut executions: Vec<StepExecutionId> = self
+      .agents
+      .iter()
+      .filter(|(_, active)| active.steers.is_some() && !active.abandoned)
+      .map(|(execution, _)| *execution)
+      .collect();
+    if executions.is_empty() {
+      return Ok(());
+    }
+    executions.sort_unstable();
+    let messages = self.db.messages(self.run.task())?;
+    for execution in executions {
+      let Some(profile) = self.profile_of(execution) else {
+        continue;
+      };
+      let steered: Vec<Message> = messages
+        .iter()
+        .filter(|message| message.steers(self.run.id(), profile) && !self.steered.contains(&message.id()))
+        .cloned()
+        .collect();
+      if steered.is_empty() {
+        continue;
+      }
+      self.steered.extend(steered.iter().map(Message::id));
+      tracing::info!(run = %self.run.id(), %execution, count = steered.len(), "messages sent now go to the agent");
+      if let Some(steers) = self.agents.get(&execution).and_then(|active| active.steers.as_ref())
+        && steers.send(steered).is_err()
+      {
+        // The agent has just ended: its end reads what is still queued.
+        tracing::debug!(%execution, "the agent ended before the messages sent now");
+      }
+    }
+    Ok(())
+  }
+
+  /// The agent profile `execution`'s step runs on; `None` for a tool step.
+  fn profile_of(&self, execution: StepExecutionId) -> Option<ResourceId> {
+    self
       .run
       .execution(execution)
       .and_then(|execution| self.run.snapshot().step(execution.step()))
       .and_then(|step| match step.executor() {
         StepExecutor::Agent { profile, .. } => Some(profile.resource),
         StepExecutor::Tool { .. } => None,
-      });
-    let Some(profile) = profile else {
+      })
+  }
+
+  /// People's messages queued for `execution`'s agent: to Orchestrator or to its profile.
+  pub(super) fn queued_for(&self, execution: StepExecutionId) -> Result<Vec<Message>, ExecutionError> {
+    let Some(profile) = self.profile_of(execution) else {
       return Ok(Vec::new());
     };
     let messages = self.db.messages(self.run.task())?;
@@ -207,19 +253,26 @@ impl RunTask {
     )
   }
 
-  /// `messages` went to `execution`'s agent with `invocation`, which started with them.
+  /// `messages` went to `execution`'s agent with `invocation`, which started with them, as
+  /// `arrival` says.
   pub(super) fn deliver(
     &mut self,
     execution: StepExecutionId,
     invocation: &Invocation,
     mut messages: Vec<Message>,
+    arrival: Arrival,
   ) -> Result<(), ExecutionError> {
     if messages.is_empty() {
       return Ok(());
     }
     for message in &mut messages {
       message
-        .deliver(self.run.id(), (execution, invocation.id), invocation.started_at)
+        .deliver(
+          self.run.id(),
+          (execution, invocation.id),
+          invocation.started_at,
+          arrival,
+        )
         .map_err(ExecutionError::Conversation)?;
     }
     self.db.save_deliveries(&messages)?;

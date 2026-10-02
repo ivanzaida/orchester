@@ -61,7 +61,7 @@ pub(super) struct ToolApprovalProps {
 impl lurq::app::component::DevtoolsInspectable for ToolApprovalProps {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Choice {
+pub(in crate::screens::project::task) enum Choice {
   Approve,
   Deny,
 }
@@ -69,17 +69,17 @@ enum Choice {
 impl lurq::app::component::DevtoolsInspectable for Choice {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decision {
-  run: RunId,
-  approval: String,
-  choice: Choice,
+pub(in crate::screens::project::task) struct Decision {
+  pub(in crate::screens::project::task) run: RunId,
+  pub(in crate::screens::project::task) approval: String,
+  pub(in crate::screens::project::task) choice: Choice,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
 
-type DecisionAction = FutureAction<Decision, (), Message>;
+pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
 
-fn decision_action(ctx: &mut Ctx) -> DecisionAction {
+pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
@@ -355,7 +355,12 @@ fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {
     .into()
 }
 
-fn action_label(ctx: &Ctx, choice: Choice, busy: bool, requested: Option<Choice>) -> Arc<str> {
+pub(in crate::screens::project::task) fn action_label(
+  ctx: &Ctx,
+  choice: Choice,
+  busy: bool,
+  requested: Option<Choice>,
+) -> Arc<str> {
   match (choice, busy && requested == Some(choice)) {
     (Choice::Approve, true) => ctx.t("runs.toolApproval.approving"),
     (Choice::Deny, true) => ctx.t("runs.toolApproval.denying"),

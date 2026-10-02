@@ -6,7 +6,7 @@
 //! (pause, cancel, the runner stopping) arrive as [`Control`]s.
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   path::PathBuf,
   sync::{
     Arc,
@@ -17,7 +17,7 @@ use std::{
 
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
-  id::StepExecutionId,
+  id::{MessageId, StepExecutionId},
   project::Project,
   run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
   secret::SecretVault,
@@ -113,6 +113,8 @@ pub(super) struct RunTask {
   events: mpsc::UnboundedReceiver<WorkerEvent>,
   /// The memory records were scanned for unreadable ones: once per run task is enough.
   pub(super) memory_scanned: bool,
+  /// People's messages sent now that went to an agent at work, each once.
+  pub(super) steered: HashSet<MessageId>,
 }
 
 impl RunTask {
@@ -140,6 +142,7 @@ impl RunTask {
       worker_events,
       events,
       memory_scanned: false,
+      steered: HashSet::new(),
     }
   }
 
