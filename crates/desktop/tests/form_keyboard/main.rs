@@ -30,6 +30,7 @@ mod mcp_servers;
 mod modal_layer;
 mod native_connections;
 mod native_dialog;
+mod native_model_uses;
 mod native_models;
 mod native_run;
 mod new_task;

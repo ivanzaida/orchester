@@ -36,7 +36,7 @@ pub use self::{
     check, executable_candidates, parse_claude_auth_status, parse_codex_catalog, parse_codex_login_status,
     parse_version,
   },
-  agent::{AgentConnection, CheckResult, ConnectionCheck},
+  agent::{AgentConnection, CheckResult, ConnectionCheck, EngineVendor},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
@@ -47,7 +47,7 @@ pub use self::{
     parse_gh_auth_status, parse_gh_version,
   },
   model_requirements::{CliTooOld, ModelRequirements, parse_cli_too_old},
-  native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError, ensure_used_listed},
+  native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError, ensure_used_kept},
   provider::{AgentProvider, AgentRuntime, WireApi},
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};

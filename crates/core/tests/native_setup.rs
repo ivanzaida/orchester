@@ -8,7 +8,7 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CheckResult, ConnectionCheck, ConnectionError,
     ConnectionStatus, Effort, EndpointPreset, ModelSource, NativeModel, NativeModels, NativeModelsError,
-    ensure_used_listed, offers_provider_fallback,
+    ensure_used_kept, offers_provider_fallback,
   },
   id::{ConnectionId, SecretId},
   name::Name,
@@ -103,30 +103,35 @@ fn native_models_list_each_id_once_with_a_listed_default_and_one_of_its_efforts(
 }
 
 #[test]
-fn native_models_keep_every_model_a_profile_uses() {
+fn native_models_keep_every_listed_model_in_use() {
   let mini = model("lab-mini-8b", &[Effort::Low], ModelSource::Manual);
   let large = model("lab-large-70b", &[], ModelSource::Manual);
+  let both = [mini.clone(), large.clone()];
   let used = [
     model_id("lab-mini-8b"),
     model_id("lab-mini-8b"),
     model_id("lab-large-70b"),
   ];
-  assert_eq!(ensure_used_listed(&[mini.clone(), large.clone()], &used), Ok(()));
-  assert_eq!(ensure_used_listed(&[], []), Ok(()), "no profile uses a model");
+  assert_eq!(ensure_used_kept(&both, &both, &used), Ok(()));
+  assert_eq!(ensure_used_kept(&[], &[], []), Ok(()), "nothing uses a model");
   // Removing a used model, or giving it another id, drops it.
   assert_eq!(
-    ensure_used_listed(std::slice::from_ref(&large), &used),
+    ensure_used_kept(&both, std::slice::from_ref(&large), &used),
     Err(NativeModelsError::UsedModelDropped(model_id("lab-mini-8b")))
   );
   let renamed = model("lab-mini-9b", &[Effort::Low], ModelSource::Manual);
   assert_eq!(
-    ensure_used_listed(&[renamed, large], &used),
+    ensure_used_kept(&both, &[renamed, large.clone()], &used),
     Err(NativeModelsError::UsedModelDropped(model_id("lab-mini-8b")))
   );
   assert_eq!(
-    ensure_used_listed(&[mini], &used),
+    ensure_used_kept(&both, std::slice::from_ref(&mini), &used),
     Err(NativeModelsError::UsedModelDropped(model_id("lab-large-70b")))
   );
+  // A used model the list never had does not hold up a change of the list.
+  let typed = [model_id("claude-typed-model"), model_id("lab-mini-8b")];
+  assert_eq!(ensure_used_kept(&both, std::slice::from_ref(&mini), &typed), Ok(()));
+  assert_eq!(ensure_used_kept(&[], std::slice::from_ref(&large), &typed), Ok(()));
 }
 
 #[test]

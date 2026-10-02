@@ -156,7 +156,13 @@ impl ModelsDialog {
     if rows.is_empty() {
       return Err(Message::new("connections.native.save.noModels"));
     }
+    let before = self
+      .connection
+      .api()
+      .map(|api| api.models().models())
+      .unwrap_or_default();
     keep_used(
+      before,
       &rows,
       &of_connection(&self.context.model_uses, self.connection.id()),
       DROPPED_KEYS,

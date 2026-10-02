@@ -118,10 +118,10 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
     "api.anthropic.com",
     "DeepSeek",
     "api.deepseek.com",
-    "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
+    "The DeepSeek preset uses OpenAI Responses; DeepSeek’s Anthropic route is reachable through Custom,",
+    "and compatible endpoints come in a later version of Orchester.",
     "Custom",
     "your server",
-    "Compatible endpoints come in a later version of Orchester.",
   ] {
     assert!(shows(&mut desktop, "native-preset", text), "{text}");
   }

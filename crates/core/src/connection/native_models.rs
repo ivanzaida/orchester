@@ -120,14 +120,18 @@ pub enum NativeModelsError {
   UsedModelDropped(ModelId),
 }
 
-/// Checks that `models` still lists every model in `used`, the models profiles on the connection run
-/// with: removing a model a profile uses, or changing its id, would leave the profile without a model,
-/// so the profile has to switch to another model first (decision of 2026-10-01).
-pub fn ensure_used_listed<'a>(
-  models: &[NativeModel],
+/// Checks that the models `after` still list every model in `used` (the models profiles and steps on
+/// the connection run with) that the models `before` listed: removing such a model, or changing its id,
+/// would leave its user without a model, so the user has to switch to another model first (decision of
+/// 2026-10-01). A used model `before` did not list is not the list's to keep: a profile draft may name a
+/// model the connection never listed, and that does not hold up any change of the list.
+pub fn ensure_used_kept<'a>(
+  before: &[NativeModel],
+  after: &[NativeModel],
   used: impl IntoIterator<Item = &'a ModelId>,
 ) -> Result<(), NativeModelsError> {
-  match used.into_iter().find(|id| !models.iter().any(|model| &model.id == *id)) {
+  let listed = |models: &[NativeModel], id: &ModelId| models.iter().any(|model| &model.id == id);
+  match used.into_iter().find(|id| listed(before, id) && !listed(after, id)) {
     Some(dropped) => Err(NativeModelsError::UsedModelDropped(dropped.clone())),
     None => Ok(()),
   }

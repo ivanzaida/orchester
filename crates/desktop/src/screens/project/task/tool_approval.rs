@@ -14,7 +14,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::AgentProvider, id::RunId, resource::ModelId, run::PendingToolApproval};
+use orchester_core::{
+  connection::{AgentProvider, EngineVendor},
+  id::RunId,
+  resource::ModelId,
+  run::PendingToolApproval,
+};
 use orchester_ipc::Command;
 
 use super::native_approval;
@@ -44,6 +49,8 @@ pub(super) struct ToolApprovalProps {
   approval: PendingToolApproval,
   /// The CLI of the agent that asks, which decides what an approval means.
   provider: Option<AgentProvider>,
+  /// Who receives the agent's prompts, as its engine is named.
+  vendor: Option<EngineVendor>,
   /// The model the asking step runs on.
   model: Option<ModelId>,
   /// The asking step only reads: an approved command can still change files.
@@ -138,6 +145,7 @@ pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[ShownApproval
     ToolApprovalProps {
       approval: shown.approval,
       provider: shown.provider,
+      vendor: shown.vendor,
       model: shown.model,
       read_only: shown.read_only,
       remaining: pending.len() - 1,
@@ -239,7 +247,7 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       ctx,
       approval,
       native,
-      (props.provider, props.model.as_ref()),
+      (props.vendor.as_ref(), props.model.as_ref()),
     )),
     None => cli_details(ctx, column, approval),
   };

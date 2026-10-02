@@ -40,7 +40,7 @@ fn read_only() -> AgentPermissions {
   )
 }
 
-fn open_models(desktop: &mut Desktop) {
+pub(crate) fn open_models(desktop: &mut Desktop) {
   open_connections(desktop);
   desktop.click("edit-models");
   desktop.wait_for("models-dialog");
@@ -233,8 +233,8 @@ fn native_models_editor_closes_when_its_model_is_removed() {
   assert_eq!(desktop.value("model-id"), "lab-mini-8b");
 }
 
-/// Planner's draft moves to lab-large-70b while its published version keeps lab-mini-8b.
-fn draft_on_large(repo: &Path, connection: ConnectionId) {
+/// Planner's draft moves to `model` on `connection` while its published version stays as it was.
+pub(crate) fn planner_draft_on(repo: &Path, connection: ConnectionId, model: &str) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let planner = db
     .resources(ResourceKind::AgentProfile)
@@ -252,7 +252,7 @@ fn draft_on_large(repo: &Path, connection: ConnectionId) {
     String::new(),
     PromptText::new("Work carefully.").expect("prompt"),
     connection,
-    ModelId::new("lab-large-70b").expect("model"),
+    ModelId::new(model).expect("model"),
     ProviderSettings::default(),
   );
   db.save_draft(planner, &Draft::new(body, Some(published.number()), Timestamp::now()))
@@ -264,7 +264,7 @@ fn native_models_keep_what_a_published_version_and_a_draft_use() {
   let mut seeded = None;
   let mut desktop = Desktop::with_seeded_project(|repo| {
     let id = seed_lab_gateway(repo);
-    draft_on_large(repo, id);
+    planner_draft_on(repo, id, "lab-large-70b");
     seeded = Some(id);
   });
   let id = seeded.expect("seeded");

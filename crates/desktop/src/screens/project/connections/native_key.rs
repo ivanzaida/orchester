@@ -135,14 +135,29 @@ impl NativeDialog {
         ),
         field(&ctx.t("connections.native.key.value"), value.into(), FieldNote::None),
       ))
-      .child(select(
-        ctx,
-        "native-key-environment",
-        "connections.native.key.environment",
-        self.key_environment.clone(),
-        environments,
+      // Half width, under the name, as Secrets pairs its environment (`E213dn`).
+      .child(pair(
+        select(
+          ctx,
+          "native-key-environment",
+          "connections.native.key.environment",
+          self.key_environment.clone(),
+          environments,
+        ),
+        Column::new().into(),
       ))
       .child(Text::new(&hint).variant(ExtraTypography::Hint.role()));
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .overflow_visible()
+      .child(self.new_key_label(ctx))
+      .child(panel)
+      .into()
+  }
+
+  /// *API key · new project secret* and *Choose an existing secret* (`P1whyS`).
+  fn new_key_label(&self, ctx: &Ctx) -> Element {
     let (key, typed) = (self.key.clone(), self.key_value.clone());
     // A value typed for the new secret is wiped when an existing secret is chosen instead.
     let existing = pressable(surface().id("native-key-existing"), move || {
@@ -154,19 +169,13 @@ impl NativeDialog {
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextPrimary),
     );
-    let label = Row::new()
+    Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .child(Text::new(&ctx.t("connections.native.key.newLabel")).variant(TypographyStyle::Caption))
       .child(Spacer::new().flex(1.0))
-      .child(existing);
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .overflow_visible()
-      .child(label)
-      .child(panel)
+      .child(existing)
       .into()
   }
 }

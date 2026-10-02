@@ -252,8 +252,9 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
     Vec<String>`, `context_window: Option<u64>`) becomes a `NativeModel` with `ModelSource::Endpoint`, dropping
     effort names `Effort` does not know and limits that do not fit `NonZeroU32`; `NativeModel::context_window`
     becomes `LoopSettings::context_window` (`DEFAULT_CONTEXT_WINDOW` when unknown).
-  - The invocation records the endpoint and the effort it used, so 04.H10's panel can show what the run used
-    instead of the connection as it is now (*Endpoint now*), and its *Effort* row.
+  - The invocation records the endpoint, the engine's vendor (`AgentConnection::vendor`) and the effort it used,
+    so 04.H10's panel and header and 04.H9's agent row can show what the run used instead of the connection as it
+    is now (*Endpoint now*), and the panel's *Effort* row appears once an invocation records one.
   - The transcript rows of 04.H10 `IcGvI`, moved here from P1e by the user's decision of 2026-10-02, with the
     `AgentEvent` data they need (§2.2): a native tool call's kind (read_file, list_files, search, edit_file,
     write_file, run_command), the lines read and the size, the search scope and its match and file counts, an edit's
@@ -267,15 +268,16 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
   Advanced base URL, the key secret picked or created with the connection in the environment chosen (Development by
   default, as in Secrets), models added by hand with default model and effort, provider fallback (04.H1–H3); the
   native inspector with its statuses, key missing derived from the project's secrets (04.H4, H5); the models dialog
-  (04.H6), where a model in use keeps its id and is never dropped: core `ensure_used_listed` over every published
-  profile version and draft and every published step that overrides the model; the §5.4 capability rows with
+  (04.H6), where a listed model in use keeps its id and is never dropped: core `ensure_used_kept` compares the list
+  before and after against every published profile version and draft, the profile versions unfinished runs pinned,
+  and every step of a published pipeline or draft that overrides the model; the §5.4 capability rows with
   *Enforced by Orchester* (04.H8); the approval of a native command with its shell, full string, working directory
   and time limit (04.H9); in Activity, the step header and the invocation panel of a native invocation (04.H10: runs
   on this computer, the connection's endpoint now, network, tool calls); and the note of what Orchester could not
   enforce under the readiness card (04.H11). Test connection and Fetch models are visibly unavailable. Not built:
   04.H7; the *Effort* row of 04.H10's panel (the invocation records no effort yet, P1d). The transcript rows of
   04.H10 moved to P1d by the user's decision of 2026-10-02 (see P1d). Tests: `form_keyboard native_`
-  (`native_connections`, `native_dialog`, `native_models`, `native_run`), core `native_connection`/`native_setup`,
+  (`native_connections`, `native_dialog`, `native_models`, `native_model_uses`, `native_run`), core `native_connection`/`native_setup`,
   store `connections native`, `tool_approvals native_`.
 
 ## L · After lurq 0.30.0

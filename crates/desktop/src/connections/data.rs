@@ -15,7 +15,7 @@ use orchester_core::{
   repository::RepositoryLink,
   resource::ModelId,
   secret::Secret,
-  store::{ConnectionStore, McpServerStore, RepositoryStore, ResourceStore, SecretStore},
+  store::{ConnectionStore, McpServerStore, RepositoryStore, SecretStore},
   time::Timestamp,
 };
 use orchester_exec::launch::{self, Launch};
@@ -61,14 +61,7 @@ pub struct ProjectConnections {
 impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
 
 impl ProjectConnections {
-  pub fn load<S>(store: &S) -> Result<Self, StoreError>
-  where
-    S: ResourceStore<Error = StoreError>
-      + ConnectionStore<Error = StoreError>
-      + RepositoryStore<Error = StoreError>
-      + McpServerStore<Error = StoreError>
-      + SecretStore<Error = StoreError>,
-  {
+  pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
     // A profile uses the connection and the MCP servers its current content names: its draft if it
     // has one.
     let uses = profiles(store)?

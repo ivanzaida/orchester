@@ -12,7 +12,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::AgentProvider,
+  connection::EngineVendor,
   resource::ModelId,
   run::{NativeCommandAsk, PendingToolApproval},
 };
@@ -50,7 +50,7 @@ pub(super) fn details(
   ctx: &Ctx,
   approval: &PendingToolApproval,
   native: NativeCommandAsk,
-  (provider, model): (Option<AgentProvider>, Option<&ModelId>),
+  (vendor, model): (Option<&EngineVendor>, Option<&ModelId>),
 ) -> Vec<Element> {
   let shell = native.shell.map(|shell| {
     let value = ctx.t_args(
@@ -74,7 +74,7 @@ pub(super) fn details(
       "runs.activity.panel.agentValue",
       [
         ("agent", approval.agent.as_str()),
-        ("engine", &*engine(ctx, provider, model.as_str())),
+        ("engine", &*engine(ctx, vendor, model.as_str())),
       ],
     ),
     None => approval.agent.as_str().into(),

@@ -30,7 +30,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::AgentProvider, id::StepExecutionId};
+use orchester_core::{connection::EngineVendor, id::StepExecutionId};
 use parking_lot::Mutex;
 
 use self::{
@@ -43,7 +43,7 @@ use crate::{
   background, messages,
   messages::Message,
   runner::Runners,
-  screens::project::connections::status::short_key as provider_short_key,
+  screens::project::connections::status::{preset_name_key, short_key as provider_short_key},
   tasks::{
     detail::{RunView, TaskDetail, activity_in},
     transcript::{Entry, entries},
@@ -364,15 +364,15 @@ impl ActivityTab {
   }
 }
 
-/// The CLI or model API and the model an agent runs on, as the design writes it ("Codex / Sol",
-/// "OpenAI API / deepseek-v4-pro"); the model alone once the profile's connection is gone. A
-/// connection keeps its provider, so naming it from the connection as it is now names what ran.
-pub(super) fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
-  match provider {
-    Some(provider) => ctx.t_args(
-      "runs.activity.engine",
-      [("provider", &*ctx.t(provider_short_key(provider))), ("model", model)],
-    ),
-    None => model.into(),
-  }
+/// Who receives an agent's prompts and the model it runs on, as the design writes it ("Codex / Sol",
+/// "DeepSeek / deepseek-v4-pro", "gateway.kontur.lan / lab-coder-32b"); the model alone once the
+/// profile's connection is gone. Who that is follows core's `AgentConnection::vendor`.
+pub(super) fn engine(ctx: &Ctx, vendor: Option<&EngineVendor>, model: &str) -> Arc<str> {
+  let name = match vendor {
+    Some(EngineVendor::Provider(provider)) => ctx.t(provider_short_key(*provider)),
+    Some(EngineVendor::Preset(preset)) => ctx.t(preset_name_key(*preset)),
+    Some(EngineVendor::Host(host)) => host.as_str().into(),
+    None => return model.into(),
+  };
+  ctx.t_args("runs.activity.engine", [("provider", &*name), ("model", model)])
 }

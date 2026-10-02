@@ -225,7 +225,7 @@ impl ModelEditor {
       .iter()
       .map(|row| if row.id() == edited { model.clone() } else { row.clone() })
       .collect();
-    keep_used(&after, uses, ID_KEYS).map_err(|error| Some(EditError::Id(error)))?;
+    keep_used(models, &after, uses, ID_KEYS).map_err(|error| Some(EditError::Id(error)))?;
     Ok(model)
   }
 }

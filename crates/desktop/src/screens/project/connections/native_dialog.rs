@@ -136,7 +136,7 @@ impl Component for NativeDialog {
   type Props = ();
 
   fn create(ctx: &mut Ctx) -> Self {
-    let mut context = ctx
+    let context = ctx
       .use_context::<DialogContext>()
       .expect("the connections screen provides the dialog context");
     let editing = match &context.mode {
@@ -149,12 +149,6 @@ impl Component for NativeDialog {
       _ => AgentProvider::AnthropicApi,
     };
     let key_value = Signal::new(String::new());
-    let (wipe, close) = (key_value.clone(), context.close.clone());
-    // A value typed but not saved is wiped when the dialog closes.
-    context.close = Arc::new(move || {
-      wipe.update(|text| text.zeroize());
-      close();
-    });
     let dialog = Self::with_values(ctx, context, provider, editing.as_ref(), key_value);
     ctx.focus(&dialog.frame);
     dialog.watch(ctx);
@@ -184,6 +178,14 @@ impl Component for NativeDialog {
       _ => "connections.dialog.addTitle",
     };
     dialog(ctx, &self.frame, &ctx.t(title), &self.context, fields, bar)
+  }
+}
+
+/// A value typed but not saved is wiped whenever the dialog goes: closed, cancelled, saved, or replaced
+/// by another kind's or provider's dialog.
+impl Drop for NativeDialog {
+  fn drop(&mut self) {
+    self.key_value.update(|text| text.zeroize());
   }
 }
 
@@ -270,17 +272,23 @@ impl NativeDialog {
     let base_url = self.base_url();
     let key = self.key_secret();
     let rows = self.models.get().0;
-    let id = match &self.context.mode {
-      DialogMode::EditNative(connection) => Some(connection.id()),
+    let editing = match &self.context.mode {
+      DialogMode::EditNative(connection) => Some(connection),
       _ => None,
     };
+    let id = editing.map(|connection| connection.id());
     let uses = id
       .map(|id| of_connection(&self.context.model_uses, id))
+      .unwrap_or_default();
+    // A new connection lists no model anything uses yet.
+    let before = editing
+      .and_then(AgentConnection::api)
+      .map(|api| api.models().models())
       .unwrap_or_default();
     let models = if rows.is_empty() {
       Err(Message::new("connections.native.save.noModels"))
     } else {
-      keep_used(&rows, &uses, DROPPED_KEYS).and_then(|()| {
+      keep_used(before, &rows, &uses, DROPPED_KEYS).and_then(|()| {
         // The defaults are cleared as soon as they no longer fit the models (`watch`).
         NativeModels::new(rows, self.default_model.get().0, self.default_effort.get().0)
           .map_err(|_| Message::new("connections.native.save.defaultsInvalid"))

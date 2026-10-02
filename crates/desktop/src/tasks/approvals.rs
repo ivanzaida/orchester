@@ -4,7 +4,7 @@
 //! step that only reads.
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind},
+  connection::{AgentConnection, AgentProvider, EngineVendor},
   permission::RepositoryAccess,
   resource::{AgentProfile, ModelId},
   run::{PendingToolApproval, PinnedVersion, StepExecutor},
@@ -17,6 +17,8 @@ use orchester_store::{ProjectDb, StoreError};
 pub struct ShownApproval {
   pub approval: PendingToolApproval,
   pub provider: Option<AgentProvider>,
+  /// Who receives the agent's prompts, as its engine is named.
+  pub vendor: Option<EngineVendor>,
   /// The model the asking step runs on, by the run's pinned snapshot.
   pub model: Option<ModelId>,
   /// The asking invocation launched read-only, by its recorded launch permissions.
@@ -29,11 +31,13 @@ pub fn pending(db: &ProjectDb) -> Result<Vec<ShownApproval>, StoreError> {
     db.pending_tool_approvals_all()?
       .into_iter()
       .map(|approval| {
-        let (provider, model) = engine(db, &approval).map_or((None, None), |(provider, model)| (provider, Some(model)));
+        let (connection, model) =
+          engine(db, &approval).map_or((None, None), |(connection, model)| (connection, Some(model)));
         let read_only = launched_read_only(db, &approval);
         ShownApproval {
           approval,
-          provider,
+          provider: connection.as_ref().map(AgentConnection::provider),
+          vendor: connection.as_ref().map(AgentConnection::vendor),
           model,
           read_only,
         }
@@ -58,7 +62,7 @@ fn launched_read_only(db: &ProjectDb, approval: &PendingToolApproval) -> bool {
 /// The CLI the request's step ran on, through its run's pinned profile version and that profile's
 /// connection, and the step's pinned model. A missing or unreadable part leaves it unknown, which the
 /// dialog shows with its general wording.
-fn engine(db: &ProjectDb, approval: &PendingToolApproval) -> Option<(Option<AgentProvider>, ModelId)> {
+fn engine(db: &ProjectDb, approval: &PendingToolApproval) -> Option<(Option<AgentConnection>, ModelId)> {
   // `.ok()`: an unreadable run, profile or connection only loses the provider-specific wording;
   // the request itself stays shown and decidable, and the list reports its own read errors.
   let run = db.run(approval.run).ok()??;
@@ -66,16 +70,14 @@ fn engine(db: &ProjectDb, approval: &PendingToolApproval) -> Option<(Option<Agen
   let StepExecutor::Agent { profile, model, .. } = run.snapshot().step(&step)?.executor() else {
     return None;
   };
-  Some((provider(db, *profile), model.clone()))
+  Some((connection(db, *profile), model.clone()))
 }
 
-/// The CLI of pinned profile version `profile`'s connection, while both can be read.
-fn provider(db: &ProjectDb, profile: PinnedVersion) -> Option<AgentProvider> {
-  // `.ok()`: as above, an unreadable profile or connection only loses the provider-specific wording.
+/// The agent connection of pinned profile version `profile`, while both can be read.
+fn connection(db: &ProjectDb, profile: PinnedVersion) -> Option<AgentConnection> {
+  // `.ok()`: as above, an unreadable profile or connection only loses the provider-specific wording;
+  // a connection of another kind is no agent's.
   let version = db.version::<AgentProfile>(profile.resource, profile.number).ok()??;
   let connection = db.connection(version.body().connection()).ok()??;
-  match connection.kind() {
-    ConnectionKind::Agent(provider) => Some(*provider),
-    ConnectionKind::GitHub { .. } => None,
-  }
+  AgentConnection::try_from(connection).ok()
 }

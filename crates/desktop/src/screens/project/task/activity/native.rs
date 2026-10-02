@@ -9,9 +9,8 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, TypographyStyle},
   },
-  components::{Row, Spacer, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  components::Text,
+  node::Element,
 };
 use orchester_core::{
   connection::stream::CommandStatus, id::InvocationId, run::Invocation, time::Timestamp, tokens::compact_tokens,
@@ -29,7 +28,7 @@ use crate::{
   ui::{
     message_text,
     pressable::surface,
-    property::{ValueStyle, property, styled_property},
+    property::{ValueStyle, element_property, property, styled_property},
   },
 };
 
@@ -98,8 +97,11 @@ pub(super) fn title(ctx: &Ctx, step: &StepView) -> Arc<str> {
 /// *Started* with how long the invocation has run, or ran: "14:25 · 7 min" (`eK8lM`).
 pub(super) fn started_row(ctx: &Ctx, invocation: &Invocation) -> Element {
   let end = invocation.ended_at.unwrap_or_else(Timestamp::now);
-  let took =
-    Duration::from_millis(u64::try_from(end.unix_millis() - invocation.started_at.unix_millis()).unwrap_or_default());
+  let took = {
+    // A clock set back after the start would make it negative: it reads as no time at all.
+    let millis = (end.unix_millis() - invocation.started_at.unix_millis()).max(0);
+    Duration::from_millis(millis.unsigned_abs())
+  };
   let value = ctx.t_args(
     "runs.activity.panel.startedValue",
     [
@@ -144,13 +146,5 @@ pub(super) fn permissions_row(ctx: &Ctx, nav: &ProjectNav, step: &StepView) -> O
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextPrimary),
     );
-  Some(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .align_items(Alignment::Center)
-      .child(Text::new(&ctx.t("runs.summary.permissions")).variant(TypographyStyle::Caption))
-      .child(Spacer::new().flex(1.0))
-      .child(link)
-      .into(),
-  )
+  Some(element_property(&ctx.t("runs.summary.permissions"), link.into()))
 }

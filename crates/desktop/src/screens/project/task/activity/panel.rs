@@ -150,7 +150,10 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   // A tool step's command runs no model: the panel names its tool instead of an agent.
   let (label, engine) = match invocation.model() {
     Some(model) if native::is_native(step) => ("runs.activity.panel.agent", model.as_str().into()),
-    Some(model) => ("runs.activity.panel.agent", engine(ctx, step.provider, model.as_str())),
+    Some(model) => (
+      "runs.activity.panel.agent",
+      engine(ctx, step.vendor.as_ref(), model.as_str()),
+    ),
     None => ("runs.activity.panel.tool", ctx.t("runs.activity.commandTool")),
   };
   let agent = ctx.t_args(

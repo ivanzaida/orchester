@@ -92,6 +92,15 @@ pub const fn preset_key(preset: EndpointPreset) -> &'static str {
   }
 }
 
+/// The preset's own name, e.g. "DeepSeek", as an engine is named after it.
+pub const fn preset_name_key(preset: EndpointPreset) -> &'static str {
+  match preset {
+    EndpointPreset::Official => "connections.native.preset.officialTitle",
+    EndpointPreset::DeepSeek => "connections.native.preset.deepseekTitle",
+    EndpointPreset::Custom => "connections.native.preset.customTitle",
+  }
+}
+
 /// The company whose models the provider runs, e.g. "OpenAI".
 pub const fn vendor_key(provider: AgentProvider) -> &'static str {
   match provider {

@@ -215,7 +215,7 @@ fn native_shell_command_asks_with_its_shell_full_string_and_time_limit() {
     "Builder asks to run this command through a shell in the task worktree"
   ));
   // The agent row names what it runs on; the explanation names its role only.
-  assert!(shows(&mut desktop, DIALOG, "Builder · OpenAI API / deepseek-v4-pro"));
+  assert!(shows(&mut desktop, DIALOG, "Builder · DeepSeek / deepseek-v4-pro"));
   assert!(shows(
     &mut desktop,
     DIALOG,
@@ -332,7 +332,7 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
   assert!(shows(
     &mut desktop,
     "activity-step-header",
-    "OpenAI API / deepseek-v4-pro · native"
+    "DeepSeek / deepseek-v4-pro · native"
   ));
   assert!(shows(&mut desktop, "activity-invocation-title", "Implement invocation"));
   assert!(shows(&mut desktop, panel, "Builder · deepseek-v4-pro"));

@@ -98,8 +98,8 @@ fn store_connection(
       .map_err(|error| store_failure(&error))?;
     return Ok(connection.id());
   };
-  ensure_kept(db, id, &draft.models)?;
   let mut connection = stored(db, id)?;
+  ensure_kept(db, &connection, &draft.models)?;
   connection.rename(draft.name.clone());
   connection.set_api(api).map_err(|error| connection_failure(&error))?;
   db.save_connection(&connection).map_err(|error| store_failure(&error))?;
@@ -109,8 +109,8 @@ fn store_connection(
 /// Stores `models` as the models of native connection `id`; its key, endpoint and last check stay.
 pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) -> Result<(), Message> {
   let mut db = ProjectDb::open(repo_root).map_err(|error| store_failure(&error))?;
-  ensure_kept(&db, id, &models)?;
   let mut connection = stored(&db, id)?;
+  ensure_kept(&db, &connection, &models)?;
   let api = connection
     .api()
     .ok_or_else(|| Message::new("errors.storage"))?
@@ -120,11 +120,19 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
   db.save_connection(&connection).map_err(|error| store_failure(&error))
 }
 
-/// Refuses `models` for connection `id` while a profile version or draft, or a published pipeline step,
-/// as stored now, runs on a model they no longer list.
-fn ensure_kept(db: &ProjectDb, id: ConnectionId, models: &NativeModels) -> Result<(), Message> {
+/// Refuses `models` for `connection` while something, as stored now, runs on a model its stored models
+/// list and `models` no longer do.
+fn ensure_kept(db: &ProjectDb, connection: &AgentConnection, models: &NativeModels) -> Result<(), Message> {
+  let id = connection.id();
   let uses = model_uses::load(db).map_err(|error| store_failure(&error))?;
-  keep_used(models.models(), &model_uses::of_connection(&uses, id), DROPPED_KEYS).inspect_err(|_| {
+  let before = connection.api().map(|api| api.models().models()).unwrap_or_default();
+  keep_used(
+    before,
+    models.models(),
+    &model_uses::of_connection(&uses, id),
+    DROPPED_KEYS,
+  )
+  .inspect_err(|_| {
     tracing::warn!(connection = %id, "something still uses a model the saved models leave out");
   })
 }

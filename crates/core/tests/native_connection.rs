@@ -8,8 +8,8 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{
     AgentConnection, AgentEndpoint, AgentProvider, AgentRuntime, ApiEndpoint, BaseUrl, CheckResult, Connection,
-    ConnectionCheck, ConnectionError, ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, LastCheck,
-    WireApi, check, invocation::Platform, parse_version,
+    ConnectionCheck, ConnectionError, ConnectionKind, ConnectionStatus, EndpointError, EndpointPreset, EngineVendor,
+    LastCheck, WireApi, check, invocation::Platform, parse_version,
   },
   id::{ConnectionId, SecretId},
   name::Name,
@@ -334,6 +334,43 @@ fn native_listed_commands_run_unconfined_and_a_cli_list_is_not_orchesters() {
     .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
     .expect("enforced by Claude Code");
   assert_eq!(claude.unconfined_list(), None);
+}
+
+#[test]
+fn native_engine_is_named_after_whoever_receives_the_prompts() {
+  let official = native(
+    AgentProvider::AnthropicApi,
+    api(EndpointPreset::Official, "https://api.anthropic.com"),
+  );
+  assert_eq!(
+    official.expect("official").vendor(),
+    EngineVendor::Provider(AgentProvider::AnthropicApi)
+  );
+  let deepseek = native(
+    AgentProvider::OpenAiApi,
+    api(EndpointPreset::DeepSeek, "https://api.deepseek.com"),
+  );
+  assert_eq!(
+    deepseek.expect("deepseek").vendor(),
+    EngineVendor::Preset(EndpointPreset::DeepSeek)
+  );
+  let custom = native(
+    AgentProvider::AnthropicApi,
+    api(EndpointPreset::Custom, "https://gateway.kontur.lan:8443/v1"),
+  );
+  assert_eq!(
+    custom.expect("custom").vendor(),
+    EngineVendor::Host("gateway.kontur.lan:8443".to_owned())
+  );
+  let cli = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Codex · Kontur").expect("name"),
+    AgentProvider::CodexCli,
+    program(),
+    Timestamp::from_unix_millis(1_000),
+  )
+  .expect("a CLI connection");
+  assert_eq!(cli.vendor(), EngineVendor::Provider(AgentProvider::CodexCli));
 }
 
 #[test]

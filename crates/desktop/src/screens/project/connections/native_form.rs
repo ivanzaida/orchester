@@ -105,32 +105,37 @@ impl NativeDialog {
             |url| url.host().into(),
           );
         let radio = Radio::new(id, ctx.t(title), preset == chosen).detail(host);
-        let Some(reason) = preset_unavailable(ctx, self, preset) else {
+        if !preset.offered_on(self.provider) || !preset.is_available() {
+          return radio.unavailable();
+        }
+        {
           let (choice, advanced, url, provider) = (
             self.preset.clone(),
             self.advanced.clone(),
             self.url.clone(),
             self.provider,
           );
-          return radio.render(move || {
+          radio.render(move || {
             choice.set(PresetChoice(preset));
             advanced.set(false);
             url.set(preset.base_url(provider).map(String::from).unwrap_or_default());
-          });
-        };
-        Column::new()
-          .spacing(SpacingSize::Xs)
-          .child(radio.unavailable())
-          .child(unavailable_reason(&reason))
-          .into()
+          })
+        }
       })
       .collect();
+    // The presets in one row, with one note for those that cannot be chosen (`VQjWR`, `TWmTY`).
+    let row = Row::new()
+      .spacing(SpacingSize::Lg)
+      .align_items(Alignment::Center)
+      .overflow_visible()
+      .with_children(options);
     let control = Column::new()
       .id("native-preset")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .overflow_visible()
-      .with_children(options);
+      .child(row)
+      .with_children(presets_locked(ctx, self.provider).map(|reason| unavailable_reason(&reason)));
     field(
       &ctx.t("connections.native.preset.label"),
       control.into(),
@@ -378,12 +383,19 @@ impl NativeDialog {
   }
 }
 
-/// Why `preset` cannot be chosen here: not offered on the provider, or not in this version.
-fn preset_unavailable(ctx: &Ctx, dialog: &NativeDialog, preset: EndpointPreset) -> Option<Arc<str>> {
-  if !preset.offered_on(dialog.provider) {
-    return Some(ctx.t("connections.native.preset.deepseekOnAnthropic"));
+/// Why some presets cannot be chosen on `provider`, in one note: one not offered on the provider, others
+/// not in this version.
+fn presets_locked(ctx: &Ctx, provider: AgentProvider) -> Option<Arc<str>> {
+  let not_offered = EndpointPreset::ALL.iter().any(|preset| !preset.offered_on(provider));
+  let later = EndpointPreset::ALL
+    .iter()
+    .any(|preset| preset.offered_on(provider) && !preset.is_available());
+  match (not_offered, later) {
+    (true, true) => Some(ctx.t("connections.native.preset.deepseekOnAnthropicLater")),
+    (true, false) => Some(ctx.t("connections.native.preset.deepseekOnAnthropic")),
+    (false, true) => Some(ctx.t("connections.native.preset.later")),
+    (false, false) => None,
   }
-  (!preset.is_available()).then(|| ctx.t("connections.native.preset.later"))
 }
 
 /// `field` with `hint` under it (`cLLsA`, `BcRPX`).

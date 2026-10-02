@@ -134,6 +134,14 @@ pub fn noted_property(label: &str, value: &str, note: &str) -> Element {
   property_row(label, Alignment::Start).child(value).into()
 }
 
+/// A property whose value is `value`, e.g. a link (04.H10 `EZD41`), in the row's height.
+pub fn element_property(label: &str, value: Element) -> Element {
+  property_row(label, Alignment::Center)
+    .height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(value)
+    .into()
+}
+
 fn aligned_property(label: &str, value: &str, style: ValueStyle, alignment: Alignment) -> Element {
   let (typography, color) = match style {
     ValueStyle::Text => (TypographyStyle::Caption, PaletteColor::TextPrimary),

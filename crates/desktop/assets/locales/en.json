@@ -2065,6 +2065,7 @@
         "customHost": "your server",
         "deepseekOnAnthropic": "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
         "later": "Compatible endpoints come in a later version of Orchester.",
+        "deepseekOnAnthropicLater": "The DeepSeek preset uses OpenAI Responses; DeepSeek’s Anthropic route is reachable through Custom, and compatible endpoints come in a later version of Orchester.",
         "notOffered": "This preset is not offered on this provider."
       },
       "url": {

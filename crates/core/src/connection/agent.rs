@@ -3,13 +3,21 @@
 use std::{ops::Deref, path::PathBuf};
 
 use super::{
-  AgentEndpoint, AgentProvider, ApiEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck,
-  SignIn,
+  AgentEndpoint, AgentProvider, ApiEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus,
+  EndpointPreset, LastCheck, SignIn,
   catalog::{CatalogModel, ModelCatalog},
   compare_versions,
   model_requirements::CliTooOld,
 };
 use crate::{id::ConnectionId, name::Name, resource::ModelId, secret::Secret, time::Timestamp};
+
+/// Who receives an agent's prompts, as its engine is named: see [`AgentConnection::vendor`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EngineVendor {
+  Provider(AgentProvider),
+  Preset(EndpointPreset),
+  Host(String),
+}
 
 /// What running an agent CLI's read-only commands found, or what testing a native connection's model
 /// API found (`docs/architecture/native-agent.md` §7: listing its models spends no tokens).
@@ -127,6 +135,21 @@ impl AgentConnection {
 
   pub const fn provider(&self) -> AgentProvider {
     self.provider
+  }
+
+  /// Who an agent on this connection is named after where its engine is shown ("Codex / Sol",
+  /// "DeepSeek / deepseek-v4-pro"): whoever receives its prompts. A CLI, and a native connection on its
+  /// provider's official API, name the provider; another preset names itself (DeepSeek, whose data is
+  /// stored in the PRC); a custom endpoint names its host.
+  pub fn vendor(&self) -> EngineVendor {
+    match self.api() {
+      None => EngineVendor::Provider(self.provider()),
+      Some(api) => match api.preset() {
+        EndpointPreset::Official => EngineVendor::Provider(self.provider()),
+        EndpointPreset::Custom => EngineVendor::Host(api.base_url().host().to_owned()),
+        preset @ EndpointPreset::DeepSeek => EngineVendor::Preset(preset),
+      },
+    }
   }
 
   pub fn into_connection(self) -> Connection {
