@@ -103,6 +103,7 @@ const fn pause_reason_text(reason: PauseReason) -> &'static str {
     PauseReason::LimitReached(RunLimit::Tokens) => "token_limit",
     PauseReason::LimitReached(RunLimit::Time) => "time_limit",
     PauseReason::LimitReached(RunLimit::DailyBudget) => "daily_budget",
+    PauseReason::LimitReached(RunLimit::GroupBudget) => "group_budget",
     PauseReason::LimitReached(RunLimit::StepBudget { .. }) => STEP_BUDGET,
   }
 }
@@ -113,6 +114,7 @@ fn parse_pause_reason(value: &str) -> Result<PauseReason, StoreError> {
     "token_limit" => Ok(PauseReason::LimitReached(RunLimit::Tokens)),
     "time_limit" => Ok(PauseReason::LimitReached(RunLimit::Time)),
     "daily_budget" => Ok(PauseReason::LimitReached(RunLimit::DailyBudget)),
+    "group_budget" => Ok(PauseReason::LimitReached(RunLimit::GroupBudget)),
     other => Err(corrupt("pause reason", other)),
   }
 }

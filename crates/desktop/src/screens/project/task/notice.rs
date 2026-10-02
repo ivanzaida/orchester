@@ -59,6 +59,17 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: Option<&RunView>) -> (Icon, Arc<
       ctx.t("runs.summary.notice.queuedTitle"),
       ctx.t("runs.summary.notice.queuedDetail"),
     ),
+    Some(run) if run.first_run && run.run.status() == &RunStatus::Pending => (
+      Icon::Clock3,
+      ctx.t("runs.summary.notice.pendingTitle"),
+      ctx.t(
+        if run.group_hold == Some(orchester_core::task_group::GroupHold::SessionEnded) {
+          "runs.summary.notice.pendingHeldDetail"
+        } else {
+          "runs.summary.notice.pendingDetail"
+        },
+      ),
+    ),
     Some(run) => run_notice(ctx, run),
   }
 }
@@ -249,9 +260,16 @@ fn stopped_at_step_budget(ctx: &Ctx, run: &RunView, execution: StepExecutionId) 
 /// "Stopped at the token limit · checkpoint 7c1e9f2" (`EzWLg`): what was used, and whether the
 /// work at the limit was committed.
 fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str>, Arc<str>) {
+  if limit == RunLimit::GroupBudget {
+    return (
+      Icon::OctagonPause,
+      ctx.t("tasks.bulk.stoppedGroup"),
+      ctx.t("tasks.bulk.stoppedGroupDetail"),
+    );
+  }
   let checkpoint = saved_checkpoint(run);
   let (title, titled) = match limit {
-    RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
+    RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
       ("runs.limit.tokenTitle", "runs.limit.tokenTitleCheckpoint")
     }
     RunLimit::Time => ("runs.limit.timeTitle", "runs.limit.timeTitleCheckpoint"),
@@ -266,7 +284,7 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| ctx.t("runs.limit.theAgent"));
   let (used, of) = match limit {
-    RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
+    RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => (
       compact_tokens(run.run.used().get()),
       compact_tokens(run.run.budget().get()),
     ),
@@ -278,8 +296,10 @@ fn stopped_at_limit(ctx: &Ctx, run: &RunView, limit: RunLimit) -> (Icon, Arc<str
   // The time limit's count decides the plural: "of its 1 minute", "of its 30 minutes".
   let one = of == "1";
   let key = match (limit, checkpoint.is_some(), one) {
-    (RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, true, _) => "runs.limit.tokenDetail",
-    (RunLimit::Tokens | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, false, _) => {
+    (RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, true, _) => {
+      "runs.limit.tokenDetail"
+    }
+    (RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. }, false, _) => {
       "runs.limit.tokenDetailUnsaved"
     }
     (RunLimit::Time, true, true) => "runs.limit.timeDetail.one",

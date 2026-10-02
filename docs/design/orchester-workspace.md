@@ -816,7 +816,7 @@ A run that reaches its time or token budget stops its agents, commits a checkpoi
 
   Each row is followed by the step header of the new attempt. The board also shows the panel's refusal: the runner's reason (*The run does not wait for your decision any more.*) is a field error (circle-alert 12, Inter 11/1.5 `$text`) directly above *Stop and fail the run*.
 
-Proposals in these frames that differ from the build or are not built yet: the Overview card's context names why the run waits (*ORC-128 · Review still fails after 2 retries*; the app shows *Waiting for you*); the status bar event *Review needs your decision · ORC-128*; the three timeline marks; and the *Return the work to* select seeded with the first step (*Research*, as built), where the step the retry would resume (*Implement*) may be the better default.
+Decided 2026-10-02: the Overview card names why the run waits (*ORC-128 · Review still fails after 2 retries*), the status bar shows *Review needs your decision · ORC-128*, the three timeline marks are built as drawn, and *Return the work to* defaults to the step a retry would resume (*Implement*), not the first step; 02.B3 and 02.B5 still draw *Research* there and the text wins.
 
 ## Pipelines library, creation and publishing
 
@@ -905,6 +905,90 @@ Reused: sidebar `zo9Py` with `TSJpn`, `u1XBP`, `DeizF`, `ZGwlv`, `q5LzI`, `tfGRt
 The user explicitly requested creating ten tasks and letting agents work on them either concurrently or in sequence. A pipeline defines the steps within one task; the task queue coordinates separate task runs. All of this remains within the selected project.
 
 Tasks (`J9467`) is the main backlog, with All tasks, Drafts, Queue, Needs review and Done tabs. New task opens the existing single-task form, whose *Create* returns here with the new task's row scrolled into view and highlighted in `$hover` (no frame draws this state yet); Create multiple opens `OqmXc`. Rows expose task ID, title, published pipeline, status and readiness/dependency, with selection and direct entry to task details/conversation. Run selected opens a scheduling review rather than immediately starting work.
+
+**ORC-30 implementation (2026-09-30; independent design verification pending).** Checkboxes select rows without
+opening their task. Select all affects the visible filtered rows; selections hidden by a query remain selected and
+counted. Search matches title, task key, internal ID and brief, combined with the pipeline filter, sort and tab.
+The selection bar counts ready and incomplete selections and lists each selected task's readiness problems.
+Run selected requires every selected task to be a complete draft with a published pipeline and no previous run.
+The review permits dragging or keyboard editing of task order, parallel concurrency or sequential scheduling, per-task token/time
+limits and the aggregate cap; cancelling returns to the selection without scheduling work. Queue saves the whole
+group atomically, pins pipeline versions, and the runner starts one idempotent first run per task. Waiting for input
+or approval occupies a task slot. Sequential scheduling waits until the previous run succeeds (ready for review).
+The aggregate cap applies only to the group's first runs, including further attempts of those same runs. Cancel
+followed by Run again creates a separate run with its own limits; it neither inherits the exhausted group cap nor
+contributes usage to that group. Original group membership remains stored for first-run idempotency and history.
+An unrecovered failure or cancellation holds unstarted members; existing agents retain their normal controls.
+The open review retains the published pipeline versions and task order it displays. Submission and preflight use
+those exact immutable versions, even if a newer publication appears in the meantime; atomic submission rejects a
+changed task pipeline assignment and asks for a renewed review. First-run snapshots use the queued reviewed versions.
+On a Fresh attachment after a desktop session ends, unstarted members (including Pending first runs) receive a
+persisted scheduling hold before agent slots become available. Reconnect does not clear that hold. Open a queued
+member and explicitly start its reviewed first run, or explicitly continue an interrupted first run, to release the
+group's session hold. Existing concurrency, cap, preflight and previous-task checks still apply. A later Run again
+cannot release the old group's hold. These recovery reasons reuse the task list's waiting text (implemented, not
+drawn yet); they preserve group order, original run keys, checkpoints and snapshots rather than creating a new group.
+A recorded Pending original first run exposes Start run in its Summary topbar (implemented, not drawn yet), using
+that existing run's stable first-run key. It retries worktree/start preparation with the recorded ID and snapshot,
+not a new run or the latest publication. Its Summary notice and heading explicitly name a session scheduling hold;
+a Pending record without that hold says it has not started. The list's pipeline column uses the latest readable
+run's pinned pipeline/version, otherwise the queued task's reviewed version, and the latest publication for a draft.
+All five task tabs round-trip through navigation routes; search, pipeline filter and sort remain combined when
+switching tabs. Unknown task-tab routes still fall back to All.
+
+**Implemented, not drawn yet:** inline Set pipeline picker/apply/cancel and skipped-task reasons (only drafts without
+runs are changed); empty search results and non-fixture filter/sort combinations; review validation, offline runner,
+pending/error and queued-success states; one selected task; group waiting reasons for concurrency, previous task,
+agent capacity, daily/shared budgets, preflight or start failure. These reuse existing fields, buttons, notices and
+error text. Values are derived from real selections, never the illustrative ten-task defaults. Group caps stop
+agents at turn boundaries and can overshoot by already-running turns. Queue editing, pause scheduling and explicit
+task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
+enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
+cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
+**Held groups (implemented, not drawn yet; to be drawn in J9467's selection bar):** a failed or cancelled task, the
+spent group cap, or a start the person must fix (preflight problems, a failed start) holds a group's unstarted tasks
+for good; their rows say so (*Held after a task failed or was cancelled. Select the waiting tasks and choose Return to
+drafts to schedule them again.*, and the same for the cap). Selecting any of them adds a secondary **Return to
+drafts** button (undo-2 icon, 32px like Set pipeline) to the selection bar, left of Set pipeline. It takes the
+selected held, never-started tasks back to the drafts and out of their group, together; the group keeps its started
+members, and a group left without members is removed. The drafts can then be reviewed and queued again. The
+selection bar's split names tasks that are neither ready nor incomplete: *0 ready to queue · 1 incomplete · 2 already
+queued or started*. When the selected tasks had different budgets or time limits, the review says under its token
+fields that *These limits replace each selected task’s own token budget and time limit.* (the shared limits apply to
+every task, as the review's per-task fields show). The runner retries a start the person must fix with a growing
+wait (2 s, doubling to 1 min) and stops treating a group as work once it is held for good or every first run ended.
+**Narrow windows and empty searches (implemented, not drawn yet):** below a 1260 window the scheduling review puts
+the settings under the order, both as wide as the page, and the page scrolls; below 1152 the task table leaves out its
+Pipeline column so the title keeps at least 120 (the fixed column widths otherwise leave the title nothing at 960). Below the same width the selection bar puts its actions (Return to drafts, Set pipeline, Run selected) on a second
+line, right-aligned; at any width they keep their full width and the readiness summary gives way with an ellipsis.
+When the search or pipeline filter hides every row of a tab, the table says *No tasks in this tab match the search or
+pipeline filter.* with a *Clear search and filter* button. The drawn copy that names merge dependencies (selection
+summary, sequential hint and notice, branch note) is not used: dependencies are not built, so the app does not claim
+them.
+The scheduling-review order column includes a Task to reorder selector and keyboard-reachable Move up, Move down
+and Undo buttons beneath the scrolling rows (implemented, not drawn yet). Select a task with the picker, then use
+Tab and Enter on its move action. Boundary moves and actions after submission are disabled. Each real keyboard
+move or drag replaces the single Undo snapshot; Undo restores that snapshot once. Choosing a task or attempting
+a no-op move does not replace history. Both review modes share this behavior and queue the resulting order.
+
+**After the failed 2026-09-30 visual review:** scheduling reviews now show the task-count/concurrency footer,
+token units and compact readbacks, the selected published pipeline versions, and compact active-time properties.
+Activating the time property opens a minutes field and Done button (implemented, not drawn yet). Mixed pipeline
+versions are listed explicitly in a wrapping property; pipelines without plan gates keep the generic approvals
+notice. Gate and failure selects offer only the scheduler's supported policy. Actual runner slots appear when
+reported. The footer follows the visible task rows, including the draft-editing hint. Independent re-verification
+is still required. Order counts stay unpadded under the shared counts rule. Create multiple and Orchestrator remain
+visibly unavailable; their implementation is outside ORC-30. The older frames omit the existing Skills sidebar
+entry. The person's scope decision retains existing global navigation and records this omission as a pre-existing
+design/state difference, consistent with runtime UI verification. Fresh independent Verify compares the changed
+task-list and scheduling-review regions against their references; ORC-30 does not remove Skills navigation.
+
+**Scheduling-review recheck corrections:** settings keep the 32px inset after the divider and 508px controls
+width at 1440px. Their reserved 12px scrollbar gutter occupies part of the page's right padding, preserving
+the controls' right edge. Execution-mode cards use the drawn 88px height and 12px gap (`YZcH2`, `jPX6u`).
+Order titles keep the 12px field typography with primary text color; subtitles remain muted. These corrections
+apply to both W1Dq6 and IyJ5a and require a fresh independent visual comparison. The original evidence in
+`.tmp/verify/recheck/report.md` remains preserved.
 
 **Task rows by run state (`r2al55`, drawn 2026-09-27 from the app).** A task with a run shows the run's state as the status label and, in the last column (and after the key in the Overview list `zemhy`), what that means for the task now:
 
@@ -1440,6 +1524,8 @@ The *Enforced by <CLI>* panel lists each setting with the mechanism the chosen c
 **On the task page.** The run panels show the current agent's effective permissions as a row with a link: *This run* in 02.10 (`RD4pc`, *Explorer · Read-only · view ↗*) and *Working context* in 02.12 (`jgqPe`) and 02.A (`Oqmog`) (*Builder · Edit files · 3 commands · Network off · change ↗*). The Activity tab's invocation panel repeats it.
 
 **What the row shows: the launch, not the next settings (ORC-44, drawn 2026-10-02).** The row shows what the step's current or last invocation actually launched with. The label carries the qualifier and the value stays bare: *Running with* (an invocation is open), *Last ran with* (the step's last invocation ended), *Next run uses* (nothing launched yet). The value is *Builder · Edit files · 3 commands · Network off · MCP asks*; the MCP part is *MCP asks* or *MCP auto*. An invocation that exists but has not recorded its launch reads *Running with · starting…*; an older invocation from before launches were recorded reads *Running with · not recorded*. A value wraps only at the "·" separators, never inside a part; when the row cannot hold it on one line, the value stacks (right-aligned) above *change ↗* / *view ↗*, which is never clipped. Drawn in place: 02.10 `H1wCPK` (stacked in the 288 panel), 02.12 `YOcfT`, 02.A `d6xleF` (*Last ran with*, paused), 02.S `Lr8Dg` and the 02.J anchor `rnGN7` (one line at 720). All states, the inline row at window 1440 (row 720) and at 960 (row 240, stacked), and the Activity invocation panel (*Running with* for the open invocation, *Ran with* for an ended one, *Ran with · no permissions · it did not start* for one that never started) are on the compact board `iPHGE` in 04.2 `DMBmo`. *Ran with* and the never-started wording are proposals that differ from the app's current *This invocation did not start · it ran with no permissions*.
+
+**Decisions (2026-10-02, ORC-44).** The user approved the frames and the designer's choices: during Apply now the change is named in the notice title (*Applying pnpm build added at the next checkpoint…*), not appended to the row; Activity labels a finished invocation *Ran with* and one that never started *Ran with · no permissions · it did not start*; in ask-before-commands mode the command part reads *Commands ask*; the ended-run popover dims its controls to 0.5; the 960 inline row is specified by its specimen on board `iPHGE`.
 
 **Change for this run (02.J `q4K1G`).** The link opens a popover anchored above the row (same surface as the status bar popover: `$raised`, `$border`, 12px radius, shadow 0 8 24 #00000066; 460px wide). It shows the agent, step, model and the profile version the values came from, then the three settings in compact form, with changed values outlined (fixture: `pnpm build`, *added for this run*). Timing, stated in the popover: **changes apply from the next agent invocation; the invocation running now keeps the permissions it started with.** This is the honest rule for CLIs that read permissions at launch. An invocation is one launch of the agent CLI (a step execution, a retry, a continue after pause or limit). Two ways to apply, both for Run 128 only: *Apply from next invocation* (primary) and *Apply now* (user decision 2026-09-25). *Apply now* lets the agent finish the command it is running, stops it at the next checkpoint, commits the worktree as a checkpoint and restarts the current step from it as a new invocation with the new permissions. The popover has one key/value line *Running with · Builder · Edit files · 3 commands · Network off · MCP asks* between its header and the takes-effect notice, and no extra heading (2026-10-02: `UPDBO` in `NNRH8`, `zCqp2` in `W29Od2`'s `ecCTw`, which wraps it at a "·"); the notice was shortened so the popover stays about as tall as before, and it was moved up by the difference so it still ends 6 px above its row. An ended run (04.2 `YgLEg`) shows *Last ran with*, the controls read-only (0.5, no remove or add), the notice *This run has ended, so its permissions can’t be changed here. Continuing the conversation starts a new invocation of Builder with these settings.* and only *Close*. *Apply from next invocation* shows the notice *Saved for the next invocation · pnpm build added* (bookmark-check, same `q5LzI` notice) while the row keeps *Running with …* (`A3h7B4`, first in `LJmTH`). Pending state (`LJmTH`, middle; changed 2026-10-02): the row keeps *Running with …* and the notice title carries the pending change, *Applying pnpm build added at the next checkpoint…* (chosen over appending *· applying … at next checkpoint* to the row, so the row keeps one meaning); the loader notice says what happens to in-flight work — the running command completes, nothing in the worktree is lost, the agent's unsaved reasoning since its last turn is not carried over unless the CLI can resume its session — and *Keep for next invocation instead* cancels the restart. Once the agent has stopped at its checkpoint the notice reads *Restarting with the new permissions…* with no button, and says Implement restarts as soon as the run continues; if the restart never started it reads *New permissions not active: Builder did not restart* (triangle-alert) and points to Activity; both rows read *Last ran with …* (04.2 `D8qjLz`, 2026-10-02). Applied state (right): *New permissions active since 12:09*, the new checkpoint (*saved to apply permissions*) and invocation 2; the first invocation's transcript stays in Activity. *Also save to the Builder profile* adds the same change to the profile draft (v3); new runs get it only after publishing. Escape or *Cancel* closes without changes and returns focus to the row. 
 

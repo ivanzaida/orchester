@@ -37,8 +37,10 @@ const PIPELINE_WIDTH: f32 = 136.0;
 const STATUS_WIDTH: f32 = 128.0;
 const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
-const HEADING_HEIGHT: f32 = 28.0;
-const TABLE_ROW_HEIGHT: f32 = 48.0;
+/// The least room a task's title keeps when the window is narrow.
+const TITLE_MIN_WIDTH: f32 = 120.0;
+pub(super) const HEADING_HEIGHT: f32 = 28.0;
+pub(super) const TABLE_ROW_HEIGHT: f32 = 48.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
 const LIST_ROW_HEIGHT: f32 = 78.0;
@@ -109,6 +111,12 @@ fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
     .into()
 }
 
+/// Whether the window is wide enough for the Pipeline column; reading the width re-renders the
+/// caller as the window resizes.
+fn shows_pipeline(ctx: &Ctx) -> bool {
+  ctx.window().logical_width() >= crate::theme::TASK_TABLE_PIPELINE_MIN_WINDOW
+}
+
 fn column_label(text: &str) -> Text {
   Text::new(text).variant(ExtraTypography::Footnote.role()).nowrap()
 }
@@ -123,8 +131,13 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .align_items(Alignment::Center)
     .child(Row::new().width(Dimension::Px(SELECT_WIDTH)))
     .child(cell(KEY_WIDTH, column_label(&ctx.t("tasks.columns.key"))))
-    .child(Row::new().flex(1.0).child(column_label(&ctx.t("tasks.columns.task"))))
-    .child(cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline"))))
+    .child(
+      Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(TITLE_MIN_WIDTH))
+        .child(column_label(&ctx.t("tasks.columns.task"))),
+    )
+    .with_children(shows_pipeline(ctx).then(|| cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline")))))
     .child(cell(STATUS_WIDTH, column_label(&ctx.t("tasks.columns.status"))))
     .child(cell(READINESS_WIDTH, column_label(&ctx.t("tasks.columns.readiness"))))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
@@ -158,46 +171,64 @@ impl Component for QueueRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let QueueRowProps { row, created } = ctx.props::<QueueRowProps>().clone();
-    // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
-    // `r2al55`).
-    let select = icon(Icon::Square, IconSize::Option, PaletteColor::TextSecondary);
+    let select = super::tasks::selection::row_checkbox(ctx, row.id, &row.key);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(TABLE_ROW_HEIGHT))
-      .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-      .child(cell(SELECT_WIDTH, select))
       .child(cell(
         KEY_WIDTH,
         Text::new(&row.key).variant(TypographyStyle::Mono).nowrap(),
       ))
       .child(
-        Row::new().flex(1.0).align_items(Alignment::Center).child(
-          Text::new(&row.title)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary)
-            .nowrap()
+        Row::new()
+          .id(format!("task-title-{}", row.key))
+          .flex(1.0)
+          .min_width(Dimension::Px(TITLE_MIN_WIDTH))
+          .align_items(Alignment::Center)
+          .child(
+            Text::new(&row.title)
+              .variant(TypographyStyle::FieldLabel)
+              .color(PaletteColor::TextPrimary)
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis)
+              .flex(1.0),
+          ),
+      )
+      .with_children(shows_pipeline(ctx).then(|| {
+        cell(
+          PIPELINE_WIDTH,
+          column_label(&message_text(ctx, &row.pipeline.message()))
             .text_overflow(TextOverflow::Elipsis)
             .flex(1.0),
-        ),
-      )
-      .child(cell(
-        PIPELINE_WIDTH,
-        column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
-      ))
+        )
+        .id(format!("task-pipeline-{}", row.key))
+      }))
       .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
-      .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
+      .child(cell(
+        READINESS_WIDTH,
+        column_label(&message_text(ctx, &row.detail))
+          .text_overflow(TextOverflow::Elipsis)
+          .flex(1.0),
+      ))
       .child(open_chevron());
-    // The task Create just made reads as selected, in the hover fill (`$hover`).
-    let content = if created {
-      content.background(PaletteColor::AccentMuted).class("created")
+    let line = Row::new()
+      .width(Dimension::Pct(100.0))
+      .padding_horizontal(ExtraSpacing::Stack.role())
+      .spacing(SpacingSize::Md)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .align_items(Alignment::Center)
+      .child(cell(SELECT_WIDTH, select))
+      .child(Row::new().flex(1.0).child(opens(&self.nav, &row, content)));
+    // The task Create just made reads as selected, in the hover fill (`$hover`), across the
+    // whole row including its checkbox.
+    if created {
+      line.background(PaletteColor::AccentMuted).class("created")
     } else {
-      content
-    };
-    opens(&self.nav, &row, content)
+      line
+    }
   }
 }
 

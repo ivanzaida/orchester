@@ -44,6 +44,8 @@ pub enum RunLimit {
   /// The project's runs used today's token budget. The run continues with a plain resume once
   /// the day has room again (tomorrow, or a raised daily budget).
   DailyBudget,
+  /// The reviewed task group reached its aggregate cap; raising a per-run limit cannot lift it.
+  GroupBudget,
   /// `execution` used its step's budget. The run continues once that step's budget is raised for
   /// the run ([`super::Run::raise_step_budget`]); the published pipeline stays as it is.
   StepBudget {
@@ -55,7 +57,7 @@ impl RunLimit {
   /// Whether this is a limit of the whole run, which a raised run budget or time limit lifts, as
   /// opposed to a step's budget.
   pub const fn is_run_limit(self) -> bool {
-    !matches!(self, Self::StepBudget { .. })
+    !matches!(self, Self::StepBudget { .. } | Self::GroupBudget)
   }
 }
 

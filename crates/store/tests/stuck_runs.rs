@@ -14,7 +14,7 @@ use rusqlite::Connection;
 use self::support::{at, copied_at_version, started_run};
 
 /// The schema version before runs could wait for a person.
-const BEFORE_STUCK_RUNS: u32 = 33;
+const BEFORE_STUCK_RUNS: u32 = 35;
 
 fn implement() -> StepKey {
   StepKey::new("implement").expect("key")
@@ -84,11 +84,11 @@ fn stuck_runs_migration_keeps_runs_that_failed_after_their_retries_failed() {
   let current = repo.path().join(".orchester").join("orchester.db");
   let old = copied_at_version(&current, BEFORE_STUCK_RUNS);
   let path = old.path().join(".orchester").join("orchester.db");
-  let v33 = Connection::open(&path).expect("open the schema 33 database");
-  // Schema 33 knows no waiting run and no restart attempt.
+  let old_schema = Connection::open(&path).expect("open the schema 35 database");
+  // Schema 35 knows no waiting run and no restart attempt.
   let id = run.id().to_string();
   assert!(
-    v33
+    old_schema
       .execute(
         "UPDATE runs SET status = 'waiting', status_reason = 'broke_again', failed_step = 'implement' WHERE id = ?1",
         [&id],
@@ -96,15 +96,15 @@ fn stuck_runs_migration_keeps_runs_that_failed_after_their_retries_failed() {
       .is_err()
   );
   assert!(
-    v33
+    old_schema
       .execute(
         "UPDATE attempts SET reason = 'restart', return_to = 'implement' WHERE run_id = ?1",
         [&id]
       )
       .is_err()
   );
-  // A run whose retries ran out, as schema 33 recorded it: failed, with its reason and step.
-  v33
+  // A run whose retries ran out, as schema 35 recorded it: failed, with its reason and step.
+  old_schema
     .execute_batch(&format!(
       "UPDATE step_executions SET status = 'failed', failure = 'reported_failed' WHERE id = '{execution}';
        UPDATE attempts SET status = 'failed' WHERE run_id = '{id}';
@@ -112,7 +112,7 @@ fn stuck_runs_migration_keeps_runs_that_failed_after_their_retries_failed() {
          WHERE id = '{id}';"
     ))
     .expect("a run that failed after its retries");
-  drop(v33);
+  drop(old_schema);
   let db = ProjectDb::open(old.path()).expect("migrate existing project");
   let migrated = reloaded(&db, &run);
   assert_eq!(

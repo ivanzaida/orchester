@@ -1,3 +1,5 @@
+#[path = "tasks/browse.rs"]
+mod browse;
 #[path = "tasks/pipelines.rs"]
 mod pipelines;
 mod support;
@@ -207,13 +209,16 @@ fn stored_tasks() -> Vec<Task> {
 #[test]
 fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
-  assert_eq!(TaskTab::All.count(&tasks), Some(2));
-  assert_eq!(TaskTab::Drafts.count(&tasks), Some(1));
-  for unavailable in [TaskTab::Queue, TaskTab::NeedsReview, TaskTab::Done] {
-    assert!(!unavailable.is_available());
-    assert_eq!(unavailable.count(&tasks), None);
-    assert!(list::rows(&tasks, &[], &Default::default(), unavailable).is_empty());
-  }
+  let count = |tab| list::rows(&tasks, &[], &Default::default(), tab).len();
+  assert_eq!(count(TaskTab::All), 2);
+  assert_eq!(count(TaskTab::Drafts), 1);
+  assert_eq!(
+    count(TaskTab::Queue),
+    1,
+    "a queued task waits in the queue before its run"
+  );
+  assert_eq!(count(TaskTab::NeedsReview), 0);
+  assert_eq!(count(TaskTab::Done), 0);
   let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
   assert_eq!(drafts.len(), 1);
   assert_eq!(&*drafts[0].title, "Incomplete");

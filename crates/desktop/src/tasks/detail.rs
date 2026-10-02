@@ -18,6 +18,7 @@ use orchester_core::{
   },
   store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::Task,
+  task_group::GroupHold,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -67,6 +68,9 @@ pub struct StepView {
 /// The latest run of a task.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunView {
+  /// Only the saved original first run can be retried with the task first-run key.
+  pub first_run: bool,
+  pub group_hold: Option<GroupHold>,
   pub run: Run,
   pub pipeline: Arc<str>,
   pub version: VersionNumber,
@@ -284,6 +288,7 @@ impl TaskDetail {
 /// `run` with its steps and invocations, as the task page shows it.
 pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   let pinned = run.snapshot().pipeline();
+  let (first_run, group_hold) = first_run_hold(db, &run)?;
   let pipeline = db
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
@@ -350,6 +355,8 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   Ok(RunView {
     attempt_starts,
+    first_run,
+    group_hold,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,
@@ -468,4 +475,18 @@ pub(crate) fn run_store_error(error: orchester_store::RunStoreError) -> StoreErr
       detail: other.to_string(),
     },
   }
+}
+
+fn first_run_hold(db: &ProjectDb, run: &Run) -> Result<(bool, Option<GroupHold>), StoreError> {
+  let first = db.run_with_key(run.task().first_run_key()).map_err(run_store_error)?;
+  let is_first = first.is_some_and(|first| first.id() == run.id());
+  let hold = if is_first {
+    db.task_group_for_task(run.task())?
+      .map(|group| db.task_group_hold(group.key()))
+      .transpose()?
+      .flatten()
+  } else {
+    None
+  };
+  Ok((is_first, hold))
 }
