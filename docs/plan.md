@@ -301,8 +301,12 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
-select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.4,
-which also preserves text selection after a drag on scaled displays.
+select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
+scaled displays in 0.30.4. This workspace uses 0.32.0. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+`lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
+0.32.0 percentage-width children of a wrapping row resolve against the row's width. A patch release such as 0.32.1
+needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already admits it) and, to keep
+naming the version in use, this line.
 
 ## P · Product decisions waiting for the user
 
