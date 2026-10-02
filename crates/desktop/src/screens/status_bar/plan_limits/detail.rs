@@ -17,7 +17,7 @@ use crate::{
   messages::Message,
   theme::{
     ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH,
-    PLAN_WINDOW_LABEL,
+    PLAN_PERCENT_WIDTH, PLAN_WINDOW_LABEL,
   },
   ui::message_text,
 };
@@ -101,7 +101,11 @@ fn section(ctx: &Ctx, entry: &Entry<'_>) -> Element {
     section = section.child(row);
   }
   if entry.state() == LimitState::Reached {
-    section = section.child(Text::new(&refuses(ctx, entry)).variant(TypographyStyle::Caption));
+    section = section.child(
+      Text::new(&refuses(ctx, entry))
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary),
+    );
   }
   metadata::sources(ctx, entry, metadata::account_rows(ctx, entry, section)).into()
 }
@@ -187,11 +191,15 @@ fn window_row(ctx: &Ctx, entry: &Entry<'_>, window: &LimitWindow) -> Element {
   } else {
     PaletteColor::TextPrimary
   };
-  let figure = Row::new().justify(Justify::End).child(
-    Text::new(&used.map_or_else(|| ctx.t("statusBar.counts.unknown"), |used| text::percent(ctx, used)))
-      .variant(variant.role())
-      .color(PaletteColor::TextPrimary),
-  );
+  let figure = Row::new()
+    .id("status-plan-limits-percent")
+    .width(Dimension::Px(PLAN_PERCENT_WIDTH))
+    .justify(Justify::End)
+    .child(
+      Text::new(&used.map_or_else(|| ctx.t("statusBar.counts.unknown"), |used| text::percent(ctx, used)))
+        .variant(variant.role())
+        .color(PaletteColor::TextPrimary),
+    );
   row
     .child(meter)
     .child(figure)

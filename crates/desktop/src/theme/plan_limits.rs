@@ -5,6 +5,8 @@ pub const PLAN_HINT_WIDTH: f32 = 360.0;
 pub const PLAN_WINDOW_LABEL: f32 = 44.0;
 pub const PLAN_METER_WIDTH: f32 = 100.0;
 pub const PLAN_METER_HEIGHT: f32 = 4.0;
+/// The used percentage's column, right-aligned so the resets line up (`KDuKw`, `Y1XNS`).
+pub const PLAN_PERCENT_WIDTH: f32 = 32.0;
 /// Below this window width the status bar drops the version.
 pub const STATUS_VERSION_MIN_WIDTH: f32 = 1280.0;
 /// Below this width it drops Tokens today, and the count labels while a plan limit is reached.

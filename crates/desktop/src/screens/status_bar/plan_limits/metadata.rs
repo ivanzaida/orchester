@@ -152,13 +152,11 @@ pub fn account_rows(ctx: &Ctx, entry: &Entry<'_>, mut section: Column) -> Column
     let value = if credits.unlimited {
       ctx.t("statusBar.planLimits.unlimited")
     } else {
-      ctx.t_args(
-        "statusBar.planLimits.creditsValue",
-        [(
-          "balance",
-          credits.balance.as_deref().unwrap_or(&ctx.t("statusBar.counts.unknown")),
-        )],
-      )
+      let balance = credits.balance.as_deref().map_or_else(
+        || ctx.t("statusBar.counts.unknown").to_string(),
+        |balance| text::balance(ctx, balance),
+      );
+      ctx.t_args("statusBar.planLimits.creditsValue", [("balance", balance.as_str())])
     };
     section = section.child(account_row(ctx, "statusBar.planLimits.creditsLabel", &value));
   }
@@ -239,7 +237,7 @@ fn source(ctx: &Ctx, entry: &Entry<'_>, at: Timestamp, minutes: Option<u64>) -> 
   let copy = ctx.t_args(
     key,
     [
-      ("cli", &*text::name(ctx, entry.provider)),
+      ("cli", &*text::hint_name(ctx, entry.provider)),
       ("time", text::clock(at).as_str()),
       ("count", count.to_string().as_str()),
       ("window", &*window),

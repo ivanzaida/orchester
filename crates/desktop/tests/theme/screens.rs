@@ -28,6 +28,7 @@ fn plan_limits_emphasis_follows_pencil() {
   assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
   assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
   assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
   assert_eq!(
     (
       theme::STATUS_LABELS_MIN_WIDTH,

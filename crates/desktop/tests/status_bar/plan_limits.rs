@@ -225,12 +225,12 @@ fn status_bar_plan_limits_partial_claude_keeps_window_ages() {
   assert!(
     copy
       .iter()
-      .any(|line| line.starts_with("5-hour · From the last Claude turn") && line.ends_with("Just now"))
+      .any(|line| line.starts_with("5-hour · From the last Claude Code turn") && line.ends_with("just now"))
   );
   assert!(
     copy
       .iter()
-      .any(|line| line.starts_with("Weekly · From the last Claude turn") && line.ends_with("3m ago"))
+      .any(|line| line.starts_with("Weekly · From the last Claude Code turn") && line.ends_with("3 min ago"))
   );
 }
 
@@ -280,7 +280,7 @@ fn status_bar_plan_limits_headers_order_and_combined_account_rows() {
       Some(Credits {
         has_credits: true,
         unlimited: false,
-        balance: Some("1,250".into()),
+        balance: Some("1250".into()),
       }),
     ),
     (AgentProvider::ClaudeCodeCli, 300, 100.0, true, None, None),
@@ -381,4 +381,33 @@ fn status_bar_plan_limits_reached_without_its_use_shows_no_percentage() {
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
   assert!(copy.contains("5-hour — "), "no invented figure: {copy}");
   assert!(copy.contains("Claude refuses new turns until"));
+}
+
+#[test]
+fn status_bar_plan_limits_percent_column_and_short_reset() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 48 * 60_000 - 1_000);
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: now,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(300, Some(7.0), Some(reset), LimitState::Normal, false).expect("window")],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::ClaudeCodeCli)]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  assert_eq!(bounds(&mut tree, "status-plan-limits-percent").width, 32.0);
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(copy.contains("7% resets in 48 min"), "{copy}");
 }

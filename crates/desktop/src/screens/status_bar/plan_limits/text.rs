@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::AgentProvider, time::Timestamp};
+use orchester_core::{connection::AgentProvider, time::Timestamp, tokens::grouped};
 
 use crate::{
   display::{self, WEEKDAY_KEYS},
@@ -37,6 +37,15 @@ pub fn percent(ctx: &Ctx, percent: f64) -> Arc<str> {
   ctx.t_args("statusBar.planLimits.percent", [("used", whole.to_string().as_str())])
 }
 
+/// A credit balance as reported, its digits grouped as the locale writes numbers when it is a
+/// whole number (`1,250`); anything else is shown as the CLI wrote it.
+pub fn balance(ctx: &Ctx, balance: &str) -> String {
+  balance.parse::<u64>().map_or_else(
+    |_| balance.to_owned(),
+    |whole| grouped(whole, &ctx.t("number.groupSeparator")),
+  )
+}
+
 /// The local clock time of `at` (`16:40`).
 pub fn clock(at: Timestamp) -> String {
   display::clock(at)
@@ -48,6 +57,12 @@ pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -
   };
   let minutes = (at.unix_millis().saturating_sub(now.unix_millis())).max(0) as u64;
   let minutes = minutes.div_ceil(60_000);
+  if relative && minutes < 60 {
+    return ctx.t_args(
+      "statusBar.planLimits.resetsInMinutes",
+      [("minutes", minutes.to_string().as_str())],
+    );
+  }
   if relative && minutes < DAY_MINUTES {
     return ctx.t_args(
       "statusBar.planLimits.resetsIn",

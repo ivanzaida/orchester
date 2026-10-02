@@ -3851,6 +3851,7 @@
       "reasonWorkspace": "workspace limit",
       "resetsAt": "resets {{time}}",
       "resetsIn": "resets in {{hours}} h {{minutes}} min",
+      "resetsInMinutes": "resets in {{minutes}} min",
       "resetsOnDay": "resets {{weekday}} {{time}}",
       "resetUnknown": "Reset not reported",
       "fiveHour": "5-hour",
@@ -3868,16 +3869,16 @@
       "refusesOther": "{{cli}} refuses new turns; it did not say until when.",
       "unlimited": "Unlimited",
       "source": {
-        "justNow": "From the last {{cli}} turn · {{time}}, Just now",
-        "minutes": "From the last {{cli}} turn · {{time}}, {{count}}m ago",
-        "hours": "From the last {{cli}} turn · {{time}}, {{count}}h ago",
-        "days": "From the last {{cli}} turn · {{time}}, {{count}}d ago"
+        "justNow": "From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "From the last {{cli}} turn · {{time}}, {{count}} d ago"
       },
       "windowSource": {
-        "justNow": "{{window}} · From the last {{cli}} turn · {{time}}, Just now",
-        "minutes": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}}m ago",
-        "hours": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}}h ago",
-        "days": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}}d ago"
+        "justNow": "{{window}} · From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} d ago"
       },
       "notRead": "{{cli}} reports its limits with each turn. They appear after the next {{cli}} turn in any open project.",
       "unreadable": "This project’s connections could not be read, so its plan limits are not shown.",
@@ -3885,7 +3886,7 @@
       "cannotStart": "{{connection}} · {{project}} could not start {{cli}} when it was checked at {{time}}, so no limits can be read. Connections shows why.",
       "checked": "Connection checked · {{time}}",
       "expired": "Reset at {{time}} · read again with the next turn",
-      "footnote": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project's own daily budget."
+      "footnote": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget."
     },
     "runner": {
       "starting": "Starting runner…",
