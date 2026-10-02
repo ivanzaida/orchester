@@ -226,9 +226,10 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
-### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (pending design verification)
+### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
-Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
+Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
+can stay cut after the window widens until lurq 0.32.1 (text layout cache). Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
 design follow-ups on top. Codex and Claude Code report their account's limits live during agent turns: Codex App
 Server's `account/rateLimits/updated` notification and Claude Code's `stream-json` `rate_limit_event`. The runner hands
 each reading to the desktop without storing it; the status bar shows the newest reading per CLI across open projects,
