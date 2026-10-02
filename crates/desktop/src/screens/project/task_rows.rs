@@ -200,12 +200,19 @@ impl Component for QueueRow {
       .with_children(shows_pipeline(ctx).then(|| {
         cell(
           PIPELINE_WIDTH,
-          column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
+          column_label(&message_text(ctx, &row.pipeline.message()))
+            .text_overflow(TextOverflow::Elipsis)
+            .flex(1.0),
         )
         .id(format!("task-pipeline-{}", row.key))
       }))
       .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
-      .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
+      .child(cell(
+        READINESS_WIDTH,
+        column_label(&message_text(ctx, &row.detail))
+          .text_overflow(TextOverflow::Elipsis)
+          .flex(1.0),
+      ))
       .child(open_chevron());
     let line = Row::new()
       .width(Dimension::Pct(100.0))

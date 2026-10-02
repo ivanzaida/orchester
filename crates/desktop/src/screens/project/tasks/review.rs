@@ -44,6 +44,7 @@ use crate::{
     form::form,
     icon::{Icon, IconSize, icon},
     message_text,
+    notice::Notice,
     option_card::OptionCard,
     pressable::surface,
   },
@@ -158,23 +159,52 @@ impl Component for SchedulingReview {
         &ctx.t("tasks.bulk.reviewDescription"),
       ))
       .child(self.body(ctx, &props, pending || completed))
-      .with_children(parsed.err().map(|e| field_error(&message_text(ctx, &e))))
-      .with_children((!props.runner_online).then(|| field_error(&ctx.t("runs.start.runnerUnavailable"))))
-      .with_children(
-        state
-          .error
-          .as_ref()
-          .into_iter()
-          .flatten()
-          .map(|e| field_error(&message_text(ctx, e))),
-      )
-      .with_children(completed.then(|| {
-        Element::from(Text::new(&ctx.t("tasks.bulk.queued")).variant(TypographyStyle::Description))
-          .id("tasks-review-result")
-      }))
+      .with_children(outcome(
+        ctx,
+        &props,
+        parsed.as_ref().err(),
+        state.error.as_ref(),
+        completed,
+      ))
       .child(self.actions(ctx, &props, submit.clone(), pending, completed));
     form(submit, content)
   }
+}
+
+/// Why the group cannot be queued, or that it was, inset like the page content above the action
+/// strip (implemented, not drawn yet).
+fn outcome(
+  ctx: &Ctx,
+  props: &ReviewProps,
+  invalid: Option<&Message>,
+  failed: Option<&Vec<Message>>,
+  completed: bool,
+) -> Option<Element> {
+  let mut lines: Vec<Element> = invalid.iter().map(|e| field_error(&message_text(ctx, e))).collect();
+  if !props.runner_online {
+    lines.push(field_error(&ctx.t("runs.start.runnerUnavailable")));
+  }
+  lines.extend(failed.into_iter().flatten().map(|e| field_error(&message_text(ctx, e))));
+  if completed {
+    lines.push(
+      Notice::new(
+        Icon::CircleCheck,
+        ctx.t("tasks.bulk.queuedHeading"),
+        ctx.t("tasks.bulk.queued"),
+      )
+      .id("tasks-review-result")
+      .into(),
+    );
+  }
+  (!lines.is_empty()).then(|| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_horizontal(SpacingSize::Section)
+      .padding_bottom(SpacingSize::Md)
+      .spacing(SpacingSize::Sm)
+      .with_children(lines)
+      .into()
+  })
 }
 
 fn queue_action(ctx: &mut Ctx) -> FutureAction<QueueSubmission, (), Vec<Message>> {

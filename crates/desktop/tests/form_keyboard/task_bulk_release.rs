@@ -65,7 +65,7 @@ fn task_bulk_release_returns_held_queued_tasks_to_the_drafts() {
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("task-select-KON-2");
-  assert!(shows(&mut desktop, "task-row-KON-1", "Held after a task failed"));
+  assert!(shows(&mut desktop, "task-row-KON-1", "Held · a task failed"));
   // Selecting a task without one shows no release action.
   desktop.press("task-select-KON-3");
   assert!(desktop.tree.get_element_by_id("tasks-release-held").is_none());
@@ -75,6 +75,12 @@ fn task_bulk_release_returns_held_queued_tasks_to_the_drafts() {
     &mut desktop,
     "task-selection",
     "0 ready to queue · 1 incomplete · 2 already queued or started"
+  ));
+  // The two held tasks share one line with the group's full reason.
+  assert!(shows(
+    &mut desktop,
+    "task-problems",
+    "2 tasks: Held after a task failed or was cancelled."
   ));
   desktop.press("tasks-release-held");
   desktop.settle("the released drafts", |tree| {

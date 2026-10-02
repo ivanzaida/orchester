@@ -9,7 +9,7 @@ use orchester_core::{
 
 use super::{
   data::ProjectTasks,
-  group::hold_messages,
+  group::hold_row_message,
   list::{self, TaskRow, TaskTab},
 };
 use crate::messages::Message;
@@ -73,11 +73,7 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: &str, pipeline: PipelineFi
     .into_iter()
     .map(|mut row| {
       match (data.group_holds.get(&row.id), row.phase) {
-        (Some(hold), Some(TaskPhase::Queued)) => {
-          if let Some(reason) = hold_messages(hold).into_iter().next() {
-            row.detail = reason;
-          }
-        }
+        (Some(hold), Some(TaskPhase::Queued)) => row.detail = hold_row_message(hold),
         (Some(GroupHold::GroupCap), Some(TaskPhase::StoppedAtLimit)) => {
           row.detail = Message::new("tasks.bulk.stoppedGroup");
         }

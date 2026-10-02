@@ -1,5 +1,5 @@
 //! Query controls and selection bar of J9467; pipeline assignment is implemented, not drawn yet.
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -19,10 +19,11 @@ use super::{
   TasksScreen, selection::checkbox,
 };
 use crate::{
+  messages::Message,
   tasks::{
     browse::{PipelineFilter, TaskSort},
     data::ProjectTasks,
-    group::{self, problem_message},
+    group::{self, hold_messages, problem_message},
     list::TaskRow,
   },
   theme::ExtraSpacing,
@@ -257,21 +258,50 @@ pub fn assignment(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectT
     .into()
 }
 
-pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Vec<Element> {
-  let selected = screen.selected.get();
+/// Why selected tasks cannot run, one line per reason: a queued task its group holds says why the
+/// group holds it, and tasks that share a reason share its line.
+fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<(Message, Vec<String>)> {
   let published: Vec<_> = tasks.pipelines.iter().map(|p| p.id).collect();
-  let mut messages = Vec::new();
-  for task in tasks.tasks.iter().filter(|t| selected.0.contains(&t.id())) {
-    for problem in task_selection::problems(task, tasks.phases.contains_key(&task.id()), &published) {
-      messages.push(field_error(&ctx.t_args(
-        "tasks.bulk.notReady",
-        [
-          ("task", task.key().to_string()),
-          ("reason", message_text(ctx, &problem_message(&problem)).to_string()),
-        ],
-      )));
+  let mut reasons: Vec<(Message, Vec<String>)> = Vec::new();
+  for task in tasks.tasks.iter().filter(|t| selected.contains(&t.id())) {
+    let has_run = tasks.phases.contains_key(&task.id());
+    let held = (!has_run)
+      .then(|| tasks.group_holds.get(&task.id()))
+      .flatten()
+      .and_then(|hold| hold_messages(hold).into_iter().next());
+    let messages: Vec<_> = match held {
+      Some(reason) => vec![reason],
+      None => task_selection::problems(task, has_run, &published)
+        .iter()
+        .map(problem_message)
+        .collect(),
+    };
+    for message in messages {
+      let key = task.key().to_string();
+      match reasons.iter_mut().find(|(reason, _)| *reason == message) {
+        Some((_, keys)) => keys.push(key),
+        None => reasons.push((message, vec![key])),
+      }
     }
   }
+  reasons
+}
+
+pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Option<Element> {
+  let selected = screen.selected.get();
+  let mut messages: Vec<Element> = reasons(tasks, &selected.0)
+    .into_iter()
+    .map(|(reason, keys)| {
+      let reason = message_text(ctx, &reason).to_string();
+      field_error(&match keys.as_slice() {
+        [task] => ctx.t_args("tasks.bulk.notReady", [("task", task.clone()), ("reason", reason)]),
+        several => ctx.t_args(
+          "tasks.bulk.notReadyMany",
+          [("count", several.len().to_string()), ("reason", reason)],
+        ),
+      })
+    })
+    .collect();
   if let Some(error) = screen.release.state().get().error.as_ref() {
     messages.push(field_error(&message_text(ctx, error)));
   }
@@ -284,5 +314,12 @@ pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Vec<El
   {
     messages.extend(skipped.iter().map(|m| field_error(&message_text(ctx, m))));
   }
-  messages
+  (!messages.is_empty()).then(|| {
+    Column::new()
+      .id("task-problems")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .with_children(messages)
+      .into()
+  })
 }

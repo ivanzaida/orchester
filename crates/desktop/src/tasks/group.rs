@@ -45,6 +45,21 @@ pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Messag
   vec![Message::new(key)]
 }
 
+/// The hold in a few words, for a task row's readiness cell; [`hold_messages`] says it in full.
+pub const fn hold_row_message(hold: &GroupHold) -> Message {
+  Message::new(match hold {
+    GroupHold::SessionEnded => "tasks.bulk.held.sessionEnded",
+    GroupHold::AgentCapacity => "tasks.bulk.held.capacity",
+    GroupHold::DailyBudget => "tasks.bulk.held.dailyBudget",
+    GroupHold::GroupCap => "tasks.bulk.held.groupCap",
+    GroupHold::PreviousTask => "tasks.bulk.held.previous",
+    GroupHold::Concurrency => "tasks.bulk.held.concurrency",
+    GroupHold::FailedTask => "tasks.bulk.held.failure",
+    GroupHold::Preflight(_) => "tasks.bulk.held.preflight",
+    GroupHold::StartFailed => "tasks.bulk.held.startFailed",
+  })
+}
+
 pub fn assign(root: &Path, tasks: &[TaskId], pipeline: ResourceId) -> Result<Vec<Message>, Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let skipped = db

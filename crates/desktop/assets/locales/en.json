@@ -358,12 +358,24 @@
         "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
       },
+      "held": {
+        "sessionEnded": "Held · project reopened",
+        "capacity": "Waiting for an agent slot",
+        "dailyBudget": "Waiting for the daily budget",
+        "groupCap": "Held · group token cap",
+        "previous": "Waiting for the previous task",
+        "concurrency": "Waiting for a task slot",
+        "failure": "Held · a task failed",
+        "preflight": "Held · cannot start yet",
+        "startFailed": "Held · start failed"
+      },
       "selected": "{{count}} selected",
       "runSelected": "Run selected · {{count}}",
       "notDraft": "This task is already queued.",
       "hasRun": "This task already has a run.",
       "notHeld": "This task is no longer held by its group, so it stays queued.",
       "notReady": "{{task}}: {{reason}}",
+      "notReadyMany": "{{count}} tasks: {{reason}}",
       "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
       "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
       "applyPipeline": "Apply pipeline",
@@ -418,6 +430,7 @@
       "branchNote": "Each task works in a separate branch and worktree.",
       "queue": "Queue {{count}} tasks",
       "queued": "The reviewed group is queued. The runner starts tasks as capacity becomes available.",
+      "queuedHeading": "Group queued",
       "stoppedGroup": "Stopped at the group token cap",
       "stoppedGroupDetail": "This group used its shared token cap. Further task starts are held; raising this run's own limit does not raise the group cap."
     },
