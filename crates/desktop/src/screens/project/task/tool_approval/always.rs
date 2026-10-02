@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{permission::CommandPrefix, resource::VersionNumber, run::ApprovalAnswer};
 
-use super::{Pressed, View, footer};
+use super::{super::approval_value::ValueRows, Pressed, View, footer, request};
 use crate::{
   tasks::approvals::{AlwaysShown, CommandAlways, ShownApproval},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, select_menu_scrollbar},
@@ -27,7 +27,7 @@ use crate::{
     form::Submit,
     icon::{Icon, IconSize, icon},
     pressable::{Ring, keyboard_stop, stroke_selected_focused},
-    property::property,
+    property::{ValueStyle, property, styled_property},
   },
 };
 
@@ -82,7 +82,8 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
     .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
-    .child(property(&ctx.t("runs.toolApproval.agent"), &shown.approval.agent))
+    .child(request(ctx, view))
+    .child(property(&ctx.t("runs.toolApproval.agent"), &request::agent(ctx, shown)))
     .with_children(body);
   let sections = vec![
     header(&title, &explanation),
@@ -94,6 +95,19 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
     footer::always(ctx, view, primary),
   ];
   (sections, submit)
+}
+
+/// The request the step adds for (`Mchq9`, `NIVdj`): a command whole, or the server and the tool.
+fn request(ctx: &Ctx, view: &View<'_>) -> Element {
+  let approval = &view.shown().approval;
+  if approval.command {
+    return ValueRows::new(ctx, view.copied, view.arguments).command(&approval.action);
+  }
+  let tool = ctx.t_args(
+    "runs.toolApproval.always.toolValue",
+    [("server", approval.server.as_str()), ("tool", approval.action.as_str())],
+  );
+  styled_property(&ctx.t("runs.toolApproval.always.tool"), &tool, ValueStyle::Mono)
 }
 
 /// What the step shows for one kind of request, and its primary: its label and answer.
@@ -238,7 +252,10 @@ fn tool_body(
   (profiles, others): (&[Arc<str>], &[Arc<str>]),
 ) -> Vec<Element> {
   let join = |names: &[Arc<str>]| names.iter().map(|name| &**name).collect::<Vec<_>>().join(", ");
-  let (getting, not_getting) = (join(profiles), join(others));
+  // The asking agent's profile first.
+  let mut ordered = profiles.to_vec();
+  ordered.sort_by_key(|name| **name != *shown.approval.agent);
+  let (getting, not_getting) = (join(&ordered), join(others));
   let names = [
     ("server", server),
     ("tool", tool),
@@ -258,13 +275,13 @@ fn tool_body(
     .child(target_row(
       "tool-approval-always-tool",
       Icon::Plus,
-      tool,
+      (tool, true),
       &ctx.t_args("runs.toolApproval.always.toolWhere", names),
     ))
     .child(target_row(
       "tool-approval-always-profiles",
       Icon::Users,
-      &getting,
+      (&getting, false),
       &affects,
     ));
   vec![
@@ -278,7 +295,12 @@ fn tool_body(
 }
 
 /// What is added or who it affects, as a row of the step (`uuHXG`, `wsQxg`).
-fn target_row(id: &'static str, glyph: Icon, value: &str, detail: &str) -> Element {
+fn target_row(id: &'static str, glyph: Icon, (value, mono): (&str, bool), detail: &str) -> Element {
+  let value = if mono {
+    Text::new(value).variant(ExtraTypography::MonoField.role())
+  } else {
+    Text::new(value).variant(ExtraTypography::NoticeHeading.role())
+  };
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -289,7 +311,7 @@ fn target_row(id: &'static str, glyph: Icon, value: &str, detail: &str) -> Eleme
     .rounded(RadiusSize::Sm)
     .border(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(icon(glyph, IconSize::Button, PaletteColor::TextSecondary))
-    .child(Text::new(value).variant(ExtraTypography::MonoField.role()).nowrap())
+    .child(value.nowrap())
     .child(Text::new(detail).variant(TypographyStyle::Caption).flex(1.0))
     .into()
 }

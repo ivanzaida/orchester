@@ -26,6 +26,7 @@ use orchester_desktop::{
 use orchester_ipc::SessionEnd;
 use tokio::runtime::Runtime;
 
+mod approvals;
 mod narrow;
 mod plan_limits;
 

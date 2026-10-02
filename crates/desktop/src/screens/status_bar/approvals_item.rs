@@ -10,7 +10,7 @@ use lurq::{
   node::Element,
 };
 
-use super::item::{action, glyph, item, separator, truncated_label, value};
+use super::item::{action, glyph, item, label, separator, truncated_label, value};
 use crate::{
   display,
   screens::project::approval_queue::ApprovalQueue,
@@ -100,10 +100,11 @@ pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], stop: impl Fn() + Se
       [("count", runs.len().to_string().as_str())],
     ),
   };
+  // A safety indicator: it keeps its words, and the waiting approvals give way first.
   let row = item("status-auto-approving")
-    .flex_shrink(1.0)
+    .flex_shrink(0.0)
     .child(glyph(Icon::Zap, PaletteColor::TextPrimary))
-    .child(truncated_label(&text, PaletteColor::TextPrimary));
+    .child(label(&text, PaletteColor::TextPrimary));
   vec![
     separator(),
     row.into(),

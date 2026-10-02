@@ -324,7 +324,12 @@
       "open": "Open task  →",
       "clarification": "CLARIFICATION",
       "questionContext": "{{agent}} is waiting · {{task}}",
-      "answer": "Answer question  →"
+      "answer": "Answer question  →",
+      "approval": "APPROVAL",
+      "requestTool": "{{agent}} asks to use {{server}} {{tool}}",
+      "requestCommand": "{{agent}} asks to run a command",
+      "requestContext": "{{task}} · Run {{run}} · {{step}} · since {{time}}",
+      "review": "Review"
     },
     "activity": {
       "title": "Recent activity",
@@ -549,7 +554,8 @@
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
         "unreadable": "Run {{run}} · could not be read",
-        "unreadableUnnumbered": "Its latest run could not be read"
+        "unreadableUnnumbered": "Its latest run could not be read",
+        "waitsForAnswer": "Run {{run}} · {{pipeline}} {{version}} · {{step}} · {{agent}} waits for your answer, {{time}}"
       },
       "tabs": {
         "summary": "Summary",
@@ -557,7 +563,8 @@
         "changes": "Changes",
         "activity": "Activity",
         "artifacts": "Artifacts"
-      }
+      },
+      "needsYou": "Needs you"
     },
     "unreadable": {
       "title": "Run #{{run}} could not be read",
@@ -706,13 +713,14 @@
         "alwaysTitle": "Always allowed during this run",
         "toolRule": "{{server}} · {{tool}}",
         "commandRule": "{{words}} … · {{category}}",
-        "since": "since {{time}} · approved {{count}} without asking you",
         "revoked": "revoked at {{time}} · approved {{count}} before",
         "revoke": "Revoke",
         "alwaysAdded": "added to the profile’s Allowed commands at {{time}}, by you",
         "autoApproving": "Auto-approving",
         "autoApprovingDetail": "Orchester answers this run’s requests itself; dangerous ones still ask you.",
-        "stop": "Stop"
+        "stop": "Stop",
+        "sinceTool": "since {{time}} · approved {{count}} calls without asking you",
+        "sinceCommand": "since {{time}} · approved {{count}} commands without asking you"
       }
     },
     "progress": {
@@ -1078,29 +1086,50 @@
         "heading": "Or answer more widely",
         "similar": "Approve similar in this run",
         "similarTool": "{{server}} {{tool}}, every call until Run {{run}} ends. Starts now, for this invocation too.",
-        "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Starts now, for this invocation too.",
+        "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Flags and packages may differ; another subcommand or category still asks.",
         "always": "Always allow…",
         "alwaysTool": "Add {{tool}} to {{server}}’s tools that run without asking, for every profile that uses {{server}}.",
         "alwaysCommand": "Add {{prefix}} to {{profile}}’s Allowed commands, in a new profile version, for runs that start later.",
         "runHeading": "Or stop asking for this run",
         "run": "Approve everything in this run",
         "runCovers": "Orchester answers this and every later request of Run {{run}} itself, until the run ends or you stop it. Writes outside the worktree, secrets, installs, destructive and unreadable commands still ask you.",
-        "unknown": "Orchester can’t tell which later commands would be alike.",
         "severalAsk": "Several parts ask: approve once or deny.",
         "destructive": "A command that rewrites or discards history can’t be always allowed.",
         "destructiveForms": "Its prefix would also allow destructive forms, such as git reset --hard or rm -rf.",
         "noAllowedList": "The profile has no Allowed commands to add to: it asks before every command, or its CLI keeps no list.",
         "listFull": "The profile lists as many commands as a profile can.",
         "toolName": "This tool’s name can’t be listed: a listed name has only letters, digits, - and _.",
-        "missing": "The step’s profile or the server can no longer be read."
+        "missing": "The step’s profile or the server can no longer be read.",
+        "similarUnknown": "Unavailable: Orchester can’t tell which later commands would be alike.",
+        "alwaysUnknown": "Unavailable for an Unknown command."
       },
       "similarScope": {
-        "ruleTool": "{{server}} · {{tool}} · any arguments · until Run {{run}} ends · starts with this invocation",
-        "runsTool": "Runs without asking: {{server}} {{tool}} with any arguments, in this invocation and later ones of Run {{run}}.",
-        "asksTool": "Still asks you: another tool of {{server}}, another server, another run.",
-        "ruleCommand": "{{words}} … · {{category}} · until Run {{run}} ends",
-        "runsCommand": "Runs without asking: {{words}} with other flags, arguments or packages, while it stays in {{category}}.",
-        "asksCommand": "Still asks you: another subcommand, a part in another category, another part that asks, another run."
+        "heading": "Approve similar in this run covers",
+        "runs": "Runs without asking",
+        "asks": "Still asks you",
+        "toolRule": "{{server}} · {{tool}}",
+        "anyArguments": "any arguments",
+        "toolUntil": "until Run {{run}} ends · starts with this invocation",
+        "toolCall": "{{server}} · {{tool}}",
+        "otherArguments": "with other arguments",
+        "laterInvocation": "in a later invocation of Run {{run}}",
+        "otherTool": "{{server}} · …",
+        "otherToolWhy": "another tool of {{server}}",
+        "otherServer": "… · {{tool}}",
+        "otherServerWhy": "another server",
+        "otherRun": "{{tool}} in another run",
+        "otherRunWhy": "another run",
+        "toolNote": "Same server and tool, any arguments. Orchester answers each later call itself, one at a time, marked “approved by similar rule · {{server}} {{tool}}”. Revoke the rule in the run’s Approvals.",
+        "commandRule": "{{words}} …",
+        "inCategory": "in {{category}}",
+        "commandUntil": "until Run {{run}} ends · starts with this invocation",
+        "commandCall": "{{words}} …",
+        "otherFlags": "other flags, arguments or packages, still {{category}}",
+        "otherSubcommand": "another subcommand",
+        "otherSubcommandWhy": "not {{words}}",
+        "otherPart": "… && another command",
+        "otherPartWhy": "a part in another category, or another part that asks",
+        "commandNote": "Same program and subcommand in {{category}}. Orchester answers each later command itself, one at a time, marked “approved by similar rule · {{category}}”. Revoke the rule in the run’s Approvals."
       },
       "scope": "One requested action only; no session or permanent grant",
       "always": {
@@ -1119,11 +1148,13 @@
         "toolExplanation": "Adds {{tool}} to the {{server}} server’s Tools that run without asking. Every profile that gets {{server}} and asks before MCP actions then runs it without asking. This call is approved as well.",
         "toolLabel": "What is added, where, and who it affects",
         "toolWhere": "to Connections › MCP servers › {{server}} › Tools that run without asking",
-        "toolProfiles": "every profile that gets {{server}}; {{others}} doesn’t get it",
+        "toolProfiles": "every profile that gets {{server}}, not {{others}}",
         "toolProfilesAll": "every profile that gets {{server}}",
         "toolStartsHeading": "Starts now, and for every agent that starts later",
         "toolStarts": "Agents that start later get it from their CLI and are not asked. The CLI reads the list only when an agent starts, so for {{agent}}’s current invocation Orchester answers later {{tool}} calls itself.",
-        "addTool": "Add to {{server}} and approve"
+        "addTool": "Add to {{server}} and approve",
+        "tool": "Tool",
+        "toolValue": "{{server}} · {{tool}}"
       },
       "notAwaited": "This tool action no longer waits for a decision.",
       "commandTitle": "Approve command?",

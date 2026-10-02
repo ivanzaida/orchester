@@ -158,7 +158,10 @@ fn similar_rule(
       [("time", display::clock(revoked).as_str()), ("count", answered.as_str())],
     ),
     None => ctx.t_args(
-      "runs.summary.approvals.since",
+      match rule.scope {
+        RuleScope::SimilarMcpTool { .. } => "runs.summary.approvals.sinceTool",
+        _ => "runs.summary.approvals.sinceCommand",
+      },
       [("time", since.as_str()), ("count", answered.as_str())],
     ),
   };

@@ -17,7 +17,7 @@ use orchester_core::{connection::AgentProvider, run::PendingToolApproval};
 
 use super::{
   super::{approval_value::ValueRows, native_approval},
-  View, footer, wider,
+  View, footer, scope, wider,
 };
 use crate::{
   tasks::approvals::ShownApproval,
@@ -177,14 +177,14 @@ fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
     None => cli_details(values, column, shown),
   };
   column
-    .child(denial(values.ctx(), shown))
     .with_children(
       view
         .scope_open
         .get()
-        .then(|| wider::scope_panel(values.ctx(), shown))
+        .then(|| scope::panel(values.ctx(), shown))
         .flatten(),
     )
+    .child(denial(values.ctx(), shown))
     .into()
 }
 
@@ -227,7 +227,7 @@ fn cli_details(values: &ValueRows<'_>, column: Column, shown: &ShownApproval) ->
 }
 
 /// The agent, with its step, run and task when they can be read (`dcjnZ`).
-fn agent(ctx: &Ctx, shown: &ShownApproval) -> String {
+pub(super) fn agent(ctx: &Ctx, shown: &ShownApproval) -> String {
   match (&shown.step, shown.run, &shown.task) {
     (Some(step), Some(run), Some(task)) => ctx
       .t_args(

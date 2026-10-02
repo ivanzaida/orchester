@@ -3,7 +3,7 @@
 //! Apart from them, *Approve everything in this run* turns on the run's auto-approval (user decision of
 //! 2026-10-02; no frame yet). A tile that a request does not offer stays in place at 0.4 with a lock and
 //! the reason, so the dialog keeps its shape between requests. While *Approve similar* has the pointer
-//! or the focus, its scope opens under the request (`XKja4`).
+//! or the focus, its scope opens under the request (`XKja4`, [`super::scope`]).
 
 use std::sync::Arc;
 
@@ -96,7 +96,7 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
       ),
       Offer::Press(Arc::new(view.answer(Pressed::Similar, ApprovalAnswer::Similar))),
     ),
-    Err(SimilarUnavailable::Unknown) => (ctx.t("runs.toolApproval.wider.unknown"), Offer::Unavailable),
+    Err(SimilarUnavailable::Unknown) => (ctx.t("runs.toolApproval.wider.similarUnknown"), Offer::Unavailable),
     Err(SimilarUnavailable::SeveralAsk) => (ctx.t("runs.toolApproval.wider.severalAsk"), Offer::Unavailable),
   };
   Tile {
@@ -147,7 +147,7 @@ fn always(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
 /// Why Always allow is unavailable, in the tile.
 fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
   ctx.t(match blocked {
-    AlwaysBlocked::Command(AlwaysUnavailable::Unknown) => "runs.toolApproval.wider.unknown",
+    AlwaysBlocked::Command(AlwaysUnavailable::Unknown) => "runs.toolApproval.wider.alwaysUnknown",
     AlwaysBlocked::Command(AlwaysUnavailable::SeveralAsk) => "runs.toolApproval.wider.severalAsk",
     AlwaysBlocked::Command(AlwaysUnavailable::Destructive) => "runs.toolApproval.wider.destructive",
     AlwaysBlocked::Command(AlwaysUnavailable::DestructiveForms) => "runs.toolApproval.wider.destructiveForms",
@@ -181,16 +181,14 @@ fn pressed_title(ctx: &Ctx, view: &View<'_>, pressed: Pressed, key: &str) -> Arc
 /// A tile: icon, title and what it covers; outlined `$text` on `$hover` under the pointer and while
 /// focused.
 fn tile(view: &View<'_>, tile: Tile) -> Element {
-  let available = matches!(tile.offer, Offer::Press(_));
-  let mut covers = Row::new().spacing(SpacingSize::Xs).align_items(Alignment::Start);
-  if !available {
-    covers = covers.child(icon(Icon::Lock, IconSize::Reason, PaletteColor::TextSecondary));
-  }
-  let covers = covers.child(
-    Text::new(&tile.covers)
-      .variant(ExtraTypography::CellLabel.role())
-      .flex(1.0),
-  );
+  // An answer the request does not offer shows a lock instead of its icon (`bjrgu`).
+  let glyph = match tile.offer {
+    Offer::Press(_) => tile.glyph,
+    Offer::Unavailable => Icon::Lock,
+  };
+  let covers = Text::new(&tile.covers)
+    .variant(ExtraTypography::CellLabel.role())
+    .width(Dimension::Pct(100.0));
   let copy = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -208,7 +206,7 @@ fn tile(view: &View<'_>, tile: Tile) -> Element {
     .align_items(Alignment::Start)
     .border(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .rounded(RadiusSize::Md)
-    .child(icon(tile.glyph, IconSize::Button, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Button, PaletteColor::TextSecondary))
     .child(copy);
   let Offer::Press(press) = tile.offer else {
     return button
@@ -238,46 +236,4 @@ fn tile(view: &View<'_>, tile: Tile) -> Element {
       .on_blur(move || blurred.set(false));
   }
   button.into()
-}
-
-/// The scope of Approve similar (`XKja4`): the rule it makes, then what runs without asking and what
-/// still asks.
-pub(super) fn scope_panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
-  let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
-  let (rule, runs, asks) = match shown.choices.similar.as_ref().ok()? {
-    SimilarShown::Tool { server, tool } => {
-      let names = [("server", &**server), ("tool", &**tool), ("run", run.as_str())];
-      (
-        ctx.t_args("runs.toolApproval.similarScope.ruleTool", names),
-        ctx.t_args("runs.toolApproval.similarScope.runsTool", names),
-        ctx.t_args("runs.toolApproval.similarScope.asksTool", names),
-      )
-    }
-    SimilarShown::Command { words, category } => {
-      let category = ctx.t(category_key(*category));
-      let names = [("words", &**words), ("category", &*category), ("run", run.as_str())];
-      (
-        ctx.t_args("runs.toolApproval.similarScope.ruleCommand", names),
-        ctx.t_args("runs.toolApproval.similarScope.runsCommand", names),
-        ctx.t_args("runs.toolApproval.similarScope.asksCommand", names),
-      )
-    }
-  };
-  Some(
-    Column::new()
-      .id("tool-approval-similar-scope")
-      .width(Dimension::Pct(100.0))
-      .padding(ExtraSpacing::Group.role())
-      .spacing(ExtraSpacing::Tight.role())
-      .background(PaletteColor::SurfaceRaised)
-      .rounded(RadiusSize::Md)
-      .child(
-        Text::new(&rule)
-          .variant(ExtraTypography::MonoValue.role())
-          .color(PaletteColor::TextPrimary),
-      )
-      .child(Text::new(&runs).variant(ExtraTypography::CellLabel.role()))
-      .child(Text::new(&asks).variant(ExtraTypography::CellLabel.role()))
-      .into(),
-  )
 }

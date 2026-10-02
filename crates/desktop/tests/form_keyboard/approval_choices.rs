@@ -3,7 +3,8 @@
 //! Deny and Approve once, which has the focus; what Deny tells the agent), the keyboard (Tab in the visual
 //! order, wrapping; Esc is Decide later), one request at a time with "1 of 3", Decide later leaving the
 //! requests in Needs you and the status bar with Review, Needs you counting while the dialog is open, a
-//! similar rule's Revoke, and auto-approval's switch, indicator and Stop.
+//! similar rule's Revoke, and auto-approval's switch, indicator and Stop. This harness has no runner, so its status
+//! bar shows that problem in place of the waiting requests (`tests/status_bar/approvals.rs` shows them).
 
 use orchester_core::{
   id::RunId,
@@ -131,7 +132,6 @@ fn approval_choices_one_request_at_a_time_oldest_first() {
 fn approval_choices_needs_you_counts_requests_while_the_dialog_is_open() {
   let (mut desktop, _) = open(3);
   assert!(shows(&mut desktop, "status-needs-you", "3"));
-  assert!(shows(&mut desktop, "status-approvals", "3 waiting"));
 }
 
 #[test]
@@ -139,12 +139,19 @@ fn approval_choices_decide_later_leaves_the_requests_waiting_with_review() {
   let (mut desktop, _) = open(3);
   desktop.press("tool-approval-decide-later");
   desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
-  assert!(shows(&mut desktop, "status-approvals", "3 approvals waiting"));
   assert!(shows(&mut desktop, "status-needs-you", "3"));
+  // Needs you on the Overview lists each request, oldest first.
+  assert!(shows(
+    &mut desktop,
+    "overview-attention",
+    "Designer asks to use pencil batch_design_0"
+  ));
   // Nothing reopens it by itself.
   desktop.pass();
   assert!(!has(&mut desktop, DIALOG));
-  desktop.press("status-approvals-review");
+  // This harness has no runner, so the status bar shows that first; Needs you's row opens the request.
+  let review = first_review(&desktop).expect("a request row with Review");
+  desktop.click(&review);
   desktop.wait_for(DIALOG);
   assert!(shows(&mut desktop, "tool-approval-position", "1 of 3 waiting"));
   // Esc is Decide later, never Deny.
@@ -207,6 +214,13 @@ fn approval_choices_auto_approval_switch_indicator_and_stop() {
   desktop.wait_until("the indicators go away", |desktop| {
     !has(desktop, "status-auto-approving") && !has(desktop, "task-auto-approving")
   });
+}
+
+/// The id of the first request's Review on the Overview's Needs you.
+fn first_review(desktop: &Desktop) -> Option<String> {
+  let db = ProjectDb::open(desktop.repo()).expect("open");
+  let oldest = db.pending_tool_approvals_all().expect("requests").into_iter().next()?;
+  Some(format!("overview-request-review-{}", oldest.id))
 }
 
 fn open_task(desktop: &mut Desktop) {

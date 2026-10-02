@@ -13,6 +13,7 @@
 mod always;
 mod footer;
 mod request;
+mod scope;
 mod wider;
 
 use std::sync::Arc;

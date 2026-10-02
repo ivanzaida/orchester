@@ -79,8 +79,9 @@ pub(super) fn summary(
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
+    // The card says what the run waits for; the run's own notice would say it is at work.
+    .with_children(waiting.is_none().then(|| with_reason(notice(ctx, detail, lost), reason)))
     .with_children(waiting)
-    .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
     .with_children(brief_section(ctx, details));

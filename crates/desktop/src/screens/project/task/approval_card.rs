@@ -6,19 +6,25 @@ use lurq::{app::ctx::Ctx, node::Element};
 use crate::{
   display,
   screens::project::{approval_queue::ApprovalQueue, pages::Shown},
-  tasks::detail::RunView,
+  tasks::{approvals::ShownApproval, detail::RunView},
   ui::{button::ActionButton, icon::Icon, notice::Notice},
 };
 
-/// The card of the oldest request `run` waits on; `None` when it waits on none.
-pub(super) fn review_card(ctx: &mut Ctx, run: &RunView) -> Option<Element> {
+/// The oldest request `run` waits on, as the project's tasks know it.
+pub(super) fn waiting_request(ctx: &mut Ctx, run: &RunView) -> Option<ShownApproval> {
   let shown = ctx.use_context::<Shown>()?;
-  let queue = ctx.use_context::<ApprovalQueue>()?;
   let tasks = shown.tasks.ready()?;
-  let waiting = tasks
+  tasks
     .pending_tool_approvals
     .iter()
-    .find(|pending| pending.approval.run == run.id())?;
+    .find(|pending| pending.approval.run == run.id())
+    .cloned()
+}
+
+/// The card of the oldest request `run` waits on; `None` when it waits on none.
+pub(super) fn review_card(ctx: &mut Ctx, run: &RunView) -> Option<Element> {
+  let waiting = waiting_request(ctx, run)?;
+  let queue = ctx.use_context::<ApprovalQueue>()?;
   let approval = &waiting.approval;
   let title = if approval.command {
     ctx.t_args(
