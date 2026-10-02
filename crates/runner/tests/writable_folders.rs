@@ -16,14 +16,14 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{FolderBounds, WritableFolder, WritableFolders},
   resource::{AgentProfile, Draft, ResourceKind},
-  run::{Run, RunStatus},
+  run::{Run, RunStatus, Stuck},
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 
-use self::support::{Setup, project, reported, scheduler, threads, wait_for};
+use self::support::{Setup, project, reported, scheduler, settled, threads, wait_for};
 
 /// Publishes the Builder profile again, allowing it to write to `entries` besides its worktree.
 fn allow_folders(root: &Path, entries: &[String]) {
@@ -54,7 +54,7 @@ async fn run(root: &Path, task: orchester_core::id::TaskId) -> (RunId, Run) {
     .start_run(IdempotencyKey::generate(), task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let run = wait_for(root, &mut events, id, settled).await;
   (id, run)
 }
 
@@ -127,7 +127,11 @@ async fn writable_folders_that_are_gone_stop_the_agent_before_its_cli_starts() {
   allow_folders(root, std::slice::from_ref(&entry));
   outside.close().expect("the folder is removed");
   let (id, run) = run(root, project.task).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let db = ProjectDb::open(root).expect("open");
   assert!(reported(&db, id, "argv: ").is_empty(), "the CLI never started");
   assert_eq!(

@@ -18,7 +18,7 @@ mod tokens;
 mod typography;
 
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
-pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar};
+pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar, value_box_scrollbar};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
@@ -34,6 +34,8 @@ pub const WINDOW_CONTROL_WIDTH: f32 = tokens::WINDOW_CONTROL_WIDTH;
 /// Width of the lifecycle dialogs at most (`um9B1`, `KS2RU`, `BovYZ`); narrower windows keep
 /// `ExtraSpacing::DialogMargin` on either side instead.
 pub const LIFECYCLE_DIALOG_WIDTH: f32 = tokens::LIFECYCLE_DIALOG_WIDTH;
+/// The tallest a long value's box in the approval dialog grows before it scrolls (`E5NBo` in `bjrgu`).
+pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = tokens::APPROVAL_VALUE_MAX_HEIGHT;
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
 /// Width of the check slot every select option reserves, the size of the check (`ClxwV` in
@@ -58,6 +60,8 @@ pub const TASK_REVIEW_QUEUE_WIDTH: f32 = tokens::TASK_REVIEW_QUEUE_WIDTH;
 pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = tokens::TASK_REVIEW_PROPERTY_HEIGHT;
 pub const TASK_REVIEW_BACK_WIDTH: f32 = tokens::TASK_REVIEW_BACK_WIDTH;
 pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = tokens::TASK_REVIEW_COLUMNS_MIN_WINDOW;
+pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = tokens::RETRY_LIMIT_COLUMNS_MIN_WINDOW;
+pub const ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = tokens::ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW;
 pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = tokens::TASK_TABLE_PIPELINE_MIN_WINDOW;
 
 const FONTS: &[&[u8]] = &[

@@ -133,8 +133,10 @@ async fn failed_recovery_stale_messages_cannot_retry_a_new_failure() {
     Some(failed.last_sequence()),
   );
   scheduler.deliver_messages(id).await.expect("recover");
+  // The resumed turn breaks, so its step restarts once as a fresh session, which reads the brief
+  // and reports the failure again.
   let again = wait_for(root, &mut events, id, |run| {
-    run.attempts().len() == 2 && run.status().is_terminal()
+    run.attempts().len() == 3 && run.status().is_terminal()
   })
   .await;
   wait_for_idle(&scheduler).await;
@@ -153,7 +155,7 @@ async fn failed_recovery_stale_messages_cannot_retry_a_new_failure() {
   send(root, &again, "Now continue successfully.", Some(again.last_sequence()));
   scheduler.deliver_messages(id).await.expect("fresh recovery");
   let done = wait_for(root, &mut events, id, |run| run.status() == &RunStatus::Succeeded).await;
-  assert_eq!(done.attempts().len(), 3);
+  assert_eq!(done.attempts().len(), 4);
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -197,7 +197,40 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
-### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (merged with master 2026-10-02)
+### Useful automatic retries · branch `claude/retry-feedback` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of 02.B3–B7 passed. Noted, not fixed: retries are counted
+over the whole run, so after a person returns the work a later verdict failure of that step waits at once; a member
+of a task group that waits for a person keeps Return to drafts unavailable for the group until it is stopped or
+retried; the Conversation tab's progress column at 960 loses step names (ORC-61 rewrites that tab).
+
+Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
+failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
+verdict (`reported_failed`, `command_failed`) follows `on_failure`, a `failed` result wins over a turn that failed
+after it, any other failure restarts its step in place until it broke twice since it last passed (at most 10 automatic
+attempts in a row, `MAX_AUTOMATIC_ATTEMPTS`); a restart keeps the report and note of the attempt it restarts;
+exhausted retries and a second breakage make the run wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
+retry, returns the work to an agent step with a note, or stops the run (`Command::DecideStuckRun`). Migration 36
+rebuilds `runs` (status `waiting`) and `attempts` (reasons `restart`, `returned`, column `note`); runs that failed
+with `retries_exhausted` stay failed. See `docs/architecture/storage.md`, Step graphs, Failures. Tests: `cargo test
+-p orchester-core --test run stuck retry_prompt`, `cargo test -p orchester-store --test stuck_runs stuck_runs`,
+`cargo test -p orchester-runner --features test-agent --test retries retries`, `cargo test -p orchester-desktop
+--test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`,
+`cargo test -p orchester-desktop --test activity activity_run_waiting`.
+
+**Done when** an independent design verifier compares the app with the run-waits-for-a-person frames in `O4vgKt`
+and reports no blocking or major mismatches; then move this entry to *Done*:
+- 02.B3 `FjCWv`: retries used up, panel `Bi6pU`;
+- 02.B4 `K7hbj`: a step chosen (Implement, the step a retry resumes, by default) and a note typed;
+- 02.B5 `m3pDW`: a step broke twice;
+- 02.B6 `NM5My`: *Needs you* in Overview (card *ORC-128 · Review still fails after 2 retries*) and the status bar
+  (*Review needs your decision · ORC-128*, hand, until opened or dismissed);
+- 02.B7 `zyusO`: the three Activity transcript marks (automatic return, automatic restart, your return with note) and
+  the runner's refusal above *Stop and fail the run*.
+`DecideStuckRun`, `RunNotWaiting` and `RunWaitsForPerson` raise the ipc `PROTOCOL_VERSION` to 11.
+### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of the permission rows, popovers and notices passed.
 
 Run #12 (`orchester/orc-44-run-2`, base `37716df`) passed Implement, Check and Review; its Verify was interrupted.
 Master was merged into the branch (merge `a05ba75`) with master's approval architecture as the base. Almost all of
@@ -344,6 +377,46 @@ admits it) and, to keep naming the version in use, this line.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Tool approval dialog: long values shown in full · branch `claude/approval-long`
+
+- **Done 2026-10-02.** Independent review and design verification passed. A value that does not fit beside its label (Action, Command or
+  Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
+  label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
+  both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
+  with 04.H9's shell string; each thumb in a 6px lane of its own, never over a glyph; a quiet Copy at the right of
+  the label's line, 12 above the box, takes the value as recorded). A CLI command comes after its working directory,
+  labelled *Command · N lines, as recorded* (`Grcu7`); a CLI's request names no shell, so no Shell row. Arguments that parse as JSON read one member a line (2-space indent, only
+  whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
+  scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
+  (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
+- Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- lurq bug worked around: a component that renders its own `Modal` and re-renders after two window resizes lays the
+  layer out at the earlier size. The dialog renders only the layer (`ToolApprovalDialog`); everything that changes lives
+  in `ToolApprovalPanel`. The fix goes upstream as lurq 0.33.2; other dialogs that render their own `Modal` and
+  re-render while open are exposed until then.
+- Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
+  `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
+  512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
+  agent writes them and deep nesting multiplies the indentation. A number holding a secret's digits is redacted too.
+- MCP arguments are recorded whole (they were cut at 600 characters): Claude Code's permission prompt removes secret
+  values from every text in them first, then `run::recorded_arguments` keeps them whole up to `ARGUMENTS_CEILING`
+  (256 KB). Past it they are cut at a character boundary and end with a visible `… cut at 256 KB` line; the dialog lays
+  out the part kept and ends it with that line (`runs.toolApproval.argumentsCut`). Activity never showed MCP
+  arguments (it names a tool by its file path), and the approval row's `scope` column has no size limit, so neither
+  changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
+- The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
+  room left of them and wraps there.
+- Copy is the ghost button of `feLwP` (22 high, 6 at each side and between icon and label, `muted`, `text` and the
+  hover fill under the pointer, `oriyY`); each value box keeps its thumbs in lanes of their own inside its 6px padding,
+  the vertical one from the viewport's top (`e0vyng`). With lurq 0.33.1 a press or drag anywhere in a lane scrolls
+  and never selects text (checked in the running app on both lanes).
+- Left: a command's *Agent's note* still cuts with an ellipsis. The sideways lane is always reserved (lurq reserves
+  always or never), where the design adds it only while a line overflows; lurq has one end inset for both bars, so the
+  sideways thumb also starts at the viewport's left rather than 12 in.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
+  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
+  approval`.
 
 Cargo-specific build folder handling removed · branch `claude/no-cargo-special`
 

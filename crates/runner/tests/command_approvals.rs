@@ -8,7 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, FolderBounds, LaunchPermissions, WritableFolder, WritableFolders},
   resource::{AgentProfile, StepKey},
-  run::{PendingToolApproval, PermissionsApply, RunStatus},
+  run::{AttemptReason, PendingToolApproval, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
   time::Timestamp,
 };
@@ -259,9 +259,20 @@ async fn verify_progress(
   let profile = before
     .profile_of(&StepKey::new("implement").expect("key"))
     .expect("profile");
-  let after = wait_for(root, events, id, |run| run.status().is_terminal()).await;
-  if deny_command || deny_tool {
-    assert!(matches!(after.status(), RunStatus::Failed(_)));
+  let denied = deny_command || deny_tool;
+  let after = wait_for(root, events, id, |run| {
+    if denied {
+      run.waits_for_a_person() && run.attempts().len() == 2
+    } else {
+      run.status().is_terminal()
+    }
+  })
+  .await;
+  if denied {
+    assert!(matches!(
+      after.current_attempt().map(|attempt| attempt.reason()),
+      Some(AttemptReason::Restart { step }) if step.as_str() == "implement"
+    ));
   } else {
     assert_eq!(after.status(), &RunStatus::Succeeded);
   }
@@ -275,7 +286,7 @@ async fn verify_progress(
   assert_eq!(worktree.join("command-once.txt").exists(), !deny_command);
   assert_eq!(worktree.join("mcp-once.txt").exists(), !deny_command && !deny_tool);
   let invocations = db.invocations(id).expect("invocations");
-  assert_eq!(invocations.len(), 3);
+  assert_eq!(invocations.len(), if denied { 4 } else { 3 });
   assert_eq!(invocations[1].session, invocations[2].session);
   assert_eq!(invocations[1].execution, invocations[2].execution);
   let prepared = StepKey::new("prepare").expect("key");

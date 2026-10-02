@@ -200,6 +200,30 @@ impl ActivityStore for ProjectDb {
     }
   }
 
+  fn last_command_finished(&self, run: RunId, execution: StepExecutionId) -> Result<Option<AgentEvent>, StoreError> {
+    let payload: Option<String> = self
+      .connection
+      .query_row(
+        "
+        SELECT payload FROM agent_events
+        WHERE run_id = ?1 AND step_execution_id = ?2 AND kind = 'tool_command_finished'
+        ORDER BY sequence DESC LIMIT 1",
+        params![run.to_string(), execution.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    let Some(payload) = payload else {
+      return Ok(None);
+    };
+    match decode_json("agent event", EVENT_SCHEMA, &payload)? {
+      finished @ AgentEvent::ToolCommandFinished { .. } => Ok(Some(finished)),
+      other => Err(corrupt(
+        "agent event",
+        format!("kind `tool_command_finished` holds a `{}` payload", other.name()),
+      )),
+    }
+  }
+
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT sequence, step_execution_id, invocation_id, at, kind, payload FROM agent_events \

@@ -15,7 +15,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Select, Spacer, Text},
   core::{ElementRef, Signal},
@@ -36,7 +36,9 @@ use super::{
 use crate::{
   background,
   messages::Message,
+  navigation::route::{Page, TaskPageTab},
   runner::Runners,
+  screens::project::ProjectNav,
   tasks::{
     conversation::{Conversation, PanelState, send_in},
     run::control_message,
@@ -46,6 +48,7 @@ use crate::{
     field::{field_error, select_style},
     icon::Icon,
     message_text,
+    pressable::surface,
     status_label::status_label,
   },
 };
@@ -215,6 +218,7 @@ impl Component for ConversationPanel {
       (None, Some(Sent::Queued(reason))) => Some(reason.clone()),
       _ => None,
     };
+    let decision = (conversation.state == PanelState::Deciding).then(|| decision_link(ctx, props.task));
     let composer = composer(
       ctx,
       Composer {
@@ -255,6 +259,7 @@ impl Component for ConversationPanel {
           .width(Dimension::Pct(100.0))
           .into(),
       ))
+      .with_children(decision.map(beside_gutter))
   }
 }
 
@@ -381,6 +386,7 @@ fn heading(ctx: &Ctx, state: PanelState) -> Element {
     PanelState::Waiting => (Icon::MessageCircle, "conversation.status.waiting"),
     PanelState::Paused => (Icon::Pause, "conversation.status.paused"),
     PanelState::Stopped => (Icon::OctagonPause, "conversation.status.stopped"),
+    PanelState::Deciding => (Icon::Hand, "conversation.status.deciding"),
     PanelState::Interrupted => (Icon::CirclePause, "conversation.status.interrupted"),
     // The run is still ready for review; only its agent cannot be asked.
     PanelState::Ready | PanelState::WorktreeRemoved => (Icon::GitPullRequest, "conversation.status.ready"),
@@ -406,6 +412,7 @@ fn participants(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     let key = match conversation.state {
       PanelState::Paused => Some("conversation.participants.paused"),
       PanelState::Stopped => Some("conversation.participants.stopped"),
+      PanelState::Deciding => Some("conversation.participants.deciding"),
       PanelState::Interrupted => Some("conversation.participants.interrupted"),
       _ => None,
     };
@@ -461,6 +468,7 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::Live | PanelState::Waiting, _) => ctx.t("conversation.explanation.checkpoint"),
     (PanelState::Paused, _) => ctx.t("conversation.explanation.paused"),
     (PanelState::Stopped, _) => ctx.t("conversation.explanation.stopped"),
+    (PanelState::Deciding, _) => ctx.t("conversation.explanation.deciding"),
     (PanelState::Interrupted, _) => ctx.t("conversation.explanation.queued"),
     (PanelState::Ready, Some(agent)) => ctx.t_args("conversation.explanation.ready", [("agent", agent)]),
     (PanelState::Ready, None) => ctx.t("conversation.explanation.readyNoAgent"),
@@ -471,4 +479,16 @@ fn explanation(ctx: &Ctx, conversation: &Conversation) -> Arc<str> {
     (PanelState::Merged, _) => ctx.t("conversation.explanation.merged"),
     (PanelState::Ended, _) => ctx.t("conversation.explanation.ended"),
   }
+}
+
+/// The way to the decision a waiting run needs: its Summary, with the decision panel.
+fn decision_link(ctx: &mut Ctx, task: TaskId) -> Element {
+  let nav = ctx
+    .use_context::<ProjectNav>()
+    .expect("the project shell provides ProjectNav");
+  nav
+    .link(Page::Task(task, TaskPageTab::Summary))
+    .on(surface().id("conversation-open-decision"))
+    .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link))
+    .into()
 }

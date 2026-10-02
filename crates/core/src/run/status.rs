@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::plan::ReviewNote;
 use crate::{id::StepExecutionId, resource::StepKey};
 
 /// Why a running run stopped without a checkpoint-safe pause.
@@ -72,11 +73,42 @@ pub enum PauseReason {
   LimitReached(RunLimit),
 }
 
+/// Why automatic execution stopped and the run waits for a person to decide how it goes on: allow
+/// one more retry, return the work to an earlier agent step with a note, or stop the run.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stuck {
+  /// The step's work still failed after its failure route was taken `max_retries` times.
+  RetriesExhausted(StepKey),
+  /// The step broke again in the attempt that restarted it: its agent's turn failed without a
+  /// `failed` verdict, or the step could not be started, committed or merged.
+  BrokeAgain(StepKey),
+}
+
+impl Stuck {
+  /// The step that failed.
+  pub const fn step(&self) -> &StepKey {
+    match self {
+      Self::RetriesExhausted(step) | Self::BrokeAgain(step) => step,
+    }
+  }
+
+  /// How the run fails when the person stops it.
+  pub fn failure(&self) -> RunFailure {
+    match self {
+      Self::RetriesExhausted(step) => RunFailure::RetriesExhausted(step.clone()),
+      Self::BrokeAgain(step) => RunFailure::StepFailed(step.clone()),
+    }
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RunStatus {
   Pending,
   Running,
   Paused(PauseReason),
+  /// Its attempt ended for this reason and no automatic route is left; no agent works for it.
+  WaitingForPerson(Stuck),
   /// Stopped without settling; the last checkpoint is kept and nothing after it counts as done.
   Interrupted(InterruptCause),
   Succeeded,
@@ -147,6 +179,15 @@ pub enum StepFailure {
   CommandFailed,
 }
 
+impl StepFailure {
+  /// Whether the step judged the work: its agent reported `failed`, or its command's exit code
+  /// said so. Only a verdict follows the step's failure route; any other failure is a breakage,
+  /// which restarts the step itself once (user decision 2026-10-02).
+  pub const fn is_verdict(self) -> bool {
+    matches!(self, Self::ReportedFailed | Self::CommandFailed)
+  }
+}
+
 /// Why an attempt was started.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -165,6 +206,18 @@ pub enum AttemptReason {
   /// A person's message resumes `step` after failure, then runs its dependent and unfinished steps.
   Recovery {
     step: StepKey,
+  },
+  /// `step` broke without a verdict on its work: it runs again as a fresh execution, then its
+  /// dependent and unfinished steps.
+  Restart {
+    step: StepKey,
+  },
+  /// `failed_step` waited for a person, who returned the work to the agent step `return_to` with
+  /// `note`, the instruction its prompt carries.
+  Returned {
+    failed_step: StepKey,
+    return_to: StepKey,
+    note: ReviewNote,
   },
 }
 
