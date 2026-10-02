@@ -10,7 +10,7 @@ use std::{
 
 use orchester_core::{
   connection::{
-    AgentProvider, Connection, ConnectionKind,
+    AgentEndpoint, AgentProvider, Connection, ConnectionKind,
     mcp::{HttpServer, McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, McpUrl},
   },
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
@@ -51,7 +51,7 @@ fn codex(db: &mut ProjectDb) -> ConnectionId {
     ConnectionId::generate(),
     name("Codex"),
     ConnectionKind::Agent(AgentProvider::CodexCli),
-    std::env::temp_dir().join("codex"),
+    AgentEndpoint::Program(std::env::temp_dir().join("codex")),
     at(1),
   )
   .expect("absolute executable");
@@ -369,7 +369,7 @@ fn import_writes_nothing_when_a_mapped_connection_is_gone() {
         gone,
         name("Codex"),
         ConnectionKind::Agent(AgentProvider::CodexCli),
-        std::env::temp_dir().join("codex"),
+        AgentEndpoint::Program(std::env::temp_dir().join("codex")),
         at(1),
       )
       .expect("connection"),

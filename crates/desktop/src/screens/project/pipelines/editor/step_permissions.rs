@@ -3,7 +3,8 @@
 //! profile's. Only values at or below the profile's are offered: read-only instead of editing, a
 //! subset of the allowed commands (when the connection enforces a list), network off (when the
 //! connection enforces it). Without a profile (`UjHDL`) one row says that permissions come from
-//! the profile.
+//! the profile. A step that asks when a tool needs approval also lists, under that switch, the servers
+//! of the profile that run some tools without asking (no frame draws these lines).
 
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
+  connection::invocation::Platform,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess, StepCommands,
     StepNetwork, StepPermissions,
@@ -31,6 +32,7 @@ use super::{
   step_inspector::{Fields, StepInspectorProps},
 };
 use crate::{
+  agents::permissions::{escalations, file_command_hints, unlisted_commands},
   pipelines::{data::ProfileChoice, describe::repository_access, fields::AccessChoice},
   theme::ExtraTypography,
   ui::{
@@ -70,8 +72,15 @@ pub fn rows(ctx: &Ctx, props: &StepInspectorProps, fields: &Fields, handle: &Edi
   let mut rows = vec![repository_row(ctx, choice, &effective, fields)];
   rows.extend(commands_rows(ctx, choice, narrowing, &effective, &edit));
   rows.push(network_row(ctx, choice, narrowing, &effective, &edit));
-  if choice.provider == Some(AgentProvider::CodexCli) {
-    rows.push(tool_approvals_row(ctx, narrowing, &edit));
+  rows.push(tool_approvals_row(ctx, choice, narrowing, &edit));
+  if choice.permissions.interactive_tool_approvals() || narrowing.interactive_tool_approvals {
+    rows.extend(
+      props
+        .assignables
+        .exempt_tools(choice)
+        .into_iter()
+        .map(|(server, count)| note(&exempt_text(ctx, &server, count))),
+    );
   }
   rows.push(note(&narrowing_note(ctx, choice, narrowing)));
   rows
@@ -133,6 +142,7 @@ fn commands_rows(
     &commands_value(ctx, effective),
     ValueStyle::Mono,
   )];
+  rows.extend(escalations(ctx, choice.provider, effective.commands()).map(|text| note(&text)));
   let CommandPermission::Allowed(profile) = choice.permissions.commands() else {
     return rows;
   };
@@ -171,6 +181,10 @@ fn commands_rows(
       .with_children(entries)
       .into(),
   );
+  if let CommandPermission::Allowed(kept) = effective.commands() {
+    rows.extend(file_command_hints(ctx, kept).iter().map(|text| note(text)));
+    rows.extend(unlisted_commands(ctx, choice.provider, kept).map(|text| note(&text)));
+  }
   rows
 }
 
@@ -250,22 +264,36 @@ fn network_row(
     .into()
 }
 
-/// Opts this Codex step into one-call decisions for tools that ask the host for approval.
-fn tool_approvals_row(ctx: &Ctx, narrowing: &StepPermissions, edit: &StepEdit) -> Element {
+/// Opts this step into one-call decisions for tools that ask the host for approval.
+fn tool_approvals_row(ctx: &Ctx, choice: &ProfileChoice, narrowing: &StepPermissions, edit: &StepEdit) -> Element {
   let label = ctx.t("pipelines.inspector.permissions.interactiveToolApprovals");
-  let enabled = narrowing.interactive_tool_approvals;
+  let required = choice.permissions.interactive_tool_approvals();
+  let enabled = required || narrowing.interactive_tool_approvals;
   let edit = edit.clone();
-  let switch = Switch::new("step-tool-approvals", label.clone(), enabled)
-    .hide_label()
-    .render(move || {
+  let switch = Switch::new("step-tool-approvals", label.clone(), enabled).hide_label();
+  let switch = if required || choice.provider.is_none() {
+    switch.locked()
+  } else {
+    switch.render(move || {
       edit.apply(|permissions| permissions.interactive_tool_approvals = !enabled);
-    });
+    })
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
     .child(Text::new(&label).variant(TypographyStyle::Caption).flex(1.0))
     .child(switch)
     .into()
+}
+
+/// "pencil: 5 tools run without asking".
+fn exempt_text(ctx: &Ctx, server: &str, count: usize) -> Arc<str> {
+  let key = if count == 1 {
+    "pipelines.inspector.permissions.exemptTools.one"
+  } else {
+    "pipelines.inspector.permissions.exemptTools.other"
+  };
+  ctx.t_args(key, [("server", server), ("count", count.to_string().as_str())])
 }
 
 /// What the profile allows beyond the step (`m2XU9r`): "Reviewer v2 also allows pnpm lint.

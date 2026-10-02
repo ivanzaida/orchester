@@ -121,7 +121,10 @@ impl Component for SecretDialog {
       .expect("the secrets screen provides the dialog context");
     let (kind, environment) = match &context.purpose {
       DialogPurpose::Replace(secret) => (secret.kind(), secret.environment()),
-      DialogPurpose::Add => (SecretKind::ALL[0], context.environment.unwrap_or(Environment::ALL[0])),
+      DialogPurpose::Add => (
+        SecretKind::ALL[0],
+        context.environment.unwrap_or(Environment::NEW_SECRET),
+      ),
     };
     let save = save_action(ctx);
     let saved = context.saved.clone();

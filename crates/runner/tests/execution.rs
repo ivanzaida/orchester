@@ -55,6 +55,38 @@ async fn execution_runs_a_step_on_the_cli_and_commits_its_changes() {
   assert_transcript(&db, id);
 }
 
+/// What the runner asked Codex App Server for: the model, the sandbox and approval policy of the
+/// thread, the effort and the result schema of the turn.
+fn assert_thread_and_turn(stderr: &[&str]) {
+  let reported = |prefix: &str| {
+    stderr
+      .iter()
+      .find_map(|line| line.strip_prefix(prefix))
+      .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("JSON"))
+      .expect("reported")
+  };
+  let thread = reported("thread: ");
+  assert_eq!(thread["model"], "gpt-5.5");
+  // The user's own MCP server, read from `config/read`, is turned off for the thread.
+  assert_eq!(
+    thread["config"],
+    serde_json::json!({"mcp_servers": {"user-global": {"enabled": false}}})
+  );
+  assert_eq!(thread["sandbox"], "workspace-write");
+  // Commands that need more than the sandbox ask a person; nothing else does.
+  assert_eq!(
+    thread["approvalPolicy"],
+    serde_json::json!({"granular": {"mcp_elicitations": false, "rules": false, "sandbox_approval": true,
+      "request_permissions": false, "skill_approval": false}})
+  );
+  let turn = reported("turn: ");
+  assert_eq!(turn["effort"], "low");
+  assert!(
+    turn["outputSchema"].is_object(),
+    "a new session reports its result in the schema"
+  );
+}
+
 fn assert_transcript(db: &ProjectDb, run: RunId) {
   let entries: Vec<AgentEvent> = db
     .activity(run, 0)
@@ -76,18 +108,23 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
     .iter()
     .find_map(|line| line.strip_prefix("argv: "))
     .expect("argv reported");
+  // What the user's own Codex setup would add is turned off first: notify, plugins, apps and the
+  // permission requests that could stay granted.
+  let isolation = "app-server --stdio -c notify=[] -c features.plugins=false -c features.apps=false -c \
+                   features.exec_permission_approvals=false -c features.request_permissions_tool=false ";
   // The profile has network off, which Codex cannot enforce on Windows: network stays on there.
   let expected = if cfg!(windows) {
-    "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
-     workspace-write -c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true --output-schema "
+    "-c windows.sandbox=elevated -c sandbox_workspace_write.network_access=true -c sandbox_workspace_write.writable_roots=["
   } else {
-    "-a never exec --json --ignore-user-config --ignore-rules -m gpt-5.5 -c model_reasoning_effort=low --sandbox \
-     workspace-write --output-schema "
+    "-c sandbox_workspace_write.network_access=false -c sandbox_workspace_write.writable_roots=["
   };
-  assert!(argv.starts_with(expected), "{argv}");
-  // The step result schema is read from next to the project database, outside the worktree.
-  assert!(argv.contains("step-result.schema.json -C "), "{argv}");
-  assert!(argv.ends_with(" -"), "{argv}");
+  // Then the worktree and its repository are untrusted, so the repository's `.codex` never loads.
+  assert!(argv.starts_with(&format!("{isolation}-c projects={{")), "{argv}");
+  assert!(
+    argv.contains(&format!("={{trust_level=\"untrusted\"}}}} {expected}")),
+    "{argv}"
+  );
+  assert_thread_and_turn(&stderr);
   let environment = stderr
     .iter()
     .find_map(|line| line.strip_prefix("env: "))
@@ -115,10 +152,6 @@ fn assert_transcript(db: &ProjectDb, run: RunId) {
       .iter()
       .any(|event| matches!(event, AgentEvent::FileChanged { .. }))
   );
-  assert!(entries.contains(&AgentEvent::Raw {
-    stream: OutputStream::Stdout,
-    line: "a line that is not JSON".into()
-  }));
   assert!(
     entries
       .iter()
@@ -175,14 +208,16 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
   let mut db = ProjectDb::open(root).expect("open");
   let stored = db.connections().expect("connections").remove(0);
   let mut connection = AgentConnection::try_from(stored).expect("an agent connection");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "0.139.0".into(),
-      sign_in: SignIn::SignedOut,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in: SignIn::SignedOut,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   db.save_connection(&connection.into_connection()).expect("save");
   let (scheduler, _events) = scheduler(root);
   assert_eq!(

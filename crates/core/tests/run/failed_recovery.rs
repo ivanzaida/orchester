@@ -72,3 +72,38 @@ fn failed_recovery_a_second_failure_is_still_recoverable_without_erasing_the_fir
   );
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
+
+#[test]
+fn failed_recovery_invalidates_a_dependent_failed_context_without_discarding_history() {
+  let mut logged = Logged::started();
+  logged.through_plan();
+  logged.pass("implement");
+  logged.pass("checks");
+  let previous = logged.exec("review");
+  logged.apply(|run| run.start_step(previous, at(30)));
+  logged.apply(|run| run.fail_step(previous, StepFailure::ReportedFailed, at(31)));
+  let old = logged.run.clone();
+  logged.apply(|run| run.recover(&key("implement"), at(40)));
+  let review = logged.exec("review");
+  assert_eq!(logged.run.recovered_execution(review), None);
+  assert_eq!(logged.run.attempts()[0], old.attempts()[0]);
+  assert_eq!(logged.run.id(), old.id());
+  assert_eq!(logged.run.branch(), old.branch());
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
+fn failed_recovery_retains_the_selected_failed_session_and_unaffected_parallel_session() {
+  let mut logged = Logged::started();
+  logged.through_plan();
+  logged.pass("implement");
+  let checks = logged.exec("checks");
+  let review = logged.exec("review");
+  logged.apply(|run| run.start_step(checks, at(30)));
+  logged.apply(|run| run.start_step(review, at(31)));
+  logged.apply(|run| run.fail_step(review, StepFailure::ReportedFailed, at(32)));
+  logged.apply(|run| run.recover(&key("review"), at(40)));
+  assert_eq!(logged.run.recovered_execution(logged.exec("review")), Some(review));
+  assert_eq!(logged.run.recovered_execution(logged.exec("checks")), Some(checks));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}

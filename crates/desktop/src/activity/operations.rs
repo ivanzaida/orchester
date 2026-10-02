@@ -474,7 +474,8 @@ pub fn mcp_server_switch(open: &OpenProject, name: &str, enabled: bool) -> Opera
 }
 
 /// Checking a provider's CLI in the connection dialog; named by the product, e.g. "Codex CLI".
-pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> OperationSpec {
+/// `None` for a native provider, which has no CLI to check.
+pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> Option<OperationSpec> {
   let wording = match provider {
     AgentProvider::CodexCli => Wording {
       running: "statusBar.operations.cliCheck.codex.running",
@@ -486,11 +487,14 @@ pub fn cli_check(open: &OpenProject, provider: AgentProvider) -> OperationSpec {
       done: "statusBar.operations.cliCheck.claude.done",
       failed: "statusBar.operations.cliCheck.claude.failed",
     },
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return None,
   };
-  wording
-    .unnamed()
-    .project(open.project.name().as_str())
-    .target(in_project(open, Place::Connections))
+  Some(
+    wording
+      .unnamed()
+      .project(open.project.name().as_str())
+      .target(in_project(open, Place::Connections)),
+  )
 }
 
 /// Checking the GitHub CLI in the GitHub connection dialog.

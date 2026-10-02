@@ -75,8 +75,16 @@ pub struct ProjectNav {
   /// Why the task an Edit task page was opened for can no longer be edited; its page, shown
   /// instead, says so.
   refused_edit: Signal<Option<(TaskId, Message)>>,
+  /// The task Create just made, which the task list shown next highlights.
+  created: Signal<Option<CreatedTask>>,
   tabs: Tabs,
 }
+
+/// The task New task's Create made.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CreatedTask(TaskId);
+
+impl lurq::app::component::DevtoolsInspectable for CreatedTask {}
 
 impl ProjectNav {
   /// Opens `page` as a new history entry, as every user navigation does, once the page shown may
@@ -242,6 +250,20 @@ impl ProjectNav {
     Some(reason)
   }
 
+  /// Create made `task`: the form gives way to the task list ([`Self::finish`]), which highlights
+  /// it.
+  pub fn show_created(&self, task: TaskId) {
+    self.created.set(Some(CreatedTask(task)));
+    self.finish(Page::TASKS);
+  }
+
+  /// The task Create just made, once: the task list shown after the form highlights it.
+  pub fn take_created(&self) -> Option<TaskId> {
+    let CreatedTask(created) = self.created.get_untracked()?;
+    self.created.set(None);
+    Some(created)
+  }
+
   /// Tasks were saved; every tab of the project reads them again.
   pub fn tasks_changed(&self) {
     self.feed.revision.update(|revision| *revision += 1);
@@ -334,6 +356,7 @@ impl Component for ProjectShell {
         feed: feeds.of(project),
         add_github: ctx.signal(false),
         refused_edit: ctx.signal(None),
+        created: ctx.signal(None),
         tabs: ctx
           .use_context::<Tabs>()
           .expect("the window provides Tabs before mounting screens"),
@@ -366,6 +389,8 @@ impl Component for ProjectShell {
       usage,
     });
     let bar = ProjectBar {
+      project_name: open.project.name().as_str().to_owned(),
+      connections: feed.connections.get(),
       repo_root: open.repo_root.clone(),
       runner: status.clone(),
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),

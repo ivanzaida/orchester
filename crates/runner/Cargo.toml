@@ -101,6 +101,10 @@ name = "mcp"
 required-features = ["test-agent"]
 
 [[test]]
+name = "mcp_exempt_tools"
+required-features = ["test-agent"]
+
+[[test]]
 name = "writable_folders"
 required-features = ["test-agent"]
 
@@ -117,7 +121,51 @@ name = "run_again"
 required-features = ["test-agent"]
 
 [[test]]
+name = "command_approvals"
+required-features = ["test-agent"]
+
+[[test]]
 name = "failed_recovery"
+required-features = ["test-agent"]
+
+[[test]]
+name = "claude_approvals"
+required-features = ["test-agent"]
+
+[[test]]
+name = "claude_unlisted"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_escalations"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_repository_settings"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_stderr"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codex_resume"
+required-features = ["test-agent"]
+
+[[test]]
+name = "claude_prompt_relay"
+required-features = ["test-agent"]
+
+[[test]]
+name = "codebase_index"
+required-features = ["test-agent"]
+
+[[test]]
+name = "memory"
+required-features = ["test-agent"]
+
+[[test]]
+name = "plan_limits"
 required-features = ["test-agent"]
 
 [features]
@@ -126,6 +174,8 @@ test-agent = []
 [dependencies]
 orchester-core.workspace = true
 orchester-exec.workspace = true
+# The codebase index of each run's base revision, built before its first step.
+orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
 fs4.workspace = true

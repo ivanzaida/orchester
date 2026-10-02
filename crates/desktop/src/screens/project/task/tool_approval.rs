@@ -14,13 +14,19 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::RunId, run::PendingToolApproval};
+use orchester_core::{
+  connection::{AgentProvider, EngineVendor},
+  id::RunId,
+  resource::ModelId,
+  run::PendingToolApproval,
+};
 use orchester_ipc::Command;
 
+use super::native_approval;
 use crate::{
   messages::Message,
   runner::Runners,
-  tasks::run::control_message,
+  tasks::{approvals::ShownApproval, run::control_message},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -41,6 +47,14 @@ const BUTTON_HEIGHT: f32 = 36.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ToolApprovalProps {
   approval: PendingToolApproval,
+  /// The CLI of the agent that asks, which decides what an approval means.
+  provider: Option<AgentProvider>,
+  /// Who receives the agent's prompts, as its engine is named.
+  vendor: Option<EngineVendor>,
+  /// The model the asking step runs on.
+  model: Option<ModelId>,
+  /// The asking step only reads: an approved command can still change files.
+  read_only: bool,
   remaining: usize,
 }
 
@@ -123,13 +137,17 @@ impl Component for ToolApprovalDialog {
   }
 }
 
-pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[PendingToolApproval]) -> Option<Element> {
-  let approval = pending.first()?.clone();
-  let key = format!("tool-approval-{}", approval.id);
+pub(in crate::screens::project) fn modal(ctx: &mut Ctx, pending: &[ShownApproval]) -> Option<Element> {
+  let shown = pending.first()?.clone();
+  let key = format!("tool-approval-{}", shown.approval.id);
   Some(ctx.mount_keyed::<ToolApprovalDialog>(
     &key,
     ToolApprovalProps {
-      approval,
+      approval: shown.approval,
+      provider: shown.provider,
+      vendor: shown.vendor,
+      model: shown.model,
+      read_only: shown.read_only,
       remaining: pending.len() - 1,
     },
   ))
@@ -145,28 +163,66 @@ struct DialogState<'a> {
 }
 
 fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
+  let width = match state.props.approval.native {
+    Some(_) => native_approval::DIALOG_WIDTH,
+    None => DIALOG_WIDTH,
+  };
   let panel = Column::new()
     .id("tool-approval-dialog")
-    .width(Dimension::Px(DIALOG_WIDTH))
+    .width(Dimension::Px(width))
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(header(ctx, &state.props.approval))
+    .child(header(ctx, state.props))
     .child(details(ctx, state.props))
     .child(actions(ctx, state));
   backdrop(ctx, form(None, panel))
 }
 
-fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
-  let title = ctx.t("runs.toolApproval.title");
-  let explanation = ctx.t_args(
-    "runs.toolApproval.explanation",
-    [
-      ("agent", approval.agent.as_str()),
-      ("server", approval.server.as_str()),
-      ("action", approval.action.as_str()),
-    ],
-  );
+fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
+  let approval = &props.approval;
+  let command = approval.command;
+  let title = ctx.t(if command {
+    "runs.toolApproval.commandTitle"
+  } else {
+    "runs.toolApproval.title"
+  });
+  let explanation = if let Some(native) = approval.native {
+    ctx.t_args(
+      native_approval::explanation_key(native, props.read_only),
+      [
+        ("agent", approval.agent.as_str()),
+        ("cwd", approval.target.as_deref().unwrap_or_default()),
+      ],
+    )
+  } else if command {
+    // Claude Code runs an approved command without a sandbox; Codex runs an approved escalation
+    // outside its sandbox. Either can then change files, which a read-only step must say.
+    let key = match (props.provider, props.read_only) {
+      (Some(AgentProvider::ClaudeCodeCli), false) => "runs.toolApproval.commandExplanationClaude",
+      (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
+      (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
+      (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
+      // A native agent's command carries what it runs with; one without says only what it asks.
+      (Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi), _) => "runs.toolApproval.commandExplanationNative",
+    };
+    ctx.t_args(
+      key,
+      [
+        ("agent", approval.agent.as_str()),
+        ("cwd", approval.target.as_deref().unwrap_or_default()),
+      ],
+    )
+  } else {
+    ctx.t_args(
+      "runs.toolApproval.explanation",
+      [
+        ("agent", approval.agent.as_str()),
+        ("server", approval.server.as_str()),
+        ("action", approval.action.as_str()),
+      ],
+    )
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Lg)
@@ -180,29 +236,28 @@ fn header(ctx: &Ctx, approval: &PendingToolApproval) -> Element {
 
 fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
   let approval = &props.approval;
-  Column::new()
+  let column = Column::new()
     .id("tool-approval-details")
     .width(Dimension::Pct(100.0))
     .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
-    .spacing(ExtraSpacing::Stack.role())
-    .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
-    .child(styled_property(
-      &ctx.t("runs.toolApproval.server"),
-      &approval.server,
-      ValueStyle::Mono,
-    ))
-    .child(styled_property(
-      &ctx.t("runs.toolApproval.action"),
-      &approval.action,
-      ValueStyle::Mono,
-    ))
-    .with_children(
-      approval
-        .target
-        .as_deref()
-        .map(|target| styled_property(&ctx.t("runs.toolApproval.target"), target, ValueStyle::Mono)),
-    )
+    .spacing(ExtraSpacing::Stack.role());
+  let column = match approval.native {
+    Some(native) => column.with_children(native_approval::details(
+      ctx,
+      approval,
+      native,
+      (props.vendor.as_ref(), props.model.as_ref()),
+    )),
+    None => cli_details(ctx, column, approval),
+  };
+  // A native request's scope line is the smaller 11/1.5 of `W30mF` in 04.H9.
+  let scope = match approval.native {
+    Some(_) => ExtraTypography::CellLabel.role(),
+    None => TypographyStyle::Description,
+  };
+  column
+    .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(scope))
     .with_children((props.remaining > 0).then(|| {
       Text::new(&ctx.t_args(
         "runs.toolApproval.remaining",
@@ -211,6 +266,49 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       .variant(TypographyStyle::Description)
     }))
     .into()
+}
+
+/// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
+/// what the agent said about it.
+fn cli_details(ctx: &Ctx, column: Column, approval: &PendingToolApproval) -> Column {
+  let command = approval.command;
+  column
+    .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
+    .with_children(
+      (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
+    )
+    .child(styled_property(
+      &ctx.t(if command {
+        "runs.toolApproval.command"
+      } else {
+        "runs.toolApproval.action"
+      }),
+      &approval.action,
+      ValueStyle::Mono,
+    ))
+    .with_children(approval.target.as_deref().map(|target| {
+      styled_property(
+        &ctx.t(if command {
+          "runs.toolApproval.cwd"
+        } else {
+          "runs.toolApproval.target"
+        }),
+        target,
+        ValueStyle::Mono,
+      )
+    }))
+    .with_children(approval.scope.as_deref().map(|scope| scope_row(ctx, command, scope)))
+}
+
+/// What a request says beside its action: for a command, the reason the agent gave; for an MCP
+/// call, its arguments as one line of JSON, secret values removed and cut at 600 characters when
+/// recorded, and cut here with an ellipsis where the row ends.
+fn scope_row(ctx: &Ctx, command: bool, scope: &str) -> Element {
+  if command {
+    property(&ctx.t("runs.toolApproval.note"), scope)
+  } else {
+    styled_property(&ctx.t("runs.toolApproval.arguments"), scope, ValueStyle::Mono)
+  }
 }
 
 fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {

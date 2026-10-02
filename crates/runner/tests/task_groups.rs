@@ -2,6 +2,7 @@ mod support;
 use std::num::NonZeroU32;
 
 use orchester_core::{
+  connection::AgentProvider,
   id::IdempotencyKey,
   run::{InterruptCause, PauseReason, RunLimit, RunStatus},
   store::{RunStore, TaskStore},
@@ -101,7 +102,10 @@ fn reviewed_group(db: &mut ProjectDb, original: orchester_core::id::TaskId, mode
 
 #[tokio::test(flavor = "multi_thread")]
 async fn task_group_shared_cap_stops_the_run_and_holds_unstarted_tasks() {
-  let fixture = project(&Setup::new("Work in turns."));
+  let fixture = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = fixture.repo.path();
   let mut db = ProjectDb::open(root).expect("db");
   let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 5_000);
@@ -187,7 +191,10 @@ async fn task_group_parallel_still_obeys_runner_agent_slots() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn task_group_cancel_then_run_again_does_not_inherit_exhausted_shared_cap() {
-  let fixture = project(&Setup::new("Work in turns."));
+  let fixture = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = fixture.repo.path();
   let mut db = ProjectDb::open(root).expect("db");
   let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 5_000);
@@ -344,7 +351,10 @@ async fn task_group_fresh_reopen_holds_second_task_until_explicit_start() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn task_group_fresh_reopen_explicit_continue_keeps_first_run_checkpoint() {
-  let fixture = project(&Setup::new("Work in turns."));
+  let fixture = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = fixture.repo.path();
   let mut db = ProjectDb::open(root).expect("db");
   let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 3_000_000);

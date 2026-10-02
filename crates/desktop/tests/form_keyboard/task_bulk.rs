@@ -349,6 +349,8 @@ fn task_bulk_select_all_and_search_combine_with_drafts_tab() {
   add_draft(&mut desktop, "Improve filters", 2);
   desktop.press("task-select-KON-1");
   assert!(shows(&mut desktop, "task-selection", "1 selected"));
+  // Selecting another row keeps the task Create just made highlighted.
+  assert!(super::new_task::highlighted(&mut desktop.tree, "KON-2"));
   desktop.press("tasks-select-all");
   assert!(shows(&mut desktop, "task-selection", "2 selected"));
   desktop.press("tasks-tab-drafts");
@@ -366,15 +368,12 @@ fn add_draft(desktop: &mut Desktop, title: &str, number: usize) {
   desktop.wait_for("task-title");
   desktop.tab_to("task-title", 30);
   desktop.type_text(title);
+  // Enter is Create: the draft is made and the list shows it highlighted.
   desktop.enter();
-  desktop.settle("the draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
+  let key = format!("KON-{number}");
+  desktop.settle("the new draft in the list", |tree| {
+    tree.get_element_by_id("task-title").is_none() && super::new_task::highlighted(tree, &key)
   });
-  desktop.press("new-task-back");
-  desktop.wait_for(&format!("task-row-KON-{number}"));
 }
 
 fn publish_unseen_pipeline(desktop: &mut Desktop) -> orchester_core::resource::VersionNumber {

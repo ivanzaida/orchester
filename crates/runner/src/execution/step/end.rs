@@ -2,7 +2,8 @@
 //! worked beside others is merged back into the run's branch (for command tools as well, see
 //! `tool::end`). Its final message becomes its output for the steps after it; the step then passes
 //! — a gated one proposes the output as its next plan and waits for a decision — or fails for a
-//! reason its failure route handles. A failed step ends the attempt, so agents of the same attempt
+//! reason its failure route handles; once its fate is known, its handoff is kept as task memory
+//! (`super::memory`). A failed step ends the attempt, so agents of the same attempt
 //! still at work are ended. An agent whose turn ends reads what people wrote first (see
 //! `conversation`): its question makes the step wait for the answer, and messages queued for it
 //! keep the step going.
@@ -10,6 +11,7 @@
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
+  memory::StepFate,
   revision::Revision,
   run::{Checkpoint, RunLimit, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
@@ -47,8 +49,19 @@ impl RunTask {
     match finished.stopped {
       // Carried out once every agent has ended; the work stays uncommitted in the worktree.
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
+      // No tool decision was sent: save the session's work without completing its step.
+      Some(StopCause::Paused) => self.save(execution, &active, "saved while awaiting a tool decision"),
       // The execution stays open and continues with the run's new permissions.
-      Some(StopCause::Permissions) => self.restart_for_permissions(execution, &active),
+      Some(StopCause::Permissions) => {
+        self.restart_for_permissions(execution, &active)?;
+        if finished.approval_interrupted {
+          self.report(&active.invocation, RunnerProblem::CouldNotStart {
+            detail: "A tool decision ended without a confirmed result. Inspect its side effects before explicitly resuming the paused run.".to_owned(),
+          })?;
+          self.transition(|run, now| run.request_pause(now))?;
+        }
+        Ok(())
+      }
       // The execution stays open: it continues where it stopped once the run continues.
       Some(StopCause::Limit(limit)) => {
         let label = match limit {
@@ -105,6 +118,7 @@ impl RunTask {
       finished.final_message.as_deref(),
       Timestamp::now(),
     );
+    self.note_cli_too_old(execution, active, &finished.outcome)?;
     let failure = if !finished.outcome.is_success() {
       Some(StepFailure::AgentFailed)
     } else if output.outcome == Some(StepOutcome::Failed) {
@@ -128,6 +142,7 @@ impl RunTask {
     }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;
+      self.keep_handoff(execution, StepFate::Failed);
       return self.fail(execution, failure);
     }
     self.pass(execution, active, output.text)
@@ -146,9 +161,13 @@ impl RunTask {
       Ok(Integrated::Done) if self.run.is_gated(execution).map_err(RecordError::from)? => {
         self.propose(execution, output)
       }
-      Ok(Integrated::Done) => self.transition(|run, now| run.complete_step(execution, now)),
+      Ok(Integrated::Done) => {
+        self.keep_handoff(execution, StepFate::Passed);
+        self.transition(|run, now| run.complete_step(execution, now))
+      }
       Ok(Integrated::Conflict { branch, files }) => {
         self.report(&active.invocation, RunnerProblem::MergeConflict { branch, files })?;
+        self.keep_handoff(execution, StepFate::Failed);
         self.fail(execution, StepFailure::MergeConflict)
       }
       Err(IntegrateError::Execution(error)) => Err(error),
@@ -157,6 +176,7 @@ impl RunTask {
           detail: error.to_string(),
         };
         self.report(&active.invocation, problem)?;
+        self.keep_handoff(execution, StepFate::Failed);
         self.fail(execution, StepFailure::CheckpointFailed)
       }
     }

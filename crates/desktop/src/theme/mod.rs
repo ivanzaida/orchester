@@ -8,12 +8,17 @@ mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod plan_limits;
+pub use plan_limits::{
+  PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH, PLAN_PERCENT_WIDTH, PLAN_WINDOW_LABEL, STATUS_WIDTHS,
+  STATUS_WIDTHS_BOTH_REACHED, STATUS_WIDTHS_ONE_REACHED, StatusBarWidths,
+};
 mod shadow;
 mod tokens;
 mod typography;
 
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
-pub use form::{gutter_scrollbar, select_menu_scrollbar};
+pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;

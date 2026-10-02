@@ -37,13 +37,14 @@ pub fn report_codex(args: &[String]) -> bool {
   broken
 }
 
-/// Reports the `--mcp-config` file of Claude Code arguments `args`; `true` when it configures
-/// `broken`.
+/// Reports the `--mcp-config` file of Claude Code arguments `args` with the project's servers (not
+/// the permission prompt's, whose token stays out of the report); `true` when it configures `broken`.
 pub fn report_claude(args: &[String]) -> bool {
   let Some(path) = args
     .iter()
     .position(|arg| arg == "--mcp-config")
     .and_then(|index| args.get(index + 1))
+    .filter(|path| !fs::read_to_string(path).is_ok_and(|contents| contents.contains(r#""Orchester":"#)))
   else {
     return false;
   };

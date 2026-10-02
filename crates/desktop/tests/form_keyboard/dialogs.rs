@@ -110,12 +110,16 @@ fn connection_dialog_enter_saves_nothing_without_a_program() {
 #[test]
 fn connection_dialog_traps_tab() {
   let mut desktop = connection_dialog();
-  // Selects have no id of their own and show up as unnamed stops.
+  // Selects have no id of their own and show up as unnamed stops. The OpenAI kind cannot be chosen
+  // in this version, so it is no stop.
   assert_tab_stays_in(
     &mut desktop,
     &[
       "connection-dialog-close",
       "connection-name",
+      "connection-kind-codex",
+      "connection-kind-claude",
+      "connection-kind-anthropic",
       "connection-program",
       "connection-recheck",
       "connection-cancel",

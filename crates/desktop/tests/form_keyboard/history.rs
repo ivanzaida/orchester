@@ -1,11 +1,11 @@
 //! Back and forward: the mouse's side buttons (on release) and the history shortcuts move
-//! through the screens the user opened, tabs included. A submitted run form is not visited again,
-//! no screen follows itself in history, and Alt+Left in a focused text field stays with the
-//! field.
+//! through the screens the user opened, tabs included. A submitted form (Create, Create & run) is
+//! not visited again, no screen follows itself in history, and Alt+Left in a focused text field
+//! stays with the field.
 
 use lurq::app::{Tree, events::MouseButton};
 
-use crate::harness::Desktop;
+use crate::{harness::Desktop, new_task::highlighted};
 
 const OVERVIEW: &str = "new-task";
 const TASKS: &str = "tasks-new-task";
@@ -60,7 +60,14 @@ fn shortcut(desktop: &mut Desktop, back: bool) {
   desktop.pass();
 }
 
-/// The saved draft "Add switcher", listed in Tasks after leaving New task.
+/// Types `title` into the open New task form and presses Enter, which is Create.
+fn create(desktop: &mut Desktop, title: &str) {
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text(title);
+  desktop.enter();
+}
+
+/// The draft "Add switcher", made with Create from Tasks, which the form returned to.
 fn saved_draft() -> Desktop {
   let mut desktop = Desktop::with_project();
   desktop.wait_for(OVERVIEW);
@@ -68,17 +75,10 @@ fn saved_draft() -> Desktop {
   desktop.wait_for(TASKS);
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
-  desktop.tab_to(TITLE, MAX_STOPS);
-  desktop.type_text("Add switcher");
-  desktop.enter();
-  desktop.settle("the draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
+  create(&mut desktop, "Add switcher");
+  desktop.settle("the new task in the list", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
   });
-  desktop.press("new-task-back");
-  desktop.wait_for("task-row-KON-1");
   desktop
 }
 
@@ -128,27 +128,30 @@ fn history_alt_left_stays_with_a_focused_text_field() {
   assert_eq!(desktop.focused().as_deref(), Some(TITLE));
 }
 
-/// Whether the tab `id` of the task list is the selected one: a selected tab, like one that
-/// cannot be opened yet, is not a button.
+/// Whether the tab `id` of the task list is the selected one: a selected tab is not a link like
+/// the others, such as Done, which these tests never open.
 fn tab_selected(tree: &mut Tree, id: &str) -> bool {
-  let unavailable = tree
-    .get_element_by_id("tasks-tab-queue")
+  let unselected = tree
+    .get_element_by_id("tasks-tab-done")
     .map(|tab| tab.tag_name().to_owned());
   tree
     .get_element_by_id(id)
-    .is_some_and(|tab| Some(tab.tag_name()) == unavailable.as_deref())
+    .is_some_and(|tab| unselected.is_some_and(|unselected| tab.tag_name() != unselected))
 }
 
 #[test]
-fn history_saved_draft_stays_in_the_form_until_leaving() {
+fn history_create_returns_to_the_list_and_is_not_visited_again() {
   let mut desktop = saved_draft();
-  // Leaving after Save returns to the list; the form remains a history entry.
+  // Create went back to the list the form was opened from: going back leads to the overview
+  // before it, and forward past the list stays there instead of reopening the form.
   side_button(&mut desktop, BACK);
   desktop.wait_for(OVERVIEW);
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("task-row-KON-1");
   side_button(&mut desktop, FORWARD);
-  desktop.wait_for(TITLE);
+  desktop.pass();
+  assert!(shows(&mut desktop, "task-row-KON-1"));
+  assert!(!shows(&mut desktop, TITLE));
 }
 
 #[test]
@@ -177,18 +180,9 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
   desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
-  desktop.tab_to(TITLE, MAX_STOPS);
-  desktop.type_text("Second draft");
-  desktop.enter();
-  desktop.settle("the second draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
-  });
-  desktop.press("new-task-back");
+  create(&mut desktop, "Second draft");
   desktop.settle("the second draft on the Drafts tab", |tree| {
-    tree.get_element_by_id("task-row-KON-2").is_some() && tab_selected(tree, "tasks-tab-drafts")
+    highlighted(tree, "KON-2") && tab_selected(tree, "tasks-tab-drafts")
   });
   // The Drafts tab is one entry: going back leads to the All tab before it.
   side_button(&mut desktop, BACK);
@@ -233,25 +227,20 @@ fn history_new_task_back_arrow_from_the_overview_opens_the_list() {
   desktop.wait_for(OVERVIEW);
 }
 
+/// Opened from the overview, Create puts the task list in the form's place.
 #[test]
-fn history_saved_draft_from_the_overview_follows_it() {
+fn history_create_from_the_overview_takes_the_form_s_place() {
   let mut desktop = Desktop::with_project();
   desktop.wait_for(OVERVIEW);
   desktop.click(OVERVIEW);
   desktop.wait_for(TITLE);
-  desktop.tab_to(TITLE, MAX_STOPS);
-  desktop.type_text("Add switcher");
-  desktop.enter();
-  desktop.settle("the draft save", |tree| {
-    tree
-      .get_element_by_id("new-task-state")
-      .and_then(|state| state.text_content())
-      .is_some_and(|status| status.contains("Draft saved locally"))
+  create(&mut desktop, "Add switcher");
+  desktop.settle("the new task in the list", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
   });
-  desktop.press("new-task-back");
-  desktop.wait_for("task-row-KON-1");
   side_button(&mut desktop, BACK);
-  desktop.wait_for(TITLE);
+  desktop.wait_for(OVERVIEW);
+  assert!(!shows(&mut desktop, TITLE));
   side_button(&mut desktop, FORWARD);
   desktop.wait_for("task-row-KON-1");
 }

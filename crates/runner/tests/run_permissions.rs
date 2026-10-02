@@ -23,7 +23,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, StepSpec, git, project, reported, scheduler, wait_for};
+use self::support::{PATIENCE, Setup, StepSpec, git, project, reported, scheduler, threads, wait_for};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -60,6 +60,30 @@ fn builder(root: &Path, run: RunId) -> ResourceId {
   run
     .profile_of(&run.snapshot().steps()[0].key().clone())
     .expect("an agent step")
+}
+
+fn launch_permissions(root: &Path, run: RunId) -> Vec<AgentPermissions> {
+  ProjectDb::open(root)
+    .expect("open")
+    .invocations(run)
+    .expect("invocations")
+    .into_iter()
+    .map(|invocation| {
+      invocation
+        .permissions
+        .expect("actual prepared launch policy")
+        .permissions()
+        .clone()
+    })
+    .collect()
+}
+
+fn enforced(permissions: &AgentPermissions, provider: AgentProvider) -> AgentPermissions {
+  permissions
+    .enforced_on(provider, orchester_core::connection::invocation::Platform::current())
+    .expect("enforceable")
+    .permissions()
+    .clone()
 }
 
 /// Waits until `count` commands of the run have started.
@@ -113,22 +137,32 @@ async fn run_permissions_apply_from_the_next_invocation() {
   .await;
   let root = project.repo.path();
   wait_for_commands(root, &mut events, id, 1).await;
+  let original = launch_permissions(root, id).remove(0);
   let builder = builder(root, id);
   scheduler
     .change_permissions(id, builder, read_only(), PermissionsApply::NextInvocation)
     .await
     .expect("the change is recorded");
+  assert_eq!(
+    launch_permissions(root, id),
+    std::slice::from_ref(&original),
+    "live policy stays unchanged"
+  );
   release(root);
   let run = wait_for(root, &mut events, id, finished).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(db.invocations(id).expect("invocations").len(), 2, "nothing restarted");
-  let argv = reported(&db, id, "argv: ");
-  assert!(argv[0].contains("--sandbox workspace-write"), "{argv:?}");
-  assert!(argv[1].contains("--sandbox read-only"), "the next invocation: {argv:?}");
+  let threads = threads(&db, id);
+  assert_eq!(threads[0]["sandbox"], "workspace-write", "{threads:?}");
+  assert_eq!(threads[1]["sandbox"], "read-only", "the next invocation: {threads:?}");
   let changed = run.changed_permissions(builder).expect("changed");
   assert_eq!(changed.permissions(), &read_only());
   assert!(changed.applied().is_none());
+  assert_eq!(
+    launch_permissions(root, id),
+    [original, enforced(&read_only(), AgentProvider::CodexCli)]
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -145,6 +179,7 @@ async fn run_permissions_apply_now_restarts_after_the_command_with_the_same_sess
   .await;
   let root = project.repo.path();
   wait_for_commands(root, &mut events, id, 1).await;
+  let original = launch_permissions(root, id).remove(0);
   let builder = builder(root, id);
   scheduler
     .change_permissions(id, builder, read_only(), PermissionsApply::Now)
@@ -155,6 +190,11 @@ async fn run_permissions_apply_now_restarts_after_the_command_with_the_same_sess
   assert!(pending.changed_permissions(builder).expect("changed").is_pending());
   // The command it runs finishes first: the agent is still at work.
   assert_eq!(db.invocations(id).expect("invocations")[0].ended_at, None);
+  assert_eq!(
+    launch_permissions(root, id),
+    std::slice::from_ref(&original),
+    "checkpoint has not applied the change"
+  );
   release(root);
   let run = wait_for(root, &mut events, id, finished).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -162,11 +202,15 @@ async fn run_permissions_apply_now_restarts_after_the_command_with_the_same_sess
   assert_eq!(invocations.len(), 2);
   assert_eq!(invocations[0].execution, invocations[1].execution);
   assert_eq!(invocations[1].session.as_deref(), Some("fake-thread-1"));
-  let argv = reported(&db, id, "argv: ");
-  assert!(argv[0].contains("--sandbox workspace-write"), "{argv:?}");
+  assert_eq!(
+    launch_permissions(root, id),
+    [original, enforced(&read_only(), AgentProvider::CodexCli)]
+  );
+  let threads = threads(&db, id);
+  assert_eq!(threads[0]["sandbox"], "workspace-write", "{threads:?}");
   assert!(
-    argv[1].contains("exec resume") && argv[1].contains("sandbox_mode=read-only"),
-    "the session resumes with the new permissions: {argv:?}"
+    threads[1]["threadId"] == "fake-thread-1" && threads[1]["sandbox"] == "read-only",
+    "the session resumes with the new permissions: {threads:?}"
   );
   let applied = run
     .changed_permissions(builder)
@@ -206,6 +250,7 @@ async fn run_permissions_kept_for_next_invocation_do_not_restart() {
   .await;
   let root = project.repo.path();
   wait_for_commands(root, &mut events, id, 1).await;
+  let original = launch_permissions(root, id);
   let builder = builder(root, id);
   assert_eq!(
     scheduler.keep_permissions_for_next_invocation(id, builder).await,
@@ -231,6 +276,11 @@ async fn run_permissions_kept_for_next_invocation_do_not_restart() {
   let changed = run.changed_permissions(builder).expect("changed");
   assert!(!changed.is_pending());
   assert!(changed.applied().is_none());
+  assert_eq!(
+    launch_permissions(root, id),
+    original,
+    "cancelled restarts do not rewrite history"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -271,9 +321,9 @@ async fn run_permissions_apply_now_restarts_every_agent_beside_others() {
       .any(|event| matches!(event.kind(), RunEventKind::PermissionsApplied { execution: applied, .. } if *applied == execution));
     assert!(restarted, "{step} restarted with the new permissions");
   }
-  let resumed = reported(&db, id, "argv: ")
+  let resumed = threads(&db, id)
     .into_iter()
-    .filter(|argv| argv.contains("exec resume") && argv.contains("sandbox_mode=read-only"))
+    .filter(|thread| thread.get("threadId").is_some() && thread["sandbox"] == "read-only")
     .count();
   assert_eq!(resumed, 2);
 }
@@ -291,6 +341,7 @@ async fn run_permissions_apply_from_the_next_claude_invocation() {
   .await;
   let root = project.repo.path();
   wait_for_commands(root, &mut events, id, 1).await;
+  let original = launch_permissions(root, id).remove(0);
   let builder = builder(root, id);
   // Claude Code cannot keep an arbitrary command inside the worktree.
   assert!(matches!(
@@ -303,6 +354,11 @@ async fn run_permissions_apply_from_the_next_claude_invocation() {
     .change_permissions(id, builder, with_pnpm_build(), PermissionsApply::NextInvocation)
     .await
     .expect("the change is recorded");
+  assert_eq!(
+    launch_permissions(root, id),
+    std::slice::from_ref(&original),
+    "Claude keeps its active policy"
+  );
   release(root);
   let run = wait_for(root, &mut events, id, finished).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
@@ -314,6 +370,13 @@ async fn run_permissions_apply_from_the_next_claude_invocation() {
     argv[1].contains("--allowedTools Bash(git:*) Bash(pnpm build:*)"),
     "{argv:?}"
   );
+  let next = enforced(&with_pnpm_build(), AgentProvider::ClaudeCodeCli);
+  assert_eq!(
+    next.network(),
+    NetworkAccess::On,
+    "unsupported network-off is not claimed"
+  );
+  assert_eq!(launch_permissions(root, id), [original, next]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -331,6 +394,7 @@ async fn run_permissions_apply_now_restarts_claude_with_the_same_session() {
   .await;
   let root = project.repo.path();
   wait_for_commands(root, &mut events, id, 1).await;
+  let original = launch_permissions(root, id).remove(0);
   let builder = builder(root, id);
   scheduler
     .change_permissions(id, builder, with_pnpm_build(), PermissionsApply::Now)
@@ -344,6 +408,10 @@ async fn run_permissions_apply_now_restarts_claude_with_the_same_session() {
   assert_eq!(invocations.len(), 2);
   let session = invocations[0].session.clone().expect("the first session");
   assert_eq!(invocations[1].session.as_deref(), Some(session.as_str()));
+  assert_eq!(
+    launch_permissions(root, id),
+    [original, enforced(&with_pnpm_build(), AgentProvider::ClaudeCodeCli)]
+  );
   let argv = reported(&db, id, "argv: ");
   assert!(!argv[0].contains("Bash(pnpm build:*)"), "{argv:?}");
   assert!(

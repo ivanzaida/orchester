@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, GitHubConnection, mcp::McpServer},
+  connection::{AgentConnection, ApiEndpoint, GitHubConnection, mcp::McpServer},
   id::ConnectionId,
 };
 
@@ -106,6 +106,7 @@ impl ConnectionsScreen {
           checking: busy.on == Some(connection.id()),
           check_error: busy.error,
           launch: data.launch_of(connection.id()),
+          secrets: &data.secrets,
         };
         let actions = self.agent_actions(open, connection, work, busy.on.is_some());
         inspector(ctx, connection, (&state, &self.scrolls.inspector), &actions)
@@ -164,7 +165,7 @@ impl ConnectionsScreen {
           selected: id == selected,
           checking: working == Some(id),
         };
-        connection_row(ctx, connection, &state, select)
+        connection_row(ctx, connection, (&state, &data.secrets), select)
       }
       Listed::GitHub(connection) => {
         let link = data.link_of(id);
@@ -214,6 +215,24 @@ impl ConnectionsScreen {
     work: &WorkAction,
     busy: bool,
   ) -> InspectorActions {
+    let (nav, secrets_nav) = (self.nav.clone(), self.nav.clone());
+    let key = connection.api().map(ApiEndpoint::key);
+    let profile = Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile))));
+    let secrets = Arc::new(move || secrets_nav.link(Page::Secrets(key)));
+    // This version cannot test a native connection; the inspector says why.
+    if connection.provider().is_native() {
+      let (edit, models, editing) = (self.dialog.clone(), self.dialog.clone(), connection.clone());
+      let models_of = connection.clone();
+      return InspectorActions {
+        check: None,
+        edit: Some(Arc::new(move || edit.set(DialogMode::EditNative(editing.clone())))),
+        edit_models: Some(Arc::new(move || {
+          models.set(DialogMode::NativeModels(models_of.clone()))
+        })),
+        profile,
+        secrets,
+      };
+    }
     let check = (!busy).then(|| {
       let spec = operations::connection_check(open, connection.name().as_str());
       actions::start(
@@ -226,11 +245,12 @@ impl ConnectionsScreen {
       )
     });
     let (dialog, editing) = (self.dialog.clone(), connection.clone());
-    let nav = self.nav.clone();
     InspectorActions {
       check,
-      edit: Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone()))),
-      profile: Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile)))),
+      edit: Some(Arc::new(move || dialog.set(DialogMode::EditAgent(editing.clone())))),
+      edit_models: None,
+      profile,
+      secrets,
     }
   }
 

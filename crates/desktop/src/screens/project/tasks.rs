@@ -1,4 +1,5 @@
-//! Tasks (02.03 `J9467`): query, select drafts and review their first-run scheduling.
+//! Tasks (02.03 `J9467`): query, select drafts and review their first-run scheduling. Shown after
+//! New task's Create, the list scrolls to the new task and highlights it.
 
 mod controls;
 mod review;
@@ -24,7 +25,7 @@ use orchester_core::id::{ResourceId, TaskId};
 
 use super::{
   ProjectNav, TasksState, page,
-  task_rows::{QueueRow, table_heading},
+  task_rows::{QueueRow, QueueRowProps, table_heading},
 };
 use crate::{
   background,
@@ -84,6 +85,8 @@ pub struct TasksScreen {
   assigning: Signal<bool>,
   assign_pipeline: Signal<PipelineFilter>,
   assign: FutureAction<(PathBuf, Vec<TaskId>, ResourceId), Vec<Message>, Message>,
+  /// The task Create just made, highlighted while the list is shown.
+  created: Option<TaskId>,
 }
 
 impl Component for TasksScreen {
@@ -101,6 +104,7 @@ impl Component for TasksScreen {
       }
     });
     Self {
+      created: nav.take_created(),
       nav,
       selected: ctx.signal(Selection::default()),
       search: ctx.signal(String::new()),
@@ -273,7 +277,8 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
   )
 }
 
-/// Filters, the selection bar, the task table and its footer (`npcrO`).
+/// Filters, the selection bar, the task table and its footer (`npcrO`); the task Create just made
+/// is highlighted and scrolled into view once the tasks as read include it.
 fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks, tab: TaskTab) -> Element {
   let rows = Arc::new(browse::rows(
     tasks,
@@ -283,6 +288,10 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
     screen.sort.get(),
   ));
   let visible = rows.clone();
+  let created = screen.created;
+  let reveal = created
+    .filter(|task| rows.iter().any(|row| row.id == *task))
+    .map(|task| task.to_string());
   let table: Element = if rows.is_empty() {
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -296,7 +305,14 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .max_height(Dimension::Px(super::task_rows::TABLE_ROW_HEIGHT * rows.len() as f32))
-      .mount_keyed::<QueueRow, _, _, _>(|row| row.id, Clone::clone)
+      .reveal_key(reveal)
+      .mount_keyed::<QueueRow, _, _, _>(
+        |row| row.id,
+        move |row| QueueRowProps {
+          row: row.clone(),
+          created: created == Some(row.id),
+        },
+      )
   };
   let content = body()
     .child(controls::filters(ctx, screen, tasks))

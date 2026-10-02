@@ -14,6 +14,7 @@ mod controls;
 mod conversation;
 mod heading;
 mod limit_panel;
+mod native_approval;
 mod notice;
 mod permissions;
 mod plan_review;

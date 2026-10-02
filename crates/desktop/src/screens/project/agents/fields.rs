@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{AgentConnection, CatalogSource, ModelSupport},
-  resource::PromptText,
+  resource::{ModelId, PromptText},
 };
 
 use super::{
@@ -27,6 +27,7 @@ use super::{
 use crate::{
   agents::form::{ModelSelection, effort_options, model_options},
   messages::Message,
+  screens::project::connections::status::cli_too_old,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, ValueTone, field, select_style, styled_input, text_input, value_box},
@@ -68,11 +69,20 @@ impl ProfileEditor {
         self.connection_field(ctx, errors.and_then(|errors| errors.connection.as_ref())),
         self.model_field(ctx, connection, errors.and_then(|errors| errors.model.as_ref())),
       ),
-      Text::new(&self.explanation(ctx, connection))
+    ];
+    // A native connection's notice above the tabs says all there is to say about its models.
+    fields.extend(self.explanation(ctx, connection).map(|explanation| {
+      Text::new(&explanation)
         .variant(TypographyStyle::Caption)
         .id("agent-provider-explanation")
-        .into(),
-    ];
+        .into()
+    }));
+    // Full width after the model-source note (`q5LzI`), not inside the Model column.
+    fields.extend(connection.and_then(|connection| {
+      self
+        .chosen_model()
+        .and_then(|model| cli_too_old(ctx, connection, &model))
+    }));
     fields.extend(self.effort_field(ctx, connection));
     fields.push(self.instructions_field(ctx, errors.and_then(|errors| errors.instructions.as_ref())));
     fields
@@ -103,13 +113,17 @@ impl ProfileEditor {
       .connections
       .iter()
       .map(|connection| {
-        (
-          ConnectionChoice(Some(connection.id())),
-          connection.name().as_str().into(),
-        )
+        let name = connection.name().as_str();
+        let label = if connection.provider().runs_agents() {
+          name.into()
+        } else {
+          ctx.t_args("agents.connectionNotAvailable", [("connection", name)])
+        };
+        (ConnectionChoice(Some(connection.id())), label)
       })
       .collect();
-    let select = styled_select(ctx, Select::new(self.connection.clone()).options(options));
+    let select =
+      styled_select(ctx, Select::new(self.connection.clone()).options(options)).id("agent-connection-select");
     let note = error.map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)));
     field(
       &ctx.t("agents.connection"),
@@ -176,11 +190,25 @@ impl ProfileEditor {
     field(&label, column.into(), note)
   }
 
-  /// What the connection runs and where its models come from (`kwRad`).
-  fn explanation(&self, ctx: &Ctx, connection: Option<&AgentConnection>) -> Arc<str> {
+  /// The model the fields name: the listed one, or the typed id when it is a valid one (an
+  /// invalid id has its own error under the field, so `.ok()` loses nothing).
+  fn chosen_model(&self) -> Option<ModelId> {
+    match self.model.get() {
+      ModelSelection::Listed(id) => Some(id),
+      ModelSelection::Custom => ModelId::new(self.custom_model.get().trim()).ok(),
+      ModelSelection::None => None,
+    }
+  }
+
+  /// What the connection runs and where its models come from (`kwRad`); `None` on a native
+  /// connection, which this version lists no models for.
+  fn explanation(&self, ctx: &Ctx, connection: Option<&AgentConnection>) -> Option<Arc<str>> {
     let Some(connection) = connection else {
-      return ctx.t("agents.noConnectionChosen");
+      return Some(ctx.t("agents.noConnectionChosen"));
     };
+    if !connection.provider().runs_agents() {
+      return None;
+    }
     let key = match (self.model.get(), connection.catalog().map(|catalog| catalog.source())) {
       (ModelSelection::Custom, _) => "agents.explain.custom",
       (_, None) => "agents.explain.notChecked",
@@ -189,8 +217,9 @@ impl ProfileEditor {
       }
       (_, Some(CatalogSource::Provider)) => "agents.explain.provider",
       (_, Some(CatalogSource::DocumentedAliases)) => "agents.explain.aliases",
+      (_, Some(CatalogSource::ProviderAndCurrentIds)) => "agents.explain.providerAndCurrentIds",
     };
-    ctx.t_args(key, [("connection", connection.name().as_str())])
+    Some(ctx.t_args(key, [("connection", connection.name().as_str())]))
   }
 
   /// Reasoning effort (`LugPH`), only for a model whose catalog entry lists efforts.

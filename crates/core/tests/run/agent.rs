@@ -5,10 +5,10 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, CatalogSource, CheckResult, Connection, ConnectionCheck, ConnectionKind,
-    ConnectionStatus, GitHubHost, ModelCatalog, SignIn,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, BaseUrl, CatalogSource, CheckResult, Connection,
+    ConnectionCheck, ConnectionKind, ConnectionStatus, EndpointPreset, GitHubHost, ModelCatalog, SignIn,
   },
-  id::{ConnectionId, RunId},
+  id::{ConnectionId, RunId, SecretId},
   integration::{MergeKind, RunMerge},
   name::Name,
   permission::{
@@ -37,14 +37,16 @@ fn connection(provider: AgentProvider, sign_in: SignIn) -> Connection {
     at(1),
   )
   .expect("absolute path");
-  connection.record_check(ConnectionCheck {
-    at: at(2),
-    result: CheckResult::Available {
-      version: "0.139.0".into(),
-      sign_in,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: at(2),
+      result: CheckResult::Available {
+        version: "0.139.0".into(),
+        sign_in,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   connection.into_connection()
 }
 
@@ -118,11 +120,41 @@ fn preflight_allows_approval_gates_and_reports_unusable_connections() {
     ConnectionKind::GitHub {
       host: GitHubHost::github_com(),
     },
-    std::env::temp_dir().join("gh"),
+    AgentEndpoint::Program(std::env::temp_dir().join("gh")),
     at(1),
   )
   .expect("absolute path");
   assert!(problems_with(&github, &before).contains(&PreflightProblem::UnsupportedProvider { step: key("review") }));
+}
+
+#[test]
+fn preflight_refuses_steps_on_a_native_connection() {
+  let endpoint = ApiEndpoint::new(
+    EndpointPreset::Official,
+    BaseUrl::new("https://api.anthropic.com").expect("valid base URL"),
+    SecretId::generate(),
+  );
+  let native = AgentConnection::native(
+    ConnectionId::generate(),
+    Name::new("Claude API").expect("valid name"),
+    AgentProvider::AnthropicApi,
+    endpoint,
+    at(1),
+  )
+  .expect("native connection")
+  .into_connection();
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::Allowed(AllowedCommands::default()),
+    NetworkAccess::On,
+  );
+  let problems = problems_with(&native, &permissions);
+  assert!(problems.contains(&PreflightProblem::NativeNotAvailable { step: key("review") }));
+  assert!(
+    problems
+      .iter()
+      .all(|problem| matches!(problem, PreflightProblem::NativeNotAvailable { .. }))
+  );
 }
 
 #[test]

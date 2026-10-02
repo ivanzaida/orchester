@@ -19,6 +19,7 @@ use std::{
 };
 
 use orchester_core::{
+  code_index::CodeIndexSetting,
   connection::{
     AgentConnection, AgentProvider, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, REASONING_EFFORT,
     SignIn,
@@ -33,9 +34,11 @@ use orchester_core::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
     StepKind,
   },
-  run::Run,
+  run::{PendingToolApproval, Run},
   secret::Secret,
-  store::{ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, TaskStore},
+  store::{
+    ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, SettingsStore, TaskStore,
+  },
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
@@ -140,10 +143,17 @@ pub struct Setup {
   pub steps: Vec<StepSpec>,
   /// The CLI the Builder profile runs on.
   pub provider: AgentProvider,
+  /// The Builder profile's model; `None` for the provider's usual test model.
+  pub model: Option<&'static str>,
+  /// The Builder profile's permissions; `None` for writing with the provider's usual commands.
+  pub permissions: Option<AgentPermissions>,
   /// MCP servers of the project, all chosen by the Builder profile.
   pub mcp: Vec<McpServer>,
   /// Secrets of the project with their values in the keychain.
   pub secrets: Vec<(Secret, &'static str)>,
+  /// Off unless a test is about the code index: what an agent is given then depends on where
+  /// ripgrep is on the machine.
+  pub code_index: CodeIndexSetting,
 }
 
 impl Setup {
@@ -153,8 +163,11 @@ impl Setup {
       review: false,
       steps: Vec::new(),
       provider: AgentProvider::CodexCli,
+      model: None,
+      permissions: None,
       mcp: Vec::new(),
       secrets: Vec::new(),
+      code_index: CodeIndexSetting::Off,
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -197,6 +210,7 @@ pub fn project(setup: &Setup) -> TestProject {
   for server in &setup.mcp {
     db.create_mcp_server(server).expect("MCP server");
   }
+  db.save_code_index(setup.code_index).expect("code index setting");
   let task = queued_task(&mut db, connection.id(), setup);
   TestProject {
     repo,
@@ -210,6 +224,7 @@ fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Conn
   let (title, fake, version) = match provider {
     AgentProvider::CodexCli => ("Codex · Kontur", FAKE_CODEX, "0.139.0"),
     AgentProvider::ClaudeCodeCli => ("Claude · Kontur", FAKE_CLAUDE, "2.1.89"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
   };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -219,14 +234,16 @@ fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Conn
     Timestamp::now(),
   )
   .expect("absolute path");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: version.into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: version.into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   connection.into_connection()
 }
 
@@ -284,18 +301,20 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     "Implements tasks.".into(),
     PromptText::new("Work carefully.").expect("prompt"),
     connection,
-    ModelId::new(match setup.provider {
+    ModelId::new(setup.model.unwrap_or(match setup.provider {
       AgentProvider::CodexCli => "gpt-5.5",
       AgentProvider::ClaudeCodeCli => "haiku",
-    })
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
+    }))
     .expect("model"),
     settings,
   )
-  .with_permissions(AgentPermissions::new(
-    RepositoryAccess::Write,
-    commands(setup.provider),
-    NetworkAccess::Off,
-  ))
+  .with_permissions(
+    setup
+      .permissions
+      .clone()
+      .unwrap_or_else(|| AgentPermissions::new(RepositoryAccess::Write, commands(setup.provider), NetworkAccess::Off)),
+  )
   .with_mcp_servers(McpServerSelection::new(setup.mcp.iter().map(McpServer::id).collect()).expect("servers"));
   let builder = db
     .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, now)
@@ -343,6 +362,7 @@ fn commands(provider: AgentProvider) -> CommandPermission {
     AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(
       AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid prefix")]).expect("valid list"),
     ),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
   }
 }
 
@@ -370,7 +390,8 @@ pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
 /// A scheduler that reads secret values from `vault`.
 pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   let (sender, events) = mpsc::unbounded_channel();
-  (Scheduler::new(root, Notifier::new(sender), vault), events)
+  let relay = PathBuf::from(env!("CARGO_BIN_EXE_orchester-runner"));
+  (Scheduler::new(root, Notifier::new(sender), vault, Some(relay)), events)
 }
 
 /// Waits for the tasks currently executing runs to close their control receivers.
@@ -406,6 +427,31 @@ pub async fn wait_for(
     .expect("the run reaches the state in time")
 }
 
+/// Waits until the run has a tool approval whose invocation waits for it, and returns it.
+pub async fn pending_approval(
+  root: &Path,
+  events: &mut mpsc::UnboundedReceiver<Event>,
+  run: RunId,
+) -> PendingToolApproval {
+  tokio::time::timeout(PATIENCE, async {
+    loop {
+      let db = ProjectDb::open(root).expect("open");
+      if let Some(request) = db.pending_tool_approvals(run).expect("requests").first()
+        && db
+          .invocations(run)
+          .expect("invocations")
+          .iter()
+          .any(|invocation| invocation.id == request.invocation && invocation.timing.waiting_since().is_some())
+      {
+        return request.clone();
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("an approval arrives")
+}
+
 /// Waits until the run's transcript holds `count` agent turns that started.
 pub async fn wait_for_turns(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: RunId, count: usize) {
   let db = ProjectDb::open(root).expect("open");
@@ -436,6 +482,14 @@ pub fn reported(db: &ProjectDb, run: RunId, prefix: &str) -> Vec<String> {
       AgentEvent::Raw { line, .. } => line.strip_prefix(prefix).map(str::to_owned),
       _ => None,
     })
+    .collect()
+}
+
+/// The parameters of each `thread/start` or `thread/resume` `orchester-fake-codex` was sent, in order.
+pub fn threads(db: &ProjectDb, run: RunId) -> Vec<serde_json::Value> {
+  reported(db, run, "thread: ")
+    .iter()
+    .map(|thread| serde_json::from_str(thread).expect("the fake reports JSON"))
     .collect()
 }
 

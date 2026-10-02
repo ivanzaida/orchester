@@ -1,6 +1,6 @@
 //! Task rows: the task table row of the task list (`clVjO`) with its heading (`B5FaIC`), and
 //! the task list row of the overview (`zemhy`). A row opens the task's page; rows are outside a
-//! form, so they are pointer-only.
+//! form, so they are pointer-only. The row of a task New task's Create just made is highlighted.
 
 use lurq::{
   app::{
@@ -131,13 +131,22 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .into()
 }
 
+/// A row of the task table and whether its task is the one Create just made.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueRowProps {
+  pub row: TaskRow,
+  pub created: bool,
+}
+
+impl lurq::app::component::DevtoolsInspectable for QueueRowProps {}
+
 /// One row of the task table (`clVjO`), mounted by the virtualized task list.
 pub struct QueueRow {
   nav: ProjectNav,
 }
 
 impl Component for QueueRow {
-  type Props = TaskRow;
+  type Props = QueueRowProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -148,7 +157,7 @@ impl Component for QueueRow {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let row = ctx.props::<TaskRow>().clone();
+    let QueueRowProps { row, created } = ctx.props::<QueueRowProps>().clone();
     let select = super::tasks::selection::row_checkbox(ctx, row.id, &row.key);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
@@ -177,14 +186,21 @@ impl Component for QueueRow {
       .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
       .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());
-    Row::new()
+    let line = Row::new()
       .width(Dimension::Pct(100.0))
       .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Md)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .align_items(Alignment::Center)
       .child(cell(SELECT_WIDTH, select))
-      .child(Row::new().flex(1.0).child(opens(&self.nav, &row, content)))
+      .child(Row::new().flex(1.0).child(opens(&self.nav, &row, content)));
+    // The task Create just made reads as selected, in the hover fill (`$hover`), across the
+    // whole row including its checkbox.
+    if created {
+      line.background(PaletteColor::AccentMuted).class("created")
+    } else {
+      line
+    }
   }
 }
 

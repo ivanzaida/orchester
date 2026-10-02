@@ -2,7 +2,7 @@
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize, TypographyStyle},
-  components::{Row, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
@@ -82,6 +82,63 @@ pub fn wrapping_top_property(label: &str, value: &str) -> Element {
         .flex(1.0)
         .selectable(true),
     )
+    .into()
+}
+
+/// A mono value shown in full, wrapping when it is longer than the row, e.g. a native connection's
+/// endpoint (04.H4 `lJG42`).
+pub fn wrapping_mono_property(label: &str, value: &str) -> Element {
+  property_row(label, Alignment::Start)
+    .min_height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(
+      Text::new(value)
+        .variant(ExtraTypography::MonoValue.role())
+        .color(PaletteColor::TextPrimary)
+        .text_align(TextAlign::Right)
+        .flex(1.0)
+        .selectable(true),
+    )
+    .into()
+}
+
+/// A mono value (`style` Mono) with a note under it that wraps, e.g. the code index an agent got and
+/// why it had no ripgrep (`O4YLY` in `rd1Vo`).
+pub fn noted_property(label: &str, value: &str, note: &str) -> Element {
+  let value = Column::new()
+    .flex(1.0)
+    .align_items(Alignment::End)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(PROPERTY_HEIGHT))
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(value)
+            .variant(ExtraTypography::MonoValue.role())
+            .color(PaletteColor::TextPrimary)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .text_align(TextAlign::Right)
+            .flex(1.0)
+            .selectable(true),
+        ),
+    )
+    .child(
+      Text::new(note)
+        .variant(ExtraTypography::WrappingProperty.role())
+        .color(PaletteColor::TextPrimary)
+        .text_align(TextAlign::Right)
+        .width(Dimension::Pct(100.0))
+        .selectable(true),
+    );
+  property_row(label, Alignment::Start).child(value).into()
+}
+
+/// A property whose value is `value`, e.g. a link (04.H10 `EZD41`), in the row's height.
+pub fn element_property(label: &str, value: Element) -> Element {
+  property_row(label, Alignment::Center)
+    .height(Dimension::Px(PROPERTY_HEIGHT))
+    .child(value)
     .into()
 }
 

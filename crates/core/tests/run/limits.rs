@@ -169,6 +169,7 @@ fn run_limits_time_counts_active_agent_time_only() {
     kind: InvocationKind::Agent {
       model: model("gpt-5.5"),
     },
+    permissions: None,
     session: None,
     started_at: at(started),
     ended_at: ended.map(at),

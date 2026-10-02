@@ -5,6 +5,7 @@
 
 pub mod agent_files;
 pub mod blob;
+pub mod code_index;
 pub mod command;
 pub mod connection;
 pub mod conversation;
@@ -14,7 +15,9 @@ pub mod id;
 pub mod import;
 pub mod integration;
 pub mod limits;
+pub mod memory;
 pub mod name;
+pub mod native;
 pub mod permission;
 pub mod project;
 pub mod pull_request;

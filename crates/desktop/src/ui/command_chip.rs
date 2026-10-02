@@ -13,6 +13,7 @@ use lurq::{
 };
 
 use super::{
+  command_row::command_preview,
   icon::{Icon, IconSize, icon},
   pressable::{Ring, keyboard_stop},
 };
@@ -141,7 +142,7 @@ impl From<CommandChip> for Element {
 }
 
 fn command(command: &str, color: PaletteColor) -> Text {
-  Text::new(command)
+  Text::new(&command_preview(command))
     .variant(ExtraTypography::MonoValue.role())
     .color(color)
     .nowrap()
