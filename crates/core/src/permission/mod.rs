@@ -217,6 +217,11 @@ pub struct AgentPermissions {
   network: NetworkAccess,
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   interactive_tool_approvals: bool,
+  /// *Approve automatically (don't ask me)*: Orchester answers what would ask a person itself, but for
+  /// what auto-approval never approves ([`crate::run::auto_verdict`]). Left out of the stored form while
+  /// off, as before it existed.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  auto_approve: bool,
 }
 
 impl AgentPermissions {
@@ -227,6 +232,7 @@ impl AgentPermissions {
       commands,
       network,
       interactive_tool_approvals: false,
+      auto_approve: false,
     }
   }
 
@@ -280,6 +286,14 @@ impl AgentPermissions {
 
   pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {
     self.interactive_tool_approvals = enabled;
+  }
+
+  pub const fn auto_approve(&self) -> bool {
+    self.auto_approve
+  }
+
+  pub const fn set_auto_approve(&mut self, enabled: bool) {
+    self.auto_approve = enabled;
   }
 
   pub const fn set_repository(&mut self, repository: RepositoryAccess) {

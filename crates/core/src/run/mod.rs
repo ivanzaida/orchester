@@ -5,6 +5,7 @@
 //! ([`Run::replay`]). See `docs/architecture/storage.md` (Execution, State machines).
 
 mod again;
+mod answer;
 mod apply;
 mod attempt;
 mod branch;
@@ -35,6 +36,11 @@ mod usage;
 
 pub use self::{
   again::{RunAgainBlock, RunAgainInput, run_again},
+  answer::{
+    AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
+    AutoVerdict, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer, allowing_command,
+    allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, denial_message, listing,
+  },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
   counts::RunCounts,
