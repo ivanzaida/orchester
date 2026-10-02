@@ -1,14 +1,16 @@
 //! Shared command controls retain the source while presenting a compact preview.
 
 use lurq::{
-  app::{App, Tree, component::Component, ctx::Ctx},
+  app::{App, Tree, component::Component, ctx::Ctx, events::ScrollPhase},
   clipboard::{copy_to_clipboard, read_from_clipboard},
-  core::Signal,
-  node::Element,
+  components::Column,
+  core::{ElementRect, Signal},
+  node::{Element, dimension::Dimension},
 };
 use orchester_desktop::{
   command_row::{CommandPlace, Copied, command_preview, command_row},
-  i18n, theme,
+  i18n,
+  theme::{self, ExtraTypography},
 };
 
 #[derive(Clone)]
@@ -36,14 +38,15 @@ impl Component for Details {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>();
-    command_row(
+    // Inside a column, as in the transcript, so the window does not stretch the box.
+    Column::new().width(Dimension::Pct(100.0)).child(command_row(
       ctx,
       "detail",
       "copy",
       &props.command,
       CommandPlace::Transcript,
       &props.copied,
-    )
+    ))
   }
 }
 
@@ -58,9 +61,18 @@ fn multiline_command_preview_is_single_line_without_changing_one_line_commands()
   }
   for ending in ["\n", "\r\n", "\r"] {
     let command = format!("pwsh -Command \"{ending}  'quoted'{ending}{ending}  echo done{ending}\"");
-    assert_eq!(command_preview(&command), "pwsh -Command \"   'quoted'    echo done \"");
+    assert_eq!(command_preview(&command), "pwsh -Command \" 'quoted' echo done \"");
     assert!(command.contains(ending), "the source remains untouched");
   }
+  let indented = "pwsh -NoProfile -Command \"
+  $files = Get-ChildItem crates/desktop/src
+  foreach ($f in $files) {  Write-Output $f  }
+\"";
+  assert_eq!(
+    command_preview(indented),
+    "pwsh -NoProfile -Command \" $files = Get-ChildItem crates/desktop/src foreach ($f in $files) {  Write-Output $f  } \"",
+    "indentation reads as one space; spaces within a line stay"
+  );
 }
 
 #[test]
@@ -91,44 +103,109 @@ fn has_text(element: lurq::node::element::ElementRef<'_>, text: &str) -> bool {
 }
 
 #[test]
-fn multiline_command_details_wrap_long_lines_inside_the_copy_row() {
+fn multiline_command_details_centre_a_one_line_command_on_copy() {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales");
-  for ending in ["\n", "\r\n"] {
+  let mut tree = Tree::new();
+  tree.resize(960, 960);
+  tree.mount_root::<Details>(
+    &mut app,
+    Props {
+      command: "pnpm test src/auth".into(),
+      copied: Signal::new(Copied::default()),
+    },
+  );
+  tree.pass_headless(&mut app);
+  let (text, row, copy) = (
+    bounds(&mut tree, "detail-text"),
+    bounds(&mut tree, "detail"),
+    bounds(&mut tree, "copy"),
+  );
+  assert_eq!(row.height, 38.0, "the box of `BQgqg`");
+  assert!((text.y + text.height / 2.0 - (copy.y + copy.height / 2.0)).abs() < 0.5);
+}
+
+/// Where `id` is laid out.
+fn bounds(tree: &mut Tree, id: &str) -> ElementRect {
+  tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+#[test]
+fn multiline_command_details_keep_each_line_and_scroll_it_sideways_beside_copy() {
+  let mut app = App::new();
+  theme::install(&mut app);
+  i18n::install(&app).expect("bundled locales");
+  let line = {
+    let style = app.theme().typography_style(ExtraTypography::Output.role());
+    style.font_size * style.line_height
+  };
+  for ending in [
+    "
+", "
+",
+  ] {
     let command = format!(
       "pwsh -Command \"{ending}  'quoted'{ending}{ending}  # {}{ending}\"",
       "long ".repeat(100)
     );
     for width in [1440, 320] {
+      let copied = Signal::new(Copied::default());
       let mut tree = Tree::new();
       tree.resize(width, 960);
       tree.mount_root::<Details>(
         &mut app,
         Props {
           command: command.clone(),
-          copied: Signal::new(Copied::default()),
+          copied: copied.clone(),
         },
       );
       tree.pass_headless(&mut app);
       let original = tree.get_element_by_id("detail-text").expect("original command");
       assert_eq!(original.text_content(), Some(command.as_str()));
-      let text = tree
-        .get_element_by_id_mut("detail-text")
-        .and_then(|element| element.bounds())
-        .expect("text bounds");
-      let row = tree
-        .get_element_by_id_mut("detail")
-        .and_then(|element| element.bounds())
-        .expect("row bounds");
-      let copy = tree
-        .get_element_by_id_mut("copy")
-        .and_then(|element| element.bounds())
-        .expect("copy bounds");
-      assert!(text.height > 26.0);
-      assert!(text.y >= row.y && text.y + text.height <= row.y + row.height);
-      assert!(text.x + text.width <= copy.x);
-      assert!(copy.x + copy.width <= row.x + row.width);
+      let (text, scroll) = (bounds(&mut tree, "detail-text"), bounds(&mut tree, "detail-scroll"));
+      let (row, copy) = (bounds(&mut tree, "detail"), bounds(&mut tree, "copy"));
+      assert!(
+        (text.height - 5.0 * line).abs() < 0.5,
+        "five recorded lines stay five lines: nothing wraps"
+      );
+      assert!(text.width > scroll.width, "the long line runs past the box");
+      assert!(scroll.x + scroll.width <= copy.x, "Copy is outside the scrolling text");
+      assert_eq!(
+        (copy.y - row.y, row.x + row.width - copy.x - copy.width),
+        (6.0, 6.0),
+        "Copy at the top right"
+      );
+      assert!(
+        (text.y + line / 2.0 - (copy.y + copy.height / 2.0)).abs() < 0.5,
+        "the first line is centred on Copy"
+      );
+      assert_eq!(
+        (text.x - row.x, text.y - row.y),
+        (12.0, 10.0),
+        "the output block's inset"
+      );
+
+      let (x, y) = (scroll.x + scroll.width / 2.0, scroll.y + scroll.height / 2.0);
+      tree.scroll(x, y, 0.0, 0.0, ScrollPhase::Start);
+      tree.scroll(x, y, -200.0, 0.0, ScrollPhase::Scroll);
+      tree.scroll(x, y, 0.0, 0.0, ScrollPhase::End);
+      tree.pass_headless(&mut app);
+      let scrolled = bounds(&mut tree, "detail-text");
+      assert_eq!(scrolled.x, text.x - 200.0, "the lines scroll sideways");
+      assert_eq!(bounds(&mut tree, "copy"), copy, "Copy does not move");
+      assert_eq!(bounds(&mut tree, "detail"), row, "the box does not move");
+      copied.set(Copied(Some((command.as_str().into(), true))));
+      tree.pass_headless(&mut app);
+      assert!(has_text(tree.get_element_by_id("copy").expect("copy"), "Copied"));
+      assert_eq!(
+        bounds(&mut tree, "detail-text").x,
+        scrolled.x,
+        "copying keeps the scroll"
+      );
     }
   }
 }

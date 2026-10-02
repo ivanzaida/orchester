@@ -1,6 +1,9 @@
 //! Command previews and details through the real Activity tab, using stored fixture events.
 
-use lurq::node::element::ElementRef;
+use lurq::{
+  clipboard::{copy_to_clipboard, read_from_clipboard},
+  node::element::ElementRef,
+};
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, ToolCommandResult},
   store::ActivityStore,
@@ -46,7 +49,7 @@ fn assert_header_geometry(desktop: &mut Desktop, sequence: u64) {
   assert_eq!(icon.y, header.y);
 }
 
-fn check_entry(command: &str, events: &[AgentEvent], meta: &str, failed: bool) {
+fn check_entry((command, preview): (&str, &str), events: &[AgentEvent], meta: &str, failed: bool) {
   let has_output = events
     .iter()
     .any(|event| matches!(event, AgentEvent::CommandFinished { .. }));
@@ -56,14 +59,21 @@ fn check_entry(command: &str, events: &[AgentEvent], meta: &str, failed: bool) {
     create_and_run(&mut desktop, "Append one line.", "1400000");
     finished_on_page(&mut desktop);
     let sequence = append(&desktop, events.to_vec());
-    check_at_width(&mut desktop, sequence, command, meta, (failed, has_output), width);
+    check_at_width(
+      &mut desktop,
+      sequence,
+      (command, preview),
+      meta,
+      (failed, has_output),
+      width,
+    );
   }
 }
 
 fn check_at_width(
   desktop: &mut Desktop,
   sequence: u64,
-  command: &str,
+  (command, preview): (&str, &str),
   meta: &str,
   (failed, has_output): (bool, bool),
   width: u32,
@@ -76,8 +86,7 @@ fn check_at_width(
   let toggle = format!("activity-entry-toggle-{sequence}");
   let detail_id = format!("activity-entry-details-{sequence}");
   desktop.wait_for(&header);
-  let preview = command.replace("\r\n", "\n").replace('\n', " ");
-  assert!(shows(desktop, &header, &preview));
+  assert!(shows(desktop, &header, preview));
   assert!(shows(desktop, &header, meta));
   if failed {
     assert!(has(desktop, &detail_id), "failed commands start expanded");
@@ -100,6 +109,11 @@ fn check_at_width(
     assert!(exact_text(detail, "unchanged output\nsecond line"));
     assert!(shows(desktop, &header, "1.0 s"));
   }
+  assert!(
+    has(desktop, &format!("activity-command-detail-{sequence}")),
+    "ids are the entry's own"
+  );
+  assert!(has(desktop, &format!("activity-command-copy-{sequence}")));
   let detail_bounds = desktop.bounds(&detail_id);
   assert!(detail_bounds.height > 26.0, "details grow for multiline commands");
   desktop.click(&toggle);
@@ -115,6 +129,8 @@ fn multiline_command_preview_and_details_keep_states_and_output() {
       "python -c \"{ending}  print('quoted') {ending}{ending}  # {}{ending}\"",
       "long ".repeat(20)
     );
+    let preview = format!("python -c \" print('quoted') # {} \"", "long ".repeat(20).trim_end());
+    let shown = (command.as_str(), preview.as_str());
     for status in [None, Some(CommandStatus::Completed), Some(CommandStatus::Failed)] {
       let mut events = vec![AgentEvent::CommandStarted {
         item: "multiline".into(),
@@ -134,7 +150,7 @@ fn multiline_command_preview_and_details_keep_states_and_output() {
         Some(CommandStatus::Failed) => "exit 1",
         _ => "exit 0",
       };
-      check_entry(&command, &events, meta, status == Some(CommandStatus::Failed));
+      check_entry(shown, &events, meta, status == Some(CommandStatus::Failed));
     }
     let events = vec![
       AgentEvent::ToolCommandStarted {
@@ -150,6 +166,73 @@ fn multiline_command_preview_and_details_keep_states_and_output() {
         omitted_bytes: 0,
       },
     ];
-    check_entry(&command, &events, "exit 0", false);
+    check_entry(shown, &events, "exit 0", false);
   }
+}
+
+/// Two failed commands, both open, in the Activity tab at the supported minimum width; returns the
+/// app and the first entry's sequence.
+fn two_open_commands() -> (Desktop, u64) {
+  let command = format!("pwsh -Command \"\n  # {}\n\"", "long ".repeat(60));
+  let mut events = Vec::new();
+  for item in ["first", "second"] {
+    events.push(AgentEvent::CommandStarted {
+      item: item.into(),
+      command: command.clone(),
+    });
+    events.push(AgentEvent::CommandFinished {
+      item: item.into(),
+      command: command.clone(),
+      output: "".into(),
+      exit_code: Some(1),
+      status: CommandStatus::Failed,
+    });
+  }
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  create_and_run(&mut desktop, "Append one line.", "1400000");
+  finished_on_page(&mut desktop);
+  let first = append(&desktop, events);
+  desktop.tree.resize(960, 960);
+  desktop.click("task-tab-activity");
+  desktop.wait_for("activity-step-header");
+  desktop.click("activity-step-header");
+  desktop.wait_for(&format!("activity-entry-details-{first}"));
+  (desktop, first)
+}
+
+#[test]
+fn multiline_command_text_pressed_in_activity_leaves_the_entry_open() {
+  let (mut desktop, first) = two_open_commands();
+  let second = first + 2;
+  for sequence in [first, second] {
+    assert!(has(&mut desktop, &format!("activity-command-detail-{sequence}")));
+    assert!(has(&mut desktop, &format!("activity-command-copy-{sequence}")));
+  }
+  let details = format!("activity-entry-details-{first}");
+  // The middle of the scroll area is on the command's text, which runs past it.
+  desktop.press(&format!("activity-command-detail-{first}-scroll"));
+  assert!(
+    has(&mut desktop, &details),
+    "pressing the command text keeps the entry open"
+  );
+  desktop.press(&format!("activity-command-detail-{first}"));
+  assert!(
+    has(&mut desktop, &details),
+    "pressing the command box keeps the entry open"
+  );
+}
+
+#[test]
+#[ignore = "writes the command to the clipboard and restores its previous text; run separately"]
+fn multiline_command_copy_pressed_in_activity_leaves_the_entry_open() {
+  let previous = read_from_clipboard().expect("a text clipboard whose previous contents can be restored");
+  let (mut desktop, first) = two_open_commands();
+  let copy = format!("activity-command-copy-{first}");
+  desktop.press(&copy);
+  let copied = shows(&mut desktop, &copy, "Copied");
+  let open = has(&mut desktop, &format!("activity-entry-details-{first}"));
+  assert!(copy_to_clipboard(&previous), "restore the previous clipboard text");
+  assert!(copied, "Copy took the command");
+  assert!(open, "pressing Copy keeps the entry open");
 }

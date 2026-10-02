@@ -114,6 +114,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | button that cannot be pressed, primary or secondary: its own colors at 40 % (`kLJJb`, `HN7cO`) | `theme::DISABLED_OPACITY`, applied by `ui::button::ActionButton` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |
+| transcript command box: lines 4 from the viewport's top and bottom (`Z3M6Nz` in `uA3Sh`); horizontal thumb 4px `border`, radius 2, overlaid 1 from the box's bottom and 12 from the viewport's ends (`hpzPu` in `G9skx`) | `ExtraSpacing::CommandLines.role()` / `theme::command_scrollbar()` |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |

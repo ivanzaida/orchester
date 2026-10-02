@@ -55,7 +55,7 @@ pub struct ActionButton {
   in_form: bool,
   /// The icon and label start at the left instead of the middle.
   start: bool,
-  id: Option<&'static str>,
+  id: Option<Arc<str>>,
 }
 
 impl ActionButton {
@@ -170,8 +170,8 @@ impl ActionButton {
   }
 
   /// Element id for tooling (`lurq_read_tree`, `lurq_interact`).
-  pub fn id(mut self, id: &'static str) -> Self {
-    self.id = Some(id);
+  pub fn id(mut self, id: impl Into<Arc<str>>) -> Self {
+    self.id = Some(id.into());
     self
   }
 

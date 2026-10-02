@@ -2,7 +2,7 @@
 //! a one-line header with right-aligned meta, optional body text and an optional output block. A
 //! file change entry opens its file in the Changes tab (↗).
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use lurq::{
   app::{
@@ -255,8 +255,8 @@ fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied
       .with_children(command.map(|command| {
         command_row(
           ctx,
-          "activity-command-detail",
-          "activity-command-copy",
+          format!("activity-command-detail-{}", entry.sequence),
+          format!("activity-command-copy-{}", entry.sequence),
           command,
           CommandPlace::Transcript,
           copied,
@@ -507,7 +507,7 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
   };
   Shown {
     glyph,
-    title: command_preview(&entry.command).into_owned().into(),
+    title: preview_title(&entry.command),
     meta,
     body,
     output: Some(entry.output.lines().map(Arc::from).collect()),
@@ -537,13 +537,21 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
   });
   Shown {
     glyph: Icon::Terminal,
-    title: command_preview(&entry.command).into_owned().into(),
+    title: preview_title(&entry.command),
     meta,
     body: None,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted,
     collapsible: true,
     opens: None,
+  }
+}
+
+/// The header's one-line preview, sharing the command itself when it already is one line.
+fn preview_title(command: &Arc<str>) -> Arc<str> {
+  match command_preview(command) {
+    Cow::Borrowed(_) => command.clone(),
+    Cow::Owned(preview) => preview.into(),
   }
 }
 
