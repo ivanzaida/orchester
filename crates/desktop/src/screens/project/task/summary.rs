@@ -78,14 +78,14 @@ pub(super) fn summary(
     .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
-    .with_children(brief_section(ctx, details))
     .with_children(
       detail
         .task
         .organization()
         .blocked_reason()
         .map(|reason| crate::ui::organization_notice::organization_notice(&ctx.t("tasks.blocked.label"), reason)),
-    );
+    )
+    .with_children(brief_section(ctx, details));
 
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let panel = match &detail.run {

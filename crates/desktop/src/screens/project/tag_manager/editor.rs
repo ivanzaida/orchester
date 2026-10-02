@@ -175,10 +175,12 @@ impl TagManager {
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)
+          .align_items(lurq::layout::Alignment::Center)
           .child(tag_chip(source))
           .with_children(target.map(|(tag, _)| {
             Row::new()
               .spacing(SpacingSize::Sm)
+              .align_items(lurq::layout::Alignment::Center)
               .child(crate::ui::icon::icon(
                 Icon::ArrowRight,
                 crate::ui::icon::IconSize::Small,

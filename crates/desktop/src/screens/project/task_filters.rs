@@ -15,9 +15,10 @@ use orchester_core::task::organization::{Priority, TaskFilter, TaskSort, Workflo
 use crate::{
   tasks::{
     data::ProjectTasks,
-    organization::{CONTROL_HEIGHT, priority_copy, workflow_copy},
+    organization::{CONTROL_HEIGHT, PickerAppearance, button_trigger, priority_copy, secondary_button, workflow_copy},
   },
-  ui::{button::ActionButton, field::select_style},
+  theme::ExtraSpacing,
+  ui::{button::ActionButton, field::select_style, icon::Icon},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -76,30 +77,19 @@ impl Component for TaskFilters {
       self.match_all.set(mode);
     }
     let mut row = self.facet_buttons(ctx, &props);
-    let options = [
-      (Sort(TaskSort::Updated), ctx.t("tasks.sort.updated")),
-      (Sort(TaskSort::Status), ctx.t("tasks.sort.status")),
-      (Sort(TaskSort::Priority), ctx.t("tasks.sort.priority")),
-    ];
     let clear = props.filter.clone();
-    row = row
-      .child(
-        Select::new(props.sort.clone())
-          .options(options)
-          .height(Dimension::Px(CONTROL_HEIGHT))
-          .style(select_style(ctx, CONTROL_HEIGHT).min_menu_width(crate::tasks::organization::ORGANIZATION_MENU_WIDTH)),
-      )
-      .with_children(
-        (!props.filter.get().0.statuses.is_empty()
-          || !props.filter.get().0.priorities.is_empty()
-          || !props.filter.get().0.tags.is_empty())
-        .then(|| {
-          ActionButton::new(ctx.t("tasks.filters.clear"))
-            .id("filters-clear")
-            .on_click(move || clear.set(Filters::default()))
-            .render(ctx)
-        }),
-      );
+    row = row.child(sort_select(ctx, &props.sort)).with_children(
+      (!props.filter.get().0.statuses.is_empty()
+        || !props.filter.get().0.priorities.is_empty()
+        || !props.filter.get().0.tags.is_empty())
+      .then(|| {
+        ActionButton::new(ctx.t("tasks.filters.clear"))
+          .icon(Icon::X)
+          .id("filters-clear")
+          .on_click(move || clear.set(Filters::default()))
+          .render(ctx)
+      }),
+    );
     let mut column = Column::new()
       .spacing(SpacingSize::Sm)
       .child(row)
@@ -126,7 +116,7 @@ impl Component for TaskFilters {
 
 impl TaskFilters {
   fn facet_buttons(&self, ctx: &Ctx, props: &FilterProps) -> Row {
-    let mut row = Row::new().spacing(SpacingSize::Sm);
+    let mut row = Row::new().spacing(ExtraSpacing::Stack.role());
     for (index, (facet, key)) in [
       (Facet::Status, "tasks.workflow.label"),
       (Facet::Priority, "tasks.priority.label"),
@@ -148,9 +138,9 @@ impl TaskFilters {
           },
         ))
         .icon(if facet == Facet::Tags {
-          crate::ui::icon::Icon::Tag
+          Icon::Tag
         } else {
-          crate::ui::icon::Icon::ChevronDown
+          Icon::ChevronDown
         })
         .id(match facet {
           Facet::Status => "filter-status",
@@ -250,6 +240,41 @@ fn menu(ctx: &Ctx, props: &FilterProps, facet: Facet, query: &Signal<String>, ma
   }
   column.into()
 }
+/// Sort (`SoOX5` in `qVMJh`): a secondary button naming the order, whose menu lists the orders in
+/// full (`rVJoA`).
+fn sort_select(ctx: &Ctx, sort: &Signal<Sort>) -> Element {
+  const SORTS: [(TaskSort, &str, &str); 3] = [
+    (TaskSort::Updated, "tasks.sort.updated", "tasks.sort.short.updated"),
+    (TaskSort::Status, "tasks.sort.status", "tasks.sort.short.status"),
+    (TaskSort::Priority, "tasks.sort.priority", "tasks.sort.short.priority"),
+  ];
+  let labels: Vec<(TaskSort, Arc<str>)> = SORTS
+    .iter()
+    .map(|(value, _, short)| {
+      (
+        *value,
+        ctx.t_args("tasks.sort.trigger", [("sort", ctx.t(short).as_ref())]),
+      )
+    })
+    .collect();
+  let (button, value) = (secondary_button(ctx), sort.clone());
+  Element::from(
+    Select::new(sort.clone())
+      .options(SORTS.map(|(value, key, _)| (Sort(value), ctx.t(key))))
+      .trigger(move |_| {
+        let current = value.get().0;
+        let label = labels
+          .iter()
+          .find(|(sort, _)| *sort == current)
+          .map_or("", |(_, label)| label.as_ref());
+        button_trigger(Icon::ArrowDownWideNarrow, label, &button)
+      })
+      .height(Dimension::Px(PickerAppearance::Header.height()))
+      .style(PickerAppearance::Header.style(ctx)),
+  )
+  .id("tasks-sort")
+}
+
 fn toggle<T: PartialEq>(values: &mut Vec<T>, value: T) {
   if values.contains(&value) {
     values.retain(|item| *item != value);

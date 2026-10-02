@@ -12,6 +12,7 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Row, Text},
   core::Signal,
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -36,7 +37,7 @@ use crate::{
       OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
     },
   },
-  theme::{ExtraColor, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
 };
 
@@ -94,14 +95,16 @@ impl Component for OrganizationHeader {
       .spacing(SpacingSize::Sm)
       .child(
         Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(Column::new().width(Dimension::Px(STATUS_WIDTH)).child(workflow_select(
+          .wrap()
+          .spacing(ExtraSpacing::Stack.role())
+          .align_items(Alignment::Center)
+          .child(workflow_select(
             ctx,
             self.status.clone(),
             "task-header-status",
             !state.is_pending(),
             PickerAppearance::Header,
-          )))
+          ))
           .with_children(props.detail.run.as_ref().map(|_| {
             Text::new(
               &ctx.t_args(
@@ -114,23 +117,20 @@ impl Component for OrganizationHeader {
                 )],
               ),
             )
-            .variant(TypographyStyle::Caption)
+            .variant(TypographyStyle::Description)
           }))
-          .child(
-            Column::new()
-              .width(Dimension::Px(PRIORITY_WIDTH))
-              .child(priority_select(
-                ctx,
-                self.priority.clone(),
-                "task-header-priority",
-                !state.is_pending(),
-                PickerAppearance::Header,
-              )),
-          )
+          .child(priority_select(
+            ctx,
+            self.priority.clone(),
+            "task-header-priority",
+            !state.is_pending(),
+            PickerAppearance::Header,
+          ))
           .child(ctx.mount_keyed::<TagPicker>(
             "task-header-tags",
             TagPickerProps {
               root: props.root.clone(),
+              inline: false,
               appearance: PickerAppearance::Header,
               selected: self.value.clone(),
               enabled: !state.is_pending(),
@@ -373,7 +373,5 @@ impl OrganizationHeader {
   }
 }
 
-// Header controls gNExS/Sd5qt; confirmation N1vwaM.
-const STATUS_WIDTH: f32 = 128.0;
-const PRIORITY_WIDTH: f32 = 112.0;
+// Confirmation N1vwaM.
 const CONFIRM_WIDTH: f32 = 620.0;

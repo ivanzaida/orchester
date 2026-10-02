@@ -245,10 +245,11 @@ fn organization_readiness_shows_reason_blocks_run_and_refreshes_after_resolution
   desktop.wait_for("task-row-KON-2");
   desktop.press("task-row-KON-2");
   desktop.wait_for("task-run");
+  assert!(shows(&mut desktop, "task-page", "Waiting for integration"));
   assert!(shows(
     &mut desktop,
     "task-dependency-readiness",
-    "Waiting for integration"
+    "Run is unavailable while KON-1 is unfinished."
   ));
   desktop.press("task-run");
   assert_eq!(tasks(&desktop.repo)[1].status(), TaskStatus::Draft);
@@ -385,9 +386,9 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
     desktop.press(&format!("select-task-{id}"));
   }
   desktop.press("bulk-add-tags");
-  desktop.wait_for("task-tags-picker");
-  desktop.press("task-tags-picker");
+  // The panel shows the tag choices in place (`HI91q`), without a picker button to open.
   desktop.wait_for(&format!("picker-tag-{tag}"));
+  assert!(desktop.tree.get_element_by_id("task-tags-picker").is_none());
   desktop.press(&format!("picker-tag-{tag}"));
   desktop.click("bulk-tags-apply");
   desktop.wait_until("bulk tag addition", |desktop| {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Select, Spacer, Text, TextOverflow},
   core::Signal,
@@ -27,19 +27,27 @@ pub const CONTROL_HEIGHT: f32 = 40.0;
 const HEADER_HEIGHT: f32 = 36.0;
 // gNExS/Sd5qt: both menus are 280 logical pixels wide.
 pub const ORGANIZATION_MENU_WIDTH: f32 = 280.0;
+/// A picker as a form field (`ixENv`), or as a secondary button that hugs its label: in the task
+/// header (`gNExS`, `Sd5qt`) and for the task list's sort (`SoOX5` in `qVMJh`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PickerAppearance {
   Field,
   Header,
 }
 impl PickerAppearance {
-  fn height(self) -> f32 {
+  fn width(self) -> Dimension {
+    match self {
+      Self::Field => Dimension::Pct(100.0),
+      Self::Header => Dimension::Auto,
+    }
+  }
+  pub fn height(self) -> f32 {
     match self {
       Self::Field => CONTROL_HEIGHT,
       Self::Header => HEADER_HEIGHT,
     }
   }
-  fn style(self, ctx: &Ctx) -> SelectStyle {
+  pub fn style(self, ctx: &Ctx) -> SelectStyle {
     let style = select_style(ctx, self.height())
       .min_menu_width(ORGANIZATION_MENU_WIDTH)
       .option_selected(SelectPartStyle::new().background(PaletteColor::AccentMuted));
@@ -115,15 +123,19 @@ pub fn workflow_select(
       .options(WorkflowStatus::ALL.into_iter().map(|status| {
         lurq::components::SelectOption::new(WorkflowChoice(status), ctx.t(workflow_copy(status).1)).disabled(!enabled)
       }))
-      .trigger(move |state| {
-        select_trigger(
-          workflow_copy(value.get().0).0,
-          state.label.as_deref().unwrap_or_default(),
-          appearance,
-        )
+      .trigger({
+        let button = secondary_button(ctx);
+        move |state| {
+          select_trigger(
+            workflow_copy(value.get().0).0,
+            state.label.as_deref().unwrap_or_default(),
+            appearance,
+            &button,
+          )
+        }
       })
       .height(Dimension::Px(appearance.height()))
-      .width(Dimension::Pct(100.0))
+      .width(appearance.width())
       .style(appearance.style(ctx)),
   )
   .id(id)
@@ -143,36 +155,60 @@ pub fn priority_select(
         lurq::components::SelectOption::new(PriorityChoice(priority), ctx.t(priority_copy(priority).1))
           .disabled(!enabled)
       }))
-      .trigger(move |state| {
-        select_trigger(
-          priority_copy(value.get().0).0,
-          state.label.as_deref().unwrap_or_default(),
-          appearance,
-        )
+      .trigger({
+        let button = secondary_button(ctx);
+        move |state| {
+          select_trigger(
+            priority_copy(value.get().0).0,
+            state.label.as_deref().unwrap_or_default(),
+            appearance,
+            &button,
+          )
+        }
       })
       .height(Dimension::Px(appearance.height()))
-      .width(Dimension::Pct(100.0))
+      .width(appearance.width())
       .style(appearance.style(ctx)),
   )
   .id(id)
 }
 
-fn select_trigger(glyph: Icon, label: &str, appearance: PickerAppearance) -> Element {
+/// The secondary button's role, which a header picker's trigger takes its look from.
+pub fn secondary_button(ctx: &Ctx) -> FormButtonRole {
+  ctx.theme().form().button.secondary.clone()
+}
+
+fn select_trigger(glyph: Icon, label: &str, appearance: PickerAppearance, button: &FormButtonRole) -> Element {
+  match appearance {
+    PickerAppearance::Field => Row::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .padding_horizontal(SpacingSize::Sm)
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
+      .child(Text::new(label).variant(TypographyStyle::Body))
+      .child(Spacer::new().flex(1.0))
+      .child(icon(Icon::ChevronDown, IconSize::Small, PaletteColor::TextSecondary))
+      .into(),
+    PickerAppearance::Header => button_trigger(glyph, label, button),
+  }
+}
+
+/// A select trigger drawn as the secondary button (`u1XBP`): its icon and label, padded as the
+/// button is.
+pub fn button_trigger(glyph: Icon, label: &str, button: &FormButtonRole) -> Element {
   Row::new()
-    .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Sm)
+    .padding_custom(button.padding)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
-    .child(Text::new(label).variant(match appearance {
-      PickerAppearance::Field => TypographyStyle::Body,
-      PickerAppearance::Header => TypographyStyle::Caption,
-    }))
-    .child(Spacer::new().flex(1.0))
-    .with_children(
-      matches!(appearance, PickerAppearance::Field)
-        .then(|| icon(Icon::ChevronDown, IconSize::Small, PaletteColor::TextSecondary)),
+    .child(icon(glyph, IconSize::Button, button.text.color.clone()))
+    .child(
+      Text::new(label)
+        .variant(button.text.typography)
+        .color(button.text.color.clone())
+        .nowrap(),
     )
     .into()
 }

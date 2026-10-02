@@ -130,7 +130,7 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .child(Row::new().width(Dimension::Px(SELECT_WIDTH)))
     .child(cell(KEY_WIDTH, column_label(&ctx.t("tasks.columns.key"))))
     .child(Row::new().flex(1.0).child(column_label(&ctx.t("tasks.columns.task"))))
-    .child(cell(PRIORITY_WIDTH, column_label(&ctx.t("tasks.priority.label"))))
+    .child(cell(PRIORITY_WIDTH, column_label(&ctx.t("tasks.columns.priority"))))
     .child(cell(STATUS_WIDTH, column_label(&ctx.t("tasks.columns.status"))))
     .child(cell(READINESS_WIDTH, column_label(&ctx.t("tasks.columns.readiness"))))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))

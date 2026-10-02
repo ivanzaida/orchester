@@ -8,6 +8,7 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Popup, Row, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -30,7 +31,7 @@ use crate::{
     data::ProjectTasks,
     organization::{OrganizationValue, priority_copy, workflow_copy},
   },
-  theme::ExtraColor,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
 };
 
@@ -101,10 +102,12 @@ impl Component for SelectionBar {
     if selected.is_empty() {
       return Column::new();
     }
+    // The selection bar (`EpDpS` in `HI91q`): its count and actions centered, 12 apart.
     let mut row = Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .padding(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Stack.role())
+      .padding(ExtraSpacing::Stack.role())
+      .align_items(Alignment::Center)
       .background(PaletteColor::SurfaceRaised)
       .child(
         Text::new(&ctx.t_args(
@@ -227,6 +230,7 @@ impl SelectionBar {
             appearance: crate::tasks::organization::PickerAppearance::Field,
             selected: self.tags.clone(),
             enabled: !pending,
+            inline: true,
           },
         ));
         let (action, tags) = (action.clone(), self.tags.clone());

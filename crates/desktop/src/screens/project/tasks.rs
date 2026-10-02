@@ -291,7 +291,7 @@ impl TasksScreen {
     body()
       .child(
         Row::new()
-          .spacing(SpacingSize::Sm)
+          .spacing(ExtraSpacing::Stack.role())
           .child(ctx.mount_keyed::<TaskFilters>(
             "task-filters",
             FilterProps {
@@ -303,7 +303,7 @@ impl TasksScreen {
           .child(Spacer::new().flex(1.0))
           .child(
             ActionButton::new(ctx.t("tasks.tags.manageShort"))
-              .icon(Icon::Tag)
+              .icon(Icon::Tags)
               .id("project-tags-manage")
               .link(self.nav.link(Page::ProjectTags))
               .render(ctx),

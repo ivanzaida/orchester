@@ -176,13 +176,11 @@ fn dependency_links(ctx: &Ctx, task: &Task, tasks: &ProjectTasks, nav: &ProjectN
       .map(|task| task.key().to_string())
       .collect::<Vec<_>>()
       .join(&ctx.t("common.listSeparator"));
-    column = column.child(crate::ui::field::wrapping_field_error(&ctx.t_args(
-      "tasks.blocked.unfinished",
-      [
-        ("tasks", keys.as_str()),
-        ("reason", task.organization().blocked_reason().unwrap_or_default()),
-      ],
-    )));
+    // The reason is the page's Blocked notice; here only why Run is unavailable (`Ncjvt`).
+    column = column.child(
+      Text::new(&ctx.t_args("tasks.blocked.runUnavailableWhile", [("tasks", keys.as_str())]))
+        .variant(TypographyStyle::Description),
+    );
   } else {
     column = column.child(Text::new(&ctx.t("tasks.readiness.ready")).variant(TypographyStyle::Caption));
   }

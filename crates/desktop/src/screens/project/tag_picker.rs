@@ -8,6 +8,7 @@ use lurq::{
   },
   components::{Column, Popup, Row, ScrollVertical, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::TagId, name::Name, task::organization::Tag};
@@ -18,6 +19,7 @@ use crate::{
   background,
   messages::{self, Message},
   tasks::organization::{OrganizationValue, PickerAppearance, tag_chips},
+  theme::ExtraSpacing,
   ui::{
     button::ActionButton,
     field::{field_error, text_input},
@@ -41,10 +43,16 @@ pub struct TagPickerProps {
   pub selected: Signal<OrganizationValue>,
   pub enabled: bool,
   pub appearance: PickerAppearance,
+  /// The menu shown in place of the trigger, with the chosen tags under it, as the bulk Add tag
+  /// panel shows it (`HI91q`).
+  pub inline: bool,
 }
 impl PartialEq for TagPickerProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root && self.enabled == other.enabled && self.appearance == other.appearance
+    self.root == other.root
+      && self.enabled == other.enabled
+      && self.appearance == other.appearance
+      && self.inline == other.inline
   }
 }
 impl lurq::app::component::DevtoolsInspectable for TagPickerProps {}
@@ -92,12 +100,20 @@ impl Component for TagPicker {
       .filter(|tag| selected.tags().contains(&tag.id()))
       .map(|tag| Arc::from(tag.name().as_str()))
       .collect();
+    if props.inline {
+      return Column::new()
+        .spacing(SpacingSize::Sm)
+        .child(self.menu(ctx, &props, &tags, &action))
+        .child(Row::new().id("task-tag-chips").child(tag_chips(&names)))
+        .with_children(state.error.map(|error| field_error(&message_text(ctx, &error))));
+    }
     let open = self.open.clone();
     let mut column = Column::new().spacing(SpacingSize::Sm).child(
       Row::new()
         .id("task-tag-chips")
         .wrap()
-        .spacing(SpacingSize::Sm)
+        .spacing(ExtraSpacing::Stack.role())
+        .align_items(Alignment::Center)
         .child(tag_chips(&names))
         .child(
           ActionButton::new(ctx.t(match (names.is_empty(), props.appearance) {
@@ -196,7 +212,11 @@ impl TagPicker {
     let typed = self.query.clone();
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     let mut menu = Column::new()
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(if props.inline {
+        Dimension::Pct(100.0)
+      } else {
+        Dimension::Px(MENU_WIDTH)
+      })
       .padding(SpacingSize::Sm)
       .background(PaletteColor::SurfaceRaised)
       .rounded(RadiusSize::Md)
@@ -211,6 +231,7 @@ impl TagPicker {
       .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)))
       .child(
         ActionButton::new(ctx.t("tasks.tags.manage"))
+          .icon(Icon::Tags)
           .in_form()
           .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
           .render(ctx),

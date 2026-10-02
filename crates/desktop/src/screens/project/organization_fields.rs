@@ -20,6 +20,7 @@ use crate::{
   tasks::organization::{
     OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
   },
+  theme::ExtraSpacing,
   ui::{
     button::ActionButton,
     field::{FieldNote, field, locked_input, text_input},
@@ -102,17 +103,19 @@ impl Component for OrganizationFields {
     };
     let mut content = Column::new()
       .spacing(SpacingSize::Lg)
-      .child(organization_pickers(ctx, draft, !props.locked))
-      .child(Text::new(&ctx.t("tasks.tags.label")).variant(TypographyStyle::Caption))
-      .child(ctx.mount_keyed::<TagPicker>(
-        "form-tags",
-        TagPickerProps {
-          root: props.root.clone(),
-          appearance: PickerAppearance::Field,
-          selected: draft.value.clone(),
-          enabled: !props.locked,
-        },
-      ))
+      .child(organization_pickers(ctx, draft, !props.locked));
+    let tags = ctx.mount_keyed::<TagPicker>(
+      "form-tags",
+      TagPickerProps {
+        root: props.root.clone(),
+        inline: false,
+        appearance: PickerAppearance::Field,
+        selected: draft.value.clone(),
+        enabled: !props.locked,
+      },
+    );
+    content = content
+      .child(field(&ctx.t("tasks.tags.label"), tags, FieldNote::None))
       .child(blocked_control(ctx, blocked, flip, !props.locked));
     if blocked {
       let input = text_input(
@@ -123,6 +126,7 @@ impl Component for OrganizationFields {
         TypographyStyle::Body,
       )
       .multiline()
+      .padding(ExtraSpacing::TextArea.role())
       .height(Dimension::Px(BLOCKED_REASON_HEIGHT))
       .on_input(move |event: lurq::app::events::TextInputEvent| reason.set(event.new_value));
       let control: Element = locked_input(input, props.locked).into();
@@ -470,12 +474,13 @@ const BLOCKED_REASON_HEIGHT: f32 = 96.0;
 fn blocked_control(ctx: &Ctx, checked: bool, value: Signal<bool>, enabled: bool) -> Element {
   let content = Row::new()
     .spacing(SpacingSize::Sm)
+    .align_items(lurq::layout::Alignment::Center)
     .child(crate::ui::icon::icon(
       if checked { Icon::SquareCheck } else { Icon::Square },
-      crate::ui::icon::IconSize::Small,
+      crate::ui::icon::IconSize::Option,
       lurq::app::theme::PaletteColor::TextPrimary,
     ))
-    .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption));
+    .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Body));
   let surface = crate::ui::pressable::surface().id("task-blocked-field").child(content);
   let button = if enabled {
     crate::ui::pressable::keyboard_stop(
@@ -490,6 +495,7 @@ fn blocked_control(ctx: &Ctx, checked: bool, value: Signal<bool>, enabled: bool)
   };
   Row::new()
     .spacing(SpacingSize::Sm)
+    .align_items(lurq::layout::Alignment::Center)
     .child(button)
     .child(Text::new(&ctx.t("tasks.blocked.helper")).variant(TypographyStyle::Caption))
     .into()

@@ -411,6 +411,7 @@
     "columns": {
       "key": "ID",
       "task": "TASK / TAGS",
+      "priority": "PRIORITY",
       "pipeline": "Pipeline",
       "status": "WORKFLOW / RUN",
       "readiness": "DEPENDENCY / READINESS"
@@ -576,6 +577,7 @@
       "unfinished": "Blocked · {{tasks}} unfinished. {{reason}}",
       "informational": "Blocked · {{reason}}",
       "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
+      "runUnavailableWhile": "Run is unavailable while {{tasks}} is unfinished.",
       "linkLabel": "{{key}} · {{title}}",
       "search": "Search tasks",
       "helper": "Add a reason and optional blocking tasks.",
@@ -648,7 +650,13 @@
     "sort": {
       "updated": "Updated · newest first",
       "status": "Status · workflow order",
-      "priority": "Priority · urgent first"
+      "priority": "Priority · urgent first",
+      "trigger": "Sort: {{sort}}",
+      "short": {
+        "updated": "Updated",
+        "status": "Status",
+        "priority": "Priority"
+      }
     },
     "history": {
       "title": "Task history",
