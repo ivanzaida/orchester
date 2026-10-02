@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{permission::CommandPrefix, resource::VersionNumber, run::ApprovalAnswer};
 
-use super::{super::approval_value::ValueRows, Pressed, View, footer, request};
+use super::{super::approval_value::ValueRows, Pressed, View, footer, request, subject_line};
 use crate::{
   tasks::approvals::{AlwaysShown, CommandAlways, ShownApproval},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, select_menu_scrollbar},
@@ -82,7 +82,8 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
     .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role())
-    .child(request(ctx, view))
+    .child(subject_line::line(ctx, shown))
+    .with_children(request(ctx, view))
     .child(property(&ctx.t("runs.toolApproval.agent"), &request::agent(ctx, shown)))
     .with_children(body);
   let sections = vec![
@@ -97,17 +98,30 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
   (sections, submit)
 }
 
-/// The request the step adds for (`Mchq9`, `NIVdj`): a command whole, or the server and the tool.
-fn request(ctx: &Ctx, view: &View<'_>) -> Element {
-  let approval = &view.shown().approval;
+/// The request the step adds for (`Mchq9`, `NIVdj`): why a command asks (`sc59y`) and the command
+/// whole in its box, or the server and the tool.
+fn request(ctx: &Ctx, view: &View<'_>) -> Vec<Element> {
+  let shown = view.shown();
+  let approval = &shown.approval;
   if approval.command {
-    return ValueRows::new(ctx, view.copy, view.arguments).command(&approval.action);
+    let reason = shown
+      .choices
+      .reason
+      .as_ref()
+      .map(|reason| subject_line::reason(ctx, reason));
+    let command = ValueRows::new(ctx, view.copy, view.arguments)
+      .labelled_command(&ctx.t("runs.toolApproval.command"), &approval.action);
+    return reason.into_iter().chain([command]).collect();
   }
   let tool = ctx.t_args(
     "runs.toolApproval.always.toolValue",
     [("server", approval.server.as_str()), ("tool", approval.action.as_str())],
   );
-  styled_property(&ctx.t("runs.toolApproval.always.tool"), &tool, ValueStyle::Mono)
+  vec![styled_property(
+    &ctx.t("runs.toolApproval.always.tool"),
+    &tool,
+    ValueStyle::Mono,
+  )]
 }
 
 /// What the step shows for one kind of request, and its primary: its label and answer.

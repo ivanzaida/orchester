@@ -310,7 +310,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
             .variant(TypographyStyle::Mono),
         ),
     )
-    .child(progress_list(ctx, run, false))
+    .child(progress_list(ctx, run, false, &[]))
     .into()
 }
 

@@ -19,7 +19,7 @@ use orchester_core::time::Timestamp;
 use super::super::{
   ProjectNav,
   approval_queue::ApprovalQueue,
-  task::{category_key, command_line},
+  task::{command_line, subject_key},
   task_rows::status_copy,
 };
 use crate::{
@@ -133,7 +133,7 @@ fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> E
   let category = shown
     .choices
     .category
-    .map(|category| ctx.t(category_key(category)))
+    .map(|category| ctx.t(subject_key(category, shown.choices.secrets)))
     .unwrap_or_default();
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
   let since = display::clock(approval.requested_at);

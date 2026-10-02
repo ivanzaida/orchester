@@ -22,6 +22,7 @@ use orchester_core::integration::Leftovers;
 
 pub use self::panel::{ConversationPanel, ConversationProps};
 use super::{
+  approval_card::waiting_requests,
   notice::{Lost, notice},
   permissions::permissions_property,
   progress::progress_list,
@@ -109,6 +110,11 @@ fn active_work(
     .into(),
     None => notice(ctx, detail, tab.lost),
   };
+  let waiting = detail
+    .run
+    .as_ref()
+    .map(|run| waiting_requests(ctx, run))
+    .unwrap_or_default();
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -121,7 +127,7 @@ fn active_work(
       detail
         .run
         .as_ref()
-        .map(|run| progress_list(ctx, run, tab.lost.is_some())),
+        .map(|run| progress_list(ctx, run, tab.lost.is_some(), &waiting)),
     )
     .with_children(
       detail

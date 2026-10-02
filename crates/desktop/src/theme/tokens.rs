@@ -76,6 +76,8 @@ pub const RADIUS_MARK: f32 = 2.0;
 pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 /// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
+/// Corner radius of a category chip (`EfQuh`).
+pub const RADIUS_CHIP: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so

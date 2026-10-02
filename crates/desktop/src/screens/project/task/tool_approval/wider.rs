@@ -161,14 +161,27 @@ fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
   })
 }
 
+/// *Approve everything in this run*; while the run already auto-approves it is on, and this request
+/// reached you because auto-approval leaves it to a person.
 fn approve_run(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
+  let (covers, offer) = if shown.auto_approving {
+    (
+      ctx.t_args("runs.toolApproval.wider.runOn", [("run", run.as_str())]),
+      Offer::Unavailable,
+    )
+  } else {
+    (
+      ctx.t_args("runs.toolApproval.wider.runCovers", [("run", run.as_str())]),
+      Offer::Press(Arc::new(view.answer(Pressed::Run, ApprovalAnswer::ApproveRun))),
+    )
+  };
   Tile {
     id: "tool-approval-approve-run",
     glyph: Icon::Zap,
     title: pressed_title(ctx, view, Pressed::Run, "runs.toolApproval.wider.run"),
-    covers: ctx.t_args("runs.toolApproval.wider.runCovers", [("run", run.as_str())]),
-    offer: Offer::Press(Arc::new(view.answer(Pressed::Run, ApprovalAnswer::ApproveRun))),
+    covers,
+    offer,
     scope: None,
   }
 }

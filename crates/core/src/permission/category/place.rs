@@ -41,6 +41,9 @@ impl Placing<'_> {
       return;
     };
     for (path, place) in located {
+      if place == Place::Secret && part.secret_word.is_none() {
+        part.secret_word = Some(word.to_owned());
+      }
       note(part, &path, place);
     }
   }
@@ -56,12 +59,22 @@ impl Placing<'_> {
       return;
     };
     for (path, place) in located {
-      part.at_least(match place {
+      let category = match place {
         Place::Granted => CommandCategory::Worktree,
         Place::Temp => CommandCategory::OutsideWrite,
         Place::Outside | Place::Secret if delete => CommandCategory::HistoryDestructive,
         Place::Outside | Place::Secret => CommandCategory::OutsideWrite,
-      });
+      };
+      let written = Some(target.to_owned());
+      match category {
+        CommandCategory::HistoryDestructive => part.outside_delete = part.outside_delete.take().or(written),
+        CommandCategory::OutsideWrite => part.outside_write = part.outside_write.take().or(written),
+        _ => {}
+      }
+      if place == Place::Secret && part.secret_word.is_none() {
+        part.secret_word = Some(target.to_owned());
+      }
+      part.at_least(category);
       note(part, &path, place);
     }
   }

@@ -11,19 +11,31 @@ use lurq::{
 };
 use orchester_core::{run::StepFailure, time::Timestamp, tokens::compact_tokens};
 
+use super::approval_card::waiting_on;
 use crate::{
   display,
   tasks::{
+    approvals::ShownApproval,
     detail::RunView,
     progress::{ProgressRow, ProgressState, progress},
   },
   ui::{check_row::check_row, icon::Icon, message_text},
 };
 
-/// Every step of `run`. `lost`: the run is recorded as running but has no runner.
-pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool) -> Element {
-  rows(ctx, &progress(run, lost, Timestamp::now()), SpacingSize::Sm)
+/// Every step of `run`. `lost`: the run is recorded as running but has no runner. A step that waits on
+/// one of `waiting`, the requests the run waits on, says what it waits on and since when (`G0rzJy`).
+pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool, waiting: &[ShownApproval]) -> Element {
+  let rows = progress(run, lost, Timestamp::now());
+  Column::new()
     .id("task-progress-steps")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .with_children(rows.iter().map(|row| {
+      let waiting_on = (row.state == ProgressState::NeedsYou)
+        .then(|| waiting_on(ctx, waiting, &row.step))
+        .flatten();
+      progress_row(ctx, row, waiting_on)
+    }))
     .into()
 }
 
@@ -33,13 +45,26 @@ pub(super) fn rows(ctx: &Ctx, rows: &[ProgressRow], gap: SpacingSize) -> Column 
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(gap)
-    .with_children(rows.iter().map(|row| progress_row(ctx, row)))
+    .with_children(rows.iter().map(|row| progress_row(ctx, row, None)))
 }
 
-fn progress_row(ctx: &Ctx, row: &ProgressRow) -> Element {
+/// A step's check row; `waiting_on` replaces its detail while it waits on a request.
+fn progress_row(ctx: &Ctx, row: &ProgressRow, waiting_on: Option<Arc<str>>) -> Element {
   let title = title(ctx, row);
   let (glyph, state) = state(ctx, row.state);
-  let result = match row.usage {
+  let (glyph, result) = match waiting_on {
+    Some(waiting_on) => (Icon::Hand, waiting_on),
+    None => (glyph, detail(ctx, row, state)),
+  };
+  check_row(glyph, &title, &result)
+    .describe("step", row.id.to_string())
+    .describe("state", format!("{:?}", row.state))
+    .into()
+}
+
+/// Where a step stands, with its attempt, tokens and active agent time when it ran.
+fn detail(ctx: &Ctx, row: &ProgressRow, state: Arc<str>) -> Arc<str> {
+  match row.usage {
     Some(usage) => {
       let attempt = usage.attempt.to_string();
       let duration = message_text(ctx, &display::duration(usage.active));
@@ -65,11 +90,7 @@ fn progress_row(ctx: &Ctx, row: &ProgressRow) -> Element {
       }
     }
     None => state,
-  };
-  check_row(glyph, &title, &result)
-    .describe("step", row.id.to_string())
-    .describe("state", format!("{:?}", row.state))
-    .into()
+  }
 }
 
 /// "Implement · Builder"; a step with no available agent shows its name alone.

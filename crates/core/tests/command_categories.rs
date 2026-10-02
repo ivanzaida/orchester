@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use orchester_core::permission::category::{ClassifiedCommand, CommandCategory, CommandScope};
+use orchester_core::permission::category::{ClassifiedCommand, CommandCategory, CommandReason, CommandScope};
 use tempfile::TempDir;
 
 /// A home folder with a worktree in it, a writable build folder and a temporary folder beside them.
@@ -197,4 +197,61 @@ fn command_categories_similar_and_prefixes() {
       .has_wider_forms()
   );
   assert!(folders.classify("./x.sh").forcing().expect("part").similar().is_none());
+}
+
+#[test]
+fn command_categories_reason_names_what_asks() {
+  let folders = Folders::new();
+  let outside = folders.abs(&folders.home.join("notes.txt"));
+  let command = |words: &str| CommandReason::Network {
+    command: words.to_owned(),
+  };
+  let cases = [
+    (
+      "cargo add serde --features derive".to_owned(),
+      CommandReason::Installs {
+        registry: "crates.io".to_owned(),
+        package: Some("serde".to_owned()),
+      },
+    ),
+    (
+      format!("cp src/a.rs {outside}"),
+      CommandReason::WritesOutside { path: outside },
+    ),
+    (
+      "rm -rf ../../other".to_owned(),
+      CommandReason::DeletesOutside {
+        path: "../../other".to_owned(),
+      },
+    ),
+    (
+      "git push origin main".to_owned(),
+      CommandReason::RewritesHistory {
+        command: "git push".to_owned(),
+      },
+    ),
+    (
+      "cat ~/.ssh/id_rsa".to_owned(),
+      CommandReason::ReadsCredentials {
+        what: "~/.ssh/id_rsa".to_owned(),
+      },
+    ),
+    ("git fetch origin".to_owned(), command("git fetch")),
+    ("./scripts/regen.sh".to_owned(), CommandReason::Unknown),
+    (
+      "cargo test -p core".to_owned(),
+      CommandReason::Worktree {
+        command: "cargo test".to_owned(),
+      },
+    ),
+    (
+      "git status".to_owned(),
+      CommandReason::ReadOnly {
+        command: "git status".to_owned(),
+      },
+    ),
+  ];
+  for (line, reason) in cases {
+    assert_eq!(folders.classify(&line).reason(), Some(reason), "{line}");
+  }
 }

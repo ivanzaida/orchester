@@ -144,6 +144,9 @@ pub struct ToolDecision {
   /// A command's category, for its mark.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub category: Option<CommandCategory>,
+  /// The command read a credential location, which its mark names instead of the category.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub secrets: bool,
   /// What the agent was told, for a denial.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub told: Option<String>,

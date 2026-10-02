@@ -827,6 +827,10 @@
         "titleTool": "{{agent}} waits for your answer · {{server}} {{tool}}",
         "titleCommand": "{{agent}} waits for your answer · a command",
         "detail": "Waiting since {{time}}; its active time stopped. Nothing runs until you answer.",
+        "detailOthers": {
+          "one": "Waiting since {{time}}; its active time stopped. {{count}} more request waits in another run.",
+          "other": "Waiting since {{time}}; its active time stopped. {{count}} more requests wait in other runs."
+        },
         "review": "Review request"
       },
       "approvals": {
@@ -858,6 +862,8 @@
       "together": " + ",
       "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
       "commandDetail": "{{state}} · attempt {{attempt}} · {{duration}}",
+      "waitingOn": "Waiting for you · {{subject}} · since {{time}}",
+      "toolSubject": "{{server}} {{tool}}",
       "state": {
         "waiting": "Waiting",
         "working": "Working",
@@ -1113,7 +1119,8 @@
           "network": "Network",
           "outsideWrite": "Outside write",
           "unknown": "Unknown",
-          "historyDestructive": "History / destructive"
+          "historyDestructive": "History / destructive",
+          "credentialRead": "Credential read"
         }
       },
       "mcp": {
@@ -1219,7 +1226,6 @@
       "title": "Approve tool action?",
       "explanation": "{{agent}} asks to call one tool of the {{server}} MCP server. Approve once runs this call only. Deny tells {{agent}} and it goes on; the step does not fail.",
       "agent": "Agent",
-      "server": "MCP server",
       "action": "Action",
       "target": "Target",
       "deny": "Deny",
@@ -1232,6 +1238,36 @@
       "agentValue": "{{agent}} · {{step}} · Run {{run}} · {{task}}",
       "denyTells": "Deny tells {{agent}}: “{{message}}”",
       "denyTellsCodex": "Deny declines it, and Codex tells {{agent}}: “{{message}}”",
+      "waitingSince": "waiting since {{time}}",
+      "policy": {
+        "commandsAsk": "Asks before commands · {{profile}} {{version}}",
+        "notListed": "Not an allowed command · {{profile}} {{version}}",
+        "beyondSandbox": "Asks to leave the sandbox · {{profile}} {{version}}",
+        "mcpActions": "Ask before MCP actions · {{profile}} {{version}}",
+        "profile": "{{profile}} {{version}}"
+      },
+      "reason": {
+        "unknown": "Orchester could not read it to the end.",
+        "installs": "Installs a package from the network:",
+        "installsSource": "{{registry}} · {{package}}",
+        "deletesOutside": "Deletes outside the worktree:",
+        "rewritesHistory": "Rewrites or discards history:",
+        "readsCredentials": "Reads credentials:",
+        "writesOutside": "Writes outside the worktree:",
+        "network": "Uses the network:",
+        "worktree": "Changes the worktree:",
+        "readOnly": "Only reads:"
+      },
+      "commandBecause": {
+        "installs": "Command · installs a package from the network: {{value}}",
+        "deletesOutside": "Command · deletes outside the worktree: {{value}}",
+        "rewritesHistory": "Command · rewrites or discards history: {{value}}",
+        "readsCredentials": "Command · reads credentials: {{value}}",
+        "writesOutside": "Command · writes outside the worktree: {{value}}",
+        "network": "Command · uses the network: {{value}}",
+        "worktree": "Command · changes the worktree: {{value}}",
+        "readOnly": "Command · only reads: {{value}}"
+      },
       "wider": {
         "heading": "Or answer more widely",
         "similar": "Approve similar in this run",
@@ -1243,9 +1279,10 @@
         "runHeading": "Or stop asking for this run",
         "run": "Approve everything in this run",
         "runCovers": "Orchester answers this and every later request of Run {{run}} itself, until the run ends or you stop it. Network commands, writes outside the worktree, secrets, installs, destructive and unreadable commands still ask you.",
+        "runOn": "On: Orchester already answers Run {{run}}’s requests itself. It leaves this one to you, as it never answers a request like it.",
         "severalAsk": "Several parts ask: approve once or deny.",
         "destructive": "A command that rewrites or discards history can’t be always allowed.",
-        "widerForms": "Its prefix would also allow riskier forms, such as rm -rf, git reset --hard or an option that starts another program.",
+        "widerForms": "Its prefix would also allow riskier forms, such as rm ‑rf, git reset ‑‑hard or an option that starts another program.",
         "secrets": "Unavailable for a command that reads credentials: approve once or deny.",
         "similarDestructive": "Unavailable for a command that rewrites history or deletes outside the worktree: approve once or deny.",
         "noAllowedList": "The profile has no Allowed commands to add to: it asks before every command, or its CLI keeps no list.",
@@ -1309,9 +1346,17 @@
         "toolValue": "{{server}} · {{tool}}"
       },
       "notAwaited": "This tool action no longer waits for a decision.",
+      "notAwaitedCommand": "This command no longer waits for a decision.",
       "commandTitle": "Approve command?",
-      "commandExplanation": "{{agent}} asks to run this command. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
-      "commandExplanationClaude": "{{agent}} asks to run this command. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "policyExplanation": {
+        "readOnly": "{{agent}}’s policy asks you about commands that only read. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "worktree": "{{agent}}’s policy asks you about commands that change the worktree. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "network": "{{agent}}’s policy asks you about commands that use the network. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "outsideWrite": "{{agent}}’s policy asks you about commands that write outside the worktree. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "historyDestructive": "{{agent}}’s policy asks you about commands that rewrite or discard history. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "credentials": "{{agent}}’s policy asks you about commands that read credentials. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "unknown": "Orchester could not read this command to the end, so it is Unknown and {{agent}}’s policy asks you. Approve once runs it once. Deny tells {{agent}} and it goes on; the step does not fail."
+      },
       "commandExplanationReadOnly": "{{agent}} asks to run this command. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
       "commandExplanationNative": "{{agent}} asks to run this command. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
       "commandExplanationClaudeReadOnly": "{{agent}} asks to run this command. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",

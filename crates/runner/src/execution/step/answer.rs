@@ -32,6 +32,8 @@ pub(super) struct Settled {
   pub(super) decided_by: DecidedBy,
   pub(super) rule: Option<ApprovalRuleId>,
   pub(super) category: Option<CommandCategory>,
+  /// A command that reads a credential location, which its mark names; only a person answers one.
+  pub(super) secrets: bool,
   pub(super) told: Option<String>,
 }
 
@@ -41,6 +43,7 @@ impl Settled {
       decided_by,
       rule: None,
       category,
+      secrets: false,
       told: None,
     }
   }
@@ -113,7 +116,10 @@ impl Worker {
     answer: &ApprovalAnswer,
   ) -> Result<Result<Settled, Rejection>, StoreError> {
     let subject = ApprovalSubject::of(approval, &self.scope);
-    let settled = Settled::by(answer.decided_by(), category_of(&subject));
+    let settled = Settled {
+      secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      ..Settled::by(answer.decided_by(), category_of(&subject))
+    };
     let now = Timestamp::now();
     match answer {
       ApprovalAnswer::Once => {}
@@ -242,6 +248,7 @@ impl Worker {
     let decision = ToolDecision {
       decided_by: settled.decided_by,
       category: settled.category,
+      secrets: settled.secrets,
       told: settled.told,
     };
     self.observe(

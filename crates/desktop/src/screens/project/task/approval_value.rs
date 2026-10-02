@@ -72,6 +72,12 @@ impl<'a> ValueRows<'a> {
     self.boxed(Self::ACTION, &label, command)
   }
 
+  /// The command in its box under `label`, which says why it asks (`J6guZs` in `NV6xJ`), however short
+  /// it is.
+  pub(super) fn labelled_command(&self, label: &str, command: &str) -> Element {
+    self.boxed(Self::ACTION, label, command)
+  }
+
   fn boxed(&self, id: &str, label: &str, value: &str) -> Element {
     let text = BoxText {
       shown: value,

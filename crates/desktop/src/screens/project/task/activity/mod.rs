@@ -34,7 +34,7 @@ use lurq::{
 use orchester_core::{connection::EngineVendor, id::StepExecutionId, run::RunStatus};
 use parking_lot::Mutex;
 
-pub(in crate::screens::project) use self::mcp_call::category_key;
+pub(in crate::screens::project) use self::mcp_call::{category_key, subject_key};
 use self::{
   entry::TranscriptRowView,
   footer::{LiveFooter, LiveFooterProps},

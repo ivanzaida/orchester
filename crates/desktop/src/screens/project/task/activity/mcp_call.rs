@@ -75,7 +75,7 @@ fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
 /// command's category).
 fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
   let subject = match (mark.command, mark.decision.category) {
-    (true, Some(category)) => ctx.t(category_key(category)),
+    (true, Some(category)) => ctx.t(subject_key(category, mark.decision.secrets)),
     (true, None) => ctx.t("runs.activity.decision.aCommand"),
     (false, _) => ctx.t_args(
       "runs.activity.decision.tool",
@@ -104,5 +104,15 @@ pub(in crate::screens::project) const fn category_key(category: CommandCategory)
     CommandCategory::OutsideWrite => "runs.activity.decision.category.outsideWrite",
     CommandCategory::Unknown => "runs.activity.decision.category.unknown",
     CommandCategory::HistoryDestructive => "runs.activity.decision.category.historyDestructive",
+  }
+}
+
+/// What a command is called where its category shows: *Credential read* when it reads a credential
+/// location, else its category.
+pub(in crate::screens::project) const fn subject_key(category: CommandCategory, secrets: bool) -> &'static str {
+  if secrets {
+    "runs.activity.decision.category.credentialRead"
+  } else {
+    category_key(category)
   }
 }

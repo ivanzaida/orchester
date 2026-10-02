@@ -22,6 +22,7 @@ mod paths;
 mod place;
 mod powershell;
 mod programs;
+mod reason;
 mod words;
 
 use std::path::Path;
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 pub use self::{
   part::{CommandPart, SimilarCommand},
   paths::CommandScope,
+  reason::CommandReason,
 };
 use self::{
   place::{Folders, Placing},

@@ -13,7 +13,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   permission::{
     AgentPermissions, CommandPrefix,
-    category::{CommandCategory, CommandScope},
+    category::{CommandCategory, CommandReason, CommandScope},
   },
   resource::{AgentProfile, Pipeline, ResourceKind, StepKind, VersionNumber},
   run::{
@@ -86,6 +86,10 @@ pub struct ApprovalChoices {
   pub codex: bool,
   /// A command's category; `None` for an MCP call.
   pub category: Option<CommandCategory>,
+  /// A command reads a credential location, which is named instead of its category.
+  pub secrets: bool,
+  /// Why a command asks, from the classifier; `None` for an MCP call.
+  pub reason: Option<CommandReason>,
 }
 
 impl ApprovalChoices {
@@ -140,6 +144,11 @@ impl ApprovalChoices {
       codex,
       category: match &subject {
         ApprovalSubject::Command(command) => Some(command.category()),
+        ApprovalSubject::McpTool { .. } => None,
+      },
+      secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      reason: match &subject {
+        ApprovalSubject::Command(command) => command.reason(),
         ApprovalSubject::McpTool { .. } => None,
       },
     }

@@ -25,7 +25,7 @@ use orchester_core::{
 
 use super::{
   TaskScrolls,
-  approval_card::review_card,
+  approval_card::{review_card, waiting_requests},
   brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
@@ -85,7 +85,10 @@ pub(super) fn summary(
     .with_children(waiting.is_none().then(|| with_reason(notice(ctx, detail, lost), reason)))
     .with_children(waiting)
     .with_children(raise)
-    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
+    .with_children(detail.run.as_ref().map(|run| {
+      let waiting = waiting_requests(ctx, run);
+      progress_list(ctx, run, lost.is_some(), &waiting)
+    }))
     .with_children(brief_section(ctx, details));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let panel = match &detail.run {

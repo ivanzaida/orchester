@@ -13,11 +13,11 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::AgentProvider, run::PendingToolApproval};
+use orchester_core::{connection::AgentProvider, permission::category::CommandCategory, run::PendingToolApproval};
 
 use super::{
   super::{approval_value::ValueRows, native_approval},
-  View, footer, scope, wider,
+  View, footer, scope, subject_line, wider,
 };
 use crate::{
   tasks::approvals::ShownApproval,
@@ -26,7 +26,7 @@ use crate::{
     form::Submit,
     icon::{Icon, IconSize, icon},
     pressable::{Ring, keyboard_stop},
-    property::{ValueStyle, property, styled_property},
+    property::property,
   },
 };
 
@@ -142,16 +142,31 @@ fn explanation(ctx: &Ctx, shown: &ShownApproval) -> Arc<str> {
     return ctx.t_args("runs.toolApproval.explanation", names);
   }
   // Claude Code runs an approved command without a sandbox; Codex runs an approved escalation
-  // outside its sandbox. Either can then change files, which a read-only step must say.
+  // outside its sandbox. Either can then change files, which a read-only step must say; otherwise the
+  // explanation says what the policy asks about (`xNcLS` in `NV6xJ`, `V8j3QO` in `bjrgu`).
   let key = match (shown.provider, shown.read_only) {
-    (Some(AgentProvider::ClaudeCodeCli), false) => "runs.toolApproval.commandExplanationClaude",
     (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
-    (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
     (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
     // A native agent's command carries what it runs with; one without says only what it asks.
     (Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi), _) => "runs.toolApproval.commandExplanationNative",
+    (_, false) => policy_explanation(shown),
   };
   ctx.t_args(key, names)
+}
+
+/// What the asking policy asks about, by the command's category (or that it reads credentials).
+const fn policy_explanation(shown: &ShownApproval) -> &'static str {
+  if shown.choices.secrets {
+    return "runs.toolApproval.policyExplanation.credentials";
+  }
+  match shown.choices.category {
+    Some(CommandCategory::ReadOnly) => "runs.toolApproval.policyExplanation.readOnly",
+    Some(CommandCategory::Worktree) => "runs.toolApproval.policyExplanation.worktree",
+    Some(CommandCategory::Network) => "runs.toolApproval.policyExplanation.network",
+    Some(CommandCategory::OutsideWrite) => "runs.toolApproval.policyExplanation.outsideWrite",
+    Some(CommandCategory::HistoryDestructive) => "runs.toolApproval.policyExplanation.historyDestructive",
+    Some(CommandCategory::Unknown) | None => "runs.toolApproval.policyExplanation.unknown",
+  }
 }
 
 fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
@@ -163,6 +178,7 @@ fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
     .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
     .spacing(ExtraSpacing::Stack.role());
+  let column = column.child(subject_line::line(values.ctx(), shown));
   let column = match approval.native {
     Some(native) => column.with_children(native_approval::details(
       values,
@@ -184,10 +200,11 @@ fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
     .into()
 }
 
-/// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
-/// what the agent said about it. A command, action or target that does not fit beside its label
-/// moves under it, whole. A command comes after its working directory, as the box it may need
-/// closes the details (`Grcu7`); a CLI's request does not say which shell runs it.
+/// A CLI's request under its subject line: the agent, then a command's working directory, what the agent
+/// said about it and the command, or a tool action and its target and arguments (`kpuQj`, `NV6xJ`). A
+/// command, action or target that does not fit beside its label moves under it, whole. A command comes
+/// last, as the box it may need closes the details (`Grcu7`), labelled with why it asks; a CLI's
+/// request does not say which shell runs it.
 fn cli_details(values: &ValueRows<'_>, column: Column, shown: &ShownApproval) -> Column {
   let ctx = values.ctx();
   let approval = &shown.approval;
@@ -205,24 +222,26 @@ fn cli_details(values: &ValueRows<'_>, column: Column, shown: &ShownApproval) ->
   };
   let target = target.map(|value| values.value(ValueRows::TARGET, &ctx.t(target_key), value));
   let column = column.child(property(&ctx.t("runs.toolApproval.agent"), &agent(ctx, shown)));
-  let column = if command {
-    column.with_children(target).child(values.command(&approval.action))
-  } else {
-    column
-      .child(styled_property(
-        &ctx.t("runs.toolApproval.server"),
-        &approval.server,
-        ValueStyle::Mono,
-      ))
+  let scope = approval
+    .scope
+    .as_deref()
+    .map(|scope| scope_row(values, approval, scope));
+  if !command {
+    return column
       .child(values.value(ValueRows::ACTION, &ctx.t("runs.toolApproval.action"), &approval.action))
       .with_children(target)
+      .with_children(scope);
+  }
+  let label = shown
+    .choices
+    .reason
+    .as_ref()
+    .and_then(|reason| subject_line::command_label(ctx, reason));
+  let command = match label {
+    Some(label) => values.labelled_command(&label, &approval.action),
+    None => values.command(&approval.action),
   };
-  column.with_children(
-    approval
-      .scope
-      .as_deref()
-      .map(|scope| scope_row(values, approval, scope)),
-  )
+  column.with_children(target).with_children(scope).child(command)
 }
 
 /// The agent, with its step, run and task when they can be read (`dcjnZ`).

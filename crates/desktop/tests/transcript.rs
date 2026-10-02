@@ -324,6 +324,7 @@ fn transcript_marks_answered_requests_on_their_calls() {
     decision: ToolDecision {
       decided_by,
       category: (server == "command").then_some(CommandCategory::Network),
+      secrets: false,
       told: told.map(str::to_owned),
     },
   };

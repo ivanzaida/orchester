@@ -14,6 +14,7 @@ mod always;
 mod footer;
 mod request;
 mod scope;
+mod subject_line;
 mod wider;
 
 use std::sync::Arc;
@@ -30,12 +31,12 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{id::RunId, run::ApprovalAnswer};
-use orchester_ipc::Command;
+use orchester_ipc::{Command, Rejection};
 
 use super::{approval_arguments::ArgumentsCache, native_approval};
 use crate::{
   messages::Message,
-  runner::Runners,
+  runner::{RunRequestError, Runners},
   screens::project::approval_queue::{ApprovalQueue, QueuePlace},
   tasks::{approvals::ShownApproval, run::control_message},
   theme::ExtraColor,
@@ -73,6 +74,8 @@ struct Decision {
   run: RunId,
   approval: String,
   answer: ApprovalAnswer,
+  /// The request is a command, which an error names as such.
+  command: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
@@ -95,7 +98,12 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
         .await
         .map_err(|error| {
           tracing::warn!(%error, "the runner did not take the tool approval decision");
-          control_message(&error)
+          match error {
+            RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) if decision.command => {
+              Message::new("runs.toolApproval.notAwaitedCommand")
+            }
+            error => control_message(&error),
+          }
         })
     }
   })
@@ -245,6 +253,7 @@ impl View<'_> {
       run: self.shown().approval.run,
       approval: self.shown().approval.id.clone(),
       answer,
+      command: self.shown().approval.command,
     };
     move || {
       let state = action.state().get_untracked();

@@ -50,7 +50,11 @@ fn waiting(number: usize) -> ShownApproval {
       told: "The person reviewing this run denied pencil batch_design. Continue without it.".into(),
       codex: false,
       category: None,
+      secrets: false,
+      reason: None,
     },
+    asking: None,
+    auto_approving: false,
   }
 }
 

@@ -43,6 +43,8 @@ pub(super) struct Judged {
   pub(super) installs: bool,
   /// It reads a credential store (a keychain, Windows credentials, a password manager, a token).
   pub(super) secret_store: bool,
+  /// For an install, where the software comes from and the first package named.
+  pub(super) source: Option<(String, Option<String>)>,
   /// The subcommand, and where it starts among the arguments, for a program that has them.
   pub(super) subcommand: Option<(usize, String)>,
   /// A later command of the same program and subcommand can be alike; not when the arguments are a
@@ -64,6 +66,7 @@ impl Judged {
       inside: Vec::new(),
       installs: false,
       secret_store: false,
+      source: None,
       subcommand: None,
       alike: true,
       prefix_stays: false,
@@ -105,6 +108,12 @@ impl Judged {
 
   pub(super) const fn installing(mut self) -> Self {
     self.installs = true;
+    self
+  }
+
+  /// An install from `registry` of `package`.
+  pub(super) fn installed_from(mut self, registry: &str, package: Option<String>) -> Self {
+    self.source = Some((registry.to_owned(), package));
     self
   }
 

@@ -89,13 +89,15 @@ impl Drop for DialogPresence {
   }
 }
 
-/// `dialog` over the scrim; mounted in a `Modal` that targets the whole window.
+/// `dialog` over the scrim; mounted in a `Modal` that targets the whole window. A dialog as tall as
+/// the window keeps the same margin above and below as at its sides.
 pub fn backdrop(ctx: &mut Ctx, dialog: impl Into<Element>) -> Element {
   let scrim = Column::new()
     .id("dialog-backdrop")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .padding_horizontal(ExtraSpacing::DialogMargin.role())
+    .padding_vertical(ExtraSpacing::DialogMargin.role())
     .background(ExtraColor::Scrim.role())
     .align_items(Alignment::Center)
     .justify(Justify::Center)

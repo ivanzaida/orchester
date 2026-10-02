@@ -10,6 +10,9 @@ use super::programs::{Judged, Kind, has_option};
 /// A program's subcommands by what they do.
 struct Manager {
   programs: &'static [&'static str],
+  /// Where its installs come from, as a person knows it; `None` for system and version managers,
+  /// which are named by their program.
+  registry: Option<&'static str>,
   installs: &'static [&'static str],
   builds: &'static [&'static str],
   reads: &'static [&'static str],
@@ -20,6 +23,7 @@ struct Manager {
 const MANAGERS: [Manager; 11] = [
   Manager {
     programs: &["cargo"],
+    registry: Some("crates.io"),
     installs: &["add", "install", "update", "fetch", "generate-lockfile"],
     builds: &[
       "build", "check", "test", "clippy", "fmt", "run", "doc", "bench", "clean", "b", "c", "t", "r", "nextest",
@@ -29,6 +33,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["npm", "pnpm", "yarn", "bun"],
+    registry: Some("npm"),
     installs: &[
       "install", "i", "add", "ci", "update", "upgrade", "up", "dlx", "x", "exec", "create", "init", "link",
     ],
@@ -38,6 +43,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["pip", "pip3", "pipx", "uv", "poetry", "conda", "mamba"],
+    registry: Some("PyPI"),
     installs: &[
       "install", "add", "sync", "lock", "update", "upgrade", "run", "tool", "pip", "inject", "create",
     ],
@@ -47,6 +53,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["go"],
+    registry: Some("Go modules"),
     installs: &["get", "install", "mod"],
     builds: &["build", "test", "vet", "fmt", "run", "generate"],
     reads: &["version", "env", "doc"],
@@ -54,6 +61,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["dotnet"],
+    registry: Some("NuGet"),
     installs: &["add", "tool", "restore", "new", "workload"],
     builds: &["build", "test", "run", "format", "publish", "pack", "clean"],
     reads: &["--version", "--info", "--list-sdks"],
@@ -61,6 +69,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["gem", "bundle", "bundler", "composer"],
+    registry: Some("RubyGems"),
     installs: &["install", "update", "add", "require", "exec"],
     builds: &["test"],
     reads: &["list", "show", "--version"],
@@ -68,6 +77,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["brew", "apt", "apt-get", "yum", "dnf", "pacman", "apk", "port"],
+    registry: None,
     installs: &[
       "install",
       "reinstall",
@@ -85,6 +95,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["winget", "choco", "scoop"],
+    registry: None,
     installs: &["install", "upgrade", "update", "add"],
     builds: &[],
     reads: &["list", "--version"],
@@ -92,6 +103,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["rustup"],
+    registry: Some("rustup"),
     installs: &[
       "install",
       "update",
@@ -107,6 +119,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["deno"],
+    registry: Some("deno"),
     installs: &["install", "add", "cache", "upgrade", "run"],
     builds: &["test", "check", "fmt", "lint"],
     reads: &["--version"],
@@ -114,6 +127,7 @@ const MANAGERS: [Manager; 11] = [
   },
   Manager {
     programs: &["nvm", "volta", "asdf", "mise", "fnm"],
+    registry: None,
     installs: &["install", "use", "pin", "plugin"],
     builds: &[],
     reads: &["list", "ls", "current", "--version"],
@@ -127,13 +141,17 @@ const FETCH_AND_RUN: [&str; 4] = ["npx", "pnpx", "bunx", "uvx"];
 /// The verdict for package manager or toolchain `program` with `args`; `None` for any other program.
 pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   if FETCH_AND_RUN.contains(&program) {
-    return Some(Judged::of(Kind::Network).installing());
+    let registry = if program == "uvx" { "PyPI" } else { "npm" };
+    let package = args.iter().find(|arg| !arg.starts_with('-')).cloned();
+    return Some(Judged::of(Kind::Network).installing().installed_from(registry, package));
   }
   let manager = MANAGERS.iter().find(|manager| manager.programs.contains(&program))?;
   let Some((at, sub)) = subcommand(args) else {
     // `yarn` alone installs; any other manager without a subcommand prints its help.
     return Some(if program == "yarn" {
-      Judged::of(Kind::Network).installing()
+      Judged::of(Kind::Network)
+        .installing()
+        .installed_from(manager.registry.unwrap_or(program), None)
     } else {
       Judged::of(Kind::ReadOnly)
     });
@@ -142,7 +160,11 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   // Installs and builds run the packages' and the worktree's own code whatever their arguments, so a
   // prefix of them allows nothing more; `clean` deletes the folder it is given.
   let judged = if has_option(args, &["-g", "--global", "--location=global"]) || manager.installs.contains(&sub) {
-    Judged::of(Kind::Network).installing().prefix_stays()
+    let package = rest.iter().find(|arg| !arg.starts_with('-')).cloned();
+    Judged::of(Kind::Network)
+      .installing()
+      .prefix_stays()
+      .installed_from(manager.registry.unwrap_or(program), package)
   } else if manager.builds.contains(&sub) {
     let judged = Judged::of(Kind::Worktree).inside_all(rest);
     if sub == "clean" { judged } else { judged.prefix_stays() }

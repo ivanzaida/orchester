@@ -66,6 +66,14 @@ pub struct CommandPart {
   pub(super) category: CommandCategory,
   pub(super) reads_secrets: bool,
   pub(super) installs: bool,
+  /// The first word that names a credential location, as written.
+  pub(super) secret_word: Option<String>,
+  /// The first file written outside the worktree, and the first deleted outside the temporary
+  /// folder, as written.
+  pub(super) outside_write: Option<String>,
+  pub(super) outside_delete: Option<String>,
+  /// Where an install comes from and the first package named ([`Judged::source`]).
+  pub(super) source: Option<(String, Option<String>)>,
   /// The folders outside the worktree and its writable folders that the part names or writes.
   pub(super) outside: Vec<PathBuf>,
   /// A later part of the same program and subcommand can be alike ([`Judged::alike`]).
@@ -90,6 +98,10 @@ impl CommandPart {
       category,
       reads_secrets: judged.secret_store,
       installs: judged.installs,
+      secret_word: None,
+      outside_write: None,
+      outside_delete: None,
+      source: judged.source.clone(),
       outside: Vec::new(),
       alike: judged.alike,
       prefix_stays: judged.prefix_stays,

@@ -66,7 +66,8 @@ impl Component for RunApprovalsPanel {
     let approvals = &props.approvals;
     let auto = approvals.auto_approving();
     let switch = Switch::new("task-auto-approve", ctx.t("runs.summary.approvals.approveRun"), auto)
-      .note(ctx.t("runs.summary.approvals.approveRunNote"));
+      .note(ctx.t("runs.summary.approvals.approveRunNote"))
+      .inset_ring();
     let switch = if props.live && !busy {
       switch.render(press(&change, &props, RunApprovalChange::AutoApprove(!auto)))
     } else {
