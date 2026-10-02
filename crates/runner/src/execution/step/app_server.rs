@@ -214,7 +214,7 @@ impl AppServerSession {
       }
       let updates = self.stream.parse(line).map_err(|error| error.to_string())?;
       let updates = self.screen(updates)?;
-      if updates.iter().any(|update| matches!(update, Update::TurnEnded)) {
+      if updates.iter().any(|update| matches!(update, Update::TurnEnded { .. })) {
         self.phase = Phase::Complete;
       }
       return Ok(updates);

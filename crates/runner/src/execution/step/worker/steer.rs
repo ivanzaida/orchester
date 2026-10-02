@@ -9,6 +9,12 @@
 //! One the turn ended before (Codex had no turn to add it to, or Claude Code's input was closed),
 //! and one still on its way when the CLI ends, stays queued and is read when the turn ends. One that
 //! comes before Codex's turn has started is given to the turn as it starts.
+//!
+//! Codex keeps a message it accepted (`turn/steer` answered with the turn) for its turn: it gives it
+//! to the model at the next sampling, or, when the turn finishes first, records it into the thread
+//! before `turn/completed` (Codex's `on_task_finished`). Such a message is delivered at the turn's
+//! end then, so it is never queued for the next turn as well; only a turn interrupted before taking it
+//! leaves it queued (`Update::TurnEnded`), as does a process that ends without completing its turn.
 
 use std::{io, time::Duration};
 
@@ -46,6 +52,8 @@ struct Sent {
   /// The turns Claude Code had ended when the message was written: one taken after more ended
   /// arrived at a turn's end.
   results_before: usize,
+  /// Codex accepted it for its running turn.
+  accepted: bool,
 }
 
 impl Steering {
@@ -53,6 +61,22 @@ impl Steering {
   fn take(&mut self, id: MessageId) -> Option<Sent> {
     let at = self.sent.iter().position(|sent| sent.message.id() == id)?;
     Some(self.sent.remove(at))
+  }
+
+  /// Notes that Codex accepted the message sent with `id` for its turn.
+  fn accept(&mut self, id: MessageId) {
+    if let Some(sent) = self.sent.iter_mut().find(|sent| sent.message.id() == id) {
+      sent.accepted = true;
+    }
+  }
+
+  /// The messages Codex accepted and has not shown it took, no longer waiting.
+  fn take_accepted(&mut self) -> Vec<Sent> {
+    let (accepted, waiting) = std::mem::take(&mut self.sent)
+      .into_iter()
+      .partition(|sent| sent.accepted);
+    self.sent = waiting;
+    accepted
   }
 
   /// The message whose text is `text`, no longer waiting.
@@ -83,6 +107,7 @@ impl Worker {
       watch.steering.sent.push(Sent {
         message,
         results_before,
+        accepted: false,
       });
       if let Err(error) = written {
         tracing::warn!(message = %id, %error, "the message could not be written to the agent's CLI");
@@ -120,18 +145,20 @@ impl Worker {
     }
   }
 
-  /// Codex's answers to `turn/steer`: an accepted message waits for its turn to take it; one
-  /// refused because the turn ended stays queued, any other refusal is not delivered.
+  /// Codex's answers to `turn/steer`: an accepted message waits for its turn to take it, at the latest
+  /// as the turn ends; one refused because the turn ended stays queued, any other refusal is not
+  /// delivered.
   pub(super) fn steer_answered(&self, watch: &mut Watch, answers: Vec<SteerAnswer>) -> Result<(), StoreError> {
     for answer in answers {
-      let Some(reason) = answer.refused else {
-        continue;
-      };
       let Some(id) = answer
         .id
         .strip_prefix(STEER_REQUEST)
         .and_then(|id| id.parse::<MessageId>().ok())
       else {
+        continue;
+      };
+      let Some(reason) = answer.refused else {
+        watch.steering.accept(id);
         continue;
       };
       let Some(sent) = watch.steering.take(id) else {
@@ -162,6 +189,18 @@ impl Worker {
     self.record(watch, sent.message.id(), |message| {
       message.deliver(run, (execution, invocation), Timestamp::now(), arrival)
     })
+  }
+
+  /// Codex's turn ended and kept the messages it accepted but did not show it took: they are
+  /// delivered at the turn's end, and not queued for the next turn as well.
+  pub(super) fn kept_at_turn_end(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    let (run, execution, invocation) = (watch.invocation.run, watch.invocation.execution, watch.invocation.id);
+    for sent in watch.steering.take_accepted() {
+      self.record(watch, sent.message.id(), |message| {
+        message.deliver(run, (execution, invocation), Timestamp::now(), Arrival::TurnEnd)
+      })?;
+    }
+    Ok(())
   }
 
   fn not_delivered(&self, watch: &mut Watch, id: MessageId, reason: Undelivered) -> Result<(), StoreError> {

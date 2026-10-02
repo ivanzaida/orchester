@@ -2,7 +2,8 @@
 //! `orchester-fake-claude`, which take a message the way Codex 0.159.2 and Claude Code 2.1.286 did in
 //! the probe of 2026-10-02: a message sent now reaches the agent at work after the tool call it is
 //! running (delivered mid-turn, in the same invocation); one whose turn ended first is delivered at
-//! the end of the turn (Codex: the session continues to read it; Claude Code: its next turn); one
+//! the end of the turn (Codex: the session continues to read it, or, when Codex had accepted it, it
+//! kept it as the turn ended and it is delivered once; Claude Code: its next turn); one
 //! Codex refuses, or that Claude Code does not read, is not delivered and goes no further; a message
 //! sent after the turn stays queued while the agent works and is delivered when its turn ends.
 //! Needs `git`.
@@ -194,6 +195,36 @@ async fn send_now_codex_delivers_at_the_end_of_a_turn_that_ended_first() {
     ),
     "{:?}",
     stored[0].delivery()
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_now_codex_accepted_but_not_taken_is_delivered_once_at_the_turn_end() {
+  // Codex accepts the steer, then the turn finishes before the model reads it: Codex records it into
+  // the thread as the turn ends, so the runner must not give it to a next turn as well.
+  let project = with(AgentProvider::CodexCli, "Keep a message for the turn's end.");
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started(&project).await;
+  send(root, project.task, id, "Rename the test.", Timing::Now);
+  scheduler.deliver_messages(id).await.expect("taken");
+  let run = wait_for(root, &mut events, id, ended).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(invocations(root, id), 1, "not sent again in a turn of its own");
+  assert!(
+    matches!(
+      delivery(root, project.task),
+      Some(
+        Delivery::Delivered {
+          arrival: Arrival::TurnEnd,
+          ..
+        } | Delivery::Acknowledged {
+          arrival: Arrival::TurnEnd,
+          ..
+        }
+      )
+    ),
+    "{:?}",
+    delivery(root, project.task)
   );
 }
 

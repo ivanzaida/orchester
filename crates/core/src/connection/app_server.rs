@@ -128,7 +128,11 @@ pub enum Update {
   Declined(String),
   /// The running turn took a person's message: a `userMessage` item with this text completed.
   InputTaken(String),
-  TurnEnded,
+  /// The turn ended; `input_kept`: Codex kept in the thread any `turn/steer` input it had accepted but
+  /// not given the model yet, as it does unless the turn was interrupted.
+  TurnEnded {
+    input_kept: bool,
+  },
 }
 
 #[derive(Clone)]
@@ -458,16 +462,18 @@ impl AppServerStream {
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
     let turn = params.get("turn").unwrap_or(&Value::Null);
+    let status = turn.get("status").and_then(Value::as_str);
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
     self.usage = TokenUsage::default();
-    if turn.get("status").and_then(Value::as_str) != Some("completed") {
+    if status != Some("completed") {
       let message = turn
         .get("error")
         .and_then(|error| string(error, "message"))
         .unwrap_or_else(|| "Codex turn did not complete".to_owned());
       updates.push(Update::Activity(AgentEvent::TurnFailed { message }));
     }
-    updates.push(Update::TurnEnded);
+    let input_kept = status != Some("interrupted");
+    updates.push(Update::TurnEnded { input_kept });
     updates
   }
 }

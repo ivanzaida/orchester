@@ -212,9 +212,24 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
           output: 35
         }
       }),
-      Update::TurnEnded
+      Update::TurnEnded { input_kept: true }
     ]
   ));
+}
+
+#[test]
+fn an_interrupted_turn_does_not_keep_the_input_it_accepted() {
+  // Codex records accepted `turn/steer` input as a turn completes or fails, and holds it back for a
+  // turn of its own when the turn is interrupted.
+  for (status, kept) in [("completed", true), ("failed", true), ("interrupted", false)] {
+    let mut stream = AppServerStream::default();
+    let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
+    let updates = stream.parse(&ended.to_string()).expect("turn");
+    assert!(
+      matches!(updates.last(), Some(Update::TurnEnded { input_kept }) if *input_kept == kept),
+      "{status}"
+    );
+  }
 }
 
 #[test]

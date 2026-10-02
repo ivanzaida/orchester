@@ -195,7 +195,10 @@ impl Worker {
         Ok(())
       }
       Update::InputTaken(text) => self.input_taken(watch, &text, None),
-      Update::TurnEnded => {
+      Update::TurnEnded { input_kept } => {
+        if input_kept {
+          self.kept_at_turn_end(watch)?;
+        }
         self.process.terminate();
         Ok(())
       }

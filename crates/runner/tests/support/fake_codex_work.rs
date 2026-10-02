@@ -11,8 +11,10 @@
 //! - "Wait for a message": runs a command (`pnpm test`) until a message sent now arrives (`turn/steer`), answers it,
 //!   completes the command, reports the message as a `userMessage` item and writes "Noted: <message>", as Codex 0.159.2
 //!   did in the probe of 2026-10-02; then works as below. "Refuse a message" refuses the steer instead ("steering is
-//!   not available for this turn") and works as below. A steer while no turn waits for one is answered "no active turn
-//!   to steer", as Codex answers it while no turn runs;
+//!   not available for this turn") and works as below. "Keep a message for the turn's end" accepts the steer, completes
+//!   the command and the turn without a `userMessage` item, as Codex does with input it accepted but had not given the
+//!   model when the turn finished (it records it into the thread then). A steer while no turn waits for one is answered
+//!   "no active turn to steer", as Codex answers it while no turn runs;
 //! - "Report failure": works as below, but its result says it failed;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
@@ -59,12 +61,30 @@ pub struct StepReport {
 pub struct AwaitsMessage {
   prompt: String,
   structured: bool,
-  refuse: bool,
+  answer: SteerAnswer,
+}
+
+/// What the turn does with the message sent now.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SteerAnswer {
+  /// Accepts it and gives it to the model after the running command.
+  Take,
+  /// Refuses it.
+  Refuse,
+  /// Accepts it, but the turn ends before the model reads it.
+  KeepForTurnEnd,
 }
 
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   let worktree = session.cwd.clone();
-  if !session.resumed && (prompt.contains("Wait for a message") || prompt.contains("Refuse a message")) {
+  let answer = if prompt.contains("Refuse a message") {
+    Some(SteerAnswer::Refuse)
+  } else if prompt.contains("Keep a message for the turn's end") {
+    Some(SteerAnswer::KeepForTurnEnd)
+  } else {
+    prompt.contains("Wait for a message").then_some(SteerAnswer::Take)
+  };
+  if let Some(answer) = answer.filter(|_| !session.resumed) {
     notify(
       session,
       "item/started",
@@ -73,7 +93,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     session.awaits_message = Some(AwaitsMessage {
       prompt: prompt.to_owned(),
       structured,
-      refuse: prompt.contains("Refuse a message"),
+      answer,
     });
     return Step::Go;
   }
@@ -121,15 +141,15 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   finish(session, &line, &result)
 }
 
-/// A message sent now (`turn/steer` with `id`): taken after the running command, or refused; then the
-/// turn works as usual.
+/// A message sent now (`turn/steer` with `id`): taken after the running command, refused, or accepted
+/// and left for the turn's end; then the turn works as usual.
 pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_json::Value) -> Step {
   let Some(awaits) = session.awaits_message.take() else {
     emit(&json!({"id": id, "error": {"code": -32600, "message": "no active turn to steer"}}));
     return Step::Go;
   };
   let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
-  if awaits.refuse {
+  if awaits.answer == SteerAnswer::Refuse {
     emit(&json!({"id": id, "error": {"code": -32600, "message": "steering is not available for this turn"}}));
   } else {
     emit(&json!({"id": id, "result": {"turnId": params["expectedTurnId"]}}));
@@ -139,7 +159,7 @@ pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_jso
     "item/completed",
     json!({"item": {"id": "item_8", "type": "commandExecution", "command": "pnpm test", "status": "completed", "exitCode": 0, "aggregatedOutput": "ok"}}),
   );
-  if !awaits.refuse {
+  if awaits.answer == SteerAnswer::Take {
     notify(
       session,
       "item/completed",

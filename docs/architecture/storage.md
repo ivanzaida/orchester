@@ -184,7 +184,12 @@ at work takes one.
   (`undelivered_reason = 'refused'`) or that cannot be written to it within five seconds
   (`'unwritable'`) is *not delivered*: it is kept, goes no further, and is queued again only when the
   person chooses *Send after this turn* (the desktop's write; `timing` then becomes `'after_turn'`). If
-  the CLI takes one late after all, it is delivered then.
+  the CLI takes one late after all, it is delivered then. Codex keeps a message it accepted (`turn/steer`
+  answered with the turn): it gives it to the model at its next sampling or, when the turn finishes
+  first, records it into the thread before `turn/completed` (Codex's `on_task_finished`). Such a message
+  is delivered at that `turn/completed` (`arrival = 'turn_end'`) unless the turn was interrupted, so it
+  is never queued for a next turn as well; an interrupted turn, or a process that ends without
+  `turn/completed`, leaves it queued.
 - **Questions.** A result with the outcome `question` asks the person before the step can go on: its
   work is committed, the question is the agent's message, and the step waits for a message (like a
   plan, a run that only waits holds no agent slot and no active time). A message that reaches it
