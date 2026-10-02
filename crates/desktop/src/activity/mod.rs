@@ -112,7 +112,7 @@ impl Activity {
       .send_modify(|log| log.record_needs_you(project, title, target, SystemTime::now()));
   }
 
-  /// A run at `target` no longer waits for the user's decision.
+  /// A run at `target` no longer waits for the user's decision: its item goes.
   pub fn settle_needs_you(&self, target: &Target) {
     self.log.send_if_modified(|log| log.settle_needs_you(target));
   }

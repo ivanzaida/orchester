@@ -11,7 +11,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, ScrollVertical, Select, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::run::Plan;
@@ -59,7 +59,7 @@ pub(super) fn aside(
         .into(),
       note_field(
         ctx,
-        (note, note_focused),
+        (note, note_focused, None),
         ("plan-review-note", NOTE_HEIGHT),
         &ctx.t("runs.plan.notePlaceholder"),
       ),
@@ -121,7 +121,7 @@ fn changes_meaning(ctx: &Ctx, review: &PlanReview) -> Arc<str> {
 /// (`o8Oug`) while it has the focus. Also the note that returns a waiting run's work to a step.
 pub(in super::super) fn note_field(
   ctx: &Ctx,
-  (note, focused): (&Signal<String>, &Signal<bool>),
+  (note, focused, reference): (&Signal<String>, &Signal<bool>, Option<&ElementRef>),
   (id, height): (&'static str, f32),
   placeholder: &str,
 ) -> Element {
@@ -140,6 +140,10 @@ pub(in super::super) fn note_field(
     .placeholder(placeholder)
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false));
+  let area = match reference {
+    Some(reference) => area.ref_element(reference.clone()),
+    None => area,
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(height))

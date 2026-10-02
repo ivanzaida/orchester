@@ -114,11 +114,14 @@ fn activity_run_waiting_for_a_decision_leaves_the_slot_once_the_run_goes_on() {
     repo_root: PathBuf::from("other"),
     place: Place::Tasks,
   };
-  log.record_needs_you(None, Message::new("waits"), task.clone(), at(1));
+  log.record(None, Message::new("earlier"), other.clone(), at(1));
+  log.record_needs_you(None, Message::new("waits"), task.clone(), at(2));
   assert!(!log.settle_needs_you(&other), "another task's change leaves it");
   assert_eq!(title(&log.slot()), "waits");
   assert!(log.settle_needs_you(&task));
-  assert!(matches!(log.slot(), Slot::Latest(_)));
+  // The stale text is gone from the slot and the list: the slot reads what happened before.
+  assert_eq!(title(&log.slot()), "earlier");
+  assert!(log.recent().iter().all(|event| event.title().key != "waits"));
   assert!(!log.settle_needs_you(&task), "nothing more to settle");
 }
 

@@ -16,7 +16,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, ScrollVertical, Select, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -92,8 +92,11 @@ type Press = Arc<dyn Fn() + Send + Sync>;
 pub struct RetryDecisionPanel {
   note: Signal<String>,
   note_focused: Signal<bool>,
+  note_input: ElementRef,
   target: Signal<Target>,
   seeded: Signal<bool>,
+  /// The layout of the last render: beside the evidence or under it.
+  stacked: Signal<Option<bool>>,
 }
 
 impl Component for RetryDecisionPanel {
@@ -104,14 +107,17 @@ impl Component for RetryDecisionPanel {
     Self {
       note: ctx.signal(String::new()),
       note_focused: ctx.signal(false),
+      note_input: ElementRef::new(),
       target: ctx.signal(Target(None)),
       seeded: ctx.signal(false),
+      stacked: ctx.signal(None),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RetryDecisionProps>().clone();
     self.seed(&props);
+    self.keep_focus(ctx, props.stacked);
     let action = decision_action(ctx);
     let state = action.state().get();
     let idle = !state.is_pending();
@@ -168,9 +174,10 @@ fn layout(stacked: bool, decisions: Column, footer: Column) -> Element {
     .id("task-retry-settings")
     .background(PaletteColor::SurfacePanel);
   if stacked {
+    // Under the evidence its content starts where the evidence's does (`Q4LnK`, padding 32).
     return panel
       .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
+      .padding(SpacingSize::Section)
       .spacing(ExtraSpacing::Form.role())
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(decisions)
@@ -204,6 +211,18 @@ fn layout(stacked: bool, decisions: Column, footer: Column) -> Element {
 }
 
 impl RetryDecisionPanel {
+  /// A resize across the stacking width builds the panel anew: a note being written keeps the focus.
+  fn keep_focus(&self, ctx: &Ctx, stacked: bool) {
+    let before = self.stacked.get_untracked();
+    if before == Some(stacked) {
+      return;
+    }
+    self.stacked.set(Some(stacked));
+    if before.is_some() && self.note_focused.get_untracked() {
+      ctx.focus(&self.note_input);
+    }
+  }
+
   /// Starts the choice at the step a retry resumes, once.
   fn seed(&self, props: &RetryDecisionProps) {
     if self.seeded.get_untracked() {
@@ -253,7 +272,7 @@ impl RetryDecisionPanel {
       .child(select)
       .child(note_field(
         ctx,
-        (&self.note, &self.note_focused),
+        (&self.note, &self.note_focused, Some(&self.note_input)),
         ("task-return-note", NOTE_HEIGHT),
         &ctx.t("runs.retryLimit.notePlaceholder"),
       ));

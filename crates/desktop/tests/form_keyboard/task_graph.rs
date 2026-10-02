@@ -157,13 +157,28 @@ fn waiting_page_states(desktop: &mut Desktop) {
   assert!(has(desktop, "task-open-conversation"));
   assert!(has(desktop, "task-cancel-run"));
   assert!(!has(desktop, "task-edit"));
-  // At 960 the panel goes under the evidence, across the page.
+  // At 960 the panel goes under the evidence, across the page, at the evidence's inset; a note
+  // being written keeps the focus.
+  desktop.click("task-return-note");
+  assert_eq!(desktop.focused().as_deref(), Some("task-return-note"));
   desktop.tree.resize(960, 960);
+  desktop.pass();
   desktop.pass();
   let evidence = desktop.bounds("task-notice");
   let panel = desktop.bounds("task-retry-settings");
+  let title = desktop.bounds("task-allow-retry");
   assert!(panel.y > evidence.y + evidence.height, "{panel:?} under {evidence:?}");
   assert!(panel.width > 600.0, "{panel:?}");
+  assert!((title.x - evidence.x).abs() < 1.0, "{title:?} starts with {evidence:?}");
+  assert_eq!(desktop.focused().as_deref(), Some("task-return-note"));
+  // The Activity toolbar keeps the live state beside the step filter, left of the inspector.
+  desktop.click("task-tab-activity");
+  desktop.wait_until("the activity", |desktop| has(desktop, "activity-live-state"));
+  let state = desktop.bounds("activity-live-state");
+  let inspector = desktop.bounds("activity-invocation-content");
+  assert!(state.x + state.width <= inspector.x, "{state:?} left of {inspector:?}");
+  desktop.click("task-tab-summary");
+  desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
   desktop.tree.resize(1440, 960);
   desktop.pass();
   // The conversation says the run waits for a decision, not that it stopped at a limit.

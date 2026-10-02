@@ -190,6 +190,7 @@ impl ActivityTab {
     });
     Column::new()
       .flex(1.0)
+      .min_width(Dimension::Px(0.0))
       .height(Dimension::Pct(100.0))
       .padding_horizontal(SpacingSize::Section)
       .child(self.toolbar(ctx, run, live, following))
@@ -273,21 +274,49 @@ impl ActivityTab {
       (true, false) => compact_status_label(Icon::Pause, &ctx.t("runs.activity.notFollowing")),
       (false, _) if waiting => compact_status_label(Icon::Hand, &ctx.t("runs.activity.waitingDecision")),
       (false, _) => compact_status_label(Icon::Check, &ctx.t("runs.activity.ended")),
+    }
+    .id("activity-live-state");
+    let switch = Switch::new("activity-raw", ctx.t("runs.activity.showRaw"), on).render(move || raw.set(!on));
+    // Reading the window's width re-renders the toolbar as the window resizes.
+    let narrow = ctx.window().logical_width() < crate::theme::ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW;
+    let line = || {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Stack.role())
+        .align_items(Alignment::Center)
     };
-    Row::new()
-      .width(Dimension::Pct(100.0))
+    if narrow {
+      // The live state stays beside the step filter; Show raw lines goes to a line of its own.
+      return Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_vertical(ExtraSpacing::Stack.role())
+        .spacing(ExtraSpacing::Stack.role())
+        .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+        .child(
+          line()
+            .child(
+              Row::new()
+                .flex(1.0)
+                .min_width(Dimension::Px(0.0))
+                .child(self.filter_select(ctx, run, Dimension::Pct(100.0))),
+            )
+            .child(Row::new().flex_shrink(0.0).child(state)),
+        )
+        .child(line().child(switch))
+        .into();
+    }
+    line()
       .height(Dimension::Px(TOOLBAR_HEIGHT))
-      .spacing(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(self.filter_select(ctx, run))
-      .child(Switch::new("activity-raw", ctx.t("runs.activity.showRaw"), on).render(move || raw.set(!on)))
+      .child(self.filter_select(ctx, run, Dimension::Px(FILTER_WIDTH)))
+      .child(switch)
       .child(Spacer::new().flex(1.0))
       .child(state)
       .into()
   }
 
-  fn filter_select(&self, ctx: &Ctx, run: &RunView) -> Element {
+  /// The step filter, `width` wide.
+  fn filter_select(&self, ctx: &Ctx, run: &RunView, width: Dimension) -> Element {
     let executions: Vec<StepExecutionId> = run
       .run
       .attempts()
@@ -332,7 +361,7 @@ impl ActivityTab {
     Element::from(
       Select::new(self.filter.clone())
         .options(options)
-        .width(Dimension::Px(FILTER_WIDTH))
+        .width(width)
         .height(Dimension::Px(FILTER_HEIGHT))
         .style(select_style(ctx, FILTER_HEIGHT)),
     )
