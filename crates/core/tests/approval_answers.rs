@@ -112,8 +112,16 @@ fn approval_answers_similar_command_is_program_subcommand_and_category() {
     Err(SimilarUnavailable::Unknown)
   );
   assert_eq!(
-    RuleScope::similar(&fixture.command("cargo add serde && git push")),
+    RuleScope::similar(&fixture.command("cargo add serde && cargo test")),
     Err(SimilarUnavailable::SeveralAsk)
+  );
+  assert_eq!(
+    RuleScope::similar(&fixture.command("cargo add serde && git push")),
+    Err(SimilarUnavailable::Destructive)
+  );
+  assert_eq!(
+    RuleScope::similar(&fixture.command("cat ~/.ssh/id_rsa")),
+    Err(SimilarUnavailable::Secrets)
   );
 }
 
@@ -161,8 +169,8 @@ fn approval_answers_always_allow_prefixes() {
   );
   for (command, unavailable) in [
     ("git push origin main", AlwaysUnavailable::Destructive),
-    ("git reset src/lib.rs", AlwaysUnavailable::DestructiveForms),
-    ("rm build/out.txt", AlwaysUnavailable::DestructiveForms),
+    ("git reset src/lib.rs", AlwaysUnavailable::WiderForms),
+    ("rm build/out.txt", AlwaysUnavailable::WiderForms),
     ("./regen.sh", AlwaysUnavailable::Unknown),
   ] {
     let ApprovalSubject::Command(classified) = fixture.command(command) else {
@@ -200,7 +208,6 @@ fn approval_answers_auto_approval_never_approves_what_is_dangerous() {
   assert_eq!(auto_verdict(&mcp("pencil", "batch_design")), AutoVerdict::Approve(None));
   for (command, category) in [
     ("cargo test", CommandCategory::Worktree),
-    ("git fetch origin", CommandCategory::Network),
     ("git status", CommandCategory::ReadOnly),
   ] {
     assert_eq!(
@@ -222,6 +229,8 @@ fn approval_answers_auto_approval_never_approves_what_is_dangerous() {
     ("git reset --hard", AutoAsk::Destructive),
     ("./regen.sh", AutoAsk::Unknown),
     ("echo $SECRET", AutoAsk::Unknown),
+    ("git fetch origin", AutoAsk::Network),
+    ("curl https://example.dev", AutoAsk::Network),
   ] {
     assert_eq!(
       auto_verdict(&fixture.command(command)),

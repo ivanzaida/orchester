@@ -98,6 +98,8 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
     ),
     Err(SimilarUnavailable::Unknown) => (ctx.t("runs.toolApproval.wider.similarUnknown"), Offer::Unavailable),
     Err(SimilarUnavailable::SeveralAsk) => (ctx.t("runs.toolApproval.wider.severalAsk"), Offer::Unavailable),
+    Err(SimilarUnavailable::Destructive) => (ctx.t("runs.toolApproval.wider.similarDestructive"), Offer::Unavailable),
+    Err(SimilarUnavailable::Secrets) => (ctx.t("runs.toolApproval.wider.secrets"), Offer::Unavailable),
   };
   Tile {
     id: "tool-approval-similar",
@@ -150,7 +152,8 @@ fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
     AlwaysBlocked::Command(AlwaysUnavailable::Unknown) => "runs.toolApproval.wider.alwaysUnknown",
     AlwaysBlocked::Command(AlwaysUnavailable::SeveralAsk) => "runs.toolApproval.wider.severalAsk",
     AlwaysBlocked::Command(AlwaysUnavailable::Destructive) => "runs.toolApproval.wider.destructive",
-    AlwaysBlocked::Command(AlwaysUnavailable::DestructiveForms) => "runs.toolApproval.wider.destructiveForms",
+    AlwaysBlocked::Command(AlwaysUnavailable::Secrets) => "runs.toolApproval.wider.secrets",
+    AlwaysBlocked::Command(AlwaysUnavailable::WiderForms) => "runs.toolApproval.wider.widerForms",
     AlwaysBlocked::Command(AlwaysUnavailable::NoAllowedList) => "runs.toolApproval.wider.noAllowedList",
     AlwaysBlocked::Command(AlwaysUnavailable::ListFull) => "runs.toolApproval.wider.listFull",
     AlwaysBlocked::ToolName => "runs.toolApproval.wider.toolName",

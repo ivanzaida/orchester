@@ -22,9 +22,12 @@ pub enum AlwaysUnavailable {
   SeveralAsk,
   /// It rewrites or discards history; Allow is unavailable for that category.
   Destructive,
-  /// Every prefix it offers would also allow a History / destructive form (`git reset` also allows
-  /// `git reset --hard`).
-  DestructiveForms,
+  /// It reads a credential location or store.
+  Secrets,
+  /// Every prefix it offers would also allow a more dangerous form: a History / destructive one (`git
+  /// reset` also allows `git reset --hard`), one that starts another program or writes outside (`git
+  /// fetch` also allows `git fetch --upload-pack=…`), or one that reads a credential (`cat`).
+  WiderForms,
   /// The profile asks before every command, or its CLI cannot keep a list (Codex): it has no Allowed
   /// commands to add to.
   NoAllowedList,
@@ -63,12 +66,15 @@ pub fn always_prefixes(
   if command.category() == CommandCategory::HistoryDestructive {
     return Err(AlwaysUnavailable::Destructive);
   }
+  if command.reads_secrets() {
+    return Err(AlwaysUnavailable::Secrets);
+  }
   if command.asking().count() > 1 {
     return Err(AlwaysUnavailable::SeveralAsk);
   }
   let part = command.forcing().ok_or(AlwaysUnavailable::Unknown)?;
-  if part.has_destructive_forms() {
-    return Err(AlwaysUnavailable::DestructiveForms);
+  if part.has_wider_forms() {
+    return Err(AlwaysUnavailable::WiderForms);
   }
   if listed.entries().len() >= AllowedCommands::MAX_ENTRIES {
     return Err(AlwaysUnavailable::ListFull);

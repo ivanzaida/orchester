@@ -85,7 +85,7 @@ impl Splitter {
         Some('\n') | None => {}
         Some(escaped) => self.push(escaped),
       },
-      '$' => self.dollar(chars),
+      '$' => self.dollar(chars, false),
       '`' | '(' | ')' | '{' | '}' => self.part.unread = true,
       '#' if self.word.is_none() => while chars.next_if(|next| *next != '\n').is_some() {},
       other => self.push(other),
@@ -187,7 +187,7 @@ impl Splitter {
           }
           None => self.part.unread = true,
         },
-        Some('$') => self.dollar(chars),
+        Some('$') => self.dollar(chars, true),
         Some('`') => self.part.unread = true,
         Some(quoted) => self.push(quoted),
         None => {
@@ -198,15 +198,35 @@ impl Splitter {
     }
   }
 
-  /// A `$` that starts a variable or substitution leaves the part unread; any other is a plain `$`.
-  fn dollar(&mut self, chars: &mut Chars<'_>) {
-    let expands = chars.peek().is_some_and(|next| {
-      next.is_ascii_alphanumeric() || matches!(next, '_' | '{' | '(' | '@' | '*' | '#' | '?' | '!' | '$')
-    });
-    if expands {
-      self.part.unread = true;
-    } else {
+  /// A `$` is a plain `$` only where nothing can follow it: at the end of a word, or before the quote
+  /// that closes a double-quoted string. Anything else may expand (`$x`, `$(…)`, `$'…'`, `$"…"`,
+  /// `$[…]`) and leaves the part unread; PowerShell's `$null` is kept as a word, the null device.
+  fn dollar(&mut self, chars: &mut Chars<'_>, quoted: bool) {
+    let plain = match chars.peek() {
+      None => true,
+      Some(next) if quoted => *next == '"',
+      Some(next) => matches!(next, ' ' | '\t' | '\r' | '\n' | ';' | '|' | '&' | '<' | '>'),
+    };
+    if plain {
       self.push('$');
+    } else if !quoted && self.quoting == Quoting::PowerShell && self.word.is_none() && Self::null(chars) {
+      self.word = Some("$null".to_owned());
+    } else {
+      self.part.unread = true;
     }
+  }
+
+  /// Whether `null` follows, ending the word; it is taken.
+  fn null(chars: &mut Chars<'_>) -> bool {
+    let rest: String = chars.clone().take(5).collect();
+    let ends = rest
+      .chars()
+      .nth(4)
+      .is_none_or(|next| matches!(next, ' ' | '\t' | '\r' | '\n' | ';' | '|' | '&' | ')'));
+    if rest.get(..4).is_some_and(|name| name.eq_ignore_ascii_case("null")) && ends {
+      chars.nth(3);
+      return true;
+    }
+    false
   }
 }

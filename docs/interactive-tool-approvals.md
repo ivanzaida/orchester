@@ -149,8 +149,11 @@ activity (`AgentEvent::ToolDecided`):
 - **Approve similar in this run** adds a run rule (`approval_rules`, `RuleScope`). For a command it names the
   program and subcommand of its asking part in that part's category (`cargo add` in Network, `cp` in Outside write;
   `permission::category`); a later command is answered when a rule covers one of its parts and every other part is
-  covered too or is a plain read (Read-only, reading no credential location, installing nothing). Unavailable for a
-  command Orchester cannot read to the end, or with several asking parts. For an MCP call it names the server and
+  covered too or is a plain read (Read-only, reading no credential location, installing nothing). A rule never
+  covers a part that rewrites history, deletes outside the worktree, reads a credential or is Unknown, and covers a
+  part that reaches outside the worktree only in the folders the approved part reached (`cp … /tmp/x` covers
+  `cp … /tmp/y`, not `cp … ~/AppData/…`); `ssh`, `scp` and `rsync` make none. Unavailable for a command Orchester
+  cannot read to the end, with several asking parts, that rewrites history or deletes outside, or reads a credential. For an MCP call it names the server and
   the tool, any arguments. Rules are read at each request, so they apply at once, in the current invocation too;
   later answers are marked *approved by similar rule*. The run's Summary lists them with **Revoke** (the desktop
   marks the rule revoked; the next request asks again); calls approved before keep their mark. Rules end with the
@@ -160,8 +163,10 @@ activity (`AgentEvent::ToolDecided`):
   with it as the next version and adds it to an unsaved draft, which is then based on that version
   (`ProjectDb::publish_allowed_command`, one transaction). The run keeps its pinned version and keeps the prefix as
   a rule (*always allowed*), until it ends. It is unavailable for a profile that asks before every command or whose
-  CLI keeps no list (Codex), for History / destructive and Unknown commands, and for a prefix that would also allow
-  a destructive form (`git reset`, `rm`, …). An MCP tool goes into its server's Tools that run without asking (a
+  CLI keeps no list (Codex), for History / destructive and Unknown commands and those that read a credential, and for a
+  prefix that would also allow a more dangerous form: only builds, tests and installs (which run the worktree's or
+  the packages' code whatever their arguments) and the git subcommands that stay in the repository (`git status`,
+  `git add`, …) offer one; `git config`, `gh`, `git fetch`, `curl`, `cat`, `rm`, … do not. An MCP tool goes into its server's Tools that run without asking (a
   connection setting, saved at once); later calls of the current invocation, whose CLI read the list when it
   started, are answered by the runner (*always allowed*), and later invocations get the CLI rule.
 - **Approve everything in this run** turns on the run's auto-approval (`runs.auto_approve`), below.
@@ -173,11 +178,11 @@ activity (`AgentEvent::ToolDecided`):
   for an MCP call and `exec_command failed: CreateProcess { message: "Rejected(\"rejected by user\")" }` for an
   escalated command (`run::codex_denial`), ran nothing, and the turn completed.
 
-**Auto-approval** (user decision 2026-10-02) is a run's own choice (*Approve everything in this run*, the switch in
+**Auto-approval** (user decisions 2026-10-02 and 2026-10-03) is a run's own choice (*Approve everything in this run*, the switch in
 the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the
 profile setting *Approve automatically (don't ask me)* (`AgentPermissions::auto_approve`, part of the profile
-version). It approves commands that stay in the worktree, network commands and MCP tool calls, and never what
-`run::auto_verdict` leaves to a person: a write, move or delete outside the worktree and its writable folders (the
+version). It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
+`run::auto_verdict` leaves to a person: a command that reaches the network, a write, move or delete outside the worktree and its writable folders (the
 temporary folder too: Run temp is not told apart yet), a read of a credential location (dot files and folders of
 the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, the Windows credential folders, the macOS
 keychains, or a credential store program), an install of software or packages (`npm install`, `cargo add`,

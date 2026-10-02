@@ -45,10 +45,12 @@ impl CommandScope {
     &self.worktree
   }
 
-  /// `word`, a path as the command names it from `cwd`, resolved; `None` when it holds a glob that
-  /// leaves even its folder open (`*/x`), or names the home folder of another user (`~bob`).
-  pub(super) fn path(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
-    let word = before_glob(word)?;
+  /// `word`, a path as the command names it from `cwd`, resolved, and where it lies. A word with a glob
+  /// is the folder before its first glob component (`src/*.rs` is `src`, `*/x` the folder `cwd`), which
+  /// is a credential location when what the glob matches in it may be one (`~/.s*`). `None` when it
+  /// names the home folder of another user (`~bob`) or the folders `~+` and `~-`.
+  pub(super) fn locate(&self, cwd: &Path, word: &str) -> Option<(PathBuf, Place)> {
+    let (word, glob) = before_glob(word);
     let path = if word == "~" {
       self.home.clone()?
     } else if let Some(rest) = word.strip_prefix("~/").or_else(|| word.strip_prefix("~\\")) {
@@ -58,22 +60,56 @@ impl CommandScope {
     } else {
       cwd.join(host_path(word))
     };
-    Some(resolved(&path))
+    let path = resolved(&path);
+    let place = match self.place(&path) {
+      Place::Granted => Place::Granted,
+      _ if glob && self.may_hold_secrets(&path) => Place::Secret,
+      place => place,
+    };
+    Some((path, place))
   }
 
-  /// Where `path` (resolved) lies.
-  pub(super) fn place(&self, path: &Path) -> Place {
+  /// `word` resolved from `cwd`, without its place.
+  pub(super) fn path(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
+    self.locate(cwd, word).map(|(path, _)| path)
+  }
+
+  /// Where `path` (resolved) lies. The home folder and the folders that hold it are credential
+  /// locations too: a program that reads a folder's tree (`grep -r`, `ls -R`, `cp -r`) reads them.
+  fn place(&self, path: &Path) -> Place {
     // The worktree may lie in a dot folder of the home folder; what it holds is still the run's.
     if path.starts_with(&self.worktree) || self.writable.iter().any(|folder| path.starts_with(folder)) {
       return Place::Granted;
     }
-    if self.secret(path) {
+    if self.secret(path) || self.home.as_ref().is_some_and(|home| home.starts_with(path)) {
       return Place::Secret;
     }
     if self.temp.as_ref().is_some_and(|temp| path.starts_with(temp)) {
       return Place::Temp;
     }
     Place::Outside
+  }
+
+  /// Whether a folder's entries may be credential locations: the home folder and the folders above
+  /// it, `AppData` down to its `Microsoft` folders, and `Library`.
+  fn may_hold_secrets(&self, folder: &Path) -> bool {
+    let Some(home) = self.home.as_ref() else {
+      return false;
+    };
+    if home.starts_with(folder) {
+      return true;
+    }
+    let Ok(rest) = folder.strip_prefix(home) else {
+      return false;
+    };
+    let names: Vec<String> = rest
+      .components()
+      .map(|part| part.as_os_str().to_string_lossy().to_lowercase())
+      .collect();
+    matches!(
+      names.iter().map(String::as_str).collect::<Vec<_>>().as_slice(),
+      ["appdata"] | ["appdata", _] | ["appdata", _, "microsoft"] | ["library"]
+    )
   }
 
   /// Whether `path` is a credential location of the home folder: a dot file or folder in it (the agent
@@ -115,14 +151,14 @@ fn resolved(path: &Path) -> PathBuf {
   existing(path).map_or_else(|_| normalize(path), |found| found.path)
 }
 
-/// The part of `word` before its first component with a glob character; `None` when that is all of it
-/// and the folder itself is a glob.
-fn before_glob(word: &str) -> Option<&str> {
+/// The part of `word` before its first component with a glob character (empty when that is the first),
+/// and whether it had one.
+fn before_glob(word: &str) -> (&str, bool) {
   let Some(glob) = word.find(['*', '?', '[']) else {
-    return Some(word);
+    return (word, false);
   };
-  let folder_end = word[..glob].rfind(['/', '\\'])?;
-  Some(&word[..=folder_end])
+  let folder = word[..glob].rfind(['/', '\\']).map_or("", |end| &word[..=end]);
+  (folder, true)
 }
 
 /// `word` as the host reads it: on Windows, Git Bash's `/c/…` is `C:\…`.

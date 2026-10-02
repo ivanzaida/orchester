@@ -1,11 +1,11 @@
-//! Auto-approval (user decision 2026-10-02): a run, or every run of a profile, in which Orchester
-//! answers the agent's requests itself. It approves commands that stay in the worktree, network
-//! commands and MCP tool calls, and never what is dangerous: a write, move or delete outside the
-//! worktree and its writable folders (the temporary folder included, as Run temp is not told apart), a
-//! read of a credential location, an install of software or packages, anything that rewrites or
-//! discards history (whose category cannot be allowed), and anything it cannot read to the end. Those
-//! still ask a person. What the step's permissions refuse never reaches a person, so auto-approval
-//! never approves it either.
+//! Auto-approval (user decisions 2026-10-02 and 2026-10-03): a run, or every run of a profile, in which
+//! Orchester answers the agent's requests itself. It approves only commands it knows to read or to stay
+//! in the worktree, and MCP tool calls. It never approves a command that reaches the network, nor what
+//! is dangerous: a write, move or delete outside the worktree and its writable folders (the temporary
+//! folder included, as Run temp is not told apart), a read of a credential location, an install of
+//! software or packages, anything that rewrites or discards history (whose category cannot be
+//! allowed), and anything it cannot read to the end. Those still ask a person. What the step's
+//! permissions refuse never reaches a person, so auto-approval never approves it either.
 
 use super::subject::ApprovalSubject;
 use crate::permission::category::{ClassifiedCommand, CommandCategory};
@@ -32,6 +32,8 @@ pub enum AutoAsk {
   Secrets,
   /// It installs software or packages.
   Installs,
+  /// It reaches the network.
+  Network,
 }
 
 /// Auto-approval's verdict on `subject`.
@@ -50,7 +52,8 @@ fn command_verdict(command: &ClassifiedCommand) -> AutoVerdict {
     CommandCategory::ReadOnly | CommandCategory::Worktree | CommandCategory::Network => None,
   }
   .or_else(|| command.reads_secrets().then_some(AutoAsk::Secrets))
-  .or_else(|| command.installs().then_some(AutoAsk::Installs));
+  .or_else(|| command.installs().then_some(AutoAsk::Installs))
+  .or_else(|| (command.category() == CommandCategory::Network).then_some(AutoAsk::Network));
   match ask {
     Some(ask) => AutoVerdict::Ask(ask),
     None => AutoVerdict::Approve(Some(command.category())),

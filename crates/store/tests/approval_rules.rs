@@ -8,10 +8,14 @@ use orchester_core::{
   },
   resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, Slug, VersionNumber},
   run::{DecidedBy, PendingToolApproval, RuleScope, ToolApprovalDecision},
-  store::{ActivityStore, ResourceStore},
+  store::{ActivityStore, ResourceStore, RunStore},
 };
-use orchester_store::{DecisionCounts, StoreError};
-use support::{at, model, name, started_run};
+use orchester_store::{DecisionCounts, ProjectDb, StoreError};
+use support::{at, copied_at_version, model, name, started_run};
+
+/// The schema version before approval choices: who answered a request, approval rules and a run's own
+/// auto-approval choice.
+const BEFORE_APPROVAL_CHOICES: u32 = 36;
 
 fn mcp_rule(tool: &str) -> RuleScope {
   RuleScope::SimilarMcpTool {
@@ -177,4 +181,37 @@ fn approval_rules_always_allow_publishes_the_prefix_and_keeps_the_draft() {
   );
   let refused = db.publish_allowed_command(id, &command, &CommandPrefix::new("rm").expect("prefix"), at(5));
   assert!(matches!(refused, Err(StoreError::AlwaysAllow(_))));
+}
+
+#[test]
+fn approval_rules_migration_keeps_runs_and_waiting_requests() {
+  let (repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let approval = PendingToolApproval {
+    id: format!("{}:1", invocation.id),
+    run: run.id(),
+    execution,
+    invocation: invocation.id,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "cargo test".to_owned(),
+    target: None,
+    requested_at: at(11),
+    native: None,
+  };
+  db.request_tool_approval(&approval).expect("request");
+  drop(db);
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let old = copied_at_version(&current, BEFORE_APPROVAL_CHOICES);
+  let db = ProjectDb::open(old.path()).expect("migrate the schema 36 database");
+  assert!(db.run(run.id()).expect("read").is_some());
+  // A run that started before follows its profiles' setting.
+  assert_eq!(db.run_auto_approve(run.id()).expect("read"), None);
+  assert_eq!(db.pending_tool_approvals(run.id()).expect("pending"), [approval]);
+  assert!(db.approval_rules(run.id()).expect("rules").is_empty());
+  assert_eq!(db.decision_counts(run.id()).expect("counts").waiting, 1);
 }

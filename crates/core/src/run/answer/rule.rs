@@ -1,6 +1,8 @@
 //! Rules a run keeps from its wider answers (design `k4cz1C`, "Approval choices and waiting requests"):
-//! Approve similar makes one for the same program and subcommand in the same category, or for one tool
-//! of one MCP server; Always allow of a command makes one for its prefix, so the run keeps allowing it
+//! Approve similar makes one for the same program and subcommand in the same category, reaching outside
+//! the worktree only where the approved command did, or for one tool of one MCP server; no rule ever
+//! covers a command part that rewrites history, deletes outside the worktree, reads a credential or was
+//! not read to the end; Always allow of a command makes one for its prefix, so the run keeps allowing it
 //! although it started with the profile version before. Rules live with the run, end with it, never
 //! reach the agent's CLI, and a similar rule can be revoked; Orchester answers each later request a
 //! rule covers itself.
@@ -47,10 +49,15 @@ pub enum RuleScope {
 /// Why Approve similar cannot answer a request (`ZJt4d`, `k4cz1C`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimilarUnavailable {
-  /// Part of the command is not read to the end: Orchester cannot tell which later commands are alike.
+  /// Part of the command is not read to the end, or its arguments are a command for another machine
+  /// (`ssh host …`): Orchester cannot tell which later commands are alike.
   Unknown,
   /// Several parts of the command would ask by themselves.
   SeveralAsk,
+  /// It rewrites or discards history, or deletes outside the worktree: a person answers each.
+  Destructive,
+  /// It reads a credential location or store: a person answers each.
+  Secrets,
 }
 
 impl RuleScope {
@@ -74,7 +81,7 @@ impl RuleScope {
   fn covers_part(&self, part: &CommandPart) -> bool {
     match self {
       Self::SimilarCommand { command } => part.is_similar(command),
-      Self::AlwaysCommand { prefix } => part.category() != CommandCategory::Unknown && prefix.covers_argv(part.words()),
+      Self::AlwaysCommand { prefix } => !part.always_asks() && prefix.covers_argv(part.words()),
       Self::SimilarMcpTool { .. } => false,
     }
   }
@@ -87,6 +94,12 @@ fn similar_command(command: &ClassifiedCommand) -> Result<SimilarCommand, Simila
     .any(|part| part.category() == CommandCategory::Unknown)
   {
     return Err(SimilarUnavailable::Unknown);
+  }
+  if command.reads_secrets() {
+    return Err(SimilarUnavailable::Secrets);
+  }
+  if command.category() == CommandCategory::HistoryDestructive {
+    return Err(SimilarUnavailable::Destructive);
   }
   if command.asking().count() > 1 {
     return Err(SimilarUnavailable::SeveralAsk);

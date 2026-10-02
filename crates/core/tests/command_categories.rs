@@ -188,13 +188,13 @@ fn command_categories_similar_and_prefixes() {
     .map(ToString::to_string)
     .collect();
   assert_eq!(prefixes, ["cargo add", "cargo add serde --features derive"]);
-  assert!(!first.forcing().expect("part").has_destructive_forms());
+  assert!(!first.forcing().expect("part").has_wider_forms());
   assert!(
     folders
       .classify("git reset src/a.rs")
       .forcing()
       .expect("part")
-      .has_destructive_forms()
+      .has_wider_forms()
   );
   assert!(folders.classify("./x.sh").forcing().expect("part").similar().is_none());
 }
