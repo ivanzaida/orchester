@@ -182,9 +182,13 @@ impl FileScope {
   /// Whether a command argument `arg`, taken relative to `workdir` as the command will, names nothing
   /// outside the readable scope: it names no existing path, or one inside the scope. The OS resolves
   /// it, `..` after a link included, exactly as the command would; a network or device path is never
-  /// resolved.
+  /// resolved. A drive-relative path (`C:file`) is refused, as the file tools refuse it: it is relative
+  /// to a per-drive folder the scope does not know.
   pub fn argument_readable(&self, workdir: &Path, arg: &str) -> bool {
-    if arg.contains('\0') || platform::names_another_machine(arg) {
+    if arg.contains('\0')
+      || platform::names_another_machine(arg)
+      || matches!(platform::path_form(arg), Err(ScopeError::DriveRelative(_)))
+    {
       return false;
     }
     match fs::canonicalize(workdir.join(arg)) {

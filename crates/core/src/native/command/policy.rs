@@ -67,9 +67,10 @@ impl CommandPolicy {
       return true;
     }
     !list.is_empty()
-      && known_safe::is_known_safe(argv)
-      && known_safe::path_candidates(argv)
-        .into_iter()
-        .all(|arg| scope.argument_readable(command.workdir(), arg))
+      && known_safe::readable_arguments(argv).is_some_and(|args| {
+        args
+          .into_iter()
+          .all(|arg| scope.argument_readable(command.workdir(), arg))
+      })
   }
 }

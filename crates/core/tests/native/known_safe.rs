@@ -1,10 +1,10 @@
 //! The known-safe read-only command table, by its argument rules.
 
-use orchester_core::permission::known_safe::{is_known_safe, path_candidates};
+use orchester_core::permission::known_safe::readable_arguments;
 
-fn safe(command: &str) -> bool {
+pub fn safe(command: &str) -> bool {
   let argv: Vec<String> = command.split(' ').map(str::to_owned).collect();
-  is_known_safe(&argv)
+  readable_arguments(&argv).is_some()
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn native_known_safe_path_candidates() {
     .map(str::to_owned)
     .into();
   assert_eq!(
-    path_candidates(&argv),
+    readable_arguments(&argv).expect("known-safe"),
     [
       "--ignore-file=/etc/x",
       "/etc/x",

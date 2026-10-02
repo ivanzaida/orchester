@@ -117,6 +117,7 @@ fn native_command_hardened_git() {
       "-c",
       "core.fsmonitor=false",
       "--no-pager",
+      "--no-optional-locks",
       "status",
       "--short"
     ]))
@@ -128,6 +129,7 @@ fn native_command_hardened_git() {
       "-c",
       "core.fsmonitor=false",
       "--no-pager",
+      "--no-optional-locks",
       "diff",
       "--no-ext-diff",
       "--no-textconv",
@@ -141,6 +143,7 @@ fn native_command_hardened_git() {
       "-c",
       "core.fsmonitor=false",
       "--no-pager",
+      "--no-optional-locks",
       "blame",
       "--no-textconv",
       "src/main.rs"
@@ -173,7 +176,14 @@ fn native_command_hardened_git_in_any_case() {
   .expect("parsed");
   assert_eq!(
     command.program_args(),
-    Some(words(&["Git", "-c", "core.fsmonitor=false", "--no-pager", "status"]))
+    Some(words(&[
+      "Git",
+      "-c",
+      "core.fsmonitor=false",
+      "--no-pager",
+      "--no-optional-locks",
+      "status"
+    ]))
   );
 }
 

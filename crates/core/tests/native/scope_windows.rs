@@ -81,6 +81,10 @@ fn native_scope_windows_path_forms() {
     Err(ScopeError::NetworkPath(_))
   ));
   assert!(!scope.argument_readable(&layout.worktree, r"\\server\share\file.txt"));
+  assert!(
+    !scope.argument_readable(&layout.worktree, "C:main.rs"),
+    "a command argument is refused drive-relative, as the file tools refuse it"
+  );
 }
 
 #[test]

@@ -3,6 +3,7 @@
 
 mod command;
 mod known_safe;
+mod known_safe_options;
 mod loop_resume;
 mod loop_stop;
 mod loop_turns;
