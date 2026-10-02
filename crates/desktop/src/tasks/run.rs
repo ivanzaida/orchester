@@ -171,23 +171,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     }
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
-    PreflightProblem::BuildSpaceLow {
-      target,
-      available,
-      required,
-    } => Message::new("runs.preflight.buildSpaceLow")
-      .with("target", target.display().to_string())
-      .with("available", gib(*available))
-      .with("required", gib(*required)),
-    PreflightProblem::BuildSpaceUnavailable { target } => {
-      Message::new("runs.preflight.buildSpaceUnavailable").with("target", target.display().to_string())
-    }
   }
-}
-
-fn gib(bytes: u64) -> String {
-  let tenths = u128::from(bytes) * 10 / (1024_u128 * 1024 * 1024);
-  format!("{}.{}", tenths / 10, tenths % 10)
 }
 
 /// What a person reads when the start request fails, including an unconfirmed outcome.

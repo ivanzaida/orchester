@@ -107,10 +107,8 @@ impl RunTask {
     execution: StepExecutionId,
     worktree: &Path,
   ) -> Result<(PinnedCommand, PathBuf, CommandEnvironment), RunnerProblem> {
-    let mut command = self.pinned_command(execution)?;
-    let tool_environment = super::environment::for_worktree(command.action.environment().clone(), worktree)?;
-    command.action = command.action.with_environment(tool_environment);
-    let environment = self.environment(worktree)?;
+    let command = self.pinned_command(execution)?;
+    let environment = self.environment()?;
     let program =
       find_program(&command.action, &environment, worktree).ok_or_else(|| RunnerProblem::ProgramNotFound {
         program: command.action.program().as_str().to_owned(),

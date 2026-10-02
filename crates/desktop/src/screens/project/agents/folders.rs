@@ -1,12 +1,10 @@
 //! Extra writable folders on the Permissions tab (implemented, not drawn yet; built from the
 //! allowed commands of 04.04 `T1rjv`: the field `mwPz8` and *Add command*, then the entries
-//! `bpmzN`, one per line and as wide as the column since paths are long, and the notice with an
-//! action of Project settings › Environment `CMSyB`). Folders outside the
+//! `bpmzN`, one per line and as wide as the column since paths are long). Folders outside the
 //! task worktree that an agent which edits files may also write to; each is checked when it is
-//! added (`crate::agents::folders`). When Environment sets `CARGO_TARGET_DIR` and the profile does
-//! not list it yet, a notice offers to add it; nothing is added until the person does.
+//! added (`crate::agents::folders`).
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -17,12 +15,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::permission::{RepositoryAccess, WritableFolders};
+use orchester_core::permission::RepositoryAccess;
 
 use super::editor::ProfileEditor;
 use crate::{
-  agents::folders::{lists, with_folder, without_folder},
-  environment::CARGO_TARGET_DIR,
+  agents::folders::{with_folder, without_folder},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -31,19 +28,16 @@ use crate::{
     form::form,
     icon::Icon,
     message_text,
-    notice::Notice,
   },
 };
 
-/// Folder field width: a path needs more room than a command (`mwPz8` is 180), the height of the
-/// entries beside it (`bpmzN`), and of a notice's action (`IgW07` in `CMSyB`).
+/// Folder field width: a path needs more room than a command (`mwPz8` is 180), and the height of
+/// the entries beside it (`bpmzN`).
 const FOLDER_INPUT_WIDTH: f32 = 280.0;
 const FOLDER_HEIGHT: f32 = 26.0;
-const NOTICE_ACTION_HEIGHT: f32 = 32.0;
 
 impl ProfileEditor {
-  /// The extra writable folders, a field to add one, what they mean, and the suggestion to add
-  /// the build folder Environment sets.
+  /// The extra writable folders, a field to add one, and what they mean.
   pub(super) fn folders_setting(&self, ctx: &Ctx) -> Element {
     let permissions = self.permissions.get();
     let folders = permissions.writable_folders().clone();
@@ -101,9 +95,6 @@ impl ProfileEditor {
       None if folders.is_empty() => hint(ctx, "agents.permissions.noFolders"),
       None => hint(ctx, "agents.permissions.foldersMeaning"),
     };
-    let suggestion = (permissions.repository() == RepositoryAccess::Write)
-      .then(|| self.target_suggestion(ctx, &folders))
-      .flatten();
     Column::new()
       .id("agent-folders")
       .width(Dimension::Pct(100.0))
@@ -119,7 +110,6 @@ impl ProfileEditor {
           .child(form(add, row))
           .child(note),
       )
-      .with_children(suggestion)
       .into()
   }
 
@@ -145,60 +135,6 @@ impl ProfileEditor {
         Err(message) => error.set(Some(message)),
       }
     }))
-  }
-
-  /// *Allow agents to write to CARGO_TARGET_DIR* while Environment sets it and the profile does not
-  /// list it yet.
-  fn target_suggestion(&self, ctx: &Ctx, folders: &WritableFolders) -> Option<Element> {
-    let target = self.context.agents.target_dir.clone()?;
-    let repo_root = self.context.project.repo_root.clone();
-    if lists(folders, &target, &repo_root) {
-      return None;
-    }
-    let (permissions, error) = (self.permissions.clone(), self.folder_error.clone());
-    let added = suggested_entry(&target, &repo_root);
-    let add = ActionButton::new(ctx.t("agents.permissions.addTargetFolder"))
-      .icon(Icon::Plus)
-      .id("agent-add-target-folder")
-      .in_form()
-      .height(Dimension::Px(NOTICE_ACTION_HEIGHT))
-      .on_click(move || {
-        let list = permissions.get_untracked().writable_folders().clone();
-        match with_folder(&list, &added, &repo_root) {
-          Ok(list) => {
-            permissions.update(|permissions| permissions.set_writable_folders(list));
-            error.set(None);
-          }
-          Err(message) => error.set(Some(message)),
-        }
-      })
-      .render(ctx);
-    Some(
-      Notice::new(
-        Icon::Lightbulb,
-        ctx.t_args("agents.permissions.targetTitle", [("variable", CARGO_TARGET_DIR)]),
-        ctx.t_args(
-          "agents.permissions.targetDetail",
-          [("variable", CARGO_TARGET_DIR), ("folder", &*target)],
-        ),
-      )
-      .action(add)
-      .id("agent-target-folder")
-      .into(),
-    )
-  }
-}
-
-/// The folder `target` as the profile lists it: relative to the repository root when it lies inside
-/// the repository, so the profile means the same folder in another checkout.
-fn suggested_entry(target: &str, repo_root: &Path) -> String {
-  match Path::new(target).strip_prefix(repo_root) {
-    Ok(inside) if !inside.as_os_str().is_empty() => inside
-      .components()
-      .map(|part| part.as_os_str().to_string_lossy())
-      .collect::<Vec<_>>()
-      .join("/"),
-    _ => target.to_owned(),
   }
 }
 

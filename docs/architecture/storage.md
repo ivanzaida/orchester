@@ -16,7 +16,7 @@ Date: 2026-09-23. Status: agreed direction for the local (single-user) version; 
 | Execution | separate runner process; agents are runner child processes |
 | Agent worktrees | inside the repository, `<repo>/.orchester/worktrees/`; a step running beside other steps of its run has its own, merged back when it passes; a run's worktrees go when it is merged, or when a person removes them after it ended (see [Integration](#integration)) |
 | Integration | a run that succeeded is merged into the branch the user's checkout had when it started, in that checkout, only while it is clean and on that branch; nothing of the user's is stashed, reset or discarded |
-| Environment | a project adds plain variables (no secrets) to the cleaned environment of every agent CLI and command tool its runs start, e.g. `CARGO_TARGET_DIR` |
+| Environment | a project adds plain variables (no secrets) to the cleaned environment of every agent CLI and command tool its runs start, passed as written |
 | Closing with active runs | confirmation listing the runs: wait for checkpoints, or quit now |
 | Quit now or crash | next start reports the abnormal end and offers to continue from the last checkpoint |
 | Logs and transcripts | kept in full, no retention limit |
