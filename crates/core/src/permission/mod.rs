@@ -6,8 +6,11 @@
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
 //! in a bypass mode.
 
+pub(crate) mod canonical;
 pub mod capability;
 pub mod claude;
+pub mod known_safe;
+mod launch;
 pub mod mcp;
 mod narrow;
 pub mod writable;
@@ -18,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  launch::{LaunchPermissions, OutsideCommands},
   narrow::{StepCommands, StepNetwork, StepPermissions},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,
@@ -35,6 +39,10 @@ pub enum CommandPrefixError {
   #[error("a command must not contain `{0}`")]
   ForbiddenCharacter(char),
 }
+
+/// Commands that create, copy, move, remove or edit files; Claude Code's `acceptEdits` runs exactly
+/// these without a rule ([`claude`]).
+const FILE_COMMANDS: [&str; 7] = ["mkdir", "touch", "rm", "rmdir", "mv", "cp", "sed"];
 
 /// A command an agent may run, matched by prefix on whole words: `pnpm test` also allows
 /// `pnpm test src/auth`, not `pnpm tester`. Words are separated by single spaces.
@@ -63,6 +71,25 @@ impl CommandPrefix {
 
   pub fn as_str(&self) -> &str {
     &self.0
+  }
+
+  /// Whether the first word creates, copies, moves, removes or edits files (`mkdir`, `touch`, `rm`,
+  /// `rmdir`, `mv`, `cp`, `sed`). As every prefix, it also allows any arguments after it, which for
+  /// these can change other files than the listed form names (`rm -f build/x ../src`).
+  pub fn starts_with_file_command(&self) -> bool {
+    self
+      .0
+      .split(' ')
+      .next()
+      .is_some_and(|first| FILE_COMMANDS.contains(&first))
+  }
+
+  /// Whether this prefix allows the program and arguments `argv`: its words are the first elements of
+  /// `argv`, each whole. An argument with spaces matches no word, so `git "status --short"` is not
+  /// `git status`, while arguments after the prefix may hold anything (`git commit -m "a message"`).
+  pub fn covers_argv(&self, argv: &[String]) -> bool {
+    let words: Vec<&str> = self.0.split(' ').collect();
+    argv.len() >= words.len() && words.iter().zip(argv).all(|(word, arg)| *word == arg)
   }
 
   /// Whether this prefix allows `other`: the same words, or `other` continues them.
@@ -132,6 +159,11 @@ impl AllowedCommands {
     self.0.iter().any(|entry| entry.covers(command))
   }
 
+  /// Whether some entry allows the program and arguments `argv` ([`CommandPrefix::covers_argv`]).
+  pub fn allows_argv(&self, argv: &[String]) -> bool {
+    self.0.iter().any(|entry| entry.covers_argv(argv))
+  }
+
   /// The entries of `self` that `wider` allows, for narrowing.
   fn within(&self, wider: &Self) -> Self {
     Self(self.0.iter().filter(|entry| wider.allows(entry)).cloned().collect())
@@ -156,8 +188,7 @@ impl From<AllowedCommands> for Vec<CommandPrefix> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "commands")]
 pub enum CommandPermission {
-  /// Every command waits for a person's decision. Needs the permission-request flow, which does
-  /// not exist yet, so no connection can enforce it (see [`capability`]).
+  /// Codex routes commands requiring approval to a person's one-action decision.
   AskBefore,
   /// Only the listed commands run; anything else is denied and the agent is told why.
   Allowed(AllowedCommands),
@@ -183,6 +214,8 @@ pub struct AgentPermissions {
   writable_folders: WritableFolders,
   commands: CommandPermission,
   network: NetworkAccess,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  interactive_tool_approvals: bool,
 }
 
 impl AgentPermissions {
@@ -192,6 +225,7 @@ impl AgentPermissions {
       writable_folders: WritableFolders::none(),
       commands,
       network,
+      interactive_tool_approvals: false,
     }
   }
 
@@ -237,6 +271,14 @@ impl AgentPermissions {
 
   pub const fn network(&self) -> NetworkAccess {
     self.network
+  }
+
+  pub const fn interactive_tool_approvals(&self) -> bool {
+    self.interactive_tool_approvals
+  }
+
+  pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {
+    self.interactive_tool_approvals = enabled;
   }
 
   pub const fn set_repository(&mut self, repository: RepositoryAccess) {

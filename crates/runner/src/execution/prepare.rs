@@ -103,9 +103,6 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
   if !problems.is_empty() {
     return Err(Rejection::Preflight { problems });
   }
-  if matches!(source, PipelineSource::QueuedPin) {
-    super::build_space::preflight(db, root)?;
-  }
   let pipeline = pipeline.expect("the preflight rejects a pipeline without a published version");
   let base = base_revision(root)?;
   let base_branch = checked_out_branch(&ProcessRunner::new(GIT_TIMEOUT), Path::new("git"), root)

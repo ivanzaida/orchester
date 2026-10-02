@@ -191,29 +191,14 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
+    PreflightProblem::NativeNotAvailable { step: key } => step("runs.preflight.nativeNotAvailable", key),
     PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
-    PreflightProblem::BuildSpaceLow {
-      target,
-      available,
-      required,
-    } => Message::new("runs.preflight.buildSpaceLow")
-      .with("target", target.display().to_string())
-      .with("available", gib(*available))
-      .with("required", gib(*required)),
-    PreflightProblem::BuildSpaceUnavailable { target } => {
-      Message::new("runs.preflight.buildSpaceUnavailable").with("target", target.display().to_string())
-    }
   }
-}
-
-fn gib(bytes: u64) -> String {
-  let tenths = u128::from(bytes) * 10 / (1024_u128 * 1024 * 1024);
-  format!("{}.{}", tenths / 10, tenths % 10)
 }
 
 /// What a person reads when the start request fails, including an unconfirmed outcome.

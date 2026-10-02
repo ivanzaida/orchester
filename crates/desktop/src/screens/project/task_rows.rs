@@ -1,6 +1,6 @@
 //! Task rows: the task table row of the task list (`clVjO`) with its heading (`B5FaIC`), and
 //! the task list row of the overview (`zemhy`). A row opens the task's page; rows are outside a
-//! form, so they are pointer-only.
+//! form, so they are pointer-only. The row of a task New task's Create just made is highlighted.
 
 use lurq::{
   app::{
@@ -137,13 +137,22 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .into()
 }
 
+/// A row of the task table and whether its task is the one Create just made.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueRowProps {
+  pub row: TaskRow,
+  pub created: bool,
+}
+
+impl lurq::app::component::DevtoolsInspectable for QueueRowProps {}
+
 /// One row of the task table (`clVjO`), mounted by the virtualized task list.
 pub struct QueueRow {
   nav: ProjectNav,
 }
 
 impl Component for QueueRow {
-  type Props = TaskRow;
+  type Props = QueueRowProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -154,7 +163,7 @@ impl Component for QueueRow {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let row = ctx.props::<TaskRow>().clone();
+    let QueueRowProps { row, created } = ctx.props::<QueueRowProps>().clone();
     // Selecting tasks for a run is not available yet: unselected in `$muted` (`R7idX` in
     // `r2al55`).
     let select = selection_checkbox(ctx, row.id);
@@ -197,6 +206,12 @@ impl Component for QueueRow {
           .width(Dimension::Pct(100.0)),
       ))
       .child(open_chevron());
+    // The task Create just made reads as selected, in the hover fill (`$hover`).
+    let content = if created {
+      content.background(PaletteColor::AccentMuted).class("created")
+    } else {
+      content
+    };
     opens(&self.nav, &row, content)
   }
 }

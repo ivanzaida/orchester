@@ -199,17 +199,24 @@ async fn mcp_servers_reach_codex_as_overrides_with_secrets_in_its_environment_on
       .any(|arg| arg.starts_with("mcp_servers.off.") || arg.starts_with("mcp_servers.ghost."))
   );
   assert!(argv[0].contains(r#"shell_environment_policy.exclude=["DOCS_TOKEN","ORCHESTER_MCP_TOKEN_KNOWLEDGE"]"#));
+  // The fake printed each value it got; the run's activity keeps every secret value out, so a value
+  // shows as redacted exactly where the secret reached the CLI's environment.
   let env = reported(&db, run.id(), "mcp-env: ");
-  assert!(env.contains(&format!("DOCS_TOKEN={TOKEN}")), "{env:?}");
-  assert!(
-    env.contains(&format!("ORCHESTER_MCP_TOKEN_KNOWLEDGE={BEARER}")),
-    "{env:?}"
+  assert_eq!(
+    env,
+    ["DOCS_TOKEN=<redacted>", "ORCHESTER_MCP_TOKEN_KNOWLEDGE=<redacted>"]
   );
+  let activity = format!("{:?}", db.activity(run.id(), 0).expect("activity"));
+  assert!(
+    !activity.contains(TOKEN) && !activity.contains(BEARER),
+    "no secret in the activity"
+  );
+  // Codex App Server reported `broken` not connected; the agent worked without it.
   let mut expected = expected_left_out();
   expected.push((
     Some("broken".to_owned()),
     McpServerProblem::FailedToStart {
-      detail: Some("program not found".to_owned()),
+      detail: Some("failed".to_owned()),
     },
   ));
   assert_eq!(left_out(&db, &run), expected);
@@ -225,8 +232,9 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
   let argv = reported(&db, run.id(), "argv: ");
   assert_no_secret_in(&argv);
   assert_no_secret_in(&reported(&db, run.id(), "env: "));
+  assert!(argv[0].contains("--allowedTools Bash(git:*) Edit("), "{}", argv[0]);
   assert!(
-    argv[0].contains("--allowedTools Bash(git:*) mcp__files mcp__knowledge mcp__broken"),
+    argv[0].contains(" mcp__files mcp__knowledge mcp__broken"),
     "{}",
     argv[0]
   );
@@ -240,11 +248,15 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
     serde_json::from_str(&reported(&db, run.id(), "mcp-config: ")[0]).expect("the file is JSON");
   let servers = &config["mcpServers"];
   assert_eq!(servers["files"]["command"], TEST_COMMAND);
-  assert_eq!(servers["files"]["env"]["DOCS_TOKEN"], TOKEN);
+  // The fake CLI printed the file; the run's activity keeps every secret value out, so a value
+  // shows as redacted exactly where the secret was written.
+  assert_eq!(servers["files"]["env"]["DOCS_TOKEN"], "<redacted>");
   assert_eq!(servers["files"]["env"]["LOG_LEVEL"], "debug");
-  assert_eq!(
-    servers["knowledge"]["headers"]["Authorization"],
-    format!("Bearer {BEARER}")
+  assert_eq!(servers["knowledge"]["headers"]["Authorization"], "Bearer <redacted>");
+  let activity = format!("{:?}", db.activity(run.id(), 0).expect("activity"));
+  assert!(
+    !activity.contains(TOKEN) && !activity.contains(BEARER),
+    "no secret in the activity"
   );
   assert!(servers.get("docs").is_none() && servers.get("off").is_none());
   let mut expected = expected_left_out();
@@ -254,4 +266,34 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
     McpServerProblem::FailedToStart { detail: None },
   ));
   assert_eq!(left_out(&db, &run), expected);
+}
+
+/// A server of the user's own Codex configuration named like a chosen one would merge its
+/// `command`, `args` or `env` into the chosen server, so the step stops before its thread starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_servers_named_like_one_of_the_users_own_refuse_the_codex_step() {
+  let taken = server("user-global", stdio(TEST_COMMAND, None), McpEnvironment::default());
+  let project = project(&Setup {
+    mcp: vec![taken],
+    ..Setup::new("Say hello.")
+  });
+  let run = run_to_the_end(&project).await;
+  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let failures: Vec<String> = db
+    .activity(run.id(), 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::TurnFailed { message } => Some(message),
+      _ => None,
+    })
+    .collect();
+  assert!(
+    failures
+      .iter()
+      .any(|message| message.contains("has an MCP server named `user-global`")),
+    "{failures:?}"
+  );
+  assert!(reported(&db, run.id(), "thread: ").is_empty(), "no thread starts");
 }

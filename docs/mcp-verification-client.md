@@ -7,8 +7,8 @@ redacts the token if a tool echoes it in a result. Python 3 is required in the a
 Results are printed as ASCII-safe JSON, so non-ASCII UI text remains available through JSON escapes even in Windows
 PowerShell pipes.
 
-Build and copy the desktop and runner to a run-owned app directory before starting them. The shared Cargo target can
-be rebuilt by another checkout or feature set between build and launch (D6). Start only that copied desktop with L6's
+Build and copy the desktop and runner to a run-owned app directory before starting them. The Cargo target directory can
+be rebuilt by another build or feature set between build and launch (D6). Start only that copied desktop with L6's
 no-focus option, record its PID, and use the same discovery data directory for the app and client:
 
 - Windows: set `LOCALAPPDATA` for **both child processes** to a writable run-owned directory. The discovery file is

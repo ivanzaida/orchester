@@ -15,6 +15,7 @@ mod conversation;
 mod dependencies;
 mod heading;
 mod limit_panel;
+mod native_approval;
 mod notice;
 mod organization;
 mod organization_history;

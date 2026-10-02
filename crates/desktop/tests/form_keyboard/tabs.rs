@@ -327,6 +327,13 @@ fn tabs_inactive_tab_keeps_its_draft_and_scroll() {
 
   desktop.click("nav-settings");
   desktop.wait_for("settings-repository");
+  // The repository agent files section loads after the rest of the page. A page scrolled to its
+  // end follows content that grows below it, so the page is scrolled once it has loaded.
+  desktop.settle("the repository's agent files read", |tree| {
+    tree
+      .get_element_by_id("settings-agent-files-section")
+      .is_some_and(|section| !contains_text(section, "Reading the repository"))
+  });
   desktop.tree.resize(1440, 560);
   desktop.pass();
   let before = desktop.bounds("settings-repository").y;

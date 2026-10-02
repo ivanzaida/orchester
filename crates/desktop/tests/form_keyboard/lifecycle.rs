@@ -25,7 +25,9 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  task_run::{create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed},
+  task_run::{
+    create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed, seed_claude,
+  },
 };
 
 /// A desktop whose project runs Implement on the fake CLI, with the runner program `runner`.
@@ -338,22 +340,28 @@ fn mark_agent_connection_unusable(repo: &Path) {
   db.save_connection(&connection).expect("save failed check");
 }
 
+/// Saves the project's limits with the defaults of Project settings and a daily budget of `daily`
+/// tokens.
+fn save_daily_budget(repo: &Path, daily: u64) {
+  let limits = ProjectLimits::new(
+    TokenBudget::new(10_000_000).expect("above zero"),
+    TokenBudget::new(1_400_000).expect("above zero"),
+    TokenBudget::new(daily).expect("above zero"),
+    Duration::from_secs(30 * 60),
+  )
+  .expect("limits");
+  ProjectDb::open(repo)
+    .expect("open")
+    .save_project_limits(&limits)
+    .expect("save limits");
+}
+
 #[test]
 fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed(repo, &fake, false);
-    let tight = ProjectLimits::new(
-      TokenBudget::new(10_000_000).expect("above zero"),
-      TokenBudget::new(1_400_000).expect("above zero"),
-      TokenBudget::new(5_000).expect("above zero"),
-      Duration::from_secs(30 * 60),
-    )
-    .expect("limits");
-    ProjectDb::open(repo)
-      .expect("open")
-      .save_project_limits(&tight)
-      .expect("save limits");
+    seed_claude(repo, &fake);
+    save_daily_budget(repo, 5_000);
   });
   create_and_run(&mut desktop, "Work in turns.", "1400000");
   desktop.wait_until("the daily budget stop", |desktop| {
@@ -384,28 +392,30 @@ fn lifecycle_the_daily_budget_stops_the_run_and_holds_back_new_work() {
   // New work waits too: Create & run queues the task, and the runner refuses its run.
   desktop.click("task-breadcrumb");
   fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
-  desktop.click("save-draft");
-  desktop.wait_until("the saved draft", |desktop| {
-    text_of(desktop, "new-task-state", "Draft saved locally")
-  });
   desktop.click("create-and-run");
   desktop.wait_until("the refusal in New task", |desktop| {
     desktop.tree.root().is_some_and(|root| contains_text(root, refusal)) && has(desktop, "create-and-run")
   });
   desktop.wait_until("the queued task status", |desktop| {
-    text_of(desktop, "new-task-state", "Task queued")
+    text_of(desktop, "new-task-state", "Queued · run not started")
   });
   let tasks = ProjectDb::open(desktop.repo())
     .expect("open project")
     .tasks()
     .expect("tasks");
   assert_eq!(tasks.last().expect("new task").status(), TaskStatus::Queued);
+  assert!(text_of(&mut desktop, "create-and-run", "Retry run"));
+  assert!(!has(&mut desktop, "save-draft"));
+  // Retry sends the same start request to the runner, which admits new work before it checks the
+  // task's setup: with the daily budget raised, the retry reaches the preflight and reports what
+  // it finds, and the task stays queued.
   mark_agent_connection_unusable(desktop.repo());
+  save_daily_budget(desktop.repo(), 20_000_000);
   desktop.click("create-and-run");
   desktop.wait_until("the retry preflight error", |desktop| {
     text_of(desktop, "execution-plan", "connection that cannot be used now")
   });
-  assert!(text_of(&mut desktop, "new-task-state", "Task queued"));
+  assert!(text_of(&mut desktop, "new-task-state", "Queued · run not started"));
   desktop.tab_to("create-and-run", 30);
   desktop.tab();
   assert_ne!(desktop.focused().as_deref(), Some("save-draft"));

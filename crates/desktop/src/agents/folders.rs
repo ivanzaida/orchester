@@ -40,19 +40,6 @@ pub fn without_folder(list: &WritableFolders, removed: &WritableFolder) -> Writa
   WritableFolders::new(rest).expect("a shorter list keeps its entries unique")
 }
 
-/// Whether `list` already names the folder `path` (relative to `repo_root` when relative), compared
-/// as written, without reading the file system.
-pub fn lists(list: &WritableFolders, path: &str, repo_root: &Path) -> bool {
-  let Ok(wanted) = WritableFolder::try_from(path.to_owned()) else {
-    return false;
-  };
-  let wanted = wanted.lexical_path(repo_root);
-  list
-    .entries()
-    .iter()
-    .any(|folder| folder.lexical_path(repo_root) == wanted)
-}
-
 fn folder_error(error: &WritableFolderError) -> Message {
   let with_path = |key, path: &Path| Message::new(key).with("folder", path.display().to_string());
   match error {

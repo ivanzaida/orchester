@@ -122,6 +122,26 @@ pub const MONTH_KEYS: [&str; 12] = [
   "time.month.dec",
 ];
 
+/// [`WEEKDAY_KEYS`] index of the local weekday of `at`.
+pub fn weekday(at: Timestamp) -> usize {
+  use chrono::Datelike;
+  // As in `clock`: stored times are after 1970.
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  let local = chrono::DateTime::<chrono::Local>::from(UNIX_EPOCH + Duration::from_millis(millis));
+  local.weekday().num_days_from_monday() as usize
+}
+
+/// The i18n keys of the weekdays' short names, Monday first.
+pub const WEEKDAY_KEYS: [&str; 7] = [
+  "time.weekday.mon",
+  "time.weekday.tue",
+  "time.weekday.wed",
+  "time.weekday.thu",
+  "time.weekday.fri",
+  "time.weekday.sat",
+  "time.weekday.sun",
+];
+
 /// A revision as people read it: its first seven characters.
 pub fn short_revision(revision: &str) -> &str {
   revision.get(..7).unwrap_or(revision)

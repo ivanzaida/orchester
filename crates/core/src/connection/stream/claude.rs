@@ -11,19 +11,30 @@
 //! beyond the messages is counted when it arrives. Claude reports cache reads and cache writes apart
 //! from `input_tokens`: reads are cached input, which does not count; writes count as input
 //! (`docs/design/orchester-workspace.md`, "Token budgets"). `total_cost_usd` is ignored.
+//!
+//! The step result ([`StepResult`]) is the result's `structured_output`, which the CLI fills when it
+//! was given the result schema (`--json-schema`); else the one that closes the final message
+//! ([`StepResult::at_end`]). Either becomes the invocation's last message, as a JSON document. A
+//! turn that ends without one fails: the prompt asks for it, and prose alone must never pass a step
+//! that the agent may have meant to fail or to ask about.
 
 use std::collections::HashMap;
 
 use serde_json::Value;
 
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
-use crate::{connection::mcp::McpServerProblem, run::TokenUsage};
+use crate::{
+  connection::mcp::{InvocationExemptions, McpServerProblem},
+  run::{StepResult, TokenUsage},
+};
 
 /// The `error` of an assistant message whose CLI is not signed in.
 const AUTHENTICATION_FAILED: &str = "authentication_failed";
 /// Content blocks of an assistant message the parser reads; `redacted_thinking` carries nothing a
 /// person can read.
 const KNOWN_BLOCKS: [&str; 4] = ["text", "thinking", "redacted_thinking", "tool_use"];
+/// Why a turn that ended without a step result failed.
+const NO_RESULT: &str = "Claude Code ended its turn without the step result: a JSON object with outcome and summary";
 /// Tools that change the file named in their input.
 const EDIT_TOOLS: [&str; 4] = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
@@ -39,6 +50,8 @@ pub struct ClaudeStream {
   /// The last text the agent wrote.
   last_text: Option<String>,
   signed_out: bool,
+  /// The MCP tools that run without asking, in a step that asks before MCP actions.
+  exemptions: InvocationExemptions,
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +63,15 @@ struct Call {
 }
 
 impl ClaudeStream {
+  /// A stream whose calls of the tools `exemptions` names are reported as not asked
+  /// ([`AgentEvent::McpToolNotAsked`]): they run by an allow rule, never reaching the permission prompt.
+  pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
+    Self {
+      exemptions,
+      ..Self::default()
+    }
+  }
+
   /// The events one line of Claude Code output reports, possibly none: a repeated usage, an edit
   /// whose result is still to come or the end of a CLI that already said it is not signed in.
   /// Standard error carries the CLI's own diagnostics, which are kept as raw lines, like anything
@@ -66,6 +88,14 @@ impl ClaudeStream {
       return vec![raw()];
     };
     let events = match value.get("type").and_then(Value::as_str) {
+      // Account limits never reach the transcript; one this version cannot read is left out.
+      Some("rate_limit_event") => Some(
+        value
+          .get("rate_limit_info")
+          .and_then(super::super::plan_limits::claude_limits)
+          .map(|limits| vec![AgentEvent::PlanLimits { limits }])
+          .unwrap_or_default(),
+      ),
       Some("system") => system(&value),
       Some("assistant") => self.assistant(&value).map(|(mut events, understood)| {
         if !understood {
@@ -95,6 +125,9 @@ impl ClaudeStream {
       understood &= KNOWN_BLOCKS.contains(&kind);
       if let Some(event) = self.content(block, error) {
         events.push(event);
+      }
+      if kind == "tool_use" {
+        events.extend(self.not_asked(block));
       }
     }
     let usage = message.get("usage").and_then(usage).unwrap_or_default();
@@ -146,6 +179,16 @@ impl ClaudeStream {
     });
     self.calls.insert(item, Call { tool, command, file });
     started
+  }
+
+  /// A call of a tool that runs without asking.
+  fn not_asked(&self, block: &Value) -> Option<AgentEvent> {
+    let (server, tool) = self.exemptions.claude_tool(block.get("name")?.as_str()?)?;
+    Some(AgentEvent::McpToolNotAsked {
+      item: text(block, "id")?,
+      server: server.to_string(),
+      tool: tool.to_string(),
+    })
   }
 
   /// Tool results; a user message without any is not understood.
@@ -226,11 +269,33 @@ impl ClaudeStream {
         let message = said.or_else(|| text(value, "subtype")).unwrap_or_default();
         events.push(AgentEvent::TurnFailed { message });
       }
-    } else if let Some(said) = said.filter(|said| self.last_text.as_ref() != Some(said)) {
-      self.last_text = Some(said.clone());
-      events.push(AgentEvent::Message { text: said });
+    } else {
+      if let Some(said) = said.filter(|said| self.last_text.as_ref() != Some(said)) {
+        self.last_text = Some(said.clone());
+        events.push(AgentEvent::Message { text: said });
+      }
+      events.extend(self.step_result(value));
     }
     Some(events)
+  }
+
+  /// The step result as the last message, unless the last message already is exactly it; a
+  /// failed turn without one.
+  fn step_result(&mut self, value: &Value) -> Option<AgentEvent> {
+    let structured = value
+      .get("structured_output")
+      .and_then(|output| serde_json::from_value::<StepResult>(output.clone()).ok());
+    let Some(result) = structured.or_else(|| self.last_text.as_deref().and_then(StepResult::at_end)) else {
+      return Some(AgentEvent::TurnFailed {
+        message: NO_RESULT.to_owned(),
+      });
+    };
+    if self.last_text.as_deref().and_then(StepResult::parse).as_ref() == Some(&result) {
+      return None;
+    }
+    let text = serde_json::to_string(&result).expect("a step result serializes to JSON");
+    self.last_text = Some(text.clone());
+    Some(AgentEvent::Message { text })
   }
 }
 

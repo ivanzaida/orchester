@@ -1,2 +1,0 @@
-{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"m1raw2","tool":"ping","arguments":{},"result":{"content":[{"type":"text","text":"M1_TOOL_OK; server_secret_present=true"}],"structured_content":null},"error":null,"status":"completed"}}
-{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"m1raw2","tool":"ping","arguments":{},"result":{"content":[{"type":"text","text":"M1_TOOL_OK; server_secret_present=true"}],"structured_content":null},"error":null,"status":"completed"}}

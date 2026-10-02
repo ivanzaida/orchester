@@ -7,9 +7,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::core::Signal;
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, EngineVendor},
   id::{StepExecutionId, TaskId},
-  run::{StepStatus, TokenUsage},
+  run::{EditProgress, StepStatus, TokenUsage},
   time::Timestamp,
 };
 
@@ -53,12 +53,16 @@ pub(super) struct Header {
   /// A tool step: a command tool ran instead of an agent, on no model and with no tokens.
   pub(super) command: bool,
   pub(super) provider: Option<AgentProvider>,
+  pub(super) vendor: Option<EngineVendor>,
   pub(super) model: Arc<str>,
   pub(super) invocations: usize,
   pub(super) started: Option<Timestamp>,
   /// `None` while an invocation runs.
   pub(super) ended: Option<Timestamp>,
   pub(super) usage: TokenUsage,
+  /// What the execution used before its first edit; `None` for a tool step or launches recorded
+  /// before it was kept.
+  pub(super) before_edit: Option<EditProgress>,
   pub(super) status: Option<StepStatus>,
   pub(super) open: bool,
 }
@@ -153,6 +157,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
     agent: step.agent.clone().unwrap_or_else(|| "".into()),
     command: step.tool_step,
     provider: step.provider,
+    vendor: step.vendor.clone(),
     model: step.model.clone().unwrap_or_else(|| "".into()),
     invocations: invocations.len(),
     started: invocations.first().map(|invocation| invocation.started_at),
@@ -162,6 +167,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
       invocations.last().and_then(|invocation| invocation.ended_at)
     },
     usage: invocations.iter().map(|invocation| invocation.usage).sum(),
+    before_edit: run.index.execution_edit(execution),
     status: Some(status),
     open: toggles.is_open(&key, running || status.is_open()),
   })

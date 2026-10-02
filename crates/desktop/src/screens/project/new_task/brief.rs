@@ -6,9 +6,9 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Text, TextInput, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextInput, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
@@ -97,15 +97,24 @@ pub fn brief_form(
         .in_form()
         .height(Dimension::Px(CONTEXT_BUTTON_HEIGHT))
         .render(ctx),
-    ))
-    .child(preview_footer(ctx));
-  ScrollVertical::new(fields)
-    .id("new-task-brief")
+    ));
+  // The footer stays at the column's foot under the fields, which scroll (`MoDET` after the
+  // flexible space `i2EEy`).
+  Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .child(
+      ScrollVertical::new(fields)
+        .id("new-task-brief")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0),
+    )
+    .child(preview_footer(ctx))
     .into()
 }
 
+/// What the task's prompt also includes, with *Preview* unavailable at the right (`MoDET`).
 fn preview_footer(ctx: &Ctx) -> Element {
   let preview = Button::empty()
     .button()
@@ -114,6 +123,7 @@ fn preview_footer(ctx: &Ctx) -> Element {
     .focusable(false)
     .cursor(CursorIcon::NotAllowed)
     .opacity(DISABLED_OPACITY)
+    .padding_vertical(SpacingSize::Xs)
     .child(
       Row::new()
         .spacing(SpacingSize::Xs)
@@ -124,6 +134,8 @@ fn preview_footer(ctx: &Ctx) -> Element {
   Row::new()
     .id("new-task-preview-footer")
     .width(Dimension::Pct(100.0))
+    // In line with the fields, which keep this room for focus rings (see `brief_form`).
+    .padding_left(FOCUS_ROOM)
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .child(
@@ -131,6 +143,7 @@ fn preview_footer(ctx: &Ctx) -> Element {
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextMuted),
     )
+    .child(Spacer::new().flex(1.0))
     .child(preview)
     .into()
 }
@@ -258,22 +271,52 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .iter()
     .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable, locked))
     .collect();
-  let signal = form.criteria.clone();
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
+    .with_children(rows)
+    .child(add_criterion(ctx, &form.criteria, locked))
+    .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
+    // Add criterion may be last; its focus ring reaches past the column.
+    .overflow_visible()
+    .into()
+}
+
+/// *+ Add criterion* (`Sc8e9`). The locked form keeps it in its place (`fblW6` in `WOdDe`,
+/// `T6bVyU`), unavailable like the form's other controls that cannot be used there.
+fn add_criterion(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, locked: bool) -> Element {
   // The link's padding keeps its focus ring off the text, and an equal shift back keeps the text
   // in line with the criterion markers (`Sc8e9` in `l2YA4`). The ring reaches into the room the
   // form's scroll content keeps on its left.
   let padding = ctx.theme().spacing_value(SpacingSize::Xs).resolve(0.0);
-  let add = keyboard_stop(Button::empty().button(), Ring::Outer)
-    .id("add-criterion")
-    .padding_horizontal(SpacingSize::Xs)
-    .offset(-padding, 0.0)
-    .rounded(RadiusSize::Sm)
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
+  let label = Text::new(&ctx.t("tasks.new.addCriterion"))
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextPrimary);
+  let add = |button: Button| {
+    button
+      .id("add-criterion")
+      .padding_horizontal(SpacingSize::Xs)
+      .offset(-padding, 0.0)
+      .rounded(RadiusSize::Sm)
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(label)
+  };
+  if locked {
+    return add(Button::empty().button())
+      .describe("state", "unavailable")
+      .focusable(false)
+      .cursor(CursorIcon::NotAllowed)
+      .opacity(DISABLED_OPACITY)
+      .into();
+  }
+  let criteria = criteria.clone();
+  add(keyboard_stop(Button::empty().button(), Ring::Outer))
     .cursor(CursorIcon::Pointer)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .on_click(move |_| {
-      signal.update(|criteria| {
+      criteria.update(|criteria| {
         let next = criteria
           .iter()
           .map(|criterion| criterion.id + 1)
@@ -282,20 +325,6 @@ fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
         criteria.push(Criterion::new(next));
       });
     })
-    .child(
-      Text::new(&ctx.t("tasks.new.addCriterion"))
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary),
-    );
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
-    .with_children(rows)
-    .with_children((!locked).then_some(add))
-    .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
-    // Add criterion may be last; its focus ring reaches past the column.
-    .overflow_visible()
     .into()
 }
 
@@ -306,7 +335,18 @@ fn criterion_row(
   removable: bool,
   locked: bool,
 ) -> Element {
-  let input = styled_input(ctx, criterion.text.clone(), TypographyStyle::FieldLabel)
+  // A criterion reads in `$muted` (`Y3PwR0` in `WOdDe`, `egNyW` in `dRN4m`); the placeholder of an
+  // empty one stays apart from it in `$subtle`.
+  let theme = ctx.theme();
+  let text = |color| {
+    FormTextRole {
+      typography: TypographyStyle::FieldLabel,
+      color,
+    }
+    .resolve(&theme.typography(), &theme.palette())
+  };
+  let input = TextInput::styled(criterion.text.clone(), text(PaletteColor::TextSecondary))
+    .placeholder_style(text(PaletteColor::TextMuted))
     .id(Arc::<str>::from(format!("criterion-{}", criterion.id)))
     .single_line()
     .flex(1.0)

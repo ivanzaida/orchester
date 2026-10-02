@@ -8,6 +8,7 @@ use std::time::Duration;
 use crate::{
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
+  permission::LaunchPermissions,
   resource::ModelId,
   run::TokenUsage,
   time::Timestamp,
@@ -32,6 +33,11 @@ pub struct Invocation {
   /// 1 for the execution's first launch.
   pub number: u32,
   pub kind: InvocationKind,
+  /// The enforced policy used to prepare this agent launch, with what happened to commands outside
+  /// it, recorded once before starting its process. `None` means unknown for older or unprepared
+  /// agent launches, or no agent policy for command tools. Run permission changes never replace
+  /// this snapshot.
+  pub permissions: Option<LaunchPermissions>,
   /// The CLI's session id, once it reported one.
   pub session: Option<String>,
   pub started_at: Timestamp,

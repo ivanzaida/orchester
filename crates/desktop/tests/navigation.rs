@@ -183,6 +183,7 @@ fn pages() -> Vec<Page> {
     Page::Settings(SettingsTab::General),
     Page::Settings(SettingsTab::Limits),
     Page::Settings(SettingsTab::Environment),
+    Page::Settings(SettingsTab::CodeIndex),
   ]
 }
 

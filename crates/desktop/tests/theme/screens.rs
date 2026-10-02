@@ -15,6 +15,30 @@ use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, Extra
 use super::themed_app;
 
 #[test]
+fn plan_limits_emphasis_follows_pencil() {
+  let app = themed_app();
+  let percent = app.theme().typography_style(ExtraTypography::MonoLimit.role());
+  assert_eq!(percent.font_size, 11.0);
+  assert_eq!(percent.weight, FontWeight::Medium);
+  assert_eq!(&*percent.font_family, "Geist Mono");
+  assert_eq!(
+    app.theme().spacing_value(ExtraSpacing::PlanRows.role()),
+    Dimension::Px(6.0)
+  );
+  assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
+  assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
+  assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
+  let widths = |widths: theme::StatusBarWidths| (widths.version, widths.tokens, widths.labels, widths.details);
+  assert_eq!(widths(theme::STATUS_WIDTHS), (1280.0, 1120.0, 960.0, 0.0));
+  assert_eq!(widths(theme::STATUS_WIDTHS_ONE_REACHED), (1440.0, 1280.0, 1120.0, 0.0));
+  assert_eq!(
+    widths(theme::STATUS_WIDTHS_BOTH_REACHED),
+    (1600.0, 1440.0, 1280.0, 1120.0)
+  );
+}
+
+#[test]
 fn task_screen_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
@@ -231,6 +255,28 @@ fn select_menu_roles_follow_pencil() {
       scrollbar.min_thumb_length
     ),
     (3.0, 11.0, 24.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+  assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+}
+
+/// Transcript command box (`uA3Sh` in `N4SlQq`): its lines 4 from the viewport's top and bottom;
+/// the horizontal thumb (`hpzPu` in `G9skx`) 4px in `border`, radius 2, no track, overlaid 1 from
+/// the box's bottom and 12 from the viewport's ends.
+#[test]
+fn transcript_command_box_follows_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::CommandLines.role()),
+    Dimension::Px(4.0)
+  );
+  let scrollbar = theme::command_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Overlay);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(
+    (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
+    (1.0, 12.0)
   );
   assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));

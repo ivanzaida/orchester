@@ -1,4 +1,9 @@
-use super::*;
+//! What the form holds compared with what is stored, and what can be pressed.
+
+use orchester_core::limits::ProjectLimits;
+
+use super::{Editing, FormState, NewTaskForm, RunAction, SaveAction};
+use crate::tasks::form::{FormErrors, TaskForm};
 
 impl NewTaskForm {
   pub(super) fn state(
@@ -6,7 +11,7 @@ impl NewTaskForm {
     save: &SaveAction,
     run: &RunAction,
     separator: &str,
-    (limits, editing): (ProjectLimits, Option<&Task>),
+    (limits, editing): (ProjectLimits, Option<&Editing>),
     recovered: bool,
   ) -> FormState {
     let criteria: Vec<String> = self
@@ -45,8 +50,8 @@ impl NewTaskForm {
     let stored = saving
       .data
       .as_ref()
-      .map(|saved| &saved.0)
-      .or_else(|| editing.map(Task::details));
+      .map(|saved| &saved.details)
+      .or_else(|| editing.map(|editing| editing.task.details()));
     FormState {
       errors,
       missing: form.missing(),
@@ -56,12 +61,14 @@ impl NewTaskForm {
           saving
             .data
             .as_ref()
-            .map(|saved| &saved.1)
-            .or_else(|| editing.map(Task::organization))
+            .map(|saved| &saved.organization)
+            .or_else(|| editing.map(|editing| editing.task.organization()))
             == Some(&value)
         }),
       editing: editing.is_some(),
-      started: editing.is_some_and(|task| task.status() == TaskStatus::Queued),
+      // A task this form queued has no run until the runner starts one; until then it keeps
+      // Retry run.
+      started: editing.is_some_and(|editing| editing.has_run),
       queued,
       recovered,
       ready,

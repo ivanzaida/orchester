@@ -1,11 +1,29 @@
-use lurq::components::{Modal, ModalTarget};
-use orchester_core::store::RunStore;
+//! The confirmation that saving an edited task as Canceled stops its active run (`N1vwaM`).
+
+use lurq::{
+  app::{
+    ctx::{Ctx, FutureState},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Modal, ModalTarget, Row, Text},
+  core::Signal,
+  node::{Element, border::Border, dimension::Dimension},
+};
+use orchester_core::{id::TaskId, store::RunStore};
 use orchester_store::ProjectDb;
 
-use super::*;
+use super::{NewTaskProps, SaveAction};
 use crate::{
-  background, messages,
-  ui::{backdrop::backdrop, button::ActionButton, field::field_error, message_text},
+  background,
+  messages::{self, Message},
+  theme::{ExtraColor, ExtraTypography},
+  ui::{
+    backdrop::backdrop,
+    button::ActionButton,
+    field::field_error,
+    form::{Submit, form},
+    message_text,
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -58,7 +76,7 @@ pub(super) fn confirmation(
     .state()
     .get()
     .error
-    .filter(|error| error.key != "tasks.cancel.confirmRequired")
+    .filter(|error| !super::persistence::needs_cancel_confirmation(error))
   {
     content = content.child(field_error(&message_text(ctx, &error)));
   }
@@ -101,7 +119,7 @@ pub(super) fn confirmation(
 // N1vwaM: cancel confirmation in Edit task.
 const CONFIRM_WIDTH: f32 = 620.0;
 
-fn active_run(ctx: &mut Ctx, root: &std::path::Path, task: TaskId) -> lurq::app::ctx::FutureState<ActiveRun, Message> {
+fn active_run(ctx: &mut Ctx, root: &std::path::Path, task: TaskId) -> FutureState<ActiveRun, Message> {
   ctx
     .future((root.to_path_buf(), task), |(root, task)| async move {
       background::run(move || {

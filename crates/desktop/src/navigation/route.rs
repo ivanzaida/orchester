@@ -39,6 +39,7 @@ const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
 const LIMITS: &str = "limits";
 const ENVIRONMENT: &str = "environment";
+const CODE_INDEX: &str = "code-index";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
@@ -178,6 +179,7 @@ pub enum SettingsTab {
   General,
   Limits,
   Environment,
+  CodeIndex,
 }
 
 /// The sidebar item a page belongs to: Tasks stays selected on a task or the new task form.
@@ -304,6 +306,7 @@ impl Page {
       [SETTINGS] => Self::Settings(SettingsTab::General),
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
+      [SETTINGS, CODE_INDEX] => Self::Settings(SettingsTab::CodeIndex),
       _ => return None,
     })
   }
@@ -346,6 +349,7 @@ impl Page {
       Self::Settings(SettingsTab::General) => format!("{root}/{SETTINGS}"),
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
       Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
+      Self::Settings(SettingsTab::CodeIndex) => format!("{root}/{SETTINGS}/{CODE_INDEX}"),
     }
   }
 

@@ -1,8 +1,7 @@
 //! Extra writable folders: folders outside the task worktree that an agent which edits files may
-//! also write to, such as one Cargo build folder shared by every run's worktree
-//! (`docs/design/orchester-workspace.md`, "Agent permissions"). They are part of the profile's
-//! permissions and apply only with *Edit files in the task worktree*; nothing is granted unless a
-//! person adds the folder.
+//! also write to, such as a build or cache folder outside it (`docs/design/orchester-workspace.md`,
+//! "Agent permissions"). They are part of the profile's permissions and apply only with *Edit files
+//! in the task worktree*; nothing is granted unless a person adds the folder.
 //!
 //! A folder is written as an absolute path or as a path relative to the repository root. It must
 //! exist, or lie under the repository's `.orchester/` folder, where it is created before the agent
@@ -17,11 +16,13 @@
 
 use std::{
   fmt, fs, io,
-  path::{Component, Path, PathBuf, Prefix},
+  path::{Component, Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use super::canonical::{self, normalize, plain};
 
 /// The repository's folder for Orchester's own files; writable folders may be created under it.
 const STATE_DIR: &str = ".orchester";
@@ -278,57 +279,12 @@ fn check_repository(path: &Path, repository: &Path) -> Result<(), WritableFolder
 
 /// `path` with links resolved as far as it exists, and whether part of it does not exist yet.
 fn existing(path: &Path) -> Result<(PathBuf, bool), WritableFolderError> {
-  let mut missing = Vec::new();
-  let mut current = path;
-  loop {
-    match fs::canonicalize(current) {
-      Ok(found) => {
-        let mut resolved = plain(found);
-        let is_missing = !missing.is_empty();
-        resolved.extend(missing.iter().rev());
-        return Ok((resolved, is_missing));
-      }
-      Err(error) if error.kind() == io::ErrorKind::NotFound => {
-        let (Some(parent), Some(name)) = (current.parent(), current.file_name()) else {
-          return Err(WritableFolderError::Missing(path.to_path_buf()));
-        };
-        missing.push(name.to_owned());
-        current = parent;
-      }
-      Err(error) => {
-        return Err(WritableFolderError::Unreadable {
-          path: current.to_path_buf(),
-          kind: error.kind(),
-        });
-      }
-    }
-  }
-}
-
-/// `path` without `.` and `..` components, without reading the file system.
-fn normalize(path: &Path) -> PathBuf {
-  let mut normalized = PathBuf::new();
-  for component in path.components() {
-    match component {
-      Component::CurDir => {}
-      Component::ParentDir => {
-        normalized.pop();
-      }
-      other => normalized.push(other.as_os_str()),
-    }
-  }
-  normalized
-}
-
-/// A canonical Windows path (`\\?\C:\…`) in the usual form (`C:\…`) that programs given it as an
-/// argument understand; other paths unchanged.
-fn plain(path: PathBuf) -> PathBuf {
-  let mut components = path.components();
-  match components.next() {
-    Some(Component::Prefix(prefix)) => match prefix.kind() {
-      Prefix::VerbatimDisk(letter) => PathBuf::from(format!("{}:", char::from(letter))).join(components.as_path()),
-      _ => path,
-    },
-    _ => path,
+  match canonical::existing(path) {
+    Ok(found) => Ok((found.path, found.missing)),
+    Err(failure) if failure.error.kind() == io::ErrorKind::NotFound => Err(WritableFolderError::Missing(failure.path)),
+    Err(failure) => Err(WritableFolderError::Unreadable {
+      path: failure.path,
+      kind: failure.error.kind(),
+    }),
   }
 }

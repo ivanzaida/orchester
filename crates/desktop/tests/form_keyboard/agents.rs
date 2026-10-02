@@ -85,7 +85,7 @@ fn agent_editor_tab_follows_the_fields_only() {
     expected(&[
       Some(ROLE),
       Some(RESPONSIBILITY),
-      None,
+      Some("agent-connection-select"),
       None,
       None,
       Some(INSTRUCTIONS),

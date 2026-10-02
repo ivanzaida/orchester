@@ -9,6 +9,7 @@
     "notAvailableYet": "Not available in this version yet",
     "separator": "·",
     "listSeparator": ", ",
+    "listAnd": "{{rest}} and {{last}}",
     "close": "Close",
     "copy": "Copy",
     "copied": "Copied",
@@ -478,7 +479,7 @@
     "new": {
       "breadcrumb": "{{project}} / Tasks / New task",
       "notSaved": "Not saved yet",
-      "saving": "Saving draft…",
+      "creating": "Creating the task…",
       "saved": "Draft saved locally",
       "queued": "Queued · run not started",
       "unconfirmed": "Task saved · run status unconfirmed",
@@ -518,11 +519,10 @@
       "minutes": "minutes",
       "createAndRun": "Create & run",
       "retryRun": "Retry run",
-      "saveDraft": "Save as draft",
+      "create": "Create",
       "noLongerDraft": "This task is already queued and cannot be saved as a draft. Retry Create & run or open it from Tasks.",
       "savedDetailsDiffer": "The stored draft differs from this form. Open it from Tasks before editing.",
-      "limitsBlockSave": "Correct the run budget and time limit to save the draft.",
-      "savingDraft": "Saving draft…",
+      "limitsBlockSave": "Correct the run budget and time limit to save the task.",
       "repositoryPath": "{{owner}}/{{name}}",
       "starting": "Starting the run…",
       "startingDetail": "Saving the task, checking its setup and handing it to the runner.",
@@ -899,6 +899,7 @@
       "ended": "Run ended",
       "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
+      "engineNative": "{{engine}} · native",
       "headerRunning": "{{engine}} · invocation {{count}} · started {{start}}",
       "headerFinished": {
         "one": "{{engine}} · {{count}} invocation · {{start}}–{{end}}",
@@ -936,7 +937,39 @@
         "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
         "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
         "programNotFound": "{{program}} was not found",
-        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool."
+        "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
+        "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
+        "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
+        "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+        "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
+        "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
+        "ripgrepNotFound": "ripgrep was not found",
+        "ripgrepUnavailable": "ripgrep could not be given to the agent",
+        "ripgrepUnavailableDetail": "{{fallback}}\n{{detail}}",
+        "ripgrepFallback": {
+          "unknown": "The agent searched without it.",
+          "indexWithGitGrep": "Codex still gets the code index; it searches the index and the files with git grep.",
+          "indexWithOwnTools": "Claude Code still gets the code index; it searches with its own search tools.",
+          "gitGrep": "Codex has no code index either; it searches the files with git grep.",
+          "ownTools": "Claude Code has no code index either; it searches with its own search tools."
+        },
+        "memoryNotSaved": "The step’s handoff was not saved to task memory",
+        "memoryContainsSecret": "It contains the value of the secret {{secret}}. Secret values are never kept in memory.",
+        "memoryStorageFailed": "The project database could not store it: {{detail}}",
+        "memoryKeychainUnavailable": "The system keychain could not be read to check it for the value of the secret {{secret}}.",
+        "memoryUnreadable": {
+          "one": "{{count}} memory record could not be read",
+          "other": "{{count}} memory records could not be read"
+        },
+        "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+        "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
+        "stderrLeftOut": {
+          "one": "{{count}} more line of the agent’s standard error left out",
+          "other": "{{count}} more lines of the agent’s standard error left out"
+        },
+        "stderrLeftOutDetail": "The activity keeps the first 1000 lines (256 KiB) of each agent start.",
+        "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
+        "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -973,9 +1006,61 @@
         "output": "Output tokens",
         "counted": "Counted",
         "runTotal": "Run total",
-        "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget."
+        "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget.",
+        "noteFirstEdit": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file.",
+        "noteAtMost": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file; ≤ means the turn of that edit was reported whole, so its later part is counted too.",
+        "stepTitle": "{{step}} · {{agent}}",
+        "ran": "Ran",
+        "ranValue": "{{start}}–{{end}} · {{took}}",
+        "codeIndex": "Code index",
+        "codeIndexGiven": "{{revision}} · {{branch}}",
+        "codeIndexRevision": "{{revision}}",
+        "codeIndexRipgrepNotFound": "ripgrep not found",
+        "codeIndexRipgrepUnavailable": "ripgrep could not be given",
+        "codeIndexGitGrep": "{{reason}} · searches with git grep",
+        "codeIndexOwnTools": "{{reason}} · searches with its own tools",
+        "codeIndexOff": "Off · project setting",
+        "codeIndexUnavailable": "Unavailable · build failed",
+        "codeIndexBuilding": "Unavailable · still building",
+        "beforeFirstEdit": "Tokens before first edit",
+        "firstEdit": "First edit",
+        "firstEditValue": "{{time}} · {{path}}",
+        "noEditYet": "No file changed yet",
+        "noEditInStep": "No file changed in this step",
+        "soFar": "{{count}} so far",
+        "cachedSoFar": "{{count}} so far · not counted",
+        "atMost": "≤ {{count}}",
+        "cachedAtMost": "≤ {{count}} · not counted",
+        "nativeTitle": "{{step}} invocation",
+        "startedValue": "{{start}} · {{took}}",
+        "runBudget": "Run budget",
+        "permissionsValue": "{{repository}} · {{commands}} ↗",
+        "runs": "Runs",
+        "runsHere": "This computer (Orchester)",
+        "endpointNow": "Endpoint now",
+        "network": "Network",
+        "networkStaysOn": "Stays on · off not enforceable",
+        "networkOn": "On",
+        "toolCalls": "Tool calls",
+        "toolCallsDenied": "{{count}} · {{denied}} denied",
+        "noteNative": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeFirstEdit": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeAtMost": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file; ≤ means the request of that edit was reported whole, so its later part is counted too. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent."
       },
+      "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
+      "noEditMeta": "{{tokens}} · no edit",
       "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
+      "mcpCall": "{{server}} MCP tool",
+      "mcpCallFailed": "failed",
+      "decision": {
+        "notAskedExempt": "not asked · exempt tool of {{server}}",
+        "approvedByYou": "approved by you · {{server}}",
+        "askedYou": "asked you · {{server}}",
+        "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
+        "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
+        "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
+        "withMeta": "{{meta}} · {{mark}}"
+      },
       "mcp": {
         "title": "Working without MCP server {{server}}",
         "titleUnnamed": "Working without an MCP server",
@@ -1069,6 +1154,12 @@
         "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
       }
     },
+    "notEnforced": {
+      "heading": "What Orchester could not enforce for {{agent}}",
+      "networkStayedOn": "Network stayed on. {{agent}}’s profile asks for network off, but commands the agent runs could reach the network: Orchester can’t block it for a native connection yet.",
+      "listedUnconfined": "Listed commands were not confined. {{commands}} ran with your account’s access, outside the worktree’s limits; Orchester’s file tools stayed in the worktree.",
+      "permissionsLink": "{{agent}}’s permissions ↗"
+    },
     "toolApproval": {
       "title": "Approve tool action?",
       "explanation": "{{agent}} requests {{action}} from the {{server}} MCP server. Review the target before deciding. Approve once applies only to this request; Deny fails this step.",
@@ -1081,7 +1172,31 @@
       "denying": "Denying…",
       "approveOnce": "Approve once",
       "approving": "Approving…",
-      "notAwaited": "This tool action no longer waits for a decision."
+      "notAwaited": "This tool action no longer waits for a decision.",
+      "commandTitle": "Approve command?",
+      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
+      "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "command": "Command",
+      "cwd": "Working directory",
+      "note": "Agent’s note",
+      "arguments": "Arguments",
+      "scope": "One requested action only; no session or permanent grant",
+      "native": {
+        "explanation": "{{agent}} asks to run this command in the task worktree. It is not on the allowed list and not known to be safe, so it asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "explanationReadOnly": "{{agent}} asks to run this command in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanation": "{{agent}} asks to run this command through a shell in the task worktree. A shell command is never on the allowed list and never known-safe, so it always asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanationReadOnly": "{{agent}} asks to run this command through a shell in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shell": "Shell",
+        "shellValue": "{{shell}} · {{invocation}}",
+        "commandLabel": "Command · the full string the shell receives",
+        "timeLimit": "Time limit",
+        "timeLimitValue": "{{seconds}} s",
+        "unsandboxedTitle": "Runs outside any sandbox",
+        "unsandboxedDetail": "Orchester keeps its file tools inside the worktree, but not commands. This one runs as you: it can read and change whatever your account can and reach the network. Secrets are not in its environment."
+      }
     },
     "ready": {
       "status": "Ready for review",
@@ -1261,10 +1376,9 @@
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
+      "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from.",
-      "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
-      "buildSpaceUnavailable": "Cannot check free space for CARGO_TARGET_DIR ({{target}}). Check that the folder or its volume is accessible before starting this run."
+      "noCommits": "The repository has no commit to start the run from."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -1649,13 +1763,15 @@
     "connection": "Project connection",
     "model": "Model",
     "chooseConnectionFirst": "Choose a connection first",
+    "connectionNotAvailable": "{{connection}} · not available yet",
     "customModel": "Other model id…",
     "customModelPlaceholder": "Model id, as the CLI accepts it",
     "modelNotVerified": "{{model}} · not verified",
     "noConnectionChosen": "Choose the connection this role runs on.",
     "explain": {
       "provider": "{{connection}} lists these models itself.",
-      "aliases": "{{connection}} cannot list its models; these are the aliases its CLI help documents.",
+      "aliases": "{{connection}} did not list its models; these are the current model ids and the aliases its CLI help documents.",
+      "providerAndCurrentIds": "These are the current model ids, then the models {{connection}} lists itself.",
       "custom": "This model id is not verified: {{connection}} decides whether it accepts it when an agent starts.",
       "notChecked": "{{connection}} has not been checked yet, so its models are unknown. Check it on the Connections screen."
     },
@@ -1708,22 +1824,34 @@
           "detail": "Create and change files only in this task’s worktree and the extra writable folders."
         },
         "askBefore": {
-          "title": "Ask before running commands · later",
-          "detail": "Each command waits for your decision in Needs you. Arrives with permission requests."
+          "title": "Ask before running commands",
+          "detail": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
         },
         "allowed": {
           "title": "Allowed commands",
-          "detail": "Only these commands run. Anything else is denied and the agent is told why."
+          "detail": "Only these commands run. Anything else is denied and the agent is told why.",
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first.",
+          "nativeDetail": "Listed commands run, and once a command is listed, known-safe read-only ones too. Every other command asks you first."
         },
         "any": {
           "title": "Any command in the worktree",
-          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders."
+          "detail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders.",
+          "codexDetail": "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. Beyond the sandbox, commands ask you first."
         }
       },
       "addCommand": "Add command",
+      "toolApprovals": "Ask before MCP actions that require approval",
+      "toolApprovalsHeading": "MCP approvals",
+      "toolApprovalsDisabled": "MCP approval requests are denied",
+      "transport": "Codex App Server uses your normal account. Your own MCP servers, plugins and notify program are turned off.",
+      "claudeTransport": "Claude Code asks Orchester through its permission prompt tool. Only the project-selected MCP servers load.",
       "commandPlaceholder": "e.g. pnpm test",
       "commandMatching": "A command matches by prefix: pnpm test also allows pnpm test src/auth.",
-      "noCommands": "No command is allowed yet.",
+      "fileCommandPrefix": "{{command}} also allows any arguments after it, including ones that change files.",
+      "noCommands": "No command is listed yet, so every command asks you first, even a read-only one.",
+      "claudeReadOnlyCommands": "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other commands ask you first.",
+      "codexEscalations": "Beyond the sandbox, commands ask you first.",
+      "codexRulesNote": "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. The repository’s .codex settings are ignored.",
       "commandInvalid": {
         "blank": "Type a command first.",
         "tooLong": "A command is at most {{max}} characters long.",
@@ -1732,7 +1860,7 @@
         "tooMany": "At most {{max}} commands can be allowed."
       },
       "addFolder": "Add folder",
-      "folderPlaceholder": "e.g. .orchester/target",
+      "folderPlaceholder": "e.g. .orchester/build",
       "noFolders": "Agents write only inside their task worktree. Add a folder outside it, such as a shared build folder: absolute, or relative to the repository root.",
       "foldersMeaning": "Agents that edit files may also write here, commands included. Absolute, or relative to the repository root; never the repository itself or your home folder.",
       "foldersReadOnly": "Used only when agents edit files in the task worktree. With Read-only they write nowhere.",
@@ -1754,14 +1882,12 @@
         "duplicate": "{{folder}} is already listed.",
         "tooMany": "At most {{max}} folders can be listed."
       },
-      "targetTitle": "Allow agents to write to {{variable}}",
-      "targetDetail": "Environment sets {{variable}} to {{folder}}. Agents that edit files write only inside their worktree, so their builds cannot write there until you add it.",
-      "addTargetFolder": "Add folder",
       "networkOff": "Off",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
       "networkOnDetail": "Commands and web tools can reach the network.",
       "summary": "{{repository}} · {{commands}} · {{network}}",
+      "summaryWithTools": "{{permissions}} · MCP approvals enabled",
       "long": {
         "readOnly": "Read-only",
         "edit": "Edits files in the task worktree",
@@ -1769,7 +1895,7 @@
         "editFoldersOther": "Edits files in the task worktree and {{count}} more folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command in the worktree",
-        "commandsNone": "No commands",
+        "commandsNone": "No listed commands, all ask",
         "commandsOne": "1 allowed command",
         "commandsOther": "{{count}} allowed commands",
         "networkOff": "Network off",
@@ -1783,7 +1909,7 @@
         "editFoldersOther": "Edit files + {{count}} folders",
         "commandsAsk": "Asks before commands",
         "commandsAny": "Any command",
-        "commandsNone": "No commands",
+        "commandsNone": "All commands ask",
         "commandsOne": "1 command",
         "commandsOther": "{{count}} commands",
         "networkOff": "Network off",
@@ -1793,33 +1919,54 @@
       "unavailable": {
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
-        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so."
+        "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so.",
+        "nativeMcp": "Unavailable on this connection: {{cli}} agents get no MCP servers in this version, so they are left out."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
         "source": "{{connection}} · known limits on {{platform}}",
+        "nativeTitle": "Enforced by Orchester",
+        "native": {
+          "anyCommand": "Any command · not enforceable",
+          "anyCommandHow": "no sandbox · commands can’t be confined",
+          "mcp": "MCP servers are left out",
+          "mcpHow": "none start for native agents yet",
+          "listedNotConfined": "A listed command is chosen by Orchester, not confined: it runs as you and can write anywhere you can."
+        },
         "platform": {
           "windows": "Windows",
           "macos": "macOS"
         },
         "enforced": "{{setting}} · enforced",
         "staysOn": "Network stays on · off is not enforceable",
+        "codexRules": "Your own Codex rules still apply",
+        "codexRulesHow": "allow rules run unsandboxed, unasked",
+        "codexRepository": "Repository .codex settings ignored",
+        "codexRepositoryHow": "worktree untrusted · none load",
         "notEnforceable": "{{setting}} · not enforceable",
+        "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
+          "codexChosen": "Only the chosen MCP servers run",
+          "codexDenied": "not asked · the call fails",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
           "onlyOne": "Only the chosen MCP server loads",
           "only": "Only the {{count}} chosen MCP servers load",
-          "codexLoading": "-c mcp_servers.* · no user config",
           "claudeLoading": "--strict-mcp-config --mcp-config",
-          "codexCalls": "Their tools run without approval",
-          "codexCallsHow": "-a never · unverified",
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
+          "claudeCallsAsk": "Each tool call waits for your decision",
+          "claudeCallsAskHow": "--permission-prompt-tool · one call each",
+          "exempt": {
+            "one": "{{server}}: 1 tool runs without asking",
+            "other": "{{server}}: {{count}} tools run without asking"
+          },
+          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool> · other tools ask",
+          "exemptCodexHow": "tools.<tool>.approval_mode = approve · other tools ask",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
@@ -1831,6 +1978,8 @@
           "codexLeftOut": "project_doc_max_bytes=0 · skills off",
           "codexLoads": "loads AGENTS.md · .agents/skills",
           "claude": "--setting-sources \"\" · loads neither",
+          "orchesterLoads": "prompt adds AGENTS.md · repository skills",
+          "orchesterLeftOut": "prompt holds neither",
           "note": "Repository agent files is set for all of {{project}} in Project settings › General, not per profile.",
           "summary": "· Repository files off"
         }
@@ -1838,30 +1987,45 @@
       "mechanism": {
         "codexReadOnly": "sandbox · read-only",
         "codexWorkspaceWrite": "sandbox · workspace-write",
-        "codexCommands": "sandbox · commands stay in the worktree",
+        "codexCommands": "sandbox · escalations ask you",
+        "codexCommandApprovals": "Codex App Server · one command approval",
         "codexNetworkOff": "sandbox · network access off",
         "codexNetworkOn": "sandbox · network access on",
         "codexWritableRoots": "sandbox · writable roots",
-        "claudeEditToolsRemoved": "edit tools removed · listed cmds run",
+        "claudeEditToolsRemoved": "edit tools off · list runs · others ask",
+        "claudeEditToolsRemovedAsk": "edit tools off · commands ask",
         "claudeAcceptEdits": "permission mode · accept edits",
+        "claudeEditRules": "allowed tools · edit rules per folder",
         "claudeAllowedTools": {
-          "one": "allowed tools · 1 prefix rule",
-          "other": "allowed tools · {{count}} prefix rules"
+          "none": "no listed commands · all ask",
+          "one": "allowed tools · 1 rule · others ask",
+          "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
-        "claudeAddDir": "--add-dir for edit tools · commands not confined"
+        "claudeAddDir": "--add-dir for edit tools · commands not confined",
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "nativeWriteToolsWithheld": "write tools withheld · reads stay in the worktree",
+        "nativeFileScope": "file tools · worktree only, .git protected",
+        "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
+        "nativeCommandApprovals": "Orchester asks you before each command",
+        "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
+        "nativeCommandListEmpty": "no command listed · every command asks you",
+        "nativeNetwork": "commands keep the network · no web tools"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
-        "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option."
+        "notEnforceable": "{{cli}} cannot enforce {{option}}. Choose another option.",
+        "nativeNotAvailable": "Orchester doesn’t run {{cli}} agents in this version yet, so this profile can’t be published or run on its connection. Choose a Codex or Claude Code connection."
       },
       "blockedTitle": "This profile cannot be published with these permissions",
+      "nativeBlockedTitle": "This profile can’t run yet: its connection is a native agent",
       "changeConnection": "Change connection",
       "resetTitle": "Changed to what {{connection}} can enforce",
-      "resetDetail": "Unavailable on this connection and replaced by the most restrictive option it enforces: {{options}}. Review before publishing.",
+      "resetDetail": "Unavailable on this connection, so changed to the most restrictive option it enforces: {{changes}}. Review before publishing.",
+      "resetChange": "{{from}} became {{to}}",
       "appliesTitle": "Applies to new runs after publishing",
-      "appliesDetail": "Runs keep the permissions they launched with. Changing them for a single run is not available yet.",
+      "appliesDetail": "Runs keep the permissions they launched with. You can still change them for a single run from its task page.",
       "mcp": {
         "label": "MCP servers",
         "none": "This project has no MCP servers yet.",
@@ -2005,6 +2169,7 @@
     "ownership": "Connections belong to {{project}}. CLI connections use the account the CLI is signed in to on this computer; {{project}} records which account it expects.",
     "type": {
       "provider": "Provider",
+      "native": "Native",
       "agentProvider": "Agent provider",
       "mcp": "MCP",
       "mcpServer": "MCP server"
@@ -2017,11 +2182,166 @@
       "description": "{{vendor}} · {{program}} {{version}}",
       "descriptionUnchecked": "{{vendor}} · {{program}}"
     },
+    "cliTooOld": {
+      "claude": "Claude Code",
+      "codex": "Codex CLI",
+      "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+      "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
+    },
+    "kind": {
+      "label": "Kind",
+      "codexDetail": "Runs the codex program, signed in on this computer.",
+      "claudeDetail": "Runs the claude program, signed in on this computer.",
+      "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
+      "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
+      "notYet": "OpenAI API connections come in a later version of Orchester."
+    },
+    "native": {
+      "row": "{{provider}} · {{preset}} · {{host}}",
+      "preset": {
+        "official": "Official preset",
+        "deepseek": "DeepSeek preset",
+        "custom": "Custom preset",
+        "label": "Preset",
+        "officialTitle": "Official",
+        "deepseekTitle": "DeepSeek",
+        "customTitle": "Custom",
+        "customHost": "your server",
+        "deepseekOnAnthropic": "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
+        "later": "Compatible endpoints come in a later version of Orchester.",
+        "deepseekOnAnthropicLater": "The DeepSeek preset uses OpenAI Responses; DeepSeek’s Anthropic route is reachable through Custom, and compatible endpoints come in a later version of Orchester.",
+        "notOffered": "This preset is not offered on this provider."
+      },
+      "url": {
+        "label": "Base URL",
+        "advanced": "Advanced",
+        "presetHint": "Set by the preset. Prompts, repository content and command output are sent to {{host}}. Change it under Advanced.",
+        "hint": "https://, or http:// for localhost, 127.0.0.1 or [::1]. Shown in full wherever the connection is.",
+        "wireMessages": "Wire format · Anthropic Messages",
+        "wireResponses": "Wire format · OpenAI Responses",
+        "blank": "Enter the base URL.",
+        "scheme": "Use https://, or http:// for localhost, 127.0.0.1 or [::1].",
+        "host": "Enter a valid host and port.",
+        "credentials": "Keep user names and passwords out of the URL.",
+        "query": "Remove the query or fragment.",
+        "characters": "Remove spaces and backslashes from the URL.",
+        "tooLong": "The URL is too long."
+      },
+      "key": {
+        "label": "API key · project secret",
+        "none": "Choose a secret…",
+        "option": "{{name}} ({{environment}})",
+        "new": "New secret…",
+        "name": "Secret name",
+        "namePlaceholder": "ANTHROPIC_API_KEY",
+        "value": "Value",
+        "environment": "Environment",
+        "newLabel": "API key · new project secret",
+        "chooseExisting": "Choose an existing secret",
+        "keepsHint": "The connection keeps only which secret it uses. Orchester reads the value from the system keychain when an agent starts; it is never shown again.",
+        "newHint": "Saved to {{project}}’s secrets as an API key in {{environment}} when the connection is saved. The value goes to the system keychain and is never shown again; to change it, replace it in Secrets.",
+        "nameInvalid": "Use letters, digits and underscores for the secret name.",
+        "taken": "{{project}} already has a secret {{name}}.",
+        "valueRequired": "Enter the key’s value.",
+        "authentication": "API key · {{name}} ({{environment}})",
+        "gone": "API key · secret missing",
+        "choose": "Choose a secret",
+        "openSecrets": "Open Secrets",
+        "replace": "Replace in Secrets"
+      },
+      "afterSaving": "After saving, choose this connection and a model in an agent profile. Its Permissions tab shows what Orchester enforces.",
+      "save": {
+        "noKey": "Choose or create the API key’s secret.",
+        "noModels": "Add at least one model.",
+        "defaultsInvalid": "Choose the default model and effort again."
+      },
+      "fallback": {
+        "label": "Provider fallback",
+        "switch": "Retry declined requests on another model",
+        "detail": "Off: a declined request stops the step and is shown as a problem with its reason. On: Anthropic may answer with another model, and Activity names the model that answered.",
+        "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
+      },
+      "testAgain": "Test again",
+      "testUnavailable": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches the API nor reads the key.",
+      "execution": "This computer (Orchester runs the agent)",
+      "modelTraffic": "Orchester’s own HTTPS",
+      "property": {
+        "preset": "Preset",
+        "modelTraffic": "Model traffic",
+        "balance": "Balance"
+      }
+    },
+    "models": {
+      "title": "Models",
+      "none": "No models yet. Add one by hand.",
+      "default": "Default",
+      "source": {
+        "endpoint": "From the endpoint · {{time}}",
+        "preset": "From the preset",
+        "manual": "Added by hand"
+      },
+      "context": "{{tokens}} context",
+      "maxOutput": "{{tokens}} output",
+      "joined": "{{first}} · {{second}}",
+      "separator": " · ",
+      "noEfforts": "no effort",
+      "edit": "Edit models",
+      "fetch": "Fetch models",
+      "fetchUnavailable": "Fetching models needs a test of the connection, which comes in a later version. Add models by hand meanwhile.",
+      "addByHand": "Add a model by hand",
+      "add": "Add a model",
+      "editModel": "Edit",
+      "remove": "Remove",
+      "removeModel": "Remove model",
+      "save": "Save model",
+      "saveAll": "Save models",
+      "dialogTitle": "Models · {{connection}}",
+      "dialogExplanation": "Models are added by hand in this version: fetching them from {{host}} needs a test of the connection, which comes later. Agents get only the models listed here; each profile chooses one.",
+      "saveNote": "Agent invocations that start after you save use the new list.",
+      "id": "Model id",
+      "idHint": "Exactly as the endpoint expects it in requests.",
+      "editTitle": "Edit model",
+      "newTitle": "New model",
+      "contextWindow": "Context window · tokens · optional",
+      "maxOutputLabel": "Max output · tokens · optional",
+      "efforts": "Efforts",
+      "effortsHint": "The effort values the endpoint accepts. With none, the effort control is hidden for this model and none is sent.",
+      "inUse": "{{profiles}} uses {{model}}. Switch to another model before removing it.",
+      "idInUse": "{{profile}} uses {{model}}. Switch to another model before changing its id.",
+      "usedDropped": "{{profile}} uses {{model}}, which is no longer listed. Switch to another model first.",
+      "idInUseByStep": "Step {{step}} of {{pipeline}} runs on {{model}}. Switch it to another model before changing its id.",
+      "usedDroppedByStep": "Step {{step}} of {{pipeline}} runs on {{model}}, which is no longer listed. Switch it to another model first.",
+      "stepUser": "{{pipeline}} · {{step}}",
+      "invalidId": "Enter the model id as the API names it, without spaces.",
+      "listedAlready": "{{model}} is listed already.",
+      "invalidTokens": "Enter a whole number of tokens, or leave it empty.",
+      "defaultModel": "Default model",
+      "defaultModelHint": "Used by agent profiles that do not choose a model.",
+      "defaultEffortHint": "The model’s own efforts: {{efforts}}.",
+      "defaultEffortNone": "The default model takes no effort setting.",
+      "defaultEffortNoModel": "The efforts come from the default model.",
+      "defaultEffort": "Default effort",
+      "noDefault": "No default",
+      "modelsEffort": "The model’s own"
+    },
+    "dataNotice": {
+      "sent": "Prompts, repository content and command output are sent to {{host}}.",
+      "storedInPrc": "Data is stored in the PRC, per DeepSeek’s privacy policy."
+    },
+    "nativeNotAvailable": {
+      "heading": "{{connection}} uses {{provider}}, which is not available yet",
+      "detail": "Native agents are not available in this version of Orchester. A step whose profile runs on this connection doesn’t start, so a run with one doesn’t start either. Choose a Codex or Claude Code connection."
+    },
     "provider": {
       "codex": "Codex CLI",
       "claude": "Claude Code CLI",
       "codexShort": "Codex",
       "claudeShort": "Claude",
+      "anthropicApi": "Anthropic API (native)",
+      "openaiApi": "OpenAI API (native)",
+      "anthropicApiShort": "Anthropic API",
+      "openaiApiShort": "OpenAI API",
       "openai": "OpenAI",
       "anthropic": "Anthropic"
     },
@@ -2033,7 +2353,11 @@
       "executableMissing": "Not found",
       "notRecognized": "Not recognized",
       "couldNotRun": "Could not run",
-      "checking": "Checking…"
+      "checking": "Checking…",
+      "keyMissing": "Key missing",
+      "keyRejected": "Key rejected",
+      "billingProblem": "Billing problem",
+      "endpointUnreachable": "Endpoint unreachable"
     },
     "detail": {
       "notChecked": "This connection has not been checked yet.",
@@ -2043,7 +2367,13 @@
       "signInUnknown": "The CLI answers, but whether it is signed in could not be determined. Agents may fail to start until it is.",
       "executableMissing": "The program file does not exist. Edit the connection to choose it again, then check again.",
       "notRecognized": "The program answered, but not as the expected CLI. Edit the connection to choose the right file.",
-      "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection."
+      "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection.",
+      "nativeConnected": "The API accepted the key when it was last tested. Orchester runs agents with it once native agents are available.",
+      "nativeNotChecked": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run.",
+      "keyMissing": "The key’s secret is archived or gone. Choose another secret, or add one in Secrets.",
+      "keyRejected": "The API refused the key (401). Replace its value in Secrets, then test again.",
+      "billingProblem": "The API accepted the key but refuses to serve it (402): the balance is empty or billing is not set up.",
+      "endpointUnreachable": "The endpoint could not be reached or did not answer in time. Check the base URL and the network, then test again."
     },
     "property": {
       "provider": "Provider",
@@ -2052,6 +2382,7 @@
       "execution": "Execution",
       "authentication": "Authentication",
       "lastChecked": "Last checked",
+      "endpoint": "Endpoint",
       "version": "Version",
       "runs": "Runs with",
       "script": "Script"
@@ -2064,7 +2395,8 @@
     "noModelsListed": "The CLI listed no models. Profiles can still enter a model id, marked as not verified.",
     "modelSource": {
       "provider": "Listed by the model catalog bundled with the CLI.",
-      "aliases": "The CLI cannot list its models; these aliases are documented in its help."
+      "aliases": "The CLI did not list its models; these are the current model ids and the aliases its help documents.",
+      "providerAndCurrentIds": "The current model ids, then the models the CLI lists."
     },
     "refreshModels": "Refresh models",
     "usedBy": "Used by",
@@ -2133,6 +2465,9 @@
       "secretName": "{{name}} ({{environment}})",
       "secretGone": "a secret this project no longer has",
       "variables": "Variables",
+      "exemptTools": "Tools that run without asking",
+      "exemptToolsNone": "None. When a profile asks before MCP actions, every tool of this server asks.",
+      "exemptToolsNote": "Only these tools of this server, and only for agent profiles that ask before MCP actions. Every other tool still asks.",
       "tools": "Discovered tools",
       "toolsNote": "Orchester does not connect to MCP servers itself, so it cannot list their tools yet. The agent’s CLI lists them when an agent starts.",
       "refreshTools": "Refresh tools",
@@ -2148,11 +2483,17 @@
         "urlRequired": "Enter the server’s URL",
         "urlScheme": "The URL starts with http:// or https:// and names a host",
         "urlCredentials": "Keep user names and passwords out of the URL; use a bearer token from a secret",
+        "urlBackslash": "Use / instead of \\ in the host and path of the URL",
+        "urlHost": "The IPv6 address in the URL is not valid",
         "whitespace": "Remove the spaces and line breaks",
         "tooLong": "This is too long",
         "workingDirectory": "Use a folder inside the worktree, or an absolute path",
         "variables": "A variable cannot be used as written",
-        "unknownSecret": "This project has no secret {{secret}}"
+        "unknownSecret": "This project has no secret {{secret}}",
+        "exemptToolName": "{{tool}} is not a tool name: use letters, digits, - and _",
+        "exemptToolTooLong": "A tool name is at most {{max}} characters long",
+        "exemptToolTwice": "{{tool}} is listed twice",
+        "exemptToolsTooMany": "List at most {{max}} tools"
       },
       "dialog": {
         "addTitle": "Add MCP server",
@@ -2162,6 +2503,7 @@
         "programPlaceholder": "npx",
         "folderHint": "A folder in the worktree, or an absolute path. Claude Code starts every server in the worktree.",
         "argumentsHint": "One argument per line, passed as written.",
+        "exemptToolsHint": "One tool name per line, as the server names it (get_screenshot). When an agent profile asks before MCP actions, only these tools of this server run without asking; every other tool still asks. List only tools that change nothing.",
         "variablesHint": "One NAME=value per line. ${secret:NAME@environment} takes the value of a project secret.",
         "addSecret": "Add a variable from a secret…",
         "noSecrets": "This project has no secrets",
@@ -2355,7 +2697,111 @@
     "tabs": {
       "general": "General",
       "limits": "Limits",
-      "environment": "Environment"
+      "environment": "Environment",
+      "codeIndex": "Code index"
+    },
+    "codeIndex": {
+      "description": "How agents find their way around {{project}}’s code.",
+      "heading": "Code index",
+      "explanation": "Orchester indexes the repository’s tracked files at the revision a run starts from: languages and line counts, symbols, file outlines, Markdown headings and a package map. Agents get a built-in skill that searches the index with ripgrep, so they find code without reading whole files.",
+      "name": "Use code index",
+      "detail": "Agents that start after a change follow it. An agent already working keeps what it started with.",
+      "on": "On · agents search the index",
+      "off": "Off · agents get no index",
+      "offReadback": "Agents find code by listing and reading files",
+      "noneReadback": "No index yet",
+      "kept": {
+        "one": "1 index kept",
+        "other": "{{count}} indexes kept"
+      },
+      "keptBusy": "{{kept}} · {{busy}}",
+      "building": "{{count}} building",
+      "failedCount": "{{count}} failed",
+      "offTitle": "Agents get no index and no index skill",
+      "offDetail": "They find code by listing and reading files, which takes longer and uses more tokens in a large repository. No index is built while this is off.",
+      "listTitle": "Indexes",
+      "total": {
+        "one": "1 index · {{size}} in total",
+        "other": "{{count}} indexes · {{size}} in total"
+      },
+      "totalWithoutSize": {
+        "one": "1 index",
+        "other": "{{count}} indexes"
+      },
+      "noneKept": "None kept",
+      "listExplanation": "Built per revision when a run starts, shared read-only by the runs from that revision, and removed together with the worktrees that used it.",
+      "empty": "No index yet — built when the next run starts",
+      "listFailed": "Couldn’t read the kept indexes",
+      "usedByRun": "{{task}} · Run {{number}}",
+      "usedByRuns": "{{task}} · Runs {{number}}",
+      "runNumber": "Run {{number}}",
+      "usedBySeparator": " · ",
+      "state": {
+        "ready": "Ready",
+        "building": "Building",
+        "failed": "Failed",
+        "outdated": "Outdated"
+      },
+      "outdatedDetail": "Earlier index format · rebuilt when a run starts from it",
+      "readyDetail": "{{size}} · {{files}} files · {{symbols}} symbols · built {{when}} in {{took}}",
+      "builtToday": "today {{time}}",
+      "builtOn": "{{month}} {{day}} {{time}}",
+      "phase": {
+        "listing": "Listing tracked files… · started {{start}}, {{elapsed}} ago",
+        "indexing": "Indexing {{files}} files… · started {{start}}, {{elapsed}} ago",
+        "writing": "Writing the package map… · started {{start}}, {{elapsed}} ago"
+      },
+      "failed": {
+        "one": "{{reason}}. {{runs}} continues without the index; its agents search the files themselves.",
+        "other": "{{reason}}. {{runs}} continue without the index; their agents search the files themselves.",
+        "none": "{{reason}}."
+      },
+      "rebuild": "Rebuild",
+      "retry": "Retry",
+      "rebuildFailed": "The index was not rebuilt: {{reason}}",
+      "rebuildInUse": "The index was not rebuilt: a running agent is reading it. Try again when it finishes.",
+      "searchHeading": "Search tool",
+      "ripgrep": "ripgrep",
+      "ripgrepDetail": "The index skill searches with rg. Orchester copies it into .orchester/tools so it also runs inside the Codex sandbox.",
+      "checking": "Looking for ripgrep…",
+      "checkFailed": "Couldn’t look for ripgrep",
+      "found": "Found · {{version}}",
+      "foundWithoutVersion": "Found",
+      "source": {
+        "onPath": "On PATH · agents get a copy in .orchester/tools",
+        "codexCli": "Bundled with Codex CLI · agents get a copy in .orchester/tools",
+        "claudeCode": "Bundled with Claude Code · agents get a copy in .orchester/tools",
+        "winget": "Installed with winget · agents get a copy in .orchester/tools"
+      },
+      "notFound": "Not found",
+      "notFoundDetail": "Not on PATH, not bundled with Codex CLI or Claude Code",
+      "slowTitle": "Agents fall back to slower search",
+      "slowDetail": "Without ripgrep the index skill can’t run, so agents list and read files with the shell instead. That takes longer and uses more tokens.",
+      "commandLabel": "Install ripgrep runs",
+      "hint": "Nothing runs until you click. Afterwards Orchester looks for rg again and copies it into .orchester/tools.",
+      "install": "Install ripgrep",
+      "checkAgain": "Check again",
+      "tryAgain": "Try again",
+      "installing": "Installing…",
+      "installingReadback": "{{installer}} started at {{time}} · {{elapsed}}",
+      "installingTitle": "Installing ripgrep with {{installer}}",
+      "installingDetail": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes, you cancel it or you close Orchester.",
+      "installingDetailContinues": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes or you cancel it, also after you close Orchester.",
+      "cancelInstall": "Cancel",
+      "installCancelled": "You cancelled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installTimedOut": "{{installer}} did not finish within {{minutes}} minutes and was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "running": "Running",
+      "lastOutput": "Last output: {{line}}",
+      "installFailedTitle": "ripgrep was not installed",
+      "installFailedDetail": "{{installer}} ended with exit code {{code}}: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installNotStarted": "{{installer}} could not be started: {{message}}. Nothing was installed. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installUnavailable": "Install ripgrep is unavailable: {{installer}} was not found. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installUnsupported": "Orchester cannot install ripgrep on this system. Install ripgrep yourself, for example from github.com/BurntSushi/ripgrep, then choose Check again.",
+      "installer": {
+        "winget": "winget",
+        "homebrew": "Homebrew",
+        "homebrewProgram": "Homebrew (brew)"
+      }
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
@@ -2383,11 +2829,6 @@
       "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
       "variables": "Variables · NAME=value per line",
       "hint": "Stored and shown in plain text, so never put secrets here.",
-      "targetTitle": "Share one build folder between run worktrees",
-      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
-      "addTarget": "Add CARGO_TARGET_DIR",
-      "agentsTitle": "Agents need permission to write to {{variable}}",
-      "agentsDetail": "Agents that edit files write only inside their worktree. Add {{folder}} to Extra writable folders under Agents › Permissions for each profile that builds.",
       "changesTitle": "Changes apply to the next agent or command that starts",
       "changesDetail": "An agent or command already running keeps the environment it started with."
     },
@@ -2465,6 +2906,15 @@
       "oct": "Oct",
       "nov": "Nov",
       "dec": "Dec"
+    },
+    "weekday": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
     }
   },
   "recovery": {
@@ -2487,13 +2937,14 @@
     "runnerAlreadyServed": "Another Orchester window is already running this project's runner. Close that window, then restart the runner.",
     "runnerStartFailed": "The runner could not be started. The log has the details.",
     "runnerLost": "The runner stopped unexpectedly and could not be reconnected. The log has the details.",
-    "titleRequired": "Enter a title to save the draft.",
+    "titleRequired": "Enter a title to save the task.",
     "timeLimitRequired": "Enter a time limit too, or clear the budget.",
     "timeLimitInvalid": "Enter whole minutes, such as 30.",
     "timeLimitZero": "The time limit must be at least one minute.",
     "connectionNameRequired": "Enter a name for the connection.",
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
+    "nativeNotAvailable": "Native agents are not available in this version yet.",
     "executableNotAbsolute": "Choose the program file by its full path.",
     "secretNameTaken": "Another secret of this project already has this name in this environment.",
     "secretGone": "This secret no longer exists or was archived.",
@@ -2818,6 +3269,10 @@
         "commandsNarrowed": "Commands · narrowed",
         "networkStaysOn": "Stays on",
         "interactiveToolApprovals": "Ask when a tool needs approval",
+        "exemptTools": {
+          "one": "{{server}}: 1 tool runs without asking",
+          "other": "{{server}}: {{count}} tools run without asking"
+        },
         "onlyNarrow": "Steps can only narrow profile permissions.",
         "alsoAllows": "{{profile}} {{version}} also allows {{commands}}. Steps can only narrow profile permissions."
       }
@@ -3450,9 +3905,9 @@
       "empty": "No text.",
       "resolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved at this injection event",
       "unresolved": "Source {{index}} of {{count}} · {{resolved}} variables resolved · no value yet: {{unavailable}}",
-      "note": "Preview only. Existing runs keep the instruction versions they started with.",
+      "note": "Preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts.",
       "originDraft": "{{kind}} · {{event}} · Draft substituted for published v{{version}}",
-      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with."
+      "noteDraft": "Draft preview only. Existing runs keep the instruction versions they started with. The skills and the code index part are added when a run starts."
     },
     "create": {
       "title": "New instruction",
@@ -3703,6 +4158,70 @@
     }
   },
   "statusBar": {
+    "planLimits": {
+      "claudeFull": "Claude Code",
+      "title": "Plan limits",
+      "planPro": "Pro plan",
+      "planPlus": "Plus plan",
+      "planOther": "{{plan}} plan",
+      "stateNotRead": "Not read yet",
+      "stateSignedOut": "Not signed in",
+      "stateUnavailable": "No working connection",
+      "headerReached": "· {{window}} limit reached",
+      "headerCredits": "· No credits left",
+      "headerWorkspace": "· Workspace usage limit reached",
+      "headerOther": "· Limit reached",
+      "creditsLabel": "Credits",
+      "creditsValue": "{{balance}} left",
+      "extraLabel": "Extra usage",
+      "extraValue": "In use: turns past the limit use it",
+      "checkUnknown": "time not recorded",
+      "separator": "·",
+      "percent": "{{used}}%",
+      "reached": "{{cli}} limit reached",
+      "reasonCredits": "no credits left",
+      "reasonWorkspace": "workspace limit",
+      "resetsAt": "resets {{time}}",
+      "resetsIn": "resets in {{hours}} h {{minutes}} min",
+      "resetsInMinutes": "resets in {{minutes}} min",
+      "resetsInHours": "resets in {{hours}} h",
+      "resetsOnDay": "resets {{weekday}} {{time}}",
+      "resetUnknown": "Reset not reported",
+      "fiveHour": "5-hour",
+      "weekly": "Weekly",
+      "minutes": "{{count}}-minute",
+      "hours": "{{count}}-hour",
+      "days": "{{count}}-day",
+      "windowNear": "Near the {{window}} limit",
+      "nearWeekly": "Near the weekly limit",
+      "nearFiveHour": "Near the 5-hour limit",
+      "notReported": "Not reported yet",
+      "refuses": "{{cli}} refuses new turns until {{time}}.",
+      "refusesOnDay": "{{cli}} refuses new turns until {{weekday}} {{time}}.",
+      "refusesCredits": "{{cli}} refuses new turns: the workspace has no credits left.",
+      "refusesWorkspace": "{{cli}} refuses new turns: the workspace’s usage limit is reached.",
+      "refusesOther": "{{cli}} refuses new turns; it did not say until when.",
+      "unlimited": "Unlimited",
+      "source": {
+        "justNow": "From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "windowSource": {
+        "justNow": "{{window}} · From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "notRead": "{{cli}} reports its limits with each turn. They appear after the next {{cli}} turn in any open project.",
+      "unreadable": "This project’s connections could not be read, so its plan limits are not shown.",
+      "signedOut": "{{cli}} is not signed in on this computer, so it reports no limits. Sign in to it in a terminal, then test the connection in Connections.",
+      "cannotStart": "{{connection}} · {{project}} could not start {{cli}} when it was checked at {{time}}, so no limits can be read. Connections shows why.",
+      "checked": "Connection checked · {{time}}",
+      "expired": "Reset at {{time}} · read again with the next turn",
+      "footnote": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget."
+    },
     "runner": {
       "starting": "Starting runner…",
       "online": "Runner online",
@@ -4006,6 +4525,16 @@
         "running": "Saving repository agent files",
         "done": "Repository agent files saved",
         "failed": "Could not save repository agent files"
+      },
+      "codeIndex": {
+        "running": "Saving the code index setting",
+        "done": "Code index setting saved",
+        "failed": "Could not save the code index setting"
+      },
+      "codeIndexRebuild": {
+        "running": "Rebuilding the code index of {{name}}",
+        "done": "Code index of {{name}} rebuilt",
+        "failed": "Could not rebuild the code index of {{name}}"
       }
     },
     "opens": {

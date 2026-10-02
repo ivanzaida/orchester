@@ -12,8 +12,8 @@ use std::{
 };
 
 pub use self::{
-  claude::{ClaudeInvocation, ClaudeSession},
-  codex::{CodexAgentFiles, CodexInvocation},
+  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, result_schema},
+  codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
 };
 use crate::{
@@ -113,6 +113,12 @@ pub fn is_agent_variable(name: &str) -> bool {
 pub enum InvocationError {
   #[error("the path {0} is not valid Unicode")]
   NotUnicode(PathBuf),
+  /// The permissions ask a person, but the invocation has no way to ask.
+  #[error("the step asks a person before some actions, but the agent was not given the permission prompt")]
+  NoPermissionPrompt,
+  /// The step edits by `Edit` allow rules, and none can name this folder (a network share).
+  #[error("edits on a network share can't be allowed by rule: {0}")]
+  NoEditRule(PathBuf),
 }
 
 /// Refuses a folder the CLI would get mangled, before its arguments are built.

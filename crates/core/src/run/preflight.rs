@@ -8,7 +8,7 @@
 //! approvals), tools with access rules and approval gates on tool steps are reported as not
 //! supported yet rather than skipped.
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +43,8 @@ pub enum PreflightProblem {
   ConnectionMissing { step: StepKey },
   /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
+  /// The profile's connection is to a native agent provider, which this version runs no agent on.
+  NativeNotAvailable { step: StepKey },
   /// The connection's last check says its CLI cannot be used (not signed in, missing, …).
   ConnectionNotUsable { step: StepKey, status: ConnectionStatus },
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
@@ -52,37 +54,6 @@ pub enum PreflightProblem {
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
   NoCommits,
-  /// The configured Cargo target's volume has too little space for a build.
-  BuildSpaceLow {
-    target: PathBuf,
-    available: u64,
-    required: u64,
-  },
-  /// The runner could not measure space on the configured Cargo target's volume.
-  BuildSpaceUnavailable { target: PathBuf },
-}
-
-const GIB: u64 = 1024 * 1024 * 1024;
-
-/// A new target can need 10–20 GiB; an existing target needs a smaller emergency floor so
-/// incremental builds are not refused only because they have already filled their cache.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BuildTargetState {
-  Empty,
-  Populated,
-}
-
-/// The low-space problem for a shared Cargo target, if its host volume is below the floor.
-pub fn build_space_problem(target: PathBuf, available: u64, state: BuildTargetState) -> Option<PreflightProblem> {
-  let required = match state {
-    BuildTargetState::Empty => 10 * GIB,
-    BuildTargetState::Populated => GIB,
-  };
-  (available < required).then_some(PreflightProblem::BuildSpaceLow {
-    target,
-    available,
-    required,
-  })
 }
 
 /// The configuration a task's run would use.
@@ -185,6 +156,9 @@ fn usable_provider(
   let ConnectionKind::Agent(provider) = connection.kind() else {
     return Err(PreflightProblem::UnsupportedProvider { step });
   };
+  if !provider.runs_agents() {
+    return Err(PreflightProblem::NativeNotAvailable { step });
+  }
   let status = connection.status();
   if !status.is_usable() {
     return Err(PreflightProblem::ConnectionNotUsable { step, status });

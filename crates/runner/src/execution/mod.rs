@@ -16,11 +16,13 @@
 mod again;
 mod attach;
 mod board;
-mod build_space;
 mod checkpoint;
+mod codebase_index;
 mod control;
 mod conversation;
+mod environment;
 mod halt;
+mod handoff;
 mod idle;
 mod permissions;
 mod plan;
@@ -106,6 +108,9 @@ struct Inner {
   notifier: Notifier,
   /// Where the values of the secrets MCP servers use are read from when an agent starts.
   vault: Arc<dyn SecretVault>,
+  /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
+  /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
+  relay: Option<PathBuf>,
   board: Arc<Board>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
   /// Serializes requests that start a task or change a run while its task may end. A fallback
@@ -114,11 +119,12 @@ struct Inner {
 }
 
 impl Scheduler {
-  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>) -> Self {
+  pub fn new(project_root: &Path, notifier: Notifier, vault: Arc<dyn SecretVault>, relay: Option<PathBuf>) -> Self {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
         vault,
+        relay,
         board: Arc::new(Board::new(notifier.clone())),
         notifier,
         active: Mutex::new(HashMap::new()),
@@ -175,7 +181,6 @@ impl Scheduler {
     {
       if recorded.status() == &RunStatus::Pending {
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
@@ -224,7 +229,6 @@ impl Scheduler {
     if let Some(recorded) = recorded {
       if recorded.status() == &RunStatus::Pending {
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
@@ -235,9 +239,6 @@ impl Scheduler {
     if let Some(confirmed) = &remove_worktrees {
       again::remove_worktrees(root, &previous, confirmed)?;
     }
-    // The confirmed cleanup can free the shared build target's volume. Check after it, but
-    // before recording this run or creating its worktree.
-    build_space::preflight(&db, root)?;
     let prepared = prepare::record(&mut db, root, key, checked)?;
     self.begin(db, prepared)
   }
@@ -314,7 +315,7 @@ impl Scheduler {
 
   /// "Wait for agents to save": starts no new work, asks every active run to pause at its next
   /// checkpoint and returns once each has settled. The work summary shows each run saving, then
-  /// saved.
+  /// saved. Pending tool decisions checkpoint without granting the requested action.
   pub async fn finish_at_checkpoints(&self) {
     let settling = {
       let _one_at_a_time = self.inner.continuing.lock().await;
@@ -467,6 +468,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
+      relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       controls,
       settled: settled.clone(),

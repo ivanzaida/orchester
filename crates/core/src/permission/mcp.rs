@@ -1,64 +1,25 @@
 //! What each agent CLI enforces for the MCP servers a profile chooses
-//! (`docs/design/orchester-workspace.md`, "MCP servers"). Checked against Codex CLI 0.139 and Claude
-//! Code 2.1.89 on Windows. A signed-in Codex 0.139 model turn on 2026-09-29 called the chosen
-//! tool with `-a never`; the test variable reached its server, while an agent shell command could
-//! not see it. Two repeated calls to an unannotated tool also worked after one earlier call was
-//! cancelled; that cancellation's cause is unknown. Claude Code was not signed in, so its
-//! `mcp__<server>` allow rule has not been verified by a model turn.
+//! (`docs/design/orchester-workspace.md`, "MCP servers"). Checked against Codex CLI 0.159 and Claude
+//! Code 2.1.89 on Windows. Claude Code was not signed in, so its `mcp__<server>` allow rule has not
+//! been verified by a model turn.
 //!
-//! - Both CLIs load only the servers the invocation names: Codex leaves the user's own configuration out
-//!   (`--ignore-user-config`), Claude Code every other configuration (`--strict-mcp-config`).
-//! - Claude Code allows the chosen servers' tools with `--allowedTools mcp__<server>`; print mode denies any tool no
-//!   rule allows. Codex runs with `-a never`: nobody is asked before a tool of a chosen server runs.
+//! - Codex runs as App Server (`crate::connection::invocation::CodexInvocation`), which loads the user's own
+//!   configuration and its global servers besides the chosen ones (`-c mcp_servers.<server>…` overrides). A tool call
+//!   that asks for approval reaches a person when the step asks before MCP actions, and is declined otherwise (the
+//!   approval policy's `mcp_elicitations`; `docs/interactive-tool-approvals.md`).
+//! - Claude Code loads only the servers the invocation names (`--strict-mcp-config`) and allows their tools with
+//!   `--allowedTools mcp__<server>`; print mode denies any tool no rule allows.
 //! - Neither CLI's sandbox or permission settings reach inside a server: the server is a program of its own (or a
 //!   service elsewhere) that works outside the worktree's limits and reaches the network whatever the Network setting
 //!   says.
-//! - Codex starts a server in the folder it is set to; Claude Code starts every server in the worktree.
-
-use serde::{Deserialize, Serialize};
 
 use crate::connection::AgentProvider;
 
-/// How a CLI keeps the agent to the chosen servers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum McpLoading {
-  /// `--ignore-user-config` and `-c mcp_servers.<server>…` overrides.
-  CodexConfigOverrides,
-  /// `--strict-mcp-config --mcp-config <file>`.
-  ClaudeStrictConfig,
-}
-
-/// Whether a person approves a call of a chosen server's tool.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum McpCalls {
-  /// `-a never`: calls run without anyone being asked.
-  CodexNeverAsks,
-  /// `--allowedTools mcp__<server>`: the chosen servers' tools are allowed, nothing else is.
-  ClaudeAllowedTools,
-}
-
-/// What a CLI enforces for MCP servers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct McpSupport {
-  pub loading: McpLoading,
-  pub calls: McpCalls,
-  /// The CLI starts a server in the folder it is set to; otherwise in the worktree.
-  pub working_directory: bool,
-}
-
-pub const fn mcp_support(provider: AgentProvider) -> McpSupport {
+/// Whether `provider` starts a server in the folder it is set to: Codex does, Claude Code starts
+/// every server in the worktree, and a native agent starts none in this version.
+pub const fn starts_in_its_folder(provider: AgentProvider) -> bool {
   match provider {
-    AgentProvider::CodexCli => McpSupport {
-      loading: McpLoading::CodexConfigOverrides,
-      calls: McpCalls::CodexNeverAsks,
-      working_directory: true,
-    },
-    AgentProvider::ClaudeCodeCli => McpSupport {
-      loading: McpLoading::ClaudeStrictConfig,
-      calls: McpCalls::ClaudeAllowedTools,
-      working_directory: false,
-    },
+    AgentProvider::CodexCli => true,
+    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => false,
   }
 }

@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{ConnectionId, InvocationId, ResourceId, RunId, SecretId, TaskId},
+  id::{ConnectionId, InvocationId, MemoryId, ResourceId, RunId, SecretId, TaskId},
   resource::{PublishError, ResourceKind},
   run::RunError,
   task::EditError,
@@ -65,12 +65,28 @@ pub enum StoreError {
   NotAGitHubConnection(ConnectionId),
   #[error("invocation {0} does not exist")]
   InvocationNotFound(InvocationId),
+  #[error("invocation {0} is not an open agent launch without a recorded permission snapshot")]
+  InvocationPermissionsNotRecordable(InvocationId),
   #[error("a secret named `{name}` already exists in {environment}")]
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]
   SecretNotFound(SecretId),
   #[error("run {0} was merged already")]
   AlreadyMerged(RunId),
+  #[error("memory {0} does not exist")]
+  MemoryNotFound(MemoryId),
+  /// The stored record changed since this copy of it was read; read it again. Nothing was changed.
+  #[error("memory {0} changed since it was read")]
+  MemoryConflict(MemoryId),
+  /// A record with the id is stored already; nothing was changed.
+  #[error("memory {0} exists already")]
+  MemoryExists(MemoryId),
+  /// The stored record is no longer active, so it cannot be superseded; nothing was changed.
+  #[error("memory {0} is no longer active")]
+  MemoryNotActive(MemoryId),
+  /// Another active record of the scope has the key; nothing was changed.
+  #[error("an active memory record with the key `{0}` already exists")]
+  DuplicateMemoryKey(String),
 }
 
 impl StoreError {

@@ -2,15 +2,16 @@
 //! dialog's fields as entered and their mapping to and from a server, and saving a server or
 //! turning it on and off. Arguments are one per line and plain variables `NAME=value` lines, as a
 //! command tool's; a variable whose value comes from a project secret is written
-//! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. Saving
-//! blocks on SQLite; the UI calls it off the UI thread.
+//! `NAME=${secret:SECRET_NAME@environment}`, which names the secret, never its value. The tools that
+//! run without asking are one name per line. Saving blocks on SQLite; the UI calls it off the UI thread.
 
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::mcp::{
-    HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerError, McpServerName, McpServerNameError,
-    McpTransport, McpUrl, StdioServer, TransportError, WorkingDirectory,
+    ExemptTools, ExemptToolsError, HttpServer, McpEnvValue, McpEnvironment, McpServer, McpServerError, McpServerName,
+    McpServerNameError, McpToolName, McpToolNameError, McpTransport, McpUrl, StdioServer, TransportError,
+    WorkingDirectory,
   },
   id::{ConnectionId, SecretId},
   resource::{CommandArg, CommandProgram, VariableName},
@@ -51,6 +52,8 @@ pub struct McpServerText {
   pub variables: String,
   pub url: String,
   pub bearer: Option<SecretId>,
+  /// One tool name per line; empty lines are left out.
+  pub exempt_tools: String,
 }
 
 /// Why the server cannot be saved yet, per field.
@@ -62,6 +65,7 @@ pub struct McpServerErrors {
   pub working_directory: Option<Message>,
   pub variables: Option<Message>,
   pub url: Option<Message>,
+  pub exempt_tools: Option<Message>,
 }
 
 /// A server as the dialog saves it.
@@ -70,6 +74,7 @@ pub struct McpServerDraft {
   pub name: McpServerName,
   pub transport: McpTransport,
   pub environment: McpEnvironment,
+  pub exempt_tools: ExemptTools,
 }
 
 impl McpServerText {
@@ -84,6 +89,7 @@ impl McpServerText {
       variables: String::new(),
       url: String::new(),
       bearer: None,
+      exempt_tools: String::new(),
     }
   }
 
@@ -92,6 +98,16 @@ impl McpServerText {
     let mut text = Self {
       name: server.name().as_str().to_owned(),
       variables: variables_text(server.environment(), secrets),
+      exempt_tools: server
+        .exempt_tools()
+        .tools()
+        .iter()
+        .map(McpToolName::as_str)
+        .collect::<Vec<_>>()
+        .join(
+          "
+",
+        ),
       ..Self::new_server()
     };
     match server.transport() {
@@ -141,11 +157,14 @@ impl McpServerText {
       }
       TransportChoice::Http => Ok(McpEnvironment::default()),
     };
-    match (name, transport, environment) {
-      (Ok(name), Some(transport), Ok(environment)) => Ok(McpServerDraft {
+    let exempt_tools =
+      ExemptTools::parse(&self.exempt_tools).map_err(|error| errors.exempt_tools = Some(exempt_message(&error)));
+    match (name, transport, environment, exempt_tools) {
+      (Ok(name), Some(transport), Ok(environment), Ok(exempt_tools)) => Ok(McpServerDraft {
         name,
         transport,
         environment,
+        exempt_tools,
       }),
       _ => Err(Box::new(errors)),
     }
@@ -250,11 +269,34 @@ fn name_message(error: &McpServerNameError) -> Message {
   }
 }
 
+fn exempt_message(error: &ExemptToolsError) -> Message {
+  match error {
+    ExemptToolsError::Name(McpToolNameError::Invalid(tool)) => {
+      Message::new("connections.mcp.errors.exemptToolName").with("tool", tool.clone())
+    }
+    ExemptToolsError::Name(McpToolNameError::TooLong) => {
+      Message::new("connections.mcp.errors.exemptToolTooLong").with("max", McpToolName::MAX_CHARS.to_string())
+    }
+    // Empty lines are left out, so a listed name is never blank.
+    ExemptToolsError::Name(McpToolNameError::Blank) => {
+      Message::new("connections.mcp.errors.exemptToolName").with("tool", String::new())
+    }
+    ExemptToolsError::Duplicate(tool) => {
+      Message::new("connections.mcp.errors.exemptToolTwice").with("tool", tool.clone())
+    }
+    ExemptToolsError::TooMany => {
+      Message::new("connections.mcp.errors.exemptToolsTooMany").with("max", ExemptTools::MAX.to_string())
+    }
+  }
+}
+
 fn transport_message(error: &TransportError) -> Message {
   match error {
     TransportError::BlankUrl => Message::new("connections.mcp.errors.urlRequired"),
     TransportError::UrlScheme => Message::new("connections.mcp.errors.urlScheme"),
     TransportError::UrlCredentials => Message::new("connections.mcp.errors.urlCredentials"),
+    TransportError::Backslash => Message::new("connections.mcp.errors.urlBackslash"),
+    TransportError::InvalidHost => Message::new("connections.mcp.errors.urlHost"),
     TransportError::Whitespace(_) => Message::new("connections.mcp.errors.whitespace"),
     TransportError::TooLong(_) => Message::new("connections.mcp.errors.tooLong"),
     TransportError::BlankWorkingDirectory | TransportError::OutsideWorktree(_) => {
@@ -283,7 +325,7 @@ enum SaveError {
 
 fn save(db: &mut ProjectDb, id: Option<ConnectionId>, draft: McpServerDraft) -> Result<ConnectionId, SaveError> {
   let Some(id) = id else {
-    let server = McpServer::new(
+    let mut server = McpServer::new(
       ConnectionId::generate(),
       draft.name,
       draft.transport,
@@ -291,6 +333,7 @@ fn save(db: &mut ProjectDb, id: Option<ConnectionId>, draft: McpServerDraft) -> 
       Timestamp::now(),
     )
     .map_err(SaveError::Server)?;
+    server.set_exempt_tools(draft.exempt_tools);
     db.create_mcp_server(&server).map_err(SaveError::Store)?;
     return Ok(server.id());
   };
@@ -301,6 +344,7 @@ fn save(db: &mut ProjectDb, id: Option<ConnectionId>, draft: McpServerDraft) -> 
   server
     .update(draft.name, draft.transport, draft.environment)
     .map_err(SaveError::Server)?;
+  server.set_exempt_tools(draft.exempt_tools);
   db.save_mcp_server(&server).map_err(SaveError::Store)?;
   Ok(id)
 }

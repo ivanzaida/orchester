@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::{connections::data::agent_connections, environment::CARGO_TARGET_DIR};
+use crate::connections::data::agent_connections;
 
 /// Slug of a profile whose role has no ASCII letters or digits.
 const FALLBACK_SLUG: &str = "agent";
@@ -103,9 +103,6 @@ pub struct ProjectAgents {
   pub steps: Arc<Vec<StepUse>>,
   /// The project's MCP servers, which a profile can give its agents.
   pub mcp: Arc<Vec<McpServer>>,
-  /// The build folder Project settings › Environment sets (`CARGO_TARGET_DIR`), which the
-  /// Permissions tab suggests as an extra writable folder.
-  pub target_dir: Option<Arc<str>>,
   /// Whether the project's agents may load the repository's own agent files (Project settings ›
   /// General), which the enforcement panel shows beside the profile's permissions.
   pub agent_files: RepositoryAgentFiles,
@@ -126,7 +123,6 @@ impl ProjectAgents {
       connections: Arc::new(agent_connections(store.connections()?)),
       steps: Arc::new(step_uses(store)?),
       mcp: Arc::new(store.mcp_servers()?),
-      target_dir: store.project_environment()?.get(CARGO_TARGET_DIR).map(Arc::from),
       agent_files: store.repository_agent_files()?,
     })
   }
@@ -155,7 +151,7 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
 }
 
 /// Steps of the latest published pipeline versions that run a profile.
-fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
+pub(crate) fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
   let mut uses = Vec::new();
   for resource in store.resources(ResourceKind::Pipeline)? {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {

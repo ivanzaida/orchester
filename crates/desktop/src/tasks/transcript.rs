@@ -2,7 +2,8 @@
 //! entries a person reads. A command's start and end become one entry (a tool step's command tool
 //! too), a permission denial marks the command it denied, each file of a file change is an entry of
 //! its own (it opens the file in the Changes tab), consecutive unparsed lines become one collapsed
-//! entry, and a failed turn
+//! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
+//! of its own (Codex, which reports no command for it), and a failed turn
 //! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
 //! invocation panel shows the session. Nothing else is left out.
 
@@ -36,6 +37,42 @@ pub enum EntryKind {
   Raw(Arc<Vec<(OutputStream, Arc<str>)>>),
   /// A tool step's command tool, from its start to its end.
   ToolCommand(ToolCommandEntry),
+  /// A call of an MCP tool that no command shows: Codex reports none for it.
+  McpTool(McpToolEntry),
+  /// A tool listed to run without asking that asks after all: Claude Code could name it as a tool of
+  /// `other`.
+  ExemptionNotApplied {
+    server: Arc<str>,
+    tool: Arc<str>,
+    other: Arc<str>,
+  },
+}
+
+/// How a call of a tool of MCP server `server` was decided, as the decision marks of the command
+/// categories design say it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CommandMark {
+  /// The step asks before MCP actions, and `server` lists the tool among those that run without asking.
+  ExemptTool { server: Arc<str> },
+  /// `server` asked for approval in a step that does not ask before MCP actions: declined at once.
+  Declined { server: Arc<str> },
+  /// A person was asked, and the call ran.
+  ApprovedByYou { server: Arc<str> },
+  /// A person was asked, and the call did not run to its end.
+  AskedYou { server: Arc<str> },
+}
+
+/// An MCP tool call that no command shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct McpToolEntry {
+  /// The CLI's id of the call.
+  pub item: Arc<str>,
+  pub server: Arc<str>,
+  pub tool: Arc<str>,
+  /// How it was decided, when the CLI asked or Orchester answered for it.
+  pub mark: Option<CommandMark>,
+  /// `None` until the call ends.
+  pub status: Option<CommandStatus>,
 }
 
 /// A command tool's program that a tool step ran.
@@ -55,6 +92,8 @@ pub struct ToolCommandEntry {
 /// A command the agent ran, from its start to its end.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommandEntry {
+  /// The CLI's id of the call.
+  pub item: Arc<str>,
   pub command: Arc<str>,
   pub output: Arc<str>,
   /// `None` while the command runs.
@@ -62,6 +101,8 @@ pub struct CommandEntry {
   pub exit_code: Option<i64>,
   /// Milliseconds from start to end, when both were seen.
   pub duration: Option<i64>,
+  /// Why nobody was asked about it, when it says.
+  pub mark: Option<CommandMark>,
 }
 
 /// One entry of the transcript.
@@ -86,6 +127,9 @@ impl Entry {
         command.result,
         Some(ToolCommandResult::Failed | ToolCommandResult::TimedOut)
       ),
+      EntryKind::McpTool(call) => {
+        matches!(call.mark, Some(CommandMark::Declined { .. })) || call.status == Some(CommandStatus::Failed)
+      }
       EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) | EntryKind::McpServer(..) => true,
       _ => false,
     }
@@ -105,15 +149,17 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       kind,
     };
     match &stored.event {
-      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted => {}
+      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted | AgentEvent::PlanLimits { .. } => {}
       AgentEvent::Message { text } => entries.push(entry(EntryKind::Message(text.as_str().into()))),
       AgentEvent::Reasoning { text } => entries.push(entry(EntryKind::Reasoning(text.as_str().into()))),
-      AgentEvent::CommandStarted { command, .. } => entries.push(entry(EntryKind::Command(CommandEntry {
+      AgentEvent::CommandStarted { item, command } => entries.push(entry(EntryKind::Command(CommandEntry {
+        item: item.as_str().into(),
         command: command.as_str().into(),
         output: "".into(),
         status: None,
         exit_code: None,
         duration: None,
+        mark: None,
       }))),
       AgentEvent::CommandFinished { .. } => finish_command(&mut entries, stored),
       AgentEvent::FileChanged { changes, .. } => {
@@ -131,7 +177,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
-      AgentEvent::PermissionDenied { command, .. } => deny_command(&mut entries, stored, command),
+      AgentEvent::PermissionDenied { item, command } => deny_command(&mut entries, stored, (item, command)),
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
       AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
       AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
@@ -148,14 +194,116 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
         duration: None,
       }))),
       AgentEvent::ToolCommandFinished { .. } => finish_tool_command(&mut entries, stored),
+      AgentEvent::McpToolNotAsked { .. } | AgentEvent::McpToolDeclined { .. } => not_asked(&mut entries, stored),
+      AgentEvent::McpToolFinished { .. } => mcp_tool_finished(&mut entries, stored),
+      AgentEvent::McpExemptionNotApplied { server, tool, other } => {
+        entries.push(entry(EntryKind::ExemptionNotApplied {
+          server: server.as_str().into(),
+          tool: tool.as_str().into(),
+          other: other.as_str().into(),
+        }))
+      }
     }
   }
   entries
 }
 
+/// Marks the command of a call nobody was asked about, or adds an entry for the call when no command
+/// shows it.
+fn not_asked(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
+  let (item, server, tool, mark) = match &stored.event {
+    AgentEvent::McpToolNotAsked { item, server, tool } => (
+      item,
+      server,
+      tool,
+      CommandMark::ExemptTool {
+        server: server.as_str().into(),
+      },
+    ),
+    AgentEvent::McpToolDeclined { item, server, tool } => (
+      item,
+      server,
+      tool,
+      CommandMark::Declined {
+        server: server.as_str().into(),
+      },
+    ),
+    _ => return,
+  };
+  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
+    EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.item == **item => Some(shown),
+    _ => None,
+  });
+  match shown {
+    Some(shown) => shown.mark = Some(mark),
+    None => push_mcp_tool(
+      entries,
+      stored,
+      McpToolEntry {
+        item: item.as_str().into(),
+        server: server.as_str().into(),
+        tool: tool.as_str().into(),
+        mark: Some(mark),
+        status: None,
+      },
+    ),
+  }
+}
+
+/// Ends the entry of a Codex MCP call, or adds one: a call nobody was asked about shows only when it ends.
+fn mcp_tool_finished(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
+  let AgentEvent::McpToolFinished {
+    item,
+    server,
+    tool,
+    status,
+    asked,
+  } = &stored.event
+  else {
+    return;
+  };
+  let server: Arc<str> = server.as_str().into();
+  let decided = asked.then(|| match status {
+    CommandStatus::Completed => CommandMark::ApprovedByYou { server: server.clone() },
+    _ => CommandMark::AskedYou { server: server.clone() },
+  });
+  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
+    EntryKind::McpTool(shown) if entry.invocation == stored.invocation && *shown.item == **item => Some(shown),
+    _ => None,
+  });
+  match shown {
+    Some(shown) => {
+      shown.status = Some(*status);
+      shown.mark = shown.mark.take().or(decided);
+    }
+    None => push_mcp_tool(
+      entries,
+      stored,
+      McpToolEntry {
+        item: item.as_str().into(),
+        server,
+        tool: tool.as_str().into(),
+        mark: decided,
+        status: Some(*status),
+      },
+    ),
+  }
+}
+
+fn push_mcp_tool(entries: &mut Vec<Entry>, stored: &ActivityEntry, call: McpToolEntry) {
+  entries.push(Entry {
+    sequence: stored.sequence,
+    part: 0,
+    execution: stored.execution,
+    invocation: stored.invocation,
+    at: stored.at,
+    kind: EntryKind::McpTool(call),
+  });
+}
+
 /// Marks the latest entry of `command` in the same invocation as declined, or adds a declined one
 /// when the command was not shown.
-fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, command: &str) {
+fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, (item, command): (&str, &str)) {
   let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
     EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.command == *command => Some(shown),
     _ => None,
@@ -169,11 +317,13 @@ fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, command: &str)
       invocation: stored.invocation,
       at: stored.at,
       kind: EntryKind::Command(CommandEntry {
+        item: item.into(),
         command: command.into(),
         output: "".into(),
         status: Some(CommandStatus::Declined),
         exit_code: None,
         duration: None,
+        mark: None,
       }),
     }),
   }
@@ -182,11 +332,11 @@ fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, command: &str)
 /// Completes the entry its start created, or adds one when the start was not seen.
 fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
   let AgentEvent::CommandFinished {
+    item,
     command,
     output,
     exit_code,
     status,
-    ..
   } = &stored.event
   else {
     return;
@@ -195,18 +345,24 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
     entry.invocation == stored.invocation
       && matches!(&entry.kind, EntryKind::Command(started) if started.status.is_none() && *started.command == **command)
   });
-  let finished = |duration| {
+  let finished = |duration, mark| {
     EntryKind::Command(CommandEntry {
+      item: item.as_str().into(),
       command: command.as_str().into(),
       output: output.as_str().into(),
       status: Some(*status),
       exit_code: *exit_code,
       duration,
+      mark,
     })
   };
   match started {
     Some(entry) => {
-      entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis()));
+      let mark = match &entry.kind {
+        EntryKind::Command(started) => started.mark.clone(),
+        _ => None,
+      };
+      entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis()), mark);
     }
     None => entries.push(Entry {
       sequence: stored.sequence,
@@ -214,7 +370,7 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
       execution: stored.execution,
       invocation: stored.invocation,
       at: stored.at,
-      kind: finished(None),
+      kind: finished(None, None),
     }),
   }
 }

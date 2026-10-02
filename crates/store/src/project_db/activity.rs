@@ -1,28 +1,34 @@
 //! Agent CLI and command tool invocations and the transcript of their events, written by the runner.
 
 use orchester_core::{
+  code_index::CodeIndexUse,
   connection::stream::{AgentEvent, InvocationOutcome},
   id::{InvocationId, RunId, StepExecutionId},
+  permission::{AgentPermissions, LaunchPermissions},
   resource::ModelId,
-  run::{ActivityEntry, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage},
+  run::{
+    ActivityEntry, EditProgress, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage,
+  },
   store::ActivityStore,
   time::Timestamp,
   tokens::TokensUsed,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, invocation_prompts, step_outputs};
+use super::{ProjectDb, code_index, invocation_prompts, step_outputs};
 use crate::{
   StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
 const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
+/// 2: launch permissions with what happened to commands outside them; 1 held the permissions alone.
+const PERMISSIONS_SCHEMA: u32 = 2;
 
 const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, kind, model, session_id, \
                                   started_at, ended_at, input_tokens, cached_input_tokens, output_tokens, outcome, \
-                                  inactive_ms, waiting_since \
+                                  inactive_ms, waiting_since, permissions \
                                   FROM invocations";
 /// `kind` of an agent CLI's invocation and of a command tool's.
 const AGENT: &str = "agent";
@@ -78,6 +84,34 @@ impl ActivityStore for ProjectDb {
     Ok(())
   }
 
+  fn save_invocation_permissions(
+    &mut self,
+    invocation: InvocationId,
+    permissions: &LaunchPermissions,
+  ) -> Result<(), StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE invocations SET permissions = ?2 \
+       WHERE id = ?1 AND kind = 'agent' AND ended_at IS NULL AND permissions IS NULL",
+      params![
+        invocation.to_string(),
+        encode_json("invocation permissions", PERMISSIONS_SCHEMA, permissions)?,
+      ],
+    )?;
+    if changed == 0 {
+      let exists: bool = self.connection.query_row(
+        "SELECT EXISTS (SELECT 1 FROM invocations WHERE id = ?1)",
+        [invocation.to_string()],
+        |row| row.get(0),
+      )?;
+      return Err(if exists {
+        StoreError::InvocationPermissionsNotRecordable(invocation)
+      } else {
+        StoreError::InvocationNotFound(invocation)
+      });
+    }
+    Ok(())
+  }
+
   fn invocations(&self, run: RunId) -> Result<Vec<Invocation>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
       "{SELECT_INVOCATIONS} WHERE run_id = ?1 ORDER BY started_at, rowid"
@@ -94,6 +128,22 @@ impl ActivityStore for ProjectDb {
 
   fn invocation_prompt(&self, invocation: InvocationId) -> Result<Option<InvocationPrompt>, StoreError> {
     invocation_prompts::of_invocation(&self.connection, invocation)
+  }
+
+  fn save_invocation_code_index(&mut self, invocation: InvocationId, used: &CodeIndexUse) -> Result<(), StoreError> {
+    code_index::save_use(&self.connection, invocation, used)
+  }
+
+  fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, StoreError> {
+    code_index::load_use(&self.connection, invocation)
+  }
+
+  fn save_edit_progress(&mut self, invocation: InvocationId, progress: &EditProgress) -> Result<(), StoreError> {
+    code_index::save_progress(&self.connection, invocation, progress)
+  }
+
+  fn edit_progress(&self, invocation: InvocationId) -> Result<Option<EditProgress>, StoreError> {
+    code_index::load_progress(&self.connection, invocation)
   }
 
   fn append_activity(
@@ -123,6 +173,31 @@ impl ActivityStore for ProjectDb {
     }
     transaction.commit()?;
     Ok(last)
+  }
+
+  fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, StoreError> {
+    let row: Option<(i64, String)> = self
+      .connection
+      .query_row(
+        "
+        SELECT sequence, payload FROM agent_events
+        WHERE run_id = ?1 AND step_execution_id = ?2 AND kind = 'message'
+        ORDER BY sequence DESC LIMIT 1",
+        params![run.to_string(), execution.to_string()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+      .optional()?;
+    let Some((sequence, payload)) = row else {
+      return Ok(None);
+    };
+    let sequence = u64::try_from(sequence).map_err(|_| corrupt("agent event sequence", sequence))?;
+    match decode_json("agent event", EVENT_SCHEMA, &payload)? {
+      AgentEvent::Message { text } => Ok(Some((sequence, text))),
+      other => Err(corrupt(
+        "agent event",
+        format!("kind `message` holds a `{}` payload", other.name()),
+      )),
+    }
   }
 
   fn activity(&self, run: RunId, after: u64) -> Result<Vec<ActivityEntry>, StoreError> {
@@ -218,6 +293,7 @@ fn start(
     execution,
     number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
     kind,
+    permissions: None,
     session: None,
     started_at: now,
     ended_at: None,
@@ -276,6 +352,7 @@ struct InvocationRow {
   outcome: Option<String>,
   inactive_ms: i64,
   waiting_since: Option<i64>,
+  permissions: Option<String>,
 }
 
 impl InvocationRow {
@@ -294,6 +371,7 @@ impl InvocationRow {
       outcome: row.get(12)?,
       inactive_ms: row.get(13)?,
       waiting_since: row.get(14)?,
+      permissions: row.get(15)?,
     })
   }
 
@@ -316,6 +394,7 @@ impl InvocationRow {
         COMMAND => InvocationKind::Command,
         other => return Err(corrupt("invocation kind", other)),
       },
+      permissions: self.permissions.as_deref().map(launch_permissions).transpose()?,
       session: self.session,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: self.ended_at.map(Timestamp::from_unix_millis),
@@ -330,5 +409,19 @@ impl InvocationRow {
         self.waiting_since.map(Timestamp::from_unix_millis),
       ),
     })
+  }
+}
+
+/// Stored launch permissions; those recorded with schema 1, before what happened to commands
+/// outside them was, read with that unknown.
+fn launch_permissions(text: &str) -> Result<LaunchPermissions, StoreError> {
+  const WHAT: &str = "invocation permissions";
+  match decode_document(WHAT, text)? {
+    (PERMISSIONS_SCHEMA, body) => decode_body(WHAT, body),
+    (1, body) => decode_body::<AgentPermissions>(WHAT, body).map(LaunchPermissions::recorded_before),
+    (schema, _) => Err(corrupt(
+      WHAT,
+      format!("schema {schema} is not the supported schema {PERMISSIONS_SCHEMA}"),
+    )),
   }
 }

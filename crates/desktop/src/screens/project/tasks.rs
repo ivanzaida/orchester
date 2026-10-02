@@ -1,6 +1,7 @@
 //! Tasks (02.03 `J9467`): the project's backlog with its tabs. All tasks and Drafts work;
 //! queueing, review and completion do not exist yet, so their tabs are unavailable, and so are
 //! selecting tasks, running them, creating several at once, searching, filtering and sorting.
+//! Shown after New task's Create, the list scrolls to the new task and highlights it.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -15,11 +16,12 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
+use orchester_core::id::TaskId;
 
 use super::{
   ProjectNav, TasksState, page,
   task_filters::{FilterProps, Filters, Sort, TaskFilters},
-  task_rows::{QueueRow, table_heading},
+  task_rows::{QueueRow, QueueRowProps, table_heading},
   task_selection::{SelectedIds, SelectionBar, SelectionProps, TaskSelection},
 };
 use crate::{
@@ -62,19 +64,23 @@ pub struct TasksScreen {
   sort: Signal<Sort>,
   selected: Signal<SelectedIds>,
   nav: ProjectNav,
+  /// The task Create just made, highlighted while the list is shown.
+  created: Option<TaskId>,
 }
 
 impl Component for TasksScreen {
   type Props = TasksProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     Self {
       filter: ctx.signal(Filters::default()),
       sort: ctx.signal(Sort::default()),
       selected: ctx.signal(SelectedIds::default()),
-      nav: ctx
-        .use_context::<ProjectNav>()
-        .expect("the project shell provides ProjectNav"),
+      created: nav.take_created(),
+      nav,
     }
   }
 
@@ -238,6 +244,8 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
 }
 
 impl TasksScreen {
+  /// Filters, the selection bar, the task table and its footer (`npcrO`); the task Create just
+  /// made is highlighted and scrolled into view once the tasks as read include it.
   fn library(&self, ctx: &mut Ctx, tasks: &ProjectTasks, tab: TaskTab, root: &std::path::Path) -> Element {
     let filter = self.filter.get().0;
     let sort = self.sort.get().0;
@@ -260,6 +268,10 @@ impl TasksScreen {
         ),
       )
     });
+    let created = self.created;
+    let reveal = created
+      .filter(|task| rows.iter().any(|row| row.id == *task))
+      .map(|task| task.to_string());
     let table = if rows.is_empty() {
       no_matches(ctx, self.filter.clone())
     } else {
@@ -267,7 +279,14 @@ impl TasksScreen {
         .list_key("task-rows")
         .width(Dimension::Pct(100.0))
         .flex(1.0)
-        .mount_keyed::<QueueRow, _, _, _>(|row| row.id, Clone::clone)
+        .reveal_key(reveal)
+        .mount_keyed::<QueueRow, _, _, _>(
+          |row| row.id,
+          move |row| QueueRowProps {
+            row: row.clone(),
+            created: created == Some(row.id),
+          },
+        )
     };
     body()
       .child(

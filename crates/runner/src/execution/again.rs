@@ -1,7 +1,8 @@
 //! Run again: whether a task whose latest run failed or was cancelled may start its next run
 //! (the rule is core's, [`run_again`]), and removing that run's worktrees first when the person
 //! asked to, with the same rules as *Remove worktree* ([`clean_up`]): a worktree with uncommitted
-//! changes goes only with exactly the changes the person saw.
+//! changes goes only with exactly the changes the person saw. The codebase indexes only removed
+//! worktrees used go with them.
 
 use std::path::Path;
 
@@ -14,6 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::ProcessRunner;
+use orchester_index::CodebaseIndexes;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
@@ -66,6 +68,14 @@ pub(super) fn remove_worktrees(root: &Path, previous: &Run, confirmed: &Leftover
   let git = ProcessRunner::new(REMOVE_TIMEOUT);
   let cleanup = clean_up(&git, Path::new("git"), root, previous, Some(confirmed))
     .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
+  // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
+  // with the next removal.
+  let indexes = CodebaseIndexes::new(root);
+  tokio::task::spawn_blocking(move || {
+    if let Err(error) = indexes.prune() {
+      tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
+    }
+  });
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => {

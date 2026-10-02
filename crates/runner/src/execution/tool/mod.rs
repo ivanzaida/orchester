@@ -18,7 +18,7 @@ use orchester_core::{
   id::StepExecutionId,
   resource::{CommandAction, CommandEnvironment, Tool, ToolAction},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
-  store::{ActivityStore, ResourceStore, SettingsStore},
+  store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -108,12 +108,7 @@ impl RunTask {
     worktree: &Path,
   ) -> Result<(PinnedCommand, PathBuf, CommandEnvironment), RunnerProblem> {
     let command = self.pinned_command(execution)?;
-    let environment = self
-      .db
-      .project_environment()
-      .map_err(|error| RunnerProblem::CouldNotStart {
-        detail: error.to_string(),
-      })?;
+    let environment = self.environment()?;
     let program =
       find_program(&command.action, &environment, worktree).ok_or_else(|| RunnerProblem::ProgramNotFound {
         program: command.action.program().as_str().to_owned(),

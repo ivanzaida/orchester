@@ -14,10 +14,11 @@ use std::{
 };
 
 use orchester_core::{
+  command::SecretVariable,
   connection::{
     AgentProvider,
     invocation::{ClaudeMcpConfig, CodexMcp, LaunchValue, McpLaunch, Platform},
-    mcp::{McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
+    mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, SecretId},
@@ -28,7 +29,10 @@ use orchester_core::{
 use orchester_exec::launch::{self, Via};
 use orchester_store::ProjectDb;
 
-use super::super::run::RunTask;
+use super::{
+  super::run::RunTask,
+  start::{NATIVE_NOT_AVAILABLE, problem},
+};
 use crate::private_file::PrivateFile;
 
 /// A server left out, by name (by id when the project no longer has it), and why.
@@ -38,7 +42,50 @@ type LeftOut = (String, McpServerProblem);
 pub(in super::super) enum McpSetup {
   Codex(CodexMcp),
   /// The configuration file, and the servers in it; `None` when no server is left.
-  Claude(Option<(PrivateFile, Vec<McpServerName>)>),
+  Claude(Option<ClaudeServers>),
+}
+
+impl McpSetup {
+  /// The secret values Claude Code's servers take, which its activity must not show; Codex's
+  /// App Server redacts its own.
+  pub(in super::super) fn claude_secrets(&self) -> Vec<SecretVariable> {
+    match self {
+      Self::Claude(Some(servers)) => servers.secrets.clone(),
+      Self::Claude(None) | Self::Codex(_) => Vec::new(),
+    }
+  }
+
+  /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked,
+  /// and an event for each listed tool that gets no allow rule because another server could have its
+  /// name: none unless the step `asks` before MCP actions.
+  pub(in super::super) fn claude_exemptions(&self, asks: bool) -> (InvocationExemptions, Vec<AgentEvent>) {
+    let Self::Claude(Some(servers)) = self else {
+      return (InvocationExemptions::default(), Vec::new());
+    };
+    if !asks {
+      return (InvocationExemptions::default(), Vec::new());
+    }
+    let unapplied = servers
+      .exemptions
+      .claude_unapplied()
+      .into_iter()
+      .map(|unapplied| AgentEvent::McpExemptionNotApplied {
+        server: unapplied.server.to_string(),
+        tool: unapplied.tool.to_string(),
+        other: unapplied.other.to_string(),
+      })
+      .collect();
+    (servers.exemptions.clone(), unapplied)
+  }
+}
+
+/// The MCP configuration file of a Claude Code invocation, the servers in it, their tools that run
+/// without asking and their secret values.
+pub(in super::super) struct ClaudeServers {
+  pub(in super::super) file: PrivateFile,
+  pub(in super::super) servers: Vec<McpServerName>,
+  pub(in super::super) exemptions: InvocationExemptions,
+  pub(in super::super) secrets: Vec<SecretVariable>,
 }
 
 /// The servers of one invocation, and an event for each one left out.
@@ -69,7 +116,12 @@ impl RunTask {
         let file = config
           .map(|config| {
             PrivateFile::write(self.project.id(), &format!("{invocation}.json"), config.contents())
-              .map(|file| (file, config.servers().to_vec()))
+              .map(|file| ClaudeServers {
+                file,
+                servers: config.servers().to_vec(),
+                exemptions: config.exemptions().clone(),
+                secrets: config.secrets().to_vec(),
+              })
               .map_err(|error| RunnerProblem::CouldNotStart {
                 detail: format!("cannot write the MCP server configuration: {error}"),
               })
@@ -77,6 +129,8 @@ impl RunTask {
           .transpose()?;
         McpSetup::Claude(file)
       }
+      // `start::cli::program` refuses a native connection before its servers are set up.
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(problem(NATIVE_NOT_AVAILABLE.to_owned())),
     };
     let left_out = left_out
       .into_iter()
@@ -136,7 +190,8 @@ fn launched(
   let stdio = match server.transport() {
     McpTransport::Http(http) => {
       let bearer = http.bearer().map(|secret| secrets.read(secret)).transpose()?;
-      return Ok(McpLaunch::http(server.name().clone(), http.url().clone(), bearer));
+      let launch = McpLaunch::http(server.name().clone(), http.url().clone(), bearer);
+      return Ok(launch.with_exempt_tools(server.exempt_tools().clone()));
     }
     McpTransport::Stdio(stdio) => stdio,
   };
@@ -153,12 +208,8 @@ fn launched(
     };
     variables.push((name.clone(), value));
   }
-  Ok(McpLaunch::stdio(
-    server.name().clone(),
-    program,
-    working_directory,
-    variables,
-  ))
+  let launch = McpLaunch::stdio(server.name().clone(), program, working_directory, variables);
+  Ok(launch.with_exempt_tools(server.exempt_tools().clone()))
 }
 
 /// The program that starts and its arguments: the file the server's program is on the `PATH`
@@ -189,7 +240,9 @@ fn started(
   }
   let leading = launch.leading_args().to_vec();
   match launch.via() {
-    Via::Direct | Via::NodeScript { .. } => Ok((unicode(launch.program().to_path_buf())?, [leading, args].concat())),
+    Via::Direct | Via::NodeScript { .. } | Via::LauncherProgram => {
+      Ok((unicode(launch.program().to_path_buf())?, [leading, args].concat()))
+    }
     // The CLI starts programs, not scripts: `cmd.exe` runs the script, with arguments that pass
     // through it unchanged (checked above).
     Via::CommandScript => {

@@ -38,12 +38,16 @@ pub fn name_error(error: &NameError) -> Message {
   }
 }
 
+/// The key of [`OrganizationError::StopRunFirst`](orchester_core::task::organization::OrganizationError):
+/// a form that saves Canceled asks for confirmation when it sees it.
+pub const CANCEL_CONFIRM_REQUIRED: &str = "tasks.cancel.confirmRequired";
+
 pub fn organization_error(error: &orchester_core::task::organization::OrganizationError) -> Message {
   use orchester_core::task::organization::OrganizationError;
   Message::new(match error {
     OrganizationError::MissingReason => "tasks.blocked.reasonRequired",
     OrganizationError::DependencyCycle => "tasks.blocked.cycle",
-    OrganizationError::StopRunFirst(_) => "tasks.cancel.confirmRequired",
+    OrganizationError::StopRunFirst(_) => CANCEL_CONFIRM_REQUIRED,
     OrganizationError::DuplicateTag => "tasks.tags.duplicate",
     OrganizationError::TagNotFound(_) => "tasks.tags.stale",
     OrganizationError::SameTag => "tasks.tags.sameTarget",
@@ -76,7 +80,13 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
     | StoreError::InvocationNotFound(_)
+    | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::MemoryNotFound(_)
+    | StoreError::MemoryExists(_)
+    | StoreError::MemoryConflict(_)
+    | StoreError::MemoryNotActive(_)
+    | StoreError::DuplicateMemoryKey(_)
     | StoreError::MigrationBrokeReferences(_) => Message::new("errors.storage"),
     StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
       "version",

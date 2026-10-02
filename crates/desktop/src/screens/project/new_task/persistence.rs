@@ -71,12 +71,15 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
           if task.details() != &details {
             return Err(TaskDraftSaveError::DetailsMismatch);
           }
-          if matches!(target, crate::tasks::data::SaveTarget::New(_))
-            && task.status() != orchester_core::task::TaskStatus::Draft
-          {
+          let created = matches!(target, crate::tasks::data::SaveTarget::New(_));
+          if created && task.status() != orchester_core::task::TaskStatus::Draft {
             return Err(TaskDraftSaveError::NotDraft(task.status()));
           }
-          Ok(SavedDraft(details, organization))
+          Ok(SavedDraft {
+            details,
+            organization,
+            created: created.then(|| task.id()),
+          })
         })
         .await?;
         saved.map_err(|error| {
@@ -91,4 +94,10 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
       activity.track(spec, save).await
     }
   })
+}
+
+/// The save was refused because the task has an active run that Canceled would stop: the form
+/// asks before saving again with the cancellation confirmed.
+pub(super) fn needs_cancel_confirmation(error: &Message) -> bool {
+  error.key == messages::CANCEL_CONFIRM_REQUIRED
 }
