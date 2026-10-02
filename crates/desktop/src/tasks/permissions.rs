@@ -28,13 +28,13 @@ pub enum ChangeState {
   NextInvocation,
   /// "Applying new permissions at the next checkpoint…": the agent finishes its command first.
   Pending,
-  /// The agent stopped at its checkpoint for the change, and the step has not launched again yet:
-  /// it starts with the new permissions as soon as the run continues. Too late to keep the change
-  /// for the next invocation instead.
-  Restarting,
-  /// The agent stopped at its checkpoint for the change, but the step's restart did not launch it;
+  /// The agent stopped at `checkpoint` (when its work had changed anything) for the change, and the
+  /// step has not launched again yet: it starts with the new permissions as soon as the run
+  /// continues. Too late to keep the change for the next invocation instead.
+  Restarting { checkpoint: Option<Revision> },
+  /// The agent stopped at `checkpoint` for the change, but the step's restart did not launch it;
   /// its activity says why.
-  RestartFailed,
+  RestartFailed { checkpoint: Option<Revision> },
   /// "New permissions active since 12:09": the agent restarted from `checkpoint` (when its work had
   /// changed anything) as invocation `invocation`.
   Applied {
@@ -49,6 +49,9 @@ pub enum ChangeState {
 pub struct RunPermissions {
   /// What its next invocation runs with: [`Self::base`] narrowed by the step.
   pub permissions: AgentPermissions,
+  /// What the CLI enforces of [`Self::permissions`], as an invocation would record its launch;
+  /// `None` when they cannot be enforced or the connection is unknown.
+  pub next_launch: Option<AgentPermissions>,
   /// What the step's current or last invocation actually launched with; never one whose CLI did not
   /// start.
   pub invocation_policy: InvocationPolicy,
@@ -157,6 +160,7 @@ pub fn run_permissions(
   };
   Ok(Some(RunPermissions {
     invocation_policy: invocation.map_or(InvocationPolicy::NoInvocation, InvocationPolicy::of),
+    next_launch: enforced.as_ref().map(|enforced| enforced.permissions().clone()),
     permissions,
     network_stays_on,
     unconfined_commands,
@@ -274,8 +278,8 @@ fn change_state(
   }
   let failed = restarts().any(|invocation| invocation.outcome == Some(InvocationOutcome::NotStarted));
   Ok(Some(if failed {
-    ChangeState::RestartFailed
+    ChangeState::RestartFailed { checkpoint }
   } else {
-    ChangeState::Restarting
+    ChangeState::Restarting { checkpoint }
   }))
 }

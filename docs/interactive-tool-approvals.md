@@ -39,20 +39,28 @@ intact. **Apply now** uses the existing checkpoint/restart mechanism. Approval r
 time are persisted; waiting for a decision does not consume active agent time.
 
 The task's Permissions row shows what the step's current or last invocation launched with, as the runner
-recorded it before starting the CLI (`Invocation::permissions`), including whether it asks before MCP actions:
-*Current invocation: …* while it runs, *Last invocation: …* after it ended, and *Next invocation settings: …*
-before any has launched. An invocation the runner has created but not launched yet (it prepares the launch
-first, the code index included) reads *starting*; one whose CLI never started is skipped, so the row keeps the
-launch before it. Saving a change for the next invocation never relabels the running agent: until an
-invocation launches with exactly the permissions the change enforces, the row keeps the recorded policy and a
-notice says *Saved for the next invocation*. An *Apply now* change is pending, with *Keep for next invocation
-instead*, until the agent stops at its checkpoint; then it reads *Restarting with the new permissions…* without
-that action (the runner can no longer keep it), or says the agent did not restart when the new launch failed,
-and it reads as applied only once the restarted invocation has recorded its launch. The popover repeats the
-recorded policy above the settings it edits (*Next invocation settings*), except before any launch, when those
-settings are the policy; for an ended run it says the settings are shown for reference. The Activity panel
-shows what its own invocation launched with. An invocation that ended before launches were recorded reads
-*permissions unknown*; nothing is inferred from the run's settings or event times.
+recorded it before starting the CLI (`Invocation::permissions`), including whether it asks before MCP actions.
+The label carries the qualifier and the value stays bare (design `iPHGE`): *Running with* while it runs, *Last
+ran with* after it ended, *Next run uses* before any has launched, then *Builder · Edit files · 3 commands ·
+Network off · MCP asks* (*MCP auto* without asking, *Commands ask* when asking before commands). A value breaks
+only at its "·" separators; in the "This run" panel it stacks above *change ↗*, elsewhere the link follows it and
+moves under it when the line cannot hold both, so it is never cut off. An invocation the runner has created but
+not launched yet (it prepares the launch first, the code index included) reads *Running with · starting…*; one
+whose CLI never started is skipped, so the row keeps the launch before it; one that ended before launches were
+recorded reads *not recorded*. Nothing is inferred from the run's settings or event times.
+
+Saving a change for the next invocation never relabels the running agent: until an invocation launches with
+exactly the permissions the change enforces, the row keeps the recorded policy and a notice says *Saved for the
+next invocation · pnpm build added*, naming what differs from the launch. An *Apply now* change is pending
+(*Applying pnpm build added at the next checkpoint…*, with *Keep for next invocation instead*) until the agent
+stops at its checkpoint; then it reads *Restarting with the new permissions…* without that action (the runner
+can no longer keep it), or *New permissions not active: Builder did not restart* when the new launch failed, and
+it reads as applied only once the restarted invocation has recorded its launch. The popover repeats the line
+(*Running with …*) between its header and the timing notice and ends 6 px above its row, scrolling when the
+window is too short. For an ended run it shows *Last ran with …*, the settings faded and read-only, why they
+cannot be changed, and only *Close*. The Activity panel shows what its own invocation ran with: the row with its
+link while the invocation is open, *Ran with …* once it ended, *Ran with · no permissions · it did not start*
+for one whose CLI never started.
 
 ## App Server requests
 

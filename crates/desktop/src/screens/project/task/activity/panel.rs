@@ -5,6 +5,8 @@
 //! after the step, with when it ran once it ended. Token counts are what the CLI reported; cached
 //! input is not counted.
 
+use std::path::Path;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -16,12 +18,18 @@ use lurq::{
 use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
 
 use super::{
-  super::{super::ProjectNav, permissions::invocation_value},
+  super::{
+    super::ProjectNav,
+    permissions::{RunPermissionsProps, RunPermissionsRow, invocation_property},
+  },
   engine, first_edit, native,
 };
 use crate::{
   display,
-  tasks::{detail::RunView, transcript::Entry},
+  tasks::{
+    detail::{RunView, StepView},
+    transcript::Entry,
+  },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{message_text, property::property},
 };
@@ -31,8 +39,8 @@ const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
 pub(super) fn invocation_panel(
-  ctx: &Ctx,
-  nav: &ProjectNav,
+  ctx: &mut Ctx,
+  (nav, repo_root): (&ProjectNav, &Path),
   run: &RunView,
   entries: &[Entry],
   filter: Option<StepExecutionId>,
@@ -90,10 +98,8 @@ pub(super) fn invocation_panel(
       .into_iter()
       .chain(native::tool_rows(ctx, step, entries, invocation.id))
       .collect(),
-    // The panel's own invocation: what it launched with, not the step's latest launch.
     None => step
-      .and_then(|step| invocation_value(ctx, step, invocation))
-      .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
+      .and_then(|step| permissions(ctx, run, (step, invocation), repo_root))
       .into_iter()
       .collect::<Vec<_>>(),
   };
@@ -112,6 +118,31 @@ pub(super) fn invocation_panel(
         .id("activity-invocation-note"),
     );
   frame(panel)
+}
+
+/// What the panel's own invocation runs or ran with (`iPHGE`), not the step's latest launch: while
+/// it is open in a live run, the row with its *change ↗*, as on the task page (it is then the step's
+/// latest launch); otherwise only what it ran with.
+fn permissions(
+  ctx: &mut Ctx,
+  run: &RunView,
+  (step, invocation): (&StepView, &Invocation),
+  repo_root: &Path,
+) -> Option<Element> {
+  let live = !run.run.status().is_terminal();
+  if invocation.ended_at.is_some() || !live {
+    return invocation_property(ctx, step, invocation);
+  }
+  let props = RunPermissionsProps {
+    permissions: step.permissions.clone()?,
+    step: step.clone(),
+    run: run.id(),
+    run_number: run.run.number().get(),
+    live,
+    repo_root: repo_root.to_path_buf(),
+    inline_link: false,
+  };
+  Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("activity-permissions-{}", step.key), props))
 }
 
 /// The panel's fill and edge around `content`, which scrolls when it is taller than the panel, so

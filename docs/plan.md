@@ -210,21 +210,26 @@ runner changes; the command caption that denied sandbox exceptions (master asks 
 `exec`-path invocation tests; the wrapping Target/working directory row in the approval dialog (C6 and the approval
 choices design's long values, `bjrgu`, own it).
 
-Ported (still missing on master): the task's Permissions row shows what the step's current or last invocation
-launched with (*Current invocation: …* / *Last invocation: …* / *Next invocation settings: …*, with *MCP approvals
-on/off*, or *permissions unknown* for unrecorded launches), never the queued settings; a change kept for the next
-invocation shows *Saved for the next invocation* until an invocation launches with it; Apply now reads as applied only
-once the restarted invocation recorded its launch; the popover repeats the recorded policy above *Next invocation
-settings*, and an ended run's popover says its settings are for reference (`docs/interactive-tool-approvals.md`).
+Ported (still missing on master), then built to the designer's frames approved 2026-10-02 (design doc, "What the
+row shows"): the task's Permissions row shows what the step's current or last invocation launched with, never the
+queued settings. The label carries the qualifier (*Running with* / *Last ran with* / *Next run uses*; Activity
+*Running with* / *Ran with*), the value is bare (*… · MCP asks* / *MCP auto*, *Commands ask*), breaks only at "·"
+and stacks above its never-clipped link; *starting…*, *not recorded* and *no permissions · it did not start* cover
+the launches without a record. Notices: *Saved for the next invocation · <change>*, *Applying <change> at the next
+checkpoint…*, *Restarting with the new permissions…* (no button) and *New permissions not active: <agent> did not
+restart*, then applied once the restarted invocation recorded its launch. The popover has one *Running with* line,
+ends 6 px above its row and scrolls when the window is short; an ended run's popover is read-only with only
+*Close* (`docs/interactive-tool-approvals.md`).
 Tests: `cargo test -p orchester-desktop --test run_permission_policy run_policy`, `--test form_keyboard
-run_permissions`.
+run_permissions` (layout at 1440 and 960, popover above its row at 1020/960/700).
 
 **Done when** an independent review passes and an independent design verifier reports no blocking or major mismatch
-for the run permissions row (`C5Ai5o` in 02.10, `jgqPe`, `Oqmog`), the popover (02.J `q4K1G`/`NNRH8`, `W29Od2` in
-`DMBmo`) and its pending/applied states (`LJmTH`). The *Current invocation:* prefix, the MCP approvals part of the row,
-the popover's recorded-policy line and *Next invocation settings* label, the *Saved for the next invocation* notice
-and the ended-run note are not drawn, and while Apply now is pending the row keeps the recorded policy instead of
-`LJmTH`'s *Applying at next checkpoint…* (the notice under it still says so); the verifier must report them and the user decide whether the design gets them.
+for the rows (02.10 `H1wCPK`, 02.12 `YOcfT`, 02.A `d6xleF`, 02.S `Lr8Dg`, 02.J anchor `rnGN7`, `iPBOy`), the board
+`iPHGE` (panel states, inline row at 1440 and 960, Activity panel), the popovers (`UPDBO` in `NNRH8`, `zCqp2` in
+`ecCTw`, ended `YgLEg`/`vXtTX`), Apply now (`D8qjLz`: `v0wd4R`, `R5mCao`) and `LJmTH` (`A3h7B4`, `ztEdT`, `shNob`).
+Known differences: at 960 the inline link wraps under the value with its "·" (lurq cannot drop a separator at a
+wrap); notice details say "the new permissions" where the frames name the change ("pnpm build allowed"), and the
+pending detail does not name the running command; the ended popover's network switch fades to the locked 0.45.
 Then move this entry to *Done*.
 
 ### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)

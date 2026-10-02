@@ -185,11 +185,11 @@ fn run_policy_apply_now_restarting_until_the_new_launch_is_recorded() {
   let (fixture, run, invocation) = applied_now();
   // Stopped at the checkpoint, not started again yet: too late to keep it for the next invocation.
   let stopped = view(&fixture, &run, std::slice::from_ref(&invocation));
-  assert_eq!(stopped.state, Some(ChangeState::Restarting));
+  assert_eq!(stopped.state, Some(ChangeState::Restarting { checkpoint: None }));
   assert_eq!(stopped.invocation_policy, InvocationPolicy::Last(policy(false)));
   // The new invocation exists but has not recorded what it launched with.
   let starting = view(&fixture, &run, &[invocation.clone(), restart(&invocation, at(41))]);
-  assert_eq!(starting.state, Some(ChangeState::Restarting));
+  assert_eq!(starting.state, Some(ChangeState::Restarting { checkpoint: None }));
   assert_eq!(starting.invocation_policy, InvocationPolicy::Starting);
 }
 
@@ -200,7 +200,7 @@ fn run_policy_apply_now_whose_restart_did_not_start_says_so_and_keeps_the_record
   failed.ended_at = Some(at(41));
   failed.outcome = Some(InvocationOutcome::NotStarted);
   let view = view(&fixture, &run, &[invocation, failed.clone()]);
-  assert_eq!(view.state, Some(ChangeState::RestartFailed));
+  assert_eq!(view.state, Some(ChangeState::RestartFailed { checkpoint: None }));
   // The launch that never happened does not hide the one before it.
   assert_eq!(view.invocation_policy, InvocationPolicy::Last(policy(false)));
   // The Activity panel about the failed launch itself says it never started.

@@ -37,6 +37,7 @@ icons! {
   ArrowUp => '\u{e04a}',
   ArrowUpRight => '\u{e04d}',
   BookOpen => '\u{e05f}',
+  BookmarkCheck => '\u{e51f}',
   Bot => '\u{e1bb}',
   Braces => '\u{e36a}',
   Check => '\u{e06c}',
