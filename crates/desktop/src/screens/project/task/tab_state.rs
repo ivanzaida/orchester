@@ -59,8 +59,8 @@ pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Eleme
   )
 }
 
-/// The timeline has nothing yet, with why: the task has no run, its run has not started (with the
-/// steps it will run, `zxIMy`), or its agents have reported nothing so far.
+/// The timeline has nothing yet, with why: the task has no run, its run is queued (with the steps it
+/// will run on one line, `zxIMy`), or its agents have reported nothing so far.
 pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
   let Some(run) = run else {
     return state(
@@ -86,26 +86,37 @@ pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
     );
   }
   let number = run.run.number().get().to_string();
-  let steps = Column::new()
+  let mut steps = Row::new()
     .id("conversation-empty-steps")
-    .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center)
-    .with_children(run.steps.iter().map(|step| {
-      Text::new(&ctx.t_args(
-        "runs.activity.stepOption",
-        [
-          ("number", format!("{:02}", step.number).as_str()),
-          ("step", &*step.name),
-          ("agent", step.agent.as_deref().unwrap_or_default()),
-        ],
-      ))
-      .variant(lurq::app::theme::TypographyStyle::Caption)
-    }));
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center);
+  for (index, step) in run.steps.iter().enumerate() {
+    if index > 0 {
+      steps = steps.child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted));
+    }
+    let number = format!("{:02}", step.number);
+    let label = match step.agent.as_deref().filter(|_| !step.tool_step) {
+      Some(agent) => ctx.t_args(
+        "runs.conversation.empty.step",
+        [("number", number.as_str()), ("step", &*step.name), ("agent", agent)],
+      ),
+      None => ctx.t_args(
+        "runs.conversation.empty.toolStep",
+        [("number", number.as_str()), ("step", &*step.name)],
+      ),
+    };
+    steps = steps.child(
+      Text::new(&label)
+        .variant(lurq::app::theme::TypographyStyle::Caption)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  }
   state(
     "conversation-empty",
-    Icon::Clock3,
-    &ctx.t_args("runs.conversation.empty.notStartedTitle", [("run", number.as_str())]),
-    &ctx.t("runs.conversation.empty.notStarted"),
+    Icon::MessagesSquare,
+    &ctx.t("runs.conversation.empty.nothingYet"),
+    &ctx.t_args("runs.conversation.empty.queued", [("run", number.as_str())]),
     vec![steps.into()],
   )
 }

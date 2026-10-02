@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -26,8 +26,11 @@ use crate::{
       view::{Choice, Show, Shown},
     },
   },
-  theme::ExtraSpacing,
-  ui::{button::ActionButton, icon::Icon},
+  ui::{
+    button::ActionButton,
+    icon::{Icon, IconSize, icon},
+    pressable::{pressable, surface},
+  },
 };
 
 /// The lines for what `choice` leaves out of `shown`, or `None` when it leaves nothing out.
@@ -53,7 +56,12 @@ pub(super) fn readback(
         ("steps", &steps(ctx, &shown.matched_steps)),
       ],
     );
-    lines.push(line("conversation-search-readback", &text, clear_search(ctx, query)));
+    lines.push(line(
+      "conversation-search-readback",
+      Some(Icon::Search),
+      &text,
+      clear_search(query, &ctx.t("runs.conversation.clearSearch")),
+    ));
   }
   if let Some(picked) = choice.step.and_then(|picked| run.step_of(picked)) {
     let picked = ctx.t_args(
@@ -69,7 +77,12 @@ pub(super) fn readback(
       _ => "runs.conversation.showingOnly.other",
     };
     let text = ctx.t_args(key, [("step", &*picked), ("hidden", &steps(ctx, &shown.hidden_steps))]);
-    lines.push(line("conversation-step-readback", &text, show_all_steps(ctx, step)));
+    lines.push(line(
+      "conversation-step-readback",
+      Some(Icon::ListFilter),
+      &text,
+      show_all_steps(step, &ctx.t("runs.conversation.showAllSteps")),
+    ));
   }
   let (calls, groups) = shown.hidden_tools;
   if choice.show == Show::Messages && groups > 0 {
@@ -85,12 +98,14 @@ pub(super) fn readback(
       ],
     );
     let show = show.clone();
-    let all = ActionButton::new(ctx.t("runs.conversation.showAll"))
-      .compact()
-      .id("conversation-show-all")
-      .on_click(move || show.set(ShowChoice(Show::All)))
-      .render(ctx);
-    lines.push(line("conversation-tools-readback", &text, all));
+    let all = text_link(
+      "conversation-show-all",
+      &ctx.t("runs.conversation.showAll"),
+      move || {
+        show.set(ShowChoice(Show::All));
+      },
+    );
+    lines.push(line("conversation-tools-readback", None, &text, all));
   }
   (!lines.is_empty()).then(|| {
     Column::new()
@@ -128,7 +143,7 @@ pub(super) fn nothing_found(
         [("run", number.as_str()), ("query", needle)],
       ),
       &ctx.t_args(searched, [("count", ran.to_string().as_str())]),
-      vec![clear_search(ctx, query)],
+      vec![clear_search_button(ctx, query)],
     );
   };
   let label = ctx.t_args(
@@ -157,7 +172,7 @@ pub(super) fn nothing_found(
         ("steps", &steps(ctx, &elsewhere.matched_steps)),
       ],
     ),
-    vec![show_all_steps(ctx, step)],
+    vec![show_all_steps_button(ctx, step)],
   )
 }
 
@@ -193,29 +208,57 @@ fn steps(ctx: &Ctx, heads: &[StepHead]) -> String {
   }
 }
 
-fn line(id: &'static str, text: &str, action: Element) -> Element {
+/// A read-back line (`B8kdO`, `V1wuJ`): its glyph, what is left out and the way back as a link.
+fn line(id: &'static str, glyph: Option<Icon>, text: &str, action: Element) -> Element {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Inline.role())
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(Text::new(text).variant(TypographyStyle::Description))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Small, PaletteColor::TextSecondary)))
+    .child(Text::new(text).variant(TypographyStyle::Caption))
     .child(action)
     .into()
 }
 
-fn clear_search(ctx: &Ctx, query: &Signal<String>) -> Element {
+/// A plain text link (11/500 `$text`), as the read-back lines draw their way back.
+fn text_link(id: &'static str, label: &str, on_click: impl Fn() + Send + Sync + 'static) -> Element {
+  pressable(surface().id(id), on_click)
+    .child(
+      Text::new(label)
+        .variant(TypographyStyle::Link)
+        .color(PaletteColor::TextPrimary)
+        .nowrap(),
+    )
+    .into()
+}
+
+fn clear_search(query: &Signal<String>, label: &str) -> Element {
+  let query = query.clone();
+  text_link("conversation-clear-search", label, move || query.set(String::new()))
+}
+
+fn show_all_steps(step: &Signal<StepFilter>, label: &str) -> Element {
+  let step = step.clone();
+  text_link("conversation-show-all-steps", label, move || step.set(StepFilter(None)))
+}
+
+/// *Clear search* under a search that found nothing (`gLVQQ`), with its ×.
+fn clear_search_button(ctx: &Ctx, query: &Signal<String>) -> Element {
   let query = query.clone();
   ActionButton::new(ctx.t("runs.conversation.clearSearch"))
+    .icon(Icon::X)
     .compact()
     .id("conversation-clear-search")
     .on_click(move || query.set(String::new()))
     .render(ctx)
 }
 
-fn show_all_steps(ctx: &Ctx, step: &Signal<StepFilter>) -> Element {
+/// *Show all steps* when the picked step has no match but others do (`gLVQQ`), with its list.
+fn show_all_steps_button(ctx: &Ctx, step: &Signal<StepFilter>) -> Element {
   let step = step.clone();
   ActionButton::new(ctx.t("runs.conversation.showAllSteps"))
+    .icon(Icon::List)
     .compact()
     .id("conversation-show-all-steps")
     .on_click(move || step.set(StepFilter(None)))

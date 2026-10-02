@@ -37,6 +37,8 @@ pub struct StepHead {
   pub status: Option<StepStatus>,
   /// The attempt it ran in, when the run had more than one.
   pub attempt: Option<u32>,
+  /// The step the run ended on or stopped at while no agent works: it stays open.
+  pub ended_on: bool,
 }
 
 impl StepHead {
@@ -76,6 +78,7 @@ impl StepHead {
       before_edit: run.index.execution_edit(execution),
       status: Some(status),
       attempt,
+      ended_on: false,
     })
   }
 
@@ -109,13 +112,16 @@ impl StepHead {
         before_edit: None,
         status: None,
         attempt: None,
+        ended_on: false,
       })
       .collect()
   }
 
-  /// Whether it starts open: running, waiting for the person, or failed, which shows why (`hep0l`).
+  /// Whether it starts open: running, waiting for the person, failed, which shows why (`hep0l`), or
+  /// the step the run ended on (`AzKYQ`); other finished steps fold to their header.
   pub fn starts_open(&self) -> bool {
-    (self.ended.is_none() && self.execution.is_some())
+    self.ended_on
+      || (self.ended.is_none() && self.execution.is_some())
       || matches!(self.status, Some(StepStatus::Waiting(_) | StepStatus::Failed))
   }
 }

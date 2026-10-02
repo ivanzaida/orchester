@@ -27,7 +27,10 @@ use orchester_core::{
 };
 
 use super::{
-  super::plan_review::{Decision as PlanRequest, DecisionAction, decision_action as plan_decision},
+  super::{
+    activity::DETAILS_WIDTH,
+    plan_review::{Decision as PlanRequest, DecisionAction, decision_action as plan_decision},
+  },
   column,
   composer_text::{hint, primary_label, recipient_label},
   nav,
@@ -44,7 +47,9 @@ use crate::{
     detail::TaskDetail,
     plan::PlanReview,
   },
-  theme::{DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{
+    CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography,
+  },
   ui::{
     button::ActionButton,
     field::{field_error, select_style, styled_input},
@@ -73,11 +78,16 @@ pub(super) struct ComposerProps {
   pub(super) reload: Signal<u64>,
   /// Called once a message was sent: the timeline goes to its end.
   pub(super) sent: Arc<dyn Fn() + Send + Sync>,
+  /// The Details pane takes room beside the composer's column.
+  pub(super) details_open: bool,
 }
 
 impl PartialEq for ComposerProps {
   fn eq(&self, other: &Self) -> bool {
-    self.repo_root == other.repo_root && self.detail == other.detail && self.conversation == other.conversation
+    self.repo_root == other.repo_root
+      && self.detail == other.detail
+      && self.conversation == other.conversation
+      && self.details_open == other.details_open
   }
 }
 
@@ -156,7 +166,13 @@ impl Component for ComposerDock {
     let presses = self.presses(&props, (&mode, recipient), (&action, &plan), sending);
     let feedback = feedback(&action, &plan);
     let field = self.field(ctx, &props, &mode, presses.shortcut.clone());
-    let row = self.action_row(ctx, conversation, (&mode, recipient), &presses, sending);
+    let row = self.action_row(
+      ctx,
+      (conversation, props.details_open),
+      (&mode, recipient),
+      &presses,
+      sending,
+    );
     let border = if self.focused.get() {
       Border::inside(BorderSize::Md, PaletteColor::BorderFocus)
     } else {
@@ -206,19 +222,11 @@ struct Presses {
 }
 
 impl ComposerDock {
-  /// Points the recipient at whom the run's state addresses (the agent at work, the one that
-  /// asked), unless the person chose another.
+  /// Points the recipient at whom the run's state addresses ([`ComposerMode::default_recipient`]),
+  /// unless the person chose another.
   fn follow_default(&self, conversation: &Conversation, run: Option<&crate::tasks::detail::RunView>) {
     let mode = ComposerMode::of(conversation, run, Recipient::Orchestrator);
-    let default = mode
-      .fixed_recipient()
-      .or_else(|| {
-        conversation
-          .working
-          .first()
-          .map(|working| Recipient::Agent(working.profile))
-      })
-      .unwrap_or(Recipient::Orchestrator);
+    let default = mode.default_recipient(conversation);
     let fixed = mode.fixed_recipient().is_some();
     let current = self.to.get_untracked();
     let offered = conversation
@@ -337,11 +345,13 @@ impl ComposerDock {
       .into()
   }
 
-  /// The recipient and *Attach* at the left, the state's buttons at the right.
+  /// The recipient and *Attach* at the left, the state's buttons at the right; when the window
+  /// leaves the composer too narrow for one line, the buttons go to a line of their own and the
+  /// recipient gives way first.
   fn action_row(
     &self,
     ctx: &Ctx,
-    conversation: &Conversation,
+    (conversation, details_open): (&Conversation, bool),
     (mode, recipient): (&ComposerMode, Recipient),
     presses: &Presses,
     sending: bool,
@@ -383,15 +393,43 @@ impl ComposerDock {
       ComposerMode::Steer(working) => Some(self.send_now(ctx, working.mid_turn, presses, sending)),
       _ => None,
     };
-    Row::new()
+    let line = || {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Inline.role())
+        .align_items(Alignment::Center)
+    };
+    let pane = if details_open { DETAILS_WIDTH } else { 0.0 };
+    // Reading the window's width re-renders the composer as the window resizes.
+    if ctx.window().logical_width() - pane >= CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW {
+      return line()
+        .child(self.recipient(ctx, conversation, (mode, recipient), Dimension::Px(RECIPIENT_WIDTH)))
+        .child(attach.render(ctx))
+        .child(Spacer::new().flex(1.0))
+        .child(primary.render(ctx))
+        .with_children(now)
+        .into();
+    }
+    Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Inline.role())
-      .align_items(Alignment::Center)
-      .child(self.recipient(ctx, conversation, (mode, recipient)))
-      .child(attach.render(ctx))
-      .child(Spacer::new().flex(1.0))
-      .child(primary.render(ctx))
-      .with_children(now)
+      .child(
+        line()
+          .child(
+            Row::new()
+              .flex(1.0)
+              .min_width(Dimension::Px(0.0))
+              .max_width(Dimension::Px(RECIPIENT_WIDTH))
+              .child(self.recipient(ctx, conversation, (mode, recipient), Dimension::Pct(100.0))),
+          )
+          .child(Row::new().flex_shrink(0.0).child(attach.render(ctx))),
+      )
+      .child(
+        line()
+          .child(Spacer::new().flex(1.0))
+          .child(primary.render(ctx))
+          .with_children(now),
+      )
       .into()
   }
 
@@ -426,6 +464,7 @@ impl ComposerDock {
     ctx: &Ctx,
     conversation: &Conversation,
     (mode, recipient): (&ComposerMode, Recipient),
+    width: Dimension,
   ) -> Element {
     let options = conversation
       .recipients
@@ -438,7 +477,7 @@ impl ComposerDock {
     let select = Element::from(
       Select::new(self.to.clone())
         .options(options)
-        .width(Dimension::Px(RECIPIENT_WIDTH))
+        .width(width)
         .height(Dimension::Px(BUTTON_HEIGHT))
         .style(select_style(ctx, BUTTON_HEIGHT))
         .focusable(usable),

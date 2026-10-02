@@ -10,6 +10,7 @@ mod composer;
 mod composer_text;
 mod details;
 mod group;
+mod live_state;
 mod message;
 mod readback;
 mod row;
@@ -346,8 +347,8 @@ impl ConversationTab {
       raw: self.raw.clone(),
       details: self.details.clone(),
       details_open,
-      live: conversation.state == PanelState::Live,
-      deciding: conversation.state == PanelState::Deciding,
+      state: conversation.state,
+      asks: conversation.open_question().is_some(),
       following: self.following.get(),
     }
   }
@@ -364,6 +365,7 @@ impl ConversationTab {
         focus: props.focus.clone(),
         reload: props.reload.clone(),
         sent: self.sent_handler(),
+        details_open: pane.is_some(),
       },
     );
     Row::new()

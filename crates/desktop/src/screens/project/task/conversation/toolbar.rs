@@ -1,7 +1,7 @@
 //! The timeline's toolbar (52 high, `RrScB`): the step filter (`ZGwlv`), *Show* (All, Messages,
-//! Tools), *Show raw lines* in the Tools view (`q4fCXK`), the search field, whether the timeline
-//! follows live (or the run waits for the person's decision), and *Details*, pressed while its pane
-//! is open.
+//! Tools), the search field, *Show raw lines* in the Tools view (`q4fCXK`), where the run stands
+//! ([`live_state`]), and *Details*, pressed while its pane is open. Before the run starts there is
+//! nothing to filter or look up: everything but the run's state is unavailable (`zxIMy`).
 
 use std::sync::Arc;
 
@@ -17,18 +17,20 @@ use lurq::{
 };
 use orchester_core::id::StepExecutionId;
 
-use super::{super::activity::DETAILS_WIDTH, ShowChoice, StepFilter, details::DetailsPane, segments::segments};
+use super::{
+  super::activity::DETAILS_WIDTH, ShowChoice, StepFilter, details::DetailsPane, live_state::live_state,
+  segments::segments,
+};
 use crate::{
-  tasks::{detail::RunView, timeline::view::Show},
+  tasks::{conversation::PanelState, detail::RunView, timeline::view::Show},
   theme::{
     CONVERSATION_TOOLBAR_DECISION_STATE, CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW, CONVERSATION_TOOLBAR_RAW_SWITCH,
-    ExtraColor, ExtraSpacing,
+    DISABLED_OPACITY, ExtraColor, ExtraSpacing,
   },
   ui::{
     field::{select_style, styled_input},
     icon::{Icon, IconSize, icon},
     pressable::{pressable, surface},
-    status_label::compact_status_label,
     switch::Switch,
   },
 };
@@ -47,61 +49,57 @@ pub(super) struct ToolbarState {
   pub(super) raw: Signal<bool>,
   pub(super) details: DetailsPane,
   pub(super) details_open: bool,
-  /// An agent is at work on the run.
-  pub(super) live: bool,
-  /// The run waits for the person's decision after its retries: it has not ended.
-  pub(super) deciding: bool,
+  /// Where the run stands.
+  pub(super) state: PanelState,
+  /// An agent's question waits for the person.
+  pub(super) asks: bool,
   pub(super) following: bool,
 }
 
+/// The toolbar's controls, built once for either layout.
+struct Controls {
+  filter: Element,
+  show: Element,
+  search: Element,
+  raw: Option<Element>,
+  state: Element,
+  details: Element,
+}
+
 /// The toolbar across the tab's main column, with its side padding. While the window is too narrow
-/// for one line, the step filter keeps the first with the live state and *Details*, and *Show*, *Show
-/// raw lines* and the search go to a second.
+/// for one line, the step filter keeps the first with the run's state and *Details*, *Show* and the
+/// search (as wide as the line leaves it) go to a second, and *Show raw lines* goes with them, or to
+/// a third beside the Details pane.
 pub(super) fn toolbar(ctx: &Ctx, run: &RunView, state: &ToolbarState) -> Element {
-  let show_options = vec![
-    (ShowChoice(Show::All), ctx.t("runs.conversation.show.all")),
-    (ShowChoice(Show::Messages), ctx.t("runs.conversation.show.messages")),
-    (ShowChoice(Show::Tools), ctx.t("runs.conversation.show.tools")),
-  ];
   let tools = state.show.get().0 == Show::Tools;
-  let raw = tools.then(|| {
-    let (raw, on) = (state.raw.clone(), state.raw.get());
-    Switch::new("activity-raw", ctx.t("runs.activity.showRaw"), on).render(move || raw.set(!on))
-  });
-  let follow = match (state.live, state.following) {
-    (true, true) => compact_status_label(Icon::Radio, &ctx.t("runs.activity.following")),
-    (true, false) => compact_status_label(Icon::CirclePause, &ctx.t("runs.activity.notFollowing")),
-    (false, _) if state.deciding => compact_status_label(Icon::Hand, &ctx.t("runs.activity.waitingDecision")),
-    (false, _) => compact_status_label(Icon::Check, &ctx.t("runs.activity.ended")),
-  }
-  .id("conversation-live-state");
-  let show = Row::new()
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("runs.conversation.show.label")).variant(TypographyStyle::Caption))
-    .child(segments("conversation-show", &state.show, show_options));
-  let details = details_button(ctx, &state.details, state.details_open);
+  let one_line = one_line_fits(ctx, state, tools);
+  let controls = controls(ctx, run, state, (tools, one_line));
   let line = || {
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Stack.role())
       .align_items(Alignment::Center)
   };
-  if one_line_fits(ctx, state, tools) {
+  if one_line {
     return line()
       .id("conversation-toolbar")
       .height(Dimension::Px(TOOLBAR_HEIGHT))
       .padding_horizontal(SpacingSize::Section)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(step_filter(ctx, run, &state.step, Dimension::Px(FILTER_WIDTH)))
-      .child(show)
-      .with_children(raw)
-      .child(search(ctx, &state.query))
+      .child(controls.filter)
+      .child(controls.show)
+      .child(controls.search)
+      .with_children(controls.raw)
       .child(Spacer::new().flex(1.0))
-      .child(follow)
-      .child(details)
+      .child(controls.state)
+      .child(controls.details)
       .into();
   }
+  let (beside, below) = if state.details_open {
+    (None, controls.raw)
+  } else {
+    (controls.raw, None)
+  };
   Column::new()
     .id("conversation-toolbar")
     .width(Dimension::Pct(100.0))
@@ -111,16 +109,67 @@ pub(super) fn toolbar(ctx: &Ctx, run: &RunView, state: &ToolbarState) -> Element
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(
       line()
-        .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(step_filter(
-          ctx,
-          run,
-          &state.step,
-          Dimension::Pct(100.0),
-        )))
-        .child(Row::new().flex_shrink(0.0).child(follow))
-        .child(Row::new().flex_shrink(0.0).child(details)),
+        .child(
+          Row::new()
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .child(controls.filter),
+        )
+        .child(Row::new().flex_shrink(0.0).child(controls.state))
+        .child(Row::new().flex_shrink(0.0).child(controls.details)),
     )
-    .child(line().child(show).with_children(raw).child(search(ctx, &state.query)))
+    .child(
+      line()
+        .child(Row::new().flex_shrink(0.0).child(controls.show))
+        .child(
+          Row::new()
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .child(controls.search),
+        )
+        .with_children(beside),
+    )
+    .with_children(below.map(|raw| line().child(raw)))
+    .into()
+}
+
+/// The controls; each but the run's state unavailable before the run starts.
+fn controls(ctx: &Ctx, run: &RunView, state: &ToolbarState, (tools, one_line): (bool, bool)) -> Controls {
+  let show_options = vec![
+    (ShowChoice(Show::All), ctx.t("runs.conversation.show.all")),
+    (ShowChoice(Show::Messages), ctx.t("runs.conversation.show.messages")),
+    (ShowChoice(Show::Tools), ctx.t("runs.conversation.show.tools")),
+  ];
+  let raw = tools.then(|| {
+    let (raw, on) = (state.raw.clone(), state.raw.get());
+    Switch::new("activity-raw", ctx.t("runs.activity.showRaw"), on).render(move || raw.set(!on))
+  });
+  let not_started = state.state == PanelState::NotStarted;
+  let usable = |element: Element| {
+    if not_started { unavailable(element) } else { element }
+  };
+  let (filter_width, search_width) = if one_line {
+    (Dimension::Px(FILTER_WIDTH), Dimension::Px(SEARCH_WIDTH))
+  } else {
+    (Dimension::Pct(100.0), Dimension::Pct(100.0))
+  };
+  Controls {
+    filter: usable(step_filter(ctx, run, &state.step, filter_width)),
+    show: usable(segments("conversation-show", &state.show, show_options)),
+    search: usable(search(ctx, &state.query, search_width)),
+    raw,
+    state: live_state(ctx, state.state, state.asks, state.following),
+    details: usable(details_button(ctx, &state.details, state.details_open)),
+  }
+}
+
+/// `element` faded as an unavailable control is, taking no pointer or focus.
+fn unavailable(element: Element) -> Element {
+  Column::new()
+    .opacity(DISABLED_OPACITY)
+    .cursor(CursorIcon::NotAllowed)
+    .describe("state", "disabled")
+    .child(Column::new().pointer_events_none().child(element))
     .into()
 }
 
@@ -134,7 +183,7 @@ fn one_line_fits(ctx: &Ctx, state: &ToolbarState, tools: bool) -> bool {
   if tools {
     needed += CONVERSATION_TOOLBAR_RAW_SWITCH;
   }
-  if state.deciding {
+  if state.state == PanelState::Deciding {
     needed += CONVERSATION_TOOLBAR_DECISION_STATE;
   }
   ctx.window().logical_width() >= needed
@@ -150,10 +199,10 @@ fn step_filter(ctx: &Ctx, run: &RunView, filter: &Signal<StepFilter>, width: Dim
     .map(|execution| execution.id())
     .filter(|execution| run.invocations_of(*execution).next().is_some())
     .collect();
-  let key = if executions.len() == 1 {
-    "runs.activity.allSteps.one"
-  } else {
-    "runs.activity.allSteps.other"
+  let key = match executions.len() {
+    0 => "runs.conversation.allStepsNone",
+    1 => "runs.activity.allSteps.one",
+    _ => "runs.activity.allSteps.other",
   };
   let all = ctx.t_args(key, [("count", executions.len().to_string().as_str())]);
   let options = std::iter::once((StepFilter(None), all)).chain(
@@ -201,8 +250,9 @@ fn step_option(ctx: &Ctx, run: &RunView, execution: StepExecutionId) -> Option<A
   )
 }
 
-/// *Search this run…*; with a query, the field shows it and × clears it (`a5hF4`).
-fn search(ctx: &Ctx, query: &Signal<String>) -> Element {
+/// *Search this run…* after its search glyph, `width` wide; with a query, × at its end clears it
+/// (`a5hF4`).
+fn search(ctx: &Ctx, query: &Signal<String>, width: Dimension) -> Element {
   let input = ctx.theme().form().input.clone();
   let field = styled_input(ctx, query.clone(), TypographyStyle::FieldLabel)
     .id("conversation-search")
@@ -210,18 +260,15 @@ fn search(ctx: &Ctx, query: &Signal<String>) -> Element {
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .placeholder(&ctx.t("runs.conversation.search"));
-  let end: Element = if query.get().is_empty() {
-    icon(Icon::Search, IconSize::Small, PaletteColor::TextSecondary).into()
-  } else {
+  let clear = (!query.get().is_empty()).then(|| {
     let query = query.clone();
     pressable(surface().id("conversation-search-clear"), move || {
       query.set(String::new())
     })
     .child(icon(Icon::X, IconSize::Small, PaletteColor::TextSecondary))
-    .into()
-  };
+  });
   Row::new()
-    .width(Dimension::Px(SEARCH_WIDTH))
+    .width(width)
     .height(Dimension::Px(CONTROL_HEIGHT))
     .padding_custom(input.padding)
     .spacing(SpacingSize::Sm)
@@ -229,8 +276,9 @@ fn search(ctx: &Ctx, query: &Signal<String>) -> Element {
     .background(input.background)
     .border(Border::inside(BorderSize::Sm, input.border.clone()))
     .rounded(input.radius)
+    .child(icon(Icon::Search, IconSize::Small, PaletteColor::TextSecondary))
     .child(field)
-    .child(end)
+    .with_children(clear)
     .into()
 }
 

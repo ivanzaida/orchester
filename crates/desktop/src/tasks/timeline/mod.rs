@@ -79,6 +79,8 @@ pub struct PlanCard {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApprovalCard {
   pub request: PendingToolApproval,
+  /// The step whose agent asked.
+  pub step: Arc<str>,
   /// `None` while it waits; `Some(None)` when it was interrupted.
   pub decided: Option<Option<orchester_core::run::ToolApprovalDecision>>,
 }
@@ -142,6 +144,9 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     });
     items.extend(execution_items(sources, execution));
   }
+  if *run.run.status() != RunStatus::Running {
+    mark_ended_on(&mut items);
+  }
   items.extend(StepHead::not_started(run).into_iter().map(|head| Item {
     key: format!("not-started-{}", head.number).into(),
     execution: None,
@@ -159,6 +164,17 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
   items.extend(waiting);
   items.extend(run_end(run, sources.merge));
   items
+}
+
+/// Keeps the last step that ran open: the one the run ended on or stopped at.
+fn mark_ended_on(items: &mut [Item]) {
+  let last = items.iter_mut().rev().find_map(|item| match &mut item.kind {
+    ItemKind::Step(head) if head.execution.is_some() => Some(head),
+    _ => None,
+  });
+  if let Some(head) = last {
+    head.ended_on = true;
+  }
 }
 
 /// The run's step executions that ran, in the order they were created: the index of their attempt,
@@ -202,7 +218,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
       .filter(|plan| plan.execution == execution)
       .map(|plan| plan_item(run, plan, (&agent, &name))),
   );
-  between.extend(approval_items(sources, execution));
+  between.extend(approval_items(sources, execution, &name));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, execution));
   items
@@ -295,7 +311,7 @@ fn plan_item(run: &RunView, plan: &Plan, (agent, step): (&Arc<str>, &Arc<str>)) 
   }
 }
 
-fn approval_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Item> {
+fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<str>) -> Vec<Item> {
   let pending = sources
     .pending
     .iter()
@@ -312,7 +328,11 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Item
       key: format!("approval-{}", request.id).into(),
       execution: Some(execution),
       at: request.requested_at,
-      kind: ItemKind::Approval(ApprovalCard { request, decided }),
+      kind: ItemKind::Approval(ApprovalCard {
+        step: step.clone(),
+        request,
+        decided,
+      }),
     })
     .collect()
 }

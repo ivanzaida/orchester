@@ -123,10 +123,9 @@ fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
   ));
 }
 
-/// Opens the run's first step once the timeline shows the run ended, its steps folded.
+/// Waits until the timeline shows the run ended, the step it ended on open.
 fn open_finished_step(desktop: &mut Desktop) {
   desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
-  desktop.click("activity-step-header");
 }
 
 #[test]
@@ -246,6 +245,7 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.wait_until("the plan's card", |desktop| has(desktop, "conversation-approve-plan"));
   assert!(shows(&mut desktop, "conversation", "Plan v1 · Say hello"));
   assert!(shows(&mut desktop, "conversation", "Waiting for approval"));
+  assert!(shows(&mut desktop, "conversation-live-state", "Waiting for you"));
   assert!(holds(
     &mut desktop,
     "conversation-composer-context",
@@ -271,6 +271,8 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.click("conversation-approve-plan");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   open_finished_step(&mut desktop);
+  // Plan, the first step, is folded; Implement, which the run ended on, is open.
+  desktop.click("activity-step-header");
   desktop.wait_until("the approved plan", |desktop| {
     holds(desktop, "conversation", "Approved")
   });
@@ -331,6 +333,7 @@ fn composer_continues_a_failed_run_with_instructions() {
   desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
   assert!(holds(&mut desktop, "conversation-end", "Run 1 failed at Implement"));
   assert!(shows(&mut desktop, "conversation", "Implement failed"));
+  assert!(shows(&mut desktop, "conversation-live-state", "Failed"));
   write(&mut desktop, "Continue with the corrected instruction.");
   send_with_keyboard(&mut desktop);
   desktop.wait_until("the recovered run", |desktop| {
@@ -389,4 +392,44 @@ fn composer_keeps_a_draft_task_s_message_for_its_run_s_start() {
   desktop.wait_until("queued for the start", |desktop| {
     holds(desktop, "conversation", "Queued · waiting for the run to start")
   });
+}
+
+/// Whether `id` lies within `right`, the main column's right edge less its 32 padding, from side to
+/// side.
+fn fits(desktop: &mut Desktop, id: &str, right: f32) -> bool {
+  let bounds = desktop.bounds(id);
+  bounds.width > 0.0 && bounds.x >= 0.0 && bounds.x + bounds.width <= right + 0.5
+}
+
+#[test]
+fn composer_keeps_its_buttons_and_the_search_usable_at_960() {
+  let mut desktop = working_conversation("Wait for release.");
+  assert!(shows(&mut desktop, "conversation-live-state", "Following live"));
+  desktop.tree.resize(960, 960);
+  desktop.pass();
+  desktop.pass();
+  for id in [
+    "conversation-recipient",
+    "conversation-attach",
+    "conversation-send",
+    "conversation-send-now",
+  ] {
+    assert!(fits(&mut desktop, id, 928.0), "{id} at 960");
+  }
+  // Details takes 320 at the right: the composer and the toolbar's search fit what is left.
+  desktop.click("conversation-details");
+  desktop.wait_for("activity-invocation");
+  desktop.pass();
+  for id in [
+    "conversation-recipient",
+    "conversation-attach",
+    "conversation-send",
+    "conversation-send-now",
+    "conversation-search",
+    "conversation-live-state",
+  ] {
+    assert!(fits(&mut desktop, id, 608.0), "{id} beside Details at 960");
+  }
+  release(&desktop);
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

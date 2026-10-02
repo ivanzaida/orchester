@@ -185,6 +185,7 @@ fn head(execution: StepExecutionId, number: usize, step: &str) -> StepHead {
     before_edit: None,
     status: Some(StepStatus::Passed),
     attempt: None,
+    ended_on: false,
   }
 }
 
@@ -427,7 +428,11 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
     key: "approval-1".into(),
     execution: Some(execution),
     at: request.requested_at,
-    kind: ItemKind::Approval(ApprovalCard { request, decided: None }),
+    kind: ItemKind::Approval(ApprovalCard {
+      request,
+      step: "Implement".into(),
+      decided: None,
+    }),
   };
   assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);
 }
@@ -515,5 +520,36 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
   assert!(
     other.rows.iter().all(|row| &**row.key() != "mark-2"),
     "another step's filter hides the mark"
+  );
+}
+
+#[test]
+fn timeline_a_tool_step_s_failing_command_is_a_row_of_its_own() {
+  use orchester_core::connection::stream::ToolCommandResult;
+  let execution = StepExecutionId::generate();
+  let ran = |item: &str, result: ToolCommandResult, exit: i64| {
+    [
+      AgentEvent::ToolCommandStarted {
+        tool: "Run checks".into(),
+        command: format!("pnpm test {item}"),
+      },
+      AgentEvent::ToolCommandFinished {
+        tool: "Run checks".into(),
+        command: format!("pnpm test {item}"),
+        result,
+        exit_code: Some(exit),
+        output: "1 failed".into(),
+        omitted_bytes: 0,
+      },
+    ]
+  };
+  let mut events = Vec::new();
+  events.extend(ran("a", ToolCommandResult::Passed, 0));
+  events.extend(ran("b", ToolCommandResult::Failed, 1));
+  let kinds: Vec<Option<ToolKind>> = transcript(execution, events).iter().map(tool_kind).collect();
+  assert_eq!(
+    kinds,
+    [Some(ToolKind::Command), None],
+    "what failed the step is never grouped"
   );
 }

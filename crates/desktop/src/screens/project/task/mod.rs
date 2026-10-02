@@ -466,6 +466,8 @@ impl TaskScreen {
     let edit = detail
       .filter(|_| open.is_none())
       .and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
+    // On the Conversation tab it would open the tab itself.
+    let open = open.filter(|_| props.tab != TaskPageTab::Conversation);
     page::topbar_with(
       breadcrumb.into(),
       open.into_iter().chain(buttons).chain(ended).chain(edit),

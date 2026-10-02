@@ -159,12 +159,10 @@ fn changes_tab_opens_on_the_file_a_timeline_entry_changed() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  // Its step starts collapsed only once the page shows the run finished: pressing the header of
-  // a step the page still shows at work would close it.
+  // The step the run ended on stays open once the page shows the run finished.
   finished_on_page(&mut desktop);
   desktop.click("task-tab-conversation");
   desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
-  desktop.click("activity-step-header");
   open_group(&mut desktop, "edited 1 file");
   desktop.wait_until("the file change", |desktop| {
     has(desktop, "activity-open-file:README.md")

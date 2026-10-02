@@ -69,6 +69,8 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => None,
     EntryKind::Command(command) => Some(command_kind(&command.command)),
+    // A tool step's failing command is what failed the step: a row of its own, its output open (`hep0l`).
+    EntryKind::ToolCommand(_) if entry.is_failure() => None,
     EntryKind::ToolCommand(_) => Some(ToolKind::Command),
     EntryKind::FileChange(_) => Some(ToolKind::Edit),
     // A declined call is a problem row whatever it calls, a memory tool too, and however it ended.

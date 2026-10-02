@@ -1461,8 +1461,19 @@
       "failed": "The runner could not do this; its log has the details."
     },
     "conversation": {
+      "state": {
+        "waiting": "Waiting for you",
+        "queued": "Queued",
+        "paused": "Paused",
+        "stopped": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "ready": "Ready for review",
+        "merged": "Merged",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "allStepsNone": "All steps · none yet",
       "show": {
-        "label": "Show",
         "all": "All",
         "messages": "Messages",
         "tools": "Tools"
@@ -1498,8 +1509,10 @@
       },
       "empty": {
         "noRun": "This task has not run yet",
-        "notStartedTitle": "Run {{run}} has not started",
-        "notStarted": "It waits for a free agent slot. Its steps run in this order:"
+        "nothingYet": "Nothing in this conversation yet",
+        "queued": "Run {{run}} is queued and starts when an agent slot is free. The agents’ messages, their tool activity and your messages will appear here.",
+        "step": "{{number}} {{step}} · {{agent}}",
+        "toolStep": "{{number}} {{step}}"
       },
       "agentMeta": "{{step}} · {{time}}",
       "you": "You",
@@ -1508,6 +1521,7 @@
       "problemMeta": "{{meta}} · {{time}}",
       "editInComposer": "Edit in composer",
       "line": {
+        "message": "message",
         "agent": "{{agent}}: {{text}}",
         "you": "You: {{text}}",
         "youTo": "You to {{agent}}: {{text}}"
@@ -1584,6 +1598,9 @@
       },
       "card": {
         "asks": "{{agent}} asks you",
+        "asksMcp": "{{agent}} asks to use an MCP tool",
+        "asksCommand": "{{agent}} asks to run a command",
+        "approveOnce": "Approve once applies to this request only.",
         "waitingAnswer": "Waiting for your answer",
         "answered": "Answered",
         "waitingApproval": "Waiting for approval",

@@ -223,6 +223,11 @@ pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
 /// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
 /// Narrower, *Show* and the search go to a second line (not drawn yet).
 pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
+/// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its
+/// recipient, *Attach* and both send buttons on one line: the 216 sidebar, the column's 64 padding,
+/// the composer's 24, the 260 recipient, *Attach* (104), *Send after this turn* (166), *Send now*
+/// (104) and three 10 gaps. Narrower, the buttons go to a line of their own (not drawn yet).
+pub const CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW: f32 = 980.0;
 /// What the Tools view adds to that line: *Show raw lines* (`q4fCXK`) and its gap.
 pub const CONVERSATION_TOOLBAR_RAW_SWITCH: f32 = 140.0;
 /// How much wider *Waits for your decision* is than *Following live*.

@@ -74,6 +74,32 @@ impl ComposerMode {
     }
   }
 
+  /// Whom the run's state addresses unless the person chooses another: the agent that asked, whose
+  /// plan waits, that a follow-up or a continuation resumes, or the agent at work; else Orchestrator.
+  pub fn default_recipient(&self, conversation: &Conversation) -> Recipient {
+    let by_agent = |agent: &str| {
+      conversation
+        .recipients
+        .iter()
+        .find(|choice| choice.agent.as_deref() == Some(agent))
+        .map(|choice| choice.recipient)
+    };
+    self
+      .fixed_recipient()
+      .or_else(|| match self {
+        Self::PlanChanges { agent, .. } => by_agent(agent),
+        Self::FollowUp | Self::Continue => conversation.next_agent.as_deref().and_then(by_agent),
+        _ => None,
+      })
+      .or_else(|| {
+        conversation
+          .working
+          .first()
+          .map(|working| Recipient::Agent(working.profile))
+      })
+      .unwrap_or(Recipient::Orchestrator)
+  }
+
   /// The recipient the composer is fixed to, if it is: the agent whose question it answers.
   pub const fn fixed_recipient(&self) -> Option<Recipient> {
     match self {

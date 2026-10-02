@@ -309,7 +309,7 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_conversation() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  // The page shows the finished run before the timeline opens, so its step starts folded.
+  // The page shows the finished run before the timeline opens; the step it ended on stays open.
   finished_on_page(&mut desktop);
   desktop.click("task-tab-conversation");
   desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
@@ -317,7 +317,6 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_conversation() {
     !has(&mut desktop, "activity-invocation"),
     "Details is closed by default"
   );
-  desktop.click("activity-step-header");
   open_group(&mut desktop, "Ran echo");
   desktop.wait_until("the group's entries", |desktop| {
     has(desktop, "activity-open-file:README.md")

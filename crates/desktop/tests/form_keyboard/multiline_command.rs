@@ -83,7 +83,6 @@ fn check_at_width(
   desktop.tree.resize(width, 960);
   desktop.click("task-tab-conversation");
   desktop.wait_for("activity-step-header");
-  desktop.click("activity-step-header");
   open_group(desktop, "Ran ");
   let header = format!("activity-entry-header-{sequence}");
   let toggle = format!("activity-entry-toggle-{sequence}");
@@ -199,7 +198,6 @@ fn two_open_commands() -> (Desktop, u64) {
   desktop.tree.resize(960, 960);
   desktop.click("task-tab-conversation");
   desktop.wait_for("activity-step-header");
-  desktop.click("activity-step-header");
   open_group(&mut desktop, "Ran ");
   desktop.wait_for(&format!("activity-entry-details-{first}"));
   (desktop, first)

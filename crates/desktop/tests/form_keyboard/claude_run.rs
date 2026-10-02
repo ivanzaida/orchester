@@ -28,7 +28,6 @@ fn claude_run_names_the_provider_in_the_conversation_and_shows_its_transcript() 
   desktop.click("conversation-details");
   desktop.wait_for("activity-invocation");
   assert!(shows(&mut desktop, "activity-invocation", "Builder · Claude / haiku"));
-  desktop.click("activity-step-header");
   open_group(&mut desktop, "git status --short");
   desktop.wait_until("the group's entries", |desktop| {
     has(desktop, "activity-open-file:README.md")

@@ -88,11 +88,15 @@ fn search(desktop: &mut Desktop, query: &str) {
 #[test]
 fn conversation_timeline_folds_tool_events_into_a_group_between_messages() {
   let mut desktop = finished_conversation(false);
-  // A finished step folds to its header; its tokens are in it, and Details is closed.
+  // The step the run ended on stays open; its tokens are in its header, and Details is closed.
   assert!(shows(&mut desktop, "activity-step-header", "Implement · Builder"));
   assert!(shows(&mut desktop, "activity-step-header", "tokens"));
-  assert!(!has(&mut desktop, "conversation-agent-message"));
+  desktop.wait_until("the step's items", |desktop| has(desktop, "conversation-agent-message"));
   assert!(!has(&mut desktop, "activity-invocation"));
+  assert!(shows(&mut desktop, "conversation-live-state", "Ready for review"));
+  // Pressing its header folds it.
+  desktop.click("activity-step-header");
+  desktop.wait_until("the step folded", |desktop| !has(desktop, "conversation-agent-message"));
   assert!(holds(
     &mut desktop,
     "conversation-end",
@@ -130,7 +134,6 @@ fn conversation_timeline_folds_tool_events_into_a_group_between_messages() {
 #[test]
 fn conversation_show_narrows_the_timeline_to_messages_or_tools() {
   let mut desktop = finished_conversation(false);
-  desktop.click("activity-step-header");
   desktop.wait_for("conversation-group-toggle");
 
   desktop.click("conversation-show-1");

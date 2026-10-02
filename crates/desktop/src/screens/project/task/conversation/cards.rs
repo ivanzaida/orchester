@@ -301,15 +301,18 @@ impl Component for ApprovalCardView {
     let action = approval_decision(ctx);
     let request = &props.card.request;
     let waiting = props.card.decided.is_none();
-    let title = ctx.t(if request.command {
-      "runs.toolApproval.commandTitle"
-    } else {
-      "runs.toolApproval.title"
-    });
+    let title = ctx.t_args(
+      if request.command {
+        "runs.conversation.card.asksCommand"
+      } else {
+        "runs.conversation.card.asksMcp"
+      },
+      [("agent", request.agent.as_str())],
+    );
     let meta = ctx.t_args(
       "runs.conversation.agentMeta",
       [
-        ("step", request.agent.as_str()),
+        ("step", &*props.card.step),
         ("time", display::clock(request.requested_at).as_str()),
       ],
     );
@@ -388,8 +391,10 @@ impl ApprovalCardView {
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
           .child(deny.render(ctx))
-          .child(approve.render(ctx)),
+          .child(approve.render(ctx))
+          .child(Text::new(&ctx.t("runs.conversation.card.approveOnce")).variant(TypographyStyle::Caption)),
       )
       .with_children(
         state
@@ -441,33 +446,44 @@ pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> E
       ctx.t("runs.conversation.result.summary"),
       Page::Task(timeline.task, TaskPageTab::Summary),
     ));
-  Column::new()
-    .id(format!("conversation-result-{}", card.execution))
-    .width(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Group.role())
+  // The title's meta follows it; what was reported and the links line up under the title (`AzKYQ`).
+  let body = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Notice.role())
     .child(
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
         .child(
           Text::new(&ctx.t_args(key, [("step", &*card.step)]))
             .variant(ExtraTypography::NoticeHeading.role())
             .nowrap(),
         )
-        .child(Spacer::new().flex(1.0))
-        .child(Text::new(&meta).variant(TypographyStyle::Mono).nowrap()),
+        .child(
+          Text::new(&meta)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextMuted)
+            .nowrap(),
+        ),
     )
     .with_children(card.reported.as_deref().map(|reported| {
       Text::new(reported)
-        .variant(TypographyStyle::Description)
+        .variant(ExtraTypography::Explanation.role())
         .width(Dimension::Pct(100.0))
         .selectable(true)
     }))
-    .child(links)
+    .child(links);
+  Row::new()
+    .id(format!("conversation-result-{}", card.execution))
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Group.role())
+    .spacing(ExtraSpacing::Stack.role())
+    .align_items(Alignment::Start)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(ExtraRadius::Notice.role())
+    .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
+    .child(body)
     .into()
 }
 
