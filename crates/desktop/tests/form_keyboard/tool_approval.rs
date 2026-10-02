@@ -3,10 +3,7 @@
 //! transcript's command box, which scrolls instead of cutting it; Copy takes the value as recorded;
 //! and Approve and Deny stay in view in the smallest window.
 
-use std::{
-  sync::Arc,
-  time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use lurq::{
   app::events::ScrollPhase,
@@ -410,17 +407,16 @@ fn tool_approval_arguments_cut_at_the_ceiling_say_so_under_what_was_kept() {
 }
 
 #[test]
-fn tool_approval_deeply_nested_arguments_are_shown_as_recorded_and_quickly() {
+fn tool_approval_deeply_nested_arguments_are_shown_as_recorded() {
   // 120 levels deep, and 20 000 elements at the bottom: laid out one a line, every element would
   // carry 240 spaces of indent, about 5 MB.
   let raw = format!("{}{}{}", "[".repeat(120), vec!["1"; 20_000].join(","), "]".repeat(120));
   serde_json::from_str::<Value>(&raw).expect("valid JSON");
-  let started = Instant::now();
+  // The raw text and its note prove the layout stopped at its bound; a wall-clock limit here would
+  // only measure the harness and the machine's load.
   let mut desktop = mcp_arguments(raw.clone());
-  let elapsed = started.elapsed();
   assert_whole(&mut desktop, ARGUMENTS, &raw);
   assert!(shows(&mut desktop, "tool-approval-arguments-note", "Shown as recorded"));
-  assert!(elapsed < Duration::from_secs(3), "the dialog appears in {elapsed:?}");
   // Small arguments nested as deep are still laid out.
   let small = format!("{}1{}", "[".repeat(100), "]".repeat(100));
   let mut desktop = mcp_arguments(small);

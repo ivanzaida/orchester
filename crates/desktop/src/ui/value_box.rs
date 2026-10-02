@@ -14,10 +14,10 @@ use lurq::{
 };
 
 use super::command_row::{Copied, command_box, copy_button, recorded_lines, with_copy_failure};
+use crate::theme::{ExtraSpacing, value_box_scrollbar};
 
 /// Height of Copy on the label's line (`feLwP`), which is the line's height.
 const COPY_HEIGHT: f32 = 22.0;
-use crate::theme::{ExtraSpacing, value_box_scrollbar};
 
 /// The state the Copy buttons of a group of value boxes share: the last copy and its outcome, and
 /// which Copy the pointer is over (by its id).

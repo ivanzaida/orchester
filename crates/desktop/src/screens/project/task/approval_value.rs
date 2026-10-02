@@ -61,7 +61,8 @@ impl<'a> ValueRows<'a> {
     if fits_inline(command) {
       return styled_property(&ctx.t("runs.toolApproval.command"), command, ValueStyle::Mono);
     }
-    let lines = command.split('\n').count();
+    // A trailing line break ends the last line; it does not start another one.
+    let lines = command.trim_end_matches(['\r', '\n']).split('\n').count();
     let key = if lines == 1 {
       "runs.toolApproval.commandLines.one"
     } else {

@@ -312,7 +312,7 @@ admits it) and, to keep naming the version in use, this line.
 
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
-- **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
+- **Done 2026-10-02.** Independent review and design verification passed. A value that does not fit beside its label (Action, Command or
   Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
   label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
   both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
@@ -323,6 +323,10 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
   (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
 - Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- lurq bug worked around: a component that renders its own `Modal` and re-renders after two window resizes lays the
+  layer out at the earlier size. The dialog renders only the layer (`ToolApprovalDialog`); everything that changes lives
+  in `ToolApprovalPanel`. The fix goes upstream as lurq 0.33.2; other dialogs that render their own `Modal` and
+  re-render while open are exposed until then.
 - Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
   `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
   512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
