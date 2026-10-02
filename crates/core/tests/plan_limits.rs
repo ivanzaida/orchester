@@ -3,8 +3,8 @@ use orchester_core::{
     AgentProvider,
     app_server::{AppServerStream, Update},
     plan_limits::{
-      InvalidWindow, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings, claude_limits,
-      codex_limits,
+      Blocked, InvalidWindow, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings,
+      claude_limits, codex_limits,
     },
     stream::{AgentEvent, ClaudeStream, OutputStream},
   },
@@ -110,11 +110,33 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
     "secondary":{"usedPercent":40,"windowDurationMins":10080},
     "rateLimitReachedType":"rate_limit_reached"}))
   .expect("provider state");
-  assert_eq!(limits.windows[0].state(now()), LimitState::Normal);
   assert_eq!(
-    limits.windows[1].state(now()),
-    LimitState::Reached,
-    "the reason names no window; the fullest one is reached"
+    limits.blocked,
+    Some(Blocked {
+      reason: LimitBlock::Window,
+      window: Some(10080)
+    }),
+    "the reason names no window; it applies to the fullest one of the update"
+  );
+  assert!(
+    limits
+      .windows
+      .iter()
+      .all(|window| window.state(now()) == LimitState::Normal),
+    "a window's own state stays what the CLI said about it"
+  );
+  let reading = LimitReading {
+    provider: AgentProvider::CodexCli,
+    at: now(),
+    limits,
+  };
+  assert_eq!(
+    reading.window_state(&reading.limits.windows[0], now()),
+    LimitState::Normal
+  );
+  assert_eq!(
+    reading.window_state(&reading.limits.windows[1], now()),
+    LimitState::Reached
   );
 }
 
@@ -132,7 +154,7 @@ fn plan_limits_codex_block_reasons_and_window_lifts() {
   ] {
     let payload = json!({"primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":reset.unix_millis()/1000},"rateLimitReachedType":reason});
     let reading = parsed(AgentProvider::CodexCli, &codex_update(&payload), now());
-    assert_eq!(reading.limits.blocked, Some(block));
+    assert_eq!(reading.limits.blocked.map(|blocked| blocked.reason), Some(block));
     assert_eq!(reading.state(now()), LimitState::Reached, "{reason}");
     let expected = if lifts { LimitState::Normal } else { LimitState::Reached };
     assert_eq!(reading.state(after), expected, "{reason} after the window reset");
@@ -144,7 +166,7 @@ fn plan_limits_codex_block_reasons_and_window_lifts() {
   assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&blocked), later)));
   let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
   assert_eq!(
-    reading.limits.blocked,
+    reading.limits.blocked.map(|blocked| blocked.reason),
     Some(LimitBlock::Credits),
     "a block without a window is kept"
   );
@@ -154,7 +176,7 @@ fn plan_limits_codex_block_reasons_and_window_lifts() {
   assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&credits), even_later)));
   let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
   assert_eq!(
-    reading.limits.blocked,
+    reading.limits.blocked.map(|blocked| blocked.reason),
     Some(LimitBlock::Credits),
     "credits alone say nothing of the block"
   );
@@ -278,7 +300,13 @@ fn plan_limits_claude_events_never_reach_the_transcript() {
   assert_eq!(state_only.windows[0].state(now()), LimitState::Reached);
   let unknown_window = claude_limits(&json!({"status":"rejected","rateLimitType":null})).expect("rejected");
   assert!(unknown_window.windows.is_empty());
-  assert_eq!(unknown_window.blocked, Some(LimitBlock::Window));
+  assert_eq!(
+    unknown_window.blocked,
+    Some(Blocked {
+      reason: LimitBlock::Window,
+      window: None
+    })
+  );
   let reading = LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
     at: now(),
@@ -330,7 +358,7 @@ fn plan_limits_malformed_newer_codex_event_preserves_state_age_and_expiry() {
       assert_eq!(reading, &retained, "a newer malformed event is not a snapshot");
       let window = reading.fullest(later).expect("unexpired window");
       assert_eq!(
-        (window.percent(), window.state(later), window.resets()),
+        (window.percent(), reading.window_state(window, later), window.resets()),
         (Some(percent), state, Some(reset))
       );
       assert_eq!(window.reported_at(), Some(now()));
@@ -368,4 +396,106 @@ fn plan_limits_sparse_codex_update_keeps_what_it_leaves_out() {
   assert_eq!(reading.limits.plan.as_deref(), Some("pro"));
   assert!(reading.limits.credits.is_some());
   assert_eq!(reading.fullest(later).expect("fullest").percent(), Some(65.0));
+}
+
+fn claude_event(info: &serde_json::Value) -> String {
+  json!({"type":"rate_limit_event","rate_limit_info":info}).to_string()
+}
+
+fn at(minutes: i64) -> Timestamp {
+  Timestamp::from_unix_millis(now().unix_millis() + minutes * 60_000)
+}
+
+#[test]
+fn plan_limits_block_without_its_window_over_an_expired_retained_window() {
+  let mut readings = PlanReadings::default();
+  let weekly =
+    json!({"status":"allowed","rateLimitType":"seven_day","utilization":0.96,"resetsAt":at(30).unix_millis()/1000});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&weekly), now()));
+  let rejected = json!({"status":"rejected","rateLimitType":null});
+  assert!(readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&rejected), at(60))));
+  let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
+  assert_eq!(reading.state(at(60)), LimitState::Reached, "the fresh rejection holds");
+  assert_eq!(
+    reading.block_beyond_reset(),
+    Some(LimitBlock::Window),
+    "with no reset to name"
+  );
+  let codex = json!({"rateLimitReachedType":"rate_limit_reached"});
+  let mut readings = PlanReadings::default();
+  readings.observe(parsed(AgentProvider::CodexCli, CODEX, now()));
+  assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&codex), at(1))));
+  let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
+  assert_eq!(reading.state(at(1)), LimitState::Reached);
+  assert_eq!(reading.block_beyond_reset(), Some(LimitBlock::Window));
+  let kept = reading.fullest(at(1)).expect("retained window");
+  assert_eq!(
+    (kept.state(at(1)), reading.window_state(kept, at(1))),
+    (LimitState::Normal, LimitState::Normal),
+    "the block is not pinned on the retained window"
+  );
+}
+
+#[test]
+fn plan_limits_block_without_its_window_is_not_kept_on_a_live_window() {
+  let mut readings = PlanReadings::default();
+  let weekly =
+    json!({"status":"allowed","rateLimitType":"seven_day","utilization":0.4,"resetsAt":at(600).unix_millis()/1000});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&weekly), now()));
+  let rejected = json!({"status":"rejected"});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&rejected), at(1)));
+  let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
+  assert_eq!(reading.state(at(1)), LimitState::Reached);
+  let limiting = reading.limiting(at(1)).expect("weekly");
+  assert_eq!(
+    reading.window_state(limiting, at(1)),
+    LimitState::Normal,
+    "no reset is claimed for it"
+  );
+  let five =
+    json!({"status":"allowed","rateLimitType":"five_hour","utilization":0.1,"resetsAt":at(120).unix_millis()/1000});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&five), at(2)));
+  let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
+  assert_eq!(reading.state(at(2)), LimitState::Normal);
+  assert!(
+    reading
+      .limits
+      .windows
+      .iter()
+      .all(|window| reading.window_state(window, at(2)) == LimitState::Normal),
+    "the weekly window is not left reached"
+  );
+}
+
+#[test]
+fn plan_limits_status_only_report_keeps_a_use_it_does_not_contradict() {
+  let reset = at(120).unix_millis() / 1000;
+  let mut readings = PlanReadings::default();
+  let known = json!({"status":"allowed","rateLimitType":"five_hour","utilization":0.4,"resetsAt":reset});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&known), now()));
+  let status = json!({"status":"allowed","rateLimitType":"five_hour","resetsAt":reset});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&status), at(5)));
+  let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
+  let window = &reading.limits.windows[0];
+  assert_eq!(window.percent(), Some(40.0));
+  assert_eq!(window.reported_at(), Some(now()), "the use keeps its own age");
+  let warning = json!({"status":"allowed_warning","rateLimitType":"five_hour","resetsAt":reset});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&warning), at(6)));
+  let window = &readings
+    .get(AgentProvider::ClaudeCodeCli)
+    .expect("Claude")
+    .limits
+    .windows[0];
+  assert_eq!(window.percent(), None, "a warning contradicts 40 %");
+  assert_eq!(window.state(at(6)), LimitState::Near);
+  let next = json!({"status":"allowed","rateLimitType":"five_hour","utilization":0.4,"resetsAt":reset});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&next), at(7)));
+  let moved = json!({"status":"allowed","rateLimitType":"five_hour","resetsAt":reset + 18_000});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&moved), at(8)));
+  let window = &readings
+    .get(AgentProvider::ClaudeCodeCli)
+    .expect("Claude")
+    .limits
+    .windows[0];
+  assert_eq!(window.percent(), None, "a new period does not inherit the old use");
 }

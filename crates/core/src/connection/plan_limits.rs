@@ -153,13 +153,23 @@ impl LimitBlock {
   }
 }
 
+/// A CLI's refusal as it reported it. Kept apart from the windows: a window's own state is only
+/// what the CLI said about that window, never a block inferred for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Blocked {
+  pub reason: LimitBlock,
+  /// The window (its minutes) a [`LimitBlock::Window`] applies to: the fullest window of the same
+  /// update. `None` when the update named no window, so nothing says when the block lifts.
+  pub window: Option<u64>,
+}
+
 /// One CLI report: Claude Code reports one window at a time, Codex App Server the windows it knows.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanLimits {
   pub windows: Vec<LimitWindow>,
   pub plan: Option<String>,
   pub credits: Option<Credits>,
-  pub blocked: Option<LimitBlock>,
+  pub blocked: Option<Blocked>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,7 +197,7 @@ impl LimitReading {
       .iter()
       .filter(|window| !window.expired(now))
       .max_by_key(|window| {
-        let priority = match window.state(now) {
+        let priority = match self.window_state(window, now) {
           LimitState::Normal => 0,
           LimitState::Near => 1,
           LimitState::Reached => 2,
@@ -196,25 +206,35 @@ impl LimitReading {
       })
   }
 
-  /// The account's state: a block that a window reset does not lift, or one with no window to
-  /// lift it, holds until a newer reading; otherwise the limiting window decides.
-  pub fn state(&self, now: Timestamp) -> LimitState {
-    match self.limits.blocked {
-      Some(block) if !block.lifts_at_reset() => LimitState::Reached,
-      Some(_) if self.limits.windows.is_empty() => LimitState::Reached,
-      _ => self
-        .limiting(now)
-        .map_or(LimitState::Normal, |window| window.state(now)),
+  /// `window`'s state, reached also while the window block of the update that named it holds.
+  pub fn window_state(&self, window: &LimitWindow, now: Timestamp) -> LimitState {
+    let blocked = self
+      .limits
+      .blocked
+      .is_some_and(|blocked| blocked.reason == LimitBlock::Window && blocked.window == Some(window.minutes));
+    if blocked && !window.expired(now) {
+      return LimitState::Reached;
     }
+    window.state(now)
   }
-}
 
-/// Marks the fullest of `windows` as the one a window block applies to, unless one already is.
-fn mark_blocked(windows: &mut [LimitWindow]) {
-  if windows.iter().any(|window| window.state == LimitState::Reached) {
-    return;
+  /// A block that no window reset lifts: its reason does not lift at a reset, or the update named
+  /// no window. It holds until a newer reading.
+  pub fn block_beyond_reset(&self) -> Option<LimitBlock> {
+    let blocked = self.limits.blocked?;
+    let window = blocked
+      .window
+      .filter(|minutes| self.limits.windows.iter().any(|window| window.minutes == *minutes));
+    (!blocked.reason.lifts_at_reset() || window.is_none()).then_some(blocked.reason)
   }
-  if let Some(window) = windows.iter_mut().max_by_key(|window| window.used) {
-    window.state = LimitState::Reached;
+
+  /// The account's state: a block no reset lifts holds; otherwise the limiting window decides.
+  pub fn state(&self, now: Timestamp) -> LimitState {
+    if self.block_beyond_reset().is_some() {
+      return LimitState::Reached;
+    }
+    self
+      .limiting(now)
+      .map_or(LimitState::Normal, |window| self.window_state(window, now))
   }
 }

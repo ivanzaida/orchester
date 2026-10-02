@@ -1,5 +1,5 @@
-use super::{LimitBlock, LimitReading, mark_blocked};
-use crate::connection::AgentProvider;
+use super::{LimitReading, LimitWindow};
+use crate::{connection::AgentProvider, time::Timestamp};
 
 /// Session-only newest readings, one account per CLI on this computer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -23,6 +23,13 @@ impl PlanReadings {
       return false;
     }
     let reports_windows = !reading.limits.windows.is_empty();
+    for window in &mut reading.limits.windows {
+      if let Some(known) = old.limits.windows.iter().find(|known| known.minutes == window.minutes)
+        && keeps_known_use(known, window, reading.at)
+      {
+        *window = known.clone();
+      }
+    }
     // Both CLIs report sparsely: Claude Code one window per event, Codex App Server's update
     // leaves out what it does not know, which does not clear what was read before.
     for window in &old.limits.windows {
@@ -37,12 +44,10 @@ impl PlanReadings {
       reading.limits.credits.clone_from(&old.limits.credits);
     }
     // An update with windows and no block says the CLI no longer refuses; one without windows
-    // (credits or the plan only) says nothing about it.
+    // (credits or the plan only) says nothing about it. A block is never moved onto a window the
+    // update did not name.
     if reading.limits.blocked.is_none() && !reports_windows {
       reading.limits.blocked = old.limits.blocked;
-    }
-    if reading.limits.blocked == Some(LimitBlock::Window) {
-      mark_blocked(&mut reading.limits.windows);
     }
     if old == &reading {
       return false;
@@ -50,4 +55,17 @@ impl PlanReadings {
     *old = reading;
     true
   }
+}
+
+/// Whether a window reported without its use keeps the use read before, with that reading's own
+/// age: only while the earlier reading still stands for the same period and says what the new
+/// report says (same reset, extra usage and state). A report that disagrees replaces it, and the
+/// use reads unknown rather than a value the CLI has contradicted.
+fn keeps_known_use(known: &LimitWindow, new: &LimitWindow, at: Timestamp) -> bool {
+  new.used.is_none()
+    && known.used.is_some()
+    && !known.expired(at)
+    && new.resets.is_none_or(|resets| known.resets == Some(resets))
+    && known.extra == new.extra
+    && known.state(at) == new.state(at)
 }

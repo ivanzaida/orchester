@@ -322,7 +322,7 @@ fn status_bar_plan_limits_credit_block_names_its_reason_without_a_reset() {
   use orchester_core::{
     connection::{
       AgentProvider,
-      plan_limits::{LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+      plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
     },
     time::Timestamp,
   };
@@ -336,7 +336,10 @@ fn status_bar_plan_limits_credit_block_names_its_reason_without_a_reset() {
       windows: vec![LimitWindow::new(300, Some(40.0), Some(reset), LimitState::Normal, false).expect("window")],
       plan: None,
       credits: None,
-      blocked: Some(LimitBlock::Credits),
+      blocked: Some(Blocked {
+        reason: LimitBlock::Credits,
+        window: None,
+      }),
     },
   });
   let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::CodexCli)]);
@@ -410,4 +413,40 @@ fn status_bar_plan_limits_percent_column_and_short_reset() {
   assert_eq!(bounds(&mut tree, "status-plan-limits-percent").width, 32.0);
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
   assert!(copy.contains("7% resets in 48 min"), "{copy}");
+}
+
+#[test]
+fn status_bar_plan_limits_block_without_its_window_names_no_reset() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 7_200_000);
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: now,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(10080, Some(40.0), Some(reset), LimitState::Normal, false).expect("window")],
+      plan: None,
+      credits: None,
+      blocked: Some(Blocked {
+        reason: LimitBlock::Window,
+        window: None,
+      }),
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::ClaudeCodeCli)]);
+  assert_eq!(item_texts(&mut tree, "status-plan-limits"), ["Claude limit reached"]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(
+    copy.contains("Claude refuses new turns; it did not say until when."),
+    "{copy}"
+  );
+  assert!(!copy.contains("until 1") && !copy.contains("until 2") && !copy.contains("until 0"));
 }

@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Credits, LimitBlock, LimitState, LimitWindow, PlanLimits, mark_blocked};
+use super::{Blocked, Credits, LimitBlock, LimitState, LimitWindow, PlanLimits};
 use crate::time::Timestamp;
 
 /// The bucket of the account's plan in Codex App Server's `RateLimitSnapshot`; other buckets
@@ -16,7 +16,7 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
   if optional_text(value.get("limitId"))?.is_some_and(|bucket| bucket != CODEX_PLAN_BUCKET) {
     return None;
   }
-  let blocked = optional_text(value.get("rateLimitReachedType"))?.map(codex_block);
+  let reason = optional_text(value.get("rateLimitReachedType"))?.map(codex_block);
   let mut windows = Vec::new();
   for name in ["primary", "secondary"] {
     if let Some(window) = value.get(name).filter(|window| !window.is_null()) {
@@ -29,12 +29,24 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
         None | Some(Value::Null) => continue,
         Some(value) => value.as_u64()?,
       };
+      // A window App Server reports out of range (negative or not a number) makes the whole
+      // snapshot untrustworthy; it is not a reading, and the last valid one stays.
       windows.push(LimitWindow::new(minutes, Some(percent), resets, LimitState::Normal, false).ok()?);
     }
   }
-  if blocked == Some(LimitBlock::Window) {
-    mark_blocked(&mut windows);
-  }
+  // The reason names no window: a window block applies to the fullest window of this update, and
+  // to none when it reports no window.
+  let blocked = reason.map(|reason| Blocked {
+    reason,
+    window: (reason == LimitBlock::Window)
+      .then(|| {
+        windows
+          .iter()
+          .max_by_key(|window| window.used)
+          .map(LimitWindow::minutes)
+      })
+      .flatten(),
+  });
   let credits = match value.get("credits") {
     None | Some(Value::Null) => None,
     Some(value) => Some(Credits {
@@ -97,7 +109,10 @@ pub fn claude_limits(value: &Value) -> Option<PlanLimits> {
       windows: Vec::new(),
       plan: None,
       credits: None,
-      blocked: Some(LimitBlock::Window),
+      blocked: Some(Blocked {
+        reason: LimitBlock::Window,
+        window: None,
+      }),
     });
   };
   let percent = match value.get("utilization") {
@@ -109,6 +124,8 @@ pub fn claude_limits(value: &Value) -> Option<PlanLimits> {
     Some(value) => Some(Timestamp::from_unix_seconds(value.as_i64()?)),
   };
   let extra = value.get("isUsingOverage").and_then(Value::as_bool).unwrap_or(false);
+  // A utilization out of range (negative or not a number) is not a reading; the event is dropped
+  // like any other this version cannot read, and the last valid window stays.
   let window = LimitWindow::new(minutes, percent, resets, state, extra).ok()?;
   Some(PlanLimits {
     windows: vec![window],

@@ -236,9 +236,7 @@ impl Entry<'_> {
   }
   /// What the CLI refuses turns for, when it is not a window that lifts at its reset.
   fn block_beyond_reset(&self) -> Option<LimitBlock> {
-    let reading = self.reading?;
-    let block = reading.limits.blocked?;
-    (!block.lifts_at_reset() || reading.limits.windows.is_empty()).then_some(block)
+    self.reading?.block_beyond_reset()
   }
 }
 

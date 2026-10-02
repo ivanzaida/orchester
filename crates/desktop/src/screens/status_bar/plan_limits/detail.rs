@@ -164,7 +164,11 @@ fn window_row(ctx: &Ctx, entry: &Entry<'_>, window: &LimitWindow) -> Element {
       )
       .into();
   }
-  let color = if window.state(entry.now) == LimitState::Normal {
+  let state = entry.reading.map_or_else(
+    || window.state(entry.now),
+    |reading| reading.window_state(window, entry.now),
+  );
+  let color = if state == LimitState::Normal {
     PaletteColor::TextSecondary
   } else {
     PaletteColor::TextPrimary
@@ -181,12 +185,12 @@ fn window_row(ctx: &Ctx, entry: &Entry<'_>, window: &LimitWindow) -> Element {
         .background(color)
         .rounded(ExtraRadius::Mark.role())
     }));
-  let variant = if window.state(entry.now) == LimitState::Normal {
+  let variant = if state == LimitState::Normal {
     ExtraTypography::MonoValue
   } else {
     ExtraTypography::MonoLimit
   };
-  let reset_color = if window.state(entry.now) == LimitState::Normal {
+  let reset_color = if state == LimitState::Normal {
     PaletteColor::TextMuted
   } else {
     PaletteColor::TextPrimary
