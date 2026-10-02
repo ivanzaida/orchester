@@ -18,7 +18,7 @@ use orchester_core::{
   connection::{AgentProvider, EngineVendor},
   id::RunId,
   resource::ModelId,
-  run::PendingToolApproval,
+  run::{ApprovalAnswer, PendingToolApproval},
 };
 use orchester_ipc::Command;
 
@@ -91,7 +91,11 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
         .control_run(Command::DecideToolApproval {
           run: decision.run,
           approval: decision.approval,
-          approve: decision.choice == Choice::Approve,
+          answer: if decision.choice == Choice::Approve {
+            ApprovalAnswer::Once
+          } else {
+            ApprovalAnswer::Deny
+          },
         })
         .await
         .map_err(|error| {

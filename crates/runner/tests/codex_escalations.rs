@@ -10,7 +10,7 @@ mod support;
 use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, OutsideCommands, RepositoryAccess},
-  run::{PendingToolApproval, Run, RunStatus},
+  run::{ApprovalAnswer, PendingToolApproval, Run, RunStatus},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -56,10 +56,10 @@ impl Started {
     pending_approval(self.project.repo.path(), &mut self.events, self.id).await
   }
 
-  async fn decide(&mut self, request: PendingToolApproval, approve: bool) -> Run {
+  async fn decide(&mut self, request: PendingToolApproval, answer: ApprovalAnswer) -> Run {
     self
       .scheduler
-      .decide_tool_approval(self.id, request.id, approve)
+      .decide_tool_approval(self.id, request.id, answer)
       .await
       .expect("decided");
     self.ended().await
@@ -102,7 +102,7 @@ async fn codex_escalations_ask_and_run_once_when_approved() {
     "hi\n",
     "nothing runs before the decision"
   );
-  let run = started.decide(request, true).await;
+  let run = started.decide(request, ApprovalAnswer::Once).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = started.db();
   let policy = &threads(&db, started.id)[0]["approvalPolicy"];
@@ -126,17 +126,15 @@ async fn codex_escalations_ask_and_run_once_when_approved() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn codex_escalations_declined_fail_the_step_without_the_command() {
+async fn codex_escalations_declined_go_on_without_the_command() {
   let mut started = Started::new("Escalate `pnpm install`.", RepositoryAccess::Write).await;
   let request = started.pending().await;
-  let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let run = started.decide(request, ApprovalAnswer::Deny).await;
+  // Codex declines the command, tells its model so, and the turn goes on to the step's result.
+  assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(reported(&started.db(), started.id, "escalation: "), ["decline"]);
-  assert!(
-    !std::fs::read_to_string(started.worktree().join("README.md"))
-      .expect("README")
-      .contains("escalated")
-  );
+  let readme = std::fs::read_to_string(started.worktree().join("README.md")).expect("README");
+  assert!(!readme.contains("escalated") && readme.contains("went on"), "{readme}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -144,8 +142,8 @@ async fn codex_escalations_ask_in_a_read_only_step() {
   let mut started = Started::new("Escalate `pnpm install`.", RepositoryAccess::ReadOnly).await;
   let request = started.pending().await;
   assert_eq!(request.action, "pnpm install");
-  let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let run = started.decide(request, ApprovalAnswer::Deny).await;
+  assert!(!matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
   let db = started.db();
   let thread = &threads(&db, started.id)[0];
   assert_eq!(thread["sandbox"], "read-only");

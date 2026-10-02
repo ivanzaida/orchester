@@ -1,8 +1,9 @@
-//! One person's decision on one tool call an agent waits on: the request is recorded and shown,
-//! the agent's time stops counting while it waits, and the decision goes to exactly the call that
+//! One tool call an agent waits on: the request is recorded, Orchester answers it itself when a rule of
+//! the run, Always allow or auto-approval covers it ([`super::answer`]), and otherwise it is shown and
+//! the agent's time stops counting while a person decides. The answer goes to exactly the call that
 //! asked — a Codex App Server JSON-RPC request or a Claude Code permission prompt call
-//! ([`super::claude_approval`]). A denial fails the step. A decision that no longer matches the
-//! waiting call is refused, so a stale one never approves a later action.
+//! ([`super::claude_approval`]). A denial tells the agent and lets it continue. A decision that no
+//! longer matches the waiting call is refused, so a stale one never approves a later action.
 
 use orchester_core::{
   command::redact_secrets,
@@ -11,7 +12,7 @@ use orchester_core::{
     parse_cli_too_old,
     stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   },
-  run::{PendingToolApproval, ToolApprovalDecision},
+  run::PendingToolApproval,
   store::ActivityStore,
   time::Timestamp,
 };
@@ -21,7 +22,8 @@ use tokio::sync::oneshot;
 
 use super::{
   super::control::answer,
-  claude_approval::Asked,
+  answer::Settled,
+  claude_approval::{Asked, PromptAnswer},
   worker::{ApprovalDecision, Watch, Worker},
 };
 
@@ -31,7 +33,7 @@ pub(super) enum Awaiting {
   /// The permission prompt call `call` (its tool use id), answered through `reply`.
   Claude {
     call: String,
-    reply: oneshot::Sender<bool>,
+    reply: oneshot::Sender<PromptAnswer>,
   },
 }
 
@@ -56,7 +58,7 @@ struct Shown {
 
 impl Worker {
   /// The CLI the approvals of this worker come from, for its messages.
-  const fn cli(&self) -> &'static str {
+  pub(super) const fn cli(&self) -> &'static str {
     if self.app_server().is_some() {
       "Codex"
     } else {
@@ -64,7 +66,11 @@ impl Worker {
     }
   }
 
-  pub(super) fn request_approval(&mut self, watch: &mut Watch, request: PendingApproval) -> Result<(), StoreError> {
+  pub(super) async fn request_approval(
+    &mut self,
+    watch: &mut Watch,
+    request: PendingApproval,
+  ) -> Result<(), StoreError> {
     let shown = Shown {
       command: request.is_command(),
       server: request.server.clone(),
@@ -73,12 +79,14 @@ impl Worker {
       scope: request.scope.clone(),
     };
     let key = request.request_key();
-    self.await_person(watch, &key, shown, Awaiting::Codex(Box::new(request)))
+    self
+      .await_person(watch, &key, shown, Awaiting::Codex(Box::new(request)))
+      .await
   }
 
   /// A permission prompt call of Claude Code that a person decides. A call asked about before is
   /// denied without asking again.
-  pub(super) fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
+  pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
     let Asked { request, reply } = asked;
     let first = self
       .claude_approvals
@@ -86,7 +94,7 @@ impl Worker {
       .is_some_and(|approvals| approvals.first_ask(request.call()));
     if !first {
       // The relay reads the denial; a closed relay has nothing to deny.
-      if reply.send(false).is_err() {
+      if reply.send(PromptAnswer::Repeated).is_err() {
         tracing::debug!("the permission prompt closed before a repeated call was denied");
       }
       return Ok(());
@@ -110,7 +118,9 @@ impl Worker {
     };
     let call = request.call().to_owned();
     let key = call.clone();
-    self.await_person(watch, &key, shown, Awaiting::Claude { call, reply })
+    self
+      .await_person(watch, &key, shown, Awaiting::Claude { call, reply })
+      .await
   }
 
   pub(super) fn redact(&self, text: &str) -> String {
@@ -167,7 +177,13 @@ impl Worker {
     Ok(())
   }
 
-  fn await_person(&mut self, watch: &mut Watch, key: &str, shown: Shown, awaiting: Awaiting) -> Result<(), StoreError> {
+  async fn await_person(
+    &mut self,
+    watch: &mut Watch,
+    key: &str,
+    shown: Shown,
+    awaiting: Awaiting,
+  ) -> Result<(), StoreError> {
     if watch.approval.is_some() {
       self.observe(
         watch,
@@ -178,9 +194,8 @@ impl Worker {
       self.process.terminate();
       return Ok(());
     }
-    let id = format!("{}:{key}", watch.invocation.id);
     let approval = PendingToolApproval {
-      id: id.clone(),
+      id: format!("{}:{key}", watch.invocation.id),
       run: watch.invocation.run,
       execution: watch.invocation.execution,
       invocation: watch.invocation.id,
@@ -194,18 +209,26 @@ impl Worker {
       native: None,
     };
     watch.db.request_tool_approval(&approval)?;
+    if let Some(settled) = self.answer_itself(watch, &approval)? {
+      // Recorded and delivered like a person's answer; a call that can no longer take it ends the
+      // agent there, as for a person.
+      if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
+        tracing::debug!(?rejection, "Orchester's own answer did not reach the agent");
+      }
+      return Ok(());
+    }
     watch.invocation.timing.wait_for_person(approval.requested_at);
     watch.db.save_invocation(&watch.invocation)?;
-    watch.approval = Some((id, awaiting));
     self.notifier.send(Event::ToolApprovalChanged {
       run: approval.run,
       task: self.task,
     });
+    watch.approval = Some((approval, awaiting));
     Ok(())
   }
 
   pub(super) async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), StoreError> {
-    let result = self.apply_decision(watch, &decision.id, decision.approve).await;
+    let result = self.apply_decision(watch, &decision).await;
     match result {
       Ok(reply) => answer(decision.ack, reply),
       Err(error) => {
@@ -225,77 +248,33 @@ impl Worker {
   async fn apply_decision(
     &mut self,
     watch: &mut Watch,
-    id: &str,
-    approve: bool,
+    decision: &ApprovalDecision,
   ) -> Result<Result<(), Rejection>, StoreError> {
     // A stopping agent (a pause checkpointing at the decision) takes none any more.
-    if watch.stop.is_some() || watch.approval.as_ref().is_none_or(|(pending, _)| pending != id) {
-      return Ok(Err(Rejection::ToolApprovalNotAwaited));
-    }
-    if !watch
-      .db
-      .claim_tool_approval(watch.invocation.run, id, approve, Timestamp::now())?
+    if watch.stop.is_some()
+      || watch
+        .approval
+        .as_ref()
+        .is_none_or(|(pending, _)| pending.id != decision.id)
     {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
-    self.notifier.send(Event::ToolApprovalChanged {
-      run: watch.invocation.run,
-      task: self.task,
-    });
-    let (_, awaiting) = watch.approval.take().expect("the pending approval was matched above");
-    if let Err(error) = self.deliver(watch, awaiting, approve).await {
-      watch
-        .db
-        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
-      self.end_approval_wait(watch)?;
-      self.observe(
-        watch,
-        AgentEvent::TurnFailed {
-          message: format!("The {} session closed before the tool decision arrived", self.cli()),
-        },
-      )?;
-      self.process.terminate();
-      return Ok(Err(Rejection::Failed {
-        detail: format!("cannot send the tool decision to {}: {error}", self.cli()),
-      }));
-    }
-    let kind = if approve {
-      ToolApprovalDecision::Approved
-    } else {
-      ToolApprovalDecision::Denied
+    let (approval, awaiting) = watch.approval.take().expect("the pending approval was matched above");
+    let settled = match self.widen(watch, &approval, &decision.answer)? {
+      Ok(settled) => settled,
+      Err(rejection) => {
+        // The request still waits for an answer that can be given.
+        watch.approval = Some((approval, awaiting));
+        return Ok(Err(rejection));
+      }
     };
-    if !watch.db.delivered_tool_approval(watch.invocation.run, id, kind)? {
-      watch
-        .db
-        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
-      self.end_approval_wait(watch)?;
-      self.observe(
-        watch,
-        AgentEvent::TurnFailed {
-          message: "The tool decision could not be recorded after delivery".to_owned(),
-        },
-      )?;
-      self.process.terminate();
-      return Ok(Err(Rejection::Failed {
-        detail: "the tool decision could not be recorded after delivery".to_owned(),
-      }));
-    }
-    self.end_approval_wait(watch)?;
-    if !approve {
-      self.observe(
-        watch,
-        AgentEvent::TurnFailed {
-          message: "The requested tool action was denied".to_owned(),
-        },
-      )?;
-      self.process.terminate();
-    }
-    Ok(Ok(()))
+    self.settle(watch, &approval, awaiting, settled).await
   }
 
-  /// Hands the decision to the call that asked. An approved Claude Code call is then running
-  /// until its result arrives ([`Watch::approved_calls`]).
-  async fn deliver(&self, watch: &mut Watch, awaiting: Awaiting, approve: bool) -> Result<(), String> {
+  /// Hands `answer` to the call that asked. An approved Claude Code call is then running until its
+  /// result arrives ([`Watch::approved_calls`]).
+  pub(super) async fn deliver(&self, watch: &mut Watch, awaiting: Awaiting, answer: &Settled) -> Result<(), String> {
+    let approve = answer.decided_by.approves();
     match awaiting {
       Awaiting::Codex(request) => self
         .process
@@ -303,8 +282,12 @@ impl Worker {
         .await
         .map_err(|error| error.to_string()),
       Awaiting::Claude { call, reply } => {
+        let prompt = match &answer.told {
+          Some(told) if !approve => PromptAnswer::Deny(told.clone()),
+          _ => PromptAnswer::Allow,
+        };
         reply
-          .send(approve)
+          .send(prompt)
           .map_err(|_| "its permission prompt has closed".to_owned())?;
         if approve {
           watch.approved_calls.insert(call);
@@ -314,14 +297,17 @@ impl Worker {
     }
   }
 
-  fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(super) fn end_approval_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    let waited = watch.invocation.timing.waiting_since().is_some();
     watch.invocation.timing.resume(Timestamp::now());
     watch.db.save_invocation(&watch.invocation)?;
     watch.approval = None;
-    self.notifier.send(Event::ToolApprovalChanged {
-      run: watch.invocation.run,
-      task: self.task,
-    });
+    if waited {
+      self.notifier.send(Event::ToolApprovalChanged {
+        run: watch.invocation.run,
+        task: self.task,
+      });
+    }
     Ok(())
   }
 }

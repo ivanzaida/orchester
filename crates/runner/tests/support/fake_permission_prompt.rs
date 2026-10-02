@@ -63,15 +63,16 @@ impl Prompt {
     listed.then_some(prompt)
   }
 
-  /// The `behavior` the prompt decides for `tool` with `input` in call `call`; `None` when the
-  /// server gave no usable answer.
-  pub fn ask(&mut self, tool: &str, input: &Value, call: &str) -> Option<String> {
+  /// The `behavior` the prompt decides for `tool` with `input` in call `call`, and the message of a
+  /// denial; `None` when the server gave no usable answer.
+  pub fn ask(&mut self, tool: &str, input: &Value, call: &str) -> Option<(String, String)> {
     let arguments = json!({"tool_name": tool, "input": input, "tool_use_id": call});
     let name = self.tool.clone();
     let result = self.request("tools/call", &json!({"name": name, "arguments": arguments}))?;
     let text = result.pointer("/content/0/text")?.as_str()?;
     let decision: Value = serde_json::from_str(text).ok()?;
-    Some(decision.get("behavior")?.as_str()?.to_owned())
+    let message = decision.get("message").and_then(Value::as_str).unwrap_or_default();
+    Some((decision.get("behavior")?.as_str()?.to_owned(), message.to_owned()))
   }
 
   fn request(&mut self, method: &str, params: &Value) -> Option<Value> {

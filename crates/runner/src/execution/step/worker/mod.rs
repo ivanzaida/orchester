@@ -17,8 +17,9 @@ use std::{
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
-  id::{StepExecutionId, TaskId},
-  run::{FirstEditTracker, Invocation, RunLimit},
+  id::{ResourceId, StepExecutionId, TaskId},
+  permission::category::CommandScope,
+  run::{ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   time::Timestamp,
   tokens::TokensUsed,
 };
@@ -92,7 +93,7 @@ pub(in super::super) enum WorkerEvent {
 
 pub(in super::super) struct ApprovalDecision {
   pub id: String,
-  pub approve: bool,
+  pub answer: ApprovalAnswer,
   pub ack: Ack,
 }
 
@@ -132,6 +133,10 @@ pub(in super::super) struct Worker {
   pub(in super::super) agent: String,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
+  /// Where the agent's commands run and may write, which classifies the commands it asks about.
+  pub(in super::super) scope: CommandScope,
+  /// The agent profile of the step, which Always allow of a command adds to.
+  pub(in super::super) profile: Option<ResourceId>,
 }
 
 pub(super) struct Watch {
@@ -150,8 +155,8 @@ pub(super) struct Watch {
   /// Ends the agent once no command runs.
   after_command: Option<StopCause>,
   pause_requested: bool,
-  /// The approval waiting for a person, by its id.
-  pub(super) approval: Option<(String, Awaiting)>,
+  /// The approval waiting for a person, and the call it answers.
+  pub(super) approval: Option<(PendingToolApproval, Awaiting)>,
   /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
   /// they do, the actions may have run, and the run is not resumed on its own.
   pub(super) approved_calls: HashSet<String>,

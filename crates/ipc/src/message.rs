@@ -12,7 +12,8 @@ use orchester_core::{
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
   run::{
-    InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber,
+    ApprovalAnswer, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock,
+    RunLimit, RunNumber,
   },
   tokens::TokenBudget,
 };
@@ -125,12 +126,14 @@ pub enum Command {
     version: PlanVersion,
     decision: PlanDecision,
   },
-  /// One decision on a live Codex tool call; the same App Server session resumes on approval.
-  /// A stale or already-decided request is rejected.
+  /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
+  /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
+  /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
+  /// lets it continue. A stale or already-decided request is rejected.
   DecideToolApproval {
     run: RunId,
     approval: String,
-    approve: bool,
+    answer: ApprovalAnswer,
   },
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question

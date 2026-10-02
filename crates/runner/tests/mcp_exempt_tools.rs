@@ -18,7 +18,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram},
-  run::{PendingToolApproval, RunStatus},
+  run::{ApprovalAnswer, PendingToolApproval, RunStatus},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -146,7 +146,7 @@ async fn mcp_exempt_claude_other_tool_still_asks() {
     ("pencil", "batch_design")
   );
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -176,7 +176,7 @@ async fn mcp_exempt_codex_tool_runs_without_asking_and_another_asks() {
     "the listed tool ran unasked first"
   );
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;

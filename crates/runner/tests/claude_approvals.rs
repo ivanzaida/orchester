@@ -17,7 +17,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId, SecretId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, StepKey, VariableName},
-  run::{PauseReason, PendingToolApproval, RunStatus, StepStatus},
+  run::{ApprovalAnswer, PauseReason, PendingToolApproval, RunStatus, StepStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::ActivityStore,
   time::Timestamp,
@@ -140,16 +140,18 @@ async fn claude_approvals_run_an_approved_command_once() {
   tokio::time::sleep(std::time::Duration::from_millis(60)).await;
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, "another-call".to_owned(), true)
+      .decide_tool_approval(id, "another-call".to_owned(), ApprovalAnswer::Once)
       .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   scheduler
-    .decide_tool_approval(id, request.id.clone(), true)
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once)
     .await
     .expect("approved");
   assert_eq!(
-    scheduler.decide_tool_approval(id, request.id, true).await,
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "a decision is taken once"
   );
@@ -236,7 +238,9 @@ async fn stop_at_a_pending_approval(stopping: Stopping) -> PausedAtApproval {
   let db = ProjectDb::open(root).expect("open");
   assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
   assert_eq!(
-    scheduler.decide_tool_approval(id, request.id, true).await,
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "the call was not granted and cannot be later"
   );
@@ -304,7 +308,7 @@ async fn claude_approvals_resume_after_a_pause_at_a_pending_call_asks_again() {
     "the interrupted call did not run"
   );
   scheduler
-    .decide_tool_approval(id, again.id, true)
+    .decide_tool_approval(id, again.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -351,7 +355,7 @@ async fn claude_approvals_ask_even_for_a_command_accept_edits_would_run() {
   let request = pending(root, &mut events, id).await;
   assert_eq!(request.action, "mkdir build-output");
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -376,7 +380,7 @@ async fn claude_approvals_ask_in_a_read_only_step_too() {
   let request = pending(root, &mut events, id).await;
   assert_eq!(request.action, "mkdir build-output");
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -403,7 +407,7 @@ async fn claude_approvals_ask_in_a_read_only_step_too() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn claude_approvals_denial_fails_the_step_without_the_action() {
+async fn claude_approvals_denial_tells_the_agent_and_the_step_goes_on() {
   let project = claude(
     "Ask before publishing.",
     permissions(CommandPermission::AskBefore, false),
@@ -416,23 +420,30 @@ async fn claude_approvals_denial_fails_the_step_without_the_action() {
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   scheduler
-    .decide_tool_approval(id, request.id, false)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny)
     .await
     .expect("denied");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(run.status(), &RunStatus::Succeeded);
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");
-  assert_eq!(implement.status(), StepStatus::Failed);
-  assert!(!readme(root, id).contains("approved"));
+  assert_eq!(implement.status(), StepStatus::Passed);
+  let readme = readme(root, id);
+  assert!(!readme.contains("approved") && readme.contains("went on"), "{readme}");
   let db = ProjectDb::open(root).expect("open");
   let invocation = &db.invocations(id).expect("invocations")[0];
-  assert!(
-    matches!(&invocation.outcome, Some(InvocationOutcome::TurnFailed { message }) if message.contains("denied")),
-    "{:?}",
-    invocation.outcome
-  );
+  assert_eq!(invocation.outcome, Some(InvocationOutcome::Completed));
+  let told: Vec<String> = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::ToolDecided { decision, .. } => decision.told,
+      _ => None,
+    })
+    .collect();
+  assert_eq!(told, ["Denied by the person reviewing this run. Continue without it."]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -457,7 +468,9 @@ async fn claude_approvals_cancel_while_waiting_leaves_a_stale_decision_unusable(
   let db = ProjectDb::open(root).expect("open");
   assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
   assert_eq!(
-    scheduler.decide_tool_approval(id, request.id, true).await,
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   let invocation = &db.invocations(id).expect("invocations")[0];
@@ -480,7 +493,7 @@ async fn claude_approvals_show_an_mcp_action_without_its_secret() {
   assert_eq!((request.server.as_str(), request.action.as_str()), ("docs", "write"));
   assert_eq!(request.target.as_deref(), Some("docs/<redacted>.md"));
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
