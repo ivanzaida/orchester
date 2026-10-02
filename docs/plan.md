@@ -38,57 +38,11 @@ Environment variables, project MCP servers, tabs, and the installed stable build
    Review → Ready for review.
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
-5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
-   builds, add this build root to *Extra writable folders* (the tab offers it).
-   The runner scopes absolute targets to `<root>/worktrees/<worktree-directory>` for agents and command tools.
-   Sequential steps and resumed invocations reuse their worktree's artifacts; parallel worktrees cannot mix
-   artifacts from different revisions. Relative targets already belong to their worktree and are kept.
-   A new worktree starts cold (several GB, several minutes), with a 10 GiB host-side free-space reserve.
+5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away
+   with the worktree. A new worktree starts cold (several GB, several minutes).
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
-
-### D5 · Check free disk space outside the agent CLI
-
-In the first D3 run, Codex 0.139.0 with `-a never` declined `Get-PSDrive`, `fsutil volume diskfree H:` and `Get-Volume H`
-in a read-only step. A task that required that check stopped before cargo. Add an Orchester host-side free-space
-preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
-depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
-
-The implementation on `codex/d5-free-space` checks an absolute project `CARGO_TARGET_DIR` on the host before creating
-a run or worktree. It returns typed, localized errors when the target's volume cannot be measured or has less than
-10 GiB free for a cold target or 1 GiB for a populated one. Relative targets are skipped. A low-space target also
-blocks a documentation-only run because the runner cannot know whether an arbitrary step will build.
-
-**Done when** the filtered boundary and error-path tests, `tools/check.ps1`, independent review, and Windows host
-measurement pass; the runner macOS target passes cross-check or a Mac smoke test; and a separate agent compares the
-new visible error states with exact Pencil frames and app screenshots of the same size and state.
-
-**Status 2026-09-29: Done on Windows, with macOS verification deferred by the user.** The implementation on
-`codex/d5-final-port` checks absolute shared build targets before run/worktree creation, persists the selected
-pipeline version, keeps a queued task locked across navigation, and retries under its persisted first-run key.
-Post-rebase independent verification passed 17 named-filter Windows test commands (including all seven Run again
-tests) and `tools/check.ps1`. Exact-PID app captures matched the D5 form, error, and Retry regions in all four saved
-Pencil states without blocking or major differences. The newer ORC-15 Skills sidebar item is absent from those D5
-frames, a major global design-source difference the user explicitly accepted as a D5 exception on 2026-09-29.
-The direct low-space capture used a synthetic measurement for visual verification; the inaccessible-target run and
-tests cover the host error path. A retry after publishing pipeline v2 created one run with its pinned v1 snapshot;
-the integrated ORC-16 Run again path uses the latest published version and checks build space after confirmed
-worktree cleanup. See
-`docs/evidence/d5-final-verification-2026-09-29.md` and the full local report at `.tmp/verify/d5-final-port/report.md`.
-
-A full `orchester-runner` macOS cross-check could not run on this Windows host without macOS SDK headers, and no Mac
-was available. The user explicitly chose to close D5 with this limitation and track macOS verification separately.
-The verifier also observed intermittent foreground activation of its own app window, including one failure and one
-clean interval after the final rebase. No D5 activation call or causal link was found, so no speculative focus change
-was made.
-This observation remains open for a separate reproduction. Earlier evidence is in
-`docs/evidence/d5-live-reproduction-2026-09-29.md`, `docs/evidence/d5-design-path-2026-09-29.md`, and
-`docs/evidence/d5-status-2026-09-29.md`.
-
-Pencil (drawn 2026-09-29): `WOdDe` (02.09C, cannot measure), `WmW1G` (02.09D, low space), `l801hD` (02.09E, retrying the
-same run), and `T6bVyU` (queued task reopened after navigation). Compare the header, description, pipeline box,
-actions, and error or recovery text in the same app state and size.
 
 ## T · Tests and runner
 
@@ -112,8 +66,8 @@ change, and a dev build on this repository would share `<repo>/.orchester` with 
    format-6 index by the ORC-48 review.
 2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
    a core/runner change), plus ORC-32 again for comparison with
-   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms and give each run its own
-   `CARGO_TARGET_DIR`. Record tokens, time to the first edit and command counts (all, and before the first edit),
+   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms; each run builds in its own
+   worktree. Record tokens, time to the first edit and command counts (all, and before the first edit),
    and which index files the agent used.
 
 **Done when** a new `docs/evidence` file has the table and a conclusion.
@@ -329,7 +283,7 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.33.0, whose layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.33.1: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0), and a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1). Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
@@ -354,6 +308,24 @@ admits it) and, to keep naming the version in use, this line.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Cargo-specific build folder handling removed · branch `claude/no-cargo-special`
+
+- **Done 2026-10-02.** Orchester orchestrates agents for any kind of project, so nothing in its behaviour singles
+  out Cargo any more. Removed: Project settings › Environment's suggestion to add
+  `CARGO_TARGET_DIR=<repo>/.orchester/target` for a repository with a root `Cargo.toml` and its notice that agents
+  need permission to write there; the Agents › Permissions notice offering to add that folder to *Extra writable
+  folders*; the runner's per-worktree rewrite of an absolute `CARGO_TARGET_DIR` to `<root>/worktrees/<worktree>`;
+  and D5's host-side free-space preflight for that folder (`BuildSpaceLow`/`BuildSpaceUnavailable`, the `fs4`
+  dependency). Why: every run got its own 13–17 GB build folder outside its worktree that nothing removed; it grew
+  past 200 GB. Without the variable Cargo builds into `<worktree>/target`, which is git-ignored and goes with the
+  worktree, as any toolchain's output does. The free-space check is not replaced by a generic one: its 10 GiB / 1 GiB
+  floors were sized for a cold Cargo target, and no threshold fits every toolchain. Stored data is not migrated: a
+  project that still sets `CARGO_TARGET_DIR` passes it to its agents as written, like any variable, and an agent
+  that should write to a folder outside its worktree needs that folder among its profile's extra writable folders.
+  Pencil still draws the removed states (Environment `CMSyB` in `tXahd`, D5 `WmW1G`, and the free-space error in
+  `WOdDe`); a designer removes them. D5's open observation of intermittent verifier-window foreground activation
+  stays recorded in `docs/evidence/d5-final-verification-2026-09-29.md`.
 
 ORC-57 · Native agent P1b: core native module
 

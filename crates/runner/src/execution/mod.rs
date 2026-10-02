@@ -16,7 +16,6 @@
 mod again;
 mod attach;
 mod board;
-mod build_space;
 mod checkpoint;
 mod codebase_index;
 mod control;
@@ -195,7 +194,6 @@ impl Scheduler {
       if recorded.status() == &RunStatus::Pending {
         self.check_group_start(&db, task, Some(&recorded))?;
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
@@ -245,7 +243,6 @@ impl Scheduler {
     if let Some(recorded) = recorded {
       if recorded.status() == &RunStatus::Pending {
         self.admit(&db)?;
-        build_space::preflight(&db, root)?;
       }
       let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
       return self.begin(db, prepared);
@@ -256,9 +253,6 @@ impl Scheduler {
     if let Some(confirmed) = &remove_worktrees {
       again::remove_worktrees(root, &previous, confirmed)?;
     }
-    // The confirmed cleanup can free the shared build target's volume. Check after it, but
-    // before recording this run or creating its worktree.
-    build_space::preflight(&db, root)?;
     let prepared = prepare::record(&mut db, root, key, checked)?;
     self.begin(db, prepared)
   }
