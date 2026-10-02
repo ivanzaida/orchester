@@ -33,6 +33,9 @@ pub enum PanelState {
   Paused,
   /// Stopped at a limit.
   Stopped,
+  /// The run waits for the person's decision after its retries ran out or a step broke again;
+  /// messages wait until it continues.
+  Deciding,
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
@@ -58,8 +61,8 @@ impl PanelState {
       TaskPhase::Running => Self::Live,
       TaskPhase::Waiting => Self::Waiting,
       TaskPhase::Paused => Self::Paused,
-      // A run waiting for a decision after its retries keeps messages until it continues.
-      TaskPhase::StoppedAtLimit | TaskPhase::Stuck => Self::Stopped,
+      TaskPhase::StoppedAtLimit => Self::Stopped,
+      TaskPhase::Stuck => Self::Deciding,
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
       TaskPhase::Merged => Self::Merged,
@@ -233,6 +236,7 @@ fn suspended_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
   let step = match state {
     PanelState::Paused | PanelState::Interrupted => run.current_step(),
     PanelState::Stopped => run.stopped_step().or_else(|| run.current_step()),
+    PanelState::Deciding => run.current_step(),
     _ => return None,
   };
   step.and_then(|step| step.agent.clone())

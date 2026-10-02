@@ -328,6 +328,22 @@ impl ActivityLog {
     });
   }
 
+  /// Runs that waited for the user's decision at `target` no longer do: their events stop holding
+  /// the slot. Whether any did.
+  pub fn settle_needs_you(&mut self, target: &Target) -> bool {
+    let mut settled = false;
+    for event in &mut self.events {
+      if event.target == *target
+        && let Outcome::NeedsYou { resolved } = &mut event.outcome
+        && !*resolved
+      {
+        *resolved = true;
+        settled = true;
+      }
+    }
+    settled
+  }
+
   /// The user opened the failure's object or dismissed it; it stays in the recent list.
   pub fn resolve(&mut self, id: OperationId) {
     for event in &mut self.events {

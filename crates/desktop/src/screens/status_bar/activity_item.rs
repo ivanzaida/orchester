@@ -115,15 +115,26 @@ fn failure(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Vec<Elem
     .child(value(&display::clock_time(event.at()), PaletteColor::TextMuted));
   let row = hints.attach(row, HintAnchor::Activity, text);
   let mut items = vec![open_event(row, event, opener)];
+  let needs_you = matches!(event.outcome(), Outcome::NeedsYou { .. });
   if opener.can_open(event.target()) {
+    // A waiting run's item reads "Open" (02.B6 `K8VQRC`).
+    let key = if needs_you {
+      "statusBar.open.decision"
+    } else {
+      super::popover::open_key(event.target())
+    };
     items.push(action(
       "status-activity-open",
-      &ctx.t(super::popover::open_key(event.target())),
+      &ctx.t(key),
       opener.press(event.target(), Some(event.id())),
     ));
   }
-  let (id, dismissing) = (event.id(), opener.clone());
-  items.push(dismiss("status-activity-dismiss", move || dismissing.dismiss(id)));
+  // A waiting run's item has no dismiss: it goes once its task is opened from it, or once the run
+  // no longer waits, and the run still counts in Needs you either way.
+  if !needs_you {
+    let (id, dismissing) = (event.id(), opener.clone());
+    items.push(dismiss("status-activity-dismiss", move || dismissing.dismiss(id)));
+  }
   items
 }
 

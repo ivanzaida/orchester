@@ -13,25 +13,30 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, ScrollVertical, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   resource::StepKey,
-  run::{StepFailure, StepStatus, Stuck},
+  run::{RunStatus, StepFailure, StepStatus, Stuck},
   time::Timestamp,
   tokens::compact_tokens,
 };
 
 use super::{
+  super::{ProjectNav, page},
   progress::rows,
   retry_decision::{RetryDecisionPanel, RetryDecisionProps},
   summary::{budget_value, with_reason},
 };
 use crate::{
   display,
-  tasks::{detail::RunView, progress::progress},
-  theme::{ExtraSpacing, ExtraTypography},
+  navigation::route::{Page, TaskPageTab},
+  tasks::{
+    detail::{RunView, TaskDetail},
+    progress::progress,
+  },
+  theme::{ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{button::ActionButton, icon::Icon, notice::Notice},
 };
 
@@ -49,24 +54,64 @@ pub(super) fn retry_limit(
   reason: Option<Element>,
 ) -> Element {
   let broke = matches!(waiting, Some(Stuck::BrokeAgain(_)));
+  // Reading the window's width re-renders the page as the window resizes.
+  let stacked = ctx.window().logical_width() < crate::theme::RETRY_LIMIT_COLUMNS_MIN_WINDOW;
   let panel = waiting.map(|stuck| {
-    let props = decision_props(ctx, run, stuck);
+    let props = decision_props(ctx, run, stuck, stacked);
     ctx.mount_keyed::<RetryDecisionPanel>(
       &format!("retry-decision-{}-{}", run.id(), run.run.last_sequence().get()),
       props,
     )
   });
-  Row::new()
+  let evidence = evidence(ctx, run, (step, broke), reason);
+  if !stacked {
+    return Row::new()
+      .id("task-retry-limit")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .child(evidence.flex(1.0).height(Dimension::Pct(100.0)))
+      .with_children(panel)
+      .into();
+  }
+  // Too narrow for both columns: the panel goes under the evidence, and the page scrolls.
+  Column::new()
     .id("task-retry-limit")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(evidence(ctx, run, (step, broke), reason))
-    .with_children(panel)
+    .child(
+      ScrollVertical::new(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .child(evidence.width(Dimension::Pct(100.0)))
+          .with_children(panel),
+      )
+      .id("task-retry-limit-page")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar()),
+    )
     .into()
 }
 
+/// *Open conversation* in the top bar of a run that waits for a person, before *Cancel run*
+/// (`A3JNZ` in 02.B3): the task's details are not edited while it waits.
+pub(super) fn open_conversation(ctx: &Ctx, nav: &ProjectNav, detail: &TaskDetail) -> Option<Element> {
+  let run = detail.run.as_ref()?;
+  if !matches!(run.run.status(), RunStatus::WaitingForPerson(_)) {
+    return None;
+  }
+  Some(
+    ActionButton::new(ctx.t("runs.ready.openConversation"))
+      .icon(Icon::MessagesSquare)
+      .id("task-open-conversation")
+      .height(Dimension::Px(page::TOPBAR_BUTTON_HEIGHT))
+      .link(nav.link(Page::Task(detail.task.id(), TaskPageTab::Conversation)))
+      .render(ctx),
+  )
+}
+
 /// What the decision panel shows of the waiting run.
-fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck) -> RetryDecisionProps {
+fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck, stacked: bool) -> RetryDecisionProps {
   let failed = stuck.step();
   let retry_from = run.run.retry_from().unwrap_or(failed).clone();
   let left = ctx.t_args(
@@ -94,6 +139,7 @@ fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck) -> RetryDecisionProps
     retry_from,
     failed: Arc::from(step_name(run, failed)),
     targets,
+    stacked,
   }
 }
 
@@ -107,8 +153,8 @@ fn step_name<'a>(run: &'a RunView, step: &'a StepKey) -> &'a str {
 
 /// What failed and the latest attempt's steps (`yYFkk`); `broke`: the step broke again rather than
 /// using up its retries.
-fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: Option<Element>) -> Element {
-  let taken = run.run.retries_taken(step);
+fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: Option<Element>) -> Column {
+  let taken = run.run.automatic_retries_taken(step);
   let title = match (broke, taken) {
     (true, _) => "runs.retryLimit.brokeTitle",
     (false, 1) => "runs.retryLimit.title.one",
@@ -160,8 +206,6 @@ fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: O
     .filter(|row| executed.contains(&&*row.id))
     .collect();
   Column::new()
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
     .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
     .child(with_reason(notice.into(), reason))
@@ -184,7 +228,6 @@ fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: O
         [("branch", run.run.branch().as_str())],
       ),
     ))
-    .into()
 }
 
 /// What the failing step's agent reported when it failed (`NMg2D`).

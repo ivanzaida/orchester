@@ -15,7 +15,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Select, Spacer, Text},
+  components::{Column, ScrollVertical, Select, Text},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -31,7 +31,7 @@ use crate::{
   messages::Message,
   runner::Runners,
   tasks::run::control_message,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     field::{ValueTone, select_style, value_box, wrapping_field_error},
@@ -62,6 +62,8 @@ pub struct RetryDecisionProps {
   pub failed: Arc<str>,
   /// The agent steps the work can return to, with their names, in pipeline order.
   pub targets: Arc<[(StepKey, Arc<str>)]>,
+  /// The panel is under the evidence, across the page, rather than beside it.
+  pub stacked: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RetryDecisionProps {}
@@ -119,14 +121,9 @@ impl Component for RetryDecisionPanel {
     };
     let failure = state.error.filter(|_| idle).map(|error| message_text(ctx, &error));
     let returning = (!props.targets.is_empty()).then(|| self.returning(ctx, &props, &decide));
-    let content = Column::new()
-      .id("task-retry-settings")
-      .width(Dimension::Px(PANEL_WIDTH))
-      .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
+    let decisions = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Form.role())
-      .background(PaletteColor::SurfacePanel)
-      .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(Text::new(&ctx.t("runs.retryLimit.allowTitle")).variant(TypographyStyle::Title))
       .child(
         Column::new()
@@ -145,24 +142,65 @@ impl Component for RetryDecisionPanel {
         .primary()
         .render(ctx),
       )
-      .with_children(returning.into_iter().flatten())
-      .child(Spacer::new().flex(1.0))
+      .with_children(returning.into_iter().flatten());
+    // The runner's refusal shows above Stop (02.B7 `s9ZQmK`), 12 apart.
+    let footer = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Stack.role())
+      .with_children(failure.map(|error| wrapping_field_error(&error)))
       .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(ExtraSpacing::Stack.role())
-          .with_children(failure.map(|error| wrapping_field_error(&error)))
-          .child(
-            button(
-              (&ctx.t("runs.retryLimit.stop"), "task-stop-run"),
-              Icon::Square,
-              decide(StuckDecision::Stop),
-            )
-            .render(ctx),
-          ),
+        button(
+          (&ctx.t("runs.retryLimit.stop"), "task-stop-run"),
+          Icon::Square,
+          decide(StuckDecision::Stop),
+        )
+        .render(ctx),
       );
-    form(None, content)
+    form(None, layout(props.stacked, decisions, footer))
   }
+}
+
+/// The panel beside the evidence (`Bi6pU`): Stop and the refusal stay at its bottom, and the
+/// decisions above them scroll when the window is too low for them, so nothing runs into the
+/// panel's padding. Under the evidence, across the page, it takes the height it needs.
+fn layout(stacked: bool, decisions: Column, footer: Column) -> Element {
+  let panel = Column::new()
+    .id("task-retry-settings")
+    .background(PaletteColor::SurfacePanel);
+  if stacked {
+    return panel
+      .width(Dimension::Pct(100.0))
+      .padding(SpacingSize::Lg)
+      .spacing(ExtraSpacing::Form.role())
+      .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .child(decisions)
+      .child(footer)
+      .into();
+  }
+  // The scroll gutter takes the right padding's inner 12; the decisions keep their focus rings
+  // inside the viewport through their own padding.
+  let decisions = decisions
+    .padding_top(SpacingSize::Lg)
+    .padding_left(SpacingSize::Lg)
+    .padding_right(ExtraSpacing::Stack.role())
+    .padding_bottom(ExtraSpacing::Form.role());
+  panel
+    .width(Dimension::Px(PANEL_WIDTH))
+    .height(Dimension::Pct(100.0))
+    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      ScrollVertical::new(decisions)
+        .id("task-retry-decisions")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
+    )
+    .child(
+      footer
+        .padding_horizontal(SpacingSize::Lg)
+        .padding_bottom(SpacingSize::Lg),
+    )
+    .into()
 }
 
 impl RetryDecisionPanel {

@@ -79,6 +79,7 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   };
   desktop.wait_until("the run to wait for a person", waiting(2));
   desktop.wait_until("the retry limit state", |desktop| has(desktop, "task-retry-settings"));
+  waiting_page_states(&mut desktop);
   assert!(shows(&mut desktop, "task-notice", "Review still fails after 1 retry"));
   assert!(shows(&mut desktop, "task-page", "Automatic retries exhausted"));
   assert!(shows(&mut desktop, "task-retry-limit", "Review · Builder"));
@@ -148,4 +149,33 @@ fn shows_the_marks(desktop: &mut Desktop) {
   ));
   assert!(shows(desktop, "activity-mark-4", "Keep the greeting short."));
   desktop.click("task-tab-summary");
+}
+
+/// The waiting run's top bar, its narrow layout, and how Conversation and Activity read it.
+fn waiting_page_states(desktop: &mut Desktop) {
+  // Open conversation and Cancel run, no Edit (02.B3 `A3JNZ`).
+  assert!(has(desktop, "task-open-conversation"));
+  assert!(has(desktop, "task-cancel-run"));
+  assert!(!has(desktop, "task-edit"));
+  // At 960 the panel goes under the evidence, across the page.
+  desktop.tree.resize(960, 960);
+  desktop.pass();
+  let evidence = desktop.bounds("task-notice");
+  let panel = desktop.bounds("task-retry-settings");
+  assert!(panel.y > evidence.y + evidence.height, "{panel:?} under {evidence:?}");
+  assert!(panel.width > 600.0, "{panel:?}");
+  desktop.tree.resize(1440, 960);
+  desktop.pass();
+  // The conversation says the run waits for a decision, not that it stopped at a limit.
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the conversation", |desktop| has(desktop, "conversation-status"));
+  assert!(shows(desktop, "conversation-status", "Waiting for your decision"));
+  assert!(has(desktop, "conversation-open-decision"));
+  // Activity has not ended.
+  desktop.click("task-tab-activity");
+  desktop.wait_until("the activity", |desktop| has(desktop, "activity"));
+  assert!(shows(desktop, "activity", "Waits for your decision"));
+  assert!(!shows(desktop, "activity", "Run ended"));
+  desktop.click("task-tab-summary");
+  desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
 }

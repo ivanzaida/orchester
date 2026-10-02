@@ -31,7 +31,7 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::EngineVendor, id::StepExecutionId};
+use orchester_core::{connection::EngineVendor, id::StepExecutionId, run::RunStatus};
 use parking_lot::Mutex;
 
 use self::{
@@ -262,13 +262,16 @@ impl ActivityTab {
       .into()
   }
 
-  /// Step filter, Show raw lines and the live state (`c1dmZ`).
+  /// Step filter, Show raw lines and the live state (`c1dmZ`); a run that waits for the person's
+  /// decision has not ended, and says so.
   fn toolbar(&self, ctx: &Ctx, run: &RunView, live: bool, following: bool) -> Element {
     let raw = self.raw.clone();
     let on = raw.get();
+    let waiting = matches!(run.run.status(), RunStatus::WaitingForPerson(_));
     let state = match (live, following) {
       (true, true) => compact_status_label(Icon::Radio, &ctx.t("runs.activity.following")),
       (true, false) => compact_status_label(Icon::Pause, &ctx.t("runs.activity.notFollowing")),
+      (false, _) if waiting => compact_status_label(Icon::Hand, &ctx.t("runs.activity.waitingDecision")),
       (false, _) => compact_status_label(Icon::Check, &ctx.t("runs.activity.ended")),
     };
     Row::new()

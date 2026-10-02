@@ -102,6 +102,26 @@ fn activity_run_waiting_for_a_decision_holds_the_slot_until_handled() {
   assert_eq!(log.recent()[1].outcome(), &Outcome::NeedsYou { resolved: true });
 }
 
+/// The waiting run's item goes once the run no longer waits, without anyone dismissing it.
+#[test]
+fn activity_run_waiting_for_a_decision_leaves_the_slot_once_the_run_goes_on() {
+  let mut log = ActivityLog::default();
+  let task = Target::Project {
+    repo_root: PathBuf::from("repo"),
+    place: Place::Tasks,
+  };
+  let other = Target::Project {
+    repo_root: PathBuf::from("other"),
+    place: Place::Tasks,
+  };
+  log.record_needs_you(None, Message::new("waits"), task.clone(), at(1));
+  assert!(!log.settle_needs_you(&other), "another task's change leaves it");
+  assert_eq!(title(&log.slot()), "waits");
+  assert!(log.settle_needs_you(&task));
+  assert!(matches!(log.slot(), Slot::Latest(_)));
+  assert!(!log.settle_needs_you(&task), "nothing more to settle");
+}
+
 #[test]
 fn activity_resolved_failure_stays_in_the_recent_list_unpinned() {
   let mut log = ActivityLog::default();

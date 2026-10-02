@@ -348,11 +348,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     _ => (None, false),
   };
   let finished_at = finished_at(db, &run)?;
-  let attempt_starts = if run.attempts().len() > 1 {
-    attempt_starts(&db.events(run.id()).map_err(run_store_error)?)
-  } else {
-    Vec::new()
-  };
+  let attempt_starts = starts_of(db, &run)?;
   Ok(RunView {
     attempt_starts,
     first_run,
@@ -369,6 +365,14 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// When each attempt of `run` started and who started it; nothing to read for a run of one attempt.
+fn starts_of(db: &ProjectDb, run: &Run) -> Result<Vec<AttemptStart>, StoreError> {
+  if run.attempts().len() < 2 {
+    return Ok(Vec::new());
+  }
+  Ok(attempt_starts(&db.events(run.id()).map_err(run_store_error)?))
 }
 
 /// When `run` ended, if it did: succeeded, failed or was cancelled.

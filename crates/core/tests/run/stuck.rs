@@ -124,6 +124,8 @@ fn stuck_one_more_retry_takes_the_same_route_and_waits_again_after_it() {
   );
   assert_eq!(logged.run.attempts()[2].status(), AttemptStatus::RoutedBack);
   assert_eq!(logged.run.retries_taken(&key("checks")), 3);
+  // The retry the person allowed is not one the route took by itself.
+  assert_eq!(logged.run.automatic_retries_taken(&key("checks")), 2);
   logged.pass("implement");
   fail_checks(&mut logged);
   assert_eq!(

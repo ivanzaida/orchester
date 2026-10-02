@@ -310,6 +310,15 @@ impl Reporter {
       .record_needs_you(Some(self.project.clone()), title, target);
   }
 
+  /// A run of task `task` changed: if it waited for the user's decision, it may no longer, so its
+  /// item stops holding the slot. A run that starts to wait says so right after
+  /// ([`Self::run_waits`]).
+  pub(super) fn task_run_changed(&self, task: TaskId) {
+    if let Some(target) = self.task_target(task) {
+      self.shared.activity.settle_needs_you(&target);
+    }
+  }
+
   /// Records `title` as the latest event of this runner's project, opening `place`.
   fn record_for_task(&self, task: TaskId, title: Message, place: Place) {
     let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {

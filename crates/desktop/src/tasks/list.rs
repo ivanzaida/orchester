@@ -92,7 +92,7 @@ impl AwaitedDecision {
         .body()
         .step(step)
         .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
-      retries: run.retries_taken(step),
+      retries: run.automatic_retries_taken(step),
       broke: matches!(stuck, Stuck::BrokeAgain(_)),
     })
   }

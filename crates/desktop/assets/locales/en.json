@@ -868,6 +868,7 @@
       "following": "Following live",
       "notFollowing": "Not following",
       "ended": "Run ended",
+      "waitingDecision": "Waits for your decision",
       "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
       "engineNative": "{{engine}} · native",
@@ -1436,6 +1437,7 @@
       "waiting": "Waiting for you",
       "paused": "Paused",
       "stopped": "Stopped",
+      "deciding": "Waiting for your decision",
       "interrupted": "Interrupted",
       "ready": "Ready for review",
       "merged": "Merged",
@@ -1455,6 +1457,7 @@
       "cannotContinue": "{{agents}} cannot continue",
       "paused": "{{agent}} paused · messages stay in this task",
       "stopped": "{{agent}} stopped at the limit · messages wait in this task",
+      "deciding": "{{agent}} stopped · the run waits for your decision · messages wait in this task",
       "interrupted": "{{agent}} interrupted · messages wait in this task",
       "none": "No agent takes part in this task yet"
     },
@@ -1478,6 +1481,7 @@
       "answered": "Question · answered"
     },
     "reply": "Reply  →",
+    "openDecision": "Open the decision  →",
     "empty": "No messages yet. Questions and clarifications you write here stay with this task.",
     "emptyWorktreeRemoved": "No messages were sent before this run’s worktree was removed.",
     "composer": {
@@ -1495,6 +1499,7 @@
       "queued": "Messages stay queued until the run continues.",
       "paused": "You can write while paused. Resume keeps this run and its saved versions.",
       "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
+      "deciding": "The run waits for your decision on its Summary. Messages stay queued until it continues.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "failed": "Your message continues this run from its saved work. The agent resumes its session when available; dependent steps run again.",
@@ -4537,6 +4542,7 @@
       "instruction": "Open instruction",
       "skill": "Open skill",
       "task": "Open task",
+      "decision": "Open",
       "secrets": "Open secrets"
     }
   },

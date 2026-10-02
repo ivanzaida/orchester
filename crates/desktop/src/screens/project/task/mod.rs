@@ -59,7 +59,6 @@ use self::{
   changes::{ChangesProps, ChangesTab, CheckpointedLoad},
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
-  plan_review::{PlanReviewPanel, PlanReviewProps},
   ready::{ReadyForReview, ReadyProps},
   worktree::{RemoveWorktree, RemoveWorktreeProps},
 };
@@ -73,7 +72,7 @@ use crate::{
   tasks::{
     changes::checkpointed_in,
     data::PipelineChoice,
-    detail::{RunView, TaskDetail},
+    detail::TaskDetail,
     integration::{LeftBehind, leftovers_in},
     plan::PlanReview,
   },
@@ -302,7 +301,7 @@ impl TaskScreen {
       && let Some(run) = detail.run.as_ref()
       && let Some(review) = PlanReview::of(run)
     {
-      return plan_review(ctx, detail, run, review);
+      return plan_review::screen(ctx, detail, run, review);
     }
     match (props.tab, detail.run.as_ref()) {
       (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => ctx
@@ -508,8 +507,14 @@ impl TaskScreen {
         .map(|run| control_buttons(ctx, run, control, &self.requested))
         .unwrap_or_default(),
     };
-    let edit = detail.and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
-    page::topbar_with(breadcrumb.into(), buttons.into_iter().chain(ended).chain(edit))
+    let open = detail.and_then(|detail| retry_limit::open_conversation(ctx, &self.nav, detail));
+    let edit = detail
+      .filter(|_| open.is_none())
+      .and_then(|detail| brief::edit_button(ctx, &self.nav, detail));
+    page::topbar_with(
+      breadcrumb.into(),
+      open.into_iter().chain(buttons).chain(ended).chain(edit),
+    )
   }
 
   /// Summary, Changes with the count of files changed up to the latest checkpoint, and Activity;
@@ -546,20 +551,6 @@ impl TaskScreen {
       ],
     )
   }
-}
-
-/// The Summary while a plan waits for a decision (02.11 `x3lVC`); a new version mounts it anew,
-/// with an empty note.
-fn plan_review(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
-  let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
-  let task = detail.run_task.as_ref().unwrap_or(&detail.task).details();
-  let props = PlanReviewProps {
-    review: Arc::new(review),
-    task: task.title.as_str().into(),
-    criteria: task.acceptance_criteria.clone().into(),
-    tokens: summary::budget_value(ctx, run),
-  };
-  ctx.mount_keyed::<PlanReviewPanel>(&key, props)
 }
 
 /// Why the runner did not carry out a run control (`field-error` below the heading).

@@ -128,6 +128,19 @@ impl Run {
       .count()
   }
 
+  /// How often the failure route of `step` was taken by itself: its retries up to the route's
+  /// `max_retries`. Retries beyond them were ones a person allowed, which "still fails after N
+  /// retries" does not count.
+  pub fn automatic_retries_taken(&self, step: &StepKey) -> u32 {
+    let allowed = self
+      .snapshot()
+      .body()
+      .step(step)
+      .and_then(|pinned| pinned.on_failure.as_ref())
+      .map_or(0, |route| route.max_retries.get());
+    self.retries_taken(step).min(allowed)
+  }
+
   /// The step one more retry of a waiting run starts from: the failure route's target after used-up
   /// retries, the step itself after it broke again. `None` for a run that does not wait.
   pub fn retry_from(&self) -> Option<&StepKey> {
