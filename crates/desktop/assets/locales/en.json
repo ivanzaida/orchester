@@ -909,7 +909,26 @@
         "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
         "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
         "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
-        "withMeta": "{{meta}} · {{mark}}"
+        "withMeta": "{{meta}} · {{mark}}",
+        "tool": "{{server}} {{tool}}",
+        "aCommand": "command",
+        "approvedByYouOnce": "approved by you · {{subject}}",
+        "approvedSimilarAdded": "approved by you · {{subject}} · similar rule added",
+        "approvedAlwaysAdded": "approved by you · {{subject}} · always allowed",
+        "approvedRunAdded": "approved by you · {{subject}} · auto-approving this run",
+        "deniedByYou": "denied by you · the agent continued",
+        "bySimilarRule": "approved by similar rule · {{subject}}",
+        "alwaysAllowed": "always allowed · {{subject}}",
+        "autoApproved": "auto-approved · {{subject}}",
+        "told": "Told the agent: {{message}}",
+        "category": {
+          "readOnly": "Read-only",
+          "worktree": "Worktree",
+          "network": "Network",
+          "outsideWrite": "Outside write",
+          "unknown": "Unknown",
+          "historyDestructive": "History / destructive"
+        }
       },
       "mcp": {
         "title": "Working without MCP server {{server}}",
@@ -2787,6 +2806,7 @@
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "storage": "The data could not be read or written. The log has the details.",
+    "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
     "runnerMissing": "The runner program was not found at {{path}}.",
