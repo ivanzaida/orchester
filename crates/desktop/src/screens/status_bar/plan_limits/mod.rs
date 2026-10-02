@@ -44,6 +44,8 @@ pub struct Props {
   pub project_name: String,
   pub connections: Connections,
   pub readings: PlanReadings,
+  /// Reached entries leave out their reset or reason, which the hint still gives.
+  pub brief: bool,
 }
 impl lurq::app::component::DevtoolsInspectable for Props {}
 
@@ -85,7 +87,7 @@ impl Component for PlanLimits {
     self.next_change.store(next_change(&entries, now), Ordering::Relaxed);
     let (bar, panel) = match &props.connections {
       Connections::Failed(error) => (self.unreadable(ctx), detail::unreadable(ctx, error)),
-      _ => (self.bar(ctx, &entries), detail::panel(ctx, &entries)),
+      _ => (self.bar(ctx, &entries, props.brief), detail::panel(ctx, &entries)),
     };
     let mut result = Column::new().child(bar);
     if self.hover.get() {
@@ -125,7 +127,7 @@ impl PlanLimits {
       ))
   }
 
-  fn bar(&self, ctx: &Ctx, entries: &[Entry<'_>]) -> Element {
+  fn bar(&self, ctx: &Ctx, entries: &[Entry<'_>], brief: bool) -> Element {
     let reached = entries.iter().any(|entry| entry.state() == LimitState::Reached);
     let near = entries.iter().any(|entry| entry.state() == LimitState::Near);
     let icon = if reached {
@@ -143,7 +145,7 @@ impl PlanLimits {
       if index > 0 {
         bar = bar.child(label(&ctx.t("statusBar.planLimits.separator"), PaletteColor::TextMuted));
       }
-      bar = bar.with_children(compact(ctx, entry));
+      bar = bar.with_children(compact(ctx, entry, brief));
     }
     bar.into()
   }
@@ -158,7 +160,7 @@ impl PlanLimits {
   }
 }
 
-fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
+fn compact(ctx: &Ctx, entry: &Entry<'_>, brief: bool) -> Vec<Element> {
   let state = entry.state();
   let color = if state == LimitState::Normal {
     PaletteColor::TextSecondary
@@ -168,6 +170,7 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
   if state == LimitState::Reached {
     // A reason is prose in the label's role; a reset time is a value in mono, as in `WuIp9`.
     let detail = match entry.block_beyond_reset() {
+      _ if brief => None,
       Some(LimitBlock::Credits) => Some(label(
         &ctx.t("statusBar.planLimits.reasonCredits"),
         PaletteColor::TextPrimary,
@@ -302,8 +305,10 @@ pub fn shown(props: &Props) -> bool {
   }
 }
 
-pub fn reached(props: &Props) -> bool {
+/// How many CLIs are reached or refused, which decides how wide the item is.
+pub fn reached_count(props: &Props) -> usize {
   entries(props, Timestamp::now())
     .iter()
-    .any(|entry| entry.state() == LimitState::Reached)
+    .filter(|entry| entry.state() == LimitState::Reached)
+    .count()
 }

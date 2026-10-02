@@ -9,6 +9,7 @@ use crate::{
 };
 
 const DAY_MINUTES: u64 = 24 * 60;
+const DAY_MILLIS: i64 = 24 * 60 * 60 * 1000;
 
 /// The CLI's short name, as the status bar item shows it ("Codex", "Claude").
 pub fn name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
@@ -78,14 +79,35 @@ pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -
       ],
     );
   }
-  if minutes < DAY_MINUTES {
-    return ctx.t_args("statusBar.planLimits.resetsAt", [("time", clock(at).as_str())]);
+  timed(
+    ctx,
+    at,
+    now,
+    "statusBar.planLimits.resetsAt",
+    "statusBar.planLimits.resetsOnDay",
+    &[],
+  )
+}
+
+/// The message `key` with the clock time of `at`, or `day_key` with its weekday as well when it
+/// is a day or more after `now`, as every reset in the item and the hint is named.
+pub fn timed(
+  ctx: &Ctx,
+  at: Timestamp,
+  now: Timestamp,
+  key: &str,
+  day_key: &str,
+  args: &[(&'static str, &str)],
+) -> Arc<str> {
+  let time = clock(at);
+  let mut values = vec![("time", time.as_str())];
+  values.extend_from_slice(args);
+  if at.unix_millis() - now.unix_millis() < DAY_MILLIS {
+    return ctx.t_args(key, values);
   }
   let weekday = ctx.t(WEEKDAY_KEYS[display::weekday(at)]);
-  ctx.t_args(
-    "statusBar.planLimits.resetsOnDay",
-    [("weekday", &*weekday), ("time", clock(at).as_str())],
-  )
+  values.push(("weekday", &weekday));
+  ctx.t_args(day_key, values)
 }
 
 /// A window's name by its length: 5-hour and Weekly as the CLIs call them, else whole days,

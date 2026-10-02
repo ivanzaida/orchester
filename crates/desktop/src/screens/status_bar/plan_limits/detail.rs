@@ -119,9 +119,13 @@ fn refuses(ctx: &Ctx, entry: &Entry<'_>) -> std::sync::Arc<str> {
     Some(LimitBlock::Window | LimitBlock::Other) => "statusBar.planLimits.refusesOther",
     None => match entry.window().and_then(LimitWindow::resets) {
       Some(at) => {
-        return ctx.t_args(
+        return text::timed(
+          ctx,
+          at,
+          entry.now,
           "statusBar.planLimits.refuses",
-          [("cli", &*cli), ("time", text::clock(at).as_str())],
+          "statusBar.planLimits.refusesOnDay",
+          &[("cli", &cli)],
         );
       }
       None => "statusBar.planLimits.refusesOther",

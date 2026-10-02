@@ -3865,6 +3865,7 @@
       "nearFiveHour": "Near the 5-hour limit",
       "notReported": "Not reported yet",
       "refuses": "{{cli}} refuses new turns until {{time}}.",
+      "refusesOnDay": "{{cli}} refuses new turns until {{weekday}} {{time}}.",
       "refusesCredits": "{{cli}} refuses new turns: the workspace has no credits left.",
       "refusesWorkspace": "{{cli}} refuses new turns: the workspace’s usage limit is reached.",
       "refusesOther": "{{cli}} refuses new turns; it did not say until when.",

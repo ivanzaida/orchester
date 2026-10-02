@@ -27,7 +27,7 @@ use crate::{
     overview::{OverviewTab, figure},
     usage::ProjectUsage,
   },
-  theme::{STATUS_WIDTHS, STATUS_WIDTHS_REACHED},
+  theme::{STATUS_WIDTHS, STATUS_WIDTHS_BOTH_REACHED, STATUS_WIDTHS_ONE_REACHED},
   ui::{icon::Icon, link::Press},
 };
 
@@ -39,11 +39,11 @@ pub fn counts(
   (limits, width): (&plan_limits::Props, f32),
 ) -> Element {
   // R (`VTnmr`): remove version, tokens, then count labels; limits always stay.
-  // A reached or refused CLI widens the plan limits item, so the rest gives way earlier.
-  let widths = if plan_limits::reached(limits) {
-    STATUS_WIDTHS_REACHED
-  } else {
-    STATUS_WIDTHS
+  // Each reached or refused CLI widens the plan limits item, so the rest gives way earlier.
+  let widths = match plan_limits::reached_count(limits) {
+    0 => STATUS_WIDTHS,
+    1 => STATUS_WIDTHS_ONE_REACHED,
+    _ => STATUS_WIDTHS_BOTH_REACHED,
   };
   let show_labels = width >= widths.labels;
   let mut row = Row::new()
@@ -71,7 +71,11 @@ pub fn counts(
       row = row.child(tokens(ctx, project.usage.as_ref(), &unknown, hints));
     }
     if plan_limits::shown(limits) {
-      row = row.child(ctx.mount_keyed::<plan_limits::PlanLimits>("status-plan-limits-component", limits.clone()));
+      let limits = plan_limits::Props {
+        brief: width < widths.details,
+        ..limits.clone()
+      };
+      row = row.child(ctx.mount_keyed::<plan_limits::PlanLimits>("status-plan-limits-component", limits));
     }
     row = row.child(separator());
   }

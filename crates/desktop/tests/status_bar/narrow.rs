@@ -17,25 +17,54 @@ use super::{
 };
 
 const WIDTHS: [u32; 5] = [1280, 1279, 1120, 1119, 960];
+/// The room the right group leaves at 960 with percentages (`VTnmr`), less a little for the
+/// varying width of reset times: no class leaves the activity less.
+const ACTIVITY_ROOM: f32 = 330.0;
 /// An activity item narrower than its padding, icon and an ellipsis has no label left.
 const SQUEEZED: f32 = 40.0;
 
-/// Codex at 65 %, at 100 % (reached, with a reset), or refused for want of credits.
-fn readings(percent: f64, blocked: Option<LimitBlock>) -> PlanReadings {
+/// A CLI's weekly window at `percent`, reached at 100 % or refused for `blocked`.
+fn reading(provider: AgentProvider, percent: f64, blocked: Option<LimitBlock>) -> LimitReading {
   let now = Timestamp::now();
-  let reset = Timestamp::from_unix_millis(now.unix_millis() + 7_200_000);
-  let mut readings = PlanReadings::default();
-  readings.observe(LimitReading {
-    provider: AgentProvider::CodexCli,
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 3 * 86_400_000);
+  LimitReading {
+    provider,
     at: now,
     limits: PlanLimits {
-      windows: vec![LimitWindow::new(300, Some(percent), Some(reset), LimitState::Normal, false).expect("window")],
+      windows: vec![LimitWindow::new(10080, Some(percent), Some(reset), LimitState::Normal, false).expect("window")],
       plan: None,
       credits: None,
       blocked: blocked.map(|reason| Blocked { reason, window: None }),
     },
-  });
-  readings
+  }
+}
+
+/// The item's width classes: percentages, one CLI reached or refused, both.
+fn classes() -> Vec<(&'static str, PlanReadings)> {
+  let (codex, claude) = (AgentProvider::CodexCli, AgentProvider::ClaudeCodeCli);
+  let credits = Some(LimitBlock::Credits);
+  [
+    ("normal", [reading(codex, 65.0, None), reading(claude, 42.0, None)]),
+    ("reached", [reading(codex, 100.0, None), reading(claude, 42.0, None)]),
+    ("blocked", [reading(codex, 40.0, credits), reading(claude, 42.0, None)]),
+    (
+      "both reached",
+      [reading(codex, 100.0, None), reading(claude, 100.0, None)],
+    ),
+    (
+      "both blocked",
+      [reading(codex, 40.0, credits), reading(claude, 100.0, None)],
+    ),
+  ]
+  .into_iter()
+  .map(|(name, list)| {
+    let mut readings = PlanReadings::default();
+    for reading in list {
+      readings.observe(reading);
+    }
+    (name, readings)
+  })
+  .collect()
 }
 
 /// The runner of `root` after it could not start: the activity slot then says how many runs
@@ -70,13 +99,8 @@ fn status_bar_narrow_right_group_never_covers_the_activity() {
   let folder = tempfile::tempdir().expect("project folder");
   let root = folder.path().to_path_buf();
   let runner = failed_runner(&root);
-  let states = [
-    ("normal", readings(65.0, None)),
-    ("reached", readings(100.0, None)),
-    ("blocked", readings(40.0, Some(LimitBlock::Credits))),
-  ];
   let mut cut = Vec::new();
-  for (state, readings) in states {
+  for (state, readings) in classes() {
     for width in WIDTHS {
       let connections = Connections::Ready(AgentProvider::CLI.into_iter().map(cli).collect());
       let mut bar = project(Some(2));
@@ -134,4 +158,24 @@ fn status_bar_narrow_right_group_never_covers_the_activity() {
     cut.len() >= 5,
     "the label is cut with an ellipsis in most cases, only in {cut:?}"
   );
+}
+
+#[test]
+fn status_bar_narrow_every_class_leaves_the_activity_its_room() {
+  let mut widths: Vec<u32> = (960..=1600).step_by(40).collect();
+  widths.extend([1119, 1279, 1439, 1599]);
+  for (state, readings) in classes() {
+    for &width in &widths {
+      let mut bar = project(Some(2));
+      bar.project.as_mut().expect("project").connections =
+        Connections::Ready(AgentProvider::CLI.into_iter().map(cli).collect());
+      let (_app, mut tree) = with_bar(width, readings.clone(), bar);
+      let agents = bounds(&mut tree, "status-agents");
+      assert!(
+        agents.x >= ACTIVITY_ROOM,
+        "{state} at {width}: the right group starts at {}",
+        agents.x
+      );
+    }
+  }
 }

@@ -11,7 +11,7 @@ mod palette;
 mod plan_limits;
 pub use plan_limits::{
   PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH, PLAN_PERCENT_WIDTH, PLAN_WINDOW_LABEL, STATUS_WIDTHS,
-  STATUS_WIDTHS_REACHED, StatusBarWidths,
+  STATUS_WIDTHS_BOTH_REACHED, STATUS_WIDTHS_ONE_REACHED, StatusBarWidths,
 };
 mod shadow;
 mod tokens;

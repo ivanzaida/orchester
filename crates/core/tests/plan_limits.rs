@@ -428,11 +428,9 @@ fn plan_limits_block_without_its_window_over_an_expired_retained_window() {
   let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
   assert_eq!(reading.state(at(1)), LimitState::Reached);
   assert_eq!(reading.block_beyond_reset(), Some(LimitBlock::Window));
-  let kept = reading.fullest(at(1)).expect("retained window");
-  assert_eq!(
-    (kept.state(at(1)), reading.window_state(kept, at(1))),
-    (LimitState::Normal, LimitState::Normal),
-    "the block is not pinned on the retained window"
+  assert!(
+    reading.limits.windows.is_empty(),
+    "the 65 % window the refusal contradicts is not shown beside it"
   );
 }
 
@@ -446,11 +444,9 @@ fn plan_limits_block_without_its_window_is_not_kept_on_a_live_window() {
   readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&rejected), at(1)));
   let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
   assert_eq!(reading.state(at(1)), LimitState::Reached);
-  let limiting = reading.limiting(at(1)).expect("weekly");
-  assert_eq!(
-    reading.window_state(limiting, at(1)),
-    LimitState::Normal,
-    "no reset is claimed for it"
+  assert!(
+    reading.limits.windows.is_empty(),
+    "no reset is claimed for the 40 % window"
   );
   let five =
     json!({"status":"allowed","rateLimitType":"five_hour","utilization":0.1,"resetsAt":at(120).unix_millis()/1000});
@@ -465,6 +461,17 @@ fn plan_limits_block_without_its_window_is_not_kept_on_a_live_window() {
       .all(|window| reading.window_state(window, at(2)) == LimitState::Normal),
     "the weekly window is not left reached"
   );
+  let mut readings = PlanReadings::default();
+  let full = json!({"status":"rejected","rateLimitType":"seven_day","resetsAt":at(600).unix_millis()/1000});
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&full), now()));
+  readings.observe(parsed(AgentProvider::ClaudeCodeCli, &claude_event(&rejected), at(1)));
+  let reading = readings.get(AgentProvider::ClaudeCodeCli).expect("Claude");
+  let kept = reading
+    .limits
+    .windows
+    .first()
+    .expect("a reached window agrees with the refusal");
+  assert_eq!(kept.reported_at(), Some(now()), "it keeps its own time");
 }
 
 #[test]

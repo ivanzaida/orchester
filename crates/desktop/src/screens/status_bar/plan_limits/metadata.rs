@@ -201,6 +201,15 @@ pub fn sources(ctx: &Ctx, entry: &Entry<'_>, mut section: Column) -> Column {
     .iter()
     .any(|window| window.reported_at().unwrap_or(reading.at) != reading.at);
   if mixed {
+    // The newest report named no window (a refusal or credits only): its own time comes first.
+    let newest_named = reading
+      .limits
+      .windows
+      .iter()
+      .any(|window| window.reported_at().unwrap_or(reading.at) == reading.at);
+    if !newest_named {
+      section = section.child(source(ctx, entry, reading.at, None));
+    }
     let mut windows: Vec<_> = reading.limits.windows.iter().collect();
     windows.sort_by_key(|window| window.minutes());
     for window in windows {

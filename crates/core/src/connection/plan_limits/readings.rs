@@ -1,4 +1,4 @@
-use super::{LimitReading, LimitWindow};
+use super::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow};
 use crate::{connection::AgentProvider, time::Timestamp};
 
 /// Session-only newest readings, one account per CLI on this computer.
@@ -32,8 +32,17 @@ impl PlanReadings {
     }
     // Both CLIs report sparsely: Claude Code one window per event, Codex App Server's update
     // leaves out what it does not know, which does not clear what was read before.
+    // A refusal that names no window keeps only the windows read before that agree with it:
+    // those that were reached. Any other would read as current beside a refusal it contradicts.
+    let refused_without_window = !reports_windows
+      && reading.limits.blocked
+        == Some(Blocked {
+          reason: LimitBlock::Window,
+          window: None,
+        });
     for window in &old.limits.windows {
-      if !reading.limits.windows.iter().any(|new| new.minutes == window.minutes) {
+      let agrees = !refused_without_window || window.state(reading.at) == LimitState::Reached;
+      if agrees && !reading.limits.windows.iter().any(|new| new.minutes == window.minutes) {
         reading.limits.windows.push(window.clone());
       }
     }

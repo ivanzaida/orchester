@@ -486,3 +486,87 @@ fn status_bar_plan_limits_whole_hours_reset_reads_without_minutes() {
   let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
   assert!(copy.contains("7% resets in 3 h From"), "{copy}");
 }
+
+#[test]
+fn status_bar_plan_limits_reached_hint_names_the_reset_day() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 3 * 86_400_000);
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::CodexCli,
+    at: now,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(10080, Some(100.0), Some(reset), LimitState::Normal, false).expect("window")],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::CodexCli)]);
+  let item = item_texts(&mut tree, "status-plan-limits");
+  let day = item[1].strip_prefix("resets ").expect("reset").to_owned();
+  assert_eq!(day.split(' ').count(), 2, "the bar names the day: {item:?}");
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint").join(" ");
+  assert!(
+    copy.contains(&format!("Codex refuses new turns until {day}.")),
+    "{copy}"
+  );
+}
+
+#[test]
+fn status_bar_plan_limits_refusal_without_a_window_shows_its_own_time() {
+  use orchester_core::{
+    connection::{
+      AgentProvider,
+      plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
+    },
+    time::Timestamp,
+  };
+  let now = Timestamp::now();
+  let earlier = Timestamp::from_unix_millis(now.unix_millis() - 180_000);
+  let reset = Timestamp::from_unix_millis(now.unix_millis() + 3 * 86_400_000);
+  let mut readings = PlanReadings::default();
+  readings.observe(LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: earlier,
+    limits: PlanLimits {
+      windows: vec![LimitWindow::new(10080, Some(100.0), Some(reset), LimitState::Reached, false).expect("window")],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  });
+  readings.observe(LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: now,
+    limits: PlanLimits {
+      windows: Vec::new(),
+      plan: None,
+      credits: None,
+      blocked: Some(Blocked {
+        reason: LimitBlock::Window,
+        window: None,
+      }),
+    },
+  });
+  let (mut app, mut tree) = with_limits(1440, readings, vec![cli(AgentProvider::ClaudeCodeCli)]);
+  hover(&mut app, &mut tree, "status-plan-limits");
+  let copy = item_texts(&mut tree, "status-plan-limits-hint");
+  let sources: Vec<&String> = copy.iter().filter(|line| line.contains("From the last")).collect();
+  assert!(
+    sources[0].starts_with("From the last Claude Code turn") && sources[0].ends_with("just now"),
+    "{sources:?}"
+  );
+  assert!(
+    sources[1].starts_with("Weekly · From the last Claude Code turn") && sources[1].ends_with("3 min ago"),
+    "{sources:?}"
+  );
+}

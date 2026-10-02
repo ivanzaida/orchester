@@ -113,6 +113,7 @@ impl Component for StatusBar {
         .as_ref()
         .map_or_else(Default::default, |project| project.connections.clone()),
       readings,
+      brief: false,
     };
     // The bar spans the window; reading its width re-renders the bar as the window resizes.
     let width = ctx.window().logical_width();
