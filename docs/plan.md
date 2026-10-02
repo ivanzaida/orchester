@@ -337,6 +337,46 @@ admits it) and, to keep naming the version in use, this line.
 
 ## Done
 
+Tool approval dialog: long values shown in full · branch `claude/approval-long`
+
+- **Done 2026-10-02.** Independent review and design verification passed. A value that does not fit beside its label (Action, Command or
+  Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
+  label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
+  both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
+  with 04.H9's shell string; each thumb in a 6px lane of its own, never over a glyph; a quiet Copy at the right of
+  the label's line, 12 above the box, takes the value as recorded). A CLI command comes after its working directory,
+  labelled *Command · N lines, as recorded* (`Grcu7`); a CLI's request names no shell, so no Shell row. Arguments that parse as JSON read one member a line (2-space indent, only
+  whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
+  scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
+  (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
+- Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- lurq bug worked around: a component that renders its own `Modal` and re-renders after two window resizes lays the
+  layer out at the earlier size. The dialog renders only the layer (`ToolApprovalDialog`); everything that changes lives
+  in `ToolApprovalPanel`. The fix goes upstream as lurq 0.33.2; other dialogs that render their own `Modal` and
+  re-render while open are exposed until then.
+- Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
+  `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
+  512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
+  agent writes them and deep nesting multiplies the indentation. A number holding a secret's digits is redacted too.
+- MCP arguments are recorded whole (they were cut at 600 characters): Claude Code's permission prompt removes secret
+  values from every text in them first, then `run::recorded_arguments` keeps them whole up to `ARGUMENTS_CEILING`
+  (256 KB). Past it they are cut at a character boundary and end with a visible `… cut at 256 KB` line; the dialog lays
+  out the part kept and ends it with that line (`runs.toolApproval.argumentsCut`). Activity never showed MCP
+  arguments (it names a tool by its file path), and the approval row's `scope` column has no size limit, so neither
+  changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
+- The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
+  room left of them and wraps there.
+- Copy is the ghost button of `feLwP` (22 high, 6 at each side and between icon and label, `muted`, `text` and the
+  hover fill under the pointer, `oriyY`); each value box keeps its thumbs in lanes of their own inside its 6px padding,
+  the vertical one from the viewport's top (`e0vyng`). With lurq 0.33.1 a press or drag anywhere in a lane scrolls
+  and never selects text (checked in the running app on both lanes).
+- Left: a command's *Agent's note* still cuts with an ellipsis. The sideways lane is always reserved (lurq reserves
+  always or never), where the design adds it only while a line overflows; lurq has one end inset for both bars, so the
+  sideways thumb also starts at the viewport's left rather than 12 in.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
+  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
+  approval`.
+
 Cargo-specific build folder handling removed · branch `claude/no-cargo-special`
 
 - **Done 2026-10-02.** Orchester orchestrates agents for any kind of project, so nothing in its behaviour singles

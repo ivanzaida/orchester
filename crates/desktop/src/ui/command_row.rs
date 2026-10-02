@@ -1,6 +1,7 @@
 //! Command row (`LBSz7` in 01.D, `s4DoJ` in 04.C1): a command in mono on the canvas fill with a
 //! Copy button. Dialog and page rows show commands Orchester never runs; the user copies them into
-//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded.
+//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded; the
+//! approval dialog shows a long value in the same box (`ui::value_box`).
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -74,15 +75,37 @@ pub fn command_row(
   copied: &Signal<Copied>,
 ) -> Element {
   let id = id.into();
+  let (copy, outcome) = copy_button(ctx, copy_id.into(), command, copied);
+  let row = match place {
+    CommandPlace::Dialog => wrapping_row(
+      &id,
+      command,
+      ExtraTypography::MonoValue.role(),
+      copy.in_form().render(ctx),
+    ),
+    CommandPlace::Page => wrapping_row(&id, command, TypographyStyle::Mono, copy.render(ctx)),
+    CommandPlace::Transcript => transcript_row(&id, command, copy.render(ctx)),
+  };
+  with_copy_failure(ctx, row.into(), outcome)
+}
+
+/// Copy, which puts `original` on the clipboard and records the outcome in `copied`, and the
+/// outcome of the last copy of `original`: it says *Copied* once the clipboard took it.
+pub(super) fn copy_button(
+  ctx: &Ctx,
+  copy_id: Arc<str>,
+  original: &str,
+  copied: &Signal<Copied>,
+) -> (ActionButton, Option<bool>) {
   let outcome = match &copied.get().0 {
-    Some((text, success)) if &**text == command => Some(*success),
+    Some((text, success)) if &**text == original => Some(*success),
     _ => None,
   };
   let label = match outcome {
     Some(true) => "common.copied",
     Some(false) | None => "common.copy",
   };
-  let (signal, text) = (copied.clone(), Arc::<str>::from(command));
+  let (signal, text) = (copied.clone(), Arc::<str>::from(original));
   let copy = ActionButton::new(ctx.t(label))
     .icon(if outcome == Some(true) { Icon::Check } else { Icon::Copy })
     .compact()
@@ -95,33 +118,27 @@ pub fn command_row(
       }
       signal.set(Copied(Some((text.clone(), success))));
     });
-  let row = match place {
-    CommandPlace::Dialog => wrapping_row(
-      &id,
-      command,
-      ExtraTypography::MonoValue.role(),
-      copy.in_form().render(ctx),
-    ),
-    CommandPlace::Page => wrapping_row(&id, command, TypographyStyle::Mono, copy.render(ctx)),
-    CommandPlace::Transcript => transcript_row(&id, command, copy.render(ctx)),
-  };
+  (copy, outcome)
+}
+
+/// `content`, followed by why the clipboard did not take the last copy when that is the `outcome`.
+pub(super) fn with_copy_failure(ctx: &Ctx, content: Element, outcome: Option<bool>) -> Element {
   if outcome != Some(false) {
-    return row.into();
+    return content;
   }
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(row)
+    .child(content)
     .child(field_error(&ctx.t("common.copyFailed")))
     .into()
 }
 
-/// The box around the command and Copy, with Copy at its top right.
-fn command_box(id: &str) -> Row {
+/// The box around the command and Copy, with Copy at its top right; callers set its padding.
+pub(super) fn command_box(id: &str) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
-    .padding_right(ExtraSpacing::Tight.role())
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
     .background(PaletteColor::SurfaceBase)
@@ -135,6 +152,7 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
   command_box(id)
     .padding_vertical(ExtraSpacing::Tight.role())
     .padding_left(ExtraSpacing::Inline.role())
+    .padding_right(ExtraSpacing::Tight.role())
     .child(
       Column::new()
         .min_width(Dimension::Px(0.0))
@@ -158,29 +176,36 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
 /// sideways in a viewport of the box's own; Copy keeps its column at the top right. The box's
 /// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb.
 fn transcript_row(id: &str, command: &str, copy: Element) -> Row {
-  let lines = Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(
-    Column::new()
-      .padding_vertical(ExtraSpacing::CommandLines.role())
-      .padding_left(ExtraSpacing::Stack.role())
-      .child(
-        Text::new(command)
-          .id(format!("{id}-text"))
-          .variant(ExtraTypography::Output.role())
-          .color(PaletteColor::TextPrimary)
-          .selectable(true)
-          .nowrap(),
-      ),
-  );
   command_box(id)
     .padding_top(ExtraSpacing::Tight.role())
+    .padding_right(ExtraSpacing::Tight.role())
     // Selecting or copying details must not toggle the enclosing transcript entry.
     .on_click(|event: MouseEvent| event.stop_propagation())
     .child(
-      ScrollHorizontal::new(lines)
+      ScrollHorizontal::new(
+        Column::new()
+          .padding_bottom(ExtraSpacing::Tight.role())
+          .child(recorded_lines(id, command)),
+      )
         .id(format!("{id}-scroll"))
         .scrollbar(command_scrollbar())
         .min_width(Dimension::Px(0.0))
         .flex(1.0),
     )
     .child(Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(copy))
+}
+
+/// The lines of the transcript's box (`uA3Sh`, `Z3M6Nz`): every line as recorded, never wrapped.
+pub(super) fn recorded_lines(id: &str, command: &str) -> Column {
+  Column::new()
+    .padding_vertical(ExtraSpacing::CommandLines.role())
+    .padding_left(ExtraSpacing::Stack.role())
+    .child(
+      Text::new(command)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Output.role())
+        .color(PaletteColor::TextPrimary)
+        .selectable(true)
+        .nowrap(),
+    )
 }

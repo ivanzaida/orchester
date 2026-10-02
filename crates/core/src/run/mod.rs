@@ -62,7 +62,10 @@ pub use self::{
     StepFailure, StepStatus, Stuck, WaitReason,
   },
   stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
-  tool_approval::{CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell},
+  tool_approval::{
+    ARGUMENTS_CEILING, CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell,
+    cut_arguments, recorded_arguments,
+  },
   tool_step::{CapturedOutput, CommandEnd, OutputCapture, StepAt, ToolCommand},
   transition::RaisedLimits,
   unreadable::{ListedRun, UnreadableRun},
