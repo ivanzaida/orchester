@@ -55,13 +55,19 @@ pub(super) struct TaskFilters {
 impl Component for TaskFilters {
   type Props = FilterProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let filters = Self {
       query: ctx.signal(String::new()),
       match_all: ctx.signal(false),
       open: ctx.signal(None),
       show: ctx.signal(false),
       anchors: std::array::from_fn(|_| ElementRef::default()),
-    }
+    };
+    // Registered once; the task list keeps the same filter signal for the component's lifetime.
+    let filter = ctx.props::<FilterProps>().filter.clone();
+    ctx.watch(&filters.match_all, move |mode| {
+      filter.update(|value| value.0.all_tags = *mode)
+    });
+    filters
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FilterProps>().clone();
@@ -69,10 +75,6 @@ impl Component for TaskFilters {
     if self.match_all.get_untracked() != mode {
       self.match_all.set(mode);
     }
-    let filter = props.filter.clone();
-    ctx.watch(&self.match_all, move |mode| {
-      filter.update(|value| value.0.all_tags = *mode)
-    });
     let mut row = self.facet_buttons(ctx, &props);
     let options = [
       (Sort(TaskSort::Updated), ctx.t("tasks.sort.updated")),

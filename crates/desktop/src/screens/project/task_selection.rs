@@ -81,17 +81,21 @@ pub(super) struct SelectionBar {
 impl Component for SelectionBar {
   type Props = SelectionProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let bar = Self {
       menu: ctx.signal(None),
       open: ctx.signal(false),
       anchors: std::array::from_fn(|_| ElementRef::default()),
       tags: ctx.signal(OrganizationValue::default()),
       confirm: ctx.signal(false),
-    }
+    };
+    let props = ctx.props::<SelectionProps>().clone();
+    let action = action(ctx, &props);
+    bar.observe(ctx, &action);
+    bar
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SelectionProps>().clone();
-    let action = self.action(ctx, &props);
+    let action = action(ctx, &props);
     let selected = props.selected.get().0;
     let pending = action.state().get().is_pending();
     if selected.is_empty() {
@@ -188,35 +192,18 @@ impl SelectionBar {
     row
   }
 
-  fn action(&self, ctx: &mut Ctx, props: &SelectionProps) -> Action {
-    let root = props.root.clone();
-    let runners = ctx.use_context::<Runners>().expect("root provides runners");
-    let action = ctx.future_action(move |(tasks, mutation, confirmed): (Vec<TaskId>, Mutation, bool)| {
-      let (root, runners) = (root.clone(), runners.clone());
-      async move {
-        let mut outcomes = Vec::new();
-        for task in tasks {
-          let result = apply(&root, task, mutation.clone(), confirmed, &runners).await;
-          outcomes.push((task, result));
-        }
-        Ok(Outcomes(outcomes))
-      }
-    });
-    let (confirm, nav) = (
-      self.confirm.clone(),
-      ctx.use_context::<ProjectNav>().expect("shell provides navigation"),
-    );
-    let open = self.open.clone();
+  /// Registered once, in `create`: a bulk change that has just finished closes its menu and
+  /// rereads the tasks; the confirmation stays open while any task failed.
+  fn observe(&self, ctx: &mut Ctx, action: &Action) {
+    let (confirm, open) = (self.confirm.clone(), self.open.clone());
+    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     ctx.watch(&action.state(), move |state| {
-      if let Some(Outcomes(outcomes)) = &state.data
-        && !state.is_pending()
-      {
+      if let Some(Outcomes(outcomes)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
         confirm.set(!outcomes.iter().all(|(_, result)| result.is_ok()) && confirm.get_untracked());
         open.set(false);
         nav.tasks_changed();
       }
     });
-    action
   }
 
   fn menu(&self, ctx: &mut Ctx, props: &SelectionProps, menu: Menu, action: &Action) -> Element {
@@ -518,4 +505,22 @@ fn results(ctx: &Ctx, props: &SelectionProps, action: &Action) -> Element {
     column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
   }
   column.into()
+}
+
+/// Applies one change to each selected task in turn, recording each task's outcome; the call in
+/// `create` and every `render` refer to the same action.
+fn action(ctx: &mut Ctx, props: &SelectionProps) -> Action {
+  let root = props.root.clone();
+  let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  ctx.future_action(move |(tasks, mutation, confirmed): (Vec<TaskId>, Mutation, bool)| {
+    let (root, runners) = (root.clone(), runners.clone());
+    async move {
+      let mut outcomes = Vec::new();
+      for task in tasks {
+        let result = apply(&root, task, mutation.clone(), confirmed, &runners).await;
+        outcomes.push((task, result));
+      }
+      Ok(Outcomes(outcomes))
+    }
+  })
 }

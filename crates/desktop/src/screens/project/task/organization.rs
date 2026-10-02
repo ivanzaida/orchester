@@ -144,7 +144,10 @@ impl Component for OrganizationHeader {
       column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
     }
     // Refused because the task has an active run: the confirmation that opened says so.
-    if let Some(error) = state.error.filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED) {
+    if let Some(error) = state
+      .error
+      .filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED)
+    {
       column = column.child(field_error(&message_text(ctx, &error)));
     }
     column.child(self.confirmation(ctx, &props, &action))

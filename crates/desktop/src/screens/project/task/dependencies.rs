@@ -42,17 +42,28 @@ impl lurq::app::component::DevtoolsInspectable for Problems {}
 pub(super) struct TaskDependencies;
 impl Component for TaskDependencies {
   type Props = DependencyProps;
-  fn create(_ctx: &mut Ctx) -> Self {
+  fn create(ctx: &mut Ctx) -> Self {
+    let props = ctx.props::<DependencyProps>().clone();
+    let action = action(ctx, &props);
+    // Registered once: only a start that has just succeeded opens the task again; a failed start
+    // keeps the data of an earlier one that succeeded.
+    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
+    ctx.watch(&action.state(), move |state| {
+      if let Some(Started(task)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
+        nav.tasks_changed();
+        nav.show(Page::task(*task));
+      }
+    });
     Self
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<DependencyProps>().clone();
+    let action = action(ctx, &props);
     let load = ctx.future((props.root.clone(), props.revision), |(root, _)| async move {
       background::run(move || ProjectTasks::load(&root))
         .await?
         .map_err(|error| crate::messages::store_error(&error))
     });
-    let action = self.action(ctx, &props);
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
     let state = load.state().get();
     let mut column = Column::new()
@@ -96,56 +107,45 @@ impl Component for TaskDependencies {
   }
 }
 
-impl TaskDependencies {
-  fn action(&self, ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureAction<(), Started, Problems> {
-    let runners = ctx.use_context::<Runners>().expect("root provides runners");
-    let root = props.root.clone();
-    let task = props.task.clone();
-    let action = ctx.future_action(move |()| {
-      let root = root.clone();
-      let runners = runners.clone();
-      let task = task.clone();
-      async move {
-        let queued = background::run(move || {
-          let tasks =
-            ProjectTasks::load(&root).map_err(|error| Problems(vec![crate::messages::store_error(&error)].into()))?;
-          let version = tasks
-            .pipelines
-            .iter()
-            .find(|pipeline| Some(pipeline.id) == task.details().pipeline)
-            .ok_or_else(|| Problems(vec![Message::new("runs.preflight.pipelineNotPublished")].into()))?
-            .version;
-          queue_organized_in(
-            &root,
-            SaveTarget::Task(task.id()),
-            task.details().clone(),
-            task.organization(),
-            version,
-          )
-          .map_err(|error| Problems(error.messages().into()))
-        })
+/// Queues the task and starts its run; the call in `create` and every `render` refer to the same
+/// action, pointed at the task as last shown.
+fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureAction<(), Started, Problems> {
+  let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let root = props.root.clone();
+  let task = props.task.clone();
+  ctx.future_action(move |()| {
+    let root = root.clone();
+    let runners = runners.clone();
+    let task = task.clone();
+    async move {
+      let queued = background::run(move || {
+        let tasks =
+          ProjectTasks::load(&root).map_err(|error| Problems(vec![crate::messages::store_error(&error)].into()))?;
+        let version = tasks
+          .pipelines
+          .iter()
+          .find(|pipeline| Some(pipeline.id) == task.details().pipeline)
+          .ok_or_else(|| Problems(vec![Message::new("runs.preflight.pipelineNotPublished")].into()))?
+          .version;
+        queue_organized_in(
+          &root,
+          SaveTarget::Task(task.id()),
+          task.details().clone(),
+          task.organization(),
+          version,
+        )
+        .map_err(|error| Problems(error.messages().into()))
+      })
+      .await
+      .map_err(|error| Problems(vec![error].into()))??;
+      let task = queued.task.id();
+      runners
+        .start_run(task.first_run_key(), task)
         .await
-        .map_err(|error| Problems(vec![error].into()))??;
-        let task = queued.task.id();
-        runners
-          .start_run(task.first_run_key(), task)
-          .await
-          .map_err(|error| Problems(start_messages(&error).into()))?;
-        Ok(Started(task))
-      }
-    });
-    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
-    let changed = nav;
-    ctx.watch(&action.state(), move |state| {
-      if let Some(Started(task)) = state.data
-        && !state.is_pending()
-      {
-        changed.tasks_changed();
-        changed.show(Page::task(task));
-      }
-    });
-    action
-  }
+        .map_err(|error| Problems(start_messages(&error).into()))?;
+      Ok(Started(task))
+    }
+  })
 }
 
 fn dependency_links(ctx: &Ctx, task: &Task, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {

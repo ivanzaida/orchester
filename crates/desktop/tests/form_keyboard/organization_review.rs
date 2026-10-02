@@ -34,11 +34,7 @@ fn complete(pipeline: ResourceId) -> TaskDetails {
     acceptance_criteria: vec!["Complete.".into()],
     pipeline: Some(pipeline),
     limits: Some(
-      TaskLimits::new(
-        TokenBudget::new(10_000).expect("budget"),
-        Duration::from_secs(1_800),
-      )
-      .expect("limits"),
+      TaskLimits::new(TokenBudget::new(10_000).expect("budget"), Duration::from_secs(1_800)).expect("limits"),
     ),
   }
 }
@@ -86,7 +82,9 @@ fn save_changes(desktop: &mut Desktop) {
 /// picker, the header's one tab stop, can be used again.
 fn choose_in_header(desktop: &mut Desktop, id: &str, label: &str, saved: impl Fn(&Desktop) -> bool) {
   choose(desktop, id, label);
-  desktop.wait_until(label, |desktop| saved(desktop) && reachable(desktop, "task-tags-picker"));
+  desktop.wait_until(label, |desktop| {
+    saved(desktop) && reachable(desktop, "task-tags-picker")
+  });
 }
 
 /// R1: after one successful save, Canceled for a task with an active run keeps the confirmation
@@ -111,7 +109,10 @@ fn organization_edit_form_keeps_the_cancel_confirmation_after_an_earlier_save() 
     desktop.pass();
   }
   assert!(
-    desktop.tree.get_element_by_id("edit-task-cancel-confirmation").is_some(),
+    desktop
+      .tree
+      .get_element_by_id("edit-task-cancel-confirmation")
+      .is_some(),
     "the confirmation stays open until it is answered"
   );
   assert_ne!(stored_status(&desktop), WorkflowStatus::Canceled);
@@ -152,13 +153,19 @@ fn organization_tag_manager_keeps_the_editor_of_a_failed_change() {
   desktop.wait_until("the created tag", |desktop| {
     desktop.tree.get_element_by_id("project-tag-name").is_none()
   });
-  let tag = ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags")[0].id();
+  let tag = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags")[0]
+    .id();
   desktop.press(&format!("project-tag-rename-{tag}"));
   desktop.wait_for("project-tag-name");
   set_text(&mut desktop, "project-tag-name", "Client");
   // Held past the store's busy timeout, so the rename fails.
   let connection = rusqlite::Connection::open(desktop.repo.join(".orchester/orchester.db")).expect("connection");
-  connection.execute_batch("BEGIN IMMEDIATE").expect("hold the write lock");
+  connection
+    .execute_batch("BEGIN IMMEDIATE")
+    .expect("hold the write lock");
   desktop.tab_to("tag-editor-confirm", 12);
   desktop.enter();
   desktop.wait_until("the failed rename", |desktop| {
@@ -271,13 +278,19 @@ fn organization_header_tag_picker_creates_no_tag_while_saving() {
     db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
   });
   open_task(&mut desktop);
-  let tag = ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags")[0].id();
+  let tag = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags")[0]
+    .id();
   desktop.press("task-tags-picker");
   desktop.wait_for("tag-search");
   // The header's save waits for the write lock: it stays under way until the lock is released,
   // and a creation pressed meanwhile would complete after it.
   let connection = rusqlite::Connection::open(desktop.repo.join(".orchester/orchester.db")).expect("connection");
-  connection.execute_batch("BEGIN IMMEDIATE").expect("hold the write lock");
+  connection
+    .execute_batch("BEGIN IMMEDIATE")
+    .expect("hold the write lock");
   desktop.press(&format!("picker-tag-{tag}"));
   set_text(&mut desktop, "tag-search", "Client");
   desktop.wait_for("tag-create-inline");
@@ -287,10 +300,12 @@ fn organization_header_tag_picker_creates_no_tag_while_saving() {
     tasks(&desktop.repo)[0].organization().tags() == [tag]
   });
   assert_eq!(
-    ProjectDb::open(&desktop.repo).expect("open").project_tags().expect("tags").len(),
+    ProjectDb::open(&desktop.repo)
+      .expect("open")
+      .project_tags()
+      .expect("tags")
+      .len(),
     1,
     "no tag was created"
   );
 }
-
-
