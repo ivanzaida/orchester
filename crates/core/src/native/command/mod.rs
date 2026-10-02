@@ -25,6 +25,8 @@ const GIT_GLOBAL: [&str; 3] = ["-c", "core.fsmonitor=false", "--no-pager"];
 /// Git subcommands that print diffs, and the options that keep configured diff programs from running.
 const GIT_DIFFS: [&str; 3] = ["diff", "log", "show"];
 const GIT_DIFF_OPTIONS: [&str; 2] = ["--no-ext-diff", "--no-textconv"];
+/// `git blame` runs a configured textconv program by default; it takes no diff program.
+const GIT_BLAME_OPTIONS: [&str; 1] = ["--no-textconv"];
 
 /// Why a command can never run: the agent gets this as an error result.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -91,7 +93,9 @@ impl ParsedCommand {
   }
 
   /// The program and arguments to start, `None` for a shell command. Git gets [`GIT_GLOBAL`] before its
-  /// subcommand, and its diff subcommands also [`GIT_DIFF_OPTIONS`] after it.
+  /// subcommand, its diff subcommands also [`GIT_DIFF_OPTIONS`] after it, and `blame`
+  /// [`GIT_BLAME_OPTIONS`]. The program's name is matched as the platform finds it, so `Git` on macOS is
+  /// hardened too.
   pub fn program_args(&self) -> Option<Vec<String>> {
     let CommandForm::Direct { argv } = &self.form else {
       return None;
@@ -110,6 +114,8 @@ impl ParsedCommand {
       args.push(subcommand.clone());
       if GIT_DIFFS.contains(&subcommand.as_str()) {
         args.extend(GIT_DIFF_OPTIONS.map(str::to_owned));
+      } else if subcommand == "blame" {
+        args.extend(GIT_BLAME_OPTIONS.map(str::to_owned));
       }
     }
     args.extend(argv.iter().skip(2).cloned());

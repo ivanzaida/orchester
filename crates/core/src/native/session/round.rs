@@ -19,6 +19,9 @@ pub const REMINDER: &str = "Call finish_step with your result.";
 /// The result of a command a person denied (§5.2).
 pub const DENIED: &str = "Denied by a person. Do not run this command again; continue without it or explain in \
                           finish_step why you cannot.";
+/// The result of the `finish_step` call whose result the loop ended with. It is stored, so that a
+/// conversation resumed after the step was reopened does not tell the model its result was not taken.
+pub const RECORDED: &str = "Your result was recorded.";
 
 /// A planned step of the current turn.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,6 +31,7 @@ pub(super) enum Queued {
   Write(PlannedTool),
   /// Classified only when its turn comes, since the calls before it can change the files it names.
   Command(ToolCallId, RunCommand),
+  Finish(ToolCallId, StepResult),
   End(LoopEnd),
 }
 
@@ -62,6 +66,7 @@ impl NativeLoop {
     if calls.is_empty() {
       return self.on_missing_finish(actions);
     }
+    self.reminded = false;
     self.plan(calls, actions);
     self.advance(actions);
   }
@@ -92,7 +97,7 @@ impl NativeLoop {
         ToolInput::WriteFile(write) => rest.push(Queued::Write(planned(ToolWork::WriteFile(write)))),
         ToolInput::RunCommand(command) => rest.push(Queued::Command(call, command)),
         ToolInput::FinishStep(result) => {
-          rest.push(Queued::End(LoopEnd::Result(result)));
+          rest.push(Queued::Finish(call, result));
           break;
         }
         ToolInput::AskQuestion(question) => {
@@ -140,6 +145,10 @@ impl NativeLoop {
       match next {
         Queued::Reads(batch) => return self.run(batch, actions),
         Queued::Write(planned) => return self.run(vec![planned], actions),
+        Queued::Finish(call, result) => {
+          self.append(vec![Item::tool_result(call, RECORDED, false)], actions);
+          return self.end(LoopEnd::Result(result), actions);
+        }
         Queued::End(end) => return self.end(end, actions),
         Queued::Command(call, input) => match self.commands.classify(&input, &self.scope) {
           CommandVerdict::Refuse(refusal) => self.decline(call, input.command(), refusal.to_string(), actions),
@@ -238,11 +247,11 @@ impl NativeLoop {
     actions.push(LoopAction::Emit(vec![denied]));
   }
 
-  /// A turn ended without a tool call: remind the model once, then take a result from its last message if
-  /// it wrote one there.
+  /// A turn ended without a tool call: remind the model, then, when the next turn has no tool call
+  /// either, take a result from its last message if it wrote one there.
   fn on_missing_finish(&mut self, actions: &mut Vec<LoopAction>) {
-    self.missed_finish += 1;
-    if self.missed_finish == 1 {
+    if !self.reminded {
+      self.reminded = true;
       self.append(vec![Item::user(REMINDER, UserOrigin::Reminder)], actions);
       return self.next_request(actions);
     }

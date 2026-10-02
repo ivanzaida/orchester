@@ -6,7 +6,7 @@ use orchester_core::{
   native::{
     item::{Item, UserOrigin},
     model::{ModelError, StopReason},
-    session::{DENIED, LoopAction, LoopEnd, LoopError, LoopFailure, LoopInput, REMINDER, ToolWork},
+    session::{DENIED, LoopAction, LoopEnd, LoopError, LoopFailure, LoopInput, RECORDED, REMINDER, ToolWork},
   },
   permission::RepositoryAccess,
   run::StepOutcome,
@@ -153,6 +153,14 @@ fn native_loop_finish_ends_and_skips_later_calls() {
     panic!("result: {actions:?}")
   };
   assert_eq!((result.outcome, result.summary.as_str()), (StepOutcome::Done, "Done."));
+  assert_eq!(
+    persisted(&actions),
+    [
+      Item::tool_result(call("r1"), "text", false),
+      Item::tool_result(call("finish"), RECORDED, false)
+    ],
+    "the accepted result is stored as the call's result"
+  );
   assert!(native.has_ended());
 }
 
@@ -288,6 +296,25 @@ fn native_loop_reminder_then_no_result() {
     )))
     .expect("second miss");
   assert_eq!(ended(&actions), Some(&LoopEnd::NoResult));
+}
+
+#[test]
+fn native_loop_reminder_after_every_turn_with_calls() {
+  let layout = Layout::new();
+  let (mut native, _) = start(&layout, RepositoryAccess::Write, &[]);
+  let miss = || response(vec![assistant("All done.")], StopReason::EndTurn, 10);
+  native.handle(LoopInput::Responded(miss())).expect("first miss");
+  let read = tool_call("r1", "read_file", json!({"path": "src/main.rs"}));
+  native
+    .handle(LoopInput::Responded(response(vec![read], StopReason::ToolUse, 10)))
+    .expect("read");
+  native.handle(LoopInput::ToolDone(call("r1"), ok("text"))).expect("r1");
+  let actions = native.handle(LoopInput::Responded(miss())).expect("later miss");
+  assert!(
+    persisted(&actions).contains(&Item::user(REMINDER, UserOrigin::Reminder)),
+    "a miss after a turn with calls is reminded again: {actions:?}"
+  );
+  assert_eq!(ended(&actions), None);
 }
 
 #[test]

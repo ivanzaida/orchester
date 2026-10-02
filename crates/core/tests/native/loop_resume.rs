@@ -1,5 +1,7 @@
 //! Resuming a native conversation, and compacting it when it nears the context window.
 
+use std::collections::BTreeSet;
+
 use orchester_core::{
   connection::stream::{FileChange, FileChangeKind},
   native::{
@@ -8,7 +10,7 @@ use orchester_core::{
     model::{ModelError, StopReason},
     session::{
       COMPACTION_REQUEST, Continuation, LoopAction, LoopEnd, LoopError, LoopFailure, LoopInput, MAX_COMPACTIONS,
-      NOT_RUN, NativeLoop,
+      NOT_RUN, NativeLoop, RECORDED,
     },
   },
   permission::{CommandPermission, RepositoryAccess},
@@ -28,14 +30,79 @@ fn resume(
   stored: Vec<Item>,
   continuation: Continuation,
 ) -> Result<(NativeLoop, Vec<LoopAction>), LoopError> {
+  resume_with(layout, 200_000, stored, continuation, BTreeSet::new())
+}
+
+fn resume_with(
+  layout: &Layout,
+  context_window: u64,
+  stored: Vec<Item>,
+  continuation: Continuation,
+  changed: BTreeSet<String>,
+) -> Result<(NativeLoop, Vec<LoopAction>), LoopError> {
   let policy = CommandPolicy::new(&CommandPermission::AskBefore).expect("policy");
   NativeLoop::resume(
-    settings(RepositoryAccess::Write, 200_000),
+    settings(RepositoryAccess::Write, context_window),
     layout.scope(RepositoryAccess::Write),
     policy,
     stored,
     continuation,
+    changed,
   )
+}
+
+/// The text of the note that follows a compaction's summary among `stored`.
+fn compaction_note(stored: &[Item]) -> &str {
+  stored
+    .iter()
+    .find_map(|item| match item {
+      Item::User {
+        text,
+        origin: UserOrigin::Compaction,
+      } => Some(text.as_str()),
+      _ => None,
+    })
+    .expect("compaction note")
+}
+
+#[test]
+fn native_resume_after_an_accepted_result() {
+  let layout = Layout::new();
+  let stored = vec![
+    task(),
+    tool_call("f1", "finish_step", json!({"outcome": "done", "summary": "Done."})),
+    Item::tool_result(call("f1"), RECORDED, false),
+  ];
+  let revise = Continuation::Prompt("Revise: also update the docs.".to_owned());
+  let (_, actions) = resume(&layout, stored, revise).expect("resume");
+  assert_eq!(
+    persisted(&actions),
+    vec![Item::user("Revise: also update the docs.", UserOrigin::Resume)],
+    "a reopened step does not tell the model its result was not taken"
+  );
+}
+
+#[test]
+fn native_resume_compaction_names_earlier_changes() {
+  let layout = Layout::new();
+  let changed = BTreeSet::from(["src/lib.rs".to_owned()]);
+  let (mut native, actions) = resume_with(
+    &layout,
+    10,
+    vec![task()],
+    Continuation::Prompt("Continue.".to_owned()),
+    changed,
+  )
+  .expect("resume");
+  let fork = request(&actions).expect("summary request");
+  assert_eq!(
+    fork.items.last(),
+    Some(&Item::user(COMPACTION_REQUEST, UserOrigin::Compaction))
+  );
+  let summary = response(vec![assistant("Changed lib.")], StopReason::EndTurn, 5);
+  let actions = native.handle(LoopInput::Responded(summary)).expect("summary");
+  let note = compaction_note(&persisted(&actions)).to_owned();
+  assert!(note.contains("src/lib.rs"), "{note}");
 }
 
 #[test]
@@ -147,6 +214,12 @@ fn native_compaction_near_the_window() {
 
   let summary = response(vec![assistant("Made main public.")], StopReason::EndTurn, 950);
   let actions = native.handle(LoopInput::Responded(summary)).expect("summary");
+  let position = |wanted: fn(&LoopAction) -> bool| actions.iter().position(wanted).expect("action");
+  assert!(
+    position(|action| matches!(action, LoopAction::Persist(_)))
+      < position(|action| matches!(action, LoopAction::Emit(_))),
+    "the summary is stored before its turn is reported: {actions:?}"
+  );
   let stored = persisted(&actions);
   assert_eq!(
     stored[0],

@@ -127,6 +127,14 @@ fn native_known_safe_windows_program_names() {
   assert!(!safe(r"C:\tools\cat.exe a"));
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn native_known_safe_macos_program_names() {
+  assert!(safe("Git status"));
+  assert!(safe("CAT a"));
+  assert!(!safe("Git grep --op=sh x"));
+}
+
 #[test]
 fn native_known_safe_path_candidates() {
   let argv: Vec<String> = ["rg", "--ignore-file=/etc/x", "-f/etc/y", "needle", "--", "-n"]
@@ -144,4 +152,75 @@ fn native_known_safe_path_candidates() {
       "-n"
     ]
   );
+}
+
+#[test]
+fn native_known_safe_refuses_abbreviated_options() {
+  for command in [
+    "git grep --op=sh x",
+    "git grep --open-files=sh x",
+    "git grep --open-files-in=sh x",
+    "git grep --ope x",
+    "git diff --outp=x",
+    "git log --out=x",
+    "git show --ou x",
+    "git diff --ext-d",
+    "git log --ext",
+    "git show --textc",
+    "git blame --tex a",
+    "git log --show-sig",
+    "git log --pag",
+    "rg --pr=cat x",
+    "rg --search x",
+    "rg --fol x",
+    "file --comp -m magic",
+    "ls --deref -R",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+  for command in [
+    "git diff --text",
+    "git grep --text x",
+    "git log --oneline",
+    "git diff --output-indicator-new=+",
+    "git diff --no-ext-diff",
+    "git log --no-textconv",
+    "rg --no-follow x",
+    "ls --directory a",
+  ] {
+    assert!(safe(command), "{command}");
+  }
+}
+
+#[test]
+fn native_known_safe_refuses_signature_checks() {
+  for command in [
+    "git log --show-signature",
+    "git show --show-signature HEAD",
+    "git log --format=%G?",
+    "git log --pretty=format:%h%x20%GS",
+  ] {
+    assert!(!safe(command), "{command}: gpg would run");
+  }
+}
+
+#[test]
+fn native_known_safe_refuses_following_links() {
+  for command in [
+    "rg -L x",
+    "rg -nL x",
+    "rg --follow x",
+    "find -L .",
+    "find -HL .",
+    "find . -follow",
+    "ls -RL",
+    "ls -laL src",
+    "ls --dereference -R",
+    "file -bC -m magic",
+  ] {
+    assert!(!safe(command), "{command}");
+  }
+  for command in ["find . -name *.rs -type l", "ls -la", "rg -n x"] {
+    assert!(safe(command), "{command}");
+  }
 }

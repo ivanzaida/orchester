@@ -615,11 +615,17 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
    `is_known_safe_command` *(to verify against the current Codex source)*. Its entries are argv rules, not prefixes:
    - `git` with `status`, `log`, `diff`, `show`, `rev-parse`, `ls-files`, `branch` (list only), `blame` or `grep`.
      Every git call gets `-c core.fsmonitor=false --no-pager` (an fsmonitor setting can run a program on `git
-     status`). `diff`, `log` and `show` also get `--no-ext-diff --no-textconv`. `--output` and `-c` from the model
-     are refused.
-   - `rg`, without `--pre`, `--pre-glob` or `--search-zip`.
-   - `ls`, `cat`, `head`, `tail`, `wc`, `pwd`, `echo`, `which`, `where`, `file`, `stat`.
-   - `find`, without `-exec`, `-execdir`, `-ok`, `-delete` or `-fprint*`.
+     status`). `diff`, `log` and `show` also get `--no-ext-diff --no-textconv`, and `blame`, which runs a textconv
+     program by default, `--no-textconv`. `--output`, `-c`, `--ext-diff`, `--textconv`, `--open-files-in-pager`
+     (`-O`), `--show-signature` and the `%G…` format placeholders (both start `gpg`) from the model are refused.
+   - `rg`, without `--pre`, `--pre-glob`, `--search-zip` or `--follow` (`-L`).
+   - `ls` without `--dereference` (`-L`), `cat`, `head`, `tail`, `wc`, `pwd`, `echo`, `which`, `where`, `file`
+     without `--compile` (`-C`), `stat`.
+   - `find`, without `-exec`, `-execdir`, `-ok`, `-delete`, `-fprint*`, `-follow` or `-L`.
+
+   A refused long option is refused in every abbreviation as well: git's parse-options and `getopt_long` accept any
+   unambiguous prefix (`git grep --op=<cmd>` is `--open-files-in-pager`). Options that follow links are refused
+   because the path check below sees the folder a command walks, not where a link inside it leads.
    - `cargo` with `metadata` or `tree`, and `--version` of any listed program.
 
    Every argument that resolves to an existing path must lie in the **readable** scope; otherwise the command is not

@@ -8,11 +8,17 @@
 //! absolute path. A program written with a folder (`./cat`) is never known-safe: it could be a file the
 //! agent wrote.
 //!
+//! A refused long option is refused in every abbreviation too: git's parse-options and `getopt_long`
+//! (`file`, `ls`) accept any unambiguous prefix of a long option, so `git grep --op=<cmd>` is
+//! `--open-files-in-pager`. Options that follow links are refused where a command walks folders: the
+//! path check sees the folder it is given, not where a link inside it leads.
+//!
 //! Cargo is left out, although the design lists `cargo metadata` and `cargo tree`: both start `rustc`,
 //! which a `.cargo/config.toml` or `rust-toolchain.toml` the agent writes in the worktree can replace
 //! with any program, so they ask like any other command.
 
-/// Programs that are known-safe with any arguments the path check accepts.
+/// Programs that are known-safe with any arguments the path check accepts, unless their rules below
+/// refuse some.
 const PLAIN: [&str; 11] = [
   "ls", "cat", "head", "tail", "wc", "pwd", "echo", "which", "where", "file", "stat",
 ];
@@ -30,9 +36,9 @@ const GIT_READ: [&str; 9] = [
   "blame",
   "grep",
 ];
-/// Git options the model may not pass: they set configuration, write files, or start a pager or diff
-/// program.
-const GIT_REFUSED: [&str; 8] = [
+/// Git options the model may not pass: they set configuration, write files, or start a pager, a diff
+/// program or `gpg` (`--show-signature`).
+const GIT_REFUSED: [&str; 9] = [
   "-c",
   "--config-env",
   "--exec-path",
@@ -41,10 +47,17 @@ const GIT_REFUSED: [&str; 8] = [
   "--ext-diff",
   "--textconv",
   "--paginate",
+  "--show-signature",
 ];
+/// Git options that are a prefix of a refused option but name another one, which git matches exactly
+/// before it looks for an abbreviation: `--text` is not `--textconv`.
+const GIT_EXACT: [&str; 1] = ["--text"];
 /// Short git options that are refused, also inside a cluster: `-O` (grep: start a pager; diff: read an
 /// order file the path check cannot see when attached).
 const GIT_REFUSED_SHORT: [char; 1] = ['O'];
+/// The start of the `git log` format placeholders that verify a signature (`%G?`, `%GS`, …), which
+/// starts `gpg`.
+const GIT_SIGNATURE_PLACEHOLDER: &str = "%G";
 /// `git branch` options that only list.
 const GIT_BRANCH_LIST: [&str; 10] = [
   "--list",
@@ -58,16 +71,22 @@ const GIT_BRANCH_LIST: [&str; 10] = [
   "-vv",
   "--verbose",
 ];
-/// Ripgrep options that start programs or decompress through them.
-const RG_REFUSED: [&str; 4] = ["--pre", "--pre-glob", "--search-zip", "--hostname-bin"];
-/// `rg -z` is `--search-zip`.
-const RG_REFUSED_SHORT: [char; 1] = ['z'];
-/// `find` actions that run programs, delete, or write files.
-const FIND_REFUSED: [&str; 9] = [
-  "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls",
+/// Ripgrep options that start programs, decompress through them, or follow links.
+const RG_REFUSED: [&str; 5] = ["--pre", "--pre-glob", "--search-zip", "--hostname-bin", "--follow"];
+/// `rg -z` is `--search-zip`, `rg -L` is `--follow`.
+const RG_REFUSED_SHORT: [char; 2] = ['z', 'L'];
+/// `find` actions that run programs, delete, or write files, and `-follow`, which follows links.
+const FIND_REFUSED: [&str; 10] = [
+  "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls", "-follow",
 ];
-/// `file` options that write a compiled magic file.
-const FILE_REFUSED: [&str; 2] = ["-C", "--compile"];
+/// The options BSD `find` (macOS) reads before its paths, also as a cluster (`-HL`); `-L` follows links.
+const FIND_LEADING: &str = "EHLPXdsx";
+/// `file --compile` (`-C`) writes a compiled magic file.
+const FILE_REFUSED: [&str; 1] = ["--compile"];
+const FILE_REFUSED_SHORT: [char; 1] = ['C'];
+/// `ls --dereference` (`-L`) follows links, also those `-R` walks into.
+const LS_REFUSED: [&str; 1] = ["--dereference"];
+const LS_REFUSED_SHORT: [char; 1] = ['L'];
 
 /// Whether `argv` (program first) is a known-safe read-only command by its words.
 pub fn is_known_safe(argv: &[String]) -> bool {
@@ -85,8 +104,9 @@ pub fn is_known_safe(argv: &[String]) -> bool {
   match program.as_str() {
     "git" => git(args),
     "rg" => !args.iter().any(|arg| refused(arg, &RG_REFUSED, &RG_REFUSED_SHORT)),
-    "find" => !args.iter().any(|arg| FIND_REFUSED.contains(&arg.as_str())),
-    "file" => !args.iter().any(|arg| refused(arg, &FILE_REFUSED, &[])),
+    "find" => !args.iter().any(|arg| find_refused(arg)),
+    "file" => !args.iter().any(|arg| refused(arg, &FILE_REFUSED, &FILE_REFUSED_SHORT)),
+    "ls" => !args.iter().any(|arg| refused(arg, &LS_REFUSED, &LS_REFUSED_SHORT)),
     other => PLAIN.contains(&other),
   }
 }
@@ -110,8 +130,9 @@ pub fn path_candidates(argv: &[String]) -> Vec<&str> {
   candidates
 }
 
-/// The program's name as the rules know it, or `None` when it is written with a folder. On Windows the
-/// name is matched without case and without `.exe`, as the program search finds it.
+/// The program's name as the rules know it, or `None` when it is written with a folder. On Windows and
+/// macOS, whose file systems find a program without regard to case, the name is matched without case;
+/// on Windows also without `.exe`, as the program search finds it.
 pub fn program_name(program: &str) -> Option<String> {
   if program.is_empty() || program.contains(['/', '\\']) {
     return None;
@@ -119,6 +140,9 @@ pub fn program_name(program: &str) -> Option<String> {
   if cfg!(windows) {
     let lower = program.to_ascii_lowercase();
     return Some(lower.strip_suffix(".exe").map_or_else(|| lower.clone(), str::to_owned));
+  }
+  if cfg!(target_os = "macos") {
+    return Some(program.to_ascii_lowercase());
   }
   Some(program.to_owned())
 }
@@ -130,7 +154,11 @@ fn git(args: &[String]) -> bool {
   if !GIT_READ.contains(&subcommand.as_str()) {
     return false;
   }
-  if rest.iter().any(|arg| refused(arg, &GIT_REFUSED, &GIT_REFUSED_SHORT)) {
+  let refused_arg = |arg: &String| {
+    arg.contains(GIT_SIGNATURE_PLACEHOLDER)
+      || (!GIT_EXACT.contains(&arg.as_str()) && refused(arg, &GIT_REFUSED, &GIT_REFUSED_SHORT))
+  };
+  if rest.iter().any(refused_arg) {
     return false;
   }
   subcommand != "branch" || branch_lists(rest)
@@ -149,15 +177,29 @@ fn branch_lists(args: &[String]) -> bool {
   })
 }
 
-/// Whether `arg` is one of the `long` options (also as `--option=value`) or a short-option cluster
-/// holding one of `short`.
+/// Whether `find` `arg` is one of [`FIND_REFUSED`] or a cluster of leading options that holds `-L`.
+fn find_refused(arg: &str) -> bool {
+  FIND_REFUSED.contains(&arg)
+    || arg
+      .strip_prefix('-')
+      .is_some_and(|flags| flags.contains('L') && flags.chars().all(|flag| FIND_LEADING.contains(flag)))
+}
+
+/// Whether `arg` is one of the `long` options or an abbreviation of one (also as `--option=value`), or
+/// a short-option cluster holding one of `short`.
 fn refused(arg: &str, long: &[&str], short: &[char]) -> bool {
   let name = arg.split_once('=').map_or(arg, |(name, _)| name);
   if long.contains(&name) {
     return true;
   }
-  match arg.strip_prefix('-') {
-    Some(cluster) if !cluster.starts_with('-') => cluster.chars().any(|c| short.contains(&c)),
-    _ => false,
+  if let Some(abbreviation) = name.strip_prefix("--") {
+    return !abbreviation.is_empty()
+      && long
+        .iter()
+        .filter_map(|option| option.strip_prefix("--"))
+        .any(|option| option.starts_with(abbreviation));
   }
+  arg
+    .strip_prefix('-')
+    .is_some_and(|cluster| cluster.chars().any(|c| short.contains(&c)))
 }

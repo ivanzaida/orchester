@@ -134,6 +134,19 @@ fn native_command_hardened_git() {
       "HEAD"
     ]))
   );
+  assert_eq!(
+    parsed("git blame src/main.rs").program_args(),
+    Some(words(&[
+      "git",
+      "-c",
+      "core.fsmonitor=false",
+      "--no-pager",
+      "blame",
+      "--no-textconv",
+      "src/main.rs"
+    ])),
+    "blame runs a textconv program by default"
+  );
   assert_eq!(parsed("cargo test").program_args(), Some(words(&["cargo", "test"])));
   let shell = ParsedCommand::parse(
     &run_command(&json!({"command": "ls | wc", "shell": true})),
@@ -144,6 +157,24 @@ fn native_command_hardened_git() {
   assert_eq!(shell.form(), &CommandForm::Shell);
   assert_eq!(shell.program_args(), None);
   assert_eq!(shell.text(), "ls | wc");
+}
+
+/// Windows and macOS find `Git` as `git`, so it gets the same hardening.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn native_command_hardened_git_in_any_case() {
+  let layout = Layout::new();
+  let scope = layout.scope(RepositoryAccess::ReadOnly);
+  let command = ParsedCommand::parse(
+    &run_command(&json!({"command": "Git status"})),
+    CommandSyntax::Posix,
+    &scope,
+  )
+  .expect("parsed");
+  assert_eq!(
+    command.program_args(),
+    Some(words(&["Git", "-c", "core.fsmonitor=false", "--no-pager", "status"]))
+  );
 }
 
 #[test]

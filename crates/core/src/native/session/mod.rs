@@ -22,7 +22,7 @@ pub use self::{
     ApprovalAsk, Continuation, DEFAULT_CONTEXT_WINDOW, LoopAction, LoopEnd, LoopError, LoopFailure, LoopInput,
     LoopSettings, MAX_COMPACTIONS, PlannedTool, StopMode, ToolOutcome, ToolWork,
   },
-  round::{DENIED, REMINDER},
+  round::{DENIED, RECORDED, REMINDER},
 };
 use self::{context::ContextEstimate, round::Queued};
 use super::{
@@ -73,11 +73,11 @@ pub struct NativeLoop {
   phase: Phase,
   queue: VecDeque<Queued>,
   stop: Option<StopMode>,
-  /// Turns that ended without a tool call; the first gets a reminder.
-  missed_finish: u8,
+  /// The model was reminded to call `finish_step` after its last turn, which had no tool call.
+  reminded: bool,
   compactions: u8,
   context: ContextEstimate,
-  /// Files the agent changed in this invocation, named after a compaction.
+  /// Files the agent changed in this step, earlier invocations included, named after a compaction.
   changed: BTreeSet<String>,
 }
 
@@ -100,13 +100,16 @@ impl NativeLoop {
   }
 
   /// The stored conversation `stored` continued: calls left unanswered get [`NOT_RUN`] (a pending
-  /// `ask_question` the person's answer), then `continuation` follows.
+  /// `ask_question` the person's answer), then `continuation` follows. `changed` holds the files the
+  /// step's earlier invocations changed, as their `FileChanged` Activity recorded them; a compaction
+  /// names them with the files this invocation changes.
   pub fn resume(
     settings: LoopSettings,
     scope: FileScope,
     commands: CommandPolicy,
     stored: Vec<Item>,
     continuation: Continuation,
+    changed: BTreeSet<String>,
   ) -> Result<(Self, Vec<LoopAction>), LoopError> {
     let (task, mut items) = context::latest_segment(stored)?;
     let appended = context::answer_unanswered(&items, continuation);
@@ -116,6 +119,7 @@ impl NativeLoop {
       LoopAction::Emit(vec![events::session(&settings)]),
     ];
     let mut native = Self::new(settings, scope, commands, task, items);
+    native.changed = changed;
     native.next_request(&mut actions);
     Ok((native, actions))
   }
@@ -131,7 +135,7 @@ impl NativeLoop {
       phase: Phase::AwaitingModel,
       queue: VecDeque::new(),
       stop: None,
-      missed_finish: 0,
+      reminded: false,
       compactions: 0,
       context,
       changed: BTreeSet::new(),

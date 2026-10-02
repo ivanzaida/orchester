@@ -90,9 +90,7 @@ impl NativeLoop {
 
   /// Starts a new segment: the task, the summary, and a note naming the files changed so far.
   pub(super) fn on_summary(&mut self, response: &ModelResponse, actions: &mut Vec<LoopAction>) {
-    actions.push(LoopAction::Emit(vec![AgentEvent::TurnCompleted {
-      usage: response.usage,
-    }]));
+    let completed = LoopAction::Emit(vec![AgentEvent::TurnCompleted { usage: response.usage }]);
     let summary = response
       .items
       .iter()
@@ -104,6 +102,7 @@ impl NativeLoop {
       .collect::<Vec<_>>()
       .join("\n\n");
     if summary.is_empty() {
+      actions.push(completed);
       return self.end(LoopEnd::Failed(LoopFailure::NoSummary), actions);
     }
     self.compactions += 1;
@@ -111,6 +110,7 @@ impl NativeLoop {
     self.context = ContextEstimate::fresh(&self.settings, &self.items);
     let note = Item::user(compaction_note(&self.changed), UserOrigin::Compaction);
     self.append(vec![Item::Compaction { summary }, note], actions);
+    actions.push(completed);
     self.next_request(actions);
   }
 }
