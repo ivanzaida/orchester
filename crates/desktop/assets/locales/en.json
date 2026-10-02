@@ -347,6 +347,13 @@
       "cancelled": "Run #{{run}} was cancelled"
     },
     "insights": "Run activity and attention",
+    "summary": {
+      "running": "{{count}} running",
+      "needsInputOne": "{{count}} task needs your input",
+      "needsInputOther": "{{count}} tasks need your input",
+      "inReview": "{{count}} in review",
+      "completed": "{{count}} completed today"
+    },
     "blockedTask": "Blocked · {{task}}"
   },
   "tasks": {
@@ -376,7 +383,10 @@
       "noMatches": "No tasks match these filters.",
       "searchTags": "Search tags",
       "facetCount": "{{facet}} · {{count}}",
-      "noMatchesHint": "Try another filter or clear the selected filters."
+      "noMatchesHint": "Try another filter or clear the selected filters.",
+      "tagSummary": "{{names}} · {{mode}}",
+      "all": "all",
+      "any": "any"
     },
     "selection": {
       "unavailable": "Selecting tasks is not available yet",
@@ -544,7 +554,8 @@
       "canceled": "Canceled",
       "noActiveRun": "No active run",
       "saving": "Saving changes…",
-      "combined": "{{status}} · {{run}}"
+      "combined": "{{status}} · {{run}}",
+      "runSuffix": "· {{run}}"
     },
     "priority": {
       "label": "Priority",
@@ -622,7 +633,7 @@
       "keepTag": "Keep tag",
       "deleteTag": "Delete tag",
       "renameImpact": "The name changes on all {{count}} tagged tasks.",
-      "deleteImpact": "{{tag}} will be removed from all {{count}} tagged tasks and from this project’s tag list. The tasks and their other tags stay.",
+      "deleteImpact": "{{tag}} will be removed from all {{count}} tagged tasks and from {{project}}’s project tag list. The tasks and their other tags stay.",
       "cannotUndo": "Cannot be undone",
       "deleteWarning": "You can create {{tag}} again, but its task assignments will not be restored.",
       "mergeImpact": "{{source}} is on {{count}} tasks. These tasks will get {{target}}, and {{source}} will be removed from this project. A task that already has both tags keeps one {{target}} tag.",

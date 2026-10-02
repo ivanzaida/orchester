@@ -1,7 +1,7 @@
 //! Organization menu options (gNExS, l7kBSq, IOWwP): full-width rows and trailing checks.
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Row, Spacer, Text},
+  components::{Row, Text},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension},
 };
@@ -17,11 +17,10 @@ pub fn menu_option(label: &str, selected: bool, enabled: bool, on_click: impl Fn
     .align_items(Alignment::Center)
     .spacing(SpacingSize::Sm)
     .child(Text::new(label).variant(TypographyStyle::Button).flex(1.0))
-    .child(Spacer::new().flex(1.0))
     .with_children(selected.then(|| icon(Icon::Check, IconSize::Small, PaletteColor::TextPrimary)));
   let mut button = surface()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(super::field::SELECT_OPTION_HEIGHT))
+    .min_height(Dimension::Px(super::field::SELECT_OPTION_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
     .rounded(RadiusSize::Sm)
     .align_items(Alignment::Center)

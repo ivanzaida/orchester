@@ -58,6 +58,24 @@ impl TagManager {
     if pending {
       content = content.child(Text::new(&ctx.t("tasks.tags.saving")).variant(TypographyStyle::Caption));
     }
+    self.present_editor(ctx, mode, pending, content)
+  }
+
+  fn present_editor(&self, ctx: &mut Ctx, mode: EditingTag, pending: bool, content: Column) -> Element {
+    if !matches!(mode, EditingTag::Delete(_)) {
+      let editing = self.editing.clone();
+      return form(
+        None,
+        Column::new()
+          .child(content)
+          .on_key_down(move |event: lurq::app::events::KeyboardEvent| {
+            if event.key == "Escape" && !pending {
+              event.prevent_default();
+              editing.set(None);
+            }
+          }),
+      );
+    }
     let editing = self.editing.clone();
     ctx.watch(&self.open, move |open| {
       if !*open {
@@ -189,7 +207,11 @@ impl TagManager {
       .child(
         Text::new(&ctx.t_args(
           "tasks.tags.deleteImpact",
-          [("tag", name), ("count", count.to_string().as_str())],
+          [
+            ("tag", name),
+            ("count", count.to_string().as_str()),
+            ("project", ctx.props::<OpenProject>().project.name().as_str()),
+          ],
         ))
         .variant(ExtraTypography::Explanation.role()),
       )

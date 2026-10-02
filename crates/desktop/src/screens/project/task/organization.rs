@@ -94,8 +94,18 @@ impl Component for OrganizationHeader {
             PickerAppearance::Header,
           )))
           .with_children(props.detail.run.as_ref().map(|_| {
-            Text::new(&ctx.t(super::super::task_rows::status_copy(props.detail.phase()).1))
-              .variant(TypographyStyle::Caption)
+            Text::new(
+              &ctx.t_args(
+                "tasks.workflow.runSuffix",
+                [(
+                  "run",
+                  ctx
+                    .t(super::super::task_rows::status_copy(props.detail.phase()).1)
+                    .as_ref(),
+                )],
+              ),
+            )
+            .variant(TypographyStyle::Caption)
           }))
           .child(
             Column::new()
@@ -112,17 +122,15 @@ impl Component for OrganizationHeader {
             "task-header-tags",
             TagPickerProps {
               root: props.root.clone(),
+              appearance: PickerAppearance::Header,
               selected: self.value.clone(),
               enabled: !state.is_pending(),
             },
-          )),
+          ))
+          .with_children(current.blocked_reason().is_some().then(|| {
+            crate::ui::status_label::status_label(crate::ui::icon::Icon::CircleMinus, &ctx.t("tasks.blocked.label"))
+          })),
       );
-    if current.blocked_reason().is_some() {
-      column = column.child(crate::ui::status_label::status_label(
-        crate::ui::icon::Icon::CircleMinus,
-        &ctx.t("tasks.blocked.label"),
-      ));
-    }
     if state.is_pending() {
       column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
     }

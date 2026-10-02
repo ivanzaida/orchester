@@ -106,9 +106,16 @@ impl Component for TagManager {
           .render(ctx),
       );
     } else if let Some(Catalog(tags)) = state.data {
-      body = body
-        .child(self.list(ctx, &tags, pending))
-        .child(self.dialog(ctx, &tags, &action));
+      body = if matches!(
+        self.editing.get(),
+        Some(EditingTag::Create | EditingTag::Rename(_) | EditingTag::Merge(_))
+      ) {
+        body.child(self.dialog(ctx, &tags, &action))
+      } else {
+        body
+          .child(self.list(ctx, &tags, pending))
+          .child(self.dialog(ctx, &tags, &action))
+      };
     } else {
       body = body.child(Text::new(&ctx.t("tasks.tags.loading")).variant(TypographyStyle::Caption));
     }
@@ -178,7 +185,8 @@ impl TagManager {
   }
 
   fn list(&self, ctx: &mut Ctx, tags: &[(Tag, usize)], pending: bool) -> Element {
-    let mut column = Column::new().child(self.list_actions(ctx, pending));
+    let actions = self.list_actions(ctx, pending);
+    let mut column = Column::new().padding_top(SpacingSize::Lg);
     if tags.is_empty() {
       column = column.child(Text::new(&ctx.t("tasks.tags.empty")).variant(TypographyStyle::Caption));
     }
@@ -243,7 +251,7 @@ impl TagManager {
           ),
       );
     }
-    ScrollVertical::new(column)
+    ScrollVertical::new(Column::new().child(actions).child(column))
       .max_height(Dimension::Px(MANAGER_HEIGHT))
       .into()
   }

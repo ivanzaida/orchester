@@ -27,7 +27,7 @@ pub const CONTROL_HEIGHT: f32 = 40.0;
 const HEADER_HEIGHT: f32 = 36.0;
 // gNExS/Sd5qt: both menus are 280 logical pixels wide.
 pub const ORGANIZATION_MENU_WIDTH: f32 = 280.0;
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PickerAppearance {
   Field,
   Header,
@@ -170,7 +170,10 @@ fn select_trigger(glyph: Icon, label: &str, appearance: PickerAppearance) -> Ele
       PickerAppearance::Header => TypographyStyle::Caption,
     }))
     .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::ChevronDown, IconSize::Small, PaletteColor::TextSecondary))
+    .with_children(
+      matches!(appearance, PickerAppearance::Field)
+        .then(|| icon(Icon::ChevronDown, IconSize::Small, PaletteColor::TextSecondary)),
+    )
     .into()
 }
 

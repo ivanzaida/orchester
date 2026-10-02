@@ -224,6 +224,7 @@ async fn organization_attach_keeps_blocked_answer_waiting_and_resumes_other_runs
   let linked = link_blocker(&mut db, project.task);
   let blocked_messages = queue_restart(&mut db, &waiting);
   queue_restart(&mut db, &other_waiting);
+  let original_run = db.run(blocked_id).expect("read").expect("run");
   let original_events = db.events(blocked_id).expect("events");
   let original_history = db.task_organization_history(project.task).expect("history");
   let path = root.join(".orchester/worktrees").join(blocked_id.to_string());
@@ -236,7 +237,7 @@ async fn organization_attach_keeps_blocked_answer_waiting_and_resumes_other_runs
   let done = wait_for(root, &mut next_events, other_id, |run| run.status().is_terminal()).await;
   wait_for_idle(&next).await;
   assert_eq!(done.status(), &orchester_core::run::RunStatus::Succeeded);
-  assert_eq!(db.run(blocked_id).expect("read").expect("run"), waiting);
+  assert_eq!(db.run(blocked_id).expect("read").expect("run"), original_run);
   assert_eq!(db.messages(project.task).expect("messages"), blocked_messages);
   assert_eq!(db.events(blocked_id).expect("events"), original_events);
   assert_eq!(

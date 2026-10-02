@@ -115,3 +115,63 @@ fn organization_search_and_any_all_tag_filter_preserve_selected_values() {
   desktop.wait_for("task-row-KON-2");
   assert!(crate::github::shows(&mut desktop, "filter-tags", "Tags · 2"));
 }
+
+#[test]
+fn organization_overview_rows_span_the_page_and_keep_run_tabs_reachable() {
+  let mut desktop = Desktop::with_seeded_project(seed);
+  desktop.wait_for("task-row-KON-1");
+  let row = desktop.bounds("task-row-KON-1");
+  let list = desktop.bounds("overview-tasks");
+  assert!(row.width > 1000.0, "overview rows span the page");
+  assert!(row.height > 0.0 && list.height >= row.height);
+  assert!(desktop.tree.get_element_by_id("overview-tab-failed").is_none());
+  assert!(desktop.tree.get_element_by_id("overview-tokens").is_none());
+  // Expanding the extra execution controls preserves the existing routes and attention actions.
+  desktop.click("overview-insights");
+  desktop.wait_for("overview-tab-failed");
+  desktop.click("overview-tab-failed");
+  desktop.wait_for("overview-tab-all");
+  desktop.click("overview-tab-all");
+  desktop.wait_for("task-row-KON-1");
+  assert!(desktop.tree.get_element_by_id("overview-attention").is_some());
+  assert!(desktop.tree.get_element_by_id("overview-tokens").is_some());
+}
+
+#[test]
+fn organization_blocked_flag_preserves_the_run_label_in_overview_and_tasks() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    use orchester_core::store::RunStore;
+
+    use crate::unreadable_run::{at, delivery, started};
+
+    seed(repo);
+    let mut db = ProjectDb::open(repo).expect("open");
+    let snapshot = delivery(&mut db);
+    let task = db.tasks().expect("tasks").remove(0);
+    let mut run = started(&mut db, (task.id(), &snapshot), 1, 11);
+    let events = run.request_pause(at(12)).expect("request pause");
+    db.append_events(&run, &events).expect("request persisted");
+    let events = run.pause(at(13)).expect("pause");
+    db.append_events(&run, &events).expect("pause persisted");
+    let task = db.task(task.id()).expect("read").expect("task");
+    let organization = TaskOrganization::new(
+      task.organization().status(),
+      task.organization().priority(),
+      Some("Waiting for a decision".into()),
+      vec![],
+      task.organization().tags().to_vec(),
+    )
+    .expect("flag");
+    db.set_task_organization(task.id(), &organization, ChangeActor::Person, at(14))
+      .expect("organization");
+  });
+  desktop.wait_for("task-row-KON-1");
+  for label in ["In progress", "Paused", "Blocked"] {
+    assert!(crate::github::shows(&mut desktop, "task-row-KON-1", label));
+  }
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  for label in ["In progress", "Paused", "Blocked"] {
+    assert!(crate::github::shows(&mut desktop, "task-row-KON-1", label));
+  }
+}

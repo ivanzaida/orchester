@@ -284,6 +284,30 @@ fn filter_summary(ctx: &Ctx, props: &FilterProps) -> Element {
     .filter(|tag| filter.tags.contains(&tag.id()))
     .map(|tag| tag.name().to_string())
     .collect::<Vec<_>>();
+  let tags = if tags.is_empty() {
+    tags
+  } else {
+    vec![
+      ctx
+        .t_args(
+          "tasks.filters.tagSummary",
+          [
+            ("names", tags.join(&ctx.t("common.listSeparator")).as_str()),
+            (
+              "mode",
+              ctx
+                .t(if filter.all_tags {
+                  "tasks.filters.all"
+                } else {
+                  "tasks.filters.any"
+                })
+                .as_ref(),
+            ),
+          ],
+        )
+        .to_string(),
+    ]
+  };
   Row::new()
     .spacing(SpacingSize::Sm)
     .with_children(

@@ -105,6 +105,7 @@ impl Component for OrganizationFields {
         "form-tags",
         TagPickerProps {
           root: props.root.clone(),
+          appearance: PickerAppearance::Field,
           selected: draft.value.clone(),
           enabled: true,
         },

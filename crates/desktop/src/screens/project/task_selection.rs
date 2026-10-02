@@ -237,18 +237,22 @@ impl SelectionBar {
           "bulk-tag-picker",
           TagPickerProps {
             root: props.root.clone(),
+            appearance: crate::tasks::organization::PickerAppearance::Field,
             selected: self.tags.clone(),
             enabled: !pending,
           },
         ));
         let (action, tags) = (action.clone(), self.tags.clone());
         column = column.child(
-          ActionButton::new(ctx.t_args("tasks.selection.addToCount",[("count",selected.len().to_string().as_str())]))
-            .icon(crate::ui::icon::Icon::Plus)
-            .id("bulk-tags-apply")
-            .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), false)))
-            .enabled(!pending && !self.tags.get().0.tags().is_empty())
-            .render(ctx),
+          ActionButton::new(ctx.t_args(
+            "tasks.selection.addToCount",
+            [("count", selected.len().to_string().as_str())],
+          ))
+          .icon(crate::ui::icon::Icon::Plus)
+          .id("bulk-tags-apply")
+          .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), false)))
+          .enabled(!pending && !self.tags.get().0.tags().is_empty())
+          .render(ctx),
         );
       }
       Menu::RemoveTags => column = self.remove_menu(ctx, props, action, column),

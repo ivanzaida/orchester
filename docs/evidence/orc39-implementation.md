@@ -64,3 +64,38 @@ Run fresh Check and independent Review. The independent Verify step must launch 
 Verify all 24 frame states listed in `docs/design/orchester-workspace.md`: Tasks/Overview rows and tabs (`qVMJh`, `DtpHJ`); header status/priority (`gNExS`, `Sd5qt`); tag picker, inline creation, validation and overflow (`IOWwP`, `yrT73`); New/Edit organization fields, reason-only flag, unfinished/finished links and readiness (`ixENv`, `ZLhiM`, `tUwII`, `Ncjvt`); single and bulk active-run cancellation, pending/failure/Escape and retained work (`N1vwaM`, `Fhzcc`, `hFH4D`); bulk status/priority/tags and mixed outcomes (`Ayo8q`, `HI91q`); combined filters, sorting, no matches and load errors (`l7kBSq`, `rVJoA`); project tag list and create/rename/merge/delete confirmations and errors (`y3ohgK`, `YBfjV`, `ZWSYj`, `nOOi1`, `VvhOQ`); history and independent system labels (`D1DC6T`, `k3YiJ`). Explicitly check keyboard focus, chips wrapping/overflow, menu positioning, confirmation dismissal, resolved-readiness refresh, and preservation of unrelated controls. Report inaccessible states rather than treating unit tests as design verification.
 
 Only move the complete product task to Done after independent verification passes.
+
+
+## Corrections after independent Verify of a68b9b9 - 2026-10-02
+
+This section covers the current saved work based on `d535ff6dc6c159ab766d56f439c986a4605f8f31` plus the preserved working-tree corrections. The source-input SHA256 is `6fbd60368fda2c40e2ba4c159dbe566753258a4f5909216751db90de7de7d663`. The 859-file input list and hashing algorithm are in `.tmp/orc39-verify-corrections-20261002/source-inputs.json`. Orchester checkpointed the first corrective changes; this implementing agent made no commit or merge. Earlier sections and their checks describe earlier candidates.
+
+The negative Verify report at `.tmp/verify/report.md`, its screenshot pairs, old checkpoints and inconclusive foreground timeline remain unchanged. The approved host PNGs and handoff were used as design input; no canonical design or stable installation was changed.
+
+Implemented corrections:
+
+- Task titles retain a real line inside their table column instead of taking vertical flex space. Headless coverage resizes the existing route repeatedly and checks visible title bounds without navigation or route reconstruction. The independent verifier must still reproduce the original GPU-rendered resize scenario.
+- Organization status/priority menus have the approved 280px width and selected-option surface. Shared tag, filter and bulk options occupy the full menu width with trailing checks and allow long names to wrap. Header tag controls, compact chips, Tasks heading rhythm, toolbar alignment, labels and secondary New task were corrected.
+- Tag pickers have persistent search/create labeling, conditional inline creation and a project management entry. Filters expose selected counts and summaries, searchable tags, all/any matching, descriptive sorting and an explanatory no-results notice. Bulk removal stages its selected tags before a separate apply action; membership names both the assigned and selected-task counts.
+- Organization forms retain every unrelated criteria/context/execution control. Blocked uses the checkbox/helper, a multiline reason and linked-task title/status/navigation. Dependency/readiness explanations wrap. The task page shows a prominent flag and a full reason notice. Reason-only Blocked remains informational; execution readiness rules did not change.
+- Overview uses two compact summary panels and full-width task rows, with priority beside the second line, combined workflow/run labels and explicit blocked notices. Blocked preserves the run label. Existing run tabs, attention actions, runner details, tokens and budget remain accessible through Run activity and attention; no capability was removed.
+- Project tags have neutral chips, count columns, 64px separated rows and a shared action row. Create/rename and merge use the approved focused page panels; delete uses a named-impact modal. Editors identify source/target tags, preview and task impact, provide action-specific confirmation copy, and preserve invalid/no-target/pending disabled behavior. History has page padding, event icons, separate change/attribution lines and complete localized dates.
+- The exact Attach regression now compares against the durable snapshot taken after the runner settled and queued replies were persisted. It still asserts preservation of blocked run state/events/history/messages and uncommitted worktree content while unrelated work resumes. Production Attach/restart/readiness behavior is unchanged by this visual correction.
+
+Fresh checks passed with `CARGO_TARGET_DIR=.tmp/orc39-check/target`:
+
+- `powershell -File tools/check.ps1`: `check: OK`; final log `.tmp/orc39-verify-corrections-20261002/check.log`.
+- `cargo test -p orchester-core --test task_organization organization_`: 5 passed.
+- `cargo test -p orchester-store --test task_organization organization_`: 7 passed.
+- `cargo test -p orchester-runner --features test-agent --test task_organization organization_`: 3 passed, including blocked offline queued-reply attachment isolation.
+- `cargo test -p orchester-desktop --test form_keyboard organization_`: 13 passed; final log `.tmp/orc39-verify-corrections-20261002/organization-tests.log`.
+- `cargo test -p orchester-desktop --test form_keyboard new_task_`: 10 passed; `edit_task_`: 4 passed.
+- `cargo test -p orchester-desktop --test i18n locale`: 4 passed; `every_key`: 1 passed.
+- `cargo test -p orchester-desktop --test theme roles_`: 14 passed. Theme configuration and these test inputs are unchanged by the subsequent row-layout edit; this check covers roles, not layout.
+- `git diff --check`: passed.
+
+No full workspace tests, macOS cross-check/runtime, private desktop launch or implementer app/Pencil verification were run in this continuation. Incremental-cache access warnings appeared in test builds; tests and the warnings-denied quality gate passed. No process belonging to the stable installation was touched.
+
+Next agents must run fresh independent Check, Review and app/Pencil Verify against this saved candidate. Compare all 24 approved frames, including the previously unreachable active-run, cancellation, pending/failure, merge/deletion, restart/history and resolved-readiness states. Specifically inspect resize/title rendering without route reconstruction, menu dimensions/options, tag search/filters and staged bulk apply, blocked reasons/links, Overview composition and retained activity controls, tag editors/named impacts and history. Retained New/Edit criteria/context/execution controls remain the approved exception.
+
+Before every private Verify launch, build and pin the current executable pair, announce that current pin READY, then obtain a NEW Root host watcher. Reuse neither the old captures nor the inconclusive timeline as proof. Root does not perform task QA. Move the product task to Done only after independent Verify passes.

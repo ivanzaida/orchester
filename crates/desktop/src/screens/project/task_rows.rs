@@ -192,6 +192,8 @@ impl Component for QueueRow {
         READINESS_WIDTH,
         Text::new(&message_text(ctx, &row.detail))
           .variant(ExtraTypography::CellLabel.role())
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
           .width(Dimension::Pct(100.0)),
       ))
       .child(open_chevron());
@@ -210,13 +212,16 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
     .justify(Justify::Center)
     .child(icon(row_glyph(row.phase), IconSize::Option, PaletteColor::TextPrimary));
   let metadata = Row::new()
+    .wrap()
     .spacing(SpacingSize::Xs)
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
     .child(Text::new(&ctx.t("common.separator")).variant(TypographyStyle::Caption))
     .child(
       Text::new(&message_text(ctx, &row.detail))
         .variant(TypographyStyle::Caption)
-        .flex(1.0),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .max_width(Dimension::Pct(65.0)),
     )
     .child(priority_label(ctx, row.organization.priority()));
   let content = Row::new()
@@ -253,17 +258,18 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
 }
 
 fn workflow_run(ctx: &Ctx, row: &TaskRow) -> Element {
-  let run_key = match row.phase {
-    Some(TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Merged | TaskPhase::Succeeded) => {
-      "tasks.workflow.noActiveRun"
-    }
-    Some(phase) => status_copy(phase).1,
-    None => "tasks.status.unreadable",
-  };
+  let run_key = system_label_key(row.phase).unwrap_or("tasks.workflow.noActiveRun");
   Column::new()
     .spacing(SpacingSize::Xs)
     .child(workflow_label(ctx, row.organization.status()))
     .child(Text::new(&ctx.t(run_key)).variant(TypographyStyle::Caption))
+    .with_children(is_blocked(row).then(|| {
+      Row::new()
+        .spacing(SpacingSize::Xs)
+        .align_items(Alignment::Center)
+        .child(icon(Icon::CircleMinus, IconSize::Small, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption))
+    }))
     .into()
 }
 
@@ -295,30 +301,31 @@ fn selection_checkbox(ctx: &mut Ctx, id: orchester_core::id::TaskId) -> Element 
 
 fn overview_workflow(ctx: &Ctx, row: &TaskRow) -> Element {
   let (icon, key) = crate::tasks::organization::workflow_copy(row.organization.status());
-  let status = ctx.t(key);
-  let run = if row.organization.blocked_reason().is_some()
-    || matches!(row.detail.key, "tasks.blocked.unfinished" | "tasks.readiness.blocked")
+  let mut label = ctx.t(key);
+  for suffix in [
+    system_label_key(row.phase),
+    is_blocked(row).then_some("tasks.blocked.label"),
+  ]
+  .into_iter()
+  .flatten()
   {
-    Some(ctx.t("tasks.blocked.label"))
-  } else {
-    row
-      .phase
-      .filter(|phase| {
-        !matches!(
-          phase,
-          TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Succeeded | TaskPhase::Merged
-        )
-      })
-      .map(|phase| ctx.t(status_copy(phase).1))
-  };
-  let label = run.map_or_else(
-    || status.clone(),
-    |run| {
-      ctx.t_args(
-        "tasks.workflow.combined",
-        [("status", status.as_ref()), ("run", run.as_ref())],
-      )
-    },
-  );
+    label = ctx.t_args(
+      "tasks.workflow.combined",
+      [("status", label.as_ref()), ("run", ctx.t(suffix).as_ref())],
+    );
+  }
   status_label(icon, &label)
+}
+
+fn system_label_key(phase: Option<TaskPhase>) -> Option<&'static str> {
+  match phase {
+    Some(TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Merged | TaskPhase::Succeeded) => None,
+    Some(phase) => Some(status_copy(phase).1),
+    None => Some("tasks.status.unreadable"),
+  }
+}
+
+fn is_blocked(row: &TaskRow) -> bool {
+  row.organization.blocked_reason().is_some()
+    || matches!(row.detail.key, "tasks.blocked.unfinished" | "tasks.readiness.blocked")
 }

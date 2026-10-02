@@ -17,7 +17,7 @@ use super::ProjectNav;
 use crate::{
   background,
   messages::{self, Message},
-  tasks::organization::{OrganizationValue, tag_chips},
+  tasks::organization::{OrganizationValue, PickerAppearance, tag_chips},
   ui::{
     button::ActionButton,
     field::{field_error, text_input},
@@ -39,10 +39,11 @@ pub struct TagPickerProps {
   pub root: PathBuf,
   pub selected: Signal<OrganizationValue>,
   pub enabled: bool,
+  pub appearance: PickerAppearance,
 }
 impl PartialEq for TagPickerProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root && self.enabled == other.enabled
+    self.root == other.root && self.enabled == other.enabled && self.appearance == other.appearance
   }
 }
 impl lurq::app::component::DevtoolsInspectable for TagPickerProps {}
@@ -89,14 +90,15 @@ impl Component for TagPicker {
     let open = self.open.clone();
     let mut column = Column::new().spacing(SpacingSize::Sm).child(
       Row::new()
+        .id("task-tag-chips")
         .wrap()
         .spacing(SpacingSize::Sm)
         .child(tag_chips(&names))
         .child(
-          ActionButton::new(ctx.t(if names.is_empty() {
-            "tasks.tags.add"
-          } else {
-            "tasks.tags.edit"
+          ActionButton::new(ctx.t(match (names.is_empty(), props.appearance) {
+            (true, _) => "tasks.tags.add",
+            (false, PickerAppearance::Header) => "tasks.tags.label",
+            (false, PickerAppearance::Field) => "tasks.tags.edit",
           }))
           .icon(Icon::Tag)
           .in_form()

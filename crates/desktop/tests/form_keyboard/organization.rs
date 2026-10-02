@@ -60,6 +60,9 @@ fn organization_new_form_saves_status_priority_informational_reason_and_inline_t
       .len()
       == 1
   });
+  desktop.wait_until("inline tag selected in the form", |desktop| {
+    crate::github::shows(desktop, "task-tag-chips", "Desktop")
+  });
   desktop.key("Escape", "Escape");
   desktop.tab_to("save-draft", 40);
   desktop.enter();

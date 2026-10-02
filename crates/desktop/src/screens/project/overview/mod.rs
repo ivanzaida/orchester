@@ -103,56 +103,59 @@ impl Component for OverviewScreen {
       .spacing(spacing)
       .with_children(notice)
       .child(heading(ctx, &props.open, &self.nav));
-    body = match &props.tasks {
-      TasksState::Loading => body,
-      TasksState::Failed(error) => body.child(RecoveryPanel::new(
-        Icon::AlertCircle,
-        &ctx.t("tasks.loadFailed"),
-        &message_text(ctx, error),
-      )),
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
-      TasksState::Ready(tasks) => {
-        let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
-        let online = props.runner == RunnerState::Online;
-        body
-          .child(pulse::pulse(
-            ctx,
-            &figures,
-            (online, props.agents_working, tasks.lost_to_runner),
-            props.usage,
-            tasks
-              .tasks
-              .iter()
-              .filter(|task| {
-                task.organization().status() == orchester_core::task::organization::WorkflowStatus::InReview
-              })
-              .count(),
-          ))
-          .child(task_list::task_list(
-            ctx,
-            tasks,
-            props.tab,
-            &self.nav,
-            self.insights.get() || props.tab != OverviewTab::All,
-          ))
-          .with_children(blocked_notices(ctx, tasks))
-          .child(
-            ActionButton::new(ctx.t("overview.insights"))
-              .icon(Icon::Activity)
-              .on_click({
-                let insights = self.insights.clone();
-                move || insights.update(|show| *show = !*show)
-              })
-              .render(ctx),
-          )
-          .with_children(
-            self
-              .insights
-              .get()
-              .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
-          )
-      }
-    };
+    body =
+      match &props.tasks {
+        TasksState::Loading => body,
+        TasksState::Failed(error) => body.child(RecoveryPanel::new(
+          Icon::AlertCircle,
+          &ctx.t("tasks.loadFailed"),
+          &message_text(ctx, error),
+        )),
+        TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
+        TasksState::Ready(tasks) => {
+          let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
+          let online = props.runner == RunnerState::Online;
+          body
+            .child(pulse::pulse(
+              ctx,
+              &figures,
+              tasks
+                .tasks
+                .iter()
+                .filter(|task| {
+                  task.organization().status() == orchester_core::task::organization::WorkflowStatus::InReview
+                })
+                .count(),
+            ))
+            .child(task_list::task_list(
+              ctx,
+              tasks,
+              props.tab,
+              &self.nav,
+              self.insights.get() || props.tab != OverviewTab::All,
+            ))
+            .with_children(blocked_notices(ctx, tasks))
+            .child(
+              ActionButton::new(ctx.t("overview.insights"))
+                .id("overview-insights")
+                .icon(Icon::Activity)
+                .on_click({
+                  let insights = self.insights.clone();
+                  move || insights.update(|show| *show = !*show)
+                })
+                .render(ctx),
+            )
+            .with_children(self.insights.get().then(|| {
+              pulse::execution_context(ctx, (online, props.agents_working, tasks.lost_to_runner), props.usage)
+            }))
+            .with_children(
+              self
+                .insights
+                .get()
+                .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
+            )
+        }
+      };
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))

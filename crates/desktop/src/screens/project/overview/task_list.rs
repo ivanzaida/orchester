@@ -87,8 +87,7 @@ pub(super) fn task_list(
   };
   Column::new()
     .id("overview-tasks")
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
+    .width(Dimension::Pct(100.0))
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
