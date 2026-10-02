@@ -351,7 +351,14 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
   let ended = invocations.iter().filter_map(|invocation| invocation.ended_at).max();
   let reported = run.reported(execution).map(|text| {
     let summary = StepResult::parse(text).map_or_else(|| text.to_owned(), |result| result.summary);
-    Arc::<str>::from(summary.as_str())
+    // A tool step reports its command's end, then the output's last lines, which its command's row
+    // already shows: the card keeps the first line (`hep0l`).
+    let summary = if step.tool_step {
+      summary.lines().next().unwrap_or_default()
+    } else {
+      summary.as_str()
+    };
+    Arc::<str>::from(summary)
   });
   Some(Item {
     key: format!("result-{execution}").into(),

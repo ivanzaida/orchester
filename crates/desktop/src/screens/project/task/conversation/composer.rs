@@ -416,10 +416,11 @@ impl ComposerDock {
       .child(
         line()
           .child(
+            // As wide as it is on one line, giving way when the line is narrower; Attach follows it.
             Row::new()
-              .flex(1.0)
+              .width(Dimension::Px(RECIPIENT_WIDTH))
+              .flex_shrink(1.0)
               .min_width(Dimension::Px(0.0))
-              .max_width(Dimension::Px(RECIPIENT_WIDTH))
               .child(self.recipient(ctx, conversation, (mode, recipient), Dimension::Pct(100.0))),
           )
           .child(Row::new().flex_shrink(0.0).child(attach.render(ctx))),

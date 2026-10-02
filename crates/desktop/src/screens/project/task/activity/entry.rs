@@ -194,6 +194,8 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
 fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied>) -> Option<Column> {
   let command = match &entry.kind {
     EntryKind::Command(command) => Some(&*command.command),
+    // A tool step's one-line command is whole in the row's title: its output follows (`hep0l`).
+    EntryKind::ToolCommand(command) if matches!(command_preview(&command.command), Cow::Borrowed(_)) => None,
     EntryKind::ToolCommand(command) => Some(&*command.command),
     _ => None,
   };

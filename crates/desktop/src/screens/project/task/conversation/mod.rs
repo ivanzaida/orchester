@@ -157,6 +157,13 @@ struct Timeline {
   reload: Signal<u64>,
 }
 
+/// The card the timeline reveals, and whether the person has scrolled since the tab opened.
+#[derive(Default)]
+struct Reveal {
+  key: Option<String>,
+  scrolled: bool,
+}
+
 /// The run's transcript and requests, as read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Read(Loaded);
@@ -173,6 +180,8 @@ pub(super) struct ConversationTab {
   left_at: Signal<usize>,
   /// Rows of the last render, to notice new ones; `None` before the first.
   shown: Arc<Mutex<Option<usize>>>,
+  /// The card that waits for the person, which the timeline shows until the person scrolls.
+  reveal: Arc<Mutex<Reveal>>,
   toggles: Toggles,
   scroll: ScrollState,
   retry: Signal<u64>,
@@ -199,6 +208,7 @@ impl Component for ConversationTab {
       following: ctx.signal(true),
       left_at: ctx.signal(0),
       shown: Arc::new(Mutex::new(None)),
+      reveal: Arc::new(Mutex::new(Reveal::default())),
       toggles: Toggles(ctx.signal(OpenRows::default())),
       scroll: ScrollState::new(),
       retry: ctx.signal(0),
@@ -393,20 +403,25 @@ impl ConversationTab {
     })
   }
 
-  /// Keeps the newest row in view while following. The first time, the timeline starts at the end,
-  /// or at a card that waits for the person, which it returns.
+  /// Keeps the newest row in view while following. The first time, the timeline starts at the end;
+  /// until the person scrolls, the first card that waits for them is the list's reveal, from the
+  /// render it appears in (the run's state may read before its question) until it no longer waits.
+  /// The key stays the same on every render: a reveal that changes to `None` is dropped before the
+  /// list has measured its way to the card.
   fn follow(&self, rows: usize, items: &[Item]) -> Option<String> {
     let mut shown = self.shown.lock();
-    let first = shown.is_none();
-    let reveal = first
-      .then(|| items.iter().find(|item| timeline::waits_for_you(item)))
-      .flatten()
-      .map(|item| item.key.to_string());
-    if reveal.is_none() && self.following.get_untracked() && rows > shown.unwrap_or(0) {
+    let mut reveal = self.reveal.lock();
+    if !reveal.scrolled {
+      reveal.key = items
+        .iter()
+        .find(|item| timeline::waits_for_you(item))
+        .map(|item| item.key.to_string());
+    }
+    if (reveal.key.is_none() || shown.is_none()) && self.following.get_untracked() && rows > shown.unwrap_or(0) {
       self.scroll.scroll_to_bottom_pending();
     }
     *shown = Some(rows);
-    reveal
+    reveal.key.clone()
   }
 
   fn list(&self, ctx: &mut Ctx, shown: &Shown, reveal: Option<String>) -> Element {
@@ -420,6 +435,7 @@ impl ConversationTab {
     );
     let count = rows.len();
     let (scroll, following, left_at) = (self.scroll.clone(), self.following.clone(), self.left_at.clone());
+    let revealed = self.reveal.clone();
     VirtualizedList::new_shared(ctx, rows)
       .list_key("conversation-timeline")
       .width(Dimension::Pct(100.0))
@@ -428,6 +444,11 @@ impl ConversationTab {
       .scrollbar(gutter_scrollbar())
       .reveal_key(reveal)
       .on_scroll(move |event: ScrollEvent| {
+        // The person scrolls: the card the tab opened at no longer holds the list.
+        *revealed.lock() = Reveal {
+          key: None,
+          scrolled: true,
+        };
         // The handler runs before the wheel moves the list, which moves by the opposite of the delta.
         let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);
         let at_end = scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;

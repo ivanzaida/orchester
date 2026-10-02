@@ -404,6 +404,9 @@ fn fits(desktop: &mut Desktop, id: &str, right: f32) -> bool {
 #[test]
 fn composer_keeps_its_buttons_and_the_search_usable_at_960() {
   let mut desktop = working_conversation("Wait for release.");
+  desktop.wait_until("the timeline's toolbar", |desktop| {
+    has(desktop, "conversation-live-state")
+  });
   assert!(shows(&mut desktop, "conversation-live-state", "Following live"));
   desktop.tree.resize(960, 960);
   desktop.pass();
@@ -432,4 +435,50 @@ fn composer_keeps_its_buttons_and_the_search_usable_at_960() {
   }
   release(&desktop);
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+#[test]
+fn composer_tab_opens_at_the_question_that_waits() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "research", "Research", "Write own file.", &[]),
+        agent_step(builder, "plan", "Plan", "Write own file.", &["research"]),
+        agent_step(builder, "design", "Design", "Write own file.", &["plan"]),
+        agent_step(builder, "prepare", "Prepare", "Write own file.", &["design"]),
+        agent_step(builder, "implement", "Implement", "Ask first.", &["prepare"]),
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  desktop.wait_until("the question", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.waits_for_a_person())
+  });
+  // A short window: the earlier steps and the step's own items fill the timeline before the card.
+  desktop.tree.resize(1440, 700);
+  desktop.pass();
+  for _ in 0..2 {
+    desktop.click("task-tab-conversation");
+    desktop.wait_until("the question's card", |desktop| has(desktop, "conversation-reply"));
+    for _ in 0..4 {
+      desktop.pass();
+    }
+    let (toolbar, dock) = (
+      desktop.bounds("conversation-toolbar"),
+      desktop.bounds("conversation-dock"),
+    );
+    let card = desktop
+      .tree
+      .find_element_mut(|element| element.id().is_some_and(|id| id.starts_with("conversation-question-")))
+      .map(|element| element.bounds())
+      .expect("the question's card");
+    assert!(
+      card.y >= toolbar.y + toolbar.height - 0.5 && card.y < dock.y,
+      "{card:?} starts between {toolbar:?} and {dock:?}"
+    );
+    // Opening the tab again lands on it again.
+    desktop.click("task-tab-summary");
+    desktop.wait_until("the summary", |desktop| !has(desktop, "conversation-reply"));
+  }
 }

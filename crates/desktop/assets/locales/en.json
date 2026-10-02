@@ -1609,7 +1609,6 @@
         "superseded": "Earlier version",
         "denied": "Denied",
         "interrupted": "Interrupted",
-        "waitingDecision": "Waiting for your decision",
         "wholePlan": "Show the whole plan · {{count}} lines"
       },
       "result": {

@@ -317,7 +317,7 @@ impl Component for ApprovalCardView {
       ],
     );
     let state = match props.card.decided {
-      None => (Icon::ShieldAlert, ctx.t("runs.conversation.card.waitingDecision")),
+      None => (Icon::Hand, ctx.t("runs.conversation.state.waiting")),
       Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
       Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),
       Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.interrupted")),
