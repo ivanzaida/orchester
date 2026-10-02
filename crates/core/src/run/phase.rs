@@ -70,6 +70,16 @@ impl TaskPhase {
     matches!(self, Self::Running | Self::Waiting)
   }
 
+  /// Whether the latest run has not ended, as the store counts an active run, which Canceled
+  /// stops: pending, running, waiting, stuck, paused, stopped at a limit or interrupted. The phase
+  /// of a task with a run; a queued task without one is not active.
+  pub const fn run_not_ended(self) -> bool {
+    !matches!(
+      self,
+      Self::Draft | Self::Succeeded | Self::Merged | Self::Failed | Self::Cancelled
+    )
+  }
+
   /// The phase while no runner is connected to the project. A run recorded as running has lost
   /// its agent: it is interrupted and keeps its last checkpoint until a runner is back and
   /// records what happened (`docs/design/orchester-workspace.md`, "Runner connection"). A step

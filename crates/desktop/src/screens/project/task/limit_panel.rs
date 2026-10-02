@@ -67,13 +67,15 @@ pub struct RaiseLimitProps {
   /// The step and agent stopped mid-step, if the run stopped in a step.
   stopped: Option<(Arc<str>, Arc<str>)>,
   checkpoint: Option<String>,
+  /// Unfinished blocking tasks keep the run from going on: Continue is unavailable.
+  blocked: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RaiseLimitProps {}
 
 impl RaiseLimitProps {
   /// `None` for a stop at a step's budget when the step has none, which no runner records.
-  pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits) -> Option<Self> {
+  pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits, blocked: bool) -> Option<Self> {
     if limit == RunLimit::GroupBudget {
       return None;
     }
@@ -100,6 +102,7 @@ impl RaiseLimitProps {
         .run
         .last_checkpoint()
         .map(|checkpoint| crate::display::short_revision(checkpoint.revision().as_str()).to_owned()),
+      blocked,
     })
   }
 
@@ -188,7 +191,7 @@ impl Component for RaiseLimitPanel {
     };
     let run = props.run;
     let submit: Submit = raise
-      .filter(|_| !pending)
+      .filter(|_| !pending && !props.blocked)
       .map(|raise| Arc::new(move || action.run((run, raise))) as Arc<dyn Fn() + Send + Sync>);
     let failure = state.error.filter(|_| !pending).map(|error| message_text(ctx, &error));
     let title = if props.raises_step_budget() {

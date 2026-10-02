@@ -72,15 +72,22 @@ impl ProjectDb {
     self.replace_project_tag(source, Some(target), at)
   }
 
-  pub fn tag_task_count(&self, id: TagId) -> Result<usize, StoreError> {
-    ensure_tag(&self.connection, id)?;
-    let mut count = 0;
-    for task in all_tasks(&self.connection)? {
-      if organization::load(&self.connection, task)?.tags().contains(&id) {
-        count += 1;
-      }
-    }
-    Ok(count)
+  /// How many tasks carry each tag, read in one query; a tag on no task is left out.
+  pub fn tag_task_counts(&self) -> Result<std::collections::HashMap<TagId, usize>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT tag.value, COUNT(DISTINCT organization.task_id)        FROM task_organization AS organization, json_each(organization.body, '$.body.tags') AS tag        GROUP BY tag.value",
+    )?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(id, count)| {
+        let id = crate::rows::parse("tag id", &id)?;
+        let count = usize::try_from(count).map_err(|_| crate::rows::corrupt("tag count", "negative count"))?;
+        Ok((id, count))
+      })
+      .collect()
   }
 
   fn replace_project_tag(&mut self, source: TagId, target: Option<TagId>, at: Timestamp) -> Result<(), StoreError> {

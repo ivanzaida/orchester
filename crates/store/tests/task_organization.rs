@@ -7,7 +7,7 @@ use orchester_core::{
   run::BranchName,
   store::{MergeStore, RunStore, TaskStore},
   task::organization::{
-    BlockingTask, ChangeActor, DependencyGate, OrganizationError, Priority, TaskFilter, TaskOrganization, TaskSort,
+    BlockingTask, ChangeActor, DependencyGate, OrganizationError, Priority, TaskFilter, TaskOrganization,
     WorkflowStatus,
   },
 };
@@ -144,12 +144,11 @@ fn organization_tags_uniqueness_merge_delete_and_bulk_filters_sorting() {
     all_tags: true,
     ..TaskFilter::default()
   };
-  assert_eq!(
-    db.organized_task_ids(&filter, TaskSort::Priority)
-      .expect("filter")
-      .len(),
-    2
-  );
+  let matching = ids
+    .iter()
+    .filter(|id| filter.includes(&db.task_organization(**id).expect("metadata")))
+    .count();
+  assert_eq!(matching, 2);
   assert_eq!(
     db.tasks()
       .expect("scheduler order")
@@ -176,7 +175,7 @@ fn organization_tags_uniqueness_merge_delete_and_bulk_filters_sorting() {
   assert!(deletion.to_tag_names.is_empty());
   let recreated = db.create_project_tag(name("UX")).expect("recreate");
   assert_ne!(recreated.id(), target.id());
-  assert_eq!(db.tag_task_count(recreated.id()).expect("count"), 0);
+  assert!(!db.tag_task_counts().expect("counts").contains_key(&recreated.id()));
   assert!(
     db.set_task_organization(
       ids[0],
@@ -402,4 +401,83 @@ fn organization_migration_keeps_tasks_and_runs_of_schema_36() {
   db.set_task_organization(task, &value, ChangeActor::Person, at(20))
     .expect("organize a migrated task");
   assert_eq!(db.task_organization(task).expect("organization"), value);
+}
+
+/// The store reads a blocking task as finished exactly when the domain rule
+/// (`DependencyGate::is_completed` of its task phase) does, for each gate and each state of the
+/// blocking task's latest run: none, running, ready for review, merged and cancelled.
+#[test]
+fn organization_unfinished_follows_the_dependency_gate_rule() {
+  use orchester_core::run::TaskPhase;
+  #[derive(Clone, Copy, Debug)]
+  enum Latest {
+    NoRun,
+    Running,
+    Succeeded,
+    Merged,
+    Cancelled,
+  }
+  for latest in [
+    Latest::NoRun,
+    Latest::Running,
+    Latest::Succeeded,
+    Latest::Merged,
+    Latest::Cancelled,
+  ] {
+    for gate in [DependencyGate::Review, DependencyGate::Merge] {
+      let (_repo, mut db, mut run, execution) = started_run();
+      let template = db.task(run.task()).expect("read").expect("task").details().clone();
+      let drafts = db
+        .create_tasks(IdempotencyKey::generate(), vec![template.clone(), template], at(30))
+        .expect("tasks");
+      let blocker = match latest {
+        Latest::NoRun => drafts[1].id(),
+        _ => run.task(),
+      };
+      if matches!(latest, Latest::Succeeded | Latest::Merged) {
+        let events = run.start_step(execution, at(31)).expect("start step");
+        db.append_events(&run, &events).expect("stored");
+        let events = run.complete_step(execution, at(32)).expect("complete step");
+        db.append_events(&run, &events).expect("stored");
+      }
+      if matches!(latest, Latest::Merged) {
+        db.save_run_merge(&RunMerge {
+          run: run.id(),
+          into: BranchName::new("main").expect("branch"),
+          revision: Revision::new(&"b".repeat(40)).expect("revision"),
+          kind: MergeKind::FastForward,
+          merged_at: at(33),
+        })
+        .expect("merge");
+      }
+      if matches!(latest, Latest::Cancelled) {
+        let events = run.cancel(at(31)).expect("cancel");
+        db.append_events(&run, &events).expect("stored");
+      }
+      let linked = TaskOrganization::new(
+        WorkflowStatus::Todo,
+        Priority::None,
+        Some("Waits.".into()),
+        vec![BlockingTask { task: blocker, gate }],
+        vec![],
+      )
+      .expect("linked");
+      db.set_task_organization(drafts[0].id(), &linked, ChangeActor::Person, at(34))
+        .expect("link");
+      let blocker_task = db.task(blocker).expect("read").expect("blocker");
+      let last = db
+        .runs_of_task(blocker)
+        .expect("runs")
+        .pop()
+        .map(|run| run.expect("readable"));
+      let merge = last.as_ref().and_then(|run| db.run_merge(run.id()).expect("merge"));
+      let phase = TaskPhase::of(&blocker_task, last.as_ref(), merge.as_ref());
+      let unfinished = db.unfinished_blocking_tasks(drafts[0].id()).expect("unfinished");
+      assert_eq!(
+        unfinished.is_empty(),
+        gate.is_completed(phase),
+        "{latest:?} under {gate:?} ({phase:?})"
+      );
+    }
+  }
 }

@@ -105,14 +105,16 @@ impl Component for TasksScreen {
     let assign = assignment_action(ctx);
     let changed = nav.clone();
     ctx.watch(&assign.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
+      // A failed request keeps the data of the last one that succeeded.
+      if state.is_fulfilled() {
         changed.tasks_changed();
       }
     });
     let release = release_action(ctx);
     let changed = nav.clone();
     ctx.watch(&release.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
+      // A failed request keeps the data of the last one that succeeded.
+      if state.is_fulfilled() {
         changed.tasks_changed();
       }
     });

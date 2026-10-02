@@ -93,6 +93,18 @@ impl ProjectTasks {
     row
   }
 
+  /// How many of `tasks` have a run that has not ended, which bulk Canceled stops. A latest run
+  /// that cannot be read counts: the store, which decides, may find it active.
+  pub fn runs_not_ended(&self, tasks: &std::collections::BTreeSet<TaskId>) -> usize {
+    self
+      .phases
+      .iter()
+      .filter(|(id, latest)| {
+        tasks.contains(id) && latest.phase().is_none_or(orchester_core::run::TaskPhase::run_not_ended)
+      })
+      .count()
+  }
+
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;

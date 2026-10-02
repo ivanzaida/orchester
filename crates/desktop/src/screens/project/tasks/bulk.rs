@@ -400,26 +400,7 @@ impl BulkOrganization {
 const CONFIRM_WIDTH: f32 = 620.0;
 const MENU_WIDTH: f32 = 320.0;
 fn active_count(props: &BulkProps) -> usize {
-  let selected = props.selected.get().0;
-  props
-    .tasks
-    .phases
-    .iter()
-    .filter(|(id, latest)| {
-      selected.contains(id)
-        && latest.phase().is_some_and(|phase| {
-          matches!(
-            phase,
-            orchester_core::run::TaskPhase::Queued
-              | orchester_core::run::TaskPhase::Running
-              | orchester_core::run::TaskPhase::Waiting
-              | orchester_core::run::TaskPhase::Paused
-              | orchester_core::run::TaskPhase::StoppedAtLimit
-              | orchester_core::run::TaskPhase::Interrupted
-          )
-        })
-    })
-    .count()
+  props.tasks.runs_not_ended(&props.selected.get().0)
 }
 
 async fn apply(

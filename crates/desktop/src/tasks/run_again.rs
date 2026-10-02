@@ -80,14 +80,14 @@ impl RunAgainCheck {
       limits: db.project_limits()?,
       used_today: db.tokens_used_since(Timestamp::now().local_day_start())?,
     };
-    if !db.unfinished_blocking_tasks(task.id())?.is_empty() {
-      return Ok(Self {
-        after,
-        pipeline: name,
-        next: Err(RunAgainBlock::TaskBlocked),
-      });
-    }
-    if let Err(block) = run_again(&input) {
+    // A run that has not ended says so first; a blocked task then says what blocks it before the
+    // pipeline or the day's budget.
+    let block = match run_again(&input) {
+      Err(block @ (RunAgainBlock::RunActive { .. } | RunAgainBlock::NotEnded)) => Some(block),
+      _ if !db.unfinished_blocking_tasks(task.id())?.is_empty() => Some(RunAgainBlock::TaskBlocked),
+      outcome => outcome.err(),
+    };
+    if let Some(block) = block {
       return Ok(Self {
         after,
         pipeline: name,

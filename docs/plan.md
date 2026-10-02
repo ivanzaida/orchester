@@ -182,6 +182,14 @@ Integration with ORC-30 (decisions to draw in Pencil, not drawn yet):
   from 212 to 164; the title still has 124 at 960.
 - **Overview:** the run tabs stay behind Insights; the Needs you panel shows without Insights while anything needs you.
 
+Review follow-ups (review of `7ddd610`): a draft whose blocking task has not finished is a Run selected problem
+("KON-3 is blocked by KON-1") and the store refuses to queue it; a group member blocked after queueing is passed over
+(the members after it start), the group holds `GroupHold::Blocked { by }`, which ends on its own and keeps the runner
+busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 12 for
+`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (`claude/approval-choices` also wants 12; whichever merges later
+takes 13). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
+another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
+
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,
 Tasks) and of J9467 at 1440 and 960. Move this entry to Done after they pass.

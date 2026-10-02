@@ -458,3 +458,15 @@ fn task_page_progress_reads_stopped_at_limit_for_every_limit_and_paused_for_a_pa
   fixture.record(&run, &events);
   assert_eq!(step_states(&fixture, task), [ProgressState::Paused]);
 }
+
+/// A run its blocking tasks keep from going on says so, rather than that the runner failed.
+#[test]
+fn task_blocked_refusal_reads_as_run_unavailable() {
+  use orchester_core::run::RunAgainBlock;
+  use orchester_desktop::{runner::RunRequestError, tasks::run::control_message};
+  use orchester_ipc::Rejection;
+  let refused = RunRequestError::Rejected(Rejection::RunAgainBlocked {
+    block: RunAgainBlock::TaskBlocked,
+  });
+  assert_eq!(control_message(&refused).key, "tasks.blocked.runUnavailable");
+}

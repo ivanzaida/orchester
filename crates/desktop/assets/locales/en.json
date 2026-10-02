@@ -367,7 +367,8 @@
         "concurrency": "Waiting for task concurrency",
         "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
-        "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
+        "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
+        "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks."
       },
       "held": {
         "sessionEnded": "Held · project reopened",
@@ -378,7 +379,8 @@
         "concurrency": "Waiting for a task slot",
         "failure": "Held · a task failed",
         "preflight": "Held · cannot start yet",
-        "startFailed": "Held · start failed"
+        "startFailed": "Held · start failed",
+        "blocked": "Waiting for blocking tasks"
       },
       "selected": "{{count}} selected",
       "runSelected": "Run selected · {{count}}",
@@ -388,6 +390,8 @@
       "hasRunMany": "{{count}} tasks already have a run.",
       "notHeld": "This task is no longer held by its group, so it stays queued.",
       "notReady": "{{task}}: {{reason}}",
+      "blocked": "Blocked by an unfinished task.",
+      "blockedBy": "{{task}} is blocked by {{blockers}}",
       "notReadyMany": "{{count}} tasks: {{reason}}",
       "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
       "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",

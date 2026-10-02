@@ -484,8 +484,8 @@ impl TaskScreen {
       Some(detail) if detail.latest_unreadable.is_some() => unreadable::controls(ctx),
       _ => detail
         .filter(|detail| !detail.lost_its_runner(online))
-        .and_then(|detail| detail.run.as_ref())
-        .map(|run| control_buttons(ctx, run, control, &self.requested))
+        .and_then(|detail| detail.run.as_ref().map(|run| (run, !detail.blocked_by.is_empty())))
+        .map(|(run, blocked)| control_buttons(ctx, run, (control, blocked), &self.requested))
         .unwrap_or_default(),
     };
     let open = detail.and_then(|detail| retry_limit::open_conversation(ctx, &self.nav, detail));

@@ -205,6 +205,9 @@ pub struct TaskDetail {
   pub earlier: Vec<EarlierRun>,
   /// The task's earlier runs that cannot be read, oldest first, while its latest run can be.
   pub earlier_unreadable: Vec<Unreadable>,
+  /// The keys of the linked blocking tasks that have not finished: while there are any, the
+  /// task's run neither starts nor goes on.
+  pub blocked_by: Vec<String>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
@@ -232,6 +235,7 @@ impl TaskDetail {
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
+    let blocked_by = blocking_keys(&db, &task)?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     let messages = db.messages(task.id())?;
     let latest = runs.pop();
@@ -244,6 +248,7 @@ impl TaskDetail {
       return Ok(Self {
         latest_unreadable: Some(Unreadable::of(latest)),
         earlier,
+        blocked_by,
         ..Self::without_runs(task, messages)
       });
     }
@@ -267,6 +272,7 @@ impl TaskDetail {
       run_task,
       merge,
       earlier_unreadable,
+      blocked_by,
       ..Self::without_runs(task, messages)
     })
   }
@@ -281,8 +287,20 @@ impl TaskDetail {
       latest_unreadable: None,
       earlier: Vec::new(),
       earlier_unreadable: Vec::new(),
+      blocked_by: Vec::new(),
     }
   }
+}
+
+/// The keys of `task`'s unfinished blocking tasks.
+fn blocking_keys(db: &ProjectDb, task: &Task) -> Result<Vec<String>, StoreError> {
+  db.unfinished_blocking_tasks(task.id())?
+    .into_iter()
+    .map(|id| {
+      let blocker = db.task(id)?.ok_or(StoreError::TaskNotFound(id))?;
+      Ok(blocker.key().to_string())
+    })
+    .collect()
 }
 
 /// `run` with its steps and invocations, as the task page shows it.

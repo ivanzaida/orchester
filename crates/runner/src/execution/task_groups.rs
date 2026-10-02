@@ -106,6 +106,42 @@ fn usage(runs: &[Option<Run>]) -> TokensUsed {
   })
 }
 
+/// The unfinished blocking tasks of each task of `group` that has not started, in the group's
+/// order; empty for a task that is free to start or already runs.
+fn blockers(db: &ProjectDb, group: &TaskGroup, statuses: &[Option<RunStatus>]) -> Result<Vec<Vec<TaskId>>, Rejection> {
+  group
+    .tasks()
+    .iter()
+    .zip(statuses)
+    .map(|(task, status)| match status {
+      None | Some(RunStatus::Pending) => db
+        .unfinished_blocking_tasks(*task)
+        .map_err(|error| super::failed("cannot read blocking tasks", &error)),
+      Some(_) => Ok(Vec::new()),
+    })
+    .collect()
+}
+
+/// Whether a blocking task runs now, so it finishes without a person and the group behind it
+/// will go on.
+fn blocker_runs(db: &ProjectDb, by: &[TaskId]) -> Result<bool, Rejection> {
+  for task in by {
+    let active = db
+      .active_task_run(*task)
+      .map_err(|error| super::failed("cannot read a blocking task's run", &error))?;
+    let Some(run) = active else {
+      continue;
+    };
+    let run = db
+      .run(run)
+      .map_err(|error| read_failed("cannot read a blocking task's run", error))?;
+    if run.is_some_and(|run| matches!(run.status(), RunStatus::Pending | RunStatus::Running)) {
+      return Ok(true);
+    }
+  }
+  Ok(false)
+}
+
 /// A start that failed this way waits for the person; the group retries it with a backoff.
 const fn retries_later(hold: &GroupHold) -> bool {
   matches!(hold, GroupHold::Preflight(_) | GroupHold::StartFailed)
@@ -152,11 +188,12 @@ impl Scheduler {
       .map(|(id, status)| status.filter(|status| !(*id == task && status == &RunStatus::Pending)))
       .collect();
     let used = usage(&runs);
-    if group.eligible(&statuses, used).contains(&task) {
+    let blockers = blockers(db, &group, &statuses)?;
+    if group.eligible(&statuses, used, &blockers).contains(&task) {
       return Ok(());
     }
     Err(Rejection::TaskGroupWaiting {
-      hold: group.waiting_reason(&statuses, used),
+      hold: group.waiting_reason(&statuses, used, &blockers),
     })
   }
 
@@ -175,10 +212,17 @@ impl Scheduler {
       }
       let runs = first_runs(&db, &group)?;
       let statuses = statuses(&runs);
+      let (used, blockers) = (usage(&runs), blockers(&db, &group, &statuses)?);
       // The free slot or the day's budget the runner waits for comes without a person.
       let waits_for_capacity = matches!(stored, Some(GroupHold::AgentCapacity | GroupHold::DailyBudget))
         && statuses.iter().any(Option::is_none);
-      if waits_for_capacity || group.has_work_of_its_own(&statuses, usage(&runs)) {
+      if waits_for_capacity || group.has_work_of_its_own(&statuses, used, &blockers) {
+        return Ok(true);
+      }
+      // Tasks waiting for their blocking tasks go on when a blocking task that runs now finishes.
+      if let Some(GroupHold::Blocked { by }) = group.hold(&statuses, used, &blockers)
+        && blocker_runs(&db, &by)?
+      {
         return Ok(true);
       }
     }
@@ -221,21 +265,29 @@ impl Scheduler {
       return Ok(());
     }
     let used = usage(&runs);
+    let blockers = blockers(db, group, &statuses)?;
     // A failed worktree creation may have left a Pending run. Retry its own saved key before
-    // looking for more drafts; Pending is already counted against the group limit.
+    // looking for more drafts; Pending is already counted against the group limit. A blocked task
+    // waits for its blocking tasks without holding the others.
     let pending = group
       .tasks()
       .iter()
       .zip(&statuses)
-      .filter(|(_, s)| matches!(s, Some(RunStatus::Pending)))
-      .map(|(id, _)| *id);
-    for task in pending.chain(group.eligible(&statuses, used)) {
-      if let Err(error) = self.start_run(task.first_run_key(), task).await {
-        return self.record_failed_start(db, group, &error);
+      .zip(&blockers)
+      .filter(|((_, s), by)| matches!(s, Some(RunStatus::Pending)) && by.is_empty())
+      .map(|((id, _), _)| *id);
+    for task in pending.chain(group.eligible(&statuses, used, &blockers)) {
+      match self.start_run(task.first_run_key(), task).await {
+        Ok(_) => {}
+        // Blocked since the blocking tasks were read: it waits like the other blocked tasks.
+        Err(Rejection::RunAgainBlocked {
+          block: orchester_core::run::RunAgainBlock::TaskBlocked,
+        }) => {}
+        Err(error) => return self.record_failed_start(db, group, &error),
       }
     }
     self.inner.group_retries.clear(group.key());
-    self.group_hold(db, group, group.hold(&statuses, used).as_ref())?;
+    self.group_hold(db, group, group.hold(&statuses, used, &blockers).as_ref())?;
     Ok(())
   }
 
@@ -296,8 +348,10 @@ impl Scheduler {
       if !unstarted {
         continue;
       }
+      let statuses = statuses(&runs);
+      let blockers = blockers(db, &group, &statuses)?;
       let lasting = group
-        .hold(&statuses(&runs), usage(&runs))
+        .hold(&statuses, usage(&runs), &blockers)
         .filter(GroupHold::outlives_session)
         .or(Self::stored_hold(db, &group)?.filter(GroupHold::outlives_session));
       let hold = lasting.unwrap_or(GroupHold::SessionEnded);

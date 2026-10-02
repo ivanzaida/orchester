@@ -7,7 +7,6 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use rusqlite::Transaction;
 
 use super::{ProjectDb, organization, tasks};
 use crate::StoreError;
@@ -33,7 +32,7 @@ impl ProjectDb {
       if task.status() != TaskStatus::Draft {
         return Ok(task);
       }
-      edit(&transaction, task, details)?
+      tasks::edit_task(&transaction, task, details)?
     } else {
       let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'task'", [], |row| row.get(0))?;
       let key = TaskKey::new(self.project.key().clone(), tasks::task_number(number)?);
@@ -60,29 +59,9 @@ impl ProjectDb {
       .pop()
       .ok_or(StoreError::TaskNotFound(id))?;
     organization::validate(&transaction, id, value)?;
-    let task = edit(&transaction, task, details)?;
+    let task = tasks::edit_task(&transaction, task, details)?;
     organization::write(&transaction, id, value, ChangeActor::Person, at)?;
     transaction.commit()?;
     Ok(task.with_organization(value.clone()))
   }
-}
-
-fn edit(transaction: &Transaction<'_>, mut task: Task, details: TaskDetails) -> Result<Task, StoreError> {
-  let has_run: bool = transaction.query_row(
-    "SELECT EXISTS(SELECT 1 FROM runs WHERE task_id = ?1)",
-    [task.id().to_string()],
-    |row| row.get(0),
-  )?;
-  let before = task.clone();
-  task
-    .edit(details, has_run)
-    .map_err(|source| StoreError::TaskNotEditable {
-      task: task.id(),
-      source,
-    })?;
-  if has_run {
-    tasks::snapshot_earlier_runs(transaction, &before)?;
-  }
-  tasks::update_task(transaction, &task)?;
-  Ok(task)
 }

@@ -26,6 +26,7 @@ pub fn problem_message(problem: &SelectionProblem) -> Message {
     SelectionProblem::HasRun => Message::new("tasks.bulk.hasRun"),
     SelectionProblem::Missing(detail) => Message::new(missing_key(*detail)),
     SelectionProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
+    SelectionProblem::Blocked { .. } => Message::new("tasks.bulk.blocked"),
   }
 }
 
@@ -40,6 +41,7 @@ pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Messag
     GroupHold::Concurrency => "tasks.bulk.hold.concurrency",
     GroupHold::FailedTask => "tasks.bulk.hold.failure",
     GroupHold::StartFailed => "tasks.bulk.hold.startFailed",
+    GroupHold::Blocked { .. } => "tasks.bulk.hold.blocked",
     GroupHold::Preflight(problems) => return problems.iter().map(preflight_message).collect(),
   };
   vec![Message::new(key)]
@@ -57,6 +59,7 @@ pub const fn hold_row_message(hold: &GroupHold) -> Message {
     GroupHold::FailedTask => "tasks.bulk.held.failure",
     GroupHold::Preflight(_) => "tasks.bulk.held.preflight",
     GroupHold::StartFailed => "tasks.bulk.held.startFailed",
+    GroupHold::Blocked { .. } => "tasks.bulk.held.blocked",
   })
 }
 

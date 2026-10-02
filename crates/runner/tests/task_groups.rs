@@ -1,3 +1,5 @@
+#[path = "task_groups/blocked.rs"]
+mod blocked;
 #[path = "task_groups/reopen.rs"]
 mod reopen;
 mod support;

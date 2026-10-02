@@ -88,6 +88,10 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
     .into_iter()
     .map(|row| {
       let mut row = data.decorate_row(row);
+      // A blocked task says what blocks it rather than how its group waits.
+      if data.blocking.get(&row.id).is_some_and(|by| !by.is_empty()) {
+        return row;
+      }
       match (data.group_holds.get(&row.id), row.phase) {
         (Some(hold), Some(TaskPhase::Queued)) => row.detail = hold_row_message(hold),
         (Some(GroupHold::GroupCap), Some(TaskPhase::StoppedAtLimit)) => {

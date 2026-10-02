@@ -323,6 +323,10 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
     RunRequestError::Rejected(Rejection::PlanNotAwaited) => Message::new("runs.plan.errors.notAwaited"),
     RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) => Message::new("runs.toolApproval.notAwaited"),
+    // Unfinished blocking tasks keep the run from going on; the task page names them.
+    RunRequestError::Rejected(Rejection::RunAgainBlocked {
+      block: orchester_core::run::RunAgainBlock::TaskBlocked,
+    }) => Message::new("tasks.blocked.runUnavailable"),
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun

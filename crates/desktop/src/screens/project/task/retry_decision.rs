@@ -64,6 +64,9 @@ pub struct RetryDecisionProps {
   pub targets: Arc<[(StepKey, Arc<str>)]>,
   /// The panel is under the evidence, across the page, rather than beside it.
   pub stacked: bool,
+  /// Unfinished blocking tasks keep the run from going on: another attempt is unavailable, Stop
+  /// is not.
+  pub blocked: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RetryDecisionProps {}
@@ -123,7 +126,8 @@ impl Component for RetryDecisionPanel {
     let idle = !state.is_pending();
     let decide = |decision: StuckDecision| -> Option<Press> {
       let (action, run) = (action.clone(), props.run);
-      idle.then(|| Arc::new(move || action.run((run, decision.clone()))) as Press)
+      let goes_on = !matches!(decision, StuckDecision::Stop);
+      (idle && !(goes_on && props.blocked)).then(|| Arc::new(move || action.run((run, decision.clone()))) as Press)
     };
     let failure = state.error.filter(|_| idle).map(|error| message_text(ctx, &error));
     let returning = (!props.targets.is_empty()).then(|| self.returning(ctx, &props, &decide));

@@ -203,25 +203,39 @@ impl TaskStore for ProjectDb {
 
   fn update_task(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, StoreError> {
     let transaction = self.connection.transaction()?;
-    let mut task = load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
+    let task = load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
       .pop()
       .ok_or(StoreError::TaskNotFound(id))?;
-    let has_run: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM runs WHERE task_id = ?1)",
-      [id.to_string()],
-      |row| row.get(0),
-    )?;
-    let before = task.clone();
-    task
-      .edit(details, has_run)
-      .map_err(|source| StoreError::TaskNotEditable { task: id, source })?;
-    if has_run {
-      snapshot_earlier_runs(&transaction, &before)?;
-    }
-    update_task(&transaction, &task)?;
+    let task = edit_task(&transaction, task, details)?;
     transaction.commit()?;
     Ok(task)
   }
+}
+
+/// Replaces `task`'s details within `transaction`: a task with runs stays complete, and its
+/// earlier runs keep the details they ran with.
+pub(super) fn edit_task(
+  transaction: &Transaction<'_>,
+  mut task: Task,
+  details: TaskDetails,
+) -> Result<Task, StoreError> {
+  let has_run: bool = transaction.query_row(
+    "SELECT EXISTS (SELECT 1 FROM runs WHERE task_id = ?1)",
+    [task.id().to_string()],
+    |row| row.get(0),
+  )?;
+  let before = task.clone();
+  task
+    .edit(details, has_run)
+    .map_err(|source| StoreError::TaskNotEditable {
+      task: task.id(),
+      source,
+    })?;
+  if has_run {
+    snapshot_earlier_runs(transaction, &before)?;
+  }
+  update_task(transaction, &task)?;
+  Ok(task)
 }
 
 /// Stores the details and status of `task`, which must exist.

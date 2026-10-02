@@ -86,10 +86,13 @@ impl Component for TagManager {
     let load = ctx.future((props.repo_root.clone(), self.revision.get()), |(root, _)| async move {
       background::run(move || {
         let db = ProjectDb::open(&root)?;
-        db.project_tags()?
-          .into_iter()
-          .map(|tag| db.tag_task_count(tag.id()).map(|count| (tag, count)))
-          .collect::<Result<Vec<_>, _>>()
+        let counts = db.tag_task_counts()?;
+        // A tag on no task has no count of its own.
+        let tags = db.project_tags()?.into_iter().map(|tag| {
+          let count = counts.get(&tag.id()).copied().unwrap_or_default();
+          (tag, count)
+        });
+        Ok::<_, orchester_store::StoreError>(tags.collect::<Vec<_>>())
       })
       .await?
       .map(Catalog)

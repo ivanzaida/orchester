@@ -183,8 +183,11 @@ fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: 
 }
 fn history_date(ctx: &Ctx, at: orchester_core::time::Timestamp) -> String {
   use chrono::Datelike;
-  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
-  let date = chrono::DateTime::<chrono::Local>::from(std::time::UNIX_EPOCH + std::time::Duration::from_millis(millis));
+  // Times before 1970 read as they are; only a time beyond chrono's range of about 262,000 years,
+  // which no recorded change has, would read as the epoch.
+  let date = chrono::DateTime::from_timestamp_millis(at.unix_millis())
+    .unwrap_or_default()
+    .with_timezone(&chrono::Local);
   ctx
     .t_args(
       "tasks.history.date",

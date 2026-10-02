@@ -62,11 +62,12 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
 }
 
 /// The buttons for `run` in its current state. `requested` is the last request made, which is
-/// under way while `action` is pending.
+/// under way while `action` is pending. While the task is `blocked` by unfinished tasks, Start,
+/// Resume and Continue are unavailable; the page's Blocked notice says why.
 pub(super) fn control_buttons(
   ctx: &Ctx,
   run: &RunView,
-  action: &ControlAction,
+  (action, blocked): (&ControlAction, bool),
   requested: &Signal<Option<RunControl>>,
 ) -> Vec<Element> {
   let pending = if action.state().get().is_pending() {
@@ -80,6 +81,7 @@ pub(super) fn control_buttons(
     action,
     requested,
     pending,
+    blocked,
   };
   if run.run.status().is_terminal() {
     return Vec::new();
@@ -98,6 +100,8 @@ struct ControlButtons<'a> {
   action: &'a ControlAction,
   requested: &'a Signal<Option<RunControl>>,
   pending: Option<RunControl>,
+  /// Unfinished blocking tasks keep the run from starting or going on.
+  blocked: bool,
 }
 
 impl ControlButtons<'_> {
@@ -141,6 +145,7 @@ impl ControlButtons<'_> {
           .button("runs.page.start", Icon::Play, "task-start-pending-run")
           .primary()
           .on_click(self.press(RunControl::StartFirst(self.run.run.task())))
+          .enabled(!self.blocked)
       });
     }
     match self.run.run.status() {
@@ -172,7 +177,7 @@ impl ControlButtons<'_> {
           .button("runs.page.resume", Icon::Play, "task-resume-run")
           .primary()
           .on_click(self.press(RunControl::Resume))
-          .enabled(self.pending.is_none()),
+          .enabled(self.pending.is_none() && !self.blocked),
       ),
       RunStatus::Interrupted(_) if self.pending == Some(RunControl::Continue) => Some(
         self
@@ -185,7 +190,7 @@ impl ControlButtons<'_> {
           .button("runs.page.continue", Icon::Play, "task-continue-run")
           .primary()
           .on_click(self.press(RunControl::Continue))
-          .enabled(self.pending.is_none()),
+          .enabled(self.pending.is_none() && !self.blocked),
       ),
       _ => None,
     }

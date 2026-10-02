@@ -106,14 +106,15 @@ pub fn filters(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element
     .into()
 }
 
-/// How the selected tasks stand for a first run: ready drafts, drafts that miss details, and
-/// tasks already queued or started, which are neither.
+/// How the selected tasks stand for a first run: ready drafts, drafts that miss details or wait
+/// for blocking tasks, and tasks already queued or started, which are neither.
 fn readiness(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> (usize, Arc<str>) {
   let selected = screen.selected.get();
   let published: Vec<_> = tasks.pipelines.iter().map(|p| p.id).collect();
   let (mut ready, mut incomplete, mut started) = (0, 0, 0);
   for task in tasks.tasks.iter().filter(|t| selected.0.contains(&t.id())) {
-    let problems = task_selection::problems(task, tasks.phases.contains_key(&task.id()), &published);
+    let has_run = tasks.phases.contains_key(&task.id());
+    let problems = task_selection::problems(task, has_run, &published, blocked_by(tasks, task.id()));
     if problems.is_empty() {
       ready += 1;
     } else if problems
@@ -345,9 +346,13 @@ struct Reason {
 }
 
 impl Reason {
-  /// One line: the task and its reason, or how many tasks, in words that fit a count.
+  /// One line: the task and its reason, or how many tasks, in words that fit a count. A blocked
+  /// task's line names it and its blocking tasks.
   fn line(&self, ctx: &Ctx) -> Arc<str> {
     let reason = message_text(ctx, &self.message).to_string();
+    if matches!(self.problem, Some(SelectionProblem::Blocked { .. })) {
+      return reason.into();
+    }
     let [task] = self.tasks.as_slice() else {
       let count = [("count", self.tasks.len().to_string())];
       return match self.problem {
@@ -365,7 +370,7 @@ impl Reason {
 
 /// Why selected tasks cannot run, one line per reason: a queued task its group holds says why the
 /// group holds it, and tasks that share a reason share its line.
-fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<Reason> {
+fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>, separator: &str) -> Vec<Reason> {
   let published: Vec<_> = tasks.pipelines.iter().map(|p| p.id).collect();
   let mut reasons: Vec<Reason> = Vec::new();
   for task in tasks.tasks.iter().filter(|t| selected.contains(&t.id())) {
@@ -376,9 +381,15 @@ fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<Reason> {
       .and_then(|hold| hold_messages(hold).into_iter().next());
     let found: Vec<_> = match held {
       Some(reason) => vec![(reason, None)],
-      None => task_selection::problems(task, has_run, &published)
+      None => task_selection::problems(task, has_run, &published, blocked_by(tasks, task.id()))
         .into_iter()
-        .map(|problem| (problem_message(&problem), Some(problem)))
+        .map(|problem| {
+          let message = match &problem {
+            SelectionProblem::Blocked { by } => blocked_message(tasks, task, by, separator),
+            other => problem_message(other),
+          };
+          (message, Some(problem))
+        })
         .collect(),
     };
     for (message, problem) in found {
@@ -396,9 +407,27 @@ fn reasons(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<Reason> {
   reasons
 }
 
+/// The unfinished blocking tasks of `task`, as the tasks were read.
+fn blocked_by(tasks: &ProjectTasks, task: TaskId) -> &[TaskId] {
+  tasks.blocking.get(&task).map(Vec::as_slice).unwrap_or_default()
+}
+
+/// "KON-3 is blocked by KON-1": the task and the blocking tasks it waits for, by key.
+fn blocked_message(tasks: &ProjectTasks, task: &orchester_core::task::Task, by: &[TaskId], separator: &str) -> Message {
+  let keys: Vec<String> = by
+    .iter()
+    .filter_map(|id| tasks.tasks.iter().find(|task| task.id() == *id))
+    .map(|blocker| blocker.key().to_string())
+    .collect();
+  Message::new("tasks.bulk.blockedBy")
+    .with("task", task.key().to_string())
+    .with("blockers", keys.join(separator))
+}
+
 pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Option<Element> {
   let selected = screen.selected.get();
-  let mut messages: Vec<Element> = reasons(tasks, &selected.0)
+  let separator = ctx.t("common.listSeparator");
+  let mut messages: Vec<Element> = reasons(tasks, &selected.0, &separator)
     .iter()
     .map(|reason| field_error(&reason.line(ctx)))
     .collect();
@@ -409,7 +438,8 @@ pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Option
   if let Some(error) = state.error.as_ref() {
     messages.push(field_error(&message_text(ctx, error)));
   }
-  if !state.is_pending()
+  // Only the assignment that just succeeded says what it skipped.
+  if state.is_fulfilled()
     && let Some(skipped) = state.data.as_ref()
   {
     messages.extend(skipped.iter().map(|m| field_error(&message_text(ctx, m))));

@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use orchester_core::{
   id::{RunId, TaskId},
   task::organization::{
-    ChangeActor, DependencyGate, OrganizationChange, OrganizationError, TaskFilter, TaskOrganization, TaskSort,
-    WorkflowStatus,
+    ChangeActor, DependencyGate, OrganizationChange, OrganizationError, TaskOrganization, WorkflowStatus,
   },
   time::Timestamp,
 };
@@ -108,41 +107,6 @@ impl ProjectDb {
   pub fn check_task_readiness(&self, task: TaskId) -> Result<(), StoreError> {
     check_readiness(&self.connection, task)
   }
-
-  /// List organization never writes task queue or run ordering.
-  pub fn organized_task_ids(&self, filter: &TaskFilter, sort: TaskSort) -> Result<Vec<TaskId>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare("SELECT id, created_at FROM tasks ORDER BY number")?;
-    let rows = statement
-      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
-      .collect::<Result<Vec<_>, _>>()?;
-    let mut entries = Vec::new();
-    for (id, created) in rows {
-      let id = crate::rows::parse("task id", &id)?;
-      let value = load(&self.connection, id)?;
-      if !filter.includes(&value) {
-        continue;
-      }
-      let updated = self
-        .connection
-        .query_row(
-          "SELECT updated_at FROM task_organization WHERE task_id = ?1",
-          [id.to_string()],
-          |row| row.get::<_, i64>(0),
-        )
-        .optional()?
-        .unwrap_or(created);
-      entries.push((id, value, updated));
-    }
-    entries.sort_by(|a, b| {
-      sort.compare(
-        (&a.1, Timestamp::from_unix_millis(a.2), a.0),
-        (&b.1, Timestamp::from_unix_millis(b.2), b.0),
-      )
-    });
-    Ok(entries.into_iter().map(|(id, ..)| id).collect())
-  }
 }
 
 pub(super) fn load(connection: &Connection, task: TaskId) -> Result<TaskOrganization, StoreError> {
@@ -234,6 +198,9 @@ pub(super) fn validate(connection: &Connection, task: TaskId, value: &TaskOrgani
   Ok(())
 }
 
+/// The blocking tasks of `task` that have not finished. This is `DependencyGate::is_completed` of
+/// each blocking task's phase, read in SQL because every task list and run start asks it; the
+/// test `organization_unfinished_follows_the_dependency_gate_rule` keeps the two the same.
 pub(super) fn unfinished(connection: &Connection, task: TaskId) -> Result<Vec<TaskId>, StoreError> {
   let value = load(connection, task)?;
   let mut blocking = Vec::new();
