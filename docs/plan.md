@@ -199,6 +199,7 @@ windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
 ### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
 
+**Done 2026-10-02.** Independent review (four rounds) and design verification (1440 and 960) passed.
 Built in Orchester run #10 (`orchester/orc-30-run-2`, on the old base `37716df`) and merged with master on
 `claude/orc30` (merges `162206c`, `69677c9` for lurq 0.33.0). Row and select-all selection with the ready / incomplete /
 already queued or started split, readiness reasons, Set pipeline (published pipelines, drafts only, skipped tasks
