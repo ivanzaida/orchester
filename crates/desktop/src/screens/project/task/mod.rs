@@ -239,8 +239,7 @@ impl Component for TaskScreen {
     let online = props.runner == RunnerState::Online;
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let changes = self.changes(ctx, &props, &detail, lost.is_some());
-    let files = changes.as_ref().and_then(RunChanges::checkpointed_files);
-    let listed = changes.as_ref().and_then(RunChanges::listed_files);
+    let files = changes.as_ref().and_then(RunChanges::listed_files);
     let leftovers = self.leftovers(ctx, &props, &detail);
     let again = run_again::offer(ctx, &props.project, &detail, props.revision, leftovers.as_ref());
     let body = self.body(
@@ -264,7 +263,7 @@ impl Component for TaskScreen {
       .child(heading::heading(ctx, &detail, lost.is_some()))
       .with_children(earlier_unreadable)
       .with_children(control_error)
-      .child(self.tabs(ctx, &props, listed))
+      .child(self.tabs(ctx, &props, files))
       .child(body)
   }
 }

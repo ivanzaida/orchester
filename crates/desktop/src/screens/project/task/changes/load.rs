@@ -122,14 +122,6 @@ pub(in super::super) struct RunChanges {
 }
 
 impl RunChanges {
-  /// How many files the run changed up to its latest checkpoint, once read.
-  pub(in super::super) fn checkpointed_files(&self) -> Option<usize> {
-    match &self.checkpointed {
-      CheckpointedLoad::Ready(checkpointed) => checkpointed.files(),
-      CheckpointedLoad::Loading | CheckpointedLoad::Failed(_) => None,
-    }
-  }
-
   /// How many files the Changes tab lists, a file changed both up to the checkpoint and beyond it
   /// counted once. `None` while that is not known: either part is still being read, could not be
   /// read, or is too large to list file by file beside the other; and while the run has neither
