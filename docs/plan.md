@@ -406,7 +406,10 @@ ORC-61 · Conversation merged with Activity, Send now and following live (absorb
   on its way to one agent goes into no other agent's prompt until that agent ends; an acceptance Codex sends after
   `turn/completed` still delivers at the turn's end; *Send after this turn* and the runner's late delivery change a
   message only while it stands as read (`ConversationStore::change_delivery`), so a race never fails the step;
-  master merged again for the Changes tab count.
+  master merged again for the Changes tab count. Design verification fixes (2026-10-03): the toolbar's state follows the run's state; the
+  step the run ended on stays open; at 960 with or without Details the toolbar and composer keep every control; a tool
+  step's failing command shows open; the queued empty state and unavailable toolbar of `zxIMy`; read-back links, result
+  card layout, approval card title, default recipient and the Messages meta.
 - Tests: `cargo test -p orchester-runner --features test-agent --test send_now send_`, `--test conversation
   conversation`; `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`,
   `--test form_keyboard` with `conversation`, `composer_`, `activity_`, `multiline_command`, `tool_approval`,
