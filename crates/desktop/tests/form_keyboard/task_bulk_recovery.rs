@@ -16,7 +16,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use crate::{
-  github::shows,
+  github::{contains_text, shows},
   harness::Desktop,
   task_run::{init_repository, programs, seed},
 };
@@ -242,7 +242,12 @@ fn task_bulk_fresh_pending_first_run_has_explicit_recovery_with_saved_identity()
   desktop.wait_for("task-row-KON-1");
   desktop.click("task-row-KON-1");
   desktop.wait_for("task-start-pending-run");
-  assert!(shows(&mut desktop, "task-notice", "Scheduling is held after reopening"));
+  // The runner records the hold as it attaches, which may come after the page is first shown.
+  desktop.settle("the scheduling hold", |tree| {
+    tree
+      .get_element_by_id("task-notice")
+      .is_some_and(|notice| contains_text(notice, "Scheduling is held after reopening"))
+  });
   assert!(shows(&mut desktop, "task-heading", "scheduling held after reopening"));
   desktop.click("task-breadcrumb");
   desktop.wait_for("task-row-KON-1");
