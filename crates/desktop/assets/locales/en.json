@@ -730,6 +730,7 @@
       "popover": {
         "title": "Permissions for this run",
         "subtitle": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}}",
+        "subtitleEnded": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}} · run ended",
         "takesEffect": "Apply from next invocation: {{agent}} keeps these until it next starts. Apply now: it stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
         "ended": "This run has ended, so its permissions can’t be changed here. Continuing the conversation starts a new invocation of {{agent}} with these settings.",
         "added": "{{commands}} added for this run",

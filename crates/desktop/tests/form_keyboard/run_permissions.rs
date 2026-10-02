@@ -134,6 +134,9 @@ fn within(inner: &ElementRect, outer: &ElementRect) -> bool {
 #[test]
 fn run_permissions_row_keeps_its_link_at_1440_and_960() {
   let mut desktop = desktop_running("Wait for release.");
+  desktop.wait_until("the recorded launch", |desktop| {
+    !shows(desktop, "task-permissions", "starting…")
+  });
   for (width, height) in [(1440, 960), (960, 700)] {
     desktop.tree.resize(width, height);
     desktop.pass();
@@ -172,9 +175,16 @@ fn run_permissions_row_keeps_its_link_at_1440_and_960() {
       desktop.bounds("task-permissions-view"),
     );
     assert!(within(&link, &row), "{width}: {link:?} {row:?}");
+    // The whole value is shown: it wraps inside the row rather than running past it.
+    assert!(within(&value, &row), "{width}: {value:?} {row:?}");
     let context = desktop.bounds("task-working-context");
     assert!(across(&row, &context), "{width}: {row:?} {context:?}");
     if one_line {
+      // Label, value and link share one line box, so their text lines up.
+      let label = desktop.bounds("task-permissions-label");
+      let middle = |bounds: &ElementRect| bounds.y + bounds.height / 2.0;
+      assert!((middle(&label) - middle(&value)).abs() < 0.5, "{label:?} {value:?}");
+      assert!((middle(&link) - middle(&value)).abs() < 0.5, "{link:?} {value:?}");
       assert!(
         (link.y - value.y).abs() < 4.0,
         "{width}: the link follows the value: {link:?} {value:?}"
@@ -190,8 +200,8 @@ fn run_permissions_row_keeps_its_link_at_1440_and_960() {
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
-/// The popover ends 6 px above its row however tall the window, scrolling what does not fit
-/// (`q4K1G`), instead of growing over the row.
+/// The Codex popover (`ecCTw`) ends 6 px above its row however tall the window, instead of
+/// growing over the row; its frame and footer stay whole and only its body scrolls.
 #[test]
 fn run_permissions_popover_stays_above_its_row() {
   let mut desktop = desktop_running("Wait for release.");
@@ -201,17 +211,27 @@ fn run_permissions_popover_stays_above_its_row() {
     desktop.click("task-permissions-view");
     desktop.wait_for("task-permissions-popover");
     desktop.pass();
-    let (row, scroll) = (
+    let (row, frame) = (
       desktop.bounds("task-permissions"),
-      desktop.bounds("task-permissions-scroll"),
+      desktop.bounds("task-permissions-popover"),
     );
-    let bottom = scroll.y + scroll.height;
+    let bottom = frame.y + frame.height;
     assert!(
       (row.y - 6.0 - bottom).abs() < 1.0,
       "{width}x{height}: the popover ends at {bottom}, the row starts at {}",
       row.y
     );
-    assert!(scroll.y >= orchester_desktop::theme::TITLE_BAR_HEIGHT - 0.5);
+    assert!(frame.y >= orchester_desktop::theme::TITLE_BAR_HEIGHT - 0.5);
+    // Only the body scrolls: the footer stays inside the popover and the window.
+    for button in [
+      "task-permissions-cancel",
+      "task-permissions-apply-now",
+      "task-permissions-apply-next",
+    ] {
+      let button = desktop.bounds(button);
+      assert!(within(&button, &frame), "{width}x{height}: {button:?} in {frame:?}");
+      assert!(button.y + button.height <= f32::from(u16::try_from(height).expect("height")));
+    }
     desktop.click("task-permissions-cancel");
     desktop.pass();
   }

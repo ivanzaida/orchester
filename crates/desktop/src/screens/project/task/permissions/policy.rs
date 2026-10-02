@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Row, Text},
   layout::{Alignment, text_style::TextAlign},
@@ -154,10 +154,11 @@ pub(super) fn value_text(value: &str) -> Text {
     .text_align(TextAlign::Right)
 }
 
-/// The row's label, which keeps its width.
+/// The row's label, which keeps its width. It shares the value's line box (11, 1.5; muted by
+/// default), as do the link and its separator, so all three sit on one line.
 pub(super) fn label_text(label: &str) -> Text {
   Text::new(label)
-    .variant(TypographyStyle::Caption)
+    .variant(ExtraTypography::CellLabel.role())
     .nowrap()
     .flex_shrink(0.0)
 }

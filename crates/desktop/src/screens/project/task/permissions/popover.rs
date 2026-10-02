@@ -14,7 +14,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Rect, Row, Text},
+  components::{Button, Column, Rect, Row, ScrollVertical, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
@@ -75,7 +75,9 @@ const FOOTER_BUTTON_HEIGHT: f32 = 30.0;
 type Apply = Arc<dyn Fn(PermissionsApply) + Send + Sync>;
 
 impl RunPermissionsRow {
-  pub(super) fn popover(&self, ctx: &Ctx, props: &RunPermissionsProps, action: &ApplyAction) -> Element {
+  /// The popover at most `cap` tall: its header and footer stay whole and the body between them
+  /// scrolls when the room above the row is too short (`ecCTw`).
+  pub(super) fn popover(&self, ctx: &Ctx, props: &RunPermissionsProps, action: &ApplyAction, cap: f32) -> Element {
     let Some(draft) = self.edit.draft.get().0 else {
       return Column::new().id("task-permissions-popover").into();
     };
@@ -101,17 +103,9 @@ impl RunPermissionsRow {
       .error
       .filter(|_| !pending)
       .map(|error| field_error(&message_text(ctx, &error)));
-    let content = Column::new()
-      .id("task-permissions-popover")
-      .width(Dimension::Px(POPOVER_WIDTH))
-      .padding(SpacingSize::Md)
+    let body = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Group.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
-      .box_shadow(ExtraShadow::Popover.role())
-      .overflow_visible()
-      .child(self.header(ctx, props))
       .child(current_policy(ctx, props))
       .child(takes_effect(ctx, props))
       .with_children(settings(ctx, &self.edit, props, &draft))
@@ -120,16 +114,39 @@ impl RunPermissionsRow {
         Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role())
       }))
       .with_children(props.live.then(|| self.save_to_profile(ctx, props)))
-      .with_children(failure)
+      .with_children(failure);
+    let content = Column::new()
+      .id("task-permissions-popover")
+      .width(Dimension::Px(POPOVER_WIDTH))
+      .max_height(Dimension::Px(cap))
+      .padding(SpacingSize::Md)
+      .spacing(ExtraSpacing::Group.role())
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .rounded(RadiusSize::Lg)
+      .box_shadow(ExtraShadow::Popover.role())
+      .child(self.header(ctx, props))
+      .child(
+        ScrollVertical::new(body)
+          .id("task-permissions-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex_shrink(1.0),
+      )
       .child(self.footer(ctx, props, apply.as_ref(), pending));
     let submit: Submit = apply.map(|apply| Arc::new(move || apply(PermissionsApply::NextInvocation)) as _);
     form(submit, content)
   }
 
-  /// "Permissions for this run" over "Builder · Implement · Codex / Sol · from profile v2", and ×.
+  /// "Permissions for this run" over "Builder · Implement · Codex / Sol · from profile v2" (with
+  /// "· run ended" for an ended run, `B4zwoA`), and ×.
   fn header(&self, ctx: &Ctx, props: &RunPermissionsProps) -> Element {
+    let key = if props.live {
+      "runs.permissions.popover.subtitle"
+    } else {
+      "runs.permissions.popover.subtitleEnded"
+    };
     let subtitle = ctx.t_args(
-      "runs.permissions.popover.subtitle",
+      key,
       [
         ("agent", agent_of(&props.step)),
         ("step", &*props.step.name),

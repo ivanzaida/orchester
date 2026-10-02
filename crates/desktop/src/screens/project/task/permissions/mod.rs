@@ -23,7 +23,7 @@ use lurq::{
     ctx::{CollisionStrategy, Ctx, FutureAction, Placement},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Popup, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
@@ -53,7 +53,7 @@ use crate::{
     permissions::InvocationPolicy,
     run::control_message,
   },
-  theme::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT},
+  theme::{ExtraTypography, STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT},
   ui::pressable::{pressable, surface},
 };
 
@@ -143,18 +143,14 @@ impl Component for RunPermissionsRow {
     let apply = apply_action(ctx);
     let keep = keep_action(ctx);
     // Popup collision bounds cover the whole window, so the content reserves the title and status
-    // bars; it scrolls when it is taller than the room above the row, so its bottom always stays
-    // `POPOVER_GAP` above the row instead of being pushed over it.
+    // bars; the popover is at most as tall as the room above the row, so its bottom always stays
+    // `POPOVER_GAP` above the row instead of being pushed over it, and its body scrolls.
     let window = ctx.window().info().logical_height() - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT;
     let above = self.anchor.bounds().y - TITLE_BAR_HEIGHT - POPOVER_GAP;
     let available = if above > 0.0 { above.min(window) } else { window }.max(0.0);
     let content = Column::new()
       .child(Spacer::new().height(Dimension::Px(TITLE_BAR_HEIGHT)))
-      .child(
-        ScrollVertical::new(self.popover(ctx, &props, &apply))
-          .id("task-permissions-scroll")
-          .max_height(Dimension::Px(available)),
-      )
+      .child(self.popover(ctx, &props, &apply, available))
       .child(Spacer::new().height(Dimension::Px(STATUS_BAR_HEIGHT)));
     let popover = Popup::new(self.anchor.clone(), content)
       .open(self.open.clone())
@@ -190,7 +186,7 @@ impl RunPermissionsRow {
       "runs.permissions.view"
     };
     let stacked = text.full && !props.inline_link;
-    let link_text = Text::new(&ctx.t(link_key)).variant(TypographyStyle::Caption);
+    let link_text = Text::new(&ctx.t(link_key)).variant(ExtraTypography::CellLabel.role());
     let link = pressable(surface().id("task-permissions-view"), move || {
       edit.open(&base);
       open.set(true);
@@ -219,7 +215,7 @@ impl RunPermissionsRow {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Start)
       .ref_element(self.anchor.clone())
-      .child(label_text(&text.label))
+      .child(label_text(&text.label).id("task-permissions-label"))
       .child(value)
       .into()
   }
@@ -263,14 +259,20 @@ fn inline_value(ctx: &Ctx, text: &PolicyText, link: Element) -> Element {
     .spacing(SpacingSize::Xs)
     .justify(Justify::End)
     .align_items(Alignment::End)
-    .child(value_text(&text.value).id("task-permissions-value"))
+    // A text in a wrapping row is measured at its natural width unless a percentage bounds it; bound
+    // to the row, a value longer than the line wraps at its separators instead of overflowing.
+    .child(
+      value_text(&text.value)
+        .id("task-permissions-value")
+        .max_width(Dimension::Pct(100.0)),
+    )
     .child(
       Row::new()
         .spacing(SpacingSize::Xs)
         .align_items(Alignment::Center)
         .child(
           Text::new(&ctx.t("common.separator"))
-            .variant(TypographyStyle::Caption)
+            .variant(ExtraTypography::CellLabel.role())
             .color(PaletteColor::TextPrimary),
         )
         .child(link),
