@@ -1,5 +1,8 @@
 //! Drag, keyboard moves and a single undo share the same reviewed order.
+use lurq::components::TextOverflow;
+
 use super::*;
+use crate::tasks::list::PipelineLabel;
 
 /// The order heading and the width of a row's position (`s7zYn`, `XY1PR` in `gj5Cf`).
 const ORDER_HEADING_HEIGHT: f32 = 32.0;
@@ -113,7 +116,10 @@ impl SchedulingReview {
       .render(ctx)
   }
 
-  pub(super) fn task_order(&self, ctx: &mut Ctx, props: &ReviewProps, locked: bool) -> Element {
+  /// The reviewed order beside the settings (`R9ifN`): its rows scroll, and the column's right
+  /// padding holds their scroll gutter. `stacked` above the settings, it is as wide as the page
+  /// and its rows scroll with the page.
+  pub(super) fn task_order(&self, ctx: &mut Ctx, props: &ReviewProps, locked: bool, stacked: bool) -> Element {
     let rows = self
       .order
       .get()
@@ -135,8 +141,19 @@ impl SchedulingReview {
         .enumerate()
         .map(|(index, task)| self.order_row(ctx, task, index, locked)),
     );
-    // The list's scroll gutter sits in the column's right padding, so the heading and the
-    // controls leave room for it too and line up with the rows (`R9ifN`).
+    let heading = self.order_heading(ctx);
+    let controls = self.order_controls(ctx, &rows, locked);
+    if stacked {
+      return Column::new()
+        .id("tasks-review-order")
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Stack.role())
+        .child(heading)
+        .child(list)
+        .child(controls)
+        .into();
+    }
+    // The heading and the controls leave room for the list's gutter, so they line up with the rows.
     Column::new()
       .id("tasks-review-order")
       .flex(1.0)
@@ -147,19 +164,8 @@ impl SchedulingReview {
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(ORDER_HEADING_HEIGHT))
           .padding_right(ExtraSpacing::Stack.role())
-          .align_items(lurq::layout::Alignment::Center)
-          .child(
-            Text::new(&ctx.t(if self.mode.get() == Mode::Parallel {
-              "tasks.bulk.priority"
-            } else {
-              "tasks.bulk.order"
-            }))
-            .variant(ExtraTypography::ReviewHeading.role()),
-          )
-          .child(Spacer::new().flex(1.0))
-          .child(Text::new(&ctx.t("tasks.bulk.dragToReorder")).variant(TypographyStyle::Caption)),
+          .child(heading),
       )
       .child(
         ScrollVertical::new(list)
@@ -171,8 +177,26 @@ impl SchedulingReview {
         Column::new()
           .width(Dimension::Pct(100.0))
           .padding_right(ExtraSpacing::Stack.role())
-          .child(self.order_controls(ctx, &rows, locked)),
+          .child(controls),
       )
+      .into()
+  }
+
+  fn order_heading(&self, ctx: &Ctx) -> Element {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(ORDER_HEADING_HEIGHT))
+      .align_items(lurq::layout::Alignment::Center)
+      .child(
+        Text::new(&ctx.t(if self.mode.get() == Mode::Parallel {
+          "tasks.bulk.priority"
+        } else {
+          "tasks.bulk.order"
+        }))
+        .variant(ExtraTypography::ReviewHeading.role()),
+      )
+      .child(Spacer::new().flex(1.0))
+      .child(Text::new(&ctx.t("tasks.bulk.dragToReorder")).variant(TypographyStyle::Caption))
       .into()
   }
 
@@ -180,6 +204,24 @@ impl SchedulingReview {
   /// (`gj5Cf`, a `zemhy` row).
   fn order_row(&self, ctx: &mut Ctx, task: &TaskRow, index: usize, locked: bool) -> Element {
     let handle = self.order_handle(ctx, task.id, locked);
+    // "ORC-129 · Feature delivery v3": the published version follows the pipeline's name.
+    let subtitle = match &task.pipeline {
+      PipelineLabel::Published { name, version } => ctx.t_args(
+        "tasks.bulk.taskPipelineVersion",
+        [
+          ("task", task.key.to_string()),
+          ("pipeline", name.to_string()),
+          ("version", version.to_string()),
+        ],
+      ),
+      other => ctx.t_args(
+        "tasks.bulk.taskPipeline",
+        [
+          ("task", task.key.to_string()),
+          ("pipeline", message_text(ctx, &other.message()).to_string()),
+        ],
+      ),
+    };
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(REVIEW_ROW_HEIGHT))
@@ -195,17 +237,15 @@ impl SchedulingReview {
           .child(
             Text::new(&task.title)
               .variant(TypographyStyle::FieldLabel)
-              .color(lurq::app::theme::PaletteColor::TextPrimary),
+              .color(lurq::app::theme::PaletteColor::TextPrimary)
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis),
           )
           .child(
-            Text::new(&ctx.t_args(
-              "tasks.bulk.taskPipeline",
-              [
-                ("task", task.key.to_string()),
-                ("pipeline", message_text(ctx, &task.pipeline.message()).to_string()),
-              ],
-            ))
-            .variant(ExtraTypography::Hint.role()),
+            Text::new(&subtitle)
+              .variant(ExtraTypography::Hint.role())
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis),
           ),
       )
       .child(

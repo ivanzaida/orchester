@@ -37,6 +37,8 @@ const PIPELINE_WIDTH: f32 = 136.0;
 const STATUS_WIDTH: f32 = 128.0;
 const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
+/// The least room a task's title keeps when the window is narrow.
+const TITLE_MIN_WIDTH: f32 = 120.0;
 pub(super) const HEADING_HEIGHT: f32 = 28.0;
 pub(super) const TABLE_ROW_HEIGHT: f32 = 48.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
@@ -109,6 +111,12 @@ fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
     .into()
 }
 
+/// Whether the window is wide enough for the Pipeline column; reading the width re-renders the
+/// caller as the window resizes.
+fn shows_pipeline(ctx: &Ctx) -> bool {
+  ctx.window().logical_width() >= crate::theme::TASK_TABLE_PIPELINE_MIN_WINDOW
+}
+
 fn column_label(text: &str) -> Text {
   Text::new(text).variant(ExtraTypography::Footnote.role()).nowrap()
 }
@@ -123,8 +131,13 @@ pub fn table_heading(ctx: &Ctx) -> Element {
     .align_items(Alignment::Center)
     .child(Row::new().width(Dimension::Px(SELECT_WIDTH)))
     .child(cell(KEY_WIDTH, column_label(&ctx.t("tasks.columns.key"))))
-    .child(Row::new().flex(1.0).child(column_label(&ctx.t("tasks.columns.task"))))
-    .child(cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline"))))
+    .child(
+      Row::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(TITLE_MIN_WIDTH))
+        .child(column_label(&ctx.t("tasks.columns.task"))),
+    )
+    .with_children(shows_pipeline(ctx).then(|| cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline")))))
     .child(cell(STATUS_WIDTH, column_label(&ctx.t("tasks.columns.status"))))
     .child(cell(READINESS_WIDTH, column_label(&ctx.t("tasks.columns.readiness"))))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
@@ -170,19 +183,27 @@ impl Component for QueueRow {
         Text::new(&row.key).variant(TypographyStyle::Mono).nowrap(),
       ))
       .child(
-        Row::new().flex(1.0).align_items(Alignment::Center).child(
-          Text::new(&row.title)
-            .variant(TypographyStyle::FieldLabel)
-            .color(PaletteColor::TextPrimary)
-            .nowrap()
-            .text_overflow(TextOverflow::Elipsis)
-            .flex(1.0),
-        ),
+        Row::new()
+          .id(format!("task-title-{}", row.key))
+          .flex(1.0)
+          .min_width(Dimension::Px(TITLE_MIN_WIDTH))
+          .align_items(Alignment::Center)
+          .child(
+            Text::new(&row.title)
+              .variant(TypographyStyle::FieldLabel)
+              .color(PaletteColor::TextPrimary)
+              .nowrap()
+              .text_overflow(TextOverflow::Elipsis)
+              .flex(1.0),
+          ),
       )
-      .child(cell(
-        PIPELINE_WIDTH,
-        column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
-      ))
+      .with_children(shows_pipeline(ctx).then(|| {
+        cell(
+          PIPELINE_WIDTH,
+          column_label(&message_text(ctx, &row.pipeline.message())).text_overflow(TextOverflow::Elipsis),
+        )
+        .id(format!("task-pipeline-{}", row.key))
+      }))
       .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
       .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
       .child(open_chevron());

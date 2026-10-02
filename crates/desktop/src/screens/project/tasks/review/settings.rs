@@ -2,7 +2,9 @@
 use super::*;
 
 impl SchedulingReview {
-  pub(super) fn settings(&self, ctx: &Ctx, props: &ReviewProps, locked: bool) -> Element {
+  /// The execution settings (`qdApo`) in their own scrolling column, or `stacked` under the order
+  /// as wide as the page.
+  pub(super) fn settings(&self, ctx: &Ctx, props: &ReviewProps, locked: bool, stacked: bool) -> Element {
     let fields = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Divider.role())
@@ -21,6 +23,9 @@ impl SchedulingReview {
       .child(self.pipeline_readback(ctx, props))
       .child(self.approval_notice(ctx, props))
       .child(Text::new(&ctx.t("tasks.bulk.branchNote")).variant(ExtraTypography::CellLabel.role()));
+    if stacked {
+      return fields.id("tasks-review-settings").into();
+    }
     Column::new()
       .id("tasks-review-settings")
       .width(Dimension::Px(REVIEW_RAIL_WIDTH))

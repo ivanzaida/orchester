@@ -52,8 +52,7 @@ impl SchedulingReview {
     let note = parsed.into_iter().map(|budget| {
       Element::from(
         Text::new(&ctx.t_args(keys.1, [("count", compact_tokens(budget.get()))]))
-          .variant(ExtraTypography::Hint.role())
-          .color(lurq::app::theme::PaletteColor::TextMuted),
+          .variant(ExtraTypography::ReadBack.role()),
       )
       .id(format!("{id}-readback"))
     });
@@ -151,16 +150,25 @@ impl SchedulingReview {
         }
       }
     }
+    let several = versions.len() > 1;
     let value = versions
       .into_iter()
       .collect::<Vec<_>>()
       .join(&ctx.t("tasks.bulk.pipelineSeparator"));
-    Row::new()
+    let label = ctx.t("tasks.bulk.pipelineVersion");
+    // One version sits on the label's line (`RG0FF`); several wrap under the first line's top.
+    let row = Row::new()
       .id("tasks-review-pipeline")
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Px(crate::theme::TASK_REVIEW_PROPERTY_HEIGHT))
-      .child(wrapping_top_property(&ctx.t("tasks.bulk.pipelineVersion"), &value))
-      .into()
+      .min_height(Dimension::Px(crate::theme::TASK_REVIEW_PROPERTY_HEIGHT));
+    if several {
+      row.child(wrapping_top_property(&label, &value)).into()
+    } else {
+      row
+        .align_items(lurq::layout::Alignment::Center)
+        .child(property(&label, &value))
+        .into()
+    }
   }
 
   pub(super) fn approval_notice(&self, ctx: &Ctx, props: &ReviewProps) -> Element {

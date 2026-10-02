@@ -157,18 +157,7 @@ impl Component for SchedulingReview {
         &ctx.t_args("tasks.bulk.reviewTitle", [("count", count.to_string())]),
         &ctx.t("tasks.bulk.reviewDescription"),
       ))
-      .child(
-        Row::new()
-          .flex(1.0)
-          .width(Dimension::Pct(100.0))
-          .padding_top(SpacingSize::Xs)
-          .padding_bottom(ExtraSpacing::Step.role())
-          .padding_left(SpacingSize::Section)
-          .padding_right(ExtraSpacing::BesideGutter.role())
-          .spacing(SpacingSize::Section)
-          .child(self.task_order(ctx, &props, pending || completed))
-          .child(self.settings(ctx, &props, pending || completed)),
-      )
+      .child(self.body(ctx, &props, pending || completed))
       .with_children(parsed.err().map(|e| field_error(&message_text(ctx, &e))))
       .with_children((!props.runner_online).then(|| field_error(&ctx.t("runs.start.runnerUnavailable"))))
       .with_children(
@@ -245,6 +234,40 @@ impl SchedulingReview {
     Ok((group, limits))
   }
 
+  /// The order and the settings side by side (W1Dq6), or one under the other in a window too
+  /// narrow for both columns, the page scrolling (implemented, not drawn yet).
+  fn body(&self, ctx: &mut Ctx, props: &ReviewProps, locked: bool) -> Element {
+    // Reading the window's width re-renders the review as the window resizes.
+    let stacked = ctx.window().logical_width() < crate::theme::TASK_REVIEW_COLUMNS_MIN_WINDOW;
+    let order = self.task_order(ctx, props, locked, stacked);
+    let settings = self.settings(ctx, props, locked, stacked);
+    let body = Row::new()
+      .flex(1.0)
+      .width(Dimension::Pct(100.0))
+      .padding_top(SpacingSize::Xs)
+      .padding_bottom(ExtraSpacing::Step.role())
+      .padding_left(SpacingSize::Section)
+      .padding_right(ExtraSpacing::BesideGutter.role())
+      .spacing(SpacingSize::Section);
+    if !stacked {
+      return body.child(order).child(settings).into();
+    }
+    let columns = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Section)
+      .child(order)
+      .child(settings);
+    body
+      .child(
+        ScrollVertical::new(columns)
+          .id("tasks-review-page")
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Pct(100.0))
+          .scrollbar(gutter_scrollbar()),
+      )
+      .into()
+  }
+
   fn topbar(&self, ctx: &Ctx, props: &ReviewProps, pending: bool) -> Element {
     let close = props.close.clone();
     Row::new()
@@ -262,7 +285,10 @@ impl SchedulingReview {
         ActionButton::new(ctx.t("tasks.bulk.back"))
           .icon(Icon::ArrowLeft)
           .id("tasks-review-back")
-          .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
+          .size(
+            Dimension::Px(crate::theme::TASK_REVIEW_BACK_WIDTH),
+            Dimension::Px(TOPBAR_BUTTON_HEIGHT),
+          )
           .on_click(move || close.set(false))
           .enabled(!pending)
           .render(ctx),
@@ -300,14 +326,14 @@ impl SchedulingReview {
       .height(Dimension::Px(crate::theme::TASK_REVIEW_FOOTER_HEIGHT))
       .padding_horizontal(SpacingSize::Section)
       .align_items(lurq::layout::Alignment::Center)
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Group.role())
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(Element::from(Text::new(&self.summary(ctx)).variant(TypographyStyle::Caption)).id("tasks-review-summary"))
       .child(Spacer::new().flex(1.0))
       .child(
         ActionButton::new(ctx.t(if complete { "tasks.bulk.back" } else { "common.cancel" }))
           .icon(if complete { Icon::ArrowLeft } else { Icon::X })
-          .height(Dimension::Px(crate::theme::TASK_REVIEW_ACTION_HEIGHT))
+          .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
           .id("tasks-review-cancel")
           .in_form()
           .on_click(move || close.set(false))

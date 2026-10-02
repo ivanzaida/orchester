@@ -1,4 +1,6 @@
 //! Task list controls and scheduling review, driven through the headless desktop.
+#[path = "task_bulk_narrow.rs"]
+mod narrow;
 #[path = "task_bulk_recovery.rs"]
 mod recovery;
 #[path = "task_bulk_release.rs"]
@@ -369,6 +371,20 @@ fn task_bulk_select_all_and_search_combine_with_drafts_tab() {
     tree.get_element_by_id("task-row-KON-1").is_none() && tree.get_element_by_id("task-row-KON-2").is_some()
   });
   assert!(shows(&mut desktop, "task-selection", "2 selected"));
+  // A search that hides every row says so and can be cleared.
+  desktop.type_text(" nothing");
+  desktop.settle("the empty search", |tree| {
+    tree.get_element_by_id("tasks-clear-query").is_some()
+  });
+  assert!(shows(
+    &mut desktop,
+    "tasks-empty-rows",
+    "No tasks in this tab match the search or pipeline filter."
+  ));
+  desktop.press("tasks-clear-query");
+  desktop.settle("the cleared search", |tree| {
+    tree.get_element_by_id("task-row-KON-1").is_some() && tree.get_element_by_id("task-row-KON-2").is_some()
+  });
 }
 
 fn add_draft(desktop: &mut Desktop, title: &str, number: usize) {

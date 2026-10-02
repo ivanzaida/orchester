@@ -305,12 +305,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
     .filter(|task| rows.iter().any(|row| row.id == *task))
     .map(|task| task.to_string());
   let table: Element = if rows.is_empty() {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .padding(ExtraSpacing::Stack.role())
-      .child(Text::new(&ctx.t("tasks.emptyTab")).variant(TypographyStyle::Caption))
-      .into()
+    empty_rows(ctx, screen)
   } else {
     VirtualizedList::new_shared(ctx, rows.clone())
       .list_key("task-rows")
@@ -336,18 +331,54 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
         .then(|| controls::assignment(ctx, screen, root, tasks)),
     )
     .with_children(controls::problems(ctx, screen, tasks))
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .max_height(Dimension::Px(
-          super::task_rows::HEADING_HEIGHT + super::task_rows::TABLE_ROW_HEIGHT * visible.len().max(1) as f32,
-        ))
-        .child(table_heading(ctx))
-        .child(table),
-    )
+    .child(table_column(ctx, table, visible.len()))
     .child(footer(ctx, tasks));
   crate::ui::form::form(None, content)
+}
+
+/// The table under its heading: as tall as its `rows` up to the room left, so the footer follows
+/// the last row; without rows, as tall as what it says instead.
+fn table_column(ctx: &Ctx, table: Element, rows: usize) -> Element {
+  let column = Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(table_heading(ctx))
+    .child(table);
+  if rows == 0 {
+    return column.into();
+  }
+  column
+    .flex(1.0)
+    .max_height(Dimension::Px(
+      super::task_rows::HEADING_HEIGHT + super::task_rows::TABLE_ROW_HEIGHT * rows as f32,
+    ))
+    .into()
+}
+
+/// No row to show: the tab has no tasks, or the search or pipeline filter hides them all, which
+/// the person can clear (implemented, not drawn yet).
+fn empty_rows(ctx: &Ctx, screen: &TasksScreen) -> Element {
+  let filtered = !screen.search.get().trim().is_empty() || screen.pipeline.get().0.is_some();
+  let text = ctx.t(if filtered { "tasks.emptyQuery" } else { "tasks.emptyTab" });
+  let (search, pipeline) = (screen.search.clone(), screen.pipeline.clone());
+  Column::new()
+    .id("tasks-empty-rows")
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Stack.role())
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .child(Text::new(&text).variant(TypographyStyle::Caption))
+    .with_children(filtered.then(|| {
+      ActionButton::new(ctx.t("tasks.clearQuery"))
+        .icon(Icon::X)
+        .id("tasks-clear-query")
+        .in_form()
+        .on_click(move || {
+          search.set(String::new());
+          pipeline.set(PipelineFilter::default());
+        })
+        .render(ctx)
+    }))
+    .into()
 }
 
 /// Task and run counts (`Bpth7`).

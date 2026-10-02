@@ -194,5 +194,15 @@ pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
 pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
 /// A key/value setting: time limit and pipeline version (`U673I`, `RG0FF`, `tfGRt`).
 pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;
+/// Back to tasks in the review's topbar (`uBqK9`).
+pub const TASK_REVIEW_BACK_WIDTH: f32 = 132.0;
+/// The narrowest window that holds the review's two columns: the 216 sidebar, 32 page padding, an
+/// order column of 440 (its rows and its Move and Undo buttons), the 32 gap, the 520 settings with
+/// their gutter and 20 padding. Narrower, the settings go under the order (not drawn yet).
+pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
+/// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
+/// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
+/// column is left out so the title keeps its room (not drawn yet).
+pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1152.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

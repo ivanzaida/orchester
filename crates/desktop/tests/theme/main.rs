@@ -3,7 +3,7 @@ use lurq::{
     App,
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  layout::text_style::{FontFeature, FontFeatures, FontWeight},
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::{color::Color, dimension::Dimension},
 };
 use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography};
@@ -92,6 +92,11 @@ fn extra_typography_follows_pencil() {
   assert_eq!(
     theme.typography_style(ExtraTypography::CardTitle.role()).font_size,
     14.0
+  );
+  let read_back = theme.typography_style(ExtraTypography::ReadBack.role());
+  assert_eq!(
+    (read_back.font_size, read_back.line_height),
+    (10.0, TextStyle::default().line_height)
   );
   let review = theme.typography_style(ExtraTypography::ReviewHeading.role());
   assert_eq!((review.font_size, review.weight), (14.0, FontWeight::Normal));

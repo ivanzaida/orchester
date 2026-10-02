@@ -938,6 +938,13 @@ queued or started*. When the selected tasks had different budgets or time limits
 fields that *These limits replace each selected task’s own token budget and time limit.* (the shared limits apply to
 every task, as the review's per-task fields show). The runner retries a start the person must fix with a growing
 wait (2 s, doubling to 1 min) and stops treating a group as work once it is held for good or every first run ended.
+**Narrow windows and empty searches (implemented, not drawn yet):** below a 1260 window the scheduling review puts
+the settings under the order, both as wide as the page, and the page scrolls; below 1152 the task table leaves out its
+Pipeline column so the title keeps at least 120 (the fixed column widths otherwise leave the title nothing at 960).
+When the search or pipeline filter hides every row of a tab, the table says *No tasks in this tab match the search or
+pipeline filter.* with a *Clear search and filter* button. The drawn copy that names merge dependencies (selection
+summary, sequential hint and notice, branch note) is not used: dependencies are not built, so the app does not claim
+them.
 The scheduling-review order column includes a Task to reorder selector and keyboard-reachable Move up, Move down
 and Undo buttons beneath the scrolling rows (implemented, not drawn yet). Select a task with the picker, then use
 Tab and Enter on its move action. Boundary moves and actions after submission are disabled. Each real keyboard

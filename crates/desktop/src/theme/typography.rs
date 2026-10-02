@@ -99,6 +99,9 @@ pub enum ExtraTypography {
   Instructions,
   /// Short explanation under a field, e.g. "Choose a model here…" (`k66CB`, `Lwlf3`).
   Hint,
+  /// A value read back on one line under a field, e.g. "≈ 14M tokens" under the scheduling review's
+  /// token cap (`n5Wrl`, `xPwNl` in `W1Dq6`): 10 subtle.
+  ReadBack,
   /// Version figure in the publish confirmation, e.g. "v4" (`p8L552`).
   VersionFigure,
   /// Explanation under an empty state title (`xIG73`).
@@ -183,7 +186,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 81] = [
+  const ALL: [Self; 82] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::ReviewHeading,
@@ -227,6 +230,7 @@ impl ExtraTypography {
     Self::MonoField,
     Self::Instructions,
     Self::Hint,
+    Self::ReadBack,
     Self::VersionFigure,
     Self::Summary,
     Self::IconLarge,
@@ -328,6 +332,7 @@ impl ExtraTypography {
       Self::MonoField => "mono-field",
       Self::Instructions => "instructions",
       Self::Hint => "hint",
+      Self::ReadBack => "read-back",
       Self::VersionFigure => "version-figure",
       Self::Summary => "summary",
       Self::CompactStatusLabel => "compact-status-label",
@@ -503,6 +508,7 @@ impl ExtraTypography {
       Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
       Self::Instructions => leading(1.65, style(12.0, FontWeight::Normal, TEXT)),
       Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
+      Self::ReadBack => style(10.0, FontWeight::Normal, SUBTLE),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
       Self::Summary => leading(1.6, style(13.0, FontWeight::Normal, MUTED)),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),

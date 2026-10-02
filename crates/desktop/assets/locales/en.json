@@ -382,6 +382,7 @@
       "orderTaskValue": "{{task}} · {{title}}",
       "dragToReorder": "Drag to reorder",
       "taskPipeline": "{{task}} · {{pipeline}}",
+      "taskPipelineVersion": "{{task}} · {{pipeline}} {{version}}",
       "parallel": "Parallel",
       "parallelDetail": "Run ready tasks together.",
       "sequential": "Sequential",
@@ -429,6 +430,8 @@
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
+    "emptyQuery": "No tasks in this tab match the search or pipeline filter.",
+    "clearQuery": "Clear search and filter",
     "tabs": {
       "all": "All tasks",
       "drafts": "Drafts",
