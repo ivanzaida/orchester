@@ -243,6 +243,25 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
+### Useful automatic retries · branch `claude/retry-feedback` (built 2026-10-02, UI verification pending)
+
+Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
+failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
+verdict (`reported_failed`, `command_failed`) follows `on_failure`, a `failed` result wins over a turn that failed
+after it, any other failure restarts its step once in place; exhausted retries and a second breakage make the run
+wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
+retry, returns the work to an agent step with a note, or stops the run (`Command::DecideStuckRun`). Migration 34
+rebuilds `runs` (status `waiting`) and `attempts` (reasons `restart`, `returned`, column `note`); runs that failed
+with `retries_exhausted` stay failed. See `docs/architecture/storage.md`, Step graphs, Failures. Tests: `cargo test
+-p orchester-core --test run stuck retry_prompt`, `cargo test -p orchester-store --test stuck_runs stuck_runs`,
+`cargo test -p orchester-runner --features test-agent --test retries retries`, `cargo test -p orchester-desktop
+--test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`.
+
+**Done when** an independent design verifier compares the waiting state of 02.B (`J3JZaT`, panel `Lk43S`) with the
+app (the panel now holds the step choice, the note field and *Stop and fail the run*, drawn with existing
+components until the designer draws the final state) and reports no blocking or major mismatches; then move this
+entry to *Done*.
+
 ## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
