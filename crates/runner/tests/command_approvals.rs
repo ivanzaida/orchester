@@ -288,7 +288,7 @@ async fn verify_progress(
   assert_eq!(worktree.join("command-once.txt").exists(), !deny_command);
   assert_eq!(worktree.join("mcp-once.txt").exists(), !deny_command && !deny_tool);
   let invocations = db.invocations(id).expect("invocations");
-  assert_eq!(invocations.len(), 3);
+  assert_eq!(invocations.len(), 3, "a denial restarts nothing");
   assert_eq!(invocations[1].session, invocations[2].session);
   assert_eq!(invocations[1].execution, invocations[2].execution);
   let prepared = StepKey::new("prepare").expect("key");

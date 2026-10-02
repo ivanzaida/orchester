@@ -197,6 +197,102 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
+### Useful automatic retries · branch `claude/retry-feedback` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of 02.B3–B7 passed. Noted, not fixed: retries are counted
+over the whole run, so after a person returns the work a later verdict failure of that step waits at once; a member
+of a task group that waits for a person keeps Return to drafts unavailable for the group until it is stopped or
+retried; the Conversation tab's progress column at 960 loses step names (ORC-61 rewrites that tab).
+
+Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
+failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
+verdict (`reported_failed`, `command_failed`) follows `on_failure`, a `failed` result wins over a turn that failed
+after it, any other failure restarts its step in place until it broke twice since it last passed (at most 10 automatic
+attempts in a row, `MAX_AUTOMATIC_ATTEMPTS`); a restart keeps the report and note of the attempt it restarts;
+exhausted retries and a second breakage make the run wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
+retry, returns the work to an agent step with a note, or stops the run (`Command::DecideStuckRun`). Migration 36
+rebuilds `runs` (status `waiting`) and `attempts` (reasons `restart`, `returned`, column `note`); runs that failed
+with `retries_exhausted` stay failed. See `docs/architecture/storage.md`, Step graphs, Failures. Tests: `cargo test
+-p orchester-core --test run stuck retry_prompt`, `cargo test -p orchester-store --test stuck_runs stuck_runs`,
+`cargo test -p orchester-runner --features test-agent --test retries retries`, `cargo test -p orchester-desktop
+--test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`,
+`cargo test -p orchester-desktop --test activity activity_run_waiting`.
+
+**Done when** an independent design verifier compares the app with the run-waits-for-a-person frames in `O4vgKt`
+and reports no blocking or major mismatches; then move this entry to *Done*:
+- 02.B3 `FjCWv`: retries used up, panel `Bi6pU`;
+- 02.B4 `K7hbj`: a step chosen (Implement, the step a retry resumes, by default) and a note typed;
+- 02.B5 `m3pDW`: a step broke twice;
+- 02.B6 `NM5My`: *Needs you* in Overview (card *ORC-128 · Review still fails after 2 retries*) and the status bar
+  (*Review needs your decision · ORC-128*, hand, until opened or dismissed);
+- 02.B7 `zyusO`: the three Activity transcript marks (automatic return, automatic restart, your return with note) and
+  the runner's refusal above *Stop and fail the run*.
+`DecideStuckRun`, `RunNotWaiting` and `RunWaitsForPerson` raise the ipc `PROTOCOL_VERSION` to 11.
+### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of the permission rows, popovers and notices passed.
+
+Run #12 (`orchester/orc-44-run-2`, base `37716df`) passed Implement, Check and Review; its Verify was interrupted.
+Master was merged into the branch (merge `a05ba75`) with master's approval architecture as the base. Almost all of
+ORC-44 was already on master: enabling *Ask before running commands* and *Ask before MCP actions* for a profile, a step
+or the current run, one-action command and MCP decisions, resuming an `exec` session through App Server, Apply now at
+a checkpoint, immutable invocation launch permissions, Windows sandbox selection and scoped build directories (see the
+agent runtime architecture entry under *Done*, since reworked by Claude Code support, App Server for every Codex step,
+`tool_approvals`, MCP exemptions and ORC-57/60). Dropped as covered or superseded: those runtime, core, store and
+runner changes; the command caption that denied sandbox exceptions (master asks about them on purpose); the
+`exec`-path invocation tests; the wrapping Target/working directory row in the approval dialog (C6 and the approval
+choices design's long values, `bjrgu`, own it).
+
+Ported (still missing on master), then built to the designer's frames approved 2026-10-02 (design doc, "What the
+row shows"): the task's Permissions row shows what the step's current or last invocation launched with, never the
+queued settings. The label carries the qualifier (*Running with* / *Last ran with* / *Next run uses*; Activity
+*Running with* / *Ran with*), the value is bare (*… · MCP asks* / *MCP auto*, *Commands ask*), breaks only at "·"
+and stacks above its never-clipped link; *starting…*, *not recorded* and *no permissions · it did not start* cover
+the launches without a record. Notices: *Saved for the next invocation · <change>*, *Applying <change> at the next
+checkpoint…*, *Restarting with the new permissions…* (no button) and *New permissions not active: <agent> did not
+restart*, then applied once the restarted invocation recorded its launch. The popover has one *Running with* line,
+ends 6 px above its row and scrolls when the window is short; an ended run's popover is read-only with only
+*Close* (`docs/interactive-tool-approvals.md`).
+Tests: `cargo test -p orchester-desktop --test run_permission_policy run_policy`, `--test form_keyboard
+run_permissions` (layout at 1440 and 960, popover above its row at 1020/960/700).
+
+**Done when** an independent review passes and an independent design verifier reports no blocking or major mismatch
+for the rows (02.10 `H1wCPK`, 02.12 `YOcfT`, 02.A `d6xleF`, 02.S `Lr8Dg`, 02.J anchor `rnGN7`, `iPBOy`), the board
+`iPHGE` (panel states, inline row at 1440 and 960, Activity panel), the popovers (`UPDBO` in `NNRH8`, `zCqp2` in
+`ecCTw`, ended `YgLEg`/`vXtTX`), Apply now (`D8qjLz`: `v0wd4R`, `R5mCao`) and `LJmTH` (`A3h7B4`, `ztEdT`, `shNob`).
+Known differences: at 960 the inline link wraps under the value with its "·" (lurq cannot drop a separator at a
+wrap); notice details say "the new permissions" where the frames name the change ("pnpm build allowed"), and the
+pending detail does not name the running command; the ended popover's network switch fades to the locked 0.45.
+Then move this entry to *Done*.
+
+### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
+
+**Done 2026-10-02.** Independent review (four rounds) and design verification (1440 and 960) passed.
+Built in Orchester run #10 (`orchester/orc-30-run-2`, on the old base `37716df`) and merged with master on
+`claude/orc30` (merges `162206c`, `69677c9` for lurq 0.33.0). Row and select-all selection with the ready / incomplete /
+already queued or started split, readiness reasons, Set pipeline (published pipelines, drafts only, skipped tasks
+explained), search by title/id/brief, the pipeline filter and sort combined with the tabs (an empty result says so and
+can be cleared), and Run selected opening the parallel/sequential scheduling review (editable order, shared task
+limits, aggregate token cap) that queues each task exactly once: groups are stored atomically and first runs use
+stable first-run keys, so a retry never starts a task twice; the runner keeps the reviewed concurrency and its agent
+slots. A group held for good (failed task, spent cap, a start to fix) leaves the runner idle; its unstarted tasks go
+back to the drafts with *Return to drafts* in the selection bar. Finished groups are no longer polled, and failing
+starts back off. The row of the task New task's Create just made stays highlighted next to the selection checkboxes.
+Narrow windows: the review stacks its columns below 1260, the table drops its Pipeline column below 1152.
+Undrawn states are listed in the design doc as implemented, not drawn yet. The drawn copy that names merge
+dependencies is deliberately not used: dependencies are outside ORC-30 and not built.
+History: the run passed Implement, Check and Review; its Verify failed (order 12px high, settings too dense), fixed
+in `9971dbf`. An independent review of `4b507a3` failed on runner idleness, group polling, errors and dead code,
+fixed in the review follow-ups; an independent verification of `4b507a3` passed at 1440 and failed at 960, fixed in
+the design follow-ups.
+Tests: `cargo test -p orchester-core --test task_groups task_group`, `cargo test -p orchester-store --test
+task_groups task_group`, `cargo test -p orchester-runner --features test-agent --test task_groups task_group`,
+`cargo test -p orchester-desktop --test form_keyboard task_bulk`, `cargo test -p orchester-desktop --test tasks task`.
+
+**Done when** an independent re-review and design verifier report no blocking or major findings against Tasks
+`J9467` and the scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential), at 1440 and 960; then move this entry
+to *Done*. Not verified yet after the follow-ups.
+
 ## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
@@ -256,7 +352,7 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.33.1: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0), and a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1). Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.34.0: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
@@ -319,7 +415,7 @@ Approval choices, waiting requests and auto-approval · branch `claude/approval-
 
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
-- **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
+- **Done 2026-10-02.** Independent review and design verification passed. A value that does not fit beside its label (Action, Command or
   Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
   label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
   both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
@@ -330,6 +426,10 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
   (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
 - Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- lurq bug worked around: a component that renders its own `Modal` and re-renders after two window resizes lays the
+  layer out at the earlier size. The dialog renders only the layer (`ToolApprovalDialog`); everything that changes lives
+  in `ToolApprovalPanel`. The fix goes upstream as lurq 0.33.2; other dialogs that render their own `Modal` and
+  re-render while open are exposed until then.
 - Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
   `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
   512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
@@ -342,11 +442,13 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
 - The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
   room left of them and wraps there.
-- Left: a command's *Agent's note* still cuts with an ellipsis. Pressing a value box's sideways scrollbar lane off its
-  4px thumb starts a text selection instead of scrolling: lurq starts a selection from the nearest selectable text
-  within a slop that reaches the lane, and does not treat the lane (track) as the scrollbar; to be fixed in lurq.
-  The sideways lane is always reserved (lurq reserves always or never), where the design adds it only while a line
-  overflows.
+- Copy is the ghost button of `feLwP` (22 high, 6 at each side and between icon and label, `muted`, `text` and the
+  hover fill under the pointer, `oriyY`); each value box keeps its thumbs in lanes of their own inside its 6px padding,
+  the vertical one from the viewport's top (`e0vyng`). With lurq 0.33.1 a press or drag anywhere in a lane scrolls
+  and never selects text (checked in the running app on both lanes).
+- Left: a command's *Agent's note* still cuts with an ellipsis. The sideways lane is always reserved (lurq reserves
+  always or never), where the design adds it only while a line overflows; lurq has one end inset for both bars, so the
+  sideways thumb also starts at the viewport's left rather than 12 in.
 - Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
   writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
   approval`.

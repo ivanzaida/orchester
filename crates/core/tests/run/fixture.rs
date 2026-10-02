@@ -117,6 +117,11 @@ pub struct Config {
 
 impl Config {
   pub fn feature_delivery() -> Self {
+    Self::feature_delivery_with_retries(2)
+  }
+
+  /// [`Config::feature_delivery`] whose checks return to implement at most `retries` times.
+  pub fn feature_delivery_with_retries(retries: u32) -> Self {
     let builder = ResourceId::generate();
     let reviewer = ResourceId::generate();
     let plan = Step {
@@ -126,7 +131,7 @@ impl Config {
     let checks = Step {
       on_failure: Some(FailureRoute {
         return_to: key("implement"),
-        max_retries: NonZeroU32::new(2).expect("positive"),
+        max_retries: NonZeroU32::new(retries).expect("positive"),
       }),
       ..agent_step("checks", builder, &["implement"])
     };
@@ -202,14 +207,14 @@ pub struct Logged {
 
 impl Logged {
   pub fn pending() -> Self {
+    Self::pending_with(&Config::feature_delivery())
+  }
+
+  /// A created run of `config`'s pipeline.
+  pub fn pending_with(config: &Config) -> Self {
     let number = RunNumber::new(NonZeroU32::new(128).expect("positive"));
-    let (run, created) = Run::create(
-      RunId::generate(),
-      number,
-      new_run(Config::feature_delivery().snapshot()),
-      at(10),
-    )
-    .expect("positive time limit");
+    let (run, created) =
+      Run::create(RunId::generate(), number, new_run(config.snapshot()), at(10)).expect("positive time limit");
     Self {
       run,
       log: vec![created],

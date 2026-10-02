@@ -12,8 +12,8 @@ use std::{
 };
 
 use orchester_core::{
-  id::RunId,
-  run::{ApprovalAnswer, InterruptCause, RaisedLimits},
+  id::{RunId, StepExecutionId},
+  run::{ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
 use orchester_ipc::{
   Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
@@ -134,8 +134,14 @@ impl Drop for InFlightRequest {
 
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
   async fn run(mut self) -> Result<(), IpcError> {
+    let mut groups = tokio::time::interval(Duration::from_secs(1));
     loop {
       tokio::select! {
+        _ = groups.tick(), if self.finishing.is_none() => {
+          if let Err(error) = self.scheduler.advance_task_groups().await {
+            tracing::error!(?error, "cannot advance reviewed task groups");
+          }
+        }
         request = self.requests.recv() => {
           if let Some(end) = self.on_request(request).await? {
             return end;
@@ -277,7 +283,7 @@ async fn answer(
       Reply::Continued { continued, refused }
     }
     Command::Ping { nonce } => Reply::Pong { nonce },
-    Command::StartRun { key, task } => started(scheduler.start_run(key, task).await),
+    Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
     Command::RunAgain {
       key,
       task,
@@ -322,12 +328,8 @@ async fn answer(
       execution,
       version,
       ref decision,
-    } => {
-      let decision = decision.clone();
-      return later.answer(run, async move {
-        handle.decide_plan(run, execution, version, decision).await
-      });
-    }
+    } => return answer_plan(&later, handle, (run, execution, version), decision.clone()),
+    Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
     Command::DecideToolApproval {
       run,
       ref approval,
@@ -351,6 +353,21 @@ fn answer_tool_approval(
   later.answer(run, async move {
     scheduler.decide_tool_approval(run, approval, answer).await
   })
+}
+
+fn answer_plan(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  (run, execution, version): (RunId, StepExecutionId, PlanVersion),
+  decision: PlanDecision,
+) -> Answer {
+  later.answer(run, async move {
+    scheduler.decide_plan(run, execution, version, decision).await
+  })
+}
+
+fn answer_stuck(later: &Later<'_>, scheduler: Scheduler, run: RunId, decision: StuckDecision) -> Answer {
+  later.answer(run, async move { scheduler.decide_stuck(run, decision).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

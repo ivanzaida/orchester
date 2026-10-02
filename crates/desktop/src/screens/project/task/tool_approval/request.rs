@@ -37,7 +37,7 @@ const QUEUE_BUTTON_SIZE: f32 = 26.0;
 pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit) {
   // No taller than the screen: the details scroll between the header and the answers, so the wider
   // answers and the footer stay in view however long the values are.
-  let details = ScrollVertical::new(details(&ValueRows::new(ctx, view.copied, view.arguments), view))
+  let details = ScrollVertical::new(details(&ValueRows::new(ctx, view.copy, view.arguments), view))
     .id("tool-approval-details-scroll")
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)

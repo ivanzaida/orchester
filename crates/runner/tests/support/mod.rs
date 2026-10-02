@@ -34,7 +34,7 @@ use orchester_core::{
     AgentProfile, FailureRoute, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
     StepKind,
   },
-  run::{PendingToolApproval, Run},
+  run::{PendingToolApproval, Run, RunStatus},
   secret::Secret,
   store::{
     ActivityStore, ConnectionStore, McpServerStore, ResourceStore, RunStore, SecretStore, SettingsStore, TaskStore,
@@ -400,6 +400,11 @@ pub async fn wait_for_idle(scheduler: &Scheduler) {
     .await
     .expect("the run tasks end in time");
   assert!(scheduler.active_runs().is_empty(), "the runner has no active runs");
+}
+
+/// Whether `run` no longer works on its own: it ended, or it waits for a person's decision.
+pub fn settled(run: &Run) -> bool {
+  run.status().is_terminal() || matches!(run.status(), RunStatus::WaitingForPerson(_))
 }
 
 /// The run once a notification shows it satisfying `done`.

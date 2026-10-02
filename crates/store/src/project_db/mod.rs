@@ -5,6 +5,7 @@ mod approval_rules;
 mod blobs;
 mod code_index;
 mod connections;
+mod consistent;
 mod environment;
 mod import;
 mod invocation_prompts;
@@ -26,6 +27,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod step_outputs;
+mod task_groups;
 mod tasks;
 mod tool_approvals;
 

@@ -22,7 +22,7 @@ use orchester_core::{
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine, first_edit,
+  engine, first_edit, mark,
   mcp::mcp_server_text,
   mcp_call,
   problem::problem_text,
@@ -63,6 +63,7 @@ impl Component for TranscriptRowView {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TranscriptRow>().clone();
     match &row.kind {
+      RowKind::Mark(mark) => mark::mark_row(ctx, mark),
       RowKind::Header(header) => header_row(ctx, &row, header),
       RowKind::Entry { entry, agent, open } => {
         let nav = ctx

@@ -14,14 +14,14 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
   resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, StepKey},
-  run::{PromptPart, PromptSource, RunFailure, RunStatus, StepFailure, StepStatus},
+  run::{PromptPart, PromptSource, RunStatus, StepFailure, StepStatus, Stuck},
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_ipc::AttachSession;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, git, killed_mid_run, project, reported, scheduler, wait_for};
+use self::support::{Setup, StepSpec, git, killed_mid_run, project, reported, scheduler, settled, wait_for};
 
 fn rule(text: &str, targets: AgentTargets, events: &[InjectionEvent]) -> Instruction {
   Instruction::new(
@@ -224,12 +224,12 @@ async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_an
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let finished = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+  let finished = wait_for(root, &mut events, run, settled).await;
 
   let first = StepKey::new("first").expect("key");
   assert_eq!(
     finished.status(),
-    &RunStatus::Failed(RunFailure::StepFailed(first.clone()))
+    &RunStatus::WaitingForPerson(Stuck::BrokeAgain(first.clone()))
   );
   let execution = finished.latest_execution(&first).expect("the step has an execution");
   assert_eq!(execution.status(), StepStatus::Failed);
@@ -237,7 +237,8 @@ async fn instructions_run_revision_before_the_first_checkpoint_fails_the_step_an
   assert!(finished.last_checkpoint().is_none());
   let db = ProjectDb::open(root).expect("open");
   let invocations = db.invocations(run).expect("invocations");
-  assert_eq!(invocations.len(), 1);
+  // It could not start, and neither could its one restart.
+  assert_eq!(invocations.len(), 2);
   assert_eq!(invocations[0].outcome, Some(InvocationOutcome::NotStarted));
   // The CLI never started; the step's activity says which variable had no value.
   assert!(reported(&db, run, "argv: ").is_empty());

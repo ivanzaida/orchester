@@ -48,7 +48,7 @@ impl OverviewTab {
     match self {
       Self::All => true,
       Self::Running => matches!(phase, Some(TaskPhase::Running)),
-      Self::NeedsYou => matches!(phase, Some(TaskPhase::Waiting)),
+      Self::NeedsYou => matches!(phase, Some(phase) if phase.needs_you()),
       Self::Queued => matches!(phase, Some(TaskPhase::Queued)),
       Self::Failed => matches!(phase, Some(TaskPhase::Failed)),
     }
@@ -96,7 +96,7 @@ impl Pulse {
           running: pulse.running + 1,
           ..pulse
         },
-        TaskPhase::Waiting => Self {
+        TaskPhase::Waiting | TaskPhase::Stuck => Self {
           needs_input: pulse.needs_input + 1,
           ..pulse
         },
@@ -176,7 +176,7 @@ impl RecentRun {
     let key = match self.phase {
       TaskPhase::Draft | TaskPhase::Queued => "overview.activity.queued",
       TaskPhase::Running => "overview.activity.running",
-      TaskPhase::Waiting => "overview.activity.waiting",
+      TaskPhase::Waiting | TaskPhase::Stuck => "overview.activity.waiting",
       TaskPhase::Paused => "overview.activity.paused",
       TaskPhase::StoppedAtLimit => "overview.activity.stoppedAtLimit",
       TaskPhase::Interrupted => "overview.activity.interrupted",

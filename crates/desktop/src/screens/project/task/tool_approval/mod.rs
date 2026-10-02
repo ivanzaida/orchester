@@ -39,7 +39,7 @@ use crate::{
   screens::project::approval_queue::{ApprovalQueue, QueuePlace},
   tasks::{approvals::ShownApproval, run::control_message},
   theme::ExtraColor,
-  ui::{backdrop::backdrop, command_row::Copied, form::form},
+  ui::{backdrop::backdrop, command_row::Copied, form::form, value_box::CopyState},
 };
 
 /// Dialog width (`gth5z` in `kpuQj`).
@@ -101,9 +101,33 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   })
 }
 
-pub(super) struct ToolApprovalDialog {
+/// The dialog's layer: the modal over the window and its backdrop. Everything that changes while the
+/// dialog is open lives in [`ToolApprovalPanel`] inside it, so the layer itself renders again only for
+/// another request or step. lurq laid out a `Modal` at a window size from before the last resize when
+/// the component that renders it rendered again on its own (seen with lurq 0.33.1).
+pub(super) struct ToolApprovalDialog;
+
+impl Component for ToolApprovalDialog {
+  type Props = ToolApprovalProps;
+
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<ToolApprovalProps>().clone();
+    let panel = ctx.mount::<ToolApprovalPanel>(props);
+    // A click on the backdrop answers nothing and leaves the dialog open (*proposed*).
+    Modal::new(backdrop(ctx, panel))
+      .target(ModalTarget::Root)
+      .dismiss_on_escape(false)
+  }
+}
+
+/// The dialog itself: the request, the answer being sent, the step's choices and its Copy buttons.
+struct ToolApprovalPanel {
   pressed: Signal<Option<Pressed>>,
-  copied: Signal<Copied>,
+  copy: CopyState,
   arguments: ArgumentsCache,
   /// The prefix chosen in the *Always allow* step of a command, by its place among those offered.
   prefix: Signal<usize>,
@@ -113,7 +137,7 @@ pub(super) struct ToolApprovalDialog {
   primary: ElementRef,
 }
 
-impl Component for ToolApprovalDialog {
+impl Component for ToolApprovalPanel {
   type Props = ToolApprovalProps;
 
   fn create(ctx: &mut Ctx) -> Self {
@@ -122,7 +146,10 @@ impl Component for ToolApprovalDialog {
     ctx.focus(&primary);
     Self {
       pressed: ctx.signal(None),
-      copied: ctx.signal(Copied::default()),
+      copy: CopyState {
+        copied: ctx.signal(Copied::default()),
+        hovered: ctx.signal(None),
+      },
       arguments: ArgumentsCache::default(),
       prefix: ctx.signal(0),
       scope_open: ctx.signal(false),
@@ -143,7 +170,7 @@ impl Component for ToolApprovalDialog {
       error: error.as_ref(),
       action: &action,
       pressed_signal: &self.pressed,
-      copied: &self.copied,
+      copy: &self.copy,
       arguments: &self.arguments,
       prefix: &self.prefix,
       scope_open: &self.scope_open,
@@ -168,10 +195,7 @@ impl Component for ToolApprovalDialog {
       .rounded(RadiusSize::Lg)
       .on_key_down(escape(&props))
       .with_children(sections);
-    // A click on the backdrop answers nothing and leaves the dialog open (*proposed*).
-    Modal::new(backdrop(ctx, form(submit, panel)))
-      .target(ModalTarget::Root)
-      .dismiss_on_escape(false)
+    form(submit, panel)
   }
 }
 
@@ -201,7 +225,7 @@ struct View<'a> {
   error: Option<&'a Message>,
   action: &'a DecisionAction,
   pressed_signal: &'a Signal<Option<Pressed>>,
-  copied: &'a Signal<Copied>,
+  copy: &'a CopyState,
   arguments: &'a ArgumentsCache,
   prefix: &'a Signal<usize>,
   scope_open: &'a Signal<bool>,

@@ -168,7 +168,7 @@ fn similar_rule(
   let revoke = (rule.is_active() && props.live).then(|| {
     ActionButton::new(ctx.t("runs.summary.approvals.revoke"))
       .id(format!("task-revoke-rule-{}", rule.id.get()))
-      .quiet()
+      .icon(Icon::Undo2)
       .compact()
       .on_click(press(change, props, RunApprovalChange::Revoke(rule.id)))
       .enabled(!busy)

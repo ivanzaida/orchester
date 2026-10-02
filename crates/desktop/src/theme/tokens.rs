@@ -167,6 +167,9 @@ pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
 /// bottom of the box, and starting where the text does, 12px in.
 pub const COMMAND_SCROLLBAR_EDGE_INSET: f32 = 1.0;
 pub const COMMAND_SCROLLBAR_END_INSET: f32 = 12.0;
+/// Thumbs of a capped value box in the approval dialog (`e0vyng` in `bjrgu`): from the very start
+/// of the viewport, which the box's 6px padding already holds off its border.
+pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;
@@ -180,5 +183,43 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
+/// Scheduling review (02.05 `W1Dq6`, 02.06 `IyJ5a`): a task in the order (`gj5Cf`, a `zemhy` row).
+pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
+/// The 508px execution settings (`qdApo`) plus their reserved scroll gutter, which sits in the
+/// page padding.
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = 508.0 + SPACE_STACK;
+/// Execution-mode cards (`YZcH2`, `jPX6u`).
+pub const TASK_REVIEW_MODE_HEIGHT: f32 = 88.0;
+/// The settings' selects and token fields (`gIQBb`, `MUKob`, `dMiX2`, `XZCQ5`).
+pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
+/// The drag handle tile of an order row (`aqRNL` in `gj5Cf`).
+pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;
+/// The action strip under the review (`JV6sD`).
+pub const TASK_REVIEW_FOOTER_HEIGHT: f32 = 76.0;
+/// Queue N tasks, the strip's primary action (`QAYeP`).
+pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
+pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
+/// A key/value setting: time limit and pipeline version (`U673I`, `RG0FF`, `tfGRt`).
+pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;
+/// Back to tasks in the review's topbar (`uBqK9`).
+pub const TASK_REVIEW_BACK_WIDTH: f32 = 132.0;
+/// The narrowest window that holds the review's two columns: the 216 sidebar, 32 page padding, an
+/// order column of 440 (its rows and its Move and Undo buttons), the 32 gap, the 520 settings with
+/// their gutter and 20 padding. Narrower, the settings go under the order (not drawn yet).
+pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
+/// The narrowest window that holds the retry limit's evidence beside its 360 decision panel
+/// (`Q4LnK`, `Bi6pU` in 02.B3): the 216 sidebar, the evidence's 64 padding, a check row of 560 (its
+/// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
+/// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
+pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
+/// The narrowest window whose Activity toolbar (`c1dmZ`) holds everything on one line: the 216
+/// sidebar, the 320 invocation inspector, the transcript's 64 padding, the 240 step filter, Show
+/// raw lines and the widest live state ("Waits for your decision") with their gaps. Narrower, Show
+/// raw lines goes to a second line (not drawn yet).
+pub const ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1240.0;
+/// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
+/// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
+/// column is left out so the title keeps its room (not drawn yet).
+pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1152.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

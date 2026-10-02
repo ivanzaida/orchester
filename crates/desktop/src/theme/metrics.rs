@@ -62,7 +62,8 @@ pub enum ExtraSpacing {
   Field,
   /// Between key/value properties of the step inspector (`dSLqh`).
   Property,
-  /// Above the properties after their divider (`dSLqh`).
+  /// Above the properties after their divider (`dSLqh`); between the execution settings of the
+  /// scheduling review (`qdApo` in 02.05 `W1Dq6`, 02.06 `IyJ5a`).
   Divider,
   /// Padding of an open select menu around its options (`u0ByM`).
   SelectMenu,

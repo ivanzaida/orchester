@@ -282,8 +282,9 @@ fn transcript_command_box_follows_pencil() {
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
 }
 
-/// Capped value box of the approval dialog (`E5NBo` in `bjrgu`): the transcript command's thumbs,
-/// each in a 6px lane of its own (4 wide, 1 from each side), so neither covers a glyph.
+/// Capped value box of the approval dialog (`E5NBo`, `e0vyng` in `bjrgu`): the transcript command's
+/// thumbs, each in a 6px lane of its own (4 wide, 1 from each side), so neither covers a glyph,
+/// running from the viewport's start.
 #[test]
 fn approval_value_box_scrollbars_keep_lanes_of_their_own() {
   let scrollbar = theme::value_box_scrollbar();
@@ -291,7 +292,7 @@ fn approval_value_box_scrollbars_keep_lanes_of_their_own() {
   assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
   assert_eq!(
     (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
-    (1.0, 12.0)
+    (1.0, 0.0)
   );
   assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
 }

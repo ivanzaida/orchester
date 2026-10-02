@@ -96,13 +96,41 @@ at work takes one.
 - **Joining.** When such a step passes, its work is committed on its branch and merged into the
   run's branch in the run's worktree, one merge at a time, with the repository's git identity (fast
   forward when possible, else a merge commit); its worktree and branch are then removed. A conflict
-  is undone, the step fails with *merge conflict* (the files are named in the transcript) and its
-  failure route decides: retry from the route's target, or fail the run. Its branch and worktree stay.
+  is undone, the step fails with *merge conflict* (the files are named in the transcript) and restarts
+  by itself, as any breakage does (below). Its branch and worktree stay.
 - **Failures.** A step fails when its agent fails, when its structured result says `failed`, when it
   cannot start or when its work cannot be committed or merged. A failure ends its attempt: agents of
   the attempt still at work are ended and their executions skipped. What a failed step changed is
   committed as a checkpoint of its execution, never discarded. Failures for a used step budget,
-  recorded by earlier versions, are still read.
+  recorded by earlier versions, are still read. What follows depends on the failure (user decisions
+  2026-10-02, `orchester_core::run::Run::fail_step`):
+  - A **verdict** on the work — the agent reported `failed` (also when its turn failed after it
+    delivered that result, e.g. a permission prompt that closed afterwards), or a command tool's
+    program exited with a code the tool does not expect or timed out — follows the step's failure
+    route: a new attempt from the route's target and everything after it. Without a route the run
+    fails. Once the route was taken `max_retries` times the run **waits for a person**.
+  - Any other failure is a **breakage**: the agent CLI failed its turn without a `failed` result (it
+    crashed, its turn failed, its permission prompt closed or never reached the runner — a `done`
+    result never outweighs that), or the step could not start, commit or merge. The step restarts
+    as a fresh execution in a new attempt (reason *restart*: that step, its dependent and its
+    unfinished steps; never its route's target). A step that broke twice since it last passed —
+    counted across attempts, so steps that break in turn do not restart each other forever — makes
+    the run wait for a person. A follow-up that fails is not routed at all.
+  - At most 10 automatic attempts (retries and restarts) follow each other; any failure after them
+    makes the run wait for a person.
+  - A run **waiting for a person** (*Needs you*) holds no agent slot. The person allows one more
+    retry (the same route, or for a broken step the same restart), returns the work to an agent
+    step the failed step runs after (or the failed step itself) with a note — an attempt with reason
+    *returned* whose note the step's prompt carries as the person's instruction — or stops the run,
+    which fails it as before (retries exhausted, or step failed for a breakage). A run that waits can
+    also be cancelled. Messages written meanwhile stay queued until it continues.
+  - The **prompt of a retry attempt** tells the route's target, or the step a person returned the
+    work to, that it came back from the failed step in attempt *n*, with that step's whole result
+    (its summary and handoff lists) or, for a command tool, how it ended and the end of its output;
+    the failed step itself gets its own earlier result to check each finding. A restart of either
+    step carries the same report and the person's note. The report is quoted
+    as untrusted output and kept within 12 KiB (an agent's from its start, a program's output from
+    its end, each with a cut marker).
 - **Step budgets.** A step whose execution uses its budget does not fail: its agent is ended after
   its turn, its work is committed as a checkpoint in its worktree, and the run stops at its limit
   (*Stopped at limit*, naming the execution). Agents of other steps finish their invocations, as at a
@@ -364,11 +392,11 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
+| `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
-| `attempts` | run, number, status, reason (initial, retry, or a follow-up naming the step it asks) |
+| `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
@@ -439,7 +467,8 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   merged / done; any active state → paused, cancelled, failed. Blocked is derived from
   dependencies, not stored.
 - **Run:** pending → running ⇄ paused → succeeded / failed / cancelled; running → interrupted
-  (session ended) → running on continue. Interrupted keeps its last checkpoint. A pause is
+  (session ended) → running on continue; running → waiting for a person (retries exhausted, or a
+  step broke again) → running on a person's retry or return, failed on their stop, or cancelled. Interrupted keeps its last checkpoint. A pause is
   requested first and recorded as paused once the active agent invocation ended and its work was
   committed. A run that reaches its token budget or time limit is paused as stopped at limit
   after its agent was ended and its work committed; raising the limit continues it. A succeeded

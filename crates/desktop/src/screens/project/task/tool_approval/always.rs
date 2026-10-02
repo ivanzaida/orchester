@@ -101,7 +101,7 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
 fn request(ctx: &Ctx, view: &View<'_>) -> Element {
   let approval = &view.shown().approval;
   if approval.command {
-    return ValueRows::new(ctx, view.copied, view.arguments).command(&approval.action);
+    return ValueRows::new(ctx, view.copy, view.arguments).command(&approval.action);
   }
   let tool = ctx.t_args(
     "runs.toolApproval.always.toolValue",

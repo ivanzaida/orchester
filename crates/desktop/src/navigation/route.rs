@@ -44,6 +44,9 @@ const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
 const MCP_SERVERS: &str = "mcp-servers";
 const DRAFTS: &str = "drafts";
+const QUEUE: &str = "queue";
+const NEEDS_REVIEW: &str = "needs-review";
+const DONE: &str = "done";
 const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
 const QUEUED: &str = "queued";
@@ -403,10 +406,13 @@ const fn overview_query(tab: OverviewTab) -> Option<&'static str> {
   }
 }
 
-/// Only the tabs that are available have a path; the others cannot be opened yet.
+/// Every task tab has a stable route; an unknown tab falls back to All.
 fn task_tab(tab: Option<&str>) -> TaskTab {
   match tab {
     Some(DRAFTS) => TaskTab::Drafts,
+    Some(QUEUE) => TaskTab::Queue,
+    Some(NEEDS_REVIEW) => TaskTab::NeedsReview,
+    Some(DONE) => TaskTab::Done,
     _ => TaskTab::All,
   }
 }
@@ -414,7 +420,10 @@ fn task_tab(tab: Option<&str>) -> TaskTab {
 const fn task_query(tab: TaskTab) -> Option<&'static str> {
   match tab {
     TaskTab::Drafts => Some(DRAFTS),
-    TaskTab::All | TaskTab::Queue | TaskTab::NeedsReview | TaskTab::Done => None,
+    TaskTab::Queue => Some(QUEUE),
+    TaskTab::NeedsReview => Some(NEEDS_REVIEW),
+    TaskTab::Done => Some(DONE),
+    TaskTab::All => None,
   }
 }
 

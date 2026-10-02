@@ -16,6 +16,9 @@ pub enum ExtraTypography {
   SectionHeading,
   /// Card and panel titles, e.g. "Needs you" (`qlo9F`).
   CardTitle,
+  /// Heading of a column of the scheduling review, "Task priority" and "Execution mode" (`Y68u8`,
+  /// `TjVjp` in 02.05 `W1Dq6`).
+  ReviewHeading,
   /// Small uppercase category label, e.g. "REVIEW PULL REQUEST" (`f1tfh3`).
   Overline,
   /// Large monospaced figure in project metrics (`PwPmH`).
@@ -96,6 +99,9 @@ pub enum ExtraTypography {
   Instructions,
   /// Short explanation under a field, e.g. "Choose a model here…" (`k66CB`, `Lwlf3`).
   Hint,
+  /// A value read back on one line under a field, e.g. "≈ 14M tokens" under the scheduling review's
+  /// token cap (`n5Wrl`, `xPwNl` in `W1Dq6`): 10 subtle.
+  ReadBack,
   /// Version figure in the publish confirmation, e.g. "v4" (`p8L552`).
   VersionFigure,
   /// Explanation under an empty state title (`xIG73`).
@@ -142,7 +148,8 @@ pub enum ExtraTypography {
   VariableName,
   /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
   ContextNote,
-  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
+  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`);
+  /// a note between the scheduling review's settings (`q6NwTY`, `YPW1U` in `W1Dq6`).
   CellLabel,
   /// A field error that wraps beside its icon, e.g. why a dialog's action is unavailable at the
   /// left of its buttons (`foNvP` in 01.06 F `glurU`, `eeksu` in 02.Q states `XIEn8`).
@@ -179,9 +186,10 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 80] = [
+  const ALL: [Self; 82] = [
     Self::SectionHeading,
     Self::CardTitle,
+    Self::ReviewHeading,
     Self::Overline,
     Self::Metric,
     Self::Brand,
@@ -222,6 +230,7 @@ impl ExtraTypography {
     Self::MonoField,
     Self::Instructions,
     Self::Hint,
+    Self::ReadBack,
     Self::VersionFigure,
     Self::Summary,
     Self::IconLarge,
@@ -295,6 +304,7 @@ impl ExtraTypography {
     match self {
       Self::SectionHeading => "section-heading",
       Self::CardTitle => "card-title",
+      Self::ReviewHeading => "review-heading",
       Self::Overline => "overline",
       Self::Metric => "metric",
       Self::Brand => "brand",
@@ -322,6 +332,7 @@ impl ExtraTypography {
       Self::MonoField => "mono-field",
       Self::Instructions => "instructions",
       Self::Hint => "hint",
+      Self::ReadBack => "read-back",
       Self::VersionFigure => "version-figure",
       Self::Summary => "summary",
       Self::CompactStatusLabel => "compact-status-label",
@@ -467,6 +478,7 @@ impl ExtraTypography {
     match self {
       Self::SectionHeading => style(15.0, FontWeight::Medium, TEXT),
       Self::CardTitle => style(14.0, FontWeight::Medium, TEXT),
+      Self::ReviewHeading => style(14.0, FontWeight::Normal, TEXT),
       Self::Overline => style(9.0, FontWeight::SemiBold, SUBTLE),
       Self::Brand => TextStyle {
         letter_spacing: -0.7,
@@ -496,6 +508,7 @@ impl ExtraTypography {
       Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
       Self::Instructions => leading(1.65, style(12.0, FontWeight::Normal, TEXT)),
       Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
+      Self::ReadBack => style(10.0, FontWeight::Normal, SUBTLE),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
       Self::Summary => leading(1.6, style(13.0, FontWeight::Normal, MUTED)),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),

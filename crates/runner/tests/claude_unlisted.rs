@@ -23,7 +23,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, wait_for};
+use self::support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, settled, wait_for};
 
 fn listed(repository: RepositoryAccess, entries: &[&str]) -> AgentPermissions {
   let entries = entries
@@ -75,14 +75,12 @@ impl Started {
       .decide_tool_approval(self.id, request.id, answer)
       .await
       .expect("decided");
+    // A denial tells the agent, which goes on: the run settles as after an approval.
     self.ended().await
   }
 
   async fn ended(&mut self) -> Run {
-    wait_for(self.project.repo.path(), &mut self.events, self.id, |run| {
-      run.status().is_terminal()
-    })
-    .await
+    wait_for(self.project.repo.path(), &mut self.events, self.id, settled).await
   }
 
   fn db(&self) -> ProjectDb {

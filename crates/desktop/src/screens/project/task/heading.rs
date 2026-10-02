@@ -13,7 +13,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, TaskPhase};
+use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, Stuck, TaskPhase};
 
 use super::{
   super::page,
@@ -61,7 +61,7 @@ fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> 
     (Some(run), None) if *run.run.status() == RunStatus::Succeeded => {
       ready_heading(ctx, title, run, detail.merge.is_some())
     }
-    _ => page::heading(title, &description(ctx, detail, lost)),
+    _ => page::heading(title, &description(ctx, detail, lost)).id("task-heading"),
   };
   let auto = detail
     .run
@@ -191,9 +191,13 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
   let awaiting_plan = run.run.waits_for_a_person() && !run.run.awaiting_plan().is_empty();
   let asking = run.run.waits_for_a_person() && !run.run.awaiting_answer().is_empty();
   let key = match (run.run.status(), step) {
+    (RunStatus::Paused(PauseReason::LimitReached(RunLimit::GroupBudget)), _) => "tasks.bulk.stoppedGroup",
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
     (RunStatus::Running, _) if awaiting_plan => "runs.page.describe.awaitingPlan",
     (RunStatus::Running, _) if asking => "runs.page.describe.asking",
+    (RunStatus::Pending, _) if run.group_hold == Some(orchester_core::task_group::GroupHold::SessionEnded) => {
+      "runs.page.describe.schedulingHeld"
+    }
     (RunStatus::Pending, _) => "runs.page.describe.pending",
     (RunStatus::Running, _) if run.run.pause_requested() => "runs.page.describe.pausing",
     (RunStatus::Running, Some(_)) if working.len() > 1 => "runs.page.describe.workingParallel",
@@ -206,7 +210,11 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { .. })), _) => "runs.page.describe.stepBudget",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
-    (RunStatus::Failed(RunFailure::RetriesExhausted(_)), _) => "runs.page.describe.retriesExhausted",
+    (
+      RunStatus::Failed(RunFailure::RetriesExhausted(_)) | RunStatus::WaitingForPerson(Stuck::RetriesExhausted(_)),
+      _,
+    ) => "runs.page.describe.retriesExhausted",
+    (RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)), _) => "runs.page.describe.brokeAgain",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",
     (RunStatus::Cancelled, _) if run.run.current_attempt().is_none() => "runs.page.describe.cancelledBeforeStart",
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",

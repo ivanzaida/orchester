@@ -19,14 +19,14 @@ use orchester_core::{
   },
   id::{ConnectionId, IdempotencyKey, SecretId},
   resource::{CommandArg, CommandProgram, VariableName},
-  run::{Run, RunStatus},
+  run::{Run, RunStatus, Stuck},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::ActivityStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
+use self::support::{Setup, TestProject, project, reported, scheduler_with, settled, tools::TEST_COMMAND, wait_for};
 
 const TOKEN: &str = "docs-token-value-7f3a";
 const BEARER: &str = "bearer-value-91c2";
@@ -132,7 +132,7 @@ async fn run_to_the_end(project: &TestProject) -> Run {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  wait_for(root, &mut events, id, |run| run.status().is_terminal()).await
+  wait_for(root, &mut events, id, settled).await
 }
 
 /// The servers the agent worked without, with why, in the order the activity reports them.
@@ -278,7 +278,11 @@ async fn mcp_servers_named_like_one_of_the_users_own_refuse_the_codex_step() {
     ..Setup::new("Say hello.")
   });
   let run = run_to_the_end(&project).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let db = ProjectDb::open(project.repo.path()).expect("open");
   let failures: Vec<String> = db
     .activity(run.id(), 0)

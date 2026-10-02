@@ -19,9 +19,13 @@ fn assert_copy_beside_the_label(desktop: &mut Desktop, id: &str) {
     (copy.x + copy.width - (frame.x + frame.width)).abs() < 0.5,
     "{id}'s Copy ends where the box does"
   );
-  // The viewport spans the box; its vertical scrollbar has a lane of its own at the right.
+  // Copy is the ghost button of `feLwP`: 22 high, about 59 wide.
+  assert!((copy.height - 22.0).abs() < 0.5, "{id}'s Copy is {} high", copy.height);
+  assert!(copy.width < 64.0, "{id}'s Copy is {} wide", copy.width);
+  // The viewport spans the box but for its 6px right padding; its vertical scrollbar has a lane of
+  // its own inside it.
   assert!(
-    viewport.width >= frame.width - 2.0,
+    viewport.width >= frame.width - 8.0,
     "{id}'s lines take {} of {} px",
     viewport.width,
     frame.width
@@ -116,4 +120,29 @@ fn tool_approval_command_comes_after_its_folder_under_a_label_that_counts_its_li
   let mut desktop = long_target();
   let height = desktop.bounds(TARGET).height;
   assert!((height - 44.0).abs() < 1.0, "the target's box is {height} px high");
+}
+
+#[test]
+fn tool_approval_copy_hover_after_a_resize_keeps_the_backdrop_on_the_window() {
+  // Hovering Copy renders the dialog again; after two resizes lurq used to lay its layer out at the
+  // first resize's size.
+  let mut desktop = large_arguments();
+  desktop.tree.resize(960, 700);
+  desktop.pass();
+  desktop.tree.resize(1440, 960);
+  desktop.pass();
+  let before = desktop.bounds("dialog-backdrop");
+  desktop.hover(&format!("{ARGUMENTS}-copy"));
+  desktop.pass();
+  let after = desktop.bounds("dialog-backdrop");
+  assert_eq!(
+    (after.x, after.y, after.width, after.height),
+    (before.x, before.y, before.width, before.height),
+    "the backdrop keeps the window's size after Copy is hovered"
+  );
+  assert!(
+    (after.width - 1440.0).abs() < 0.5,
+    "the backdrop is {} wide",
+    after.width
+  );
 }

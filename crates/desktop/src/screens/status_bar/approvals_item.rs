@@ -12,11 +12,18 @@ use lurq::{
 
 use super::item::{action, glyph, item, label, separator, truncated_label, value};
 use crate::{
+  activity::{Outcome, Slot, bar::ActivitySlot},
   display,
   screens::project::{approval_queue::ApprovalQueue, command_line},
   tasks::{approvals::ShownApproval, data::AutoApprovingRun},
   ui::{icon::Icon, link::Press},
 };
+
+/// Whether the activity slot shows a run waiting for the person's decision (02.B6 `K8VQRC`), which stays
+/// beside the waiting approvals.
+pub fn waits_for_decision(slot: &ActivitySlot<'_>) -> bool {
+  matches!(slot, ActivitySlot::Activity(Slot::Failure(event)) if matches!(event.outcome(), Outcome::NeedsYou { .. }))
+}
 
 /// The waiting requests, oldest first; nothing when none waits.
 pub fn approvals(ctx: &Ctx, pending: &[ShownApproval], queue: Option<&ApprovalQueue>) -> Vec<Element> {

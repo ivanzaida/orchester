@@ -1,15 +1,21 @@
 //! A Codex session recorded before App Server became the only transport (by `codex exec`), resumed
 //! end to end against `orchester-fake-codex`: App Server resumes it by its id with `thread/resume`
 //! (0.159.2 finds an exec session by id: `thread/read` returned one with `source: exec`), and a session
-//! Codex has no history of stops the step with Codex's reason. Needs `git`. Run with `cargo test -p
-//! orchester-runner --features test-agent --test codex_resume codex_resume`.
+//! Codex has no history of fails the turn with Codex's reason, so the step restarts as a fresh session. Needs `git`.
+//! Run with `cargo test -p orchester-runner --features test-agent --test codex_resume codex_resume`.
 
 mod support;
 
 use std::{num::NonZeroU32, path::Path};
 
-use orchester_core::{connection::stream::AgentEvent, id::RunId, run::RunStatus, store::ActivityStore};
+use orchester_core::{
+  connection::stream::AgentEvent,
+  id::RunId,
+  run::{InterruptCause, Run, RunStatus},
+  store::ActivityStore,
+};
 use orchester_ipc::AttachSession;
+use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 
 use self::support::{Setup, killed_mid_run, project, scheduler, threads, wait_for};
@@ -21,7 +27,7 @@ const GONE_SESSION: &str = "01a0f41a-gone-7ab3-bd75-813b279d498f";
 
 /// A run whose runner was killed mid-turn, its agent's session replaced by `session`, as an
 /// invocation recorded through `codex exec` holds it, then resumed by a new runner until `done`.
-async fn resumed(session: &str, done: fn(&RunStatus) -> bool) -> (support::TestProject, RunId) {
+async fn resumed(session: &str, done: fn(&Run) -> bool) -> (support::TestProject, RunId, Scheduler) {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
   let run = killed_mid_run(root, project.task).await;
@@ -39,8 +45,8 @@ async fn resumed(session: &str, done: fn(&RunStatus) -> bool) -> (support::TestP
     .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("above zero"))
     .await
     .expect("attached");
-  wait_for(root, &mut events, run, |run| done(run.status())).await;
-  (project, run)
+  wait_for(root, &mut events, run, done).await;
+  (project, run, scheduler)
 }
 
 fn resumed_ids(root: &Path, run: RunId) -> Vec<String> {
@@ -53,13 +59,17 @@ fn resumed_ids(root: &Path, run: RunId) -> Vec<String> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn codex_resume_continues_a_session_codex_exec_recorded() {
-  let (project, run) = resumed(EXEC_SESSION, |status| status == &RunStatus::Succeeded).await;
+  let (project, run, _) = resumed(EXEC_SESSION, |run| run.status() == &RunStatus::Succeeded).await;
   assert_eq!(resumed_ids(project.repo.path(), run), [EXEC_SESSION]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn codex_resume_of_a_session_codex_no_longer_has_says_why() {
-  let (project, run) = resumed(GONE_SESSION, |status| matches!(status, RunStatus::Failed(_))).await;
+  // The step broke without a result, so it restarts once as a fresh session, which works on.
+  let (project, run, scheduler) = resumed(GONE_SESSION, |run| {
+    run.attempts().len() == 2 && run.status() == &RunStatus::Running
+  })
+  .await;
   let root = project.repo.path();
   assert_eq!(resumed_ids(root, run), [GONE_SESSION]);
   let failures: Vec<String> = ProjectDb::open(root)
@@ -75,4 +85,5 @@ async fn codex_resume_of_a_session_codex_no_longer_has_says_why() {
   let expected =
     format!("Codex could not resume the earlier session {GONE_SESSION}: no rollout found for thread id {GONE_SESSION}");
   assert!(failures.contains(&expected), "{failures:?}");
+  scheduler.stop_all(InterruptCause::QuitNow).await;
 }

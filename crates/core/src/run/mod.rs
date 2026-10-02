@@ -28,6 +28,7 @@ mod snapshot;
 mod state;
 mod status;
 mod step;
+mod stuck;
 mod tool_approval;
 mod tool_step;
 mod transition;
@@ -55,17 +56,18 @@ pub use self::{
   preflight::{PreflightInput, PreflightProblem, preflight},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
-    ExcludedInstruction, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion, PipelineInfo,
-    PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RunContext,
-    SkillListing,
+    ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
+    PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource,
+    RetryReport, RunContext, SkillListing,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
-    StepFailure, StepStatus, WaitReason,
+    StepFailure, StepStatus, Stuck, WaitReason,
   },
+  stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{
     ARGUMENTS_CEILING, CommandShell, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision, UnknownShell,
     cut_arguments, recorded_arguments,

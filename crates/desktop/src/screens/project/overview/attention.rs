@@ -1,8 +1,9 @@
 //! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — each tool request
 //! waiting for a decision, oldest first, with *Review*, which opens the approval dialog on it (`ZkOPf`),
 //! then runs waiting for a plan decision (a review card, `dpeD7`), an answer to an agent's question
-//! (`Mt22P`, which opens the task's conversation) or another approval — and the recent activity of the project's runs
-//! (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside any form, so pointer-only.
+//! (`Mt22P`, which opens the task's conversation), another approval or its own decision after its retries
+//! (`Np9kc`, 02.B6) — and the recent activity of the project's runs (`YJ8PV`, `mBkeJ` events). Each opens its task;
+//! they are outside any form, so pointer-only.
 
 use lurq::{
   app::{
@@ -27,7 +28,7 @@ use crate::{
   tasks::{
     approvals::ShownApproval,
     data::ProjectTasks,
-    list::{AwaitedPlan, TaskRow},
+    list::{AwaitedDecision, AwaitedPlan, TaskRow},
     overview::{OverviewTab, RecentRun, activity_empty, figure, recent_runs},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
@@ -207,16 +208,23 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       ctx.t("overview.attention.answer"),
       Page::Task(task, TaskPageTab::Conversation),
     ),
-    None => (
-      ctx.t("overview.attention.needsInput"),
-      row.title.clone(),
-      ctx.t_args(
-        "overview.attention.context",
-        [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
-      ),
-      ctx.t("overview.attention.open"),
-      Page::task(task),
-    ),
+    None => {
+      // A run waiting for a decision after its retries says what stopped it (02.B6 `Np9kc`).
+      let detail = row
+        .decision
+        .as_ref()
+        .map_or_else(|| row.detail.clone(), AwaitedDecision::title);
+      (
+        ctx.t("overview.attention.needsInput"),
+        row.title.clone(),
+        ctx.t_args(
+          "overview.attention.context",
+          [("task", &*row.key), ("detail", &*message_text(ctx, &detail))],
+        ),
+        ctx.t("overview.attention.open"),
+        Page::task(task),
+      )
+    }
   };
   nav
     .link(page)

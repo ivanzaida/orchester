@@ -225,7 +225,7 @@ impl TaskStore for ProjectDb {
 }
 
 /// Stores the details and status of `task`, which must exist.
-fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+pub(super) fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   let updated = transaction.execute(
@@ -398,6 +398,15 @@ fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
     .and_then(NonZeroU32::new)
     .map(VersionNumber::new)
     .ok_or_else(|| corrupt("task pipeline version", number))
+}
+
+/// Whether `task` is queued, read in `transaction`: a run is recorded only for a queued task.
+pub(super) fn is_queued(transaction: &rusqlite::Transaction<'_>, task: TaskId) -> Result<bool, StoreError> {
+  Ok(transaction.query_row(
+    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 AND status = ?2)",
+    [task.to_string(), status_text(TaskStatus::Queued).to_owned()],
+    |row| row.get(0),
+  )?)
 }
 
 const fn status_text(status: TaskStatus) -> &'static str {

@@ -153,18 +153,21 @@ impl Component for StatusBar {
       (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
       (Some(project), _) => approvals_item::approvals(ctx, &project.approvals, queue.as_ref()),
     };
-    left = if waiting.is_empty() {
-      left.with_children(activity_slot(
+    // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
+    // hides the other. Any other activity gives way to them.
+    let activity = (waiting.is_empty() || approvals_item::waits_for_decision(&slot)).then(|| {
+      activity_slot(
         ctx,
         (&slot, interrupted),
         &log,
         &opener,
         &hints,
         props.project.is_some(),
-      ))
-    } else {
-      left.with_children(waiting)
-    };
+      )
+    });
+    left = left
+      .with_children(waiting)
+      .with_children(activity.into_iter().flatten());
     if let Some(project) = &props.project {
       left = left.with_children(approvals_item::auto_approving(
         ctx,

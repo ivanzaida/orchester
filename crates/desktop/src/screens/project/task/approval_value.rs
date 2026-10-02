@@ -4,16 +4,15 @@
 //! box (`uA3Sh`) across the full width, lines as recorded, scrolling both ways inside a box no taller
 //! than 12 lines (`E5NBo`); a quiet Copy sits at the right of the label's line (`ui::value_box`).
 
-use lurq::{app::ctx::Ctx, components::Text, core::Signal, node::Element};
+use lurq::{app::ctx::Ctx, components::Text, node::Element};
 use orchester_core::run::ARGUMENTS_CEILING;
 
 use super::approval_arguments::ArgumentsCache;
 use crate::{
   theme::{APPROVAL_VALUE_MAX_HEIGHT, ExtraTypography},
   ui::{
-    command_row::Copied,
     property::{ValueStyle, styled_property},
-    value_box::{BoxText, value_box},
+    value_box::{BoxText, CopyState, value_box},
   },
 };
 
@@ -23,11 +22,11 @@ use crate::{
 /// which reaches the row's end is never cut with an ellipsis.
 const INLINE_COLUMNS: usize = 60;
 
-/// Builds the value rows of one approval; Copy records its outcome in `copied`, and the arguments
+/// Builds the value rows of one approval; Copy records its outcome and hover in `copy`, and the arguments
 /// are laid out once, in `arguments`.
 pub(super) struct ValueRows<'a> {
   ctx: &'a Ctx,
-  copied: &'a Signal<Copied>,
+  copy: &'a CopyState,
   arguments: &'a ArgumentsCache,
 }
 
@@ -38,8 +37,8 @@ impl<'a> ValueRows<'a> {
   pub(super) const TARGET: &'static str = "tool-approval-target";
   pub(super) const ARGUMENTS: &'static str = "tool-approval-arguments";
 
-  pub(super) const fn new(ctx: &'a Ctx, copied: &'a Signal<Copied>, arguments: &'a ArgumentsCache) -> Self {
-    Self { ctx, copied, arguments }
+  pub(super) const fn new(ctx: &'a Ctx, copy: &'a CopyState, arguments: &'a ArgumentsCache) -> Self {
+    Self { ctx, copy, arguments }
   }
 
   pub(super) const fn ctx(&self) -> &'a Ctx {
@@ -62,7 +61,8 @@ impl<'a> ValueRows<'a> {
     if fits_inline(command) {
       return styled_property(&ctx.t("runs.toolApproval.command"), command, ValueStyle::Mono);
     }
-    let lines = command.split('\n').count();
+    // A trailing line break ends the last line; it does not start another one.
+    let lines = command.trim_end_matches(['\r', '\n']).split('\n').count();
     let key = if lines == 1 {
       "runs.toolApproval.commandLines.one"
     } else {
@@ -77,7 +77,7 @@ impl<'a> ValueRows<'a> {
       shown: value,
       original: value,
     };
-    value_box(self.ctx, (label, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copied).into()
+    value_box(self.ctx, (label, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copy).into()
   }
 
   /// The arguments of `approval` under `label`: JSON one member a line when they parse, otherwise
@@ -105,7 +105,7 @@ impl<'a> ValueRows<'a> {
         .id("tool-approval-arguments-note")
         .variant(ExtraTypography::Hint.role())
     });
-    value_box(self.ctx, (label, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copied)
+    value_box(self.ctx, (label, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copy)
       .with_children(note)
       .into()
   }
