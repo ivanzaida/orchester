@@ -151,7 +151,12 @@ fn pages() -> Vec<Page> {
     Page::Overview(OverviewTab::NeedsYou),
     Page::Overview(OverviewTab::Failed),
     Page::TASKS,
+    Page::Tasks(TaskTab::NeedsYou),
     Page::Tasks(TaskTab::Backlog),
+    Page::Tasks(TaskTab::Todo),
+    Page::Tasks(TaskTab::InProgress),
+    Page::Tasks(TaskTab::InReview),
+    Page::Tasks(TaskTab::Done),
     Page::NewTask,
     Page::task(TaskId::generate()),
     Page::Task(TaskId::generate(), TaskPageTab::Activity),
@@ -241,11 +246,16 @@ fn route_defaults_are_left_out_of_the_path() {
 #[test]
 fn route_tabs_are_part_of_the_path() {
   let project = ProjectId::generate();
-  let drafts = Route::Project(project, Page::Tasks(TaskTab::Backlog)).path();
-  assert_eq!(drafts, format!("/project/{project}/tasks?tab=backlog"));
-  // A tab that cannot be opened yet, or does not exist, is the first tab.
-  let queue = format!("/project/{project}/tasks?tab=queue");
-  assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));
+  let backlog = Route::Project(project, Page::Tasks(TaskTab::Backlog)).path();
+  assert_eq!(backlog, format!("/project/{project}/tasks?tab=backlog"));
+  let in_progress = format!("/project/{project}/tasks?tab=in-progress");
+  assert_eq!(
+    Route::parse(&in_progress),
+    Some(Route::Project(project, Page::Tasks(TaskTab::InProgress)))
+  );
+  // A tab that does not exist is the first tab.
+  let nothing = format!("/project/{project}/tasks?tab=nothing");
+  assert_eq!(Route::parse(&nothing), Some(Route::Project(project, Page::TASKS)));
   let unknown = format!("/project/{project}?tab=nothing");
   assert_eq!(Route::parse(&unknown), Some(Route::Project(project, Page::OVERVIEW)));
   let roles = Route::Project(project, Page::Instructions(InstructionsTab::AgentRoles, None)).path();

@@ -1,3 +1,5 @@
+#[path = "tasks/browse.rs"]
+mod browse;
 #[path = "tasks/pipelines.rs"]
 mod pipelines;
 mod support;
@@ -207,12 +209,11 @@ fn stored_tasks() -> Vec<Task> {
 #[test]
 fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
-  assert_eq!(TaskTab::All.count(&tasks), Some(2));
-  assert_eq!(TaskTab::Backlog.count(&tasks), Some(2));
-  for unavailable in [TaskTab::Todo, TaskTab::InReview, TaskTab::Done] {
-    assert!(unavailable.is_available());
-    assert_eq!(unavailable.count(&tasks), Some(0));
-    assert!(list::rows(&tasks, &[], &Default::default(), unavailable).is_empty());
+  let count = |tab| list::rows(&tasks, &[], &Default::default(), tab).len();
+  assert_eq!(count(TaskTab::All), 2);
+  assert_eq!(count(TaskTab::Backlog), 2);
+  for other in [TaskTab::Todo, TaskTab::InProgress, TaskTab::InReview, TaskTab::Done] {
+    assert_eq!(count(other), 0);
   }
   let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Backlog);
   assert_eq!(drafts.len(), 2);

@@ -10,12 +10,12 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::task::organization::{Priority, TaskFilter, TaskSort, WorkflowStatus};
+use orchester_core::task::organization::{Priority, TaskFilter, WorkflowStatus};
 
 use crate::{
   tasks::{
     data::ProjectTasks,
-    organization::{CONTROL_HEIGHT, PickerAppearance, button_trigger, priority_copy, secondary_button, workflow_copy},
+    organization::{CONTROL_HEIGHT, priority_copy, workflow_copy},
   },
   theme::ExtraSpacing,
   ui::{button::ActionButton, field::select_style, icon::Icon},
@@ -24,9 +24,6 @@ use crate::{
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Filters(pub TaskFilter);
 impl lurq::app::component::DevtoolsInspectable for Filters {}
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Sort(pub TaskSort);
-impl lurq::app::component::DevtoolsInspectable for Sort {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Facet {
   Status,
@@ -38,7 +35,6 @@ impl lurq::app::component::DevtoolsInspectable for Facet {}
 pub(super) struct FilterProps {
   pub tasks: ProjectTasks,
   pub filter: Signal<Filters>,
-  pub sort: Signal<Sort>,
 }
 impl PartialEq for FilterProps {
   fn eq(&self, other: &Self) -> bool {
@@ -78,7 +74,7 @@ impl Component for TaskFilters {
     }
     let mut row = self.facet_buttons(ctx, &props);
     let clear = props.filter.clone();
-    row = row.child(sort_select(ctx, &props.sort)).with_children(
+    row = row.with_children(
       (!props.filter.get().0.statuses.is_empty()
         || !props.filter.get().0.priorities.is_empty()
         || !props.filter.get().0.tags.is_empty())
@@ -240,41 +236,6 @@ fn menu(ctx: &Ctx, props: &FilterProps, facet: Facet, query: &Signal<String>, ma
   }
   column.into()
 }
-/// Sort (`SoOX5` in `qVMJh`): a secondary button naming the order, whose menu lists the orders in
-/// full (`rVJoA`).
-fn sort_select(ctx: &Ctx, sort: &Signal<Sort>) -> Element {
-  const SORTS: [(TaskSort, &str, &str); 3] = [
-    (TaskSort::Updated, "tasks.sort.updated", "tasks.sort.short.updated"),
-    (TaskSort::Status, "tasks.sort.status", "tasks.sort.short.status"),
-    (TaskSort::Priority, "tasks.sort.priority", "tasks.sort.short.priority"),
-  ];
-  let labels: Vec<(TaskSort, Arc<str>)> = SORTS
-    .iter()
-    .map(|(value, _, short)| {
-      (
-        *value,
-        ctx.t_args("tasks.sort.trigger", [("sort", ctx.t(short).as_ref())]),
-      )
-    })
-    .collect();
-  let (button, value) = (secondary_button(ctx), sort.clone());
-  Element::from(
-    Select::new(sort.clone())
-      .options(SORTS.map(|(value, key, _)| (Sort(value), ctx.t(key))))
-      .trigger(move |_| {
-        let current = value.get().0;
-        let label = labels
-          .iter()
-          .find(|(sort, _)| *sort == current)
-          .map_or("", |(_, label)| label.as_ref());
-        button_trigger(Icon::ArrowDownWideNarrow, label, &button)
-      })
-      .height(Dimension::Px(PickerAppearance::Header.height()))
-      .style(PickerAppearance::Header.style(ctx)),
-  )
-  .id("tasks-sort")
-}
-
 fn toggle<T: PartialEq>(values: &mut Vec<T>, value: T) {
   if values.contains(&value) {
     values.retain(|item| *item != value);

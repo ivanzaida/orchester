@@ -294,6 +294,31 @@ impl Reporter {
     self.record_for_task(task, title, Place::Task(task));
   }
 
+  /// A run of task `task` (`task_key`) waits for the user's decision after the retries of its step
+  /// `step` ran out or the step broke again: the slot keeps it until the task is opened ("Review
+  /// needs your decision · ORC-128").
+  pub(super) fn run_waits(&self, task: TaskId, task_key: &str, step: &str) {
+    let title = Message::new("statusBar.activity.needsDecision")
+      .with("step", step.to_owned())
+      .with("task", task_key.to_owned());
+    let Some(target) = self.task_target(task) else {
+      return;
+    };
+    self
+      .shared
+      .activity
+      .record_needs_you(Some(self.project.clone()), title, target);
+  }
+
+  /// A run of task `task` changed: if it waited for the user's decision, it may no longer, so its
+  /// item stops holding the slot. A run that starts to wait says so right after
+  /// ([`Self::run_waits`]).
+  pub(super) fn task_run_changed(&self, task: TaskId) {
+    if let Some(target) = self.task_target(task) {
+      self.shared.activity.settle_needs_you(&target);
+    }
+  }
+
   /// Records `title` as the latest event of this runner's project, opening `place`.
   fn record_for_task(&self, task: TaskId, title: Message, place: Place) {
     let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
@@ -302,6 +327,18 @@ impl Reporter {
     };
     let target = Target::Project { repo_root, place };
     self.shared.activity.record(Some(self.project.clone()), title, target);
+  }
+
+  /// Where an event about task `task` leads: the task's page in this runner's project.
+  fn task_target(&self, task: TaskId) -> Option<Target> {
+    let Some(repo_root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
+      tracing::debug!(%task, "an event for a runner without a project");
+      return None;
+    };
+    Some(Target::Project {
+      repo_root,
+      place: Place::Task(task),
+    })
   }
 
   /// The runner's latest work summary.

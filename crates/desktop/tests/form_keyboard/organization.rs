@@ -103,8 +103,8 @@ fn organization_bulk_status_priority_and_filters() {
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
   let ids: Vec<_> = tasks(&desktop.repo).iter().map(|task| task.id()).collect();
-  for id in &ids {
-    desktop.press(&format!("select-task-{id}"));
+  for task in tasks(&desktop.repo) {
+    desktop.press(&format!("task-select-{}", task.key()));
   }
   desktop.press("bulk-status");
   desktop.wait_for("bulk-status-InReview");
@@ -382,8 +382,8 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
-  for id in &ids {
-    desktop.press(&format!("select-task-{id}"));
+  for task in tasks(&desktop.repo) {
+    desktop.press(&format!("task-select-{}", task.key()));
   }
   desktop.press("bulk-add-tags");
   // The panel shows the tag choices in place (`HI91q`), without a picker button to open.

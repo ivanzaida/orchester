@@ -1,12 +1,14 @@
 //! Changing a run's permissions from the task page (02.J), headlessly with the real runner and
 //! `orchester-fake-codex`: the popover changes the permissions for the run, Apply now shows the
 //! change pending until the agent restarts and then applied, Also save to the profile adds the
-//! change to the profile's draft, Keep for next invocation instead cancels the restart, and
+//! change to the profile's draft, Keep for next invocation instead cancels the restart, the row
+//! shows what the running agent launched with while a change waits for the next invocation, and
 //! Escape or Cancel close the popover without changes. On `orchester-fake-claude` the popover says
 //! what Claude Code runs besides the allowed commands.
 
 use std::{fs, path::Path};
 
+use lurq::core::ElementRect;
 use orchester_core::{
   connection::{AgentProvider, stream::AgentEvent},
   permission::RepositoryAccess,
@@ -115,6 +117,166 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
   desktop.click("task-permissions-cancel");
 }
 
+/// `inner` lies within `outer` from side to side, give or take half a pixel; the panels scroll, so
+/// only their width bounds what they show.
+fn across(inner: &ElementRect, outer: &ElementRect) -> bool {
+  inner.x >= outer.x - 0.5 && inner.x + inner.width <= outer.x + outer.width + 0.5
+}
+
+/// `inner` lies within `outer`, give or take half a pixel.
+fn within(inner: &ElementRect, outer: &ElementRect) -> bool {
+  across(inner, outer) && inner.y >= outer.y - 0.5 && inner.y + inner.height <= outer.y + outer.height + 0.5
+}
+
+/// The row keeps its link whole at both widths (`iPHGE`): in the "This run" panel the full value
+/// stacks above it; in the Conversation tab's wide column it follows the value at 1440 and moves
+/// under it at 960. The value only breaks at its "·" separators.
+#[test]
+fn run_permissions_row_keeps_its_link_at_1440_and_960() {
+  let mut desktop = desktop_running("Wait for release.");
+  desktop.wait_until("the recorded launch", |desktop| {
+    !shows(desktop, "task-permissions", "starting…")
+  });
+  for (width, height) in [(1440, 960), (960, 700)] {
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    let (row, value, link) = (
+      desktop.bounds("task-permissions"),
+      desktop.bounds("task-permissions-value"),
+      desktop.bounds("task-permissions-view"),
+    );
+    let panel = desktop.bounds("task-this-run");
+    assert!(
+      within(&link, &row) && across(&row, &panel),
+      "{width}: {link:?} {row:?} {panel:?}"
+    );
+    assert!(
+      link.y >= value.y + value.height - 0.5,
+      "{width}: the link is under the value"
+    );
+  }
+  let value = desktop
+    .tree
+    .get_element_by_id("task-permissions-value")
+    .and_then(|value| value.text_content())
+    .expect("the value");
+  assert!(
+    value.contains("Any\u{a0}command\u{a0}· "),
+    "{value:?} breaks only after a separator"
+  );
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("task-working-context");
+  for (width, height, one_line) in [(1440, 960, true), (960, 700, false)] {
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    let (row, value, link) = (
+      desktop.bounds("task-permissions"),
+      desktop.bounds("task-permissions-value"),
+      desktop.bounds("task-permissions-view"),
+    );
+    assert!(within(&link, &row), "{width}: {link:?} {row:?}");
+    // The whole value is shown: it wraps inside the row rather than running past it.
+    assert!(within(&value, &row), "{width}: {value:?} {row:?}");
+    let context = desktop.bounds("task-working-context");
+    assert!(across(&row, &context), "{width}: {row:?} {context:?}");
+    if one_line {
+      // Label, value and link share one line box, so their text lines up.
+      let label = desktop.bounds("task-permissions-label");
+      let middle = |bounds: &ElementRect| bounds.y + bounds.height / 2.0;
+      assert!((middle(&label) - middle(&value)).abs() < 0.5, "{label:?} {value:?}");
+      assert!((middle(&link) - middle(&value)).abs() < 0.5, "{link:?} {value:?}");
+      assert!(
+        (link.y - value.y).abs() < 4.0,
+        "{width}: the link follows the value: {link:?} {value:?}"
+      );
+    } else {
+      assert!(
+        link.y >= value.y + value.height - 0.5,
+        "{width}: the link is under the value"
+      );
+    }
+  }
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+/// The Codex popover (`ecCTw`) ends 6 px above its row however tall the window, instead of
+/// growing over the row; its frame and footer stay whole and only its body scrolls.
+#[test]
+fn run_permissions_popover_stays_above_its_row() {
+  let mut desktop = desktop_running("Wait for release.");
+  for (width, height) in [(1440, 1020), (1440, 960), (960, 700)] {
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    desktop.click("task-permissions-view");
+    desktop.wait_for("task-permissions-popover");
+    desktop.pass();
+    let (row, frame) = (
+      desktop.bounds("task-permissions"),
+      desktop.bounds("task-permissions-popover"),
+    );
+    let bottom = frame.y + frame.height;
+    assert!(
+      (row.y - 6.0 - bottom).abs() < 1.0,
+      "{width}x{height}: the popover ends at {bottom}, the row starts at {}",
+      row.y
+    );
+    assert!(frame.y >= orchester_desktop::theme::TITLE_BAR_HEIGHT - 0.5);
+    // Only the body scrolls: the footer stays inside the popover and the window.
+    for button in [
+      "task-permissions-cancel",
+      "task-permissions-apply-now",
+      "task-permissions-apply-next",
+    ] {
+      let button = desktop.bounds(button);
+      assert!(within(&button, &frame), "{width}x{height}: {button:?} in {frame:?}");
+      assert!(button.y + button.height <= f32::from(u16::try_from(height).expect("height")));
+    }
+    desktop.click("task-permissions-cancel");
+    desktop.pass();
+  }
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+#[test]
+fn run_permissions_first_next_change_shows_actual_policy_and_queued_approval_settings() {
+  let mut desktop = desktop_running("Wait for release.");
+  desktop.click("task-permissions-view");
+  desktop.click("task-permissions-ask");
+  desktop.click("task-permissions-tool-approvals");
+  desktop.click("task-permissions-apply-next");
+  desktop.wait_until("first queued change", |desktop| has(desktop, "task-permissions-next"));
+  // The notice names what changes against what the agent launched with.
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-next",
+    "Saved for the next invocation · Commands ask, MCP asks"
+  ));
+  assert!(shows(&mut desktop, "task-permissions", "Running with"));
+  assert!(shows(&mut desktop, "task-permissions", "Any command"));
+  assert!(shows(&mut desktop, "task-permissions", "MCP auto"));
+  desktop.click("task-permissions-view");
+  assert!(shows(&mut desktop, "task-permissions-current-policy", "MCP auto"));
+  // Changing the settings back to what the agent launched with leaves nothing queued.
+  desktop.click("task-permissions-any");
+  desktop.click("task-permissions-tool-approvals");
+  desktop.click("task-permissions-apply-next");
+  desktop.wait_until("queued settings restored to the active policy", |desktop| {
+    !has(desktop, "task-permissions-popover") && !has(desktop, "task-permissions-next")
+  });
+  assert!(shows(&mut desktop, "task-permissions", "Any command"));
+  let run = latest_run(desktop.repo()).expect("run");
+  let db = ProjectDb::open(desktop.repo()).expect("open");
+  assert_eq!(db.invocations(run.id()).expect("invocations").len(), 1);
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+  let stored = db.invocations(run.id()).expect("completed invocation");
+  assert!(stored[0].ended_at.is_some());
+  let launched = stored[0].permissions.as_ref().expect("launch snapshot");
+  assert!(!launched.permissions().interactive_tool_approvals());
+}
+
 #[test]
 fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_draft() {
   let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
@@ -133,7 +295,9 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
   desktop.wait_until("the pending change", |desktop| {
     !has(desktop, "task-permissions-popover") && has(desktop, "task-permissions-pending")
   });
-  assert!(shows(&mut desktop, "task-permissions", "Applying at next checkpoint…"));
+  // Until the agent restarts, the row still shows what it launched with.
+  assert!(shows(&mut desktop, "task-permissions", "Running with"));
+  assert!(shows(&mut desktop, "task-permissions", "Read-only"));
   assert!(shows(&mut desktop, "task-permissions-saved", "draft v2"));
   let db = ProjectDb::open(desktop.repo()).expect("open");
   let builder = db.resources(ResourceKind::AgentProfile).expect("profiles")[0].id();

@@ -7,7 +7,8 @@ use super::phase::TaskPhase;
 pub struct RunCounts {
   /// Runs with an agent at work.
   pub active: usize,
-  /// Runs with a step waiting for a person: a plan decision, a question or an approval.
+  /// Runs waiting for a person: a step's plan decision, question or approval, or the run's own
+  /// decision after its retries ran out.
   pub needs_you: usize,
 }
 
@@ -24,7 +25,7 @@ impl RunCounts {
           active: counts.active + 1,
           ..counts
         },
-        TaskPhase::Waiting => Self {
+        phase if phase.needs_you() => Self {
           needs_you: counts.needs_you + 1,
           ..counts
         },

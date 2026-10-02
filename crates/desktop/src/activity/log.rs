@@ -134,6 +134,11 @@ pub enum Outcome {
     reason: Message,
     resolved: bool,
   },
+  /// A run waits for the user's decision (02.B6 `K8VQRC`); like a failure it stays in the slot
+  /// until the user opened its task or dismissed it.
+  NeedsYou {
+    resolved: bool,
+  },
 }
 
 /// A finished or failed operation, or something that happened on its own (the runner
@@ -175,12 +180,15 @@ impl Event {
 
   /// A failure the user has neither opened nor dismissed.
   pub fn is_unresolved(&self) -> bool {
-    matches!(self.outcome, Outcome::Failed { resolved: false, .. })
+    matches!(
+      self.outcome,
+      Outcome::Failed { resolved: false, .. } | Outcome::NeedsYou { resolved: false }
+    )
   }
 
   /// The same thing happened again, e.g. another save of the same draft.
   fn repeats(&self, other: &Self) -> bool {
-    !matches!(self.outcome, Outcome::Failed { .. })
+    !matches!(self.outcome, Outcome::Failed { .. } | Outcome::NeedsYou { .. })
       && self.outcome == other.outcome
       && self.title == other.title
       && self.target == other.target
@@ -293,6 +301,19 @@ impl ActivityLog {
     self.take(id);
   }
 
+  /// A run of `project` waits for the user's decision: it stays in the slot until handled.
+  pub fn record_needs_you(&mut self, project: Option<Arc<str>>, title: Message, target: Target, at: SystemTime) {
+    let id = self.next_id();
+    self.push(Event {
+      id,
+      project,
+      title,
+      target,
+      at,
+      outcome: Outcome::NeedsYou { resolved: false },
+    });
+  }
+
   /// Something that finished without being started here, e.g. the runner reconnecting or a run
   /// proposing a plan in `project`.
   pub fn record(&mut self, project: Option<Arc<str>>, title: Message, target: Target, at: SystemTime) {
@@ -307,11 +328,21 @@ impl ActivityLog {
     });
   }
 
+  /// Runs that waited for the user's decision at `target` no longer do: their events go, so no
+  /// stale "needs your decision" stays in the slot or the recent list. Whether any went.
+  pub fn settle_needs_you(&mut self, target: &Target) -> bool {
+    let before = self.events.len();
+    self
+      .events
+      .retain(|event| !(event.target == *target && matches!(event.outcome, Outcome::NeedsYou { .. })));
+    self.events.len() != before
+  }
+
   /// The user opened the failure's object or dismissed it; it stays in the recent list.
   pub fn resolve(&mut self, id: OperationId) {
     for event in &mut self.events {
       if event.id == id
-        && let Outcome::Failed { resolved, .. } = &mut event.outcome
+        && let Outcome::Failed { resolved, .. } | Outcome::NeedsYou { resolved } = &mut event.outcome
       {
         *resolved = true;
       }

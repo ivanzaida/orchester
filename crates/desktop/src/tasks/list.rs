@@ -7,7 +7,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
   resource::{StepKey, VersionNumber},
-  run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
+  run::{PauseReason, PinnedVersion, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -40,9 +40,6 @@ impl TaskTab {
     Self::InReview,
     Self::Done,
   ];
-  pub const fn is_available(self) -> bool {
-    true
-  }
   pub const fn label_key(self) -> &'static str {
     match self {
       Self::All => "tasks.tabs.all",
@@ -65,14 +62,13 @@ impl TaskTab {
       Self::Done => task.organization().status() == WorkflowStatus::Done,
     }
   }
-  pub fn count(self, tasks: &[Task]) -> Option<usize> {
-    (self != Self::NeedsYou).then(|| tasks.iter().filter(|task| self.includes(task)).count())
-  }
 }
 
 /// Where a task's latest run stands, for its row's status and its dependency / readiness cell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LatestRun {
+  /// The configuration the latest readable run actually executes.
+  pub pipeline: PinnedVersion,
   pub phase: TaskPhase,
   /// The run's number in the project, e.g. 128 for "Run #128".
   pub number: RunNumber,
@@ -90,6 +86,48 @@ pub struct LatestRun {
   pub merged_into: Option<Arc<str>>,
   /// The question it waits for an answer to, if it does.
   pub question: Option<AwaitedQuestion>,
+  /// The decision it waits for after its retries ran out or its step broke again, if it does.
+  pub decision: Option<AwaitedDecision>,
+}
+
+/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
+/// whether its retries ran out (how many it took) or it broke again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwaitedDecision {
+  pub step: Arc<str>,
+  pub retries: u32,
+  pub broke: bool,
+}
+
+impl AwaitedDecision {
+  /// What `run` waits for a decision on, if it does.
+  pub fn of(run: &Run) -> Option<Self> {
+    let RunStatus::WaitingForPerson(stuck) = run.status() else {
+      return None;
+    };
+    let step = stuck.step();
+    Some(Self {
+      step: run
+        .snapshot()
+        .body()
+        .step(step)
+        .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
+      retries: run.automatic_retries_taken(step),
+      broke: matches!(stuck, Stuck::BrokeAgain(_)),
+    })
+  }
+
+  /// "Review still fails after 2 retries", or "Implement stopped again without a result".
+  pub fn title(&self) -> Message {
+    let key = match (self.broke, self.retries) {
+      (true, _) => "runs.retryLimit.brokeTitle",
+      (false, 1) => "runs.retryLimit.title.one",
+      (false, _) => "runs.retryLimit.title.other",
+    };
+    Message::new(key)
+      .with("step", self.step.to_string())
+      .with("retries", self.retries.to_string())
+  }
 }
 
 /// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
@@ -134,6 +172,7 @@ impl LatestRun {
   /// `updated_at`, with the plan or the question it waits on, if any.
   pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
+      pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),
       number: run.number(),
@@ -145,6 +184,7 @@ impl LatestRun {
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
       plan: awaited.plan,
       question: awaited.question,
+      decision: AwaitedDecision::of(run),
     }
   }
 
@@ -171,7 +211,7 @@ impl LatestRun {
       TaskPhase::Queued => Message::new("tasks.progress.queued"),
       TaskPhase::Running if self.pausing => Message::new("tasks.progress.pausing"),
       TaskPhase::Running => Message::new("tasks.progress.running"),
-      TaskPhase::Waiting => Message::new("tasks.progress.waiting"),
+      TaskPhase::Waiting | TaskPhase::Stuck => Message::new("tasks.progress.waiting"),
       TaskPhase::Paused => with_checkpoint("tasks.progress.paused", "tasks.progress.pausedNoCheckpoint"),
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),
@@ -329,6 +369,8 @@ pub struct TaskRow {
   pub plan: Option<AwaitedPlan>,
   /// The question its run waits for an answer to, if it does.
   pub question: Option<AwaitedQuestion>,
+  /// The decision its run waits for after its retries, if it does.
+  pub decision: Option<AwaitedDecision>,
   pub created_at: Timestamp,
 }
 
@@ -359,14 +401,29 @@ impl TaskRow {
       tags: Vec::new(),
       key: task.key().to_string().into(),
       title: task.details().title.as_str().into(),
-      pipeline: PipelineLabel::of(task.details().pipeline, published),
+      pipeline: task_pipeline_label(task, published, latest),
       phase,
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
       question: latest.and_then(|latest| latest.question.clone()),
+      decision: latest.and_then(|latest| latest.decision.clone()),
       created_at: task.created_at(),
     }
   }
+}
+
+fn task_pipeline_label(task: &Task, published: &[PipelineChoice], latest: Option<&LatestRun>) -> PipelineLabel {
+  let pinned = latest
+    .map(|run| (run.pipeline.resource, run.pipeline.number))
+    .or_else(|| task.details().pipeline.zip(task.pipeline_version()));
+  let id = pinned.map(|(id, _)| id).or(task.details().pipeline);
+  let mut label = PipelineLabel::of(id, published);
+  if let PipelineLabel::Published { version, .. } = &mut label
+    && let Some((_, number)) = pinned
+  {
+    *version = number;
+  }
+  label
 }
 
 /// Rows of `tab`, in task number order.
@@ -374,7 +431,7 @@ pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: 
   tasks
     .iter()
     .filter(|task| {
-      tab.includes(task) && (tab != TaskTab::NeedsYou || phase_of(task, phases) == Some(TaskPhase::Waiting))
+      tab.includes(task) && (tab != TaskTab::NeedsYou || phase_of(task, phases).is_some_and(TaskPhase::needs_you))
     })
     .map(|task| TaskRow::new(task, published, phases.get(&task.id())))
     .collect()

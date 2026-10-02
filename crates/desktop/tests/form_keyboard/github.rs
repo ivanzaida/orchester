@@ -143,8 +143,12 @@ fn open_connections(desktop: &mut Desktop) {
   desktop.wait_for(INSPECTOR);
 }
 
+/// Whether `element` or a descendant shows `text`; a non-breaking space, which keeps words on one
+/// line, counts as a space.
 pub(crate) fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
-  element.text_content().is_some_and(|content| content.contains(text))
+  element
+    .text_content()
+    .is_some_and(|content| content.replace('\u{a0}', " ").contains(text))
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
 

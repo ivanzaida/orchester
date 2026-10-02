@@ -1,4 +1,6 @@
-use std::{collections::HashSet, path::PathBuf};
+//! Bulk Set status, Set priority, Add tag and Remove tag for the selected tasks (ORC-39 `HI91q`).
+
+use std::path::PathBuf;
 
 use lurq::{
   app::{
@@ -19,7 +21,7 @@ use orchester_core::{
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
-use super::{
+use super::super::{
   ProjectNav,
   tag_picker::{TagPicker, TagPickerProps},
 };
@@ -28,6 +30,7 @@ use crate::{
   messages::{self, Message},
   runner::Runners,
   tasks::{
+    browse::Selection,
     data::ProjectTasks,
     organization::{OrganizationValue, priority_copy, workflow_copy},
   },
@@ -35,23 +38,19 @@ use crate::{
   ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
 };
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct SelectedIds(pub HashSet<TaskId>);
-impl lurq::app::component::DevtoolsInspectable for SelectedIds {}
+/// The selected tasks to organize, as the task list reads them.
 #[derive(Clone)]
-pub(super) struct TaskSelection(pub Signal<SelectedIds>);
-#[derive(Clone)]
-pub(super) struct SelectionProps {
+pub(super) struct BulkProps {
   pub root: PathBuf,
   pub tasks: ProjectTasks,
-  pub selected: Signal<SelectedIds>,
+  pub selected: Signal<Selection>,
 }
-impl PartialEq for SelectionProps {
+impl PartialEq for BulkProps {
   fn eq(&self, other: &Self) -> bool {
     self.root == other.root && self.tasks == other.tasks
   }
 }
-impl lurq::app::component::DevtoolsInspectable for SelectionProps {}
+impl lurq::app::component::DevtoolsInspectable for BulkProps {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Menu {
   Status,
@@ -72,15 +71,17 @@ struct Outcomes(Vec<(TaskId, Result<(), Message>)>);
 impl lurq::app::component::DevtoolsInspectable for Outcomes {}
 type Action = FutureAction<(Vec<TaskId>, Mutation, bool), Outcomes, Message>;
 
-pub(super) struct SelectionBar {
+/// The selection bar's organization group (`EpDpS` in `HI91q`): Set status, Set priority, Add tag
+/// and Remove tag, with their menus, the Canceled confirmation and each task's outcome.
+pub(super) struct BulkOrganization {
   menu: Signal<Option<Menu>>,
   open: Signal<bool>,
   anchors: [ElementRef; 4],
   tags: Signal<OrganizationValue>,
   confirm: Signal<bool>,
 }
-impl Component for SelectionBar {
-  type Props = SelectionProps;
+impl Component for BulkOrganization {
+  type Props = BulkProps;
   fn create(ctx: &mut Ctx) -> Self {
     let bar = Self {
       menu: ctx.signal(None),
@@ -89,46 +90,21 @@ impl Component for SelectionBar {
       tags: ctx.signal(OrganizationValue::default()),
       confirm: ctx.signal(false),
     };
-    let props = ctx.props::<SelectionProps>().clone();
+    let props = ctx.props::<BulkProps>().clone();
     let action = action(ctx, &props);
     bar.observe(ctx, &action);
     bar
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<SelectionProps>().clone();
+    let props = ctx.props::<BulkProps>().clone();
     let action = action(ctx, &props);
     let selected = props.selected.get().0;
     let pending = action.state().get().is_pending();
-    if selected.is_empty() {
-      return Column::new();
-    }
-    // The selection bar (`EpDpS` in `HI91q`): its count and actions centered, 12 apart.
-    let mut row = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Stack.role())
-      .padding(ExtraSpacing::Stack.role())
-      .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
-      .child(
-        Text::new(&ctx.t_args(
-          "tasks.selection.count",
-          [("count", selected.len().to_string().as_str())],
-        ))
-        .variant(TypographyStyle::Caption),
-      );
-    row = self.buttons(ctx, &props, row, pending);
-    let clear = props.selected.clone();
-    row = row.child(
-      ActionButton::new(ctx.t("tasks.selection.clear"))
-        .on_click(move || clear.set(SelectedIds::default()))
-        .enabled(!pending)
-        .render(ctx),
-    );
-    row = row.with_children(
-      ["tasks.selection.setPipeline", "tasks.selection.runSelected"]
-        .into_iter()
-        .map(|key| ActionButton::new(ctx.t(key)).render(ctx)),
-    );
+    let row = Row::new()
+      .wrap()
+      .spacing(ExtraSpacing::Group.role())
+      .align_items(Alignment::Center);
+    let row = self.buttons(ctx, &props, row, pending);
     let mut column = Column::new().spacing(SpacingSize::Sm).child(row);
     if let Some(menu) = self.menu.get().filter(|_| !selected.is_empty()) {
       let index = match menu {
@@ -149,8 +125,8 @@ impl Component for SelectionBar {
   }
 }
 
-impl SelectionBar {
-  fn buttons(&self, ctx: &Ctx, props: &SelectionProps, mut row: Row, pending: bool) -> Row {
+impl BulkOrganization {
+  fn buttons(&self, ctx: &Ctx, props: &BulkProps, mut row: Row, pending: bool) -> Row {
     let selected = props.selected.get().0;
     for (index, (menu, key)) in [
       (Menu::Status, "tasks.selection.setStatus"),
@@ -182,6 +158,8 @@ impl SelectionBar {
             Menu::AddTags => "bulk-add-tags",
             Menu::RemoveTags => "bulk-remove-tags",
           })
+          .in_form()
+          .height(Dimension::Px(super::SELECTION_BUTTON_HEIGHT))
           .ref_element(self.anchors[index].clone())
           .on_click(move || {
             show.set(true);
@@ -209,7 +187,7 @@ impl SelectionBar {
     });
   }
 
-  fn menu(&self, ctx: &mut Ctx, props: &SelectionProps, menu: Menu, action: &Action) -> Element {
+  fn menu(&self, ctx: &mut Ctx, props: &BulkProps, menu: Menu, action: &Action) -> Element {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
     let mut column = Column::new()
@@ -251,7 +229,7 @@ impl SelectionBar {
     column.into()
   }
 
-  fn status_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+  fn status_menu(&self, ctx: &Ctx, props: &BulkProps, action: &Action, mut column: Column) -> Column {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
     for status in WorkflowStatus::ALL {
@@ -276,7 +254,7 @@ impl SelectionBar {
     }
     column
   }
-  fn priority_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+  fn priority_menu(&self, ctx: &Ctx, props: &BulkProps, action: &Action, mut column: Column) -> Column {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     for priority in Priority::ALL {
       let (apply, ids) = (action.clone(), selected.clone());
@@ -298,7 +276,7 @@ impl SelectionBar {
     }
     column
   }
-  fn remove_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+  fn remove_menu(&self, ctx: &Ctx, props: &BulkProps, action: &Action, mut column: Column) -> Column {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
     for tag in &*props.tasks.tags {
@@ -357,7 +335,7 @@ impl SelectionBar {
     )
   }
 
-  fn confirmation(&self, ctx: &mut Ctx, props: &SelectionProps, action: &Action) -> Element {
+  fn confirmation(&self, ctx: &mut Ctx, props: &BulkProps, action: &Action) -> Element {
     if !self.confirm.get() {
       return Modal::new(Column::new()).open_when(false).into();
     }
@@ -421,7 +399,7 @@ impl SelectionBar {
 // hFH4D: bulk cancellation confirmation.
 const CONFIRM_WIDTH: f32 = 620.0;
 const MENU_WIDTH: f32 = 320.0;
-fn active_count(props: &SelectionProps) -> usize {
+fn active_count(props: &BulkProps) -> usize {
   let selected = props.selected.get().0;
   props
     .tasks
@@ -482,7 +460,7 @@ fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
   }
 }
 
-fn results(ctx: &Ctx, props: &SelectionProps, action: &Action) -> Element {
+fn results(ctx: &Ctx, props: &BulkProps, action: &Action) -> Element {
   let mut column = Column::new().spacing(SpacingSize::Sm);
   if let Some(Outcomes(outcomes)) = action.state().get().data {
     for (id, result) in outcomes {
@@ -513,7 +491,7 @@ fn results(ctx: &Ctx, props: &SelectionProps, action: &Action) -> Element {
 
 /// Applies one change to each selected task in turn, recording each task's outcome; the call in
 /// `create` and every `render` refer to the same action.
-fn action(ctx: &mut Ctx, props: &SelectionProps) -> Action {
+fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
   let root = props.root.clone();
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
   ctx.future_action(move |(tasks, mutation, confirmed): (Vec<TaskId>, Mutation, bool)| {

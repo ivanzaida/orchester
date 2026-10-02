@@ -27,8 +27,8 @@ pub const CONTROL_HEIGHT: f32 = 40.0;
 const HEADER_HEIGHT: f32 = 36.0;
 // gNExS/Sd5qt: both menus are 280 logical pixels wide.
 pub const ORGANIZATION_MENU_WIDTH: f32 = 280.0;
-/// A picker as a form field (`ixENv`), or as a secondary button that hugs its label: in the task
-/// header (`gNExS`, `Sd5qt`) and for the task list's sort (`SoOX5` in `qVMJh`).
+/// A picker as a form field (`ixENv`), or as a secondary button that hugs its label, in the task
+/// header (`gNExS`, `Sd5qt`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PickerAppearance {
   Field,
@@ -41,13 +41,13 @@ impl PickerAppearance {
       Self::Header => Dimension::Auto,
     }
   }
-  pub fn height(self) -> f32 {
+  fn height(self) -> f32 {
     match self {
       Self::Field => CONTROL_HEIGHT,
       Self::Header => HEADER_HEIGHT,
     }
   }
-  pub fn style(self, ctx: &Ctx) -> SelectStyle {
+  fn style(self, ctx: &Ctx) -> SelectStyle {
     let style = select_style(ctx, self.height())
       .min_menu_width(ORGANIZATION_MENU_WIDTH)
       .option_selected(SelectPartStyle::new().background(PaletteColor::AccentMuted));
@@ -174,7 +174,7 @@ pub fn priority_select(
 }
 
 /// The secondary button's role, which a header picker's trigger takes its look from.
-pub fn secondary_button(ctx: &Ctx) -> FormButtonRole {
+fn secondary_button(ctx: &Ctx) -> FormButtonRole {
   ctx.theme().form().button.secondary.clone()
 }
 
@@ -197,7 +197,7 @@ fn select_trigger(glyph: Icon, label: &str, appearance: PickerAppearance, button
 
 /// A select trigger drawn as the secondary button (`u1XBP`): its icon and label, padded as the
 /// button is.
-pub fn button_trigger(glyph: Icon, label: &str, button: &FormButtonRole) -> Element {
+fn button_trigger(glyph: Icon, label: &str, button: &FormButtonRole) -> Element {
   Row::new()
     .height(Dimension::Pct(100.0))
     .padding_custom(button.padding)

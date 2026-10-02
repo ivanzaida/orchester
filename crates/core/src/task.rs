@@ -101,6 +101,15 @@ pub enum QueueError {
   Incomplete(Vec<MissingDetail>),
 }
 
+/// Why a queued task cannot go back to the drafts.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ReturnError {
+  #[error("only a queued task can go back to the drafts")]
+  NotQueued,
+  #[error("the task has a run, so it stays queued")]
+  HasRun,
+}
+
 /// Why a task's details cannot be changed. A queued task waiting for its first run stays locked;
 /// once a run exists, edits must keep the task complete for future runs.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -215,6 +224,19 @@ impl Task {
     }
     self.status = TaskStatus::Queued;
     self.pipeline_version = Some(pipeline_version);
+    Ok(())
+  }
+
+  /// Takes a queued task that never started back to the drafts, e.g. one a held group released.
+  pub fn return_to_draft(&mut self, has_run: bool) -> Result<(), ReturnError> {
+    if self.status != TaskStatus::Queued {
+      return Err(ReturnError::NotQueued);
+    }
+    if has_run {
+      return Err(ReturnError::HasRun);
+    }
+    self.status = TaskStatus::Draft;
+    self.pipeline_version = None;
     Ok(())
   }
 }

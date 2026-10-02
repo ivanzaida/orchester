@@ -413,7 +413,7 @@ const fn overview_query(tab: OverviewTab) -> Option<&'static str> {
   }
 }
 
-/// Only the tabs that are available have a path; the others cannot be opened yet.
+/// Every task tab has a stable route; an unknown tab falls back to All.
 fn task_tab(tab: Option<&str>) -> TaskTab {
   match tab {
     Some(BACKLOG) => TaskTab::Backlog,

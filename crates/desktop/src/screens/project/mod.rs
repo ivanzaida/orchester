@@ -31,7 +31,6 @@ mod tag_picker;
 mod task;
 mod task_filters;
 mod task_rows;
-mod task_selection;
 mod tasks;
 mod tools;
 

@@ -1,14 +1,21 @@
-//! Tasks (02.03 `J9467`): the project's backlog with its tabs. All tasks and Drafts work;
-//! queueing, review and completion do not exist yet, so their tabs are unavailable, and so are
-//! selecting tasks, running them, creating several at once, searching, filtering and sorting.
-//! Shown after New task's Create, the list scrolls to the new task and highlights it.
+//! Tasks (02.03 `J9467`, ORC-39 `qVMJh`): workflow tabs, query and organization filters, select
+//! tasks to organize them in bulk or review their first-run scheduling. Shown after New task's
+//! Create, the list scrolls to the new task and highlights it.
 
-use std::{path::PathBuf, sync::Arc};
+mod bulk;
+mod controls;
+mod review;
+pub(super) mod selection;
+
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
     component::Component,
-    ctx::Ctx,
+    ctx::{Ctx, FutureAction},
     theme::{BorderSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, VirtualizedList},
@@ -16,18 +23,21 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::id::TaskId;
+use orchester_core::id::{ResourceId, TaskId};
 
 use super::{
   ProjectNav, TasksState, page,
-  task_filters::{FilterProps, Filters, Sort, TaskFilters},
+  task_filters::{FilterProps, Filters, TaskFilters},
   task_rows::{QueueRow, QueueRowProps, table_heading},
-  task_selection::{SelectedIds, SelectionBar, SelectionProps, TaskSelection},
 };
 use crate::{
+  background,
+  messages::Message,
   navigation::route::Page,
   tasks::{
+    browse::{self, PipelineFilter, Query, Selection, TaskSort},
     data::ProjectTasks,
+    group,
     list::{self, TaskTab},
   },
   theme::{ExtraColor, ExtraSpacing},
@@ -47,12 +57,20 @@ const TOPBAR_BUTTON_HEIGHT: f32 = 36.0;
 const CREATE_MULTIPLE_WIDTH: f32 = 142.0;
 const NEW_TASK_WIDTH: f32 = 116.0;
 const TAB_ROW_HEIGHT: f32 = 42.0;
+const FILTER_HEIGHT: f32 = 36.0;
+const PIPELINE_FILTER_WIDTH: f32 = 184.0;
+const SORT_WIDTH: f32 = 164.0;
+const SELECTION_HEIGHT: f32 = 44.0;
+const SELECTION_BUTTON_HEIGHT: f32 = 32.0;
+const RUN_SELECTED_WIDTH: f32 = 158.0;
 const FOOTER_HEIGHT: f32 = 30.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TasksProps {
-  pub root: PathBuf,
   pub project: Arc<str>,
+  pub root: Arc<PathBuf>,
+  pub runner_online: bool,
+  pub agent_slots: Option<std::num::NonZeroU32>,
   pub tab: TaskTab,
   pub tasks: TasksState,
 }
@@ -60,10 +78,19 @@ pub struct TasksProps {
 impl lurq::app::component::DevtoolsInspectable for TasksProps {}
 
 pub struct TasksScreen {
-  filter: Signal<Filters>,
-  sort: Signal<Sort>,
-  selected: Signal<SelectedIds>,
   nav: ProjectNav,
+  selected: Signal<Selection>,
+  search: Signal<String>,
+  search_focused: Signal<bool>,
+  pipeline: Signal<PipelineFilter>,
+  /// Status, priority and tag filters (`l7kBSq`).
+  filter: Signal<Filters>,
+  sort: Signal<TaskSort>,
+  reviewing: Signal<bool>,
+  assigning: Signal<bool>,
+  assign_pipeline: Signal<PipelineFilter>,
+  assign: FutureAction<(PathBuf, Vec<TaskId>, ResourceId), Vec<Message>, Message>,
+  release: FutureAction<(PathBuf, Vec<TaskId>), (), Message>,
   /// The task Create just made, highlighted while the list is shown.
   created: Option<TaskId>,
 }
@@ -75,40 +102,62 @@ impl Component for TasksScreen {
     let nav = ctx
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
+    let assign = assignment_action(ctx);
+    let changed = nav.clone();
+    ctx.watch(&assign.state(), move |state| {
+      if !state.is_pending() && state.data.is_some() {
+        changed.tasks_changed();
+      }
+    });
+    let release = release_action(ctx);
+    let changed = nav.clone();
+    ctx.watch(&release.state(), move |state| {
+      if !state.is_pending() && state.data.is_some() {
+        changed.tasks_changed();
+      }
+    });
     Self {
-      filter: ctx.signal(Filters::default()),
-      sort: ctx.signal(Sort::default()),
-      selected: ctx.signal(SelectedIds::default()),
       created: nav.take_created(),
       nav,
+      selected: ctx.signal(Selection::default()),
+      search: ctx.signal(String::new()),
+      search_focused: ctx.signal(false),
+      pipeline: ctx.signal(PipelineFilter::default()),
+      filter: ctx.signal(Filters::default()),
+      sort: ctx.signal(TaskSort::default()),
+      reviewing: ctx.signal(false),
+      assigning: ctx.signal(false),
+      assign_pipeline: ctx.signal(PipelineFilter::default()),
+      assign,
+      release,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // Keep the create-time actions' polling slots alive on every render.
+    let _assign = assignment_action(ctx);
+    let _release = release_action(ctx);
     let props = ctx.props::<TasksProps>().clone();
+    ctx.provide(selection::TaskSelection(self.selected.clone()));
+    if self.reviewing.get() {
+      return ctx.mount_keyed::<review::SchedulingReview>(
+        "task-scheduling-review",
+        review::ReviewProps {
+          project: props.project.clone(),
+          root: props.root.clone(),
+          tasks: props.tasks.clone(),
+          selected: self.selected.get().0.iter().copied().collect(),
+          close: self.reviewing.clone(),
+          runner_online: props.runner_online,
+          agent_slots: props.agent_slots,
+        },
+      );
+    }
     let nav = self.nav.clone();
     let tab = props.tab;
-    ctx.provide(TaskSelection(self.selected.clone()));
     let body = match &props.tasks {
       TasksState::Loading => Column::new().into(),
-      TasksState::Failed(error) => {
-        let nav = nav.clone();
-        centered(
-          Column::new()
-            .spacing(SpacingSize::Sm)
-            .child(RecoveryPanel::new(
-              Icon::AlertCircle,
-              &ctx.t("tasks.loadFailed"),
-              &message_text(ctx, error),
-            ))
-            .child(
-              ActionButton::new(ctx.t("common.retry"))
-                .on_click(move || nav.tasks_changed())
-                .render(ctx),
-            )
-            .into(),
-        )
-      }
+      TasksState::Failed(error) => load_failed(ctx, &nav, error),
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => Column::new()
         .flex(1.0)
         .child(
@@ -119,31 +168,39 @@ impl Component for TasksScreen {
         )
         .child(empty(ctx, &nav))
         .into(),
-      TasksState::Ready(tasks) => self.library(ctx, tasks, tab, &props.root),
+      TasksState::Ready(tasks) => library(ctx, self, &props.root, tasks, tab),
     };
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, &props.project, &nav))
-      .child(page::organization_heading(
-        &ctx.t("tasks.title"),
-        &ctx.t("tasks.description"),
-      ))
+      .child(page::screen_heading(&ctx.t("tasks.title"), &ctx.t("tasks.description")))
       .child(self.tabs(ctx, tab, props.tasks.ready()))
       .child(body)
+      .into()
   }
+}
+
+fn assignment_action(ctx: &mut Ctx) -> FutureAction<(PathBuf, Vec<TaskId>, ResourceId), Vec<Message>, Message> {
+  ctx.future_action(
+    |(root, tasks, pipeline): (PathBuf, Vec<TaskId>, ResourceId)| async move {
+      background::run(move || group::assign(&root, &tasks, pipeline)).await?
+    },
+  )
+}
+
+fn release_action(ctx: &mut Ctx) -> FutureAction<(PathBuf, Vec<TaskId>), (), Message> {
+  ctx.future_action(|(root, tasks): (PathBuf, Vec<TaskId>)| async move {
+    background::run(move || group::release(&root, &tasks)).await?
+  })
 }
 
 impl TasksScreen {
   fn tabs(&self, ctx: &Ctx, selected: TaskTab, tasks: Option<&ProjectTasks>) -> Element {
     let tabs = TaskTab::ALL.into_iter().map(|tab| {
-      let item = Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
-        .min_width(Dimension::Px(tab_width(tab)));
-      if !tab.is_available() {
-        return item;
-      }
-      item
-        .count(tasks.and_then(|tasks| tab.count(&tasks.tasks)))
+      Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
+        .min_width(Dimension::Px(tab_width(tab)))
+        .count(tasks.map(|tasks| list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, tab).len()))
         .selected(tab == selected)
         .link(self.nav.link(Page::Tasks(tab)))
     });
@@ -156,7 +213,7 @@ impl TasksScreen {
   }
 }
 
-/// Tab widths in the design (`Iefue`, `WGkQY`, `vfoPn`, `gDolJ`, `fwdrp` in `XxplC`).
+/// The least width of each workflow tab (`qVMJh`).
 const fn tab_width(tab: TaskTab) -> f32 {
   match tab {
     TaskTab::All | TaskTab::Todo | TaskTab::Done => 48.0,
@@ -164,6 +221,7 @@ const fn tab_width(tab: TaskTab) -> f32 {
     TaskTab::NeedsYou | TaskTab::InProgress | TaskTab::InReview => 96.0,
   }
 }
+
 const fn tab_id(tab: TaskTab) -> &'static str {
   match tab {
     TaskTab::All => "tasks-tab-all",
@@ -198,6 +256,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
     )
     .child(
       ActionButton::new(ctx.t("overview.newTask"))
+        .primary()
         .icon(Icon::Plus)
         .id("tasks-new-task")
         .size(Dimension::Px(NEW_TASK_WIDTH), Dimension::Px(TOPBAR_BUTTON_HEIGHT))
@@ -224,6 +283,26 @@ fn centered(content: Element) -> Element {
     .into()
 }
 
+/// The tasks cannot be read: why, and Retry, which reads them again.
+fn load_failed(ctx: &Ctx, nav: &ProjectNav, error: &Message) -> Element {
+  let nav = nav.clone();
+  centered(
+    Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(RecoveryPanel::new(
+        Icon::AlertCircle,
+        &ctx.t("tasks.loadFailed"),
+        &message_text(ctx, error),
+      ))
+      .child(
+        ActionButton::new(ctx.t("common.retry"))
+          .on_click(move || nav.tasks_changed())
+          .render(ctx),
+      )
+      .into(),
+  )
+}
+
 /// No tasks in the project yet.
 fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
   let action = ActionButton::new(ctx.t("overview.newTask"))
@@ -243,90 +322,123 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
   )
 }
 
-impl TasksScreen {
-  /// Filters, the selection bar, the task table and its footer (`npcrO`); the task Create just
-  /// made is highlighted and scrolled into view once the tasks as read include it.
-  fn library(&self, ctx: &mut Ctx, tasks: &ProjectTasks, tab: TaskTab, root: &std::path::Path) -> Element {
-    let filter = self.filter.get().0;
-    let sort = self.sort.get().0;
-    let mut rows: Vec<_> = list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, tab)
-      .into_iter()
-      .filter(|row| filter.includes(&row.organization))
-      .map(|row| tasks.decorate_row(row))
-      .collect();
-    rows.sort_by(|a, b| {
-      sort.compare(
-        (
-          &a.organization,
-          tasks.updated.get(&a.id).copied().unwrap_or(a.created_at),
-          a.id,
-        ),
-        (
-          &b.organization,
-          tasks.updated.get(&b.id).copied().unwrap_or(b.created_at),
-          b.id,
-        ),
-      )
-    });
-    let created = self.created;
-    let reveal = created
-      .filter(|task| rows.iter().any(|row| row.id == *task))
-      .map(|task| task.to_string());
-    let table = if rows.is_empty() {
-      no_matches(ctx, self.filter.clone())
-    } else {
-      VirtualizedList::new_shared(ctx, Arc::new(rows))
-        .list_key("task-rows")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .reveal_key(reveal)
-        .mount_keyed::<QueueRow, _, _, _>(
-          |row| row.id,
-          move |row| QueueRowProps {
-            row: row.clone(),
-            created: created == Some(row.id),
-          },
-        )
-    };
-    body()
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Stack.role())
-          .child(ctx.mount_keyed::<TaskFilters>(
-            "task-filters",
-            FilterProps {
-              tasks: tasks.clone(),
-              filter: self.filter.clone(),
-              sort: self.sort.clone(),
-            },
-          ))
-          .child(Spacer::new().flex(1.0))
-          .child(
-            ActionButton::new(ctx.t("tasks.tags.manageShort"))
-              .icon(Icon::Tags)
-              .id("project-tags-manage")
-              .link(self.nav.link(Page::ProjectTags))
-              .render(ctx),
-          ),
-      )
-      .child(ctx.mount_keyed::<SelectionBar>(
-        "task-selection",
-        SelectionProps {
-          root: root.to_owned(),
-          tasks: tasks.clone(),
-          selected: self.selected.clone(),
+/// Filters, the selection bar, the task table and its footer (`npcrO`); the task Create just made
+/// is highlighted and scrolled into view once the tasks as read include it.
+fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks, tab: TaskTab) -> Element {
+  let (search, filter) = (screen.search.get(), screen.filter.get());
+  let query = Query {
+    text: &search,
+    pipeline: screen.pipeline.get(),
+    organization: &filter.0,
+  };
+  let rows = Arc::new(browse::rows(tasks, tab, query, screen.sort.get()));
+  let visible = rows.clone();
+  let created = screen.created;
+  let reveal = created
+    .filter(|task| rows.iter().any(|row| row.id == *task))
+    .map(|task| task.to_string());
+  let table: Element = if rows.is_empty() {
+    empty_rows(ctx, screen)
+  } else {
+    VirtualizedList::new_shared(ctx, rows.clone())
+      .list_key("task-rows")
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .max_height(Dimension::Px(super::task_rows::TABLE_ROW_HEIGHT * rows.len() as f32))
+      .reveal_key(reveal)
+      .mount_keyed::<QueueRow, _, _, _>(
+        |row| row.id,
+        move |row| QueueRowProps {
+          row: row.clone(),
+          created: created == Some(row.id),
         },
-      ))
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .flex(1.0)
-          .child(table_heading(ctx))
-          .child(table),
       )
-      .child(footer(ctx, tasks))
-      .into()
+  };
+  let content = body()
+    .child(controls::filters(ctx, screen, tasks))
+    .child(organization_filters(ctx, screen, tasks))
+    .child(controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
+    .with_children(
+      screen
+        .assigning
+        .get()
+        .then(|| controls::assignment(ctx, screen, root, tasks)),
+    )
+    .with_children(controls::problems(ctx, screen, tasks))
+    .child(table_column(ctx, table, visible.len()))
+    .child(footer(ctx, tasks));
+  crate::ui::form::form(None, content)
+}
+
+/// Status, priority and tag filters with what they hold, and Manage tags (`qVMJh`, `l7kBSq`).
+fn organization_filters(ctx: &mut Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(ctx.mount_keyed::<TaskFilters>(
+      "task-filters",
+      FilterProps {
+        tasks: tasks.clone(),
+        filter: screen.filter.clone(),
+      },
+    ))
+    .child(Spacer::new().flex(1.0))
+    .child(
+      ActionButton::new(ctx.t("tasks.tags.manageShort"))
+        .icon(Icon::Tags)
+        .id("project-tags-manage")
+        .link(screen.nav.link(Page::ProjectTags))
+        .render(ctx),
+    )
+    .into()
+}
+
+/// The table under its heading: as tall as its `rows` up to the room left, so the footer follows
+/// the last row; without rows, as tall as what it says instead.
+fn table_column(ctx: &Ctx, table: Element, rows: usize) -> Element {
+  let column = Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(table_heading(ctx))
+    .child(table);
+  if rows == 0 {
+    return column.into();
   }
+  column
+    .flex(1.0)
+    .max_height(Dimension::Px(
+      super::task_rows::HEADING_HEIGHT + super::task_rows::TABLE_ROW_HEIGHT * rows as f32,
+    ))
+    .into()
+}
+
+/// No row to show: the tab has no tasks, or the search, pipeline or organization filters hide
+/// them all, which the person can clear (implemented, not drawn yet).
+fn empty_rows(ctx: &Ctx, screen: &TasksScreen) -> Element {
+  let filtered = !screen.search.get().trim().is_empty()
+    || screen.pipeline.get().0.is_some()
+    || screen.filter.get() != Filters::default();
+  let text = ctx.t(if filtered { "tasks.emptyQuery" } else { "tasks.emptyTab" });
+  let (search, pipeline, filter) = (screen.search.clone(), screen.pipeline.clone(), screen.filter.clone());
+  Column::new()
+    .id("tasks-empty-rows")
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Stack.role())
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .child(Text::new(&text).variant(TypographyStyle::Caption))
+    .with_children(filtered.then(|| {
+      ActionButton::new(ctx.t("tasks.clearQuery"))
+        .icon(Icon::X)
+        .id("tasks-clear-query")
+        .in_form()
+        .on_click(move || {
+          search.set(String::new());
+          pipeline.set(PipelineFilter::default());
+          filter.set(Filters::default());
+        })
+        .render(ctx)
+    }))
+    .into()
 }
 
 /// Task and run counts (`Bpth7`).
@@ -339,18 +451,7 @@ fn footer(ctx: &Ctx, tasks: &ProjectTasks) -> Element {
     .child(
       Text::new(&message_text(ctx, &list::footer(tasks.tasks.len(), tasks.runs))).variant(TypographyStyle::Caption),
     )
+    .child(Spacer::new().flex(1.0))
+    .child(Text::new(&ctx.t("tasks.editingHint")).variant(TypographyStyle::Caption))
     .into()
-}
-
-fn no_matches(ctx: &Ctx, filter: Signal<Filters>) -> Element {
-  crate::ui::organization_notice::organization_notice(
-    &ctx.t("tasks.filters.noMatches"),
-    &ctx.t("tasks.filters.noMatchesHint"),
-  )
-  .child(
-    ActionButton::new(ctx.t("tasks.filters.clear"))
-      .on_click(move || filter.set(Filters::default()))
-      .render(ctx),
-  )
-  .into()
 }

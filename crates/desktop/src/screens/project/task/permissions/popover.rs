@@ -1,8 +1,11 @@
 //! The run permissions popover (02.J `NNRH8`): which agent, step, model and profile version the
-//! permissions come from, when a change takes effect (`aDPaV`), the three settings (`settings`),
-//! *Also save to the profile* (`u8JAYJ`) and the footer: Cancel, Apply now (`v2ssd`) and Apply from
-//! next invocation (`JOLcW`); under the settings, the MCP servers the agent gets (read-only). It is a form: Tab moves
-//! through its controls and wraps, Enter applies from the next invocation, Escape or Cancel closes it without changes.
+//! permissions come from, what the agent runs with (`UPDBO`, wrapping at a "·" as `zCqp2`), when a
+//! change takes effect (`aDPaV`), the settings for the next invocation (`settings`), *Also save to
+//! the profile* (`u8JAYJ`) and the footer: Cancel, Apply now (`v2ssd`) and Apply from next
+//! invocation (`JOLcW`); under the settings, the MCP servers the agent gets (read-only). It is a
+//! form: Tab moves through its controls and wraps, Enter applies from the next invocation, Escape
+//! or Cancel closes it without changes. For an ended run (04.2 `YgLEg`) the settings are read-only,
+//! the notice says why, and only *Close* is left.
 
 use std::sync::Arc;
 
@@ -11,18 +14,21 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Rect, Row, Text},
+  components::{Button, Column, Rect, Row, ScrollVertical, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::run::PermissionsApply;
 
 use super::{
-  super::heading::agent_of, ApplyAction, ApplyRequest, RunPermissionsProps, RunPermissionsRow, settings::settings,
+  super::heading::agent_of,
+  ApplyAction, ApplyRequest, RunPermissionsProps, RunPermissionsRow,
+  policy::{Wording, policy_property, policy_text},
+  settings::settings,
 };
 use crate::{
   screens::project::connections::status::short_key,
-  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
+  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
     field::field_error,
@@ -69,7 +75,9 @@ const FOOTER_BUTTON_HEIGHT: f32 = 30.0;
 type Apply = Arc<dyn Fn(PermissionsApply) + Send + Sync>;
 
 impl RunPermissionsRow {
-  pub(super) fn popover(&self, ctx: &Ctx, props: &RunPermissionsProps, action: &ApplyAction) -> Element {
+  /// The popover at most `cap` tall: its header and footer stay whole and the body between them
+  /// scrolls when the room above the row is too short (`ecCTw`).
+  pub(super) fn popover(&self, ctx: &Ctx, props: &RunPermissionsProps, action: &ApplyAction, cap: f32) -> Element {
     let Some(draft) = self.edit.draft.get().0 else {
       return Column::new().id("task-permissions-popover").into();
     };
@@ -95,32 +103,50 @@ impl RunPermissionsRow {
       .error
       .filter(|_| !pending)
       .map(|error| field_error(&message_text(ctx, &error)));
+    let body = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Group.role())
+      .child(current_policy(ctx, props))
+      .child(takes_effect(ctx, props))
+      .with_children(settings(ctx, &self.edit, props, &draft))
+      .child(mcp_servers(ctx, props))
+      .with_children(props.live.then(|| {
+        Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role())
+      }))
+      .with_children(props.live.then(|| self.save_to_profile(ctx, props)))
+      .with_children(failure);
     let content = Column::new()
       .id("task-permissions-popover")
       .width(Dimension::Px(POPOVER_WIDTH))
+      .max_height(Dimension::Px(cap))
       .padding(SpacingSize::Md)
       .spacing(ExtraSpacing::Group.role())
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .box_shadow(ExtraShadow::Popover.role())
-      .overflow_visible()
       .child(self.header(ctx, props))
-      .child(takes_effect(ctx, props))
-      .with_children(settings(ctx, &self.edit, props, &draft))
-      .child(mcp_servers(ctx, props))
-      .child(Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role()))
-      .child(self.save_to_profile(ctx, props))
-      .with_children(failure)
+      .child(
+        ScrollVertical::new(body)
+          .id("task-permissions-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex_shrink(1.0),
+      )
       .child(self.footer(ctx, props, apply.as_ref(), pending));
     let submit: Submit = apply.map(|apply| Arc::new(move || apply(PermissionsApply::NextInvocation)) as _);
     form(submit, content)
   }
 
-  /// "Permissions for this run" over "Builder · Implement · Codex / Sol · from profile v2", and ×.
+  /// "Permissions for this run" over "Builder · Implement · Codex / Sol · from profile v2" (with
+  /// "· run ended" for an ended run, `B4zwoA`), and ×.
   fn header(&self, ctx: &Ctx, props: &RunPermissionsProps) -> Element {
+    let key = if props.live {
+      "runs.permissions.popover.subtitle"
+    } else {
+      "runs.permissions.popover.subtitleEnded"
+    };
     let subtitle = ctx.t_args(
-      "runs.permissions.popover.subtitle",
+      key,
       [
         ("agent", agent_of(&props.step)),
         ("step", &*props.step.name),
@@ -189,14 +215,6 @@ impl RunPermissionsRow {
             .variant(ExtraTypography::Hint.role()),
           ),
       );
-    if !props.live {
-      return row
-        .focusable(false)
-        .opacity(UNAVAILABLE_OPTION_OPACITY)
-        .cursor(CursorIcon::NotAllowed)
-        .describe("state", "unavailable")
-        .into();
-    }
     let save = self.edit.save.clone();
     keyboard_stop(row, Ring::Outer)
       .cursor(CursorIcon::Pointer)
@@ -206,10 +224,26 @@ impl RunPermissionsRow {
   }
 
   /// Cancel closes; Apply now while an agent of the profile is at work; Apply from next
-  /// invocation (`dIP0h`). Both apply only a change.
+  /// invocation (`dIP0h`). Both apply only a change. An ended run has only *Close* (`gjM7t`).
   fn footer(&self, ctx: &Ctx, props: &RunPermissionsProps, apply: Option<&Apply>, pending: bool) -> Element {
     let close = self.open.clone();
     let height = Dimension::Px(FOOTER_BUTTON_HEIGHT);
+    let dismiss = ActionButton::new(ctx.t(if props.live { "common.cancel" } else { "common.close" }))
+      .id("task-permissions-cancel")
+      .compact()
+      .in_form()
+      .height(height)
+      .on_click(move || close.set(false))
+      .render(ctx);
+    let row = Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .justify(Justify::End)
+      .align_items(Alignment::Center)
+      .child(dismiss);
+    if !props.live {
+      return row.into();
+    }
     let button = |label: &str, id: &'static str, glyph: Icon, how: Option<PermissionsApply>| {
       let button = ActionButton::new(ctx.t(label))
         .id(id)
@@ -226,20 +260,7 @@ impl RunPermissionsRow {
       }
     };
     let now = props.permissions.can_apply_now.then_some(PermissionsApply::Now);
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .justify(Justify::End)
-      .align_items(Alignment::Center)
-      .child(
-        ActionButton::new(ctx.t("common.cancel"))
-          .id("task-permissions-cancel")
-          .compact()
-          .in_form()
-          .height(height)
-          .on_click(move || close.set(false))
-          .render(ctx),
-      )
+    row
       .child(
         button(
           "runs.permissions.popover.applyNow",
@@ -263,17 +284,40 @@ impl RunPermissionsRow {
   }
 }
 
-/// When a change takes effect (`XpncF`, `aDPaV`).
+/// "Running with  Builder · Edit files · 3 commands · Network off · MCP asks" (`UPDBO`), as the row
+/// says it, without its link.
+fn current_policy(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
+  let text = policy_text(
+    ctx,
+    &props.step,
+    (&props.permissions.invocation_policy, &props.permissions),
+    Wording::Row,
+  );
+  policy_property(&text).id("task-permissions-current-policy").into()
+}
+
+/// When a change takes effect (`XpncF`, `aDPaV`), or, for an ended run, why it cannot be changed
+/// (`uHLwL`).
 fn takes_effect(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
   let run = props.run_number.to_string();
-  let text = ctx.t_args(
-    "runs.permissions.popover.takesEffect",
-    [
-      ("agent", agent_of(&props.step)),
-      ("step", &*props.step.name),
-      ("run", run.as_str()),
-    ],
-  );
+  let (glyph, text) = if props.live {
+    (
+      Icon::Clock,
+      ctx.t_args(
+        "runs.permissions.popover.takesEffect",
+        [
+          ("agent", agent_of(&props.step)),
+          ("step", &*props.step.name),
+          ("run", run.as_str()),
+        ],
+      ),
+    )
+  } else {
+    (
+      Icon::Info,
+      ctx.t_args("runs.permissions.popover.ended", [("agent", agent_of(&props.step))]),
+    )
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Stack.role())
@@ -281,7 +325,7 @@ fn takes_effect(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
     .align_items(Alignment::Start)
     .background(ExtraColor::Surface.role())
     .rounded(ExtraRadius::Notice.role())
-    .child(icon(Icon::Clock, IconSize::Event, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Event, PaletteColor::TextSecondary))
     .child(Text::new(&text).variant(ExtraTypography::Detail.role()).flex(1.0))
     .into()
 }

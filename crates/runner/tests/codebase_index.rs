@@ -137,7 +137,7 @@ async fn codebase_index_is_built_for_the_base_revision_before_the_first_step() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn codebase_index_goes_with_the_worktree_removed_before_running_again() {
-  let project = project(&indexed("Please fail."));
+  let project = project(&indexed("Report failure."));
   let root = project.repo.path();
   let _path = agent_path(root, true);
   let (scheduler, mut events) = scheduler(root);

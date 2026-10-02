@@ -23,7 +23,7 @@ use orchester_core::integration::Leftovers;
 pub use self::panel::{ConversationPanel, ConversationProps};
 use super::{
   notice::{Lost, notice},
-  permissions::permissions_value,
+  permissions::permissions_property,
   progress::progress_list,
   ready::merged_notice,
   summary::{budget_value, permissions_row},
@@ -162,10 +162,7 @@ fn active_work(
 /// can continue, its permissions are only shown (`d9SVut` in 02.S2).
 fn working_context(ctx: &mut Ctx, run: &RunView, tab: &TabContext<'_>, read_only: bool) -> Element {
   let permissions = if read_only {
-    run
-      .current_step()
-      .and_then(|step| permissions_value(ctx, step))
-      .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
+    run.current_step().and_then(|step| permissions_property(ctx, step))
   } else {
     permissions_row(ctx, run, tab.repo_root, true)
   };

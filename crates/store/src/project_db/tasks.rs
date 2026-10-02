@@ -402,6 +402,15 @@ fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
     .ok_or_else(|| corrupt("task pipeline version", number))
 }
 
+/// Whether `task` is queued, read in `transaction`: a run is recorded only for a queued task.
+pub(super) fn is_queued(transaction: &rusqlite::Transaction<'_>, task: TaskId) -> Result<bool, StoreError> {
+  Ok(transaction.query_row(
+    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 AND status = ?2)",
+    [task.to_string(), status_text(TaskStatus::Queued).to_owned()],
+    |row| row.get(0),
+  )?)
+}
+
 const fn status_text(status: TaskStatus) -> &'static str {
   match status {
     TaskStatus::Draft => "draft",

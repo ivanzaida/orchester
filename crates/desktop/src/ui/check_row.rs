@@ -12,8 +12,10 @@ use lurq::{
 use super::icon::{Icon, IconSize, icon};
 use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography};
 
-/// Row height (`l3hyb`).
+/// Row height (`l3hyb`), and the least room its title keeps when the row is narrow: the result
+/// gives way first, cut at its end.
 const CHECK_ROW_HEIGHT: f32 = 46.0;
+const TITLE_MIN_WIDTH: f32 = 140.0;
 
 pub fn check_row(glyph: Icon, title: &str, result: &str) -> Row {
   Row::new()
@@ -29,12 +31,16 @@ pub fn check_row(glyph: Icon, title: &str, result: &str) -> Row {
         .color(PaletteColor::TextPrimary)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
+        .min_width(Dimension::Px(TITLE_MIN_WIDTH))
         .flex(1.0),
     )
     .child(
       Text::new(result)
         .variant(ExtraTypography::MonoValue.role())
         .color(PaletteColor::TextSecondary)
-        .nowrap(),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .min_width(Dimension::Px(0.0))
+        .flex_shrink(1.0),
     )
 }

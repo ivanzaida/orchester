@@ -29,7 +29,7 @@ fn failed(number: u32) -> Run {
   let mut logged = run(number);
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
-  logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
+  logged.apply(|run| run.fail_step(research, StepFailure::ReportedFailed, at(13)));
   logged.run
 }
 

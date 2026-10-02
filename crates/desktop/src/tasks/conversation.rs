@@ -33,6 +33,9 @@ pub enum PanelState {
   Paused,
   /// Stopped at a limit.
   Stopped,
+  /// The run waits for the person's decision after its retries ran out or a step broke again;
+  /// messages wait until it continues.
+  Deciding,
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
@@ -59,6 +62,7 @@ impl PanelState {
       TaskPhase::Waiting => Self::Waiting,
       TaskPhase::Paused => Self::Paused,
       TaskPhase::StoppedAtLimit => Self::Stopped,
+      TaskPhase::Stuck => Self::Deciding,
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
       TaskPhase::Merged => Self::Merged,
@@ -232,6 +236,7 @@ fn suspended_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
   let step = match state {
     PanelState::Paused | PanelState::Interrupted => run.current_step(),
     PanelState::Stopped => run.stopped_step().or_else(|| run.current_step()),
+    PanelState::Deciding => run.current_step(),
     _ => return None,
   };
   step.and_then(|step| step.agent.clone())
@@ -393,8 +398,14 @@ fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
     RunStatus::Pending => Queue::RunStarts,
     RunStatus::Paused(PauseReason::Requested) if later_agent => Queue::AgentNextTurn,
     RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => Queue::AgentNextTurn,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_)
+      if later_agent =>
+    {
+      Queue::AgentNextTurn
+    }
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_) => {
+      Queue::RunContinues
+    }
     RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,

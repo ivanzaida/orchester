@@ -467,6 +467,10 @@ pub trait ActivityStore {
   /// final message once its latest invocation ended.
   fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, Self::Error>;
 
+  /// How the last command tool run of `execution` in `run` ended, as its transcript recorded it: an
+  /// [`AgentEvent::ToolCommandFinished`] with what the program printed.
+  fn last_command_finished(&self, run: RunId, execution: StepExecutionId) -> Result<Option<AgentEvent>, Self::Error>;
+
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
   /// usage each completed turn reported.
   fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, Self::Error>;

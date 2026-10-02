@@ -131,7 +131,7 @@ fn snapshot(db: &mut ProjectDb, builder: ResourceId) -> RunSnapshot {
 
 /// KON-1 with run #1, whose Implement step started on DeepSeek with Builder's launch permissions as
 /// the runner records them, and that invocation.
-fn native_run(repo: &Path) -> (Run, Invocation) {
+pub(crate) fn native_run(repo: &Path) -> (Run, Invocation) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let builder = deepseek_builder(&mut db);
   let snapshot = snapshot(&mut db, builder);

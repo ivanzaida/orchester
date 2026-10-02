@@ -1,8 +1,8 @@
 //! The Summary tab (`Nlcnu` in 02.10 `RD4pc`): what the run is doing in a notice, for a run
 //! stopped at a limit the panel that raises it (02.L `ZUYM0`), the run's progress per step
 //! (`qB7mj` in 02.12, `l3hyb` rows), the latest agent launch, and the run's pinned configuration,
-//! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries shows
-//! 02.B (`J3JZaT`) instead.
+//! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries or broke
+//! again shows 02.B (`J3JZaT`) instead, with the person's decisions while it waits for them.
 
 use std::{path::Path, sync::Arc};
 
@@ -60,10 +60,12 @@ pub(super) fn summary(
   (repo_root, scrolls): (&Path, &TaskScrolls),
   reason: Option<Element>,
 ) -> Element {
-  if let Some(run) = &detail.run
-    && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
-  {
-    return retry_limit(ctx, run, step, reason);
+  if let Some(run) = &detail.run {
+    match run.run.status() {
+      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => return retry_limit(ctx, run, step, None, reason),
+      RunStatus::WaitingForPerson(stuck) => return retry_limit(ctx, run, stuck.step(), Some(stuck), reason),
+      _ => {}
+    }
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   // Brief and criteria on a run page describe what that run was asked to do, even after the

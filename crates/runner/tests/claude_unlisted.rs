@@ -15,7 +15,7 @@ use orchester_core::{
     RepositoryAccess,
   },
   resource::StepKey,
-  run::{PendingToolApproval, Run, RunStatus, StepStatus},
+  run::{PendingToolApproval, Run, RunStatus, StepStatus, Stuck},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -23,7 +23,9 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, wait_for};
+use self::support::{
+  Setup, TestProject, deny_until_settled, git, pending_approval, project, reported, scheduler, settled, wait_for,
+};
 
 fn listed(repository: RepositoryAccess, entries: &[&str]) -> AgentPermissions {
   let entries = entries
@@ -75,14 +77,15 @@ impl Started {
       .decide_tool_approval(self.id, request.id, approve)
       .await
       .expect("decided");
-    self.ended().await
+    if approve {
+      return self.ended().await;
+    }
+    // A denied turn that ends without a result restarts its step, which asks again.
+    deny_until_settled(&self.scheduler, self.project.repo.path(), &mut self.events, self.id).await
   }
 
   async fn ended(&mut self) -> Run {
-    wait_for(self.project.repo.path(), &mut self.events, self.id, |run| {
-      run.status().is_terminal()
-    })
-    .await
+    wait_for(self.project.repo.path(), &mut self.events, self.id, settled).await
   }
 
   fn db(&self) -> ProjectDb {
@@ -161,7 +164,11 @@ async fn claude_unlisted_command_denied_fails_the_step() {
   let mut started = Started::new("Run `pnpm build`.", listed(RepositoryAccess::Write, &["git"])).await;
   let request = started.pending().await;
   let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");
@@ -235,5 +242,9 @@ async fn claude_unlisted_command_in_a_read_only_step_asks() {
   assert_eq!(launched.permissions().repository(), RepositoryAccess::ReadOnly);
   assert_eq!(launched.outside_commands(), Some(OutsideCommands::PermissionPrompt));
   let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
 }

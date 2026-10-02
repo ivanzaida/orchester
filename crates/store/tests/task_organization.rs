@@ -11,8 +11,8 @@ use orchester_core::{
     WorkflowStatus,
   },
 };
-use orchester_store::StoreError;
-use support::{at, name, started_run};
+use orchester_store::{ProjectDb, StoreError};
+use support::{at, copied_at_version, name, started_run};
 
 #[test]
 fn organization_defaults_transitions_and_cancel_rule() {
@@ -378,4 +378,28 @@ fn organization_failed_follow_up_restores_review_and_retains_transition_history(
   assert_eq!(change.to.status(), WorkflowStatus::InReview);
   assert_eq!(change.actor, ChangeActor::Orchester);
   assert_eq!(change.at, at(32));
+}
+
+/// The schema version before tasks had an organization: master's last migration, stuck runs.
+const BEFORE_ORGANIZATION: u32 = 36;
+
+/// A project database of schema 36 opens with its tasks and runs, each task in Backlog with no
+/// priority, tags or links, and takes organization changes.
+#[test]
+fn organization_migration_keeps_tasks_and_runs_of_schema_36() {
+  let (repo, db, run, _) = started_run();
+  drop(db);
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let old = copied_at_version(&current, BEFORE_ORGANIZATION);
+  let mut db = ProjectDb::open(old.path()).expect("migrate existing project");
+  let task = run.task();
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+  assert_eq!(
+    db.task_organization(task).expect("organization"),
+    TaskOrganization::default()
+  );
+  let value = TaskOrganization::default().with_priority(Priority::High);
+  db.set_task_organization(task, &value, ChangeActor::Person, at(20))
+    .expect("organize a migrated task");
+  assert_eq!(db.task_organization(task).expect("organization"), value);
 }

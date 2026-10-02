@@ -1,5 +1,6 @@
 //! The rows of the Activity transcript: one header per step execution (`mDnc3`) followed by its
-//! entries (`N4SlQq`) while the execution is open. Finished executions start collapsed and the
+//! entries (`N4SlQq`) while the execution is open; an attempt that returned or restarted the work
+//! starts with its mark (02.B7 `zyusO`). Finished executions start collapsed and the
 //! running one open; failed commands start expanded and others collapsed. A person's choice
 //! overrides the start state and is kept while the transcript grows.
 
@@ -13,6 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
+use super::mark::{Mark, mark_of};
 use crate::tasks::{
   detail::RunView,
   transcript::{Entry, EntryKind},
@@ -69,8 +71,14 @@ pub(super) struct Header {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum RowKind {
+  /// A return or restart, before the header of the step its attempt starts from.
+  Mark(Mark),
   Header(Header),
-  Entry { entry: Entry, agent: Arc<str>, open: bool },
+  Entry {
+    entry: Entry,
+    agent: Arc<str>,
+    open: bool,
+  },
 }
 
 /// One row of the virtualized transcript.
@@ -106,13 +114,29 @@ pub(super) fn rows(
     .run
     .attempts()
     .iter()
-    .flat_map(|attempt| attempt.executions())
-    .filter(|execution| filter.is_none_or(|wanted| wanted == execution.id()))
-    .filter(|execution| run.invocations_of(execution.id()).next().is_some());
-  for execution in executions {
+    .enumerate()
+    .flat_map(|(index, attempt)| {
+      attempt
+        .executions()
+        .iter()
+        .enumerate()
+        .map(move |(position, execution)| (index, position == 0, execution))
+    })
+    .filter(|(_, _, execution)| filter.is_none_or(|wanted| wanted == execution.id()))
+    .filter(|(_, _, execution)| run.invocations_of(execution.id()).next().is_some());
+  for (attempt, first, execution) in executions {
     let Some(header) = header(run, execution.id(), execution.status(), toggles) else {
       continue;
     };
+    if let Some(mark) = first.then(|| mark_of(run, attempt)).flatten() {
+      rows.push(TranscriptRow {
+        key: format!("mark-{}", mark.attempt).into(),
+        task: run.run.task(),
+        kind: RowKind::Mark(mark),
+        raw,
+        toggles: toggles.clone(),
+      });
+    }
     let open = header.open;
     let agent = header.agent.clone();
     rows.push(TranscriptRow {

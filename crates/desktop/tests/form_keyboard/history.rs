@@ -128,12 +128,15 @@ fn history_alt_left_stays_with_a_focused_text_field() {
   assert_eq!(desktop.focused().as_deref(), Some(TITLE));
 }
 
-/// Whether the tab `id` of the task list is the selected one: a selected tab, like one that
-/// cannot be opened yet, is not a button.
+/// Whether the tab `id` of the task list is the selected one: a selected tab is not a link like
+/// the others, such as Done, which these tests never open.
 fn tab_selected(tree: &mut Tree, id: &str) -> bool {
+  let unselected = tree
+    .get_element_by_id("tasks-tab-done")
+    .map(|tab| tab.tag_name().to_owned());
   tree
     .get_element_by_id(id)
-    .is_some_and(|tab| tab.tag_name().eq_ignore_ascii_case("row"))
+    .is_some_and(|tab| unselected.is_some_and(|unselected| tab.tag_name() != unselected))
 }
 
 #[test]

@@ -68,6 +68,10 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
     StoreError::TaskNotEditable { source, .. } => edit_error(source),
+    StoreError::TaskGroupReviewChanged(_) => Message::new("tasks.bulk.reviewChanged"),
+    StoreError::TaskNotSelectable { problem, .. } => crate::tasks::group::problem_message(problem),
+    StoreError::PipelineNotPublished(_) => Message::new("runs.preflight.pipelineNotPublished"),
+    StoreError::TaskNotHeld(_) => Message::new("tasks.bulk.notHeld"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }

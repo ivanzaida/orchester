@@ -3,6 +3,7 @@ mod agent_files;
 mod blobs;
 mod code_index;
 mod connections;
+mod consistent;
 mod environment;
 mod import;
 mod invocation_prompts;
@@ -27,6 +28,7 @@ mod schema;
 mod secrets;
 mod step_outputs;
 mod tags;
+mod task_groups;
 mod tasks;
 mod tool_approvals;
 

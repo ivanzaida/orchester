@@ -26,6 +26,7 @@ pub mod summary_step;
 pub mod switch;
 pub mod tab;
 pub mod unit_input;
+pub mod value_box;
 
 use std::sync::Arc;
 

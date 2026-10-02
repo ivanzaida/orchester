@@ -103,19 +103,18 @@ impl Component for OverviewScreen {
       .spacing(spacing)
       .with_children(notice)
       .child(heading(ctx, &props.open, &self.nav));
-    body =
-      match &props.tasks {
-        TasksState::Loading => body,
-        TasksState::Failed(error) => body.child(RecoveryPanel::new(
-          Icon::AlertCircle,
-          &ctx.t("tasks.loadFailed"),
-          &message_text(ctx, error),
-        )),
-        TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
-        TasksState::Ready(tasks) => {
-          let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
-          let online = props.runner == RunnerState::Online;
-          body
+    body = match &props.tasks {
+      TasksState::Loading => body,
+      TasksState::Failed(error) => body.child(RecoveryPanel::new(
+        Icon::AlertCircle,
+        &ctx.t("tasks.loadFailed"),
+        &message_text(ctx, error),
+      )),
+      TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
+      TasksState::Ready(tasks) => {
+        let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
+        let online = props.runner == RunnerState::Online;
+        body
             .child(pulse::pulse(
               ctx,
               &figures,
@@ -135,6 +134,12 @@ impl Component for OverviewScreen {
               self.insights.get() || props.tab != OverviewTab::All,
             ))
             .with_children(blocked_notices(ctx, tasks))
+            // What needs you, including a run that waits for a decision after its retries, shows
+            // without Insights; the rest of the attention panel comes with them.
+            .with_children(
+              (self.insights.get() || OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases) > 0)
+                .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
+            )
             .child(
               ActionButton::new(ctx.t("overview.insights"))
                 .id("overview-insights")
@@ -148,14 +153,8 @@ impl Component for OverviewScreen {
             .with_children(self.insights.get().then(|| {
               pulse::execution_context(ctx, (online, props.agents_working, tasks.lost_to_runner), props.usage)
             }))
-            .with_children(
-              self
-                .insights
-                .get()
-                .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
-            )
-        }
-      };
+      }
+    };
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
