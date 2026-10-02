@@ -103,13 +103,35 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   })
 }
 
-pub(super) struct ToolApprovalDialog {
+/// The dialog's layer: the modal over the window and its backdrop. Everything that changes while the
+/// dialog is open lives in [`ToolApprovalPanel`] inside it, so the layer itself renders again only
+/// for another request. lurq lays out a `Modal` at a window size from before the last resize when
+/// the component that renders it renders again on its own (seen with lurq 0.33.1).
+pub(super) struct ToolApprovalDialog;
+
+impl Component for ToolApprovalDialog {
+  type Props = ToolApprovalProps;
+
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<ToolApprovalProps>().clone();
+    let panel = ctx.mount::<ToolApprovalPanel>(props);
+    let content = backdrop(ctx, form(None, panel));
+    Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
+  }
+}
+
+/// The dialog itself: the request, the decision being sent and the state of its Copy buttons.
+struct ToolApprovalPanel {
   requested: Signal<Option<Choice>>,
   copy: CopyState,
   arguments: ArgumentsCache,
 }
 
-impl Component for ToolApprovalDialog {
+impl Component for ToolApprovalPanel {
   type Props = ToolApprovalProps;
 
   fn create(ctx: &mut Ctx) -> Self {
@@ -131,7 +153,7 @@ impl Component for ToolApprovalDialog {
     let busy = state.is_pending() || state.data.is_some();
     let requested = self.requested.get();
     let error = state.error.filter(|_| !busy);
-    let content = dialog(
+    dialog(
       ctx,
       &DialogState {
         props: &props,
@@ -143,8 +165,7 @@ impl Component for ToolApprovalDialog {
         copy: &self.copy,
         arguments: &self.arguments,
       },
-    );
-    Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
+    )
   }
 }
 
@@ -187,7 +208,7 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)
     .scrollbar(select_menu_scrollbar());
-  let panel = Column::new()
+  Column::new()
     .id("tool-approval-dialog")
     .width(Dimension::Px(width))
     .max_height(Dimension::Pct(100.0))
@@ -196,8 +217,8 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     .rounded(RadiusSize::Lg)
     .child(header(ctx, state.props))
     .child(details)
-    .child(actions(ctx, state));
-  backdrop(ctx, form(None, panel))
+    .child(actions(ctx, state))
+    .into()
 }
 
 fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
