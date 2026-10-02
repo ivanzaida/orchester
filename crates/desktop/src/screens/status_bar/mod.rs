@@ -22,7 +22,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::Row,
-  core::{ElementRef, Signal},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -51,7 +51,7 @@ const POPOVER_GAP: f32 = 9.0;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectBar {
   pub project_name: String,
-  pub connections: Vec<orchester_core::connection::AgentConnection>,
+  pub connections: crate::plan_limits::Connections,
   pub repo_root: PathBuf,
   pub runner: RunnerStatus,
   /// Queued tasks; `None` while the tasks are read.
@@ -74,8 +74,6 @@ pub struct StatusBarProps {
 impl lurq::app::component::DevtoolsInspectable for StatusBarProps {}
 
 pub struct StatusBar {
-  bounds: ElementRef,
-  width: Signal<f32>,
   activity: Activity,
   popover: Signal<bool>,
   hint: Signal<Option<Hint>>,
@@ -87,18 +85,10 @@ impl Component for StatusBar {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      bounds: ElementRef::new(),
-      width: ctx.signal(1440.0),
       activity: Activity::of(ctx),
       popover: ctx.signal(false),
       hint: ctx.signal(None),
       anchors: Anchors::default(),
-    }
-  }
-
-  fn after_layout(&self) {
-    if self.bounds.is_attached() && (self.bounds.width() - self.width.get_untracked()).abs() > 0.5 {
-      self.width.set(self.bounds.width());
     }
   }
 
@@ -121,10 +111,11 @@ impl Component for StatusBar {
       connections: props
         .project
         .as_ref()
-        .map_or_else(Vec::new, |project| project.connections.clone()),
+        .map_or_else(Default::default, |project| project.connections.clone()),
       readings,
     };
-    let width = self.width.get();
+    // The bar spans the window; reading its width re-renders the bar as the window resizes.
+    let width = ctx.window().logical_width();
     let mut left = Row::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
@@ -150,7 +141,6 @@ impl Component for StatusBar {
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
       .id("status-bar")
-      .ref_element(self.bounds.clone())
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding_horizontal(SpacingSize::Sm)

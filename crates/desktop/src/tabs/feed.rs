@@ -129,9 +129,7 @@ impl Component for FeedLoader {
     publish(&self.feed.changes, changes);
     let revision = self.feed.revision.get();
     let resources = self.feed.resources.get();
-    if let Some(connections) = connections(ctx, (root.clone(), resources)) {
-      publish(&self.feed.connections, connections);
-    }
+    publish(&self.feed.connections, connections(ctx, (root.clone(), resources)));
     publish(&self.feed.tasks, tasks(ctx, (root.clone(), revision, states)));
     let day_start = Timestamp::now().local_day_start();
     if let Some(usage) = usage(ctx, (root, revision, (states, changes), day_start)) {
@@ -148,15 +146,17 @@ fn publish<T: Clone + PartialEq + Send + Sync + lurq::core::SignalValue + 'stati
   }
 }
 
-/// The connections reload after a save, check, or resource import in any project tab.
-fn connections(ctx: &mut Ctx, deps: (PathBuf, u64)) -> Option<crate::plan_limits::Connections> {
+/// The connections reload after a save, check, or resource import in any project tab. A failed
+/// read replaces the last one, so the plan limits do not stand for connections no longer known.
+fn connections(ctx: &mut Ctx, deps: (PathBuf, u64)) -> crate::plan_limits::Connections {
+  use crate::plan_limits::Connections;
   let load = ctx.future(deps, |(root, _)| async move {
     background::run(move || {
       use orchester_core::store::ConnectionStore;
       let db = orchester_store::ProjectDb::open(&root)?;
       db.connections()
         .map(crate::connections::data::agent_connections)
-        .map(crate::plan_limits::Connections)
+        .map(Connections::Ready)
     })
     .await?
     .map_err(|error| {
@@ -164,7 +164,12 @@ fn connections(ctx: &mut Ctx, deps: (PathBuf, u64)) -> Option<crate::plan_limits
       messages::store_error(&error)
     })
   });
-  load.state().get().data
+  let state = load.state().get();
+  match (state.data, state.error) {
+    (_, Some(error)) => Connections::Failed(error),
+    (Some(connections), None) => connections,
+    (None, None) => Connections::Loading,
+  }
 }
 
 /// Which of a project's change counts a loader follows.

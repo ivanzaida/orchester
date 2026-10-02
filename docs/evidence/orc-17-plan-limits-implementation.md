@@ -5,15 +5,27 @@ The earlier Verify result is FAIL; its findings are not closed until independent
 re-verification passes. The implementer did not perform design verification or
 take app/design screenshots.
 
-**Merged onto master 2026-10-02.** Master runs every Codex step through App Server and has no
-`codex exec` JSON path, so the Codex session-log reader (`crates/runner/src/codex_limits.rs`), the
-session `token_count` parser, its fake session log and the runner's optional `chrono` and tokio
-`fs` feature were removed. Codex limits now come only from App Server's
-`account/rateLimits/updated` notification, read against the v2 schema of codex-cli 0.159.2
-(`windowDurationMins` nullable, sparse updates merged into the last reading, only the `codex`
-bucket). The sections below describe the run as it was before the merge.
+## Current state · 2026-10-02
 
-## Behavior
+Master was merged into `claude/orc17` (merge `c290682`); the run's own history is unchanged. Master runs every Codex
+step through App Server and has no `codex exec` JSON path, so the Codex session-log reader
+(`crates/runner/src/codex_limits.rs`), the session `token_count` parser, its fake session log and the runner's
+optional `chrono` and tokio `fs` feature were removed. What holds now:
+
+- Codex limits come only from App Server's `account/rateLimits/updated` notification, read against the v2 schema of
+  codex-cli 0.159.2: `windowDurationMins` may be null (that window is left out), only the `codex` bucket is the plan,
+  usage above 100 % reads as 100 %, and `rateLimitReachedType` is a reason: `rate_limit_reached` blocks the fullest
+  window until its reset, depleted credits and a workspace usage limit hold until a newer reading says otherwise. A
+  sparse update keeps the windows, plan, credits and block it leaves out.
+- Claude Code's `rate_limit_event` never reaches the transcript. `utilization`, `resetsAt` and `rateLimitType` may be
+  missing: a window without its use keeps its status without a percentage, a rejection without its window still
+  shows the limit as reached, and windows of one model (`seven_day_opus`, …) are left out.
+- The project's connections that cannot be read show the item with an explanation instead of hiding it.
+
+The sections below are the run's record before the merge and are kept as history; where they describe the session
+log reader or what a snapshot without windows does, the list above replaces them.
+
+## Behavior (historical, before the merge)
 
 - The runner parses Codex session `token_count.rate_limits`, Codex App Server
   `account/rateLimits/updated`, and Claude `rate_limit_event` messages.
@@ -155,7 +167,7 @@ with distinct per-window ages. The exact combined credits/extra-usage specimen
 preservation remains unverified: root must supply the longer fresh host watcher
 before the verifier launches a private app; retain its final conclusive judgment.
 
-## Recovery after malformed Codex snapshot Review finding
+## Recovery after malformed Codex snapshot Review finding (historical, superseded)
 
 The saved implementation, earlier UI/order/per-window-timestamp fixes, and all
 Review/Verify evidence were preserved. This recovery does not close an independent

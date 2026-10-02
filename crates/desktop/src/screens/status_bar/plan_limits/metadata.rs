@@ -9,26 +9,45 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  connection::{ConnectionStatus, plan_limits::LimitState},
+  connection::{
+    AgentProvider, ConnectionStatus,
+    plan_limits::{LimitBlock, LimitState},
+  },
   time::Timestamp,
 };
 
-use super::{Cli, Entry, text};
-use crate::{
-  display,
-  theme::{ExtraSpacing, ExtraTypography},
-  ui::message_text,
-};
+use super::{Entry, text};
+use crate::theme::{ExtraSpacing, ExtraTypography};
+
+const MINUTE_MILLIS: i64 = 60_000;
+const HOUR_MILLIS: i64 = 60 * MINUTE_MILLIS;
+const DAY_MILLIS: i64 = 24 * HOUR_MILLIS;
+/// A reading's source by its age: just now, minutes, hours, days.
+const SOURCE_KEYS: [&str; 4] = [
+  "statusBar.planLimits.source.justNow",
+  "statusBar.planLimits.source.minutes",
+  "statusBar.planLimits.source.hours",
+  "statusBar.planLimits.source.days",
+];
+/// The same for one window of a reading whose windows arrived at different times.
+const WINDOW_SOURCE_KEYS: [&str; 4] = [
+  "statusBar.planLimits.windowSource.justNow",
+  "statusBar.planLimits.windowSource.minutes",
+  "statusBar.planLimits.windowSource.hours",
+  "statusBar.planLimits.windowSource.days",
+];
 
 pub fn header(ctx: &Ctx, entry: &Entry<'_>) -> Element {
   let mut row = Row::new()
-    .id(match entry.cli {
-      Cli::Codex => "status-plan-limits-codex-heading",
-      Cli::Claude => "status-plan-limits-claude-heading",
+    .id(match entry.provider {
+      AgentProvider::CodexCli => "status-plan-limits-codex-heading",
+      AgentProvider::ClaudeCodeCli => "status-plan-limits-claude-heading",
+      // Only agent CLIs have an entry (`AgentProvider::CLI`).
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => "status-plan-limits-heading",
     })
     .spacing(ExtraSpacing::PlanRows.role())
     .align_items(Alignment::Center)
-    .child(Text::new(&text::hint_name(ctx, entry.cli)).variant(ExtraTypography::StatusLabel.role()));
+    .child(Text::new(&text::hint_name(ctx, entry.provider)).variant(ExtraTypography::StatusLabel.role()));
   if let Some(plan) = entry.reading.and_then(|reading| reading.limits.plan.as_deref()) {
     row = row.child(Text::new(&text::plan(ctx, plan)).variant(TypographyStyle::Caption));
   }
@@ -57,6 +76,12 @@ fn heading_state(ctx: &Ctx, entry: &Entry<'_>) -> Option<std::sync::Arc<str>> {
       _ => "statusBar.planLimits.stateNotRead",
     }));
   };
+  match entry.block_beyond_reset() {
+    Some(LimitBlock::Credits) => return Some(ctx.t("statusBar.planLimits.headerCredits")),
+    Some(LimitBlock::Workspace) => return Some(ctx.t("statusBar.planLimits.headerWorkspace")),
+    Some(LimitBlock::Window | LimitBlock::Other) => return Some(ctx.t("statusBar.planLimits.headerOther")),
+    None => {}
+  }
   let window = reading.limiting(entry.now)?;
   // Extra usage has its own explanation row, without a second warning heading (`b3WD6`).
   if entry.state() == LimitState::Normal || window.extra() {
@@ -88,12 +113,12 @@ pub fn unavailable(ctx: &Ctx, entry: &Entry<'_>) -> Element {
   let checked = entry
     .connection
     .last_check()
-    .map(|check| text::clock(check.at, false))
+    .map(|check| text::clock(check.at))
     .unwrap_or_else(|| ctx.t("statusBar.planLimits.checkUnknown").to_string());
   let body = ctx.t_args(
     key,
     [
-      ("cli", &*text::hint_name(ctx, entry.cli)),
+      ("cli", &*text::hint_name(ctx, entry.provider)),
       ("connection", entry.connection.name().as_str()),
       ("project", entry.project_name),
       ("time", checked.as_str()),
@@ -194,24 +219,31 @@ pub fn sources(ctx: &Ctx, entry: &Entry<'_>, mut section: Column) -> Column {
   }
 }
 
+/// Which turn a reading came from and how long ago, one message per age unit; with `minutes`,
+/// for that window only.
 fn source(ctx: &Ctx, entry: &Entry<'_>, at: Timestamp, minutes: Option<u64>) -> Element {
-  let age = message_text(ctx, &display::elapsed(entry.now, at));
+  let elapsed = entry.now.unix_millis() - at.unix_millis();
+  let (unit, count) = if elapsed >= DAY_MILLIS {
+    (3, elapsed / DAY_MILLIS)
+  } else if elapsed >= HOUR_MILLIS {
+    (2, elapsed / HOUR_MILLIS)
+  } else if elapsed >= MINUTE_MILLIS {
+    (1, elapsed / MINUTE_MILLIS)
+  } else {
+    (0, 0)
+  };
+  let (key, window) = match minutes {
+    Some(minutes) => (WINDOW_SOURCE_KEYS[unit], text::window(ctx, minutes)),
+    None => (SOURCE_KEYS[unit], "".into()),
+  };
   let copy = ctx.t_args(
-    "statusBar.planLimits.source",
+    key,
     [
-      ("cli", &*text::name(ctx, entry.cli)),
-      ("time", text::clock(at, false).as_str()),
-      ("age", &*age),
+      ("cli", &*text::name(ctx, entry.provider)),
+      ("time", text::clock(at).as_str()),
+      ("count", count.to_string().as_str()),
+      ("window", &*window),
     ],
-  );
-  let copy = minutes.map_or_else(
-    || copy.clone(),
-    |minutes| {
-      ctx.t_args(
-        "statusBar.planLimits.windowSource",
-        [("window", &*text::window(ctx, minutes)), ("source", &*copy)],
-      )
-    },
   );
   Text::new(&copy)
     .variant(TypographyStyle::Caption)

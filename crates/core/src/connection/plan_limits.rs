@@ -1,7 +1,9 @@
 //! Account plan readings reported by an agent turn, never an estimate of current usage.
 
 mod parse;
+mod readings;
 pub use parse::{claude_limits, codex_limits};
+pub use readings::PlanReadings;
 use serde::{Deserialize, Serialize};
 
 use crate::{connection::AgentProvider, time::Timestamp};
@@ -13,12 +15,13 @@ pub enum LimitState {
   Reached,
 }
 
-/// A validated provider window. Hundredths retain fractional percentages without float equality.
+/// A validated provider window. Hundredths retain fractional percentages without float equality;
+/// a CLI may report a window's state without how much of it is used.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "WindowData", into = "WindowData")]
 pub struct LimitWindow {
   minutes: u64,
-  used: u32,
+  used: Option<u32>,
   resets: Option<Timestamp>,
   state: LimitState,
   extra: bool,
@@ -28,7 +31,7 @@ pub struct LimitWindow {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct WindowData {
   minutes: u64,
-  used: u32,
+  used: Option<u32>,
   resets: Option<Timestamp>,
   state: LimitState,
   extra: bool,
@@ -43,14 +46,8 @@ pub struct InvalidWindow;
 impl TryFrom<WindowData> for LimitWindow {
   type Error = InvalidWindow;
   fn try_from(data: WindowData) -> Result<Self, Self::Error> {
-    let mut window = Self::new(
-      data.minutes,
-      f64::from(data.used) / 100.0,
-      data.resets,
-      data.state,
-      data.extra,
-    )
-    .ok_or(InvalidWindow)?;
+    let percent = data.used.map(|used| f64::from(used) / 100.0);
+    let mut window = Self::new(data.minutes, percent, data.resets, data.state, data.extra)?;
     window.at = data.at;
     Ok(window)
   }
@@ -70,13 +67,21 @@ impl From<LimitWindow> for WindowData {
 }
 
 impl LimitWindow {
-  pub fn new(minutes: u64, percent: f64, resets: Option<Timestamp>, state: LimitState, extra: bool) -> Option<Self> {
-    if minutes == 0 || !percent.is_finite() || !(0.0..=100.0).contains(&percent) {
-      return None;
+  /// A window of `minutes`, `percent` used when the CLI says. A CLI that counts past the limit
+  /// reports more than 100 %, which reads as the full window.
+  pub fn new(
+    minutes: u64,
+    percent: Option<f64>,
+    resets: Option<Timestamp>,
+    state: LimitState,
+    extra: bool,
+  ) -> Result<Self, InvalidWindow> {
+    if minutes == 0 || percent.is_some_and(|percent| !percent.is_finite() || percent < 0.0) {
+      return Err(InvalidWindow);
     }
-    Some(Self {
+    Ok(Self {
       minutes,
-      used: (percent * 100.0).round() as u32,
+      used: percent.map(|percent| (percent.min(100.0) * 100.0).round() as u32),
       resets,
       state,
       extra,
@@ -86,8 +91,9 @@ impl LimitWindow {
   pub const fn minutes(&self) -> u64 {
     self.minutes
   }
-  pub fn percent(&self) -> f64 {
-    f64::from(self.used) / 100.0
+  /// How much of the window is used; `None` when the CLI reported only its state.
+  pub fn percent(&self) -> Option<f64> {
+    self.used.map(|used| f64::from(used) / 100.0)
   }
   pub const fn resets(&self) -> Option<Timestamp> {
     self.resets
@@ -109,10 +115,11 @@ impl LimitWindow {
     if self.extra {
       return LimitState::Near;
     }
-    if self.state == LimitState::Reached || self.used >= 10_000 {
+    let used = self.used.unwrap_or_default();
+    if self.state == LimitState::Reached || used >= 10_000 {
       return LimitState::Reached;
     }
-    if self.state == LimitState::Near || self.used >= 8_000 {
+    if self.state == LimitState::Near || used >= 8_000 {
       return LimitState::Near;
     }
     LimitState::Normal
@@ -126,12 +133,33 @@ pub struct Credits {
   pub balance: Option<String>,
 }
 
+/// Why a CLI says it refuses new turns (Codex App Server's `rateLimitReachedType`; Claude Code's
+/// `rejected` status without its window).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LimitBlock {
+  /// A usage window is used up; the block lifts when that window resets.
+  Window,
+  /// The workspace has no credits left; a window reset does not lift it.
+  Credits,
+  /// The workspace's own usage limit is reached; a window reset does not lift it.
+  Workspace,
+  /// A reason this version does not know; nothing says when it lifts.
+  Other,
+}
+
+impl LimitBlock {
+  pub const fn lifts_at_reset(self) -> bool {
+    matches!(self, Self::Window)
+  }
+}
+
 /// One CLI report: Claude Code reports one window at a time, Codex App Server the windows it knows.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanLimits {
   pub windows: Vec<LimitWindow>,
   pub plan: Option<String>,
   pub credits: Option<Credits>,
+  pub blocked: Option<LimitBlock>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,46 +167,6 @@ pub struct LimitReading {
   pub provider: AgentProvider,
   pub at: Timestamp,
   pub limits: PlanLimits,
-}
-
-/// Session-only newest readings, one account per CLI on this computer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PlanReadings(Vec<LimitReading>);
-
-impl PlanReadings {
-  pub fn get(&self, provider: AgentProvider) -> Option<&LimitReading> {
-    self.0.iter().find(|reading| reading.provider == provider)
-  }
-  pub fn observe(&mut self, mut reading: LimitReading) -> bool {
-    for window in &mut reading.limits.windows {
-      window.at = Some(reading.at);
-    }
-    let Some(old) = self.0.iter_mut().find(|old| old.provider == reading.provider) else {
-      self.0.push(reading);
-      return true;
-    };
-    if old.at > reading.at {
-      return false;
-    }
-    // Both CLIs report sparsely: Claude Code one window per event, Codex App Server's update
-    // leaves out what it does not know, which does not clear what was read before.
-    for window in &old.limits.windows {
-      if !reading.limits.windows.iter().any(|new| new.minutes == window.minutes) {
-        reading.limits.windows.push(window.clone());
-      }
-    }
-    if reading.limits.plan.is_none() {
-      reading.limits.plan.clone_from(&old.limits.plan);
-    }
-    if reading.limits.credits.is_none() {
-      reading.limits.credits.clone_from(&old.limits.credits);
-    }
-    if old == &reading {
-      return false;
-    }
-    *old = reading;
-    true
-  }
 }
 
 impl LimitReading {
@@ -206,5 +194,27 @@ impl LimitReading {
         };
         (priority, window.used)
       })
+  }
+
+  /// The account's state: a block that a window reset does not lift, or one with no window to
+  /// lift it, holds until a newer reading; otherwise the limiting window decides.
+  pub fn state(&self, now: Timestamp) -> LimitState {
+    match self.limits.blocked {
+      Some(block) if !block.lifts_at_reset() => LimitState::Reached,
+      Some(_) if self.limits.windows.is_empty() => LimitState::Reached,
+      _ => self
+        .limiting(now)
+        .map_or(LimitState::Normal, |window| window.state(now)),
+    }
+  }
+}
+
+/// Marks the fullest of `windows` as the one a window block applies to, unless one already is.
+fn mark_blocked(windows: &mut [LimitWindow]) {
+  if windows.iter().any(|window| window.state == LimitState::Reached) {
+    return;
+  }
+  if let Some(window) = windows.iter_mut().max_by_key(|window| window.used) {
+    window.state = LimitState::Reached;
   }
 }

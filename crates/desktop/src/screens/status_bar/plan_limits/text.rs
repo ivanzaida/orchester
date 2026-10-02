@@ -1,22 +1,25 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, Local};
 use lurq::app::ctx::Ctx;
-use orchester_core::time::Timestamp;
+use orchester_core::{connection::AgentProvider, time::Timestamp};
 
-use super::Cli;
+use crate::{
+  display::{self, WEEKDAY_KEYS},
+  screens::project::connections::status::short_key,
+};
 
-pub fn name(ctx: &Ctx, cli: Cli) -> Arc<str> {
-  ctx.t(match cli {
-    Cli::Codex => "statusBar.planLimits.codex",
-    Cli::Claude => "statusBar.planLimits.claude",
-  })
+const DAY_MINUTES: u64 = 24 * 60;
+
+/// The CLI's short name, as the status bar item shows it ("Codex", "Claude").
+pub fn name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
+  ctx.t(short_key(provider))
 }
 
-pub fn hint_name(ctx: &Ctx, cli: Cli) -> Arc<str> {
-  match cli {
-    Cli::Codex => name(ctx, cli),
-    Cli::Claude => ctx.t("statusBar.planLimits.claudeFull"),
+/// The CLI's name in a hint heading, where Claude Code is named in full.
+pub fn hint_name(ctx: &Ctx, provider: AgentProvider) -> Arc<str> {
+  match provider {
+    AgentProvider::ClaudeCodeCli => ctx.t("statusBar.planLimits.claudeFull"),
+    provider => name(ctx, provider),
   }
 }
 
@@ -28,19 +31,15 @@ pub fn plan(ctx: &Ctx, plan: &str) -> Arc<str> {
   }
 }
 
+/// A used percentage in whole percent, as every limit figure reads.
 pub fn percent(ctx: &Ctx, percent: f64) -> Arc<str> {
-  ctx.t_args(
-    "statusBar.planLimits.percent",
-    [("used", format!("{percent:.0}").as_str())],
-  )
+  let whole = percent.round() as u64;
+  ctx.t_args("statusBar.planLimits.percent", [("used", whole.to_string().as_str())])
 }
 
-pub fn clock(at: Timestamp, day: bool) -> String {
-  DateTime::from_timestamp_millis(at.unix_millis()).map_or_else(String::new, |at| {
-    at.with_timezone(&Local)
-      .format(if day { "%a %H:%M" } else { "%H:%M" })
-      .to_string()
-  })
+/// The local clock time of `at` (`16:40`).
+pub fn clock(at: Timestamp) -> String {
+  display::clock(at)
 }
 
 pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -> Arc<str> {
@@ -49,7 +48,7 @@ pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -
   };
   let minutes = (at.unix_millis().saturating_sub(now.unix_millis())).max(0) as u64;
   let minutes = minutes.div_ceil(60_000);
-  if relative && minutes < 1440 {
+  if relative && minutes < DAY_MINUTES {
     return ctx.t_args(
       "statusBar.planLimits.resetsIn",
       [
@@ -58,23 +57,25 @@ pub fn reset(ctx: &Ctx, at: Option<Timestamp>, now: Timestamp, relative: bool) -
       ],
     );
   }
+  if minutes < DAY_MINUTES {
+    return ctx.t_args("statusBar.planLimits.resetsAt", [("time", clock(at).as_str())]);
+  }
+  let weekday = ctx.t(WEEKDAY_KEYS[display::weekday(at)]);
   ctx.t_args(
-    "statusBar.planLimits.resetsAt",
-    [("time", clock(at, minutes >= 1440).as_str())],
+    "statusBar.planLimits.resetsOnDay",
+    [("weekday", &*weekday), ("time", clock(at).as_str())],
   )
 }
 
+/// A window's name by its length: 5-hour and Weekly as the CLIs call them, else whole days,
+/// hours or minutes.
 pub fn window(ctx: &Ctx, minutes: u64) -> Arc<str> {
-  match minutes {
-    300 => ctx.t("statusBar.planLimits.fiveHour"),
-    10080 => ctx.t("statusBar.planLimits.weekly"),
-    minutes if minutes % 1440 == 0 => ctx.t_args(
-      "statusBar.planLimits.days",
-      [("count", (minutes / 1440).to_string().as_str())],
-    ),
-    minutes => ctx.t_args(
-      "statusBar.planLimits.hours",
-      [("count", format!("{:.1}", minutes as f64 / 60.0).as_str())],
-    ),
-  }
+  let (key, count) = match minutes {
+    300 => return ctx.t("statusBar.planLimits.fiveHour"),
+    10080 => return ctx.t("statusBar.planLimits.weekly"),
+    minutes if minutes % DAY_MINUTES == 0 => ("statusBar.planLimits.days", minutes / DAY_MINUTES),
+    minutes if minutes % 60 == 0 => ("statusBar.planLimits.hours", minutes / 60),
+    minutes => ("statusBar.planLimits.minutes", minutes),
+  };
+  ctx.t_args(key, [("count", count.to_string().as_str())])
 }

@@ -27,6 +27,7 @@ use crate::{
     overview::{OverviewTab, figure},
     usage::ProjectUsage,
   },
+  theme::{STATUS_LABELS_MIN_WIDTH, STATUS_TOKENS_MIN_WIDTH, STATUS_VERSION_MIN_WIDTH},
   ui::{icon::Icon, link::Press},
 };
 
@@ -38,7 +39,8 @@ pub fn counts(
   (limits, width): (&plan_limits::Props, f32),
 ) -> Element {
   // R (`VTnmr`): remove version, tokens, then count labels; limits always stay.
-  let show_labels = width >= 960.0 && !(width < 1120.0 && plan_limits::reached(limits));
+  let show_labels =
+    width >= STATUS_LABELS_MIN_WIDTH && !(width < STATUS_TOKENS_MIN_WIDTH && plan_limits::reached(limits));
   let mut row = Row::new()
     .flex_shrink(0.0)
     .height(Dimension::Pct(100.0))
@@ -60,16 +62,16 @@ pub fn counts(
       .child(opens(agents, opener, Page::TASKS))
       .child(opens(queued, opener, Page::TASKS))
       .child(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)));
-    if width >= 1120.0 {
+    if width >= STATUS_TOKENS_MIN_WIDTH {
       row = row.child(tokens(ctx, project.usage.as_ref(), &unknown, hints));
     }
-    if !limits.connections.is_empty() {
+    if plan_limits::shown(limits) {
       row = row.child(ctx.mount_keyed::<plan_limits::PlanLimits>("status-plan-limits-component", limits.clone()));
     }
     row = row.child(separator());
   }
   row = row.child(mcp_item(ctx, mcp, hints));
-  if width >= 1280.0 {
+  if width >= STATUS_VERSION_MIN_WIDTH {
     row = row.child(version(ctx, hints));
   }
   row.into()

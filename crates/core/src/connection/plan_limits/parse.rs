@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Credits, LimitState, LimitWindow, PlanLimits};
+use super::{Credits, LimitBlock, LimitState, LimitWindow, PlanLimits, mark_blocked};
 use crate::time::Timestamp;
 
 /// The bucket of the account's plan in Codex App Server's `RateLimitSnapshot`; other buckets
@@ -9,14 +9,14 @@ const CODEX_PLAN_BUCKET: &str = "codex";
 
 /// The `rateLimits` snapshot of Codex App Server's `account/rateLimits/updated` notification.
 /// The update is sparse: a window without its duration cannot be labelled and is left out, and
-/// an update with no window is not a reading ([`super::PlanReadings::observe`] merges the rest).
+/// what it leaves out keeps its last value ([`super::PlanReadings::observe`]). `None` for a
+/// malformed snapshot, another bucket, or one that reports nothing.
 pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
   value.as_object()?;
   if optional_text(value.get("limitId"))?.is_some_and(|bucket| bucket != CODEX_PLAN_BUCKET) {
     return None;
   }
-  // Values name why the limit was reached (`rate_limit_reached`, depleted credits), not a window.
-  let reached = optional_text(value.get("rateLimitReachedType"))?.is_some();
+  let blocked = optional_text(value.get("rateLimitReachedType"))?.map(codex_block);
   let mut windows = Vec::new();
   for name in ["primary", "secondary"] {
     if let Some(window) = value.get(name).filter(|window| !window.is_null()) {
@@ -29,15 +29,11 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
         None | Some(Value::Null) => continue,
         Some(value) => value.as_u64()?,
       };
-      windows.push(LimitWindow::new(minutes, percent, resets, LimitState::Normal, false)?);
+      windows.push(LimitWindow::new(minutes, Some(percent), resets, LimitState::Normal, false).ok()?);
     }
   }
-  // No reported window is not a quota snapshot and must not clear the last valid reading.
-  if windows.is_empty() {
-    return None;
-  }
-  if reached && let Some(window) = windows.iter_mut().max_by_key(|window| window.used) {
-    window.state = LimitState::Reached;
+  if blocked == Some(LimitBlock::Window) {
+    mark_blocked(&mut windows);
   }
   let credits = match value.get("credits") {
     None | Some(Value::Null) => None,
@@ -47,11 +43,26 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
       balance: optional_text(value.get("balance"))?.map(str::to_owned),
     }),
   };
+  let plan = optional_text(value.get("planType"))?.map(str::to_owned);
+  if windows.is_empty() && blocked.is_none() && credits.is_none() && plan.is_none() {
+    return None;
+  }
   Some(PlanLimits {
     windows,
+    plan,
     credits,
-    plan: optional_text(value.get("planType"))?.map(str::to_owned),
+    blocked,
   })
+}
+
+/// App Server's `RateLimitReachedType` names why turns are refused, not a window.
+fn codex_block(reason: &str) -> LimitBlock {
+  match reason {
+    "rate_limit_reached" => LimitBlock::Window,
+    "workspace_owner_credits_depleted" | "workspace_member_credits_depleted" => LimitBlock::Credits,
+    "workspace_owner_usage_limit_reached" | "workspace_member_usage_limit_reached" => LimitBlock::Workspace,
+    _ => LimitBlock::Other,
+  }
 }
 
 fn optional_text(value: Option<&Value>) -> Option<Option<&str>> {
@@ -61,34 +72,48 @@ fn optional_text(value: Option<&Value>) -> Option<Option<&str>> {
   }
 }
 
-/// The `rate_limit_info` of Claude Code's `stream-json` `rate_limit_event`.
+/// The `rate_limit_info` of Claude Code's `stream-json` `rate_limit_event`. Claude Code leaves
+/// out `utilization`, `resetsAt` and `rateLimitType` when it does not know them. Windows of one
+/// model (`seven_day_opus`, `seven_day_sonnet`, …) or of another kind of use are not the plan's
+/// and give `None`; so does an event with nothing to show.
 pub fn claude_limits(value: &Value) -> Option<PlanLimits> {
-  let minutes = match value.get("rateLimitType")?.as_str()? {
-    "five_hour" => 300,
-    "seven_day" => 10080,
-    _ => value.get("window_minutes")?.as_u64()?,
-  };
   let state = match value.get("status")?.as_str()? {
     "allowed" => LimitState::Normal,
     "allowed_warning" => LimitState::Near,
     "rejected" => LimitState::Reached,
     _ => return None,
   };
+  let minutes = match value.get("rateLimitType") {
+    None | Some(Value::Null) => None,
+    Some(kind) => Some(match kind.as_str()? {
+      "five_hour" => 300,
+      "seven_day" => 10080,
+      _ => return None,
+    }),
+  };
+  let Some(minutes) = minutes else {
+    // Without its window the event still says whether the CLI refuses new turns.
+    return (state == LimitState::Reached).then_some(PlanLimits {
+      windows: Vec::new(),
+      plan: None,
+      credits: None,
+      blocked: Some(LimitBlock::Window),
+    });
+  };
+  let percent = match value.get("utilization") {
+    None | Some(Value::Null) => None,
+    Some(value) => Some(value.as_f64()? * 100.0),
+  };
+  let resets = match value.get("resetsAt") {
+    None | Some(Value::Null) => None,
+    Some(value) => Some(Timestamp::from_unix_seconds(value.as_i64()?)),
+  };
   let extra = value.get("isUsingOverage").and_then(Value::as_bool).unwrap_or(false);
-  let resets = value
-    .get("resetsAt")
-    .and_then(Value::as_i64)
-    .map(Timestamp::from_unix_seconds);
-  let window = LimitWindow::new(
-    minutes,
-    value.get("utilization")?.as_f64()? * 100.0,
-    resets,
-    state,
-    extra,
-  )?;
+  let window = LimitWindow::new(minutes, percent, resets, state, extra).ok()?;
   Some(PlanLimits {
     windows: vec![window],
     plan: None,
     credits: None,
+    blocked: None,
   })
 }

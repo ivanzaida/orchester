@@ -88,10 +88,14 @@ impl ClaudeStream {
       return vec![raw()];
     };
     let events = match value.get("type").and_then(Value::as_str) {
-      Some("rate_limit_event") => value
-        .get("rate_limit_info")
-        .and_then(super::super::plan_limits::claude_limits)
-        .map(|limits| vec![AgentEvent::PlanLimits { limits }]),
+      // Account limits never reach the transcript; one this version cannot read is left out.
+      Some("rate_limit_event") => Some(
+        value
+          .get("rate_limit_info")
+          .and_then(super::super::plan_limits::claude_limits)
+          .map(|limits| vec![AgentEvent::PlanLimits { limits }])
+          .unwrap_or_default(),
+      ),
       Some("system") => system(&value),
       Some("assistant") => self.assistant(&value).map(|(mut events, understood)| {
         if !understood {

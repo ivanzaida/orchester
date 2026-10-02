@@ -2,7 +2,10 @@ use orchester_core::{
   connection::{
     AgentProvider,
     app_server::{AppServerStream, Update},
-    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings, claude_limits, codex_limits},
+    plan_limits::{
+      InvalidWindow, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings, claude_limits,
+      codex_limits,
+    },
     stream::{AgentEvent, ClaudeStream, OutputStream},
   },
   time::Timestamp,
@@ -57,13 +60,13 @@ fn codex_update(limits: &serde_json::Value) -> String {
 fn plan_limits_codex_app_server_and_claude_stream_events() {
   let codex = parsed(AgentProvider::CodexCli, CODEX, now());
   assert_eq!(codex.limits.plan.as_deref(), Some("pro"));
-  assert_eq!(codex.fullest(now()).expect("window").percent(), 65.0);
+  assert_eq!(codex.fullest(now()).expect("window").percent(), Some(65.0));
   assert_eq!(codex.fullest(now()).expect("window").minutes(), 10080);
   let credits = codex.limits.credits.expect("credits");
   assert!(!credits.has_credits);
   assert_eq!(credits.balance.as_deref(), Some("0"));
   let claude = parsed(AgentProvider::ClaudeCodeCli, CLAUDE, now());
-  assert_eq!(claude.fullest(now()).expect("window").percent(), 96.0);
+  assert_eq!(claude.fullest(now()).expect("window").percent(), Some(96.0));
   assert_eq!(claude.fullest(now()).expect("window").state(now()), LimitState::Near);
   assert!(claude.limits.plan.is_none());
 }
@@ -78,7 +81,7 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
     (70.0, LimitState::Reached, false, LimitState::Reached),
     (100.0, LimitState::Reached, true, LimitState::Near),
   ] {
-    let window = LimitWindow::new(300, percent, Some(now()), reported, extra).expect("window");
+    let window = LimitWindow::new(300, Some(percent), Some(now()), reported, extra).expect("window");
     assert_eq!(
       window.state(Timestamp::from_unix_millis(now().unix_millis() - 1)),
       state
@@ -86,8 +89,18 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
     assert_eq!(window.state(now()), LimitState::Normal);
     assert!(window.expired(now()));
   }
-  assert!(LimitWindow::new(0, 0.0, None, LimitState::Normal, false).is_none());
-  assert!(LimitWindow::new(300, f64::NAN, None, LimitState::Normal, false).is_none());
+  assert_eq!(
+    LimitWindow::new(0, Some(0.0), None, LimitState::Normal, false),
+    Err(InvalidWindow)
+  );
+  assert_eq!(
+    LimitWindow::new(300, Some(f64::NAN), None, LimitState::Normal, false),
+    Err(InvalidWindow)
+  );
+  let over = LimitWindow::new(300, Some(112.5), None, LimitState::Normal, false).expect("past the limit");
+  assert_eq!((over.percent(), over.state(now())), (Some(100.0), LimitState::Reached));
+  let unknown = LimitWindow::new(300, None, None, LimitState::Reached, false).expect("state only");
+  assert_eq!((unknown.percent(), unknown.state(now())), (None, LimitState::Reached));
   assert!(
     serde_json::from_value::<LimitWindow>(json!({"minutes":0,"used":50,"resets":null,"state":"Normal","extra":false}))
       .is_err()
@@ -95,7 +108,7 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
   let limits = codex_limits(&json!({
     "primary":{"usedPercent":25,"windowDurationMins":300},
     "secondary":{"usedPercent":40,"windowDurationMins":10080},
-    "rateLimitReachedType":"workspace_member_usage_limit_reached"}))
+    "rateLimitReachedType":"rate_limit_reached"}))
   .expect("provider state");
   assert_eq!(limits.windows[0].state(now()), LimitState::Normal);
   assert_eq!(
@@ -106,20 +119,80 @@ fn plan_limits_warning_full_extra_and_expired_semantics() {
 }
 
 #[test]
+fn plan_limits_codex_block_reasons_and_window_lifts() {
+  let reset = Timestamp::from_unix_millis(now().unix_millis() + 3_600_000);
+  let after = Timestamp::from_unix_millis(reset.unix_millis() + 1);
+  for (reason, block, lifts) in [
+    ("rate_limit_reached", LimitBlock::Window, true),
+    ("workspace_member_credits_depleted", LimitBlock::Credits, false),
+    ("workspace_owner_credits_depleted", LimitBlock::Credits, false),
+    ("workspace_owner_usage_limit_reached", LimitBlock::Workspace, false),
+    ("workspace_member_usage_limit_reached", LimitBlock::Workspace, false),
+    ("something_new", LimitBlock::Other, false),
+  ] {
+    let payload = json!({"primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":reset.unix_millis()/1000},"rateLimitReachedType":reason});
+    let reading = parsed(AgentProvider::CodexCli, &codex_update(&payload), now());
+    assert_eq!(reading.limits.blocked, Some(block));
+    assert_eq!(reading.state(now()), LimitState::Reached, "{reason}");
+    let expected = if lifts { LimitState::Normal } else { LimitState::Reached };
+    assert_eq!(reading.state(after), expected, "{reason} after the window reset");
+  }
+  let mut readings = PlanReadings::default();
+  readings.observe(parsed(AgentProvider::CodexCli, CODEX, now()));
+  let later = Timestamp::from_unix_millis(now().unix_millis() + 60_000);
+  let blocked = json!({"rateLimitReachedType":"workspace_owner_credits_depleted"});
+  assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&blocked), later)));
+  let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
+  assert_eq!(
+    reading.limits.blocked,
+    Some(LimitBlock::Credits),
+    "a block without a window is kept"
+  );
+  assert_eq!(reading.fullest(later).expect("kept window").percent(), Some(65.0));
+  let credits = json!({"credits":{"hasCredits":true,"unlimited":false,"balance":"50"}});
+  let even_later = Timestamp::from_unix_millis(later.unix_millis() + 60_000);
+  assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&credits), even_later)));
+  let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
+  assert_eq!(
+    reading.limits.blocked,
+    Some(LimitBlock::Credits),
+    "credits alone say nothing of the block"
+  );
+  assert_eq!(
+    reading
+      .limits
+      .credits
+      .as_ref()
+      .and_then(|credits| credits.balance.as_deref()),
+    Some("50")
+  );
+  let fresh = json!({"primary":{"usedPercent":10,"windowDurationMins":300}});
+  let latest = Timestamp::from_unix_millis(even_later.unix_millis() + 60_000);
+  assert!(readings.observe(parsed(AgentProvider::CodexCli, &codex_update(&fresh), latest)));
+  let reading = readings.get(AgentProvider::CodexCli).expect("Codex");
+  assert_eq!(
+    reading.limits.blocked, None,
+    "a window update without a block clears it"
+  );
+  assert_eq!(reading.state(latest), LimitState::Normal);
+}
+
+#[test]
 fn plan_limits_fullest_percentage_is_separate_from_the_warning_window() {
   let reading = LimitReading {
     provider: AgentProvider::ClaudeCodeCli,
     at: now(),
     limits: orchester_core::connection::plan_limits::PlanLimits {
       windows: vec![
-        LimitWindow::new(300, 20.0, None, LimitState::Near, false).expect("warning"),
-        LimitWindow::new(10080, 70.0, None, LimitState::Normal, false).expect("fullest"),
+        LimitWindow::new(300, Some(20.0), None, LimitState::Near, false).expect("warning"),
+        LimitWindow::new(10080, Some(70.0), None, LimitState::Normal, false).expect("fullest"),
       ],
       plan: None,
       credits: None,
+      blocked: None,
     },
   };
-  assert_eq!(reading.fullest(now()).expect("fullest").percent(), 70.0);
+  assert_eq!(reading.fullest(now()).expect("fullest").percent(), Some(70.0));
   assert_eq!(reading.limiting(now()).expect("warning").minutes(), 300);
 }
 
@@ -155,7 +228,7 @@ fn plan_limits_newest_across_projects_and_partial_claude_windows() {
   let round_trip: LimitReading =
     serde_json::from_str(&serde_json::to_string(reading).expect("serialize")).expect("deserialize");
   assert_eq!(&round_trip, reading, "window timestamps survive IPC serialization");
-  assert_eq!(reading.fullest(now()).expect("fullest").percent(), 96.0);
+  assert_eq!(reading.fullest(now()).expect("fullest").percent(), Some(96.0));
   assert!(readings.observe(parsed(AgentProvider::CodexCli, CODEX, later)));
   assert_eq!(readings.get(AgentProvider::CodexCli).expect("Codex").at, later);
   assert!(
@@ -179,13 +252,42 @@ fn plan_limits_app_server_notifications_and_invalid_unknown_events() {
     codex_limits(&model).is_none(),
     "a single model's bucket is not the plan"
   );
-  assert!(claude_limits(&json!({"rateLimitType":"unknown", "status":"allowed", "utilization":0.2})).is_none());
   assert!(codex_limits(&json!({"primary":{"usedPercent":-1,"windowDurationMins":300}})).is_none());
-  let events = ClaudeStream::default().parse(OutputStream::Stdout, "{\"type\":\"rate_limit_event\"}");
-  assert!(
-    matches!(&events[0], AgentEvent::Raw { .. }),
-    "unreadable data stays raw"
-  );
+  let over = codex_limits(&json!({"primary":{"usedPercent":130,"windowDurationMins":300}})).expect("past the limit");
+  assert_eq!(over.windows[0].percent(), Some(100.0));
+  assert_eq!(over.windows[0].state(now()), LimitState::Reached);
+}
+
+#[test]
+fn plan_limits_claude_events_never_reach_the_transcript() {
+  for line in [
+    r#"{"type":"rate_limit_event"}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":null}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"seven_day_opus","utilization":1}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"seven_day_sonnet","utilization":0.4}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"seven_day_overage_included"}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"unknown","rateLimitType":"five_hour"}}"#,
+    r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","utilization":"high"}}"#,
+  ] {
+    let events = ClaudeStream::default().parse(OutputStream::Stdout, line);
+    assert!(events.is_empty(), "{line} gave {events:?}");
+  }
+  let state_only = claude_limits(&json!({"status":"rejected","rateLimitType":"five_hour"})).expect("rejected window");
+  assert_eq!(state_only.windows[0].percent(), None, "no invented percentage");
+  assert_eq!(state_only.windows[0].state(now()), LimitState::Reached);
+  let unknown_window = claude_limits(&json!({"status":"rejected","rateLimitType":null})).expect("rejected");
+  assert!(unknown_window.windows.is_empty());
+  assert_eq!(unknown_window.blocked, Some(LimitBlock::Window));
+  let reading = LimitReading {
+    provider: AgentProvider::ClaudeCodeCli,
+    at: now(),
+    limits: unknown_window,
+  };
+  assert_eq!(reading.state(now()), LimitState::Reached);
+  let over =
+    claude_limits(&json!({"status":"allowed","rateLimitType":"seven_day","utilization":1.04})).expect("past the limit");
+  assert_eq!(over.windows[0].percent(), Some(100.0));
 }
 
 #[test]
@@ -211,7 +313,6 @@ fn plan_limits_malformed_newer_codex_event_preserves_state_age_and_expiry() {
       json!({"primary":null,"secondary":null}),
       json!({"primary":{}}),
       json!({"primary":{"usedPercent":10}}),
-      json!({"credits":{"hasCredits":true,"unlimited":false,"balance":"50"}}),
       json!({"primary":{"usedPercent":10,"windowDurationMins":300,"resetsAt":"bad"}}),
       json!({"primary":{"usedPercent":10,"windowDurationMins":300},"credits":false}),
       json!({"primary":{"usedPercent":10,"windowDurationMins":300},"rateLimitReachedType":true}),
@@ -230,7 +331,7 @@ fn plan_limits_malformed_newer_codex_event_preserves_state_age_and_expiry() {
       let window = reading.fullest(later).expect("unexpired window");
       assert_eq!(
         (window.percent(), window.state(later), window.resets()),
-        (percent, state, Some(reset))
+        (Some(percent), state, Some(reset))
       );
       assert_eq!(window.reported_at(), Some(now()));
       assert_eq!(
@@ -266,5 +367,5 @@ fn plan_limits_sparse_codex_update_keeps_what_it_leaves_out() {
   assert_eq!(minutes, [300, 10080], "a window without its duration is left out");
   assert_eq!(reading.limits.plan.as_deref(), Some("pro"));
   assert!(reading.limits.credits.is_some());
-  assert_eq!(reading.fullest(later).expect("fullest").percent(), 65.0);
+  assert_eq!(reading.fullest(later).expect("fullest").percent(), Some(65.0));
 }

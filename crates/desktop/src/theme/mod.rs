@@ -9,7 +9,10 @@ mod markdown;
 mod metrics;
 mod palette;
 mod plan_limits;
-pub use plan_limits::{PLAN_HAIRLINE, PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH, PLAN_WINDOW_LABEL};
+pub use plan_limits::{
+  PLAN_HINT_WIDTH, PLAN_METER_HEIGHT, PLAN_METER_WIDTH, PLAN_WINDOW_LABEL, STATUS_LABELS_MIN_WIDTH,
+  STATUS_TOKENS_MIN_WIDTH, STATUS_VERSION_MIN_WIDTH,
+};
 mod shadow;
 mod tokens;
 mod typography;

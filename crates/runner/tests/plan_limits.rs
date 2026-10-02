@@ -55,7 +55,7 @@ async fn plan_limits_runner_sends_both_cli_readings_without_storing_them() {
     } else {
       96.0
     };
-    assert_eq!(received.limits.windows[0].percent(), expected);
+    assert_eq!(received.limits.windows[0].percent(), Some(expected));
     support::wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
     let db = ProjectDb::open(root).expect("database");
     assert!(db.run(run).expect("run").expect("exists").status().is_terminal());
