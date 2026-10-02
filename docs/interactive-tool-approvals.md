@@ -142,7 +142,12 @@ activity (`AgentEvent::ToolDecided`):
   started, are answered by the runner (*always allowed*), and later invocations get the CLI rule.
 - **Approve everything in this run** turns on the run's auto-approval (`runs.auto_approve`), below.
 - **Deny**: the call does not run; the agent is told and continues (Claude Code: the message; Codex: `decline`).
-  The activity reads *denied by you · the agent continued* with what Claude Code's agent was told.
+  The activity reads *denied by you · the agent continued* with what the agent was told. Checked 2026-10-02 with
+  the real CLIs against local mocks of the model APIs (no model; scripts in `.tmp/approval-choices/`): Claude Code
+  2.1.286 handed the agent the message as an error tool result, ran nothing, and the turn ended with the model's
+  final message (`permission_denials` lists the call); Codex 0.159.2 told its model `user rejected MCP tool call`
+  for an MCP call and `exec_command failed: CreateProcess { message: "Rejected(\"rejected by user\")" }` for an
+  escalated command (`run::codex_denial`), ran nothing, and the turn completed.
 
 **Auto-approval** (user decision 2026-10-02) is a run's own choice (*Approve everything in this run*, the switch in
 the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the
