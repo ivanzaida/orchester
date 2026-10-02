@@ -178,7 +178,13 @@ fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> E
             .flex(1.0),
         ),
     )
-    .child(Text::new(&context).variant(TypographyStyle::Caption))
+    .child(
+      Text::new(&context)
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .width(Dimension::Pct(100.0)),
+    )
     .child(review.render(ctx))
     .into()
 }

@@ -284,7 +284,12 @@ admits it) and, to keep naming the version in use, this line.
 
 Approval choices, waiting requests and auto-approval · branch `claude/approval-choices`
 
-- **Built 2026-10-02 (user decisions of that day), design verification below.** Four answers for commands and MCP
+- **Built 2026-10-02 (user decisions of that day); independent design verification passed in round 3** (no blocking
+  or major mismatch against `kpuQj`, `NV6xJ`, `XKja4`, `bjrgu`, `G0rzJy`, `ZkOPf`; shots and the seeder in
+  `.tmp/verify-approval-choices/`). Minors left: Copy and Decide later insets, the Review request card's style and
+  text, Tool as a label/value row, no category description line, no MCP tool chip on a rule and Revoke as a text
+  link, the Review button's icon. Not reached by the verifier: activity marks, Tab order and the smallest window in
+  the running app (covered by headless tests), answering through a live CLI. Four answers for commands and MCP
   tools alike, and auto-approval: `docs/interactive-tool-approvals.md`, "Answers and waiting requests"; design doc,
   "Approval choices and waiting requests" (with the auto-approval decision and the states built without frames).
 - Core: `permission::category` (commands split into simple commands, bash and PowerShell quoting, shells followed;
