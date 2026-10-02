@@ -13,15 +13,19 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
   repository::RepositoryLink,
+  resource::ModelId,
   secret::Secret,
-  store::{ConnectionStore, McpServerStore, RepositoryStore, ResourceStore, SecretStore},
+  store::{ConnectionStore, McpServerStore, RepositoryStore, SecretStore},
   time::Timestamp,
 };
 use orchester_exec::launch::{self, Launch};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::probe;
+use super::{
+  model_uses::{self, ModelUse},
+  probe,
+};
 use crate::{
   agents::data::profiles,
   messages::{self, Message},
@@ -34,7 +38,7 @@ pub struct ProfileUse {
   pub connection: ConnectionId,
   pub profile: ResourceId,
   pub role: Arc<str>,
-  pub model: Arc<str>,
+  pub model: ModelId,
 }
 
 /// The project's connections of each kind, what starts when each one's program runs, the
@@ -48,6 +52,8 @@ pub struct ProjectConnections {
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<ProfileUse>>,
+  /// Who runs on which model of each agent connection.
+  pub model_uses: Arc<Vec<ModelUse>>,
   pub link: Option<Arc<RepositoryLink>>,
   pub launches: Arc<Vec<(ConnectionId, Launch)>>,
 }
@@ -55,14 +61,7 @@ pub struct ProjectConnections {
 impl lurq::app::component::DevtoolsInspectable for ProjectConnections {}
 
 impl ProjectConnections {
-  pub fn load<S>(store: &S) -> Result<Self, StoreError>
-  where
-    S: ResourceStore<Error = StoreError>
-      + ConnectionStore<Error = StoreError>
-      + RepositoryStore<Error = StoreError>
-      + McpServerStore<Error = StoreError>
-      + SecretStore<Error = StoreError>,
-  {
+  pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
     // A profile uses the connection and the MCP servers its current content names: its draft if it
     // has one.
     let uses = profiles(store)?
@@ -75,7 +74,7 @@ impl ProjectConnections {
             connection,
             profile: entry.id,
             role: entry.profile.role().as_str().into(),
-            model: entry.profile.model().as_str().into(),
+            model: entry.profile.model().clone(),
           })
       })
       .collect();
@@ -98,6 +97,7 @@ impl ProjectConnections {
       mcp: Arc::new(store.mcp_servers()?),
       secrets: Arc::new(store.secrets()?),
       uses: Arc::new(uses),
+      model_uses: Arc::new(model_uses::load(store)?),
       link: store.repository_link()?.map(Arc::new),
       launches: Arc::new(launches),
     })
@@ -196,7 +196,8 @@ impl SaveError {
         ConnectionError::NotAgent(_)
         | ConnectionError::NotGitHub(_)
         | ConnectionError::CheckKindMismatch(_)
-        | ConnectionError::PresetNotOffered,
+        | ConnectionError::PresetNotOffered
+        | ConnectionError::FallbackNotOffered,
       ) => Message::new("errors.storage"),
       // Only a native connection has no program to point at.
       Self::Connection(ConnectionError::EndpointMismatch(_)) | Self::NativeNotAvailable => {

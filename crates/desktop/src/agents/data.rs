@@ -155,7 +155,7 @@ pub fn profiles<S: ResourceStore>(store: &S) -> Result<Vec<ProfileEntry>, S::Err
 }
 
 /// Steps of the latest published pipeline versions that run a profile.
-fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
+pub(crate) fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::Error> {
   let mut uses = Vec::new();
   for resource in store.resources(ResourceKind::Pipeline)? {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {

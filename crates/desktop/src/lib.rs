@@ -41,5 +41,5 @@ pub mod tasks;
 pub mod theme;
 pub mod tools;
 mod ui;
-pub use ui::{pressable, unit_input::FieldStroke};
+pub use ui::{command_row, pressable, unit_input::FieldStroke};
 pub mod workspace;

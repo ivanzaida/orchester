@@ -3,8 +3,8 @@ use std::{fs, path::PathBuf};
 use orchester_core::{
   connection::{
     AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, BaseUrl, CatalogModel, CatalogSource, CheckResult,
-    ConnectionCheck, ConnectionStatus, EndpointPreset, GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost,
-    GitHubLogin, ModelCatalog, SignIn,
+    ConnectionCheck, ConnectionStatus, Effort, EndpointPreset, GitHubCheck, GitHubCheckResult, GitHubConnection,
+    GitHubHost, GitHubLogin, ModelCatalog, ModelSource, NativeModel, NativeModels, SignIn,
   },
   id::{ConnectionId, ProjectId, SecretId},
   name::Name,
@@ -338,6 +338,69 @@ fn native_connection_rows_hold_the_endpoint_and_the_secret_id_only() {
       "api": {"preset": "deepseek", "base_url": "https://api.deepseek.com", "key": key.to_string()}
     })
   );
+}
+
+#[test]
+fn native_connection_round_trip_keeps_models_fallback_and_api_check() {
+  let (repo, mut db) = project_repo();
+  let opus = ModelId::new("claude-opus-5-5").expect("model");
+  let fetched = ModelSource::Endpoint {
+    at: Timestamp::from_unix_millis(2_000),
+  };
+  let models = NativeModels::new(
+    vec![
+      NativeModel::new(
+        opus.clone(),
+        std::num::NonZeroU32::new(200_000),
+        std::num::NonZeroU32::new(64_000),
+        vec![Effort::Medium, Effort::Max],
+        fetched,
+      ),
+      NativeModel::new(
+        ModelId::new("lab-mini-8b").expect("model"),
+        None,
+        None,
+        Vec::new(),
+        ModelSource::Manual,
+      ),
+    ],
+    Some(opus),
+    Some(Effort::Max),
+  )
+  .expect("models");
+  let endpoint = ApiEndpoint::new(
+    EndpointPreset::Official,
+    BaseUrl::new("https://api.anthropic.com").expect("valid base URL"),
+    SecretId::generate(),
+  )
+  .with_models(models)
+  .with_provider_fallback(true);
+  let mut claude = AgentConnection::native(
+    ConnectionId::generate(),
+    Name::new("Claude API · Kontur").expect("valid name"),
+    AgentProvider::AnthropicApi,
+    endpoint,
+    Timestamp::from_unix_millis(1_000),
+  )
+  .expect("native connection");
+  let check = ConnectionCheck {
+    at: Timestamp::from_unix_millis(3_000),
+    result: CheckResult::BillingProblem {
+      balance: Some("0.00".into()),
+    },
+  };
+  claude.record_check(check).expect("an API check");
+  db.create_connection(&claude).expect("create");
+  let reopened = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = AgentConnection::try_from(reopened.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored, claude);
+  assert_eq!(stored.status(), ConnectionStatus::BillingProblem);
+  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  let status: String = raw
+    .query_row("SELECT status FROM connections", [], |row| row.get(0))
+    .expect("row");
+  assert_eq!(status, "billing_problem");
 }
 
 #[test]

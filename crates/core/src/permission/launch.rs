@@ -15,6 +15,9 @@ pub enum OutsideCommands {
   PermissionPrompt,
   /// Codex App Server's sandbox approval: a command that needs more than the sandbox.
   SandboxApproval,
+  /// A native agent's command outside the allowed list and the known-safe read-only ones, or every
+  /// command: Orchester asks before running it.
+  OrchesterAsks,
 }
 
 /// Launch permissions: the enforced [`AgentPermissions`] and what happened to other commands.

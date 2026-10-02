@@ -18,6 +18,7 @@
 
 mod details;
 mod merge;
+mod not_enforced;
 
 use std::sync::Arc;
 
@@ -113,10 +114,14 @@ impl Component for ReadyForReview {
     let (ask, open) = conversation(ctx, detail.task.id());
     // Its agent continues in the run's worktree: once that was removed, it cannot be asked.
     let ask = leftovers.is_none_or(Leftovers::keeps_run_worktree).then_some(ask);
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     let content = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .child(readiness(ctx, detail.merge.as_ref(), leftovers))
+      .with_children(not_enforced::not_enforced(ctx, &nav, run))
       .child(stages(run))
       .with_children(what_changed(ctx, run))
       .child(verification(ctx, run));

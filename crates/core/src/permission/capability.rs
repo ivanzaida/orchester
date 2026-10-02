@@ -20,8 +20,12 @@
 //!   Claude Code through its permission prompt tool (`crate::connection::claude_approval`), where every command asks.
 //!   Claude Code runs an approved command outside any sandbox, so in a read-only step the approval says it can change
 //!   files.
-//! - Native agents (`docs/architecture/native-agent.md` §5.4) are not available in this version: no option is enforced
-//!   for them ([`Unavailable::NativeNotAvailable`]), so no profile runs on a native connection.
+//! - Native agents (`docs/architecture/native-agent.md` §5.4) are enforced by Orchester itself, alike on Windows and
+//!   macOS: its file tools stay in the worktree (and the writable folders), its write tools are withheld from a
+//!   read-only step, and every command outside the allowed list asks a person, except known-safe read-only ones once
+//!   the list has an entry. It has no sandbox for commands, so it can neither confine any command to the worktree nor
+//!   keep commands off the network. Native agents do not run in this version yet ([`AgentProvider::runs_agents`]);
+//!   these rows say how they are enforced once they do.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
@@ -139,6 +143,20 @@ pub enum Mechanism {
   /// Network off was chosen but cannot be enforced: WebFetch and WebSearch are removed, commands
   /// keep network access (`claude::permission_args`).
   ClaudeWebToolsRemoved,
+  /// Orchester offers a native agent no tool that writes; its file tools refuse writes by scope.
+  NativeWriteToolsWithheld,
+  /// Orchester's file tools read and write in the worktree only, `.git` and `.orchester` protected.
+  NativeFileScope,
+  /// Orchester's file tools may also write in the writable folders; commands were never confined.
+  NativeFileScopeFolders,
+  /// Orchester asks a person before every command.
+  NativeCommandApprovals,
+  /// Orchester runs the listed commands, unconfined, and asks a person about any other. Known-safe
+  /// read-only commands run too once the list has an entry; with an empty list every command asks
+  /// (`crate::native::command::CommandPolicy`).
+  NativeCommandList,
+  /// Commands the native agent runs reach the network as the OS lets them.
+  NativeNetworkUnrestricted,
 }
 
 /// Why a CLI cannot enforce an option.
@@ -151,8 +169,6 @@ pub enum Unavailable {
   CannotConfineCommands,
   /// The CLI cannot keep commands off the network on this platform.
   CannotBlockNetwork,
-  /// Native agents are not available in this version, so nothing is enforced for them.
-  NativeNotAvailable,
 }
 
 /// Whether a CLI enforces an option on a platform.
@@ -193,7 +209,22 @@ pub const fn support(provider: AgentProvider, platform: Platform, option: Permis
     (AgentProvider::ClaudeCodeCli, O::AnyCommand) => No(U::CannotConfineCommands),
     (AgentProvider::ClaudeCodeCli, O::NetworkOff) => No(U::CannotBlockNetwork),
     (AgentProvider::ClaudeCodeCli, O::NetworkOn) => Enforced(M::ClaudeWebTools),
-    (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, _) => No(U::NativeNotAvailable),
+    (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, option) => native_support(option),
+  }
+}
+
+/// The native rows (§5.4), the same on both platforms in this version.
+const fn native_support(option: PermissionOption) -> Support {
+  use Mechanism as M;
+  use PermissionOption as O;
+  match option {
+    O::ReadOnly => Support::Enforced(M::NativeWriteToolsWithheld),
+    O::EditWorktree => Support::Enforced(M::NativeFileScope),
+    O::AskBeforeCommands => Support::Enforced(M::NativeCommandApprovals),
+    O::AllowedCommands => Support::Enforced(M::NativeCommandList),
+    O::AnyCommand => Support::Unavailable(Unavailable::CannotConfineCommands),
+    O::NetworkOff => Support::Unavailable(Unavailable::CannotBlockNetwork),
+    O::NetworkOn => Support::Enforced(M::NativeNetworkUnrestricted),
   }
 }
 
@@ -210,9 +241,6 @@ pub enum PermissionProblem {
     option: PermissionOption,
     reason: Unavailable,
   },
-  /// The connection is to a native agent provider, which this version runs no agent on.
-  #[error("native agents are not available in this version")]
-  NativeNotAvailable,
 }
 
 /// Permissions as a CLI runs them, with how each setting is enforced.
@@ -256,6 +284,16 @@ impl EnforcedPermissions {
     self.network_stays_on
   }
 
+  /// The listed commands Orchester itself runs without confining them to the worktree: a native
+  /// agent's allowed list, chosen but not confined (§5.4). `None` when a CLI runs the commands, or
+  /// when none is listed.
+  pub fn unconfined_list(&self) -> Option<&AllowedCommands> {
+    match (self.commands, self.permissions.commands()) {
+      (Mechanism::NativeCommandList, CommandPermission::Allowed(list)) if !list.is_empty() => Some(list),
+      _ => None,
+    }
+  }
+
   /// How the CLI asks a person about a command these permissions do not run by themselves: Codex
   /// whenever a command needs more than its sandbox, Claude Code about every command outside the
   /// allowed list (every command when the list is empty or it asks before commands).
@@ -278,9 +316,7 @@ impl AgentPermissions {
     provider: AgentProvider,
     platform: Platform,
   ) -> Result<EnforcedPermissions, PermissionProblem> {
-    let Some((folders_mechanism, outside_commands)) = cli_traits(provider) else {
-      return Err(PermissionProblem::NativeNotAvailable);
-    };
+    let (folders_mechanism, outside_commands) = traits(provider);
     for setting in [
       PermissionSetting::Repository,
       PermissionSetting::Commands,
@@ -309,8 +345,9 @@ impl AgentPermissions {
         permissions.network = NetworkAccess::On;
         let mechanism = match provider {
           AgentProvider::ClaudeCodeCli => Mechanism::ClaudeWebToolsRemoved,
-          AgentProvider::CodexCli => enforced(PermissionOption::NetworkOn)?,
-          AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => return Err(PermissionProblem::NativeNotAvailable),
+          AgentProvider::CodexCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => {
+            enforced(PermissionOption::NetworkOn)?
+          }
         };
         (mechanism, Some(reason))
       }
@@ -335,13 +372,10 @@ impl AgentPermissions {
   }
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
-  /// cannot be enforced there (as [`Self::enforced_on`] runs it). A native provider runs nothing in
-  /// this version, so nothing turns its network on: it keeps the chosen access.
+  /// cannot be enforced there (as [`Self::enforced_on`] runs it).
   pub const fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
     match self.network {
-      NetworkAccess::Off
-        if provider.runs_agents() && !support(provider, platform, PermissionOption::NetworkOff).is_enforced() =>
-      {
+      NetworkAccess::Off if !support(provider, platform, PermissionOption::NetworkOff).is_enforced() => {
         NetworkAccess::On
       }
       network => network,
@@ -401,12 +435,14 @@ impl AgentPermissions {
   }
 }
 
-/// How a CLI grants the extra writable folders and asks a person about the commands its permissions
-/// do not run by themselves; `None` for a native provider, which enforces nothing in this version.
-const fn cli_traits(provider: AgentProvider) -> Option<(Mechanism, OutsideCommands)> {
+/// How a provider grants the extra writable folders and asks a person about the commands its
+/// permissions do not run by themselves.
+const fn traits(provider: AgentProvider) -> (Mechanism, OutsideCommands) {
   match provider {
-    AgentProvider::CodexCli => Some((Mechanism::CodexWritableRoots, OutsideCommands::SandboxApproval)),
-    AgentProvider::ClaudeCodeCli => Some((Mechanism::ClaudeAddDir, OutsideCommands::PermissionPrompt)),
-    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
+    AgentProvider::CodexCli => (Mechanism::CodexWritableRoots, OutsideCommands::SandboxApproval),
+    AgentProvider::ClaudeCodeCli => (Mechanism::ClaudeAddDir, OutsideCommands::PermissionPrompt),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => {
+      (Mechanism::NativeFileScopeFolders, OutsideCommands::OrchesterAsks)
+    }
   }
 }

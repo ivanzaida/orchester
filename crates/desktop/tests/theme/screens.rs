@@ -260,6 +260,28 @@ fn select_menu_roles_follow_pencil() {
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
 }
 
+/// Transcript command box (`uA3Sh` in `N4SlQq`): its lines 4 from the viewport's top and bottom;
+/// the horizontal thumb (`hpzPu` in `G9skx`) 4px in `border`, radius 2, no track, overlaid 1 from
+/// the box's bottom and 12 from the viewport's ends.
+#[test]
+fn transcript_command_box_follows_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::CommandLines.role()),
+    Dimension::Px(4.0)
+  );
+  let scrollbar = theme::command_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Overlay);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(
+    (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
+    (1.0, 12.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+  assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+}
+
 /// Scroll gutter (`nf9DG` in `NwsEg`, 04.01 `JuVaA`): a 12px gutter of its own; the thumb is 4px
 /// in `border`, radius 2, centred in the gutter, 4px from the viewport's top and bottom, at least
 /// 24px long and as long as the visible share of the track; no track.

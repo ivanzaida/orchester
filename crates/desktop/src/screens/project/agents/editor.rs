@@ -416,7 +416,7 @@ impl ProfileEditor {
     let Editing::Profile(entry) = &self.context.editing else {
       return button.on_click(|| {}).enabled(false).render(ctx);
     };
-    if !publishable || state.saving || self.permission_problem().is_some() {
+    if !publishable || state.saving || self.permission_problem().is_some() || self.on_native_connection() {
       return button.on_click(|| {}).enabled(false).render(ctx);
     }
     let (action, repo_root, id) = (

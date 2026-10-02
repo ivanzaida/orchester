@@ -65,4 +65,10 @@ impl AgentProvider {
   pub const fn runs_agents(self) -> bool {
     !self.is_native()
   }
+
+  /// Whether a connection to the provider can be added in this version. OpenAI Responses comes after
+  /// Anthropic's Messages API (§9, P2).
+  pub const fn can_be_added(self) -> bool {
+    !matches!(self, Self::OpenAiApi)
+  }
 }

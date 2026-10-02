@@ -3,7 +3,9 @@
 //! `D4mDB`), GitHub's details and states (04.05 `CHa9s`, 04.C1–C5) with the account panel
 //! (01.D `hNPA1`), checking a connection again when it needs attention (04.A `RZUKo`), and the
 //! project's MCP servers: their rows and details (04.D `QdLRd`), adding and editing one
-//! (`mcp_dialog`, 04.E `yRb2k`), turning one on and off. The search is not available yet.
+//! (`mcp_dialog`, 04.E `yRb2k`), turning one on and off; native agent connections: adding and editing one
+//! (`native_dialog`, 04.H1–H3), its details and statuses (04.H4, H5) and its models (`models_dialog`, 04.H6).
+//! The search is not available yet.
 
 mod actions;
 mod dialog;
@@ -13,12 +15,20 @@ mod github_dialog;
 mod github_form;
 mod github_inspector;
 mod inspector;
+mod kind;
 mod launch;
 mod library;
 mod list;
 mod mcp_dialog;
 mod mcp_form;
 mod mcp_inspector;
+mod model_editor;
+mod model_text;
+mod models_dialog;
+mod native_dialog;
+mod native_form;
+mod native_inspector;
+mod native_key;
 pub(crate) mod status;
 
 use std::{path::PathBuf, sync::Arc};
@@ -39,7 +49,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{
-    AgentConnection, GitHubConnection,
+    AgentConnection, AgentProvider, GitHubConnection,
     mcp::{McpServer, McpServerName},
   },
   id::ConnectionId,
@@ -53,6 +63,8 @@ use self::{
   dialog::{ConnectionDialog, PickedFile, pick_action},
   github_dialog::GitHubDialog,
   mcp_dialog::McpDialog,
+  models_dialog::ModelsDialog,
+  native_dialog::NativeDialog,
 };
 use super::{
   super::github::account_panel::{AccountPanel, AccountPanelProps},
@@ -62,9 +74,10 @@ use super::{
 use crate::{
   activity::{OperationSpec, operations},
   background,
-  connections::data::ProjectConnections,
+  connections::{data::ProjectConnections, model_uses::ModelUse},
   messages::{self, Message},
   navigation::route::{ConnectionTab, Page, Route},
+  secrets::Vault,
   theme::ExtraSpacing,
   ui::{
     button::ActionButton,
@@ -125,9 +138,15 @@ impl lurq::app::component::DevtoolsInspectable for KindChoice {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DialogMode {
   Closed,
-  AddAgent,
+  /// A new connection to the CLI of this provider.
+  AddAgent(AgentProvider),
+  /// A new native connection to this provider's model API (04.H1).
+  AddNative(AgentProvider),
   AddGitHub,
   EditAgent(AgentConnection),
+  EditNative(AgentConnection),
+  /// The models of a native connection (04.H6 `zHowy`).
+  NativeModels(AgentConnection),
   EditGitHub(GitHubConnection),
   AddMcp,
   EditMcp(McpServer),
@@ -146,14 +165,20 @@ pub struct DialogContext {
   pub taken: Vec<Name>,
   /// Names of the project's other MCP servers.
   pub mcp_taken: Vec<McpServerName>,
-  /// The secrets an MCP server can take values from.
+  /// The secrets an MCP server or a native connection's key can come from.
   pub secrets: Arc<Vec<Secret>>,
+  /// Who runs on which model of each agent connection.
+  pub model_uses: Arc<Vec<ModelUse>>,
+  /// Where a native connection's new key secret goes.
+  pub vault: Vault,
   /// The project's repository link, if it has one.
   pub link: Option<Arc<RepositoryLink>>,
   pub close: Arc<dyn Fn() + Send + Sync>,
   pub saved: Arc<dyn Fn(ConnectionId) + Send + Sync>,
   /// Switches a new connection to the other type's dialog.
   pub retype: Arc<dyn Fn(KindChoice) + Send + Sync>,
+  /// Switches a new agent connection to the dialog of another provider (its kind, 04.H1).
+  pub provider: Arc<dyn Fn(AgentProvider) + Send + Sync>,
 }
 
 type PickAction = FutureAction<Arc<str>, PickedFile, Message>;
@@ -322,7 +347,7 @@ impl ConnectionsScreen {
         dialog.set(match tab {
           ConnectionTab::GitHub => DialogMode::AddGitHub,
           ConnectionTab::McpServers => DialogMode::AddMcp,
-          ConnectionTab::All | ConnectionTab::AgentProviders => DialogMode::AddAgent,
+          ConnectionTab::All | ConnectionTab::AgentProviders => DialogMode::AddAgent(AgentProvider::CodexCli),
         });
       })
       .render(ctx)
@@ -373,10 +398,20 @@ impl ConnectionsScreen {
         Some(panel) => panel,
         None => return Modal::new(Column::new()).open_when(false).into(),
       },
-      DialogMode::AddAgent | DialogMode::EditAgent(_) => {
+      DialogMode::AddAgent(_) | DialogMode::EditAgent(_) => {
         let key = dialog_key(&mode);
         self.provide_dialog_context(ctx, (open, data, view), mode.clone());
         ctx.mount_keyed::<ConnectionDialog>(&key, ())
+      }
+      DialogMode::AddNative(_) | DialogMode::EditNative(_) => {
+        let key = dialog_key(&mode);
+        self.provide_dialog_context(ctx, (open, data, view), mode.clone());
+        ctx.mount_keyed::<NativeDialog>(&key, ())
+      }
+      DialogMode::NativeModels(_) => {
+        let key = dialog_key(&mode);
+        self.provide_dialog_context(ctx, (open, data, view), mode.clone());
+        ctx.mount_keyed::<ModelsDialog>(&key, ())
       }
       DialogMode::AddGitHub | DialogMode::EditGitHub(_) => {
         let key = dialog_key(&mode);
@@ -402,7 +437,7 @@ impl ConnectionsScreen {
     mode: DialogMode,
   ) {
     let editing = match &mode {
-      DialogMode::EditAgent(connection) => Some(connection.id()),
+      DialogMode::EditAgent(connection) | DialogMode::EditNative(connection) => Some(connection.id()),
       DialogMode::EditGitHub(connection) => Some(connection.id()),
       DialogMode::EditMcp(server) => Some(server.id()),
       _ => None,
@@ -427,13 +462,18 @@ impl ConnectionsScreen {
       .map(|(_, name)| name.clone())
       .collect();
     let (close, saved, retype) = (self.dialog.clone(), self.dialog.clone(), self.dialog.clone());
-    let (nav, revision) = (self.nav.clone(), self.revision.clone());
+    let (nav, revision, provider) = (self.nav.clone(), self.revision.clone(), self.dialog.clone());
+    let vault = ctx
+      .use_context::<Vault>()
+      .expect("the root provides the vault before mounting screens");
     ctx.provide(DialogContext {
       project: open.clone(),
       mode,
       taken,
       mcp_taken,
       secrets: data.secrets.clone(),
+      model_uses: data.model_uses.clone(),
+      vault,
       link: data.link.clone(),
       close: Arc::new(move || close.set(DialogMode::Closed)),
       saved: Arc::new(move |id| {
@@ -445,9 +485,16 @@ impl ConnectionsScreen {
       }),
       retype: Arc::new(move |kind| {
         retype.set(match kind {
-          KindChoice::Agent => DialogMode::AddAgent,
+          KindChoice::Agent => DialogMode::AddAgent(AgentProvider::CodexCli),
           KindChoice::GitHub => DialogMode::AddGitHub,
           KindChoice::Mcp => DialogMode::AddMcp,
+        });
+      }),
+      provider: Arc::new(move |chosen: AgentProvider| {
+        provider.set(if chosen.is_native() {
+          DialogMode::AddNative(chosen)
+        } else {
+          DialogMode::AddAgent(chosen)
         });
       }),
     });
@@ -483,11 +530,14 @@ impl ConnectionsScreen {
 fn dialog_key(mode: &DialogMode) -> String {
   match mode {
     DialogMode::EditAgent(connection) => format!("connection-dialog-{}", connection.id()),
+    DialogMode::EditNative(connection) => format!("native-dialog-{}", connection.id()),
+    DialogMode::NativeModels(connection) => format!("native-models-{}", connection.id()),
+    DialogMode::AddNative(provider) => format!("native-dialog-add-{provider:?}"),
     DialogMode::EditGitHub(connection) => format!("github-dialog-{}", connection.id()),
     DialogMode::AddGitHub => "github-dialog-add".to_owned(),
     DialogMode::EditMcp(server) => format!("mcp-dialog-{}", server.id()),
     DialogMode::AddMcp => "mcp-dialog-add".to_owned(),
-    DialogMode::AddAgent | DialogMode::Closed | DialogMode::Account(_) => "connection-dialog-add".to_owned(),
+    DialogMode::AddAgent(_) | DialogMode::Closed | DialogMode::Account(_) => "connection-dialog-add".to_owned(),
   }
 }
 

@@ -191,6 +191,7 @@ impl Worker {
       action: self.redact(&shown.action),
       target: shown.target.map(|target| self.redact(&target)),
       requested_at: Timestamp::now(),
+      native: None,
     };
     watch.db.request_tool_approval(&approval)?;
     watch.invocation.timing.wait_for_person(approval.requested_at);

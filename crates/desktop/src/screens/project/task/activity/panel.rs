@@ -15,10 +15,13 @@ use lurq::{
 };
 use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
 
-use super::{super::permissions::permissions_value, engine, first_edit};
+use super::{
+  super::{super::ProjectNav, permissions::permissions_value},
+  engine, first_edit, native,
+};
 use crate::{
   display,
-  tasks::detail::RunView,
+  tasks::{detail::RunView, transcript::Entry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{message_text, property::property},
 };
@@ -27,7 +30,13 @@ use crate::{
 const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
-pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExecutionId>) -> Element {
+pub(super) fn invocation_panel(
+  ctx: &Ctx,
+  nav: &ProjectNav,
+  run: &RunView,
+  entries: &[Entry],
+  filter: Option<StepExecutionId>,
+) -> Element {
   let invocation = match filter {
     Some(execution) => run.invocations_of(execution).last(),
     None => run.invocations.last(),
@@ -36,6 +45,8 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
     filter,
     invocation.and_then(|invocation| run.step_of(invocation.execution)),
   ) {
+    // An agent Orchester runs itself names its step (04.H10 `FRtSj`).
+    (_, Some(step)) if native::is_native(step) => native::title(ctx, step),
     (Some(_), Some(step)) => ctx.t_args(
       "runs.activity.panel.stepTitle",
       [
@@ -63,12 +74,28 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
   let before = invocation
     .model()
     .and_then(|_| first_edit::before_first_edit(ctx, run, invocation.execution));
-  let note = match &before {
-    None => "runs.activity.panel.note",
-    Some((_, false)) => "runs.activity.panel.noteFirstEdit",
-    Some((_, true)) => "runs.activity.panel.noteAtMost",
+  let step = run.step_of(invocation.execution);
+  let native_step = step.filter(|step| native::is_native(step));
+  let note = match (&before, native_step.is_some()) {
+    (None, false) => "runs.activity.panel.note",
+    (Some((_, false)), false) => "runs.activity.panel.noteFirstEdit",
+    (Some((_, true)), false) => "runs.activity.panel.noteAtMost",
+    (None, true) => "runs.activity.panel.noteNative",
+    (Some((_, false)), true) => "runs.activity.panel.noteNativeFirstEdit",
+    (Some((_, true)), true) => "runs.activity.panel.noteNativeAtMost",
   };
   let before = before.map(|(rows, _)| rows);
+  let permissions = match native_step {
+    Some(step) => native::permissions_row(ctx, nav, step)
+      .into_iter()
+      .chain(native::tool_rows(ctx, step, entries, invocation.id))
+      .collect(),
+    None => step
+      .and_then(|step| permissions_value(ctx, step))
+      .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
+      .into_iter()
+      .collect::<Vec<_>>(),
+  };
   let panel = panel
     .with_children(details(ctx, run, invocation, filter.is_some()))
     .child(divider())
@@ -76,12 +103,7 @@ pub(super) fn invocation_panel(ctx: &Ctx, run: &RunView, filter: Option<StepExec
     .with_children(before.is_some().then(divider))
     .with_children(before.into_iter().flatten())
     .child(divider())
-    .with_children(
-      run
-        .step_of(invocation.execution)
-        .and_then(|step| permissions_value(ctx, step))
-        .map(|value| property(&ctx.t("runs.summary.permissions"), &value)),
-    )
+    .with_children(permissions)
     .child(Spacer::new().flex(1.0))
     .child(
       Text::new(&ctx.t(note))
@@ -127,7 +149,11 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   );
   // A tool step's command runs no model: the panel names its tool instead of an agent.
   let (label, engine) = match invocation.model() {
-    Some(model) => ("runs.activity.panel.agent", engine(ctx, step.provider, model.as_str())),
+    Some(model) if native::is_native(step) => ("runs.activity.panel.agent", model.as_str().into()),
+    Some(model) => (
+      "runs.activity.panel.agent",
+      engine(ctx, step.vendor.as_ref(), model.as_str()),
+    ),
     None => ("runs.activity.panel.tool", ctx.t("runs.activity.commandTool")),
   };
   let agent = ctx.t_args(
@@ -160,9 +186,15 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   let mut rows = vec![
     property(&ctx.t("runs.activity.panel.step"), &step_value),
     property(&ctx.t(label), &agent),
-    property(&ctx.t("runs.activity.panel.invocation"), &invocation_number),
-    when,
   ];
+  if native::is_native(step) {
+    // 04.H10 `f0xJK`: where it ran, then when it started and for how long; no invocation number.
+    rows.extend(native::launch_rows(ctx, step));
+    rows.push(native::started_row(ctx, invocation));
+  } else {
+    rows.push(property(&ctx.t("runs.activity.panel.invocation"), &invocation_number));
+    rows.push(when);
+  }
   rows.extend(first_edit::code_index_row(ctx, run, invocation));
   rows
 }
@@ -190,12 +222,16 @@ fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
   if invocation.model().is_none() {
     return vec![property(&ctx.t("runs.activity.panel.runTotal"), &total)];
   }
+  let run_row = match run.step_of(invocation.execution) {
+    Some(step) if native::is_native(step) => native::budget_row(ctx, run),
+    _ => property(&ctx.t("runs.activity.panel.runTotal"), &total),
+  };
   vec![
     property(&ctx.t("runs.activity.panel.input"), &count(usage.counted_input())),
     property(&ctx.t("runs.activity.panel.output"), &count(usage.output)),
     property(&ctx.t("runs.cached"), &cached),
     property(&ctx.t("runs.activity.panel.counted"), &counted),
-    property(&ctx.t("runs.activity.panel.runTotal"), &total),
+    run_row,
   ]
 }
 

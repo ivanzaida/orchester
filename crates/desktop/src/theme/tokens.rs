@@ -107,6 +107,8 @@ pub const SPACE_FIELD: f32 = 9.0;
 pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
 pub const SPACE_SELECT_MENU: f32 = 4.0;
+/// Above and below a transcript command's lines in its viewport (`Z3M6Nz` in `uA3Sh`).
+pub const SPACE_COMMAND_LINES: f32 = 4.0;
 pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 /// Padding of a note field (`NbNN0`, the changes a plan needs).
 pub const SPACE_TEXT_AREA: f32 = 14.0;
@@ -157,6 +159,10 @@ pub const SELECT_SCROLLBAR_END_INSET: f32 = 11.0;
 /// Scroll gutter thumb (`nf9DG` in `NwsEg`): centred in the 12px gutter, 4px from either side,
 /// and 4px from the viewport's top and bottom.
 pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
+/// Horizontal thumb of a transcript command (`hpzPu` in `G9skx`): centred in the 6px band at the
+/// bottom of the box, and starting where the text does, 12px in.
+pub const COMMAND_SCROLLBAR_EDGE_INSET: f32 = 1.0;
+pub const COMMAND_SCROLLBAR_END_INSET: f32 = 12.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;

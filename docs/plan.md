@@ -255,10 +255,47 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 - **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
   (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
-  start here, and the permissions panel then reads *Enforced by Orchester* (04.H8 `yh0Xe`) instead of *Not enforced
-  yet*.
-- **P1e · ORC-60:** connections UI, 04.H1–H11 (group `PNDQm`): the native form and inspector, test connection,
-  models, default model and effort, provider fallback and the data-location notice.
+  start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
+  what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`, §7; it records
+  `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
+  `ModelSource::Endpoint`). Further notes for this task:
+  - A native command's approval is recorded with `PendingToolApproval::native` (the `CommandShell` and the time
+    limit), which 04.H9 shows. Its `action` (the full shell string) and `target` are redacted as the CLI path does
+    with `self.redact` in `step/approval.rs` before they are stored.
+  - The connection's models and the loop's types meet here: `connection::Effort` (`as_str`) becomes the
+    `effort: Option<String>` of `native::model::ModelRequest` and `native::session::LoopSettings`, from the profile's
+    effort or the connection's `NativeModels::default_effort`; a fetched `native::model::RemoteModel` (`efforts:
+    Vec<String>`, `context_window: Option<u64>`) becomes a `NativeModel` with `ModelSource::Endpoint`, dropping
+    effort names `Effort` does not know and limits that do not fit `NonZeroU32`; `NativeModel::context_window`
+    becomes `LoopSettings::context_window` (`DEFAULT_CONTEXT_WINDOW` when unknown).
+  - The invocation records the endpoint, the engine's vendor (`AgentConnection::vendor`) and the effort it used,
+    so 04.H10's panel and header and 04.H9's agent row can show what the run used instead of the connection as it
+    is now (*Endpoint now*), and the panel's *Effort* row appears once an invocation records one.
+  - The transcript rows of 04.H10 `IcGvI`, moved here from P1e by the user's decision of 2026-10-02, with the
+    `AgentEvent` data they need (§2.2): a native tool call's kind (read_file, list_files, search, edit_file,
+    write_file, run_command), the lines read and the size, the search scope and its match and file counts, an edit's
+    added and removed lines, the shell a command ran in (*shell · pwsh*), an approval (*Approved by you · approve once
+    · waited 48 s*), a denial by a person (*Denied by a person · the agent continues*, told apart from a refusal, so
+    the panel can say *denied by you*) and the result the agent was given for it.
+  - The prompt must honour `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel
+    already shows.
+- **P1e · ORC-60 (done 2026-10-02, branch `claude/orc60-fix`; independent review and design verification passed):**
+  connections UI, 04.H1–H11 (group `PNDQm`). Built: Add connection's four kinds
+  (OpenAI API locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3),
+  Advanced base URL, the key secret picked or created with the connection in the environment chosen (Development by
+  default, as in Secrets), models added by hand with default model and effort, provider fallback (04.H1–H3); the
+  native inspector with its statuses, key missing derived from the project's secrets (04.H4, H5); the models dialog
+  (04.H6), where a listed model in use keeps its id and is never dropped: core `ensure_used_kept` compares the list
+  before and after against every published profile version and draft, the profile versions unfinished runs pinned,
+  and every step of a published pipeline or draft that overrides the model; the §5.4 capability rows with
+  *Enforced by Orchester* (04.H8); the approval of a native command with its shell, full string, working directory
+  and time limit (04.H9); in Activity, the step header and the invocation panel of a native invocation (04.H10: runs
+  on this computer, the connection's endpoint now, network, tool calls); and the note of what Orchester could not
+  enforce under the readiness card (04.H11). Test connection and Fetch models are visibly unavailable. Not built:
+  04.H7; the *Effort* row of 04.H10's panel (the invocation records no effort yet, P1d). The transcript rows of
+  04.H10 moved to P1d by the user's decision of 2026-10-02 (see P1d). Tests: `form_keyboard native_`
+  (`native_connections`, `native_dialog`, `native_models`, `native_model_uses`, `native_run`), core `native_connection`/`native_setup`,
+  store `connections native`, `tool_approvals native_`.
 
 ## L · After lurq 0.30.0
 
@@ -435,6 +472,26 @@ Agent runtime architecture · effective approvals, Windows sandbox and Cargo iso
   and no physical Mac test was run. The authorized stable install was updated and blocked tasks resumed;
   ORC-44's fresh independent Review/Verify and final task-specific verification remain in progress.
   See [evidence](evidence/agent-runtime-architecture-2026-09-30.md).
+
+ORC-45 · Multiline command rendering · branch `claude/orc45`
+
+- **Done 2026-10-02.** Independent review passed; independent design verification passed at 1440 and 960. Command
+  headers show a one-line preview: a line break and the indentation around it read as one space. Every agent/tool
+  command can expand; its details keep the original command in a box with Copy (exact bytes). In that box the
+  command never wraps: each line stays as recorded and long lines scroll sideways in the box's own viewport, while
+  Copy keeps its column at the top right. Dialog and page command rows are unchanged. Ids are per entry
+  (`activity-command-detail-{sequence}`, `activity-command-copy-{sequence}`).
+- Design: the command-details states were added to `data/orchester.pen` by the designer (`iBzOj` 02.I2, `BQgqg`
+  02.I3, `tWO8E` 02.I4, hidden `uA3Sh` "Entry command" in `N4SlQq`), saved on master as b65abef. Known
+  difference: the design adds a 6px lane for the horizontal thumb only while a line overflows; lurq reserves a lane
+  always or never, so the thumb overlays the box's bottom padding and the box keeps its height.
+- Minor, left: the design's header preview keeps indentation spacing while the app collapses it to one space; the
+  box is 3px shorter at 1440.
+- Filtered regressions: `cargo test -p orchester-desktop --test form_keyboard multiline_command`,
+  `--test command_presentation multiline_command`, `--test transcript transcript`, `--test form_keyboard command`,
+  `--test i18n locale`, `--test theme mono_text`, `--test theme transcript_command`. Opt-in, because they write the
+  OS clipboard and need restorable clipboard text: `--test command_presentation multiline_command_copy_action --
+  --ignored` and `--test form_keyboard multiline_command_copy_pressed -- --ignored`.
 
 Continue failed runs through task conversation · branch `codex/continue-failed-run`
 
