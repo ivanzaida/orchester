@@ -69,20 +69,21 @@ enum Pressed {
 
 impl lurq::app::component::DevtoolsInspectable for Pressed {}
 
+/// An answer to one request, as the dialog and the Conversation's inline card give it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decision {
-  run: RunId,
-  approval: String,
-  answer: ApprovalAnswer,
+pub(in crate::screens::project::task) struct Decision {
+  pub(in crate::screens::project::task) run: RunId,
+  pub(in crate::screens::project::task) approval: String,
+  pub(in crate::screens::project::task) answer: ApprovalAnswer,
   /// The request is a command, which an error names as such.
-  command: bool,
+  pub(in crate::screens::project::task) command: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
 
-type DecisionAction = FutureAction<Decision, (), Message>;
+pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
 
-fn decision_action(ctx: &mut Ctx) -> DecisionAction {
+pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");

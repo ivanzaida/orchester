@@ -1,4 +1,5 @@
-//! Command previews and details through the real Activity tab, using stored fixture events.
+//! Command previews and details through the real Conversation tab, in the step's tool group, using
+//! stored fixture events.
 
 use lurq::{
   clipboard::{copy_to_clipboard, read_from_clipboard},
@@ -12,6 +13,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use crate::{
+  conversation::open_group,
   github::shows,
   harness::Desktop,
   task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed},
@@ -79,9 +81,9 @@ fn check_at_width(
   width: u32,
 ) {
   desktop.tree.resize(width, 960);
-  desktop.click("task-tab-activity");
+  desktop.click("task-tab-conversation");
   desktop.wait_for("activity-step-header");
-  desktop.click("activity-step-header");
+  open_group(desktop, "Ran ");
   let header = format!("activity-entry-header-{sequence}");
   let toggle = format!("activity-entry-toggle-{sequence}");
   let detail_id = format!("activity-entry-details-{sequence}");
@@ -170,8 +172,8 @@ fn multiline_command_preview_and_details_keep_states_and_output() {
   }
 }
 
-/// Two failed commands, both open, in the Activity tab at the supported minimum width; returns the
-/// app and the first entry's sequence.
+/// Two failed commands, both open, in the Conversation tab's tool group at the supported minimum
+/// width; returns the app and the first entry's sequence.
 fn two_open_commands() -> (Desktop, u64) {
   let command = format!("pwsh -Command \"\n  # {}\n\"", "long ".repeat(60));
   let mut events = Vec::new();
@@ -194,9 +196,9 @@ fn two_open_commands() -> (Desktop, u64) {
   finished_on_page(&mut desktop);
   let first = append(&desktop, events);
   desktop.tree.resize(960, 960);
-  desktop.click("task-tab-activity");
+  desktop.click("task-tab-conversation");
   desktop.wait_for("activity-step-header");
-  desktop.click("activity-step-header");
+  open_group(&mut desktop, "Ran ");
   desktop.wait_for(&format!("activity-entry-details-{first}"));
   (desktop, first)
 }

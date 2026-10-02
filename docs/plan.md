@@ -393,8 +393,8 @@ Approval choices, waiting requests and auto-approval · branch `claude/approval-
   `run::answer` (`ApprovalAnswer`, `DecidedBy`, run rules and their matching, Always allow targets, `auto_verdict`,
   `denial_message`), `AgentPermissions::auto_approve` (profile version). Store migration `approval_choices`
   (`tool_approvals.decided_by`/`rule_id`, `approval_rules`, `runs.auto_approve`; rules survive a runner restart),
-  `publish_allowed_command`. IPC protocol **12** (`DecideToolApproval { answer }`; master is at 10 and
-  `claude/retry-feedback` takes 11). Runner answers itself what a rule, Always allow or auto-approval covers, and a
+  `publish_allowed_command` (migration 38, after ORC-61's steering). IPC protocol **12** (`DecideToolApproval { answer }`; master is at 11).
+  Runner answers itself what a rule, Always allow or auto-approval covers, and a
   person's Deny tells the agent and lets the turn go on (Claude Code: deny with the message; Codex: `decline`).
 - Desktop: the 720 dialog with *1 of N* and ‹ ›, the wider answers as tiles plus *Approve everything in this run*,
   the scope of Approve similar on hover or focus, the Always allow step, Decide later (Esc), Deny's text; Needs you
@@ -412,6 +412,53 @@ Approval choices, waiting requests and auto-approval · branch `claude/approval-
   approval_rules`; `-p orchester-runner --features test-agent --test approval_choices approval_choices` (and the
   updated `claude_approvals`, `claude_unlisted`, `codex_escalations`, `command_approvals`); `-p orchester-desktop
   --test form_keyboard approval_choices_` and `tool_approval`.
+ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
+`claude/orc61` (from run #21's `orchester/orc-61-run-1`)
+
+- **Implemented 2026-10-02; merged with master and Review fixed 2026-10-03; merged into master 2026-10-03** after two
+  independent code reviews (PASS) and the independent design verification against `fTfl8` (with `q4fCXK`, `a5hF4`,
+  `gLVQQ`, `zyusO`, `iPHGE`) with no blocking or major mismatches left. Open minors (follow-ups): Attach sits apart
+  from the recipient at 960; step header wording (*Approved*, *Waiting for approval*, invocation count); plan card line
+  spacing, helper text and the plan repeated in *Plan done*; question card meta and focus; composer placeholder per
+  state; the working line as the last timeline item; titled problem rows; Details pane wording (master's invocation
+  panel); the timeline column 6 px left; a scrollbar drag does not count as the person scrolling, so a newly waiting
+  card can still pull the view; queued step names can overflow at 960; two profiles with the same name. The task
+  page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent and person messages, tool
+  groups, question, plan and tool-approval cards, problem rows, returns and restarts, result cards, the run's end),
+  with the step filter, *Show* (All, Messages, Tools), search, the Details pane (closed by default, remembered),
+  following live with *Jump to latest · N new*, and the composer in every state (steer, queue, answer, plan changes,
+  follow-up, continue with instructions, waiting for a decision, not started, closed). The Activity tab is gone.
+  *Send now* reaches the agent at work after its running tool call: Codex through `turn/steer`, Claude Code through
+  stream-json input (Claude Code now always runs with `--input-format stream-json --replay-user-messages`); messages
+  are queued, delivered mid-turn, delivered at the end of the turn, or not delivered and kept
+  (`docs/architecture/storage.md`, "Send now"). Live checks on both CLIs: `docs/evidence/orc-61-send-now-2026-10-02.md`.
+- **Merge with master:** master's Activity and old Conversation behaviour now lives in the timeline: the marks of
+  02.B7 as rows of their own (`tasks/timeline/mark.rs`, drawn by `activity/mark.rs`), the waiting run's toolbar state
+  and composer line with *Open the decision →*, the toolbar's second line when narrow, ORC-44's permission row in
+  Details (*Running with* … *change ↗*, *Ran with*), ORC-45 and approval-long through the shared `ui::command_row`
+  and `ui::value_box`. The steering migration is now 37 (after `stuck_runs`, 36); ORC-61 changes no IPC message, so
+  `PROTOCOL_VERSION` stays 11.
+- **Review fixes:** messages and cards are merged into a step's transcript before grouping, so anything that is not a
+  tool event splits a group (also in *Tools*); a declined MCP call, a memory one too, is a problem row; *Messages*
+  counts only the matches it shows; a queued message for an agent the pipeline no longer offers is not named with an
+  empty name; a Codex message accepted by `turn/steer` but not taken before `turn/completed` is delivered at the turn's
+  end, never sent again (Codex records it into the thread as the turn finishes). Second review (2026-10-03): a message
+  on its way to one agent goes into no other agent's prompt until that agent ends; an acceptance Codex sends after
+  `turn/completed` still delivers at the turn's end; *Send after this turn* and the runner's late delivery change a
+  message only while it stands as read (`ConversationStore::change_delivery`), so a race never fails the step;
+  master merged again for the Changes tab count. Design verification fixes (2026-10-03): the toolbar's state follows the run's state; the
+  step the run ended on stays open; at 960 with or without Details the toolbar and composer keep every control; a tool
+  step's failing command shows open; the queued empty state and unavailable toolbar of `zxIMy`; read-back links, result
+  card layout, approval card title, default recipient and the Messages meta.
+- Tests: `cargo test -p orchester-runner --features test-agent --test send_now send_`, `--test conversation
+  conversation`; `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`,
+  `--test form_keyboard` with `conversation`, `composer_`, `activity_`, `multiline_command`, `tool_approval`,
+  `run_permissions`, `task_graph`, `changes`, `integration`; `--test changes c`; `-p orchester-core --test app_server
+  turn`; `-p orchester-runner --features test-agent --test send_now_delivery send_now_`; `-p orchester-store --test
+  conversation conversation`.
+- **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
+  Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
+  call that asked for it when the CLI reported that call first (they are matched by time, not by call).
 
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 

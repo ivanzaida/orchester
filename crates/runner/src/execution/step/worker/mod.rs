@@ -3,10 +3,12 @@
 //! and budgets, and the agent is ended when the run says so. A run that stops at a token limit or
 //! a step budget lets the turn that used it end: the agent has [`TURN_GRACE`] to exit on its own,
 //! and starting another turn ends it at once. What the agent used before its first file edit is
-//! followed from the same events and stored with the invocation ([`FirstEditTracker`]).
+//! followed from the same events and stored with the invocation ([`FirstEditTracker`]). A person's
+//! messages sent now reach the agent while its turn runs ([`steer`]).
 
 mod observe;
 mod process;
+mod steer;
 
 use std::{
   collections::HashSet,
@@ -17,6 +19,7 @@ use std::{
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
+  conversation::Message,
   id::{ResourceId, StepExecutionId, TaskId},
   permission::category::CommandScope,
   run::{ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
@@ -111,7 +114,7 @@ pub(in super::super) struct Finished {
 /// How the runner follows a CLI: it reads Claude Code's `stream-json` output, and talks with Codex
 /// App Server.
 pub(super) enum Transport {
-  Claude(ClaudeStream),
+  Claude(Box<ClaudeStream>),
   AppServer(Box<AppServerSession>),
 }
 
@@ -137,6 +140,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) scope: CommandScope,
   /// The agent profile of the step, which Always allow of a command adds to.
   pub(in super::super) profile: Option<ResourceId>,
+  /// People's messages sent now, for the running turn.
+  pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
 }
 
 pub(super) struct Watch {
@@ -160,6 +165,8 @@ pub(super) struct Watch {
   /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
   /// they do, the actions may have run, and the run is not resumed on its own.
   pub(super) approved_calls: HashSet<String>,
+  /// Messages sent now that the CLI has not taken yet.
+  steering: steer::Steering,
 }
 
 impl Watch {
@@ -178,6 +185,7 @@ impl Watch {
       pause_requested: false,
       approval: None,
       approved_calls: HashSet::new(),
+      steering: steer::Steering::default(),
     })
   }
 

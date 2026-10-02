@@ -659,7 +659,6 @@
         "summary": "Summary",
         "conversation": "Conversation",
         "changes": "Changes",
-        "activity": "Activity",
         "artifacts": "Artifacts"
       },
       "needsYou": "Needs you"
@@ -696,7 +695,8 @@
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "notStarted": "Not started"
     },
     "permissions": {
       "label": {
@@ -1426,7 +1426,6 @@
       "merging": "Merging…",
       "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
       "mergedTitle": "Merged into {{branch}}",
-      "noticeDetail": "{{merged}} {{left}}",
       "mergedDetail": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",
@@ -1642,68 +1641,222 @@
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details."
+    },
+    "conversation": {
+      "state": {
+        "waiting": "Waiting for you",
+        "queued": "Queued",
+        "paused": "Paused",
+        "stopped": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "ready": "Ready for review",
+        "merged": "Merged",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "allStepsNone": "All steps · none yet",
+      "show": {
+        "all": "All",
+        "messages": "Messages",
+        "tools": "Tools"
+      },
+      "search": "Search this run…",
+      "details": "Details",
+      "stepLabel": "{{number}} {{step}}",
+      "showingOnly": {
+        "one": "Showing {{step}} only · {{hidden}} is hidden.",
+        "other": "Showing {{step}} only · {{hidden}} are hidden."
+      },
+      "showingOnlyAlone": "Showing {{step}} only.",
+      "showAllSteps": "Show all steps",
+      "clearSearch": "Clear search",
+      "showAll": "Show all",
+      "matches": {
+        "one": "1 match for “{{query}}” in {{steps}} · items without a match are hidden.",
+        "other": "{{count}} matches for “{{query}}” in {{steps}} · items without a match are hidden."
+      },
+      "matchesElsewhere": {
+        "one": "1 match in {{steps}}.",
+        "other": "{{count}} matches in {{steps}}."
+      },
+      "nothingInRun": "Nothing in Run {{run}} matches “{{query}}”",
+      "nothingInStep": "Nothing in {{step}} matches “{{query}}”",
+      "searched": {
+        "one": "Searched the messages, commands, paths and output of the step that ran.",
+        "other": "Searched the messages, commands, paths and output of {{count}} steps."
+      },
+      "toolsHidden": {
+        "one": "{{calls}} tool calls in 1 group hidden",
+        "other": "{{calls}} tool calls in {{groups}} groups hidden"
+      },
+      "empty": {
+        "noRun": "This task has not run yet",
+        "nothingYet": "Nothing in this conversation yet",
+        "queued": "Run {{run}} is queued and starts when an agent slot is free. The agents’ messages, their tool activity and your messages will appear here.",
+        "step": "{{number}} {{step}} · {{agent}}",
+        "toolStep": "{{number}} {{step}}"
+      },
+      "agentMeta": "{{step}} · {{time}}",
+      "you": "You",
+      "toAgent": "to {{agent}} · {{time}}",
+      "toOrchestrator": "to Orchestrator · {{time}}",
+      "problemMeta": "{{meta}} · {{time}}",
+      "editInComposer": "Edit in composer",
+      "line": {
+        "message": "message",
+        "agent": "{{agent}}: {{text}}",
+        "you": "You: {{text}}",
+        "youTo": "You to {{agent}}: {{text}}"
+      },
+      "delivery": {
+        "sendingNow": "Sending now · {{agent}} gets it at its next tool call",
+        "afterTurn": "Queued · {{agent}} reads it when its turn ends",
+        "midTurn": "Delivered mid-turn to {{agent}} · {{time}}, at its next tool call",
+        "turnEnd": "Delivered at end of turn to {{agent}} · {{time}}",
+        "turnEndedFirst": "Delivered at end of turn to {{agent}} · {{time}} · its turn ended before another tool call",
+        "delivered": "Delivered to {{agent}} · {{time}}",
+        "notDelivered": "Could not deliver to {{agent}}: {{reason}}. Your message is kept here.",
+        "refused": "its CLI refused to add it to the running turn",
+        "unwritable": "its CLI did not take its input"
+      },
+      "group": {
+        "read": {
+          "one": "read 1 file",
+          "other": "read {{count}} files"
+        },
+        "searched": {
+          "one": "searched once",
+          "other": "searched {{count}} times"
+        },
+        "memory": "searched memory",
+        "ranOne": "ran {{command}}",
+        "ranTwo": "ran {{first}} and {{second}}",
+        "ranMany": "ran {{count}} commands",
+        "exit": "exit {{code}}",
+        "failedCommand": "{{command}} · exit {{code}}",
+        "edited": {
+          "one": "edited 1 file",
+          "other": "edited {{count}} files"
+        },
+        "mcp": {
+          "one": "1 MCP call",
+          "other": "{{count}} MCP calls"
+        },
+        "running": "running {{command}}",
+        "separator": " · ",
+        "span": "{{first}}–{{last}}",
+        "calls": {
+          "one": "1 tool call · {{times}}",
+          "other": "{{count}} tool calls · {{times}}"
+        },
+        "more": "Show {{count}} more · {{kinds}}",
+        "withoutMatch": "Show {{count}} without a match · {{kinds}}",
+        "kinds": {
+          "reads": {
+            "one": "1 read",
+            "other": "{{count}} reads"
+          },
+          "searches": {
+            "one": "1 search",
+            "other": "{{count}} searches"
+          },
+          "commands": {
+            "one": "1 command",
+            "other": "{{count}} commands"
+          },
+          "edits": {
+            "one": "1 edit",
+            "other": "{{count}} edits"
+          },
+          "mcp": {
+            "one": "1 MCP call",
+            "other": "{{count}} MCP calls"
+          },
+          "other": {
+            "one": "1 note",
+            "other": "{{count}} notes"
+          }
+        }
+      },
+      "card": {
+        "asks": "{{agent}} asks you",
+        "asksMcp": "{{agent}} asks to use an MCP tool",
+        "asksCommand": "{{agent}} asks to run a command",
+        "approveOnce": "Approve once applies to this request only.",
+        "waitingAnswer": "Waiting for your answer",
+        "answered": "Answered",
+        "waitingApproval": "Waiting for approval",
+        "approved": "Approved",
+        "changesRequested": "Changes requested",
+        "superseded": "Earlier version",
+        "denied": "Denied",
+        "interrupted": "Interrupted",
+        "wholePlan": "Show the whole plan · {{count}} lines"
+      },
+      "result": {
+        "done": "{{step}} done",
+        "failed": "{{step}} failed",
+        "meta": "{{took}} · {{tokens}} tokens",
+        "changes": "Changes ↗",
+        "summary": "Summary ↗"
+      },
+      "end": {
+        "ready": "Run {{run}} is ready for your review · {{time}}",
+        "merged": "Run {{run}} was merged into {{branch}} · {{time}}",
+        "failed": "Run {{run}} failed at {{step}} · {{time}}",
+        "cancelled": "Run {{run}} was cancelled · {{time}}"
+      },
+      "composer": {
+        "sendNow": "Send now",
+        "sendAfterTurn": "Send after this turn",
+        "sendAnswer": "Send answer",
+        "sendFollowUp": "Send follow-up",
+        "continue": "Continue with instructions",
+        "sendWhenStarts": "Send when the run starts",
+        "answering": "Answering {{agent}}’s question from {{time}}",
+        "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
+        "deciding": "Waiting for your decision"
+      },
+      "to": {
+        "working": "To: {{agent}} · working",
+        "resumes": "To: {{agent}} · resumes its session",
+        "continues": "To: {{agent}} · continues the run",
+        "firstStep": "To: {{agent}} · first step"
+      },
+      "hint": {
+        "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
+        "steerMac": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Cmd+Enter sends after this turn.",
+        "steerUnavailable": "{{agent}}’s connection takes no message while its turn runs, so Send now is unavailable. Send after this turn waits until {{agent}} finishes its turn.",
+        "toolStep": "A command tool runs this step, not an agent. Your message waits for the next agent’s turn.",
+        "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
+        "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
+        "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan."
+      }
     }
   },
   "conversation": {
-    "title": "Task conversation",
-    "status": {
-      "notStarted": "Not started",
-      "live": "Live",
-      "waiting": "Waiting for you",
-      "paused": "Paused",
-      "stopped": "Stopped",
-      "deciding": "Waiting for your decision",
-      "interrupted": "Interrupted",
-      "ready": "Ready for review",
-      "merged": "Merged",
-      "failed": "Failed",
-      "ended": "Ended"
-    },
     "to": {
       "orchestrator": "To: Orchestrator · this task",
       "agent": "To: {{agent}}"
-    },
-    "participants": {
-      "working": "{{agents}} working · {{available}} available",
-      "workingOnly": "{{agents}} working",
-      "asking": "{{agents}} asks you · {{available}} available",
-      "askingOnly": "{{agents}} asks you",
-      "available": "{{available}} available",
-      "cannotContinue": "{{agents}} cannot continue",
-      "paused": "{{agent}} paused · messages stay in this task",
-      "stopped": "{{agent}} stopped at the limit · messages wait in this task",
-      "deciding": "{{agent}} stopped · the run waits for your decision · messages wait in this task",
-      "interrupted": "{{agent}} interrupted · messages wait in this task",
-      "none": "No agent takes part in this task yet"
-    },
-    "author": {
-      "you": "You · {{time}}",
-      "youTo": "You to {{agent}} · {{time}}",
-      "agent": "{{agent}} · {{time}}"
     },
     "delivery": {
       "queued": "Queued · waiting for the next checkpoint",
       "queuedRunStart": "Queued · waiting for the run to start",
       "queuedRunResume": "Queued · delivered before the next action on resume",
       "queuedRunContinue": "Queued · delivered when the run continues",
-      "queuedAgentNextTurn": "Queued · waiting for this agent’s next turn",
+      "queuedAgentNextTurn": "Queued · waiting for {{agent}}’s next turn",
       "notDelivered": "Not delivered · the run has ended",
       "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
-      "delivered": "Delivered to {{agent}}",
-      "acknowledged": "Acknowledged by {{agent}}",
       "reply": "Reply · {{step}}",
       "question": "Question · waiting for your answer",
       "answered": "Question · answered"
     },
     "reply": "Reply  →",
     "openDecision": "Open the decision  →",
-    "empty": "No messages yet. Questions and clarifications you write here stay with this task.",
-    "emptyWorktreeRemoved": "No messages were sent before this run’s worktree was removed.",
     "composer": {
       "placeholder": "Ask, clarify or redirect this task…",
       "attach": "Attach",
       "send": "Send",
-      "sendAndContinue": "Send & continue",
       "sending": "Sending…",
       "closed": "No agent of this run reads messages any more."
     },
@@ -1725,19 +1878,8 @@
     },
     "errors": {
       "blank": "Write a message first.",
-      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again."
-    },
-    "policy": "Questions and clarifications stay in this task. An agent reads your messages when its current turn ends.",
-    "worktreeRemovedNoticeDetail": "Its committed changes remain ready for review. No agent can continue this run.",
-    "work": {
-      "title": "Working context",
-      "noCheckpoint": "No checkpoint yet",
-      "changedFiles": "Changed files",
-      "files": {
-        "one": "1 file · view changes ↗",
-        "other": "{{count}} files · view changes ↗"
-      },
-      "filesUnknown": "view changes ↗"
+      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again.",
+      "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now."
     }
   },
   "pullRequests": {

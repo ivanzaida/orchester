@@ -154,7 +154,7 @@ impl RunTask {
         (command, None, Some(app))
       }
       McpSetup::Claude(servers) => {
-        let (command, file) = self.claude_command(&cli, servers, prompt)?;
+        let (command, file) = self.claude_command(&cli, servers, &prompt)?;
         (command, file, None)
       }
     };

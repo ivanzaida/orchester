@@ -9,6 +9,7 @@ use orchester_core::{
 };
 
 use crate::{
+  conversation::scroll_up,
   github::shows,
   harness::Desktop,
   task_run::{
@@ -129,11 +130,28 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   });
 }
 
-/// The transcript marks the automatic return and the person's decisions (02.B7 `zyusO`).
+/// The conversation's timeline marks the automatic return and the person's decisions, each a row
+/// of its own before the step it starts, even while that step is folded (02.B7 `zyusO`).
 fn shows_the_marks(desktop: &mut Desktop) {
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the marks", |desktop| {
-    has(desktop, "activity-mark-2") && has(desktop, "activity-mark-4")
+  desktop.click("task-tab-conversation");
+  // Messages hides the tool groups; the marks stay.
+  desktop.wait_for("conversation-show-1");
+  desktop.click("conversation-show-1");
+  desktop.wait_until("the newest marks", |desktop| {
+    has(desktop, "activity-mark-3") && has(desktop, "activity-mark-4")
+  });
+  assert!(shows(
+    desktop,
+    "activity-mark-4",
+    "Returned to Implement with your note"
+  ));
+  assert!(shows(desktop, "activity-mark-4", "Keep the greeting short."));
+  // Earlier in the run: the automatic return.
+  desktop.wait_until("the first mark", |desktop| {
+    has(desktop, "activity-mark-2") || {
+      scroll_up(desktop);
+      false
+    }
   });
   assert!(shows(
     desktop,
@@ -142,16 +160,10 @@ fn shows_the_marks(desktop: &mut Desktop) {
   ));
   assert!(shows(desktop, "activity-mark-2", "automatic · retry 1 of 1"));
   assert!(shows(desktop, "activity-mark-3", "by you"));
-  assert!(shows(
-    desktop,
-    "activity-mark-4",
-    "Returned to Implement with your note"
-  ));
-  assert!(shows(desktop, "activity-mark-4", "Keep the greeting short."));
   desktop.click("task-tab-summary");
 }
 
-/// The waiting run's top bar, its narrow layout, and how Conversation and Activity read it.
+/// The waiting run's top bar, its narrow layout, and how the conversation reads it.
 fn waiting_page_states(desktop: &mut Desktop) {
   // Open conversation and Cancel run, no Edit (02.B3 `A3JNZ`).
   assert!(has(desktop, "task-open-conversation"));
@@ -171,26 +183,49 @@ fn waiting_page_states(desktop: &mut Desktop) {
   assert!(panel.width > 600.0, "{panel:?}");
   assert!((title.x - evidence.x).abs() < 1.0, "{title:?} starts with {evidence:?}");
   assert_eq!(desktop.focused().as_deref(), Some("task-return-note"));
-  // The Activity toolbar keeps the live state beside the step filter, left of the inspector.
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the activity", |desktop| has(desktop, "activity-live-state"));
-  let state = desktop.bounds("activity-live-state");
-  let inspector = desktop.bounds("activity-invocation-content");
-  assert!(state.x + state.width <= inspector.x, "{state:?} left of {inspector:?}");
+  // The conversation's toolbar takes two lines: the live state stays beside the step filter, left
+  // of Details, and both stay in the window.
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the conversation", |desktop| {
+    has(desktop, "conversation-live-state") && has(desktop, "activity-step-title")
+  });
+  let state = desktop.bounds("conversation-live-state");
+  let details = desktop.bounds("conversation-details");
+  let filter = desktop.bounds("activity-step-filter");
+  let search = desktop.bounds("conversation-search");
+  assert!(state.x + state.width <= details.x, "{state:?} left of {details:?}");
+  assert!(details.x + details.width <= 960.0, "{details:?} in the window");
+  assert!((state.y - filter.y).abs() < 8.0, "{state:?} beside {filter:?}");
+  assert!(search.y > filter.y + filter.height, "{search:?} under {filter:?}");
+  // A step's name keeps its room; the engine and times beside it give way, within the window.
+  desktop.pass();
+  desktop.pass();
+  let (title, meta) = (
+    desktop.bounds("activity-step-title"),
+    desktop.bounds("activity-step-meta"),
+  );
+  assert!((title.y - meta.y).abs() < 4.0, "{title:?} beside {meta:?}");
+  assert!(title.x + title.width <= meta.x, "{title:?} before {meta:?}");
+  assert!(meta.x + meta.width <= 960.0, "{meta:?} in the window");
   desktop.click("task-tab-summary");
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
   desktop.tree.resize(1440, 960);
   desktop.pass();
-  // The conversation says the run waits for a decision, not that it stopped at a limit.
+  // The conversation says the run waits for a decision, not that it stopped at a limit or ended,
+  // and its composer leads to the decision.
   desktop.click("task-tab-conversation");
-  desktop.wait_until("the conversation", |desktop| has(desktop, "conversation-status"));
+  desktop.wait_until("the conversation", |desktop| {
+    has(desktop, "conversation-status") && has(desktop, "conversation-live-state")
+  });
   assert!(shows(desktop, "conversation-status", "Waiting for your decision"));
-  assert!(has(desktop, "conversation-open-decision"));
-  // Activity has not ended.
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the activity", |desktop| has(desktop, "activity"));
-  assert!(shows(desktop, "activity", "Waits for your decision"));
-  assert!(!shows(desktop, "activity", "Run ended"));
-  desktop.click("task-tab-summary");
+  assert!(shows(desktop, "conversation-live-state", "Waits for your decision"));
+
+  assert!(!shows(desktop, "conversation", "Run ended"));
+  assert!(shows(
+    desktop,
+    "conversation-explanation",
+    "The run waits for your decision on its Summary."
+  ));
+  desktop.click("conversation-open-decision");
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
 }

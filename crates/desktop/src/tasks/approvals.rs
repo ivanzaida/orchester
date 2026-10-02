@@ -2,7 +2,8 @@
 //! step only reads: the approval dialog says what an approval means for that CLI (an approved
 //! Codex command runs outside its sandbox, Claude Code has none) and that it can change files in a
 //! step that only reads. Each comes with its run, task and step, and what its wider answers cover
-//! ([`ApprovalChoices`]).
+//! ([`ApprovalChoices`]). On its task's Conversation tab the request is a card of the timeline, and
+//! the dialog does not open there.
 
 use std::{
   path::{Path, PathBuf},
@@ -23,6 +24,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
 use super::changes::run_worktree;
+use crate::navigation::route::{Page, TaskPageTab};
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the
 /// asking profile's setting, at the version the run pinned.
@@ -84,6 +86,12 @@ pub struct ShownApproval {
 }
 
 impl ShownApproval {
+  /// Whether the dialog opens for it on `page`: everywhere but its task's Conversation tab, which
+  /// shows it inline.
+  pub fn opens_on(&self, page: Option<Page>) -> bool {
+    !matches!((page, self.task_id), (Some(Page::Task(shown, TaskPageTab::Conversation)), Some(task)) if shown == task)
+  }
+
   /// A command's first line, and whether more lines follow, for a one-line mention of it.
   pub fn first_line(&self) -> (&str, bool) {
     let mut lines = self.approval.action.lines();

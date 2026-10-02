@@ -138,7 +138,7 @@ impl RunTask {
     &self,
     cli: &Cli<'_>,
     servers: Option<ClaudeServers>,
-    prompt: String,
+    prompt: &str,
   ) -> Result<(Command, Option<PrivateFile>), RunnerProblem> {
     let command = ClaudeInvocation {
       executable: cli.executable,

@@ -19,6 +19,10 @@ use crate::{
 
 /// Where the application database keeps the window's tabs (`ui_state`).
 const TABS_KEY: &str = "tabs";
+/// Where it keeps whether the Conversation tab's Details pane is open, and the two values.
+const DETAILS_KEY: &str = "conversation.details";
+const DETAILS_OPEN: &str = "open";
+const DETAILS_CLOSED: &str = "closed";
 
 /// A project whose database is open and readable.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -204,6 +208,17 @@ impl Workspace {
   /// Saves the window's tabs, as [`SavedTabs::encode`] wrote them.
   pub fn save_tabs(&self, text: &str) -> Result<(), StoreError> {
     self.db.lock().set_ui_state(TABS_KEY, text)
+  }
+
+  /// Whether the person keeps the Conversation tab's Details pane open, for every task; closed
+  /// until they open it.
+  pub fn conversation_details(&self) -> Result<bool, StoreError> {
+    Ok(self.db.lock().ui_state(DETAILS_KEY)?.as_deref() == Some(DETAILS_OPEN))
+  }
+
+  pub fn save_conversation_details(&self, open: bool) -> Result<(), StoreError> {
+    let value = if open { DETAILS_OPEN } else { DETAILS_CLOSED };
+    self.db.lock().set_ui_state(DETAILS_KEY, value)
   }
 
   pub(crate) fn start_session(&self, now: Timestamp) -> Result<(SessionId, PreviousSession), StoreError> {

@@ -22,6 +22,7 @@ pub mod progress;
 pub mod run;
 pub mod run_again;
 pub mod run_approvals;
+pub mod timeline;
 pub mod transcript;
 pub mod unreadable;
 pub mod usage;

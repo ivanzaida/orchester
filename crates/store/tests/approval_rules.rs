@@ -1,21 +1,22 @@
 mod support;
 
 use orchester_core::{
-  id::ConnectionId,
+  conversation::{Message, MessageBody, Recipient, Timing},
+  id::{ConnectionId, IdempotencyKey},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandScope},
   },
   resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, Slug, VersionNumber},
   run::{DecidedBy, PendingToolApproval, RuleScope, ToolApprovalDecision},
-  store::{ActivityStore, ResourceStore, RunStore},
+  store::{ActivityStore, ConversationStore, ResourceStore, RunStore},
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
 use support::{at, copied_at_version, model, name, started_run};
 
 /// The schema version before approval choices: who answered a request, approval rules and a run's own
-/// auto-approval choice.
-const BEFORE_APPROVAL_CHOICES: u32 = 36;
+/// auto-approval choice. Migrations are append-only; ORC-61's steering came before.
+const BEFORE_APPROVAL_CHOICES: u32 = 37;
 
 fn mcp_rule(tool: &str) -> RuleScope {
   RuleScope::SimilarMcpTool {
@@ -204,10 +205,22 @@ fn approval_rules_migration_keeps_runs_and_waiting_requests() {
     native: None,
   };
   db.request_tool_approval(&approval).expect("request");
+  // A message sent now, which only schema 37 (steering) keeps.
+  let now = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    MessageBody::new("Use the new API.").expect("a message"),
+    at(12),
+  )
+  .sent(Timing::Now)
+  .expect("a person's message");
+  db.send_message(IdempotencyKey::generate(), &now).expect("sent now");
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
   let old = copied_at_version(&current, BEFORE_APPROVAL_CHOICES);
-  let db = ProjectDb::open(old.path()).expect("migrate the schema 36 database");
+  let db = ProjectDb::open(old.path()).expect("migrate the schema 37 database");
+  assert_eq!(db.messages(run.task()).expect("messages"), [now]);
   assert!(db.run(run.id()).expect("read").is_some());
   // A run that started before follows its profiles' setting.
   assert_eq!(db.run_auto_approve(run.id()).expect("read"), None);

@@ -30,15 +30,15 @@ const FOOTER_HEIGHT: f32 = 40.0;
 const TICK: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct LiveFooterProps {
-  pub(super) agent: Arc<str>,
+pub(in crate::screens::project::task) struct LiveFooterProps {
+  pub(in crate::screens::project::task) agent: Arc<str>,
   /// When the newest entry arrived; `None` before the first.
-  pub(super) last: Option<Timestamp>,
+  pub(in crate::screens::project::task) last: Option<Timestamp>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for LiveFooterProps {}
 
-pub(super) struct LiveFooter {
+pub(in crate::screens::project::task) struct LiveFooter {
   tick: Signal<u64>,
 }
 

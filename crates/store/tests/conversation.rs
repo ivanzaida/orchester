@@ -5,7 +5,7 @@
 mod support;
 
 use orchester_core::{
-  conversation::{AgentMessage, Delivery, Message, MessageBody, Recipient, Sender},
+  conversation::{AgentMessage, Arrival, Delivery, Message, MessageBody, Recipient, Sender, Timing, Undelivered},
   id::{IdempotencyKey, InvocationId, StepExecutionId},
   run::{AttemptReason, Run, RunStatus},
   store::{ActivityStore, ConversationStore, RunStore},
@@ -70,7 +70,7 @@ fn conversation_delivery_is_stored_and_moves_forward_only() {
   let mut message = Message::from_person(run.task(), None, Recipient::Orchestrator, body("Keep email."), at(10));
   db.send_message(IdempotencyKey::generate(), &message).expect("stored");
   message
-    .deliver(run.id(), (execution, invocation), at(12))
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::Prompt)
     .expect("delivered");
   db.save_deliveries(std::slice::from_ref(&message)).expect("saved");
   assert_eq!(db.messages(run.task()).expect("messages"), [message.clone()]);
@@ -117,11 +117,71 @@ fn conversation_runs_with_queued_messages_are_the_runs_they_were_written_for() {
   assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()], "listed once");
   for message in &mut queued {
     message
-      .deliver(run.id(), (execution, invocation), at(13))
+      .deliver(run.id(), (execution, invocation), at(13), Arrival::Prompt)
       .expect("delivered");
   }
   db.save_deliveries(&queued).expect("saved");
   assert!(db.runs_with_queued_messages().expect("runs").is_empty());
+}
+
+#[test]
+fn conversation_a_message_sent_now_keeps_how_it_arrived_or_why_it_did_not() {
+  let (repo, mut db, run, execution, invocation) = working();
+  let send_now = |text: &str, millis| {
+    Message::from_person(
+      run.task(),
+      Some(run.id()),
+      Recipient::Orchestrator,
+      body(text),
+      at(millis),
+    )
+    .sent(Timing::Now)
+    .expect("a person's message")
+  };
+  let mut steered = send_now("Stop editing the parser.", 10);
+  let mut refused = send_now("Use the new API.", 11);
+  for message in [&steered, &refused] {
+    db.send_message(IdempotencyKey::generate(), message).expect("stored");
+  }
+  assert_eq!(
+    db.messages(run.task()).expect("messages"),
+    [steered.clone(), refused.clone()]
+  );
+  steered
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::MidTurn)
+    .expect("delivered");
+  refused
+    .not_delivered(run.id(), execution, at(13), Undelivered::Refused)
+    .expect("not delivered");
+  db.save_deliveries(&[steered.clone(), refused.clone()]).expect("saved");
+  assert_eq!(
+    db.messages(run.task()).expect("messages"),
+    [steered.clone(), refused.clone()]
+  );
+  assert!(
+    db.runs_with_queued_messages().expect("runs").is_empty(),
+    "a message that was not delivered is not queued"
+  );
+  // The person sends it after the turn: queued again.
+  refused.send_after_turn().expect("sent after the turn");
+  db.save_deliveries(std::slice::from_ref(&refused)).expect("saved");
+  let stored = db.messages(run.task()).expect("messages");
+  assert_eq!(stored[1], refused);
+  assert_eq!(
+    (stored[1].timing(), stored[1].delivery()),
+    (Timing::AfterTurn, Some(Delivery::Queued))
+  );
+  assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()]);
+  let connection = raw(db, repo.path());
+  assert!(
+    connection
+      .execute(
+        "UPDATE messages SET timing = 'now' WHERE id = ?1",
+        [refused.id().to_string()]
+      )
+      .is_err(),
+    "a message sent after the turn is not sent now again"
+  );
 }
 
 #[test]
@@ -211,7 +271,7 @@ fn conversation_recovery_intent_round_trips_and_cannot_be_rewritten() {
   db.append_events(&run, &events).expect("stored attempt");
   assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
   message
-    .deliver(run.id(), (execution, invocation), at(22))
+    .deliver(run.id(), (execution, invocation), at(22), Arrival::Prompt)
     .expect("delivered");
   db.save_deliveries(std::slice::from_ref(&message)).expect("delivery");
   message.acknowledge(at(23)).expect("acknowledge");
@@ -260,4 +320,74 @@ fn conversation_recovery_migration_preserves_existing_failed_run_and_messages() 
   let events = run.recover(&step, at(21)).expect("recovery");
   db.append_events(&run, &events).expect("new attempt after migration");
   assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+}
+
+/// The migrations before the steering migration (ORC-61); migrations are append-only, so this stays.
+const BEFORE_STEERING: u32 = 36;
+
+#[test]
+fn conversation_steering_migration_keeps_queued_and_delivered_messages() {
+  let (repo, mut db, run, execution, invocation) = working();
+  let message = |text: &str, millis| {
+    Message::from_person(
+      run.task(),
+      Some(run.id()),
+      Recipient::Orchestrator,
+      body(text),
+      at(millis),
+    )
+  };
+  let (mut delivered, queued) = (message("Delivered.", 10), message("Queued.", 11));
+  for message in [&delivered, &queued] {
+    db.send_message(IdempotencyKey::generate(), message).expect("stored");
+  }
+  delivered
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::Prompt)
+    .expect("delivered");
+  db.save_deliveries(std::slice::from_ref(&delivered)).expect("saved");
+  drop(db);
+  // The same rows in a database as it was before the steering migration.
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let old = copied_at_version(&current, BEFORE_STEERING);
+  let mut db = ProjectDb::open(old.path()).expect("migrate existing project");
+  // Sent after the turn, as every message was; one delivered then came with an invocation's prompt.
+  assert_eq!(db.messages(run.task()).expect("messages"), [delivered, queued]);
+  assert_eq!(db.runs_with_queued_messages().expect("runs"), [run.id()]);
+  let now = message("Sent now.", 13).sent(Timing::Now).expect("a person's message");
+  db.send_message(IdempotencyKey::generate(), &now)
+    .expect("a message sent now after the migration");
+}
+
+#[test]
+fn conversation_a_change_of_delivery_is_kept_only_while_the_message_stands_as_read() {
+  let (_repo, mut db, run, execution, invocation) = working();
+  let mut refused = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Use the new API."),
+    at(10),
+  )
+  .sent(Timing::Now)
+  .expect("a person's message");
+  db.send_message(IdempotencyKey::generate(), &refused).expect("stored");
+  refused
+    .not_delivered(run.id(), execution, at(11), Undelivered::Refused)
+    .expect("not delivered");
+  db.save_deliveries(std::slice::from_ref(&refused)).expect("saved");
+  // The desktop and the runner both read it as not delivered.
+  let (mut again, mut taken) = (refused.clone(), refused.clone());
+  again.send_after_turn().expect("sent after the turn");
+  taken
+    .deliver(run.id(), (execution, invocation), at(12), Arrival::MidTurn)
+    .expect("taken late");
+  assert!(
+    db.change_delivery(&refused, &again).expect("stored"),
+    "the first change wins"
+  );
+  assert!(
+    !db.change_delivery(&refused, &taken).expect("no store error"),
+    "the later one finds it moved on and leaves it"
+  );
+  assert_eq!(db.messages(run.task()).expect("messages"), [again]);
 }

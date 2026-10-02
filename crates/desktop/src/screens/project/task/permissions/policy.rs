@@ -12,7 +12,7 @@ use lurq::{
   },
   components::{Row, Text},
   layout::{Alignment, text_style::TextAlign},
-  node::{Element, dimension::Dimension},
+  node::dimension::Dimension,
 };
 use orchester_core::permission::{AgentPermissions, CommandPermission};
 
@@ -173,13 +173,4 @@ pub(super) fn policy_property(text: &PolicyText) -> Row {
     .align_items(Alignment::Start)
     .child(label_text(&text.label))
     .child(value_text(&text.value).flex(1.0))
-}
-
-/// What `step`'s current or last invocation launched with, as a row without a link: the working
-/// context once no agent can continue (`d9SVut` in 02.S2); `None` for a step without permissions
-/// (a tool step).
-pub fn permissions_property(ctx: &Ctx, step: &StepView) -> Option<Element> {
-  let permissions = step.permissions.as_ref()?;
-  let text = policy_text(ctx, step, (&permissions.invocation_policy, permissions), Wording::Row);
-  Some(policy_property(&text).id("task-permissions").into())
 }

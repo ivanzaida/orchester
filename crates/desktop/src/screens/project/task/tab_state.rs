@@ -1,5 +1,6 @@
 //! A task page tab without its content (`hig8O`): an icon, a title and an explanation centered in
-//! the tab, e.g. no activity yet, loading, couldn't load; the Changes tab's states are drawn alike.
+//! the tab, e.g. a run that has not started, loading, couldn't load; the Changes tab's states are
+//! drawn alike.
 
 use lurq::{
   app::{
@@ -10,9 +11,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension},
 };
+use orchester_core::run::RunStatus;
 
 use crate::{
-  tasks::unreadable::Unreadable,
+  tasks::{detail::RunView, unreadable::Unreadable},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -57,13 +59,64 @@ pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Eleme
   )
 }
 
-/// No activity has been reported yet, with why.
-pub(super) fn empty_activity(ctx: &Ctx, text: &str) -> Element {
+/// The timeline has nothing yet, with why: the task has no run, its run is queued (with the steps it
+/// will run on one line, `zxIMy`), or its agents have reported nothing so far.
+pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
+  let Some(run) = run else {
+    return state(
+      "conversation-empty",
+      Icon::Clock3,
+      &ctx.t("runs.conversation.empty.noRun"),
+      &ctx.t("runs.activity.emptyNoRun"),
+      Vec::new(),
+    );
+  };
+  if run.run.status() != &RunStatus::Pending {
+    let key = if run.run.status().is_terminal() {
+      "runs.activity.emptyNone"
+    } else {
+      "runs.activity.emptyStarting"
+    };
+    return state(
+      "activity-empty",
+      Icon::Activity,
+      &ctx.t("runs.activity.emptyTitle"),
+      &ctx.t(key),
+      Vec::new(),
+    );
+  }
+  let number = run.run.number().get().to_string();
+  let mut steps = Row::new()
+    .id("conversation-empty-steps")
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center);
+  for (index, step) in run.steps.iter().enumerate() {
+    if index > 0 {
+      steps = steps.child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted));
+    }
+    let number = format!("{:02}", step.number);
+    let label = match step.agent.as_deref().filter(|_| !step.tool_step) {
+      Some(agent) => ctx.t_args(
+        "runs.conversation.empty.step",
+        [("number", number.as_str()), ("step", &*step.name), ("agent", agent)],
+      ),
+      None => ctx.t_args(
+        "runs.conversation.empty.toolStep",
+        [("number", number.as_str()), ("step", &*step.name)],
+      ),
+    };
+    steps = steps.child(
+      Text::new(&label)
+        .variant(lurq::app::theme::TypographyStyle::Caption)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  }
   state(
-    "activity-empty",
-    Icon::Activity,
-    &ctx.t("runs.activity.emptyTitle"),
-    text,
-    Vec::new(),
+    "conversation-empty",
+    Icon::MessagesSquare,
+    &ctx.t("runs.conversation.empty.nothingYet"),
+    &ctx.t_args("runs.conversation.empty.queued", [("run", number.as_str())]),
+    vec![steps.into()],
   )
 }

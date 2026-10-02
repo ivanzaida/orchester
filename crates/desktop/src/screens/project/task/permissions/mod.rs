@@ -35,7 +35,6 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
-pub use self::policy::permissions_property;
 use self::{
   policy::{PolicyText, ROW_HEIGHT, Wording, label_text, policy_property, policy_text, value_text},
   settings::{Draft, Edit},

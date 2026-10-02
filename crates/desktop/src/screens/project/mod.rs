@@ -62,7 +62,7 @@ use crate::{
     OpenIn, Tabs,
     feed::{ProjectFeed, ProjectFeeds},
   },
-  tasks::{data::ProjectTasks, integration_jobs::RunIntegration, list},
+  tasks::{approvals::ShownApproval, data::ProjectTasks, integration_jobs::RunIntegration, list},
   ui::link::Link,
   workspace::OpenProject,
 };
@@ -386,6 +386,11 @@ impl Component for ProjectShell {
       .unwrap_or_default();
     let usage = feed.usage.get();
     let page = Route::current_page(ctx);
+    let dialogs: Vec<ShownApproval> = pending
+      .iter()
+      .filter(|approval| approval.opens_on(page))
+      .cloned()
+      .collect();
     ctx.provide(Shown {
       open: open.clone(),
       status: status.clone(),
@@ -440,6 +445,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
-      .with_children(task::tool_approval_modal(ctx, pending, &self.approvals))
+      .with_children(task::tool_approval_modal(ctx, &dialogs, &self.approvals))
   }
 }

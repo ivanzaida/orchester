@@ -254,7 +254,7 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     // Every Claude Code step asks about commands through the permission prompt.
     approvals: Some(Path::new("/tmp/orchester-mcp/approvals.json")),
   }
-  .command("Do it.".to_owned(), Vec::new(), &CommandEnvironment::default())
+  .command("Do it.", Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree");
   let args = command.args();
   assert!(args.iter().any(|arg| arg == "--strict-mcp-config"));

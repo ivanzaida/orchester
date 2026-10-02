@@ -1,9 +1,12 @@
-//! A stand-in for `claude -p --output-format stream-json --verbose` in the runner's execution tests.
+//! A stand-in for `claude -p --input-format stream-json --output-format stream-json --verbose
+//! --replay-user-messages` in the runner's execution tests.
 //! The real CLI was never observed doing a model turn (it was not signed in during the probe), so
 //! apart from the sign-in failure, which replays real output
 //! (`crates/core/tests/fixtures/claude/not-signed-in-clean-env.jsonl`), the lines it prints are
-//! synthetic, shaped like the events the probe recorded. What it does depends on the prompt it
-//! reads from standard input:
+//! synthetic, shaped like the events the probe recorded. It reads its input as Claude Code 2.1.286 did
+//! (`fake_claude_input`): the prompt is the first user message; a message that arrives during a tool call
+//! is taken after that call's result, one after its last tool call as the next turn, after the result.
+//! What it does depends on the prompt:
 //!
 //! - "Please sign in": answers like a CLI that is not signed in and exits with 1;
 //! - "Report plan limits": first prints a `rate_limit_event`, then works as the rest of the prompt says;
@@ -35,6 +38,11 @@
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
 //! - "Leave a handoff": works as below, and its step result hands off like `orchester-fake-codex`'s;
+//! - "Wait for a message": runs `pnpm test` through Bash until a message arrives on its input (or the test writes
+//!   `fake-release`), takes the message after the call's result, writes "Noted: <message>", then works as below;
+//! - "Finish after release": once the test writes `fake-release`, ends its turn with the step result and no tool call,
+//!   so a message that arrived meanwhile is taken as the next turn; with "Ignore messages" it reads nothing after its
+//!   prompt;
 //! - "Work slowly" waits a moment before it works as below, and "Write own file" writes `<step>.txt` instead of
 //!   appending to `README.md`, as `orchester-fake-codex` does;
 //! - anything else: edits `README.md` in its working directory (appending `hello`), runs `git status`, and ends with
@@ -54,17 +62,12 @@
   reason = "a stand-in for a CLI: printing is what it is for"
 )]
 
-use std::{
-  fs::OpenOptions,
-  io::{Read, Write},
-  path::Path,
-  process::ExitCode,
-  thread,
-  time::Duration,
-};
+use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, time::Duration};
 
 #[path = "fake_claude_ask.rs"]
 mod fake_claude_ask;
+#[path = "fake_claude_input.rs"]
+mod fake_claude_input;
 #[path = "fake_claude_rules.rs"]
 mod fake_claude_rules;
 #[path = "fake_mcp.rs"]
@@ -119,6 +122,7 @@ fn main() -> ExitCode {
     r#"{{"type":"system","subtype":"init","cwd":"worktree","session_id":"{}","tools":[],"mcp_servers":{servers},"model":"claude-haiku-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.89"}}"#,
     fake.session
   );
+  fake_claude_input::replay(&fake.session, &prompt);
   let step = prompt
     .lines()
     .find_map(|line| line.strip_prefix("# Current step: "))
@@ -128,38 +132,57 @@ fn main() -> ExitCode {
   if resumed.is_some() {
     return fake.resume(&worktree, &args, &step, permission_prompt);
   }
-  if prompt.contains("Keep working") {
-    fake.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
-    wait_to_be_ended();
-  }
-  if prompt.contains("Ask first") {
-    return fake.ask(&worktree);
-  }
-  if prompt.contains("Work in turns") {
-    if let Err(error) = append(&worktree, "draft") {
-      eprintln!("cannot write README.md: {error}");
-      return ExitCode::from(2);
+  fake.work(&worktree, (&args, permission_prompt), &step)
+}
+
+impl Fake {
+  /// What a new session does, by its prompt.
+  fn work(
+    &self,
+    worktree: &Path,
+    (args, permission_prompt): (&[String], Option<fake_permission_prompt::Prompt>),
+    step: &str,
+  ) -> ExitCode {
+    let prompt = &self.prompt;
+    if prompt.contains("Keep working") {
+      self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
+      wait_to_be_ended();
     }
-    fake.assistant("msg_draft", r#"{"type":"text","text":"Drafted."}"#);
-    fake.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
-    wait_to_be_ended();
+    if prompt.contains("Ask first") {
+      return self.ask(worktree);
+    }
+    if prompt.contains("Work in turns") {
+      if let Err(error) = append(worktree, "draft") {
+        eprintln!("cannot write README.md: {error}");
+        return ExitCode::from(2);
+      }
+      self.assistant("msg_draft", r#"{"type":"text","text":"Drafted."}"#);
+      self.message("msg_more", r#"{"type":"text","text":"Going on."}"#, NO_USAGE);
+      wait_to_be_ended();
+    }
+    if prompt.contains("Refuse the model") {
+      return self.refuse_the_model();
+    }
+    if let Some((text, structured)) = answer(prompt) {
+      return self.answer(&text, structured);
+    }
+    if let Some(ask) = fake_claude_ask::Ask::of(prompt) {
+      return self.ask_prompt(worktree, (args, permission_prompt), &ask, step);
+    }
+    if prompt.contains("Wait for release") {
+      self.wait_for_release(worktree, prompt);
+    }
+    if prompt.contains("Wait for a message") {
+      self.wait_for_a_message(worktree);
+    }
+    if prompt.contains("Finish after release") {
+      return self.finish_after_release(worktree, step);
+    }
+    if prompt.contains("Ask for the web") {
+      return self.ask_for_the_web(worktree, step);
+    }
+    self.finish(worktree, "hello", step)
   }
-  if prompt.contains("Refuse the model") {
-    return fake.refuse_the_model();
-  }
-  if let Some((text, structured)) = answer(&prompt) {
-    return fake.answer(&text, structured);
-  }
-  if let Some(ask) = fake_claude_ask::Ask::of(&prompt) {
-    return fake.ask_prompt(&worktree, (&args, permission_prompt), &ask, &step);
-  }
-  if prompt.contains("Wait for release") {
-    fake.wait_for_release(&worktree, &prompt);
-  }
-  if prompt.contains("Ask for the web") {
-    return fake.ask_for_the_web(&worktree, &step);
-  }
-  fake.finish(&worktree, "hello", &step)
 }
 
 /// The permission prompt's server: Claude Code starts its MCP servers, that one among them, as it
@@ -181,17 +204,17 @@ fn report_limits(prompt: &str) {
   }
 }
 
-/// Reads the prompt from standard input and reports on standard error how the CLI was started.
+/// Reads the prompt, the first user message on standard input, and reports on standard error how
+/// the CLI was started.
 fn read_prompt(args: &[String]) -> Option<String> {
   let mut names: Vec<String> = std::env::vars_os()
     .map(|(name, _)| name.to_string_lossy().into_owned())
     .collect();
   names.sort();
-  let mut prompt = String::new();
-  if std::io::stdin().read_to_string(&mut prompt).is_err() {
+  let Some(prompt) = fake_claude_input::open() else {
     eprintln!("cannot read the prompt");
     return None;
-  }
+  };
   eprintln!("argv: {}", args.join(" "));
   if let Some(schema) = args
     .iter()
@@ -281,6 +304,47 @@ impl Fake {
     }
   }
 
+  /// "Wait for a message": a command that runs until a message arrives, which the agent takes after the
+  /// command's result.
+  fn wait_for_a_message(&self, worktree: &Path) {
+    self.assistant(
+      "msg_test",
+      r#"{"type":"tool_use","id":"toolu_test","name":"Bash","input":{"command":"pnpm test"}}"#,
+    );
+    let release = worktree
+      .parent()
+      .and_then(Path::parent)
+      .map(|orchester| orchester.join("fake-release"));
+    let message = loop {
+      if let Some(message) = fake_claude_input::next(Duration::from_millis(50)) {
+        break Some(message);
+      }
+      if release.as_ref().is_some_and(|release| release.exists()) {
+        break None;
+      }
+    };
+    self.tool_result("toolu_test", "ok", false);
+    if let Some(message) = message {
+      fake_claude_input::replay(&self.session, &message);
+      let noted = serde_json::json!({"type": "text", "text": format!("Noted: {message}")});
+      self.assistant("msg_noted", &noted.to_string());
+    }
+  }
+
+  /// "Finish after release": the step result without another tool call, once released.
+  fn finish_after_release(&self, worktree: &Path, step: &str) -> ExitCode {
+    let release = worktree
+      .parent()
+      .and_then(Path::parent)
+      .map(|orchester| orchester.join("fake-release"));
+    self.message("msg_wait", r#"{"type":"text","text":"Working."}"#, NO_USAGE);
+    while !release.as_ref().is_some_and(|release| release.exists()) {
+      thread::sleep(Duration::from_millis(50));
+    }
+    let result = serde_json::json!({"outcome": "done", "summary": format!("Finished {step}")}).to_string();
+    self.answer(&result, None)
+  }
+
   /// "Ask for the web": `curl`, which the permissions deny, then the usual work.
   fn ask_for_the_web(&self, worktree: &Path, step: &str) -> ExitCode {
     self.assistant(
@@ -328,6 +392,8 @@ impl Fake {
       result["structured_output"] = structured;
     }
     println!("{result}");
+    flush();
+    fake_claude_input::later_turns(&self.session);
     ExitCode::SUCCESS
   }
 
@@ -343,6 +409,8 @@ impl Fake {
       r#"{{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"{question}","session_id":"{}","total_cost_usd":0.1,"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":[]}}"#,
       self.session
     );
+    flush();
+    fake_claude_input::later_turns(&self.session);
     ExitCode::SUCCESS
   }
 
@@ -394,6 +462,8 @@ impl Fake {
       r#"{{"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"{result}","session_id":"{}","total_cost_usd":0.5,"usage":{{"input_tokens":0,"output_tokens":0}},"permission_denials":{denials}}}"#,
       self.session
     );
+    flush();
+    fake_claude_input::later_turns(&self.session);
     ExitCode::SUCCESS
   }
 }

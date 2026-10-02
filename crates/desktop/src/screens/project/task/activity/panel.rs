@@ -35,10 +35,11 @@ use crate::{
 };
 
 /// Panel width and its dividers (`n0cEOG`, `ZR50O`).
-const PANEL_WIDTH: f32 = 320.0;
+/// The panel's width, beside the timeline (`w6Giy` in `gNa91`).
+pub(in crate::screens::project::task) const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
-pub(super) fn invocation_panel(
+pub(in crate::screens::project::task) fn invocation_panel(
   ctx: &mut Ctx,
   (nav, repo_root): (&ProjectNav, &Path),
   run: &RunView,

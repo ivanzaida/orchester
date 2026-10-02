@@ -36,11 +36,13 @@ impl Worker {
     let mut grace_armed = false;
     let mut listening = true;
     let mut deciding = self.app_server().is_some() || self.claude_approvals.is_some();
+    let mut steering = true;
     loop {
       tokio::select! {
         event = self.process.next() => match event {
           Some(ProcessEvent::Output { stream, line }) => {
             self.receive_output(&mut watch, stream, &line).await?;
+            self.steer_early(&mut watch).await?;
             self.stop_at_checkpoint(&mut watch);
             if watch.stop.is_some() {
               self.process.terminate();
@@ -53,6 +55,10 @@ impl Worker {
         decision = self.decisions.recv(), if deciding => match decision {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,
+        },
+        messages = self.steers.recv(), if steering => match messages {
+          Some(messages) => self.steer(&mut watch, messages).await?,
+          None => steering = false,
         },
         Some(asked) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => {
           self.request_claude_approval(&mut watch, asked).await?;
@@ -100,6 +106,7 @@ impl Worker {
       Transport::AppServer(app) => app.receive(stream, line, &self.process).await,
       Transport::Claude(claude) => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
     };
+    self.took_input(watch)?;
     match received {
       Ok(updates) => {
         for update in updates {
@@ -136,6 +143,27 @@ impl Worker {
     }
   }
 
+  /// What the CLI said of the messages sent now: Codex's answers to them and the ones Claude Code
+  /// took. A turn Claude Code ended closes its input: it exits once it has read what it was given.
+  fn took_input(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    match &mut self.transport {
+      Transport::AppServer(app) => {
+        let answers = app.take_steer_answers();
+        self.steer_answered(watch, answers)
+      }
+      Transport::Claude(claude) => {
+        let (taken, results) = (claude.take_replayed(), claude.results());
+        if results > 0 {
+          self.process.close_input();
+        }
+        for text in taken {
+          self.input_taken(watch, &text, Some(results))?;
+        }
+        Ok(())
+      }
+    }
+  }
+
   async fn initialize_app_server(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     if let Some(app) = self.app_server()
       && let Err(error) = app.start(&self.process).await
@@ -166,7 +194,11 @@ impl Worker {
         }
         Ok(())
       }
-      Update::TurnEnded => {
+      Update::InputTaken(text) => self.input_taken(watch, &text, None),
+      Update::TurnEnded { input_kept } => {
+        if input_kept {
+          self.kept_at_turn_end(watch)?;
+        }
         self.process.terminate();
         Ok(())
       }

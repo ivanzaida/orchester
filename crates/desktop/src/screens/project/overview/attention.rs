@@ -28,7 +28,7 @@ use crate::{
   tasks::{
     approvals::ShownApproval,
     data::ProjectTasks,
-    list::{AwaitedDecision, AwaitedPlan, TaskRow},
+    list::{AwaitedPlan, TaskRow},
     overview::{OverviewTab, RecentRun, activity_empty, figure, recent_runs},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
@@ -191,7 +191,8 @@ fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> E
 }
 
 /// A run waiting for the user: its plan to review (`dpeD7`), or else what it waits for (`Mt22P`):
-/// the question an agent asked, with the way to the task's conversation, or its task.
+/// the question an agent asked or a tool request, both with the way to the task's conversation,
+/// where the request is a card of the timeline.
 fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
   if let Some(plan) = &row.plan {
     return plan_decision(ctx, row, plan, nav);
@@ -209,11 +210,12 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       Page::Task(task, TaskPageTab::Conversation),
     ),
     None => {
-      // A run waiting for a decision after its retries says what stopped it (02.B6 `Np9kc`).
-      let detail = row
-        .decision
-        .as_ref()
-        .map_or_else(|| row.detail.clone(), AwaitedDecision::title);
+      // A run waiting for a decision after its retries says what stopped it (02.B6 `Np9kc`) and
+      // opens the decision on Summary; any other wait (a tool request) is a card of the timeline.
+      let (detail, page) = row.decision.as_ref().map_or_else(
+        || (row.detail.clone(), Page::Task(task, TaskPageTab::Conversation)),
+        |decision| (decision.title(), Page::task(task)),
+      );
       (
         ctx.t("overview.attention.needsInput"),
         row.title.clone(),
@@ -222,7 +224,7 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
           [("task", &*row.key), ("detail", &*message_text(ctx, &detail))],
         ),
         ctx.t("overview.attention.open"),
-        Page::task(task),
+        page,
       )
     }
   };
