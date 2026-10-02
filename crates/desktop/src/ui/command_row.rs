@@ -12,7 +12,7 @@ use lurq::{
   clipboard::copy_to_clipboard,
   components::{Column, Row, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 
@@ -90,18 +90,27 @@ pub fn command_row(
     .padding_right(ExtraSpacing::Tight.role())
     .padding_left(ExtraSpacing::Inline.role())
     .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
+    // Copy stays at the top right of a command that spans several lines; a one-line command is
+    // centred on it by the text column's minimum height.
+    .align_items(Alignment::Start)
     .background(PaletteColor::SurfaceBase)
     .border_inside(BorderSize::Sm, ExtraColor::Hairline.role())
     .rounded(RadiusSize::Md)
     .child(
-      Text::new(command)
-        .id(format!("{id}-text"))
-        .variant(typography)
-        .color(PaletteColor::TextPrimary)
-        .selectable(true)
+      Column::new()
         .min_width(Dimension::Px(0.0))
-        .flex(1.0),
+        .min_height(Dimension::Px(COPY_HEIGHT))
+        .justify(Justify::Center)
+        .flex(1.0)
+        .child(
+          Text::new(command)
+            .id(format!("{id}-text"))
+            .variant(typography)
+            .color(PaletteColor::TextPrimary)
+            .selectable(true)
+            .min_width(Dimension::Px(0.0))
+            .width(Dimension::Pct(100.0)),
+        ),
     )
     .child(copy);
   // Selecting or copying details must not toggle the enclosing transcript entry.
