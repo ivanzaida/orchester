@@ -321,8 +321,14 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
     db.release_held_tasks(&ids[1..]),
     Err(StoreError::TaskNotHeld(_))
   ));
-  db.set_task_group_hold(group.key(), Some(&GroupHold::FailedTask))
-    .expect("hold");
+  // Tasks waiting for blocking tasks may wait for good: they can be taken back too.
+  db.set_task_group_hold(
+    group.key(),
+    Some(&GroupHold::Blocked {
+      by: vec![orchester_core::id::TaskId::generate()],
+    }),
+  )
+  .expect("hold");
   db.release_held_tasks(&ids[1..]).expect("release");
   let released = db.task(ids[1]).expect("task").expect("exists");
   assert_eq!(released.status(), TaskStatus::Draft);

@@ -194,7 +194,11 @@ The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ET
 is hidden without a selection, padded 12 with 32-high lines 8 apart, Return to drafts, Set pipeline and Run selected
 last; select-all shows square-minus for a partial selection; a bulk change reads as one summary line with a line per
 failed task; held tasks read "2 tasks held after a task failed · Return to drafts"; rows are 60 high once the tag
-chips are dropped.
+chips are dropped. Re-review follow-ups: a run waiting for a decision on a
+blocked task shows the Blocked notice naming the blocking tasks, and the header says Blocked for link-only blocking;
+an answer or follow-up to a blocked run is kept ("Your message is kept…") and the scheduler's pass delivers it once
+the blocking tasks finish; a blocked Pending first run holds no group slot; a group held as Blocked can be returned
+to drafts.
 
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,

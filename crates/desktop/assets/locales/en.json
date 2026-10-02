@@ -408,8 +408,8 @@
           "other": "{{count}} tasks held after a start failed · Return to drafts"
         },
         "blocked": {
-          "one": "{{task}} waits for its blocking tasks",
-          "other": "{{count}} tasks wait for their blocking tasks"
+          "one": "{{task}} waits for its blocking tasks · Return to drafts",
+          "other": "{{count}} tasks wait for their blocking tasks · Return to drafts"
         }
       },
       "held": {
@@ -726,6 +726,7 @@
       "informational": "Blocked · {{reason}}",
       "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
       "runUnavailableWhile": "Run is unavailable while {{tasks}} is unfinished.",
+      "messageKept": "Your message is kept. The agent reads it once the blocking tasks finish.",
       "linkLabel": "{{key}} · {{title}}",
       "search": "Search tasks",
       "helper": "Add a reason and optional blocking tasks.",

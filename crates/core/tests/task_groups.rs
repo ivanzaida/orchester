@@ -153,7 +153,7 @@ fn task_group_parallel_passes_over_a_blocked_task() {
     Some(GroupHold::Blocked { by: vec![outside] })
   );
   assert!(GroupHold::Blocked { by: vec![outside] }.clears_on_its_own());
-  assert!(!GroupHold::Blocked { by: vec![outside] }.releases_unstarted());
+  assert!(GroupHold::Blocked { by: vec![outside] }.releases_unstarted());
   // Waiting for a task outside the group is not the group's own work.
   assert!(!group.has_work_of_its_own(&statuses, TokensUsed::ZERO, &blockers));
   // When the blocking task finishes, the task starts.
@@ -200,4 +200,23 @@ fn task_group_blocker_inside_the_group_runs_first() {
     group.eligible(&[None, done.clone(), done], TokensUsed::ZERO, &[]),
     vec![tasks[0]]
   );
+}
+
+/// A blocked task's Pending first run neither holds the group's slot nor counts as work under way:
+/// the next task starts in its place, and with only it left the group waits for its blocking task.
+#[test]
+fn task_group_blocked_pending_run_holds_no_slot() {
+  let group = group(Scheduling::Sequential);
+  let tasks = group.tasks().to_vec();
+  let outside = TaskId::generate();
+  let blockers = [vec![outside], vec![], vec![]];
+  let statuses = [Some(RunStatus::Pending), None, None];
+  assert_eq!(group.eligible(&statuses, TokensUsed::ZERO, &blockers), vec![tasks[1]]);
+  let done = Some(RunStatus::Succeeded);
+  let only_blocked = [Some(RunStatus::Pending), done.clone(), done];
+  assert_eq!(
+    group.hold(&only_blocked, TokensUsed::ZERO, &blockers),
+    Some(GroupHold::Blocked { by: vec![outside] })
+  );
+  assert!(!group.has_work_of_its_own(&only_blocked, TokensUsed::ZERO, &blockers));
 }

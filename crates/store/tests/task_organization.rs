@@ -134,10 +134,15 @@ fn organization_tags_uniqueness_merge_delete_and_bulk_filters_sorting() {
       .with_priority(Priority::High)
   })
   .expect("bulk");
+  // Each tag on both new tasks, counted once per task.
+  let counts = db.tag_task_counts().expect("counts");
+  assert_eq!(counts.get(&source.id()), Some(&2));
+  assert_eq!(counts.get(&target.id()), Some(&2));
   db.rename_project_tag(source.id(), &name("DESKTOP"))
     .expect("rename itself ignoring case");
   db.merge_project_tags(source.id(), target.id(), at(32)).expect("merge");
   assert_eq!(db.task_organization(ids[0]).expect("metadata").tags(), &[target.id()]);
+  assert_eq!(db.tag_task_counts().expect("counts"), [(target.id(), 2)].into());
   let filter = TaskFilter {
     tags: vec![target.id()],
     priorities: vec![Priority::High],

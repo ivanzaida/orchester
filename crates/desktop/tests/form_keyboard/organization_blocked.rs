@@ -93,6 +93,34 @@ fn organization_blocked_draft_is_a_selection_problem_and_says_what_blocks_it() {
 
 /// KON-1 with run #1 waiting for a person after its step broke again.
 fn seed_stuck(repo: &Path) {
+  stuck_task(repo);
+}
+
+/// [`seed_stuck`], with KON-1 linked, without a reason, to KON-2, a draft that has not run.
+fn seed_stuck_and_blocked(repo: &Path) {
+  let task = stuck_task(repo);
+  let mut db = ProjectDb::open(repo).expect("open");
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+  let blocker = db
+    .create_tasks(IdempotencyKey::generate(), vec![complete(pipeline, "Blocking")], at(40))
+    .expect("blocker")[0]
+    .id();
+  let linked = TaskOrganization::new(
+    WorkflowStatus::InProgress,
+    Priority::None,
+    None,
+    vec![BlockingTask {
+      task: blocker,
+      gate: DependencyGate::Review,
+    }],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(task, &linked, ChangeActor::Person, at(41))
+    .expect("link");
+}
+
+fn stuck_task(repo: &Path) -> orchester_core::id::TaskId {
   let mut db = ProjectDb::open(repo).expect("open");
   let snapshot = delivery(&mut db);
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
@@ -114,6 +142,7 @@ fn seed_stuck(repo: &Path) {
     run.status(),
     orchester_core::run::RunStatus::WaitingForPerson(_)
   ));
+  task
 }
 
 /// A run that waits for a person has not ended: bulk Canceled asks to stop it.
@@ -128,4 +157,26 @@ fn organization_bulk_canceled_asks_for_a_run_that_waits_for_a_person() {
   desktop.wait_for("bulk-status-Canceled");
   desktop.press("bulk-status-Canceled");
   desktop.wait_for("bulk-cancel-stop");
+}
+
+/// A run that waits for a person's decision on a task blocked by a link alone: the decisions that
+/// let it go on are unavailable, the notice names the blocking task, and the header says Blocked.
+#[test]
+fn organization_waiting_run_of_a_blocked_task_says_why_it_cannot_go_on() {
+  let mut desktop = Desktop::with_seeded_project(seed_stuck_and_blocked);
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.press("task-row-KON-1");
+  desktop.wait_for("task-blocked-run-unavailable");
+  assert!(shows(
+    &mut desktop,
+    "task-blocked-run-unavailable",
+    "Run is unavailable while KON-2 is unfinished."
+  ));
+  assert!(desktop.tree.get_element_by_id("task-header-blocked").is_some());
+  assert!(
+    !reachable(&mut desktop, "task-allow-retry"),
+    "another attempt is unavailable"
+  );
 }

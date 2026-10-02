@@ -61,11 +61,18 @@ impl Scheduler {
     }
   }
 
-  fn deliver_idle(&self, run: RunId) -> Result<(), Rejection> {
+  pub(super) fn deliver_idle(&self, run: RunId) -> Result<(), Rejection> {
     // No task executes the run, or its task ended without reading the request.
     let mut db = self.open()?;
-    let Some(prepared) = deliver_idle(&mut db, &self.inner.project_root, run)? else {
-      return Ok(());
+    let prepared = match deliver_idle(&mut db, &self.inner.project_root, run) {
+      Ok(Some(prepared)) => prepared,
+      Ok(None) => return Ok(()),
+      // The messages stay queued; they are delivered once the blocking tasks finish.
+      Err(rejection) if super::blocked_runs::is_blocked(&rejection) => {
+        self.hold_for_blockers(run);
+        return Err(rejection);
+      }
+      Err(rejection) => return Err(rejection),
     };
     self.inner.notifier.send(Event::RunChanged {
       run,
@@ -81,6 +88,7 @@ impl Scheduler {
   /// messages reach, or ends again at once.
   pub(super) fn wake_answered(&self, db: &ProjectDb, waiting: Vec<Run>) -> Result<(), Rejection> {
     for run in waiting {
+      let id = run.id();
       if self.is_active(run.id()) || run.awaiting_answer().is_empty() {
         continue;
       }
@@ -97,6 +105,7 @@ impl Scheduler {
           block: orchester_core::run::RunAgainBlock::TaskBlocked,
         }) => {
           tracing::info!("answered run remains waiting for its blocking tasks");
+          self.hold_for_blockers(id);
           continue;
         }
         Err(rejection) => return Err(rejection),
@@ -125,6 +134,7 @@ impl Scheduler {
           self.spawn(self.open()?, prepared)?;
         }
         Ok(None) => {}
+        Err(rejection) if super::blocked_runs::is_blocked(&rejection) => self.hold_for_blockers(run),
         Err(rejection) => tracing::warn!(%run, ?rejection, "queued messages cannot be delivered; they stay queued"),
       }
     }

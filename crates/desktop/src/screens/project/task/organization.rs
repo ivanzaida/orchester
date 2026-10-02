@@ -136,8 +136,10 @@ impl Component for OrganizationHeader {
               enabled: !state.is_pending(),
             },
           ))
-          .with_children(current.blocked_reason().is_some().then(|| {
+          // Flagged with a reason, or held by linked blocking tasks that have not finished.
+          .with_children((current.blocked_reason().is_some() || !props.detail.blocked_by.is_empty()).then(|| {
             crate::ui::status_label::status_label(crate::ui::icon::Icon::CircleMinus, &ctx.t("tasks.blocked.label"))
+              .id("task-header-blocked")
           })),
       );
     if state.is_pending() {

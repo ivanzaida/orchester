@@ -266,3 +266,71 @@ async fn organization_attach_keeps_blocked_answer_waiting_and_resumes_other_runs
   assert_eq!(done.status(), &orchester_core::run::RunStatus::Succeeded);
   next.stop_all(InterruptCause::QuitNow).await;
 }
+
+/// An answer to a blocked run is kept; once the blocking task is ready for review, the
+/// scheduler's pass delivers it and the run goes on without another message.
+#[tokio::test(flavor = "multi_thread")]
+async fn organization_answer_to_a_blocked_run_resumes_once_the_blocker_finishes() {
+  use std::num::NonZeroU32;
+
+  use orchester_core::run::RunStatus;
+  use orchester_ipc::AttachSession;
+  use support::{queue_another_task, wait_for, wait_for_idle};
+  let project = project(&Setup::new("Ask first."));
+  let root = project.repo.path();
+  let blocker = queue_another_task(root);
+  let (scheduler, mut events) = scheduler(root);
+  scheduler
+    .attach(AttachSession::Reconnect, NonZeroU32::new(2).expect("slots"))
+    .await
+    .expect("attach");
+  let blocker_run = scheduler
+    .start_run(IdempotencyKey::generate(), blocker)
+    .await
+    .expect("start the blocking task");
+  let blocker_waiting = wait_for(root, &mut events, blocker_run, |run| run.waits_for_a_person()).await;
+  let blocked_run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  let waiting = wait_for(root, &mut events, blocked_run, |run| run.waits_for_a_person()).await;
+  wait_for_idle(&scheduler).await;
+  let mut db = ProjectDb::open(root).expect("open");
+  let linked = TaskOrganization::new(
+    WorkflowStatus::InProgress,
+    Priority::None,
+    Some("Needs the other task.".into()),
+    vec![BlockingTask {
+      task: blocker,
+      gate: DependencyGate::Review,
+    }],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(project.task, &linked, ChangeActor::Person, Timestamp::now())
+    .expect("link");
+  queue_restart(&mut db, &waiting);
+  assert_eq!(
+    scheduler.deliver_messages(blocked_run).await,
+    Err(Rejection::RunAgainBlocked {
+      block: RunAgainBlock::TaskBlocked
+    }),
+    "the answer is kept while the task is blocked"
+  );
+  scheduler.advance_task_groups().await.expect("pass");
+  assert!(db.run(blocked_run).expect("read").expect("run").waits_for_a_person());
+  queue_restart(&mut db, &blocker_waiting);
+  scheduler
+    .deliver_messages(blocker_run)
+    .await
+    .expect("answer the blocking task");
+  wait_for(root, &mut events, blocker_run, |run| {
+    run.status() == &RunStatus::Succeeded
+  })
+  .await;
+  // No other message: the pass sees the blocking task ready for review and delivers the answer.
+  scheduler.advance_task_groups().await.expect("pass");
+  let done = wait_for(root, &mut events, blocked_run, |run| run.status().is_terminal()).await;
+  assert_eq!(done.status(), &RunStatus::Succeeded);
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}

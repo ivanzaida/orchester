@@ -124,7 +124,7 @@ fn blockers(db: &ProjectDb, group: &TaskGroup, statuses: &[Option<RunStatus>]) -
 
 /// Whether a blocking task runs now, so it finishes without a person and the group behind it
 /// will go on.
-fn blocker_runs(db: &ProjectDb, by: &[TaskId]) -> Result<bool, Rejection> {
+pub(super) fn blocker_runs(db: &ProjectDb, by: &[TaskId]) -> Result<bool, Rejection> {
   for task in by {
     let active = db
       .active_task_run(*task)
@@ -232,6 +232,10 @@ impl Scheduler {
   pub async fn advance_task_groups(&self) -> Result<(), Rejection> {
     if self.inner.board.slots().is_none() || self.inner.board.is_stopping() {
       return Ok(());
+    }
+    // Runs whose messages waited for blocking tasks go on once those finish.
+    if let Err(error) = self.release_unblocked().await {
+      tracing::error!(?error, "cannot deliver messages that waited for blocking tasks");
     }
     let db = self.open()?;
     for group in db

@@ -49,9 +49,10 @@ impl GroupHold {
   }
 
   /// Whether a person may take the group's unstarted tasks back to the drafts: the hold does not
-  /// end on its own, and is not the reopened-project hold, which Start run releases instead.
+  /// end on its own, and is not the reopened-project hold, which Start run releases instead; or
+  /// the tasks wait for blocking tasks, which may never finish.
   pub const fn releases_unstarted(&self) -> bool {
-    !self.clears_on_its_own() && !matches!(self, Self::SessionEnded)
+    matches!(self, Self::Blocked { .. }) || (!self.clears_on_its_own() && !matches!(self, Self::SessionEnded))
   }
 
   /// Whether the hold stays when the project is reopened: a failed task or the spent cap holds
@@ -129,6 +130,7 @@ impl TaskGroup {
     used: TokensUsed,
     blockers: &[Vec<TaskId>],
   ) -> GroupHold {
+    let statuses = &waiting_view(statuses, blockers);
     if used.reached(self.cap) {
       return GroupHold::GroupCap;
     }
@@ -147,6 +149,7 @@ impl TaskGroup {
   /// Why the group holds its work, if it does: the spent cap or a failed task hold it whatever is
   /// left; otherwise it holds only while tasks are unstarted and none of them can start.
   pub fn hold(&self, statuses: &[Option<RunStatus>], used: TokensUsed, blockers: &[Vec<TaskId>]) -> Option<GroupHold> {
+    let statuses = &waiting_view(statuses, blockers);
     let blocked = used.reached(self.cap) || stopped(statuses);
     let waiting = statuses.iter().any(Option::is_none) && self.eligible(statuses, used, blockers).is_empty();
     (blocked || waiting).then(|| self.waiting_reason(statuses, used, blockers))
@@ -164,6 +167,7 @@ impl TaskGroup {
     used: TokensUsed,
     blockers: &[Vec<TaskId>],
   ) -> bool {
+    let statuses = &waiting_view(statuses, blockers);
     if !statuses.iter().any(Option::is_none) {
       return false;
     }
@@ -189,6 +193,7 @@ impl TaskGroup {
   /// blocked task is passed over, so the tasks after it start in its place; it starts once its
   /// blocking tasks finish, even when one of them is a later task of the same group.
   pub fn eligible(&self, statuses: &[Option<RunStatus>], used: TokensUsed, blockers: &[Vec<TaskId>]) -> Vec<TaskId> {
+    let statuses = &waiting_view(statuses, blockers);
     if statuses.len() != self.tasks.len() || used.reached(self.cap) || stopped(statuses) {
       return Vec::new();
     }
@@ -210,6 +215,19 @@ impl TaskGroup {
       .map(|(_, (task, _))| *task);
     pending.take(capacity.saturating_sub(occupied)).collect()
   }
+}
+
+/// `statuses` with a blocked task's Pending first run read as not started: it neither holds a slot
+/// nor counts as work under way until its blocking tasks finish.
+fn waiting_view(statuses: &[Option<RunStatus>], blockers: &[Vec<TaskId>]) -> Vec<Option<RunStatus>> {
+  statuses
+    .iter()
+    .enumerate()
+    .map(|(index, status)| match status {
+      Some(RunStatus::Pending) if is_blocked(blockers, index) => None,
+      other => other.clone(),
+    })
+    .collect()
 }
 
 fn is_blocked(blockers: &[Vec<TaskId>], index: usize) -> bool {

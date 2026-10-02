@@ -25,8 +25,9 @@ use lurq::{
 use orchester_core::{
   conversation::Recipient,
   id::{IdempotencyKey, RunId, TaskId},
+  run::RunAgainBlock,
 };
-use orchester_ipc::Command;
+use orchester_ipc::{Command, Rejection};
 use parking_lot::Mutex;
 
 use super::{
@@ -37,7 +38,7 @@ use crate::{
   background,
   messages::Message,
   navigation::route::{Page, TaskPageTab},
-  runner::Runners,
+  runner::{RunRequestError, Runners},
   screens::project::ProjectNav,
   tasks::{
     conversation::{Conversation, PanelState, send_in},
@@ -146,6 +147,10 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
       };
       Ok(match runners.control_run(Command::DeliverMessages { run }).await {
         Ok(()) => Sent::Taken,
+        // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
+        Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
+          block: RunAgainBlock::TaskBlocked,
+        })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
         Err(error) => {
           tracing::warn!(%error, "the runner did not take the message");
           Sent::Queued(control_message(&error))

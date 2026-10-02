@@ -62,9 +62,15 @@ pub(super) fn summary(
 ) -> Element {
   if let Some(run) = &detail.run {
     match run.run.status() {
-      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => return retry_limit(ctx, run, step, None, reason),
+      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
+        let reason = with_blocked(reason, blocked_notice(ctx, detail));
+        return retry_limit(ctx, run, step, None, reason);
+      }
       RunStatus::WaitingForPerson(stuck) => {
+        // The decisions that let the run go on are unavailable while it is blocked: the notice
+        // says why, naming the blocking tasks.
         let waiting = (stuck, !detail.blocked_by.is_empty());
+        let reason = with_blocked(reason, blocked_notice(ctx, detail));
         return retry_limit(ctx, run, stuck.step(), Some(waiting), reason);
       }
       _ => {}
@@ -303,6 +309,21 @@ pub(super) fn budget_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
       ("budget", compact_tokens(run.run.budget().get()).as_str()),
     ],
   )
+}
+
+/// `reason` with the Blocked notice under it, either alone, or neither.
+fn with_blocked(reason: Option<Element>, blocked: Option<Element>) -> Option<Element> {
+  match (reason, blocked) {
+    (Some(reason), Some(blocked)) => Some(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(reason)
+        .child(blocked)
+        .into(),
+    ),
+    (reason, blocked) => reason.or(blocked),
+  }
 }
 
 /// The Blocked notice (`Ncjvt`): the reason, and while linked blocking tasks have not finished,
