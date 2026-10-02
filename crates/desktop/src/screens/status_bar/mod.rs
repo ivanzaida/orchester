@@ -155,7 +155,7 @@ impl Component for StatusBar {
     };
     // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
     // hides the other. Any other activity gives way to them.
-    let activity = (waiting.is_empty() || approvals_item::waits_for_decision(&slot)).then(|| {
+    let activity = (waiting.is_empty() || slot.beside_approvals()).then(|| {
       activity_slot(
         ctx,
         (&slot, interrupted),

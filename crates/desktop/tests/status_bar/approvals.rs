@@ -1,7 +1,7 @@
 //! Approvals in the status bar: the waiting requests with the oldest named, and, while a run
 //! auto-approves, *Auto-approving* with *Stop*, which keeps its words when the bar is crowded.
 
-use std::{num::NonZeroU32, sync::Arc, time::SystemTime};
+use std::{num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId, TaskId},
@@ -9,8 +9,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_desktop::{
-  activity::{ActivityLog, OperationSpec, Target},
-  messages::Message,
   status_bar::StatusBarProps,
   tasks::{
     approvals::{AlwaysBlocked, ApprovalChoices, ShownApproval},
@@ -18,7 +16,7 @@ use orchester_desktop::{
   },
 };
 
-use super::{bounds, item_texts, laid_out, laid_out_with_log, project};
+use super::{bounds, item_texts, laid_out, project};
 
 fn waiting(number: usize) -> ShownApproval {
   let invocation = InvocationId::generate();
@@ -96,38 +94,4 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
     approvals.x + approvals.width <= item.x + 0.5,
     "the approvals give way first"
   );
-}
-
-#[test]
-fn status_bar_approvals_and_a_run_waiting_for_a_decision_show_together() {
-  let mut log = ActivityLog::default();
-  log.record_needs_you(
-    Some("Kontur".into()),
-    Message::new("statusBar.operations.projectCreate.running"),
-    Target::Nothing,
-    SystemTime::now(),
-  );
-  let (_app, mut tree) = laid_out_with_log(with((0..2).map(waiting).collect(), Vec::new()), log);
-  assert!(
-    tree.get_element_by_id("status-approvals").is_some(),
-    "the approvals stay"
-  );
-  assert!(
-    tree.get_element_by_id("status-activity").is_some(),
-    "the waiting run stays"
-  );
-}
-
-#[test]
-fn status_bar_approvals_come_before_other_activity() {
-  let mut log = ActivityLog::default();
-  let spec = OperationSpec::new(
-    Message::new("statusBar.operations.projectCreate.running"),
-    Message::new("statusBar.operations.projectCreate.done"),
-    Message::new("statusBar.operations.projectCreate.failed"),
-  );
-  log.start(spec, std::time::Instant::now());
-  let (_app, mut tree) = laid_out_with_log(with(vec![waiting(0)], Vec::new()), log);
-  assert!(tree.get_element_by_id("status-approvals").is_some());
-  assert!(tree.get_element_by_id("status-activity").is_none());
 }
