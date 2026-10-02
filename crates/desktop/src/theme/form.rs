@@ -7,7 +7,7 @@ use lurq::{
 use super::tokens::{
   BORDER, BUTTON_HEIGHT, COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET, CONTROL_PADDING_X, FIELD_HEIGHT,
   GUTTER_SCROLLBAR_INSET, NO_TRACK, SCROLLBAR_MIN_THUMB, SCROLLBAR_RADIUS, SCROLLBAR_WIDTH,
-  SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET,
+  SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET, VALUE_BOX_SCROLLBAR_END_INSET,
 };
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
@@ -79,15 +79,18 @@ pub fn command_scrollbar() -> ScrollBarStyle {
   thumb().insets(COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET)
 }
 
-/// Scrollbars of a capped value box in the approval dialog (`E5NBo` in `bjrgu`): the transcript
-/// command's thumbs, each in a 6px lane of its own, the vertical one in the box's right padding and
-/// the sideways one under the last line, so neither covers a glyph. The design adds the sideways
-/// lane only while a line overflows; lurq reserves a lane always or never, so it is always there.
+/// Scrollbars of a capped value box in the approval dialog (`E5NBo`, `e0vyng` in `bjrgu`): the
+/// transcript command's thumbs, each in a 6px lane of its own beside the text, so neither covers a
+/// glyph, and running from the viewport's start: the vertical one 6 under the box's top. lurq has
+/// one end inset for both bars, so the sideways thumb starts at the viewport's left too. The
+/// design adds the sideways lane only while a line overflows; lurq reserves a lane always or
+/// never, so it is always there.
 pub fn value_box_scrollbar() -> ScrollBarStyle {
   ScrollBarStyle {
     placement: ScrollBarPlacement::Reserved,
-    ..command_scrollbar()
+    ..thumb()
   }
+  .insets(COMMAND_SCROLLBAR_EDGE_INSET, VALUE_BOX_SCROLLBAR_END_INSET)
 }
 
 /// Scrollbar of a viewport with a scroll gutter (design doc "Scroll gutter", 04.01 `JuVaA`): a

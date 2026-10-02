@@ -23,7 +23,7 @@ use super::{
   link::{Link, Press},
   pressable::{Ring, TAB_STOP},
 };
-use crate::theme::{DISABLED_OPACITY, ExtraShadow};
+use crate::theme::{DISABLED_OPACITY, ExtraShadow, ExtraSpacing};
 
 /// lurq's tab index for a control that Tab passes over.
 pub const SKIPPED_BY_TAB: i32 = -1;
@@ -32,8 +32,16 @@ pub const SKIPPED_BY_TAB: i32 = -1;
 enum Kind {
   Primary,
   Secondary,
-  /// No fill and no border, its icon and label muted; the hover fill shows only under the pointer.
+  /// No fill and no border, its icon and label muted; under the pointer the hover fill shows and
+  /// they turn `text` (`feLwP`, `oriyY`).
   Quiet,
+}
+
+/// Whether the pointer is over a quiet button, kept by its owner, and who hears it change: lurq
+/// does not color a button's text by the button's own hover.
+struct Hover {
+  hovered: bool,
+  changed: Arc<dyn Fn(bool) + Send + Sync>,
 }
 
 enum State {
@@ -58,6 +66,7 @@ pub struct ActionButton {
   in_form: bool,
   /// The icon and label start at the left instead of the middle.
   start: bool,
+  hover: Option<Hover>,
   id: Option<Arc<str>>,
 }
 
@@ -77,6 +86,7 @@ impl ActionButton {
       compact: false,
       in_form: false,
       start: false,
+      hover: None,
       id: None,
     }
   }
@@ -86,9 +96,15 @@ impl ActionButton {
     self
   }
 
-  /// A secondary action that should not draw the eye, e.g. Copy beside a value's label.
-  pub fn quiet(mut self) -> Self {
+  /// A secondary action that should not draw the eye, e.g. Copy beside a value's label (`feLwP`):
+  /// 6 at each side and between its icon and label. `hovered` is whether the pointer is over it;
+  /// `changed` hears the pointer enter (`true`) and leave (`false`).
+  pub fn quiet(mut self, hovered: bool, changed: impl Fn(bool) + Send + Sync + 'static) -> Self {
     self.kind = Kind::Quiet;
+    self.hover = Some(Hover {
+      hovered,
+      changed: Arc::new(changed),
+    });
     self
   }
 
@@ -192,26 +208,7 @@ impl ActionButton {
     };
     drop(form);
     let quiet = self.kind == Kind::Quiet;
-    let text = if quiet {
-      PaletteColor::TextSecondary
-    } else {
-      role.text.color.clone()
-    };
-
-    let (icon_size, typography) = if self.compact {
-      (IconSize::Marker, TypographyStyle::Link)
-    } else {
-      (IconSize::Button, role.text.typography)
-    };
-    let mut content = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
-    if let Some(glyph) = self.icon {
-      content = content.child(icon(glyph, icon_size, text.clone()));
-    }
-    content = content.child(Text::new(&self.label).variant(typography).color(text.clone()).nowrap());
-    if matches!(self.state, State::Unavailable) {
-      content = content.child(icon(Icon::Lock, IconSize::Small, text));
-    }
-
+    let content = self.content(&role);
     let mut button = Button::empty()
       .button()
       .height(self.height.unwrap_or(role.height))
@@ -220,10 +217,19 @@ impl ActionButton {
       .align_items(Alignment::Center)
       .justify(if self.start { Justify::Start } else { Justify::Center })
       .child(content);
-    if !quiet {
-      button = button
-        .background(role.background.clone())
-        .border(Border::inside(BorderSize::Sm, role.border.clone()));
+    match self.hover {
+      Some(hover) => {
+        let (enter, leave) = (hover.changed.clone(), hover.changed);
+        button = button
+          .padding_horizontal(ExtraSpacing::Tight.role())
+          .on_mouse_enter(move || enter(true))
+          .on_mouse_leave(move || leave(false));
+      }
+      None => {
+        button = button
+          .background(role.background.clone())
+          .border(Border::inside(BorderSize::Sm, role.border.clone()));
+      }
     }
     if let Some(element_ref) = self.element_ref {
       button = button.ref_element(element_ref);
@@ -261,6 +267,37 @@ impl ActionButton {
       State::Unavailable => not_pressable(focus(button, SKIPPED_BY_TAB)).describe("state", "unavailable"),
     }
     .into()
+  }
+}
+
+impl ActionButton {
+  /// The icon, the label and, when unavailable, the lock, in the variant's text color: a quiet
+  /// button's is `muted`, and `text` under the pointer.
+  fn content(&self, role: &FormButtonRole) -> Row {
+    let text = match &self.hover {
+      Some(hover) if hover.hovered => PaletteColor::TextPrimary,
+      Some(_) => PaletteColor::TextSecondary,
+      None => role.text.color.clone(),
+    };
+    let (icon_size, typography) = if self.compact {
+      (IconSize::Marker, TypographyStyle::Link)
+    } else {
+      (IconSize::Button, role.text.typography)
+    };
+    let gap = if self.kind == Kind::Quiet {
+      ExtraSpacing::Tight.role()
+    } else {
+      SpacingSize::Sm
+    };
+    let mut content = Row::new().spacing(gap).align_items(Alignment::Center);
+    if let Some(glyph) = self.icon {
+      content = content.child(icon(glyph, icon_size, text.clone()));
+    }
+    content = content.child(Text::new(&self.label).variant(typography).color(text.clone()).nowrap());
+    if matches!(self.state, State::Unavailable) {
+      content = content.child(icon(Icon::Lock, IconSize::Small, text));
+    }
+    content
   }
 }
 

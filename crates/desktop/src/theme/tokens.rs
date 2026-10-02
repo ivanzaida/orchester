@@ -167,6 +167,9 @@ pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
 /// bottom of the box, and starting where the text does, 12px in.
 pub const COMMAND_SCROLLBAR_EDGE_INSET: f32 = 1.0;
 pub const COMMAND_SCROLLBAR_END_INSET: f32 = 12.0;
+/// Thumbs of a capped value box in the approval dialog (`e0vyng` in `bjrgu`): from the very start
+/// of the viewport, which the box's 6px padding already holds off its border.
+pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;

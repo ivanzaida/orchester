@@ -335,11 +335,13 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
 - The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
   room left of them and wraps there.
-- Left: a command's *Agent's note* still cuts with an ellipsis. Pressing a value box's sideways scrollbar lane off its
-  4px thumb starts a text selection instead of scrolling: lurq starts a selection from the nearest selectable text
-  within a slop that reaches the lane, and does not treat the lane (track) as the scrollbar; to be fixed in lurq.
-  The sideways lane is always reserved (lurq reserves always or never), where the design adds it only while a line
-  overflows.
+- Copy is the ghost button of `feLwP` (22 high, 6 at each side and between icon and label, `muted`, `text` and the
+  hover fill under the pointer, `oriyY`); each value box keeps its thumbs in lanes of their own inside its 6px padding,
+  the vertical one from the viewport's top (`e0vyng`). With lurq 0.33.1 a press or drag anywhere in a lane scrolls
+  and never selects text (checked in the running app on both lanes).
+- Left: a command's *Agent's note* still cuts with an ellipsis. The sideways lane is always reserved (lurq reserves
+  always or never), where the design adds it only while a line overflows; lurq has one end inset for both bars, so the
+  sideways thumb also starts at the viewport's left rather than 12 in.
 - Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
   writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
   approval`.

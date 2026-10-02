@@ -19,9 +19,13 @@ fn assert_copy_beside_the_label(desktop: &mut Desktop, id: &str) {
     (copy.x + copy.width - (frame.x + frame.width)).abs() < 0.5,
     "{id}'s Copy ends where the box does"
   );
-  // The viewport spans the box; its vertical scrollbar has a lane of its own at the right.
+  // Copy is the ghost button of `feLwP`: 22 high, about 59 wide.
+  assert!((copy.height - 22.0).abs() < 0.5, "{id}'s Copy is {} high", copy.height);
+  assert!(copy.width < 64.0, "{id}'s Copy is {} wide", copy.width);
+  // The viewport spans the box but for its 6px right padding; its vertical scrollbar has a lane of
+  // its own inside it.
   assert!(
-    viewport.width >= frame.width - 2.0,
+    viewport.width >= frame.width - 8.0,
     "{id}'s lines take {} of {} px",
     viewport.width,
     frame.width

@@ -37,6 +37,7 @@ use crate::{
     icon::Icon,
     message_text,
     property::{ValueStyle, property, styled_property},
+    value_box::CopyState,
   },
 };
 
@@ -104,7 +105,7 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
 
 pub(super) struct ToolApprovalDialog {
   requested: Signal<Option<Choice>>,
-  copied: Signal<Copied>,
+  copy: CopyState,
   arguments: ArgumentsCache,
 }
 
@@ -115,7 +116,10 @@ impl Component for ToolApprovalDialog {
     decision_action(ctx);
     Self {
       requested: ctx.signal(None),
-      copied: ctx.signal(Copied::default()),
+      copy: CopyState {
+        copied: ctx.signal(Copied::default()),
+        hovered: ctx.signal(None),
+      },
       arguments: ArgumentsCache::default(),
     }
   }
@@ -136,7 +140,7 @@ impl Component for ToolApprovalDialog {
         error: error.as_ref(),
         action: &action,
         requested_signal: &self.requested,
-        copied: &self.copied,
+        copy: &self.copy,
         arguments: &self.arguments,
       },
     );
@@ -167,7 +171,7 @@ struct DialogState<'a> {
   error: Option<&'a Message>,
   action: &'a DecisionAction,
   requested_signal: &'a Signal<Option<Choice>>,
-  copied: &'a Signal<Copied>,
+  copy: &'a CopyState,
   arguments: &'a ArgumentsCache,
 }
 
@@ -178,14 +182,11 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
   };
   // No taller than the screen: the details scroll between the header and the buttons, so Approve
   // and Deny stay in view however long the values are.
-  let details = ScrollVertical::new(details(
-    &ValueRows::new(ctx, state.copied, state.arguments),
-    state.props,
-  ))
-  .id("tool-approval-details-scroll")
-  .width(Dimension::Pct(100.0))
-  .flex_shrink(1.0)
-  .scrollbar(select_menu_scrollbar());
+  let details = ScrollVertical::new(details(&ValueRows::new(ctx, state.copy, state.arguments), state.props))
+    .id("tool-approval-details-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex_shrink(1.0)
+    .scrollbar(select_menu_scrollbar());
   let panel = Column::new()
     .id("tool-approval-dialog")
     .width(Dimension::Px(width))
