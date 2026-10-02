@@ -178,8 +178,9 @@ pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
 /// Scheduling review W1Dq6/IyJ5a: ordered rows, settings rail, fields and drag grip.
 pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
-/// W1Dq6/IyJ5a: 540px rail plus the reserved scrollbar gutter inside page padding.
-pub const TASK_REVIEW_RAIL_WIDTH: f32 = 540.0 + SPACE_STACK;
+/// W1Dq6/IyJ5a: the 508px execution settings (`qdApo`) plus their reserved scroll gutter, which
+/// sits in the page padding.
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = 508.0 + SPACE_STACK;
 /// Execution-mode cards (`YZcH2`, `jPX6u`) in both scheduling reviews.
 pub const TASK_REVIEW_MODE_HEIGHT: f32 = 88.0;
 pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;

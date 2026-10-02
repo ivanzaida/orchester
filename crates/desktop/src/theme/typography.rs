@@ -16,6 +16,9 @@ pub enum ExtraTypography {
   SectionHeading,
   /// Card and panel titles, e.g. "Needs you" (`qlo9F`).
   CardTitle,
+  /// Heading of a column of the scheduling review, "Task priority" and "Execution mode" (`Y68u8`,
+  /// `TjVjp` in 02.05 `W1Dq6`).
+  ReviewHeading,
   /// Small uppercase category label, e.g. "REVIEW PULL REQUEST" (`f1tfh3`).
   Overline,
   /// Large monospaced figure in project metrics (`PwPmH`).
@@ -142,7 +145,8 @@ pub enum ExtraTypography {
   VariableName,
   /// Execution context note of the instruction preview (`HvDGw`, `utiRC` in `TnjFo`): 9 muted.
   ContextNote,
-  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`).
+  /// A table cell's label that wraps beside its icon, e.g. a worktree state (`VHSnL` in `Py65X`);
+  /// a note between the scheduling review's settings (`q6NwTY`, `YPW1U` in `W1Dq6`).
   CellLabel,
   /// A field error that wraps beside its icon, e.g. why a dialog's action is unavailable at the
   /// left of its buttons (`foNvP` in 01.06 F `glurU`, `eeksu` in 02.Q states `XIEn8`).
@@ -179,9 +183,10 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 80] = [
+  const ALL: [Self; 81] = [
     Self::SectionHeading,
     Self::CardTitle,
+    Self::ReviewHeading,
     Self::Overline,
     Self::Metric,
     Self::Brand,
@@ -295,6 +300,7 @@ impl ExtraTypography {
     match self {
       Self::SectionHeading => "section-heading",
       Self::CardTitle => "card-title",
+      Self::ReviewHeading => "review-heading",
       Self::Overline => "overline",
       Self::Metric => "metric",
       Self::Brand => "brand",
@@ -467,6 +473,7 @@ impl ExtraTypography {
     match self {
       Self::SectionHeading => style(15.0, FontWeight::Medium, TEXT),
       Self::CardTitle => style(14.0, FontWeight::Medium, TEXT),
+      Self::ReviewHeading => style(14.0, FontWeight::Normal, TEXT),
       Self::Overline => style(9.0, FontWeight::SemiBold, SUBTLE),
       Self::Brand => TextStyle {
         letter_spacing: -0.7,

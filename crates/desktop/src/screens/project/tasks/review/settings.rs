@@ -5,26 +5,25 @@ impl SchedulingReview {
   pub(super) fn settings(&self, ctx: &Ctx, props: &ReviewProps, locked: bool) -> Element {
     let fields = Column::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(Text::new(&ctx.t("tasks.bulk.executionMode")).variant(ExtraTypography::SectionHeading.role()))
+      .spacing(ExtraSpacing::Divider.role())
+      .child(Text::new(&ctx.t("tasks.bulk.executionMode")).variant(ExtraTypography::ReviewHeading.role()))
       .child(self.mode_options(ctx, locked))
       .child(self.scheduling_field(ctx, locked))
-      .child(Text::new(&self.capacity_note(ctx, props)).variant(TypographyStyle::Caption))
+      .child(Text::new(&self.capacity_note(ctx, props)).variant(ExtraTypography::CellLabel.role()))
       .child(field(
         &ctx.t("tasks.bulk.failure"),
         self.fixed_select(ctx, "tasks-review-failure", "tasks.bulk.pauseRemaining", locked),
         FieldNote::None,
       ))
       .child(self.limit_fields(ctx, locked))
+      .child(self.time_readback(ctx, locked))
       .child(self.pipeline_readback(ctx, props))
       .child(self.approval_notice(ctx, props))
-      .child(Text::new(&ctx.t("tasks.bulk.branchNote")).variant(TypographyStyle::Caption));
+      .child(Text::new(&ctx.t("tasks.bulk.branchNote")).variant(ExtraTypography::CellLabel.role()));
     Column::new()
       .id("tasks-review-settings")
       .width(Dimension::Px(REVIEW_RAIL_WIDTH))
       .height(Dimension::Pct(100.0))
-      .padding_left(SpacingSize::Section)
-      .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
       .child(
         ScrollVertical::new(fields)
           .width(Dimension::Pct(100.0))
@@ -89,29 +88,23 @@ impl SchedulingReview {
   }
 
   fn limit_fields(&self, ctx: &Ctx, locked: bool) -> Element {
-    Column::new()
+    Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Md)
-          .child(Column::new().flex(1.0).child(self.token_field(
-            ctx,
-            "tasks-review-cap",
-            ("tasks.bulk.groupCap", "tasks.bulk.totalTokens"),
-            self.cap.clone(),
-            locked,
-          )))
-          .child(Column::new().flex(1.0).child(self.token_field(
-            ctx,
-            "tasks-review-budget",
-            ("tasks.bulk.perTask", "tasks.bulk.eachTokens"),
-            self.budget.clone(),
-            locked,
-          ))),
-      )
-      .child(self.time_readback(ctx, locked))
+      .child(Column::new().flex(1.0).child(self.token_field(
+        ctx,
+        "tasks-review-cap",
+        ("tasks.bulk.groupCap", "tasks.bulk.totalTokens"),
+        self.cap.clone(),
+        locked,
+      )))
+      .child(Column::new().flex(1.0).child(self.token_field(
+        ctx,
+        "tasks-review-budget",
+        ("tasks.bulk.perTask", "tasks.bulk.eachTokens"),
+        self.budget.clone(),
+        locked,
+      )))
       .into()
   }
 

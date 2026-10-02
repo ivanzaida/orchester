@@ -1,6 +1,10 @@
 //! Drag, keyboard moves and a single undo share the same reviewed order.
 use super::*;
 
+/// The order heading and the width of a row's position (`s7zYn`, `XY1PR` in `gj5Cf`).
+const ORDER_HEADING_HEIGHT: f32 = 32.0;
+const ORDER_NUMBER_WIDTH: f32 = 24.0;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct OrderChoice(pub(super) Option<TaskId>);
 impl lurq::app::component::DevtoolsInspectable for OrderChoice {}
@@ -125,45 +129,26 @@ impl SchedulingReview {
         })
       })
       .collect::<Vec<_>>();
-    let list = Column::new()
-      .width(Dimension::Pct(100.0))
-      .with_children(rows.iter().enumerate().map(|(index, task)| {
-        let handle = self.order_handle(ctx, task.id, locked);
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(REVIEW_ROW_HEIGHT))
-          .spacing(SpacingSize::Sm)
-          .align_items(lurq::layout::Alignment::Center)
-          .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-          .child(handle)
-          .child(
-            Column::new()
-              .flex(1.0)
-              .spacing(ExtraSpacing::Indicator.role())
-              .child(
-                Text::new(&task.title)
-                  .variant(TypographyStyle::FieldLabel)
-                  .color(lurq::app::theme::PaletteColor::TextPrimary),
-              )
-              .child(
-                Text::new(&ctx.t_args(
-                  "tasks.bulk.taskPipeline",
-                  [
-                    ("task", task.key.to_string()),
-                    ("pipeline", message_text(ctx, &task.pipeline.message()).to_string()),
-                  ],
-                ))
-                .variant(ExtraTypography::Hint.role()),
-              ),
-          )
-          .child(Text::new(&(index + 1).to_string()).variant(TypographyStyle::Mono))
-      }));
+    let list = Column::new().width(Dimension::Pct(100.0)).with_children(
+      rows
+        .iter()
+        .enumerate()
+        .map(|(index, task)| self.order_row(ctx, task, index, locked)),
+    );
+    // The list's scroll gutter sits in the column's right padding, so the heading and the
+    // controls leave room for it too and line up with the rows (`R9ifN`).
     Column::new()
+      .id("tasks-review-order")
       .flex(1.0)
-      .spacing(SpacingSize::Md)
+      .height(Dimension::Pct(100.0))
+      .padding_right(ExtraSpacing::Stack.role())
+      .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .spacing(ExtraSpacing::Stack.role())
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
+          .height(Dimension::Px(ORDER_HEADING_HEIGHT))
+          .padding_right(ExtraSpacing::Stack.role())
           .align_items(lurq::layout::Alignment::Center)
           .child(
             Text::new(&ctx.t(if self.mode.get() == Mode::Parallel {
@@ -171,7 +156,7 @@ impl SchedulingReview {
             } else {
               "tasks.bulk.order"
             }))
-            .variant(ExtraTypography::SectionHeading.role()),
+            .variant(ExtraTypography::ReviewHeading.role()),
           )
           .child(Spacer::new().flex(1.0))
           .child(Text::new(&ctx.t("tasks.bulk.dragToReorder")).variant(TypographyStyle::Caption)),
@@ -182,21 +167,70 @@ impl SchedulingReview {
           .flex(1.0)
           .scrollbar(gutter_scrollbar()),
       )
-      .child(self.order_controls(ctx, &rows, locked))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_right(ExtraSpacing::Stack.role())
+          .child(self.order_controls(ctx, &rows, locked)),
+      )
+      .into()
+  }
+
+  /// A task in the reviewed order: its drag handle, title, key and pipeline, and position
+  /// (`gj5Cf`, a `zemhy` row).
+  fn order_row(&self, ctx: &mut Ctx, task: &TaskRow, index: usize, locked: bool) -> Element {
+    let handle = self.order_handle(ctx, task.id, locked);
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(REVIEW_ROW_HEIGHT))
+      .padding_horizontal(SpacingSize::Xs)
+      .spacing(ExtraSpacing::Inline.role())
+      .align_items(lurq::layout::Alignment::Center)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .child(handle)
+      .child(
+        Column::new()
+          .flex(1.0)
+          .spacing(ExtraSpacing::Indicator.role())
+          .child(
+            Text::new(&task.title)
+              .variant(TypographyStyle::FieldLabel)
+              .color(lurq::app::theme::PaletteColor::TextPrimary),
+          )
+          .child(
+            Text::new(&ctx.t_args(
+              "tasks.bulk.taskPipeline",
+              [
+                ("task", task.key.to_string()),
+                ("pipeline", message_text(ctx, &task.pipeline.message()).to_string()),
+              ],
+            ))
+            .variant(ExtraTypography::Hint.role()),
+          ),
+      )
+      .child(
+        Row::new()
+          .width(Dimension::Px(ORDER_NUMBER_WIDTH))
+          .justify(lurq::layout::layout_kind::Justify::End)
+          .child(Text::new(&format!("{:02}", index + 1)).variant(TypographyStyle::Mono)),
+      )
       .into()
   }
 
   fn order_handle(&self, ctx: &mut Ctx, task: TaskId, locked: bool) -> Element {
+    // The drag handle takes the place of the task list row's state tile (`aqRNL` in `zemhy`).
     let handle = surface()
       .id(format!("tasks-review-order-{task}"))
       .size(Dimension::Px(ORDER_HANDLE_SIZE), Dimension::Px(ORDER_HANDLE_SIZE))
+      .background(lurq::app::theme::PaletteColor::SurfaceRaised)
+      .rounded(ExtraRadius::Notice.role())
       .align_items(lurq::layout::Alignment::Center)
       .justify(lurq::layout::layout_kind::Justify::Center)
       .cursor(lurq::node::CursorIcon::Grab)
       .hovered_style(Style::new().background(lurq::app::theme::PaletteColor::AccentMuted))
       .child(icon(
         Icon::GripVertical,
-        IconSize::Small,
+        IconSize::Option,
         lurq::app::theme::PaletteColor::TextPrimary,
       ));
     if locked {

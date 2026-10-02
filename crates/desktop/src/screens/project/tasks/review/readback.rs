@@ -51,7 +51,9 @@ impl SchedulingReview {
       .render(ctx);
     let note = parsed.into_iter().map(|budget| {
       Element::from(
-        Text::new(&ctx.t_args(keys.1, [("count", compact_tokens(budget.get()))])).variant(ExtraTypography::Hint.role()),
+        Text::new(&ctx.t_args(keys.1, [("count", compact_tokens(budget.get()))]))
+          .variant(ExtraTypography::Hint.role())
+          .color(lurq::app::theme::PaletteColor::TextMuted),
       )
       .id(format!("{id}-readback"))
     });

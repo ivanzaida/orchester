@@ -153,12 +153,18 @@ fn review_readbacks(desktop: &mut Desktop) {
 }
 
 fn review_geometry(desktop: &mut Desktop) {
+  let order = desktop.bounds("tasks-review-order");
   let rail = desktop.bounds("tasks-review-settings");
   let parallel = desktop.bounds("tasks-review-parallel");
   let sequential = desktop.bounds("tasks-review-sequential");
   assert!(
-    (parallel.x - rail.x - 32.0).abs() < 1.0,
-    "settings must inset controls after the divider"
+    (rail.x - order.x - order.width - 32.0).abs() < 1.0 && (parallel.x - rail.x).abs() < 1.0,
+    "settings start 32 after the order's divider"
+  );
+  // The heading's line box differs by about a pixel between fonts; the gap after it is 18.
+  assert!(
+    (33.0..=36.0).contains(&(parallel.y - rail.y)),
+    "the mode cards follow the heading 18 below"
   );
   assert!(
     (sequential.x + sequential.width - parallel.x - 508.0).abs() < 1.0,

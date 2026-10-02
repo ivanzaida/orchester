@@ -93,6 +93,8 @@ fn extra_typography_follows_pencil() {
     theme.typography_style(ExtraTypography::CardTitle.role()).font_size,
     14.0
   );
+  let review = theme.typography_style(ExtraTypography::ReviewHeading.role());
+  assert_eq!((review.font_size, review.weight), (14.0, FontWeight::Normal));
   assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
   let wrapped = theme.typography_style(ExtraTypography::WrappingProperty.role());
   assert_eq!((wrapped.font_size, wrapped.line_height), (11.0, 1.6));

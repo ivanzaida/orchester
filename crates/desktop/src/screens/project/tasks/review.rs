@@ -34,7 +34,7 @@ use crate::{
   messages::Message,
   tasks::{group, list::TaskRow},
   theme::{
-    ExtraColor, ExtraSpacing, ExtraTypography, TASK_REVIEW_FIELD_HEIGHT as REVIEW_FIELD_HEIGHT,
+    ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, TASK_REVIEW_FIELD_HEIGHT as REVIEW_FIELD_HEIGHT,
     TASK_REVIEW_HANDLE_SIZE as ORDER_HANDLE_SIZE, TASK_REVIEW_RAIL_WIDTH as REVIEW_RAIL_WIDTH,
     TASK_REVIEW_ROW_HEIGHT as REVIEW_ROW_HEIGHT, gutter_scrollbar,
   },
@@ -161,9 +161,11 @@ impl Component for SchedulingReview {
         Row::new()
           .flex(1.0)
           .width(Dimension::Pct(100.0))
+          .padding_top(SpacingSize::Xs)
+          .padding_bottom(ExtraSpacing::Step.role())
           .padding_left(SpacingSize::Section)
           .padding_right(ExtraSpacing::BesideGutter.role())
-          .spacing(ExtraSpacing::Rail.role())
+          .spacing(SpacingSize::Section)
           .child(self.task_order(ctx, &props, pending || completed))
           .child(self.settings(ctx, &props, pending || completed)),
       )
