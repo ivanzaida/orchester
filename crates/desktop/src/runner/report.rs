@@ -145,6 +145,7 @@ pub(super) struct Shared {
   pub(super) published: watch::Sender<RunnerStatus>,
   /// Counts work summaries and state changes of all runners (the close confirmation follows them).
   pub(super) work: watch::Sender<u64>,
+  pub(super) limits: watch::Sender<orchester_core::connection::plan_limits::PlanReadings>,
   /// Each project's run change notifications, kept across its runners.
   pub(super) counters: Mutex<HashMap<PathBuf, RunCounters>>,
   /// Where runner events (a reconnect) are recorded for the status bar.
@@ -194,6 +195,12 @@ pub(super) struct Reporter {
 }
 
 impl Reporter {
+  pub(super) fn plan_limits(&self, reading: orchester_core::connection::plan_limits::LimitReading) {
+    self
+      .shared
+      .limits
+      .send_if_modified(|readings| readings.observe(reading));
+  }
   pub(super) fn new(
     generation: u64,
     project: Arc<str>,

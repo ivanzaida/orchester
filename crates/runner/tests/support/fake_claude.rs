@@ -6,6 +6,7 @@
 //! reads from standard input:
 //!
 //! - "Please sign in": answers like a CLI that is not signed in and exits with 1;
+//! - "Report plan limits": first prints a `rate_limit_event`, then works as the rest of the prompt says;
 //! - "Ask for the web": tries `curl`, which the permissions deny, then works as below;
 //! - "Work in turns": appends `draft` to `README.md`, finishes a message that used 9,739 counted tokens, starts another
 //!   one and waits until it is ended;
@@ -87,6 +88,7 @@ fn main() -> ExitCode {
     print!("{NOT_SIGNED_IN}");
     return ExitCode::from(1);
   }
+  report_limits(&prompt);
   let after = |flag: &str| {
     args
       .iter()
@@ -167,6 +169,16 @@ fn started_prompt(args: &[String], prompt: &str) -> Option<fake_permission_promp
     return None;
   }
   fake_permission_prompt::Prompt::open(args)
+}
+
+/// "Report plan limits": prints the `rate_limit_event` Claude Code 2.1.89 printed.
+fn report_limits(prompt: &str) {
+  if prompt.contains("Report plan limits") {
+    print!(
+      "{}",
+      include_str!("../../../core/tests/fixtures/claude/plan-limits.jsonl")
+    );
+  }
 }
 
 /// Reads the prompt from standard input and reports on standard error how the CLI was started.

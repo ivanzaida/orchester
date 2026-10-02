@@ -75,6 +75,7 @@ fn interrupted_runs(ctx: &Ctx, count: usize, offline: bool, hints: &Hints) -> Op
   let text = ctx.t_args(key, [("count", count.as_str())]);
   let row = item("status-activity")
     .describe("state", "interrupted")
+    .flex_shrink(1.0)
     .child(glyph(Icon::Pause, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary));
   Some(hints.attach(row, HintAnchor::Activity, text).into())
@@ -142,6 +143,7 @@ fn running(
   let text = ctx.t_args("statusBar.activity.running", [("title", &*title)]);
   let row = item("status-activity")
     .describe("state", "running")
+    .flex_shrink(1.0)
     .child(glyph(Icon::Loader, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary))
     .child(ctx.mount_keyed::<Elapsed>(
@@ -158,6 +160,7 @@ fn running(
 fn several(text: &Arc<str>, log: &ActivityLog, opener: &Opener, hints: &Hints) -> Element {
   let row = item("status-activity")
     .describe("state", "several")
+    .flex_shrink(1.0)
     .describe("running", log.running().count().to_string())
     .child(glyph(Icon::Loader, PaletteColor::TextPrimary))
     .child(truncated_label(text, PaletteColor::TextPrimary))
@@ -177,6 +180,7 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
   };
   let row = item("status-activity")
     .describe("state", "latest")
+    .flex_shrink(1.0)
     .child(glyph(icon, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary))
     .child(value(&display::clock_time(event.at()), PaletteColor::TextMuted));

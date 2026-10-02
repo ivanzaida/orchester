@@ -15,6 +15,30 @@ use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, Extra
 use super::themed_app;
 
 #[test]
+fn plan_limits_emphasis_follows_pencil() {
+  let app = themed_app();
+  let percent = app.theme().typography_style(ExtraTypography::MonoLimit.role());
+  assert_eq!(percent.font_size, 11.0);
+  assert_eq!(percent.weight, FontWeight::Medium);
+  assert_eq!(&*percent.font_family, "Geist Mono");
+  assert_eq!(
+    app.theme().spacing_value(ExtraSpacing::PlanRows.role()),
+    Dimension::Px(6.0)
+  );
+  assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
+  assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
+  assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
+  let widths = |widths: theme::StatusBarWidths| (widths.version, widths.tokens, widths.labels, widths.details);
+  assert_eq!(widths(theme::STATUS_WIDTHS), (1280.0, 1120.0, 960.0, 0.0));
+  assert_eq!(widths(theme::STATUS_WIDTHS_ONE_REACHED), (1440.0, 1280.0, 1120.0, 0.0));
+  assert_eq!(
+    widths(theme::STATUS_WIDTHS_BOTH_REACHED),
+    (1600.0, 1440.0, 1280.0, 1120.0)
+  );
+}
+
+#[test]
 fn task_screen_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();

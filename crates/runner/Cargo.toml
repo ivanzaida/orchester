@@ -164,6 +164,10 @@ required-features = ["test-agent"]
 name = "memory"
 required-features = ["test-agent"]
 
+[[test]]
+name = "plan_limits"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
