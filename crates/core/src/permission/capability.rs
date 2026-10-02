@@ -283,6 +283,16 @@ impl EnforcedPermissions {
     self.network_stays_on
   }
 
+  /// The listed commands Orchester itself runs without confining them to the worktree: a native
+  /// agent's allowed list, chosen but not confined (§5.4). `None` when a CLI runs the commands, or
+  /// when none is listed.
+  pub fn unconfined_list(&self) -> Option<&AllowedCommands> {
+    match (self.commands, self.permissions.commands()) {
+      (Mechanism::NativeCommandList, CommandPermission::Allowed(list)) if !list.is_empty() => Some(list),
+      _ => None,
+    }
+  }
+
   /// How the CLI asks a person about a command these permissions do not run by themselves: Codex
   /// whenever a command needs more than its sandbox, Claude Code about every command outside the
   /// allowed list (every command when the list is empty or it asks before commands).

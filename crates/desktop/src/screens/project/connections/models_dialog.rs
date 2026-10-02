@@ -22,12 +22,12 @@ use orchester_core::{
 use super::{
   DialogContext, DialogMode,
   dialog_frame::{SaveBar, actions, header, padded, save_reason_of},
-  model_editor::{ModelEditor, ModelEditorProps, ModelRows, ModelUse},
+  model_editor::{ModelEditor, ModelEditorProps, ModelRows},
 };
 use crate::{
   activity::{Activity, operations},
   background,
-  connections::native::save_models_in,
+  connections::native::{keep_used, model_uses, save_models_in},
   messages::Message,
   theme::{ExtraColor, gutter_scrollbar},
   ui::{
@@ -89,16 +89,7 @@ impl Component for ModelsDialog {
     let models = self.models_to_save();
     let submit = self.save(&save, models.as_ref().ok());
     let current = self.connection.api().map(|api| api.models());
-    let uses = self
-      .context
-      .uses
-      .iter()
-      .filter(|used| used.connection == self.connection.id())
-      .map(|used| ModelUse {
-        role: used.role.clone(),
-        model: used.model.clone(),
-      })
-      .collect();
+    let uses = model_uses(&self.context.uses, self.connection.id());
     let editor = ctx.mount_keyed::<ModelEditor>(
       "models-dialog-editor",
       ModelEditorProps {
@@ -147,12 +138,17 @@ impl Component for ModelsDialog {
 
 impl ModelsDialog {
   /// The models as they would be saved, keeping the default model and effort while the default model
-  /// is listed.
+  /// is listed, and every model a profile uses.
   fn models_to_save(&self) -> Result<NativeModels, Message> {
     let rows = self.models.get().0;
     if rows.is_empty() {
       return Err(Message::new("connections.native.save.noModels"));
     }
+    keep_used(
+      &rows,
+      &model_uses(&self.context.uses, self.connection.id()),
+      "connections.models.usedDropped",
+    )?;
     let current = self.connection.api().map(|api| api.models());
     let default_model = current
       .and_then(|models| models.default_model().cloned())

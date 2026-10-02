@@ -239,7 +239,7 @@ fn used_by(ctx: &Ctx, uses: &[&ProfileUse], profile: &Arc<dyn Fn(ResourceId) -> 
     .map(|used| {
       let text = ctx.t_args(
         "connections.usedByLink",
-        [("role", &*used.role), ("model", &*used.model)],
+        [("role", &*used.role), ("model", used.model.as_str())],
       );
       ActionButton::new(text)
         .icon(Icon::ExternalLink)

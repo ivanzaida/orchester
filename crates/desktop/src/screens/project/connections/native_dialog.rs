@@ -33,7 +33,7 @@ use super::{
 use crate::{
   activity::{Activity, operations},
   background,
-  connections::native::{KeySecret, NativeDraft, save_native_in},
+  connections::native::{KeySecret, NativeDraft, keep_used, model_uses, save_native_in},
   messages::Message,
   secrets::Vault,
   ui::form::Submit,
@@ -55,6 +55,12 @@ pub(super) enum KeyChoice {
 }
 
 impl lurq::app::component::DevtoolsInspectable for KeyChoice {}
+
+/// The environment of a key secret created with the connection, chosen as in Secrets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct KeyEnvironment(pub Environment);
+
+impl lurq::app::component::DevtoolsInspectable for KeyEnvironment {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct DefaultModel(pub Option<ModelId>);
@@ -109,6 +115,7 @@ pub struct NativeDialog {
   pub(super) url: Signal<String>,
   pub(super) key: Signal<KeyChoice>,
   pub(super) key_name: Signal<String>,
+  pub(super) key_environment: Signal<KeyEnvironment>,
   /// The new secret's value being typed. Made outside `ctx.signal` on purpose: lurq's DevTools record
   /// every component signal with its history, and the value must not appear there.
   pub(super) key_value: Signal<String>,
@@ -210,6 +217,7 @@ impl NativeDialog {
           .map_or(KeyChoice::None, KeyChoice::Existing),
       ),
       key_name: ctx.signal(String::new()),
+      key_environment: ctx.signal(KeyEnvironment(Environment::NEW_SECRET)),
       key_value,
       models: ctx.signal(ModelRows(models.models().to_vec())),
       default_model: ctx.signal(DefaultModel(models.default_model().cloned())),
@@ -261,19 +269,23 @@ impl NativeDialog {
     let base_url = self.base_url();
     let key = self.key_secret();
     let rows = self.models.get().0;
+    let id = match &self.context.mode {
+      DialogMode::EditNative(connection) => Some(connection.id()),
+      _ => None,
+    };
+    let uses = id.map(|id| model_uses(&self.context.uses, id)).unwrap_or_default();
     let models = if rows.is_empty() {
       Err(Message::new("connections.native.save.noModels"))
     } else {
-      // The defaults are cleared as soon as they no longer fit the models (`watch`).
-      NativeModels::new(rows, self.default_model.get().0, self.default_effort.get().0)
-        .map_err(|_| Message::new("connections.native.save.defaultsInvalid"))
+      keep_used(&rows, &uses, "connections.models.usedDropped").and_then(|()| {
+        // The defaults are cleared as soon as they no longer fit the models (`watch`).
+        NativeModels::new(rows, self.default_model.get().0, self.default_effort.get().0)
+          .map_err(|_| Message::new("connections.native.save.defaultsInvalid"))
+      })
     };
     match (name, base_url, key, models) {
       (Ok(name), Ok(base_url), Ok(key), Ok(models)) => Ok(NativeDraft {
-        id: match &self.context.mode {
-          DialogMode::EditNative(connection) => Some(connection.id()),
-          _ => None,
-        },
+        id,
         name,
         provider: self.provider,
         preset: self.preset.get().0,
@@ -307,7 +319,7 @@ impl NativeDialog {
       KeyChoice::New => {
         let entered = self.key_name.get();
         let name = SecretName::new(entered.trim()).map_err(|_| Message::new("connections.native.key.nameInvalid"))?;
-        let environment = Environment::ALL[0];
+        let environment = self.key_environment.get().0;
         if secret::existing(&self.context.secrets, &name, environment).is_some() {
           let project = self.context.project.project.name().as_str().to_owned();
           return Err(

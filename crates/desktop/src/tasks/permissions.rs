@@ -40,6 +40,9 @@ pub struct RunPermissions {
   pub permissions: AgentPermissions,
   /// Network off was chosen, but the CLI cannot enforce it, so network stays on.
   pub network_stays_on: bool,
+  /// The listed commands a native agent runs unconfined (core's
+  /// [`orchester_core::permission::EnforcedPermissions::unconfined_list`]); empty otherwise.
+  pub unconfined_commands: Vec<Arc<str>>,
   /// The profile version the permissions come from.
   pub profile: VersionNumber,
   pub profile_id: ResourceId,
@@ -76,15 +79,22 @@ pub fn run_permissions(
   let base = changed.map_or_else(|| profile_permissions.clone(), |changed| changed.permissions().clone());
   // Permissions the CLI cannot enforce at all never ran (preflight and the runner refuse them), so
   // they read as chosen.
-  let network_stays_on = provider
-    .and_then(|provider| permissions.enforced_on(provider, Platform::current()).ok())
+  let enforced = provider.and_then(|provider| permissions.enforced_on(provider, Platform::current()).ok());
+  let network_stays_on = enforced
+    .as_ref()
     .is_some_and(|enforced| enforced.network_stays_on().is_some());
+  let unconfined_commands = enforced
+    .as_ref()
+    .and_then(|enforced| enforced.unconfined_list())
+    .map(|list| list.entries().iter().map(|entry| Arc::from(entry.as_str())).collect())
+    .unwrap_or_default();
   let latest = db
     .latest_version::<AgentProfile>(profile_id)?
     .map_or(version.number(), |latest| latest.number());
   Ok(Some(RunPermissions {
     permissions,
     network_stays_on,
+    unconfined_commands,
     profile: version.number(),
     profile_id,
     base,

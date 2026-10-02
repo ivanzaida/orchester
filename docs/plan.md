@@ -241,20 +241,28 @@ P1 is split into five tasks. P1a (ORC-56) is done (see *Done*). The rest:
 - **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
   (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
-  start here (`AgentProvider::runs_agents`). Also left here by P1e, because only a native run or the runner's model
-  client produces what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`,
-  §7; it records `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
-  `ModelSource::Endpoint`), the shell approval content (04.H9 `wvh5j`), the Activity rows of native tool calls,
-  approvals and denials (04.H10 `IcGvI`), and the run summary note (04.H11 `ZvWcK`). The prompt must honour
+  start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
+  what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`, §7; it records
+  `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
+  `ModelSource::Endpoint`). A native command's approval is recorded with `PendingToolApproval::native` (the
+  `CommandShell` and the time limit), which 04.H9 shows. The prompt must honour
   `AgentFilesMechanism::OrchesterLoads`/`OrchesterLeftOut`, which the enforcement panel already shows.
-- **P1e · ORC-60 (in progress):** connections UI, group `PNDQm`. Built: Add connection's four kinds (OpenAI API
-  locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3), Advanced base
-  URL, the key secret picked or created with the connection, models added by hand with default model and effort,
-  provider fallback (04.H1–H3); the native inspector with its statuses, key missing derived from the project's
-  secrets (04.H4, H5); the models dialog (04.H6); and the §5.4 capability rows with *Enforced by Orchester* (04.H8).
-  Test connection and Fetch models are visibly unavailable. Left for P1d: see its bullet. Tests: `form_keyboard
-  native_` (`native_connections`, `native_dialog`), core `native_connection`/`native_setup`, store `connections
-  native`.
+- **P1e · ORC-60 (in progress):** connections UI, 04.H1–H11 (group `PNDQm`). Built: Add connection's four kinds
+  (OpenAI API locked until P2), the native form with the Official preset (DeepSeek and Custom locked until P3),
+  Advanced base URL, the key secret picked or created with the connection in the environment chosen (Development by
+  default, as in Secrets), models added by hand with default model and effort, provider fallback (04.H1–H3); the
+  native inspector with its statuses, key missing derived from the project's secrets (04.H4, H5); the models dialog
+  (04.H6), where a model a profile uses keeps its id and is never dropped (core `ensure_used_listed`); the §5.4
+  capability rows with *Enforced by Orchester* (04.H8); the approval of a native command with its shell, full
+  string, working directory and time limit (04.H9); in Activity, the step header and the invocation panel of a
+  native invocation (04.H10: runs on this computer, endpoint, network, tool calls); and the note of what Orchester
+  could not enforce under the readiness card (04.H11). Test connection and Fetch models are visibly unavailable.
+  Not built yet: 04.H7, and the transcript rows of 04.H10 (file tool rows with their own glyph and meta, *shell ·
+  pwsh* on a command, *Approved by you* and *Denied by a person* entries with the result the agent was given): the
+  Activity events P1b emits for a native tool call (`CommandStarted`/`CommandFinished` with a label, and
+  `PermissionDenied`) do not carry what they show. Tests: `form_keyboard native_` (`native_connections`,
+  `native_dialog`, `native_models`, `native_run`), core `native_connection`/`native_setup`, store `connections
+  native`, `tool_approvals native_`.
 
 ## L · After lurq 0.30.0
 

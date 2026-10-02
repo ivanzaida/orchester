@@ -14,7 +14,7 @@ use orchester_core::{
   id::{ConnectionId, SecretId},
   name::Name,
   permission::{
-    AgentPermissions, AllowedCommands, CommandPermission, FolderBounds, NetworkAccess, OutsideCommands,
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess, OutsideCommands,
     RepositoryAccess, WritableFolder, WritableFolders,
     capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
@@ -304,6 +304,36 @@ fn orchester_enforces_a_native_provider_alike_on_both_platforms() {
       );
     }
   }
+}
+
+#[test]
+fn native_listed_commands_run_unconfined_and_a_cli_list_is_not_orchesters() {
+  let listed = AllowedCommands::new(vec![
+    CommandPrefix::new("git").expect("prefix"),
+    CommandPrefix::new("pnpm test").expect("prefix"),
+  ])
+  .expect("list");
+  let permissions = |commands| AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::On);
+  let with_list = permissions(CommandPermission::Allowed(listed.clone()));
+  for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
+    let enforced = with_list.enforced_on(provider, Platform::Windows).expect("enforced");
+    assert_eq!(enforced.unconfined_list(), Some(&listed));
+    // Nothing listed, or every command asking, leaves no command unconfined without a person.
+    for commands in [
+      CommandPermission::Allowed(AllowedCommands::default()),
+      CommandPermission::AskBefore,
+    ] {
+      let enforced = permissions(commands)
+        .enforced_on(provider, Platform::MacOs)
+        .expect("enforced");
+      assert_eq!(enforced.unconfined_list(), None);
+    }
+  }
+  // Claude Code runs its own listed commands; Orchester does not.
+  let claude = with_list
+    .enforced_on(AgentProvider::ClaudeCodeCli, Platform::Windows)
+    .expect("enforced by Claude Code");
+  assert_eq!(claude.unconfined_list(), None);
 }
 
 #[test]

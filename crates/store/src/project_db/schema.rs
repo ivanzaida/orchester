@@ -9,6 +9,7 @@ mod import;
 mod invocation_permissions;
 mod mcp;
 mod memory;
+mod native_commands;
 mod recovery;
 mod task_edits;
 mod tool_approvals;
@@ -580,4 +581,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   invocation_permissions::MIGRATION,
   code_index::MIGRATION,
   memory::MIGRATION,
+  native_commands::MIGRATION,
 ];

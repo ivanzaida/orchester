@@ -749,6 +749,7 @@
       "ended": "Run ended",
       "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
+      "engineNative": "{{engine}} · native",
       "headerRunning": "{{engine}} · invocation {{count}} · started {{start}}",
       "headerFinished": {
         "one": "{{engine}} · {{count}} invocation · {{start}}–{{end}}",
@@ -879,7 +880,18 @@
         "soFar": "{{count}} so far",
         "cachedSoFar": "{{count}} so far · not counted",
         "atMost": "≤ {{count}}",
-        "cachedAtMost": "≤ {{count}} · not counted"
+        "cachedAtMost": "≤ {{count}} · not counted",
+        "runs": "Runs",
+        "runsHere": "This computer (Orchester)",
+        "endpoint": "Endpoint",
+        "network": "Network",
+        "networkStaysOn": "Stays on · off not enforceable",
+        "networkOn": "On",
+        "toolCalls": "Tool calls",
+        "toolCallsDenied": "{{count}} · {{denied}} denied",
+        "noteNative": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeFirstEdit": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeAtMost": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file; ≤ means the request of that edit was reported whole, so its later part is counted too. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent."
       },
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
@@ -988,6 +1000,12 @@
         "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
       }
     },
+    "notEnforced": {
+      "heading": "What Orchester could not enforce for {{agent}}",
+      "networkStayedOn": "Network stayed on. {{agent}}’s profile asks for network off, but commands the agent runs could reach the network: Orchester can’t block it for a native connection yet.",
+      "listedUnconfined": "Listed commands were not confined. {{commands}} run with your account’s access, outside the worktree’s limits; Orchester’s file tools stayed in the worktree.",
+      "permissionsLink": "{{agent}}’s permissions ↗"
+    },
     "toolApproval": {
       "title": "Approve tool action?",
       "explanation": "{{agent}} requests {{action}} from the {{server}} MCP server. Review the target before deciding. Approve once applies only to this request; Deny fails this step.",
@@ -1005,13 +1023,26 @@
       "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
-      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
       "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
       "cwd": "Working directory",
       "note": "Agent’s note",
       "arguments": "Arguments",
-      "scope": "One requested action only; no session or permanent grant"
+      "scope": "One requested action only; no session or permanent grant",
+      "native": {
+        "explanation": "{{agent}} asks to run this command in the task worktree. It is not on the allowed list and not known to be safe, so it asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "explanationReadOnly": "{{agent}} asks to run this command in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanation": "{{agent}} asks to run this command through a shell in the task worktree. A shell command is never on the allowed list and never known-safe, so it always asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanationReadOnly": "{{agent}} asks to run this command through a shell in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shell": "Shell",
+        "shellValue": "{{shell}} · {{invocation}}",
+        "commandLabel": "Command · the full string the shell receives",
+        "timeLimit": "Time limit",
+        "timeLimitValue": "{{seconds}} s",
+        "unsandboxedTitle": "Runs outside any sandbox",
+        "unsandboxedDetail": "Orchester keeps its file tools inside the worktree, but not commands. This one runs as you: it can read and change whatever your account can and reach the network. Secrets are not in its environment."
+      }
     },
     "ready": {
       "status": "Ready for review",
@@ -2052,6 +2083,7 @@
         "name": "Secret name",
         "namePlaceholder": "ANTHROPIC_API_KEY",
         "value": "Value",
+        "environment": "Environment",
         "newHint": "Saved to Secrets with the connection, as an API key. The value is never shown again.",
         "nameInvalid": "Use letters, digits and underscores for the secret name.",
         "taken": "{{project}} already has a secret {{name}}.",
@@ -2115,6 +2147,8 @@
       "maxOutputLabel": "Max output · tokens · optional",
       "efforts": "Efforts",
       "inUse": "{{profiles}} uses {{model}}. Switch to another model before removing it.",
+      "idInUse": "{{profile}} uses {{model}}. Switch to another model before changing its id.",
+      "usedDropped": "{{profile}} uses {{model}}, which is no longer listed. Switch to another model first.",
       "invalidId": "Enter the model id as the API names it, without spaces.",
       "listedAlready": "{{model}} is listed already.",
       "invalidTokens": "Enter a whole number of tokens, or leave it empty.",

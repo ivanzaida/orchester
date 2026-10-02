@@ -29,7 +29,7 @@ const DIALOG: &str = "connection-dialog";
 const REASON: &str = "connection-save-reason";
 const KEY_VALUE: &str = "fake-key-Q7x2";
 
-fn add_native(desktop: &mut Desktop) {
+pub(crate) fn add_native(desktop: &mut Desktop) {
   desktop.wait_for("nav-connections");
   desktop.click("nav-connections");
   desktop.wait_for("add-connection");
@@ -39,7 +39,7 @@ fn add_native(desktop: &mut Desktop) {
   desktop.wait_for("native-preset");
 }
 
-fn set(desktop: &mut Desktop, id: &str, text: &str) {
+pub(crate) fn set(desktop: &mut Desktop, id: &str, text: &str) {
   desktop
     .tree
     .get_element_by_id_mut(id)
@@ -50,7 +50,7 @@ fn set(desktop: &mut Desktop, id: &str, text: &str) {
 }
 
 /// Chooses the option of the select `id` whose label contains `label`.
-fn choose(desktop: &mut Desktop, id: &str, label: &str) {
+pub(crate) fn choose(desktop: &mut Desktop, id: &str, label: &str) {
   let mut select = desktop
     .tree
     .get_element_by_id_mut(id)
@@ -331,7 +331,7 @@ fn native_form_says_why_it_cannot_save() {
 }
 
 /// A custom gateway with two models added by hand, the default one used by a Planner profile.
-fn seed_lab_gateway(repo: &Path) -> ConnectionId {
+pub(crate) fn seed_lab_gateway(repo: &Path) -> ConnectionId {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let key = key_secret(&mut db, "LAB_GATEWAY_KEY", Environment::Development, false);
   let models = NativeModels::new(

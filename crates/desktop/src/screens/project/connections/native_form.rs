@@ -14,19 +14,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::connection::{
-  AgentConnection, AgentProvider, AgentRuntime, ConnectionStatus, EndpointPreset, WireApi, offers_provider_fallback,
+use orchester_core::{
+  connection::{AgentProvider, AgentRuntime, ConnectionStatus, EndpointPreset, WireApi, offers_provider_fallback},
+  secret::Environment,
 };
 
 use super::{
   DialogMode,
   form::{pair, type_field},
   kind::kind_field,
-  model_editor::{ModelEditor, ModelEditorProps, ModelUse},
-  native_dialog::{DefaultEffort, DefaultModel, KeyChoice, NativeDialog, NativeErrors, PresetChoice},
+  model_editor::{ModelEditor, ModelEditorProps},
+  native_dialog::{DefaultEffort, DefaultModel, KeyChoice, KeyEnvironment, NativeDialog, NativeErrors, PresetChoice},
   status::status_label,
 };
 use crate::{
+  connections::native::model_uses,
   messages::Message,
   screens::project::secrets::labels::environment_key,
   theme::{ExtraSpacing, ExtraTypography},
@@ -214,7 +216,7 @@ impl NativeDialog {
       SelectOption::new(KeyChoice::Existing(secret.id()), label)
     }));
     options.push(SelectOption::new(KeyChoice::New, ctx.t("connections.native.key.new")));
-    let select = Select::new(self.key.clone())
+    let key_select = Select::new(self.key.clone())
       .options(options)
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(FIELD_HEIGHT))
@@ -223,7 +225,7 @@ impl NativeDialog {
     let control = Column::new()
       .id("native-key")
       .width(Dimension::Pct(100.0))
-      .child(Element::from(select).id("native-key-select"));
+      .child(Element::from(key_select).id("native-key-select"));
     let label = ctx.t("connections.native.key.label");
     if self.key.get() != KeyChoice::New {
       let shown = error.filter(|_| self.key.get() != KeyChoice::None);
@@ -248,6 +250,11 @@ impl NativeDialog {
     )
     .mask()
     .height(Dimension::Px(FIELD_HEIGHT));
+    // The new secret's environment, chosen and defaulted as when a secret is added in Secrets.
+    let environments = Environment::ALL
+      .into_iter()
+      .map(|environment| SelectOption::new(KeyEnvironment(environment), ctx.t(environment_key(environment))))
+      .collect();
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -259,6 +266,13 @@ impl NativeDialog {
           note(ctx, error.filter(|_| named)),
         ),
         field(&ctx.t("connections.native.key.value"), value.into(), FieldNote::None),
+      ))
+      .child(select(
+        ctx,
+        "native-key-environment",
+        "connections.native.key.environment",
+        self.key_environment.clone(),
+        environments,
       ))
       .child(Text::new(&ctx.t("connections.native.key.newHint")).variant(ExtraTypography::Hint.role()))
       .into()
@@ -298,7 +312,7 @@ impl NativeDialog {
   /// test.
   fn models_section(&self, ctx: &mut Ctx) -> Element {
     let uses = match &self.context.mode {
-      DialogMode::EditNative(connection) => model_uses(&self.context, connection),
+      DialogMode::EditNative(connection) => model_uses(&self.context.uses, connection.id()),
       _ => Vec::new(),
     };
     let editor = ctx.mount_keyed::<ModelEditor>(
@@ -424,19 +438,6 @@ fn preset_unavailable(ctx: &Ctx, dialog: &NativeDialog, preset: EndpointPreset) 
     return Some(ctx.t("connections.native.preset.deepseekOnAnthropic"));
   }
   (!preset.is_available()).then(|| ctx.t("connections.native.preset.later"))
-}
-
-/// The profiles that run on `connection`, with their models.
-fn model_uses(context: &super::DialogContext, connection: &AgentConnection) -> Vec<ModelUse> {
-  context
-    .uses
-    .iter()
-    .filter(|used| used.connection == connection.id())
-    .map(|used| ModelUse {
-      role: used.role.clone(),
-      model: used.model.clone(),
-    })
-    .collect()
 }
 
 fn note(ctx: &Ctx, error: Option<&Message>) -> FieldNote {

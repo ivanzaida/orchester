@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::core::Signal;
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, EndpointPreset},
   id::{StepExecutionId, TaskId},
   run::{EditProgress, StepStatus, TokenUsage},
   time::Timestamp,
@@ -53,6 +53,8 @@ pub(super) struct Header {
   /// A tool step: a command tool ran instead of an agent, on no model and with no tokens.
   pub(super) command: bool,
   pub(super) provider: Option<AgentProvider>,
+  /// The preset of a native connection's model API.
+  pub(super) preset: Option<EndpointPreset>,
   pub(super) model: Arc<str>,
   pub(super) invocations: usize,
   pub(super) started: Option<Timestamp>,
@@ -156,6 +158,7 @@ fn header(run: &RunView, execution: StepExecutionId, status: StepStatus, toggles
     agent: step.agent.clone().unwrap_or_else(|| "".into()),
     command: step.tool_step,
     provider: step.provider,
+    preset: step.endpoint.as_ref().map(|endpoint| endpoint.preset),
     model: step.model.clone().unwrap_or_else(|| "".into()),
     invocations: invocations.len(),
     started: invocations.first().map(|invocation| invocation.started_at),

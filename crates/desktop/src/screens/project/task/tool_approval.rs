@@ -17,6 +17,7 @@ use lurq::{
 use orchester_core::{connection::AgentProvider, id::RunId, run::PendingToolApproval};
 use orchester_ipc::Command;
 
+use super::native_approval;
 use crate::{
   messages::Message,
   runner::Runners,
@@ -151,9 +152,13 @@ struct DialogState<'a> {
 }
 
 fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
+  let width = match state.props.approval.native {
+    Some(_) => native_approval::DIALOG_WIDTH,
+    None => DIALOG_WIDTH,
+  };
   let panel = Column::new()
     .id("tool-approval-dialog")
-    .width(Dimension::Px(DIALOG_WIDTH))
+    .width(Dimension::Px(width))
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
@@ -171,7 +176,15 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
   } else {
     "runs.toolApproval.title"
   });
-  let explanation = if command {
+  let explanation = if let Some(native) = approval.native {
+    ctx.t_args(
+      native_approval::explanation_key(native, props.read_only),
+      [
+        ("agent", approval.agent.as_str()),
+        ("cwd", approval.target.as_deref().unwrap_or_default()),
+      ],
+    )
+  } else if command {
     // Claude Code runs an approved command without a sandbox; Codex runs an approved escalation
     // outside its sandbox. Either can then change files, which a read-only step must say.
     let key = match (props.provider, props.read_only) {
@@ -179,7 +192,7 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       (Some(AgentProvider::ClaudeCodeCli), true) => "runs.toolApproval.commandExplanationClaudeReadOnly",
       (Some(AgentProvider::CodexCli) | None, false) => "runs.toolApproval.commandExplanation",
       (Some(AgentProvider::CodexCli) | None, true) => "runs.toolApproval.commandExplanationReadOnly",
-      // No native agent runs in this version; the wording claims no sandbox for one.
+      // A native agent's command carries what it runs with; one without says only what it asks.
       (Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi), _) => "runs.toolApproval.commandExplanationNative",
     };
     ctx.t_args(
@@ -212,13 +225,33 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
 
 fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
   let approval = &props.approval;
-  let command = approval.command;
-  Column::new()
+  let column = Column::new()
     .id("tool-approval-details")
     .width(Dimension::Pct(100.0))
     .padding_vertical(ExtraSpacing::Step.role())
     .padding_horizontal(ExtraSpacing::Rail.role())
-    .spacing(ExtraSpacing::Stack.role())
+    .spacing(ExtraSpacing::Stack.role());
+  let column = match approval.native {
+    Some(native) => column.with_children(native_approval::details(ctx, approval, native)),
+    None => cli_details(ctx, column, approval),
+  };
+  column
+    .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(TypographyStyle::Description))
+    .with_children((props.remaining > 0).then(|| {
+      Text::new(&ctx.t_args(
+        "runs.toolApproval.remaining",
+        [("count", props.remaining.to_string().as_str())],
+      ))
+      .variant(TypographyStyle::Description)
+    }))
+    .into()
+}
+
+/// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
+/// what the agent said about it.
+fn cli_details(ctx: &Ctx, column: Column, approval: &PendingToolApproval) -> Column {
+  let command = approval.command;
+  column
     .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
     .with_children(
       (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
@@ -244,15 +277,6 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
       )
     }))
     .with_children(approval.scope.as_deref().map(|scope| scope_row(ctx, command, scope)))
-    .child(Text::new(&ctx.t("runs.toolApproval.scope")).variant(TypographyStyle::Description))
-    .with_children((props.remaining > 0).then(|| {
-      Text::new(&ctx.t_args(
-        "runs.toolApproval.remaining",
-        [("count", props.remaining.to_string().as_str())],
-      ))
-      .variant(TypographyStyle::Description)
-    }))
-    .into()
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP

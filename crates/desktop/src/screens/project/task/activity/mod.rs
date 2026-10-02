@@ -8,6 +8,7 @@ mod first_edit;
 mod footer;
 mod mcp;
 mod mcp_call;
+mod native;
 mod panel;
 mod problem;
 mod rows;
@@ -29,7 +30,10 @@ use lurq::{
   },
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{connection::AgentProvider, id::StepExecutionId};
+use orchester_core::{
+  connection::{AgentProvider, EndpointPreset},
+  id::StepExecutionId,
+};
 use parking_lot::Mutex;
 
 use self::{
@@ -147,7 +151,7 @@ impl Component for ActivityTab {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(self.transcript(ctx, run, &transcript.0, props.live))
-      .child(panel::invocation_panel(ctx, run, self.filter.get().0))
+      .child(panel::invocation_panel(ctx, run, &transcript.0, self.filter.get().0))
       .into()
   }
 }
@@ -354,14 +358,17 @@ impl ActivityTab {
   }
 }
 
-/// The CLI and model an agent runs on, as the design writes it ("Codex / Sol"); the model alone
-/// once the profile's connection is gone.
-pub(super) fn engine(ctx: &Ctx, provider: Option<AgentProvider>, model: &str) -> Arc<str> {
-  match provider {
-    Some(provider) => ctx.t_args(
-      "runs.activity.engine",
-      [("provider", &*ctx.t(provider_short_key(provider))), ("model", model)],
-    ),
-    None => model.into(),
-  }
+/// The CLI or model API and the model an agent runs on, as the design writes it ("Codex / Sol",
+/// "DeepSeek / deepseek-v4-pro"); the model alone once the profile's connection is gone.
+pub(super) fn engine(
+  ctx: &Ctx,
+  (provider, preset): (Option<AgentProvider>, Option<EndpointPreset>),
+  model: &str,
+) -> Arc<str> {
+  let name = match (provider, preset) {
+    (Some(_), Some(EndpointPreset::DeepSeek)) => ctx.t("connections.native.preset.deepseekTitle"),
+    (Some(provider), _) => ctx.t(provider_short_key(provider)),
+    (None, _) => return model.into(),
+  };
+  ctx.t_args("runs.activity.engine", [("provider", &*name), ("model", model)])
 }

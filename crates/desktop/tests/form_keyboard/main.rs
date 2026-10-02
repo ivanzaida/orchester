@@ -30,6 +30,8 @@ mod mcp_servers;
 mod modal_layer;
 mod native_connections;
 mod native_dialog;
+mod native_models;
+mod native_run;
 mod new_task;
 mod pipeline_editor;
 mod pipeline_history;

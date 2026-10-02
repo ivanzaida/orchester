@@ -8,7 +8,7 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CheckResult, ConnectionCheck, ConnectionError,
     ConnectionStatus, Effort, EndpointPreset, ModelSource, NativeModel, NativeModels, NativeModelsError,
-    offers_provider_fallback,
+    ensure_used_listed, offers_provider_fallback,
   },
   id::{ConnectionId, SecretId},
   name::Name,
@@ -100,6 +100,33 @@ fn native_models_list_each_id_once_with_a_listed_default_and_one_of_its_efforts(
   let broken = json.replace(r#""default_effort":"max""#, r#""default_effort":"medium""#);
   assert_ne!(broken, json);
   assert!(serde_json::from_str::<NativeModels>(&broken).is_err());
+}
+
+#[test]
+fn native_models_keep_every_model_a_profile_uses() {
+  let mini = model("lab-mini-8b", &[Effort::Low], ModelSource::Manual);
+  let large = model("lab-large-70b", &[], ModelSource::Manual);
+  let used = [
+    model_id("lab-mini-8b"),
+    model_id("lab-mini-8b"),
+    model_id("lab-large-70b"),
+  ];
+  assert_eq!(ensure_used_listed(&[mini.clone(), large.clone()], &used), Ok(()));
+  assert_eq!(ensure_used_listed(&[], []), Ok(()), "no profile uses a model");
+  // Removing a used model, or giving it another id, drops it.
+  assert_eq!(
+    ensure_used_listed(std::slice::from_ref(&large), &used),
+    Err(NativeModelsError::UsedModelDropped(model_id("lab-mini-8b")))
+  );
+  let renamed = model("lab-mini-9b", &[Effort::Low], ModelSource::Manual);
+  assert_eq!(
+    ensure_used_listed(&[renamed, large], &used),
+    Err(NativeModelsError::UsedModelDropped(model_id("lab-mini-8b")))
+  );
+  assert_eq!(
+    ensure_used_listed(&[mini], &used),
+    Err(NativeModelsError::UsedModelDropped(model_id("lab-large-70b")))
+  );
 }
 
 #[test]

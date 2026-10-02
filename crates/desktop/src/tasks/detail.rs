@@ -6,7 +6,7 @@
 use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind},
+  connection::{AgentProvider, ConnectionKind, EndpointPreset},
   conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -43,6 +43,8 @@ pub struct StepView {
   pub tool_step: bool,
   /// The agent CLI of the profile version's connection, while that connection exists.
   pub provider: Option<AgentProvider>,
+  /// The model API of that connection when it is a native one.
+  pub endpoint: Option<NativeEndpoint>,
   pub model: Option<Arc<str>>,
   /// What the step's agent may do in this run; `None` for a tool step, or when its profile version
   /// is gone.
@@ -55,6 +57,13 @@ pub struct StepView {
   pub failure: Option<StepFailure>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
+}
+
+/// The model API a native connection reaches, as the task page names it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeEndpoint {
+  pub preset: EndpointPreset,
+  pub base_url: Arc<str>,
 }
 
 /// The latest run of a task.
@@ -288,18 +297,18 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
     let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
-    let (agent, provider, model, permissions) = match executor {
+    let (agent, (provider, endpoint), model, permissions) = match executor {
       Some(StepExecutor::Agent { profile, model, .. }) => {
-        let (role, provider, permissions) = agent_step(db, (&run, &invocations), &step.key, *profile)?;
-        (role, provider, Some(Arc::<str>::from(model.as_str())), permissions)
+        let (role, reached, permissions) = agent_step(db, (&run, &invocations), &step.key, *profile)?;
+        (role, reached, Some(Arc::<str>::from(model.as_str())), permissions)
       }
       Some(StepExecutor::Tool { tool }) => {
         let name = db
           .resource(tool.resource)?
           .map(|tool| Arc::<str>::from(tool.name().as_str()));
-        (name, None, None, None)
+        (name, (None, None), None, None)
       }
-      None => (None, None, None, None),
+      None => (None, (None, None), None, None),
     };
     let latest = run.latest_execution(&step.key);
     let attempt = latest.and_then(|execution| {
@@ -316,6 +325,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       agent,
       tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
       provider,
+      endpoint,
       model,
       permissions,
       execution: latest.map(|execution| execution.id()),
@@ -373,8 +383,11 @@ fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreErro
   )
 }
 
-/// An agent step's role, CLI and permissions.
-type AgentStep = (Option<Arc<str>>, Option<AgentProvider>, Option<RunPermissions>);
+/// The agent CLI of a connection and, for a native one, its model API.
+type Reached = (Option<AgentProvider>, Option<NativeEndpoint>);
+
+/// An agent step's role, CLI and model API, and permissions.
+type AgentStep = (Option<Arc<str>>, Reached, Option<RunPermissions>);
 
 /// The agent role, the CLI and the permissions of agent step `step`, which runs on `profile`; none
 /// of them once the profile version is gone.
@@ -385,21 +398,27 @@ fn agent_step(
   profile: PinnedVersion,
 ) -> Result<AgentStep, StoreError> {
   let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
-    return Ok((None, None, None));
+    return Ok((None, (None, None), None));
   };
   let role = Arc::<str>::from(version.body().role().as_str());
-  let provider = provider_of(db, version.body().connection())?;
-  let permissions = run_permissions(db, run, step, (profile.resource, &version), provider)?;
-  Ok((Some(role), provider, permissions))
+  let reached = reached(db, version.body().connection())?;
+  let permissions = run_permissions(db, run, step, (profile.resource, &version), reached.0)?;
+  Ok((Some(role), reached, permissions))
 }
 
-fn provider_of(db: &ProjectDb, connection: ConnectionId) -> Result<Option<AgentProvider>, StoreError> {
-  Ok(
-    match db.connection(connection)?.map(|connection| connection.kind().clone()) {
-      Some(ConnectionKind::Agent(provider)) => Some(provider),
-      Some(ConnectionKind::GitHub { .. }) | None => None,
-    },
-  )
+fn reached(db: &ProjectDb, connection: ConnectionId) -> Result<Reached, StoreError> {
+  let Some(connection) = db.connection(connection)? else {
+    return Ok((None, None));
+  };
+  let provider = match connection.kind() {
+    ConnectionKind::Agent(provider) => Some(*provider),
+    ConnectionKind::GitHub { .. } => None,
+  };
+  let endpoint = connection.endpoint().api().map(|api| NativeEndpoint {
+    preset: api.preset(),
+    base_url: api.base_url().as_str().into(),
+  });
+  Ok((provider, endpoint))
 }
 
 /// The transcript of `run` as stored.

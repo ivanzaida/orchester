@@ -13,6 +13,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
   repository::RepositoryLink,
+  resource::ModelId,
   secret::Secret,
   store::{ConnectionStore, McpServerStore, RepositoryStore, ResourceStore, SecretStore},
   time::Timestamp,
@@ -34,7 +35,7 @@ pub struct ProfileUse {
   pub connection: ConnectionId,
   pub profile: ResourceId,
   pub role: Arc<str>,
-  pub model: Arc<str>,
+  pub model: ModelId,
 }
 
 /// The project's connections of each kind, what starts when each one's program runs, the
@@ -75,7 +76,7 @@ impl ProjectConnections {
             connection,
             profile: entry.id,
             role: entry.profile.role().as_str().into(),
-            model: entry.profile.model().as_str().into(),
+            model: entry.profile.model().clone(),
           })
       })
       .collect();

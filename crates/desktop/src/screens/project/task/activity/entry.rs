@@ -124,8 +124,14 @@ fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
       "runs.activity.commandHeaderFinished.other",
     )
   } else {
+    let engine = engine(ctx, (header.provider, header.preset), &header.model);
+    // Orchester runs a native agent itself (04.H10 `rL1aI`).
+    let engine = match header.provider {
+      Some(provider) if provider.is_native() => ctx.t_args("runs.activity.engineNative", [("engine", &*engine)]),
+      _ => engine,
+    };
     (
-      engine(ctx, header.provider, &header.model),
+      engine,
       "runs.activity.headerRunning",
       "runs.activity.headerFinished.one",
       "runs.activity.headerFinished.other",

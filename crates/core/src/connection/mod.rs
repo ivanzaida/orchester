@@ -47,7 +47,7 @@ pub use self::{
     parse_gh_auth_status, parse_gh_version,
   },
   model_requirements::{CliTooOld, ModelRequirements, parse_cli_too_old},
-  native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError},
+  native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError, ensure_used_listed},
   provider::{AgentProvider, AgentRuntime, WireApi},
 };
 use crate::{id::ConnectionId, name::Name, time::Timestamp};

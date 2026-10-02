@@ -116,6 +116,21 @@ pub enum NativeModelsError {
   EffortNotOffered(Effort),
   #[error("a default effort needs a default model")]
   EffortWithoutModel,
+  #[error("model {} is used by a profile and must stay listed", .0.as_str())]
+  UsedModelDropped(ModelId),
+}
+
+/// Checks that `models` still lists every model in `used`, the models profiles on the connection run
+/// with: removing a model a profile uses, or changing its id, would leave the profile without a model,
+/// so the profile has to switch to another model first (decision of 2026-10-01).
+pub fn ensure_used_listed<'a>(
+  models: &[NativeModel],
+  used: impl IntoIterator<Item = &'a ModelId>,
+) -> Result<(), NativeModelsError> {
+  match used.into_iter().find(|id| !models.iter().any(|model| &model.id == *id)) {
+    Some(dropped) => Err(NativeModelsError::UsedModelDropped(dropped.clone())),
+    None => Ok(()),
+  }
 }
 
 /// The models of a native connection, with the default model and effort. Every id is listed once,

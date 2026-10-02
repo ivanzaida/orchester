@@ -24,6 +24,7 @@ use orchester_core::{
 
 use super::{dialog_frame::BUTTON_HEIGHT, model_text};
 use crate::{
+  connections::native::{ModelUse, keep_used},
   messages::Message,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -61,13 +62,6 @@ impl lurq::app::component::DevtoolsInspectable for Editing {}
 struct Efforts(Vec<Effort>);
 
 impl lurq::app::component::DevtoolsInspectable for Efforts {}
-
-/// A profile on the connection and the model it runs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ModelUse {
-  pub role: Arc<str>,
-  pub model: Arc<str>,
-}
 
 #[derive(Clone)]
 pub struct ModelEditorProps {
@@ -180,7 +174,7 @@ impl ModelEditor {
     let users: Vec<&str> = props
       .uses
       .iter()
-      .filter(|used| &*used.model == id)
+      .filter(|used| &used.model == model.id())
       .map(|used| &*used.role)
       .collect();
     let title = Row::new()
@@ -244,7 +238,7 @@ impl ModelEditor {
   /// The row being edited (`zHowy`): id, limits, efforts, and Remove model, Cancel and Save model.
   fn editor(&self, ctx: &Ctx, props: &ModelEditorProps, models: &[NativeModel]) -> Element {
     let editing = self.editing.get();
-    let model = self.model(models, &editing);
+    let model = self.model(models, &editing, &props.uses);
     let error = model.as_ref().err().and_then(Clone::clone);
     let limits = Row::new()
       .width(Dimension::Pct(100.0))
@@ -298,7 +292,7 @@ impl ModelEditor {
     editing: &Editing,
     model: Option<NativeModel>,
   ) -> Element {
-    let used = |id: &ModelId| props.uses.iter().any(|used| &*used.model == id.as_str());
+    let used = |id: &ModelId| props.uses.iter().any(|used| &used.model == id);
     let remove_model = match editing {
       Editing::Model(id) if !used(id) => Some(
         ActionButton::new(ctx.t("connections.models.removeModel"))
@@ -356,8 +350,14 @@ impl ModelEditor {
   }
 
   /// The model the open row would save, or why it cannot be saved: `None` while the id is still
-  /// empty, which needs no explanation.
-  fn model(&self, models: &[NativeModel], editing: &Editing) -> Result<NativeModel, Option<Message>> {
+  /// empty, which needs no explanation. An edit that leaves the model as it was keeps its source;
+  /// any change makes it a model added by hand. The id of a model a profile uses stays.
+  fn model(
+    &self,
+    models: &[NativeModel],
+    editing: &Editing,
+    uses: &[ModelUse],
+  ) -> Result<NativeModel, Option<Message>> {
     let entered = self.id.get();
     let entered = entered.trim();
     if entered.is_empty() {
@@ -372,13 +372,21 @@ impl ModelEditor {
     }
     let context = tokens(&self.context.get())?;
     let max_output = tokens(&self.max_output.get())?;
-    Ok(NativeModel::new(
-      id,
-      context,
-      max_output,
-      self.efforts.get().0,
-      ModelSource::Manual,
-    ))
+    let efforts = self.efforts.get().0;
+    let Editing::Model(edited) = editing else {
+      return Ok(NativeModel::new(id, context, max_output, efforts, ModelSource::Manual));
+    };
+    let before = models.iter().find(|model| model.id() == edited);
+    let unchanged = before
+      .map(|before| NativeModel::new(id.clone(), context, max_output, efforts.clone(), before.source()))
+      .filter(|model| Some(model) == before);
+    let model = unchanged.unwrap_or_else(|| NativeModel::new(id, context, max_output, efforts, ModelSource::Manual));
+    let after: Vec<NativeModel> = models
+      .iter()
+      .map(|row| if row.id() == edited { model.clone() } else { row.clone() })
+      .collect();
+    keep_used(&after, uses, "connections.models.idInUse").map_err(Some)?;
+    Ok(model)
   }
 }
 
