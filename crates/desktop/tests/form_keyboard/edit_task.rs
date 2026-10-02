@@ -127,6 +127,10 @@ fn edit_task_opens_the_filled_form_and_saves_changes_in_place() {
   desktop.press("save-draft");
   state_reads(&mut desktop, "Draft saved locally");
   assert!(!save_available(&mut desktop));
+  // Unlike Create, Save changes keeps the form open.
+  assert!(shows(&mut desktop, "save-draft", "Save changes"));
+  assert!(shows(&mut desktop, "task-form", "Edit task"));
+  assert_eq!(desktop.value("task-title"), "Add GitHub sign-in");
 
   let tasks = stored(&desktop.repo);
   assert_eq!(tasks.len(), 1, "the draft was saved over, not added");
