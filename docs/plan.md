@@ -422,17 +422,18 @@ Agent runtime architecture · effective approvals, Windows sandbox and Cargo iso
 
 ORC-45 · Multiline command rendering · branch `claude/orc45`
 
-- **Review passed; design follow-ups done 2026-10-02; design-doc state pending the designer's save.** Command
+- **Done 2026-10-02.** Independent review passed; independent design verification passed at 1440 and 960. Command
   headers show a one-line preview: a line break and the indentation around it read as one space. Every agent/tool
   command can expand; its details keep the original command in a box with Copy (exact bytes). In that box the
   command never wraps: each line stays as recorded and long lines scroll sideways in the box's own viewport, while
   Copy keeps its column at the top right. Dialog and page command rows are unchanged. Ids are per entry
   (`activity-command-detail-{sequence}`, `activity-command-copy-{sequence}`).
 - Design: the command-details states were added to `data/orchester.pen` by the designer (`iBzOj` 02.I2, `BQgqg`
-  02.I3, `tWO8E` 02.I4, hidden `uA3Sh` "Entry command" in `N4SlQq`); the user still has to save the file. Known
+  02.I3, `tWO8E` 02.I4, hidden `uA3Sh` "Entry command" in `N4SlQq`), saved on master as b65abef. Known
   difference: the design adds a 6px lane for the horizontal thumb only while a line overflows; lurq reserves a lane
   always or never, so the thumb overlays the box's bottom padding and the box keeps its height.
-- Remaining: independent design verification of the follow-ups against the saved nodes at 1440 and 960.
+- Minor, left: the design's header preview keeps indentation spacing while the app collapses it to one space; the
+  box is 3px shorter at 1440.
 - Filtered regressions: `cargo test -p orchester-desktop --test form_keyboard multiline_command`,
   `--test command_presentation multiline_command`, `--test transcript transcript`, `--test form_keyboard command`,
   `--test i18n locale`, `--test theme mono_text`, `--test theme transcript_command`. Opt-in, because they write the
