@@ -396,8 +396,9 @@ fn read_back(id: &'static str, text: &str) -> Element {
     .into()
 }
 
-/// Create & run with what it is doing or why it did not start, then Save as draft (`Hc1Cp`,
-/// `Q4xE7q`). `save` and `start` are `None` while they cannot be pressed.
+/// Create & run with what it is doing or why it did not start, then Create, which saves the task
+/// without running it (`Hc1Cp`, `Q4xE7q`). `save` and `start` are `None` while they cannot be
+/// pressed.
 fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Column {
   let status: Option<Element> = state
     .save_error
@@ -455,14 +456,14 @@ fn actions(ctx: &Ctx, state: &FormState, save: Submit, start: Submit) -> Column 
     }))
 }
 
-/// Save as draft, or Save changes while a draft is edited (`Q4xE7q`, `fNWfv`); `save` is `None`
-/// while it cannot be pressed.
+/// Create, or Save changes while a draft is edited (`Q4xE7q`, `fNWfv`); `save` is `None` while it
+/// cannot be pressed.
 fn save_button(ctx: &Ctx, state: &FormState, save: Submit) -> Button {
   let label = match (state.editing, state.saving) {
     (true, true) => ctx.t("tasks.edit.savingChanges"),
     (true, false) => ctx.t("tasks.edit.saveChanges"),
-    (false, true) => ctx.t("tasks.new.savingDraft"),
-    (false, false) => ctx.t("tasks.new.saveDraft"),
+    (false, true) => ctx.t("tasks.new.creating"),
+    (false, false) => ctx.t("tasks.new.create"),
   };
   // Save changes reads in `$text` while it can be pressed (`PCXbi` in `ctHXE`), `$muted` while
   // it cannot (`fNWfv` in `E1o77O`).

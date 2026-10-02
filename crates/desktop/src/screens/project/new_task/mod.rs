@@ -1,6 +1,7 @@
 //! New task (02.09 `l2YA4`): brief and acceptance criteria on the left, pipeline and limits
-//! on the right. The task is saved as a draft, incomplete if need be, under a key generated
-//! when the form opens: a failed save keeps the form, and retrying cannot create a second task.
+//! on the right. Create saves the task as a draft without running it, incomplete if need be, under
+//! a key generated when the form opens, and returns to the task list, where the new task is
+//! highlighted: a failed save keeps the form, and retrying cannot create a second task.
 //! Create & run checks that the run can start, saves and queues the task and asks the runner to
 //! start its run under a second key generated when the form opens, so a retry after a failure
 //! never starts a second run; it then opens the task page. Opened on a saved draft, the same form
@@ -87,9 +88,13 @@ pub struct PipelineSelection(pub Option<ResourceId>);
 
 impl lurq::app::component::DevtoolsInspectable for PipelineSelection {}
 
-/// Details of the latest draft save that completed successfully.
+/// The latest draft save that completed successfully.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SavedDraft(TaskDetails);
+pub struct SavedDraft {
+  details: TaskDetails,
+  /// The task Create made; `None` when the form saved over a task it edits.
+  created: Option<TaskId>,
+}
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
@@ -176,8 +181,9 @@ impl FormState {
     self.queued && !self.started
   }
 
-  /// Whether Save as draft can be pressed: not while a save or Create & run is under way or the
-  /// task is queued, and for a draft being edited not while it holds what is stored.
+  /// Whether Create, or Save changes for a draft being edited, can be pressed: not while a save or
+  /// Create & run is under way or the task is queued, and for a draft being edited not while it
+  /// holds what is stored.
   const fn can_save(&self) -> bool {
     !(self.saving
       || self.starting
@@ -219,8 +225,12 @@ impl Component for NewTaskForm {
     let save = save_action(ctx);
     let saved = nav.clone();
     ctx.watch(&save.state(), move |state| {
-      if state.data.is_some() && !state.is_pending() {
-        saved.tasks_changed();
+      let Some(draft) = state.data.as_ref().filter(|_| !state.is_pending()) else {
+        return;
+      };
+      saved.tasks_changed();
+      if let Some(task) = draft.created {
+        saved.show_created(task);
       }
     });
     let queued_task = ctx.signal(None);
@@ -422,7 +432,7 @@ impl NewTaskForm {
     let stored = saving
       .data
       .as_ref()
-      .map(|saved| &saved.0)
+      .map(|saved| &saved.details)
       .or_else(|| editing.map(|editing| editing.task.details()));
     FormState {
       errors,
@@ -448,7 +458,8 @@ impl NewTaskForm {
     }
   }
 
-  /// Saves the valid form under the form's key; `None` while it cannot be saved.
+  /// Saves the valid form: Create under the form's key, or over the task it edits; `None` while it
+  /// cannot be saved.
   fn save_handler(
     &self,
     save: &SaveAction,
@@ -492,15 +503,21 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
     let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
     async move {
       let save = async move {
-        let saved = background::run(move || save_draft_in(&repo_root, target, details)).await?;
-        saved.map(SavedDraft).map_err(|error| {
-          tracing::error!(%error, "cannot save the task draft");
-          match error {
-            TaskDraftSaveError::Store(error) => messages::store_error(&error),
-            TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
-            TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
-          }
-        })
+        let created = matches!(target, SaveTarget::New(_));
+        let saved = background::run(move || save_draft_in(&repo_root, target, &details)).await?;
+        saved
+          .map(|task| SavedDraft {
+            created: created.then(|| task.id()),
+            details: task.details().clone(),
+          })
+          .map_err(|error| {
+            tracing::error!(%error, "cannot save the task draft");
+            match error {
+              TaskDraftSaveError::Store(error) => messages::store_error(&error),
+              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
+              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+            }
+          })
       };
       activity.track(spec, save).await
     }
