@@ -1,12 +1,18 @@
 //! Task-list query, ordering and selection, independent of rendering.
 use std::collections::BTreeSet;
 
-use orchester_core::id::{ResourceId, TaskId};
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  run::TaskPhase,
+  task_group::GroupHold,
+};
 
 use super::{
   data::ProjectTasks,
+  group::hold_messages,
   list::{self, TaskRow, TaskTab},
 };
+use crate::messages::Message;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TaskSort {
@@ -66,12 +72,16 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: &str, pipeline: PipelineFi
   list::rows(&tasks, &data.pipelines, &data.phases, tab)
     .into_iter()
     .map(|mut row| {
-      if let Some(reason) = data.group_holds.get(&row.id).and_then(|messages| messages.first())
-        && (row.phase == Some(orchester_core::run::TaskPhase::Queued)
-          || (row.phase == Some(orchester_core::run::TaskPhase::StoppedAtLimit)
-            && reason.key == "tasks.bulk.stoppedGroup"))
-      {
-        row.detail = reason.clone();
+      match (data.group_holds.get(&row.id), row.phase) {
+        (Some(hold), Some(TaskPhase::Queued)) => {
+          if let Some(reason) = hold_messages(hold).into_iter().next() {
+            row.detail = reason;
+          }
+        }
+        (Some(GroupHold::GroupCap), Some(TaskPhase::StoppedAtLimit)) => {
+          row.detail = Message::new("tasks.bulk.stoppedGroup");
+        }
+        _ => {}
       }
       row
     })

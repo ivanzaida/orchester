@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   run::{PauseReason, RunStatus},
-  task_group::{GroupError, Scheduling, TaskGroup},
+  task_group::{GroupError, GroupHold, Scheduling, TaskGroup},
   tokens::{TokenBudget, TokensUsed},
 };
 
@@ -63,4 +63,35 @@ fn task_group_rejects_empty_and_duplicate_selection() {
     TaskGroup::new(key, vec![task, task], Scheduling::Sequential, cap),
     Err(GroupError::Duplicate)
   );
+}
+
+#[test]
+fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
+  let sequential = group(Scheduling::Sequential);
+  let running = Some(RunStatus::Running);
+  assert_eq!(sequential.hold(&[None, None, None], TokensUsed::ZERO), None);
+  let previous = sequential.hold(&[running.clone(), None, None], TokensUsed::ZERO);
+  assert_eq!(previous, Some(GroupHold::PreviousTask));
+  assert!(previous.is_some_and(|hold| hold.clears_on_its_own()));
+  let parallel = group(Scheduling::Parallel(NonZeroU32::new(1).expect("positive")));
+  assert_eq!(
+    parallel.hold(&[running.clone(), None, None], TokensUsed::ZERO),
+    Some(GroupHold::Concurrency)
+  );
+  let failed = Some(RunStatus::Cancelled);
+  let held = sequential.hold(&[failed.clone(), None, None], TokensUsed::ZERO);
+  assert_eq!(held, Some(GroupHold::FailedTask));
+  assert!(held.is_some_and(|hold| !hold.clears_on_its_own() && hold.releases_unstarted()));
+  let cap = sequential.hold(&[running.clone(), None, None], TokensUsed::new(100));
+  assert_eq!(cap, Some(GroupHold::GroupCap));
+  assert!(cap.is_some_and(|hold| hold.releases_unstarted()));
+  assert!(!GroupHold::SessionEnded.clears_on_its_own() && !GroupHold::SessionEnded.releases_unstarted());
+  // Nothing is left to start, and nothing holds the group: no hold.
+  let done = Some(RunStatus::Succeeded);
+  assert_eq!(
+    sequential.hold(&[done.clone(), done.clone(), running], TokensUsed::ZERO),
+    None
+  );
+  assert!(!TaskGroup::finished(&[done.clone(), done.clone(), None]));
+  assert!(TaskGroup::finished(&[done.clone(), failed, done]));
 }

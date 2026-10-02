@@ -209,14 +209,16 @@ fn stored_tasks() -> Vec<Task> {
 #[test]
 fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
-  assert_eq!(TaskTab::All.count(&tasks), Some(2));
-  assert_eq!(TaskTab::Drafts.count(&tasks), Some(1));
-  for tab in [TaskTab::Queue, TaskTab::NeedsReview, TaskTab::Done] {
-    assert!(tab.is_available());
-    let count = usize::from(tab == TaskTab::Queue);
-    assert_eq!(tab.count(&tasks), Some(count));
-    assert_eq!(list::rows(&tasks, &[], &Default::default(), tab).len(), count);
-  }
+  let count = |tab| list::rows(&tasks, &[], &Default::default(), tab).len();
+  assert_eq!(count(TaskTab::All), 2);
+  assert_eq!(count(TaskTab::Drafts), 1);
+  assert_eq!(
+    count(TaskTab::Queue),
+    1,
+    "a queued task waits in the queue before its run"
+  );
+  assert_eq!(count(TaskTab::NeedsReview), 0);
+  assert_eq!(count(TaskTab::Done), 0);
   let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
   assert_eq!(drafts.len(), 1);
   assert_eq!(&*drafts[0].title, "Incomplete");

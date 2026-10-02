@@ -584,4 +584,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   memory::MIGRATION,
   native_commands::MIGRATION,
   task_groups::MIGRATION,
+  task_groups::FINISHED_MIGRATION,
 ];

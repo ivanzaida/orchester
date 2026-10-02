@@ -16,6 +16,7 @@ impl SchedulingReview {
         FieldNote::None,
       ))
       .child(self.limit_fields(ctx, locked))
+      .with_children(self.limits_note(ctx, props))
       .child(self.time_readback(ctx, locked))
       .child(self.pipeline_readback(ctx, props))
       .child(self.approval_notice(ctx, props))

@@ -85,6 +85,7 @@ pub struct TasksScreen {
   assigning: Signal<bool>,
   assign_pipeline: Signal<PipelineFilter>,
   assign: FutureAction<(PathBuf, Vec<TaskId>, ResourceId), Vec<Message>, Message>,
+  release: FutureAction<(PathBuf, Vec<TaskId>), (), Message>,
   /// The task Create just made, highlighted while the list is shown.
   created: Option<TaskId>,
 }
@@ -103,6 +104,13 @@ impl Component for TasksScreen {
         changed.tasks_changed();
       }
     });
+    let release = release_action(ctx);
+    let changed = nav.clone();
+    ctx.watch(&release.state(), move |state| {
+      if !state.is_pending() && state.data.is_some() {
+        changed.tasks_changed();
+      }
+    });
     Self {
       created: nav.take_created(),
       nav,
@@ -115,12 +123,14 @@ impl Component for TasksScreen {
       assigning: ctx.signal(false),
       assign_pipeline: ctx.signal(PipelineFilter::default()),
       assign,
+      release,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    // Keep the create-time action's polling slot alive on every render.
+    // Keep the create-time actions' polling slots alive on every render.
     let _assign = assignment_action(ctx);
+    let _release = release_action(ctx);
     let props = ctx.props::<TasksProps>().clone();
     ctx.provide(selection::TaskSelection(self.selected.clone()));
     if self.reviewing.get() {
@@ -166,15 +176,17 @@ fn assignment_action(ctx: &mut Ctx) -> FutureAction<(PathBuf, Vec<TaskId>, Resou
   )
 }
 
+fn release_action(ctx: &mut Ctx) -> FutureAction<(PathBuf, Vec<TaskId>), (), Message> {
+  ctx.future_action(|(root, tasks): (PathBuf, Vec<TaskId>)| async move {
+    background::run(move || group::release(&root, &tasks)).await?
+  })
+}
+
 impl TasksScreen {
   fn tabs(&self, ctx: &Ctx, selected: TaskTab, tasks: Option<&ProjectTasks>) -> Element {
     let tabs = TaskTab::ALL.into_iter().map(|tab| {
-      let item = Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
-        .min_width(Dimension::Px(tab_width(tab)));
-      if !tab.is_available() {
-        return item;
-      }
-      item
+      Tab::new(tab_id(tab), ctx.t(tab.label_key()), Dimension::Px(TAB_ROW_HEIGHT))
+        .min_width(Dimension::Px(tab_width(tab)))
         .count(tasks.map(|tasks| list::rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, tab).len()))
         .selected(tab == selected)
         .link(self.nav.link(Page::Tasks(tab)))
@@ -316,7 +328,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
   };
   let content = body()
     .child(controls::filters(ctx, screen, tasks))
-    .child(controls::selection_bar(ctx, screen, tasks, visible.clone()))
+    .child(controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
     .with_children(
       screen
         .assigning

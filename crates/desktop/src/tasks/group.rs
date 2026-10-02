@@ -1,11 +1,12 @@
 //! Review validation reuses single-task preflight, then saves one atomic queue group.
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 use orchester_core::{
   id::{ResourceId, TaskId},
   resource::Pipeline,
   store::{ResourceStore, SettingsStore, TaskStore},
-  task_group::{ReviewedPipeline, TaskGroup},
+  task::TaskStatus,
+  task_group::{GroupHold, ReviewedPipeline, TaskGroup},
   task_selection::SelectionProblem,
 };
 use orchester_store::ProjectDb;
@@ -13,6 +14,7 @@ use orchester_store::ProjectDb;
 use crate::{
   messages::{self, Message},
   tasks::{
+    data::ProjectTasks,
     list::missing_key,
     run::{check, preflight_message},
   },
@@ -33,7 +35,7 @@ pub fn hold_messages(hold: &orchester_core::task_group::GroupHold) -> Vec<Messag
     GroupHold::SessionEnded => "tasks.bulk.hold.sessionEnded",
     GroupHold::AgentCapacity => "tasks.bulk.hold.capacity",
     GroupHold::DailyBudget => "runs.capacity.dailyBudgetUsed",
-    GroupHold::GroupCap => "tasks.bulk.stoppedGroup",
+    GroupHold::GroupCap => "tasks.bulk.hold.groupCap",
     GroupHold::PreviousTask => "tasks.bulk.hold.previous",
     GroupHold::Concurrency => "tasks.bulk.hold.concurrency",
     GroupHold::FailedTask => "tasks.bulk.hold.failure",
@@ -61,6 +63,32 @@ pub fn assign(root: &Path, tasks: &[TaskId], pipeline: ResourceId) -> Result<Vec
       };
       Ok(Message::new(key).with("task", task.key().to_string()))
     })
+    .collect()
+}
+
+/// Takes held groups' unstarted `tasks` back to the drafts ([`ProjectDb::release_held_tasks`]).
+pub fn release(root: &Path, tasks: &[TaskId]) -> Result<(), Message> {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  db.release_held_tasks(tasks)
+    .map_err(|error| messages::store_error(&error))
+}
+
+/// The selected tasks a person may take back to the drafts: queued, never started, in a group
+/// held for good ([`GroupHold::releases_unstarted`]).
+pub fn releasable(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<TaskId> {
+  tasks
+    .tasks
+    .iter()
+    .filter(|task| {
+      selected.contains(&task.id())
+        && task.status() == TaskStatus::Queued
+        && !tasks.phases.contains_key(&task.id())
+        && tasks
+          .group_holds
+          .get(&task.id())
+          .is_some_and(GroupHold::releases_unstarted)
+    })
+    .map(|task| task.id())
     .collect()
 }
 

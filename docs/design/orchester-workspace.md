@@ -926,6 +926,18 @@ agents at turn boundaries and can overshoot by already-running turns. Queue edit
 task prerequisites remain separate backlog work; this change does not introduce those controls or claim dependency
 enforcement. Shared-cap recovery is unavailable in the per-run raise-limit panel because raising one run's limit
 cannot raise a group cap. The independent verifier must compare J9467/W1Dq6/IyJ5a and these reachable states.
+**Held groups (implemented, not drawn yet; to be drawn in J9467's selection bar):** a failed or cancelled task, the
+spent group cap, or a start the person must fix (preflight problems, a failed start) holds a group's unstarted tasks
+for good; their rows say so (*Held after a task failed or was cancelled. Select the waiting tasks and choose Return to
+drafts to schedule them again.*, and the same for the cap). Selecting any of them adds a secondary **Return to
+drafts** button (undo-2 icon, 32px like Set pipeline) to the selection bar, left of Set pipeline. It takes the
+selected held, never-started tasks back to the drafts and out of their group, together; the group keeps its started
+members, and a group left without members is removed. The drafts can then be reviewed and queued again. The
+selection bar's split names tasks that are neither ready nor incomplete: *0 ready to queue · 1 incomplete · 2 already
+queued or started*. When the selected tasks had different budgets or time limits, the review says under its token
+fields that *These limits replace each selected task’s own token budget and time limit.* (the shared limits apply to
+every task, as the review's per-task fields show). The runner retries a start the person must fix with a growing
+wait (2 s, doubling to 1 min) and stops treating a group as work once it is held for good or every first run ended.
 The scheduling-review order column includes a Task to reorder selector and keyboard-reachable Move up, Move down
 and Undo buttons beneath the scrolling rows (implemented, not drawn yet). Select a task with the picker, then use
 Tab and Enter on its move action. Boundary moves and actions after submission are disabled. Each real keyboard

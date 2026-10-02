@@ -65,6 +65,23 @@ impl SchedulingReview {
       .into()
   }
 
+  /// Queueing gives every task the review's token budget and time limit; when the selected tasks
+  /// had different ones, say so (implemented, not drawn yet: W1Dq6's fixture tasks share theirs).
+  pub(super) fn limits_note(&self, ctx: &Ctx, props: &ReviewProps) -> Option<Element> {
+    let tasks = props.tasks.ready()?;
+    let order = self.order.get();
+    let mut limits = tasks
+      .tasks
+      .iter()
+      .filter(|task| order.tasks.contains(&task.id()))
+      .map(|task| task.details().limits);
+    let first = limits.next()?;
+    limits.any(|each| each != first).then(|| {
+      Element::from(Text::new(&ctx.t("tasks.bulk.limitsReplace")).variant(ExtraTypography::CellLabel.role()))
+        .id("tasks-review-limits-note")
+    })
+  }
+
   pub(super) fn time_readback(&self, ctx: &Ctx, locked: bool) -> Element {
     if self.editing_time.get() && !locked {
       let editing = self.editing_time.clone();

@@ -176,19 +176,23 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
-/// Scheduling review W1Dq6/IyJ5a: ordered rows, settings rail, fields and drag grip.
+/// Scheduling review (02.05 `W1Dq6`, 02.06 `IyJ5a`): a task in the order (`gj5Cf`, a `zemhy` row).
 pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
-/// W1Dq6/IyJ5a: the 508px execution settings (`qdApo`) plus their reserved scroll gutter, which
-/// sits in the page padding.
+/// The 508px execution settings (`qdApo`) plus their reserved scroll gutter, which sits in the
+/// page padding.
 pub const TASK_REVIEW_RAIL_WIDTH: f32 = 508.0 + SPACE_STACK;
-/// Execution-mode cards (`YZcH2`, `jPX6u`) in both scheduling reviews.
+/// Execution-mode cards (`YZcH2`, `jPX6u`).
 pub const TASK_REVIEW_MODE_HEIGHT: f32 = 88.0;
+/// The settings' selects and token fields (`gIQBb`, `MUKob`, `dMiX2`, `XZCQ5`).
 pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
+/// The drag handle tile of an order row (`aqRNL` in `gj5Cf`).
 pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;
-/// Scheduling review action strip and compact properties (W1Dq6/IyJ5a).
+/// The action strip under the review (`JV6sD`).
 pub const TASK_REVIEW_FOOTER_HEIGHT: f32 = 76.0;
+/// Queue N tasks, the strip's primary action (`QAYeP`).
 pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
 pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
+/// A key/value setting: time limit and pipeline version (`U673I`, `RG0FF`, `tfGRt`).
 pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

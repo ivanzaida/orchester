@@ -354,17 +354,20 @@
         "capacity": "Waiting for agent capacity",
         "previous": "Waiting for the previous task to be ready for review",
         "concurrency": "Waiting for task concurrency",
-        "failure": "Scheduling held after a task failed or was cancelled",
+        "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
       },
       "selected": "{{count}} selected",
       "runSelected": "Run selected · {{count}}",
       "notDraft": "This task is already queued.",
       "hasRun": "This task already has a run.",
+      "notHeld": "This task is no longer held by its group, so it stays queued.",
       "notReady": "{{task}}: {{reason}}",
       "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
       "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
       "applyPipeline": "Apply pipeline",
+      "releaseHeld": "Return to drafts",
       "reviewTitle": "Run {{count}} tasks",
       "reviewDescription": "Choose how this group runs. Each task keeps its own pipeline, conversation and result.",
       "emptySelection": "Select at least one ready draft.",
@@ -395,6 +398,7 @@
       "perTask": "Token budget / task",
       "timeLimit": "Time limit / task",
       "timeValue": "{{minutes}} min active agent time",
+      "limitsReplace": "These limits replace each selected task’s own token budget and time limit.",
       "finishTime": "Done",
       "pipelineVersion": "Pipeline version",
       "pipelineValue": "{{pipeline}} · {{version}}",
@@ -440,10 +444,9 @@
       "title": "Title"
     },
     "selection": {
-      "unavailable": "Selecting tasks is not available yet",
       "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
-      "setPipeline": "Set pipeline",
-      "runSelected": "Run selected"
+      "readinessStarted": "{{ready}} ready to queue · {{incomplete}} incomplete · {{started}} already queued or started",
+      "setPipeline": "Set pipeline"
     },
     "columns": {
       "key": "ID",

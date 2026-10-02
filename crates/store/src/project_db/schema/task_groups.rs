@@ -11,3 +11,8 @@ CREATE TABLE task_group_members (
   PRIMARY KEY(group_key, position)
 ) STRICT;
 ";
+
+/// A group whose every member's first run has ended is finished: the runner stops looking at it.
+pub(super) const FINISHED_MIGRATION: &str = r"
+ALTER TABLE task_groups ADD COLUMN finished INTEGER NOT NULL DEFAULT 0 CHECK (finished IN (0, 1));
+";

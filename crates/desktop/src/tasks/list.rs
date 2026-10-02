@@ -33,10 +33,6 @@ impl lurq::app::component::DevtoolsInspectable for TaskTab {}
 impl TaskTab {
   pub const ALL: [Self; 5] = [Self::All, Self::Drafts, Self::Queue, Self::NeedsReview, Self::Done];
 
-  pub const fn is_available(self) -> bool {
-    true
-  }
-
   pub const fn label_key(self) -> &'static str {
     match self {
       Self::All => "tasks.tabs.all",
@@ -45,23 +41,6 @@ impl TaskTab {
       Self::NeedsReview => "tasks.tabs.needsReview",
       Self::Done => "tasks.tabs.done",
     }
-  }
-
-  /// Whether `task` belongs to this tab; unavailable tabs contain nothing.
-  pub fn includes(self, task: &Task) -> bool {
-    match self {
-      Self::All => true,
-      Self::Drafts => task.status() == TaskStatus::Draft,
-      Self::Queue => task.status() == TaskStatus::Queued,
-      Self::NeedsReview | Self::Done => false,
-    }
-  }
-
-  /// Number of tasks in the tab, or `None` for a tab that cannot be counted yet.
-  pub fn count(self, tasks: &[Task]) -> Option<usize> {
-    self
-      .is_available()
-      .then(|| tasks.iter().filter(|task| self.includes(task)).count())
   }
 }
 
@@ -382,7 +361,8 @@ pub fn rows(tasks: &[Task], published: &[PipelineChoice], phases: &Phases, tab: 
   tasks
     .iter()
     .filter(|task| match tab {
-      TaskTab::All | TaskTab::Drafts => tab.includes(task),
+      TaskTab::All => true,
+      TaskTab::Drafts => task.status() == TaskStatus::Draft,
       TaskTab::Queue => matches!(
         phase_of(task, phases),
         Some(

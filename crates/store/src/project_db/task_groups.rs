@@ -51,7 +51,7 @@ impl ProjectDb {
   ) -> Result<Vec<(TaskId, SelectionProblem)>, StoreError> {
     let transaction = self.connection.unchecked_transaction()?;
     if self.latest_version::<Pipeline>(pipeline)?.is_none() {
-      return Err(StoreError::ResourceNotFound(pipeline));
+      return Err(StoreError::PipelineNotPublished(pipeline));
     }
     let mut skipped = Vec::new();
     for id in tasks {
@@ -92,10 +92,10 @@ impl ProjectDb {
           .edit(details, false)
           .map_err(|source| StoreError::TaskNotEditable { task: *id, source })?;
       }
-      let pipeline = task
-        .details()
-        .pipeline
-        .ok_or_else(|| corrupt("task group", "pipeline missing"))?;
+      let pipeline = task.details().pipeline.ok_or(StoreError::TaskNotSelectable {
+        task: *id,
+        problem: SelectionProblem::Missing(orchester_core::task::MissingDetail::Pipeline),
+      })?;
       let reviewed = reviewed
         .iter()
         .find(|entry| entry.task == *id && entry.pipeline == pipeline)
@@ -108,13 +108,15 @@ impl ProjectDb {
         [id.to_string()],
         |row| row.get(0),
       )?;
-      let problems = task_selection::problems(&task, has_run, &[pipeline]);
-      if !problems.is_empty() {
-        return Err(corrupt("task group", format!("{id}: {problems:?}")));
+      if let Some(problem) = task_selection::problems(&task, has_run, &[pipeline]).into_iter().next() {
+        return Err(StoreError::TaskNotSelectable { task: *id, problem });
       }
       task
         .queue(version.number())
-        .map_err(|error| corrupt("task group", error))?;
+        .map_err(|error| StoreError::TaskNotSelectable {
+          task: *id,
+          problem: SelectionProblem::from(error),
+        })?;
       queued.push(task);
     }
     transaction.execute(
@@ -162,7 +164,61 @@ impl ProjectDb {
   }
 
   pub fn task_groups(&self) -> Result<Vec<TaskGroup>, StoreError> {
-    let mut statement = self.connection.prepare("SELECT key FROM task_groups ORDER BY rowid")?;
+    self.groups_where("SELECT key FROM task_groups ORDER BY rowid")
+  }
+
+  /// The groups the runner still schedules: those not [finished](Self::finish_task_group).
+  pub fn unfinished_task_groups(&self) -> Result<Vec<TaskGroup>, StoreError> {
+    self.groups_where("SELECT key FROM task_groups WHERE finished = 0 ORDER BY rowid")
+  }
+
+  /// Records that every member's first run has ended; the group is not scheduled again.
+  pub fn finish_task_group(&self, key: IdempotencyKey) -> Result<(), StoreError> {
+    self
+      .connection
+      .execute("UPDATE task_groups SET finished = 1 WHERE key = ?1", [key.to_string()])?;
+    Ok(())
+  }
+
+  /// Takes held groups' unstarted `tasks` back to the drafts and out of their groups, together:
+  /// a failed task or the spent cap holds them for good, and the person decides what runs next.
+  /// Their groups keep the members that started; a group left without members is removed.
+  pub fn release_held_tasks(&mut self, tasks: &[TaskId]) -> Result<(), StoreError> {
+    let transaction = self.connection.unchecked_transaction()?;
+    let mut groups = Vec::new();
+    for id in tasks {
+      let group = self.task_group_for_task(*id)?.ok_or(StoreError::TaskNotHeld(*id))?;
+      if !self
+        .task_group_hold(group.key())?
+        .is_some_and(|hold| hold.releases_unstarted())
+      {
+        return Err(StoreError::TaskNotHeld(*id));
+      }
+      let has_run: bool = transaction.query_row(
+        "SELECT EXISTS(SELECT 1 FROM runs WHERE task_id = ?1)",
+        [id.to_string()],
+        |row| row.get(0),
+      )?;
+      let mut task = self.task(*id)?.ok_or(StoreError::TaskNotFound(*id))?;
+      task
+        .return_to_draft(has_run)
+        .map_err(|_| StoreError::TaskNotHeld(*id))?;
+      transaction.execute("DELETE FROM task_group_members WHERE task_id = ?1", [id.to_string()])?;
+      update_task(&transaction, &task)?;
+      groups.push(group.key());
+    }
+    for key in groups {
+      transaction.execute(
+        "DELETE FROM task_groups WHERE key = ?1 AND NOT EXISTS (SELECT 1 FROM task_group_members WHERE group_key = ?1)",
+        [key.to_string()],
+      )?;
+    }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn groups_where(&self, query: &str) -> Result<Vec<TaskGroup>, StoreError> {
+    let mut statement = self.connection.prepare(query)?;
     let keys = statement
       .query_map([], |row| row.get::<_, String>(0))?
       .collect::<Result<Vec<_>, _>>()?;

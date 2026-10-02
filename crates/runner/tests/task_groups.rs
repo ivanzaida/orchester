@@ -69,6 +69,22 @@ async fn run_group(mode: Scheduling) {
   for task in drafts {
     assert_eq!(db.runs_of_task(task.id()).expect("runs").len(), 1);
   }
+  assert!(
+    db.unfinished_task_groups().expect("groups").is_empty(),
+    "a group whose runs all ended is finished"
+  );
+}
+
+/// Waits until the scheduler has nothing to do, as `StopIfIdle` asks it.
+async fn becomes_idle(scheduler: &orchester_runner::execution::Scheduler) {
+  let start = std::time::Instant::now();
+  while !scheduler.is_idle() {
+    assert!(
+      start.elapsed() < std::time::Duration::from_secs(20),
+      "the runner stays busy"
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -153,6 +169,8 @@ async fn task_group_shared_cap_stops_the_run_and_holds_unstarted_tasks() {
       hold: GroupHold::GroupCap
     })
   );
+  // The spent cap holds the second task until a person acts, so the runner may stop.
+  becomes_idle(&scheduler).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -254,6 +272,12 @@ async fn task_group_cancel_then_run_again_does_not_inherit_exhausted_shared_cap(
       .is_none()
   );
   assert_eq!(db.runs_of_task(first.task()).expect("runs").len(), 2);
+  // The cancelled task holds the second one for good: the runner is idle, and the person can
+  // take it back to the drafts, after which the group is finished.
+  becomes_idle(&scheduler).await;
+  db.release_held_tasks(&[group.tasks()[1]]).expect("release");
+  scheduler.advance_task_groups().await.expect("advance released group");
+  assert!(db.unfinished_task_groups().expect("groups").is_empty());
 }
 
 fn reviewed(db: &ProjectDb, group: &TaskGroup) -> Vec<orchester_core::task_group::ReviewedPipeline> {

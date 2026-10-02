@@ -6,12 +6,12 @@ use orchester_core::{
   resource::{Pipeline, ResourceKind},
   run::{BranchName, NewRun},
   store::{ResourceStore, RunStore, TaskStore},
-  task::{TaskDetails, TaskStatus},
-  task_group::{Scheduling, TaskGroup},
+  task::{MissingDetail, TaskDetails, TaskStatus},
+  task_group::{GroupHold, Scheduling, TaskGroup},
   task_selection::SelectionProblem,
   tokens::TokensUsed,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use support::{at, budget, name, started_run};
 
 fn drafts(db: &mut ProjectDb) -> (ResourceId, Vec<orchester_core::task::Task>) {
@@ -139,7 +139,13 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
     budget(2_000_000),
   )
   .expect("group");
-  assert!(db.queue_task_group(&group, None, &reviewed(&db, &group)).is_err());
+  assert!(matches!(
+    db.queue_task_group(&group, None, &reviewed(&db, &group)),
+    Err(StoreError::TaskNotSelectable {
+      problem: SelectionProblem::Missing(MissingDetail::Brief),
+      ..
+    })
+  ));
   assert_eq!(
     db.task(drafts[0].id()).expect("task").expect("exists").status(),
     TaskStatus::Draft
@@ -174,10 +180,29 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
     db.set_tasks_pipeline(&[queued.id()], pipeline).expect("assign"),
     vec![(queued.id(), SelectionProblem::NotDraft)]
   );
-  assert!(
-    db.set_tasks_pipeline(&[drafts[1].id()], ResourceId::generate())
-      .is_err()
-  );
+  assert!(matches!(
+    db.set_tasks_pipeline(&[drafts[1].id()], ResourceId::generate()),
+    Err(StoreError::ResourceNotFound(_))
+  ));
+  let body = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("version")
+    .expect("published")
+    .body()
+    .clone();
+  let unpublished = db
+    .create_resource(
+      orchester_core::resource::Slug::new("unpublished").expect("slug"),
+      name("Unpublished"),
+      &body,
+      at(10),
+    )
+    .expect("draft pipeline")
+    .id();
+  assert!(matches!(
+    db.set_tasks_pipeline(&[drafts[1].id()], unpublished),
+    Err(StoreError::PipelineNotPublished(_))
+  ));
 }
 
 fn reviewed(db: &ProjectDb, group: &TaskGroup) -> Vec<orchester_core::task_group::ReviewedPipeline> {
@@ -273,4 +298,45 @@ fn task_group_changed_assignment_rejects_the_whole_review_atomically() {
       .filter(|t| group.tasks().contains(&t.id()))
       .all(|t| t.status() == TaskStatus::Draft)
   );
+}
+
+#[test]
+fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
+  let (_, mut db, ..) = started_run();
+  let (_, drafts) = drafts(&mut db);
+  let ids: Vec<_> = drafts.iter().map(|t| t.id()).collect();
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    ids.clone(),
+    Scheduling::Sequential,
+    budget(2_000_000),
+  )
+  .expect("group");
+  db.queue_task_group(&group, None, &reviewed(&db, &group))
+    .expect("queue");
+  // A group that still schedules its work keeps its tasks.
+  db.set_task_group_hold(group.key(), Some(&GroupHold::PreviousTask))
+    .expect("hold");
+  assert!(matches!(
+    db.release_held_tasks(&ids[1..]),
+    Err(StoreError::TaskNotHeld(_))
+  ));
+  db.set_task_group_hold(group.key(), Some(&GroupHold::FailedTask))
+    .expect("hold");
+  db.release_held_tasks(&ids[1..]).expect("release");
+  let released = db.task(ids[1]).expect("task").expect("exists");
+  assert_eq!(released.status(), TaskStatus::Draft);
+  assert_eq!(released.pipeline_version(), None);
+  assert!(db.task_group_for_task(ids[1]).expect("group").is_none());
+  assert_eq!(
+    db.task_group(group.key()).expect("group").expect("kept").tasks(),
+    &ids[..1]
+  );
+  assert_eq!(db.unfinished_task_groups().expect("groups").len(), 1);
+  db.finish_task_group(group.key()).expect("finish");
+  assert!(db.unfinished_task_groups().expect("groups").is_empty());
+  assert_eq!(db.task_groups().expect("groups").len(), 1);
+  // Releasing the last member removes the group.
+  db.release_held_tasks(&ids[..1]).expect("release the rest");
+  assert!(db.task_groups().expect("groups").is_empty());
 }

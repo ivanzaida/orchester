@@ -1,21 +1,107 @@
 //! Advances reviewed groups and persists why unfinished tasks wait.
+use std::{
+  collections::HashMap,
+  time::{Duration, Instant},
+};
+
 use orchester_core::{
-  run::RunStatus,
+  id::{IdempotencyKey, TaskId},
+  run::{Run, RunStatus},
   store::RunStore,
-  task_group::{GroupHold, Scheduling, TaskGroup},
+  task_group::{GroupHold, TaskGroup},
+  tokens::TokensUsed,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
+use parking_lot::Mutex;
 
 use super::{Scheduler, read_failed};
 
+/// The first wait before a group whose start failed tries again; each failure in a row doubles it
+/// up to [`RETRY_MAX`], so a start the person must fix is not retried every second.
+const RETRY_FIRST: Duration = Duration::from_secs(2);
+const RETRY_MAX: Duration = Duration::from_secs(60);
+
+/// When each group whose next start failed may try again.
+#[derive(Default)]
+pub(super) struct GroupRetries(Mutex<HashMap<IdempotencyKey, Retry>>);
+
+#[derive(Clone, Copy)]
+struct Retry {
+  wait: Duration,
+  due: Instant,
+}
+
+impl GroupRetries {
+  fn due(&self, group: IdempotencyKey) -> bool {
+    self
+      .0
+      .lock()
+      .get(&group)
+      .is_none_or(|retry| Instant::now() >= retry.due)
+  }
+
+  fn failed(&self, group: IdempotencyKey) {
+    let mut retries = self.0.lock();
+    let wait = retries
+      .get(&group)
+      .map_or(RETRY_FIRST, |retry| (retry.wait * 2).min(RETRY_MAX));
+    retries.insert(
+      group,
+      Retry {
+        wait,
+        due: Instant::now() + wait,
+      },
+    );
+  }
+
+  fn clear(&self, group: IdempotencyKey) {
+    self.0.lock().remove(&group);
+  }
+}
+
+/// The first run of each task of `group`, in the group's order, each read once.
+fn first_runs(db: &ProjectDb, group: &TaskGroup) -> Result<Vec<Option<Run>>, Rejection> {
+  group
+    .tasks()
+    .iter()
+    .map(|task| db.run_with_key(task.first_run_key()))
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| read_failed("cannot read group runs", error))
+}
+
+fn statuses(runs: &[Option<Run>]) -> Vec<Option<RunStatus>> {
+  runs
+    .iter()
+    .map(|run| run.as_ref().map(|run| run.status().clone()))
+    .collect()
+}
+
+/// What the group's first runs used together, as `ProjectDb::task_group_usage` counts it.
+fn usage(runs: &[Option<Run>]) -> TokensUsed {
+  runs.iter().flatten().fold(TokensUsed::ZERO, |mut used, run| {
+    used += run.used();
+    used
+  })
+}
+
+/// A start that failed this way waits for the person; the group retries it with a backoff.
+const fn retries_later(hold: &GroupHold) -> bool {
+  matches!(hold, GroupHold::Preflight(_) | GroupHold::StartFailed)
+}
+
 impl Scheduler {
+  fn stored_hold(db: &ProjectDb, group: &TaskGroup) -> Result<Option<GroupHold>, Rejection> {
+    db.task_group_hold(group.key())
+      .map_err(|e| super::failed("cannot read queue hold", &e))
+  }
+
   /// Single-task start requests cannot bypass the saved group review.
   pub(super) fn check_group_start(
     &self,
     db: &ProjectDb,
-    task: orchester_core::id::TaskId,
-    recorded: Option<&orchester_core::run::Run>,
+    task: TaskId,
+    recorded: Option<&Run>,
   ) -> Result<(), Rejection> {
     if let Some(run) = recorded
       && db
@@ -31,75 +117,50 @@ impl Scheduler {
     else {
       return Ok(());
     };
-    if db
-      .task_group_hold(group.key())
-      .map_err(|e| super::failed("cannot read queue hold", &e))?
-      == Some(GroupHold::SessionEnded)
-    {
+    if Self::stored_hold(db, &group)? == Some(GroupHold::SessionEnded) {
       return Err(Rejection::TaskGroupWaiting {
         hold: GroupHold::SessionEnded,
       });
     }
-    let statuses = group
+    let runs = first_runs(db, &group)?;
+    // The task's own Pending first run is the one being started, so it counts as unstarted.
+    let statuses: Vec<_> = group
       .tasks()
       .iter()
-      .map(|id| {
-        db.run_with_key(id.first_run_key()).map(|run| {
-          run.and_then(|run| {
-            if *id == task && run.status() == &RunStatus::Pending {
-              None
-            } else {
-              Some(run.status().clone())
-            }
-          })
-        })
-      })
-      .collect::<Result<Vec<_>, _>>()
-      .map_err(|e| read_failed("cannot read group runs", e))?;
-    let used = db
-      .task_group_usage(&group)
-      .map_err(|e| read_failed("cannot read group usage", e))?;
+      .zip(statuses(&runs))
+      .map(|(id, status)| status.filter(|status| !(*id == task && status == &RunStatus::Pending)))
+      .collect();
+    let used = usage(&runs);
     if group.eligible(&statuses, used).contains(&task) {
       return Ok(());
     }
-    let hold = if used.reached(group.cap()) {
-      GroupHold::GroupCap
-    } else if statuses
-      .iter()
-      .flatten()
-      .any(|s| matches!(s, RunStatus::Failed(_) | RunStatus::Cancelled))
-    {
-      GroupHold::FailedTask
-    } else {
-      match group.scheduling() {
-        Scheduling::Sequential => GroupHold::PreviousTask,
-        Scheduling::Parallel(_) => GroupHold::Concurrency,
-      }
-    };
-    Err(Rejection::TaskGroupWaiting { hold })
+    Err(Rejection::TaskGroupWaiting {
+      hold: group.waiting_reason(&statuses, used),
+    })
   }
 
+  /// Whether a group has unstarted tasks that start, or will start once a hold ends on its own.
+  /// A group held for a person (a failed task, the spent cap, a start to fix, a reopened project)
+  /// does not keep the runner busy.
   pub(super) fn has_pending_task_groups(&self) -> Result<bool, Rejection> {
     let db = self.open()?;
     for group in db
-      .task_groups()
+      .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
-      if db
-        .task_group_hold(group.key())
-        .map_err(|e| super::failed("cannot read queue hold", &e))?
-        == Some(GroupHold::SessionEnded)
-      {
+      if Self::stored_hold(&db, &group)?.is_some_and(|hold| !hold.clears_on_its_own()) {
         continue;
       }
-      for task in group.tasks() {
-        if db
-          .run_with_key(task.first_run_key())
-          .map_err(|error| read_failed("cannot read group runs", error))?
-          .is_none()
-        {
-          return Ok(true);
-        }
+      let runs = first_runs(&db, &group)?;
+      let statuses = statuses(&runs);
+      if !statuses.iter().any(Option::is_none) {
+        continue;
+      }
+      if group
+        .hold(&statuses, usage(&runs))
+        .is_none_or(|hold| hold.clears_on_its_own())
+      {
+        return Ok(true);
       }
     }
     Ok(false)
@@ -111,7 +172,7 @@ impl Scheduler {
     }
     let db = self.open()?;
     for group in db
-      .task_groups()
+      .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
       self.advance_group(&db, &group).await?;
@@ -120,42 +181,22 @@ impl Scheduler {
   }
 
   async fn advance_group(&self, db: &ProjectDb, group: &TaskGroup) -> Result<(), Rejection> {
-    if db
-      .task_group_hold(group.key())
-      .map_err(|e| super::failed("cannot read queue hold", &e))?
-      == Some(GroupHold::SessionEnded)
-    {
+    let stored = Self::stored_hold(db, group)?;
+    if stored == Some(GroupHold::SessionEnded) {
       return Ok(());
     }
-    let statuses = group
-      .tasks()
-      .iter()
-      .map(|task| {
-        db.run_with_key(task.first_run_key())
-          .map(|run| run.map(|run| run.status().clone()))
-      })
-      .collect::<Result<Vec<_>, _>>()
-      .map_err(|error| read_failed("cannot read group runs", error))?;
-    let used = db
-      .task_group_usage(group)
-      .map_err(|error| read_failed("cannot read group usage", error))?;
-    let eligible = group.eligible(&statuses, used);
-    let hold = if used.reached(group.cap()) {
-      Some(GroupHold::GroupCap)
-    } else if statuses
-      .iter()
-      .flatten()
-      .any(|s| matches!(s, RunStatus::Failed(_) | RunStatus::Cancelled))
-    {
-      Some(GroupHold::FailedTask)
-    } else if statuses.iter().any(Option::is_none) && eligible.is_empty() {
-      Some(match group.scheduling() {
-        Scheduling::Sequential => GroupHold::PreviousTask,
-        Scheduling::Parallel(_) => GroupHold::Concurrency,
-      })
-    } else {
-      None
-    };
+    let runs = first_runs(db, group)?;
+    let statuses = statuses(&runs);
+    if TaskGroup::finished(&statuses) {
+      self.inner.group_retries.clear(group.key());
+      return db
+        .finish_task_group(group.key())
+        .map_err(|e| super::failed("cannot record a finished group", &e));
+    }
+    if stored.as_ref().is_some_and(retries_later) && !self.inner.group_retries.due(group.key()) {
+      return Ok(());
+    }
+    let used = usage(&runs);
     // A failed worktree creation may have left a Pending run. Retry its own saved key before
     // looking for more drafts; Pending is already counted against the group limit.
     let pending = group
@@ -164,19 +205,34 @@ impl Scheduler {
       .zip(&statuses)
       .filter(|(_, s)| matches!(s, Some(RunStatus::Pending)))
       .map(|(id, _)| *id);
-    for task in pending.chain(eligible) {
+    for task in pending.chain(group.eligible(&statuses, used)) {
       if let Err(error) = self.start_run(task.first_run_key(), task).await {
-        return self.group_hold(db, group, Some(&rejection_hold(error)));
+        return self.record_failed_start(db, group, &error);
       }
     }
-    self.group_hold(db, group, hold.as_ref())
+    self.inner.group_retries.clear(group.key());
+    self.group_hold(db, group, group.hold(&statuses, used).as_ref())?;
+    Ok(())
+  }
+
+  /// Records why the group's next task did not start, logging it only when the reason changes,
+  /// and backs off a start the person must fix.
+  fn record_failed_start(&self, db: &ProjectDb, group: &TaskGroup, error: &Rejection) -> Result<(), Rejection> {
+    let hold = rejection_hold(error);
+    if retries_later(&hold) {
+      self.inner.group_retries.failed(group.key());
+    }
+    if self.group_hold(db, group, Some(&hold))? {
+      tracing::warn!(?error, group = %group.key(), "reviewed group could not start its next task");
+    }
+    Ok(())
   }
 
   /// A person's Start request releases the session hold; automatic scheduling never does.
   pub async fn start_requested_run(
     &self,
-    key: orchester_core::id::IdempotencyKey,
-    task: orchester_core::id::TaskId,
+    key: IdempotencyKey,
+    task: TaskId,
   ) -> Result<orchester_core::id::RunId, Rejection> {
     let db = self.open()?;
     if key == task.first_run_key() {
@@ -190,18 +246,11 @@ impl Scheduler {
     self.start_run(key, task).await
   }
 
-  pub(super) fn release_group_session_hold(
-    &self,
-    db: &ProjectDb,
-    task: orchester_core::id::TaskId,
-  ) -> Result<(), Rejection> {
+  pub(super) fn release_group_session_hold(&self, db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
     if let Some(group) = db
       .task_group_for_task(task)
       .map_err(|e| super::failed("cannot read task group", &e))?
-      && db
-        .task_group_hold(group.key())
-        .map_err(|e| super::failed("cannot read queue hold", &e))?
-        == Some(GroupHold::SessionEnded)
+      && Self::stored_hold(db, &group)? == Some(GroupHold::SessionEnded)
     {
       self.group_hold(db, &group, None)?;
     }
@@ -210,45 +259,40 @@ impl Scheduler {
 
   pub(super) fn hold_groups_after_session_end(&self, db: &ProjectDb) -> Result<(), Rejection> {
     for group in db
-      .task_groups()
+      .unfinished_task_groups()
       .map_err(|e| super::failed("cannot read task groups", &e))?
     {
-      for task in group.tasks() {
-        let first = db
-          .run_with_key(task.first_run_key())
-          .map_err(|e| read_failed("cannot read first run", e))?;
-        if first.is_none_or(|run| run.status() == &RunStatus::Pending) {
-          self.group_hold(db, &group, Some(&GroupHold::SessionEnded))?;
-          break;
-        }
+      let unstarted = first_runs(db, &group)?
+        .iter()
+        .any(|run| run.as_ref().is_none_or(|run| run.status() == &RunStatus::Pending));
+      if unstarted {
+        self.group_hold(db, &group, Some(&GroupHold::SessionEnded))?;
       }
     }
     Ok(())
   }
 
-  fn group_hold(&self, db: &ProjectDb, group: &TaskGroup, hold: Option<&GroupHold>) -> Result<(), Rejection> {
-    if db
+  /// Stores the group's hold; returns whether it changed, in which case the desktop is told.
+  fn group_hold(&self, db: &ProjectDb, group: &TaskGroup, hold: Option<&GroupHold>) -> Result<bool, Rejection> {
+    let changed = db
       .set_task_group_hold(group.key(), hold)
-      .map_err(|error| super::failed("cannot record queue hold", &error))?
-    {
+      .map_err(|error| super::failed("cannot record queue hold", &error))?;
+    if changed {
       self.inner.notifier.send(Event::TaskGroupChanged { key: group.key() });
     }
-    Ok(())
+    Ok(changed)
   }
 }
 
-fn rejection_hold(error: Rejection) -> GroupHold {
+fn rejection_hold(error: &Rejection) -> GroupHold {
   match error {
-    Rejection::TaskGroupWaiting { hold } => hold,
+    Rejection::TaskGroupWaiting { hold } => hold.clone(),
     Rejection::NoAgentSlot { .. } => GroupHold::AgentCapacity,
     Rejection::DailyBudgetUsed { .. } => GroupHold::DailyBudget,
-    Rejection::Preflight { problems } => GroupHold::Preflight(problems),
+    Rejection::Preflight { problems } => GroupHold::Preflight(problems.clone()),
     Rejection::LimitNotRaised {
       limit: orchester_core::run::RunLimit::GroupBudget,
     } => GroupHold::GroupCap,
-    other => {
-      tracing::error!(?other, "reviewed group could not start its next task");
-      GroupHold::StartFailed
-    }
+    _ => GroupHold::StartFailed,
   }
 }

@@ -118,6 +118,7 @@ struct Inner {
   /// Serializes requests that start a task or change a run while its task may end. A fallback
   /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
+  group_retries: task_groups::GroupRetries,
 }
 
 impl Scheduler {
@@ -131,6 +132,7 @@ impl Scheduler {
         notifier,
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
+        group_retries: task_groups::GroupRetries::default(),
       }),
     }
   }

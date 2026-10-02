@@ -10,6 +10,7 @@ use orchester_core::{
   run::{Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
+  task_group::GroupHold,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -49,7 +50,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
-  pub group_holds: Arc<BTreeMap<TaskId, Vec<UiMessage>>>,
+  /// Why each task of a reviewed group that holds its work waits.
+  pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
@@ -70,9 +72,8 @@ impl ProjectTasks {
     let mut group_holds = BTreeMap::new();
     for group in db.task_groups()? {
       if let Some(hold) = db.task_group_hold(group.key())? {
-        let messages = super::group::hold_messages(&hold);
         for task in group.tasks() {
-          group_holds.insert(*task, messages.clone());
+          group_holds.insert(*task, hold.clone());
         }
       }
     }

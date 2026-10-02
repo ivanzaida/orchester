@@ -32,6 +32,24 @@ pub enum GroupHold {
   StartFailed,
 }
 
+impl GroupHold {
+  /// Whether the hold ends without a person: an agent slot or the daily budget frees up, or a
+  /// running task of the group settles. The others wait for someone to act (a failed task, the
+  /// spent cap, a start the person must fix, a reopened project).
+  pub const fn clears_on_its_own(&self) -> bool {
+    matches!(
+      self,
+      Self::AgentCapacity | Self::DailyBudget | Self::PreviousTask | Self::Concurrency
+    )
+  }
+
+  /// Whether a person may take the group's unstarted tasks back to the drafts: the hold does not
+  /// end on its own, and is not the reopened-project hold, which Start run releases instead.
+  pub const fn releases_unstarted(&self) -> bool {
+    !self.clears_on_its_own() && !matches!(self, Self::SessionEnded)
+  }
+}
+
 /// The immutable published pipeline shown for one task in the scheduling review.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReviewedPipeline {
@@ -89,16 +107,40 @@ impl TaskGroup {
     self.cap
   }
 
+  /// Why a task of the group that cannot start now waits: the spent cap, a failed or cancelled
+  /// task, or otherwise its turn (the previous task, or the concurrency limit).
+  pub fn waiting_reason(&self, statuses: &[Option<RunStatus>], used: TokensUsed) -> GroupHold {
+    if used.reached(self.cap) {
+      GroupHold::GroupCap
+    } else if stopped(statuses) {
+      GroupHold::FailedTask
+    } else {
+      match self.scheduling {
+        Scheduling::Sequential => GroupHold::PreviousTask,
+        Scheduling::Parallel(_) => GroupHold::Concurrency,
+      }
+    }
+  }
+
+  /// Why the group holds its work, if it does: the spent cap or a failed task hold it whatever is
+  /// left; otherwise it holds only while tasks are unstarted and none of them can start.
+  pub fn hold(&self, statuses: &[Option<RunStatus>], used: TokensUsed) -> Option<GroupHold> {
+    let blocked = used.reached(self.cap) || stopped(statuses);
+    let waiting = statuses.iter().any(Option::is_none) && self.eligible(statuses, used).is_empty();
+    (blocked || waiting).then(|| self.waiting_reason(statuses, used))
+  }
+
+  /// Every task of the group has a first run and every one of those runs has ended.
+  pub fn finished(statuses: &[Option<RunStatus>]) -> bool {
+    statuses
+      .iter()
+      .all(|status| status.as_ref().is_some_and(RunStatus::is_terminal))
+  }
+
   /// Starts in reviewed order. Waiting, paused and interrupted runs hold a task slot; failure
   /// holds remaining work. Sequential advances only once the previous task is ready for review.
   pub fn eligible(&self, statuses: &[Option<RunStatus>], used: TokensUsed) -> Vec<TaskId> {
-    if statuses.len() != self.tasks.len()
-      || used.reached(self.cap)
-      || statuses
-        .iter()
-        .flatten()
-        .any(|s| matches!(s, RunStatus::Failed(_) | RunStatus::Cancelled))
-    {
+    if statuses.len() != self.tasks.len() || used.reached(self.cap) || stopped(statuses) {
       return Vec::new();
     }
     let capacity = match self.scheduling {
@@ -118,4 +160,12 @@ impl TaskGroup {
       .map(|(task, _)| *task);
     pending.take(capacity.saturating_sub(occupied)).collect()
   }
+}
+
+/// A failed or cancelled first run holds the rest of the group.
+fn stopped(statuses: &[Option<RunStatus>]) -> bool {
+  statuses
+    .iter()
+    .flatten()
+    .any(|status| matches!(status, RunStatus::Failed(_) | RunStatus::Cancelled))
 }

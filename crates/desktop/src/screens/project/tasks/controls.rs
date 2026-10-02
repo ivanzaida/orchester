@@ -9,7 +9,10 @@ use lurq::{
   components::{Column, Row, Select, Spacer, Text},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::task_selection;
+use orchester_core::{
+  id::TaskId,
+  task_selection::{self, SelectionProblem},
+};
 
 use super::{
   FILTER_HEIGHT, PIPELINE_FILTER_WIDTH, RUN_SELECTED_WIDTH, SELECTION_BUTTON_HEIGHT, SELECTION_HEIGHT, SORT_WIDTH,
@@ -19,7 +22,7 @@ use crate::{
   tasks::{
     browse::{PipelineFilter, TaskSort},
     data::ProjectTasks,
-    group::problem_message,
+    group::{self, problem_message},
     list::TaskRow,
   },
   theme::ExtraSpacing,
@@ -98,18 +101,49 @@ pub fn filters(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element
     .into()
 }
 
-pub fn selection_bar(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks, visible: Arc<Vec<TaskRow>>) -> Element {
+/// How the selected tasks stand for a first run: ready drafts, drafts that miss details, and
+/// tasks already queued or started, which are neither.
+fn readiness(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> (usize, Arc<str>) {
   let selected = screen.selected.get();
   let published: Vec<_> = tasks.pipelines.iter().map(|p| p.id).collect();
-  let ready = tasks
-    .tasks
-    .iter()
-    .filter(|t| {
-      selected.0.contains(&t.id())
-        && task_selection::problems(t, tasks.phases.contains_key(&t.id()), &published).is_empty()
-    })
-    .count();
+  let (mut ready, mut incomplete, mut started) = (0, 0, 0);
+  for task in tasks.tasks.iter().filter(|t| selected.0.contains(&t.id())) {
+    let problems = task_selection::problems(task, tasks.phases.contains_key(&task.id()), &published);
+    if problems.is_empty() {
+      ready += 1;
+    } else if problems
+      .iter()
+      .any(|p| matches!(p, SelectionProblem::NotDraft | SelectionProblem::HasRun))
+    {
+      started += 1;
+    } else {
+      incomplete += 1;
+    }
+  }
+  let counts = [
+    ("ready", ready.to_string()),
+    ("incomplete", incomplete.to_string()),
+    ("started", started.to_string()),
+  ];
+  let text = if started == 0 {
+    ctx.t_args("tasks.selection.readiness", counts)
+  } else {
+    ctx.t_args("tasks.selection.readinessStarted", counts)
+  };
+  (ready, text)
+}
+
+pub fn selection_bar(
+  ctx: &Ctx,
+  screen: &TasksScreen,
+  root: &Path,
+  tasks: &ProjectTasks,
+  visible: Arc<Vec<TaskRow>>,
+) -> Element {
+  let selected = screen.selected.get();
+  let (ready, readiness) = readiness(ctx, screen, tasks);
   let count = selected.0.len();
+  let releasable = group::releasable(tasks, &selected.0);
   let all = !visible.is_empty() && visible.iter().all(|row| selected.0.contains(&row.id));
   let selection = screen.selected.clone();
   let assign = screen.assigning.clone();
@@ -131,17 +165,9 @@ pub fn selection_bar(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks, visi
       Text::new(&ctx.t_args("tasks.bulk.selected", [("count", count.to_string())]))
         .variant(TypographyStyle::FieldLabel),
     )
-    .child(
-      Text::new(&ctx.t_args(
-        "tasks.selection.readiness",
-        [
-          ("ready", ready.to_string()),
-          ("incomplete", (count - ready).to_string()),
-        ],
-      ))
-      .variant(TypographyStyle::Caption),
-    )
+    .child(Text::new(&readiness).variant(TypographyStyle::Caption))
     .child(Spacer::new().flex(1.0))
+    .with_children((!releasable.is_empty()).then(|| release_button(ctx, screen, root, releasable)))
     .child(
       ActionButton::new(ctx.t("tasks.selection.setPipeline"))
         .icon(Icon::Workflow)
@@ -167,6 +193,20 @@ pub fn selection_bar(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks, visi
         .render(ctx),
     )
     .into()
+}
+
+/// Takes the selected tasks a held group keeps from starting back to the drafts (implemented,
+/// not drawn yet; the secondary selection-bar button beside Set pipeline).
+fn release_button(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: Vec<TaskId>) -> Element {
+  let (action, root) = (screen.release.clone(), root.to_path_buf());
+  ActionButton::new(ctx.t("tasks.bulk.releaseHeld"))
+    .icon(Icon::Undo2)
+    .id("tasks-release-held")
+    .in_form()
+    .height(Dimension::Px(SELECTION_BUTTON_HEIGHT))
+    .on_click(move || action.run((root.clone(), tasks.clone())))
+    .enabled(!screen.release.state().get().is_pending())
+    .render(ctx)
 }
 
 pub fn assignment(ctx: &Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks) -> Element {
@@ -231,6 +271,9 @@ pub fn problems(ctx: &Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Vec<El
         ],
       )));
     }
+  }
+  if let Some(error) = screen.release.state().get().error.as_ref() {
+    messages.push(field_error(&message_text(ctx, error)));
   }
   let state = screen.assign.state().get();
   if let Some(error) = state.error.as_ref() {
