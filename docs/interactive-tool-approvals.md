@@ -41,13 +41,18 @@ time are persisted; waiting for a decision does not consume active agent time.
 The task's Permissions row shows what the step's current or last invocation launched with, as the runner
 recorded it before starting the CLI (`Invocation::permissions`), including whether it asks before MCP actions:
 *Current invocation: …* while it runs, *Last invocation: …* after it ended, and *Next invocation settings: …*
-before any has launched. Saving a change for the next invocation never relabels the running agent: until an
+before any has launched. An invocation the runner has created but not launched yet (it prepares the launch
+first, the code index included) reads *starting*; one whose CLI never started is skipped, so the row keeps the
+launch before it. Saving a change for the next invocation never relabels the running agent: until an
 invocation launches with exactly the permissions the change enforces, the row keeps the recorded policy and a
-notice says *Saved for the next invocation*. An *Apply now* change reads as applied only once the restarted
-invocation has recorded its launch. The popover repeats the recorded policy above the settings it edits
-(*Next invocation settings*); for an ended run it says the settings are shown for reference. An invocation
-launched before launches were recorded reads *permissions unknown*; nothing is inferred from the run's
-settings or event times.
+notice says *Saved for the next invocation*. An *Apply now* change is pending, with *Keep for next invocation
+instead*, until the agent stops at its checkpoint; then it reads *Restarting with the new permissions…* without
+that action (the runner can no longer keep it), or says the agent did not restart when the new launch failed,
+and it reads as applied only once the restarted invocation has recorded its launch. The popover repeats the
+recorded policy above the settings it edits (*Next invocation settings*), except before any launch, when those
+settings are the policy; for an ended run it says the settings are shown for reference. The Activity panel
+shows what its own invocation launched with. An invocation that ended before launches were recorded reads
+*permissions unknown*; nothing is inferred from the run's settings or event times.
 
 ## App Server requests
 

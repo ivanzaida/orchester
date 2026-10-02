@@ -23,6 +23,7 @@ use super::{
 };
 use crate::{
   screens::project::connections::status::short_key,
+  tasks::permissions::InvocationPolicy,
   theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
   ui::{
     button::ActionButton,
@@ -107,11 +108,7 @@ impl RunPermissionsRow {
       .box_shadow(ExtraShadow::Popover.role())
       .overflow_visible()
       .child(self.header(ctx, props))
-      .child(
-        Text::new(&super::value(ctx, &props.step, &props.permissions))
-          .id("task-permissions-current-policy")
-          .variant(TypographyStyle::Caption),
-      )
+      .with_children(current_policy(ctx, props))
       .child(takes_effect(ctx, props))
       .child(Text::new(&ctx.t("runs.permissions.desiredLabel")).variant(TypographyStyle::Label))
       .with_children(settings(ctx, &self.edit, props, &draft))
@@ -268,6 +265,17 @@ impl RunPermissionsRow {
       )
       .into()
   }
+}
+
+/// What the step's current or last invocation launched with. Before any has launched, the settings
+/// under *Next invocation settings* are what it will launch with, so the line would only repeat them.
+fn current_policy(ctx: &Ctx, props: &RunPermissionsProps) -> Option<Element> {
+  (props.permissions.invocation_policy != InvocationPolicy::NoInvocation).then(|| {
+    Text::new(&super::value(ctx, &props.step, &props.permissions))
+      .id("task-permissions-current-policy")
+      .variant(TypographyStyle::Caption)
+      .into()
+  })
 }
 
 /// When a change takes effect (`XpncF`, `aDPaV`).

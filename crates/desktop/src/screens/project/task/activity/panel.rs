@@ -1,6 +1,6 @@
 //! The invocation panel beside the transcript (`n0cEOG`): the step and attempt, agent, provider,
 //! model and start of the latest agent launch, the code index it got, its reported tokens, the
-//! run's total, the tokens before its step's first edit, and the agent's permissions. While the
+//! run's total, the tokens before its step's first edit, and the permissions it launched with. While the
 //! transcript is narrowed to a step (`F3XhQ`) the panel is about that step's latest launch, named
 //! after the step, with when it ran once it ended. Token counts are what the CLI reported; cached
 //! input is not counted.
@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
 
 use super::{
-  super::{super::ProjectNav, permissions::permissions_value},
+  super::{super::ProjectNav, permissions::invocation_value},
   engine, first_edit, native,
 };
 use crate::{
@@ -90,8 +90,9 @@ pub(super) fn invocation_panel(
       .into_iter()
       .chain(native::tool_rows(ctx, step, entries, invocation.id))
       .collect(),
+    // The panel's own invocation: what it launched with, not the step's latest launch.
     None => step
-      .and_then(|step| permissions_value(ctx, step))
+      .and_then(|step| invocation_value(ctx, step, invocation))
       .map(|value| property(&ctx.t("runs.summary.permissions"), &value))
       .into_iter()
       .collect::<Vec<_>>(),

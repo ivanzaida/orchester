@@ -29,7 +29,9 @@ use lurq::{
 use orchester_core::{
   id::{ResourceId, RunId},
   permission::AgentPermissions,
-  run::PermissionsApply,
+  revision::Revision,
+  run::{Invocation, PermissionsApply},
+  time::Timestamp,
 };
 use orchester_ipc::Command;
 
@@ -284,18 +286,28 @@ pub fn permissions_value(ctx: &Ctx, step: &StepView) -> Option<Arc<str>> {
 
 /// What the step's current or last invocation launched with, or, before any has, what the next one
 /// will: "Current invocation: Builder · Edit files · Any command · Network off · MCP approvals off".
-/// A launch recorded as network on reads so even where network off was chosen.
 pub(super) fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
-  let (policy, label, network_stays_on) = match &permissions.invocation_policy {
-    InvocationPolicy::Active(Some(policy)) => (policy, "runs.permissions.activeValue", false),
-    InvocationPolicy::Last(Some(policy)) => (policy, "runs.permissions.lastValue", false),
-    InvocationPolicy::Active(None) => return ctx.t("runs.permissions.activeUnknown"),
-    InvocationPolicy::Last(None) => return ctx.t("runs.permissions.lastUnknown"),
-    InvocationPolicy::NotStarted => (
-      &permissions.permissions,
-      "runs.permissions.nextValue",
-      permissions.network_stays_on,
-    ),
+  policy_value(ctx, step, &permissions.invocation_policy, permissions)
+}
+
+/// What `invocation`, an agent launch of `step`, launched with, for the Activity panel about it;
+/// `None` for a step without permissions (a tool step).
+pub fn invocation_value(ctx: &Ctx, step: &StepView, invocation: &Invocation) -> Option<Arc<str>> {
+  let permissions = step.permissions.as_ref()?;
+  Some(policy_value(ctx, step, &InvocationPolicy::of(invocation), permissions))
+}
+
+/// `policy` in compact words; [`InvocationPolicy::NoInvocation`] reads as the step's settings for
+/// its next invocation (`next`). A launch recorded as network on reads so even where network off was
+/// chosen.
+fn policy_value(ctx: &Ctx, step: &StepView, policy: &InvocationPolicy, next: &RunPermissions) -> Arc<str> {
+  let (policy, label, network_stays_on) = match policy {
+    InvocationPolicy::Active(policy) => (policy, "runs.permissions.activeValue", false),
+    InvocationPolicy::Last(policy) => (policy, "runs.permissions.lastValue", false),
+    InvocationPolicy::Starting => return ctx.t("runs.permissions.starting"),
+    InvocationPolicy::Unknown => return ctx.t("runs.permissions.lastUnknown"),
+    InvocationPolicy::NotStarted => return ctx.t("runs.permissions.notStarted"),
+    InvocationPolicy::NoInvocation => (&next.permissions, "runs.permissions.nextValue", next.network_stays_on),
   };
   let (repository, commands, network) = parts(ctx, policy, network_stays_on, Length::Compact);
   let summary = ctx.t_args(
@@ -315,97 +327,126 @@ pub(super) fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) ->
   ctx.t_args(label, [("policy", &*summary), ("mcp", &*mcp)])
 }
 
-/// Kept for the next invocation, pending (loader, what happens to work in flight, *Keep for next
-/// invocation instead*) or applied (check, since when, the checkpoint and the invocation) (`LJmTH`).
+/// Kept for the next invocation; pending (loader, what happens to work in flight, *Keep for next
+/// invocation instead*); restarting, or failed to restart, after the checkpoint; or applied (check,
+/// since when, the checkpoint and the invocation) (`LJmTH`).
 fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Vec<Element> {
-  let agent = agent_of(&props.step);
-  let step = &*props.step.name;
+  let (agent, step) = (agent_of(&props.step), &*props.step.name);
   match &props.permissions.state {
-    Some(ChangeState::NextInvocation) => vec![next_notice(ctx)],
-    Some(ChangeState::Pending) => {
-      let state = keep.state().get();
-      let pending = state.is_pending();
-      let (keep, run, profile) = (keep.clone(), props.run, props.permissions.profile_id);
-      let button = ActionButton::new(ctx.t("runs.permissions.keepForNext"))
-        .id("task-permissions-keep")
-        .icon(Icon::Undo2)
-        .compact()
-        .height(Dimension::Px(KEEP_BUTTON_HEIGHT));
-      let button = if pending {
-        button.disabled()
-      } else {
-        button.on_click(move || keep.run((run, profile)))
-      };
-      let mut elements: Vec<Element> = vec![
-        Notice::new(
-          Icon::Loader,
-          ctx.t("runs.permissions.pendingTitle"),
-          ctx.t_args("runs.permissions.pendingDetail", [("agent", agent), ("step", step)]),
-        )
-        .id("task-permissions-pending")
-        .into(),
-      ];
-      elements.extend(
-        state
-          .error
-          .filter(|_| !pending)
-          .map(|error| field_error(&message_text(ctx, &error))),
-      );
-      elements.push(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .justify(lurq::layout::layout_kind::Justify::End)
-          .child(button.render(ctx))
-          .into(),
-      );
-      elements
-    }
+    Some(ChangeState::NextInvocation) => vec![
+      Notice::new(
+        Icon::Clock,
+        ctx.t("runs.permissions.nextTitle"),
+        ctx.t("runs.permissions.nextDetail"),
+      )
+      .id("task-permissions-next")
+      .into(),
+    ],
+    Some(ChangeState::Pending) => pending_notice(ctx, props, keep),
+    // The agent has already stopped, so the change can no longer be kept for the next invocation
+    // (the runner refuses it): the notice says what happens instead and offers no action.
+    Some(ChangeState::Restarting) => vec![
+      Notice::new(
+        Icon::Loader,
+        ctx.t("runs.permissions.restartingTitle"),
+        ctx.t_args("runs.permissions.restartingDetail", [("agent", agent), ("step", step)]),
+      )
+      .id("task-permissions-restarting")
+      .into(),
+    ],
+    Some(ChangeState::RestartFailed) => vec![
+      Notice::new(
+        Icon::TriangleAlert,
+        ctx.t_args("runs.permissions.restartFailedTitle", [("agent", agent)]),
+        ctx.t_args(
+          "runs.permissions.restartFailedDetail",
+          [("agent", agent), ("step", step)],
+        ),
+      )
+      .id("task-permissions-restart-failed")
+      .into(),
+    ],
     Some(ChangeState::Applied {
       at,
       checkpoint,
       invocation,
-    }) => {
-      let invocation = invocation.to_string();
-      let detail = match checkpoint {
-        Some(revision) => ctx.t_args(
-          "runs.permissions.appliedDetail",
-          [
-            ("agent", agent),
-            ("step", step),
-            ("checkpoint", display::short_revision(revision.as_str())),
-            ("invocation", invocation.as_str()),
-          ],
-        ),
-        None => ctx.t_args(
-          "runs.permissions.appliedDetailNoCheckpoint",
-          [("agent", agent), ("step", step), ("invocation", invocation.as_str())],
-        ),
-      };
-      vec![
-        Notice::new(
-          Icon::Check,
-          ctx.t_args(
-            "runs.permissions.appliedTitle",
-            [("time", display::clock(*at).as_str())],
-          ),
-          detail,
-        )
-        .id("task-permissions-applied")
-        .into(),
-      ]
-    }
+    }) => vec![applied_notice(ctx, props, *at, checkpoint.as_ref(), *invocation)],
     None => Vec::new(),
   }
 }
 
-/// "Saved for the next invocation": a change no invocation has launched with yet.
-fn next_notice(ctx: &Ctx) -> Element {
+/// "Applying new permissions at the next checkpoint…" with *Keep for next invocation instead*.
+fn pending_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Vec<Element> {
+  let (agent, step) = (agent_of(&props.step), &*props.step.name);
+  let state = keep.state().get();
+  let pending = state.is_pending();
+  let (keep, run, profile) = (keep.clone(), props.run, props.permissions.profile_id);
+  let button = ActionButton::new(ctx.t("runs.permissions.keepForNext"))
+    .id("task-permissions-keep")
+    .icon(Icon::Undo2)
+    .compact()
+    .height(Dimension::Px(KEEP_BUTTON_HEIGHT));
+  let button = if pending {
+    button.disabled()
+  } else {
+    button.on_click(move || keep.run((run, profile)))
+  };
+  let mut elements: Vec<Element> = vec![
+    Notice::new(
+      Icon::Loader,
+      ctx.t("runs.permissions.pendingTitle"),
+      ctx.t_args("runs.permissions.pendingDetail", [("agent", agent), ("step", step)]),
+    )
+    .id("task-permissions-pending")
+    .into(),
+  ];
+  elements.extend(
+    state
+      .error
+      .filter(|_| !pending)
+      .map(|error| field_error(&message_text(ctx, &error))),
+  );
+  elements.push(
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .justify(Justify::End)
+      .child(button.render(ctx))
+      .into(),
+  );
+  elements
+}
+
+/// "New permissions active since 12:09", with the checkpoint (when there was one) and the invocation.
+fn applied_notice(
+  ctx: &Ctx,
+  props: &RunPermissionsProps,
+  at: Timestamp,
+  checkpoint: Option<&Revision>,
+  invocation: u32,
+) -> Element {
+  let (agent, step) = (agent_of(&props.step), &*props.step.name);
+  let invocation = invocation.to_string();
+  let detail = match checkpoint {
+    Some(revision) => ctx.t_args(
+      "runs.permissions.appliedDetail",
+      [
+        ("agent", agent),
+        ("step", step),
+        ("checkpoint", display::short_revision(revision.as_str())),
+        ("invocation", invocation.as_str()),
+      ],
+    ),
+    None => ctx.t_args(
+      "runs.permissions.appliedDetailNoCheckpoint",
+      [("agent", agent), ("step", step), ("invocation", invocation.as_str())],
+    ),
+  };
   Notice::new(
-    Icon::Clock,
-    ctx.t("runs.permissions.nextTitle"),
-    ctx.t("runs.permissions.nextDetail"),
+    Icon::Check,
+    ctx.t_args("runs.permissions.appliedTitle", [("time", display::clock(at).as_str())]),
+    detail,
   )
-  .id("task-permissions-next")
+  .id("task-permissions-applied")
   .into()
 }
 

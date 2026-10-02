@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
+  connection::{AgentProvider, invocation::Platform, stream::InvocationOutcome},
   id::ResourceId,
   permission::{AgentPermissions, LaunchPermissions, capability::EnforcedPermissions},
   resource::{AgentProfile, StepKey, StepKind, Version, VersionNumber},
@@ -28,6 +28,13 @@ pub enum ChangeState {
   NextInvocation,
   /// "Applying new permissions at the next checkpoint…": the agent finishes its command first.
   Pending,
+  /// The agent stopped at its checkpoint for the change, and the step has not launched again yet:
+  /// it starts with the new permissions as soon as the run continues. Too late to keep the change
+  /// for the next invocation instead.
+  Restarting,
+  /// The agent stopped at its checkpoint for the change, but the step's restart did not launch it;
+  /// its activity says why.
+  RestartFailed,
   /// "New permissions active since 12:09": the agent restarted from `checkpoint` (when its work had
   /// changed anything) as invocation `invocation`.
   Applied {
@@ -42,7 +49,8 @@ pub enum ChangeState {
 pub struct RunPermissions {
   /// What its next invocation runs with: [`Self::base`] narrowed by the step.
   pub permissions: AgentPermissions,
-  /// What the step's current or last invocation actually launched with.
+  /// What the step's current or last invocation actually launched with; never one whose CLI did not
+  /// start.
   pub invocation_policy: InvocationPolicy,
   /// Network off was chosen, but the CLI cannot enforce it, so network stays on.
   pub network_stays_on: bool,
@@ -69,17 +77,37 @@ pub struct RunPermissions {
   pub tool_approvals_required: bool,
 }
 
-/// The permissions the step's latest invocation launched with, as the runner recorded them before
-/// starting it. `None` for an invocation recorded before launches were: its permissions stay unknown
-/// rather than being inferred from the run's settings or event times.
+/// What an invocation launched with, as the runner recorded it just before starting its CLI. Nothing
+/// is inferred from the run's settings or event times.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InvocationPolicy {
-  /// The invocation is still running.
-  Active(Option<AgentPermissions>),
-  /// The invocation has ended.
-  Last(Option<AgentPermissions>),
-  /// No invocation of the step has launched yet.
+  /// Launched with these and still running.
+  Active(AgentPermissions),
+  /// Launched with these and ended.
+  Last(AgentPermissions),
+  /// Created, but its CLI has not launched yet (the runner prepares it first, e.g. the code index).
+  Starting,
+  /// Ended without a record: launched before Orchester recorded launches.
+  Unknown,
+  /// Its CLI never started; the activity says why.
   NotStarted,
+  /// No invocation of the step has launched yet.
+  NoInvocation,
+}
+
+impl InvocationPolicy {
+  /// What `invocation` launched with.
+  pub fn of(invocation: &Invocation) -> Self {
+    if invocation.outcome == Some(InvocationOutcome::NotStarted) {
+      return Self::NotStarted;
+    }
+    match (&invocation.permissions, invocation.ended_at) {
+      (Some(launch), None) => Self::Active(launch.permissions().clone()),
+      (Some(launch), Some(_)) => Self::Last(launch.permissions().clone()),
+      (None, None) => Self::Starting,
+      (None, Some(_)) => Self::Unknown,
+    }
+  }
 }
 
 /// What the run's step `step`, on the pinned profile version `version` of `profile_id`, runs with.
@@ -112,7 +140,13 @@ pub fn run_permissions(
     .map_or(version.number(), |latest| latest.number());
   let invocation = latest_invocation(run, invocations, step);
   let state = change_state(db, (run, invocations), step, profile_id)?;
-  let state = if changed.is_some() && state != Some(ChangeState::Pending) && !run.status().is_terminal() {
+  // Without a provider (the profile's connection cannot be read) `enforced` is `None`, so a run
+  // change keeps reading as waiting for the next invocation: harmless, as nothing that could not be
+  // checked is shown as active.
+  let settled = state
+    .as_ref()
+    .is_none_or(|state| matches!(state, ChangeState::Applied { .. }));
+  let state = if changed.is_some() && settled && !run.status().is_terminal() {
     queued(
       state,
       invocation,
@@ -122,7 +156,7 @@ pub fn run_permissions(
     state
   };
   Ok(Some(RunPermissions {
-    invocation_policy: invocation_policy(invocation),
+    invocation_policy: invocation.map_or(InvocationPolicy::NoInvocation, InvocationPolicy::of),
     permissions,
     network_stays_on,
     unconfined_commands,
@@ -140,28 +174,15 @@ pub fn run_permissions(
   }))
 }
 
-/// The step's latest invocation, of its latest execution.
+/// The step's latest invocation, of any of its executions, leaving out those whose CLI never
+/// started: they launched with nothing, so the row keeps showing the one before.
 fn latest_invocation<'a>(run: &Run, invocations: &'a [Invocation], step: &StepKey) -> Option<&'a Invocation> {
-  let execution = run.latest_execution(step)?.id();
-  invocations
-    .iter()
-    .rev()
-    .find(|invocation| invocation.execution == execution)
-}
-
-fn invocation_policy(invocation: Option<&Invocation>) -> InvocationPolicy {
-  let Some(invocation) = invocation else {
-    return InvocationPolicy::NotStarted;
-  };
-  let launched = invocation
-    .permissions
-    .as_ref()
-    .map(|launch| launch.permissions().clone());
-  if invocation.ended_at.is_none() {
-    InvocationPolicy::Active(launched)
-  } else {
-    InvocationPolicy::Last(launched)
-  }
+  invocations.iter().rev().find(|invocation| {
+    invocation.outcome != Some(InvocationOutcome::NotStarted)
+      && run
+        .execution(invocation.execution)
+        .is_some_and(|execution| execution.step() == step)
+  })
 }
 
 /// A run change reads as waiting for the next invocation until an invocation has launched with
@@ -196,8 +217,9 @@ fn mcp_servers(db: &ProjectDb, profile: &AgentProfile) -> Result<Vec<Arc<str>>, 
     .collect()
 }
 
-/// Pending while an agent of the profile waits to restart or its new invocation has not started;
-/// applied while the step's latest execution is the one that restarted and the run has not ended.
+/// Pending while an agent of the profile has yet to stop at its checkpoint; restarting until the
+/// step's new invocation has launched (or failed to); applied while the step's latest execution is
+/// the one that restarted and the run has not ended.
 fn change_state(
   db: &ProjectDb,
   (run, invocations): (&Run, &[Invocation]),
@@ -236,22 +258,24 @@ fn change_state(
       }),
     None => None,
   };
-  // The agent restarts right after the change is recorded as applied; until its new invocation
-  // has started and recorded what it launched with, the change still reads as being applied.
-  let Some(invocation) = invocations
-    .iter()
-    .find(|invocation| {
-      invocation.execution == applied.execution
-        && invocation.started_at >= applied.at
-        && invocation.permissions.is_some()
-    })
-    .map(|invocation| invocation.number)
-  else {
-    return Ok(Some(ChangeState::Pending));
+  // The agent restarts right after the change is recorded as applied; it counts as applied once
+  // its new invocation has recorded what it launched with.
+  let restarts = || {
+    invocations
+      .iter()
+      .filter(|invocation| invocation.execution == applied.execution && invocation.started_at >= applied.at)
   };
-  Ok(Some(ChangeState::Applied {
-    at: applied.at,
-    checkpoint,
-    invocation,
+  if let Some(invocation) = restarts().find(|invocation| invocation.permissions.is_some()) {
+    return Ok(Some(ChangeState::Applied {
+      at: applied.at,
+      checkpoint,
+      invocation: invocation.number,
+    }));
+  }
+  let failed = restarts().any(|invocation| invocation.outcome == Some(InvocationOutcome::NotStarted));
+  Ok(Some(if failed {
+    ChangeState::RestartFailed
+  } else {
+    ChangeState::Restarting
   }))
 }
