@@ -217,7 +217,7 @@ impl TagPicker {
       } else {
         Dimension::Px(MENU_WIDTH)
       })
-      .padding(SpacingSize::Sm)
+      .padding(crate::theme::ExtraSpacing::Stack.role())
       .background(PaletteColor::SurfaceRaised)
       .rounded(RadiusSize::Md)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
@@ -228,14 +228,11 @@ impl TagPicker {
           .placeholder(&ctx.t("tasks.tags.search"))
           .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value)),
       )
-      .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)))
-      .child(
-        ActionButton::new(ctx.t("tasks.tags.manage"))
-          .icon(Icon::Tags)
-          .in_form()
-          .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
-          .render(ctx),
-      );
+      .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)));
+    // Create and what the typed name means come before Manage project tags (`IOWwP`, `yrT73`).
+    let existing = tags
+      .iter()
+      .find(|tag| !lower.is_empty() && tag.name().as_str().to_lowercase() == lower);
     if !lower.is_empty() && !tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower) {
       menu = menu.child(
         ActionButton::new(ctx.t_args("tasks.tags.createNamed", [("name", query.trim())]))
@@ -249,8 +246,11 @@ impl TagPicker {
     }
     if tags.is_empty() {
       menu = menu.child(Text::new(&ctx.t("tasks.tags.pickerEmpty")).variant(TypographyStyle::Caption));
-    } else if !lower.is_empty() && tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower) {
-      menu = menu.child(Text::new(&ctx.t("tasks.tags.chooseExisting")).variant(TypographyStyle::Caption));
+    } else if let Some(tag) = existing {
+      menu = menu.child(
+        Text::new(&ctx.t_args("tasks.tags.chooseExisting", [("tag", tag.name().as_str())]))
+          .variant(TypographyStyle::Caption),
+      );
     }
     if pending {
       menu = menu.child(Text::new(&ctx.t("tasks.tags.saving")).variant(TypographyStyle::Caption));
@@ -258,7 +258,15 @@ impl TagPicker {
     if let Some(error) = action.state().get().error {
       menu = menu.child(field_error(&message_text(ctx, &error)));
     }
-    menu.into()
+    menu
+      .child(
+        ActionButton::new(ctx.t("tasks.tags.manage"))
+          .icon(Icon::Tags)
+          .in_form()
+          .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
+          .render(ctx),
+      )
+      .into()
   }
 }
 

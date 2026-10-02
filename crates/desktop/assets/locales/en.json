@@ -502,8 +502,10 @@
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
-    "emptyQuery": "No tasks in this tab match the search and filters.",
-    "clearQuery": "Clear search and filters",
+    "emptyQuery": {
+      "title": "No tasks match these filters",
+      "detail": "Try another status, priority or tag, or clear your filters."
+    },
     "tabs": {
       "all": "All",
       "needsYou": "Needs you"
@@ -522,6 +524,7 @@
       "searchTags": "Search tags",
       "facetCount": "{{facet}} · {{count}}",
       "tagSummary": "{{names}} · {{mode}}",
+      "valueSeparator": " + ",
       "all": "all",
       "any": "any"
     },
@@ -612,6 +615,10 @@
       "other": "{{count}} tasks"
     },
     "footer": {
+      "matches": {
+        "one": "{{count}} task matches · Workflow tab and each active filter apply together.",
+        "other": "{{count}} tasks match · Workflow tab and each active filter apply together."
+      },
       "noRuns": {
         "one": "{{count}} task · no runs started",
         "other": "{{count}} tasks · no runs started"
@@ -702,6 +709,7 @@
       "done": "Done",
       "canceled": "Canceled",
       "noActiveRun": "No active run",
+      "canceledRun": "Canceled run",
       "saving": "Saving changes…",
       "combined": "{{status}} · {{run}}",
       "runSuffix": "· {{run}}"
@@ -720,9 +728,12 @@
       "reasonRequired": "Enter a reason when marking a task Blocked.",
       "links": "Blocking tasks · optional",
       "addLink": "Add blocking task",
+      "addSelected": "Add selected task",
+      "currentTask": "{{key}} · Current task — cannot block itself",
       "removeLink": "Remove",
       "cycle": "This link would create a dependency cycle. Choose another task.",
       "unfinished": "Blocked · {{tasks}} unfinished. {{reason}}",
+      "rowUnfinished": "Blocked · {{tasks}} unfinished",
       "informational": "Blocked · {{reason}}",
       "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
       "runUnavailableWhile": "Run is unavailable while {{tasks}} is unfinished.",
@@ -735,12 +746,41 @@
     },
     "cancel": {
       "title": "Cancel this task and stop its run?",
-      "explanation": "{{task}} has an active run. Confirming stops Run #{{run}} and sets the task to Canceled. Its work stays on {{branch}}. No branch or files are deleted.",
-      "bulkExplanation": "Cancel {{tasks}} tasks and stop {{runs}} active runs? Work stays on each run’s branch.",
+      "explanation": "{{task}} — {{title}} has an active run. Confirming stops Run #{{run}} and sets the task to Canceled. Its work stays on its branch.",
+      "workKept": "Work is kept",
+      "workKeptDetail": "Branch: {{branch}}. No branch or files are deleted.",
       "keep": "Keep task",
       "confirm": "Stop run and cancel task",
       "stopping": "Stopping…",
-      "confirmRequired": "Confirm stopping the active run before canceling this task."
+      "confirmRequired": "Confirm stopping the active run before canceling this task.",
+      "bulkTitle": {
+        "oneTask": "Cancel 1 task and stop its active run?",
+        "oneRun": "Cancel {{tasks}} tasks and stop 1 active run?",
+        "other": "Cancel {{tasks}} tasks and stop {{runs}} active runs?"
+      },
+      "bulkExplanation": {
+        "oneTask": "Confirming stops Run #{{run}} on {{task}} and sets the task to Canceled. Its work stays on its branch.",
+        "oneRun": "Confirming stops Run #{{run}} on {{task}} and sets all {{tasks}} selected tasks to Canceled. Each task’s work stays on its branch.",
+        "other": "Confirming stops {{runs}} active runs and sets all {{tasks}} selected tasks to Canceled. Each task’s work stays on its branch."
+      },
+      "activeRunHeading": {
+        "one": "Active run",
+        "other": "Active runs"
+      },
+      "activeRunLine": "{{task}} — {{title}} · Run #{{run}}",
+      "activeRunUnread": "{{task}} — {{title}}",
+      "activeRuns": "{{runs}}.",
+      "noticeWithIdle": {
+        "one": "{{runs}} {{tasks}} has no active run.",
+        "other": "{{runs}} {{tasks}} have no active run."
+      },
+      "idlePair": "{{first}} and {{second}}",
+      "bulkKeep": "Keep tasks",
+      "bulkConfirm": {
+        "oneTask": "Stop run and cancel task",
+        "oneRun": "Stop run and cancel {{tasks}} tasks",
+        "other": "Stop runs and cancel {{tasks}} tasks"
+      }
     },
     "tags": {
       "label": "Tags",
@@ -767,7 +807,9 @@
       "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project.",
       "more": "+{{count}}",
       "pickerEmpty": "No tags yet. Type a name to create the first tag.",
-      "chooseExisting": "This tag already exists. Select it to add it to this task.",
+      "chooseExisting": "{{tag}} already exists. Select it to add it to this task.",
+      "alreadyExists": "{{tag}} already exists in {{project}}.",
+      "styleNote": "Tags use the same neutral theme style throughout this project.",
       "add": "Add tags",
       "manageShort": "Manage tags",
       "projectTitle": "Project tags",
@@ -803,6 +845,7 @@
       "change": "{{time}} · {{actor}} · {{field}}: {{from}} → {{to}}",
       "valueChange": "{{field}} · {{from}} → {{to}}",
       "attribution": "{{actor}} · {{date}}",
+      "none": "None",
       "date": "{{month}} {{day}}, {{year}}, {{time}}"
     }
   },

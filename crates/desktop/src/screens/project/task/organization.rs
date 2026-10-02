@@ -8,12 +8,12 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Modal, ModalTarget, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{
   id::{TagId, TaskId},
@@ -37,8 +37,14 @@ use crate::{
       OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
     },
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
+  theme::ExtraSpacing,
+  ui::{
+    backdrop::backdrop,
+    cancel_dialog::{CancelDialog, cancel_dialog},
+    field::field_error,
+    form::form,
+    message_text,
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -105,20 +111,7 @@ impl Component for OrganizationHeader {
             !state.is_pending(),
             PickerAppearance::Header,
           ))
-          .with_children(props.detail.run.as_ref().map(|_| {
-            Text::new(
-              &ctx.t_args(
-                "tasks.workflow.runSuffix",
-                [(
-                  "run",
-                  ctx
-                    .t(super::super::task_rows::status_copy(props.detail.phase()).1)
-                    .as_ref(),
-                )],
-              ),
-            )
-            .variant(TypographyStyle::Description)
-          }))
+          .child(Text::new(&run_suffix(ctx, &props.detail)).variant(TypographyStyle::Description))
           .child(priority_select(
             ctx,
             self.priority.clone(),
@@ -142,13 +135,16 @@ impl Component for OrganizationHeader {
               .id("task-header-blocked")
           })),
       );
-    if state.is_pending() {
+    // While the confirmation is open it shows the save and its failure itself (`Fhzcc`), so the
+    // header keeps its height.
+    let confirming = self.confirm.get();
+    if state.is_pending() && !confirming {
       column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));
     }
     // Refused because the task has an active run: the confirmation that opened says so.
     if let Some(error) = state
       .error
-      .filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED)
+      .filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED && !confirming)
     {
       column = column.child(field_error(&message_text(ctx, &error)));
     }
@@ -312,61 +308,26 @@ impl OrganizationHeader {
     let Some(run) = &props.detail.run else {
       return Modal::new(Column::new()).open_when(false).into();
     };
-    let pending = action.state().get().is_pending();
-    let close = self.confirm.clone();
-    let submit = action.clone();
-    let mut content = Column::new()
-      .id("task-cancel-confirmation")
-      .width(Dimension::Px(CONFIRM_WIDTH))
-      .padding(SpacingSize::Section)
-      .spacing(SpacingSize::Lg)
-      .background(ExtraColor::Surface.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
-      .child(Text::new(&ctx.t("tasks.cancel.title")).variant(ExtraTypography::DialogTitle.role()))
-      .child(
-        Text::new(&ctx.t_args(
-          "tasks.cancel.explanation",
-          [
-            ("task", props.detail.task.key().to_string().as_str()),
-            ("run", run.run.number().to_string().as_str()),
-            ("branch", run.run.branch().as_str()),
-          ],
-        ))
-        .variant(ExtraTypography::Explanation.role()),
-      )
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(
-            ActionButton::new(ctx.t("tasks.cancel.keep"))
-              .id("task-cancel-keep")
-              .in_form()
-              .on_click(move || close.set(false))
-              .enabled(!pending)
-              .render(ctx),
-          )
-          .child(
-            ActionButton::new(ctx.t(if pending {
-              "tasks.cancel.stopping"
-            } else {
-              "tasks.cancel.confirm"
-            }))
-            .id("task-cancel-stop")
-            .in_form()
-            .on_click(move || submit.run(Mutation::Status(WorkflowStatus::Canceled, true)))
-            .enabled(!pending)
-            .render(ctx),
-          ),
-      );
-    if let Some(error) = action
-      .state()
-      .get()
+    let state = action.state().get();
+    let pending = state.is_pending();
+    let error = state
       .error
       .filter(|error| error.key != messages::CANCEL_CONFIRM_REQUIRED)
-    {
-      content = content.child(field_error(&message_text(ctx, &error)));
-    }
+      .map(|error| message_text(ctx, &error).to_string());
+    let (close, submit) = (self.confirm.clone(), action.clone());
+    let dialog = single_cancel(
+      ctx,
+      (&props.detail.task, Some(&run.run)),
+      ("task-cancel-confirmation", "task-cancel-keep", "task-cancel-stop"),
+      pending,
+      error.as_deref(),
+    );
+    let content = cancel_dialog(
+      ctx,
+      dialog,
+      move || close.set(false),
+      move || submit.run(Mutation::Status(WorkflowStatus::Canceled, true)),
+    );
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)
       .open(self.confirm.clone())
@@ -375,5 +336,48 @@ impl OrganizationHeader {
   }
 }
 
-// Confirmation N1vwaM.
-const CONFIRM_WIDTH: f32 = 620.0;
+/// What the confirmation for one task says (`N1vwaM`): its active run stops, its work stays on its
+/// branch. Without the run (not read yet, or it ended meanwhile) only the question remains.
+pub(in crate::screens::project) fn single_cancel<'a>(
+  ctx: &Ctx,
+  (task, run): (&orchester_core::task::Task, Option<&orchester_core::run::Run>),
+  (id, keep, stop): (&'static str, &'static str, &'static str),
+  pending: bool,
+  error: Option<&'a str>,
+) -> CancelDialog<'a> {
+  CancelDialog {
+    id,
+    title: ctx.t("tasks.cancel.title"),
+    explanation: run.map(|run| {
+      ctx.t_args(
+        "tasks.cancel.explanation",
+        [
+          ("task", task.key().to_string().as_str()),
+          ("title", task.details().title.as_str()),
+          ("run", run.number().get().to_string().as_str()),
+        ],
+      )
+    }),
+    notice: run.map(|run| {
+      (
+        ctx.t("tasks.cancel.workKept"),
+        ctx.t_args("tasks.cancel.workKeptDetail", [("branch", run.branch().as_str())]),
+      )
+    }),
+    keep: (ctx.t("tasks.cancel.keep"), keep),
+    confirm: (ctx.t("tasks.cancel.confirm"), stop),
+    pending,
+    error,
+  }
+}
+
+/// What the header says after the workflow status about the task's run (`Fhzcc`, `tUwII`): its
+/// state, "Canceled run" in the workflow's spelling, or that it has none.
+fn run_suffix(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
+  let run = match (&detail.run, detail.phase()) {
+    (None, _) => ctx.t("tasks.workflow.noActiveRun"),
+    (Some(_), orchester_core::run::TaskPhase::Cancelled) => ctx.t("tasks.workflow.canceledRun"),
+    (Some(_), phase) => ctx.t(super::super::task_rows::status_copy(phase).1),
+  };
+  ctx.t_args("tasks.workflow.runSuffix", [("run", run.as_ref())])
+}

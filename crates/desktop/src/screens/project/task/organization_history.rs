@@ -149,7 +149,17 @@ pub(super) fn activity(
     .into()
 }
 
+/// One change: the field, the value before and after (an empty one reads "None"), who and when.
 fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: &str) -> Element {
+  let none = ctx.t("tasks.history.none");
+  let shown = |value: &str| {
+    if value.is_empty() {
+      none.to_string()
+    } else {
+      value.to_owned()
+    }
+  };
+  let (from, to) = (shown(from), shown(to));
   let glyph = if field == ctx.t("tasks.tags.label").as_ref() {
     crate::ui::icon::Icon::Tag
   } else if field == ctx.t("tasks.priority.label").as_ref() {
@@ -170,7 +180,7 @@ fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: 
         .child(
           Text::new(&ctx.t_args(
             "tasks.history.valueChange",
-            [("field", field), ("from", from), ("to", to)],
+            [("field", field), ("from", from.as_str()), ("to", to.as_str())],
           ))
           .variant(TypographyStyle::Body),
         )

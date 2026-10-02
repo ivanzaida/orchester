@@ -3,6 +3,7 @@
 pub mod backdrop;
 pub mod brand;
 pub mod button;
+pub mod cancel_dialog;
 pub mod check_row;
 pub mod command_chip;
 pub mod command_row;

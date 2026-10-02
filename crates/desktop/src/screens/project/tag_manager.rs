@@ -6,7 +6,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Select, Spacer, Text},
+  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Select, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -204,41 +204,40 @@ impl TagManager {
       .into()
   }
 
-  fn list(&self, ctx: &mut Ctx, tags: &[(Tag, usize)], pending: bool) -> Element {
-    let actions = self.list_actions(ctx, pending);
-    let mut column = Column::new().padding_top(SpacingSize::Lg);
-    if tags.is_empty() {
-      column = column.child(Text::new(&ctx.t("tasks.tags.empty")).variant(TypographyStyle::Caption));
-    }
-    for (tag, count) in tags {
-      let id = tag.id();
-      let rename = self.editing.clone();
-      let name = self.name.clone();
-      let current = tag.name().as_str().to_owned();
-      let merge = self.editing.clone();
-      let target = self.target.clone();
-      let remove = self.editing.clone();
-      column = column.child(
+  /// One project tag (`y3ohgK`): its chip, how many tasks use it, then Rename, Merge and Delete.
+  fn tag_row(&self, ctx: &mut Ctx, (tag, count): (&Tag, usize), pending: bool, can_merge: bool) -> Element {
+    let id = tag.id();
+    let rename = self.editing.clone();
+    let name = self.name.clone();
+    let current = tag.name().as_str().to_owned();
+    let merge = self.editing.clone();
+    let target = self.target.clone();
+    let remove = self.editing.clone();
+    Row::new()
+      .height(Dimension::Px(TAG_ROW_HEIGHT))
+      .width(Dimension::Pct(100.0))
+      .align_items(Alignment::Center)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .spacing(crate::theme::ExtraSpacing::Stack.role())
+      .child(
+        Column::new()
+          .flex(1.0)
+          .child(crate::tasks::organization::tag_chip(tag.name().as_str())),
+      )
+      .child(
+        Row::new().width(Dimension::Px(TAG_COUNT_WIDTH)).child(
+          Text::new(&if count == 1 {
+            ctx.t("tasks.tags.taskCountOne")
+          } else {
+            ctx.t_args("tasks.tags.taskCount", [("count", count.to_string().as_str())])
+          })
+          .variant(TypographyStyle::Description),
+        ),
+      )
+      .child(
         Row::new()
-          .height(Dimension::Px(TAG_ROW_HEIGHT))
-          .width(Dimension::Pct(100.0))
-          .align_items(Alignment::Center)
-          .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-          .spacing(SpacingSize::Sm)
-          .child(
-            Column::new()
-              .flex(1.0)
-              .child(crate::tasks::organization::tag_chip(tag.name().as_str())),
-          )
-          .child(
-            Text::new(&if *count == 1 {
-              ctx.t("tasks.tags.taskCountOne")
-            } else {
-              ctx.t_args("tasks.tags.taskCount", [("count", count.to_string().as_str())])
-            })
-            .variant(TypographyStyle::Caption),
-          )
-          .child(Spacer::new().width(Dimension::Px(TAG_COUNT_GAP)))
+          .width(Dimension::Px(TAG_ACTIONS_WIDTH))
+          .spacing(crate::theme::ExtraSpacing::Stack.role())
           .child(
             ActionButton::new(ctx.t("tasks.tags.rename"))
               .icon(Icon::Pencil)
@@ -257,7 +256,7 @@ impl TagManager {
                 target.set(Target(None));
                 merge.set(Some(EditingTag::Merge(id)));
               })
-              .enabled(!pending && tags.len() > 1)
+              .enabled(!pending && can_merge)
               .render(ctx)
               .id(format!("project-tag-merge-{id}")),
           )
@@ -269,6 +268,24 @@ impl TagManager {
               .render(ctx)
               .id(format!("project-tag-delete-{id}")),
           ),
+      )
+      .into()
+  }
+
+  fn list(&self, ctx: &mut Ctx, tags: &[(Tag, usize)], pending: bool) -> Element {
+    let actions = self.list_actions(ctx, pending);
+    let mut column = Column::new().padding_top(SpacingSize::Lg);
+    if tags.is_empty() {
+      column = column.child(Text::new(&ctx.t("tasks.tags.empty")).variant(TypographyStyle::Caption));
+    }
+    for (tag, count) in tags {
+      column = column.child(self.tag_row(ctx, (tag, *count), pending, tags.len() > 1));
+    }
+    if !tags.is_empty() {
+      column = column.child(
+        Text::new(&ctx.t("tasks.tags.styleNote"))
+          .variant(TypographyStyle::Caption)
+          .padding_top(SpacingSize::Lg),
       );
     }
     ScrollVertical::new(Column::new().child(actions).child(column))
@@ -279,7 +296,8 @@ impl TagManager {
 
 // Project tag list y3ohgK and its confirmation panels.
 const TAG_ROW_HEIGHT: f32 = 64.0;
-const TAG_COUNT_GAP: f32 = 80.0;
+const TAG_COUNT_WIDTH: f32 = 120.0;
+const TAG_ACTIONS_WIDTH: f32 = 340.0;
 const MANAGER_HEIGHT: f32 = 520.0;
 fn mutate(root: &std::path::Path, mutation: Mutation) -> Result<(), Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;

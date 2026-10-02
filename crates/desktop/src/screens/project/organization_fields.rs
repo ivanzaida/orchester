@@ -4,11 +4,11 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   id::TaskId,
@@ -25,8 +25,12 @@ use crate::{
     button::ActionButton,
     field::{FieldNote, field, locked_input, text_input},
     icon::Icon,
+    menu_option::menu_option,
   },
 };
+
+// tUwII: the search and its results.
+const RESULTS_WIDTH: f32 = 420.0;
 
 #[derive(Clone)]
 pub struct OrganizationDraft {
@@ -202,6 +206,8 @@ impl lurq::app::component::DevtoolsInspectable for DependencyProps {}
 struct DependencyFields {
   choice: Signal<DependencyChoice>,
   query: Signal<String>,
+  /// Add blocking task opened the search (`ZLhiM` closed, `tUwII` open).
+  picking: Signal<bool>,
 }
 impl Component for DependencyFields {
   type Props = DependencyProps;
@@ -209,6 +215,7 @@ impl Component for DependencyFields {
     Self {
       choice: ctx.signal(DependencyChoice(None)),
       query: ctx.signal(String::new()),
+      picking: ctx.signal(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -353,59 +360,98 @@ impl DependencyFields {
     })
   }
 
-  fn selector(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Element {
+  /// The tasks matching the search, each with a check once chosen (`tUwII`); the current task is
+  /// named apart, since it cannot block itself.
+  fn results(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Column {
     let query = self.query.get().trim().to_lowercase();
-    let options = std::iter::once((DependencyChoice(None), ctx.t("tasks.blocked.addLink"))).chain(
-      tasks
-        .tasks
-        .iter()
-        .filter(|task| {
-          Some(task.id()) != props.task
-            && (task.details().title.as_str().to_lowercase().contains(&query)
-              || task.key().to_string().to_lowercase().contains(&query))
-        })
-        .map(|task| {
-          (
-            DependencyChoice(Some(task.id())),
-            ctx.t_args(
-              "tasks.blocked.pickerLabel",
-              [
-                ("key", task.key().to_string().as_str()),
-                ("title", task.details().title.as_str()),
-                (
-                  "status",
-                  ctx
-                    .t(crate::tasks::organization::workflow_copy(task.organization().status()).1)
-                    .as_ref(),
-                ),
-              ],
+    let matches = |task: &&orchester_core::task::Task| {
+      !query.is_empty()
+        && (task.details().title.as_str().to_lowercase().contains(&query)
+          || task.key().to_string().to_lowercase().contains(&query))
+    };
+    let chosen = self.choice.get().0;
+    let options: Vec<Element> = tasks
+      .tasks
+      .iter()
+      .filter(matches)
+      .filter(|task| Some(task.id()) != props.task)
+      .map(|task| {
+        let label = ctx.t_args(
+          "tasks.blocked.pickerLabel",
+          [
+            ("key", task.key().to_string().as_str()),
+            ("title", task.details().title.as_str()),
+            (
+              "status",
+              ctx
+                .t(crate::tasks::organization::workflow_copy(task.organization().status()).1)
+                .as_ref(),
             ),
-          )
-        }),
-    );
-    let select: Element = Element::from(
-      lurq::components::Select::new(self.choice.clone())
-        .focusable(tasks.tasks.iter().any(|task| Some(task.id()) != props.task))
-        .options(options)
-        .height(Dimension::Px(crate::tasks::organization::CONTROL_HEIGHT))
-        .style(crate::ui::field::select_style(
-          ctx,
-          crate::tasks::organization::CONTROL_HEIGHT,
-        )),
-    )
-    .id("task-blocking-picker");
-    select
+          ],
+        );
+        let (choice, id) = (self.choice.clone(), task.id());
+        menu_option(&label, chosen == Some(id), true, move || {
+          choice.set(DependencyChoice(Some(id)));
+        })
+        .id(format!("task-blocking-option-{}", task.key()))
+      })
+      .collect();
+    let current = tasks
+      .tasks
+      .iter()
+      .filter(matches)
+      .find(|task| Some(task.id()) == props.task)
+      .map(|task| {
+        Text::new(&ctx.t_args("tasks.blocked.currentTask", [("key", task.key().to_string().as_str())]))
+          .variant(TypographyStyle::Caption)
+      });
+    let list = (!options.is_empty()).then(|| {
+      Column::new()
+        .id("task-blocking-picker")
+        .width(Dimension::Pct(100.0))
+        .max_width(Dimension::Px(RESULTS_WIDTH))
+        .padding(SpacingSize::Xs)
+        .background(PaletteColor::SurfaceRaised)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .rounded(RadiusSize::Md)
+        .with_children(options)
+    });
+    Column::new()
+      .spacing(SpacingSize::Md)
+      .with_children(list)
+      .with_children(current)
   }
 
   fn add_control(&self, ctx: &Ctx, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> Element {
-    let select = self.selector(ctx, props, tasks);
-    let choice = self.choice.clone();
-    let value = props.value.clone();
+    if !self.picking.get() {
+      let picking = self.picking.clone();
+      return ActionButton::new(ctx.t("tasks.blocked.addLink"))
+        .icon(Icon::Plus)
+        .in_form()
+        .id("task-open-blocking-picker")
+        .on_click(move || picking.set(true))
+        .render(ctx);
+    }
+    let (choice, value, picking) = (self.choice.clone(), props.value.clone(), self.picking.clone());
     let cycle = self.creates_cycle(props, tasks);
-    let query = self.query.clone();
-    let clear_choice = self.choice.clone();
+    let (query, clear_choice) = (self.query.clone(), self.choice.clone());
+    let add = ActionButton::new(ctx.t("tasks.blocked.addSelected"))
+      .icon(Icon::Plus)
+      .in_form()
+      .id("task-add-blocking-link")
+      .on_click(move || {
+        if let Some(task) = choice.get().0 {
+          value.update(|value| value.0 = with_link(&value.0, task));
+          choice.set(DependencyChoice(None));
+          picking.set(false);
+        }
+      })
+      .enabled(self.choice.get().0.is_some() && !cycle)
+      .render(ctx);
     Column::new()
-      .spacing(SpacingSize::Sm)
+      .width(Dimension::Pct(100.0))
+      .max_width(Dimension::Px(RESULTS_WIDTH))
+      .spacing(SpacingSize::Md)
       .child(
         text_input(ctx, "blocking-task-search", query.clone(), false, TypographyStyle::Body)
           .placeholder(&ctx.t("tasks.blocked.search"))
@@ -414,40 +460,30 @@ impl DependencyFields {
             clear_choice.set(DependencyChoice(None));
           }),
       )
-      .child(select)
+      .child(self.results(ctx, props, tasks))
+      .child(add)
       .with_children(cycle.then(|| crate::ui::field::field_error(&ctx.t("tasks.blocked.cycle"))))
-      .child(
-        ActionButton::new(ctx.t("tasks.blocked.addLink"))
-          .in_form()
-          .id("task-add-blocking-link")
-          .on_click(move || {
-            if let Some(task) = choice.get().0 {
-              value.update(|value| {
-                let old = &value.0;
-                let mut links = old.dependencies().to_vec();
-                if !links.iter().any(|link| link.task == task) {
-                  links.push(BlockingTask {
-                    task,
-                    gate: DependencyGate::Merge,
-                  });
-                }
-                value.0 = TaskOrganization::new(
-                  old.status(),
-                  old.priority(),
-                  old.blocked_reason().map(str::to_owned),
-                  links,
-                  old.tags().to_vec(),
-                )
-                .expect("adding a link preserves local organization invariants; the store validates cycles");
-              });
-              choice.set(DependencyChoice(None));
-            }
-          })
-          .enabled(self.choice.get().0.is_some() && !cycle)
-          .render(ctx),
-      )
       .into()
   }
+}
+
+/// `organization` with `task` as one more blocking task (once).
+fn with_link(organization: &TaskOrganization, task: TaskId) -> TaskOrganization {
+  let mut links = organization.dependencies().to_vec();
+  if !links.iter().any(|link| link.task == task) {
+    links.push(BlockingTask {
+      task,
+      gate: DependencyGate::Merge,
+    });
+  }
+  TaskOrganization::new(
+    organization.status(),
+    organization.priority(),
+    organization.blocked_reason().map(str::to_owned),
+    links,
+    organization.tags().to_vec(),
+  )
+  .expect("adding a link preserves local organization invariants; the store validates cycles")
 }
 
 fn readiness_note(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks, unfinished: &[TaskId], reason: &str) -> Element {

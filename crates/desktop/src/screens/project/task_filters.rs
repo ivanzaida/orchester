@@ -89,7 +89,7 @@ impl Component for TaskFilters {
     let mut column = Column::new()
       .spacing(SpacingSize::Sm)
       .child(row)
-      .child(filter_summary(ctx, &props));
+      .with_children(filter_summary(ctx, &props));
     if let Some(facet) = self.open.get() {
       let index = match facet {
         Facet::Status => 0,
@@ -253,7 +253,8 @@ fn facet_label(ctx: &Ctx, key: &str, count: usize) -> Arc<str> {
     )
   }
 }
-fn filter_summary(ctx: &Ctx, props: &FilterProps) -> Element {
+/// The chips of the active filters; nothing while no filter is active, so the line adds no gap.
+fn filter_summary(ctx: &Ctx, props: &FilterProps) -> Option<Element> {
   let filter = props.filter.get().0;
   let status = filter
     .statuses
@@ -280,7 +281,7 @@ fn filter_summary(ctx: &Ctx, props: &FilterProps) -> Element {
         .t_args(
           "tasks.filters.tagSummary",
           [
-            ("names", tags.join(&ctx.t("common.listSeparator")).as_str()),
+            ("names", tags.join(&ctx.t("tasks.filters.valueSeparator")).as_str()),
             (
               "mode",
               ctx
@@ -296,15 +297,20 @@ fn filter_summary(ctx: &Ctx, props: &FilterProps) -> Element {
         .to_string(),
     ]
   };
-  Row::new()
-    .spacing(SpacingSize::Sm)
-    .with_children(
-      [status, priority, tags]
-        .iter()
-        .filter(|values| !values.is_empty())
-        .map(|values| crate::tasks::organization::tag_chip(&values.join(&ctx.t("common.listSeparator")))),
-    )
-    .into()
+  let active: Vec<_> = [status, priority, tags]
+    .into_iter()
+    .filter(|values| !values.is_empty())
+    .collect();
+  (!active.is_empty()).then(|| {
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .with_children(
+        active
+          .iter()
+          .map(|values| crate::tasks::organization::tag_chip(&values.join(&ctx.t("tasks.filters.valueSeparator")))),
+      )
+      .into()
+  })
 }
 
 // l7kBSq: multi-selection filter menus.

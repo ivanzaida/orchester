@@ -513,21 +513,28 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
   desktop.enter();
   desktop.wait_for("task-blocked-reason");
   set_text(&mut desktop, "task-blocked-reason", "Needs a dependency");
+  desktop.wait_for("task-open-blocking-picker");
+  desktop.tab_to("task-open-blocking-picker", 40);
+  desktop.enter();
+  desktop.wait_for("blocking-task-search");
+  set_text(&mut desktop, "blocking-task-search", "kon-");
   desktop.wait_for("task-blocking-picker");
+  assert!(desktop.tree.get_element_by_id("task-blocking-option-KON-1").is_none());
   assert!(
     !desktop
       .stops(40, false)
       .contains(&Some("task-add-blocking-link".into()))
   );
-  choose(&mut desktop, "task-blocking-picker", "KON-2 · Dependency · Todo");
+  desktop.tab_to("task-blocking-option-KON-2", 40);
+  desktop.enter();
   assert!(
     !desktop
       .stops(40, false)
       .contains(&Some("task-add-blocking-link".into()))
   );
-  desktop.press("task-add-blocking-link");
   assert!(desktop.tree.get_element_by_id("task-add-blocking-link").is_some());
-  choose(&mut desktop, "task-blocking-picker", "KON-3 · Dependency · Backlog");
+  desktop.tab_to("task-blocking-option-KON-3", 40);
+  desktop.enter();
   assert!(
     desktop
       .stops(40, false)

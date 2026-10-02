@@ -20,6 +20,7 @@ mod limit_panel;
 mod native_approval;
 mod notice;
 mod organization;
+pub(super) use organization::single_cancel;
 mod organization_history;
 mod permissions;
 mod plan_review;

@@ -1,13 +1,10 @@
 //! The confirmation that saving an edited task as Canceled stops its active run (`N1vwaM`).
 
 use lurq::{
-  app::{
-    ctx::{Ctx, FutureState},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Modal, ModalTarget, Row, Text},
+  app::ctx::{Ctx, FutureState},
+  components::{Column, Modal, ModalTarget},
   core::Signal,
-  node::{Element, border::Border, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{id::TaskId, store::RunStore};
 use orchester_store::ProjectDb;
@@ -16,11 +13,9 @@ use super::{NewTaskProps, SaveAction};
 use crate::{
   background,
   messages::{self, Message},
-  theme::{ExtraColor, ExtraTypography},
   ui::{
     backdrop::backdrop,
-    button::ActionButton,
-    field::field_error,
+    cancel_dialog::cancel_dialog,
     form::{Submit, form},
     message_text,
   },
@@ -46,68 +41,32 @@ pub(super) fn confirmation(
   let task = editing.task.id();
   let load = active_run(ctx, &props.project.repo_root, task);
   let pending = save.state().get().is_pending();
-  let mut content = Column::new()
-    .id("edit-task-cancel-confirmation")
-    .width(Dimension::Px(CONFIRM_WIDTH))
-    .padding(SpacingSize::Section)
-    .spacing(SpacingSize::Lg)
-    .background(ExtraColor::Surface.role())
-    .rounded(RadiusSize::Lg)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("tasks.cancel.title")).variant(ExtraTypography::DialogTitle.role()));
-  let loaded = load;
-  if let Some(ActiveRun(Some(run))) = loaded.data {
-    content = content.child(
-      Text::new(&ctx.t_args(
-        "tasks.cancel.explanation",
-        [
-          ("task", editing.task.key().to_string().as_str()),
-          ("run", run.number().to_string().as_str()),
-          ("branch", run.branch().as_str()),
-        ],
-      ))
-      .variant(TypographyStyle::Description),
-    );
-  }
-  if let Some(error) = loaded.error {
-    content = content.child(field_error(&message_text(ctx, &error)));
-  }
-  if let Some(error) = save
+  // The run is shown once read; a failed read says why in place of the save's error.
+  let run = load.data.and_then(|ActiveRun(run)| run);
+  let error = save
     .state()
     .get()
     .error
     .filter(|error| !super::persistence::needs_cancel_confirmation(error))
-  {
-    content = content.child(field_error(&message_text(ctx, &error)));
-  }
+    .or(load.error)
+    .map(|error| message_text(ctx, &error).to_string());
   let close = open.clone();
-  content = content.child(
-    Row::new()
-      .spacing(SpacingSize::Sm)
-      .child(
-        ActionButton::new(ctx.t("tasks.cancel.keep"))
-          .id("edit-cancel-keep")
-          .in_form()
-          .on_click(move || close.set(false))
-          .enabled(!pending)
-          .render(ctx),
-      )
-      .child(
-        ActionButton::new(ctx.t(if pending {
-          "tasks.cancel.stopping"
-        } else {
-          "tasks.cancel.confirm"
-        }))
-        .id("edit-cancel-stop")
-        .in_form()
-        .on_click(move || {
-          if let Some(submit) = &submit {
-            submit();
-          }
-        })
-        .enabled(!pending)
-        .render(ctx),
-      ),
+  let dialog = crate::screens::project::task::single_cancel(
+    ctx,
+    (&editing.task, run.as_ref()),
+    ("edit-task-cancel-confirmation", "edit-cancel-keep", "edit-cancel-stop"),
+    pending,
+    error.as_deref(),
+  );
+  let content = cancel_dialog(
+    ctx,
+    dialog,
+    move || close.set(false),
+    move || {
+      if let Some(submit) = &submit {
+        submit();
+      }
+    },
   );
   Modal::new(backdrop(ctx, form(None, content)))
     .target(ModalTarget::Root)
@@ -115,9 +74,6 @@ pub(super) fn confirmation(
     .dismiss_on_escape(!pending)
     .into()
 }
-
-// N1vwaM: cancel confirmation in Edit task.
-const CONFIRM_WIDTH: f32 = 620.0;
 
 fn active_run(ctx: &mut Ctx, root: &std::path::Path, task: TaskId) -> FutureState<ActiveRun, Message> {
   ctx

@@ -3,6 +3,7 @@
 //! Create, the list scrolls to the new task and highlights it.
 
 mod bulk;
+mod bulk_cancel;
 mod controls;
 mod outcome;
 mod review;
@@ -369,7 +370,7 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
     )
     .with_children(controls::problems(ctx, screen, tasks))
     .child(table_column(ctx, table, visible.len()))
-    .child(footer(ctx, tasks));
+    .child(footer(ctx, tasks, &visible, filtered(screen)));
   crate::ui::form::form(None, content)
 }
 
@@ -415,22 +416,30 @@ fn table_column(ctx: &Ctx, table: Element, rows: usize) -> Element {
 }
 
 /// No row to show: the tab has no tasks, or the search, pipeline or organization filters hide
-/// them all, which the person can clear (implemented, not drawn yet).
+/// them all, which the notice says and the person can clear (`rVJoA`).
 fn empty_rows(ctx: &Ctx, screen: &TasksScreen) -> Element {
-  let filtered = !screen.search.get().trim().is_empty()
-    || screen.pipeline.get().0.is_some()
-    || screen.filter.get() != Filters::default();
-  let text = ctx.t(if filtered { "tasks.emptyQuery" } else { "tasks.emptyTab" });
+  let filtered = filtered(screen);
   let (search, pipeline, filter) = (screen.search.clone(), screen.pipeline.clone(), screen.filter.clone());
+  let message: Element = if filtered {
+    crate::ui::organization_notice::organization_notice(
+      &ctx.t("tasks.emptyQuery.title"),
+      &ctx.t("tasks.emptyQuery.detail"),
+    )
+    .into()
+  } else {
+    Text::new(&ctx.t("tasks.emptyTab"))
+      .variant(TypographyStyle::Caption)
+      .into()
+  };
   Column::new()
     .id("tasks-empty-rows")
     .width(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Stack.role())
-    .spacing(SpacingSize::Sm)
+    .padding_vertical(ExtraSpacing::Stack.role())
+    .spacing(SpacingSize::Md)
     .align_items(Alignment::Start)
-    .child(Text::new(&text).variant(TypographyStyle::Caption))
+    .child(message)
     .with_children(filtered.then(|| {
-      ActionButton::new(ctx.t("tasks.clearQuery"))
+      ActionButton::new(ctx.t("tasks.filters.clear"))
         .icon(Icon::X)
         .id("tasks-clear-query")
         .in_form()
@@ -444,16 +453,22 @@ fn empty_rows(ctx: &Ctx, screen: &TasksScreen) -> Element {
     .into()
 }
 
-/// Task and run counts (`Bpth7`).
-fn footer(ctx: &Ctx, tasks: &ProjectTasks) -> Element {
+/// Whether the search, the pipeline or an organization filter narrows the rows of the tab.
+fn filtered(screen: &TasksScreen) -> bool {
+  !screen.search.get().trim().is_empty()
+    || screen.pipeline.get().0.is_some()
+    || screen.filter.get() != Filters::default()
+}
+
+/// The counts of the rows shown and their runs (`Bpth7`), or how many match the query (`l7kBSq`).
+fn footer(ctx: &Ctx, tasks: &ProjectTasks, rows: &[list::TaskRow], filtered: bool) -> Element {
+  let count = list::footer(rows.len(), tasks.runs_of(rows), filtered);
   Row::new()
     .id("tasks-footer")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(FOOTER_HEIGHT))
     .align_items(Alignment::Center)
-    .child(
-      Text::new(&message_text(ctx, &list::footer(tasks.tasks.len(), tasks.runs))).variant(TypographyStyle::Caption),
-    )
+    .child(Text::new(&message_text(ctx, &count)).variant(TypographyStyle::Caption))
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&ctx.t("tasks.editingHint")).variant(TypographyStyle::Caption))
     .into()

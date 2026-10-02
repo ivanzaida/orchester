@@ -59,8 +59,8 @@ pub struct ProjectTasks {
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
-  /// Runs started in the project, of every task, that can be read.
-  pub runs: usize,
+  /// How many runs of each task were started and can be read.
+  pub runs: Arc<BTreeMap<TaskId, usize>>,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
   /// one is ([`Self::without_runner`]).
   pub lost_to_runner: usize,
@@ -83,14 +83,17 @@ impl ProjectTasks {
         .map(|task| task.key().to_string())
         .collect::<Vec<_>>()
         .join(", ");
-      row.detail = UiMessage::new("tasks.blocked.unfinished").with("tasks", keys).with(
-        "reason",
-        row.organization.blocked_reason().unwrap_or_default().to_owned(),
-      );
+      row.detail = UiMessage::new("tasks.blocked.rowUnfinished").with("tasks", keys);
     } else if let Some(reason) = row.organization.blocked_reason() {
       row.detail = UiMessage::new("tasks.blocked.informational").with("reason", reason.to_owned());
     }
     row
+  }
+
+  /// Runs started of the tasks in `rows` that can be read.
+  #[must_use]
+  pub fn runs_of(&self, rows: &[super::list::TaskRow]) -> usize {
+    rows.iter().filter_map(|row| self.runs.get(&row.id)).sum()
   }
 
   /// How many of `tasks` have a run that has not ended, which bulk Canceled stops. A latest run
@@ -117,10 +120,10 @@ impl ProjectTasks {
       }
     }
     let mut phases = Phases::new();
-    let mut count = 0;
+    let mut counts = BTreeMap::new();
     for task in &tasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      count += runs.iter().filter(|run| run.is_ok()).count();
+      counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
       let latest = match runs.last() {
         Some(Ok(latest)) => {
           if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
@@ -155,7 +158,7 @@ impl ProjectTasks {
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(approvals::pending(&db)?),
       phases: Arc::new(phases),
-      runs: count,
+      runs: Arc::new(counts),
       lost_to_runner: 0,
     })
   }

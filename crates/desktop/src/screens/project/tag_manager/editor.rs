@@ -37,16 +37,13 @@ impl TagManager {
         },
       ),
     };
+    // The name editors are cards (`TK65i`, `mMFb1`: padding 24, 16 apart); merge and delete are
+    // dialogs (padding 32, 24 apart).
+    let named = matches!(mode, EditingTag::Create | EditingTag::Rename(_));
     let mut content = Column::new()
-      .width(Dimension::Px(
-        if matches!(mode, EditingTag::Create | EditingTag::Rename(_)) {
-          EDITOR_WIDTH
-        } else {
-          IMPACT_WIDTH
-        },
-      ))
-      .padding(SpacingSize::Section)
-      .spacing(SpacingSize::Lg)
+      .width(Dimension::Px(if named { EDITOR_WIDTH } else { IMPACT_WIDTH }))
+      .padding(if named { SpacingSize::Lg } else { SpacingSize::Section })
+      .spacing(if named { SpacingSize::Md } else { SpacingSize::Lg })
       .background(ExtraColor::Surface.role())
       .rounded(RadiusSize::Lg)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -86,23 +83,44 @@ impl TagManager {
   fn name_editor(&self, ctx: &Ctx, tags: &[(Tag, usize)], mode: EditingTag) -> (Column, Option<Mutation>) {
     let name = self.name.get();
     let input = self.name.clone();
-    let duplicate = tags.iter().any(|(tag, _)| {
+    let duplicate = tags.iter().map(|(tag, _)| tag).find(|tag| {
       tag.name().as_str().to_lowercase() == name.trim().to_lowercase() && mode != EditingTag::Rename(tag.id())
     });
-    let valid = Name::new(&name).is_ok() && !duplicate;
+    let valid = Name::new(&name).is_ok() && duplicate.is_none();
     let control = text_input(ctx, "project-tag-name", input.clone(), !valid, TypographyStyle::Body)
       .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value));
     let note = if name.trim().is_empty() {
       FieldNote::Error(ctx.t("tasks.tags.nameRequired"))
-    } else if duplicate {
-      FieldNote::Error(ctx.t("tasks.tags.chooseExisting"))
+    } else if let Some(existing) = duplicate {
+      FieldNote::Error(ctx.t_args(
+        "tasks.tags.alreadyExists",
+        [
+          ("tag", existing.name().as_str()),
+          ("project", ctx.props::<OpenProject>().project.name().as_str()),
+        ],
+      ))
     } else {
       FieldNote::None
     };
     let mut column =
       Column::new()
-        .spacing(SpacingSize::Lg)
+        .spacing(SpacingSize::Md)
         .child(field(&ctx.t("tasks.tags.nameLabel"), control.into(), note));
+    // Renaming onto an existing name offers to merge into that tag instead (`YBfjV`).
+    if let (EditingTag::Rename(id), Some(existing)) = (mode, duplicate) {
+      let (editing, target, into) = (self.editing.clone(), self.target.clone(), existing.id());
+      column = column.child(
+        ActionButton::new(ctx.t_args("tasks.tags.mergeInto", [("target", existing.name().as_str())]))
+          .icon(Icon::GitMerge)
+          .id("tag-editor-merge-duplicate")
+          .in_form()
+          .on_click(move || {
+            target.set(Target(Some(into)));
+            editing.set(Some(EditingTag::Merge(id)));
+          })
+          .render(ctx),
+      );
+    }
     if matches!(mode, EditingTag::Rename(_)) {
       column = column.child(
         Text::new(&ctx.t_args(
@@ -114,8 +132,9 @@ impl TagManager {
     }
     column = column.child(
       Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(Text::new(&ctx.t("tasks.tags.preview")).variant(TypographyStyle::Caption))
+        .spacing(crate::theme::ExtraSpacing::Stack.role())
+        .align_items(lurq::layout::Alignment::Center)
+        .child(Text::new(&ctx.t("tasks.tags.preview")).variant(TypographyStyle::Description))
         .with_children((!name.trim().is_empty()).then(|| tag_chip(name.trim()))),
     );
     let request = valid.then_some(match mode {

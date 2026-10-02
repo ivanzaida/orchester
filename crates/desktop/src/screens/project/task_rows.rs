@@ -278,7 +278,7 @@ impl Component for QueueRow {
           .priority
           .then(|| cell(PRIORITY_WIDTH, priority_label(ctx, row.organization.priority()))),
       )
-      .child(cell(columns.status_width(), workflow_run(ctx, &row)))
+      .child(cell(columns.status_width(), workflow_run(ctx, &row, !columns.tags)))
       .child(cell(
         READINESS_WIDTH,
         column_label(&message_text(ctx, &row.detail))
@@ -360,20 +360,46 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
   opens(nav, row, content)
 }
 
-fn workflow_run(ctx: &Ctx, row: &TaskRow) -> Element {
-  let run_key = system_label_key(row.phase).unwrap_or("tasks.workflow.noActiveRun");
-  Column::new()
+/// The workflow label over the run label (`DWqjc`): a draft has no active run, a queued task reads
+/// Queued (a held group member too), a task with a run reads that run's label. The Blocked flag
+/// goes under them, or beside the run label in the lower rows without tag chips, so the three
+/// lines never touch the row's hairlines.
+fn workflow_run(ctx: &Ctx, row: &TaskRow, compact: bool) -> Element {
+  let run_key = match row.phase {
+    Some(TaskPhase::Draft) => "tasks.workflow.noActiveRun",
+    Some(phase) => status_copy(phase).1,
+    None => "tasks.status.unreadable",
+  };
+  let run = Text::new(&ctx.t(run_key))
+    .variant(ExtraTypography::Footnote.role())
+    .nowrap();
+  let blocked = is_blocked(row).then(|| {
+    Row::new()
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(icon(Icon::CircleMinus, IconSize::Small, PaletteColor::TextMuted))
+      .child(
+        Text::new(&ctx.t("tasks.blocked.label"))
+          .variant(TypographyStyle::Caption)
+          .nowrap(),
+      )
+  });
+  let column = Column::new()
     .spacing(SpacingSize::Xs)
-    .child(workflow_label(ctx, row.organization.status()))
-    .child(Text::new(&ctx.t(run_key)).variant(TypographyStyle::Caption))
-    .with_children(is_blocked(row).then(|| {
-      Row::new()
-        .spacing(SpacingSize::Xs)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::CircleMinus, IconSize::Small, PaletteColor::TextMuted))
-        .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption))
-    }))
-    .into()
+    .child(workflow_label(ctx, row.organization.status()));
+  if compact {
+    column
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(run)
+          .with_children(blocked),
+      )
+      .into()
+  } else {
+    column.child(run).with_children(blocked).into()
+  }
 }
 
 fn overview_workflow(ctx: &Ctx, row: &TaskRow) -> Element {
@@ -403,6 +429,5 @@ fn system_label_key(phase: Option<TaskPhase>) -> Option<&'static str> {
 }
 
 fn is_blocked(row: &TaskRow) -> bool {
-  row.organization.blocked_reason().is_some()
-    || matches!(row.detail.key, "tasks.blocked.unfinished" | "tasks.readiness.blocked")
+  row.organization.blocked_reason().is_some() || row.detail.key == "tasks.blocked.rowUnfinished"
 }

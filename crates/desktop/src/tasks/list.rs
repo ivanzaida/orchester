@@ -476,7 +476,17 @@ impl DraftSummary {
 }
 
 /// Under the task list (`Bpth7`): how many tasks there are and how many runs were started.
-pub fn footer(tasks: usize, runs: usize) -> Message {
+/// The table's count (`Bpth7`): the rows shown and their runs, or how many rows match while a
+/// search or filter narrows them (`l7kBSq`).
+pub fn footer(tasks: usize, runs: usize, filtered: bool) -> Message {
+  if filtered {
+    let key = if tasks == 1 {
+      "tasks.footer.matches.one"
+    } else {
+      "tasks.footer.matches.other"
+    };
+    return Message::new(key).with("count", tasks.to_string());
+  }
   let key = match (tasks == 1, runs) {
     (true, 0) => "tasks.footer.noRuns.one",
     (false, 0) => "tasks.footer.noRuns.other",

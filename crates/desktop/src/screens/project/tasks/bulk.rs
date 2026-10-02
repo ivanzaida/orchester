@@ -6,12 +6,12 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, Placement},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Modal, ModalTarget, Popup, Row, Text},
+  components::{Column, Modal, ModalTarget, Popup, Row},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::{TagId, TaskId},
@@ -34,8 +34,14 @@ use crate::{
     data::ProjectTasks,
     organization::{OrganizationValue, priority_copy, workflow_copy},
   },
-  theme::{ExtraColor, ExtraSpacing},
-  ui::{backdrop::backdrop, button::ActionButton, field::field_error, form::form, message_text},
+  theme::ExtraSpacing,
+  ui::{
+    backdrop::backdrop,
+    button::ActionButton,
+    cancel_dialog::{CancelDialog, cancel_dialog},
+    form::form,
+    message_text,
+  },
 };
 
 /// The selected tasks to organize, as the task list reads them.
@@ -244,7 +250,12 @@ impl BulkOrganization {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
     for status in WorkflowStatus::ALL {
-      let (apply, ids, confirm) = (action.clone(), selected.clone(), self.confirm.clone());
+      let (apply, ids, confirm, menu) = (
+        action.clone(),
+        selected.clone(),
+        self.confirm.clone(),
+        self.open.clone(),
+      );
       let active = active_count(props);
       let checked = props
         .tasks
@@ -255,6 +266,8 @@ impl BulkOrganization {
       column = column.child(
         crate::ui::menu_option::menu_option(&ctx.t(workflow_copy(status).1), checked, !pending, move || {
           if status == WorkflowStatus::Canceled && active > 0 {
+            // The menu closes: the confirmation takes its place.
+            menu.set(false);
             confirm.set(true);
           } else {
             apply.run((ids.clone(), Mutation::Status(status), false));
@@ -346,59 +359,41 @@ impl BulkOrganization {
     )
   }
 
+  /// Bulk Canceled with active runs (`hFH4D`); the runs' failures show in it.
   fn confirmation(&self, ctx: &mut Ctx, props: &BulkProps, action: &Action) -> Element {
     if !self.confirm.get() {
       return Modal::new(Column::new()).open_when(false).into();
     }
-    let selected: Vec<_> = props.selected.get().0.into_iter().collect();
-    let pending = action.state().get().is_pending();
-    let close = self.confirm.clone();
-    let apply = action.clone();
-    let mut content = Column::new()
-      .width(Dimension::Px(CONFIRM_WIDTH))
-      .padding(SpacingSize::Lg)
-      .spacing(SpacingSize::Lg)
-      .background(ExtraColor::Surface.role())
-      .rounded(RadiusSize::Lg)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(Text::new(&ctx.t("tasks.cancel.title")).variant(TypographyStyle::Title))
-      .child(
-        Text::new(&ctx.t_args(
-          "tasks.cancel.bulkExplanation",
-          [
-            ("tasks", selected.len().to_string().as_str()),
-            ("runs", active_count(props).to_string().as_str()),
-          ],
-        ))
-        .variant(TypographyStyle::Description),
-      )
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(
-            ActionButton::new(ctx.t("tasks.cancel.keep"))
-              .id("bulk-cancel-keep")
-              .in_form()
-              .on_click(move || close.set(false))
-              .enabled(!pending)
-              .render(ctx),
-          )
-          .child(
-            ActionButton::new(ctx.t("tasks.cancel.confirm"))
-              .id("bulk-cancel-stop")
-              .in_form()
-              .on_click(move || apply.run((selected.clone(), Mutation::Status(WorkflowStatus::Canceled), true)))
-              .enabled(!pending)
-              .render(ctx),
-          ),
-      );
-    if let Some(Outcomes { results: outcomes, .. }) = action.state().get().data {
-      for (_, result) in outcomes {
-        if let Err(error) = result {
-          content = content.child(field_error(&message_text(ctx, &error)));
-        }
-      }
-    }
+    let selected = props.selected.get().0;
+    let text = super::bulk_cancel::bulk_cancel_text(ctx, &props.tasks, &selected);
+    let selected: Vec<_> = selected.into_iter().collect();
+    let state = action.state().get();
+    let pending = state.is_pending();
+    let failures: Vec<String> = state
+      .data
+      .iter()
+      .flat_map(|outcomes| outcomes.results.iter())
+      .filter_map(|(_, result)| result.as_ref().err())
+      .map(|error| message_text(ctx, error).to_string())
+      .collect();
+    let error = (!failures.is_empty()).then(|| failures.join(" "));
+    let (close, apply) = (self.confirm.clone(), action.clone());
+    let dialog = CancelDialog {
+      id: "bulk-cancel-confirmation",
+      title: text.title,
+      explanation: Some(text.explanation),
+      notice: Some((text.heading, text.notice)),
+      keep: (ctx.t("tasks.cancel.bulkKeep"), "bulk-cancel-keep"),
+      confirm: (text.confirm, "bulk-cancel-stop"),
+      pending,
+      error: error.as_deref(),
+    };
+    let content = cancel_dialog(
+      ctx,
+      dialog,
+      move || close.set(false),
+      move || apply.run((selected.clone(), Mutation::Status(WorkflowStatus::Canceled), true)),
+    );
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)
       .open(self.confirm.clone())
@@ -407,8 +402,6 @@ impl BulkOrganization {
   }
 }
 
-// hFH4D: bulk cancellation confirmation.
-const CONFIRM_WIDTH: f32 = 620.0;
 const MENU_WIDTH: f32 = 320.0;
 fn active_count(props: &BulkProps) -> usize {
   props.tasks.runs_not_ended(&props.selected.get().0)

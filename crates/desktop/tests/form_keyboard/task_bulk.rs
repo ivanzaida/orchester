@@ -376,11 +376,7 @@ fn task_bulk_select_all_and_search_combine_with_drafts_tab() {
   desktop.settle("the empty search", |tree| {
     tree.get_element_by_id("tasks-clear-query").is_some()
   });
-  assert!(shows(
-    &mut desktop,
-    "tasks-empty-rows",
-    "No tasks in this tab match the search and filters."
-  ));
+  assert!(shows(&mut desktop, "tasks-empty-rows", "No tasks match these filters"));
   desktop.press("tasks-clear-query");
   desktop.settle("the cleared search", |tree| {
     tree.get_element_by_id("task-row-KON-1").is_some() && tree.get_element_by_id("task-row-KON-2").is_some()

@@ -200,6 +200,14 @@ an answer or follow-up to a blocked run is kept ("Your message is kept…") and 
 the blocking tasks finish; a blocked Pending first run holds no group slot; a group held as Blocked can be returned
 to drafts.
 
+Design verification of `329ea66` (`.tmp/verify-orc39/REPORT.md`) failed; its majors are fixed: the Canceled
+confirmations follow `N1vwaM` and `hFH4D` (one shared panel: the Work is kept or Active run notice, Keep and Stop at
+the right with icons, bulk plurals, the Set status menu closes); held group members read Queued; the footer counts
+the tab's rows, or "N tasks match" while filtered; renaming a project tag onto an existing name offers Merge into
+it; the Blocked flag sits beside the run label in 60-high rows; the blocking-task search lists results with a check,
+Add selected task and the current task apart (`tUwII`); an empty filtered list is the `rVJoA` notice with Clear
+filters.
+
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,
 Tasks) and of J9467 at 1440 and 960. Move this entry to Done after they pass.

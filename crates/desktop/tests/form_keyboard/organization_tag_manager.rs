@@ -70,3 +70,42 @@ fn organization_tag_confirmation_disables_invalid_no_target_and_pending_actions(
     2
   );
 }
+
+#[test]
+fn organization_tag_rename_onto_an_existing_name_offers_merge() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open");
+    db.create_project_tag(Name::new("Desktop").expect("name")).expect("tag");
+    db.create_project_tag(Name::new("UX").expect("name")).expect("tag");
+  });
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("project-tags-manage");
+  desktop.press("project-tags-manage");
+  let tags = ProjectDb::open(&desktop.repo)
+    .expect("open")
+    .project_tags()
+    .expect("tags");
+  let (desktop_tag, ux) = (tags[0].id(), tags[1].id());
+  desktop.wait_for(&format!("project-tag-rename-{ux}"));
+  desktop.press(&format!("project-tag-rename-{ux}"));
+  desktop.wait_for("project-tag-name");
+  set_text(&mut desktop, "project-tag-name", "desktop");
+  desktop.wait_for("tag-editor-merge-duplicate");
+  assert!(crate::agent_permissions::shows(
+    &mut desktop,
+    "Desktop already exists in"
+  ));
+  assert!(!desktop.stops(12, false).contains(&Some("tag-editor-confirm".into())));
+  desktop.press("tag-editor-merge-duplicate");
+  desktop.wait_for("tag-merge-target");
+  desktop.tab_to("tag-editor-confirm", 12);
+  desktop.enter();
+  desktop.wait_until("UX merged into Desktop", |desktop| {
+    let tags = ProjectDb::open(&desktop.repo)
+      .expect("open")
+      .project_tags()
+      .expect("tags");
+    tags.len() == 1 && tags[0].id() == desktop_tag
+  });
+}
