@@ -1710,7 +1710,7 @@
         "tooMany": "At most {{max}} commands can be allowed."
       },
       "addFolder": "Add folder",
-      "folderPlaceholder": "e.g. .orchester/target",
+      "folderPlaceholder": "e.g. .orchester/build",
       "noFolders": "Agents write only inside their task worktree. Add a folder outside it, such as a shared build folder: absolute, or relative to the repository root.",
       "foldersMeaning": "Agents that edit files may also write here, commands included. Absolute, or relative to the repository root; never the repository itself or your home folder.",
       "foldersReadOnly": "Used only when agents edit files in the task worktree. With Read-only they write nowhere.",

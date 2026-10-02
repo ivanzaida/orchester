@@ -10,7 +10,9 @@ Windows, from the run worktree:
 ```powershell
 cargo build --locked -p orchester-desktop -p orchester-runner
 if ($LASTEXITCODE -ne 0) { throw 'app build failed' }
-$target = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory
+$metadata = cargo metadata --format-version 1 --no-deps
+if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed' }
+$target = ($metadata | ConvertFrom-Json).target_directory
 New-Item -ItemType Directory -Force .tmp/verification | Out-Null
 $desktop = cargo run --quiet --locked -p orchester-exec --bin pin-verifier-app -- "$target/debug" '.tmp/verification'
 if ($LASTEXITCODE -ne 0) { throw 'app pinning failed' }
