@@ -11,8 +11,13 @@ use lurq::{
   components::{Column, ScrollVertical, Text},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{NativeCommandAsk, PendingToolApproval};
+use orchester_core::{
+  connection::AgentProvider,
+  resource::ModelId,
+  run::{NativeCommandAsk, PendingToolApproval},
+};
 
+use super::activity::engine;
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, select_menu_scrollbar},
   ui::{
@@ -41,7 +46,12 @@ pub(super) const fn explanation_key(native: NativeCommandAsk, read_only: bool) -
 
 /// The rows under the header (`eYhOs`): agent, shell, command, working directory, time limit, the
 /// sandbox notice and the scope of an approval.
-pub(super) fn details(ctx: &Ctx, approval: &PendingToolApproval, native: NativeCommandAsk) -> Vec<Element> {
+pub(super) fn details(
+  ctx: &Ctx,
+  approval: &PendingToolApproval,
+  native: NativeCommandAsk,
+  (provider, model): (Option<AgentProvider>, Option<&ModelId>),
+) -> Vec<Element> {
   let shell = native.shell.map(|shell| {
     let value = ctx.t_args(
       "runs.toolApproval.native.shellValue",
@@ -58,7 +68,18 @@ pub(super) fn details(ctx: &Ctx, approval: &PendingToolApproval, native: NativeC
     "runs.toolApproval.native.timeLimitValue",
     [("seconds", native.time_limit_seconds.to_string().as_str())],
   );
-  let mut rows = vec![property(&ctx.t("runs.toolApproval.agent"), &approval.agent)];
+  // The agent's role, with what it runs on when that can be read: "Builder · OpenAI API / deepseek-v4-pro".
+  let agent = match model {
+    Some(model) => ctx.t_args(
+      "runs.activity.panel.agentValue",
+      [
+        ("agent", approval.agent.as_str()),
+        ("engine", &*engine(ctx, provider, model.as_str())),
+      ],
+    ),
+    None => approval.agent.as_str().into(),
+  };
+  let mut rows = vec![property(&ctx.t("runs.toolApproval.agent"), &agent)];
   rows.extend(shell);
   rows.push(command);
   rows.extend(

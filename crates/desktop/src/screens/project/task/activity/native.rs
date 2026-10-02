@@ -2,15 +2,35 @@
 //! this computer, the endpoint its connection names now (an invocation records none), whether network
 //! stayed on, and its tool calls with those that were denied. Its agent reads with its model only.
 
-use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::{connection::stream::CommandStatus, id::InvocationId};
+use std::{sync::Arc, time::Duration};
 
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
+  components::{Row, Spacer, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
+};
+use orchester_core::{
+  connection::stream::CommandStatus, id::InvocationId, run::Invocation, time::Timestamp, tokens::compact_tokens,
+};
+
+use super::super::super::ProjectNav;
 use crate::{
+  agents::permissions::{Length, parts},
+  display,
+  navigation::route::{AgentSelection, Page},
   tasks::{
-    detail::StepView,
+    detail::{RunView, StepView},
     transcript::{Entry, EntryKind},
   },
-  ui::property::{ValueStyle, property, styled_property},
+  ui::{
+    message_text,
+    pressable::surface,
+    property::{ValueStyle, property, styled_property},
+  },
 };
 
 /// Whether `step`'s agent ran on a native connection.
@@ -68,4 +88,69 @@ pub(super) fn tool_rows(ctx: &Ctx, step: &StepView, entries: &[Entry], invocatio
   };
   rows.push(property(&ctx.t("runs.activity.panel.toolCalls"), &value));
   rows
+}
+
+/// "Implement invocation" (`FRtSj`).
+pub(super) fn title(ctx: &Ctx, step: &StepView) -> Arc<str> {
+  ctx.t_args("runs.activity.panel.nativeTitle", [("step", &*step.name)])
+}
+
+/// *Started* with how long the invocation has run, or ran: "14:25 · 7 min" (`eK8lM`).
+pub(super) fn started_row(ctx: &Ctx, invocation: &Invocation) -> Element {
+  let end = invocation.ended_at.unwrap_or_else(Timestamp::now);
+  let took =
+    Duration::from_millis(u64::try_from(end.unix_millis() - invocation.started_at.unix_millis()).unwrap_or_default());
+  let value = ctx.t_args(
+    "runs.activity.panel.startedValue",
+    [
+      ("start", display::clock(invocation.started_at).as_str()),
+      ("took", &*message_text(ctx, &display::duration(took))),
+    ],
+  );
+  property(&ctx.t("runs.activity.panel.started"), &value)
+}
+
+/// *Run budget*: the run's counted tokens of its budget, "248k / 1.4M tokens" (`IbPlN`).
+pub(super) fn budget_row(ctx: &Ctx, run: &RunView) -> Element {
+  let value = ctx.t_args(
+    "tokens.usedOfBudget",
+    [
+      ("used", compact_tokens(run.usage().counted()).as_str()),
+      ("budget", compact_tokens(run.run.budget().get()).as_str()),
+    ],
+  );
+  property(&ctx.t("runs.activity.panel.runBudget"), &value)
+}
+
+/// *Permissions* in compact words without the agent and network, which have rows of their own, as a
+/// link to the profile: "Edit files · 3 commands ↗" (`EZD41`).
+pub(super) fn permissions_row(ctx: &Ctx, nav: &ProjectNav, step: &StepView) -> Option<Element> {
+  let permissions = step.permissions.as_ref()?;
+  let (repository, commands, _) = parts(
+    ctx,
+    &permissions.permissions,
+    permissions.network_stays_on,
+    Length::Compact,
+  );
+  let value = ctx.t_args(
+    "runs.activity.panel.permissionsValue",
+    [("repository", &*repository), ("commands", &*commands)],
+  );
+  let link = nav
+    .link(Page::Agents(AgentSelection::Profile(permissions.profile_id)))
+    .on(surface().id("activity-invocation-permissions"))
+    .child(
+      Text::new(&value)
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::TextPrimary),
+    );
+  Some(
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .align_items(Alignment::Center)
+      .child(Text::new(&ctx.t("runs.summary.permissions")).variant(TypographyStyle::Caption))
+      .child(Spacer::new().flex(1.0))
+      .child(link)
+      .into(),
+  )
 }

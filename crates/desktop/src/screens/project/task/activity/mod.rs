@@ -38,7 +38,7 @@ use self::{
   footer::{LiveFooter, LiveFooterProps},
   rows::{OpenRows, Toggles, TranscriptRow},
 };
-use super::tab_state;
+use super::{super::ProjectNav, tab_state};
 use crate::{
   background, messages,
   messages::Message,
@@ -143,12 +143,21 @@ impl Component for ActivityTab {
         );
       }
     };
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
     Row::new()
       .id("activity")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(self.transcript(ctx, run, &transcript.0, props.live))
-      .child(panel::invocation_panel(ctx, run, &transcript.0, self.filter.get().0))
+      .child(panel::invocation_panel(
+        ctx,
+        &nav,
+        run,
+        &transcript.0,
+        self.filter.get().0,
+      ))
       .into()
   }
 }

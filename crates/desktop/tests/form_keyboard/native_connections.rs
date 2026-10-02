@@ -258,8 +258,8 @@ fn native_inspector_shows_endpoint_data_location_key_and_models() {
     "Orchester’s own HTTPS",
     "12.40",
     "deepseek-chat",
-    "default",
-    "From the preset · 128K context · 8K output · no effort setting",
+    "Default",
+    "From the preset · 128K context · 8K output · no effort",
     "Builder → deepseek-chat",
   ] {
     assert!(shows(&mut desktop, INSPECTOR, text), "{text}");

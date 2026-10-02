@@ -4,6 +4,8 @@
 //! line. Shown only for a step whose agent ran on a native connection, from the permissions it ran
 //! with.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -61,8 +63,8 @@ fn card(ctx: &Ctx, nav: &ProjectNav, step: &StepView, agent: &str) -> Option<Ele
     lines.push(line(Icon::Wifi, &text));
   }
   if !permissions.unconfined_commands.is_empty() {
-    let commands = permissions.unconfined_commands.join(&*ctx.t("common.listSeparator"));
-    let text = ctx.t_args("runs.notEnforced.listedUnconfined", [("commands", commands.as_str())]);
+    let commands = listed(ctx, &permissions.unconfined_commands);
+    let text = ctx.t_args("runs.notEnforced.listedUnconfined", [("commands", &*commands)]);
     lines.push(line(Icon::Terminal, &text));
   }
   if lines.is_empty() {
@@ -99,6 +101,18 @@ fn card(ctx: &Ctx, nav: &ProjectNav, step: &StepView, agent: &str) -> Option<Ele
       .child(copy)
       .into(),
   )
+}
+
+/// "git, pnpm test and pnpm lint".
+fn listed(ctx: &Ctx, commands: &[Arc<str>]) -> Arc<str> {
+  match commands.split_last() {
+    Some((last, rest)) if !rest.is_empty() => {
+      let rest = rest.join(&*ctx.t("common.listSeparator"));
+      ctx.t_args("common.listAnd", [("rest", rest.as_str()), ("last", &**last)])
+    }
+    Some((last, _)) => last.clone(),
+    None => "".into(),
+  }
 }
 
 /// A line of the card (`dPZFf`, `aiiXE`): a subtle 12px glyph and what was not enforced.

@@ -60,6 +60,13 @@ fn native_models_keep_the_id_of_a_model_a_profile_uses() {
     "model-editor",
     "Planner uses lab-mini-8b. Switch to another model before changing its id."
   ));
+  // The reason sits under the Model id field it is about, above the limits.
+  let (field, error, limits) = (
+    desktop.bounds("model-id"),
+    desktop.bounds("model-id-error"),
+    desktop.bounds("model-context"),
+  );
+  assert!(error.y > field.y && error.y < limits.y, "the error is under Model id");
   desktop.click("model-save");
   assert!(has(&mut desktop, "model-editor"), "the renamed model is not saved");
   assert!(!has(&mut desktop, "model-row-lab-mini-9b"));
@@ -177,7 +184,7 @@ fn native_models_keep_their_source_until_their_data_changes() {
 fn native_key_secret_goes_to_the_environment_chosen() {
   let mut desktop = Desktop::with_project_named("Kontur");
   add_native(&mut desktop);
-  choose(&mut desktop, "native-key-select", "New secret…");
+  desktop.click("native-key-new");
   desktop.wait_for("native-key-environment");
   assert!(shows(&mut desktop, "native-key-environment", "Development"));
   set(&mut desktop, "native-key-name", "ANTHROPIC_API_KEY");

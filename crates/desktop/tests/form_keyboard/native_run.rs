@@ -190,7 +190,7 @@ fn native_shell_command_asks_with_its_shell_full_string_and_time_limit() {
       run: run.id(),
       execution: invocation.execution,
       invocation: invocation.id,
-      agent: "Builder · DeepSeek / deepseek-v4-pro".to_owned(),
+      agent: "Builder".to_owned(),
       command: true,
       scope: None,
       server: "Orchester".to_owned(),
@@ -212,8 +212,10 @@ fn native_shell_command_asks_with_its_shell_full_string_and_time_limit() {
   assert!(shows(
     &mut desktop,
     DIALOG,
-    "asks to run this command through a shell in the task worktree"
+    "Builder asks to run this command through a shell in the task worktree"
   ));
+  // The agent row names what it runs on; the explanation names its role only.
+  assert!(shows(&mut desktop, DIALOG, "Builder · OpenAI API / deepseek-v4-pro"));
   assert!(shows(
     &mut desktop,
     DIALOG,
@@ -332,7 +334,16 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
     "activity-step-header",
     "OpenAI API / deepseek-v4-pro · native"
   ));
+  assert!(shows(&mut desktop, "activity-invocation-title", "Implement invocation"));
   assert!(shows(&mut desktop, panel, "Builder · deepseek-v4-pro"));
+  assert!(shows(&mut desktop, panel, "Run budget"));
+  assert!(shows(&mut desktop, panel, " / 1M tokens"));
+  assert!(shows(
+    &mut desktop,
+    "activity-invocation-permissions",
+    "Edit files · 3 commands ↗"
+  ));
+  assert!(!shows(&mut desktop, panel, "Invocation"), "no invocation number row");
   assert!(shows(&mut desktop, panel, "This computer (Orchester)"));
   assert!(shows(&mut desktop, panel, "Endpoint now"));
   assert!(shows(&mut desktop, panel, "https://api.deepseek.com"));
@@ -391,7 +402,7 @@ fn native_run_summary_says_what_orchester_could_not_enforce() {
   assert!(shows(
     &mut desktop,
     note,
-    "Listed commands were not confined. git, pnpm test, pnpm lint run"
+    "Listed commands were not confined. git, pnpm test and pnpm lint ran"
   ));
   assert!(shows(&mut desktop, note, "Builder’s permissions ↗"));
   // It sits under the readiness card.

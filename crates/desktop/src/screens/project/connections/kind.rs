@@ -1,21 +1,22 @@
-//! Kind of a new agent connection (04.H1 `Byo8K`, option cards `lcwsy`): the two CLIs and the two model
-//! APIs Orchester runs agents on itself, two cards a row. A kind this version cannot add is faded with
-//! the reason.
+//! Kind of a new agent connection (04.H1 `Byo8K`, compact option cards `lcwsy` in `W897Q`): the two CLIs
+//! and the two model APIs Orchester runs agents on itself, in one row, with what native kinds are
+//! (`nFBxV`). A kind this version cannot add is faded, with the reason under the row.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row},
+  components::{Column, Row, Text},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::AgentProvider;
 
 use crate::{
-  theme::ExtraSpacing,
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, field},
-    option_card::OptionCard,
+    option_card::{OptionCard, unavailable_reason},
   },
 };
 
@@ -27,25 +28,32 @@ const KINDS: [AgentProvider; 4] = [
   AgentProvider::OpenAiApi,
 ];
 
-/// The *Kind* field: a card per kind, `chosen` selected; choosing another calls `choose`.
+/// The *Kind* field: a compact card per kind in one row, `chosen` selected, what native kinds are,
+/// and why a kind this version cannot add is faded; choosing another calls `choose`.
 pub fn kind_field(ctx: &Ctx, chosen: AgentProvider, choose: &Arc<dyn Fn(AgentProvider) + Send + Sync>) -> Element {
-  let rows = Column::new()
+  let cards = Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
+    .spacing(ExtraSpacing::Inline.role())
+    .align_items(Alignment::Stretch)
     .overflow_visible()
-    .with_children(KINDS.chunks(2).map(|pair| {
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Step.role())
+    .with_children(KINDS.iter().map(|&provider| {
+      Column::new()
+        .flex(1.0)
         .overflow_visible()
-        .with_children(pair.iter().map(|&provider| {
-          Column::new()
-            .flex(1.0)
-            .overflow_visible()
-            .child(card(ctx, provider, chosen, choose.clone()))
-        }))
+        .child(card(ctx, provider, chosen, choose.clone()))
     }));
-  field(&ctx.t("connections.kind.label"), rows.into(), FieldNote::None)
+  let unavailable = KINDS
+    .iter()
+    .any(|provider| !provider.can_be_added())
+    .then(|| unavailable_reason(&ctx.t("connections.kind.notYet")));
+  let content = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .overflow_visible()
+    .child(cards)
+    .child(Text::new(&ctx.t("connections.kind.nativeHint")).variant(ExtraTypography::Hint.role()))
+    .with_children(unavailable);
+  field(&ctx.t("connections.kind.label"), content.into(), FieldNote::None)
 }
 
 fn card(
@@ -65,9 +73,11 @@ fn card(
     ctx.t(super::status::program_key(provider)),
     ctx.t(detail),
     provider == chosen,
-  );
+  )
+  .compact();
   if !provider.can_be_added() {
-    return card.unavailable(Some(ctx.t("connections.kind.notYet"))).into();
+    // Its reason is said once, under the row.
+    return card.unavailable(None).into();
   }
   card
     .on_choose(move || {

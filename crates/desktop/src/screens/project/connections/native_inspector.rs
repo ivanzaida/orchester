@@ -160,7 +160,7 @@ fn model_row(ctx: &Ctx, model: &NativeModel, default: bool) -> Element {
         .variant(ExtraTypography::MonoValue.role())
         .flex(1.0),
     )
-    .with_children(default.then(|| compact_status_label(Icon::Check, &ctx.t("connections.models.default"))));
+    .with_children(default.then(|| compact_status_label(Icon::Star, &ctx.t("connections.models.default"))));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)

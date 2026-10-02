@@ -136,6 +136,7 @@ icons! {
   Square => '\u{e167}',
   SquareCheck => '\u{e559}',
   SquarePlus => '\u{e173}',
+  Star => '\u{e176}',
   Terminal => '\u{e181}',
   Timer => '\u{e1e0}',
   Trash => '\u{e18e}',

@@ -1,4 +1,5 @@
-//! The models of a native connection (04.H6 `zHowy`): a 720 dialog over Connections that lists them,
+//! The models of a native connection (04.H6 `zHowy`): a 720 dialog over Connections, with what the
+//! models are for in its header and when the new list applies in its action bar, that lists them,
 //! edits one in place, adds one by hand and removes one no profile uses, then saves them all with
 //! *Save models*. Its key, endpoint and last test stay as they are.
 
@@ -21,7 +22,7 @@ use orchester_core::{
 
 use super::{
   DialogContext, DialogMode,
-  dialog_frame::{SaveBar, actions, header, padded, save_reason_of},
+  dialog_frame::{SaveBar, actions, explained_header, padded, save_reason_of},
   model_editor::{ModelEditor, ModelEditorProps, ModelRows},
 };
 use crate::{
@@ -113,6 +114,13 @@ impl Component for ModelsDialog {
       "connections.models.dialogTitle",
       [("connection", self.connection.name().as_str())],
     );
+    let host = self
+      .connection
+      .api()
+      .map(|api| api.base_url().host().to_owned())
+      .unwrap_or_default();
+    let explanation = ctx.t_args("connections.models.dialogExplanation", [("host", host.as_str())]);
+    let note = ctx.t("connections.models.saveNote");
     let panel = Column::new()
       .id("models-dialog")
       .ref_element(self.frame.clone())
@@ -122,7 +130,7 @@ impl Component for ModelsDialog {
       .background(ExtraColor::Surface.role())
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
-      .child(header(ctx, &title, &self.context))
+      .child(explained_header(&title, &explanation))
       .child(
         ScrollVertical::new(padded(editor))
           .width(Dimension::Pct(100.0))
@@ -134,6 +142,7 @@ impl Component for ModelsDialog {
         &self.context,
         bar,
         ("models-save", "connections.models.saveAll"),
+        Some(&note),
       ));
     backdrop(ctx, form(submit, panel))
   }

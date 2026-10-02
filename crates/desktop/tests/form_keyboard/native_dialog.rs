@@ -141,7 +141,11 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
     "Default effort",
     "Provider fallback",
     "Retry declined requests on another model",
-    "The key stays in Secrets",
+    "Native kinds need no CLI",
+    "Set by the preset. Prompts, repository content and command output are sent to api.anthropic.com.",
+    "The connection keeps only which secret it uses.",
+    "Used by agent profiles that do not choose a model.",
+    "After saving, choose this connection and a model in an agent profile.",
   ] {
     assert!(shows(&mut desktop, DIALOG, text), "{text}");
   }
@@ -170,6 +174,7 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
     "native-preset-official",
     "native-url-advanced",
     "native-key-select",
+    "native-key-new",
     "model-add",
     "native-default-model-select",
     "native-default-effort-select",
@@ -195,7 +200,7 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
 fn native_connection_saves_a_new_key_secret_and_models_added_by_hand() {
   let mut desktop = Desktop::with_project_named("Kontur");
   add_native(&mut desktop);
-  choose(&mut desktop, "native-key-select", "New secret…");
+  desktop.click("native-key-new");
   desktop.wait_for("native-key-value");
   assert!(
     desktop
@@ -218,11 +223,11 @@ fn native_connection_saves_a_new_key_secret_and_models_added_by_hand() {
   assert!(shows(
     &mut desktop,
     "model-row-claude-haiku-4-5",
-    "Added by hand · no effort setting"
+    "Added by hand · no effort"
   ));
   choose(&mut desktop, "native-default-model-select", "claude-opus-5-5");
   choose(&mut desktop, "native-default-effort-select", "max");
-  assert!(shows(&mut desktop, "model-row-claude-opus-5-5", "default"));
+  assert!(shows(&mut desktop, "model-row-claude-opus-5-5", "Default"));
   desktop.click("native-fallback");
   assert!(!has_reason(&mut desktop), "nothing keeps it from saving");
   desktop.press("connection-save");
@@ -298,10 +303,13 @@ fn native_form_says_why_it_cannot_save() {
   }
   set(&mut desktop, "native-url", "https://gateway.example.dev/v1");
   assert!(shows(&mut desktop, REASON, "Choose or create the API key’s secret."));
-  choose(&mut desktop, "native-key-select", "New secret…");
+  desktop.click("native-key-new");
   set(&mut desktop, "native-key-name", "ANTHROPIC_API_KEY");
   set(&mut desktop, "native-key-value", KEY_VALUE);
   assert!(shows(&mut desktop, REASON, "already has a secret ANTHROPIC_API_KEY."));
+  // Back to the project's secrets: the typed value is wiped.
+  desktop.click("native-key-existing");
+  assert!(!whole_screen_shows(&mut desktop, KEY_VALUE));
   choose(&mut desktop, "native-key-select", "ANTHROPIC_API_KEY (Development)");
   assert!(shows(&mut desktop, REASON, "Add at least one model."));
   // A model id is required, a token count is a whole number, and an id is listed once.
@@ -379,7 +387,7 @@ fn models_dialog_edits_in_place_and_keeps_a_model_a_profile_uses() {
   desktop.click("edit-models");
   desktop.wait_for("models-dialog");
   assert!(shows(&mut desktop, "models-dialog", "Models · Lab gateway · Kontur"));
-  assert!(shows(&mut desktop, "model-row-lab-mini-8b", "default"));
+  assert!(shows(&mut desktop, "model-row-lab-mini-8b", "Default"));
   assert!(shows(
     &mut desktop,
     "model-row-lab-mini-8b",

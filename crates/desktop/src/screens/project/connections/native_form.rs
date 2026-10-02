@@ -8,15 +8,14 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Select, SelectOption, Text},
+  components::{Column, Row, Select, SelectOption, Spacer, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  connection::{AgentProvider, AgentRuntime, ConnectionStatus, EndpointPreset, WireApi, offers_provider_fallback},
-  secret::Environment,
+use orchester_core::connection::{
+  AgentProvider, AgentRuntime, BaseUrl, ConnectionStatus, EndpointPreset, WireApi, offers_provider_fallback,
 };
 
 use super::{
@@ -24,20 +23,19 @@ use super::{
   form::{pair, type_field},
   kind::kind_field,
   model_editor::{ModelEditor, ModelEditorProps},
-  native_dialog::{DefaultEffort, DefaultModel, KeyChoice, KeyEnvironment, NativeDialog, NativeErrors, PresetChoice},
+  model_text,
+  native_dialog::{DefaultEffort, DefaultModel, NativeDialog, NativeErrors, PresetChoice},
   status::status_label,
 };
 use crate::{
   connections::model_uses::of_connection,
   messages::Message,
-  screens::project::secrets::labels::environment_key,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{FieldNote, field, mono_value_box, select_style, text_input},
+    field::{FieldNote, field, select_style, text_input},
     icon::Icon,
     message_text,
-    notice::Notice,
     option_card::unavailable_reason,
     radio::Radio,
     status_label::status_label as label,
@@ -46,7 +44,7 @@ use crate::{
 };
 
 /// Field and button heights (`Iitmk`, `JWxsC`).
-const FIELD_HEIGHT: f32 = 40.0;
+pub(super) const FIELD_HEIGHT: f32 = 40.0;
 const BUTTON_HEIGHT: f32 = 30.0;
 
 impl NativeDialog {
@@ -70,11 +68,7 @@ impl NativeDialog {
       .child(models)
       .child(pair(self.default_model_field(ctx), self.default_effort_field(ctx)))
       .child(self.fallback_field(ctx))
-      .child(Notice::new(
-        Icon::ShieldCheck,
-        ctx.t("connections.native.key.noticeTitle"),
-        ctx.t("connections.native.key.noticeDetail"),
-      ))
+      .child(Text::new(&ctx.t("connections.native.afterSaving")).variant(ExtraTypography::Explanation.role()))
       .into()
   }
 
@@ -150,26 +144,39 @@ impl NativeDialog {
     let label = ctx.t("connections.native.url.label");
     if !self.advanced.get() {
       let url = self.url.get();
+      let host = BaseUrl::new(&url).map(|url| url.host().to_owned()).unwrap_or_default();
       let advanced = self.advanced.clone();
       let open = ActionButton::new(ctx.t("connections.native.url.advanced"))
-        .icon(Icon::SlidersHorizontal)
+        .icon(Icon::ChevronRight)
+        .compact()
         .id("native-url-advanced")
         .in_form()
-        .height(Dimension::Px(FIELD_HEIGHT))
+        .height(Dimension::Px(BUTTON_HEIGHT))
         .on_click(move || advanced.set(true))
         .render(ctx);
+      // The preset's URL reads as plain mono text (`r9I6OH`), not as a field.
       let row = Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Md)
+        .spacing(ExtraSpacing::Stack.role())
         .align_items(Alignment::Center)
         .overflow_visible()
         .child(
-          Column::new()
-            .flex(1.0)
-            .child(mono_value_box(ctx, "native-url", &url, Dimension::Px(FIELD_HEIGHT))),
+          Text::new(&url)
+            .id("native-url")
+            .variant(ExtraTypography::MonoField.role())
+            .color(PaletteColor::TextPrimary)
+            .selectable(true)
+            .flex(1.0),
         )
         .child(open);
-      return field(&label, row.into(), FieldNote::None);
+      let hint = ctx.t_args("connections.native.url.presetHint", [("host", host.as_str())]);
+      let content = Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .overflow_visible()
+        .child(row)
+        .child(Text::new(&hint).variant(ExtraTypography::Hint.role()));
+      return field(&label, content.into(), FieldNote::None);
     }
     let shown = error.filter(|_| !self.url.get().trim().is_empty());
     let input = text_input(
@@ -198,83 +205,6 @@ impl NativeDialog {
       .spacing(SpacingSize::Sm)
       .child(field(&label, input.into(), note(ctx, shown)))
       .child(hint)
-      .into()
-  }
-
-  /// *API key · project secret*: the project's secrets with their environments, and *New secret…*,
-  /// which adds a name and a masked value saved to Secrets with the connection.
-  fn key_field(&self, ctx: &Ctx, error: Option<&Message>) -> Element {
-    let mut options = vec![SelectOption::new(KeyChoice::None, ctx.t("connections.native.key.none"))];
-    options.extend(self.context.secrets.iter().map(|secret| {
-      let label = ctx.t_args(
-        "connections.native.key.option",
-        [
-          ("name", secret.name().as_str()),
-          ("environment", &*ctx.t(environment_key(secret.environment()))),
-        ],
-      );
-      SelectOption::new(KeyChoice::Existing(secret.id()), label)
-    }));
-    options.push(SelectOption::new(KeyChoice::New, ctx.t("connections.native.key.new")));
-    let key_select = Select::new(self.key.clone())
-      .options(options)
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FIELD_HEIGHT))
-      .style(select_style(ctx, FIELD_HEIGHT));
-    // The select takes its own id, for tools that choose an option; the column holds what it shows.
-    let control = Column::new()
-      .id("native-key")
-      .width(Dimension::Pct(100.0))
-      .child(Element::from(key_select).id("native-key-select"));
-    let label = ctx.t("connections.native.key.label");
-    if self.key.get() != KeyChoice::New {
-      let shown = error.filter(|_| self.key.get() != KeyChoice::None);
-      return field(&label, control.into(), note(ctx, shown));
-    }
-    let named = !self.key_name.get().trim().is_empty();
-    let name = text_input(
-      ctx,
-      "native-key-name",
-      self.key_name.clone(),
-      named && error.is_some(),
-      ExtraTypography::MonoField.role(),
-    )
-    .height(Dimension::Px(FIELD_HEIGHT))
-    .placeholder(&ctx.t("connections.native.key.namePlaceholder"));
-    let value = text_input(
-      ctx,
-      "native-key-value",
-      self.key_value.clone(),
-      false,
-      TypographyStyle::FieldLabel,
-    )
-    .mask()
-    .height(Dimension::Px(FIELD_HEIGHT));
-    // The new secret's environment, chosen and defaulted as when a secret is added in Secrets.
-    let environments = Environment::ALL
-      .into_iter()
-      .map(|environment| SelectOption::new(KeyEnvironment(environment), ctx.t(environment_key(environment))))
-      .collect();
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .child(field(&label, control.into(), FieldNote::None))
-      .child(pair(
-        field(
-          &ctx.t("connections.native.key.name"),
-          name.into(),
-          note(ctx, error.filter(|_| named)),
-        ),
-        field(&ctx.t("connections.native.key.value"), value.into(), FieldNote::None),
-      ))
-      .child(select(
-        ctx,
-        "native-key-environment",
-        "connections.native.key.environment",
-        self.key_environment.clone(),
-        environments,
-      ))
-      .child(Text::new(&ctx.t("connections.native.key.newHint")).variant(ExtraTypography::Hint.role()))
       .into()
   }
 
@@ -325,23 +255,29 @@ impl NativeDialog {
       },
     );
     let ctx: &Ctx = ctx;
+    let count = self.models.get().0.len().to_string();
     let fetch = ActionButton::new(ctx.t("connections.models.fetch"))
       .icon(Icon::RefreshCw)
+      .compact()
       .id("native-fetch-models")
       .in_form()
       .height(Dimension::Px(BUTTON_HEIGHT))
       .disabled()
       .render(ctx);
+    // *Models* and how many (`J27qQ`).
     let heading = Row::new()
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
+      .spacing(ExtraSpacing::Inline.role())
       .align_items(Alignment::Center)
       .overflow_visible()
+      .child(Text::new(&ctx.t("connections.models.title")).variant(TypographyStyle::Label))
       .child(
-        Text::new(&ctx.t("connections.models.title"))
-          .variant(ExtraTypography::CardTitle.role())
-          .flex(1.0),
+        Text::new(&count)
+          .id("native-models-count")
+          .variant(TypographyStyle::Mono)
+          .color(PaletteColor::TextMuted),
       )
+      .child(Spacer::new().flex(1.0))
       .child(fetch);
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -367,26 +303,35 @@ impl NativeDialog {
         .iter()
         .map(|model| SelectOption::new(DefaultModel(Some(model.id().clone())), model.id().as_str())),
     );
-    select(
+    let field = select(
       ctx,
       "native-default-model",
       "connections.models.defaultModel",
       self.default_model.clone(),
       options,
-    )
+    );
+    with_hint(field, &ctx.t("connections.models.defaultModelHint"))
   }
 
   /// *Default effort*: the model's own, or one the default model takes.
   fn default_effort_field(&self, ctx: &Ctx) -> Element {
     let chosen = self.default_model.get().0;
-    let efforts = self
+    let model = self
       .models
       .get()
       .0
       .into_iter()
-      .find(|model| Some(model.id()) == chosen.as_ref())
-      .map(|model| model.efforts().to_vec())
-      .unwrap_or_default();
+      .find(|model| Some(model.id()) == chosen.as_ref());
+    // What the default model takes (`BcRPX`).
+    let hint = match &model {
+      Some(model) if !model.efforts().is_empty() => ctx.t_args(
+        "connections.models.defaultEffortHint",
+        [("efforts", &*model_text::efforts(ctx, model))],
+      ),
+      Some(_) => ctx.t("connections.models.defaultEffortNone"),
+      None => ctx.t("connections.models.defaultEffortNoModel"),
+    };
+    let efforts = model.map(|model| model.efforts().to_vec()).unwrap_or_default();
     let mut options = vec![SelectOption::new(
       DefaultEffort(None),
       ctx.t("connections.models.modelsEffort"),
@@ -396,13 +341,14 @@ impl NativeDialog {
         .into_iter()
         .map(|effort| SelectOption::new(DefaultEffort(Some(effort)), effort.as_str())),
     );
-    select(
+    let field = select(
       ctx,
       "native-default-effort",
       "connections.models.defaultEffort",
       self.default_effort.clone(),
       options,
-    )
+    );
+    with_hint(field, &hint)
   }
 
   /// *Provider fallback* (`K8ItM`), off unless turned on; offered on the official Anthropic API only.
@@ -440,11 +386,21 @@ fn preset_unavailable(ctx: &Ctx, dialog: &NativeDialog, preset: EndpointPreset) 
   (!preset.is_available()).then(|| ctx.t("connections.native.preset.later"))
 }
 
-fn note(ctx: &Ctx, error: Option<&Message>) -> FieldNote {
+/// `field` with `hint` under it (`cLLsA`, `BcRPX`).
+fn with_hint(field: Element, hint: &str) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(field)
+    .child(Text::new(hint).variant(ExtraTypography::Hint.role()))
+    .into()
+}
+
+pub(super) fn note(ctx: &Ctx, error: Option<&Message>) -> FieldNote {
   error.map_or(FieldNote::None, |error| FieldNote::Error(message_text(ctx, error)))
 }
 
-fn select<T>(
+pub(super) fn select<T>(
   ctx: &Ctx,
   id: &'static str,
   label: &str,
