@@ -611,19 +611,39 @@ with the documented `setsid` gap on macOS. This is the same class of gap the des
 1. **Shell** (`shell: true`) → `Ask`.
 2. **Allowed list.** `AllowedCommands::allows(CommandPrefix)`, the existing whole-word prefix match on the
    re-joined argv → `Run`.
-3. **Known-safe read-only** → `Run`. This is a new core table, `permission/known_safe.rs`, modelled on Codex's
-   `is_known_safe_command` *(to verify against the current Codex source)*. Its entries are argv rules, not prefixes:
+3. **Known-safe read-only** → `Run`. This is a new core table, `permission/known_safe/`, modelled on Codex's
+   `is_known_safe_command` *(to verify against the current Codex source)*. Its entries are argv rules, not prefixes.
+   Every program and every git subcommand admits **only the options it lists**, by exact name; a short-option cluster
+   only from listed letters. Any other option, an abbreviation of a listed one included (git's parse-options and
+   `getopt_long` accept any unambiguous prefix, so `git grep --op=<cmd>` would be `--open-files-in-pager`), makes
+   the command ask. The lists leave out every option that starts a program, writes a file, reads a file of paths, or
+   follows links into folders the path check does not see:
    - `git` with `status`, `log`, `diff`, `show`, `rev-parse`, `ls-files`, `branch` (list only), `blame` or `grep`.
-     Every git call gets `-c core.fsmonitor=false --no-pager` (an fsmonitor setting can run a program on `git
-     status`). `diff`, `log` and `show` also get `--no-ext-diff --no-textconv`. `--output` and `-c` from the model
-     are refused.
-   - `rg`, without `--pre`, `--pre-glob` or `--search-zip`.
-   - `ls`, `cat`, `head`, `tail`, `wc`, `pwd`, `echo`, `which`, `where`, `file`, `stat`.
-   - `find`, without `-exec`, `-execdir`, `-ok`, `-delete` or `-fprint*`.
+     Every git call gets `-c core.fsmonitor=false -c safe.bareRepository=explicit --no-pager --no-optional-locks`
+     (an fsmonitor setting can run a program on `git status`; a bare repository the agent lays out in a worktree
+     folder would otherwise be found from a working folder inside it, with its own `config`; the last keeps `git
+     status` from rewriting `.git/index`). `diff`, `log` and `show` also
+     get `--no-ext-diff --no-textconv`, and `blame`, which runs a textconv program by default, `--no-textconv`. Not
+     listed are, among others, `--help` (starts a help viewer: a browser on Windows, `man` on macOS), `-c`,
+     `--output`, `--ext-diff`, `--textconv`, `--open-files-in-pager` (`-O`) and `--show-signature`; the `%G…`
+     format placeholders, which start `gpg` like `--show-signature`, are refused in any argument. Git still keeps
+     its own files: `git diff` refreshes the file stamps cached in `.git/index`, without changing what the index
+     holds.
+   - `rg`, without `--pre`, `--pre-glob`, `--search-zip` (`-z`), `--hostname-bin` or `--follow` (`-L`).
+   - `ls` (without `-L`), `cat`, `head`, `tail` (without `-f`; every count a number, and no argument in GNU's
+     obsolete follow form such as `+1f`), `wc` (without `--files0-from`), `pwd`, `echo`,
+     `which`, `file` (without `-f`/`--files-from`, `-m`, `-C`, `-z`, `-s`, `-p`), `stat`.
+   - Windows `where` with bare name patterns and `/Q`, `/F`, `/T` only: `$VAR:pattern` and `folder:pattern` search
+     folders the path check does not see, and `/R` searches a folder tree.
+   - `find` with start points and listed tests and printing actions (`-name`, `-type`, `-mtime`, `-newer`, `-print`,
+     …), without leading options; so without `-exec`, `-execdir`, `-ok`, `-delete`, `-fprint*`, `-fls`, `-follow`,
+     `-L` or `-files0-from`.
    - `cargo` with `metadata` or `tree`, and `--version` of any listed program.
 
    Every argument that resolves to an existing path must lie in the **readable** scope; otherwise the command is not
-   known-safe. This stops `cat ~/.ssh/id_rsa`.
+   known-safe. This stops `cat ~/.ssh/id_rsa`. The value after `=` of a long option and a value attached to a short
+   option, also inside a cluster (`rg -nf<file>`), are checked as well; a drive-relative argument (`C:file`) is
+   refused, as the file tools refuse it.
 4. **Otherwise** → `Ask`. Every command that steps 2–3 do not run asks a person (decision 1). `Refuse` remains only
    for calls that can never run: an unparsable command, or a `workdir` outside the worktree. A refusal emits
    `PermissionDenied` and returns an error result; the loop continues.

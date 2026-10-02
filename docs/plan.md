@@ -234,10 +234,8 @@ endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design 
 and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
 there; turn the phases into tasks here when work starts, beginning with P1.
 
-P1 is split into five tasks. P1a (ORC-56) is done (see *Done*). The rest:
+P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*). The rest:
 
-- **P1b · ORC-57:** core native module: conversation, tools, file and command policy, loop state machine (§2.1, §4,
-  §5.1–5.2).
 - **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
   (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
@@ -272,6 +270,21 @@ which also preserves text selection after a drag on scaled displays.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-57 · Native agent P1b: core native module
+
+- **Done 2026-10-02.** `orchester_core::native`: conversation items (`item`), the `ModelClient` boundary (`model`),
+  the tool catalog with strict schemas and typed inputs (`tools`), file confinement (`scope`: canonicalised roots,
+  `.git` at any depth, `.orchester/` in the worktree, index and skills read-only; Windows device names, ADS,
+  verbatim, device and drive-relative paths refused; network paths refused before they are resolved unless inside a
+  writable folder), command splitting per platform with hardened git and the policy (`command`), the known-safe table
+  (`permission::known_safe`), and the I/O-free loop (`session`: §4.10 order, approvals, denials returned to the
+  agent, the finish reminder, every stop mode, resume with unanswered calls, compaction at 80 % of the window, at
+  most 3 per invocation). Nothing runs it yet (P1c/P1d). Tests: `cargo test -p orchester-core --test native native_`.
+- **Differs from the design:** `cargo metadata`/`cargo tree` are not known-safe, because a `.cargo/config.toml` or
+  `rust-toolchain.toml` the agent writes in the worktree can replace `rustc`/the toolchain with any program; they
+  ask. Read stamps are left to the file tool executor (P1c), which must drop them when a `Compaction` item is stored.
+  `RunnerProblem::ContextCompacted` (§6.3) is not emitted yet: it needs Activity text, so it comes with P1d.
 
 ORC-56 · Native agent P1a: native connections stored and shown, nothing run · branch `claude/orc56-fixes`
 

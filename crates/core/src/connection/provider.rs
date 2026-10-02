@@ -28,7 +28,8 @@ pub enum AgentRuntime {
 }
 
 /// The wire format a native agent talks to its model API in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WireApi {
   AnthropicMessages,
   OpenAiResponses,
