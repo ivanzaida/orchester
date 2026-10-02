@@ -816,7 +816,7 @@ A run that reaches its time or token budget stops its agents, commits a checkpoi
 
   Each row is followed by the step header of the new attempt. The board also shows the panel's refusal: the runner's reason (*The run does not wait for your decision any more.*) is a field error (circle-alert 12, Inter 11/1.5 `$text`) directly above *Stop and fail the run*.
 
-Proposals in these frames that differ from the build or are not built yet: the Overview card's context names why the run waits (*ORC-128 · Review still fails after 2 retries*; the app shows *Waiting for you*); the status bar event *Review needs your decision · ORC-128*; the three timeline marks; and the *Return the work to* select seeded with the first step (*Research*, as built), where the step the retry would resume (*Implement*) may be the better default.
+Decided 2026-10-02: the Overview card names why the run waits (*ORC-128 · Review still fails after 2 retries*), the status bar shows *Review needs your decision · ORC-128*, the three timeline marks are built as drawn, and *Return the work to* defaults to the step a retry would resume (*Implement*), not the first step; 02.B3 and 02.B5 still draw *Research* there and the text wins.
 
 ## Pipelines library, creation and publishing
 
