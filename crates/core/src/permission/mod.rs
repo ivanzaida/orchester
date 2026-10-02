@@ -8,6 +8,7 @@
 
 pub(crate) mod canonical;
 pub mod capability;
+pub mod category;
 pub mod claude;
 pub mod known_safe;
 mod launch;
