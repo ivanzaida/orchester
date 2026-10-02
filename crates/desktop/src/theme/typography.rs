@@ -88,6 +88,8 @@ pub enum ExtraTypography {
   MonoTag,
   /// Mono value of a key/value property or a slug, e.g. "$1.50" (`yeeIR` in `BzWOd`, `cJsA7`).
   MonoValue,
+  /// Emphasized account limit percentage (`e1TK9`, state N).
+  MonoLimit,
   /// A path in a field, e.g. the project folder (`ObbY7` in `xZAZc`, `F5KwDR`).
   MonoField,
   /// Step instructions as they are written (`v1Ky8`).
@@ -177,7 +179,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 79] = [
+  const ALL: [Self; 80] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::Overline,
@@ -216,6 +218,7 @@ impl ExtraTypography {
     Self::CanvasLabel,
     Self::MonoTag,
     Self::MonoValue,
+    Self::MonoLimit,
     Self::MonoField,
     Self::Instructions,
     Self::Hint,
@@ -315,6 +318,7 @@ impl ExtraTypography {
       Self::CanvasLabel => "canvas-label",
       Self::MonoTag => "mono-tag",
       Self::MonoValue => "mono-value",
+      Self::MonoLimit => "mono-limit",
       Self::MonoField => "mono-field",
       Self::Instructions => "instructions",
       Self::Hint => "hint",
@@ -431,6 +435,10 @@ impl ExtraTypography {
       },
       Self::MonoTag => mono(9.0, MUTED),
       Self::MonoValue => mono(11.0, TEXT),
+      Self::MonoLimit => TextStyle {
+        weight: FontWeight::Medium,
+        ..mono(11.0, TEXT)
+      },
       Self::MonoField => mono(12.0, TEXT),
       Self::PullRequestContext => mono(11.0, MUTED),
       Self::DiffPath => TextStyle {

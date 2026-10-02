@@ -23,6 +23,7 @@ pub mod instructions;
 pub mod messages;
 pub mod navigation;
 pub mod pipelines;
+pub mod plan_limits;
 pub mod programs;
 pub mod project_setup;
 pub mod pull_requests;

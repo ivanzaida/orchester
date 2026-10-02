@@ -126,6 +126,10 @@ impl PartialEq for Runners {
 impl lurq::app::component::DevtoolsInspectable for Runners {}
 
 impl Runners {
+  pub fn plan_limits(&self) -> watch::Receiver<orchester_core::connection::plan_limits::PlanReadings> {
+    self.inner.shared.limits.subscribe()
+  }
+
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
@@ -136,6 +140,7 @@ impl Runners {
           displayed: Mutex::new(None),
           published: watch::Sender::new(RunnerStatus::none()),
           work: watch::Sender::new(0),
+          limits: watch::Sender::new(Default::default()),
           counters: Mutex::new(HashMap::new()),
           activity,
         }),

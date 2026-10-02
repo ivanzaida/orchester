@@ -26,11 +26,15 @@ use orchester_desktop::{
 use orchester_ipc::SessionEnd;
 use tokio::runtime::Runtime;
 
+mod narrow;
+mod plan_limits;
+
 /// Provides the session's activity and the window's feed of it, as the root does, above the bar.
 struct Shell;
 
 #[derive(Clone, PartialEq)]
 struct ShellProps {
+  readings: orchester_desktop::plan_limits::Readings,
   bar: StatusBarProps,
   log: ActivityLog,
   mcp: McpStatus,
@@ -53,6 +57,7 @@ impl Component for Shell {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ShellProps>().clone();
     WindowFeed::of(ctx).activity.set(props.log);
+    WindowFeed::of(ctx).limits.set(props.readings);
     ctx.mount_keyed::<StatusBar>("status-bar", props.bar)
   }
 }
@@ -68,6 +73,8 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
   );
   StatusBarProps {
     project: Some(ProjectBar {
+      project_name: "Kontur".into(),
+      connections: orchester_desktop::plan_limits::Connections::Ready(Vec::new()),
       repo_root: PathBuf::from("kontur"),
       runner: runners.status(),
       queued: Some(0),
@@ -92,7 +99,15 @@ fn laid_out_with(props: StatusBarProps, log: ActivityLog, mcp: McpStatus) -> (Ap
   i18n::install(&app).expect("bundled locales load");
   let mut tree = Tree::new();
   tree.resize(1440, 28);
-  tree.mount_root::<Shell>(&mut app, ShellProps { bar: props, log, mcp });
+  tree.mount_root::<Shell>(
+    &mut app,
+    ShellProps {
+      bar: props,
+      log,
+      mcp,
+      readings: Default::default(),
+    },
+  );
   tree.pass_headless(&mut app);
   (app, tree)
 }
