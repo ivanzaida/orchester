@@ -243,6 +243,36 @@ then move this entry to *Done*. Not covered: limits are read only while a run's 
 `account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
 windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 
+### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (merged with master 2026-10-02)
+
+Run #12 (`orchester/orc-44-run-2`, base `37716df`) passed Implement, Check and Review; its Verify was interrupted.
+Master was merged into the branch (merge `a05ba75`) with master's approval architecture as the base. Almost all of
+ORC-44 was already on master: enabling *Ask before running commands* and *Ask before MCP actions* for a profile, a step
+or the current run, one-action command and MCP decisions, resuming an `exec` session through App Server, Apply now at
+a checkpoint, immutable invocation launch permissions, Windows sandbox selection and scoped build directories (see the
+agent runtime architecture entry under *Done*, since reworked by Claude Code support, App Server for every Codex step,
+`tool_approvals`, MCP exemptions and ORC-57/60). Dropped as covered or superseded: those runtime, core, store and
+runner changes; the command caption that denied sandbox exceptions (master asks about them on purpose); the
+`exec`-path invocation tests; the wrapping Target/working directory row in the approval dialog (C6 and the approval
+choices design's long values, `bjrgu`, own it).
+
+Ported (still missing on master): the task's Permissions row shows what the step's current or last invocation
+launched with (*Current invocation: …* / *Last invocation: …* / *Next invocation settings: …*, with *MCP approvals
+on/off*, or *permissions unknown* for unrecorded launches), never the queued settings; a change kept for the next
+invocation shows *Saved for the next invocation* until an invocation launches with it; Apply now reads as applied only
+once the restarted invocation recorded its launch; the popover repeats the recorded policy above *Next invocation
+settings*, and an ended run's popover says its settings are for reference (`docs/interactive-tool-approvals.md`).
+Tests: `cargo test -p orchester-desktop --test run_permission_policy run_policy`, `--test form_keyboard
+run_permissions`.
+
+**Done when** an independent review passes and an independent design verifier reports no blocking or major mismatch
+for the run permissions row (`C5Ai5o` in 02.10, `jgqPe`, `Oqmog`), the popover (02.J `q4K1G`/`NNRH8`, `W29Od2` in
+`DMBmo`) and its pending/applied states (`LJmTH`). The *Current invocation:* prefix, the MCP approvals part of the row,
+the popover's recorded-policy line and *Next invocation settings* label, the *Saved for the next invocation* notice
+and the ended-run note are not drawn, and while Apply now is pending the row keeps the recorded policy instead of
+`LJmTH`'s *Applying at next checkpoint…* (the notice under it still says so); the verifier must report them and the user decide whether the design gets them.
+Then move this entry to *Done*.
+
 ## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
