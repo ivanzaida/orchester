@@ -381,8 +381,14 @@ admits it) and, to keep naming the version in use, this line.
 ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
 `claude/orc61` (from run #21's `orchester/orc-61-run-1`)
 
-- **Implemented 2026-10-02; merged with master and Review fixed 2026-10-03.** Not done until the independent design
-  verification against `fTfl8` (with `q4fCXK`, `a5hF4`, `gLVQQ`) reports no blocking or major mismatches. The task
+- **Implemented 2026-10-02; merged with master and Review fixed 2026-10-03; merged into master 2026-10-03** after two
+  independent code reviews (PASS) and the independent design verification against `fTfl8` (with `q4fCXK`, `a5hF4`,
+  `gLVQQ`, `zyusO`, `iPHGE`) with no blocking or major mismatches left. Open minors (follow-ups): Attach sits apart
+  from the recipient at 960; step header wording (*Approved*, *Waiting for approval*, invocation count); plan card line
+  spacing, helper text and the plan repeated in *Plan done*; question card meta and focus; composer placeholder per
+  state; the working line as the last timeline item; titled problem rows; Details pane wording (master's invocation
+  panel); the timeline column 6 px left; a scrollbar drag does not count as the person scrolling, so a newly waiting
+  card can still pull the view; queued step names can overflow at 960; two profiles with the same name. The task
   page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent and person messages, tool
   groups, question, plan and tool-approval cards, problem rows, returns and restarts, result cards, the run's end),
   with the step filter, *Show* (All, Messages, Tools), search, the Details pane (closed by default, remembered),
