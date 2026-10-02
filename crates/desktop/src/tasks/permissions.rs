@@ -1,14 +1,15 @@
 //! A step's permissions in its run, as the task page shows them and the run permissions popover
-//! (02.J `q4K1G`) changes them: what its invocations run with, what the popover edits (the run's
-//! permissions for the step's profile, before the step narrows them), what the profile itself
-//! allows, and whether a change made with Apply now is pending or applied (`LJmTH`).
+//! (02.J `q4K1G`) changes them: what its latest invocation launched with and what the next one runs
+//! with, what the popover edits (the run's permissions for the step's profile, before the step
+//! narrows them), what the profile itself allows, and whether a change waits for the next
+//! invocation or, made with Apply now, is pending or applied (`LJmTH`).
 
 use std::sync::Arc;
 
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   id::ResourceId,
-  permission::AgentPermissions,
+  permission::{AgentPermissions, LaunchPermissions, capability::EnforcedPermissions},
   resource::{AgentProfile, StepKey, StepKind, Version, VersionNumber},
   revision::Revision,
   run::{Invocation, Run, RunEventKind},
@@ -19,9 +20,12 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::detail::run_store_error;
 
-/// Where a change of the run's permissions made with Apply now stands.
+/// Where a change of the run's permissions stands: kept for the next invocation, or made with Apply now.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChangeState {
+  /// Changed for the run, but no invocation has launched with the change yet: it takes effect when
+  /// the agent next starts.
+  NextInvocation,
   /// "Applying new permissions at the next checkpoint…": the agent finishes its command first.
   Pending,
   /// "New permissions active since 12:09": the agent restarted from `checkpoint` (when its work had
@@ -36,8 +40,10 @@ pub enum ChangeState {
 /// A step's permissions in its run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunPermissions {
-  /// What its invocations run with: [`Self::base`] narrowed by the step.
+  /// What its next invocation runs with: [`Self::base`] narrowed by the step.
   pub permissions: AgentPermissions,
+  /// What the step's current or last invocation actually launched with.
+  pub invocation_policy: InvocationPolicy,
   /// Network off was chosen, but the CLI cannot enforce it, so network stays on.
   pub network_stays_on: bool,
   /// The listed commands a native agent runs unconfined (core's
@@ -61,6 +67,19 @@ pub struct RunPermissions {
   /// no longer has one). They are not changed for a run.
   pub mcp_servers: Vec<Arc<str>>,
   pub tool_approvals_required: bool,
+}
+
+/// The permissions the step's latest invocation launched with, as the runner recorded them before
+/// starting it. `None` for an invocation recorded before launches were: its permissions stay unknown
+/// rather than being inferred from the run's settings or event times.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InvocationPolicy {
+  /// The invocation is still running.
+  Active(Option<AgentPermissions>),
+  /// The invocation has ended.
+  Last(Option<AgentPermissions>),
+  /// No invocation of the step has launched yet.
+  NotStarted,
 }
 
 /// What the run's step `step`, on the pinned profile version `version` of `profile_id`, runs with.
@@ -91,7 +110,19 @@ pub fn run_permissions(
   let latest = db
     .latest_version::<AgentProfile>(profile_id)?
     .map_or(version.number(), |latest| latest.number());
+  let invocation = latest_invocation(run, invocations, step);
+  let state = change_state(db, (run, invocations), step, profile_id)?;
+  let state = if changed.is_some() && state != Some(ChangeState::Pending) && !run.status().is_terminal() {
+    queued(
+      state,
+      invocation,
+      enforced.as_ref().map(EnforcedPermissions::permissions),
+    )
+  } else {
+    state
+  };
   Ok(Some(RunPermissions {
+    invocation_policy: invocation_policy(invocation),
     permissions,
     network_stays_on,
     unconfined_commands,
@@ -100,13 +131,54 @@ pub fn run_permissions(
     base,
     profile_permissions,
     changed: changed.is_some(),
-    state: change_state(db, (run, invocations), step, profile_id)?,
+    state,
     can_apply_now: run.can_apply_permissions_now(profile_id),
     draft: latest.get().saturating_add(1),
     mcp_servers: mcp_servers(db, version.body())?,
     tool_approvals_required: matches!(run.snapshot().body().step(step).map(|step| &step.kind),
       Some(StepKind::Agent { permissions, .. }) if permissions.interactive_tool_approvals),
   }))
+}
+
+/// The step's latest invocation, of its latest execution.
+fn latest_invocation<'a>(run: &Run, invocations: &'a [Invocation], step: &StepKey) -> Option<&'a Invocation> {
+  let execution = run.latest_execution(step)?.id();
+  invocations
+    .iter()
+    .rev()
+    .find(|invocation| invocation.execution == execution)
+}
+
+fn invocation_policy(invocation: Option<&Invocation>) -> InvocationPolicy {
+  let Some(invocation) = invocation else {
+    return InvocationPolicy::NotStarted;
+  };
+  let launched = invocation
+    .permissions
+    .as_ref()
+    .map(|launch| launch.permissions().clone());
+  if invocation.ended_at.is_none() {
+    InvocationPolicy::Active(launched)
+  } else {
+    InvocationPolicy::Last(launched)
+  }
+}
+
+/// A run change reads as waiting for the next invocation until an invocation has launched with
+/// exactly the permissions it enforces (`expected`); one whose launch was not recorded, or whose
+/// desired settings cannot be enforced at all, never counts as having launched with it.
+fn queued(
+  state: Option<ChangeState>,
+  invocation: Option<&Invocation>,
+  expected: Option<&AgentPermissions>,
+) -> Option<ChangeState> {
+  let launched = invocation
+    .and_then(|invocation| invocation.permissions.as_ref())
+    .map(LaunchPermissions::permissions);
+  match (launched, expected) {
+    (Some(launched), Some(expected)) if launched == expected => state,
+    _ => Some(ChangeState::NextInvocation),
+  }
 }
 
 /// The names of the MCP servers `profile` chooses, in its order.
@@ -141,6 +213,10 @@ fn change_state(
   let Some(applied) = changed.applied() else {
     return Ok(None);
   };
+  // A later change for the next invocation replaces the one applied now.
+  if changed.changed_at() > applied.at {
+    return Ok(None);
+  }
   let current = run.latest_execution(step).map(|execution| execution.id());
   if run.status().is_terminal() || current != Some(applied.execution) {
     return Ok(None);
@@ -161,10 +237,14 @@ fn change_state(
     None => None,
   };
   // The agent restarts right after the change is recorded as applied; until its new invocation
-  // has started, the change still reads as being applied.
+  // has started and recorded what it launched with, the change still reads as being applied.
   let Some(invocation) = invocations
     .iter()
-    .find(|invocation| invocation.execution == applied.execution && invocation.started_at >= applied.at)
+    .find(|invocation| {
+      invocation.execution == applied.execution
+        && invocation.started_at >= applied.at
+        && invocation.permissions.is_some()
+    })
     .map(|invocation| invocation.number)
   else {
     return Ok(Some(ChangeState::Pending));

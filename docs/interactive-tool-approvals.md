@@ -38,6 +38,17 @@ Codex's reason (`no rollout found for thread id …`). Completed steps, uncommit
 intact. **Apply now** uses the existing checkpoint/restart mechanism. Approval requests and waiting
 time are persisted; waiting for a decision does not consume active agent time.
 
+The task's Permissions row shows what the step's current or last invocation launched with, as the runner
+recorded it before starting the CLI (`Invocation::permissions`), including whether it asks before MCP actions:
+*Current invocation: …* while it runs, *Last invocation: …* after it ended, and *Next invocation settings: …*
+before any has launched. Saving a change for the next invocation never relabels the running agent: until an
+invocation launches with exactly the permissions the change enforces, the row keeps the recorded policy and a
+notice says *Saved for the next invocation*. An *Apply now* change reads as applied only once the restarted
+invocation has recorded its launch. The popover repeats the recorded policy above the settings it edits
+(*Next invocation settings*); for an ended run it says the settings are shown for reference. An invocation
+launched before launches were recorded reads *permissions unknown*; nothing is inferred from the run's
+settings or event times.
+
 ## App Server requests
 
 The verified Codex 0.159 path for an ordinary MCP tool emits `item/started` with an

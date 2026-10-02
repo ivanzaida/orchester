@@ -2,8 +2,10 @@
 //! with the current agent's effective permissions and a *change ↗* link, which opens the run's
 //! permissions popover above the row (02.J `q4K1G`, panel `NNRH8`, see `popover`).
 //!
-//! A change applies to this run only: from the next invocation, or now, restarting the agent at
-//! its next checkpoint. Under the row, a change applied now reads as pending ("Applying new
+//! The row shows what the step's current or last invocation launched with, as recorded, never the
+//! run's settings for the next one. A change applies to this run only: from the next invocation, or
+//! now, restarting the agent at its next checkpoint. Under the row, a change kept for the next
+//! invocation says so until an invocation launches with it; a change applied now reads as pending ("Applying new
 //! permissions at the next checkpoint…" with *Keep for next invocation instead*) and then as
 //! applied ("New permissions active since 12:09", `LJmTH`). A change also saved to the profile
 //! names the draft it went to, with a link to the profile.
@@ -45,6 +47,7 @@ use crate::{
   screens::project::ProjectNav,
   tasks::{
     detail::{ChangeState, RunPermissions, StepView},
+    permissions::InvocationPolicy,
     run::control_message,
   },
   theme::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT},
@@ -173,12 +176,7 @@ impl Component for RunPermissionsRow {
 impl RunPermissionsRow {
   /// "Permissions  Builder · Edit files · 3 commands · Network off", with *change ↗* under it.
   fn row(&self, ctx: &Ctx, props: &RunPermissionsProps) -> Element {
-    let pending = props.permissions.state == Some(ChangeState::Pending);
-    let value = if pending {
-      ctx.t_args("runs.permissions.applyingValue", [("agent", agent_of(&props.step))])
-    } else {
-      value(ctx, &props.step, &props.permissions)
-    };
+    let value = value(ctx, &props.step, &props.permissions);
     let (open, edit, base) = (self.open.clone(), self.edit.clone(), props.permissions.base.clone());
     let link_key = if props.live {
       "runs.permissions.change"
@@ -284,14 +282,23 @@ pub fn permissions_value(ctx: &Ctx, step: &StepView) -> Option<Arc<str>> {
     .map(|permissions| value(ctx, step, permissions))
 }
 
-fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
-  let (repository, commands, network) = parts(
-    ctx,
-    &permissions.permissions,
-    permissions.network_stays_on,
-    Length::Compact,
-  );
-  ctx.t_args(
+/// What the step's current or last invocation launched with, or, before any has, what the next one
+/// will: "Current invocation: Builder · Edit files · Any command · Network off · MCP approvals off".
+/// A launch recorded as network on reads so even where network off was chosen.
+pub(super) fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
+  let (policy, label, network_stays_on) = match &permissions.invocation_policy {
+    InvocationPolicy::Active(Some(policy)) => (policy, "runs.permissions.activeValue", false),
+    InvocationPolicy::Last(Some(policy)) => (policy, "runs.permissions.lastValue", false),
+    InvocationPolicy::Active(None) => return ctx.t("runs.permissions.activeUnknown"),
+    InvocationPolicy::Last(None) => return ctx.t("runs.permissions.lastUnknown"),
+    InvocationPolicy::NotStarted => (
+      &permissions.permissions,
+      "runs.permissions.nextValue",
+      permissions.network_stays_on,
+    ),
+  };
+  let (repository, commands, network) = parts(ctx, policy, network_stays_on, Length::Compact);
+  let summary = ctx.t_args(
     "runs.permissions.value",
     [
       ("agent", agent_of(step)),
@@ -299,15 +306,22 @@ fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
       ("commands", &*commands),
       ("network", &*network),
     ],
-  )
+  );
+  let mcp = ctx.t(if policy.interactive_tool_approvals() {
+    "runs.permissions.mcpActive"
+  } else {
+    "runs.permissions.mcpInactive"
+  });
+  ctx.t_args(label, [("policy", &*summary), ("mcp", &*mcp)])
 }
 
-/// Pending (loader, what happens to work in flight, *Keep for next invocation instead*) or
-/// applied (check, since when, the checkpoint and the invocation) (`LJmTH`).
+/// Kept for the next invocation, pending (loader, what happens to work in flight, *Keep for next
+/// invocation instead*) or applied (check, since when, the checkpoint and the invocation) (`LJmTH`).
 fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Vec<Element> {
   let agent = agent_of(&props.step);
   let step = &*props.step.name;
   match &props.permissions.state {
+    Some(ChangeState::NextInvocation) => vec![next_notice(ctx)],
     Some(ChangeState::Pending) => {
       let state = keep.state().get();
       let pending = state.is_pending();
@@ -382,6 +396,17 @@ fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Ve
     }
     None => Vec::new(),
   }
+}
+
+/// "Saved for the next invocation": a change no invocation has launched with yet.
+fn next_notice(ctx: &Ctx) -> Element {
+  Notice::new(
+    Icon::Clock,
+    ctx.t("runs.permissions.nextTitle"),
+    ctx.t("runs.permissions.nextDetail"),
+  )
+  .id("task-permissions-next")
+  .into()
 }
 
 fn apply_action(ctx: &mut Ctx) -> ApplyAction {
