@@ -1,4 +1,4 @@
-use std::sync::Arc;
+mod editor;
 
 use lurq::{
   app::{
@@ -8,6 +8,7 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget, Row, ScrollVertical, Select, Spacer, Text},
   core::Signal,
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{id::TagId, name::Name, task::organization::Tag, time::Timestamp};
@@ -96,13 +97,7 @@ impl Component for TagManager {
     let mut body = Column::new()
       .padding_horizontal(SpacingSize::Section)
       .spacing(SpacingSize::Lg)
-      .flex(1.0)
-      .child(
-        ActionButton::new(ctx.t("tasks.tags.back"))
-          .icon(Icon::ArrowLeft)
-          .link(nav.link(Page::TASKS))
-          .render(ctx),
-      );
+      .flex(1.0);
     if let Some(error) = state.error {
       let retry = self.revision.clone();
       body = body.child(field_error(&message_text(ctx, &error))).child(
@@ -127,9 +122,9 @@ impl Component for TagManager {
           .link(nav.link(Page::NewTask))
           .render(ctx)],
       ))
-      .child(page::screen_heading(
-        &ctx.t("tasks.tags.manage"),
-        &ctx.t("tasks.tags.description"),
+      .child(page::organization_heading(
+        &ctx.t("tasks.tags.projectTitle"),
+        &ctx.t_args("tasks.tags.projectHint", [("project", props.project.name().as_str())]),
       ))
       .child(body)
   }
@@ -157,61 +152,33 @@ impl TagManager {
     action
   }
 
-  fn dialog(&self, ctx: &mut Ctx, tags: &[(Tag, usize)], action: &Action) -> Element {
-    let Some(mode) = self.editing.get() else {
-      return Modal::new(Column::new()).open_when(false).into();
-    };
-    let pending = action.state().get().is_pending();
-    let mut content = Column::new()
-      .width(Dimension::Px(MANAGER_WIDTH))
-      .padding(SpacingSize::Lg)
-      .spacing(SpacingSize::Lg)
-      .background(ExtraColor::Surface.role())
-      .rounded(RadiusSize::Lg)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  fn list_actions(&self, ctx: &mut Ctx, pending: bool) -> Element {
+    let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
+    let (name, editing) = (self.name.clone(), self.editing.clone());
+    Row::new()
+      .spacing(SpacingSize::Sm)
       .child(
-        Text::new(&ctx.t(match mode {
-          EditingTag::Create => "tasks.tags.new",
-          EditingTag::Rename(_) => "tasks.tags.rename",
-          EditingTag::Merge(_) => "tasks.tags.merge",
-          EditingTag::Delete(_) => "tasks.tags.delete",
-        }))
-        .variant(ExtraTypography::DialogTitle.role()),
+        ActionButton::new(ctx.t("tasks.tags.back"))
+          .icon(Icon::ArrowLeft)
+          .link(nav.link(Page::TASKS))
+          .render(ctx),
       )
-      .child(self.editor(ctx, tags, mode, action));
-    if let Some(error) = action.state().get().error {
-      content = content.child(field_error(&message_text(ctx, &error)));
-    }
-    if pending {
-      content = content.child(Text::new(&ctx.t("tasks.tags.saving")).variant(TypographyStyle::Caption));
-    }
-    let editing = self.editing.clone();
-    ctx.watch(&self.open, move |open| {
-      if !*open {
-        editing.set(None);
-      }
-    });
-    Modal::new(backdrop(ctx, form(None, content)))
-      .target(ModalTarget::Root)
-      .open(self.open.clone())
-      .dismiss_on_escape(!pending)
+      .child(
+        ActionButton::new(ctx.t("tasks.tags.new"))
+          .icon(Icon::Plus)
+          .id("project-tag-new")
+          .on_click(move || {
+            name.set(String::new());
+            editing.set(Some(EditingTag::Create));
+          })
+          .enabled(!pending)
+          .render(ctx),
+      )
       .into()
   }
 
-  fn list(&self, ctx: &Ctx, tags: &[(Tag, usize)], pending: bool) -> Element {
-    let editing = self.editing.clone();
-    let name = self.name.clone();
-    let mut column = Column::new().spacing(SpacingSize::Sm).child(
-      ActionButton::new(ctx.t("tasks.tags.new"))
-        .icon(Icon::Plus)
-        .id("project-tag-new")
-        .on_click(move || {
-          name.set(String::new());
-          editing.set(Some(EditingTag::Create));
-        })
-        .enabled(!pending)
-        .render(ctx),
-    );
+  fn list(&self, ctx: &mut Ctx, tags: &[(Tag, usize)], pending: bool) -> Element {
+    let mut column = Column::new().child(self.list_actions(ctx, pending));
     if tags.is_empty() {
       column = column.child(Text::new(&ctx.t("tasks.tags.empty")).variant(TypographyStyle::Caption));
     }
@@ -225,13 +192,25 @@ impl TagManager {
       let remove = self.editing.clone();
       column = column.child(
         Row::new()
+          .height(Dimension::Px(TAG_ROW_HEIGHT))
+          .width(Dimension::Pct(100.0))
+          .align_items(Alignment::Center)
+          .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
           .spacing(SpacingSize::Sm)
-          .child(Text::new(tag.name().as_str()).variant(TypographyStyle::Body))
           .child(
-            Text::new(&ctx.t_args("tasks.tags.taskCount", [("count", count.to_string().as_str())]))
-              .variant(TypographyStyle::Caption),
+            Column::new()
+              .flex(1.0)
+              .child(crate::tasks::organization::tag_chip(tag.name().as_str())),
           )
-          .child(Spacer::new().flex(1.0))
+          .child(
+            Text::new(&if *count == 1 {
+              ctx.t("tasks.tags.taskCountOne")
+            } else {
+              ctx.t_args("tasks.tags.taskCount", [("count", count.to_string().as_str())])
+            })
+            .variant(TypographyStyle::Caption),
+          )
+          .child(Spacer::new().width(Dimension::Px(TAG_COUNT_GAP)))
           .child(
             ActionButton::new(ctx.t("tasks.tags.rename"))
               .icon(Icon::Pencil)
@@ -268,101 +247,11 @@ impl TagManager {
       .max_height(Dimension::Px(MANAGER_HEIGHT))
       .into()
   }
-
-  fn name_input(&self, ctx: &Ctx) -> Element {
-    let input = self.name.clone();
-    text_input(
-      ctx,
-      "project-tag-name",
-      input.clone(),
-      self.name.get().trim().is_empty(),
-      TypographyStyle::Body,
-    )
-    .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value))
-    .into()
-  }
-
-  fn editor(&self, ctx: &Ctx, tags: &[(Tag, usize)], mode: EditingTag, action: &Action) -> Element {
-    let pending = action.state().get().is_pending();
-    let mut column = Column::new().spacing(SpacingSize::Lg);
-    let request = match mode {
-      EditingTag::Create | EditingTag::Rename(_) => {
-        column = column.child(self.name_input(ctx));
-        if Name::new(&self.name.get()).is_err() {
-          None
-        } else {
-          Some(match mode {
-            EditingTag::Rename(id) => Mutation::Rename(id, self.name.get()),
-            _ => Mutation::Create(self.name.get()),
-          })
-        }
-      }
-      EditingTag::Merge(source) => {
-        let options = std::iter::once((Target(None), ctx.t("tasks.tags.chooseTarget"))).chain(
-          tags
-            .iter()
-            .filter(|(tag, _)| tag.id() != source)
-            .map(|(tag, _)| (Target(Some(tag.id())), Arc::from(tag.name().as_str()))),
-        );
-        column = column
-          .child(
-            Element::from(
-              Select::new(self.target.clone())
-                .options(options)
-                .style(select_style(ctx, crate::tasks::organization::CONTROL_HEIGHT)),
-            )
-            .id("tag-merge-target"),
-          )
-          .child(Text::new(&ctx.t("tasks.tags.mergeExplanation")).variant(TypographyStyle::Description));
-        self.target.get().0.map(|target| Mutation::Merge(source, target))
-      }
-      EditingTag::Delete(id) => {
-        let count = tags
-          .iter()
-          .find(|(tag, _)| tag.id() == id)
-          .map_or(0, |(_, count)| *count);
-        column = column.child(
-          Text::new(&ctx.t_args("tasks.tags.deleteExplanation", [("count", count.to_string().as_str())]))
-            .variant(TypographyStyle::Description),
-        );
-        Some(Mutation::Delete(id))
-      }
-    };
-    let cancel = self.editing.clone();
-    let apply = action.clone();
-    let can_confirm = request.is_some() && !pending;
-    column
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .child(
-            ActionButton::new(ctx.t("common.cancel"))
-              .id("tag-editor-cancel")
-              .in_form()
-              .on_click(move || cancel.set(None))
-              .enabled(!pending)
-              .render(ctx),
-          )
-          .child(
-            ActionButton::new(ctx.t("common.confirm"))
-              .id("tag-editor-confirm")
-              .in_form()
-              .primary()
-              .on_click(move || {
-                if let Some(request) = &request {
-                  apply.run(request.clone());
-                }
-              })
-              .enabled(can_confirm)
-              .render(ctx),
-          ),
-      )
-      .into()
-  }
 }
 
 // Project tag list y3ohgK and its confirmation panels.
-const MANAGER_WIDTH: f32 = 880.0;
+const TAG_ROW_HEIGHT: f32 = 64.0;
+const TAG_COUNT_GAP: f32 = 80.0;
 const MANAGER_HEIGHT: f32 = 520.0;
 fn mutate(root: &std::path::Path, mutation: Mutation) -> Result<(), Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;

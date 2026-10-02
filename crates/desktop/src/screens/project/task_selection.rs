@@ -98,6 +98,7 @@ impl Component for SelectionBar {
       return Column::new();
     }
     let mut row = Row::new()
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .padding(SpacingSize::Sm)
       .background(PaletteColor::SurfaceRaised)
@@ -163,6 +164,11 @@ impl SelectionBar {
         .any(|task| selected.contains(&task.id()) && !task.organization().tags().is_empty());
       row = row.child(
         ActionButton::new(ctx.t(key))
+          .icon(match menu {
+            Menu::Status => crate::ui::icon::Icon::Circle,
+            Menu::Priority => crate::ui::icon::Icon::SignalHigh,
+            _ => crate::ui::icon::Icon::Tag,
+          })
           .id(match menu {
             Menu::Status => "bulk-status",
             Menu::Priority => "bulk-priority",
@@ -237,37 +243,15 @@ impl SelectionBar {
         ));
         let (action, tags) = (action.clone(), self.tags.clone());
         column = column.child(
-          ActionButton::new(ctx.t("tasks.selection.addTag"))
+          ActionButton::new(ctx.t_args("tasks.selection.addToCount",[("count",selected.len().to_string().as_str())]))
+            .icon(crate::ui::icon::Icon::Plus)
             .id("bulk-tags-apply")
             .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), false)))
             .enabled(!pending && !self.tags.get().0.tags().is_empty())
             .render(ctx),
         );
       }
-      Menu::RemoveTags => {
-        for tag in &*props.tasks.tags {
-          let count = props
-            .tasks
-            .tasks
-            .iter()
-            .filter(|task| selected.contains(&task.id()) && task.organization().tags().contains(&tag.id()))
-            .count();
-          if count == 0 {
-            continue;
-          }
-          let (action, ids, id) = (action.clone(), selected.clone(), tag.id());
-          column = column.child(
-            ActionButton::new(ctx.t_args(
-              "tasks.selection.removeTagCount",
-              [("tag", tag.name().as_str()), ("count", count.to_string().as_str())],
-            ))
-            .on_click(move || action.run((ids.clone(), Mutation::RemoveTags(vec![id]), false)))
-            .enabled(!pending)
-            .render(ctx)
-            .id(format!("bulk-remove-tag-{id}")),
-          );
-        }
-      }
+      Menu::RemoveTags => column = self.remove_menu(ctx, props, action, column),
     }
     column.into()
   }
@@ -276,65 +260,106 @@ impl SelectionBar {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
     let pending = action.state().get().is_pending();
     for status in WorkflowStatus::ALL {
-      let (action, ids, confirm) = (action.clone(), selected.clone(), self.confirm.clone());
+      let (apply, ids, confirm) = (action.clone(), selected.clone(), self.confirm.clone());
       let active = active_count(props);
+      let checked = props
+        .tasks
+        .tasks
+        .iter()
+        .filter(|task| selected.contains(&task.id()))
+        .all(|task| task.organization().status() == status);
       column = column.child(
-        ActionButton::new(ctx.t(workflow_copy(status).1))
-          .icon(
-            if props
-              .tasks
-              .tasks
-              .iter()
-              .filter(|task| selected.contains(&task.id()))
-              .all(|task| task.organization().status() == status)
-            {
-              crate::ui::icon::Icon::Check
-            } else {
-              workflow_copy(status).0
-            },
-          )
-          .on_click(move || {
-            if status == WorkflowStatus::Canceled && active > 0 {
-              confirm.set(true);
-            } else {
-              action.run((ids.clone(), Mutation::Status(status), false));
-            }
-          })
-          .enabled(!pending)
-          .render(ctx)
-          .id(format!("bulk-status-{status:?}")),
+        crate::ui::menu_option::menu_option(&ctx.t(workflow_copy(status).1), checked, !pending, move || {
+          if status == WorkflowStatus::Canceled && active > 0 {
+            confirm.set(true);
+          } else {
+            apply.run((ids.clone(), Mutation::Status(status), false));
+          }
+        })
+        .id(format!("bulk-status-{status:?}")),
       );
     }
     column
   }
-
   fn priority_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
     let selected: Vec<_> = props.selected.get().0.into_iter().collect();
-    let pending = action.state().get().is_pending();
     for priority in Priority::ALL {
-      let (action, ids) = (action.clone(), selected.clone());
+      let (apply, ids) = (action.clone(), selected.clone());
+      let checked = props
+        .tasks
+        .tasks
+        .iter()
+        .filter(|task| selected.contains(&task.id()))
+        .all(|task| task.organization().priority() == priority);
       column = column.child(
-        ActionButton::new(ctx.t(priority_copy(priority).1))
-          .icon(
-            if props
-              .tasks
-              .tasks
-              .iter()
-              .filter(|task| selected.contains(&task.id()))
-              .all(|task| task.organization().priority() == priority)
-            {
-              crate::ui::icon::Icon::Check
-            } else {
-              priority_copy(priority).0
-            },
-          )
-          .on_click(move || action.run((ids.clone(), Mutation::Priority(priority), false)))
-          .enabled(!pending)
-          .render(ctx)
-          .id(format!("bulk-priority-{priority:?}")),
+        crate::ui::menu_option::menu_option(
+          &ctx.t(priority_copy(priority).1),
+          checked,
+          !action.state().get().is_pending(),
+          move || apply.run((ids.clone(), Mutation::Priority(priority), false)),
+        )
+        .id(format!("bulk-priority-{priority:?}")),
       );
     }
     column
+  }
+  fn remove_menu(&self, ctx: &Ctx, props: &SelectionProps, action: &Action, mut column: Column) -> Column {
+    let selected: Vec<_> = props.selected.get().0.into_iter().collect();
+    let pending = action.state().get().is_pending();
+    for tag in &*props.tasks.tags {
+      let count = props
+        .tasks
+        .tasks
+        .iter()
+        .filter(|task| selected.contains(&task.id()) && task.organization().tags().contains(&tag.id()))
+        .count();
+      if count == 0 {
+        continue;
+      }
+      let (tags, id) = (self.tags.clone(), tag.id());
+      column = column.child(
+        crate::ui::menu_option::menu_option(
+          &ctx.t_args(
+            "tasks.selection.tagMembership",
+            [
+              ("tag", tag.name().as_str()),
+              ("count", count.to_string().as_str()),
+              ("total", selected.len().to_string().as_str()),
+            ],
+          ),
+          self.tags.get().0.tags().contains(&id),
+          !pending,
+          move || {
+            tags.update(|value| {
+              value.0 = if value.0.tags().contains(&id) {
+                value.0.clone().remove_tags(&[id])
+              } else {
+                value.0.clone().add_tags(&[id])
+              };
+            })
+          },
+        )
+        .id(format!("bulk-remove-tag-{id}")),
+      );
+    }
+    let (apply, tags) = (action.clone(), self.tags.clone());
+    column.child(
+      ActionButton::new(ctx.t_args(
+        "tasks.selection.removeFromCount",
+        [("count", selected.len().to_string().as_str())],
+      ))
+      .icon(crate::ui::icon::Icon::Minus)
+      .id("bulk-tags-remove-apply")
+      .on_click(move || {
+        apply.run((
+          selected.clone(),
+          Mutation::RemoveTags(tags.get().0.tags().to_vec()),
+          false,
+        ))
+      })
+      .enabled(!pending && !self.tags.get().0.tags().is_empty())
+      .render(ctx),
+    )
   }
 
   fn confirmation(&self, ctx: &mut Ctx, props: &SelectionProps, action: &Action) -> Element {

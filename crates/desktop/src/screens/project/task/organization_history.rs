@@ -6,7 +6,7 @@ use lurq::{
     ctx::Ctx,
     theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Text},
+  components::{Column, Row, Text},
   node::Element,
 };
 use orchester_core::{
@@ -48,7 +48,8 @@ impl Component for OrganizationHistory {
     let state = load.state().get();
     let mut column = Column::new()
       .id("task-organization-history")
-      .spacing(SpacingSize::Sm)
+      .padding(SpacingSize::Section)
+      .spacing(SpacingSize::Lg)
       .child(Text::new(&ctx.t("tasks.history.title")).variant(TypographyStyle::Label));
     if let Some(error) = state.error {
       return column.child(field_error(&message_text(ctx, &error)));
@@ -67,7 +68,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
     ChangeActor::Person => "tasks.history.person",
     ChangeActor::Orchester => "tasks.history.orchester",
   });
-  let time = display::clock(change.at);
+  let time = history_date(ctx, change.at);
   let mut changes = Vec::new();
   if change.from.status() != change.to.status() {
     changes.push((
@@ -116,20 +117,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   changes
     .into_iter()
-    .map(|(field, from, to)| {
-      Text::new(&ctx.t_args(
-        "tasks.history.change",
-        [
-          ("time", time.as_str()),
-          ("actor", &actor),
-          ("field", field.as_str()),
-          ("from", from.as_str()),
-          ("to", to.as_str()),
-        ],
-      ))
-      .variant(TypographyStyle::Caption)
-      .into()
-    })
+    .map(|(field, from, to)| history_row(ctx, &field, &from, &to, &actor, &time))
     .collect()
 }
 
@@ -159,4 +147,53 @@ pub(super) fn activity(
       },
     ))
     .into()
+}
+
+fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: &str) -> Element {
+  let glyph = if field == ctx.t("tasks.tags.label").as_ref() {
+    crate::ui::icon::Icon::Tag
+  } else if field == ctx.t("tasks.priority.label").as_ref() {
+    crate::ui::icon::Icon::SignalHigh
+  } else {
+    crate::ui::icon::Icon::GitCompareArrows
+  };
+  Row::new()
+    .spacing(SpacingSize::Sm)
+    .child(crate::ui::icon::icon(
+      glyph,
+      crate::ui::icon::IconSize::Button,
+      lurq::app::theme::PaletteColor::TextSecondary,
+    ))
+    .child(
+      Column::new()
+        .spacing(SpacingSize::Sm)
+        .child(
+          Text::new(&ctx.t_args(
+            "tasks.history.valueChange",
+            [("field", field), ("from", from), ("to", to)],
+          ))
+          .variant(TypographyStyle::Body),
+        )
+        .child(
+          Text::new(&ctx.t_args("tasks.history.attribution", [("actor", actor), ("date", date)]))
+            .variant(TypographyStyle::Caption),
+        ),
+    )
+    .into()
+}
+fn history_date(ctx: &Ctx, at: orchester_core::time::Timestamp) -> String {
+  use chrono::Datelike;
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  let date = chrono::DateTime::<chrono::Local>::from(std::time::UNIX_EPOCH + std::time::Duration::from_millis(millis));
+  ctx
+    .t_args(
+      "tasks.history.date",
+      [
+        ("month", ctx.t(display::MONTH_KEYS[date.month0() as usize]).as_ref()),
+        ("day", date.day().to_string().as_str()),
+        ("year", date.year().to_string().as_str()),
+        ("time", display::clock(at).as_str()),
+      ],
+    )
+    .to_string()
 }

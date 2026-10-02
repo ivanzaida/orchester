@@ -117,10 +117,11 @@ impl Component for OrganizationHeader {
             },
           )),
       );
-    if let Some(reason) = current.blocked_reason() {
-      column = column.child(
-        Text::new(&ctx.t_args("tasks.blocked.informational", [("reason", reason)])).variant(TypographyStyle::Caption),
-      );
+    if current.blocked_reason().is_some() {
+      column = column.child(crate::ui::status_label::status_label(
+        crate::ui::icon::Icon::CircleMinus,
+        &ctx.t("tasks.blocked.label"),
+      ));
     }
     if state.is_pending() {
       column = column.child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption));

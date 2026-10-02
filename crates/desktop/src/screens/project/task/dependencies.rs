@@ -58,7 +58,7 @@ impl Component for TaskDependencies {
     let mut column = Column::new()
       .id("task-dependency-readiness")
       .spacing(SpacingSize::Sm)
-      .child(Text::new(&ctx.t("tasks.blocked.links")).variant(TypographyStyle::Label));
+      .child(Text::new(&ctx.t("tasks.blocked.readinessHeading")).variant(TypographyStyle::Label));
     if let Some(error) = state.error {
       return column.child(field_error(&message_text(ctx, &error)));
     }
@@ -176,7 +176,7 @@ fn dependency_links(ctx: &Ctx, task: &Task, tasks: &ProjectTasks, nav: &ProjectN
       .map(|task| task.key().to_string())
       .collect::<Vec<_>>()
       .join(&ctx.t("common.listSeparator"));
-    column = column.child(field_error(&ctx.t_args(
+    column = column.child(crate::ui::field::wrapping_field_error(&ctx.t_args(
       "tasks.blocked.unfinished",
       [
         ("tasks", keys.as_str()),

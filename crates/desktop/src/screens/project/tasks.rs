@@ -119,7 +119,10 @@ impl Component for TasksScreen {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(topbar(ctx, &props.project, &nav))
-      .child(page::screen_heading(&ctx.t("tasks.title"), &ctx.t("tasks.description")))
+      .child(page::organization_heading(
+        &ctx.t("tasks.title"),
+        &ctx.t("tasks.description"),
+      ))
       .child(self.tabs(ctx, tab, props.tasks.ready()))
       .child(body)
   }
@@ -189,7 +192,6 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
     )
     .child(
       ActionButton::new(ctx.t("overview.newTask"))
-        .primary()
         .icon(Icon::Plus)
         .id("tasks-new-task")
         .size(Dimension::Px(NEW_TASK_WIDTH), Dimension::Px(TOPBAR_BUTTON_HEIGHT))
@@ -259,7 +261,7 @@ impl TasksScreen {
       )
     });
     let table = if rows.is_empty() {
-      Element::from(Text::new(&ctx.t("tasks.filters.noMatches")).variant(TypographyStyle::Caption))
+      no_matches(ctx, self.filter.clone())
     } else {
       VirtualizedList::new_shared(ctx, Arc::new(rows))
         .list_key("task-rows")
@@ -279,8 +281,10 @@ impl TasksScreen {
               sort: self.sort.clone(),
             },
           ))
+          .child(Spacer::new().flex(1.0))
           .child(
-            ActionButton::new(ctx.t("tasks.tags.manage"))
+            ActionButton::new(ctx.t("tasks.tags.manageShort"))
+              .icon(Icon::Tag)
               .id("project-tags-manage")
               .link(self.nav.link(Page::ProjectTags))
               .render(ctx),
@@ -317,4 +321,17 @@ fn footer(ctx: &Ctx, tasks: &ProjectTasks) -> Element {
       Text::new(&message_text(ctx, &list::footer(tasks.tasks.len(), tasks.runs))).variant(TypographyStyle::Caption),
     )
     .into()
+}
+
+fn no_matches(ctx: &Ctx, filter: Signal<Filters>) -> Element {
+  crate::ui::organization_notice::organization_notice(
+    &ctx.t("tasks.filters.noMatches"),
+    &ctx.t("tasks.filters.noMatchesHint"),
+  )
+  .child(
+    ActionButton::new(ctx.t("tasks.filters.clear"))
+      .on_click(move || filter.set(Filters::default()))
+      .render(ctx),
+  )
+  .into()
 }

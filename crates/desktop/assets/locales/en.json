@@ -345,7 +345,9 @@
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
       "cancelled": "Run #{{run}} was cancelled"
-    }
+    },
+    "insights": "Run activity and attention",
+    "blockedTask": "Blocked · {{task}}"
   },
   "tasks": {
     "title": "Tasks",
@@ -357,7 +359,7 @@
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
     "tabs": {
-      "all": "All tasks",
+      "all": "All",
       "drafts": "Drafts",
       "queue": "Queue",
       "needsReview": "Needs review",
@@ -371,7 +373,10 @@
       "clear": "Clear filters",
       "matchAll": "Match all selected tags",
       "matchAny": "Match any selected tag",
-      "noMatches": "No tasks match these filters."
+      "noMatches": "No tasks match these filters.",
+      "searchTags": "Search tags",
+      "facetCount": "{{facet}} · {{count}}",
+      "noMatchesHint": "Try another filter or clear the selected filters."
     },
     "selection": {
       "unavailable": "Selecting tasks is not available yet",
@@ -387,14 +392,17 @@
       "changed": "{{task}} updated.",
       "failed": "{{task}} could not be updated: {{reason}}",
       "removeTagCount": "Remove {{tag}} · on {{count}} selected tasks",
-      "run": "Run"
+      "run": "Run",
+      "tagMembership": "{{tag}} · on {{count}} of {{total}} tasks",
+      "removeFromCount": "Remove from {{count}} tasks",
+      "addToCount": "Add to {{count}} tasks"
     },
     "columns": {
       "key": "ID",
-      "task": "Task",
+      "task": "TASK / TAGS",
       "pipeline": "Pipeline",
-      "status": "Status",
-      "readiness": "Dependency / readiness"
+      "status": "WORKFLOW / RUN",
+      "readiness": "DEPENDENCY / READINESS"
     },
     "status": {
       "draft": "Draft",
@@ -535,7 +543,8 @@
       "done": "Done",
       "canceled": "Canceled",
       "noActiveRun": "No active run",
-      "saving": "Saving changes…"
+      "saving": "Saving changes…",
+      "combined": "{{status}} · {{run}}"
     },
     "priority": {
       "label": "Priority",
@@ -557,7 +566,10 @@
       "informational": "Blocked · {{reason}}",
       "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
       "linkLabel": "{{key}} · {{title}}",
-      "search": "Search tasks"
+      "search": "Search tasks",
+      "helper": "Add a reason and optional blocking tasks.",
+      "readinessHeading": "Dependency / readiness",
+      "pickerLabel": "{{key}} · {{title}} · {{status}}"
     },
     "cancel": {
       "title": "Cancel this task and stop its run?",
@@ -593,18 +605,48 @@
       "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project.",
       "more": "+{{count}}",
       "pickerEmpty": "No tags yet. Type a name to create the first tag.",
-      "chooseExisting": "This tag already exists. Select it to add it to this task."
+      "chooseExisting": "This tag already exists. Select it to add it to this task.",
+      "add": "Add tags",
+      "manageShort": "Manage tags",
+      "projectTitle": "Project tags",
+      "projectHint": "{{project}} · Tag names are unique, ignoring letter case.",
+      "nameLabel": "Name",
+      "preview": "Preview",
+      "renameNamed": "Rename {{tag}}",
+      "mergeNamed": "Merge {{source}} into {{target}}?",
+      "mergeSource": "Merge {{source}}",
+      "deleteNamed": "Delete {{tag}}?",
+      "saveName": "Save name",
+      "createTag": "Create tag",
+      "mergeInto": "Merge into {{target}}",
+      "keepTag": "Keep tag",
+      "deleteTag": "Delete tag",
+      "renameImpact": "The name changes on all {{count}} tagged tasks.",
+      "deleteImpact": "{{tag}} will be removed from all {{count}} tagged tasks and from this project’s tag list. The tasks and their other tags stay.",
+      "cannotUndo": "Cannot be undone",
+      "deleteWarning": "You can create {{tag}} again, but its task assignments will not be restored.",
+      "mergeImpact": "{{source}} is on {{count}} tasks. These tasks will get {{target}}, and {{source}} will be removed from this project. A task that already has both tags keeps one {{target}} tag.",
+      "affected": "Affects {{count}} tasks",
+      "otherTagsStay": "The tasks remain. Their other tags are kept.",
+      "mergeLabel": "Merge into",
+      "taskCountOne": "1 task",
+      "nameRequired": "Enter a tag name.",
+      "targetCount": "{{tag}} · {{count}} tasks",
+      "targetCountOne": "{{tag}} · 1 task"
     },
     "sort": {
-      "updated": "Sort: Updated",
-      "status": "Sort: Status",
-      "priority": "Sort: Priority"
+      "updated": "Updated · newest first",
+      "status": "Status · workflow order",
+      "priority": "Priority · urgent first"
     },
     "history": {
       "title": "Task history",
       "person": "You",
       "orchester": "Orchester",
-      "change": "{{time}} · {{actor}} · {{field}}: {{from}} → {{to}}"
+      "change": "{{time}} · {{actor}} · {{field}}: {{from}} → {{to}}",
+      "valueChange": "{{field}} · {{from}} → {{to}}",
+      "attribution": "{{actor}} · {{date}}",
+      "date": "{{month}} {{day}}, {{year}}, {{time}}"
     }
   },
   "runs": {

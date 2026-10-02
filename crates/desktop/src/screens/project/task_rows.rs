@@ -46,7 +46,8 @@ const HEADING_HEIGHT: f32 = 28.0;
 const TABLE_ROW_HEIGHT: f32 = 76.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
-const LIST_ROW_HEIGHT: f32 = 78.0;
+// DtpHJ full-width overview task specimen.
+const LIST_ROW_HEIGHT: f32 = 136.0;
 const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
@@ -176,17 +177,23 @@ impl Component for QueueRow {
           .spacing(SpacingSize::Sm)
           .child(
             Text::new(&row.title)
+              .id(format!("task-row-title-{}", row.key))
               .variant(TypographyStyle::FieldLabel)
               .color(PaletteColor::TextPrimary)
               .nowrap()
               .text_overflow(TextOverflow::Elipsis)
-              .flex(1.0),
+              .width(Dimension::Pct(100.0)),
           )
           .child(row_tag_chips(ctx, row.id, &row.tags)),
       )
       .child(cell(PRIORITY_WIDTH, priority_label(ctx, row.organization.priority())))
       .child(cell(STATUS_WIDTH, workflow_run(ctx, &row)))
-      .child(cell(READINESS_WIDTH, column_label(&message_text(ctx, &row.detail))))
+      .child(cell(
+        READINESS_WIDTH,
+        Text::new(&message_text(ctx, &row.detail))
+          .variant(ExtraTypography::CellLabel.role())
+          .width(Dimension::Pct(100.0)),
+      ))
       .child(open_chevron());
     opens(&self.nav, &row, content)
   }
@@ -206,7 +213,12 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
     .spacing(SpacingSize::Xs)
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
     .child(Text::new(&ctx.t("common.separator")).variant(TypographyStyle::Caption))
-    .child(Text::new(&message_text(ctx, &row.detail)).variant(TypographyStyle::Caption));
+    .child(
+      Text::new(&message_text(ctx, &row.detail))
+        .variant(TypographyStyle::Caption)
+        .flex(1.0),
+    )
+    .child(priority_label(ctx, row.organization.priority()));
   let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LIST_ROW_HEIGHT))
@@ -227,8 +239,7 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
         )
         .child(metadata),
     )
-    .child(priority_label(ctx, row.organization.priority()))
-    .child(workflow_run(ctx, row))
+    .child(overview_workflow(ctx, row))
     .child(row_tag_chips(ctx, row.id, &row.tags))
     .child(
       Row::new().width(Dimension::Px(TIME_WIDTH)).justify(Justify::End).child(
@@ -280,4 +291,34 @@ fn selection_checkbox(ctx: &mut Ctx, id: orchester_core::id::TaskId) -> Element 
       PaletteColor::TextSecondary,
     ))
     .into()
+}
+
+fn overview_workflow(ctx: &Ctx, row: &TaskRow) -> Element {
+  let (icon, key) = crate::tasks::organization::workflow_copy(row.organization.status());
+  let status = ctx.t(key);
+  let run = if row.organization.blocked_reason().is_some()
+    || matches!(row.detail.key, "tasks.blocked.unfinished" | "tasks.readiness.blocked")
+  {
+    Some(ctx.t("tasks.blocked.label"))
+  } else {
+    row
+      .phase
+      .filter(|phase| {
+        !matches!(
+          phase,
+          TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Succeeded | TaskPhase::Merged
+        )
+      })
+      .map(|phase| ctx.t(status_copy(phase).1))
+  };
+  let label = run.map_or_else(
+    || status.clone(),
+    |run| {
+      ctx.t_args(
+        "tasks.workflow.combined",
+        [("status", status.as_ref()), ("run", run.as_ref())],
+      )
+    },
+  );
+  status_label(icon, &label)
 }

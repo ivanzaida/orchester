@@ -93,14 +93,18 @@ impl Component for TagPicker {
         .spacing(SpacingSize::Sm)
         .child(tag_chips(&names))
         .child(
-          ActionButton::new(ctx.t("tasks.tags.edit"))
-            .icon(Icon::Tag)
-            .in_form()
-            .id("task-tags-picker")
-            .ref_element(self.anchor.clone())
-            .on_click(move || open.update(|open| *open = !*open))
-            .enabled(props.enabled)
-            .render(ctx),
+          ActionButton::new(ctx.t(if names.is_empty() {
+            "tasks.tags.add"
+          } else {
+            "tasks.tags.edit"
+          }))
+          .icon(Icon::Tag)
+          .in_form()
+          .id("task-tags-picker")
+          .ref_element(self.anchor.clone())
+          .on_click(move || open.update(|open| *open = !*open))
+          .enabled(props.enabled)
+          .render(ctx),
         ),
     );
     if self.open.get() {
@@ -163,16 +167,13 @@ impl TagPicker {
       let id = tag.id();
       let value = props.selected.clone();
       choices = choices.child(
-        ActionButton::new(Arc::from(tag.name().as_str()))
-          .icon(if selected.tags().contains(&id) {
-            Icon::Check
-          } else {
-            Icon::Tag
-          })
-          .in_form()
-          .on_click(move || toggle(&value, id))
-          .render(ctx)
-          .id(format!("picker-tag-{id}")),
+        crate::ui::menu_option::menu_option(
+          tag.name().as_str(),
+          selected.tags().contains(&id),
+          props.enabled && !action.state().get().is_pending(),
+          move || toggle(&value, id),
+        )
+        .id(format!("picker-tag-{id}")),
       );
     }
     let pending = action.state().get().is_pending();
@@ -186,6 +187,7 @@ impl TagPicker {
       .rounded(RadiusSize::Md)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .spacing(SpacingSize::Sm)
+      .child(Text::new(&ctx.t("tasks.tags.search")).variant(TypographyStyle::Caption))
       .child(
         text_input(ctx, "tag-search", input.clone(), false, TypographyStyle::Body)
           .placeholder(&ctx.t("tasks.tags.search"))
@@ -193,6 +195,13 @@ impl TagPicker {
       )
       .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)))
       .child(
+        ActionButton::new(ctx.t("tasks.tags.manage"))
+          .in_form()
+          .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
+          .render(ctx),
+      );
+    if !lower.is_empty() && !tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower) {
+      menu = menu.child(
         ActionButton::new(ctx.t_args("tasks.tags.createNamed", [("name", query.trim())]))
           .icon(Icon::Plus)
           .id("tag-create-inline")
@@ -200,13 +209,8 @@ impl TagPicker {
           .on_click(move || create.run(typed.get()))
           .enabled(!pending && !lower.is_empty() && !tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower))
           .render(ctx),
-      )
-      .child(
-        ActionButton::new(ctx.t("tasks.tags.manage"))
-          .in_form()
-          .on_click(move || nav.leave(crate::navigation::route::Page::ProjectTags))
-          .render(ctx),
       );
+    }
     if tags.is_empty() {
       menu = menu.child(Text::new(&ctx.t("tasks.tags.pickerEmpty")).variant(TypographyStyle::Caption));
     } else if !lower.is_empty() && tags.iter().any(|tag| tag.name().as_str().to_lowercase() == lower) {

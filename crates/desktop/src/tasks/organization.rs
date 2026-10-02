@@ -25,6 +25,8 @@ use crate::{
 pub const CONTROL_HEIGHT: f32 = 40.0;
 // gNExS/Sd5qt: compact header picker buttons.
 const HEADER_HEIGHT: f32 = 36.0;
+// gNExS/Sd5qt: both menus are 280 logical pixels wide.
+pub const ORGANIZATION_MENU_WIDTH: f32 = 280.0;
 #[derive(Clone, Copy)]
 pub enum PickerAppearance {
   Field,
@@ -38,7 +40,9 @@ impl PickerAppearance {
     }
   }
   fn style(self, ctx: &Ctx) -> SelectStyle {
-    let style = select_style(ctx, self.height());
+    let style = select_style(ctx, self.height())
+      .min_menu_width(ORGANIZATION_MENU_WIDTH)
+      .option_selected(SelectPartStyle::new().background(PaletteColor::AccentMuted));
     match self {
       Self::Field => style,
       Self::Header => style.trigger(
@@ -178,11 +182,11 @@ pub fn tag_chips(names: &[Arc<str>]) -> Element {
     .into()
 }
 
-pub(super) fn tag_chip(name: &str) -> Element {
+pub fn tag_chip(name: &str) -> Element {
   Row::new()
     .max_width(Dimension::Px(TAG_MAX_WIDTH))
     .padding_horizontal(SpacingSize::Sm)
-    .padding_vertical(ExtraSpacing::Indicator.role())
+    .padding_vertical(ExtraSpacing::Tight.role())
     .background(PaletteColor::SurfaceRaised)
     .rounded(lurq::app::theme::RadiusSize::Sm)
     .border_inside(lurq::app::theme::BorderSize::Sm, PaletteColor::Border)

@@ -10,8 +10,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::tokens::compact_tokens;
 
@@ -20,12 +19,8 @@ use crate::{
     overview::{Pulse, figure},
     usage::ProjectUsage,
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::message_text,
 };
-
-/// Pulse row height (`C95Z93`).
-const PULSE_HEIGHT: f32 = 94.0;
 
 /// `runner`: whether the runner is online, the agents it reported at work, and the runs its
 /// absence interrupted.
@@ -34,6 +29,7 @@ pub(super) fn pulse(
   pulse: &Pulse,
   (online, agents_working, lost): (bool, Option<usize>, usize),
   usage: Option<ProjectUsage>,
+  in_review: usize,
 ) -> Element {
   let running = message_text(ctx, &Pulse::running_context(online, agents_working, lost));
   let (tokens, budget) = match usage {
@@ -55,56 +51,60 @@ pub(super) fn pulse(
   Row::new()
     .id("overview-pulse")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(PULSE_HEIGHT))
-    .padding_vertical(ExtraSpacing::Step.role())
-    .spacing(SpacingSize::Section)
-    .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(metric(
-      "overview-running",
-      &running_figure,
-      &ctx.t("overview.metrics.running"),
-      &running,
-    ))
-    .child(metric(
-      "overview-needs-input",
-      &needs_input,
-      &ctx.t("overview.metrics.needsInput"),
-      &ctx.t("overview.metrics.needsInputContext"),
-    ))
-    .child(metric(
-      "overview-completed",
-      &completed,
-      &ctx.t("overview.metrics.completed"),
-      &ctx.t("overview.metrics.completedContext"),
-    ))
-    .child(metric(
-      "overview-tokens",
-      &tokens,
-      &ctx.t("overview.metrics.tokens"),
-      &budget,
-    ))
+    .spacing(SpacingSize::Sm)
+    .child(
+      Column::new()
+        .flex(1.0)
+        .padding(SpacingSize::Md)
+        .spacing(SpacingSize::Sm)
+        .background(PaletteColor::SurfaceInput)
+        .border_inside(BorderSize::Sm, PaletteColor::Border)
+        .rounded(lurq::app::theme::RadiusSize::Md)
+        .child(summary_metric(
+          "overview-running",
+          &running_figure,
+          &ctx.t("overview.metrics.running"),
+        ))
+        .child(summary_metric(
+          "overview-needs-input",
+          &needs_input,
+          &ctx.t("overview.metrics.needsInput"),
+        ))
+        .child(Text::new(&running).variant(TypographyStyle::Caption)),
+    )
+    .child(
+      Column::new()
+        .flex(1.0)
+        .padding(SpacingSize::Md)
+        .spacing(SpacingSize::Sm)
+        .background(PaletteColor::SurfaceInput)
+        .border_inside(BorderSize::Sm, PaletteColor::Border)
+        .rounded(lurq::app::theme::RadiusSize::Md)
+        .child(summary_metric(
+          "overview-in-review",
+          &in_review.to_string(),
+          &ctx.t("tasks.workflow.inReview"),
+        ))
+        .child(summary_metric(
+          "overview-completed",
+          &completed,
+          &ctx.t("overview.metrics.completed"),
+        ))
+        .child(summary_metric(
+          "overview-tokens",
+          &tokens,
+          &ctx.t("overview.metrics.tokens"),
+        ))
+        .child(Text::new(&budget).variant(TypographyStyle::Caption)),
+    )
     .into()
 }
 
-/// One project metric (`dZ2Zt`): the figure and its label, and what it counts.
-fn metric(id: &'static str, value: &str, label: &str, context: &str) -> Element {
-  Column::new()
-    .id(id)
-    .flex(1.0)
+fn summary_metric(id: &'static str, value: &str, label: &str) -> Element {
+  Row::new()
     .spacing(SpacingSize::Sm)
-    .child(
-      Row::new()
-        .spacing(ExtraSpacing::Inline.role())
-        .align_items(Alignment::Center)
-        .child(Text::new(value).variant(ExtraTypography::Metric.role()).nowrap())
-        .child(Text::new(label).variant(TypographyStyle::FieldLabel).nowrap()),
-    )
-    .child(
-      Text::new(context)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
+    .id(id)
+    .child(Text::new(value).variant(TypographyStyle::Body))
+    .child(Text::new(label).variant(TypographyStyle::Body))
     .into()
 }

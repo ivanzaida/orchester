@@ -100,6 +100,7 @@ impl Component for OrganizationFields {
     let mut content = Column::new()
       .spacing(SpacingSize::Lg)
       .child(organization_pickers(ctx, draft))
+      .child(Text::new(&ctx.t("tasks.tags.label")).variant(TypographyStyle::Caption))
       .child(ctx.mount_keyed::<TagPicker>(
         "form-tags",
         TagPickerProps {
@@ -108,14 +109,7 @@ impl Component for OrganizationFields {
           enabled: true,
         },
       ))
-      .child(
-        ActionButton::new(ctx.t("tasks.blocked.label"))
-          .icon(if blocked { Icon::SquareCheck } else { Icon::Square })
-          .id("task-blocked-field")
-          .in_form()
-          .on_click(move || flip.update(|value| *value = !*value))
-          .render(ctx),
-      );
+      .child(blocked_control(ctx, blocked, flip));
     if blocked {
       let control: Element = text_input(
         ctx,
@@ -124,6 +118,8 @@ impl Component for OrganizationFields {
         draft.reason.get().trim().is_empty(),
         TypographyStyle::Body,
       )
+      .multiline()
+      .height(Dimension::Px(BLOCKED_REASON_HEIGHT))
       .on_input(move |event: lurq::app::events::TextInputEvent| reason.set(event.new_value))
       .into();
       content = content.child(field(&ctx.t("tasks.blocked.reason"), control, note));
@@ -246,19 +242,51 @@ impl Component for DependencyFields {
         String::new()
       },
     ));
+    column = self.link_rows(ctx, &props, &tasks, column);
+    column.child(self.add_control(ctx, &props, &tasks))
+  }
+}
+
+impl DependencyFields {
+  fn link_rows(
+    &self,
+    ctx: &mut Ctx,
+    props: &DependencyProps,
+    tasks: &crate::tasks::data::ProjectTasks,
+    mut column: Column,
+  ) -> Column {
+    let organization = props.value.get().0;
     for link in organization.dependencies() {
       let id = link.task;
-      let label = tasks
-        .tasks
-        .iter()
-        .find(|task| task.id() == id)
-        .map(|task| task.key().to_string())
-        .unwrap_or_else(|| id.to_string());
+      let blocker = tasks.tasks.iter().find(|task| task.id() == id);
+      let label = blocker
+        .map(|task| {
+          ctx.t_args(
+            "tasks.blocked.linkLabel",
+            [
+              ("key", task.key().to_string().as_str()),
+              ("title", task.details().title.as_str()),
+            ],
+          )
+        })
+        .unwrap_or_else(|| id.to_string().into());
+      let nav = ctx
+        .use_context::<super::ProjectNav>()
+        .expect("shell provides navigation");
       let value = props.value.clone();
       column = column.child(
         Row::new()
           .spacing(SpacingSize::Sm)
-          .child(Text::new(&label).variant(TypographyStyle::Caption))
+          .child(
+            ActionButton::new(label)
+              .icon(Icon::Link)
+              .in_form()
+              .link(nav.link(crate::navigation::route::Page::task(id)))
+              .render(ctx),
+          )
+          .with_children(
+            blocker.map(|task| crate::tasks::organization::workflow_label(ctx, task.organization().status())),
+          )
           .child(
             ActionButton::new(ctx.t("tasks.blocked.removeLink"))
               .icon(Icon::X)
@@ -285,11 +313,9 @@ impl Component for DependencyFields {
           ),
       );
     }
-    column.child(self.add_control(ctx, &props, &tasks))
+    column
   }
-}
 
-impl DependencyFields {
   fn creates_cycle(&self, props: &DependencyProps, tasks: &crate::tasks::data::ProjectTasks) -> bool {
     self.choice.get().0.zip(props.task).is_some_and(|(id, task)| {
       let graph = tasks
@@ -328,10 +354,16 @@ impl DependencyFields {
           (
             DependencyChoice(Some(task.id())),
             ctx.t_args(
-              "tasks.blocked.linkLabel",
+              "tasks.blocked.pickerLabel",
               [
                 ("key", task.key().to_string().as_str()),
                 ("title", task.details().title.as_str()),
+                (
+                  "status",
+                  ctx
+                    .t(crate::tasks::organization::workflow_copy(task.organization().status()).1)
+                    .as_ref(),
+                ),
               ],
             ),
           )
@@ -413,10 +445,39 @@ fn readiness_note(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks, unfinishe
       .map(|task| task.key().to_string())
       .collect::<Vec<_>>()
       .join(&ctx.t("common.listSeparator"));
-    column = column.child(crate::ui::field::field_error(&ctx.t_args(
+    column = column.child(crate::ui::field::wrapping_field_error(&ctx.t_args(
       "tasks.blocked.unfinished",
       [("tasks", keys.as_str()), ("reason", reason)],
     )));
   }
   column.into()
+}
+
+// ZLhiM free-text reason field.
+const BLOCKED_REASON_HEIGHT: f32 = 96.0;
+
+fn blocked_control(ctx: &Ctx, checked: bool, value: Signal<bool>) -> Element {
+  let button = crate::ui::pressable::keyboard_stop(
+    crate::ui::pressable::surface()
+      .id("task-blocked-field")
+      .cursor(lurq::node::CursorIcon::Pointer)
+      .hovered_style(lurq::node::Style::new().background(lurq::app::theme::PaletteColor::AccentMuted))
+      .on_click(move |_| value.update(|value| *value = !*value))
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .child(crate::ui::icon::icon(
+            if checked { Icon::SquareCheck } else { Icon::Square },
+            crate::ui::icon::IconSize::Small,
+            lurq::app::theme::PaletteColor::TextPrimary,
+          ))
+          .child(Text::new(&ctx.t("tasks.blocked.label")).variant(TypographyStyle::Caption)),
+      ),
+    crate::ui::pressable::Ring::Outer,
+  );
+  Row::new()
+    .spacing(SpacingSize::Sm)
+    .child(button)
+    .child(Text::new(&ctx.t("tasks.blocked.helper")).variant(TypographyStyle::Caption))
+    .into()
 }

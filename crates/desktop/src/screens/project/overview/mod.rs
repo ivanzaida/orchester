@@ -16,7 +16,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Row, ScrollVertical, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -68,6 +68,7 @@ impl lurq::app::component::DevtoolsInspectable for OverviewProps {}
 pub struct OverviewScreen {
   nav: ProjectNav,
   runners: Runners,
+  insights: lurq::core::Signal<bool>,
 }
 
 impl Component for OverviewScreen {
@@ -75,6 +76,7 @@ impl Component for OverviewScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      insights: ctx.signal(false),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -118,15 +120,36 @@ impl Component for OverviewScreen {
             &figures,
             (online, props.agents_working, tasks.lost_to_runner),
             props.usage,
+            tasks
+              .tasks
+              .iter()
+              .filter(|task| {
+                task.organization().status() == orchester_core::task::organization::WorkflowStatus::InReview
+              })
+              .count(),
           ))
+          .child(task_list::task_list(
+            ctx,
+            tasks,
+            props.tab,
+            &self.nav,
+            self.insights.get() || props.tab != OverviewTab::All,
+          ))
+          .with_children(blocked_notices(ctx, tasks))
           .child(
-            Row::new()
-              .id("overview-tasks-and-attention")
-              .width(Dimension::Pct(100.0))
-              .flex(1.0)
-              .spacing(SpacingSize::Section)
-              .child(task_list::task_list(ctx, tasks, props.tab, &self.nav))
-              .child(attention::attention(ctx, &props.open, tasks, &self.nav)),
+            ActionButton::new(ctx.t("overview.insights"))
+              .icon(Icon::Activity)
+              .on_click({
+                let insights = self.insights.clone();
+                move || insights.update(|show| *show = !*show)
+              })
+              .render(ctx),
+          )
+          .with_children(
+            self
+              .insights
+              .get()
+              .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
           )
       }
     };
@@ -134,7 +157,7 @@ impl Component for OverviewScreen {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(project_bar(ctx, &props.open))
-      .child(body)
+      .child(ScrollVertical::new(body).flex(1.0))
   }
 }
 
@@ -214,4 +237,24 @@ fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &display::shorten_path(&open.repo_root, PATH_CHARS),
   ))
   .into()
+}
+
+fn blocked_notices(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks) -> Vec<Element> {
+  tasks
+    .tasks
+    .iter()
+    .filter(|task| tasks.blocking.get(&task.id()).is_some_and(|links| !links.is_empty()))
+    .map(|task| {
+      let row = tasks.decorate_row(crate::tasks::list::TaskRow::new(
+        task,
+        &tasks.pipelines,
+        tasks.phases.get(&task.id()),
+      ));
+      crate::ui::organization_notice::organization_notice(
+        &ctx.t_args("overview.blockedTask", [("task", task.key().to_string().as_str())]),
+        &message_text(ctx, &row.detail),
+      )
+      .into()
+    })
+    .collect()
 }

@@ -43,7 +43,8 @@ fn organization_new_form_saves_status_priority_informational_reason_and_inline_t
   set_text(&mut desktop, "task-title", "Organized task");
   choose(&mut desktop, "task-workflow-field", "Todo");
   choose(&mut desktop, "task-priority-field", "High");
-  desktop.press("task-blocked-field");
+  desktop.tab_to("task-blocked-field", 40);
+  desktop.enter();
   desktop.wait_for("task-blocked-reason");
   set_text(&mut desktop, "task-blocked-reason", "Waiting for a decision");
   desktop.press("task-tags-picker");
@@ -333,7 +334,7 @@ fn organization_tag_rename_and_merge_preserve_task_assignment() {
   });
   desktop.press(&format!("project-tag-merge-{source}"));
   desktop.wait_for("tag-merge-target");
-  choose(&mut desktop, "tag-merge-target", "UX");
+  choose(&mut desktop, "tag-merge-target", "UX · 1 task");
   desktop.tab_to("tag-editor-confirm", 6);
   desktop.enter();
   desktop.wait_until("merge deduplicates task assignment", |desktop| {
@@ -398,6 +399,13 @@ fn organization_bulk_add_and_remove_tags_updates_every_selected_task() {
   desktop.press("bulk-remove-tags");
   desktop.wait_for(&format!("bulk-remove-tag-{tag}"));
   desktop.press(&format!("bulk-remove-tag-{tag}"));
+  assert!(
+    tasks(&desktop.repo)
+      .iter()
+      .all(|task| task.organization().tags() == [tag]),
+    "selecting removal must not mutate tasks"
+  );
+  desktop.press("bulk-tags-remove-apply");
   desktop.wait_until("bulk tag removal", |desktop| {
     tasks(&desktop.repo)
       .iter()
@@ -494,7 +502,8 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
   desktop.wait_for("task-edit");
   desktop.click("task-edit");
   desktop.wait_for("task-blocked-field");
-  desktop.press("task-blocked-field");
+  desktop.tab_to("task-blocked-field", 40);
+  desktop.enter();
   desktop.wait_for("task-blocked-reason");
   set_text(&mut desktop, "task-blocked-reason", "Needs a dependency");
   desktop.wait_for("task-blocking-picker");
@@ -503,7 +512,7 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
       .stops(40, false)
       .contains(&Some("task-add-blocking-link".into()))
   );
-  choose(&mut desktop, "task-blocking-picker", "KON-2 · Dependency");
+  choose(&mut desktop, "task-blocking-picker", "KON-2 · Dependency · Todo");
   assert!(
     !desktop
       .stops(40, false)
@@ -511,7 +520,7 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
   );
   desktop.press("task-add-blocking-link");
   assert!(desktop.tree.get_element_by_id("task-add-blocking-link").is_some());
-  choose(&mut desktop, "task-blocking-picker", "KON-3 · Dependency");
+  choose(&mut desktop, "task-blocking-picker", "KON-3 · Dependency · Backlog");
   assert!(
     desktop
       .stops(40, false)
