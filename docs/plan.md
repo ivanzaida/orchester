@@ -159,9 +159,24 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
-### ORC-39 · Task statuses, priorities and tags — awaiting independent verification
+### ORC-39 · Task statuses, priorities and tags — merged onto master, independent review and verification pending
 
-Implementation is complete in the run worktree; fresh Check, Review and independent app/Pencil Verify remain pipeline gates. See [implementation handoff](evidence/orc39-implementation.md) for behavior, filtered test results and the 24 states to verify. Defaults and readiness policy B are approved. Move this entry to Done after Verify passes; no commit or merge is authorized in this run.
+Branch `claude/orc39` (worktree `.tmp/worktrees/claude-orc39`): run #11's work merged with master (lurq 0.33.1,
+ORC-17/45/57/60, Create returning to the highlighted list, protocol 10) in one merge commit. The Review findings are
+fixed, each with a `form_keyboard` test in `organization_review.rs`: R1 a failed save no longer passes for the last
+success (New task's Canceled confirmation, the tag manager's editor, the header's cancellation); R2 the task header,
+tag manager, tag picker, selection bar, Run and tag-mode observers are registered once and compare with the current
+state; R3 the queued Retry form locks status, priority, tags, Blocked and blocking links; R4 an unavailable tag picker
+creates no tag. The earlier Verify mismatches were checked against the Pencil frames in a private build: header pickers
+are secondary buttons, Sort is "Sort: …", bulk Add tag shows the choices in place, the blocked notice and readiness copy
+follow `Ncjvt`. See [implementation handoff](evidence/orc39-implementation.md) for behavior and the 24 frame states.
+**Remaining:** an independent Review of the merge and fixes, and independent app/Pencil design verification of the
+24 states (`docs/design/orchester-workspace.md`, Tasks). The merge took master at `f1b0285`; master has since merged
+ORC-30 (task selection, Set pipeline, Run selected) and the retry-feedback work, and a trial merge of that master
+conflicts in 11 files (`tasks.rs`, `task_rows.rs`, `tasks/list.rs`, `navigation/route.rs`, the project schema and
+`project_db/mod.rs`, `runs/mod.rs`, `en.json`, and the `history`, `navigation` and `tasks` tests). ORC-39's own
+selection bar (bulk status, priority and tags) and ORC-30's selection must become one before this branch can land.
+Move this entry to Done after the review, the second merge and verification pass.
 
 ### U10 · Pull requests screen jumps while it loads (UI)
 
