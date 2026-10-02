@@ -2,10 +2,8 @@
 //! variables the project adds to the environment of every agent CLI and command tool its runs
 //! start, on top of the cleaned environment every program gets, as `NAME=value` lines like a
 //! command tool's (06.02 `YEWFo`). They save when the field is left, once every line is valid; the
-//! topbar says whether all changes are saved. A Rust repository without `CARGO_TARGET_DIR` gets a
-//! suggestion to share one build folder between the runs' worktrees (`CMSyB`); nothing is set until
-//! the person adds it. Once it is set, a notice says that agents which edit files need the folder
-//! among their extra writable folders (Agents › Permissions; implemented, not drawn yet).
+//! topbar says whether all changes are saved. The variables are passed to every run unchanged,
+//! whatever they name.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -25,12 +23,11 @@ use super::{SettingsSave, general::CONTENT_WIDTH};
 use crate::{
   activity::{Activity, operations},
   background,
-  environment::{CARGO_TARGET_DIR, ProjectEnvironment, save_in},
+  environment::{load_in, save_in},
   messages::{self, Message},
   theme::{ExtraSpacing, ExtraTypography},
   tools::form::{environment_text, parse_environment},
   ui::{
-    button::ActionButton,
     field::{FieldNote, field, styled_input},
     form::form,
     icon::Icon,
@@ -40,11 +37,9 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// Lines the variables field shows before it scrolls, as a command tool's (`YEWFo`), and the height
-/// of *Add CARGO_TARGET_DIR* (`IgW07`).
+/// Lines the variables field shows before it scrolls, as a command tool's (`YEWFo`).
 const AREA_ROWS: (usize, usize) = (4, 12);
 const VARIABLES_AREA_HEIGHT: f32 = 116.0;
-const ADD_TARGET_HEIGHT: f32 = 32.0;
 
 #[derive(Clone)]
 pub struct EnvironmentProps {
@@ -61,20 +56,20 @@ impl PartialEq for EnvironmentProps {
 
 impl lurq::app::component::DevtoolsInspectable for EnvironmentProps {}
 
-/// The variables as stored after a save.
+/// The variables as stored, once read or after a save.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Saved(CommandEnvironment);
+struct Stored(CommandEnvironment);
 
-impl lurq::app::component::DevtoolsInspectable for Saved {}
+impl lurq::app::component::DevtoolsInspectable for Stored {}
 
-type SaveAction = FutureAction<(PathBuf, CommandEnvironment), Saved, Message>;
+type SaveAction = FutureAction<(PathBuf, CommandEnvironment), Stored, Message>;
 
 /// Cloned by the save it commits, which reads the field when it runs.
 #[derive(Clone)]
 pub struct EnvironmentTab {
   text: Signal<String>,
-  /// The variables as stored and the suggestion for the repository; `None` until read.
-  stored: Signal<Option<ProjectEnvironment>>,
+  /// `None` until read.
+  stored: Signal<Option<Stored>>,
 }
 
 impl Component for EnvironmentTab {
@@ -98,16 +93,8 @@ impl Component for EnvironmentTab {
       }
       match (&state.data, &state.error) {
         (_, Some(error)) => status.set(SettingsSave::Failed(error.clone())),
-        (Some(Saved(saved)), None) => {
-          stored.update(|stored| {
-            if let Some(stored) = stored {
-              stored.variables = saved.clone();
-              stored.suggested_target = stored
-                .suggested_target
-                .take()
-                .filter(|_| saved.get(CARGO_TARGET_DIR).is_none());
-            }
-          });
+        (Some(saved), None) => {
+          stored.set(Some(saved.clone()));
           status.set(SettingsSave::Saved);
           commit();
         }
@@ -137,8 +124,6 @@ impl Component for EnvironmentTab {
           .child(Text::new(&ctx.t("settings.environment.detail")).variant(ExtraTypography::Explanation.role())),
       )
       .child(self.variables(ctx, error.as_ref(), &commit))
-      .with_children(self.suggestion(ctx, &commit))
-      .with_children(self.agents_note(ctx))
       .child(
         Notice::new(
           Icon::History,
@@ -189,65 +174,6 @@ impl EnvironmentTab {
       .into()
   }
 
-  /// For a Rust repository without `CARGO_TARGET_DIR`: one build folder for every run's worktree,
-  /// added with a click.
-  fn suggestion(&self, ctx: &Ctx, commit: &Arc<dyn Fn() + Send + Sync>) -> Option<Element> {
-    let stored = self.stored.get()?;
-    let target = stored.suggested_target?;
-    let target = target.to_str()?.to_owned();
-    if self.text.get().lines().any(|line| {
-      line
-        .split_once('=')
-        .is_some_and(|(name, _)| name.trim().eq_ignore_ascii_case(CARGO_TARGET_DIR))
-    }) {
-      return None;
-    }
-    let (text, commit) = (self.text.clone(), commit.clone());
-    let line = format!("{CARGO_TARGET_DIR}={target}");
-    let add = ActionButton::new(ctx.t("settings.environment.addTarget"))
-      .icon(Icon::Plus)
-      .id("settings-environment-add-target")
-      .in_form()
-      .height(Dimension::Px(ADD_TARGET_HEIGHT))
-      .on_click(move || {
-        text.update(|text| {
-          if !text.is_empty() && !text.ends_with('\n') {
-            text.push('\n');
-          }
-          text.push_str(&line);
-        });
-        commit();
-      })
-      .render(ctx);
-    Some(
-      Notice::new(
-        Icon::Lightbulb,
-        ctx.t("settings.environment.targetTitle"),
-        ctx.t("settings.environment.targetDetail"),
-      )
-      .action(add)
-      .top_aligned_action()
-      .id("settings-environment-target")
-      .into(),
-    )
-  }
-
-  /// Once `CARGO_TARGET_DIR` is saved: agents that edit files may write there only when their
-  /// profile lists the folder.
-  fn agents_note(&self, ctx: &Ctx) -> Option<Element> {
-    let stored = self.stored.get()?;
-    let folder = stored.variables.get(CARGO_TARGET_DIR)?;
-    Some(
-      Notice::new(
-        Icon::FolderLock,
-        ctx.t_args("settings.environment.agentsTitle", [("variable", CARGO_TARGET_DIR)]),
-        ctx.t_args("settings.environment.agentsDetail", [("folder", folder)]),
-      )
-      .id("settings-environment-agents")
-      .into(),
-    )
-  }
-
   /// Saves the variables as entered, when every line is valid and they differ from what is stored.
   fn commit(&self, save: SaveAction, open: &OpenProject) -> Arc<dyn Fn() + Send + Sync> {
     let tab = self.clone();
@@ -259,7 +185,7 @@ impl EnvironmentTab {
       let changed = tab
         .stored
         .get_untracked()
-        .is_some_and(|stored| stored.variables != variables);
+        .is_some_and(|Stored(stored)| stored != variables);
       if changed && !save.state().get_untracked().is_pending() {
         save.run((repo_root.clone(), variables));
       }
@@ -269,7 +195,7 @@ impl EnvironmentTab {
   /// Reads the stored variables and fills the field with them once.
   fn load(&self, ctx: &mut Ctx, open: &OpenProject) {
     let load = ctx.future(open.repo_root.clone(), |repo_root| async move {
-      background::run(move || ProjectEnvironment::load_in(&repo_root))
+      background::run(move || load_in(&repo_root).map(Stored))
         .await?
         .map_err(|error| {
           tracing::error!(%error, "cannot read the project's environment");
@@ -282,7 +208,7 @@ impl EnvironmentTab {
     if self.stored.get_untracked().is_some() {
       return;
     }
-    self.text.set(environment_text(&environment.variables));
+    self.text.set(environment_text(&environment.0));
     self.stored.set(Some(environment));
   }
 }
@@ -294,7 +220,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
     let (activity, spec) = (activity.clone(), operations::project_environment(&open));
     async move {
       let save = async move {
-        background::run(move || save_in(&repo_root, &variables).map(|()| Saved(variables)))
+        background::run(move || save_in(&repo_root, &variables).map(|()| Stored(variables)))
           .await?
           .map_err(|error| {
             tracing::error!(%error, "cannot save the project's environment");

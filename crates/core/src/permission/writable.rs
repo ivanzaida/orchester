@@ -1,8 +1,7 @@
 //! Extra writable folders: folders outside the task worktree that an agent which edits files may
-//! also write to, such as one Cargo build folder shared by every run's worktree
-//! (`docs/design/orchester-workspace.md`, "Agent permissions"). They are part of the profile's
-//! permissions and apply only with *Edit files in the task worktree*; nothing is granted unless a
-//! person adds the folder.
+//! also write to, such as a build or cache folder outside it (`docs/design/orchester-workspace.md`,
+//! "Agent permissions"). They are part of the profile's permissions and apply only with *Edit files
+//! in the task worktree*; nothing is granted unless a person adds the folder.
 //!
 //! A folder is written as an absolute path or as a path relative to the repository root. It must
 //! exist, or lie under the repository's `.orchester/` folder, where it is created before the agent
