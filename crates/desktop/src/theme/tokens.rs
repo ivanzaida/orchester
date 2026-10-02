@@ -132,6 +132,10 @@ pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
 /// Width of the lifecycle dialogs at most: close with active work, waiting and start-up
 /// recovery (`um9B1`, `KS2RU`, `BovYZ`).
 pub const LIFECYCLE_DIALOG_WIDTH: f32 = 880.0;
+/// The tallest a value in the approval dialog grows before its lines scroll inside it: the full
+/// shell string of 04.H9 (`bwWuT` in `coKjY`, decision of 2026-10-01: never shortened), and a
+/// long command, target or arguments of any approval.
+pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = 160.0;
 
 /// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
 /// no spread. The only shadow in the design.

@@ -54,6 +54,7 @@ mod tabs_live;
 mod tabs_window;
 mod task_graph;
 mod task_run;
+mod tool_approval;
 mod tool_run;
 mod tools;
 mod unreadable_run;

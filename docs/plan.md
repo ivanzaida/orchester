@@ -308,6 +308,24 @@ which also preserves text selection after a drag on scaled displays.
 
 ## Done
 
+Tool approval dialog: long values shown in full · branch `claude/approval-long`
+
+- **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
+  Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
+  label into the transcript command box (`CommandPlace::Approval`: lines as recorded, no wrapping, scrolling both ways
+  in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 160, shared with 04.H9's shell string; Copy at the top
+  right takes the value as recorded). Arguments that parse as JSON read one member a line (2-space indent, only
+  whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
+  scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
+  (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
+- Design: no frame draws a long value; the block follows 04.H9 `bwWuT` in `coKjY` (label above a canvas box). A
+  designer should draw it.
+- Left: the runner still cuts MCP arguments at 600 characters when it records them
+  (`claude_approval::SHOWN_ARGUMENTS`), so very long arguments show cut and raw; a command's *Agent's note* still cuts
+  with an ellipsis.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
+  writes the clipboard and restores it).
+
 ORC-57 · Native agent P1b: core native module
 
 - **Done 2026-10-02.** `orchester_core::native`: conversation items (`item`), the `ModelClient` boundary (`model`),

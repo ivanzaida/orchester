@@ -1,6 +1,7 @@
 //! Command row (`LBSz7` in 01.D, `s4DoJ` in 04.C1): a command in mono on the canvas fill with a
 //! Copy button. Dialog and page rows show commands Orchester never runs; the user copies them into
-//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded.
+//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded, and the
+//! approval dialog shows a long value an agent asks about in the same box.
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -11,14 +12,14 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   clipboard::copy_to_clipboard,
-  components::{Column, Row, ScrollHorizontal, Text},
+  components::{Column, Row, ScrollBoth, ScrollHorizontal, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
 
 use super::{button::ActionButton, field::field_error, icon::Icon};
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, command_scrollbar};
+use crate::theme::{APPROVAL_VALUE_MAX_HEIGHT, ExtraColor, ExtraSpacing, ExtraTypography, command_scrollbar};
 
 /// Copy button height (`eFsWL`).
 const COPY_HEIGHT: f32 = 26.0;
@@ -38,6 +39,10 @@ pub enum CommandPlace {
   Page,
   /// Lines are kept as recorded and scroll sideways inside the box; Copy stays in view.
   Transcript,
+  /// A value the approval dialog asks about: the transcript's box, with Copy a Tab stop of the
+  /// dialog, and lines that also scroll down inside it once they are taller than
+  /// [`APPROVAL_VALUE_MAX_HEIGHT`].
+  Approval,
 }
 
 /// A single-line display preview: every run of whitespace that holds a line break, with the
@@ -73,16 +78,28 @@ pub fn command_row(
   place: CommandPlace,
   copied: &Signal<Copied>,
 ) -> Element {
-  let id = id.into();
+  laid_out_row(ctx, (id.into(), copy_id.into()), command, command, place, copied)
+}
+
+/// A command row that shows `shown`, `original` laid out for reading (e.g. JSON one member a
+/// line), and copies `original`.
+pub fn laid_out_row(
+  ctx: &Ctx,
+  (id, copy_id): (Arc<str>, Arc<str>),
+  shown: &str,
+  original: &str,
+  place: CommandPlace,
+  copied: &Signal<Copied>,
+) -> Element {
   let outcome = match &copied.get().0 {
-    Some((text, success)) if &**text == command => Some(*success),
+    Some((text, success)) if &**text == original => Some(*success),
     _ => None,
   };
   let label = match outcome {
     Some(true) => "common.copied",
     Some(false) | None => "common.copy",
   };
-  let (signal, text) = (copied.clone(), Arc::<str>::from(command));
+  let (signal, text) = (copied.clone(), Arc::<str>::from(original));
   let copy = ActionButton::new(ctx.t(label))
     .icon(if outcome == Some(true) { Icon::Check } else { Icon::Copy })
     .compact()
@@ -98,12 +115,13 @@ pub fn command_row(
   let row = match place {
     CommandPlace::Dialog => wrapping_row(
       &id,
-      command,
+      shown,
       ExtraTypography::MonoValue.role(),
       copy.in_form().render(ctx),
     ),
-    CommandPlace::Page => wrapping_row(&id, command, TypographyStyle::Mono, copy.render(ctx)),
-    CommandPlace::Transcript => transcript_row(&id, command, copy.render(ctx)),
+    CommandPlace::Page => wrapping_row(&id, shown, TypographyStyle::Mono, copy.render(ctx)),
+    CommandPlace::Transcript => transcript_row(&id, shown, copy.render(ctx), false),
+    CommandPlace::Approval => transcript_row(&id, shown, copy.in_form().render(ctx), true),
   };
   if outcome != Some(false) {
     return row.into();
@@ -156,8 +174,9 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
 
 /// Transcript details (`uA3Sh` in `N4SlQq`): every line as recorded, never wrapped, scrolling
 /// sideways in a viewport of the box's own; Copy keeps its column at the top right. The box's
-/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb.
-fn transcript_row(id: &str, command: &str, copy: Element) -> Row {
+/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb. A `capped`
+/// viewport is no taller than [`APPROVAL_VALUE_MAX_HEIGHT`] and scrolls down as well.
+fn transcript_row(id: &str, command: &str, copy: Element, capped: bool) -> Row {
   let lines = Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(
     Column::new()
       .padding_vertical(ExtraSpacing::CommandLines.role())
@@ -175,12 +194,25 @@ fn transcript_row(id: &str, command: &str, copy: Element) -> Row {
     .padding_top(ExtraSpacing::Tight.role())
     // Selecting or copying details must not toggle the enclosing transcript entry.
     .on_click(|event: MouseEvent| event.stop_propagation())
-    .child(
-      ScrollHorizontal::new(lines)
-        .id(format!("{id}-scroll"))
-        .scrollbar(command_scrollbar())
-        .min_width(Dimension::Px(0.0))
-        .flex(1.0),
-    )
+    .child(lines_viewport(id, lines, capped))
     .child(Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(copy))
+}
+
+fn lines_viewport(id: &str, lines: Column, capped: bool) -> Element {
+  let id = format!("{id}-scroll");
+  if !capped {
+    return ScrollHorizontal::new(lines)
+      .id(id)
+      .scrollbar(command_scrollbar())
+      .min_width(Dimension::Px(0.0))
+      .flex(1.0)
+      .into();
+  }
+  ScrollBoth::new(lines)
+    .id(id)
+    .scrollbar(command_scrollbar())
+    .min_width(Dimension::Px(0.0))
+    .max_height(Dimension::Px(APPROVAL_VALUE_MAX_HEIGHT))
+    .flex(1.0)
+    .into()
 }

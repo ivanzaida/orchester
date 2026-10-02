@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, Spacer, Text},
+  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Spacer, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -22,15 +22,16 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
-use super::native_approval;
+use super::{approval_value::ValueRows, native_approval};
 use crate::{
   messages::Message,
   runner::Runners,
   tasks::{approvals::ShownApproval, run::control_message},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, select_menu_scrollbar},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
+    command_row::Copied,
     field::wrapping_field_error,
     form::form,
     icon::Icon,
@@ -103,6 +104,7 @@ fn decision_action(ctx: &mut Ctx) -> DecisionAction {
 
 pub(super) struct ToolApprovalDialog {
   requested: Signal<Option<Choice>>,
+  copied: Signal<Copied>,
 }
 
 impl Component for ToolApprovalDialog {
@@ -112,6 +114,7 @@ impl Component for ToolApprovalDialog {
     decision_action(ctx);
     Self {
       requested: ctx.signal(None),
+      copied: ctx.signal(Copied::default()),
     }
   }
 
@@ -131,6 +134,7 @@ impl Component for ToolApprovalDialog {
         error: error.as_ref(),
         action: &action,
         requested_signal: &self.requested,
+        copied: &self.copied,
       },
     );
     Modal::new(content).target(ModalTarget::Root).dismiss_on_escape(false)
@@ -160,6 +164,7 @@ struct DialogState<'a> {
   error: Option<&'a Message>,
   action: &'a DecisionAction,
   requested_signal: &'a Signal<Option<Choice>>,
+  copied: &'a Signal<Copied>,
 }
 
 fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
@@ -167,14 +172,22 @@ fn dialog(ctx: &mut Ctx, state: &DialogState<'_>) -> Element {
     Some(_) => native_approval::DIALOG_WIDTH,
     None => DIALOG_WIDTH,
   };
+  // No taller than the screen: the details scroll between the header and the buttons, so Approve
+  // and Deny stay in view however long the values are.
+  let details = ScrollVertical::new(details(&ValueRows::new(ctx, state.copied), state.props))
+    .id("tool-approval-details-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex_shrink(1.0)
+    .scrollbar(select_menu_scrollbar());
   let panel = Column::new()
     .id("tool-approval-dialog")
     .width(Dimension::Px(width))
+    .max_height(Dimension::Pct(100.0))
     .background(ExtraColor::Surface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(header(ctx, state.props))
-    .child(details(ctx, state.props))
+    .child(details)
     .child(actions(ctx, state));
   backdrop(ctx, form(None, panel))
 }
@@ -234,7 +247,8 @@ fn header(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     .into()
 }
 
-fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
+fn details(values: &ValueRows<'_>, props: &ToolApprovalProps) -> Element {
+  let ctx = values.ctx();
   let approval = &props.approval;
   let column = Column::new()
     .id("tool-approval-details")
@@ -244,12 +258,12 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
     .spacing(ExtraSpacing::Stack.role());
   let column = match approval.native {
     Some(native) => column.with_children(native_approval::details(
-      ctx,
+      values,
       approval,
       native,
       (props.vendor.as_ref(), props.model.as_ref()),
     )),
-    None => cli_details(ctx, column, approval),
+    None => cli_details(values, column, approval),
   };
   // A native request's scope line is the smaller 11/1.5 of `W30mF` in 04.H9.
   let scope = match approval.native {
@@ -269,45 +283,40 @@ fn details(ctx: &Ctx, props: &ToolApprovalProps) -> Element {
 }
 
 /// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
-/// what the agent said about it.
-fn cli_details(ctx: &Ctx, column: Column, approval: &PendingToolApproval) -> Column {
+/// what the agent said about it. A command, action or target that does not fit beside its label
+/// moves under it, whole.
+fn cli_details(values: &ValueRows<'_>, column: Column, approval: &PendingToolApproval) -> Column {
+  let ctx = values.ctx();
   let command = approval.command;
+  let (action, target) = if command {
+    ("runs.toolApproval.command", "runs.toolApproval.cwd")
+  } else {
+    ("runs.toolApproval.action", "runs.toolApproval.target")
+  };
   column
     .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
     .with_children(
       (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
     )
-    .child(styled_property(
-      &ctx.t(if command {
-        "runs.toolApproval.command"
-      } else {
-        "runs.toolApproval.action"
-      }),
-      &approval.action,
-      ValueStyle::Mono,
-    ))
-    .with_children(approval.target.as_deref().map(|target| {
-      styled_property(
-        &ctx.t(if command {
-          "runs.toolApproval.cwd"
-        } else {
-          "runs.toolApproval.target"
-        }),
-        target,
-        ValueStyle::Mono,
-      )
-    }))
-    .with_children(approval.scope.as_deref().map(|scope| scope_row(ctx, command, scope)))
+    .child(values.value(ValueRows::ACTION, &ctx.t(action), &approval.action))
+    .with_children(
+      approval
+        .target
+        .as_deref()
+        .map(|value| values.value(ValueRows::TARGET, &ctx.t(target), value)),
+    )
+    .with_children(approval.scope.as_deref().map(|scope| scope_row(values, command, scope)))
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP
 /// call, its arguments as one line of JSON, secret values removed and cut at 600 characters when
-/// recorded, and cut here with an ellipsis where the row ends.
-fn scope_row(ctx: &Ctx, command: bool, scope: &str) -> Element {
+/// recorded, shown here in full under their label.
+fn scope_row(values: &ValueRows<'_>, command: bool, scope: &str) -> Element {
+  let ctx = values.ctx();
   if command {
     property(&ctx.t("runs.toolApproval.note"), scope)
   } else {
-    styled_property(&ctx.t("runs.toolApproval.arguments"), scope, ValueStyle::Mono)
+    values.arguments(&ctx.t("runs.toolApproval.arguments"), scope)
   }
 }
 
