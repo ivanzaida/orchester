@@ -1,7 +1,7 @@
 //! Command row (`LBSz7` in 01.D, `s4DoJ` in 04.C1): a command in mono on the canvas fill with a
 //! Copy button. Dialog and page rows show commands Orchester never runs; the user copies them into
-//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded, and the
-//! approval dialog shows a long value an agent asks about in the same box.
+//! a terminal. Transcript details show the command an agent ran, exactly as it was recorded; the
+//! approval dialog shows a long value in the same box (`ui::value_box`).
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -12,7 +12,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   clipboard::copy_to_clipboard,
-  components::{Column, Row, ScrollBoth, ScrollHorizontal, Text},
+  components::{Column, Row, ScrollHorizontal, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
@@ -33,17 +33,12 @@ impl lurq::app::component::DevtoolsInspectable for Copied {}
 /// Where the row is: in a dialog (a form), with 11px text (`cdRcl`) and Copy as a Tab stop; on a
 /// page (an inspector), with 10px text (`Z913A`) and Copy pointer-only, since only form controls
 /// take the focus; or in a transcript entry's details, with the output's mono text (`mMUyR`).
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CommandPlace {
   Dialog,
   Page,
   /// Lines are kept as recorded and scroll sideways inside the box; Copy stays in view.
   Transcript,
-  /// A long value in a dialog: the transcript's box, with Copy a Tab stop of the dialog, no
-  /// taller than `max_height`; its lines also scroll down inside it.
-  Capped {
-    max_height: f32,
-  },
 }
 
 /// A single-line display preview: every run of whitespace that holds a line break, with the
@@ -79,19 +74,29 @@ pub fn command_row(
   place: CommandPlace,
   copied: &Signal<Copied>,
 ) -> Element {
-  laid_out_row(ctx, (id.into(), copy_id.into()), command, command, place, copied)
+  let id = id.into();
+  let (copy, outcome) = copy_button(ctx, copy_id.into(), command, copied);
+  let row = match place {
+    CommandPlace::Dialog => wrapping_row(
+      &id,
+      command,
+      ExtraTypography::MonoValue.role(),
+      copy.in_form().render(ctx),
+    ),
+    CommandPlace::Page => wrapping_row(&id, command, TypographyStyle::Mono, copy.render(ctx)),
+    CommandPlace::Transcript => transcript_row(&id, command, copy.render(ctx)),
+  };
+  with_copy_failure(ctx, row.into(), outcome)
 }
 
-/// A command row that shows `shown`, `original` laid out for reading (e.g. JSON one member a
-/// line), and copies `original`.
-pub fn laid_out_row(
+/// Copy, which puts `original` on the clipboard and records the outcome in `copied`, and the
+/// outcome of the last copy of `original`: it says *Copied* once the clipboard took it.
+pub(super) fn copy_button(
   ctx: &Ctx,
-  (id, copy_id): (Arc<str>, Arc<str>),
-  shown: &str,
+  copy_id: Arc<str>,
   original: &str,
-  place: CommandPlace,
   copied: &Signal<Copied>,
-) -> Element {
+) -> (ActionButton, Option<bool>) {
   let outcome = match &copied.get().0 {
     Some((text, success)) if &**text == original => Some(*success),
     _ => None,
@@ -113,34 +118,27 @@ pub fn laid_out_row(
       }
       signal.set(Copied(Some((text.clone(), success))));
     });
-  let row = match place {
-    CommandPlace::Dialog => wrapping_row(
-      &id,
-      shown,
-      ExtraTypography::MonoValue.role(),
-      copy.in_form().render(ctx),
-    ),
-    CommandPlace::Page => wrapping_row(&id, shown, TypographyStyle::Mono, copy.render(ctx)),
-    CommandPlace::Transcript => transcript_row(&id, shown, copy.render(ctx), None),
-    CommandPlace::Capped { max_height } => transcript_row(&id, shown, copy.in_form().render(ctx), Some(max_height)),
-  };
+  (copy, outcome)
+}
+
+/// `content`, followed by why the clipboard did not take the last copy when that is the `outcome`.
+pub(super) fn with_copy_failure(ctx: &Ctx, content: Element, outcome: Option<bool>) -> Element {
   if outcome != Some(false) {
-    return row.into();
+    return content;
   }
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(row)
+    .child(content)
     .child(field_error(&ctx.t("common.copyFailed")))
     .into()
 }
 
-/// The box around the command and Copy, with Copy at its top right.
-fn command_box(id: &str) -> Row {
+/// The box around the command and Copy, with Copy at its top right; callers set its padding.
+pub(super) fn command_box(id: &str) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
-    .padding_right(ExtraSpacing::Tight.role())
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
     .background(PaletteColor::SurfaceBase)
@@ -154,6 +152,7 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
   command_box(id)
     .padding_vertical(ExtraSpacing::Tight.role())
     .padding_left(ExtraSpacing::Inline.role())
+    .padding_right(ExtraSpacing::Tight.role())
     .child(
       Column::new()
         .min_width(Dimension::Px(0.0))
@@ -175,50 +174,38 @@ fn wrapping_row(id: &str, command: &str, typography: TypographyStyle, copy: Elem
 
 /// Transcript details (`uA3Sh` in `N4SlQq`): every line as recorded, never wrapped, scrolling
 /// sideways in a viewport of the box's own; Copy keeps its column at the top right. The box's
-/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb. A box with a
-/// `max_height` is no taller, and its viewport scrolls down as well.
-fn transcript_row(id: &str, command: &str, copy: Element, max_height: Option<f32>) -> Row {
-  let lines = Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(
-    Column::new()
-      .padding_vertical(ExtraSpacing::CommandLines.role())
-      .padding_left(ExtraSpacing::Stack.role())
-      .child(
-        Text::new(command)
-          .id(format!("{id}-text"))
-          .variant(ExtraTypography::Output.role())
-          .color(PaletteColor::TextPrimary)
-          .selectable(true)
-          .nowrap(),
-      ),
-  );
-  let row = command_box(id);
-  let row = match max_height {
-    Some(max_height) => row.max_height(Dimension::Px(max_height)),
-    None => row,
-  };
-  row
+/// bottom padding sits inside the viewport, where lurq overlays the horizontal thumb.
+fn transcript_row(id: &str, command: &str, copy: Element) -> Row {
+  command_box(id)
     .padding_top(ExtraSpacing::Tight.role())
+    .padding_right(ExtraSpacing::Tight.role())
     // Selecting or copying details must not toggle the enclosing transcript entry.
     .on_click(|event: MouseEvent| event.stop_propagation())
-    .child(lines_viewport(id, lines, max_height.is_some()))
+    .child(
+      ScrollHorizontal::new(
+        Column::new()
+          .padding_bottom(ExtraSpacing::Tight.role())
+          .child(recorded_lines(id, command)),
+      )
+        .id(format!("{id}-scroll"))
+        .scrollbar(command_scrollbar())
+        .min_width(Dimension::Px(0.0))
+        .flex(1.0),
+    )
     .child(Column::new().padding_bottom(ExtraSpacing::Tight.role()).child(copy))
 }
 
-/// Where the lines scroll: sideways, or both ways in a `capped` box, as tall as the box lets it.
-fn lines_viewport(id: &str, lines: Column, capped: bool) -> Element {
-  let id = format!("{id}-scroll");
-  if !capped {
-    return ScrollHorizontal::new(lines)
-      .id(id)
-      .scrollbar(command_scrollbar())
-      .min_width(Dimension::Px(0.0))
-      .flex(1.0)
-      .into();
-  }
-  ScrollBoth::new(lines)
-    .id(id)
-    .scrollbar(command_scrollbar())
-    .min_width(Dimension::Px(0.0))
-    .flex(1.0)
-    .into()
+/// The lines of the transcript's box (`uA3Sh`, `Z3M6Nz`): every line as recorded, never wrapped.
+pub(super) fn recorded_lines(id: &str, command: &str) -> Column {
+  Column::new()
+    .padding_vertical(ExtraSpacing::CommandLines.role())
+    .padding_left(ExtraSpacing::Stack.role())
+    .child(
+      Text::new(command)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Output.role())
+        .color(PaletteColor::TextPrimary)
+        .selectable(true)
+        .nowrap(),
+    )
 }

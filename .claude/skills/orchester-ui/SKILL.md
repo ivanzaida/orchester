@@ -115,7 +115,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |
 | transcript command box: lines 4 from the viewport's top and bottom (`Z3M6Nz` in `uA3Sh`); horizontal thumb 4px `border`, radius 2, overlaid 1 from the box's bottom and 12 from the viewport's ends (`hpzPu` in `G9skx`) | `ExtraSpacing::CommandLines.role()` / `theme::command_scrollbar()` |
-| a long value's box in the approval dialog: 12 lines with its padding, then its lines scroll (`E5NBo` in `bjrgu`); the 04.H9 shell string (`bwWuT`) shares it | `theme::APPROVAL_VALUE_MAX_HEIGHT` (232), passed to `CommandPlace::Capped` |
+| a long value's box in the approval dialog: 12 lines with its padding, then its lines scroll (`E5NBo` in `bjrgu`); the 04.H9 shell string (`bwWuT`) shares it; its thumbs in 6px lanes of their own; 12 under its label | `theme::APPROVAL_VALUE_MAX_HEIGHT` (232) / `theme::value_box_scrollbar()` / `ExtraSpacing::Stack.role()`, through `ui::value_box` |
+| quiet text action beside a label, e.g. a value's Copy: no fill or border, `muted` icon and label, `hover` fill under the pointer, focus ring in a form | `ui::button::ActionButton::quiet` (`TextSecondary`, `AccentMuted`) |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |

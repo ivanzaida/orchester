@@ -18,7 +18,7 @@ mod tokens;
 mod typography;
 
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
-pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar};
+pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar, value_box_scrollbar};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;

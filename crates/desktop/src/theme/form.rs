@@ -79,6 +79,17 @@ pub fn command_scrollbar() -> ScrollBarStyle {
   thumb().insets(COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET)
 }
 
+/// Scrollbars of a capped value box in the approval dialog (`E5NBo` in `bjrgu`): the transcript
+/// command's thumbs, each in a 6px lane of its own, the vertical one in the box's right padding and
+/// the sideways one under the last line, so neither covers a glyph. The design adds the sideways
+/// lane only while a line overflows; lurq reserves a lane always or never, so it is always there.
+pub fn value_box_scrollbar() -> ScrollBarStyle {
+  ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    ..command_scrollbar()
+  }
+}
+
 /// Scrollbar of a viewport with a scroll gutter (design doc "Scroll gutter", 04.01 `JuVaA`): a
 /// 12px gutter of its own at the right edge, as wide as a list's side padding (`space-stack`),
 /// so the thumb never covers a value, a row or its selection. The gutter stays while the content

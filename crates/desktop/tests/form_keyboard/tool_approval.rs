@@ -33,10 +33,10 @@ use crate::{
   unreadable_run::at,
 };
 
-const DIALOG: &str = "tool-approval-dialog";
-const ACTION: &str = "tool-approval-action";
-const TARGET: &str = "tool-approval-target";
-const ARGUMENTS: &str = "tool-approval-arguments";
+pub(crate) const DIALOG: &str = "tool-approval-dialog";
+pub(crate) const ACTION: &str = "tool-approval-action";
+pub(crate) const TARGET: &str = "tool-approval-target";
+pub(crate) const ARGUMENTS: &str = "tool-approval-arguments";
 
 /// The smallest window the app opens (`main`).
 const MIN_WIDTH: u32 = 960;
@@ -45,7 +45,7 @@ const MIN_HEIGHT: u32 = 700;
 const LONG_TARGET: &str = ".orchester/worktrees/01J8Z9B2/packages/web/src/components/settings/keyboard-shortcuts/\
                            switcher/__tests__/fixtures/switcher-keyboard-shortcuts-with-every-binding.snapshot.json";
 
-const HEREDOC: &str = "cat <<'EOF' > docs/keyboard-shortcuts.md
+pub(crate) const HEREDOC: &str = "cat <<'EOF' > docs/keyboard-shortcuts.md
 # Keyboard shortcuts
 
 | Action                     | Windows            | macOS              |
@@ -224,7 +224,7 @@ fn copied_text(desktop: &mut Desktop, id: &str) -> String {
   copied.expect("Copy put text on the clipboard")
 }
 
-fn long_target() -> Desktop {
+pub(crate) fn long_target() -> Desktop {
   approval_dialog(Request {
     command: false,
     action: "batch_get",
@@ -234,7 +234,7 @@ fn long_target() -> Desktop {
   })
 }
 
-fn heredoc() -> Desktop {
+pub(crate) fn heredoc() -> Desktop {
   approval_dialog(Request {
     command: true,
     action: HEREDOC,
@@ -244,7 +244,7 @@ fn heredoc() -> Desktop {
   })
 }
 
-fn large_arguments() -> Desktop {
+pub(crate) fn large_arguments() -> Desktop {
   approval_dialog(Request {
     command: false,
     action: "batch_design",
@@ -470,16 +470,18 @@ fn tool_approval_tab_goes_through_each_copy_then_deny_and_approve() {
   });
   let action_copy = format!("{ACTION}-copy");
   let target_copy = format!("{TARGET}-copy");
-  desktop.tab_to(&action_copy, 8);
+  // Each value's Copy, on its label's line, in reading order: the working directory, then the
+  // command; the boxes are not stops (lurq does not scroll a box from the keyboard).
+  desktop.tab_to(&target_copy, 8);
   assert_eq!(
     desktop.stops(4, false),
     expected(&[
-      Some(&target_copy),
+      Some(&action_copy),
       Some("tool-approval-deny"),
       Some("tool-approval-approve-once"),
-      Some(&action_copy),
+      Some(&target_copy),
     ]),
-    "Tab goes on from the action's Copy and wraps in the dialog"
+    "Tab goes on from the folder's Copy and wraps in the dialog"
   );
   assert_eq!(
     desktop.stops(1, true),

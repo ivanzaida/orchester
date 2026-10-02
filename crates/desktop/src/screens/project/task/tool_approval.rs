@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Modal, ModalTarget, Row, ScrollVertical, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -291,33 +291,39 @@ fn details(values: &ValueRows<'_>, props: &ToolApprovalProps) -> Element {
 
 /// A CLI's request: the agent, the MCP server of a tool action, the command or action, its target and
 /// what the agent said about it. A command, action or target that does not fit beside its label
-/// moves under it, whole.
+/// moves under it, whole. A command comes after its working directory, as the box it may need
+/// closes the details (`Grcu7`); a CLI's request does not say which shell runs it.
 fn cli_details(values: &ValueRows<'_>, column: Column, approval: &PendingToolApproval) -> Column {
   let ctx = values.ctx();
   let command = approval.command;
-  let (action, target) = if command {
-    ("runs.toolApproval.command", "runs.toolApproval.cwd")
+  let target_key = if command {
+    "runs.toolApproval.cwd"
   } else {
-    ("runs.toolApproval.action", "runs.toolApproval.target")
+    "runs.toolApproval.target"
   };
-  column
-    .child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent))
-    .with_children(
-      (!command).then(|| styled_property(&ctx.t("runs.toolApproval.server"), &approval.server, ValueStyle::Mono)),
-    )
-    .child(values.value(ValueRows::ACTION, &ctx.t(action), &approval.action))
-    .with_children(
-      approval
-        .target
-        .as_deref()
-        .map(|value| values.value(ValueRows::TARGET, &ctx.t(target), value)),
-    )
-    .with_children(
-      approval
-        .scope
-        .as_deref()
-        .map(|scope| scope_row(values, approval, scope)),
-    )
+  let target = approval
+    .target
+    .as_deref()
+    .map(|value| values.value(ValueRows::TARGET, &ctx.t(target_key), value));
+  let column = column.child(property(&ctx.t("runs.toolApproval.agent"), &approval.agent));
+  let column = if command {
+    column.with_children(target).child(values.command(&approval.action))
+  } else {
+    column
+      .child(styled_property(
+        &ctx.t("runs.toolApproval.server"),
+        &approval.server,
+        ValueStyle::Mono,
+      ))
+      .child(values.value(ValueRows::ACTION, &ctx.t("runs.toolApproval.action"), &approval.action))
+      .with_children(target)
+  };
+  column.with_children(
+    approval
+      .scope
+      .as_deref()
+      .map(|scope| scope_row(values, approval, scope)),
+  )
 }
 
 /// What a request says beside its action: for a command, the reason the agent gave; for an MCP
@@ -346,11 +352,17 @@ fn actions(ctx: &Ctx, state: &DialogState<'_>) -> Element {
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    // Why the decision did not go through takes the room left of the buttons and wraps there: the
+    // buttons keep their size and stay in the dialog however long the reason is.
     .child(
-      state
-        .error
-        .map(|error| wrapping_field_error(&message_text(ctx, error)))
-        .unwrap_or_else(|| Element::from(Spacer::new().flex(1.0))),
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .with_children(
+          state
+            .error
+            .map(|error| wrapping_field_error(&message_text(ctx, error))),
+        ),
     )
     .child(
       ActionButton::new(deny_label)

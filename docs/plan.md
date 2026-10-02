@@ -333,9 +333,11 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
 - **Done 2026-10-02, design verification pending.** A value that does not fit beside its label (Action, Command or
   Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
-  label into the transcript command box (`CommandPlace::Capped`: lines as recorded, no wrapping, scrolling both ways
-  in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared with 04.H9's
-  shell string; Copy at the top right takes the value as recorded). Arguments that parse as JSON read one member a line (2-space indent, only
+  label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
+  both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
+  with 04.H9's shell string; each thumb in a 6px lane of its own, never over a glyph; a quiet Copy at the right of
+  the label's line, 12 above the box, takes the value as recorded). A CLI command comes after its working directory,
+  labelled *Command · N lines, as recorded* (`Grcu7`); a CLI's request names no shell, so no Shell row. Arguments that parse as JSON read one member a line (2-space indent, only
   whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
   scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
   (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
@@ -350,7 +352,13 @@ Tool approval dialog: long values shown in full · branch `claude/approval-long`
   out the part kept and ends it with that line (`runs.toolApproval.argumentsCut`). Activity never showed MCP
   arguments (it names a tool by its file path), and the approval row's `scope` column has no size limit, so neither
   changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
-- Left: a command's *Agent's note* still cuts with an ellipsis.
+- The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
+  room left of them and wraps there.
+- Left: a command's *Agent's note* still cuts with an ellipsis. Pressing a value box's sideways scrollbar lane off its
+  4px thumb starts a text selection instead of scrolling: lurq starts a selection from the nearest selectable text
+  within a slop that reaches the lane, and does not treat the lane (track) as the scrollbar; to be fixed in lurq.
+  The sideways lane is always reserved (lurq reserves always or never), where the design adds it only while a line
+  overflows.
 - Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
   writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
   approval`.

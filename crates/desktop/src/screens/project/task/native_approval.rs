@@ -61,7 +61,7 @@ pub(super) fn details(
   let command = if native.shell.is_some() {
     command_block(ctx, &approval.action)
   } else {
-    values.value(ValueRows::ACTION, &ctx.t("runs.toolApproval.command"), &approval.action)
+    values.command(&approval.action)
   };
   let time_limit = ctx.t_args(
     "runs.toolApproval.native.timeLimitValue",

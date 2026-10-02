@@ -1,4 +1,5 @@
-//! Button (`u1XBP`): an optional icon and a label, as the primary or secondary action.
+//! Button (`u1XBP`): an optional icon and a label, as the primary or secondary action, or as a quiet
+//! action that is only text until the pointer or the focus reaches it.
 //! Sizes and colors come from lurq's form button roles, filled from the design in `theme::form`.
 //! A button is pointer-only unless it is marked [`ActionButton::in_form`] (see `ui::pressable`).
 
@@ -8,7 +9,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::mouse_event::{MouseButton, MouseEvent},
-    theme::{BorderSize, FormButtonRole, SpacingSize, TypographyStyle},
+    theme::{BorderSize, FormButtonRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, Select, SelectOption, Text},
   core::{ElementRef, Signal, signal::SignalValue},
@@ -31,6 +32,8 @@ pub const SKIPPED_BY_TAB: i32 = -1;
 enum Kind {
   Primary,
   Secondary,
+  /// No fill and no border, its icon and label muted; the hover fill shows only under the pointer.
+  Quiet,
 }
 
 enum State {
@@ -80,6 +83,12 @@ impl ActionButton {
 
   pub fn primary(mut self) -> Self {
     self.kind = Kind::Primary;
+    self
+  }
+
+  /// A secondary action that should not draw the eye, e.g. Copy beside a value's label.
+  pub fn quiet(mut self) -> Self {
+    self.kind = Kind::Quiet;
     self
   }
 
@@ -179,10 +188,15 @@ impl ActionButton {
     let form = ctx.theme().form();
     let role = match self.kind {
       Kind::Primary => form.button.primary.clone(),
-      Kind::Secondary => form.button.secondary.clone(),
+      Kind::Secondary | Kind::Quiet => form.button.secondary.clone(),
     };
     drop(form);
-    let text = role.text.color.clone();
+    let quiet = self.kind == Kind::Quiet;
+    let text = if quiet {
+      PaletteColor::TextSecondary
+    } else {
+      role.text.color.clone()
+    };
 
     let (icon_size, typography) = if self.compact {
       (IconSize::Marker, TypographyStyle::Link)
@@ -202,12 +216,15 @@ impl ActionButton {
       .button()
       .height(self.height.unwrap_or(role.height))
       .padding_custom(role.padding)
-      .background(role.background.clone())
-      .border(Border::inside(BorderSize::Sm, role.border.clone()))
       .rounded(role.radius)
       .align_items(Alignment::Center)
       .justify(if self.start { Justify::Start } else { Justify::Center })
       .child(content);
+    if !quiet {
+      button = button
+        .background(role.background.clone())
+        .border(Border::inside(BorderSize::Sm, role.border.clone()));
+    }
     if let Some(element_ref) = self.element_ref {
       button = button.ref_element(element_ref);
     }
@@ -234,7 +251,7 @@ impl ActionButton {
     match self.state {
       // A press is the button's own: it does not also press a clickable row around it.
       State::Enabled(press) => press.attach(
-        with_interaction(focus(button, TAB_STOP), &role, in_form)
+        with_interaction(focus(button, TAB_STOP), &role, in_form, quiet)
           .describe("state", "enabled")
           .on_click(|event: MouseEvent| event.stop_propagation())
           .on_mouse_click(MouseButton::Middle, |event: MouseEvent| event.stop_propagation()),
@@ -253,8 +270,9 @@ fn not_pressable(button: Button) -> Button {
 }
 
 /// Pointer, hover and press fills; in a form also the outer focus ring while focused. Hover and
-/// press set no shadow, so the ring stays.
-fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> Button {
+/// press set no shadow, so the ring stays. A quiet button gets the secondary hover fill under the
+/// pointer and while pressed, and no border.
+fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool, quiet: bool) -> Button {
   let state = |background, border| {
     Style::new()
       .background(background)
@@ -265,8 +283,12 @@ fn with_interaction(button: Button, role: &FormButtonRole, in_form: bool) -> But
   } else {
     button
   };
+  let button = button.cursor(CursorIcon::Pointer);
+  if quiet {
+    let fill = || Style::new().background(role.background_hover.clone());
+    return button.hovered_style(fill()).active_style(fill());
+  }
   button
-    .cursor(CursorIcon::Pointer)
     .hovered_style(state(role.background_hover.clone(), role.border_hover.clone()))
     .active_style(state(role.background_active.clone(), role.border_active.clone()))
 }
