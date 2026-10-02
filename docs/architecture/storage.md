@@ -112,9 +112,12 @@ at work takes one.
   - Any other failure is a **breakage**: the agent CLI failed its turn without a `failed` result (it
     crashed, its turn failed, its permission prompt closed or never reached the runner — a `done`
     result never outweighs that), or the step could not start, commit or merge. The step restarts
-    once as a fresh execution in a new attempt (reason *restart*: that step, its dependent and its
-    unfinished steps; never its route's target). Breaking again in that restart makes the run wait
-    for a person. A follow-up that fails is not routed at all.
+    as a fresh execution in a new attempt (reason *restart*: that step, its dependent and its
+    unfinished steps; never its route's target). A step that broke twice since it last passed —
+    counted across attempts, so steps that break in turn do not restart each other forever — makes
+    the run wait for a person. A follow-up that fails is not routed at all.
+  - At most 10 automatic attempts (retries and restarts) follow each other; any failure after them
+    makes the run wait for a person.
   - A run **waiting for a person** (*Needs you*) holds no agent slot. The person allows one more
     retry (the same route, or for a broken step the same restart), returns the work to an agent
     step the failed step runs after (or the failed step itself) with a note — an attempt with reason
@@ -124,7 +127,8 @@ at work takes one.
   - The **prompt of a retry attempt** tells the route's target, or the step a person returned the
     work to, that it came back from the failed step in attempt *n*, with that step's whole result
     (its summary and handoff lists) or, for a command tool, how it ended and the end of its output;
-    the failed step itself gets its own earlier result to check each finding. The report is quoted
+    the failed step itself gets its own earlier result to check each finding. A restart of either
+    step carries the same report and the person's note. The report is quoted
     as untrusted output and kept within 12 KiB (an agent's from its start, a program's output from
     its end, each with a cut marker).
 - **Step budgets.** A step whose execution uses its budget does not fail: its agent is ended after

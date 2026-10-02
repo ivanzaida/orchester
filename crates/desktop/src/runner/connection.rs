@@ -425,6 +425,12 @@ impl Session {
         reporter.plan_proposed(task, &task_key, version);
         true
       }
+      Some(Ok(Some(Event::RunWaitsForPerson {
+        task, task_key, step, ..
+      }))) => {
+        reporter.run_waits(task, &task_key, &step);
+        true
+      }
       Some(Ok(Some(Event::RunReady { task, number, .. }))) => {
         reporter.run_ready(task, number);
         true

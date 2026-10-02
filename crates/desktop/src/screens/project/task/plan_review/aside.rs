@@ -60,7 +60,7 @@ pub(super) fn aside(
       note_field(
         ctx,
         (note, note_focused),
-        "plan-review-note",
+        ("plan-review-note", NOTE_HEIGHT),
         &ctx.t("runs.plan.notePlaceholder"),
       ),
       detail(&changes_meaning(ctx, review)),
@@ -122,7 +122,7 @@ fn changes_meaning(ctx: &Ctx, review: &PlanReview) -> Arc<str> {
 pub(in super::super) fn note_field(
   ctx: &Ctx,
   (note, focused): (&Signal<String>, &Signal<bool>),
-  id: &'static str,
+  (id, height): (&'static str, f32),
   placeholder: &str,
 ) -> Element {
   let input = ctx.theme().form().input.clone();
@@ -142,7 +142,7 @@ pub(in super::super) fn note_field(
     .on_blur(move || lost.set(false));
   Column::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(NOTE_HEIGHT))
+    .height(Dimension::Px(height))
     .padding(ExtraSpacing::TextArea.role())
     .background(ExtraColor::Surface.role())
     .border(border)

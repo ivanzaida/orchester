@@ -6,6 +6,7 @@
 mod entry;
 mod first_edit;
 mod footer;
+mod mark;
 mod mcp;
 mod mcp_call;
 mod native;

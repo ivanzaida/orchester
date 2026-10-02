@@ -89,6 +89,13 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
     "task-retry-resume",
     "Implement · latest checkpoint"
   ));
+  // The work returns by default to the step a retry resumes (02.B4 `K7hbj`).
+  assert!(shows(&mut desktop, "task-return-step", "Implement"));
+  assert!(shows(
+    &mut desktop,
+    "task-return-with-note",
+    "Return to Implement with note"
+  ));
   assert!(!shows(
     &mut desktop,
     "task-retry-settings",
@@ -109,6 +116,7 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
       if return_to.as_str() == "implement" && note.as_str() == "Keep the greeting short."
   ));
 
+  shows_the_marks(&mut desktop);
   desktop.wait_until("the decisions again", |desktop| has(desktop, "task-stop-run"));
   desktop.click("task-stop-run");
   desktop.wait_until("the run to fail", |desktop| {
@@ -118,4 +126,26 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   desktop.wait_until("the evidence without decisions", |desktop| {
     has(desktop, "task-retry-limit") && !has(desktop, "task-retry-settings")
   });
+}
+
+/// The transcript marks the automatic return and the person's decisions (02.B7 `zyusO`).
+fn shows_the_marks(desktop: &mut Desktop) {
+  desktop.click("task-tab-activity");
+  desktop.wait_until("the marks", |desktop| {
+    has(desktop, "activity-mark-2") && has(desktop, "activity-mark-4")
+  });
+  assert!(shows(
+    desktop,
+    "activity-mark-2",
+    "Returned to Implement · Review failed (attempt 1)"
+  ));
+  assert!(shows(desktop, "activity-mark-2", "automatic · retry 1 of 1"));
+  assert!(shows(desktop, "activity-mark-3", "by you"));
+  assert!(shows(
+    desktop,
+    "activity-mark-4",
+    "Returned to Implement with your note"
+  ));
+  assert!(shows(desktop, "activity-mark-4", "Keep the greeting short."));
+  desktop.click("task-tab-summary");
 }

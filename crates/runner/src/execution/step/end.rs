@@ -13,10 +13,11 @@ use orchester_core::{
   id::StepExecutionId,
   memory::StepFate,
   revision::Revision,
-  run::{Checkpoint, RunLimit, StepFailure, StepOutcome, StepOutput},
+  run::{Checkpoint, RunLimit, RunStatus, StepFailure, StepOutcome, StepOutput},
   store::ActivityStore,
   time::Timestamp,
 };
+use orchester_ipc::Event;
 
 use super::{
   Active,
@@ -242,6 +243,7 @@ impl RunTask {
     failure: StepFailure,
   ) -> Result<(), ExecutionError> {
     self.transition(|run, now| run.fail_step(execution, failure, now))?;
+    self.announce_waiting();
     let run = &self.run;
     for (id, active) in &mut self.agents {
       let open = run
@@ -253,6 +255,25 @@ impl RunTask {
       }
     }
     Ok(())
+  }
+
+  /// Tells the desktop that the run waits for a person's decision, if a failure just made it wait.
+  fn announce_waiting(&self) {
+    let RunStatus::WaitingForPerson(stuck) = self.run.status() else {
+      return;
+    };
+    let step = self
+      .run
+      .snapshot()
+      .body()
+      .step(stuck.step())
+      .map_or_else(|| stuck.step().to_string(), |step| step.name.as_str().to_owned());
+    self.notifier.send(Event::RunWaitsForPerson {
+      run: self.run.id(),
+      task: self.run.task(),
+      task_key: self.task.key().to_string(),
+      step,
+    });
   }
 
   /// "ORC-129: Implement (run 128)", or with `what` happened: "ORC-129: Implement, step failed

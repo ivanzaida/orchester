@@ -102,6 +102,11 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
   assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
   assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
   assert_eq!(OverviewTab::Running.count(&tasks.tasks, &tasks.phases), 0);
+  // Its card names what stopped it (02.B6 `Np9kc`), "ORC-1 · Implement stopped again …".
+  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  let decision = rows[0].decision.as_ref().expect("the decision it waits for");
+  assert!(decision.broke);
+  assert_eq!(decision.title().key, "runs.retryLimit.brokeTitle");
 }
 
 #[test]

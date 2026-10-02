@@ -248,19 +248,28 @@ windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
 Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
 failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
 verdict (`reported_failed`, `command_failed`) follows `on_failure`, a `failed` result wins over a turn that failed
-after it, any other failure restarts its step once in place; exhausted retries and a second breakage make the run
-wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
+after it, any other failure restarts its step in place until it broke twice since it last passed (at most 10 automatic
+attempts in a row, `MAX_AUTOMATIC_ATTEMPTS`); a restart keeps the report and note of the attempt it restarts;
+exhausted retries and a second breakage make the run wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
 retry, returns the work to an agent step with a note, or stops the run (`Command::DecideStuckRun`). Migration 34
 rebuilds `runs` (status `waiting`) and `attempts` (reasons `restart`, `returned`, column `note`); runs that failed
 with `retries_exhausted` stay failed. See `docs/architecture/storage.md`, Step graphs, Failures. Tests: `cargo test
 -p orchester-core --test run stuck retry_prompt`, `cargo test -p orchester-store --test stuck_runs stuck_runs`,
 `cargo test -p orchester-runner --features test-agent --test retries retries`, `cargo test -p orchester-desktop
---test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`.
+--test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`,
+`cargo test -p orchester-desktop --test activity activity_run_waiting`.
 
-**Done when** an independent design verifier compares the waiting state of 02.B (`J3JZaT`, panel `Lk43S`) with the
-app (the panel now holds the step choice, the note field and *Stop and fail the run*, drawn with existing
-components until the designer draws the final state) and reports no blocking or major mismatches; then move this
-entry to *Done*.
+**Done when** an independent design verifier compares the app with the run-waits-for-a-person frames in `O4vgKt`
+and reports no blocking or major mismatches; then move this entry to *Done*:
+- 02.B3 `FjCWv`: retries used up, panel `Bi6pU`;
+- 02.B4 `K7hbj`: a step chosen (Implement, the step a retry resumes, by default) and a note typed;
+- 02.B5 `m3pDW`: a step broke twice;
+- 02.B6 `NM5My`: *Needs you* in Overview (card *ORC-128 · Review still fails after 2 retries*) and the status bar
+  (*Review needs your decision · ORC-128*, hand, until opened or dismissed);
+- 02.B7 `zyusO`: the three Activity transcript marks (automatic return, automatic restart, your return with note) and
+  the runner's refusal above *Stop and fail the run*.
+The ipc `PROTOCOL_VERSION` bump for `DecideStuckRun`, `RunNotWaiting` and `RunWaitsForPerson` waits for
+`claude/no-cargo-special` (9 → 10) to reach master; this branch then sets 11.
 
 ## N · Native agent (P1 in progress)
 

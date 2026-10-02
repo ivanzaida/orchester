@@ -79,6 +79,29 @@ fn activity_failure_outranks_running_operations_until_dismissed() {
   assert!(matches!(log.slot(), Slot::Running { count: 1, .. }));
 }
 
+/// A run that waits for the user's decision holds the slot like a failure (02.B6 `K8VQRC`), until
+/// its task is opened or it is dismissed.
+#[test]
+fn activity_run_waiting_for_a_decision_holds_the_slot_until_handled() {
+  let mut log = ActivityLog::default();
+  let target = Target::Project {
+    repo_root: PathBuf::from("repo"),
+    place: Place::Tasks,
+  };
+  log.record_needs_you(None, Message::new("waits"), target.clone(), at(1));
+  log.start(spec("running"), Instant::now());
+  let waiting = match log.slot() {
+    Slot::Failure(event) => event.clone(),
+    other => panic!("the waiting run holds the slot: {other:?}"),
+  };
+  assert_eq!(waiting.outcome(), &Outcome::NeedsYou { resolved: false });
+  log.record(None, Message::new("later"), target, at(2));
+  assert_eq!(title(&log.slot()), "waits");
+  log.resolve(waiting.id());
+  assert!(matches!(log.slot(), Slot::Running { count: 1, .. }));
+  assert_eq!(log.recent()[1].outcome(), &Outcome::NeedsYou { resolved: true });
+}
+
 #[test]
 fn activity_resolved_failure_stays_in_the_recent_list_unpinned() {
   let mut log = ActivityLog::default();

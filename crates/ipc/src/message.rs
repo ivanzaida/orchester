@@ -238,6 +238,15 @@ pub enum Event {
     task_key: String,
     version: PlanVersion,
   },
+  /// Run `run` of task `task` (`task_key`) waits for a person's decision: the retries of its step
+  /// `step` (the step's name) ran out, or the step broke again. The status bar says so ("Review
+  /// needs your decision · ORC-128"). The run itself changed as an [`Event::RunChanged`] says.
+  RunWaitsForPerson {
+    run: RunId,
+    task: TaskId,
+    task_key: String,
+    step: String,
+  },
   /// Run `run` (number `number`) of task `task` succeeded: it is ready for review, and the status
   /// bar says so ("Run #128 ready for review"). The run itself changed as an [`Event::RunChanged`]
   /// says.

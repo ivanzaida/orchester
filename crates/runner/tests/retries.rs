@@ -187,3 +187,21 @@ async fn retries_exhausted_wait_and_a_person_returns_the_work_with_a_note() {
     "{prompts:?}"
   );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn retries_a_run_that_starts_to_wait_tells_the_desktop_which_step_needs_a_decision() {
+  let (_project, _scheduler, mut events, id) = started(&Setup::new("Please fail.")).await;
+  let told = tokio::time::timeout(support::PATIENCE, async {
+    loop {
+      if let Event::RunWaitsForPerson {
+        run, task_key, step, ..
+      } = events.recv().await.expect("the runner notifies")
+      {
+        return (run, task_key, step);
+      }
+    }
+  })
+  .await
+  .expect("the desktop is told in time");
+  assert_eq!(told, (id, "ORC-1".to_owned(), "Implement".to_owned()));
+}

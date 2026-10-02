@@ -7,7 +7,7 @@ use orchester_core::{
   id::{ResourceId, TaskId},
   integration::RunMerge,
   resource::{StepKey, VersionNumber},
-  run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, TaskPhase},
+  run::{PauseReason, Plan, PlanVersion, Run, RunLimit, RunNumber, RunStatus, Stuck, TaskPhase},
   task::{MissingDetail, Task, TaskStatus},
   time::Timestamp,
 };
@@ -85,6 +85,48 @@ pub struct LatestRun {
   pub merged_into: Option<Arc<str>>,
   /// The question it waits for an answer to, if it does.
   pub question: Option<AwaitedQuestion>,
+  /// The decision it waits for after its retries ran out or its step broke again, if it does.
+  pub decision: Option<AwaitedDecision>,
+}
+
+/// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
+/// whether its retries ran out (how many it took) or it broke again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AwaitedDecision {
+  pub step: Arc<str>,
+  pub retries: u32,
+  pub broke: bool,
+}
+
+impl AwaitedDecision {
+  /// What `run` waits for a decision on, if it does.
+  pub fn of(run: &Run) -> Option<Self> {
+    let RunStatus::WaitingForPerson(stuck) = run.status() else {
+      return None;
+    };
+    let step = stuck.step();
+    Some(Self {
+      step: run
+        .snapshot()
+        .body()
+        .step(step)
+        .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
+      retries: run.retries_taken(step),
+      broke: matches!(stuck, Stuck::BrokeAgain(_)),
+    })
+  }
+
+  /// "Review still fails after 2 retries", or "Implement stopped again without a result".
+  pub fn title(&self) -> Message {
+    let key = match (self.broke, self.retries) {
+      (true, _) => "runs.retryLimit.brokeTitle",
+      (false, 1) => "runs.retryLimit.title.one",
+      (false, _) => "runs.retryLimit.title.other",
+    };
+    Message::new(key)
+      .with("step", self.step.to_string())
+      .with("retries", self.retries.to_string())
+  }
 }
 
 /// A question an agent asked, which its run waits for an answer to: who asks (the agent role of
@@ -140,6 +182,7 @@ impl LatestRun {
         .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).into()),
       plan: awaited.plan,
       question: awaited.question,
+      decision: AwaitedDecision::of(run),
     }
   }
 
@@ -322,6 +365,8 @@ pub struct TaskRow {
   pub plan: Option<AwaitedPlan>,
   /// The question its run waits for an answer to, if it does.
   pub question: Option<AwaitedQuestion>,
+  /// The decision its run waits for after its retries, if it does.
+  pub decision: Option<AwaitedDecision>,
   pub created_at: Timestamp,
 }
 
@@ -355,6 +400,7 @@ impl TaskRow {
       detail,
       plan: latest.and_then(|latest| latest.plan.clone()),
       question: latest.and_then(|latest| latest.question.clone()),
+      decision: latest.and_then(|latest| latest.decision.clone()),
       created_at: task.created_at(),
     }
   }

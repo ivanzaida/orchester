@@ -98,14 +98,19 @@ fn runner_actions(ctx: &Ctx, opener: &Opener) -> Vec<Element> {
   ]
 }
 
-/// H: the failure on a raised fill, the action that opens its object, and dismiss.
+/// H: the failure on a raised fill, the action that opens its object, and dismiss; a run that waits
+/// for the user's decision the same way, with a hand (02.B6 `K8VQRC`).
 fn failure(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Vec<Element> {
   let text = event_text(ctx, event);
+  let (state, icon) = match event.outcome() {
+    Outcome::NeedsYou { .. } => ("needs-you", Icon::Hand),
+    _ => ("failure", Icon::AlertCircle),
+  };
   let row = item("status-activity")
-    .describe("state", "failure")
+    .describe("state", state)
     .flex_shrink(1.0)
     .background(PaletteColor::SurfaceRaised)
-    .child(glyph(Icon::AlertCircle, PaletteColor::TextPrimary))
+    .child(glyph(icon, PaletteColor::TextPrimary))
     .child(truncated_label(&text, PaletteColor::TextPrimary))
     .child(value(&display::clock_time(event.at()), PaletteColor::TextMuted));
   let row = hints.attach(row, HintAnchor::Activity, text);
@@ -177,6 +182,7 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
     // Work that was not done (state J, `XlbDa`): the alert icon in the row's muted color,
     // without the raised fill, dismiss or action of a failure (H).
     Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
+    Outcome::NeedsYou { .. } => Icon::Hand,
   };
   let row = item("status-activity")
     .describe("state", "latest")
@@ -217,7 +223,7 @@ fn popover_toggle(row: Button, opener: &Opener) -> Element {
 pub fn event_text(ctx: &Ctx, event: &Event) -> Arc<str> {
   let title = message_text(ctx, event.title());
   match event.outcome() {
-    Outcome::Finished | Outcome::NotDone => title,
+    Outcome::Finished | Outcome::NotDone | Outcome::NeedsYou { .. } => title,
     Outcome::Failed { reason, .. } => {
       let reason = message_text(ctx, reason);
       ctx.t_args("statusBar.activity.failure", [("title", &*title), ("reason", &*reason)])

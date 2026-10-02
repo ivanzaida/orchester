@@ -68,16 +68,7 @@ pub(super) fn retry_limit(
 /// What the decision panel shows of the waiting run.
 fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck) -> RetryDecisionProps {
   let failed = stuck.step();
-  let retry_from = match stuck {
-    Stuck::RetriesExhausted(_) => run
-      .run
-      .snapshot()
-      .body()
-      .step(failed)
-      .and_then(|step| step.on_failure.as_ref())
-      .map_or(failed, |route| &route.return_to),
-    Stuck::BrokeAgain(_) => failed,
-  };
+  let retry_from = run.run.retry_from().unwrap_or(failed).clone();
   let left = ctx.t_args(
     "runs.retryLimit.remainingValue",
     [(
@@ -99,7 +90,8 @@ fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck) -> RetryDecisionProps
     stuck: stuck.clone(),
     used: budget_value(ctx, run),
     left,
-    retry_from: Arc::from(step_name(run, retry_from)),
+    retry_from_name: Arc::from(step_name(run, &retry_from)),
+    retry_from,
     failed: Arc::from(step_name(run, failed)),
     targets,
   }

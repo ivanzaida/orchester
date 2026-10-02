@@ -747,6 +747,19 @@
       "stop": "Stop and fail the run"
     },
     "activity": {
+      "mark": {
+        "returnedTitle": "Returned to {{step}} · {{failed}} failed (attempt {{attempt}})",
+        "returnedDetail": "{{agent}} receives what {{failed}} reported. {{steps}} run again on the new work.",
+        "returnedDetailAlone": "{{agent}} receives what {{failed}} reported.",
+        "and": " and ",
+        "restartedTitle": "Restarted {{step}} · it stopped without a result",
+        "restartedDetail": "A fresh session from the latest checkpoint. If it stops again without a result, the run waits for you.",
+        "returnedWithNoteTitle": "Returned to {{step}} with your note",
+        "note": "“{{note}}”",
+        "automaticRetry": "automatic · retry {{retry}} of {{max}} · {{time}}",
+        "automaticAttempt": "automatic · attempt {{attempt}} · {{time}}",
+        "byYou": "by you · {{time}}"
+      },
       "allSteps": {
         "one": "All steps · {{count}} execution",
         "other": "All steps · {{count}} executions"
@@ -4130,6 +4143,7 @@
       },
       "planReady": "Plan ready for review · {{task}}",
       "agentAsks": "{{agent}} asks · {{task}}",
+      "needsDecision": "{{step}} needs your decision · {{task}}",
       "runReady": "Run #{{run}} ready for review"
     },
     "counts": {

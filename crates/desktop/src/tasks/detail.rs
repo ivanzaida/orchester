@@ -12,8 +12,9 @@ use orchester_core::{
   integration::RunMerge,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit,
+    RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, attempt_starts,
+    execution_tokens,
   },
   store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::Task,
@@ -83,6 +84,9 @@ pub struct RunView {
   pub plans: Vec<Plan>,
   /// What its agent launches got of the code index and used before their first edit.
   pub index: IndexUses,
+  /// When each of its attempts started, and whether a person's decision started it; empty for a
+  /// run of one attempt.
+  pub attempt_starts: Vec<AttemptStart>,
 }
 
 impl RunView {
@@ -339,7 +343,13 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     _ => (None, false),
   };
   let finished_at = finished_at(db, &run)?;
+  let attempt_starts = if run.attempts().len() > 1 {
+    attempt_starts(&db.events(run.id()).map_err(run_store_error)?)
+  } else {
+    Vec::new()
+  };
   Ok(RunView {
+    attempt_starts,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,
