@@ -1,17 +1,19 @@
 //! A pipeline graph run end to end, headlessly, on the real runner and `orchester-fake-codex`: the
 //! task page lists the progress of parallel steps (02.12 `FjbKY`), and a step that keeps failing
-//! after its retries shows the retry limit state (02.B `J3JZaT`) with the actions this version
-//! cannot carry out yet unavailable.
+//! after its retries shows the retry limit state (02.B `J3JZaT`) while the run waits for a person,
+//! whose decisions — one more retry, the work returned with a note, a stop — the runner carries out.
 
 use orchester_core::{
   resource::{FailureRoute, StepKey},
-  run::{RunFailure, RunStatus},
+  run::{AttemptReason, RunFailure, RunStatus, Stuck},
 };
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
+  task_run::{
+    agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, set_text,
+  },
 };
 
 fn retry(to: &str) -> Option<FailureRoute> {
@@ -54,7 +56,7 @@ fn task_graph_progress_lists_parallel_steps_with_their_attempt_and_usage() {
 }
 
 #[test]
-fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
+fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     seed_steps(repo, &fake, |builder| {
@@ -67,11 +69,16 @@ fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
     });
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
-  desktop.wait_until("the run to fail", |desktop| {
-    latest_run(desktop.repo())
-      .is_some_and(|run| matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_))))
-  });
-  desktop.wait_until("the retry limit state", |desktop| has(desktop, "task-retry-limit"));
+  let waiting = |attempts: usize| {
+    move |desktop: &mut Desktop| {
+      latest_run(desktop.repo()).is_some_and(|run| {
+        matches!(run.status(), RunStatus::WaitingForPerson(Stuck::RetriesExhausted(_)))
+          && run.attempts().len() == attempts
+      })
+    }
+  };
+  desktop.wait_until("the run to wait for a person", waiting(2));
+  desktop.wait_until("the retry limit state", |desktop| has(desktop, "task-retry-settings"));
   assert!(shows(&mut desktop, "task-notice", "Review still fails after 1 retry"));
   assert!(shows(&mut desktop, "task-page", "Automatic retries exhausted"));
   assert!(shows(&mut desktop, "task-retry-limit", "Review · Builder"));
@@ -79,12 +86,36 @@ fn task_graph_retry_limit_shows_the_failing_step_and_unavailable_actions() {
   assert!(shows(&mut desktop, "task-failure-excerpt", "Finished Review"));
   assert!(shows(
     &mut desktop,
-    "task-retry-settings",
-    "is not available in this version yet"
+    "task-retry-resume",
+    "Implement · latest checkpoint"
   ));
-  // Allowing another attempt is not possible yet: pressing it changes nothing.
+  assert!(!shows(
+    &mut desktop,
+    "task-retry-settings",
+    "not available in this version"
+  ));
+
   desktop.click("task-allow-retry");
+  desktop.wait_until("one more attempt to run and wait again", waiting(3));
+
+  desktop.wait_until("the decisions again", |desktop| has(desktop, "task-return-note"));
+  set_text(&mut desktop, "task-return-note", "Keep the greeting short.");
+  desktop.click("task-return-with-note");
+  desktop.wait_until("the returned attempt to wait again", waiting(4));
   let run = latest_run(desktop.repo()).expect("run");
-  assert_eq!(run.attempts().len(), 2);
-  assert!(has(&mut desktop, "task-retry-limit"));
+  assert!(matches!(
+    run.attempts()[3].reason(),
+    AttemptReason::Returned { return_to, note, .. }
+      if return_to.as_str() == "implement" && note.as_str() == "Keep the greeting short."
+  ));
+
+  desktop.wait_until("the decisions again", |desktop| has(desktop, "task-stop-run"));
+  desktop.click("task-stop-run");
+  desktop.wait_until("the run to fail", |desktop| {
+    latest_run(desktop.repo())
+      .is_some_and(|run| matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_))))
+  });
+  desktop.wait_until("the evidence without decisions", |desktop| {
+    has(desktop, "task-retry-limit") && !has(desktop, "task-retry-settings")
+  });
 }

@@ -100,8 +100,9 @@ impl RunTask {
 
   /// An agent that exited on its own. A turn that ended acknowledges the messages it read. The
   /// step then waits for the answer to the agent's question, or continues to read messages queued
-  /// for its agent meanwhile; otherwise it passes if the CLI succeeded and the agent did not report
-  /// a failure, and its work joins the run's branch. A follow-up leaves no output: its answer is its
+  /// for its agent meanwhile; otherwise it fails when the agent reported `failed` — also when its
+  /// turn failed afterwards — or when the turn failed, and passes otherwise; a step that passes
+  /// joins its work to the run's branch. A follow-up leaves no output: its answer is its
   /// reply in the conversation, and the step's output stays what it was.
   fn finish(&mut self, execution: StepExecutionId, active: &Active, finished: &Finished) -> Result<(), ExecutionError> {
     let step = self
@@ -118,13 +119,7 @@ impl RunTask {
       Timestamp::now(),
     );
     self.note_cli_too_old(execution, active, &finished.outcome)?;
-    let failure = if !finished.outcome.is_success() {
-      Some(StepFailure::AgentFailed)
-    } else if output.outcome == Some(StepOutcome::Failed) {
-      Some(StepFailure::ReportedFailed)
-    } else {
-      None
-    };
+    let failure = output.failure(finished.outcome.is_success());
     if finished.outcome.is_success() {
       self.acknowledge(execution, &active.invocation, &output)?;
     }

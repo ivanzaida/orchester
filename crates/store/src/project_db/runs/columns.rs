@@ -4,8 +4,8 @@
 use orchester_core::{
   resource::StepKey,
   run::{
-    AttemptReason, AttemptStatus, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus, StepFailure,
-    StepStatus, WaitReason,
+    AttemptReason, AttemptStatus, InterruptCause, PauseReason, ReviewNote, RunFailure, RunLimit, RunStatus,
+    StepFailure, StepStatus, Stuck, WaitReason,
   },
 };
 
@@ -34,10 +34,14 @@ pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
     }
     RunStatus::Paused(reason) => ("paused", Some(pause_reason_text(*reason)), None, None),
     RunStatus::Interrupted(cause) => (INTERRUPTED, Some(interrupt_cause_text(*cause)), None, None),
+    RunStatus::WaitingForPerson(Stuck::RetriesExhausted(step)) => {
+      (WAITING, Some(RETRIES_EXHAUSTED), Some(step.as_str()), None)
+    }
+    RunStatus::WaitingForPerson(Stuck::BrokeAgain(step)) => (WAITING, Some(BROKE_AGAIN), Some(step.as_str()), None),
     RunStatus::Succeeded => ("succeeded", None, None, None),
     RunStatus::Failed(RunFailure::StepFailed(step)) => ("failed", Some("step_failed"), Some(step.as_str()), None),
     RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
-      ("failed", Some("retries_exhausted"), Some(step.as_str()), None)
+      ("failed", Some(RETRIES_EXHAUSTED), Some(step.as_str()), None)
     }
     RunStatus::Cancelled => ("cancelled", None, None, None),
   };
@@ -66,9 +70,13 @@ pub(super) fn parse_run_status(
     }
     ("paused", Some(reason), None, None) => RunStatus::Paused(parse_pause_reason(reason)?),
     (INTERRUPTED, Some(cause), None, None) => RunStatus::Interrupted(parse_interrupt_cause(cause)?),
+    (WAITING, Some(RETRIES_EXHAUSTED), Some(step), None) => {
+      RunStatus::WaitingForPerson(Stuck::RetriesExhausted(step_key(step)?))
+    }
+    (WAITING, Some(BROKE_AGAIN), Some(step), None) => RunStatus::WaitingForPerson(Stuck::BrokeAgain(step_key(step)?)),
     ("succeeded", None, None, None) => RunStatus::Succeeded,
     ("failed", Some("step_failed"), Some(step), None) => RunStatus::Failed(RunFailure::StepFailed(step_key(step)?)),
-    ("failed", Some("retries_exhausted"), Some(step), None) => {
+    ("failed", Some(RETRIES_EXHAUSTED), Some(step), None) => {
       RunStatus::Failed(RunFailure::RetriesExhausted(step_key(step)?))
     }
     ("cancelled", None, None, None) => RunStatus::Cancelled,
@@ -83,6 +91,11 @@ pub(super) fn parse_run_status(
 
 /// The pause reason of a run stopped at a step's budget; the execution has a column of its own.
 const STEP_BUDGET: &str = "step_budget";
+/// A run waiting for a person, and why: the step in `failed_step` used up its retries, or broke
+/// again after its restart. A run that failed for used-up retries has the same reason.
+const WAITING: &str = "waiting";
+const RETRIES_EXHAUSTED: &str = "retries_exhausted";
+const BROKE_AGAIN: &str = "broke_again";
 
 const fn pause_reason_text(reason: PauseReason) -> &'static str {
   match reason {
@@ -121,29 +134,58 @@ fn parse_interrupt_cause(value: &str) -> Result<InterruptCause, StoreError> {
   }
 }
 
-/// `reason`, `failed_step` and `return_to` of an attempt row.
-pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> (&'static str, Option<&str>, Option<&str>) {
-  match reason {
-    AttemptReason::Initial => ("initial", None, None),
-    AttemptReason::Retry { failed_step, return_to } => ("retry", Some(failed_step.as_str()), Some(return_to.as_str())),
-    AttemptReason::FollowUp { step } => ("follow_up", None, Some(step.as_str())),
-    AttemptReason::Recovery { step } => ("recovery", None, Some(step.as_str())),
+/// `reason`, `failed_step`, `return_to` and `note` of an attempt row.
+pub(super) struct AttemptReasonColumns<'a> {
+  pub(super) reason: &'a str,
+  pub(super) failed_step: Option<&'a str>,
+  pub(super) return_to: Option<&'a str>,
+  pub(super) note: Option<&'a str>,
+}
+
+pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonColumns<'_> {
+  let (text, failed_step, return_to, note) = match reason {
+    AttemptReason::Initial => ("initial", None, None, None),
+    AttemptReason::Retry { failed_step, return_to } => {
+      ("retry", Some(failed_step.as_str()), Some(return_to.as_str()), None)
+    }
+    AttemptReason::FollowUp { step } => ("follow_up", None, Some(step.as_str()), None),
+    AttemptReason::Recovery { step } => ("recovery", None, Some(step.as_str()), None),
+    AttemptReason::Restart { step } => ("restart", None, Some(step.as_str()), None),
+    AttemptReason::Returned {
+      failed_step,
+      return_to,
+      note,
+    } => (
+      "returned",
+      Some(failed_step.as_str()),
+      Some(return_to.as_str()),
+      Some(note.as_str()),
+    ),
+  };
+  AttemptReasonColumns {
+    reason: text,
+    failed_step,
+    return_to,
+    note,
   }
 }
 
-pub(super) fn parse_attempt_reason(
-  reason: &str,
-  failed_step: Option<&str>,
-  return_to: Option<&str>,
-) -> Result<AttemptReason, StoreError> {
-  match (reason, failed_step, return_to) {
-    ("initial", None, None) => Ok(AttemptReason::Initial),
-    ("retry", Some(failed_step), Some(return_to)) => Ok(AttemptReason::Retry {
+pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result<AttemptReason, StoreError> {
+  let reason = columns.reason;
+  match (reason, columns.failed_step, columns.return_to, columns.note) {
+    ("initial", None, None, None) => Ok(AttemptReason::Initial),
+    ("retry", Some(failed_step), Some(return_to), None) => Ok(AttemptReason::Retry {
       failed_step: step_key(failed_step)?,
       return_to: step_key(return_to)?,
     }),
-    ("follow_up", None, Some(step)) => Ok(AttemptReason::FollowUp { step: step_key(step)? }),
-    ("recovery", None, Some(step)) => Ok(AttemptReason::Recovery { step: step_key(step)? }),
+    ("follow_up", None, Some(step), None) => Ok(AttemptReason::FollowUp { step: step_key(step)? }),
+    ("recovery", None, Some(step), None) => Ok(AttemptReason::Recovery { step: step_key(step)? }),
+    ("restart", None, Some(step), None) => Ok(AttemptReason::Restart { step: step_key(step)? }),
+    ("returned", Some(failed_step), Some(return_to), Some(note)) => Ok(AttemptReason::Returned {
+      failed_step: step_key(failed_step)?,
+      return_to: step_key(return_to)?,
+      note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
+    }),
     _ => Err(corrupt("attempt reason", reason)),
   }
 }

@@ -58,7 +58,8 @@ impl PanelState {
       TaskPhase::Running => Self::Live,
       TaskPhase::Waiting => Self::Waiting,
       TaskPhase::Paused => Self::Paused,
-      TaskPhase::StoppedAtLimit => Self::Stopped,
+      // A run waiting for a decision after its retries keeps messages until it continues.
+      TaskPhase::StoppedAtLimit | TaskPhase::Stuck => Self::Stopped,
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
       TaskPhase::Merged => Self::Merged,
@@ -393,8 +394,14 @@ fn queue(message: &Message, run: Option<&RunView>, state: PanelState) -> Queue {
     RunStatus::Pending => Queue::RunStarts,
     RunStatus::Paused(PauseReason::Requested) if later_agent => Queue::AgentNextTurn,
     RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => Queue::AgentNextTurn,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_)
+      if later_agent =>
+    {
+      Queue::AgentNextTurn
+    }
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_) => {
+      Queue::RunContinues
+    }
     RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,

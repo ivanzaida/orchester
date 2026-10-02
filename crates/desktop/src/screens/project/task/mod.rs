@@ -20,6 +20,7 @@ mod permissions;
 mod plan_review;
 mod progress;
 mod ready;
+mod retry_decision;
 mod retry_limit;
 mod run_again;
 mod summary;

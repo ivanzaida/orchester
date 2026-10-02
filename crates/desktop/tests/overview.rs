@@ -71,6 +71,39 @@ fn overview_needs_you_counts_runs_waiting_for_the_user() {
   );
 }
 
+/// A run that waits for a person's decision after its step broke again needs them as well.
+#[test]
+fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
+  let mut fixture = support::Fixture::new();
+  let stuck = fixture.task("Add login", support::at(10));
+  let mut run = fixture.started_run(stuck, support::at(20));
+  let first = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .fail_step(first, StepFailure::AgentFailed, support::at(30))
+    .expect("broke");
+  fixture.db.append_events(&run, &events).expect("append");
+  let restart = run.current_attempt().expect("the restart").executions()[0].id();
+  let mut events = run.start_step(restart, support::at(40)).expect("restarted");
+  events.extend(
+    run
+      .fail_step(restart, StepFailure::AgentFailed, support::at(41))
+      .expect("broke again"),
+  );
+  fixture.db.append_events(&run, &events).expect("append");
+  let tasks = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  assert_eq!(
+    tasks
+      .phases
+      .values()
+      .filter_map(|latest| latest.phase())
+      .collect::<Vec<_>>(),
+    [TaskPhase::Stuck]
+  );
+  assert_eq!(Pulse::of(&tasks.phases, support::at(0)).needs_input, 1);
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
+  assert_eq!(OverviewTab::Running.count(&tasks.tasks, &tasks.phases), 0);
+}
+
 #[test]
 fn overview_pulse_without_a_runner_counts_interrupted_runs() {
   let (_fixture, tasks) = project();
@@ -121,7 +154,7 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
   let mut run = fixture.started_run(first, support::at(11));
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run
-    .fail_step(execution, StepFailure::AgentFailed, support::at(12))
+    .fail_step(execution, StepFailure::ReportedFailed, support::at(12))
     .expect("fail first run");
   fixture.record(&run, &events);
 
@@ -133,7 +166,7 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
   let mut run = fixture.started_run(second, support::at(31));
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run
-    .fail_step(execution, StepFailure::AgentFailed, support::at(32))
+    .fail_step(execution, StepFailure::ReportedFailed, support::at(32))
     .expect("fail second run");
   fixture.record(&run, &events);
 
@@ -141,7 +174,7 @@ fn overview_failed_tab_counts_and_lists_only_tasks_whose_latest_run_failed() {
   let mut run = fixture.started_run(third, support::at(41));
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run
-    .fail_step(execution, StepFailure::AgentFailed, support::at(42))
+    .fail_step(execution, StepFailure::ReportedFailed, support::at(42))
     .expect("fail third run");
   fixture.record(&run, &events);
   fixture.task("Draft", support::at(50));

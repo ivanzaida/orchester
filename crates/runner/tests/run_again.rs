@@ -57,7 +57,7 @@ fn blocked(block: RunAgainBlock) -> Rejection {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
@@ -157,7 +157,7 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn recorded_pending_run_again_rechecks_space_before_creating_its_worktree() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
@@ -223,7 +223,7 @@ async fn run_again_is_refused_for_a_run_that_has_not_ended() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_needs_a_published_pipeline() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
@@ -298,7 +298,7 @@ async fn run_again_waits_while_the_daily_budget_is_used() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_removes_the_worktree_of_the_run_before_as_confirmed() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;

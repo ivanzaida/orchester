@@ -1,0 +1,54 @@
+//! A person's decision on a run that waits for them after its retries ran out or its step broke
+//! again ([`orchester_core::run::StuckDecision`]). Its task ended when it began to wait, so the
+//! decision is carried out on the stored run: one more retry, or the work returned to an agent step,
+//! continues the run in a new task as any continued run does; a stop fails it.
+
+use orchester_core::{
+  id::RunId,
+  run::{Run, RunStatus, StuckDecision},
+  time::Timestamp,
+};
+use orchester_ipc::{Event, Rejection};
+use orchester_store::ProjectDb;
+
+use super::{Scheduler, idle};
+
+impl Scheduler {
+  /// Carries out `decision` on `run`, which waits for a person.
+  pub async fn decide_stuck(&self, run: RunId, decision: StuckDecision) -> Result<(), Rejection> {
+    if decision != StuckDecision::Stop {
+      return self
+        .continue_settled(run, |db, root| {
+          let mut stored = waiting(db, run)?;
+          let events = stored
+            .decide_stuck(&decision, Timestamp::now())
+            .map_err(idle::rejection)?;
+          idle::store_continuation(db, root, stored, &events)
+        })
+        .await;
+    }
+    self.settled(run).await?;
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    let mut db = self.open()?;
+    let mut stored = waiting(&db, run)?;
+    let events = stored
+      .decide_stuck(&decision, Timestamp::now())
+      .map_err(idle::rejection)?;
+    idle::store(&mut db, &stored, &events)?;
+    self.inner.notifier.send(Event::RunChanged {
+      run,
+      task: stored.task(),
+    });
+    Ok(())
+  }
+}
+
+/// The stored run, if it waits for a person.
+fn waiting(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
+  let stored = idle::load(db, run)?;
+  if matches!(stored.status(), RunStatus::WaitingForPerson(_)) {
+    Ok(stored)
+  } else {
+    Err(Rejection::RunNotWaiting)
+  }
+}

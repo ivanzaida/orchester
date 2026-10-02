@@ -113,6 +113,7 @@ impl Prompt {
       revision: None,
       messages: None,
       memory: &[],
+      retry: None,
     }
   }
 }

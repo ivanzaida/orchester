@@ -26,6 +26,7 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
+pub(super) use self::aside::note_field;
 use crate::{
   messages::Message,
   runner::Runners,

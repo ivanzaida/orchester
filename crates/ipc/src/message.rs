@@ -13,6 +13,7 @@ use orchester_core::{
   resource::StepKey,
   run::{
     InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber,
+    StuckDecision,
   },
   tokens::TokenBudget,
 };
@@ -125,6 +126,11 @@ pub enum Command {
     version: PlanVersion,
     decision: PlanDecision,
   },
+  /// A person's `decision` on run `run`, which waits for one after its retries ran out or its step
+  /// broke again: one more retry or work returned to an agent step continue the run as a new
+  /// attempt, answered with [`Reply::Accepted`] once it runs again; a stop fails it, answered once
+  /// that is recorded. [`Rejection::RunNotWaiting`] when the run does not wait for a person.
+  DecideStuckRun { run: RunId, decision: StuckDecision },
   /// One decision on a live Codex tool call; the same App Server session resumes on approval.
   /// A stale or already-decided request is rejected.
   DecideToolApproval {
@@ -319,6 +325,8 @@ pub enum Rejection {
   RunNotPaused,
   /// Continuing from a checkpoint needs an interrupted run.
   RunNotInterrupted,
+  /// A decision on a stuck run needs a run that waits for a person.
+  RunNotWaiting,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)

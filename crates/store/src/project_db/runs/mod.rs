@@ -274,8 +274,8 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
 /// Inserts new attempts and executions and updates the status of existing ones.
 fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError> {
   let mut attempt_statement = transaction.prepare_cached(
-    "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, status) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
+    "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
   )?;
   let mut execution_statement = transaction.prepare_cached(
     "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure) \
@@ -284,14 +284,15 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
      failure = excluded.failure",
   )?;
   for attempt in run.attempts() {
-    let (reason, failed_step, return_to) = attempt_reason_columns(attempt.reason());
+    let reason = attempt_reason_columns(attempt.reason());
     attempt_statement.execute(params![
       attempt.id().to_string(),
       run.id().to_string(),
       attempt.number().get(),
-      reason,
-      failed_step,
-      return_to,
+      reason.reason,
+      reason.failed_step,
+      reason.return_to,
+      reason.note,
       attempt_status_text(attempt.status()),
     ])?;
     for execution in attempt.executions() {

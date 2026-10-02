@@ -1,55 +1,108 @@
 //! Retry limit reached (02.B `J3JZaT`): a step kept failing after its failure route was taken as
-//! often as it allows, so the run failed. The evidence (`yYFkk`) names the step and shows the latest
-//! attempt's steps and what the failing step reported; the panel (`Lk43S`) shows the budget used
-//! and what another attempt would need. Allowing another attempt, the verification report and
-//! revising the plan are not available in this version: they are drawn unavailable and say so.
+//! often as it allows, or broke again after its restart, so the run waits for a person. The evidence
+//! (`yYFkk`) names the step and shows the latest attempt's steps and what the failing step reported;
+//! the panel (`Lk43S`, [`RetryDecisionPanel`]) shows the budget used and the person's decisions.
+//! A run that failed after its retries (a person stopped it, or it failed before runs waited) shows
+//! the evidence alone. The verification report is not available in this version: its button is
+//! drawn unavailable.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   resource::StepKey,
-  run::{StepFailure, StepStatus},
+  run::{StepFailure, StepStatus, Stuck},
   time::Timestamp,
   tokens::compact_tokens,
 };
 
 use super::{
   progress::rows,
+  retry_decision::{RetryDecisionPanel, RetryDecisionProps},
   summary::{budget_value, with_reason},
 };
 use crate::{
   display,
   tasks::{detail::RunView, progress::progress},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{
-    button::ActionButton,
-    field::{ValueTone, value_box},
-    icon::Icon,
-    notice::Notice,
-    property::property,
-  },
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::{button::ActionButton, icon::Icon, notice::Notice},
 };
 
-/// Settings panel width (`Lk43S`) and the report button's width (`EdGtS`).
-const PANEL_WIDTH: f32 = 360.0;
+/// The report button's width (`EdGtS`).
 const REPORT_BUTTON_WIDTH: f32 = 216.0;
 
-/// The Summary tab of a run whose `step` used up its retries; `reason` says why its task cannot
-/// run again, under the notice.
-pub(super) fn retry_limit(ctx: &Ctx, run: &RunView, step: &StepKey, reason: Option<Element>) -> Element {
+/// The Summary tab of a run whose `step` used up its retries or broke again: with the person's
+/// decisions while the run waits for them (`waiting`); `reason` says why its task cannot run again,
+/// under the notice.
+pub(super) fn retry_limit(
+  ctx: &mut Ctx,
+  run: &RunView,
+  step: &StepKey,
+  waiting: Option<&Stuck>,
+  reason: Option<Element>,
+) -> Element {
+  let broke = matches!(waiting, Some(Stuck::BrokeAgain(_)));
+  let panel = waiting.map(|stuck| {
+    let props = decision_props(ctx, run, stuck);
+    ctx.mount_keyed::<RetryDecisionPanel>(
+      &format!("retry-decision-{}-{}", run.id(), run.run.last_sequence().get()),
+      props,
+    )
+  });
   Row::new()
     .id("task-retry-limit")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .child(evidence(ctx, run, step, reason))
-    .child(settings(ctx, run, step))
+    .child(evidence(ctx, run, (step, broke), reason))
+    .with_children(panel)
     .into()
+}
+
+/// What the decision panel shows of the waiting run.
+fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck) -> RetryDecisionProps {
+  let failed = stuck.step();
+  let retry_from = match stuck {
+    Stuck::RetriesExhausted(_) => run
+      .run
+      .snapshot()
+      .body()
+      .step(failed)
+      .and_then(|step| step.on_failure.as_ref())
+      .map_or(failed, |route| &route.return_to),
+    Stuck::BrokeAgain(_) => failed,
+  };
+  let left = ctx.t_args(
+    "runs.retryLimit.remainingValue",
+    [(
+      "count",
+      compact_tokens(run.run.used().left_of(run.run.budget())).as_str(),
+    )],
+  );
+  let targets: Arc<[(StepKey, Arc<str>)]> = run
+    .run
+    .return_targets()
+    .into_iter()
+    .map(|key| {
+      let name = Arc::from(step_name(run, &key));
+      (key, name)
+    })
+    .collect();
+  RetryDecisionProps {
+    run: run.id(),
+    stuck: stuck.clone(),
+    used: budget_value(ctx, run),
+    left,
+    retry_from: Arc::from(step_name(run, retry_from)),
+    failed: Arc::from(step_name(run, failed)),
+    targets,
+  }
 }
 
 fn step_name<'a>(run: &'a RunView, step: &'a StepKey) -> &'a str {
@@ -60,20 +113,26 @@ fn step_name<'a>(run: &'a RunView, step: &'a StepKey) -> &'a str {
     .map_or(step.as_str(), |view| &view.name)
 }
 
-/// What failed and the latest attempt's steps (`yYFkk`).
-fn evidence(ctx: &Ctx, run: &RunView, step: &StepKey, reason: Option<Element>) -> Element {
+/// What failed and the latest attempt's steps (`yYFkk`); `broke`: the step broke again rather than
+/// using up its retries.
+fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: Option<Element>) -> Element {
   let taken = run.run.retries_taken(step);
-  let title = if taken == 1 {
-    "runs.retryLimit.title.one"
+  let title = match (broke, taken) {
+    (true, _) => "runs.retryLimit.brokeTitle",
+    (false, 1) => "runs.retryLimit.title.one",
+    (false, _) => "runs.retryLimit.title.other",
+  };
+  let detail = if broke {
+    "runs.retryLimit.brokeDetail"
   } else {
-    "runs.retryLimit.title.other"
+    "runs.retryLimit.detail"
   };
   let retries = taken.to_string();
   let name = step_name(run, step);
   let notice = Notice::new(
     Icon::AlertCircle,
     ctx.t_args(title, [("step", name), ("retries", retries.as_str())]),
-    ctx.t("runs.retryLimit.detail"),
+    ctx.t(detail),
   )
   .id("task-notice");
   let attempt = run
@@ -172,65 +231,4 @@ fn excerpt(ctx: &Ctx, run: &RunView, step: &StepKey) -> Option<Element> {
       )
       .into(),
   )
-}
-
-/// Allow another attempt (`Lk43S`): what the run used and has left, and the settings another
-/// attempt would take — unavailable in this version, which the panel says.
-fn settings(ctx: &Ctx, run: &RunView, step: &StepKey) -> Element {
-  let left = ctx.t_args(
-    "runs.retryLimit.remainingValue",
-    [(
-      "count",
-      compact_tokens(run.run.used().left_of(run.run.budget())).as_str(),
-    )],
-  );
-  let resume = ctx.t_args("runs.retryLimit.resumeValue", [("step", step_name(run, step))]);
-  let field = |label: &str, id: &'static str, value: &str| {
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Field.role())
-      .child(Text::new(label).variant(TypographyStyle::Caption))
-      .child(value_box(ctx, id, value, ValueTone::Unavailable, None))
-  };
-  Column::new()
-    .id("task-retry-settings")
-    .width(Dimension::Px(PANEL_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Form.role())
-    .background(PaletteColor::SurfacePanel)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(Text::new(&ctx.t("runs.retryLimit.allowTitle")).variant(TypographyStyle::Title))
-    .child(property(&ctx.t("runs.retryLimit.used"), &budget_value(ctx, run)))
-    .child(property(&ctx.t("runs.retryLimit.remaining"), &left))
-    .child(field(
-      &ctx.t("runs.retryLimit.additional"),
-      "task-retry-attempts",
-      &ctx.t("runs.retryLimit.additionalValue"),
-    ))
-    .child(field(
-      &ctx.t("runs.retryLimit.resumeFrom"),
-      "task-retry-resume",
-      &resume,
-    ))
-    .child(Text::new(&ctx.t("runs.retryLimit.unavailable")).variant(ExtraTypography::Explanation.role()))
-    .child(Spacer::new().flex(1.0))
-    .child(
-      ActionButton::new(ctx.t("runs.retryLimit.allow"))
-        .icon(Icon::RefreshCw)
-        .primary()
-        .fill_width()
-        .id("task-allow-retry")
-        .disabled()
-        .render(ctx),
-    )
-    .child(
-      ActionButton::new(ctx.t("runs.retryLimit.revisePlan"))
-        .icon(Icon::MessageSquare)
-        .fill_width()
-        .id("task-revise-plan")
-        .disabled()
-        .render(ctx),
-    )
-    .into()
 }

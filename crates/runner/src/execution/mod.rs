@@ -32,6 +32,7 @@ mod record;
 mod recovery;
 mod run;
 mod step;
+mod stuck;
 mod tool;
 mod tool_approval;
 mod work;

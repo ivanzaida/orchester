@@ -51,7 +51,7 @@ fn worktree_of(repo: &Path, run: &Run) -> std::path::PathBuf {
 fn failed_run() -> Desktop {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
-  create_and_run(&mut desktop, "Please fail.", "1400000");
+  create_and_run(&mut desktop, "Report failure.", "1400000");
   desktop.wait_until("the failed run with Run again", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status().can_run_again())
       && has(desktop, "task-run-again")
@@ -199,7 +199,7 @@ fn fail(db: &mut ProjectDb, mut run: Run) -> Run {
   let events = run.start_step(execution, at(20)).expect("start the step");
   db.append_events(&run, &events).expect("append");
   let events = run
-    .fail_step(execution, StepFailure::AgentFailed, at(21))
+    .fail_step(execution, StepFailure::ReportedFailed, at(21))
     .expect("fail the step");
   db.append_events(&run, &events).expect("append");
   run

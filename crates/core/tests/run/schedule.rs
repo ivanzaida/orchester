@@ -2,7 +2,7 @@
 //! and how a failure among parallel steps ends and routes the attempt.
 
 use orchester_core::run::{
-  AttemptReason, RunFailure, RunStatus, StepFailure, StepOutcome, StepOutput, StepResult, StepStatus,
+  AttemptReason, RunStatus, StepFailure, StepOutcome, StepOutput, StepResult, StepStatus, Stuck,
 };
 
 use crate::fixture::{Logged, at, key};
@@ -62,7 +62,7 @@ fn schedule_parallel_steps_pass_independently_and_join() {
 }
 
 #[test]
-fn schedule_failure_skips_parallel_steps_and_routes_with_its_reason() {
+fn schedule_breakage_skips_parallel_steps_and_restarts_the_step_with_its_reason() {
   let mut logged = implemented();
   let (checks, review) = (logged.exec("checks"), logged.exec("review"));
   logged.apply(|run| run.start_step(checks, at(30)));
@@ -76,21 +76,20 @@ fn schedule_failure_skips_parallel_steps_and_routes_with_its_reason() {
     routed.execution(review).map(|review| review.status()),
     Some(StepStatus::Skipped)
   );
+  // A merge conflict is no verdict on the work: the step itself runs again, not its route.
   assert_eq!(
     logged.run.current_attempt().map(|attempt| attempt.reason().clone()),
-    Some(AttemptReason::Retry {
-      failed_step: key("checks"),
-      return_to: key("implement"),
-    })
+    Some(AttemptReason::Restart { step: key("checks") })
   );
-  assert_eq!(names(&logged, &logged.run.ready_executions()), ["implement"]);
+  assert_eq!(names(&logged, &logged.run.ready_executions()), ["checks", "review"]);
+  assert_eq!(logged.run.retries_taken(&key("checks")), 0);
   // The reason survives a replay of the log.
   let replayed = orchester_core::run::Run::replay(&logged.log).expect("valid log");
   assert_eq!(replayed, logged.run);
 }
 
 #[test]
-fn schedule_retry_limit_fails_the_run_once_the_route_was_taken_max_times() {
+fn schedule_retry_limit_waits_for_a_person_once_the_route_was_taken_max_times() {
   let mut logged = implemented();
   for attempt in 0..3 {
     if attempt > 0 {
@@ -103,7 +102,7 @@ fn schedule_retry_limit_fails_the_run_once_the_route_was_taken_max_times() {
   assert_eq!(logged.run.retries_taken(&key("checks")), 2);
   assert_eq!(
     logged.run.status(),
-    &RunStatus::Failed(RunFailure::RetriesExhausted(key("checks")))
+    &RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("checks")))
   );
   assert_eq!(logged.run.attempts().len(), 3);
 }

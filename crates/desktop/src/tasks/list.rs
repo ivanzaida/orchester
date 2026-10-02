@@ -166,7 +166,7 @@ impl LatestRun {
       TaskPhase::Queued => Message::new("tasks.progress.queued"),
       TaskPhase::Running if self.pausing => Message::new("tasks.progress.pausing"),
       TaskPhase::Running => Message::new("tasks.progress.running"),
-      TaskPhase::Waiting => Message::new("tasks.progress.waiting"),
+      TaskPhase::Waiting | TaskPhase::Stuck => Message::new("tasks.progress.waiting"),
       TaskPhase::Paused => with_checkpoint("tasks.progress.paused", "tasks.progress.pausedNoCheckpoint"),
       TaskPhase::StoppedAtLimit if self.daily_budget => Message::new("tasks.progress.stoppedDaily"),
       TaskPhase::StoppedAtLimit => Message::new("tasks.progress.stoppedAtLimit"),

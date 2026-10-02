@@ -125,6 +125,11 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
       "runs.summary.notice.succeededTitle",
       "runs.summary.notice.succeededDetail",
     ),
+    RunStatus::WaitingForPerson(_) => plain(
+      Icon::AlertCircle,
+      "runs.summary.notice.waitingTitle",
+      "runs.summary.notice.waitingDetail",
+    ),
     RunStatus::Failed(_) => plain(
       Icon::AlertCircle,
       "runs.summary.notice.failedTitle",

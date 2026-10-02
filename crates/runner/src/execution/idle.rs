@@ -124,7 +124,12 @@ pub(super) fn continue_after_reconnect(db: &mut ProjectDb, root: &Path, run: Run
 }
 
 /// A continuation must have a task and worktree before its state change is recorded.
-fn store_continuation(db: &mut ProjectDb, root: &Path, run: Run, events: &[RunEvent]) -> Result<Prepared, Rejection> {
+pub(super) fn store_continuation(
+  db: &mut ProjectDb,
+  root: &Path,
+  run: Run,
+  events: &[RunEvent],
+) -> Result<Prepared, Rejection> {
   let prepared = Prepared::continuing(db, root, run)?;
   store(db, &prepared.run, events)?;
   Ok(prepared)

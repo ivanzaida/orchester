@@ -13,7 +13,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, TaskPhase};
+use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, Stuck, TaskPhase};
 
 use super::super::page;
 use crate::{
@@ -137,7 +137,11 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { .. })), _) => "runs.page.describe.stepBudget",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
-    (RunStatus::Failed(RunFailure::RetriesExhausted(_)), _) => "runs.page.describe.retriesExhausted",
+    (
+      RunStatus::Failed(RunFailure::RetriesExhausted(_)) | RunStatus::WaitingForPerson(Stuck::RetriesExhausted(_)),
+      _,
+    ) => "runs.page.describe.retriesExhausted",
+    (RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)), _) => "runs.page.describe.brokeAgain",
     (RunStatus::Failed(_), _) => "runs.page.describe.failed",
     (RunStatus::Cancelled, _) if run.run.current_attempt().is_none() => "runs.page.describe.cancelledBeforeStart",
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",

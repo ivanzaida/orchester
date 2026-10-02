@@ -10,7 +10,7 @@ mod support;
 use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, OutsideCommands, RepositoryAccess},
-  run::{PendingToolApproval, Run, RunStatus},
+  run::{PendingToolApproval, Run, RunStatus, Stuck},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -19,7 +19,10 @@ use orchester_store::ProjectDb;
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use self::support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, threads, wait_for};
+use self::support::{
+  Setup, TestProject, deny_until_settled, git, pending_approval, project, reported, scheduler, settled, threads,
+  wait_for,
+};
 
 /// A run of `brief` started on Codex with `repository` access and any command in the worktree.
 struct Started {
@@ -62,14 +65,15 @@ impl Started {
       .decide_tool_approval(self.id, request.id, approve)
       .await
       .expect("decided");
-    self.ended().await
+    if approve {
+      return self.ended().await;
+    }
+    // A denied turn that ends without a result restarts its step, which asks again.
+    deny_until_settled(&self.scheduler, self.project.repo.path(), &mut self.events, self.id).await
   }
 
   async fn ended(&mut self) -> Run {
-    wait_for(self.project.repo.path(), &mut self.events, self.id, |run| {
-      run.status().is_terminal()
-    })
-    .await
+    wait_for(self.project.repo.path(), &mut self.events, self.id, settled).await
   }
 
   fn db(&self) -> ProjectDb {
@@ -130,8 +134,15 @@ async fn codex_escalations_declined_fail_the_step_without_the_command() {
   let mut started = Started::new("Escalate `pnpm install`.", RepositoryAccess::Write).await;
   let request = started.pending().await;
   let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
-  assert_eq!(reported(&started.db(), started.id, "escalation: "), ["decline"]);
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
+  assert_eq!(
+    reported(&started.db(), started.id, "escalation: "),
+    ["decline", "decline"]
+  );
   assert!(
     !std::fs::read_to_string(started.worktree().join("README.md"))
       .expect("README")
@@ -145,7 +156,11 @@ async fn codex_escalations_ask_in_a_read_only_step() {
   let request = started.pending().await;
   assert_eq!(request.action, "pnpm install");
   let run = started.decide(request, false).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let db = started.db();
   let thread = &threads(&db, started.id)[0];
   assert_eq!(thread["sandbox"], "read-only");

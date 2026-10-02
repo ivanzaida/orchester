@@ -11,6 +11,7 @@ mod mcp;
 mod memory;
 mod native_commands;
 mod recovery;
+mod stuck_runs;
 mod task_edits;
 mod tool_approvals;
 
@@ -582,4 +583,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   code_index::MIGRATION,
   memory::MIGRATION,
   native_commands::MIGRATION,
+  stuck_runs::MIGRATION,
 ];

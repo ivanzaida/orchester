@@ -53,6 +53,10 @@ name = "graph"
 required-features = ["test-agent"]
 
 [[test]]
+name = "retries"
+required-features = ["test-agent"]
+
+[[test]]
 name = "step_budget"
 required-features = ["test-agent"]
 

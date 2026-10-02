@@ -548,6 +548,7 @@
         "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
+        "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
         "unreadable": "Run {{run}} · could not be read",
         "unreadableUnnumbered": "Its latest run could not be read"
       },
@@ -683,6 +684,8 @@
         "failedTitle": "The run failed at {{step}}",
         "failedDetail": "Activity shows what the agent reported.",
         "failedCommandDetail": "Activity shows the command, its exit code and its output.",
+        "waitingTitle": "{{step}} needs your decision",
+        "waitingDetail": "Automatic execution has stopped. Allow another attempt, return the work to an earlier step, or stop the run.",
         "cancelledTitle": "The run was cancelled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
@@ -719,6 +722,8 @@
         "other": "{{step}} still fails after {{retries}} retries"
       },
       "detail": "Automatic execution has stopped. Review what the latest attempt left behind.",
+      "brokeTitle": "{{step}} stopped again without a result",
+      "brokeDetail": "Its agent or command ended without a verdict on the work, also after a fresh restart. Review what the latest attempt left behind.",
       "latest": "Latest attempt · {{revision}}",
       "latestWithoutCheckpoint": "Latest attempt {{attempt}}",
       "reported": "What {{step}} reported",
@@ -733,9 +738,13 @@
       "additionalValue": "1 additional attempt",
       "resumeFrom": "Resume from",
       "resumeValue": "{{step}} · latest checkpoint",
-      "unavailable": "Allowing another attempt is not available in this version yet. The run stays failed and its work stays on its branch.",
+      "retryMeaning": "{{step}} receives what {{failed}} reported. The steps after it run again on the new work.",
+      "restartMeaning": "{{step}} starts again as a fresh session from the latest checkpoint.",
       "allow": "Allow 1 retry & continue",
-      "revisePlan": "Revise plan first"
+      "returnTo": "Return the work to",
+      "notePlaceholder": "What should change before the next attempt",
+      "returnWithNote": "Return to {{step}} with note",
+      "stop": "Stop and fail the run"
     },
     "activity": {
       "allSteps": {
@@ -1305,6 +1314,7 @@
       "ended": "The run has already ended.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
+      "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details."
     }
   },

@@ -11,6 +11,7 @@
 
 mod cli;
 mod prompt;
+mod retry;
 mod shared;
 
 use std::path::Path;

@@ -25,12 +25,16 @@
 //!
 //! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
 //!
+//! A new session of an attempt a failure sent back reads that failure in its task part ([`retry`]):
+//! the step the work returned to, why it came back; the step that failed, its own earlier result.
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
 mod code_index;
 mod composition;
 mod memory;
+mod retry;
 mod source;
 
 use std::num::NonZeroU32;
@@ -39,6 +43,7 @@ use thiserror::Error;
 
 pub use self::{
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
+  retry::{FailureReport, RetryReport},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
 };
 use super::{
@@ -194,6 +199,9 @@ pub struct PromptInput<'a> {
   pub messages: Option<DeliveredMessages<'a>>,
   /// The task and project memory recalled for this invocation, in prompt order.
   pub memory: &'a [RecalledMemory],
+  /// The failure that sent the work back, when this execution's attempt is a retry that reports it
+  /// to this step ([`super::Run::retry_report`]).
+  pub retry: Option<RetryReport<'a>>,
 }
 
 impl PromptInput<'_> {

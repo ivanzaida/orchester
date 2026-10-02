@@ -57,7 +57,12 @@ pub(super) fn aside(
         .variant(TypographyStyle::FieldLabel)
         .color(PaletteColor::TextPrimary)
         .into(),
-      note_field(ctx, note, note_focused),
+      note_field(
+        ctx,
+        (note, note_focused),
+        "plan-review-note",
+        &ctx.t("runs.plan.notePlaceholder"),
+      ),
       detail(&changes_meaning(ctx, review)),
     ]
   });
@@ -113,8 +118,13 @@ fn changes_meaning(ctx: &Ctx, review: &PlanReview) -> Arc<str> {
 }
 
 /// The note for the agent (`NbNN0`): a text area on the surface fill, with the focused field stroke
-/// (`o8Oug`) while it has the focus.
-fn note_field(ctx: &Ctx, note: &Signal<String>, focused: &Signal<bool>) -> Element {
+/// (`o8Oug`) while it has the focus. Also the note that returns a waiting run's work to a step.
+pub(in super::super) fn note_field(
+  ctx: &Ctx,
+  (note, focused): (&Signal<String>, &Signal<bool>),
+  id: &'static str,
+  placeholder: &str,
+) -> Element {
   let input = ctx.theme().form().input.clone();
   let border = if focused.get() {
     Border::inside(BorderSize::Md, input.border_focus)
@@ -123,11 +133,11 @@ fn note_field(ctx: &Ctx, note: &Signal<String>, focused: &Signal<bool>) -> Eleme
   };
   let (gained, lost) = (focused.clone(), focused.clone());
   let area = styled_input(ctx, note.clone(), ExtraTypography::ReviewNote.role())
-    .id("plan-review-note")
+    .id(id)
     .textarea()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .placeholder(&ctx.t("runs.plan.notePlaceholder"))
+    .placeholder(placeholder)
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false));
   Column::new()
