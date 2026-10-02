@@ -1,13 +1,22 @@
 //! The small part of Codex App Server's JSON-RPC stream an agent step needs. The parser keeps
 //! tool arguments out of activity and error output; only an explicit file path may become a
 //! request target. Unknown server requests fail closed instead of leaving a turn hanging.
+//!
+//! Two requests are declined at once, without a person, as Codex declined them before it could ask:
+//! a file change outside the writable roots (`item/fileChange/requestApproval`; edits keep their
+//! rules, only commands are asked about) and a command approval for a host of Codex's managed
+//! network proxy (`networkApprovalContext`, whose grant may outlast the one command). A command
+//! that needs more than the sandbox reaches a person as an ordinary command approval.
 
 use std::{collections::HashMap, fmt};
 
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use super::stream::{AgentEvent, CommandStatus};
+use super::{
+  mcp::InvocationExemptions,
+  stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind},
+};
 use crate::run::TokenUsage;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -18,6 +27,13 @@ pub enum ProtocolError {
   UnsupportedRequest { method: String },
   #[error("Codex App Server sent an approval request without a usable decision")]
   InvalidApproval,
+  /// `with_additional_permissions`: Codex can keep such a grant for the turn's later commands, so it
+  /// cannot be one decision about one command (`features.exec_permission_approvals` is turned off).
+  #[error(
+    "Codex asked to widen the sandbox for a command (with_additional_permissions). Such a grant can stay for later \
+     commands of the turn, so Orchester does not ask about it and the step stopped."
+  )]
+  AdditionalPermissions,
 }
 
 /// One host decision for one pending JSON-RPC request. Arbitrary tool arguments and form
@@ -25,6 +41,7 @@ pub enum ProtocolError {
 #[derive(Clone, PartialEq)]
 pub struct PendingApproval {
   id: Value,
+  item: String,
   kind: ApprovalKind,
   pub thread: String,
   pub turn: Option<String>,
@@ -63,6 +80,11 @@ enum CommandDenial {
 }
 
 impl PendingApproval {
+  /// The tool item waiting for this decision; other items may still be executing.
+  pub fn item(&self) -> &str {
+    &self.item
+  }
+
   pub fn is_command(&self) -> bool {
     matches!(self.kind, ApprovalKind::Command { .. })
   }
@@ -102,6 +124,8 @@ impl PendingApproval {
 pub enum Update {
   Activity(AgentEvent),
   Approval(PendingApproval),
+  /// A request declined at once: this JSON-RPC response answers it.
+  Declined(String),
   TurnEnded,
 }
 
@@ -112,19 +136,42 @@ struct ToolContext {
   server: String,
   action: String,
   target: Option<String>,
+  /// Codex asked for approval of the call.
+  asked: bool,
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
 #[derive(Default)]
 pub struct AppServerStream {
   tools: HashMap<String, ToolContext>,
+  /// The turn's usage so far: the `last` usage of each model response.
   usage: TokenUsage,
+  /// The thread's total at the latest usage notification. Codex repeats a notification unchanged
+  /// (when its rate limits change), so `last` counts only when the total moved.
+  total: Option<TokenUsage>,
+  /// The MCP tools that run without asking, in a step that asks before MCP actions.
+  exemptions: InvocationExemptions,
 }
 
 impl AppServerStream {
+  /// A stream whose calls of the tools `exemptions` names are reported as not asked
+  /// ([`AgentEvent::McpToolNotAsked`]): the thread's configuration approves them
+  /// (`crate::connection::app_server_mcp::thread_servers`), so Codex runs them without a request.
+  pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
+    Self {
+      exemptions,
+      ..Self::default()
+    }
+  }
+
   /// A started MCP action remains active until its completion notification arrives.
   pub fn has_active_tools(&self) -> bool {
     !self.tools.is_empty()
+  }
+
+  /// A pending decision does not make any other tool safe to interrupt.
+  pub fn has_other_active_tools(&self, pending: &PendingApproval) -> bool {
+    self.tools.keys().any(|item| item != pending.item())
   }
 
   pub fn parse(&mut self, line: &str) -> Result<Vec<Update>, ProtocolError> {
@@ -134,18 +181,30 @@ impl AppServerStream {
     };
     let params = message.get("params").unwrap_or(&Value::Null);
     if let Some(id) = message.get("id") {
-      return self
-        .request(method, id, params)
-        .map(|request| vec![Update::Approval(request)]);
+      let update = self.request(method, id, params)?;
+      if let Update::Approval(request) = &update
+        && let Some(tool) = self.tools.get_mut(request.item())
+      {
+        tool.asked = true;
+      }
+      return Ok(vec![update]);
     }
     Ok(self.notification(method, params))
   }
 
-  fn request(&self, method: &str, id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {
+  fn request(&self, method: &str, id: &Value, params: &Value) -> Result<Update, ProtocolError> {
     match method {
-      "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params),
-      "mcpServer/elicitation/request" => self.elicitation(id, params),
-      "item/commandExecution/requestApproval" => Self::command_approval(id, params),
+      "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params).map(Update::Approval),
+      "mcpServer/elicitation/request" => self.elicitation(id, params).map(Update::Approval),
+      "item/commandExecution/requestApproval"
+        if params
+          .get("networkApprovalContext")
+          .is_some_and(|context| !context.is_null()) =>
+      {
+        Ok(declined(id, "decline"))
+      }
+      "item/commandExecution/requestApproval" => Self::command_approval(id, params).map(Update::Approval),
+      "item/fileChange/requestApproval" => Ok(declined(id, "decline")),
       _ => Err(ProtocolError::UnsupportedRequest {
         method: method.to_owned(),
       }),
@@ -157,9 +216,12 @@ impl AppServerStream {
     if params
       .get("additionalPermissions")
       .is_some_and(|value| !value.is_null())
-      || params
-        .get("environmentId")
-        .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
+    {
+      return Err(ProtocolError::AdditionalPermissions);
+    }
+    if params
+      .get("environmentId")
+      .is_some_and(|value| !value.is_null() && value.as_str() != Some("local"))
       || params
         .get("kind")
         .and_then(Value::as_str)
@@ -167,9 +229,10 @@ impl AppServerStream {
     {
       return Err(ProtocolError::InvalidApproval);
     }
-    string(params, "itemId").ok_or(ProtocolError::InvalidApproval)?;
+    let item = string(params, "itemId").ok_or(ProtocolError::InvalidApproval)?;
     Ok(PendingApproval {
       id: id.clone(),
+      item,
       kind: ApprovalKind::Command {
         denial: command_denial(params)?,
       },
@@ -225,6 +288,7 @@ impl AppServerStream {
     }
     Ok(PendingApproval {
       id: id.clone(),
+      item,
       kind: ApprovalKind::UserInput {
         question: string(question, "id").ok_or(ProtocolError::InvalidApproval)?,
         accept,
@@ -258,14 +322,15 @@ impl AppServerStream {
     let turn = string(params, "turnId").ok_or(ProtocolError::InvalidApproval)?;
     let mut matching = self
       .tools
-      .values()
-      .filter(|tool| tool.server == server && tool.thread == thread && tool.turn == turn);
-    let tool = matching.next().ok_or(ProtocolError::InvalidApproval)?;
+      .iter()
+      .filter(|(_, tool)| tool.server == server && tool.thread == thread && tool.turn == turn);
+    let (item, tool) = matching.next().ok_or(ProtocolError::InvalidApproval)?;
     if matching.next().is_some() {
       return Err(ProtocolError::InvalidApproval);
     }
     Ok(PendingApproval {
       id: id.clone(),
+      item: item.clone(),
       kind: ApprovalKind::Elicitation,
       thread,
       turn: Some(turn),
@@ -280,13 +345,16 @@ impl AppServerStream {
     // The runner records the session from the thread/start or thread/resume response;
     // thread/started also arrives for new threads and must not duplicate that activity.
     match method {
+      "account/rateLimits/updated" => params
+        .get("rateLimits")
+        .and_then(super::plan_limits::codex_limits)
+        .map(|limits| vec![Update::Activity(AgentEvent::PlanLimits { limits })])
+        .unwrap_or_default(),
       "turn/started" => vec![Update::Activity(AgentEvent::TurnStarted)],
       "item/started" => self.item_started(params),
       "item/completed" => self.item_completed(params),
       "thread/tokenUsage/updated" => {
-        if let Some(last) = params.get("tokenUsage").and_then(|value| value.get("last")) {
-          self.usage = usage(last);
-        }
+        self.count_usage(params.get("tokenUsage").unwrap_or(&Value::Null));
         Vec::new()
       }
       "turn/completed" => self.turn_completed(params),
@@ -310,14 +378,24 @@ impl AppServerStream {
           string(item, "server"),
           string(item, "tool"),
         ) {
+          let not_asked = self
+            .exemptions
+            .exempts(&server, &action)
+            .then(|| AgentEvent::McpToolNotAsked {
+              item: id.clone(),
+              server: server.clone(),
+              tool: action.clone(),
+            });
           let context = ToolContext {
             thread,
             turn,
             server,
             action,
             target: item.get("arguments").and_then(|args| string(args, "filePath")),
+            asked: false,
           };
           self.tools.insert(id, context);
+          return not_asked.map(Update::Activity).into_iter().collect();
         }
         Vec::new()
       }
@@ -334,12 +412,7 @@ impl AppServerStream {
       return Vec::new();
     };
     match item.get("type").and_then(Value::as_str) {
-      Some("mcpToolCall") => {
-        if let Some(id) = string(item, "id") {
-          self.tools.remove(&id);
-        }
-        Vec::new()
-      }
+      Some("mcpToolCall") => mcp_tool_finished(item, string(item, "id").and_then(|id| self.tools.remove(&id))),
       Some("agentMessage") => string(item, "text")
         .map(|text| vec![Update::Activity(AgentEvent::Message { text })])
         .unwrap_or_default(),
@@ -351,7 +424,21 @@ impl AppServerStream {
         .map(|text| vec![Update::Activity(AgentEvent::Reasoning { text })])
         .unwrap_or_default(),
       Some("commandExecution") => command_finished(item),
+      Some("fileChange") => file_changed(item),
       _ => Vec::new(),
+    }
+  }
+
+  /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
+  /// running `total` grows by it.
+  fn count_usage(&mut self, token_usage: &Value) {
+    let (Some(last), Some(total)) = (token_usage.get("last"), token_usage.get("total")) else {
+      return;
+    };
+    let total = usage(total);
+    if self.total != Some(total) {
+      self.usage += usage(last);
+      self.total = Some(total);
     }
   }
 
@@ -369,6 +456,11 @@ impl AppServerStream {
     updates.push(Update::TurnEnded);
     updates
   }
+}
+
+/// The response that declines request `id` with `decision`.
+fn declined(id: &Value, decision: &str) -> Update {
+  Update::Declined(json!({"id": id, "result": {"decision": decision}}).to_string())
 }
 
 fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {
@@ -392,6 +484,36 @@ fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {
   }
 }
 
+/// The end of the MCP call `item`, started as `started`, as its activity: what it called and whether
+/// Codex asked first.
+fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> Vec<Update> {
+  let (Some(id), Some(server), Some(tool)) = (
+    string(item, "id"),
+    started
+      .as_ref()
+      .map(|tool| tool.server.clone())
+      .or_else(|| string(item, "server")),
+    started
+      .as_ref()
+      .map(|tool| tool.action.clone())
+      .or_else(|| string(item, "tool")),
+  ) else {
+    return Vec::new();
+  };
+  let status = if item.get("status").and_then(Value::as_str) == Some("completed") {
+    CommandStatus::Completed
+  } else {
+    CommandStatus::Failed
+  };
+  vec![Update::Activity(AgentEvent::McpToolFinished {
+    item: id,
+    server,
+    tool,
+    status,
+    asked: started.is_some_and(|tool| tool.asked),
+  })]
+}
+
 fn command_finished(item: &Value) -> Vec<Update> {
   let status = match item.get("status").and_then(Value::as_str) {
     Some("completed") => CommandStatus::Completed,
@@ -407,6 +529,38 @@ fn command_finished(item: &Value) -> Vec<Update> {
       exit_code: item.get("exitCode").and_then(Value::as_i64),
       status,
     })],
+    _ => Vec::new(),
+  }
+}
+
+/// The files a completed patch changed. The kind is a word (`"update"`) or, as the protocol writes
+/// a patch's change, an object naming it (`{"type": "update"}`).
+fn file_changed(item: &Value) -> Vec<Update> {
+  if item.get("status").and_then(Value::as_str) != Some("completed") {
+    return Vec::new();
+  }
+  let changes: Vec<FileChange> = item
+    .get("changes")
+    .and_then(Value::as_array)
+    .into_iter()
+    .flatten()
+    .filter_map(|change| {
+      let kind = change.get("kind")?;
+      let kind = kind.as_str().or_else(|| kind.get("type")?.as_str())?;
+      let kind = match kind {
+        "add" => FileChangeKind::Added,
+        "update" => FileChangeKind::Modified,
+        "delete" => FileChangeKind::Deleted,
+        _ => return None,
+      };
+      Some(FileChange {
+        path: string(change, "path")?,
+        kind,
+      })
+    })
+    .collect();
+  match (string(item, "id"), changes.is_empty()) {
+    (Some(item), false) => vec![Update::Activity(AgentEvent::FileChanged { item, changes })],
     _ => Vec::new(),
   }
 }

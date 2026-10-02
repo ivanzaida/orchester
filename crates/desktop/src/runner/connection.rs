@@ -392,6 +392,10 @@ impl Session {
   /// Handles an event from the runner; `false` once the connection is over.
   fn handle(&mut self, item: Option<EventItem>, reporter: &Reporter) -> bool {
     match item {
+      Some(Ok(Some(Event::PlanLimits(reading)))) => {
+        reporter.plan_limits(reading);
+        true
+      }
       Some(Ok(Some(Event::Reply { id, reply }))) => {
         self.pending.answer(id, reply);
         true

@@ -33,6 +33,7 @@ use tokio::{sync::mpsc, time::Instant};
 use super::{
   Notifier,
   board::Board,
+  codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   prepare::Prepared,
   record::{RecordError, announce_ready, record},
@@ -56,8 +57,6 @@ pub(super) enum ExecutionError {
   Store(#[from] StoreError),
   #[error("step execution {0} is not an agent step of the run")]
   NotAnAgentStep(StepExecutionId),
-  #[error("cannot write the step result schema: {0}")]
-  Schema(std::io::Error),
   #[error("the run has steps left but none can run")]
   Stalled,
   #[error(transparent)]
@@ -70,6 +69,7 @@ pub(super) struct TaskContext {
   pub(super) root: PathBuf,
   pub(super) notifier: Notifier,
   pub(super) vault: Arc<dyn SecretVault>,
+  pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
@@ -94,6 +94,8 @@ pub(super) struct RunTask {
   pub(super) worktree: PathBuf,
   pub(super) notifier: Notifier,
   pub(super) vault: Arc<dyn SecretVault>,
+  /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
+  pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
@@ -103,8 +105,14 @@ pub(super) struct RunTask {
   pub(super) pending: Pending,
   /// Agents and command tools at work, by the execution they work on.
   pub(super) agents: HashMap<StepExecutionId, Active>,
+  /// The code index of the run's base revision.
+  pub(super) code_index: IndexState,
+  /// Its build in the background, while one runs.
+  pub(super) index_build: Option<IndexBuild>,
   pub(super) worker_events: mpsc::UnboundedSender<WorkerEvent>,
   events: mpsc::UnboundedReceiver<WorkerEvent>,
+  /// The memory records were scanned for unreadable ones: once per run task is enough.
+  pub(super) memory_scanned: bool,
 }
 
 impl RunTask {
@@ -120,14 +128,18 @@ impl RunTask {
       worktree: prepared.worktree,
       notifier: context.notifier,
       vault: context.vault,
+      relay: context.relay,
       board: context.board,
       controls: context.controls,
       listening: true,
       settled: context.settled,
       pending: Pending::default(),
       agents: HashMap::new(),
+      code_index: IndexState::NotBuilt,
+      index_build: None,
       worker_events,
       events,
+      memory_scanned: false,
     }
   }
 
@@ -161,13 +173,17 @@ impl RunTask {
   }
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
-    self.write_result_schema()?;
+    self.begin_code_index()?;
     loop {
       while let Ok(control) = self.controls.try_recv() {
         self.control(control)?;
       }
       if self.agents.is_empty() && self.settle()? {
         return Ok(());
+      }
+      if self.index_holds_starts() {
+        self.wait(false).await?;
+        continue;
       }
       let waiting_for_slot = self.start_ready()?;
       if self.agents.is_empty() && !waiting_for_slot {
@@ -187,7 +203,9 @@ impl RunTask {
     }
   }
 
-  /// Waits for an agent's news, a request, the time limit or a free slot.
+  /// Waits for an agent's news, a request, the time limit, a free slot or the code index build.
+  /// A task that stops executing the run (a cancel, a pause, the runner stopping) leaves a running
+  /// build to finish in the background; the next start of the task reuses it.
   async fn wait(&mut self, waiting_for_slot: bool) -> Result<(), ExecutionError> {
     let working = !self.agents.is_empty();
     let deadline = if working {
@@ -208,6 +226,10 @@ impl RunTask {
         if working {
           self.check_time()?;
         }
+        Ok(())
+      }
+      state = codebase_index::built(&mut self.index_build) => {
+        self.code_index_built(state);
         Ok(())
       }
     }
@@ -264,22 +286,6 @@ impl RunTask {
         self.board.release(execution);
       }
     }
-  }
-
-  /// Writes the schema new agent sessions report their result in, where `--output-schema` finds
-  /// it: next to the project database, outside every worktree.
-  fn write_result_schema(&self) -> Result<(), ExecutionError> {
-    let path = self.schema_path();
-    // A missing or unreadable schema file is simply written again.
-    let current = std::fs::read_to_string(&path).ok();
-    if current.as_deref() != Some(orchester_core::run::STEP_RESULT_SCHEMA) {
-      std::fs::write(&path, orchester_core::run::STEP_RESULT_SCHEMA).map_err(ExecutionError::Schema)?;
-    }
-    Ok(())
-  }
-
-  pub(super) fn schema_path(&self) -> PathBuf {
-    self.root.join(".orchester").join("step-result.schema.json")
   }
 
   /// Applies a transition, stores its events with the new state and announces the change. After

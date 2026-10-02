@@ -20,8 +20,9 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
+  new_task::{close, ends},
   tabs::{BACK, click_with, command, has, side_button},
-  task_run::{init_repository, latest_run, programs, seed, set_text},
+  task_run::{init_repository, latest_run, programs, seed_claude, set_text},
 };
 
 const ROW: &str = "task-row-KON-1";
@@ -126,6 +127,10 @@ fn edit_task_opens_the_filled_form_and_saves_changes_in_place() {
   desktop.press("save-draft");
   state_reads(&mut desktop, "Draft saved locally");
   assert!(!save_available(&mut desktop));
+  // Unlike Create, Save changes keeps the form open.
+  assert!(shows(&mut desktop, "save-draft", "Save changes"));
+  assert!(shows(&mut desktop, "task-form", "Edit task"));
+  assert_eq!(desktop.value("task-title"), "Add GitHub sign-in");
 
   let tasks = stored(&desktop.repo);
   assert_eq!(tasks.len(), 1, "the draft was saved over, not added");
@@ -178,7 +183,7 @@ fn edit_task_leaving_with_unsaved_changes_asks_first() {
 
 /// The published Delivery pipeline and the draft KON-1 on it, with a budget its run stops at.
 fn seed_runnable_draft(repo: &Path, fake: &Path) {
-  seed(repo, fake, false);
+  seed_claude(repo, fake);
   let db = ProjectDb::open(repo).expect("open the project");
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
   drop(db);
@@ -240,6 +245,10 @@ fn edit_task_create_and_run_keeps_the_run_snapshot_when_edited_again() {
     "Changes to KON-1 apply to future runs. Existing runs keep the task details they started with."
   ));
   assert!(!has(&mut desktop, "create-and-run"));
+  // Save changes is the plan's last line, its label at the column's foot (`lYOiy` in `dRN4m`).
+  let (_, save_bottom) = ends(&mut desktop, "save-draft");
+  let (_, plan_bottom) = ends(&mut desktop, "execution-plan");
+  assert!(close(save_bottom, plan_bottom), "{save_bottom} vs {plan_bottom}");
   set_text(&mut desktop, "task-title", "Say hello three times");
   set_text(&mut desktop, "task-brief", "Work in future turns.");
   desktop.press("save-draft");
@@ -260,4 +269,35 @@ fn edit_task_create_and_run_keeps_the_run_snapshot_when_edited_again() {
     .expect("the run task exists");
   assert_eq!(original.details().title.as_str(), "Say hello twice");
   assert_eq!(original.details().brief, "Work in turns.");
+}
+
+#[test]
+fn edit_task_create_and_run_the_runner_refuses_offers_retry_run() {
+  // No runner program exists here, so the start request fails once the task is queued.
+  let mut desktop = Desktop::with_seeded_project(|repo| seed_runnable_draft(repo, &repo.join("codex.exe")));
+  open_task(&mut desktop);
+  edit(&mut desktop);
+  desktop.wait_until("Create & run", |desktop| {
+    has(desktop, "create-and-run") && shows(desktop, "create-and-run", "Create & run")
+  });
+  desktop.click("create-and-run");
+  state_reads(&mut desktop, "Queued · run not started");
+  assert_eq!(stored(&desktop.repo)[0].status(), TaskStatus::Queued);
+  // Once the project's tasks are read again with KON-1 queued, the form still offers the retry:
+  // no run was started that the form could only edit for future runs.
+  desktop.wait_until("the queued task counted", |desktop| {
+    shows(desktop, "status-queued", "1")
+  });
+  assert!(has(&mut desktop, "create-and-run"));
+  assert!(shows(&mut desktop, "create-and-run", "Retry run"));
+  assert!(shows(&mut desktop, "execution-plan", "The runner is not connected."));
+  assert!(!has(&mut desktop, "save-draft"));
+  // The queued draft reads as the queued task of D5, as when it is reopened (`WOdDe`, `T6bVyU`).
+  assert!(shows(&mut desktop, "task-form", "What would you like to build?"));
+  assert!(shows(&mut desktop, "task-form", "Kontur / Tasks / KON-1 / Retry run"));
+  assert!(!shows(&mut desktop, "task-form", "Edit task"));
+  assert!(!shows(&mut desktop, "task-form", "KON-1 / Edit"));
+  // Add criterion keeps its place, unavailable: Tab passes it by.
+  assert!(has(&mut desktop, "add-criterion"));
+  assert!(!desktop.stops(20, false).contains(&Some("add-criterion".to_owned())));
 }

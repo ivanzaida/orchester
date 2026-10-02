@@ -2,9 +2,13 @@
 //! is looked up on the `PATH` (or chosen as a file) and checked as soon as it is known; the
 //! connection can be saved only when the check found the expected CLI. Checking runs only
 //! the CLI's read-only commands (`orchester_core::connection`). The fields are in `form`; a new
-//! connection's type can be switched to GitHub (`github_dialog`).
+//! connection's type can be switched to GitHub (`github_dialog`), and its kind to a native model API
+//! (`native_dialog`).
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -122,10 +126,13 @@ impl Component for ConnectionDialog {
       DialogMode::EditAgent(connection) => (
         connection.provider(),
         connection.name().as_str().to_owned(),
-        Some(connection.executable().to_path_buf()),
+        connection.executable().map(Path::to_path_buf),
       ),
-      _ => {
-        let provider = AgentProvider::CodexCli;
+      mode => {
+        let provider = match mode {
+          DialogMode::AddAgent(provider) => *provider,
+          _ => AgentProvider::CodexCli,
+        };
         (provider, suggested_name(ctx, &context, provider), None)
       }
     };
@@ -172,15 +179,15 @@ impl ConnectionDialog {
   fn watch(&self, ctx: &mut Ctx) {
     let retype = self.context.retype.clone();
     ctx.watch(&self.kind, move |kind| retype(*kind));
-    if self.context.mode == DialogMode::AddAgent {
-      let suggestions = AgentProvider::ALL.map(|provider| suggested_name(ctx, &self.context, provider));
+    if matches!(self.context.mode, DialogMode::AddAgent(_)) {
+      let suggestions = AgentProvider::CLI.map(|provider| suggested_name(ctx, &self.context, provider));
       let (name, picked) = (self.name.clone(), self.picked.clone());
       ctx.watch(&self.provider, move |choice| {
         if suggestions.contains(&name.get_untracked()) {
-          let index = AgentProvider::ALL
+          let index = AgentProvider::CLI
             .iter()
             .position(|provider| *provider == choice.0)
-            .expect("every provider is in ALL");
+            .expect("the dialog offers the CLI providers only");
           name.set(suggestions[index].clone());
         }
         picked.set(Picked(None));
@@ -216,11 +223,11 @@ impl ConnectionDialog {
     let check = ctx.future(deps, move |(provider, executable, _)| {
       let (activity, spec) = (activity.clone(), operations::cli_check(&project, provider));
       async move {
-        let Some(executable) = executable else {
+        let (Some(executable), Some(spec)) = (executable, spec) else {
           return Ok(None);
         };
         let check = background::run(move || {
-          let check = probe::check(provider, &executable);
+          let check = probe::check(provider, &executable)?;
           Some(Checked {
             provider,
             executable,

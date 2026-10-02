@@ -78,7 +78,7 @@ impl Run {
   }
 
   /// The execution whose session and surviving worktree this recovery execution continues.
-  /// Passed downstream steps execute afresh; unfinished parallel steps retain their partial work.
+  /// Changed dependencies require fresh work and context; unaffected parallel steps retain progress.
   pub fn recovered_execution(&self, execution: StepExecutionId) -> Option<StepExecutionId> {
     let position = self
       .attempts()
@@ -90,7 +90,8 @@ impl Run {
     };
     let current = attempt.execution(execution)?;
     let earlier = self.previous_execution(execution).and_then(|id| self.execution(id))?;
-    (current.step() == step || earlier.status() != StepStatus::Passed).then(|| earlier.id())
+    let unchanged = !self.snapshot().downstream_of(step).contains(current.step());
+    (current.step() == step || (unchanged && earlier.status() != StepStatus::Passed)).then(|| earlier.id())
   }
 
   /// The previous execution of the same step, including attempts whose pending execution never

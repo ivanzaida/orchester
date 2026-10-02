@@ -25,16 +25,16 @@ use orchester_store::ProjectDb;
 
 use crate::harness::Desktop;
 
-const INSPECTOR: &str = "connection-inspector";
+pub(crate) const INSPECTOR: &str = "connection-inspector";
 /// More presses than the screens have stops.
-const PRESSES: usize = 40;
+pub(crate) const PRESSES: usize = 40;
 
 pub(crate) fn contains_text(element: ElementRef<'_>, text: &str) -> bool {
   element.text_content().is_some_and(|content| content.contains(text))
     || element.children().into_iter().any(|child| contains_text(child, text))
 }
 
-fn shows(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+pub(crate) fn shows(desktop: &mut Desktop, id: &str, text: &str) -> bool {
   let element = desktop
     .tree
     .get_element_by_id(id)
@@ -66,7 +66,7 @@ fn stdio(program: &str, folder: Option<&str>) -> McpTransport {
 
 /// `docs`, a program with a secret variable; `knowledge`, a remote server that is turned off; and
 /// `local`, a program set to start in `tools`. Returns the servers' ids.
-fn seed_servers(repo: &Path) -> Vec<ConnectionId> {
+pub(crate) fn seed_servers(repo: &Path) -> Vec<ConnectionId> {
   let mut db = ProjectDb::open(repo).expect("project database");
   let token = Secret::new(
     SecretId::generate(),
@@ -100,7 +100,7 @@ fn seed_servers(repo: &Path) -> Vec<ConnectionId> {
   vec![docs.id(), knowledge.id(), local.id()]
 }
 
-fn open_mcp_tab(desktop: &mut Desktop) {
+pub(crate) fn open_mcp_tab(desktop: &mut Desktop) {
   desktop.wait_for("nav-connections");
   desktop.click("nav-connections");
   desktop.wait_for("connections-tab-mcp");
@@ -241,6 +241,7 @@ fn mcp_dialog_traps_tab_and_names_what_blocks_saving() {
     "mcp-folder",
     "mcp-arguments",
     "mcp-variables",
+    "mcp-exempt-tools",
     "connection-cancel",
     "connection-save",
   ];
@@ -355,40 +356,49 @@ fn agent_connection(db: &mut ProjectDb, repo: &Path, provider: AgentProvider) ->
     Timestamp::now(),
   )
   .expect("absolute executable");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "2.1.89".into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(
-        CatalogSource::Provider,
-        vec![CatalogModel::new(ModelId::new("haiku").expect("model"), Vec::new())],
-      ),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "2.1.89".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(
+          CatalogSource::Provider,
+          vec![CatalogModel::new(ModelId::new("haiku").expect("model"), Vec::new())],
+        ),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   let id = connection.id();
   db.create_connection(&connection.into_connection()).expect("connection");
   id
 }
 
 /// A Reviewer on Claude Code that already gets `docs`.
-fn seed_profile(repo: &Path, docs: ConnectionId) {
+/// A read-only profile on `provider` with `servers`: with an empty allowed list on Claude Code, and
+/// asking before commands on Codex, which cannot limit commands to a list.
+pub(crate) fn seed_profile(repo: &Path, provider: AgentProvider, servers: Vec<ConnectionId>) {
   let mut db = ProjectDb::open(repo).expect("project database");
-  let claude = agent_connection(&mut db, repo, AgentProvider::ClaudeCodeCli);
+  let commands = match provider {
+    AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(AllowedCommands::default()),
+    AgentProvider::CodexCli => CommandPermission::AskBefore,
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
+  };
+  let connection = agent_connection(&mut db, repo, provider);
   let body = AgentProfile::new(
     Name::new("Reviewer").expect("valid"),
     String::new(),
     PromptText::new("Review.").expect("prompt"),
-    claude,
+    connection,
     ModelId::new("haiku").expect("model"),
     ProviderSettings::default(),
   )
   .with_permissions(AgentPermissions::new(
     RepositoryAccess::ReadOnly,
-    CommandPermission::Allowed(AllowedCommands::default()),
+    commands,
     NetworkAccess::On,
   ))
-  .with_mcp_servers(McpServerSelection::new(vec![docs]).expect("one server"));
+  .with_mcp_servers(McpServerSelection::new(servers).expect("distinct servers"));
   db.create_resource(
     Slug::new("reviewer").expect("slug"),
     Name::new("Reviewer").expect("valid"),
@@ -402,12 +412,18 @@ fn seed_profile(repo: &Path, docs: ConnectionId) {
 fn agent_profile_chooses_its_mcp_servers_on_the_permissions_tab() {
   let mut desktop = Desktop::with_project();
   let ids = seed_servers(desktop.repo());
-  seed_profile(desktop.repo(), ids[0]);
+  seed_profile(desktop.repo(), AgentProvider::ClaudeCodeCli, vec![ids[0]]);
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   desktop.wait_for("agent-role");
   desktop.press("agent-tab-permissions");
   desktop.wait_for("agent-mcp");
+  // An empty list asks about every command; the summary reads as one setting.
+  assert!(shows(
+    &mut desktop,
+    "agent-permission-summary",
+    "No listed commands, all ask"
+  ));
   // Each server has a switch; why an agent would work without a server is said under it.
   assert!(shows(&mut desktop, "agent-mcp", "Remote MCP · mcp.example.dev"));
   assert!(shows(&mut desktop, "agent-mcp", "Turned off in Connections"));
@@ -448,4 +464,48 @@ fn agent_profile_chooses_its_mcp_servers_on_the_permissions_tab() {
       .expect("read")
       .is_some_and(|draft| draft.body().mcp_servers().ids() == [ids[2]])
   });
+}
+
+/// Codex App Server: without a chosen server the panel says none run, as for Claude Code; with one,
+/// that only the chosen ones run, and that an approval request is denied without asking unless the
+/// profile asks before MCP actions.
+#[test]
+fn agent_profile_codex_mcp_enforcement_says_when_approval_requests_are_denied() {
+  let mut desktop = Desktop::with_project();
+  seed_servers(desktop.repo());
+  seed_profile(desktop.repo(), AgentProvider::CodexCli, Vec::new());
+  desktop.wait_for("nav-agents");
+  desktop.click("nav-agents");
+  desktop.wait_for("agent-role");
+  desktop.press("agent-tab-permissions");
+  desktop.wait_for("agent-mcp");
+  assert!(shows(&mut desktop, "agent-enforcement", "No MCP servers"));
+  assert!(shows(
+    &mut desktop,
+    "agent-enforcement",
+    "none chosen · user’s own ignored"
+  ));
+  assert!(!shows(
+    &mut desktop,
+    "agent-enforcement",
+    "Only the chosen MCP servers run"
+  ));
+  desktop.tab_to("agent-mcp-docs", PRESSES);
+  desktop.enter();
+  assert!(shows(
+    &mut desktop,
+    "agent-enforcement",
+    "Only the chosen MCP servers run"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "agent-enforcement",
+    "MCP approval requests are denied"
+  ));
+  assert!(shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
+  assert!(!shows(&mut desktop, "agent-enforcement", "One requested action only"));
+  desktop.tab_to("agent-tool-approvals", PRESSES);
+  desktop.enter();
+  assert!(shows(&mut desktop, "agent-enforcement", "One requested action only"));
+  assert!(!shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
 }

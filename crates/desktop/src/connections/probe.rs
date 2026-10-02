@@ -21,8 +21,8 @@ use orchester_exec::ProcessRunner;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNNER: ProcessRunner = ProcessRunner::new(COMMAND_TIMEOUT);
 
-/// Checks the agent CLI at `executable` now.
-pub fn check(provider: AgentProvider, executable: &Path) -> ConnectionCheck {
+/// Checks the agent CLI at `executable` now; `None` for a native provider, which has no CLI.
+pub fn check(provider: AgentProvider, executable: &Path) -> Option<ConnectionCheck> {
   let environment = agent_environment(std::env::vars_os());
   connection::check(provider, executable, &RUNNER, &environment, Timestamp::now())
 }
@@ -37,18 +37,24 @@ pub fn detect_repository(request: &DetectRequest<'_>) -> Detection {
   repository::detect_repository(&RUNNER, request, Timestamp::now())
 }
 
-/// Checks the program of a stored connection now, whatever its kind.
-pub fn recheck(connection: &Connection) -> LastCheck {
-  match connection.kind() {
-    ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, connection.executable())),
-    ConnectionKind::GitHub { host } => LastCheck::GitHub(check_github(host, connection.executable())),
-  }
+/// Checks the program of a stored connection now, whatever its kind; `None` for a native agent
+/// connection, which runs no program and is not checked in this version.
+pub fn recheck(connection: &Connection) -> Option<LastCheck> {
+  let executable = connection.executable()?;
+  Some(match connection.kind() {
+    ConnectionKind::Agent(provider) => LastCheck::Agent(check(*provider, executable)?),
+    ConnectionKind::GitHub { host } => LastCheck::GitHub(check_github(host, executable)),
+  })
 }
 
 /// Installed copies of the agent CLI of `provider` on the search path, newest version first; copies
-/// whose version cannot be read come last. Each copy is asked for its version only.
+/// whose version cannot be read come last. Each copy is asked for its version only. A native
+/// provider has no program to find.
 pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
-  connection::rank_installed(provider, detect(provider.program_name()), &RUNNER)
+  let Some(program) = provider.program_name() else {
+    return Vec::new();
+  };
+  connection::rank_installed(provider, detect(program), &RUNNER)
     .into_iter()
     .map(|installed| installed.executable)
     .collect()

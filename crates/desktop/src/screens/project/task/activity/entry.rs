@@ -2,7 +2,7 @@
 //! a one-line header with right-aligned meta, optional body text and an optional output block. A
 //! file change entry opens its file in the Changes tab (↗).
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use lurq::{
   app::{
@@ -11,18 +11,21 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, RunnerProblem, ToolCommandResult},
+  connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
   tokens::compact_tokens,
 };
 
 use super::{
   super::{super::ProjectNav, heading::step_state},
-  engine,
+  engine, first_edit,
   mcp::mcp_server_text,
+  mcp_call,
+  problem::problem_text,
   rows::{Header, RowKind, TranscriptRow},
 };
 use crate::{
@@ -31,6 +34,7 @@ use crate::{
   tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
+    command_row::{CommandPlace, Copied, command_preview, command_row},
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{pressable, surface},
@@ -43,13 +47,17 @@ const TIME_WIDTH: f32 = 36.0;
 const GLYPH_SIZE: f32 = 24.0;
 const OUTPUT_LINES: usize = 200;
 
-pub(super) struct TranscriptRowView;
+pub(super) struct TranscriptRowView {
+  copied: Signal<Copied>,
+}
 
 impl Component for TranscriptRowView {
   type Props = TranscriptRow;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      copied: ctx.signal(Copied::default()),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -60,14 +68,15 @@ impl Component for TranscriptRowView {
         let nav = ctx
           .use_context::<ProjectNav>()
           .expect("the project shell provides ProjectNav");
-        entry_row(ctx, &row, entry, (agent, *open), &nav)
+        entry_row(ctx, &row, entry, (agent, *open), &nav, &self.copied)
       }
     }
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens and state (`mDnc3`). A
-/// tool step names its tool and runs, and has no model and no tokens.
+/// Disclosure, step number, step and agent, model and time span, tokens with those before the
+/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
+/// tokens.
 fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
   let meta = header_meta(ctx, header);
   let title = ctx.t_args(
@@ -79,6 +88,7 @@ fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
       "runs.tokens",
       [("count", compact_tokens(header.usage.counted()).as_str())],
     );
+    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
     Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
   });
   let (glyph, state) = step_state(header.status);
@@ -120,8 +130,14 @@ fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
       "runs.activity.commandHeaderFinished.other",
     )
   } else {
+    let engine = engine(ctx, header.vendor.as_ref(), &header.model);
+    // Orchester runs a native agent itself (04.H10 `rL1aI`).
+    let engine = match header.provider {
+      Some(provider) if provider.is_native() => ctx.t_args("runs.activity.engineNative", [("engine", &*engine)]),
+      _ => engine,
+    };
     (
-      engine(ctx, header.provider, &header.model),
+      engine,
       "runs.activity.headerRunning",
       "runs.activity.headerFinished.one",
       "runs.activity.headerFinished.other",
@@ -144,7 +160,7 @@ fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
 }
 
 /// What an entry shows, apart from its time and whether it is open.
-struct Shown {
+pub(super) struct Shown {
   glyph: Icon,
   title: Arc<str>,
   meta: Arc<str>,
@@ -159,22 +175,99 @@ struct Shown {
   opens: Option<Arc<str>>,
 }
 
+impl Shown {
+  /// One line of `title` and `meta`, with `body` under it.
+  pub(super) const fn plain(glyph: Icon, title: Arc<str>, meta: Arc<str>, body: Option<Arc<str>>) -> Self {
+    Self {
+      glyph,
+      title,
+      meta,
+      body,
+      output: None,
+      omitted: None,
+      collapsible: false,
+      opens: None,
+    }
+  }
+}
+
 fn entry_row(
   ctx: &Ctx,
   row: &TranscriptRow,
   entry: &Entry,
   (agent, open): (&Arc<str>, bool),
   nav: &ProjectNav,
+  copied: &Signal<Copied>,
 ) -> Element {
   let shown = shown(ctx, entry, agent, row.raw);
   let raw = matches!(entry.kind, EntryKind::Raw(_));
   let open = open || (raw && row.raw);
-  let mut content = Column::new()
+  let content = Column::new()
     .flex(1.0)
+    .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
-    .child(entry_header(&shown, open));
-  if open {
-    content = content
+    .child(entry_header(&shown, open, entry.sequence))
+    .with_children(open.then(|| entry_details(ctx, entry, &shown, copied)).flatten());
+  let line = Row::new()
+    .id("activity-entry")
+    .width(Dimension::Pct(100.0))
+    .padding_vertical(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Stack.role())
+    .describe("entry", entry.sequence.to_string())
+    .child(
+      Row::new()
+        .id(format!("activity-entry-time-{}", entry.sequence))
+        .size(Dimension::Px(TIME_WIDTH), Dimension::Px(GLYPH_SIZE))
+        .flex_shrink(0.0)
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(&display::clock(entry.at))
+            .variant(TypographyStyle::Mono)
+            .color(PaletteColor::TextMuted)
+            .nowrap(),
+        ),
+    )
+    .child(glyph(shown.glyph, entry.sequence))
+    .child(content);
+  let line = if raw { line.opacity(UNPARSED_OPACITY) } else { line };
+  if let Some(path) = &shown.opens {
+    return opens_file(nav, row, path, line.into());
+  }
+  if !shown.collapsible || (raw && row.raw) {
+    return line.into();
+  }
+  let (toggles, key) = (row.toggles.clone(), row.key.clone());
+  pressable(surface(), move || toggles.flip(&key, open))
+    .id(format!("activity-entry-toggle-{}", entry.sequence))
+    .width(Dimension::Pct(100.0))
+    .child(line)
+    .into()
+}
+
+fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied>) -> Option<Column> {
+  let command = match &entry.kind {
+    EntryKind::Command(command) => Some(&*command.command),
+    EntryKind::ToolCommand(command) => Some(&*command.command),
+    _ => None,
+  };
+  if command.is_none() && shown.body.is_none() && shown.output.as_ref().is_none_or(Vec::is_empty) {
+    return None;
+  }
+  Some(
+    Column::new()
+      .id(format!("activity-entry-details-{}", entry.sequence))
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .with_children(command.map(|command| {
+        command_row(
+          ctx,
+          format!("activity-command-detail-{}", entry.sequence),
+          format!("activity-command-copy-{}", entry.sequence),
+          command,
+          CommandPlace::Transcript,
+          copied,
+        )
+      }))
       .with_children(shown.body.as_ref().map(|body| {
         Text::new(body)
           .variant(ExtraTypography::Explanation.role())
@@ -186,39 +279,8 @@ fn entry_row(
           .as_ref()
           .filter(|lines| !lines.is_empty())
           .map(|lines| output(ctx, lines, shown.omitted.as_deref())),
-      );
-  }
-  let line = Row::new()
-    .id("activity-entry")
-    .width(Dimension::Pct(100.0))
-    .padding_vertical(SpacingSize::Sm)
-    .spacing(ExtraSpacing::Stack.role())
-    .describe("entry", entry.sequence.to_string())
-    .child(
-      Row::new()
-        .size(Dimension::Px(TIME_WIDTH), Dimension::Px(GLYPH_SIZE))
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&display::clock(entry.at))
-            .variant(TypographyStyle::Mono)
-            .color(PaletteColor::TextMuted)
-            .nowrap(),
-        ),
-    )
-    .child(glyph(shown.glyph))
-    .child(content);
-  let line = if raw { line.opacity(UNPARSED_OPACITY) } else { line };
-  if let Some(path) = &shown.opens {
-    return opens_file(nav, row, path, line.into());
-  }
-  if !shown.collapsible || (raw && row.raw) {
-    return line.into();
-  }
-  let (toggles, key) = (row.toggles.clone(), row.key.clone());
-  pressable(surface(), move || toggles.flip(&key, open))
-    .width(Dimension::Pct(100.0))
-    .child(line)
-    .into()
+      ),
+  )
 }
 
 /// `line`, pressed to open the changed file at `path` in the Changes tab (↗).
@@ -236,7 +298,7 @@ fn opens_file(nav: &ProjectNav, row: &TranscriptRow, path: &Arc<str>, line: Elem
     .into()
 }
 
-fn entry_header(shown: &Shown, open: bool) -> Element {
+fn entry_header(shown: &Shown, open: bool, sequence: u64) -> Element {
   let disclosure = if shown.opens.is_some() {
     Some(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextMuted))
   } else {
@@ -246,21 +308,25 @@ fn entry_header(shown: &Shown, open: bool) -> Element {
     })
   };
   Row::new()
+    .id(format!("activity-entry-header-{sequence}"))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(GLYPH_SIZE))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
       Text::new(&shown.title)
+        .id(format!("activity-entry-title-{sequence}"))
         .variant(TypographyStyle::FieldLabel)
         .color(PaletteColor::TextPrimary)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
+        .min_width(Dimension::Px(0.0))
         .flex(1.0)
         .selectable(true),
     )
     .child(
       Text::new(&shown.meta)
+        .id(format!("activity-entry-meta-{sequence}"))
         .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextMuted)
         .nowrap()
@@ -270,9 +336,11 @@ fn entry_header(shown: &Shown, open: bool) -> Element {
     .into()
 }
 
-fn glyph(glyph: Icon) -> Element {
+fn glyph(glyph: Icon, sequence: u64) -> Element {
   Row::new()
+    .id(format!("activity-entry-icon-{sequence}"))
     .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
+    .flex_shrink(0.0)
     .background(PaletteColor::SurfaceRaised)
     .rounded(RadiusSize::Sm)
     .align_items(Alignment::Center)
@@ -308,16 +376,7 @@ fn output(ctx: &Ctx, lines: &[Arc<str>], omitted: Option<&str>) -> Element {
 }
 
 fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
-  let plain = |glyph, title: Arc<str>, meta: Arc<str>, body| Shown {
-    glyph,
-    title,
-    meta,
-    body,
-    output: None,
-    omitted: None,
-    collapsible: false,
-    opens: None,
-  };
+  let plain = Shown::plain;
   match &entry.kind {
     EntryKind::Message(text) => plain(
       Icon::MessageSquare,
@@ -336,11 +395,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     },
     EntryKind::Command(entry) => command(ctx, entry),
     EntryKind::FileChange(change) => {
-      let (glyph, key) = match change.kind {
-        FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
-        FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
-        FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
-      };
+      let (glyph, key) = file_change_kind(change.kind);
       // Git's paths use `/` whatever the CLI reported.
       let path: Arc<str> = in_worktree(&change.path).replace('\\', "/").into();
       let meta = ctx.t_args("runs.activity.fileMeta", [("status", &*ctx.t(key))]);
@@ -389,6 +444,19 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
     EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
+    EntryKind::McpTool(call) => mcp_call::call(ctx, call),
+    EntryKind::ExemptionNotApplied { server, tool, other } => {
+      mcp_call::exemption_not_applied(ctx, (server, tool, other))
+    }
+  }
+}
+
+/// A file change's glyph and the key of its status.
+fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
+  match kind {
+    FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
+    FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
+    FileChangeKind::Modified => (Icon::FilePenLine, "runs.activity.fileModified"),
   }
 }
 
@@ -439,14 +507,18 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       (Icon::Terminal, meta, None)
     }
   };
+  let meta = match &entry.mark {
+    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
+    None => meta,
+  };
   Shown {
     glyph,
-    title: entry.command.clone(),
+    title: preview_title(&entry.command),
     meta,
     body,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted: None,
-    collapsible: !entry.output.is_empty(),
+    collapsible: true,
     opens: None,
   }
 }
@@ -471,13 +543,21 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
   });
   Shown {
     glyph: Icon::Terminal,
-    title: entry.command.clone(),
+    title: preview_title(&entry.command),
     meta,
     body: None,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted,
-    collapsible: !entry.output.is_empty(),
+    collapsible: true,
     opens: None,
+  }
+}
+
+/// The header's one-line preview, sharing the command itself when it already is one line.
+fn preview_title(command: &Arc<str>) -> Arc<str> {
+  match command_preview(command) {
+    Cow::Borrowed(_) => command.clone(),
+    Cow::Owned(preview) => preview.into(),
   }
 }
 
@@ -485,48 +565,6 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
 fn tenths_of_seconds(millis: i64) -> String {
   let tenths = millis.max(0) / 100;
   format!("{}.{}", tenths / 10, tenths % 10)
-}
-
-fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
-  match problem {
-    RunnerProblem::UnavailableVariable { variable } => (
-      ctx.t_args(
-        "runs.activity.problem.unavailableVariable",
-        [("variable", variable.as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::CouldNotStart { detail } => (
-      ctx.t("runs.activity.problem.couldNotStart"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::CheckpointFailed { detail } => (
-      ctx.t("runs.activity.problem.checkpointFailed"),
-      Some(detail.as_str().into()),
-    ),
-    RunnerProblem::MergeConflict { branch, files } => (
-      ctx.t_args("runs.activity.problem.mergeConflict", [("branch", branch.as_str())]),
-      Some(
-        files
-          .join(
-            "
-",
-          )
-          .into(),
-      ),
-    ),
-    RunnerProblem::StepBudgetReached { budget } => (
-      ctx.t_args(
-        "runs.activity.problem.stepBudgetReached",
-        [("budget", compact_tokens(*budget).as_str())],
-      ),
-      None,
-    ),
-    RunnerProblem::ProgramNotFound { program } => (
-      ctx.t_args("runs.activity.problem.programNotFound", [("program", program.as_str())]),
-      Some(ctx.t("runs.activity.problem.programNotFoundDetail")),
-    ),
-  }
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree

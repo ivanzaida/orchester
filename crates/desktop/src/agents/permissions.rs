@@ -7,11 +7,14 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, invocation::Platform},
   permission::{
     AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPermission, CommandPrefix, CommandPrefixError,
     NetworkAccess, RepositoryAccess,
-    capability::{EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
+    capability::{
+      EnforcedPermissions, Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable,
+      support,
+    },
   },
 };
 
@@ -30,9 +33,20 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
   }
 }
 
-/// What an option allows (`C85wh` in `lcwsy`).
-pub const fn option_detail(option: PermissionOption) -> &'static str {
+/// What an option allows on `provider` (`C85wh` in `lcwsy`). Claude Code and native agents also run
+/// known-safe read-only commands besides an allowed list, so only their *Allowed commands* says so;
+/// only Codex asks about commands that need more than its sandbox, so only its *Any command* says that.
+pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) -> &'static str {
   match option {
+    PermissionOption::AllowedCommands if provider.is_some_and(AgentProvider::is_native) => {
+      "agents.permissions.option.allowed.nativeDetail"
+    }
+    PermissionOption::AllowedCommands if runs_read_only_unlisted(provider) => {
+      "agents.permissions.option.allowed.claudeDetail"
+    }
+    PermissionOption::AnyCommand if provider == Some(AgentProvider::CodexCli) => {
+      "agents.permissions.option.any.codexDetail"
+    }
     PermissionOption::ReadOnly => "agents.permissions.option.readOnly.detail",
     PermissionOption::EditWorktree => "agents.permissions.option.editWorktree.detail",
     PermissionOption::AskBeforeCommands => "agents.permissions.option.askBefore.detail",
@@ -55,12 +69,22 @@ pub const fn setting_label(setting: PermissionSetting) -> &'static str {
 /// itself says it (asking before commands is marked *later*).
 pub fn unavailable(ctx: &Ctx, reason: Unavailable, provider: AgentProvider) -> Option<Arc<str>> {
   let key = match reason {
-    Unavailable::NeedsPermissionRequests => "agents.permissions.unavailable.needsPermissionRequests",
     Unavailable::CannotLimitCommands => "agents.permissions.unavailable.cannotLimitCommands",
     Unavailable::CannotConfineCommands => "agents.permissions.unavailable.cannotConfineCommands",
     Unavailable::CannotBlockNetwork => "agents.permissions.unavailable.cannotBlockNetwork",
   };
   Some(ctx.t_args(key, [("cli", &*ctx.t(program_key(provider)))]))
+}
+
+/// Why a profile on `provider` has no MCP choices (its servers, asking before MCP actions): native
+/// agents get no MCP servers in this version (`docs/architecture/native-agent.md` §5.4, P4). `None`
+/// for an agent CLI, or without a connection.
+pub fn native_mcp_unavailable(ctx: &Ctx, provider: Option<AgentProvider>) -> Option<Arc<str>> {
+  let provider = provider.filter(|provider| provider.is_native())?;
+  Some(ctx.t_args(
+    "agents.permissions.unavailable.nativeMcp",
+    [("cli", &*ctx.t(program_key(provider)))],
+  ))
 }
 
 /// How a CLI enforces a setting, in its own terms (`s8kRYf`, `D1auE7`, `rRzit`).
@@ -72,18 +96,35 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexCommandApprovals => "agents.permissions.mechanism.codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "agents.permissions.mechanism.codexNetworkOff",
     Mechanism::CodexSandboxNetworkOn => "agents.permissions.mechanism.codexNetworkOn",
+    // Without a listed command every command asks.
+    Mechanism::ClaudeEditToolsRemoved if lists_no_command(permissions) => {
+      "agents.permissions.mechanism.claudeEditToolsRemovedAsk"
+    }
     Mechanism::ClaudeEditToolsRemoved => "agents.permissions.mechanism.claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "agents.permissions.mechanism.claudeAcceptEdits",
+    Mechanism::ClaudeEditRules => "agents.permissions.mechanism.claudeEditRules",
     Mechanism::ClaudeWebTools => "agents.permissions.mechanism.claudeWebTools",
     Mechanism::ClaudeWebToolsRemoved => "agents.permissions.mechanism.claudeWebToolsRemoved",
     Mechanism::CodexWritableRoots => "agents.permissions.mechanism.codexWritableRoots",
     Mechanism::ClaudeAddDir => "agents.permissions.mechanism.claudeAddDir",
+    Mechanism::ClaudePermissionPrompt => "agents.permissions.mechanism.claudePermissionPrompt",
+    Mechanism::NativeWriteToolsWithheld => "agents.permissions.mechanism.nativeWriteToolsWithheld",
+    Mechanism::NativeFileScope => "agents.permissions.mechanism.nativeFileScope",
+    Mechanism::NativeFileScopeFolders => "agents.permissions.mechanism.nativeFileScopeFolders",
+    Mechanism::NativeCommandApprovals => "agents.permissions.mechanism.nativeCommandApprovals",
+    Mechanism::NativeCommandList if lists_no_command(permissions) => {
+      "agents.permissions.mechanism.nativeCommandListEmpty"
+    }
+    Mechanism::NativeCommandList => "agents.permissions.mechanism.nativeCommandList",
+    Mechanism::NativeNetworkUnrestricted => "agents.permissions.mechanism.nativeNetwork",
     Mechanism::ClaudeAllowedTools => {
       let count = match permissions.commands() {
         CommandPermission::Allowed(commands) => commands.entries().len(),
         CommandPermission::AskBefore | CommandPermission::AnyInWorktree => 0,
       };
-      let key = if count == 1 {
+      let key = if count == 0 {
+        "agents.permissions.mechanism.claudeAllowedTools.none"
+      } else if count == 1 {
         "agents.permissions.mechanism.claudeAllowedTools.one"
       } else {
         "agents.permissions.mechanism.claudeAllowedTools.other"
@@ -92,6 +133,73 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
   };
   ctx.t(key)
+}
+
+/// What a mechanism does beyond its setting's words, as a line under it; `None` for most.
+pub fn mechanism_detail(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions) -> Option<Arc<str>> {
+  match (mechanism, permissions.commands()) {
+    // Codex asks a person about a command that needs more than its sandbox (App Server).
+    (Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals, _) => Some(ctx.t(ESCALATIONS)),
+    (Mechanism::ClaudeAllowedTools, CommandPermission::Allowed(list)) if !list.is_empty() => {
+      Some(ctx.t(READ_ONLY_COMMANDS))
+    }
+    _ => None,
+  }
+}
+
+/// That Claude Code also runs known-safe read-only commands without a rule (`docs/plan.md`, C4), and
+/// asks a person about any other command.
+const READ_ONLY_COMMANDS: &str = "agents.permissions.claudeReadOnlyCommands";
+
+/// What runs besides `list` on `provider`: Claude Code's known-safe read-only commands, once the
+/// list has a command (without one it gets no command tool), and that the others ask a person.
+/// `None` where only the list runs.
+pub fn unlisted_commands(ctx: &Ctx, provider: Option<AgentProvider>, list: &AllowedCommands) -> Option<Arc<str>> {
+  (runs_read_only_unlisted(provider) && !list.is_empty()).then(|| ctx.t(READ_ONLY_COMMANDS))
+}
+
+/// That Codex asks a person about a command that needs more than its sandbox.
+const ESCALATIONS: &str = "agents.permissions.codexEscalations";
+
+/// That a command needing more than the sandbox asks a person, where `provider` enforces `commands`
+/// with its sandbox; `None` elsewhere.
+pub fn escalations(ctx: &Ctx, provider: Option<AgentProvider>, commands: &CommandPermission) -> Option<Arc<str>> {
+  let option = PermissionOption::of_commands(commands);
+  let sandboxed = provider.is_some_and(|provider| {
+    matches!(
+      support(provider, Platform::current(), option),
+      Support::Enforced(Mechanism::CodexSandboxedCommands | Mechanism::CodexCommandApprovals)
+    )
+  });
+  sandboxed.then(|| ctx.t(ESCALATIONS))
+}
+
+/// Whether `provider` enforces an allowed list the way that also runs known-safe read-only commands.
+fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
+  provider.is_some_and(|provider| {
+    support(provider, Platform::current(), PermissionOption::AllowedCommands)
+      == Support::Enforced(Mechanism::ClaudeAllowedTools)
+  })
+}
+
+/// For each entry of `list` whose first word changes files (`rm`, `sed`, …), that it also allows
+/// any arguments after it, including ones that change other files.
+pub fn file_command_hints(ctx: &Ctx, list: &AllowedCommands) -> Vec<Arc<str>> {
+  list
+    .entries()
+    .iter()
+    .filter(|entry| entry.starts_with_file_command())
+    .map(|entry| ctx.t_args("agents.permissions.fileCommandPrefix", [("command", entry.as_str())]))
+    .collect()
+}
+
+/// Whether no command is listed: asking before commands, or an empty list.
+fn lists_no_command(permissions: &AgentPermissions) -> bool {
+  match permissions.commands() {
+    CommandPermission::Allowed(commands) => commands.is_empty(),
+    CommandPermission::AskBefore => true,
+    CommandPermission::AnyInWorktree => false,
+  }
 }
 
 /// Words of the three settings, long (`haXji`: *Edits files in the task worktree · 3 allowed

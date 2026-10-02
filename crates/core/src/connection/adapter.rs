@@ -5,9 +5,11 @@
 //! - Codex CLI: `codex --version`, `codex login status` ("Show login status") and `codex debug models --bundled`
 //!   ("Render the raw model catalog as JSON", `--bundled`: "Skip refresh and dump only the bundled catalog shipped with
 //!   this binary", so no network request and no cache write).
-//! - Claude Code CLI: `claude --version` and `claude auth status --json` ("Show authentication status"). It has no
-//!   model list; `claude --help` documents the `opus` and `sonnet` aliases for `--model` and the effort levels of
-//!   `--effort`.
+//! - Claude Code CLI: `claude --version`, `claude auth status --json` ("Show authentication status") and the
+//!   `initialize` control request of its stream-json input, whose answer lists its models; that one starts no session
+//!   and sends no prompt ([`super::claude_catalog`]).
+//!
+//! A native provider has no CLI: nothing here runs for it, and [`check`] has no answer for it.
 
 use std::{
   ffi::OsStr,
@@ -19,6 +21,7 @@ use serde::Deserialize;
 use super::{
   AgentProvider, CheckResult, ConnectionCheck, SignIn,
   catalog::{CatalogModel, CatalogSource, ModelCatalog},
+  claude_catalog::{MODELS_ARGS, MODELS_REQUEST, claude_models, parse_claude_models},
 };
 use crate::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
@@ -30,24 +33,39 @@ const VERSION_ARGS: &[&str] = &["--version"];
 const CODEX_SIGN_IN_ARGS: &[&str] = &["login", "status"];
 const CODEX_CATALOG_ARGS: &[&str] = &["debug", "models", "--bundled"];
 const CLAUDE_SIGN_IN_ARGS: &[&str] = &["auth", "status", "--json"];
-/// Model aliases documented by `claude --help` for `--model`.
-const CLAUDE_MODEL_ALIASES: [&str; 2] = ["opus", "sonnet"];
-/// Levels documented by `claude --help` for `--effort`.
-const CLAUDE_EFFORTS: [&str; 4] = ["low", "medium", "high", "max"];
 /// Codex lists models meant for people with this visibility; others are internal.
 const CODEX_LISTED: &str = "list";
+
+/// The agent CLIs this module asks.
+#[derive(Clone, Copy)]
+enum AgentCli {
+  Codex,
+  Claude,
+}
+
+impl AgentCli {
+  const fn of(provider: AgentProvider) -> Option<Self> {
+    match provider {
+      AgentProvider::CodexCli => Some(Self::Codex),
+      AgentProvider::ClaudeCodeCli => Some(Self::Claude),
+      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => None,
+    }
+  }
+}
 
 /// Checks the CLI at `executable`: its version, whether it is signed in and its models. The CLI
 /// sees only `environment`, the one agents run with ([`super::invocation::agent_environment`]),
 /// so that the check finds what a run would: variables of an agent host Orchester itself runs in
-/// change the Claude Code CLI's answer.
+/// change the Claude Code CLI's answer. `None` for a native provider: it has no CLI, so nothing runs
+/// and there is nothing to report.
 pub fn check(
   provider: AgentProvider,
   executable: &Path,
   runner: &impl CommandRunner,
   environment: &[(String, String)],
   now: Timestamp,
-) -> ConnectionCheck {
+) -> Option<ConnectionCheck> {
+  let kind = AgentCli::of(provider)?;
   let cli = Cli {
     executable,
     runner,
@@ -62,20 +80,20 @@ pub fn check(
       None => CheckResult::NotRecognized,
       Some(version) => CheckResult::Available {
         version,
-        sign_in: sign_in(provider, &cli),
-        catalog: catalog(provider, &cli),
+        sign_in: sign_in(kind, &cli),
+        catalog: catalog(kind, &cli),
       },
     },
   };
-  ConnectionCheck { at: now, result }
+  Some(ConnectionCheck { at: now, result })
 }
 
 /// The version number in `--version` output, if the output is the expected CLI's:
-/// `codex-cli 0.139.0` or `2.1.89 (Claude Code)`.
+/// `codex-cli 0.139.0` or `2.1.89 (Claude Code)`. No output is a native provider's.
 pub fn parse_version(provider: AgentProvider, output: &CommandOutput) -> Option<String> {
-  let marker = match provider {
-    AgentProvider::CodexCli => "codex-cli",
-    AgentProvider::ClaudeCodeCli => "(Claude Code)",
+  let marker = match AgentCli::of(provider)? {
+    AgentCli::Codex => "codex-cli",
+    AgentCli::Claude => "(Claude Code)",
   };
   let text = output.stdout.trim();
   if !output.success() || !text.contains(marker) {
@@ -96,23 +114,26 @@ struct Cli<'a, R> {
 
 impl<R: CommandRunner> Cli<'_, R> {
   fn run(&self, args: &[&str]) -> Result<CommandOutput, CommandError> {
-    let command = Command::new(self.executable, args.iter().copied()).with_environment(self.environment.to_vec());
-    self.runner.run(&command)
+    self.runner.run(&self.command(args))
+  }
+
+  fn command(&self, args: &[&str]) -> Command {
+    Command::new(self.executable, args.iter().copied()).with_environment(self.environment.to_vec())
   }
 }
 
-fn sign_in(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> SignIn {
-  let args = match provider {
-    AgentProvider::CodexCli => CODEX_SIGN_IN_ARGS,
-    AgentProvider::ClaudeCodeCli => CLAUDE_SIGN_IN_ARGS,
+fn sign_in(kind: AgentCli, cli: &Cli<'_, impl CommandRunner>) -> SignIn {
+  let args = match kind {
+    AgentCli::Codex => CODEX_SIGN_IN_ARGS,
+    AgentCli::Claude => CLAUDE_SIGN_IN_ARGS,
   };
   // A status command that cannot run leaves the sign-in unknown, not signed out.
   let Ok(output) = cli.run(args) else {
     return SignIn::Unknown;
   };
-  match provider {
-    AgentProvider::CodexCli => parse_codex_login_status(&output),
-    AgentProvider::ClaudeCodeCli => parse_claude_auth_status(&output),
+  match kind {
+    AgentCli::Codex => parse_codex_login_status(&output),
+    AgentCli::Claude => parse_claude_auth_status(&output),
   }
 }
 
@@ -143,9 +164,9 @@ pub fn parse_claude_auth_status(output: &CommandOutput) -> SignIn {
   }
 }
 
-fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelCatalog {
-  match provider {
-    AgentProvider::CodexCli => {
+fn catalog(kind: AgentCli, cli: &Cli<'_, impl CommandRunner>) -> ModelCatalog {
+  match kind {
+    AgentCli::Codex => {
       // Without a readable catalog the list stays empty: models can still be entered by hand
       // and are marked as not verified.
       let models = cli
@@ -156,7 +177,21 @@ fn catalog(provider: AgentProvider, cli: &Cli<'_, impl CommandRunner>) -> ModelC
         .unwrap_or_default();
       ModelCatalog::new(CatalogSource::Provider, models)
     }
-    AgentProvider::ClaudeCodeCli => ModelCatalog::new(CatalogSource::DocumentedAliases, claude_aliases()),
+    AgentCli::Claude => {
+      // Without the CLI's list the catalog still has the current model ids and the aliases.
+      let listed = cli
+        .runner
+        .run(&cli.command(MODELS_ARGS).with_stdin(format!("{MODELS_REQUEST}\n")))
+        .ok()
+        .filter(|output| output.success())
+        .and_then(|output| parse_claude_models(&output.stdout));
+      let source = if listed.is_some() {
+        CatalogSource::ProviderAndCurrentIds
+      } else {
+        CatalogSource::DocumentedAliases
+      };
+      ModelCatalog::new(source, claude_models(listed))
+    }
   }
 }
 
@@ -194,16 +229,6 @@ pub fn parse_codex_catalog(json: &str) -> Option<Vec<CatalogModel>> {
     })
     .collect();
   Some(models)
-}
-
-fn claude_aliases() -> Vec<CatalogModel> {
-  CLAUDE_MODEL_ALIASES
-    .into_iter()
-    .map(|alias| {
-      let id = ModelId::new(alias).expect("documented aliases are valid model ids");
-      CatalogModel::new(id, CLAUDE_EFFORTS.map(str::to_owned).to_vec())
-    })
-    .collect()
 }
 
 /// Where `program` (see [`super::ConnectionKind::program_name`]) would be found on `path` (the

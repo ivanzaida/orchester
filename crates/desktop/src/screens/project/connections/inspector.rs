@@ -2,9 +2,11 @@
 //! what runs, where it runs, how it signs in, the last check, the models it offers and the
 //! profiles that use it, in a details viewport with a scroll gutter (`xAfju`); the actions and
 //! the status detail are pinned below it (`K9gvh`). A connection that needs attention says what
-//! to do and offers checking again, as the expired-access state does (04.A).
+//! to do and offers checking again, as the expired-access state does (04.A). A native connection shows its endpoint,
+//! key and models (`native_inspector`); this version cannot test it, so Test connection is unavailable and the status
+//! detail says why.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -18,13 +20,16 @@ use lurq::{
 use orchester_core::{
   connection::{AgentConnection, CatalogModel, CatalogSource, ConnectionStatus},
   id::ResourceId,
+  resource::ModelId,
+  secret::Secret,
   time::Timestamp,
 };
 use orchester_exec::launch::Launch;
 
 use super::{
   launch::launch_properties,
-  status::{CHECKING, status_detail_key, status_label, vendor_key},
+  native_inspector,
+  status::{CHECKING, cli_too_old, status_detail_key, status_label, vendor_key},
 };
 use crate::{
   connections::data::ProfileUse,
@@ -46,13 +51,19 @@ use crate::{
 const INSPECTOR_WIDTH: f32 = 344.0;
 const PATH_CHARS: usize = 36;
 
-type Handler = Arc<dyn Fn() + Send + Sync>;
+pub(super) type Handler = Arc<dyn Fn() + Send + Sync>;
 
 pub struct InspectorActions {
+  /// Checks the CLI again; `None` while a check runs, and for a native connection, which this version
+  /// cannot test.
   pub check: Option<Handler>,
-  pub edit: Handler,
+  pub edit: Option<Handler>,
+  /// Opens the models of a native connection.
+  pub edit_models: Option<Handler>,
   /// A link to a profile that uses it.
   pub profile: Arc<dyn Fn(ResourceId) -> Link + Send + Sync>,
+  /// A link to the project's secrets, at a native connection's key secret.
+  pub secrets: Arc<dyn Fn() -> Link + Send + Sync>,
 }
 
 pub struct InspectorState<'a> {
@@ -62,6 +73,8 @@ pub struct InspectorState<'a> {
   pub check_error: Option<Message>,
   /// What starts when the program runs.
   pub launch: Option<&'a Launch>,
+  /// The project's secrets that are not archived, which a native connection's key must be among.
+  pub secrets: &'a [Secret],
 }
 
 pub fn inspector(
@@ -70,27 +83,35 @@ pub fn inspector(
   (state, scroll): (&InspectorState, &ScrollState),
   actions: &InspectorActions,
 ) -> Element {
-  let status = connection.status();
+  let status = connection.status_with(state.secrets);
   let (status_icon, status_key) = if state.checking { CHECKING } else { status_label(status) };
   let details = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
     .child(Text::new(connection.name().as_str()).variant(ExtraTypography::InspectorTitle.role()))
-    .child(label(status_icon, &ctx.t(status_key)))
-    .with_children(properties(ctx, connection, state.launch))
-    .child(models(ctx, connection))
-    .child(button(
-      ctx,
-      "refresh-models",
-      "connections.refreshModels",
-      Icon::RefreshCw,
-      actions.check.clone(),
-    ))
-    .child(used_by(ctx, &state.uses, &actions.profile));
+    .child(label(status_icon, &ctx.t(status_key)));
+  let details = match (connection.api(), connection.executable()) {
+    (Some(api), _) => details
+      .with_children(native_inspector::properties(ctx, connection, api, state.secrets))
+      .child(native_inspector::models(ctx, api, actions.edit_models.clone())),
+    (None, Some(executable)) => details
+      .with_children(properties(ctx, connection, executable, state.launch))
+      .child(models(ctx, connection))
+      .child(button(
+        ctx,
+        "refresh-models",
+        "connections.refreshModels",
+        Icon::RefreshCw,
+        actions.check.clone(),
+      )),
+    (None, None) => details,
+  }
+  .child(used_by(ctx, &state.uses, &actions.profile));
   let pinned = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Step.role())
+    .with_children(native_inspector::status_actions(ctx, status, actions))
     .child(button(
       ctx,
       "test-connection",
@@ -103,7 +124,7 @@ pub fn inspector(
       "edit-connection",
       "connections.edit",
       Icon::Settings,
-      Some(actions.edit.clone()),
+      actions.edit.clone(),
     ))
     .child(status_detail(ctx, connection, status, state.check_error.as_ref()));
   // The details scroll when they do not fit, their thumb in a gutter of its own (`NwsEg`) beside
@@ -133,7 +154,7 @@ pub fn inspector(
 
 /// Provider, program file, what runs it and its script when it is a launcher, version,
 /// execution, authentication and last check (`wAKbx`…`ouXB3`).
-fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) -> Vec<Element> {
+fn properties(ctx: &Ctx, connection: &AgentConnection, executable: &Path, launch: Option<&Launch>) -> Vec<Element> {
   let provider = connection.provider();
   let checked = connection.last_check().map_or_else(
     || ctx.t("connections.notCheckedYet"),
@@ -148,7 +169,7 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, launch: Option<&Launch>) 
     property(&ctx.t("connections.property.provider"), &ctx.t(vendor_key(provider))),
     styled_property(
       &ctx.t("connections.property.executable"),
-      &display::shorten_path(connection.executable(), PATH_CHARS),
+      &display::shorten_path(executable, PATH_CHARS),
       ValueStyle::Path,
     ),
   ];
@@ -182,10 +203,17 @@ fn models(ctx: &Ctx, connection: &AgentConnection) -> Element {
   let source = match catalog.source() {
     CatalogSource::Provider => "connections.modelSource.provider",
     CatalogSource::DocumentedAliases => "connections.modelSource.aliases",
+    CatalogSource::ProviderAndCurrentIds => "connections.modelSource.providerAndCurrentIds",
   };
+  let too_old = connection
+    .model_requirements()
+    .iter()
+    .filter_map(|(model, _)| ModelId::new(model).ok())
+    .filter_map(|model| cli_too_old(ctx, connection, &model));
   column
     .child(model_chips(ctx, connection.models()))
     .child(Text::new(&ctx.t(source)).variant(ExtraTypography::InspectorNote.role()))
+    .with_children(too_old.collect::<Vec<Element>>())
     .into()
 }
 
@@ -211,7 +239,7 @@ fn used_by(ctx: &Ctx, uses: &[&ProfileUse], profile: &Arc<dyn Fn(ResourceId) -> 
     .map(|used| {
       let text = ctx.t_args(
         "connections.usedByLink",
-        [("role", &*used.role), ("model", &*used.model)],
+        [("role", &*used.role), ("model", used.model.as_str())],
       );
       ActionButton::new(text)
         .icon(Icon::ExternalLink)
@@ -250,17 +278,25 @@ fn status_detail(
     .into()
 }
 
-/// A full-width secondary button, disabled without a handler (while a check runs).
-fn button(ctx: &Ctx, id: &'static str, key: &str, glyph: Icon, handler: Option<Handler>) -> Element {
-  let button = ActionButton::new(ctx.t(key))
+/// A full-width secondary button, disabled without a handler: while a check runs, or on a native
+/// connection, whose status detail says why.
+pub(super) fn button(ctx: &Ctx, id: &'static str, key: &str, glyph: Icon, handler: Option<Handler>) -> Element {
+  let button = full_width(ctx, id, key, glyph);
+  match handler {
+    Some(handler) => button.on_click(move || handler()).render(ctx),
+    None => button.on_click(|| {}).enabled(false).render(ctx),
+  }
+}
+
+/// A full-width secondary button that opens `link`.
+pub(super) fn link_button(ctx: &Ctx, id: &'static str, key: &str, glyph: Icon, link: Link) -> Element {
+  full_width(ctx, id, key, glyph).link(link).render(ctx)
+}
+
+fn full_width(ctx: &Ctx, id: &'static str, key: &str, glyph: Icon) -> ActionButton {
+  ActionButton::new(ctx.t(key))
     .icon(glyph)
     .id(id)
     .fill_width()
-    .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT));
-  match handler {
-    Some(handler) => button.on_click(move || handler()).render(ctx),
-    // A button without a handler would read as not available in this version; this one
-    // only waits for the running check.
-    None => button.on_click(|| {}).enabled(false).render(ctx),
-  }
+    .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
 }

@@ -5,7 +5,11 @@
 mod cli;
 mod state;
 
-use std::{fmt, ops::Deref, path::PathBuf};
+use std::{
+  fmt,
+  ops::Deref,
+  path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,7 +22,10 @@ pub use self::{
   },
   state::{GhAdvice, GitHubState, REQUIRED_SCOPE},
 };
-use super::{Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn, agent::sign_in_status};
+use super::{
+  AgentEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus, LastCheck, SignIn,
+  agent::sign_in_status,
+};
 use crate::{id::ConnectionId, name::Name, time::Timestamp};
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -207,12 +214,20 @@ impl GitHubConnection {
     created_at: Timestamp,
   ) -> Result<Self, ConnectionError> {
     let kind = ConnectionKind::GitHub { host: host.clone() };
-    let connection = Connection::new(id, name, kind, executable, created_at)?;
+    let connection = Connection::new(id, name, kind, AgentEndpoint::Program(executable), created_at)?;
     Ok(Self { connection, host })
   }
 
   pub const fn host(&self) -> &GitHubHost {
     &self.host
+  }
+
+  /// The GitHub CLI's program.
+  pub fn executable(&self) -> &Path {
+    self
+      .connection
+      .executable()
+      .expect("a GitHub connection is reached through its program")
   }
 
   pub fn into_connection(self) -> Connection {

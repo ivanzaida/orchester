@@ -344,7 +344,18 @@ impl Desktop {
     self.settle(id, |tree| tree.get_element_by_id(id).is_some());
   }
 
+  /// Waits for `id` to be shown before it is clicked or pressed, as a person waits for what they
+  /// mean to click: background work only arrives while the harness waits, so rows or dialog
+  /// content read in the background would otherwise race the click. An element that is shown is
+  /// not waited for, so no background work goes on before it is clicked.
+  fn shown_to_click(&mut self, id: &str) {
+    if self.tree.get_element_by_id(id).is_none() {
+      self.settle(&format!("{id} to click"), |tree| tree.get_element_by_id(id).is_some());
+    }
+  }
+
   pub fn click(&mut self, id: &str) {
+    self.shown_to_click(id);
     self.tree.get_element_by_id_mut(id).expect(id).click();
     self.pass();
   }
@@ -360,6 +371,7 @@ impl Desktop {
 
   /// A pointer press and release in the middle of `id`, as a user clicks.
   pub fn press(&mut self, id: &str) {
+    self.shown_to_click(id);
     let bounds = self.bounds(id);
     let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
     self.tree.mouse_down(x, y, MouseButton::Left);

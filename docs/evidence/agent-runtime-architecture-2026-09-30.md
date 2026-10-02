@@ -3,7 +3,7 @@
 The stable reruns exposed shared runtime failures rather than task-specific defects. ORC-14
 and ORC-45 reviewers could not run read-only file reads or `git diff`; ORC-39 could not request
 approval for Pencil writes; ORC-17 and ORC-30 command checks resolved Cargo artifacts from a
-different worktree revision. ORC-44's saved implementation remains at `5f11338` on
+different worktree revision. ORC-44's initial saved implementation was `5f11338` on
 `orchester/orc-44-run-2`.
 
 At the user's direction these fixes were implemented directly in the root checkout on
@@ -41,9 +41,10 @@ repository sandbox, writable roots and normal account contract. No model turn wa
 that contract probe. Native `codex sandbox` also executed a read-only `git diff --stat` with
 `windows.sandbox=elevated`.
 
-The updated desktop and runner ran from their own copied binaries and AppDb under
+Initial verification used desktop and runner copied binaries and AppDb under
 `.tmp/agent-runtime/app`. They opened disposable repositories only. The real project database
-was not opened by this build, and the installed stable binaries were not replaced or stopped.
+was not opened by that private build. The user subsequently authorized updating and restarting
+the installed stable app.
 
 Two real **gpt-6.1-sol** runs used the native Codex CLI and a disposable MCP write tool:
 
@@ -57,7 +58,9 @@ Command approvals and migration from a waiting `exec` session were exercised wit
 fixture, separately from these native MCP runs. Three integration cases verified approved
 command/MCP actions, denied command, and denied MCP write, while preserving the original
 session/execution IDs, worktree, uncommitted file, pipeline snapshot and completed preparation
-step. They also rejected stale and duplicate request IDs.
+step. They also rejected stale and duplicate request IDs. These migration cases now include an
+extra writable folder. A fourth case approves an action, stops the runner before its turn completes,
+and verifies that reconnect does not start another invocation or replay the action.
 
 The following named-filter test commands passed on Windows:
 
@@ -110,288 +113,224 @@ fixed before the final recheck.
 Core and exec both passed `cargo check` and clippy with warnings denied for
 `aarch64-apple-darwin`. The runner/desktop cross-check could not complete because this Windows
 host lacks the target native C compiler for SQLite and zstd. No physical Mac test or full
-test suite was run. The command-approval smoke and exec-to-App-Server migration used protocol
-fixtures; no real model command approval or real model migration is claimed.
+test suite was run. Native command approval was subsequently exercised directly through App Server:
+an exact-command temporary prompt rule produced a native `commandExecution/requestApproval` with
+`environmentId: local`, no additional permissions, and sandbox approvals disabled. Approval wrote
+one line; decline plus process termination left the marker at one line. The temporary rule was removed.
+This native CLI probe is separate from the desktop protocol-fixture smoke below.
 
 The protocol fixture was also driven through the desktop: **Approve once** created only
 `command-once.txt`; the following MCP action was denied, leaving `mcp-once.txt` absent and
 the run failed. Its persisted decisions are `approved` for the command and `denied` for the
 MCP action. This UI smoke is a fixture test, not a native model command-approval result.
 
-ORC-45 was created and started through the stable app's embedded MCP as run **13**. Its
-Implement and Check passed, while Review waits on the old stable read-only sandbox defect.
-ORC-14 and ORC-39 remain waiting, ORC-17 and ORC-30 failed at Check, and ORC-44 remains paused
-at its time limit. Their saved work has not been removed. Applying this runtime to the
-installed stable app and continuing those tasks requires a separately authorized installation
-and restart, per the repository's stable-build rule.
+ORC-45 was created and started through the embedded MCP as run **13**. After the authorized stable
+update, Review passed for ORC-14 and ORC-45; Check and Review passed for ORC-17 and ORC-30.
+ORC-39's original native `exec` session resumed through App Server with the same ID and performed
+approved Pencil writes. Saved worktrees and checkpoints remained present.
 
-## Resumed ORC-44 implementation
+Resumed verifiers then exposed an App Server contract error: `environments: []` disables local
+tools and the implicit writable worktree. Explicit local environments restore them. Codex reports
+all configured runtime roots, including extra writable folders; validation checks that exact set,
+and each turn receives it. Read-only startup overrides extra roots to empty. Native 0.159.2 probes
+confirmed both access modes and the extra-root contract. A native model session was first run with
+local access disabled, then resumed under the corrected local selection; it executed a shell write
+successfully with the original session ID (`.tmp/agent-runtime/native-local/result.json`). A second
+native resumed-session probe also wrote in the configured additional folder with sandbox approvals
+disabled (`.tmp/agent-runtime/native-local-extra/result.json`).
 
-The user subsequently reported that the root completed the installation and applied the remaining
-runtime/UI/Cargo delta to `orchester/orc-44-run-2`. The Implement agent inspected checkpoint
-`9b3484f`, its saved `5f11338` implementation, that applied delta, and the independent verifier's
-root `.tmp/agent-runtime/verify/report.md`. The current effective-policy and migration code already
-incorporates the earlier work; replaying the earlier patch would replace newer behavior.
+The root also fixed ORC-44 Review findings directly: approvals do not allow sandbox exceptions,
+known project MCP secrets are redacted before activity tracking/persistence (including JSON escapes),
+and a soft stop after delivery records an interruption. The runtime-only fixes were transferred onto
+ORC-44's saved work without changing the canonical design. Fresh downstream checks remain required.
+Task-specific UI mismatches in ORC-30 were sent to its Implement agent for correction; the root
+does not substitute its own QA for those agents. Final task verification remains in progress.
 
-This resumed step preserves the applied delta and performs no installation, stable-process control,
-design writes, or implementer design verification. The original installation-pending note above is
-historical. The user's later installation report does not turn fixture command/migration coverage
-into native model evidence.
+An existing production session was then resumed without starting a model turn. This exposed
+Windows path normalization: Codex converts the runner's mixed separators to backslashes.
+Environment cwd and root validation now compares filesystem paths, retaining exact root-set
+equality instead of comparing their string spelling. The protocol fixture reproduces this
+normalization; all four command approval regressions pass.
 
-The later independent steps must check native harmless command approve/deny, native migration from
-a pre-existing noninteractive session, one-action/duplicate/session scoping, interruption recovery,
-paused active-time accounting, unchanged published/other-run policies, and inherited MCP/account
-availability. Design comparison uses the already-authored `DMBmo`, `W29Od2`, `HnBBr`, `ossOP`,
-`h3KeVQ`, and `GbNSA` references at matching app sizes and exact owned PID, without interacting
-with the stable app. Physical Mac verification and full runner/desktop cross-check remain unproven.
+The next ORC-44 Review correctly returned `failed` for a separate Apply-now recovery gap.
+The worker now waits for active MCP calls as well as shell commands. A permission restart
+whose approval delivery lacks a confirmed result requests a checkpoint pause and requires
+explicit continuation. Two runner regressions cover a held approved MCP action and a pending
+decision interrupted for a permission change; both pass. The root implements these fixes
+directly and transfers only the runtime delta into the preserved ORC-44 worktree.
 
-### Final checks in the resumed worktree
+The fresh ORC-30 Review exposed a separate result-contract ambiguity: its report contained a
+negative verdict and two major defects, but its structured outcome was `done`. The shared
+new/resumed prompt and result schema now define `done` as completion with passing required
+checks. A completed Review/Verify with a negative verdict or unresolved blocking/major
+findings must return `failed` so pipeline failure handling can route corrections. Genuine
+missing decisions, access or permissions remain `question`. This preserves the existing
+wire format and does not classify prose or rewrite past results. All three `outcome_prompt`
+regressions pass; final `tools/check.ps1` is `check: OK`. Model compliance remains a live
+agent responsibility, not something these contract tests guarantee.
 
-All **67 filtered tests passed** in this worktree's isolated Cargo target directory:
+## Installed contract and resumed task verification
 
-| Crate / test binary | Named filters | Passed |
-| --- | --- | --- |
-| core / agent_invocation | `invocation_` | 11 |
-| core / command_approvals | `approvals`, `permissions_asking` | 3 |
-| core / permissions | `permissions_` | 16 |
-| core / run | `run_permissions` | 8 |
-| store / tool_approvals | `request`, `claimed_approval` | 4 |
-| runner / command_approvals | `command_approvals_` | 3 |
-| runner / run_permissions | `run_permissions_` | 6 |
-| runner / environment | `environment_` | 6 |
-| desktop / form_keyboard | `agent_permissions_`, `run_permissions_`, `step_inspector_narrows_the_profile_commands_and_never_widens` | 8 |
-| desktop / i18n | `every_key`, `locales_have` | 2 |
+The authorized stable update completed at 2026-09-30 15:44 UTC after owned desktop
+57560 and runner 37456 exited through the save-and-close flow. The settled binaries and
+both real databases were backed up under `.tmp/agent-runtime/pre-update-20260930-154420/`.
+The install helper completed successfully; no second installer was started.
 
-Each row used `cargo test -p orchester-<crate> --test <binary> <filter>`; runner rows also
-used `--features test-agent`. Final `powershell -File tools/check.ps1` returned **`check: OK`**
-(formatting, workspace/all-targets/all-features clippy with warnings denied, file sizes, UI literals).
-`git diff --check` passed. Current core/exec `cargo check` and clippy with `-D warnings` both
-passed for `aarch64-apple-darwin`.
+The installed pair in `E:/projects/orchester` matches the release candidate manifest:
 
-The resumed implementer did not run the full test suite, rebuild/install a release, perform
-native model smoke tests, or perform design verification. Native MCP smoke and independent
-visual results above belong to the root's prior verification. Native command/session migration
-coverage and physical Mac runtime verification remain explicitly for independent follow-up.
+| Binary | SHA-256 |
+| --- | --- |
+| `orchester.exe` | `5abac1de19516eeefd903bd10ce87d4a027c7a947e5b41e1c9fb3f05451aba3e` |
+| `orchester-runner.exe` | `1e81790f2caddc5d065b291b6ad823260191c7d9dcba02c15c72237e157f02fa` |
 
-### Continuation after startup validation failure
+The new owned desktop 63184 and runner 61600 opened the preserved project. The desktop
+connected through exact-PID embedded MCP without taking focus. ORC-44's existing run
+now has a 4,000,000-token budget; its 7,200,000 ms time limit is unchanged. Its fresh
+Check and Review passed; independent Verify remains in progress. ORC-30 and ORC-39
+resumed their existing Implement steps. ORC-14 and ORC-17 retain their completed
+Implement work and await available slots for downstream verification.
 
-The root subsequently reported native Codex 0.159.2 command approve/deny coverage, startup checks
-for both access modes, and a resumed model session writing successfully in both the worktree and
-an authorized additional folder. These are root-reported live results, not new native tests by
-this implementer. The root also reports that the failed startup executed no model turn and
-preserved saved work. This supersedes the earlier native-command coverage limitation above.
+ORC-45's independent Review and Verify pass within the approved scope; run 13 is
+`succeeded`. Its `host-ready-155347` and `host-short-160636` timelines remain
+inconclusive, with original PID markers, verdicts and gap summaries preserved.
+The fresh `host-priority-161506` timeline passes the unchanged judge for owned
+PID 30256 at a documented 1,000 ms interval. This covers sampled instants of that
+short lifetime only, not continuous focus or previous functional lifetimes.
+The verifier retained unreached-state and macOS limits in `.tmp/verify/report-final.md`.
+ORC-14 resumed its existing Check in the released slot. No merge or root commit occurred.
 
-The implementer preserved the transferred runtime delta: read-only invocations clear inherited
-writable roots, startup validates the exact local runtime root set, and each turn supplies that
-same authorized set. Existing source retains disabled sandbox exceptions, literal/JSON-escaped
-secret redaction before persistence, and delivered-approval interruption bookkeeping.
+## Native command decisions and recovery session validity
 
-All **29 affected filtered tests passed** on this continuation:
+ORC-44's independent native verifier exposed a real 0.159.2 command request with
+`availableDecisions: ["accept", "cancel"]`. Requiring `decline` rejected that request
+before the approval dialog appeared. Root reproduced the envelope with one harmless
+exact-command temporary rule; it did not approve or execute the command. The redacted
+request is saved at `.tmp/agent-runtime/native-command-2bb73372/request.json`.
+The earlier decline-plus-process-termination probe proved marker containment only;
+it did not establish that `decline` was an advertised or accepted denial decision.
 
-| Crate / test binary | Named filters | Passed |
-| --- | --- | --- |
-| core / agent_invocation | `invocation_`, `app_server_` | 12 |
-| core / command_approvals | `approvals`, `permissions_asking` | 3 |
-| store / tool_approvals | `request`, `claimed_approval` | 4 |
-| runner / command_approvals | `command_approvals_` | 4 |
-| runner / run_permissions | `run_permissions_` | 6 |
+The parser now requires action-scoped `accept` plus an offered denial, preferring
+`decline` when available and otherwise sending `cancel`. Legacy missing/null decision
+lists retain `decline`; malformed, sticky-only and incomplete lists fail closed.
+The chosen denial stays attached to the correlated request. No session-wide approval,
+sandbox exception or policy amendment is introduced. Root also replaced the obsolete
+single-run permissions notice with the exact current canonical Pencil guidance.
+Only these three source files were transferred to ORC-44 after checking the original
+bytes, without resetting its worktree. Independent task QA must cover the changed inputs.
 
-Runner tests use `--features test-agent`. The four approval tests cover approve/migration with
-an additional writable folder, command denial, MCP-write denial, and soft-stop after approval
-delivery without automatic replay. `powershell -File tools/check.ps1` returned `check: OK`.
-Core/exec check and clippy with warnings denied passed for `aarch64-apple-darwin`.
+Repeated downstream Verify recoveries also reused sessions containing a completed
+negative assessment of an earlier candidate. Recovering an upstream step now starts
+dependent provider sessions on the current source, including formerly failed verifiers.
+Older failed parallel worktrees and invocation records remain intact, but are not reused
+as the new candidate. Recovery-history walks stop at this invalidation boundary instead
+of falling back to an older worktree or session. The selected step and unaffected
+unfinished parallel steps keep their saved work and sessions.
+Ordinary permission, question, budget and interrupted-step resumes are unchanged.
+Every invocation's result contract now requires current-input provenance, fresh
+reproduction of findings on changed work and explicit limits when reusing checks.
 
-Independent Check, Review and Verify must run again, exercise native command/MCP approve and
-deny, confirm same-session migration and retained progress, and inspect exact permission roots,
-secret persistence, interruption recovery and one-action decision scoping. Verify must compare
-the documented UI states against the canonical design at matching sizes using its exact owned
-PID; it may use the authorized disposable fixture and root-provided host watcher. No new design
-writes or implementer design verification occurred. The full suite, native model tests and physical
-Mac runtime verification were not run by this implementer on this continuation.
+Validation of this additional root delta:
 
-### Latest Review fix handoff
+- Five filtered core `failed_recovery_` tests pass, including dependent-session
+  invalidation, selected/parallel continuity and unchanged replayed history.
+- Two runner `recovery_sessions_` regressions pass through real scheduler/storage,
+  preserved uncommitted work and fake CLI arguments: Implement resumes, dependent
+  Review starts fresh, old invocations remain intact and a fresh negative verdict stays failed.
+  A formerly failed parallel Review receives the corrected upstream source in a new
+  worktree; the old source and uncommitted partial work remain intact in its older worktree.
+- All six existing runner `failed_recovery_` regressions and three `outcome_prompt_`
+  regressions pass. The native command parser and locale regressions passed earlier
+  in this same source milestone (three and four tests respectively).
+- `tools/check.ps1` reports `check: OK`; core Darwin clippy with warnings denied passes.
+  Full desktop/runner Darwin compilation and physical Mac testing remain unperformed
+  for the native-toolchain limitation documented above.
 
-Following checkpoint `0b958ce`, the root supplied a six-file runtime delta. This implementer
-inspected and preserved it without reimplementing the fixes. Startup compares cwd and exact
-authorized root sets as filesystem paths, accepting Codex's Windows separator normalization.
-Active MCP calls now prevent Apply-now termination until completion, as active commands do.
-If a permission restart interrupts approval delivery, the run pauses with an explicit uncertainty
-report rather than automatically starting another invocation.
+The installed 15:44 pair remains the earlier contract; the new delta is not yet installed.
+The six task runs retain their identities. ORC-45 is succeeded; current ORC-14/17/30
+verification uses new candidates, ORC-39 needs continuation after the former daily
+budget stop, and ORC-44 needs upstream adoption plus fresh independent QA. Its old
+PID 20152 host verdict is inconclusive because of sampling gaps, and the verifier
+found a real long-Target truncation without a hover reveal; that UI finding is pending
+its task-specific Implement agent. The temporary project maximum and daily budgets
+are 16M and 40M; default run/time limits remain 1.4M and 30 minutes. The user subsequently
+authorized Root commits after inspecting the pending runtime changes. Task branches remain unmerged.
 
-The root reports a no-model-turn probe of the actual preserved session, a stable release update,
-a passing release build and core/exec Darwin clippy. Session IDs, worktree snapshots, checkpoints,
-conversation, normal account and global MCP settings remain preserved according to that handoff.
-The startup rejection was a path-comparison error, not a sandbox denial or loss of saved work.
+## Graceful shutdown while a tool decision is pending
 
-This implementer reran only the newly affected named regressions:
+The committed pair (`ad13563`, `c8c683f`) was installed at 18:50:48 UTC after its final
+quality gate and release build. Actual installed desktop and runner hashes match
+`.tmp/agent-runtime/current-runtime-candidate-v2/build-manifest.json`. That update did
+not gracefully save ORC-14: the old app's CloseWaiting overlay covered its pending
+Pencil approval and the run needed an explicit Quit now interruption and continuation.
+Its existing session, checkpoint and worktree were preserved.
 
-- `cargo test -p orchester-runner --features test-agent --test approval_permissions approval_permissions_`:
-  **2 passed**, covering active-MCP waiting and uncertainty pause without a new invocation.
-- `cargo test -p orchester-runner --features test-agent --test command_approvals command_approvals_`:
-  **4 passed**, including the normalized Windows path fixture and extra-root migration.
-- `powershell -File tools/check.ps1`: **check: OK**.
+Root now fixes this deadlock in the runner instead of answering hidden approvals during
+shutdown. Pause lets ordinary invocation work finish. When the invocation awaits a tool
+decision, it ends and checkpoints the actual work without granting or denying that action.
+The open execution and provider session are preserved. Interrupted approval records prevent
+automatic replay when attaching again; continuation remains explicit. A decision received
+after checkpoint termination starts is rejected.
 
-Earlier unrelated checks were not repeated. This continuation did not run a release build,
-native model probes, physical Mac runtime tests, or design verification. Independent Check,
-Review and Verify must run again, including native approve/deny and preserved-session migration,
-active-MCP checkpoint waiting, uncertain-delivery pause and exact-root enforcement. Verify uses
-the canonical UI references and an exact-PID private app, with the root's watcher supplied before
-launch; typed disposable fixtures and interactive export are authorized. No app was launched or
-design changed by this implementer.
+The parser retains the correlated tool item so checkpoint safety excludes only that pending
+item. Other active commands and MCP calls must finish first. A pause requested during an
+approved command remains pending until it finishes; a later approval request then checkpoints
+without executing the newly requested action. Apply-now uses the same safety check for a
+pending decision alongside other active tools.
 
-### Long absolute Target correction on f4b6f5c
+Validation of this additional, uncommitted root delta:
 
-Current implementation input is checkpoint `f4b6f5c` plus the saved desktop/documentation delta
-from this continuation. The native accept/cancel parser, command tests and canonical permission
-guidance in that checkpoint remain intact; shared runtime was not reimplemented. The negative
-`.tmp/verify/resumed/native-report.md` covers the earlier `e946b9a` pin and PID 20152 only.
-Its long absolute filePath finding informed this correction; its old screenshots and host verdict
-are historical, not evidence for the changed candidate.
+- Three `approval_shutdown_` scheduler/storage/protocol regressions pass: pending command,
+  pending MCP, and active-command completion followed by a later pending MCP. They assert
+  actual checkpoint contents, the preserved session/open execution, absence of unapproved
+  side effects, and no automatic invocation after reconnect.
+- The core `pending_approval_` test proves another MCP item remains active while one waits.
+- Two existing `approval_permissions_`, four `command_approvals_`, one
+  `lifecycle_finish_at_checkpoints_`, and one `control_pause_waits_` regressions pass.
+- `tools/check.ps1` reports `check: OK` in `.tmp/agent-runtime/check-shutdown.log`;
+  core Darwin clippy with warnings denied passes.
 
-Target/cwd now uses the shared wrapping property layout with the existing MonoValue theme role.
-The label remains at the top, the full raw path is selectable, and the row grows to fit wrapped
-lines instead of using nowrap/ellipsis. Existing non-path wrapping properties retain their style.
-No new strings, theme values, design writes, runtime changes or unrelated layout changes were made.
+The shutdown correction has a successful release build and is ready for the Root commit the user
+authorized on this turn. It is not installed. No task branch was merged. Physical Mac testing,
+the full test suite, and full desktop/runner Darwin compilation
+remain unperformed; the native C-toolchain limitation still applies.
 
-Fresh checks passed: desktop `i18n` filters `locales_have` and `every_key` (one test each),
-desktop `theme` filters `extra_typography_follows_pencil` and `mono_text_uses_bundled_geist_mono`
-(one test each), `powershell -File tools/check.ps1` (`check: OK`), and `git diff --check`.
-An initial `theme_` filter matched zero tests and is not counted as coverage. Runtime/native
-checks and Mac runtime checks were not repeated for this desktop-only correction; prior results
-retain their original revision provenance and do not establish a new native or visual verdict.
+## Immutable invocation launch permissions
 
-Fresh independent Check, Review and Verify must cover current source and a new pinned pair.
-Verify must reproduce a real long absolute filePath Target, including a long unbroken segment,
-confirm the unique filename and complete path are readable/selectable without hover, and compare
-short/long MCP Target and command cwd states against `h3KeVQ`/`GbNSA` at matching sizes. Check
-button visibility and usable layout at the narrower supported size. Native approve/deny and
-same-session migration must use the current pin; old negative QA is not its verdict. Report the
-new pin **READY** before any private-app launch so the root supplies a fresh host watcher.
-This implementer launched no app, produced no pin, and performed no design verification.
+ORC-44's independent Review found that a Next invocation change immediately appeared as the
+active policy while the running agent still enforced its earlier permissions. Its Implement
+agent identified a shared data gap: invocation records held no actual launch-policy snapshot,
+and permission-change events record desired settings. Timestamp inference would invent evidence.
 
-### Command caption correction after 72bfa7c verification
+Root added the shared core/store/runner contract directly. `Invocation.permissions` is the
+enforced `AgentPermissions` used by the prepared launch command. The runner records it once
+before starting that process, including any network-on fallback when network-off cannot be
+enforced. Later run overrides, progress saves, completion and session continuation never
+rewrite an earlier invocation's snapshot. The store rejects another write, a command-tool
+policy, a closed invocation and a missing invocation. A database trigger protects an existing
+snapshot from direct update. The appended migration leaves older agent invocations explicitly
+unknown; neither desired settings nor event timestamps backfill them.
 
-The current source input is `72bfa7cb4e824b0a3ff54bbe7a537e3662d826cb` plus this
-continuation's locale/test/documentation delta. The negative report at
-`.tmp/verify/candidate-72bfa7c/native-report.md`, its PID 63328 sampled observations and its
-unverified scenarios remain historical evidence for that pin, not results for the corrected source.
+Validation of this contract:
 
-`runs.toolApproval.commandExplanation` now states that Approve once permits only this action
-within existing permissions and adds no sandbox, folder or network access; Deny prevents execution
-and fails the step. English is the only shipped locale. The new semantic test checks each safety
-claim and the agent/cwd placeholders, and requires explicit semantic coverage when another locale
-ships. Native accept/cancel handling, runtime boundaries and full Target/cwd wrapping are unchanged.
+- Three `invocation_permissions_` store tests pass: immutable round-trip/reopen despite a
+  conflicting progress record, invalid writes, and migration preserving the legacy session,
+  invocation and run without inventing a policy.
+- Six `run_permissions_` runner tests pass, including assertions that active policies remain
+  unchanged until the next launch or Apply-now checkpoint, resumed sessions get the new
+  snapshot, cancelled restarts retain their history, and Claude's unsupported network-off
+  is recorded as the actual network-on policy.
+- Four `command_approvals_` runner tests pass with assertions that migrating to App Server
+  records the actual Ask/MCP policy and preserves preceding launch snapshots.
+- Three `approval_shutdown_` tests pass with the new launch recording present.
+- `tools/check.ps1` reports `check: OK` in
+  `.tmp/agent-runtime/check-invocation-policy.log`; core Darwin clippy passes with warnings denied.
 
-The root reports updating only canonical `GbNSA/mXvUT` copy through Pencil MCP. This session
-has no callable Pencil tools; saved design exports predate that update. Fresh canonical-caption
-access was requested. The root subsequently supplied a fresh MCP readback of `GbNSA/mXvUT`:
-"Approval tester requests this command in the task worktree. Approve once permits only this action
-within existing permissions; it does not add sandbox, folder or network access. Deny prevents
-execution and fails this step." The source uses that sentence verbatim with the dynamic
-`{{agent}} requests this command in {{cwd}}.` prefix. This is root-provided canonical text
-provenance, not an implementer visual comparison. No current design comparison is claimed.
-No app was launched or pin
-prepared. Before a new private app launch the verifier must report the built/pinned pair READY
-and obtain the root's new watcher.
+Root supplied the 14 API/source/test files to the preserved ORC-44 worktree after checking every
+target. The only divergent target, `step/mod.rs`, retained its existing recovery behavior and
+received only the two launch-recording lines. Original files and hashes remain in
+`.tmp/agent-runtime/invocation-policy-handoff-v1`. Task-specific copy and evidence were preserved.
+Its Implement agent owns the current-versus-next display correction and fresh independent QA.
 
-Fresh Check, Review and independent Verify must assess the new input. Remaining native denial,
-MCP approve/deny, later requests and preserved-session migration require current-pin evidence.
-Verify must cover the corrected command explanation, short/long Target/cwd, current permissions
-and unsupported states through exact-owned-PID MCP. Prior runtime checks retain their stated
-input provenance; no new runtime, native, Mac or design verification is claimed here.
-
-Fresh implementation checks passed: `cargo test -p orchester-desktop --test i18n
-command_approval_explanation` (1), `locales_have` (1), and `every_key` (1), each as a
-separate named invocation. `powershell -File tools/check.ps1` returned `check: OK` and
-`git diff --check` passed. These checks cover the corrected source, not a new pinned release.
-
-After checkpoint `391a5b0`, the root's exact-caption answer was applied and the three named
-i18n tests and `tools/check.ps1` were rerun successfully against `391a5b0` plus this saved
-caption/test/documentation delta. Both request placeholders remain unchanged. Independent
-Verify must read/export fresh canonical `GbNSA`; earlier exports remain historical.
-
-### Review912 effective-policy display blocker
-
-Inspection input is clean checkpoint `2df92ae` (the Review912 candidate). Existing command copy,
-native accept/cancel handling and Target/cwd wrapping were preserved. No runtime or UI source
-was changed on this inspection.
-
-The desktop resolver `tasks/permissions.rs` obtains `Run::step_permissions` from the current
-mutable run override, even while an earlier invocation remains active. `Invocation` in
-`core/src/run/invocation.rs` carries no permissions or enforcement snapshot. The
-`ActivityStore::start_invocation` API accepts run, execution, model and timestamp only;
-`save_invocation` cannot persist the actual launch policy. Runner `step/command.rs` resolves
-`EnforcedPermissions` when constructing the command after the invocation has been recorded.
-`PermissionsChanged` events identify desired overrides, not the exact policy passed to each
-invocation. Timestamp reconstruction in the UI would substitute an inference for a launch record.
-
-Per the user's instruction, this shared architecture/API gap is reported to the root rather
-than worked around in the desktop. Required invariant: an immutable invocation policy snapshot
-must represent the permissions actually used to construct its transport, with a public read API
-and an explicit unknown state for historical invocations lacking that record. The root must
-provide that API or authorize its implementation before the requested truthful active/next-policy
-display and enabling/disabling regressions can be completed. The UI must keep desired settings
-editable independently and show first-change NextInvocation and ApplyNow checkpoint timing.
-
-No tests/checks were rerun for this documentation-only blocker report. Review912 remains a
-negative verdict on `2df92ae`; no corrected candidate, pinned pair or new QA verdict is claimed.
-
-### Immutable policy API adoption and current/next display correction
-
-Input is `a2941a7b7d291f195a0020da201292a6b6502655` plus the root's uncommitted shared
-API handoff and this desktop/test/documentation delta. All 14 supplied files matched their
-`adopted_sha256` entries in the root's
-`H:/projects/orchester/.tmp/agent-runtime/invocation-policy-handoff-v1/manifest.json` after
-implementation (zero mismatches). The root's runtime changes remain uncommitted/uninstalled
-according to its handoff; this implementer performed no installation or stable-process control.
-
-The task resolver reads actual permissions only from `Invocation.permissions`. It identifies
-current versus last invocation, explicitly shows unknown when the snapshot is absent, and uses
-the mutable narrowed run override only for next-invocation settings. Recorded Network on is not
-relabeled as requested Network off. Command and MCP approval status are both visible. A first
-NextInvocation change has a queued timing notice even without an earlier Apply-now record;
-Apply now retains the actual policy while the checkpoint notice is pending. The popover labels
-its editable desired settings separately from the current/last summary. Terminal views show last
-recorded policy and reference-only settings; successful runs retain the separate Ready-for-review
-screen, which has no permissions row. No published profile change or runtime reconstruction was
-introduced. Existing command caption, accept/cancel parser and Target/cwd wrapping are preserved.
-
-Fresh filtered tests passed on this candidate:
-
-| Crate / binary | Filter | Passed |
-| --- | --- | --- |
-| desktop / run_permission_policy | `run_policy_` | 5 |
-| desktop / form_keyboard | `run_permissions_` | 4 |
-| desktop / i18n | `locales_have`, `every_key`, `command_approval_explanation` | 3 |
-| desktop / theme | `extra_typography_follows_pencil` | 1 |
-| store / invocation_permissions | `invocation_permissions_` | 3 |
-| runner / run_permissions | `run_permissions_` | 6 |
-| runner / command_approvals | `command_approvals_` | 4 |
-
-Runner commands use `--features test-agent`. Policy tests cover enabling and disabling Ask/MCP
-with NextInvocation, unchanged active snapshots until the next invocation, first-change timing,
-Apply-now checkpoint/application, unknown history, idle/completed policies and unsupported Network
-off versus recorded Network on. The headless first-change test toggles both controls, verifies the
-active summary and queued notice, restores desired settings without a new invocation, and confirms
-the completed launch snapshot is unchanged. Store tests cover migration and immutability; runner
-tests cover real scheduler continuation with protocol fixtures rather than native model results.
-
-Final `powershell -File tools/check.ps1` returned `check: OK`; `git diff --check` passed.
-An intermediate quality check caught an oversized notice function and was corrected by extracting
-the queued notice. Intermediate headless failures were test expectations for old copy and an absent
-Ready-for-review permissions row; final current-input tests passed. A concurrent relink encountered
-a Windows lock on the running owned test executable; after that test exited, the final test run
-linked and passed. Cargo emitted a cache-finalization access warning for a store incremental
-directory; compilation, tests and the warnings-denied clippy gate completed successfully.
-
-Review912's negative `2df92ae` verdict and earlier native/design evidence remain historical.
-Fresh independent Check, Review and Verify must assess the changed source and a fresh pinned pair.
-Verify must compare current/last/unknown summaries, first NextInvocation notices in both approval
-directions, desired popover settings, pending/applied checkpoint states and terminal reference states
-against the canonical design. Also complete current-pin native command denial, MCP approve/deny,
-later-request isolation, migration and the previously documented short/long Target/cwd states.
-Report the built/pinned pair READY before private-app launch for the root's new watcher; use only
-exact-owned-PID MCP and the authorized disposable fixture. This implementer launched no private
-app, created no pin and performed no design verification or native model tests. The full suite and
-physical Mac runtime were not run. Root-reported Darwin checks apply only to the unchanged shared
-handoff bytes, not to a new desktop/macOS runtime verdict.
+The user authorized committing the current Root work and requires all subsequent Root source
+changes in a separate worktree. The launch-policy delta is not installed yet. Physical Mac,
+the full suite and full desktop/runner Darwin compilation remain unperformed.

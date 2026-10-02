@@ -2,12 +2,13 @@
 //! `orchester-fake-codex`: the popover changes the permissions for the run, Apply now shows the
 //! change pending until the agent restarts and then applied, Also save to the profile adds the
 //! change to the profile's draft, Keep for next invocation instead cancels the restart, and
-//! Escape or Cancel close the popover without changes.
+//! Escape or Cancel close the popover without changes. On `orchester-fake-claude` the popover says
+//! what Claude Code runs besides the allowed commands.
 
 use std::{fs, path::Path};
 
 use orchester_core::{
-  connection::stream::AgentEvent,
+  connection::{AgentProvider, stream::AgentEvent},
   permission::RepositoryAccess,
   resource::{AgentProfile, ResourceKind},
   store::{ActivityStore, ResourceStore},
@@ -17,13 +18,25 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
+  task_run::{
+    agent_step, create_and_run, fake_claude, has, init_repository, latest_run, programs, run_finished, seed_agent,
+  },
 };
 
 fn desktop_running(instructions: &'static str) -> Desktop {
+  running_on(AgentProvider::CodexCli, instructions)
+}
+
+/// The task page while the Builder on `provider`'s fake CLI runs its first command.
+fn running_on(provider: AgentProvider, instructions: &'static str) -> Desktop {
   let (runner, fake) = programs();
+  let fake = match provider {
+    AgentProvider::CodexCli => fake,
+    AgentProvider::ClaudeCodeCli => fake_claude(&fake),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the desktop tests have no native agent"),
+  };
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed_steps(repo, &fake, |builder| {
+    seed_agent(repo, &fake, provider, |builder| {
       vec![agent_step(builder, "implement", "Implement", instructions, &[])]
     });
   });
@@ -74,6 +87,19 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
   let mut desktop = desktop_running("Wait for release. Draft first. Then keep working.");
   desktop.click("task-permissions-view");
   desktop.wait_for("task-permissions-popover");
+  // Any command in the worktree on Codex: what needs more than the sandbox asks a person.
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "Beyond the sandbox, commands ask you first."
+  ));
+  // App Server still applies the user's own Codex rules, never the repository's; the popover says so too.
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "Your own Codex rules still apply: a command they allow runs outside the sandbox without asking you. \
+     The repository’s .codex settings are ignored."
+  ));
   for (width, height) in [(1440, 960), (960, 700), (1440, 960)] {
     desktop.tree.resize(width, height);
     desktop.pass();
@@ -87,47 +113,6 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
     }
   }
   desktop.click("task-permissions-cancel");
-}
-
-#[test]
-fn run_permissions_first_next_change_shows_actual_policy_and_queued_approval_settings() {
-  let mut desktop = desktop_running("Wait for release.");
-  desktop.click("task-permissions-view");
-  desktop.click("task-permissions-ask");
-  desktop.click("task-permissions-tool-approvals");
-  desktop.click("task-permissions-apply-next");
-  desktop.wait_until("first queued change", |desktop| has(desktop, "task-permissions-next"));
-  assert!(shows(&mut desktop, "task-permissions", "Current invocation:"));
-  assert!(shows(&mut desktop, "task-permissions", "Any command"));
-  assert!(shows(&mut desktop, "task-permissions", "MCP approvals off"));
-  desktop.click("task-permissions-view");
-  assert!(shows(
-    &mut desktop,
-    "task-permissions-current-policy",
-    "MCP approvals off"
-  ));
-  desktop.click("task-permissions-any");
-  desktop.click("task-permissions-tool-approvals");
-  desktop.click("task-permissions-apply-next");
-  desktop.wait_until("queued settings restored to active policy", |desktop| {
-    !has(desktop, "task-permissions-popover") && !has(desktop, "task-permissions-next")
-  });
-  assert!(shows(&mut desktop, "task-permissions", "Any command"));
-  let run = latest_run(desktop.repo()).expect("run");
-  let db = ProjectDb::open(desktop.repo()).expect("open");
-  assert_eq!(db.invocations(run.id()).expect("invocations").len(), 1);
-  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
-  desktop.wait_until("completed run", |desktop| run_finished(desktop.repo()));
-  // Success switches to Ready for review, whose existing design has no permissions row.
-  let stored = db.invocations(run.id()).expect("completed invocation");
-  assert!(stored[0].ended_at.is_some());
-  assert!(
-    !stored[0]
-      .permissions
-      .as_ref()
-      .expect("launch snapshot")
-      .interactive_tool_approvals()
-  );
 }
 
 #[test]
@@ -148,8 +133,7 @@ fn run_permissions_apply_now_is_pending_then_applied_and_saved_to_the_profile_dr
   desktop.wait_until("the pending change", |desktop| {
     !has(desktop, "task-permissions-popover") && has(desktop, "task-permissions-pending")
   });
-  assert!(shows(&mut desktop, "task-permissions", "Current invocation:"));
-  assert!(shows(&mut desktop, "task-permissions", "Read-only"));
+  assert!(shows(&mut desktop, "task-permissions", "Applying at next checkpoint…"));
   assert!(shows(&mut desktop, "task-permissions-saved", "draft v2"));
   let db = ProjectDb::open(desktop.repo()).expect("open");
   let builder = db.resources(ResourceKind::AgentProfile).expect("profiles")[0].id();
@@ -214,4 +198,35 @@ fn run_permissions_popover_closes_without_changes_and_keeps_a_change_for_the_nex
     1,
     "the agent was not restarted"
   );
+}
+
+#[test]
+fn run_permissions_popover_on_claude_says_which_commands_run_unlisted() {
+  let mut desktop = running_on(AgentProvider::ClaudeCodeCli, "Wait for release.");
+  desktop.click("task-permissions-view");
+  desktop.wait_for("task-permissions-popover");
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, without listing them. Other \
+     commands ask you first."
+  ));
+  assert!(!shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "also allows any arguments"
+  ));
+  desktop.click("task-permissions-add-command");
+  desktop.wait_for("task-permissions-new-command");
+  desktop.type_text("rm -f build/x");
+  desktop.enter();
+  desktop.wait_for("task-permissions-command-1");
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-popover",
+    "rm -f build/x also allows any arguments after it, including ones that change files."
+  ));
+  desktop.click("task-permissions-cancel");
+  fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

@@ -1,8 +1,9 @@
 //! What actually starts when a connection's program runs, for the inspectors: shown only when it
 //! is not the program file itself. One rule for both inspectors: *Runs with* names the program
-//! that starts (`cmd.exe` for a command script, `Node.js` for an npm launcher), and *Script*
-//! follows only when that program runs a file other than the program file, i.e. the Node.js
-//! script of a launcher, in the program path's style (`NrLLz` and `fhoLS` in `JuVaA`, `tmOw7`
+//! that starts (`cmd.exe` for a command script, `Node.js` for an npm launcher of a script, the
+//! path of the program an npm launcher starts in its place, in the program path's style), and
+//! *Script* follows only when that program runs a file other than the program file, i.e. the
+//! Node.js script of a launcher, in the program path's style (`NrLLz` and `fhoLS` in `JuVaA`, `tmOw7`
 //! in `C0jjP`).
 
 use lurq::{app::ctx::Ctx, node::Element};
@@ -26,6 +27,11 @@ pub fn launch_properties(ctx: &Ctx, launch: Option<&Launch>, path_chars: usize) 
   match launch.via() {
     Via::Direct => Vec::new(),
     Via::CommandScript => vec![runs(CMD)],
+    Via::LauncherProgram => vec![styled_property(
+      &ctx.t("connections.property.runs"),
+      &display::shorten_path(launch.program(), path_chars),
+      ValueStyle::Path,
+    )],
     Via::NodeScript { script } => vec![
       runs(NODE),
       styled_property(

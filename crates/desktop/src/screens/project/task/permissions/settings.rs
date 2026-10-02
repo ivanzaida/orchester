@@ -26,9 +26,11 @@ use orchester_core::{
 
 use super::RunPermissionsProps;
 use crate::{
-  agents::permissions::{option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    escalations, file_command_hints, option_title, unavailable, unlisted_commands, with_command, without_command,
+  },
   messages::Message,
-  theme::{ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     command_chip::CommandChip,
     field::{field_error, text_input},
@@ -37,6 +39,7 @@ use crate::{
     message_text,
     option_card::unavailable_reason,
     pressable::{Ring, keyboard_stop},
+    radio::Radio,
     switch::Switch,
   },
 };
@@ -128,37 +131,12 @@ fn radio(
   available: bool,
   choose: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let (glyph, color) = if selected {
-    (Icon::CircleDot, PaletteColor::TextPrimary)
+  let radio = Radio::new(id, ctx.t(option_title(option)), selected);
+  if available {
+    radio.render(choose)
   } else {
-    (Icon::Circle, PaletteColor::TextSecondary)
-  };
-  let row = Button::empty()
-    .button()
-    .id(id)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Sm)
-    .describe("selected", if selected { "true" } else { "false" })
-    .child(icon(glyph, IconSize::Event, color.clone()))
-    .child(
-      Text::new(&ctx.t(option_title(option)))
-        .variant(TypographyStyle::FieldLabel)
-        .color(color),
-    );
-  if !available {
-    return row
-      .focusable(false)
-      .cursor(CursorIcon::NotAllowed)
-      .opacity(UNAVAILABLE_OPTION_OPACITY)
-      .describe("state", "unavailable")
-      .into();
+    radio.unavailable()
   }
-  keyboard_stop(row, Ring::Outer)
-    .cursor(CursorIcon::Pointer)
-    .describe("state", "available")
-    .on_click(move |_| choose())
-    .into()
 }
 
 fn options(options: Vec<Element>) -> Element {
@@ -247,12 +225,19 @@ fn commands(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPe
       .into(),
   ];
   content.extend(reasons([ask_why, allowed_why, any_why]));
+  content.extend(escalations(ctx, provider, draft.commands()).map(|note| hint(&note)));
+  // App Server cannot leave out the user's execpolicy rules (`docs/interactive-tool-approvals.md`).
+  if provider == Some(AgentProvider::CodexCli) {
+    content.push(warning(&ctx.t("agents.permissions.codexRulesNote")));
+  }
   if let Some(list) = listed {
     content.push(command_entries(ctx, edit, &list, props));
     content.extend(changed_note(ctx, &list, props));
     if let Some(error) = edit.command_error.get() {
       content.push(field_error(&message_text(ctx, &error)));
     }
+    content.extend(file_command_hints(ctx, &list).iter().map(|note| hint(note)));
+    content.extend(unlisted_commands(ctx, provider, &list).map(|note| hint(&note)));
   }
   group(ctx, "agents.permissions.commands", content)
 }
@@ -266,25 +251,21 @@ fn tool_approvals(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &A
     ctx.t("agents.permissions.toolApprovals"),
     enabled,
   );
-  let control = if !required && (provider == Some(AgentProvider::CodexCli) || enabled) {
+  let control = if !required && (provider.is_some() || enabled) {
     let edit = edit.clone();
     switch.render(move || edit.change(|draft| draft.set_interactive_tool_approvals(!enabled)))
   } else {
     switch.locked()
   };
   let mut controls = vec![control];
-  if provider != Some(AgentProvider::CodexCli) {
-    controls.push(
-      Text::new(&ctx.t("agents.permissions.toolApprovalUnavailable"))
-        .variant(TypographyStyle::Description)
-        .into(),
-    );
-  } else if enabled || *draft.commands() == CommandPermission::AskBefore {
-    controls.push(
-      Text::new(&ctx.t("agents.permissions.transport"))
-        .variant(TypographyStyle::Description)
-        .into(),
-    );
+  let transport = match provider {
+    Some(AgentProvider::CodexCli) => Some("agents.permissions.transport"),
+    Some(AgentProvider::ClaudeCodeCli) => Some("agents.permissions.claudeTransport"),
+    // A native agent runs in no version yet, so no transport asks for it.
+    Some(AgentProvider::AnthropicApi | AgentProvider::OpenAiApi) | None => None,
+  };
+  if let Some(transport) = transport.filter(|_| enabled || *draft.commands() == CommandPermission::AskBefore) {
+    controls.push(hint(&ctx.t(transport)));
   }
   group(ctx, "agents.permissions.toolApprovalsHeading", controls)
 }
@@ -407,15 +388,32 @@ fn changed_note(ctx: &Ctx, list: &AllowedCommands, props: &RunPermissionsProps) 
       [("commands", join(removed).as_str())],
     ));
   }
-  notes
-    .into_iter()
-    .map(|note| {
-      Text::new(&note)
+  notes.iter().map(|note| hint(note)).collect()
+}
+
+/// A note under a setting, in the style of the unavailable reasons (`W29Od2`).
+fn hint(note: &str) -> Element {
+  Text::new(note)
+    .variant(ExtraTypography::Hint.role())
+    .color(PaletteColor::TextMuted)
+    .into()
+}
+
+/// A hint that limits what the settings above promise, after a warning icon.
+fn warning(note: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Start)
+    .describe("role", "codex-rules")
+    .child(icon(Icon::TriangleAlert, IconSize::Reason, PaletteColor::TextMuted))
+    .child(
+      Text::new(note)
         .variant(ExtraTypography::Hint.role())
         .color(PaletteColor::TextMuted)
-        .into()
-    })
-    .collect()
+        .flex(1.0),
+    )
+    .into()
 }
 
 /// Network (`q4Nelz`): a switch, locked on with the reason when off cannot be enforced.

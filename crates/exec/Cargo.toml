@@ -9,9 +9,25 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# Prints its arguments, for the tests of programs started in place of their npm launcher. Built
+# only with the `test-program` feature, so it never ships.
+[[bin]]
+name = "orchester-print-args"
+path = "tests/support/print_args.rs"
+required-features = ["test-program"]
+
+[[test]]
+name = "launcher_program"
+required-features = ["test-program"]
+
+[features]
+test-program = []
+
 [dependencies]
 orchester-core.workspace = true
 sha2.workspace = true
+# The content hashes of the ripgrep programs copied for agents, shared by the runner's threads.
+parking_lot.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

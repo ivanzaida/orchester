@@ -1,4 +1,4 @@
-use super::{AgentEvent, RunnerProblem};
+use super::{AgentEvent, MemoryNotSavedReason, RunnerProblem};
 use crate::connection::mcp::McpServerProblem;
 
 impl AgentEvent {
@@ -29,7 +29,15 @@ impl AgentEvent {
         }
         problem.redact(redact);
       }
-      Self::SessionStarted { .. } | Self::TurnStarted | Self::TurnCompleted { .. } => {}
+      // A tool name the server reported.
+      Self::McpToolDeclined { tool, .. } | Self::McpToolFinished { tool, .. } => *tool = redact(tool),
+      // Servers and tools named as the project configured them; plan limits are numbers and the CLI's plan name.
+      Self::PlanLimits { .. }
+      | Self::SessionStarted { .. }
+      | Self::TurnStarted
+      | Self::TurnCompleted { .. }
+      | Self::McpToolNotAsked { .. }
+      | Self::McpExemptionNotApplied { .. } => {}
     }
   }
 }
@@ -56,7 +64,12 @@ impl McpServerProblem {
 impl RunnerProblem {
   fn redact(&mut self, redact: &impl Fn(&str) -> String) {
     match self {
-      Self::CouldNotStart { detail } | Self::CheckpointFailed { detail } => *detail = redact(detail),
+      Self::CouldNotStart { detail }
+      | Self::CheckpointFailed { detail }
+      | Self::CodebaseIndexUnavailable { detail }
+      | Self::RipgrepUnavailable { detail, .. }
+      | Self::MemoryScanFailed { detail } => *detail = redact(detail),
+      Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } => *program = redact(program),
       Self::MergeConflict { branch, files } => {
@@ -65,7 +78,23 @@ impl RunnerProblem {
           *path = redact(path);
         }
       }
-      Self::StepBudgetReached { .. } => {}
+      Self::MemoryNotSaved { reason } => reason.redact(redact),
+      // Versions, a model id and counts, parsed as such: no text that could hold a secret.
+      Self::StepBudgetReached { .. }
+      | Self::RipgrepNotFound { .. }
+      | Self::MemoryUnreadable { .. }
+      | Self::StderrLeftOut { .. }
+      | Self::CliTooOld { .. }
+      | Self::PermissionPromptUnreachable => {}
+    }
+  }
+}
+
+impl MemoryNotSavedReason {
+  fn redact(&mut self, redact: &impl Fn(&str) -> String) {
+    match self {
+      Self::ContainsSecret { secret } | Self::KeychainUnavailable { secret } => *secret = redact(secret),
+      Self::StorageFailed { detail } => *detail = redact(detail),
     }
   }
 }

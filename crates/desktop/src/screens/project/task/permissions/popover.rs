@@ -106,13 +106,7 @@ impl RunPermissionsRow {
       .box_shadow(ExtraShadow::Popover.role())
       .overflow_visible()
       .child(self.header(ctx, props))
-      .child(
-        Text::new(&super::value(ctx, &props.step, &props.permissions))
-          .id("task-permissions-current-policy")
-          .variant(TypographyStyle::Caption),
-      )
       .child(takes_effect(ctx, props))
-      .child(Text::new(&ctx.t("runs.permissions.desiredLabel")).variant(TypographyStyle::Label))
       .with_children(settings(ctx, &self.edit, props, &draft))
       .child(mcp_servers(ctx, props))
       .child(Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role()))
@@ -272,18 +266,14 @@ impl RunPermissionsRow {
 /// When a change takes effect (`XpncF`, `aDPaV`).
 fn takes_effect(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
   let run = props.run_number.to_string();
-  let text = if !props.live {
-    ctx.t("runs.permissions.completedDetail")
-  } else {
-    ctx.t_args(
-      "runs.permissions.popover.takesEffect",
-      [
-        ("agent", agent_of(&props.step)),
-        ("step", &*props.step.name),
-        ("run", run.as_str()),
-      ],
-    )
-  };
+  let text = ctx.t_args(
+    "runs.permissions.popover.takesEffect",
+    [
+      ("agent", agent_of(&props.step)),
+      ("step", &*props.step.name),
+      ("run", run.as_str()),
+    ],
+  );
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Stack.role())

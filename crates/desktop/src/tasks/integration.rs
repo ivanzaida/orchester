@@ -2,6 +2,7 @@
 //! had when it started, recording the merge, and removing what the run left — its worktrees and
 //! its merged branches — right after the merge, or for a run that ended once a person confirms it.
 //! The rules are core's (`orchester_core::integration`); this reads and records what they need.
+//! The codebase indexes only removed worktrees used are removed with them (`orchester_index`).
 //! Blocks on SQLite and git; the UI calls it off the UI thread.
 
 use std::path::Path;
@@ -16,6 +17,7 @@ use orchester_core::{
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
+use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error};
@@ -175,8 +177,9 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
   // and records it then (`MergeKind::AlreadyMerged`).
   db.save_run_merge(&merge)?;
   let cleanup = clean_up(&git, Path::new(GIT), repo_root, &run, None);
-  if let Err(error) = &cleanup {
-    tracing::warn!(%error, "the run was merged, but what it left could not be cleared");
+  match &cleanup {
+    Ok(_) => prune_indexes(repo_root),
+    Err(error) => tracing::warn!(%error, "the run was merged, but what it left could not be cleared"),
   }
   Ok(Merged { merge, cleanup })
 }
@@ -210,6 +213,7 @@ pub fn remove_in(
     tracing::warn!(%error, "cannot remove what the run left");
     IntegrationProblem::Cleanup(error)
   })?;
+  prune_indexes(repo_root);
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
@@ -217,5 +221,13 @@ pub fn remove_in(
       detail,
     }),
     Some((worktree, _)) => Err(IntegrationProblem::NewChanges { path: worktree.path }),
+  }
+}
+
+/// Removes the codebase indexes that only removed worktrees used. The worktrees are gone either way;
+/// an index left behind goes with the next removal.
+fn prune_indexes(repo_root: &Path) {
+  if let Err(error) = CodebaseIndexes::new(repo_root).prune() {
+    tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
   }
 }

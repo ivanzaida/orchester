@@ -85,7 +85,7 @@ impl CommandWorker {
             }
           }
           // A command has no turns and runs no commands of its own: it runs to its end.
-          Some(Stop::AfterTurn(_) | Stop::AfterCommand(_) | Stop::Withdraw) => {}
+          Some(Stop::AfterTurn(_) | Stop::AfterCommand(_) | Stop::AtApproval | Stop::Withdraw) => {}
           None => listening = false,
         },
       }

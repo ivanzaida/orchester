@@ -6,6 +6,7 @@ mod support;
 use std::{fs, path::Path};
 
 use orchester_core::{
+  connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   run::{InterruptCause, PauseReason, Run, RunEvent, RunStatus},
   store::RunStore,
@@ -73,7 +74,10 @@ async fn missing_worktree_paused_run_cannot_resume_and_remains_unchanged() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn missing_worktree_interrupted_run_cannot_continue_and_remains_unchanged() {
-  let project = project(&Setup::new("Work in turns."));
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = project.repo.path();
   let (stopping, mut events) = scheduler(root);
   let id = start(&stopping, project.task).await;

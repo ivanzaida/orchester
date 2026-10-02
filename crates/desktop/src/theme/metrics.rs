@@ -5,11 +5,11 @@ use lurq::{
 
 use super::tokens::{
   FOCUS_STROKE, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL, RADIUS_ROW_ACTION,
-  RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_DIALOG_MARGIN,
-  SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM,
-  SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK,
-  SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM,
-  SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
+  RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_COLUMNS, SPACE_COMMAND_LINES,
+  SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP, SPACE_HAIR,
+  SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE, SPACE_LG,
+  SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT, SPACE_SECTION,
+  SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -18,6 +18,8 @@ use super::tokens::{
 pub enum ExtraSpacing {
   /// Between the rows of the status bar operations popover (`E1msJS`).
   Hair,
+  /// Rows within a plan-limit provider section (`mFTm5`, `pNIEg`).
+  PlanRows,
   /// Gap between the bars of the Orchester mark (`DIMZ6`); an operation's title to its meta
   /// line in the status bar popover (`tGNly`).
   Mark,
@@ -64,6 +66,9 @@ pub enum ExtraSpacing {
   Divider,
   /// Padding of an open select menu around its options (`u0ByM`).
   SelectMenu,
+  /// Above and below a transcript command's lines, so one line is centred on Copy (`Z3M6Nz` in
+  /// `uA3Sh`).
+  CommandLines,
   /// Least room between a dialog and the left and right window edges when the window is
   /// narrower than the dialog (design doc, "Lifecycle dialog width").
   DialogMargin,
@@ -81,8 +86,9 @@ pub enum ExtraSpacing {
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 27] = [
+  const ALL: [Self; 29] = [
     Self::Hair,
+    Self::PlanRows,
     Self::Mark,
     Self::Tight,
     Self::Indicator,
@@ -104,6 +110,7 @@ impl ExtraSpacing {
     Self::Property,
     Self::Divider,
     Self::SelectMenu,
+    Self::CommandLines,
     Self::DialogMargin,
     Self::TextArea,
     Self::BesideGutter,
@@ -114,6 +121,7 @@ impl ExtraSpacing {
   fn name(self) -> &'static str {
     match self {
       Self::Hair => "hair",
+      Self::PlanRows => "plan-rows",
       Self::Mark => "mark",
       Self::Tight => "tight",
       Self::Indicator => "indicator",
@@ -135,6 +143,7 @@ impl ExtraSpacing {
       Self::Property => "property",
       Self::Divider => "divider",
       Self::SelectMenu => "select-menu",
+      Self::CommandLines => "command-lines",
       Self::DialogMargin => "dialog-margin",
       Self::TextArea => "text-area",
       Self::BesideGutter => "beside-gutter",
@@ -146,6 +155,7 @@ impl ExtraSpacing {
   fn value(self) -> f32 {
     match self {
       Self::Hair => SPACE_HAIR,
+      Self::PlanRows => super::tokens::PLAN_LIMIT_ROWS_GAP,
       Self::Mark => SPACE_MARK,
       Self::Tight => SPACE_TIGHT,
       Self::Indicator => SPACE_INDICATOR,
@@ -167,6 +177,7 @@ impl ExtraSpacing {
       Self::Property => SPACE_PROPERTY,
       Self::Divider => SPACE_DIVIDER,
       Self::SelectMenu => SPACE_SELECT_MENU,
+      Self::CommandLines => SPACE_COMMAND_LINES,
       Self::DialogMargin => SPACE_DIALOG_MARGIN,
       Self::TextArea => SPACE_TEXT_AREA,
       Self::BesideGutter => SPACE_BESIDE_GUTTER,

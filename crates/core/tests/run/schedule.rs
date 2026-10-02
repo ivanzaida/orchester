@@ -115,10 +115,19 @@ fn schedule_step_result_reads_the_structured_final_message() {
     Some(StepResult {
       outcome: StepOutcome::Failed,
       summary: "Tests fail.".into(),
+      completed: Vec::new(),
+      decisions: Vec::new(),
+      open_questions: Vec::new(),
+      next_agent_should_know: Vec::new(),
     })
   );
   assert_eq!(StepResult::parse("Done."), None);
-  assert_eq!(StepResult::parse(r#"{"outcome":"done","summary":"x","extra":1}"#), None);
+  // A field the schema does not name is ignored; it never costs the step its outcome.
+  assert_eq!(
+    StepResult::parse(r#"{"outcome":"done","summary":"x","extra":1}"#).map(|result| result.outcome),
+    Some(StepOutcome::Done)
+  );
+  assert_eq!(StepResult::parse(r#"{"outcome":"finished","summary":"x"}"#), None);
   let logged = implemented();
   let checks = logged.exec("checks");
   let structured = StepOutput::from_final_message(

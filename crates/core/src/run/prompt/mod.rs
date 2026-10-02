@@ -18,10 +18,19 @@
 //! where its `SKILL.md` is, before the task part, so the agent reads a skill when its work needs it.
 //! A resumed session was told them when it started, and the files stay where they were.
 //!
+//! New and resumed sessions alike are told about the code index ([`CodeIndexPrompt`]): where the index of the run's
+//! base revision is, an excerpt of its package and module map, and the internal skill that explains searching it,
+//! or that ripgrep is missing and `git grep -n` searches instead. A resumed session is told again because the index
+//! may be new to it: the setting or ripgrep can have changed since it started.
+//!
+//! Every invocation, new or resumed, reads the task memory recalled for it ([`memory`]).
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
+mod code_index;
 mod composition;
+mod memory;
 mod source;
 
 use std::num::NonZeroU32;
@@ -39,6 +48,7 @@ use super::{
 use crate::{
   conversation::Message,
   id::ResourceId,
+  memory::RecalledMemory,
   project::Project,
   resource::{AgentProfile, InjectionEvent, Instruction, Step, Variable, VersionNumber},
   task::Task,
@@ -82,6 +92,25 @@ pub struct SkillListing<'a> {
   pub name: &'a str,
   pub description: &'a str,
   pub path: &'a str,
+}
+
+/// What a prompt tells an agent about the code index (`crate::code_index`).
+#[derive(Clone, Copy, Debug)]
+pub enum CodeIndexPrompt<'a> {
+  /// The index of the run's base `revision` is in `folder`; the skill whose `SKILL.md` is `skill`
+  /// explains how to search it. `git_grep`: the agent has no ripgrep and searches with `git grep`
+  /// (not said to an agent with a search tool of its own). `map` is the text of the index's
+  /// `map.md`, whose package and module map the prompt carries in a size-bounded excerpt; a map
+  /// without sections (empty when it could not be read) gets a pointer to `map.md` instead.
+  Given {
+    revision: &'a str,
+    folder: &'a str,
+    skill: &'a str,
+    git_grep: bool,
+    map: &'a str,
+  },
+  /// ripgrep is not available to the agent: it searches tracked files with `git grep -n`.
+  WithoutRipgrep,
 }
 
 /// The run an agent works in and the attempt its step execution belongs to.
@@ -154,12 +183,17 @@ pub struct PromptInput<'a> {
   pub instructions: &'a [InstructionSource<'a>],
   /// The skills the agent gets, if any, listed at [`InjectionEvent::Start`].
   pub skills: &'a [SkillListing<'a>],
+  /// What the agent is told about the code index at either event; `None` tells it nothing (the
+  /// project has it off, or it could not be built).
+  pub code_index: Option<CodeIndexPrompt<'a>>,
   /// Outputs of the steps `step` depends on, in pipeline order.
   pub dependencies: &'a [DependencyOutput<'a>],
   /// The step's plan a reviewer sent back, when this invocation revises it.
   pub revision: Option<PlanRevision<'a>>,
   /// People's messages this invocation delivers, if any.
   pub messages: Option<DeliveredMessages<'a>>,
+  /// The task and project memory recalled for this invocation, in prompt order.
+  pub memory: &'a [RecalledMemory],
 }
 
 impl PromptInput<'_> {

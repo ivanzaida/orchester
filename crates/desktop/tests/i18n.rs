@@ -105,35 +105,6 @@ fn every_key_used_in_code_exists() {
   );
 }
 
-/// Approval copy must explain the one-action boundary and the consequence of denial.
-#[test]
-fn command_approval_explanation_preserves_permission_boundaries() {
-  for (locale, contents) in LOCALES {
-    let values: Value = serde_json::from_str(contents).expect("valid shipped locale");
-    let text = values["runs"]["toolApproval"]["commandExplanation"]
-      .as_str()
-      .expect("command explanation in every shipped locale");
-    match *locale {
-      "en" => {
-        for claim in [
-          "permits only this action within existing permissions",
-          "it does not add sandbox, folder or network access",
-          "Deny prevents execution and fails this step",
-        ] {
-          assert!(text.contains(claim), "{locale}: missing approval claim: {claim}");
-        }
-        assert!(!text.contains("requested sandbox exception"));
-      }
-      other => panic!("add semantic approval-copy coverage for shipped locale {other}"),
-    }
-    assert_eq!(
-      locale_leaves(contents)["runs.toolApproval.commandExplanation"],
-      ["agent".to_owned(), "cwd".to_owned()],
-      "{locale}: preserve request identity placeholders"
-    );
-  }
-}
-
 /// Counted minutes read naturally: "of its 1 minute", "of its 30 minutes".
 #[test]
 fn locales_count_minutes_with_plural_forms() {

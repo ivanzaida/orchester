@@ -1,48 +1,44 @@
-//! How an agent step starts the Codex CLI (`.tmp/cli-probe/REPORT.md`, "Recommended argv"):
+//! How an agent step starts the Codex CLI: always as a bidirectional App Server, so that a request
+//! for a person's decision can reach "Needs you" (`docs/interactive-tool-approvals.md`):
 //!
-//! `codex -a never exec --json --ignore-user-config --ignore-rules -m <model>
-//!  [-c model_reasoning_effort=<e>] --sandbox <mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
-//!  [-c project_doc_max_bytes=0 [-c skills.config=[<skills>]]] [<MCP servers>] [--output-schema <file>] -C <worktree>
-//! -`
+//! `codex app-server --stdio <isolation> -c projects={<worktree>={trust_level="untrusted"},<repository>=…}
+//!  [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
+//!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>] [-c project_doc_max_bytes=0
+//!  [-c skills.config=[<skills>]]] [<MCP servers>]`
 //!
-//! and continues a session after a pause or a limit with
+//! in the worktree as the process's working directory, with standard input kept open for the runner's
+//! JSON-RPC requests. The runner starts or resumes the thread with the model, the sandbox, the approval
+//! policy and the reviewer, checks what Codex activated, and starts the turn with the prompt, the effort
+//! and, for a new session, the step result schema (`orchester-runner`'s `step::app_server`).
 //!
-//! `codex -a never exec resume --json --ignore-user-config --ignore-rules -m <model>
-//!  [-c model_reasoning_effort=<e>] -c sandbox_mode=<mode> [-c windows.sandbox=elevated]
-//!  [-c sandbox_workspace_write.network_access=true] [-c sandbox_workspace_write.writable_roots=[<folders>]]
-//!  [-c project_doc_max_bytes=0 [-c skills.config=[<skills>]]] [<MCP servers>] <session> -`
-//!
-//! in the worktree as the process's working directory.
-//!
-//! - `-a never` is a top-level flag: after `exec` it is an error. With it nothing ever waits for an approval; whatever
-//!   the sandbox does not allow is declined and the agent is told.
-//! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`;
+//! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`,
 //!   writing steps in `workspace-write`. Both modes need `windows.sandbox=elevated` on Windows; without a Windows
 //!   sandbox even read-only shell commands are declined.
-//! - The mode and network access come from the step's enforced permissions
-//!   ([`crate::permission::AgentPermissions::enforced_on`]); commands are always those the sandbox allows, since Codex
-//!   cannot enforce a command list. Network access is a setting of the `workspace-write` sandbox only; the `read-only`
-//!   sandbox has none.
+//! - Network access is a setting of the `workspace-write` sandbox only; the `read-only` sandbox has none. A command
+//!   that needs more than the sandbox (network while it is off, a write outside the writable roots, an escalation the
+//!   model requests) asks a person through the granular approval policy's `sandbox_approval`
+//!   ([`crate::permission::OutsideCommands::SandboxApproval`]); approved, Codex runs that one command outside the
+//!   sandbox.
 //! - Extra writable folders ([`crate::permission::writable`]) are added to the `workspace-write` sandbox as a TOML
-//!   array of basic strings. Checked 2026-09-28 with Codex CLI 0.139.0 on Windows 11 without a model turn: `codex exec`
-//!   and `codex exec resume` both report them among the sandbox's writable roots (`exec resume` has no `--add-dir`, the
-//!   equivalent of `exec`), the model is told them, and `codex sandbox` with `windows.sandbox=unelevated` lets a
-//!   command write there and not beside them. A folder that does not exist is accepted and ignored, so the runner
-//!   creates them first. The elevated sandbox was not run (it needs its one-time setup in the CLI's home); its log
-//!   shows it grants write access per writable root.
-//! - `--ignore-user-config` and `--ignore-rules` keep the user's own configuration (MCP servers, default model,
-//!   execution rules) out of the run. The MCP servers the profile chooses are passed as configuration overrides
-//!   ([`CodexMcp`]), their secrets through the process environment only.
+//!   array of basic strings, with the worktree, which Codex also reports as the local environment's workspace root. A
+//!   folder that does not exist is accepted and ignored, so the runner creates them first.
+//! - App Server has no `--ignore-user-config` or `--ignore-rules`, so it loads the user's own configuration. What of it
+//!   would reach the agent is turned off ([`ISOLATION`]): the `notify` program, plugins (with their skills and MCP
+//!   servers), apps, and the permission requests that could stay granted for later commands. The user's own MCP servers
+//!   are turned off for the thread by name, which the runner reads with `config/read` first
+//!   (`crate::connection::app_server_mcp`). The user's own execpolicy `.rules` stay: they are the user's choice, and
+//!   the enforcement panel says that a command an `allow` rule there matches runs outside the sandbox without asking.
+//! - The repository's own `.codex` folder (configuration, hooks, execpolicy rules, MCP servers) is never loaded,
+//!   whatever the user's configuration trusts: the worktree and its repository are marked untrusted
+//!   ([`CodexInvocation::untrusted_projects`]), and the runner checks with `config/read` that Codex loaded no project
+//!   layer (`crate::connection::app_server_config`). The runner checks the sandbox, approval policy, reviewer, network,
+//!   writable roots and model Codex activated against the step's permissions before the turn starts. The MCP servers
+//!   the profile chooses are passed as configuration overrides ([`CodexMcp`]), their secrets through the process
+//!   environment only.
 //! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
 //!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
 //!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
-//! - The prompt goes on standard input (`-`); free-form text in arguments would not survive the `.cmd` launcher on
-//!   Windows.
 //! - The environment is cleaned: see [`super::agent_environment`].
-//! - `--output-schema` makes the final agent message JSON of the step result schema
-//!   ([`crate::run::STEP_RESULT_SCHEMA`]). The probe verified it for new sessions only, so a continued session is
-//!   started without it and its result is read from its exit.
 
 use std::{
   ffi::OsString,
@@ -50,7 +46,7 @@ use std::{
 };
 
 use super::{
-  CodexMcp, InvocationError, Platform, agent_command, agent_environment,
+  CodexMcp, InvocationError, Platform, agent_environment,
   mcp::{toml_array, toml_string},
   unicode_folders,
 };
@@ -60,13 +56,25 @@ use crate::{
   resource::{CommandEnvironment, RepositoryAccess},
 };
 
-/// Everything that decides how one Codex invocation starts.
+/// Configuration overrides that keep the user's own Codex setup from the agent. Checked against Codex
+/// 0.159.2 with `config/read` and `mcpServerStatus/list`, without a model turn (2026-10-01): `notify`
+/// becomes empty (an array replaces the user's), and the plugin servers (`code-review`, `cua_repl`)
+/// and `codex_app` are gone from the thread's MCP inventory. A table such as `mcp_servers` merges
+/// with the user's rather than replacing it, so servers are turned off one by one instead.
+pub const ISOLATION: [&str; 5] = [
+  "notify=[]",
+  "features.plugins=false",
+  "features.apps=false",
+  "features.exec_permission_approvals=false",
+  "features.request_permissions_tool=false",
+];
+
+/// Everything that decides how one Codex App Server process starts.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodexInvocation<'a> {
   pub executable: &'a Path,
-  pub model: &'a str,
-  /// The profile's reasoning effort; `None` leaves Codex's default.
-  pub reasoning_effort: Option<&'a str>,
+  /// The repository the worktree belongs to.
+  pub repository: &'a Path,
   pub access: RepositoryAccess,
   /// Network access of a `workspace-write` sandbox.
   pub network: NetworkAccess,
@@ -75,11 +83,6 @@ pub struct CodexInvocation<'a> {
   pub writable_roots: &'a [PathBuf],
   pub worktree: &'a Path,
   pub platform: Platform,
-  /// The session to continue (`codex exec resume`), for an invocation that repeats the
-  /// unfinished part of a step; `None` starts a new session.
-  pub resume: Option<&'a str>,
-  /// The file holding the step result schema, for a new session.
-  pub output_schema: Option<&'a Path>,
   /// The MCP servers the invocation gives the agent, if any.
   pub mcp: Option<&'a CodexMcp>,
   pub agent_files: CodexAgentFiles<'a>,
@@ -96,18 +99,19 @@ pub enum CodexAgentFiles<'a> {
 }
 
 impl CodexInvocation<'_> {
-  /// Starts a bidirectional App Server with the normal Codex profile and its configured MCP servers.
-  pub fn app_server_command(
-    &self,
-    environment: impl IntoIterator<Item = (OsString, OsString)>,
-    project: &CommandEnvironment,
-  ) -> Result<Command, InvocationError> {
+  /// Arguments after the program, in order.
+  pub fn args(&self) -> Result<Vec<String>, InvocationError> {
     unicode_folders(self.writable_roots)?;
     let mut args = vec!["app-server".to_owned(), "--stdio".to_owned()];
+    for setting in ISOLATION {
+      args.extend(["-c".to_owned(), setting.to_owned()]);
+    }
+    args.extend(["-c".to_owned(), self.untrusted_projects()]);
     if self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
     }
-    if self.access == RepositoryAccess::Write {
+    let writes = self.access == RepositoryAccess::Write;
+    if writes {
       args.extend([
         "-c".to_owned(),
         format!(
@@ -116,7 +120,7 @@ impl CodexInvocation<'_> {
         ),
       ]);
     }
-    let roots: Vec<_> = if self.access == RepositoryAccess::Write {
+    let roots: Vec<_> = if writes {
       std::iter::once(self.worktree)
         .chain(self.writable_roots.iter().map(PathBuf::as_path))
         .map(Path::to_string_lossy)
@@ -142,107 +146,65 @@ impl CodexInvocation<'_> {
     if let Some(mcp) = self.mcp {
       args.extend(mcp.args().iter().cloned());
     }
+    Ok(args)
+  }
+
+  /// The worktree and its repository marked untrusted, so that Codex loads no `.codex` folder of
+  /// theirs, even where the user's configuration trusts the repository. Codex 0.159.2 looks trust up
+  /// by the folder it works in, then by the repository a worktree belongs to, not by other parent
+  /// folders; a key must be written as Codex writes the folder ([`trust_key`]). Checked with
+  /// `config/read` and the execpolicy load log, without a model turn (2026-10-01). An inline table
+  /// merges with the user's own `projects`; a dotted key would split at the dot of `.orchester`.
+  fn untrusted_projects(&self) -> String {
+    let mut keys = vec![
+      trust_key(self.worktree, self.platform),
+      trust_key(self.repository, self.platform),
+    ];
+    // A key twice in one inline table would stop Codex from starting.
+    keys.dedup();
+    let entries: Vec<String> = keys
+      .iter()
+      .map(|key| format!("{}={{trust_level=\"untrusted\"}}", toml_string(key)))
+      .collect();
+    format!("projects={{{}}}", entries.join(","))
+  }
+
+  /// The App Server process: in the worktree, with the allowed part of `environment`, the variables
+  /// the project adds (`project`) and the MCP servers' secrets.
+  pub fn command(
+    &self,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
+    let args = self.args()?;
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
     let command = Command::new(self.executable, args)
       .with_current_dir(self.worktree)
       .with_environment(variables)
       .with_interactive_stdin();
-    let Some(mcp) = self.mcp else {
-      return Ok(command);
-    };
-    Ok(mcp.secrets().iter().cloned().fold(command, Command::with_secret_env))
+    let secrets = self.mcp.map_or(&[][..], CodexMcp::secrets);
+    Ok(secrets.iter().cloned().fold(command, Command::with_secret_env))
   }
+}
 
-  /// Arguments after the program, in order.
-  pub fn args(&self) -> Vec<OsString> {
-    let mut args: Vec<OsString> = ["-a", "never", "exec"].into_iter().map(OsString::from).collect();
-    if self.resume.is_some() {
-      args.push("resume".into());
-    }
-    args.extend(
-      ["--json", "--ignore-user-config", "--ignore-rules", "-m", self.model]
-        .into_iter()
-        .map(OsString::from),
-    );
-    if let Some(effort) = self.reasoning_effort {
-      args.push("-c".into());
-      args.push(format!("model_reasoning_effort={effort}").into());
-    }
-    let mode = match self.access {
-      RepositoryAccess::ReadOnly => "read-only",
-      RepositoryAccess::Write => "workspace-write",
-    };
-    // `exec resume` has no `--sandbox` or `-C`: the sandbox is set through its configuration key
-    // and the working directory is the process's.
-    if self.resume.is_some() {
-      args.push("-c".into());
-      args.push(format!("sandbox_mode={mode}").into());
-    } else {
-      args.push("--sandbox".into());
-      args.push(mode.into());
-    }
-    if self.platform == Platform::Windows {
-      args.push("-c".into());
-      args.push("windows.sandbox=elevated".into());
-    }
-    if (self.access, self.network) == (RepositoryAccess::Write, NetworkAccess::On) {
-      args.push("-c".into());
-      args.push("sandbox_workspace_write.network_access=true".into());
-    }
-    if self.access == RepositoryAccess::Write && !self.writable_roots.is_empty() {
-      let roots: Vec<_> = self.writable_roots.iter().map(|root| root.to_string_lossy()).collect();
-      args.push("-c".into());
-      args.push(format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)).into());
-    }
-    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
-      args.push("-c".into());
-      args.push("project_doc_max_bytes=0".into());
-      if !skills.is_empty() {
-        let disabled: Vec<String> = skills
-          .iter()
-          .map(|skill| format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy())))
-          .collect();
-        args.push("-c".into());
-        args.push(format!("skills.config=[{}]", disabled.join(",")).into());
-      }
-    }
-    if let Some(mcp) = self.mcp {
-      args.extend(mcp.args().iter().map(OsString::from));
-    }
-    match self.resume {
-      Some(session) => args.push(session.into()),
-      None => {
-        if let Some(schema) = self.output_schema {
-          args.push("--output-schema".into());
-          args.push(schema.as_os_str().to_owned());
-        }
-        args.push("-C".into());
-        args.push(self.worktree.as_os_str().to_owned());
-      }
-    }
-    args.push("-".into());
-    args
+/// `folder` as Codex names a project. On Windows Codex matches `\` separators only, without the
+/// `\\?\` prefix of a canonical path, and with either case of the drive letter; its own messages
+/// write it lower-case.
+fn trust_key(folder: &Path, platform: Platform) -> String {
+  let text = folder.to_string_lossy();
+  if platform == Platform::MacOs {
+    return text.into_owned();
   }
-
-  /// The command that runs the step: in the worktree, with `prompt` on standard input, the
-  /// allowed part of `environment` and the variables the project adds (`project`).
-  pub fn command(
-    &self,
-    prompt: String,
-    environment: impl IntoIterator<Item = (OsString, OsString)>,
-    project: &CommandEnvironment,
-  ) -> Result<Command, InvocationError> {
-    unicode_folders(self.writable_roots)?;
-    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
-      unicode_folders(skills)?;
-    }
-    agent_command(
-      self.executable,
-      self.args(),
-      self.worktree,
-      prompt,
-      (environment, project, self.mcp.map_or(&[][..], CodexMcp::secrets)),
-    )
+  let text = text.replace('/', r"\");
+  let text = if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+    format!(r"\\{share}")
+  } else {
+    text.strip_prefix(r"\\?\").map_or_else(|| text.clone(), str::to_owned)
+  };
+  let mut chars = text.chars();
+  match (chars.next(), chars.next()) {
+    (Some(drive), Some(':')) if drive.is_ascii_alphabetic() => format!("{}{}", drive.to_ascii_lowercase(), &text[1..]),
+    _ => text,
   }
 }

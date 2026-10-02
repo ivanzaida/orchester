@@ -279,12 +279,16 @@ impl Resolved<'_> {
         body: profile.body(),
       },
       instructions,
-      // Skills are listed with where the runner placed them, which exists only while a run executes.
+      // Skills are listed with where the runner placed them, and the code index part names the index
+      // the runner built or reused, both only while a run executes; the viewer's note says so.
       skills: &[],
+      code_index: None,
       // Outputs of earlier steps exist only while a run executes.
       dependencies: &[],
       revision: None,
       messages: None,
+      // Memory is recalled for an invocation as it starts, from the records of that moment.
+      memory: &[],
     }
   }
 }

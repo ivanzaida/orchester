@@ -45,7 +45,6 @@ use crate::{
   screens::project::ProjectNav,
   tasks::{
     detail::{ChangeState, RunPermissions, StepView},
-    permissions::InvocationPolicy,
     run::control_message,
   },
   theme::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT},
@@ -174,7 +173,12 @@ impl Component for RunPermissionsRow {
 impl RunPermissionsRow {
   /// "Permissions  Builder · Edit files · 3 commands · Network off", with *change ↗* under it.
   fn row(&self, ctx: &Ctx, props: &RunPermissionsProps) -> Element {
-    let value = value(ctx, &props.step, &props.permissions);
+    let pending = props.permissions.state == Some(ChangeState::Pending);
+    let value = if pending {
+      ctx.t_args("runs.permissions.applyingValue", [("agent", agent_of(&props.step))])
+    } else {
+      value(ctx, &props.step, &props.permissions)
+    };
     let (open, edit, base) = (self.open.clone(), self.edit.clone(), props.permissions.base.clone());
     let link_key = if props.live {
       "runs.permissions.change"
@@ -281,20 +285,13 @@ pub fn permissions_value(ctx: &Ctx, step: &StepView) -> Option<Arc<str>> {
 }
 
 fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
-  let (policy, label) = match &permissions.invocation_policy {
-    InvocationPolicy::Active(Some(policy)) => (policy, "runs.permissions.activeValue"),
-    InvocationPolicy::Last(Some(policy)) => (policy, "runs.permissions.lastValue"),
-    InvocationPolicy::Active(None) => return ctx.t("runs.permissions.activeUnknown"),
-    InvocationPolicy::Last(None) => return ctx.t("runs.permissions.lastUnknown"),
-    InvocationPolicy::NotStarted => (&permissions.permissions, "runs.permissions.nextValue"),
-  };
   let (repository, commands, network) = parts(
     ctx,
-    policy,
-    matches!(permissions.invocation_policy, InvocationPolicy::NotStarted) && permissions.network_stays_on,
+    &permissions.permissions,
+    permissions.network_stays_on,
     Length::Compact,
   );
-  let summary = ctx.t_args(
+  ctx.t_args(
     "runs.permissions.value",
     [
       ("agent", agent_of(step)),
@@ -302,13 +299,7 @@ fn value(ctx: &Ctx, step: &StepView, permissions: &RunPermissions) -> Arc<str> {
       ("commands", &*commands),
       ("network", &*network),
     ],
-  );
-  let mcp = ctx.t(if policy.interactive_tool_approvals() {
-    "runs.permissions.mcpActive"
-  } else {
-    "runs.permissions.mcpInactive"
-  });
-  ctx.t_args(label, [("policy", summary.as_ref()), ("mcp", mcp.as_ref())])
+  )
 }
 
 /// Pending (loader, what happens to work in flight, *Keep for next invocation instead*) or
@@ -317,7 +308,6 @@ fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Ve
   let agent = agent_of(&props.step);
   let step = &*props.step.name;
   match &props.permissions.state {
-    Some(ChangeState::NextInvocation) => vec![next_notice(ctx)],
     Some(ChangeState::Pending) => {
       let state = keep.state().get();
       let pending = state.is_pending();
@@ -392,16 +382,6 @@ fn state_notice(ctx: &Ctx, props: &RunPermissionsProps, keep: &KeepAction) -> Ve
     }
     None => Vec::new(),
   }
-}
-
-fn next_notice(ctx: &Ctx) -> Element {
-  Notice::new(
-    Icon::Clock,
-    ctx.t("runs.permissions.nextTitle"),
-    ctx.t("runs.permissions.nextDetail"),
-  )
-  .id("task-permissions-next")
-  .into()
 }
 
 fn apply_action(ctx: &mut Ctx) -> ApplyAction {

@@ -8,6 +8,7 @@ mod support;
 use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use orchester_core::{
+  connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::{Leftovers, leftovers},
   limits::ProjectLimits,
@@ -263,7 +264,10 @@ async fn run_again_needs_a_published_pipeline() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_waits_while_the_daily_budget_is_used() {
-  let project = project(&Setup::new("Work in turns."));
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    ..Setup::new("Work in turns.")
+  });
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;

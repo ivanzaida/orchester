@@ -5,15 +5,20 @@ mod support;
 use orchester_core::{
   connection::stream::InvocationOutcome,
   id::InvocationId,
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{
+    AgentPermissions, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands, RepositoryAccess,
+  },
   store::{ActivityStore, RunStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 use rusqlite::Connection;
-use support::{at, model, started_run};
+use support::{at, copied_at_version, model, started_run};
 
-fn policy(commands: CommandPermission) -> AgentPermissions {
-  AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off)
+fn policy(commands: CommandPermission) -> LaunchPermissions {
+  LaunchPermissions::new(
+    AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off),
+    OutsideCommands::SandboxApproval,
+  )
 }
 
 #[test]
@@ -43,6 +48,34 @@ fn invocation_permissions_are_written_once_and_survive_save_and_reopen() {
   assert_eq!(stored.ended_at, Some(at(20)));
   let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw");
   assert!(raw.execute("UPDATE invocations SET permissions = NULL", []).is_err());
+}
+
+/// Launch permissions recorded before what happened to other commands was keep it unknown.
+#[test]
+fn invocation_permissions_of_schema_one_leave_outside_commands_unknown() {
+  let (repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("launch");
+  drop(db);
+  let legacy = AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::On,
+  );
+  let document = serde_json::json!({"schema": 1, "body": legacy}).to_string();
+  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw");
+  raw
+    .execute(
+      "UPDATE invocations SET permissions = ?1 WHERE id = ?2",
+      rusqlite::params![document, invocation.id.to_string()],
+    )
+    .expect("a launch recorded with schema 1");
+  drop(raw);
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  let stored = db.invocations(run.id()).expect("read").remove(0);
+  assert_eq!(stored.permissions, Some(LaunchPermissions::recorded_before(legacy)));
+  assert_eq!(stored.permissions.and_then(|launch| launch.outside_commands()), None);
 }
 
 #[test]
@@ -76,6 +109,9 @@ fn invocation_permissions_refuse_commands_closed_launches_and_missing_ids() {
   );
 }
 
+/// The migrations before the launch permissions migration; migrations are append-only, so this stays.
+const BEFORE_INVOCATION_PERMISSIONS: u32 = 29;
+
 #[test]
 fn invocation_permissions_migration_preserves_legacy_session_and_unknown_policy() {
   let (repo, mut db, run, execution) = started_run();
@@ -85,17 +121,9 @@ fn invocation_permissions_migration_preserves_legacy_session_and_unknown_policy(
   invocation.session = Some("legacy-thread".into());
   db.save_invocation(&invocation).expect("session");
   drop(db);
-  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw");
-  let version: u32 = raw
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
-  raw
-    .execute_batch("DROP TRIGGER invocations_permissions_immutable; ALTER TABLE invocations DROP COLUMN permissions;")
-    .expect("previous schema");
-  raw
-    .pragma_update(None, "user_version", version - 1)
-    .expect("previous version");
-  drop(raw);
+  // The same rows in a database as it was before the launch permissions migration.
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let repo = copied_at_version(&current, BEFORE_INVOCATION_PERMISSIONS);
   let db = ProjectDb::open(repo.path()).expect("migrate");
   assert_eq!(db.invocations(run.id()).expect("legacy launch"), [invocation]);
   assert_eq!(db.run(run.id()).expect("read run").expect("run"), run);

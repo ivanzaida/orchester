@@ -50,17 +50,19 @@ fn connection(db: &mut ProjectDb, label: &str, provider: AgentProvider, repo: &P
     Timestamp::now(),
   )
   .expect("absolute executable");
-  connection.record_check(ConnectionCheck {
-    at: Timestamp::now(),
-    result: CheckResult::Available {
-      version: "1.0.0".into(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(
-        CatalogSource::Provider,
-        vec![CatalogModel::new(ModelId::new("model").expect("model"), Vec::new())],
-      ),
-    },
-  });
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "1.0.0".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(
+          CatalogSource::Provider,
+          vec![CatalogModel::new(ModelId::new("model").expect("model"), Vec::new())],
+        ),
+      },
+    })
+    .expect("an agent check fits a CLI connection");
   let id = connection.id();
   db.create_connection(&connection.into_connection()).expect("connection");
   id
@@ -209,7 +211,28 @@ fn agent_permissions_disable_what_the_connection_cannot_enforce_with_the_reason(
     &mut desktop,
     "Unavailable on this connection: Codex CLI can’t limit commands to a list."
   ));
+  // Only Claude Code also runs known-safe read-only commands besides the list.
+  assert!(shows(
+    &mut desktop,
+    "Only these commands run. Anything else is denied and the agent is told why."
+  ));
+  assert!(!shows(&mut desktop, "known-safe read-only"));
   assert!(shows(&mut desktop, "Ask before running commands"));
+  // Any command in the worktree: a command that needs more than the sandbox asks a person.
+  assert!(shows(
+    &mut desktop,
+    "Commands run inside the sandbox and change files only in the worktree and the extra writable folders. \
+     Beyond the sandbox, commands ask you first."
+  ));
+  assert!(shows(&mut desktop, "sandbox · escalations ask you"));
+  // The user's own execpolicy rules stay, the repository's `.codex` folder never loads; the panel says so.
+  assert!(shows(&mut desktop, "Your own Codex rules still apply"));
+  assert!(shows(&mut desktop, "allow rules run unsandboxed, unasked"));
+  assert!(shows(&mut desktop, "Repository .codex settings ignored"));
+  assert!(shows(&mut desktop, "worktree untrusted · none load"));
+  // Builder chooses no MCP server, so none runs; the user's own are turned off.
+  assert!(shows(&mut desktop, "none chosen · user’s own ignored"));
+  assert!(shows(&mut desktop, "Beyond the sandbox, commands ask you first."));
   let network_off_enforced = cfg!(not(windows));
   assert_eq!(
     shows(
@@ -324,6 +347,33 @@ fn agent_permissions_choose_an_option_and_add_a_command() {
 }
 
 #[test]
+fn agent_permissions_reset_names_the_option_it_chose() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  desktop.press("agent-tab-profile");
+  desktop.wait_for("agent-connection-select");
+  let mut select = desktop
+    .tree
+    .get_element_by_id_mut("agent-connection-select")
+    .and_then(|element| element.as_select())
+    .expect("the connection select");
+  let codex = select
+    .labels()
+    .iter()
+    .position(|label| label.contains("Codex"))
+    .expect("the Codex connection");
+  select.commit(codex);
+  desktop.pass();
+  desktop.wait_for("agent-permissions-reset");
+  // Codex cannot limit commands to a list; the reset names what it chose instead.
+  assert!(shows(
+    &mut desktop,
+    "Unavailable on this connection, so changed to the most restrictive option it enforces: Allowed commands became \
+     Any command in the worktree. Review before publishing."
+  ));
+}
+
+#[test]
 fn agent_permissions_the_connection_cannot_enforce_block_publishing() {
   let mut desktop = seeded();
   permissions_of(&mut desktop, "Scout");
@@ -361,6 +411,7 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
   desktop.press("step-card-review");
   desktop.wait_for("step-command-2");
   assert!(shows(&mut desktop, "Commands · narrowed"));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
   assert!(shows(&mut desktop, "Reviewer v1 also allows pnpm lint."));
   // A read-only profile offers no repository choice, and a step cannot add commands of its own.
   assert!(desktop.tree.get_element_by_id("step-repository").is_none());
@@ -379,4 +430,78 @@ fn step_inspector_narrows_the_profile_commands_and_never_widens() {
       .root()
       .is_some_and(|root| contains_text(root, "Reviewer v1 also allows git."))
   });
+}
+
+/// What Claude Code runs besides a non-empty list of allowed commands, and that the others ask.
+const READ_ONLY_COMMANDS: &str = "Claude Code also runs known-safe read-only commands, such as ls, cat or git log, \
+                                  without listing them. Other commands ask you first.";
+
+#[test]
+fn agent_permissions_claude_says_what_runs_besides_the_list_and_how_listed_file_commands_edit() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  assert!(shows(
+    &mut desktop,
+    "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you \
+     first."
+  ));
+  assert!(shows(&mut desktop, READ_ONLY_COMMANDS));
+  assert!(shows(&mut desktop, "allowed tools · 3 rules · others ask"));
+  desktop.tab_to("agent-new-command", MAX_STOPS);
+  desktop.type_text("sed -n");
+  desktop.enter();
+  desktop.wait_for("agent-command-3");
+  // A prefix allows whatever follows it, and for sed that includes -i.
+  assert!(shows(
+    &mut desktop,
+    "sed -n also allows any arguments after it, including ones that change files."
+  ));
+  assert!(!shows(&mut desktop, "git also allows any arguments"));
+  desktop.press("agent-permission-edit");
+  // acceptEdits would run every form of sed, so with allowed commands edits are allowed by rule.
+  assert!(shows(&mut desktop, "allowed tools · edit rules per folder"));
+  assert!(!shows(&mut desktop, "permission mode · accept edits"));
+}
+
+#[test]
+fn agent_permissions_a_folder_no_edit_rule_can_name_is_not_enforceable() {
+  let mut desktop = seeded();
+  let mut db = ProjectDb::open(desktop.repo()).expect("project database");
+  let claude = db
+    .connections()
+    .expect("connections")
+    .into_iter()
+    .find(|connection| connection.name().as_str() == "Claude")
+    .expect("the Claude connection")
+    .id();
+  let permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(commands(&["rm -f build/x"])),
+    NetworkAccess::On,
+  )
+  .with_writable_folders(serde_json::from_str(r#"["\\\\server\\share\\cache"]"#).expect("a listed folder"));
+  profile(&mut db, "Cleaner", claude, permissions, false);
+  drop(db);
+  permissions_of(&mut desktop, "Cleaner");
+  // It edits by rule, and no rule can name a network share: a run would deny every edit there.
+  assert!(shows(&mut desktop, "Extra writable folders · not enforceable"));
+  assert!(shows(
+    &mut desktop,
+    "Edits on a network share can’t be allowed by rule, so a run can’t start."
+  ));
+  assert!(shows(&mut desktop, "Repository access · enforced"));
+}
+
+/// Agents ask: a read-only step that asks before commands asks about every one.
+#[test]
+fn agent_permissions_claude_asking_read_only_asks_about_every_command() {
+  let mut desktop = seeded();
+  permissions_of(&mut desktop, "Reviewer");
+  assert!(shows(&mut desktop, "edit tools off · list runs · others ask"));
+  desktop.press("agent-permission-ask");
+  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(shows(&mut desktop, "edit tools off · commands ask"));
+  assert!(!shows(&mut desktop, "list runs"));
+  desktop.press("agent-permission-edit");
+  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
 }

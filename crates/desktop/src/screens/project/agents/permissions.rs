@@ -24,7 +24,9 @@ use orchester_core::{
 
 use super::editor::{ProfileEditor, Resets};
 use crate::{
-  agents::permissions::{option_detail, option_title, unavailable, with_command, without_command},
+  agents::permissions::{
+    file_command_hints, native_mcp_unavailable, option_detail, option_title, unavailable, with_command, without_command,
+  },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -89,16 +91,19 @@ impl ProfileEditor {
       ctx.t("agents.permissions.toolApprovals"),
       enabled,
     );
-    let control = if provider == Some(AgentProvider::CodexCli) || enabled {
+    // Both CLIs route approvals to Orchester; a profile without a connection cannot choose, nor can
+    // one on a native connection, which runs no agent yet.
+    let native = native_mcp_unavailable(ctx, provider);
+    let control = if native.is_none() && (provider.is_some() || enabled) {
       let permissions = self.permissions.clone();
       switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
     } else {
       switch.locked()
     };
-    let mut content = Column::new().spacing(SpacingSize::Sm).child(control);
-    if provider != Some(AgentProvider::CodexCli) {
-      content = content.child(hint(ctx, "agents.permissions.toolApprovalUnavailable"));
-    }
+    let content = Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(control)
+      .with_children(native.map(|reason| unavailable_reason(&reason)));
     setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
   }
 
@@ -115,7 +120,7 @@ impl ProfileEditor {
     let card = OptionCard::new(
       option_id(option),
       ctx.t(option_title(option)),
-      ctx.t(option_detail(option)),
+      ctx.t(option_detail(option, provider)),
       selected,
     );
     let Some(provider) = provider else {
@@ -257,6 +262,7 @@ impl ProfileEditor {
       // Enter in the command field adds the command rather than saving the draft.
       .child(form(add, entries))
       .child(note)
+      .with_children(file_command_hints(ctx, list).iter().map(|text| hint_text(text)))
       .into()
   }
 
@@ -340,7 +346,11 @@ fn setting(ctx: &Ctx, label: &str, control: Element) -> Element {
 }
 
 fn hint(ctx: &Ctx, key: &str) -> Element {
-  Text::new(&ctx.t(key))
+  hint_text(&ctx.t(key))
+}
+
+fn hint_text(text: &str) -> Element {
+  Text::new(text)
     .variant(ExtraTypography::Hint.role())
     .color(PaletteColor::TextMuted)
     .into()
