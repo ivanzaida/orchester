@@ -22,7 +22,7 @@ use orchester_core::{
 };
 use orchester_exec::ProcessRunner;
 use orchester_ipc::Rejection;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 use super::{failed, read_failed};
 use crate::{git::Git, worktree::Worktrees};
@@ -132,8 +132,11 @@ pub(super) fn record(
   Checked { task, new }: Checked,
 ) -> Result<Prepared, Rejection> {
   let run = db
-    .create_run(key, new, Timestamp::now())
-    .map_err(|error| read_failed("cannot record the run", error))?;
+    .create_run_of_queued_task(key, new, Timestamp::now())
+    .map_err(|error| match error {
+      RunStoreError::TaskNotQueued(_) => Rejection::TaskNotQueued,
+      other => read_failed("cannot record the run", other),
+    })?;
   let task = db
     .task_for_run(task.id(), run.id())
     .map_err(|error| failed("cannot read the run's task snapshot", &error))?

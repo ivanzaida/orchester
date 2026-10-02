@@ -302,7 +302,7 @@ fn task_group_changed_assignment_rejects_the_whole_review_atomically() {
 
 #[test]
 fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
-  let (_, mut db, ..) = started_run();
+  let (_, mut db, template, _) = started_run();
   let (_, drafts) = drafts(&mut db);
   let ids: Vec<_> = drafts.iter().map(|t| t.id()).collect();
   let group = TaskGroup::new(
@@ -328,6 +328,21 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
   assert_eq!(released.status(), TaskStatus::Draft);
   assert_eq!(released.pipeline_version(), None);
   assert!(db.task_group_for_task(ids[1]).expect("group").is_none());
+  // A start the runner checked before the release records no run for the draft it became.
+  let late = NewRun {
+    task: ids[1],
+    snapshot: template.snapshot().clone(),
+    branch: BranchName::new("orchester/late-start").expect("branch"),
+    base: template.base().clone(),
+    base_branch: None,
+    budget: template.budget(),
+    max_duration: template.max_duration(),
+  };
+  assert!(matches!(
+    db.create_run_of_queued_task(ids[1].first_run_key(), late, at(20)),
+    Err(orchester_store::RunStoreError::TaskNotQueued(task)) if task == ids[1]
+  ));
+  assert!(db.run_with_key(ids[1].first_run_key()).expect("read").is_none());
   assert_eq!(
     db.task_group(group.key()).expect("group").expect("kept").tasks(),
     &ids[..1]

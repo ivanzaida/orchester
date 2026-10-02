@@ -2,7 +2,7 @@
 
 use crate::{
   id::ResourceId,
-  task::{MissingDetail, QueueError, Task, TaskStatus},
+  task::{MissingDetail, Task, TaskStatus},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,15 +11,6 @@ pub enum SelectionProblem {
   HasRun,
   Missing(MissingDetail),
   PipelineNotPublished,
-}
-
-impl From<QueueError> for SelectionProblem {
-  fn from(error: QueueError) -> Self {
-    match error {
-      QueueError::NotDraft(_) => Self::NotDraft,
-      QueueError::Incomplete(missing) => missing.first().map_or(Self::NotDraft, |detail| Self::Missing(*detail)),
-    }
-  }
 }
 
 /// All reasons this task cannot enter a first-run group. A persisted run always wins over status.

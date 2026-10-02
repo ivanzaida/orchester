@@ -130,6 +130,24 @@ impl TaskGroup {
     (blocked || waiting).then(|| self.waiting_reason(statuses, used))
   }
 
+  /// Whether the group has work that goes on without a person: an unstarted task that can start
+  /// now, or one waiting for its turn behind a member that is starting or running. A member that is
+  /// paused, stopped at a limit or interrupted only moves again when a person continues it, so a
+  /// turn behind it waits for that person too, as do the spent cap and a failed task.
+  pub fn has_work_of_its_own(&self, statuses: &[Option<RunStatus>], used: TokensUsed) -> bool {
+    if !statuses.iter().any(Option::is_none) {
+      return false;
+    }
+    match self.hold(statuses, used) {
+      None => true,
+      Some(GroupHold::PreviousTask | GroupHold::Concurrency) => statuses
+        .iter()
+        .flatten()
+        .any(|status| matches!(status, RunStatus::Pending | RunStatus::Running)),
+      Some(_) => false,
+    }
+  }
+
   /// Every task of the group has a first run and every one of those runs has ended.
   pub fn finished(statuses: &[Option<RunStatus>]) -> bool {
     statuses

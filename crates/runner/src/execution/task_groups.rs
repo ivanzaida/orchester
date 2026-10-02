@@ -17,8 +17,9 @@ use parking_lot::Mutex;
 
 use super::{Scheduler, read_failed};
 
-/// The first wait before a group whose start failed tries again; each failure in a row doubles it
-/// up to [`RETRY_MAX`], so a start the person must fix is not retried every second.
+/// A group whose start failed tries again at the next pass; when it fails again it waits
+/// [`RETRY_FIRST`], doubling with each failure in a row up to [`RETRY_MAX`], so a start the person
+/// must fix is not retried every second while a passing failure costs no wait.
 const RETRY_FIRST: Duration = Duration::from_secs(2);
 const RETRY_MAX: Duration = Duration::from_secs(60);
 
@@ -45,7 +46,7 @@ impl GroupRetries {
     let mut retries = self.0.lock();
     let wait = retries
       .get(&group)
-      .map_or(RETRY_FIRST, |retry| (retry.wait * 2).min(RETRY_MAX));
+      .map_or(Duration::ZERO, |retry| (retry.wait * 2).clamp(RETRY_FIRST, RETRY_MAX));
     retries.insert(
       group,
       Retry {
@@ -148,18 +149,16 @@ impl Scheduler {
       .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
-      if Self::stored_hold(&db, &group)?.is_some_and(|hold| !hold.clears_on_its_own()) {
+      let stored = Self::stored_hold(&db, &group)?;
+      if stored.as_ref().is_some_and(|hold| !hold.clears_on_its_own()) {
         continue;
       }
       let runs = first_runs(&db, &group)?;
       let statuses = statuses(&runs);
-      if !statuses.iter().any(Option::is_none) {
-        continue;
-      }
-      if group
-        .hold(&statuses, usage(&runs))
-        .is_none_or(|hold| hold.clears_on_its_own())
-      {
+      // The free slot or the day's budget the runner waits for comes without a person.
+      let waits_for_capacity = matches!(stored, Some(GroupHold::AgentCapacity | GroupHold::DailyBudget))
+        && statuses.iter().any(Option::is_none);
+      if waits_for_capacity || group.has_work_of_its_own(&statuses, usage(&runs)) {
         return Ok(true);
       }
     }
@@ -175,7 +174,10 @@ impl Scheduler {
       .unfinished_task_groups()
       .map_err(|error| super::failed("cannot read task groups", &error))?
     {
-      self.advance_group(&db, &group).await?;
+      // One group's failure leaves the others to go on; the next pass tries it again.
+      if let Err(error) = self.advance_group(&db, &group).await {
+        tracing::error!(?error, group = %group.key(), "cannot advance a reviewed task group");
+      }
     }
     Ok(())
   }
@@ -257,17 +259,27 @@ impl Scheduler {
     Ok(())
   }
 
+  /// Holds the unstarted tasks of every group until a person starts one again. A group a person
+  /// must already act on (a failed task, the spent cap, a start to fix) keeps that hold, so its
+  /// tasks can still be taken back to the drafts.
   pub(super) fn hold_groups_after_session_end(&self, db: &ProjectDb) -> Result<(), Rejection> {
     for group in db
       .unfinished_task_groups()
       .map_err(|e| super::failed("cannot read task groups", &e))?
     {
-      let unstarted = first_runs(db, &group)?
+      let runs = first_runs(db, &group)?;
+      let unstarted = runs
         .iter()
         .any(|run| run.as_ref().is_none_or(|run| run.status() == &RunStatus::Pending));
-      if unstarted {
-        self.group_hold(db, &group, Some(&GroupHold::SessionEnded))?;
+      if !unstarted {
+        continue;
       }
+      let for_a_person = group
+        .hold(&statuses(&runs), usage(&runs))
+        .filter(GroupHold::releases_unstarted)
+        .or(Self::stored_hold(db, &group)?.filter(GroupHold::releases_unstarted));
+      let hold = for_a_person.unwrap_or(GroupHold::SessionEnded);
+      self.group_hold(db, &group, Some(&hold))?;
     }
     Ok(())
   }

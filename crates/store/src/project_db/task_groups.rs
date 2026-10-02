@@ -113,10 +113,7 @@ impl ProjectDb {
       }
       task
         .queue(version.number())
-        .map_err(|error| StoreError::TaskNotSelectable {
-          task: *id,
-          problem: SelectionProblem::from(error),
-        })?;
+        .expect("a task without selection problems is a complete draft, which queues");
       queued.push(task);
     }
     transaction.execute(

@@ -95,3 +95,21 @@ fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
   assert!(!TaskGroup::finished(&[done.clone(), done.clone(), None]));
   assert!(TaskGroup::finished(&[done.clone(), failed, done]));
 }
+
+#[test]
+fn task_group_work_of_its_own_waits_only_on_moving_members() {
+  let sequential = group(Scheduling::Sequential);
+  assert!(sequential.has_work_of_its_own(&[None, None, None], TokensUsed::ZERO));
+  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::ZERO));
+  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Pending), None, None], TokensUsed::ZERO));
+  for stuck in [
+    RunStatus::Paused(PauseReason::Requested),
+    RunStatus::Interrupted(orchester_core::run::InterruptCause::RunnerLost),
+    RunStatus::Cancelled,
+  ] {
+    assert!(!sequential.has_work_of_its_own(&[Some(stuck), None, None], TokensUsed::ZERO));
+  }
+  assert!(!sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::new(100)));
+  let done = Some(RunStatus::Succeeded);
+  assert!(!sequential.has_work_of_its_own(&[done.clone(), done.clone(), done], TokensUsed::ZERO));
+}
