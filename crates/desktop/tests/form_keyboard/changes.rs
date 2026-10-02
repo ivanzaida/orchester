@@ -242,12 +242,15 @@ fn changes_label_follows_the_worktree_while_the_agent_works() {
   });
   create_and_run(&mut desktop, "Say hello.", "1400000");
   // No checkpoint yet, and the Summary open: the label counts README.md, which the agent changed
-  // in its worktree.
+  // in its worktree. The page's interval wakes the worktree reads; the harness runs timers only
+  // when asked.
   desktop.wait_until("the agent's change on the label", |desktop| {
+    desktop.tree.tick_timers();
     label_count(desktop).as_deref() == Some("1")
   });
   fs::write(run_worktree(&desktop).join("notes.md"), "notes\n").expect("write into the worktree");
   desktop.wait_until("the new file on the label", |desktop| {
+    desktop.tree.tick_timers();
     label_count(desktop).as_deref() == Some("2")
   });
   desktop.click("task-tab-changes");

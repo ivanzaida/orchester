@@ -73,6 +73,7 @@ use crate::{
   programs::Programs,
   runner::{Runners, state::RunnerState},
   tasks::{
+    changes::Refresh,
     data::PipelineChoice,
     detail::TaskDetail,
     integration::{LeftBehind, leftovers_in},
@@ -136,6 +137,8 @@ pub struct TaskScreen {
   retry: Signal<u64>,
   /// Reads the task again once a message was sent.
   reload: Signal<u64>,
+  /// Wakes the worktree reads while an agent works; they end with the page.
+  refresh: Refresh,
   /// Puts the focus in the conversation's composer (Ask agent).
   focus_composer: Signal<bool>,
   /// Why Edit task, opened for this task, was refused and this page shown instead.
@@ -172,6 +175,7 @@ impl Component for TaskScreen {
       requested: ctx.signal(None),
       retry: ctx.signal(0),
       reload: ctx.signal(0),
+      refresh: changes::worktree_refresh(ctx),
       focus_composer,
       refused_edit: ctx.signal(None),
       nav,
@@ -408,7 +412,7 @@ impl TaskScreen {
     let at_work = (agent_at_work(detail, lost), props.tab == TaskPageTab::Changes);
     Some(RunChanges {
       checkpointed: changes::checkpointed(ctx, repo_root, run, self.retry.get()),
-      worktree: changes::not_checkpointed(ctx, repo_root, run, at_work),
+      worktree: changes::not_checkpointed(ctx, repo_root, run, &self.refresh, at_work),
     })
   }
 

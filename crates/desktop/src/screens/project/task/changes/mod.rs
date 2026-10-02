@@ -23,7 +23,7 @@ use orchester_core::{
 };
 use parking_lot::Mutex;
 
-pub(super) use self::load::{RunChanges, checkpointed, not_checkpointed};
+pub(super) use self::load::{RunChanges, checkpointed, not_checkpointed, worktree_refresh};
 use self::{listed::Listed, toolbar::toolbar};
 use super::{super::ProjectNav, tab_state::state};
 use crate::{
