@@ -228,6 +228,42 @@ and reports no blocking or major mismatches; then move this entry to *Done*:
 - 02.B7 `zyusO`: the three Activity transcript marks (automatic return, automatic restart, your return with note) and
   the runner's refusal above *Stop and fail the run*.
 `DecideStuckRun`, `RunNotWaiting` and `RunWaitsForPerson` raise the ipc `PROTOCOL_VERSION` to 11.
+### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of the permission rows, popovers and notices passed.
+
+Run #12 (`orchester/orc-44-run-2`, base `37716df`) passed Implement, Check and Review; its Verify was interrupted.
+Master was merged into the branch (merge `a05ba75`) with master's approval architecture as the base. Almost all of
+ORC-44 was already on master: enabling *Ask before running commands* and *Ask before MCP actions* for a profile, a step
+or the current run, one-action command and MCP decisions, resuming an `exec` session through App Server, Apply now at
+a checkpoint, immutable invocation launch permissions, Windows sandbox selection and scoped build directories (see the
+agent runtime architecture entry under *Done*, since reworked by Claude Code support, App Server for every Codex step,
+`tool_approvals`, MCP exemptions and ORC-57/60). Dropped as covered or superseded: those runtime, core, store and
+runner changes; the command caption that denied sandbox exceptions (master asks about them on purpose); the
+`exec`-path invocation tests; the wrapping Target/working directory row in the approval dialog (C6 and the approval
+choices design's long values, `bjrgu`, own it).
+
+Ported (still missing on master), then built to the designer's frames approved 2026-10-02 (design doc, "What the
+row shows"): the task's Permissions row shows what the step's current or last invocation launched with, never the
+queued settings. The label carries the qualifier (*Running with* / *Last ran with* / *Next run uses*; Activity
+*Running with* / *Ran with*), the value is bare (*… · MCP asks* / *MCP auto*, *Commands ask*), breaks only at "·"
+and stacks above its never-clipped link; *starting…*, *not recorded* and *no permissions · it did not start* cover
+the launches without a record. Notices: *Saved for the next invocation · <change>*, *Applying <change> at the next
+checkpoint…*, *Restarting with the new permissions…* (no button) and *New permissions not active: <agent> did not
+restart*, then applied once the restarted invocation recorded its launch. The popover has one *Running with* line,
+ends 6 px above its row and scrolls when the window is short; an ended run's popover is read-only with only
+*Close* (`docs/interactive-tool-approvals.md`).
+Tests: `cargo test -p orchester-desktop --test run_permission_policy run_policy`, `--test form_keyboard
+run_permissions` (layout at 1440 and 960, popover above its row at 1020/960/700).
+
+**Done when** an independent review passes and an independent design verifier reports no blocking or major mismatch
+for the rows (02.10 `H1wCPK`, 02.12 `YOcfT`, 02.A `d6xleF`, 02.S `Lr8Dg`, 02.J anchor `rnGN7`, `iPBOy`), the board
+`iPHGE` (panel states, inline row at 1440 and 960, Activity panel), the popovers (`UPDBO` in `NNRH8`, `zCqp2` in
+`ecCTw`, ended `YgLEg`/`vXtTX`), Apply now (`D8qjLz`: `v0wd4R`, `R5mCao`) and `LJmTH` (`A3h7B4`, `ztEdT`, `shNob`).
+Known differences: at 960 the inline link wraps under the value with its "·" (lurq cannot drop a separator at a
+wrap); notice details say "the new permissions" where the frames name the change ("pnpm build allowed"), and the
+pending detail does not name the running command; the ended popover's network switch fades to the locked 0.45.
+Then move this entry to *Done*.
 
 ### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
 

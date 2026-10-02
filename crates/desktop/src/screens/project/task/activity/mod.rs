@@ -154,7 +154,7 @@ impl Component for ActivityTab {
       .child(self.transcript(ctx, run, &transcript.0, props.live))
       .child(panel::invocation_panel(
         ctx,
-        &nav,
+        (&nav, &props.repo_root),
         run,
         &transcript.0,
         self.filter.get().0,
