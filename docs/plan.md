@@ -379,22 +379,37 @@ admits it) and, to keep naming the version in use, this line.
 ## Done
 
 ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
-`orchester/orc-61-run-1`
+`claude/orc61` (from run #21's `orchester/orc-61-run-1`)
 
-- **Done 2026-10-02.** The task page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent
-  and person messages, tool groups, question, plan and tool-approval cards, problem rows, result cards, the run's end),
+- **Implemented 2026-10-02; merged with master and Review fixed 2026-10-03.** Not done until the independent design
+  verification against `fTfl8` (with `q4fCXK`, `a5hF4`, `gLVQQ`) reports no blocking or major mismatches. The task
+  page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent and person messages, tool
+  groups, question, plan and tool-approval cards, problem rows, returns and restarts, result cards, the run's end),
   with the step filter, *Show* (All, Messages, Tools), search, the Details pane (closed by default, remembered),
   following live with *Jump to latest · N new*, and the composer in every state (steer, queue, answer, plan changes,
-  follow-up, continue with instructions, not started, closed). The Activity tab is gone. *Send now* reaches the agent
-  at work after its running tool call: Codex through `turn/steer`, Claude Code through stream-json input (Claude Code
-  now always runs with `--input-format stream-json --replay-user-messages`); messages are queued, delivered mid-turn,
-  delivered at the end of the turn, or not delivered and kept (`docs/architecture/storage.md`, "Send now"). Live checks
-  on both CLIs: `docs/evidence/orc-61-send-now-2026-10-02.md`. Tests: `cargo test -p orchester-runner --features
-  test-agent --test send_now send_`, `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation
-  conversation`, `--test form_keyboard conversation` and `composer_`.
+  follow-up, continue with instructions, waiting for a decision, not started, closed). The Activity tab is gone.
+  *Send now* reaches the agent at work after its running tool call: Codex through `turn/steer`, Claude Code through
+  stream-json input (Claude Code now always runs with `--input-format stream-json --replay-user-messages`); messages
+  are queued, delivered mid-turn, delivered at the end of the turn, or not delivered and kept
+  (`docs/architecture/storage.md`, "Send now"). Live checks on both CLIs: `docs/evidence/orc-61-send-now-2026-10-02.md`.
+- **Merge with master:** master's Activity and old Conversation behaviour now lives in the timeline: the marks of
+  02.B7 as rows of their own (`tasks/timeline/mark.rs`, drawn by `activity/mark.rs`), the waiting run's toolbar state
+  and composer line with *Open the decision →*, the toolbar's second line when narrow, ORC-44's permission row in
+  Details (*Running with* … *change ↗*, *Ran with*), ORC-45 and approval-long through the shared `ui::command_row`
+  and `ui::value_box`. The steering migration is now 37 (after `stuck_runs`, 36); ORC-61 changes no IPC message, so
+  `PROTOCOL_VERSION` stays 11.
+- **Review fixes:** messages and cards are merged into a step's transcript before grouping, so anything that is not a
+  tool event splits a group (also in *Tools*); a declined MCP call, a memory one too, is a problem row; *Messages*
+  counts only the matches it shows; a queued message for an agent the pipeline no longer offers is not named with an
+  empty name; a Codex message accepted by `turn/steer` but not taken before `turn/completed` is delivered at the turn's
+  end, never sent again (Codex records it into the thread as the turn finishes).
+- Tests: `cargo test -p orchester-runner --features test-agent --test send_now send_`, `--test conversation
+  conversation`; `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`,
+  `--test form_keyboard` with `conversation`, `composer_`, `activity_`, `multiline_command`, `tool_approval`,
+  `run_permissions`, `task_graph`; `-p orchester-core --test app_server turn`.
 - **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
-  Summary only; a failed step starts open; matched words are not highlighted. Design verification against `fTfl8` is the
-  pipeline's next step.
+  Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
+  call that asked for it when the CLI reported that call first (they are matched by time, not by call).
 
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 
