@@ -14,6 +14,7 @@ use orchester_desktop::tasks::{
   timeline::{
     Item, ItemKind, StepHead, ToolGroup,
     group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+    mark::{Mark, MarkKind},
     view::{Choice, Row, Show, shown},
   },
   transcript::{Entry, entries},
@@ -331,4 +332,43 @@ fn timeline_step_filter_shows_one_step_open_and_names_the_others() {
   assert_eq!(kinds(&only.rows), ["step", "item", "group"], "the step picked is open");
   assert_eq!(only.hidden_steps.len(), 1);
   assert_eq!(&*only.hidden_steps[0].step, "Implement");
+}
+
+#[test]
+fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
+  let (mut items, _, implement) = two_steps();
+  let mark = Mark {
+    attempt: 2,
+    at: Some(at(2)),
+    by_person: false,
+    kind: MarkKind::Restarted {
+      step: "Implement".into(),
+    },
+  };
+  items.insert(3, item("mark-2", implement, ItemKind::Mark(mark)));
+  let folded = shown(&items, &Choice::default(), &|_, default| default);
+  assert_eq!(kinds(&folded.rows), ["step", "item", "step"]);
+  for show in [Show::Messages, Show::Tools] {
+    let rows = shown(
+      &items,
+      &Choice {
+        show,
+        ..Choice::default()
+      },
+      &|_, default| default,
+    );
+    assert_eq!(kinds(&rows.rows), ["step", "item", "step"], "{show:?}");
+  }
+  let other = shown(
+    &items,
+    &Choice {
+      step: Some(items[0].execution.expect("research")),
+      ..Choice::default()
+    },
+    &|_, default| default,
+  );
+  assert!(
+    other.rows.iter().all(|row| &**row.key() != "mark-2"),
+    "another step's filter hides the mark"
+  );
 }

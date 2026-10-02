@@ -2,11 +2,13 @@
 //! with Activity)"): one run's transcript and conversation in the order they happened, step by step.
 //! Each step execution that ran has its header, then its agent's messages, the person's messages it
 //! took, its tool groups ([`group`]), the cards that wait for or record a person's decision
-//! (question, plan, tool approval), its problems on their own and its result; messages that wait for
-//! a step follow, and a run that ended closes with its end. What is shown of it is [`view`]'s.
+//! (question, plan, tool approval), its problems on their own and its result; an attempt that
+//! returned or restarted the work starts with its mark ([`mark`]). Messages that wait for a step
+//! follow, and a run that ended closes with its end. What is shown of it is [`view`]'s.
 
 pub mod group;
 pub mod load;
+pub mod mark;
 pub mod step;
 pub mod view;
 
@@ -19,7 +21,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::{group::ToolGroup, step::StepHead};
+pub use self::{group::ToolGroup, mark::Mark, step::StepHead};
 use super::{
   conversation::{Conversation, Entry as MessageEntry, EntryState},
   detail::RunView,
@@ -40,6 +42,8 @@ pub struct Item {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ItemKind {
   Step(StepHead),
+  /// A return or restart, before the header of the step its attempt starts from.
+  Mark(Mark),
   /// What an agent wrote (`V17jfc`); `step` is its step's name.
   AgentMessage {
     agent: Arc<str>,
@@ -116,11 +120,19 @@ pub struct Sources<'a> {
 pub fn build(sources: &Sources<'_>) -> Vec<Item> {
   let run = sources.run;
   let mut items = Vec::new();
-  for execution in executions(run) {
+  for (attempt, first, execution) in executions(run) {
     let Some(head) = StepHead::of(run, execution) else {
       continue;
     };
     let at = head.started.unwrap_or_else(|| run.run.created_at());
+    if let Some(mark) = first.then(|| mark::mark_of(run, attempt)).flatten() {
+      items.push(Item {
+        key: format!("mark-{}", mark.attempt).into(),
+        execution: Some(execution),
+        at: mark.at.unwrap_or(at),
+        kind: ItemKind::Mark(mark),
+      });
+    }
     items.push(Item {
       key: format!("step-{execution}").into(),
       execution: Some(execution),
@@ -150,15 +162,22 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
   items
 }
 
-/// The run's step executions that ran, in the order they were created.
-fn executions(run: &RunView) -> Vec<StepExecutionId> {
+/// The run's step executions that ran, in the order they were created: the index of their attempt,
+/// whether they are its first, and their id.
+fn executions(run: &RunView) -> Vec<(usize, bool, StepExecutionId)> {
   run
     .run
     .attempts()
     .iter()
-    .flat_map(|attempt| attempt.executions())
-    .map(|execution| execution.id())
-    .filter(|execution| run.invocations_of(*execution).next().is_some())
+    .enumerate()
+    .flat_map(|(index, attempt)| {
+      attempt
+        .executions()
+        .iter()
+        .enumerate()
+        .map(move |(position, execution)| (index, position == 0, execution.id()))
+    })
+    .filter(|(.., execution)| run.invocations_of(*execution).next().is_some())
     .collect()
 }
 

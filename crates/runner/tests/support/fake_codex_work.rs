@@ -1,6 +1,7 @@
 //! What a turn of `orchester-fake-codex` does, by its prompt:
 //!
 //! - "Please fail": fails the turn as Codex did for an unsupported model;
+//! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
 //! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
@@ -38,6 +39,9 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 use serde_json::json;
 
 use super::{HELPER, Session, Step, complete, emit, fake_app_server, notify};
+
+/// The account's limits App Server reports during a turn.
+const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
 
 /// What an unsupported model's turn failed with.
 const UNSUPPORTED: &str = "The 'no-such-model-probe' model is not supported when using Codex with a ChatGPT account.";
@@ -77,6 +81,12 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
     complete(session, Some(UNSUPPORTED));
     return Step::Exit(ExitCode::SUCCESS);
+  }
+  if prompt.contains("Report plan limits") {
+    match serde_json::from_str(LIMITS) {
+      Ok(limits) => emit(&limits),
+      Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
+    }
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;

@@ -41,6 +41,7 @@ use crate::{
   command::{SecretVariable, redact_secrets},
   connection::mcp::McpServerName,
   permission::{AgentPermissions, CommandPermission},
+  run::recorded_arguments,
 };
 
 /// The MCP server that serves the permission prompt.
@@ -58,8 +59,6 @@ const COMMAND_TOOL: &str = "Bash";
 /// What an approval's server is called when it is a command, as for Codex.
 const COMMAND_SERVER: &str = "command";
 const DENIED: &str = "Denied in Orchester.";
-/// How much of an MCP call's arguments an approval shows.
-const SHOWN_ARGUMENTS: usize = 600;
 const UNAVAILABLE: &str = "Orchester approvals are unavailable; nothing was approved.";
 const NOT_ASKABLE: &str = "This step's permissions do not allow this action, and it cannot be approved in Orchester.";
 
@@ -274,15 +273,11 @@ impl ClaudeApprovalRequest {
 }
 
 /// An MCP call's arguments as the approval shows them: every text in them with `secrets` removed,
-/// then JSON on one line, then cut after [`SHOWN_ARGUMENTS`] characters. Removing them from the
-/// texts first means a value that JSON escapes (quotes, backslashes) or that the cut would split
-/// is still found whole.
+/// then JSON on one line, recorded whole ([`recorded_arguments`] cuts only a pathological call).
+/// Removing them from the texts first means a value that JSON escapes (quotes, backslashes) or that
+/// a cut would split is still found whole.
 fn shown_arguments(input: &Value, secrets: &[SecretVariable]) -> String {
-  let text = redacted(input, secrets).to_string();
-  match text.char_indices().nth(SHOWN_ARGUMENTS) {
-    Some((end, _)) => format!("{}…", &text[..end]),
-    None => text,
-  }
+  recorded_arguments(redacted(input, secrets).to_string())
 }
 
 impl fmt::Debug for ClaudeApprovalRequest {
@@ -303,10 +298,20 @@ pub fn prompt_result(approve: bool) -> String {
   }
 }
 
-/// `value` with `secrets` removed from every text in it, keys included.
+/// `value` with `secrets` removed from every text in it, keys included. A number whose digits hold a
+/// secret, such as a numeric PIN, becomes the redacted text in its place.
 fn redacted(value: &Value, secrets: &[SecretVariable]) -> Value {
   match value {
     Value::String(text) => Value::String(redact_secrets(text, secrets)),
+    Value::Number(number) => {
+      let digits = number.to_string();
+      let text = redact_secrets(&digits, secrets);
+      if text == digits {
+        value.clone()
+      } else {
+        Value::String(text)
+      }
+    }
     Value::Array(items) => Value::Array(items.iter().map(|item| redacted(item, secrets)).collect()),
     Value::Object(fields) => Value::Object(
       fields

@@ -17,7 +17,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId, SecretId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, StepKey, VariableName},
-  run::{PauseReason, PendingToolApproval, RunStatus, StepStatus},
+  run::{PauseReason, PendingToolApproval, RunStatus, StepStatus, Stuck},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::ActivityStore,
   time::Timestamp,
@@ -28,7 +28,8 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use self::support::{
-  PATIENCE, Setup, TestProject, git, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for,
+  PATIENCE, Setup, TestProject, deny_until_settled, git, project, reported, scheduler_with, tools::TEST_COMMAND,
+  wait_for,
 };
 
 const DOCS_TOKEN: &str = "docs-token-value-7f3a";
@@ -419,8 +420,13 @@ async fn claude_approvals_denial_fails_the_step_without_the_action() {
     .decide_tool_approval(id, request.id, false)
     .await
     .expect("denied");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  // The denied turn ends without a result: the step restarts once, is denied again and waits.
+  let run = deny_until_settled(&scheduler, root, &mut events, id).await;
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");

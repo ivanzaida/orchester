@@ -26,10 +26,15 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
+pub(super) use self::aside::note_field;
 use crate::{
   messages::Message,
   runner::Runners,
-  tasks::{plan::PlanReview, run::control_message},
+  tasks::{
+    detail::{RunView, TaskDetail},
+    plan::PlanReview,
+    run::control_message,
+  },
   ui::form::form,
 };
 
@@ -173,4 +178,18 @@ impl PlanReviewPanel {
       failure: state.error.filter(|_| idle),
     }
   }
+}
+
+/// The Summary while a plan waits for a decision (02.11 `x3lVC`); a new version mounts it anew,
+/// with an empty note.
+pub(super) fn screen(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
+  let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
+  let task = detail.run_task.as_ref().unwrap_or(&detail.task).details();
+  let props = PlanReviewProps {
+    review: Arc::new(review),
+    task: task.title.as_str().into(),
+    criteria: task.acceptance_criteria.clone().into(),
+    tokens: super::summary::budget_value(ctx, run),
+  };
+  ctx.mount_keyed::<PlanReviewPanel>(&key, props)
 }

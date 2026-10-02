@@ -1,6 +1,6 @@
 //! Pipeline graphs executed end to end against `orchester-fake-codex`: parallel steps in worktrees
-//! of their own merged back into the run's branch, merge conflicts and reported failures taking
-//! failure routes, retry limits and the outputs of earlier steps in later prompts. Step budgets are
+//! of their own merged back into the run's branch, merge conflicts restarting their step, reported
+//! failures taking failure routes, and the outputs of earlier steps in later prompts. Step budgets are
 //! in `step_budget.rs`.
 //! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test graph graph`.
 
@@ -12,13 +12,13 @@ use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
   id::IdempotencyKey,
   resource::StepKey,
-  run::{Run, RunFailure, RunStatus, StepFailure, StepOutcome},
+  run::{AttemptReason, Run, RunStatus, StepFailure, StepOutcome},
   store::ActivityStore,
 };
 use orchester_ipc::{AttachSession, SessionEnd};
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, git, project, reported, scheduler, wait_for};
+use self::support::{Setup, StepSpec, git, project, reported, scheduler, settled, wait_for};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -52,7 +52,7 @@ async fn run_to_the_end(setup: &Setup) -> (support::TestProject, Run) {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let run = wait_for(root, &mut events, id, settled).await;
   (project, run)
 }
 
@@ -120,7 +120,7 @@ async fn graph_parallel_steps_work_in_their_own_worktrees_and_merge_back() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn graph_merge_conflict_fails_the_step_and_takes_its_route_until_the_retry_limit() {
+async fn graph_merge_conflict_restarts_the_step_instead_of_taking_its_route() {
   let setup = Setup {
     steps: vec![
       StepSpec::new("implement", "Implement", "Write own file.", &[]),
@@ -131,14 +131,23 @@ async fn graph_merge_conflict_fails_the_step_and_takes_its_route_until_the_retry
   };
   let (project, run) = run_to_the_end(&setup).await;
   let root = project.repo.path();
+  // A merge conflict is no verdict on the work: the step that conflicted restarts by itself, now
+  // alone on the run's branch, and passes. Implement, the routes' target, never runs again.
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(run.attempts().len(), 2);
   assert!(
-    matches!(run.status(), RunStatus::Failed(RunFailure::RetriesExhausted(_))),
+    matches!(run.attempts()[1].reason(), AttemptReason::Restart { .. }),
     "{:?}",
-    run.status()
+    run.attempts()
   );
-  assert!(run.attempts().len() >= 2);
+  assert_eq!(
+    run.attempts()[1].executions().len(),
+    1,
+    "only the conflicting step runs again"
+  );
+  assert_eq!(run.retries_taken(&key("checks")) + run.retries_taken(&key("review")), 0);
   let failed = failures(&run);
-  assert!(!failed.is_empty());
+  assert_eq!(failed.len(), 1);
   assert!(
     failed.iter().all(|(_, failure)| *failure == StepFailure::MergeConflict),
     "{failed:?}"

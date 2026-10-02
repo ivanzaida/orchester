@@ -320,21 +320,25 @@ impl ConversationTab {
     let main = Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
-      .child(column(toolbar(ctx, run, &self.toolbar_state(live, details_open))))
+      .child(toolbar(
+        ctx,
+        run,
+        &self.toolbar_state(&props.conversation, details_open),
+      ))
       .with_children(readback.map(column))
       .child(body)
       .with_children(jump)
       .with_children(working);
     let pane = details_pane(
       ctx,
-      run,
+      (run, &props.repo_root),
       &loaded.entries,
       (&self.details, details_open, self.step.get().0),
     );
     self.layout(ctx, props, pane, main.into())
   }
 
-  fn toolbar_state(&self, live: bool, details_open: bool) -> toolbar::ToolbarState {
+  fn toolbar_state(&self, conversation: &Conversation, details_open: bool) -> toolbar::ToolbarState {
     toolbar::ToolbarState {
       step: self.step.clone(),
       show: self.show.clone(),
@@ -342,7 +346,8 @@ impl ConversationTab {
       raw: self.raw.clone(),
       details: self.details.clone(),
       details_open,
-      live,
+      live: conversation.state == PanelState::Live,
+      deciding: conversation.state == PanelState::Deciding,
       following: self.following.get(),
     }
   }

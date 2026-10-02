@@ -269,7 +269,7 @@ fn notes(desktop: &Desktop, count: usize) {
 }
 
 /// A wheel turn up over the timeline.
-fn scroll_up(desktop: &mut Desktop) {
+pub(crate) fn scroll_up(desktop: &mut Desktop) {
   let bounds = desktop.bounds("conversation-main");
   let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 3.0);
   desktop

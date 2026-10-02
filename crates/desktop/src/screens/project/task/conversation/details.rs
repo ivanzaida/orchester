@@ -3,6 +3,8 @@
 //! remembered for every task (the application database's `ui_state`): the tab's job is to follow and
 //! to talk, and the figures are looked up now and then.
 
+use std::path::Path;
+
 use lurq::{
   app::ctx::{Ctx, FutureAction},
   core::Signal,
@@ -107,7 +109,7 @@ impl DetailsPane {
 /// The pane while it is open: about the step its tokens opened it on, else `filter`'s.
 pub(super) fn details_pane(
   ctx: &mut Ctx,
-  run: &RunView,
+  (run, repo_root): (&RunView, &Path),
   entries: &[Entry],
   (details, open, filter): (&DetailsPane, bool, Option<StepExecutionId>),
 ) -> Option<Element> {
@@ -116,5 +118,5 @@ pub(super) fn details_pane(
   }
   let on = details.on.get().0.or(filter);
   let nav = nav(ctx);
-  Some(invocation_panel(ctx, &nav, run, entries, on))
+  Some(invocation_panel(ctx, (&nav, repo_root), run, entries, on))
 }

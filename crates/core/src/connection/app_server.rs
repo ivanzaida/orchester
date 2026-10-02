@@ -347,6 +347,11 @@ impl AppServerStream {
     // The runner records the session from the thread/start or thread/resume response;
     // thread/started also arrives for new threads and must not duplicate that activity.
     match method {
+      "account/rateLimits/updated" => params
+        .get("rateLimits")
+        .and_then(super::plan_limits::codex_limits)
+        .map(|limits| vec![Update::Activity(AgentEvent::PlanLimits { limits })])
+        .unwrap_or_default(),
       "turn/started" => vec![Update::Activity(AgentEvent::TurnStarted)],
       "item/started" => self.item_started(params),
       "item/completed" => self.item_completed(params),

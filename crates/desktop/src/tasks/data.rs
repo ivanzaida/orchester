@@ -10,6 +10,7 @@ use orchester_core::{
   run::{Run, RunEvent, StepExecutor},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
+  task_group::GroupHold,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -49,6 +50,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// Why each task of a reviewed group that holds its work waits.
+  pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
@@ -66,13 +69,26 @@ impl ProjectTasks {
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
+    let mut group_holds = BTreeMap::new();
+    for group in db.task_groups()? {
+      if let Some(hold) = db.task_group_hold(group.key())? {
+        for task in group.tasks() {
+          group_holds.insert(*task, hold.clone());
+        }
+      }
+    }
     let mut phases = Phases::new();
     let mut count = 0;
     for task in &tasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       count += runs.iter().filter(|run| run.is_ok()).count();
       let latest = match runs.last() {
-        Some(Ok(latest)) => Latest::Run(latest_run(&db, task, latest)?),
+        Some(Ok(latest)) => {
+          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+            group_holds.remove(&task.id());
+          }
+          Latest::Run(latest_run(&db, task, latest)?)
+        }
         Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
         None => continue,
       };
@@ -80,6 +96,7 @@ impl ProjectTasks {
     }
     Ok(Self {
       tasks: Arc::new(tasks),
+      group_holds: Arc::new(group_holds),
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(approvals::pending(&db)?),
       phases: Arc::new(phases),

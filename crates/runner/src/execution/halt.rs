@@ -113,6 +113,12 @@ impl RunTask {
       Some(RunLimit::Time)
     } else if idle::daily_budget_used(&self.db)? {
       Some(RunLimit::DailyBudget)
+    } else if self
+      .db
+      .task_group_limit_reached(&self.run)
+      .map_err(super::record::RecordError::from)?
+    {
+      Some(RunLimit::GroupBudget)
     } else {
       self
         .used_step_budget()?
@@ -157,6 +163,12 @@ impl RunTask {
         Some(RunLimit::Tokens)
       } else if idle::daily_budget_used(&self.db)? {
         Some(RunLimit::DailyBudget)
+      } else if self
+        .db
+        .task_group_limit_reached(&self.run)
+        .map_err(super::record::RecordError::from)?
+      {
+        Some(RunLimit::GroupBudget)
       } else {
         None
       };

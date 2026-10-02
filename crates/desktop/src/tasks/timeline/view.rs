@@ -1,15 +1,15 @@
 //! What the timeline shows of a run (`docs/design/orchester-workspace.md`, "Filters and search"):
-//! *All*, *Messages* (messages, cards, problems, step headers and results; tool groups hidden and
-//! counted) or *Tools* (every tool event as a flat transcript, messages as one-line entries); one
-//! step execution or all; and only what matches a search, a group with a match opened on its
-//! matching entries. A step folds to its header unless it runs, waits for the person, is the one
-//! picked or has a match; a person's choice to open or close a step or a group wins.
+//! *All*, *Messages* (messages, cards, problems, returns and restarts, step headers and results; tool
+//! groups hidden and counted) or *Tools* (every tool event as a flat transcript, messages as
+//! one-line entries, returns and restarts as they are); one step execution or all; and only what
+//! matches a search, a group with a match opened on its matching entries. A step folds to its header unless it runs,
+//! waits for the person, is the one picked or has a match; a person's choice to open or close a step or a group wins.
 
 use std::sync::Arc;
 
 use orchester_core::id::StepExecutionId;
 
-use super::{Item, ItemKind, StepHead, ToolGroup};
+use super::{Item, ItemKind, StepHead, ToolGroup, mark::MarkKind};
 use crate::tasks::transcript::{Entry, EntryKind};
 
 /// The *Show* control.
@@ -96,6 +96,13 @@ pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool)
   let in_step = |item: &Item| choice.step.is_none_or(|step| item.execution == Some(step));
   let mut step_open = true;
   for (index, item) in items.iter().enumerate() {
+    if let ItemKind::Mark(_) = &item.kind {
+      // A mark comes before the header of its step, so that step's fold does not hide it.
+      if in_step(item) {
+        row(&mut shown, item, (choice.show, needle.as_deref()), open);
+      }
+      continue;
+    }
     if let ItemKind::Step(head) = &item.kind {
       // A step that never ran has nothing to show but its header.
       if head.execution.is_none() {
@@ -141,11 +148,11 @@ pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool)
   shown
 }
 
-/// The items after the step header at `index`, up to the next header.
+/// The items after the step header at `index`, up to the next header or the mark before it.
 fn own_items(items: &[Item], index: usize) -> impl Iterator<Item = &Item> {
   items[index + 1..]
     .iter()
-    .take_while(|item| !matches!(item.kind, ItemKind::Step(_)))
+    .take_while(|item| !matches!(item.kind, ItemKind::Step(_) | ItemKind::Mark(_)))
 }
 
 fn row(shown: &mut Shown, item: &Item, (show, needle): (Show, Option<&str>), open: &dyn Fn(&str, bool) -> bool) {
@@ -166,6 +173,8 @@ fn row(shown: &mut Shown, item: &Item, (show, needle): (Show, Option<&str>), ope
       key: item.key.clone(),
       entry: entry.clone(),
     }),
+    // The Tools view lists returns and restarts as well (02.B7 `zyusO`).
+    (Show::Tools, ItemKind::Mark(_)) => shown.rows.push(Row::Item(item.clone())),
     (Show::Tools, _) => {}
     (Show::All | Show::Messages, _) => shown.rows.push(Row::Item(item.clone())),
   }
@@ -227,6 +236,10 @@ fn matches(item: &Item, needle: &str) -> bool {
     ItemKind::Problem(entry) => entry_matches(entry, needle),
     ItemKind::Result(card) => card.reported.as_deref().is_some_and(found),
     ItemKind::Tools(group) => group.entries.iter().any(|entry| entry_matches(entry, needle)),
+    ItemKind::Mark(mark) => match &mark.kind {
+      MarkKind::ReturnedWithNote { note, .. } => found(note),
+      MarkKind::Returned { .. } | MarkKind::Restarted { .. } => false,
+    },
     ItemKind::Step(_) | ItemKind::End(_) => false,
   }
 }

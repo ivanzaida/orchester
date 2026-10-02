@@ -18,8 +18,7 @@ pub enum ComposerMode {
   /// mid-turn) and *Send after this turn*.
   Steer(WorkingAgent),
   /// The message queues: a tool step runs, the recipient does not work now, or the run is paused,
-  /// interrupted or stopped. `waits_for` names the agent it waits for, when it is one that does not
-  /// work now.
+  /// interrupted, stopped or waits for the person's decision.
   Queue(Queued),
   /// `agent` asked a question at `asked_at`: the reply answers it and resumes its session.
   Answer {
@@ -48,6 +47,9 @@ pub enum Queued {
   NextTurn(Arc<str>),
   /// The run is paused, stopped at a limit or interrupted.
   Suspended,
+  /// The run waits for the person's decision on its Summary, after a step's retries ran out or it
+  /// broke again: the message waits until the run continues.
+  Decision,
   /// Agents work, but none is at a turn yet.
   Checkpoint,
 }
@@ -60,6 +62,7 @@ impl ComposerMode {
       PanelState::Live => live(conversation, run, recipient),
       PanelState::Waiting => waiting(conversation, run),
       PanelState::Paused | PanelState::Stopped | PanelState::Interrupted => Self::Queue(Queued::Suspended),
+      PanelState::Deciding => Self::Queue(Queued::Decision),
       PanelState::Ready => Self::FollowUp,
       PanelState::Failed => Self::Continue,
       PanelState::FailedWorktreeRemoved

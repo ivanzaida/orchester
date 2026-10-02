@@ -52,9 +52,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # (desktop build script, Windows only). It finds the Windows SDK's resource compiler for the MSVC
 # toolchain in use, which the build script cannot do in a few lines.
 embed-resource = "3"
-# Filesystem free-space query on Windows and macOS for the runner's shared Cargo target preflight.
-# This uses the host OS APIs without invoking a command inside an agent's sandbox.
-fs4 = { version = "1.1", default-features = false, features = ["sync"] }
 # Decodes the bundled PNG of the window icon. Already compiled with its PNG decoder for lurq's
 # clipboard (arboard), so it adds no crate to the build.
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -62,7 +59,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # and macOS. Applications that pick their stores link it with the stores they need instead of
 # the `keyring` facade (keyring-rs wiki, "Keyring").
 keyring-core = "1"
-lurq = { version = "0.30.4", default-features = false }
+lurq = { version = "0.34.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"

@@ -15,6 +15,30 @@ use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, Extra
 use super::themed_app;
 
 #[test]
+fn plan_limits_emphasis_follows_pencil() {
+  let app = themed_app();
+  let percent = app.theme().typography_style(ExtraTypography::MonoLimit.role());
+  assert_eq!(percent.font_size, 11.0);
+  assert_eq!(percent.weight, FontWeight::Medium);
+  assert_eq!(&*percent.font_family, "Geist Mono");
+  assert_eq!(
+    app.theme().spacing_value(ExtraSpacing::PlanRows.role()),
+    Dimension::Px(6.0)
+  );
+  assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
+  assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
+  assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
+  let widths = |widths: theme::StatusBarWidths| (widths.version, widths.tokens, widths.labels, widths.details);
+  assert_eq!(widths(theme::STATUS_WIDTHS), (1280.0, 1120.0, 960.0, 0.0));
+  assert_eq!(widths(theme::STATUS_WIDTHS_ONE_REACHED), (1440.0, 1280.0, 1120.0, 0.0));
+  assert_eq!(
+    widths(theme::STATUS_WIDTHS_BOTH_REACHED),
+    (1600.0, 1440.0, 1280.0, 1120.0)
+  );
+}
+
+#[test]
 fn task_screen_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
@@ -256,6 +280,21 @@ fn transcript_command_box_follows_pencil() {
   );
   assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+}
+
+/// Capped value box of the approval dialog (`E5NBo`, `e0vyng` in `bjrgu`): the transcript command's
+/// thumbs, each in a 6px lane of its own (4 wide, 1 from each side), so neither covers a glyph,
+/// running from the viewport's start.
+#[test]
+fn approval_value_box_scrollbars_keep_lanes_of_their_own() {
+  let scrollbar = theme::value_box_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Reserved);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(
+    (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
+    (1.0, 0.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
 }
 
 /// Scroll gutter (`nf9DG` in `NwsEg`, 04.01 `JuVaA`): a 12px gutter of its own; the thumb is 4px

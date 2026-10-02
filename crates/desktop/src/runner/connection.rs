@@ -392,11 +392,20 @@ impl Session {
   /// Handles an event from the runner; `false` once the connection is over.
   fn handle(&mut self, item: Option<EventItem>, reporter: &Reporter) -> bool {
     match item {
+      Some(Ok(Some(Event::PlanLimits(reading)))) => {
+        reporter.plan_limits(reading);
+        true
+      }
       Some(Ok(Some(Event::Reply { id, reply }))) => {
         self.pending.answer(id, reply);
         true
       }
-      Some(Ok(Some(Event::RunChanged { .. }))) => {
+      Some(Ok(Some(Event::RunChanged { task, .. }))) => {
+        reporter.run_changed();
+        reporter.task_run_changed(task);
+        true
+      }
+      Some(Ok(Some(Event::TaskGroupChanged { .. }))) => {
         reporter.run_changed();
         true
       }
@@ -419,6 +428,12 @@ impl Session {
         ..
       }))) => {
         reporter.plan_proposed(task, &task_key, version);
+        true
+      }
+      Some(Ok(Some(Event::RunWaitsForPerson {
+        task, task_key, step, ..
+      }))) => {
+        reporter.run_waits(task, &task_key, &step);
         true
       }
       Some(Ok(Some(Event::RunReady { task, number, .. }))) => {

@@ -11,7 +11,7 @@ use super::{
   permissions::{PermissionsApply, PermissionsChangedBy},
   plan::{PlanDecision, PlanVersion},
   snapshot::RunSnapshot,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, StepFailure, WaitReason},
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, StepFailure, Stuck, WaitReason},
 };
 use crate::{
   id::{AttemptId, CheckpointId, ResourceId, RunId, StepExecutionId, TaskId},
@@ -168,6 +168,13 @@ pub enum RunEventKind {
   Failed {
     reason: RunFailure,
   },
+  /// The attempt ended for `reason` with no automatic route left: the run waits for a person, who
+  /// allows another attempt ([`RunEventKind::RetryAllowed`]) or stops it ([`RunEventKind::Failed`]).
+  WaitingForPerson {
+    reason: Stuck,
+  },
+  /// A person let a run that waited for them go on; the attempt they chose follows.
+  RetryAllowed,
   Cancelled,
   /// Opens attempt `number` with fresh executions for `executions`; steps that passed in an
   /// earlier attempt and are not listed keep that result.
@@ -254,6 +261,8 @@ impl RunEventKind {
       Self::RecoveryRequested => "recovery_requested",
       Self::FollowUpFailed => "follow_up_failed",
       Self::Failed { .. } => "failed",
+      Self::WaitingForPerson { .. } => "waiting_for_person",
+      Self::RetryAllowed => "retry_allowed",
       Self::Cancelled => "cancelled",
       Self::AttemptStarted { .. } => "attempt_started",
       Self::StepStarted { .. } => "step_started",

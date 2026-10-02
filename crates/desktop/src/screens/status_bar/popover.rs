@@ -170,6 +170,7 @@ fn recent_row(ctx: &Ctx, event: &Event, opener: &Opener) -> Element {
     // Work that was not done (state J, `XlbDa`) is a finished row with the alert icon, in the
     // row's muted color, without the raised fill of a failure (H).
     Outcome::NotDone | Outcome::Failed { .. } => Icon::AlertCircle,
+    Outcome::NeedsYou { .. } => Icon::Hand,
   };
   let color = if event.is_unresolved() {
     PaletteColor::TextPrimary

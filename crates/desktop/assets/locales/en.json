@@ -347,14 +347,106 @@
     }
   },
   "tasks": {
+    "bulk": {
+      "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
+      "hold": {
+        "sessionEnded": "Scheduling is held after reopening. Use Start run on a pending first run, or Create & run on a queued task, to continue this group.",
+        "capacity": "Waiting for agent capacity",
+        "previous": "Waiting for the previous task to be ready for review",
+        "concurrency": "Waiting for task concurrency",
+        "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
+      },
+      "held": {
+        "sessionEnded": "Held · project reopened",
+        "capacity": "Waiting for an agent slot",
+        "dailyBudget": "Waiting for the daily budget",
+        "groupCap": "Held · group token cap",
+        "previous": "Waiting for the previous task",
+        "concurrency": "Waiting for a task slot",
+        "failure": "Held · a task failed",
+        "preflight": "Held · cannot start yet",
+        "startFailed": "Held · start failed"
+      },
+      "selected": "{{count}} selected",
+      "runSelected": "Run selected · {{count}}",
+      "notDraft": "This task is already queued.",
+      "notDraftMany": "{{count}} tasks are already queued.",
+      "hasRun": "This task already has a run.",
+      "hasRunMany": "{{count}} tasks already have a run.",
+      "notHeld": "This task is no longer held by its group, so it stays queued.",
+      "notReady": "{{task}}: {{reason}}",
+      "notReadyMany": "{{count}} tasks: {{reason}}",
+      "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
+      "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
+      "applyPipeline": "Apply pipeline",
+      "releaseHeld": "Return to drafts",
+      "reviewTitle": "Run {{count}} tasks",
+      "reviewDescription": "Choose how this group runs. Each task keeps its own pipeline, conversation and result.",
+      "emptySelection": "Select at least one ready draft.",
+      "breadcrumb": "{{project}} / Tasks / Run selected",
+      "back": "Back to tasks",
+      "priority": "Task priority",
+      "order": "Execution order",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "undoOrder": "Undo",
+      "orderTask": "Task to reorder",
+      "orderTaskValue": "{{task}} · {{title}}",
+      "dragToReorder": "Drag to reorder",
+      "taskPipeline": "{{task}} · {{pipeline}}",
+      "taskPipelineVersion": "{{task}} · {{pipeline}} {{version}}",
+      "parallel": "Parallel",
+      "parallelDetail": "Run ready tasks together.",
+      "sequential": "Sequential",
+      "sequentialDetail": "One task at a time, in order.",
+      "concurrentCount": "{{count}} tasks",
+      "concurrent": "Maximum concurrent tasks",
+      "nextWhen": "Start next task when",
+      "reviewGate": "Previous task is ready for review",
+      "executionMode": "Execution mode",
+      "capacityNote": "Task runs and agent slots are separate limits. The runner still limits agent capacity.",
+      "failure": "If a task fails",
+      "pauseRemaining": "Pause remaining tasks",
+      "groupCap": "Group token cap",
+      "perTask": "Token budget / task",
+      "timeLimit": "Time limit / task",
+      "timeValue": "{{minutes}} min active agent time",
+      "limitsReplace": "These limits replace each selected task’s own token budget and time limit.",
+      "finishTime": "Done",
+      "pipelineVersion": "Pipeline version",
+      "pipelineValue": "{{pipeline}} · {{version}}",
+      "pipelineSeparator": "; ",
+      "summaryParallel": "{{count}} tasks · up to {{concurrent}} at once",
+      "summarySequential": "{{count}} tasks · one at a time",
+      "totalTokens": "≈ {{count}} tokens",
+      "eachTokens": "≈ {{count}} tokens",
+      "capacitySlots": "Task runs and agent slots are separate limits. Runner: {{slots}} agent slots.",
+      "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
+      "planApprovalHeading": "Plan approval stays on",
+      "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
+      "sequentialApprovalNote": "Each task waits for your plan approval. The next task starts only when the previous task is ready for review.",
+      "approvalHeading": "Pipeline approvals stay in place",
+      "approvalNote": "Each task follows its published pipeline. Waiting runs count toward the task limit.",
+      "branchNote": "Each task works in a separate branch and worktree.",
+      "queue": "Queue {{count}} tasks",
+      "queued": "The reviewed group is queued. The runner starts tasks as capacity becomes available.",
+      "queuedHeading": "Group queued",
+      "stoppedGroup": "Stopped at the group token cap",
+      "stoppedGroupDetail": "This group used its shared token cap. Further task starts are held; raising this run's own limit does not raise the group cap."
+    },
     "title": "Tasks",
     "breadcrumb": "{{project}} / Tasks",
     "description": "Prepare your backlog, then choose what agents should work on.",
     "createMultiple": "Create multiple",
+    "editingHint": "Open a task to edit its brief, pipeline and limits.",
     "loadFailed": "Tasks cannot be read",
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
+    "emptyQuery": "No tasks in this tab match the search or pipeline filter.",
+    "clearQuery": "Clear search and filter",
     "tabs": {
       "all": "All tasks",
       "drafts": "Drafts",
@@ -365,13 +457,14 @@
     "filters": {
       "search": "Search tasks…",
       "allPipelines": "All pipelines",
-      "manualOrder": "Manual order"
+      "manualOrder": "Manual order",
+      "newest": "Newest first",
+      "title": "Title"
     },
     "selection": {
-      "unavailable": "Selecting tasks is not available yet",
       "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
-      "setPipeline": "Set pipeline",
-      "runSelected": "Run selected"
+      "readinessStarted": "{{ready}} ready to queue · {{incomplete}} incomplete · {{started}} already queued or started",
+      "setPipeline": "Set pipeline"
     },
     "columns": {
       "key": "ID",
@@ -520,6 +613,8 @@
       "pausing": "Pausing…",
       "resume": "Resume run",
       "resuming": "Resuming…",
+      "start": "Start run",
+      "starting": "Starting…",
       "continue": "Continue run",
       "continuing": "Continuing…",
       "cancel": "Cancel run",
@@ -530,7 +625,8 @@
       "draft": "Draft · not queued for a run",
       "queued": "Queued · its run has not started",
       "describe": {
-        "pending": "Run {{run}} · starting",
+        "pending": "Run {{run}} · not started",
+        "schedulingHeld": "Run {{run}} · scheduling held after reopening",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
         "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
@@ -548,6 +644,7 @@
         "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
+        "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
         "unreadable": "Run {{run}} · could not be read",
         "unreadableUnnumbered": "Its latest run could not be read"
       },
@@ -594,11 +691,36 @@
       "notStarted": "Not started"
     },
     "permissions": {
-      "value": "{{agent}} · {{repository}} · {{commands}} · {{network}}",
+      "label": {
+        "runningWith": "Running with",
+        "lastRanWith": "Last ran with",
+        "nextRunUses": "Next run uses",
+        "ranWith": "Ran with"
+      },
+      "policyValue": "{{agent}} · {{repository}} · {{commands}} · {{network}} · {{mcp}}",
+      "commandsAsk": "Commands ask",
+      "mcpAsks": "MCP asks",
+      "mcpAuto": "MCP auto",
+      "starting": "starting…",
+      "notRecorded": "not recorded",
+      "notStarted": "no permissions · it did not start",
+      "changed": {
+        "added": "{{command}} added",
+        "removed": "{{command}} removed"
+      },
+      "nextTitle": "Saved for the next invocation",
+      "nextTitleChange": "Saved for the next invocation · {{change}}",
+      "nextDetail": "{{agent}} keeps running with the permissions it started with. Its next invocation in Run {{run}} (a retry, or continuing after a pause, a limit or the conversation) starts with the new permissions.",
+      "restartingTitle": "Restarting with the new permissions…",
+      "restartingDetail": "{{agent}} stopped at checkpoint {{checkpoint}}. {{step}} restarts with the new permissions as soon as the run continues.",
+      "restartingDetailNoCheckpoint": "{{agent}} stopped at its checkpoint. {{step}} restarts with the new permissions as soon as the run continues.",
+      "restartFailedTitle": "New permissions not active: {{agent}} did not restart",
+      "restartFailedDetail": "{{agent}} stopped at checkpoint {{checkpoint}}, but {{step}} did not start again. Activity shows why; the run keeps the permissions it last ran with.",
+      "restartFailedDetailNoCheckpoint": "{{agent}} stopped at its checkpoint, but {{step}} did not start again. Activity shows why; the run keeps the permissions it last ran with.",
       "view": "view ↗",
       "change": "change ↗",
-      "applyingValue": "{{agent}} · Applying at next checkpoint…",
       "pendingTitle": "Applying new permissions at the next checkpoint…",
+      "pendingTitleChange": "Applying {{change}} at the next checkpoint…",
       "pendingDetail": "{{agent}} finishes the command it is running, then stops. Its changes are committed as a checkpoint and {{step}} restarts from it with the new permissions. Nothing in the worktree is lost; the agent’s unsaved reasoning since its last turn is not carried over unless the CLI can resume its session.",
       "keepForNext": "Keep for next invocation instead",
       "appliedTitle": "New permissions active since {{time}}",
@@ -609,7 +731,9 @@
       "popover": {
         "title": "Permissions for this run",
         "subtitle": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}}",
-        "takesEffect": "Apply from next invocation: the invocation running now keeps its permissions. Apply now: {{agent}} stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
+        "subtitleEnded": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}} · run ended",
+        "takesEffect": "Apply from next invocation: {{agent}} keeps these until it next starts. Apply now: it stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
+        "ended": "This run has ended, so its permissions can’t be changed here. Continuing the conversation starts a new invocation of {{agent}} with these settings.",
         "added": "{{commands}} added for this run",
         "removed": "{{commands}} removed for this run",
         "applyNow": "Apply now",
@@ -661,6 +785,9 @@
       "notice": {
         "draftTitle": "This task is a draft",
         "draftDetail": "A run starts from Create & run once the task has every detail.",
+        "pendingTitle": "This run has not started",
+        "pendingDetail": "Start run retries this recorded first run with its reviewed pipeline and saved snapshot. It does not create another run.",
+        "pendingHeldDetail": "Scheduling is held after reopening. Start run continues this existing first run and releases its group’s scheduling hold, keeping its reviewed pipeline and saved snapshot.",
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
         "runningTitle": "{{step}} is running",
@@ -683,6 +810,8 @@
         "failedTitle": "The run failed at {{step}}",
         "failedDetail": "Activity shows what the agent reported.",
         "failedCommandDetail": "Activity shows the command, its exit code and its output.",
+        "waitingTitle": "{{step}} needs your decision",
+        "waitingDetail": "Automatic execution has stopped. Allow another attempt, return the work to an earlier step, or stop the run.",
         "cancelledTitle": "The run was cancelled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       }
@@ -719,6 +848,8 @@
         "other": "{{step}} still fails after {{retries}} retries"
       },
       "detail": "Automatic execution has stopped. Review what the latest attempt left behind.",
+      "brokeTitle": "{{step}} stopped again without a result",
+      "brokeDetail": "Its agent or command ended without a verdict on the work, also after a fresh restart. Review what the latest attempt left behind.",
       "latest": "Latest attempt · {{revision}}",
       "latestWithoutCheckpoint": "Latest attempt {{attempt}}",
       "reported": "What {{step}} reported",
@@ -733,11 +864,28 @@
       "additionalValue": "1 additional attempt",
       "resumeFrom": "Resume from",
       "resumeValue": "{{step}} · latest checkpoint",
-      "unavailable": "Allowing another attempt is not available in this version yet. The run stays failed and its work stays on its branch.",
+      "retryMeaning": "{{step}} receives what {{failed}} reported. The steps after it run again on the new work.",
+      "restartMeaning": "{{step}} starts again as a fresh session from the latest checkpoint.",
       "allow": "Allow 1 retry & continue",
-      "revisePlan": "Revise plan first"
+      "returnTo": "Return the work to",
+      "notePlaceholder": "What should change before the next attempt",
+      "returnWithNote": "Return to {{step}} with note",
+      "stop": "Stop and fail the run"
     },
     "activity": {
+      "mark": {
+        "returnedTitle": "Returned to {{step}} · {{failed}} failed (attempt {{attempt}})",
+        "returnedDetail": "{{agent}} receives what {{failed}} reported. {{steps}} run again on the new work.",
+        "returnedDetailAlone": "{{agent}} receives what {{failed}} reported.",
+        "and": " and ",
+        "restartedTitle": "Restarted {{step}} · it stopped without a result",
+        "restartedDetail": "A fresh session from the latest checkpoint. If it stops again without a result, the run waits for you.",
+        "returnedWithNoteTitle": "Returned to {{step}} with your note",
+        "note": "“{{note}}”",
+        "automaticRetry": "automatic · retry {{retry}} of {{max}} · {{time}}",
+        "automaticAttempt": "automatic · attempt {{attempt}} · {{time}}",
+        "byYou": "by you · {{time}}"
+      },
       "allSteps": {
         "one": "All steps · {{count}} execution",
         "other": "All steps · {{count}} executions"
@@ -747,6 +895,7 @@
       "following": "Following live",
       "notFollowing": "Not following",
       "ended": "Run ended",
+      "waitingDecision": "Waits for your decision",
       "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
       "engineNative": "{{engine}} · native",
@@ -1030,9 +1179,15 @@
       "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
       "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
       "command": "Command",
+      "commandLines": {
+        "one": "Command · {{lines}} line, as recorded",
+        "other": "Command · {{lines}} lines, as recorded"
+      },
       "cwd": "Working directory",
       "note": "Agent’s note",
       "arguments": "Arguments",
+      "argumentsCut": "… cut at {{kilobytes}} KB",
+      "argumentsAsRecorded": "Shown as recorded: laid out one member a line, these arguments would be too large to read.",
       "scope": "One requested action only; no session or permanent grant",
       "native": {
         "explanation": "{{agent}} asks to run this command in the task worktree. It is not on the allowed list and not known to be safe, so it asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
@@ -1227,9 +1382,7 @@
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from.",
-      "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
-      "buildSpaceUnavailable": "Cannot check free space for CARGO_TARGET_DIR ({{target}}). Check that the folder or its volume is accessible before starting this run."
+      "noCommits": "The repository has no commit to start the run from."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -1304,6 +1457,7 @@
       "ended": "The run has already ended.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
+      "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details."
     },
     "conversation": {
@@ -1462,7 +1616,8 @@
         "continue": "Continue with instructions",
         "sendWhenStarts": "Send when the run starts",
         "answering": "Answering {{agent}}’s question from {{time}}",
-        "planChanges": "Changes to plan v{{version}} · sent to {{agent}}"
+        "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
+        "deciding": "Waiting for your decision"
       },
       "to": {
         "working": "To: {{agent}} · working",
@@ -1498,6 +1653,7 @@
       "answered": "Question · answered"
     },
     "reply": "Reply  →",
+    "openDecision": "Open the decision  →",
     "composer": {
       "placeholder": "Ask, clarify or redirect this task…",
       "attach": "Attach",
@@ -1512,6 +1668,7 @@
       "queued": "Messages stay queued until the run continues.",
       "paused": "You can write while paused. Resume keeps this run and its saved versions.",
       "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
+      "deciding": "The run waits for your decision on its Summary. Messages stay queued until it continues.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "failed": "Your message continues this run from its saved work. The agent resumes its session when available; dependent steps run again.",
@@ -1838,7 +1995,7 @@
         "tooMany": "At most {{max}} commands can be allowed."
       },
       "addFolder": "Add folder",
-      "folderPlaceholder": "e.g. .orchester/target",
+      "folderPlaceholder": "e.g. .orchester/build",
       "noFolders": "Agents write only inside their task worktree. Add a folder outside it, such as a shared build folder: absolute, or relative to the repository root.",
       "foldersMeaning": "Agents that edit files may also write here, commands included. Absolute, or relative to the repository root; never the repository itself or your home folder.",
       "foldersReadOnly": "Used only when agents edit files in the task worktree. With Read-only they write nowhere.",
@@ -1860,9 +2017,6 @@
         "duplicate": "{{folder}} is already listed.",
         "tooMany": "At most {{max}} folders can be listed."
       },
-      "targetTitle": "Allow agents to write to {{variable}}",
-      "targetDetail": "Environment sets {{variable}} to {{folder}}. Agents that edit files write only inside their worktree, so their builds cannot write there until you add it.",
-      "addTargetFolder": "Add folder",
       "networkOff": "Off",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
@@ -2810,11 +2964,6 @@
       "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
       "variables": "Variables · NAME=value per line",
       "hint": "Stored and shown in plain text, so never put secrets here.",
-      "targetTitle": "Share one build folder between run worktrees",
-      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
-      "addTarget": "Add CARGO_TARGET_DIR",
-      "agentsTitle": "Agents need permission to write to {{variable}}",
-      "agentsDetail": "Agents that edit files write only inside their worktree. Add {{folder}} to Extra writable folders under Agents › Permissions for each profile that builds.",
       "changesTitle": "Changes apply to the next agent or command that starts",
       "changesDetail": "An agent or command already running keeps the environment it started with."
     },
@@ -2892,6 +3041,15 @@
       "oct": "Oct",
       "nov": "Nov",
       "dec": "Dec"
+    },
+    "weekday": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
     }
   },
   "recovery": {
@@ -4135,6 +4293,70 @@
     }
   },
   "statusBar": {
+    "planLimits": {
+      "claudeFull": "Claude Code",
+      "title": "Plan limits",
+      "planPro": "Pro plan",
+      "planPlus": "Plus plan",
+      "planOther": "{{plan}} plan",
+      "stateNotRead": "Not read yet",
+      "stateSignedOut": "Not signed in",
+      "stateUnavailable": "No working connection",
+      "headerReached": "· {{window}} limit reached",
+      "headerCredits": "· No credits left",
+      "headerWorkspace": "· Workspace usage limit reached",
+      "headerOther": "· Limit reached",
+      "creditsLabel": "Credits",
+      "creditsValue": "{{balance}} left",
+      "extraLabel": "Extra usage",
+      "extraValue": "In use: turns past the limit use it",
+      "checkUnknown": "time not recorded",
+      "separator": "·",
+      "percent": "{{used}}%",
+      "reached": "{{cli}} limit reached",
+      "reasonCredits": "no credits left",
+      "reasonWorkspace": "workspace limit",
+      "resetsAt": "resets {{time}}",
+      "resetsIn": "resets in {{hours}} h {{minutes}} min",
+      "resetsInMinutes": "resets in {{minutes}} min",
+      "resetsInHours": "resets in {{hours}} h",
+      "resetsOnDay": "resets {{weekday}} {{time}}",
+      "resetUnknown": "Reset not reported",
+      "fiveHour": "5-hour",
+      "weekly": "Weekly",
+      "minutes": "{{count}}-minute",
+      "hours": "{{count}}-hour",
+      "days": "{{count}}-day",
+      "windowNear": "Near the {{window}} limit",
+      "nearWeekly": "Near the weekly limit",
+      "nearFiveHour": "Near the 5-hour limit",
+      "notReported": "Not reported yet",
+      "refuses": "{{cli}} refuses new turns until {{time}}.",
+      "refusesOnDay": "{{cli}} refuses new turns until {{weekday}} {{time}}.",
+      "refusesCredits": "{{cli}} refuses new turns: the workspace has no credits left.",
+      "refusesWorkspace": "{{cli}} refuses new turns: the workspace’s usage limit is reached.",
+      "refusesOther": "{{cli}} refuses new turns; it did not say until when.",
+      "unlimited": "Unlimited",
+      "source": {
+        "justNow": "From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "windowSource": {
+        "justNow": "{{window}} · From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "notRead": "{{cli}} reports its limits with each turn. They appear after the next {{cli}} turn in any open project.",
+      "unreadable": "This project’s connections could not be read, so its plan limits are not shown.",
+      "signedOut": "{{cli}} is not signed in on this computer, so it reports no limits. Sign in to it in a terminal, then test the connection in Connections.",
+      "cannotStart": "{{connection}} · {{project}} could not start {{cli}} when it was checked at {{time}}, so no limits can be read. Connections shows why.",
+      "checked": "Connection checked · {{time}}",
+      "expired": "Reset at {{time}} · read again with the next turn",
+      "footnote": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget."
+    },
     "runner": {
       "starting": "Starting runner…",
       "online": "Runner online",
@@ -4173,6 +4395,7 @@
       },
       "planReady": "Plan ready for review · {{task}}",
       "agentAsks": "{{agent}} asks · {{task}}",
+      "needsDecision": "{{step}} needs your decision · {{task}}",
       "runReady": "Run #{{run}} ready for review"
     },
     "counts": {
@@ -4477,6 +4700,7 @@
       "instruction": "Open instruction",
       "skill": "Open skill",
       "task": "Open task",
+      "decision": "Open",
       "secrets": "Open secrets"
     }
   },

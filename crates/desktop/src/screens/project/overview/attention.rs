@@ -1,6 +1,7 @@
 //! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — runs waiting for a
 //! plan decision (a review card, `dpeD7`), an answer to an agent's question (`Mt22P`, which opens
-//! the task's conversation) or an approval — and the recent activity of the project's runs
+//! the task's conversation), an approval or its own decision after its retries (`Np9kc`, 02.B6) — and
+//! the recent activity of the project's runs
 //! (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside any form, so pointer-only.
 
 use lurq::{
@@ -96,16 +97,24 @@ fn decision(ctx: &Ctx, row: &TaskRow, nav: &ProjectNav) -> Element {
       ctx.t("overview.attention.answer"),
       Page::Task(task, TaskPageTab::Conversation),
     ),
-    None => (
-      ctx.t("overview.attention.needsInput"),
-      row.title.clone(),
-      ctx.t_args(
-        "overview.attention.context",
-        [("task", &*row.key), ("detail", &*message_text(ctx, &row.detail))],
-      ),
-      ctx.t("overview.attention.open"),
-      Page::Task(task, TaskPageTab::Conversation),
-    ),
+    None => {
+      // A run waiting for a decision after its retries says what stopped it (02.B6 `Np9kc`) and
+      // opens the decision on Summary; any other wait (a tool request) is a card of the timeline.
+      let (detail, page) = row.decision.as_ref().map_or_else(
+        || (row.detail.clone(), Page::Task(task, TaskPageTab::Conversation)),
+        |decision| (decision.title(), Page::task(task)),
+      );
+      (
+        ctx.t("overview.attention.needsInput"),
+        row.title.clone(),
+        ctx.t_args(
+          "overview.attention.context",
+          [("task", &*row.key), ("detail", &*message_text(ctx, &detail))],
+        ),
+        ctx.t("overview.attention.open"),
+        page,
+      )
+    }
   };
   nav
     .link(page)

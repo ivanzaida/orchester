@@ -38,57 +38,11 @@ Environment variables, project MCP servers, tabs, and the installed stable build
    Review → Ready for review.
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
-5. Environment: `CARGO_TARGET_DIR=<repo>/.orchester/target`; then, in Agents › Permissions of each profile that
-   builds, add this build root to *Extra writable folders* (the tab offers it).
-   The runner scopes absolute targets to `<root>/worktrees/<worktree-directory>` for agents and command tools.
-   Sequential steps and resumed invocations reuse their worktree's artifacts; parallel worktrees cannot mix
-   artifacts from different revisions. Relative targets already belong to their worktree and are kept.
-   A new worktree starts cold (several GB, several minutes), with a 10 GiB host-side free-space reserve.
+5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away
+   with the worktree. A new worktree starts cold (several GB, several minutes).
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
 7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
    merge from Orchester while another agent is merging branches into `master` by hand.
-
-### D5 · Check free disk space outside the agent CLI
-
-In the first D3 run, Codex 0.139.0 with `-a never` declined `Get-PSDrive`, `fsutil volume diskfree H:` and `Get-Volume H`
-in a read-only step. A task that required that check stopped before cargo. Add an Orchester host-side free-space
-preflight for builds using a shared target, with a clear low-space result on Windows and macOS, so the agent does not
-depend on shell commands that its sandbox may decline. Evidence: `docs/evidence/d3-first-real-run-2026-09-29.md`.
-
-The implementation on `codex/d5-free-space` checks an absolute project `CARGO_TARGET_DIR` on the host before creating
-a run or worktree. It returns typed, localized errors when the target's volume cannot be measured or has less than
-10 GiB free for a cold target or 1 GiB for a populated one. Relative targets are skipped. A low-space target also
-blocks a documentation-only run because the runner cannot know whether an arbitrary step will build.
-
-**Done when** the filtered boundary and error-path tests, `tools/check.ps1`, independent review, and Windows host
-measurement pass; the runner macOS target passes cross-check or a Mac smoke test; and a separate agent compares the
-new visible error states with exact Pencil frames and app screenshots of the same size and state.
-
-**Status 2026-09-29: Done on Windows, with macOS verification deferred by the user.** The implementation on
-`codex/d5-final-port` checks absolute shared build targets before run/worktree creation, persists the selected
-pipeline version, keeps a queued task locked across navigation, and retries under its persisted first-run key.
-Post-rebase independent verification passed 17 named-filter Windows test commands (including all seven Run again
-tests) and `tools/check.ps1`. Exact-PID app captures matched the D5 form, error, and Retry regions in all four saved
-Pencil states without blocking or major differences. The newer ORC-15 Skills sidebar item is absent from those D5
-frames, a major global design-source difference the user explicitly accepted as a D5 exception on 2026-09-29.
-The direct low-space capture used a synthetic measurement for visual verification; the inaccessible-target run and
-tests cover the host error path. A retry after publishing pipeline v2 created one run with its pinned v1 snapshot;
-the integrated ORC-16 Run again path uses the latest published version and checks build space after confirmed
-worktree cleanup. See
-`docs/evidence/d5-final-verification-2026-09-29.md` and the full local report at `.tmp/verify/d5-final-port/report.md`.
-
-A full `orchester-runner` macOS cross-check could not run on this Windows host without macOS SDK headers, and no Mac
-was available. The user explicitly chose to close D5 with this limitation and track macOS verification separately.
-The verifier also observed intermittent foreground activation of its own app window, including one failure and one
-clean interval after the final rebase. No D5 activation call or causal link was found, so no speculative focus change
-was made.
-This observation remains open for a separate reproduction. Earlier evidence is in
-`docs/evidence/d5-live-reproduction-2026-09-29.md`, `docs/evidence/d5-design-path-2026-09-29.md`, and
-`docs/evidence/d5-status-2026-09-29.md`.
-
-Pencil (drawn 2026-09-29): `WOdDe` (02.09C, cannot measure), `WmW1G` (02.09D, low space), `l801hD` (02.09E, retrying the
-same run), and `T6bVyU` (queued task reopened after navigation). Compare the header, description, pipeline box,
-actions, and error or recovery text in the same app state and size.
 
 ## T · Tests and runner
 
@@ -112,8 +66,8 @@ change, and a dev build on this repository would share `<repo>/.orchester` with 
    format-6 index by the ORC-48 review.
 2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
    a core/runner change), plus ORC-32 again for comparison with
-   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms and give each run its own
-   `CARGO_TARGET_DIR`. Record tokens, time to the first edit and command counts (all, and before the first edit),
+   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms; each run builds in its own
+   worktree. Record tokens, time to the first edit and command counts (all, and before the first edit),
    and which index files the agent used.
 
 **Done when** a new `docs/evidence` file has the table and a conclusion.
@@ -226,6 +180,119 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
+### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
+
+Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
+could stay cut after the window widened; fixed by lurq 0.33.0 (text layout cache). Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
+design follow-ups on top. Codex and Claude Code report their account's limits live during agent turns: Codex App
+Server's `account/rateLimits/updated` notification and Claude Code's `stream-json` `rate_limit_event`. The runner hands
+each reading to the desktop without storing it; the status bar shows the newest reading per CLI across open projects,
+with hover details, near/reached/reset states, block reasons, extra usage and narrow-window priorities (Pencil `poPso`,
+item `XCXvw`). Tests: `cargo test -p orchester-core --test plan_limits plan_limits`, `cargo test -p orchester-runner
+--features test-agent --test plan_limits plan_limits`, `cargo test -p orchester-desktop --test status_bar status_bar`.
+Notes: [implementation handoff](evidence/orc-17-plan-limits-implementation.md).
+
+**Done when** an independent design verifier reports no blocking or major mismatches against `poPso` (states M–R);
+then move this entry to *Done*. Not covered: limits are read only while a run's agent works (App Server's
+`account/rateLimits/read` outside a run is not designed or used); Codex buckets other than `codex` and Claude Code
+windows of one model (`seven_day_opus`, `seven_day_sonnet`, …) are not shown.
+
+### Useful automatic retries · branch `claude/retry-feedback` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of 02.B3–B7 passed. Noted, not fixed: retries are counted
+over the whole run, so after a person returns the work a later verdict failure of that step waits at once; a member
+of a task group that waits for a person keeps Return to drafts unavailable for the group until it is stopped or
+retried; the Conversation tab's progress column at 960 loses step names (ORC-61 rewrites that tab).
+
+Built: a retry attempt's prompt carries the failure report (the route's target reads why the work came back with the
+failed step's whole result or a failing command's output tail; the failed step reads its own earlier result); only a
+verdict (`reported_failed`, `command_failed`) follows `on_failure`, a `failed` result wins over a turn that failed
+after it, any other failure restarts its step in place until it broke twice since it last passed (at most 10 automatic
+attempts in a row, `MAX_AUTOMATIC_ATTEMPTS`); a restart keeps the report and note of the attempt it restarts;
+exhausted retries and a second breakage make the run wait for a person (`RunStatus::WaitingForPerson`, task phase *Stuck*, counted in *Needs you*), who allows one more
+retry, returns the work to an agent step with a note, or stops the run (`Command::DecideStuckRun`). Migration 36
+rebuilds `runs` (status `waiting`) and `attempts` (reasons `restart`, `returned`, column `note`); runs that failed
+with `retries_exhausted` stay failed. See `docs/architecture/storage.md`, Step graphs, Failures. Tests: `cargo test
+-p orchester-core --test run stuck retry_prompt`, `cargo test -p orchester-store --test stuck_runs stuck_runs`,
+`cargo test -p orchester-runner --features test-agent --test retries retries`, `cargo test -p orchester-desktop
+--test form_keyboard task_graph_retry_limit`, `cargo test -p orchester-desktop --test overview overview_needs_you`,
+`cargo test -p orchester-desktop --test activity activity_run_waiting`.
+
+**Done when** an independent design verifier compares the app with the run-waits-for-a-person frames in `O4vgKt`
+and reports no blocking or major mismatches; then move this entry to *Done*:
+- 02.B3 `FjCWv`: retries used up, panel `Bi6pU`;
+- 02.B4 `K7hbj`: a step chosen (Implement, the step a retry resumes, by default) and a note typed;
+- 02.B5 `m3pDW`: a step broke twice;
+- 02.B6 `NM5My`: *Needs you* in Overview (card *ORC-128 · Review still fails after 2 retries*) and the status bar
+  (*Review needs your decision · ORC-128*, hand, until opened or dismissed);
+- 02.B7 `zyusO`: the three Activity transcript marks (automatic return, automatic restart, your return with note) and
+  the runner's refusal above *Stop and fail the run*.
+`DecideStuckRun`, `RunNotWaiting` and `RunWaitsForPerson` raise the ipc `PROTOCOL_VERSION` to 11.
+### ORC-44 · Command approvals and current-run policy changes · branch `claude/orc44` (done 2026-10-02)
+
+Independent review (three rounds) and design verification of the permission rows, popovers and notices passed.
+
+Run #12 (`orchester/orc-44-run-2`, base `37716df`) passed Implement, Check and Review; its Verify was interrupted.
+Master was merged into the branch (merge `a05ba75`) with master's approval architecture as the base. Almost all of
+ORC-44 was already on master: enabling *Ask before running commands* and *Ask before MCP actions* for a profile, a step
+or the current run, one-action command and MCP decisions, resuming an `exec` session through App Server, Apply now at
+a checkpoint, immutable invocation launch permissions, Windows sandbox selection and scoped build directories (see the
+agent runtime architecture entry under *Done*, since reworked by Claude Code support, App Server for every Codex step,
+`tool_approvals`, MCP exemptions and ORC-57/60). Dropped as covered or superseded: those runtime, core, store and
+runner changes; the command caption that denied sandbox exceptions (master asks about them on purpose); the
+`exec`-path invocation tests; the wrapping Target/working directory row in the approval dialog (C6 and the approval
+choices design's long values, `bjrgu`, own it).
+
+Ported (still missing on master), then built to the designer's frames approved 2026-10-02 (design doc, "What the
+row shows"): the task's Permissions row shows what the step's current or last invocation launched with, never the
+queued settings. The label carries the qualifier (*Running with* / *Last ran with* / *Next run uses*; Activity
+*Running with* / *Ran with*), the value is bare (*… · MCP asks* / *MCP auto*, *Commands ask*), breaks only at "·"
+and stacks above its never-clipped link; *starting…*, *not recorded* and *no permissions · it did not start* cover
+the launches without a record. Notices: *Saved for the next invocation · <change>*, *Applying <change> at the next
+checkpoint…*, *Restarting with the new permissions…* (no button) and *New permissions not active: <agent> did not
+restart*, then applied once the restarted invocation recorded its launch. The popover has one *Running with* line,
+ends 6 px above its row and scrolls when the window is short; an ended run's popover is read-only with only
+*Close* (`docs/interactive-tool-approvals.md`).
+Tests: `cargo test -p orchester-desktop --test run_permission_policy run_policy`, `--test form_keyboard
+run_permissions` (layout at 1440 and 960, popover above its row at 1020/960/700).
+
+**Done when** an independent review passes and an independent design verifier reports no blocking or major mismatch
+for the rows (02.10 `H1wCPK`, 02.12 `YOcfT`, 02.A `d6xleF`, 02.S `Lr8Dg`, 02.J anchor `rnGN7`, `iPBOy`), the board
+`iPHGE` (panel states, inline row at 1440 and 960, Activity panel), the popovers (`UPDBO` in `NNRH8`, `zCqp2` in
+`ecCTw`, ended `YgLEg`/`vXtTX`), Apply now (`D8qjLz`: `v0wd4R`, `R5mCao`) and `LJmTH` (`A3h7B4`, `ztEdT`, `shNob`).
+Known differences: at 960 the inline link wraps under the value with its "·" (lurq cannot drop a separator at a
+wrap); notice details say "the new permissions" where the frames name the change ("pnpm build allowed"), and the
+pending detail does not name the running command; the ended popover's network switch fades to the locked 0.45.
+Then move this entry to *Done*.
+
+### ORC-30 · Tasks list: select tasks, Set pipeline, Run selected · branch `claude/orc30` (UI)
+
+**Done 2026-10-02.** Independent review (four rounds) and design verification (1440 and 960) passed.
+Built in Orchester run #10 (`orchester/orc-30-run-2`, on the old base `37716df`) and merged with master on
+`claude/orc30` (merges `162206c`, `69677c9` for lurq 0.33.0). Row and select-all selection with the ready / incomplete /
+already queued or started split, readiness reasons, Set pipeline (published pipelines, drafts only, skipped tasks
+explained), search by title/id/brief, the pipeline filter and sort combined with the tabs (an empty result says so and
+can be cleared), and Run selected opening the parallel/sequential scheduling review (editable order, shared task
+limits, aggregate token cap) that queues each task exactly once: groups are stored atomically and first runs use
+stable first-run keys, so a retry never starts a task twice; the runner keeps the reviewed concurrency and its agent
+slots. A group held for good (failed task, spent cap, a start to fix) leaves the runner idle; its unstarted tasks go
+back to the drafts with *Return to drafts* in the selection bar. Finished groups are no longer polled, and failing
+starts back off. The row of the task New task's Create just made stays highlighted next to the selection checkboxes.
+Narrow windows: the review stacks its columns below 1260, the table drops its Pipeline column below 1152.
+Undrawn states are listed in the design doc as implemented, not drawn yet. The drawn copy that names merge
+dependencies is deliberately not used: dependencies are outside ORC-30 and not built.
+History: the run passed Implement, Check and Review; its Verify failed (order 12px high, settings too dense), fixed
+in `9971dbf`. An independent review of `4b507a3` failed on runner idleness, group polling, errors and dead code,
+fixed in the review follow-ups; an independent verification of `4b507a3` passed at 1440 and failed at 960, fixed in
+the design follow-ups.
+Tests: `cargo test -p orchester-core --test task_groups task_group`, `cargo test -p orchester-store --test
+task_groups task_group`, `cargo test -p orchester-runner --features test-agent --test task_groups task_group`,
+`cargo test -p orchester-desktop --test form_keyboard task_bulk`, `cargo test -p orchester-desktop --test tasks task`.
+
+**Done when** an independent re-review and design verifier report no blocking or major findings against Tasks
+`J9467` and the scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential), at 1440 and 960; then move this entry
+to *Done*. Not verified yet after the follow-ups.
+
 ## N · Native agent (P1 in progress)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
@@ -284,8 +351,11 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
-select-menu width option in 0.30.2, and the verifier window focus option in 0.30.3. This workspace uses 0.30.4,
-which also preserves text selection after a drag on scaled displays.
+select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
+scaled displays in 0.30.4. This workspace uses 0.34.0: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). Since 0.31.0 the MCP server also offers `lurq_inspect` and
+`lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
+0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
+admits it) and, to keep naming the version in use, this line.
 
 ## P · Product decisions waiting for the user
 
@@ -325,6 +395,64 @@ ORC-61 · Conversation merged with Activity, Send now and following live (absorb
 - **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
   Summary only; a failed step starts open; matched words are not highlighted. Design verification against `fTfl8` is the
   pipeline's next step.
+
+Tool approval dialog: long values shown in full · branch `claude/approval-long`
+
+- **Done 2026-10-02.** Independent review and design verification passed. A value that does not fit beside its label (Action, Command or
+  Target/Working directory when longer than 60 mono columns or multiline, and MCP Arguments always) moves under its
+  label into the transcript command box (`ui::value_box`: lines as recorded, no wrapping, the full width, scrolling
+  both ways in a box no taller than `theme::APPROVAL_VALUE_MAX_HEIGHT`, 232 = 12 lines (`E5NBo` in `bjrgu`), shared
+  with 04.H9's shell string; each thumb in a 6px lane of its own, never over a glyph; a quiet Copy at the right of
+  the label's line, 12 above the box, takes the value as recorded). A CLI command comes after its working directory,
+  labelled *Command · N lines, as recorded* (`Grcu7`); a CLI's request names no shell, so no Shell row. Arguments that parse as JSON read one member a line (2-space indent, only
+  whitespace between tokens changes); otherwise as recorded. The dialog is no taller than the screen: its details
+  scroll between the header and the buttons, so Approve and Deny stay in view at 960 x 700. Redaction is unchanged
+  (the runner records redacted values; the dialog only lays them out). This also fixes C6's cut working directory row.
+- Design: long values are drawn in `bjrgu` ("Approval choices", approved); the cap follows its 12 lines.
+- lurq bug worked around: a component that renders its own `Modal` and re-renders after two window resizes lays the
+  layer out at the earlier size. The dialog renders only the layer (`ToolApprovalDialog`); everything that changes lives
+  in `ToolApprovalPanel`. The fix goes upstream as lurq 0.33.2; other dialogs that render their own `Modal` and
+  re-render while open are exposed until then.
+- Arguments are laid out once per approval (`ArgumentsCache`, keyed by approval id and stored value), checked with
+  `serde::de::IgnoredAny`, and laid out only while the result stays within 4 x their size (at least 64 KB, at most
+  512 KB); past that they are shown as recorded with a note (`runs.toolApproval.argumentsAsRecorded`), since the
+  agent writes them and deep nesting multiplies the indentation. A number holding a secret's digits is redacted too.
+- MCP arguments are recorded whole (they were cut at 600 characters): Claude Code's permission prompt removes secret
+  values from every text in them first, then `run::recorded_arguments` keeps them whole up to `ARGUMENTS_CEILING`
+  (256 KB). Past it they are cut at a character boundary and end with a visible `… cut at 256 KB` line; the dialog lays
+  out the part kept and ends it with that line (`runs.toolApproval.argumentsCut`). Activity never showed MCP
+  arguments (it names a tool by its file path), and the approval row's `scope` column has no size limit, so neither
+  changes. Codex App Server has no cap: its MCP approvals record no arguments at all, by design of that parser.
+- The footer keeps Deny and Approve once whole: why a decision failed (e.g. the runner is not connected) takes the
+  room left of them and wraps there.
+- Copy is the ghost button of `feLwP` (22 high, 6 at each side and between icon and label, `muted`, `text` and the
+  hover fill under the pointer, `oriyY`); each value box keeps its thumbs in lanes of their own inside its 6px padding,
+  the vertical one from the viewport's top (`e0vyng`). With lurq 0.33.1 a press or drag anywhere in a lane scrolls
+  and never selects text (checked in the running app on both lanes).
+- Left: a command's *Agent's note* still cuts with an ellipsis. The sideways lane is always reserved (lurq reserves
+  always or never), where the design adds it only while a line overflows; lurq has one end inset for both bars, so the
+  sideways thumb also starts at the viewport's left rather than 12 in.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard tool_approval` (Copy: `tool_approval_copy -- --ignored`,
+  writes the clipboard and restores it); `-p orchester-core --test claude_approvals claude_approvals`; `--test theme
+  approval`.
+
+Cargo-specific build folder handling removed · branch `claude/no-cargo-special`
+
+- **Done 2026-10-02.** Orchester orchestrates agents for any kind of project, so nothing in its behaviour singles
+  out Cargo any more. Removed: Project settings › Environment's suggestion to add
+  `CARGO_TARGET_DIR=<repo>/.orchester/target` for a repository with a root `Cargo.toml` and its notice that agents
+  need permission to write there; the Agents › Permissions notice offering to add that folder to *Extra writable
+  folders*; the runner's per-worktree rewrite of an absolute `CARGO_TARGET_DIR` to `<root>/worktrees/<worktree>`;
+  and D5's host-side free-space preflight for that folder (`BuildSpaceLow`/`BuildSpaceUnavailable`, the `fs4`
+  dependency). Why: every run got its own 13–17 GB build folder outside its worktree that nothing removed; it grew
+  past 200 GB. Without the variable Cargo builds into `<worktree>/target`, which is git-ignored and goes with the
+  worktree, as any toolchain's output does. The free-space check is not replaced by a generic one: its 10 GiB / 1 GiB
+  floors were sized for a cold Cargo target, and no threshold fits every toolchain. Stored data is not migrated: a
+  project that still sets `CARGO_TARGET_DIR` passes it to its agents as written, like any variable, and an agent
+  that should write to a folder outside its worktree needs that folder among its profile's extra writable folders.
+  Pencil still draws the removed states (Environment `CMSyB` in `tXahd`, D5 `WmW1G`, and the free-space error in
+  `WOdDe`); a designer removes them. D5's open observation of intermittent verifier-window foreground activation
+  stays recorded in `docs/evidence/d5-final-verification-2026-09-29.md`.
 
 ORC-57 · Native agent P1b: core native module
 

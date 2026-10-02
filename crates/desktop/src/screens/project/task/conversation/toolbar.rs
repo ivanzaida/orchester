@@ -1,6 +1,7 @@
 //! The timeline's toolbar (52 high, `RrScB`): the step filter (`ZGwlv`), *Show* (All, Messages,
 //! Tools), *Show raw lines* in the Tools view (`q4fCXK`), the search field, whether the timeline
-//! follows live, and *Details*, pressed while its pane is open.
+//! follows live (or the run waits for the person's decision), and *Details*, pressed while its pane
+//! is open.
 
 use std::sync::Arc;
 
@@ -9,17 +10,20 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Row, Select, Spacer, Text},
+  components::{Column, Row, Select, Spacer, Text},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::id::StepExecutionId;
 
-use super::{ShowChoice, StepFilter, details::DetailsPane, segments::segments};
+use super::{super::activity::DETAILS_WIDTH, ShowChoice, StepFilter, details::DetailsPane, segments::segments};
 use crate::{
   tasks::{detail::RunView, timeline::view::Show},
-  theme::{ExtraColor, ExtraSpacing},
+  theme::{
+    CONVERSATION_TOOLBAR_DECISION_STATE, CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW, CONVERSATION_TOOLBAR_RAW_SWITCH,
+    ExtraColor, ExtraSpacing,
+  },
   ui::{
     field::{select_style, styled_input},
     icon::{Icon, IconSize, icon},
@@ -45,9 +49,14 @@ pub(super) struct ToolbarState {
   pub(super) details_open: bool,
   /// An agent is at work on the run.
   pub(super) live: bool,
+  /// The run waits for the person's decision after its retries: it has not ended.
+  pub(super) deciding: bool,
   pub(super) following: bool,
 }
 
+/// The toolbar across the tab's main column, with its side padding. While the window is too narrow
+/// for one line, the step filter keeps the first with the live state and *Details*, and *Show*, *Show
+/// raw lines* and the search go to a second.
 pub(super) fn toolbar(ctx: &Ctx, run: &RunView, state: &ToolbarState) -> Element {
   let show_options = vec![
     (ShowChoice(Show::All), ctx.t("runs.conversation.show.all")),
@@ -62,33 +71,77 @@ pub(super) fn toolbar(ctx: &Ctx, run: &RunView, state: &ToolbarState) -> Element
   let follow = match (state.live, state.following) {
     (true, true) => compact_status_label(Icon::Radio, &ctx.t("runs.activity.following")),
     (true, false) => compact_status_label(Icon::CirclePause, &ctx.t("runs.activity.notFollowing")),
+    (false, _) if state.deciding => compact_status_label(Icon::Hand, &ctx.t("runs.activity.waitingDecision")),
     (false, _) => compact_status_label(Icon::Check, &ctx.t("runs.activity.ended")),
+  }
+  .id("conversation-live-state");
+  let show = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("runs.conversation.show.label")).variant(TypographyStyle::Caption))
+    .child(segments("conversation-show", &state.show, show_options));
+  let details = details_button(ctx, &state.details, state.details_open);
+  let line = || {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Stack.role())
+      .align_items(Alignment::Center)
   };
-  Row::new()
+  if one_line_fits(ctx, state, tools) {
+    return line()
+      .id("conversation-toolbar")
+      .height(Dimension::Px(TOOLBAR_HEIGHT))
+      .padding_horizontal(SpacingSize::Section)
+      .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .child(step_filter(ctx, run, &state.step, Dimension::Px(FILTER_WIDTH)))
+      .child(show)
+      .with_children(raw)
+      .child(search(ctx, &state.query))
+      .child(Spacer::new().flex(1.0))
+      .child(follow)
+      .child(details)
+      .into();
+  }
+  Column::new()
     .id("conversation-toolbar")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TOOLBAR_HEIGHT))
+    .padding_horizontal(SpacingSize::Section)
+    .padding_vertical(ExtraSpacing::Stack.role())
     .spacing(ExtraSpacing::Stack.role())
-    .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(step_filter(ctx, run, &state.step))
     .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t("runs.conversation.show.label")).variant(TypographyStyle::Caption))
-        .child(segments("conversation-show", &state.show, show_options)),
+      line()
+        .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(step_filter(
+          ctx,
+          run,
+          &state.step,
+          Dimension::Pct(100.0),
+        )))
+        .child(Row::new().flex_shrink(0.0).child(follow))
+        .child(Row::new().flex_shrink(0.0).child(details)),
     )
-    .with_children(raw)
-    .child(search(ctx, &state.query))
-    .child(Spacer::new().flex(1.0))
-    .child(follow)
-    .child(details_button(ctx, &state.details, state.details_open))
+    .child(line().child(show).with_children(raw).child(search(ctx, &state.query)))
     .into()
 }
 
-/// *All steps · 3 executions* and one option per step execution that ran (`ZGwlv`).
-fn step_filter(ctx: &Ctx, run: &RunView, filter: &Signal<StepFilter>) -> Element {
+/// Whether the window holds the toolbar on one line, beside the Details pane when it is open.
+/// Reading the window's width re-renders the toolbar as the window resizes.
+fn one_line_fits(ctx: &Ctx, state: &ToolbarState, tools: bool) -> bool {
+  let mut needed = CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW;
+  if state.details_open {
+    needed += DETAILS_WIDTH;
+  }
+  if tools {
+    needed += CONVERSATION_TOOLBAR_RAW_SWITCH;
+  }
+  if state.deciding {
+    needed += CONVERSATION_TOOLBAR_DECISION_STATE;
+  }
+  ctx.window().logical_width() >= needed
+}
+
+/// *All steps · 3 executions* and one option per step execution that ran (`ZGwlv`), `width` wide.
+fn step_filter(ctx: &Ctx, run: &RunView, filter: &Signal<StepFilter>, width: Dimension) -> Element {
   let executions: Vec<StepExecutionId> = run
     .run
     .attempts()
@@ -111,7 +164,7 @@ fn step_filter(ctx: &Ctx, run: &RunView, filter: &Signal<StepFilter>) -> Element
   Element::from(
     Select::new(filter.clone())
       .options(options)
-      .width(Dimension::Px(FILTER_WIDTH))
+      .width(width)
       .height(Dimension::Px(CONTROL_HEIGHT))
       .style(select_style(ctx, CONTROL_HEIGHT)),
   )

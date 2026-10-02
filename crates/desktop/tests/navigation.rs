@@ -152,6 +152,9 @@ fn pages() -> Vec<Page> {
     Page::Overview(OverviewTab::Failed),
     Page::TASKS,
     Page::Tasks(TaskTab::Drafts),
+    Page::Tasks(TaskTab::Queue),
+    Page::Tasks(TaskTab::NeedsReview),
+    Page::Tasks(TaskTab::Done),
     Page::NewTask,
     Page::task(TaskId::generate()),
     Page::Task(TaskId::generate(), TaskPageTab::Conversation),
@@ -252,9 +255,14 @@ fn route_tabs_are_part_of_the_path() {
   let project = ProjectId::generate();
   let drafts = Route::Project(project, Page::Tasks(TaskTab::Drafts)).path();
   assert_eq!(drafts, format!("/project/{project}/tasks?tab=drafts"));
-  // A tab that cannot be opened yet, or does not exist, is the first tab.
   let queue = format!("/project/{project}/tasks?tab=queue");
-  assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));
+  assert_eq!(
+    Route::parse(&queue),
+    Some(Route::Project(project, Page::Tasks(TaskTab::Queue)))
+  );
+  // A tab that does not exist is the first tab.
+  let nothing = format!("/project/{project}/tasks?tab=nothing");
+  assert_eq!(Route::parse(&nothing), Some(Route::Project(project, Page::TASKS)));
   let unknown = format!("/project/{project}?tab=nothing");
   assert_eq!(Route::parse(&unknown), Some(Route::Project(project, Page::OVERVIEW)));
   let roles = Route::Project(project, Page::Instructions(InstructionsTab::AgentRoles, None)).path();

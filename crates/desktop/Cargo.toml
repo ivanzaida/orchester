@@ -49,6 +49,10 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 rfd.workspace = true
+# Checks that an MCP call's arguments are JSON, without building them, before the approval dialog
+# lays them out for reading.
+serde.workspace = true
+serde_json.workspace = true
 syntect.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -64,5 +68,4 @@ embed-resource.workspace = true
 [dev-dependencies]
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
-serde_json.workspace = true
 tempfile.workspace = true

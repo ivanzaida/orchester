@@ -328,6 +328,7 @@ fn composer_continues_a_failed_run_with_instructions() {
   desktop.wait_until("the composer of the failed run", |desktop| {
     holds(desktop, "conversation-send", "Continue with instructions")
   });
+  desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
   assert!(holds(&mut desktop, "conversation-end", "Run 1 failed at Implement"));
   assert!(shows(&mut desktop, "conversation", "Implement failed"));
   write(&mut desktop, "Continue with the corrected instruction.");

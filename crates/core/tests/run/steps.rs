@@ -1,5 +1,6 @@
 use orchester_core::run::{
-  AttemptReason, AttemptStatus, RunError, RunEventKind, RunFailure, RunStatus, StepFailure, StepStatus, WaitReason,
+  AttemptReason, AttemptStatus, RunError, RunEventKind, RunFailure, RunStatus, StepFailure, StepStatus, Stuck,
+  WaitReason,
 };
 
 use crate::fixture::{Logged, at, key};
@@ -9,20 +10,20 @@ fn status(logged: &Logged, step: &str) -> StepStatus {
 }
 
 /// Passes everything up to and including `implement`.
-fn implemented() -> Logged {
+pub(crate) fn implemented() -> Logged {
   let mut logged = Logged::started();
   logged.through_plan();
   logged.pass("implement");
   logged
 }
 
-/// Starts `checks` and `review` in parallel, then fails `checks`.
-fn fail_checks(logged: &mut Logged) {
+/// Starts `checks` and `review` in parallel, then `checks` reports that the work fails.
+pub(crate) fn fail_checks(logged: &mut Logged) {
   let checks = logged.exec("checks");
   let review = logged.exec("review");
   logged.apply(|run| run.start_step(checks, at(40)));
   logged.apply(|run| run.start_step(review, at(40)));
-  logged.apply(|run| run.fail_step(checks, StepFailure::AgentFailed, at(41)));
+  logged.apply(|run| run.fail_step(checks, StepFailure::ReportedFailed, at(41)));
 }
 
 #[test]
@@ -140,7 +141,7 @@ fn run_steps_executions_of_an_earlier_attempt_are_closed() {
 }
 
 #[test]
-fn run_steps_retries_are_exhausted_after_max_retries() {
+fn run_steps_exhausted_retries_wait_for_a_person() {
   let mut logged = implemented();
   fail_checks(&mut logged);
   logged.pass("implement");
@@ -152,9 +153,9 @@ fn run_steps_retries_are_exhausted_after_max_retries() {
   assert_eq!(run.attempts().len(), 3);
   assert_eq!(
     run.status(),
-    &RunStatus::Failed(RunFailure::RetriesExhausted(key("checks")))
+    &RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("checks")))
   );
-  assert_eq!(run.attempts()[2].status(), AttemptStatus::Failed);
+  assert_eq!(run.attempts()[2].status(), AttemptStatus::Active);
   assert!(
     run.attempts()[2]
       .executions()
@@ -168,7 +169,7 @@ fn run_steps_failure_without_a_route_fails_the_run() {
   let mut logged = Logged::started();
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
-  logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
+  logged.apply(|run| run.fail_step(research, StepFailure::ReportedFailed, at(13)));
   assert_eq!(
     logged.run.status(),
     &RunStatus::Failed(RunFailure::StepFailed(key("research")))

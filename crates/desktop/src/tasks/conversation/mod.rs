@@ -35,6 +35,9 @@ pub enum PanelState {
   Paused,
   /// Stopped at a limit.
   Stopped,
+  /// The run waits for the person's decision after its retries ran out or a step broke again;
+  /// messages wait until it continues.
+  Deciding,
   Interrupted,
   /// Ready for review: a message asks the agent again.
   Ready,
@@ -61,6 +64,7 @@ impl PanelState {
       TaskPhase::Waiting => Self::Waiting,
       TaskPhase::Paused => Self::Paused,
       TaskPhase::StoppedAtLimit => Self::Stopped,
+      TaskPhase::Stuck => Self::Deciding,
       TaskPhase::Interrupted => Self::Interrupted,
       TaskPhase::Succeeded => Self::Ready,
       TaskPhase::Merged => Self::Merged,
@@ -439,8 +443,14 @@ fn queue(message: &Message, (run, working): (Option<&RunView>, &[WorkingAgent]),
     RunStatus::Pending => Queue::RunStarts,
     RunStatus::Paused(PauseReason::Requested) if later_agent => next_turn(),
     RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) if later_agent => next_turn(),
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Queue::RunContinues,
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_)
+      if later_agent =>
+    {
+      next_turn()
+    }
+    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_) => {
+      Queue::RunContinues
+    }
     RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,

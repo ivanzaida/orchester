@@ -22,7 +22,7 @@ use lurq::{
 };
 use orchester_core::{
   conversation::{Recipient, Timing},
-  id::IdempotencyKey,
+  id::{IdempotencyKey, TaskId},
   run::{PlanDecision, ReviewNote},
 };
 
@@ -30,12 +30,17 @@ use super::{
   super::plan_review::{Decision as PlanRequest, DecisionAction, decision_action as plan_decision},
   column,
   composer_text::{hint, primary_label, recipient_label},
+  nav,
   send::{Outgoing, SendAction, Sent, send_action},
 };
 use crate::{
   display,
+  navigation::route::{Page, TaskPageTab},
   tasks::{
-    conversation::{Conversation, composer::ComposerMode},
+    conversation::{
+      Conversation,
+      composer::{ComposerMode, Queued},
+    },
     detail::TaskDetail,
     plan::PlanReview,
   },
@@ -45,6 +50,7 @@ use crate::{
     field::{field_error, select_style, styled_input},
     icon::Icon,
     message_text,
+    pressable::surface,
   },
 };
 
@@ -164,7 +170,7 @@ impl Component for ComposerDock {
       .background(ExtraColor::Surface.role())
       .border(border)
       .rounded(ExtraRadius::Notice.role())
-      .with_children(context_line(ctx, &mode))
+      .with_children(context_line(ctx, &mode, props.detail.task.id()))
       .child(field)
       .child(row);
     let hint = Text::new(&hint(ctx, &mode, conversation))
@@ -485,9 +491,11 @@ fn feedback(action: &SendAction, plan: &DecisionAction) -> Option<crate::message
   }
 }
 
-/// *Answering Builder's question from 12:09*, *Changes to plan v1 · sent to Planner*.
-fn context_line(ctx: &Ctx, mode: &ComposerMode) -> Option<Element> {
+/// *Answering Builder's question from 12:09*, *Changes to plan v1 · sent to Planner*; *Waiting for
+/// your decision* with the way to it, on the task's Summary.
+fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> Option<Element> {
   let text = match mode {
+    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, task)),
     ComposerMode::Answer { agent, asked_at, .. } => ctx.t_args(
       "runs.conversation.composer.answering",
       [("agent", &**agent), ("time", display::clock(*asked_at).as_str())],
@@ -504,4 +512,24 @@ fn context_line(ctx: &Ctx, mode: &ComposerMode) -> Option<Element> {
       .variant(TypographyStyle::Caption)
       .into(),
   )
+}
+
+/// The run waits for the person's decision after its retries: what the composer's messages wait for,
+/// and *Open the decision →*, which opens the Summary with the decision panel.
+fn decision_line(ctx: &mut Ctx, task: TaskId) -> Element {
+  let link = nav(ctx)
+    .link(Page::Task(task, TaskPageTab::Summary))
+    .on(surface().id("conversation-open-decision"))
+    .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link));
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&ctx.t("runs.conversation.composer.deciding"))
+        .id("conversation-status")
+        .variant(TypographyStyle::Caption),
+    )
+    .child(link)
+    .into()
 }

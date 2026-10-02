@@ -1,11 +1,12 @@
 //! The parts of the agent transcript (02.I `SfXU1`) the Conversation tab shows: an entry (`N4SlQq`)
-//! with its time, glyph, header and output, a step execution's header (`mDnc3`), the invocation
-//! panel of its Details pane (`n0cEOG`) and the live footer (`P2Qc0`). The tab itself is
-//! `super::conversation`.
+//! with its time, glyph, header and output, a step execution's header (`mDnc3`), a return or
+//! restart before it (02.B7 `zyusO`), the invocation panel of its Details pane (`n0cEOG`) and the
+//! live footer (`P2Qc0`). The tab itself is `super::conversation`.
 
 mod entry;
 mod first_edit;
 mod footer;
+mod mark;
 mod mcp;
 mod mcp_call;
 mod native;
@@ -22,7 +23,8 @@ use orchester_core::connection::EngineVendor;
 pub(super) use self::{
   entry::{EntryProps, EntryView},
   footer::{LiveFooter, LiveFooterProps},
-  panel::invocation_panel,
+  mark::mark_row,
+  panel::{PANEL_WIDTH as DETAILS_WIDTH, invocation_panel},
   step_header::step_header,
   toggles::{OpenRows, Toggles},
 };

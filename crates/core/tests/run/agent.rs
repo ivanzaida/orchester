@@ -250,7 +250,7 @@ fn task_phase_follows_the_task_and_its_latest_run() {
   );
   let research = logged.exec("research");
   logged.apply(|run| run.start_step(research, at(12)));
-  logged.apply(|run| run.fail_step(research, StepFailure::AgentFailed, at(13)));
+  logged.apply(|run| run.fail_step(research, StepFailure::ReportedFailed, at(13)));
   assert_eq!(TaskPhase::of(&queued, Some(&logged.run), None), TaskPhase::Failed);
   assert_eq!(TaskPhase::Failed.without_runner(), TaskPhase::Failed);
   assert_eq!(TaskPhase::Waiting.without_runner(), TaskPhase::Waiting);

@@ -1,5 +1,6 @@
-//! One row of the timeline, in its column: a step header, a message, a card, a tool group, a
-//! problem row, a step's result or the run's end; in *Tools*, an entry or a message on one line.
+//! One row of the timeline, in its column: a step header, a return or restart before it, a message,
+//! a card, a tool group, a problem row, a step's result or the run's end; in *Tools*, an entry or a message on one
+//! line.
 
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use lurq::{
 };
 
 use super::{
-  super::activity::{EntryProps, EntryView, step_header},
+  super::activity::{EntryProps, EntryView, mark_row, step_header},
   Timeline,
   cards::{self, ApprovalCardProps, ApprovalCardView, PlanCardProps, PlanCardView},
   column, group,
@@ -80,7 +81,7 @@ impl Component for TimelineRowView {
   }
 }
 
-/// A message, a card, a problem, a result or the run's end.
+/// A message, a card, a problem, a return or restart, a result or the run's end.
 fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
   match &item.kind {
     ItemKind::AgentMessage { agent, step, text } => message::agent_message(ctx, (agent, step), item.at, text),
@@ -116,6 +117,7 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
         toggles: timeline.toggles.clone(),
       },
     ),
+    ItemKind::Mark(mark) => mark_row(ctx, mark),
     ItemKind::Result(card) => cards::result(ctx, card, timeline),
     ItemKind::End(end) => cards::end_marker(ctx, end, (timeline.run_number, item.at)),
     ItemKind::Step(_) | ItemKind::Tools(_) => unreachable_row(),

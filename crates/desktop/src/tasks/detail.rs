@@ -12,11 +12,13 @@ use orchester_core::{
   integration::RunMerge,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActivityEntry, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit, RunStatus,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit,
+    RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, attempt_starts,
+    execution_tokens,
   },
   store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::Task,
+  task_group::GroupHold,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -66,6 +68,9 @@ pub struct StepView {
 /// The latest run of a task.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunView {
+  /// Only the saved original first run can be retried with the task first-run key.
+  pub first_run: bool,
+  pub group_hold: Option<GroupHold>,
   pub run: Run,
   pub pipeline: Arc<str>,
   pub version: VersionNumber,
@@ -83,6 +88,9 @@ pub struct RunView {
   pub plans: Vec<Plan>,
   /// What its agent launches got of the code index and used before their first edit.
   pub index: IndexUses,
+  /// When each of its attempts started, and whether a person's decision started it; empty for a
+  /// run of one attempt.
+  pub attempt_starts: Vec<AttemptStart>,
 }
 
 impl RunView {
@@ -280,6 +288,7 @@ impl TaskDetail {
 /// `run` with its steps and invocations, as the task page shows it.
 pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   let pinned = run.snapshot().pipeline();
+  let (first_run, group_hold) = first_run_hold(db, &run)?;
   let pipeline = db
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
@@ -339,7 +348,11 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     _ => (None, false),
   };
   let finished_at = finished_at(db, &run)?;
+  let attempt_starts = starts_of(db, &run)?;
   Ok(RunView {
+    attempt_starts,
+    first_run,
+    group_hold,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,
@@ -352,6 +365,14 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// When each attempt of `run` started and who started it; nothing to read for a run of one attempt.
+fn starts_of(db: &ProjectDb, run: &Run) -> Result<Vec<AttemptStart>, StoreError> {
+  if run.attempts().len() < 2 {
+    return Ok(Vec::new());
+  }
+  Ok(attempt_starts(&db.events(run.id()).map_err(run_store_error)?))
 }
 
 /// When `run` ended, if it did: succeeded, failed or was cancelled.
@@ -458,4 +479,18 @@ pub(crate) fn run_store_error(error: orchester_store::RunStoreError) -> StoreErr
       detail: other.to_string(),
     },
   }
+}
+
+fn first_run_hold(db: &ProjectDb, run: &Run) -> Result<(bool, Option<GroupHold>), StoreError> {
+  let first = db.run_with_key(run.task().first_run_key()).map_err(run_store_error)?;
+  let is_first = first.is_some_and(|first| first.id() == run.id());
+  let hold = if is_first {
+    db.task_group_for_task(run.task())?
+      .map(|group| db.task_group_hold(group.key()))
+      .transpose()?
+      .flatten()
+  } else {
+    None
+  };
+  Ok((is_first, hold))
 }
