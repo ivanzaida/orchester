@@ -26,6 +26,7 @@ pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
   index_use::IndexUses,
   permissions::run_permissions,
+  run_approvals::RunApprovals,
   unreadable::{EarlierRun, Unreadable},
 };
 
@@ -83,6 +84,8 @@ pub struct RunView {
   pub plans: Vec<Plan>,
   /// What its agent launches got of the code index and used before their first edit.
   pub index: IndexUses,
+  /// Its auto-approval, its rules from the wider answers and how its requests were answered.
+  pub approvals: RunApprovals,
 }
 
 impl RunView {
@@ -340,6 +343,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   let finished_at = finished_at(db, &run)?;
   Ok(RunView {
+    approvals: RunApprovals::read(db, &run)?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,

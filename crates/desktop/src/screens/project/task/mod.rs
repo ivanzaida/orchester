@@ -9,6 +9,7 @@
 
 mod activity;
 mod approval_arguments;
+mod approval_card;
 mod approval_value;
 mod brief;
 mod changes;
@@ -24,6 +25,7 @@ mod progress;
 mod ready;
 mod retry_limit;
 mod run_again;
+mod run_approvals;
 mod summary;
 mod tab_state;
 mod tool_approval;
@@ -256,15 +258,11 @@ impl Component for TaskScreen {
     let control_error = self.error_rows(ctx, &control);
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
     let ended = removal.into_iter().chain(again.action).collect();
-    let earlier_unreadable = detail
-      .earlier_unreadable
-      .iter()
-      .map(|run| unreadable::earlier_notice(ctx, run));
+    let heading = heading::with_notices(ctx, &detail, lost.is_some(), &props.project.repo_root);
     column
       .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
       .with_children(runner_notice)
-      .child(heading::heading(ctx, &detail, lost.is_some()))
-      .with_children(earlier_unreadable)
+      .with_children(heading)
       .with_children(control_error)
       .child(self.tabs(ctx, &props, files))
       .child(body)

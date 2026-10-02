@@ -2,7 +2,7 @@
 //! Attempt 1 · Implement · Builder working", and the words and icons for step states. A run ready
 //! for review shows its status label and when it finished instead (`ruBkY` in 02.13 `vpgrJ`).
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -15,7 +15,10 @@ use lurq::{
 };
 use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, TaskPhase};
 
-use super::super::page;
+use super::{
+  super::page,
+  run_approvals::{AutoApprovingLine, AutoApprovingProps},
+};
 use crate::{
   display,
   tasks::{
@@ -26,16 +29,49 @@ use crate::{
   ui::{icon::Icon, status_label::status_label},
 };
 
-/// `lost`: the run is recorded as running but no runner is connected, so it is interrupted.
-pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
+/// The heading, then a notice for each earlier run that cannot be read.
+pub(super) fn with_notices(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> Vec<Element> {
+  let heading = heading(ctx, detail, lost, repo_root);
+  std::iter::once(heading)
+    .chain(
+      detail
+        .earlier_unreadable
+        .iter()
+        .map(|run| super::unreadable::earlier_notice(ctx, run)),
+    )
+    .collect()
+}
+
+/// `lost`: the run is recorded as running but no runner is connected, so it is interrupted. While the
+/// run auto-approves, *Auto-approving* and *Stop* follow (`run_approvals`).
+fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> Element {
   let title = detail.task.details().title.as_str();
   if let Some(unreadable) = &detail.latest_unreadable {
     return page::heading(title, &unreadable_description(ctx, unreadable));
   }
-  match &detail.run {
+  let heading = match &detail.run {
     Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run, detail.merge.is_some()),
     _ => page::heading(title, &description(ctx, detail, lost)),
-  }
+  };
+  let auto = detail
+    .run
+    .as_ref()
+    .filter(|run| !run.run.status().is_terminal() && run.approvals.auto_approving());
+  let Some(run) = auto else {
+    return heading;
+  };
+  let line = ctx.mount_keyed::<AutoApprovingLine>(
+    &format!("task-auto-approving-{}", run.id()),
+    AutoApprovingProps {
+      run: run.id(),
+      repo_root: repo_root.to_path_buf(),
+    },
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(heading)
+    .child(line)
+    .into()
 }
 
 /// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`);

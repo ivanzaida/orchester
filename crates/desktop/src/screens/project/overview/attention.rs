@@ -44,7 +44,7 @@ const SHOWN: usize = 3;
 
 pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
   let waiting = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, SHOWN);
-  let count = OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases);
+  let count = tasks.needs_you();
   let decisions: Vec<Element> = if waiting.is_empty() {
     vec![
       Text::new(&ctx.t("overview.attention.empty"))

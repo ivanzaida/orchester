@@ -2,6 +2,7 @@
 //! and reading and saving through the project database. Task rules themselves are
 //! `orchester_core::task`; this module only maps between them and what is on screen.
 
+mod approval_choices;
 pub mod approvals;
 pub mod changes;
 pub mod conversation;
@@ -18,6 +19,7 @@ pub mod plan;
 pub mod progress;
 pub mod run;
 pub mod run_again;
+pub mod run_approvals;
 pub mod transcript;
 pub mod unreadable;
 pub mod usage;

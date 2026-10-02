@@ -25,6 +25,7 @@ use orchester_core::{
 
 use super::{
   TaskScrolls,
+  approval_card::review_card,
   brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
@@ -32,6 +33,7 @@ use super::{
   permissions::{RunPermissionsProps, RunPermissionsRow},
   progress::progress_list,
   retry_limit::retry_limit,
+  run_approvals::{RunApprovalsPanel, RunApprovalsProps},
 };
 use crate::{
   budget::whole_minutes,
@@ -69,12 +71,15 @@ pub(super) fn summary(
   // Brief and criteria on a run page describe what that run was asked to do, even after the
   // task is edited for a later run.
   let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
+  // A request the run's agent waits on comes first, with Review request.
+  let waiting = detail.run.as_ref().and_then(|run| review_card(ctx, run));
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
+    .with_children(waiting)
     .child(with_reason(notice(ctx, detail, lost), reason))
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
@@ -227,7 +232,17 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
-    .with_children(permissions);
+    .with_children(permissions)
+    .child(ctx.mount_keyed::<RunApprovalsPanel>(
+      &format!("task-run-approvals-{}", run.id()),
+      RunApprovalsProps {
+        run: run.id(),
+        number: run.run.number(),
+        approvals: run.approvals.clone(),
+        live: !run.run.status().is_terminal(),
+        repo_root: repo_root.to_path_buf(),
+      },
+    ));
   this_run_panel(rows, scroll, &ctx.t("runs.summary.snapshotNote"))
 }
 

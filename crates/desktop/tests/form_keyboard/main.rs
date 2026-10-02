@@ -8,6 +8,7 @@
 mod agent_permissions;
 mod agents;
 mod all_projects;
+mod approval_choices;
 mod canvas_zoom;
 mod changes;
 mod claude_run;

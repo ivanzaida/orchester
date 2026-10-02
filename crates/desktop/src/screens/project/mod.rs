@@ -8,6 +8,7 @@
 //! screen and the status bar.
 
 mod agents;
+pub(crate) mod approval_queue;
 pub(crate) mod connections;
 mod import;
 mod instructions;
@@ -18,6 +19,7 @@ mod pages;
 mod pipelines;
 mod pull_requests;
 mod repository_import;
+pub(crate) mod run_approval_action;
 mod runner;
 mod runner_card;
 mod secrets;
@@ -41,6 +43,7 @@ use orchester_core::id::{ProjectId, RunId, TaskId};
 
 pub(crate) use self::pages::page;
 use self::{
+  approval_queue::ApprovalQueue,
   pages::Shown,
   sidebar::{SidebarState, sidebar},
 };
@@ -58,7 +61,7 @@ use crate::{
     OpenIn, Tabs,
     feed::{ProjectFeed, ProjectFeeds},
   },
-  tasks::{data::ProjectTasks, integration_jobs::RunIntegration, list, overview::OverviewTab},
+  tasks::{data::ProjectTasks, integration_jobs::RunIntegration, list},
   ui::link::Link,
   workspace::OpenProject,
 };
@@ -339,6 +342,7 @@ pub(crate) fn shell(ctx: &mut Ctx) -> Element {
 
 pub struct ProjectShell {
   nav: ProjectNav,
+  approvals: ApprovalQueue,
 }
 
 impl Component for ProjectShell {
@@ -361,6 +365,7 @@ impl Component for ProjectShell {
           .use_context::<Tabs>()
           .expect("the window provides Tabs before mounting screens"),
       },
+      approvals: ApprovalQueue::new(ctx),
     }
   }
 
@@ -368,6 +373,7 @@ impl Component for ProjectShell {
     // Provided on every render: a re-render from the root replaces this component's context
     // with the root's, which does not contain it.
     ctx.provide(self.nav.clone());
+    ctx.provide(self.approvals.clone());
     let open = ctx.props::<OpenProject>().clone();
     let feed = &self.nav.feed;
     let status = feed.status.get().unwrap_or_else(RunnerStatus::none);
@@ -394,11 +400,17 @@ impl Component for ProjectShell {
       repo_root: open.repo_root.clone(),
       runner: status.clone(),
       queued: tasks.ready().map(|tasks| list::queued(&tasks.tasks, &tasks.phases)),
-      needs_you: tasks
-        .ready()
-        .map(|tasks| OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases)),
+      needs_you: tasks.ready().map(ProjectTasks::needs_you),
       usage,
       lost_to_runner: tasks.ready().map(|tasks| tasks.lost_to_runner),
+      approvals: tasks
+        .ready()
+        .map(|tasks| tasks.pending_tool_approvals.clone())
+        .unwrap_or_default(),
+      auto_approving: tasks
+        .ready()
+        .map(|tasks| tasks.auto_approving.clone())
+        .unwrap_or_default(),
     };
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -427,6 +439,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
-      .with_children(task::tool_approval_modal(ctx, pending))
+      .with_children(task::tool_approval_modal(ctx, pending, &self.approvals))
   }
 }
