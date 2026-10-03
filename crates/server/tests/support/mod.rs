@@ -141,7 +141,7 @@ impl TestServer {
     self.tls_on(self.connect().await).await
   }
 
-  async fn tls_on(&self, tcp: TcpStream) -> tokio_rustls::client::TlsStream<TcpStream> {
+  pub async fn tls_on(&self, tcp: TcpStream) -> tokio_rustls::client::TlsStream<TcpStream> {
     use tokio_rustls::rustls::{
       self,
       pki_types::{CertificateDer, ServerName, pem::PemObject},

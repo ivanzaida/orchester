@@ -51,7 +51,7 @@ impl<'de> Deserialize<'de> for TrustedProxy {
 }
 
 impl TrustedProxy {
-  fn contains(&self, address: IpAddr) -> bool {
+  pub(crate) fn contains(&self, address: IpAddr) -> bool {
     let address = address.to_canonical();
     address.is_ipv4() == self.network.is_ipv4() && masked(address, self.prefix) == self.network
   }

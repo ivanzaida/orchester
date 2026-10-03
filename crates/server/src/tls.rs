@@ -14,7 +14,10 @@ use tokio_rustls::{
   server::TlsStream,
 };
 
-use crate::{config::Config, connection_limit::ConnectionLimit, error::ServerError, initial_read::InitialRead};
+use crate::{
+  addresses::TrustedProxy, config::Config, connection_limit::ConnectionLimit, error::ServerError,
+  initial_read::InitialRead,
+};
 
 type Stream = TlsStream<InitialRead<TcpStream>>;
 
@@ -49,12 +52,12 @@ pub(crate) struct TlsListener {
 }
 
 impl TlsListener {
-  pub fn new(listener: TcpListener, acceptor: TlsAcceptor) -> Self {
+  pub fn new(listener: TcpListener, acceptor: TlsAcceptor, trusted_proxies: Vec<TrustedProxy>) -> Self {
     Self {
       listener,
       acceptor,
       handshakes: JoinSet::new(),
-      limits: ConnectionLimit::new(64, 8),
+      limits: ConnectionLimit::new(64, 32, trusted_proxies),
     }
   }
 }

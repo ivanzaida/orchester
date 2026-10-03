@@ -20,6 +20,8 @@ mod lifecycle;
 mod password_limit;
 #[path = "accounts/proxies.rs"]
 mod proxies;
+#[path = "accounts/proxy_connections.rs"]
+mod proxy_connections;
 #[path = "accounts/requests.rs"]
 mod requests;
 #[path = "accounts/security.rs"]

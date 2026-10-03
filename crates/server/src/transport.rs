@@ -23,10 +23,12 @@ pub async fn serve(
   shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<(), ServerError> {
   let tls = crate::tls::acceptor(&server.inner.config)?;
+  let proxies = server.inner.config.trusted_proxies.clone();
+  let limits = ConnectionLimit::new(256, 64, proxies.clone());
   let app = crate::http::router(server);
   match tls {
-    Some(acceptor) => serve_listener(TlsListener::new(listener, acceptor), app, shutdown).await,
-    None => serve_listener(listener, app, shutdown).await,
+    Some(acceptor) => serve_listener(TlsListener::new(listener, acceptor, proxies), app, shutdown, limits).await,
+    None => serve_listener(listener, app, shutdown, limits).await,
   }
   Ok(())
 }
@@ -35,9 +37,9 @@ async fn serve_listener<L: Listener<Addr = SocketAddr>>(
   mut listener: L,
   app: Router,
   shutdown: impl Future<Output = ()>,
+  limits: ConnectionLimit,
 ) {
   let mut connections = JoinSet::new();
-  let limits = ConnectionLimit::new(256, 64);
   let (stop, stopped) = watch::channel(false);
   tokio::pin!(shutdown);
   loop {
