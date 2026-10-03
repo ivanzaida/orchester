@@ -11,6 +11,7 @@ mod http;
 mod initial_read;
 mod passwords;
 mod rate_limit;
+mod sharing;
 mod tls;
 mod transport;
 

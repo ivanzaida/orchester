@@ -26,6 +26,7 @@ pub(crate) struct Database {
   writer: Mutex<Connection>,
   readers: Vec<Mutex<Connection>>,
   next_reader: AtomicUsize,
+  changes: tokio::sync::watch::Sender<u64>,
 }
 
 impl Database {
@@ -46,6 +47,7 @@ impl Database {
       writer: Mutex::new(writer),
       readers,
       next_reader: AtomicUsize::new(0),
+      changes: tokio::sync::watch::channel(0).0,
     })
   }
 
@@ -72,10 +74,30 @@ impl Database {
       let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
       let result = operation(&transaction)?;
       transaction.commit()?;
+      db.changes
+        .send_modify(|generation| *generation = generation.wrapping_add(1));
       Ok(result)
     })
     .await
     .map_err(|_| ServerError::Worker)?
+  }
+
+  pub async fn snapshot<T: Send + 'static>(
+    self: &Arc<Self>,
+    operation: impl FnOnce(&Connection) -> Result<T, ServerError> + Send + 'static,
+  ) -> Result<T, ServerError> {
+    self
+      .read(move |db| {
+        let transaction = db.unchecked_transaction()?;
+        let result = operation(&transaction)?;
+        transaction.commit()?;
+        Ok(result)
+      })
+      .await
+  }
+
+  pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
+    self.changes.subscribe()
   }
 }
 
@@ -96,11 +118,15 @@ fn migrate(connection: &mut Connection) -> Result<(), ServerError> {
   )?;
   if exists {
     let version: i64 = transaction.query_row("SELECT schema_version FROM meta", [], |row| row.get(0))?;
-    if version != 1 {
+    if version != 1 && version != 2 {
       return Err(ServerError::Configuration("unsupported server database schema"));
+    }
+    if version == 1 {
+      transaction.execute_batch(include_str!("sharing.sql"))?;
     }
   } else {
     transaction.execute_batch(include_str!("schema.sql"))?;
+    transaction.execute_batch(include_str!("sharing.sql"))?;
   }
   transaction.commit()?;
   Ok(())

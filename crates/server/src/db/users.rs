@@ -102,6 +102,7 @@ pub(crate) fn patch_user(
     params![user.display_name, user.admin, user.disabled, now, id.to_string()])?;
   if user.disabled {
     revoke_sessions(connection, id, None, Some(actor), now)?;
+    crate::sharing::claims::release_user(connection, None, id, actor, now)?;
   }
   audit(connection, Some(actor), "user_changed", &id.to_string(), None, now)?;
   Ok(user)
