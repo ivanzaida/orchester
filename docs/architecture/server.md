@@ -1,8 +1,9 @@
 # Orchester — shared server
 
 Date: 2026-10-02. Status: **agreed direction**; S1a and S1b (server only) handed to Codex on 2026-10-03 (`docs/plan.md`, *S · Shared server*). The user's decisions, including the answers to the
-first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Every row is now the user's: the
-architect's recommendations were confirmed on 2026-10-03. Nothing here changes the local (single-user)
+first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Every row is the user's: the
+architect's recommendations were confirmed on 2026-10-03, and after the screens were drawn the user added task
+organization and member roles (rows 23–25) and approved row 26 with the frames (2026-10-03). Nothing here changes the local (single-user)
 version in `storage.md` except where a section says so.
 
 **Goal (user, 2026-10-02).** Several people work on one project in Orchester. They share the task list and can see
@@ -22,7 +23,7 @@ settle rows 5, 6, 10 and 12. The architect's recommendations in the other rows w
 | 1 | Hosting | Self-hosted: one server binary a team runs itself, Docker is fine. No cloud service, no GitHub OAuth | user |
 | 2 | Accounts | Accounts live on the server; an admin creates users. A user signs in from the desktop and receives a token, kept in the OS keychain like every secret. Passwords are hashed with argon2id; tokens can be revoked; the first admin is created on the server host ([Accounts](#accounts-and-tokens)) | user |
 | 3 | Transport security | HTTPS, from a reverse proxy or the server's own TLS. The desktop accepts `http://` only for a loopback host, or for another host after an explicit opt-in for that server | user |
-| 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline by name, limits, status), the claim, a short live run status per task. The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, secrets, agent profiles and pipelines. The domain has no priority or tags, so none are shared | user (confirmed 2026-10-03) |
+| 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline by name, limits, status), their organization (workflow status, priority, tags, blocking links and the manual Blocked reason, with its history; rows 23–24), the claim, a short live run status per task. The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, secrets, agent profiles and pipelines | user (confirmed 2026-10-03; organization added 2026-10-03) |
 | 5 | Claim | Atomic "take if free" on the server. Starting work on a task takes the claim. Heartbeat every 60 s; no heartbeat for 15 min makes it stale; a stale claim can be taken over after confirmation, and the takeover is recorded. Manual Take and Release exist ([Claims](#claims)) | user |
 | 6 | Concurrency | Every shared task has a revision. A change names the revision it was made on; a mismatch returns a conflict with the current task, and the desktop shows the other person's change instead of overwriting it | user |
 | 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)) | user (confirmed 2026-10-03) |
@@ -41,6 +42,10 @@ settle rows 5, 6, 10 and 12. The architect's recommendations in the other rows w
 | 20 | Joining with local tasks | A review list of the joiner's local tasks, all ticked; ticked ones are uploaded with new numbers and keep their id and former key; unticked ones are archived as *Not shared* ([Two people share one repository](#two-people-share-one-repository)) | user (flow 2026-10-02, archive confirmed 2026-10-03) |
 | 21 | Token | The server generates it at sign-in; nobody is shown it; the desktop keeps it in the keychain; when it expires, the person signs in again with their password. Expiry after 30 days without use | user (expiry confirmed 2026-10-03) |
 | 22 | Two computers, retention | A heartbeat from any of a person's computers keeps their claims fresh. Events are kept 30 days; an older cursor makes the desktop reload the full list | user |
+| 23 | Task organization | ORC-39's organization is shared: workflow status, priority, tags, blocking links (a task and its gate, Review or Merge) and the manual Blocked reason are fields of a shared task, changed under its revision, with core's rules (`task::organization`). Its history is shared: every change is recorded with who made it and whether a person or Orchester did ([Task organization](#task-organization)) | user (2026-10-03) |
+| 24 | Tags | Tags belong to the server project. Members create, rename, merge and delete them under ORC-39's local rules (names unique without regard to case; merge unions into the target; delete and merge rewrite the affected tasks and record their history) | user (2026-10-03) |
+| 25 | Member roles | Owners and admins change a member's role (`PATCH …/members/{user}`); demoting or removing the last owner is refused (`409 last_owner`), so a sole owner first makes someone else an owner and can then step down or leave | user (2026-10-03) |
+| 26 | Organization on a conflict | When a change meets a newer revision, the desktop merges the organization fields with core's `TaskOrganization::rebase` (each field the person did not change keeps the current value; tags and links merge by what was added and removed) and sends again without asking; only title, brief, criteria, pipeline and limits changed by both reach the person ([Task organization](#task-organization)) | user |
 
 ## Processes and crates
 
@@ -60,7 +65,7 @@ orchester.exe (desktop) ── HTTPS ──> orchester-server (Linux / Docker)
 
 | Crate | Role | Depends on |
 | --- | --- | --- |
-| `orchester-core` | Gains the shared-task rules (`sharing`), `TaskRevision`, `RepositoryIdentity`; no HTTP or database | as today |
+| `orchester-core` | Gains the shared-task rules (`sharing`), `TaskRevision`, `RepositoryIdentity`; reuses ORC-39's `task::organization` (`TaskOrganization`, `WorkflowStatus`, `Priority`, `BlockingTask`, `DependencyGate`, `Tag`, `OrganizationChange`); no HTTP or database | as today |
 | `orchester-api` (new) | The JSON contract: request, response, error and event types. A `client` cargo feature adds the HTTP client the desktop uses | core, serde; `client`: reqwest |
 | `orchester-server` (new) | Binary `orchester-server`: HTTP API, SQLite storage, accounts, event stream, admin command line | core, api, axum, rusqlite |
 | `orchester-store` | Cache tables and the shared-task writes of the project database; the `servers` table of the application database | as today |
@@ -72,7 +77,7 @@ build on both sides at once. The `client` feature keeps reqwest out of the serve
 client.
 
 **Core stays free of HTTP and databases.** The server reuses core's rules (task completeness, queueing, the edit
-lock, `Name`, `TaskLimits`, claim transitions, staleness) by calling them; storage and HTTP live in
+lock, `Name`, `TaskLimits`, the organization rules (Blocked reason, cycles, Canceled while a run works, tag names, merge, rebase), claim transitions, staleness) by calling them; storage and HTTP live in
 `orchester-server`. Core only gains types, pure functions and serde derives, which it already uses.
 
 ### Dependencies (AGENTS.md rule 17)
@@ -138,6 +143,14 @@ local implementation that does nothing, a silent no-op (rule 6). A trait of thei
 `take_over`, `heartbeat`, `is_stale`, the run phases that end a claim) live in `orchester_core::sharing`, so the
 server enforces and the desktop displays the same rules.
 
+**Organization writes.** ORC-39 (branch `claude/orc39`, not merged yet) writes organization through `ProjectDb`
+(`set_task_organization`, `update_task_organization`, the project tag methods), not through `TaskStore`. For a shared
+project these writes go to the server like the content writes: the organization fields travel in the same `PATCH
+…/tasks/{id}` with the revision, tags through the tag endpoints, and what the server confirms is written to the cache
+tables ORC-39 already has. They take the same path as `RemoteTaskStore`, so offline they fail at once with the same
+*offline* error. Which type carries them is S2b's implementation choice, under rule 8 (no trait for one
+implementation).
+
 **Pipelines by name.** Pipelines are not shared, so a shared task names its pipeline by slug. The cache keeps the
 slug, plus the local pipeline of that slug when the person has one (`TaskDetails.pipeline`). If they have none, the
 task shows its pipeline as missing on their computer and cannot be queued or run there, which today's preflight
@@ -179,6 +192,50 @@ run status reports for that task.
 **Time.** Staleness is decided by the server's clock. Responses carry the server time, so the desktop computes
 *stale* with the same core function and an offset, without polling.
 
+## Task organization
+
+ORC-39's organization (`task::organization`, branch `claude/orc39`) is shared with the task (decisions 23–24). The
+server mirrors it field for field and calls core's rules; it adds no rule of its own.
+
+| Part | Shared as |
+| --- | --- |
+| Workflow status | `workflow`: Backlog, Todo, In progress, In review, Done, Canceled. Canceled is refused while the task's run has not ended (`stop_run_first`) |
+| Priority | `priority`: Urgent, High, Medium, Low, None. For lists only, never for the runner's order |
+| Blocking | `blocking`: links to other tasks of the project, each with its gate (Review: the blocking task's run succeeded or merged; Merge: merged). A link that would close a cycle is refused. Only an unfinished link keeps a task from running |
+| Blocked reason | `blocked_reason`: the manual flag, a non-empty reason; informational, it never stops a run |
+| Tags | `tags`: ids of the project's tags ([below](#tags)) |
+| History | One row per change: before and after, the tag names at the time, when, by whom, and `person` or `orchester` |
+
+- **Who changes it.** Any member, as any field of the task (decision 18): the change names the revision it was made
+  on. Orchester's own changes (the workflow status that follows a run: In progress when it starts, In review when it
+  succeeds, Done when it is merged) are sent by the holder's desktop, whose runner saw the run, with `actor:
+  "orchester"`; they are recorded as Orchester's for that person.
+- **Conflicts** (decision 26). A change that meets a newer revision gets `409 revision_conflict` with the
+  current task. The desktop merges the organization fields with core's `TaskOrganization::rebase`, the rule ORC-39
+  already uses locally between a form and Orchester's changes, and sends again; only content fields both people changed
+  are shown to the person (*Edit task* conflict). A bulk change (Set status, Add tag on several tasks) is one change per
+  task, each merged the same way.
+- **Offline.** Read-only like the rest of the task; nothing is queued.
+- **Join.** The review list uploads each ticked task with its organization (tags by name, links inside the upload or to
+  tasks already on the server); *Not shared* tasks keep their tag names until *Share task* maps them the same way.
+  **Make local** turns the server project's tags into the project's local tags (ids kept) and keeps every task's
+  organization as last synced.
+
+### Tags
+
+Tags belong to the server project and replace the project's local tags while it is shared. Members create, rename,
+merge and delete them with ORC-39's rules: a name is a core `Name`, unique in the project without regard to case
+(`409 tag_exists`); merge moves every assignment of a tag into another and removes it (`409 same_tag` for itself);
+delete removes the tag from every task. Merge and delete rewrite each affected task in one transaction, raise its
+revision, write its history row and send its `task` event, then a `tags` event; a desktop editing one of those tasks
+meets the new revision and merges as above.
+
+### Member roles
+
+Owners (and admins) change a member's role with `PATCH …/members/{user}` (decision 25). The last owner can be neither
+made a member nor removed (`409 last_owner`); a sole owner who wants to leave first makes another member an owner.
+Role changes are audited and send a `members` event.
+
 ## Live run status
 
 The holder's desktop reports a short status for the task's latest run whenever the runner says that run changed
@@ -210,8 +267,9 @@ status above is all it gets.
 - **Events.** The server appends one row to `events` in the transaction of every change and wakes the streams.
   Each stream then reads the events after its cursor from the database, so a slow client misses nothing; the wake-up
   carries no data, as with the IPC notifications. Event `id` is the event's sequence number.
-- **Kinds.** `task` (the full task snapshot, with claim and run status), `members` (the project's members changed),
-  `project` (name or key changed), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
+- **Kinds.** `task` (the full task snapshot, with organization, claim and run status), `members` (the project's
+  members or their roles changed), `tags` (the project's tags after a create, rename, merge or delete; a merge or
+  delete also sends a `task` event for every task it rewrote), `project` (name or key changed), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
   list and continues from the cursor the list returns), and `revoked` (the session or membership ended; the stream
   closes).
 - **Keep-alive.** A comment line every 20 s, so proxies do not close an idle stream; also `X-Accel-Buffering: no`
@@ -241,15 +299,24 @@ Session     { id, device, created_at, last_used_at, current: bool }
 Project     { id, key, name, remote, role: "owner"|"member", next_number }
 Member      { user: UserRef, role, added_at }
 TaskContent { title, brief, criteria: [string], pipeline: slug|null,
-              limits: { budget_tokens, max_duration_ms }|null }
+              limits: { budget_tokens, max_duration_ms }|null,
+              ...Organization }
+Organization { workflow: "backlog"|"todo"|"in_progress"|"in_review"|"done"|"canceled",
+              priority: "urgent"|"high"|"medium"|"low"|"none",
+              tags: [tag id], blocking: [{ task: id, gate: "review"|"merge" }],
+              blocked_reason: string|null }      // core's TaskOrganization, field for field
+Tag         { id, name }
 Task        { id, number, key: "ORC-42", former_key: "KON-12"|null, revision, ...TaskContent,
               status: "draft"|"queued", has_run: bool,
               created: { by: UserRef, at }, updated: { by: UserRef, at },
               claim: Claim|null, run: RunStatus|null }
+OrganizationChange { at, by: UserRef, actor: "person"|"orchester", from: Organization, to: Organization,
+              from_tag_names: [string], to_tag_names: [string] }
 Claim       { id, holder: UserRef, kind: "manual"|"run", since, heartbeat_at, stale: bool,
               taken_over_from: UserRef|null }
 RunStatus   { holder: UserRef, number, phase, step|null, started_at, phase_since, updated_at }
-Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued" }
+Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued",
+              workflow?, priority?, tags?, blocking?, blocked_reason?, actor?: "person"|"orchester" }
 Error       { error: code, message, ...details }   // message is English for logs; the desktop shows its own i18n text by code
 ```
 
@@ -275,17 +342,24 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `PATCH /projects/{id}` | owner | `{ name?, key? }` | `{ project }` | `422 invalid` |
 | `GET /projects/{id}/members` | member | | `{ members: [Member] }` | |
 | `POST /projects/{id}/members` | owner | `{ username, role }` | `201 { member }` | `404 no_such_user`, `409 already_member` |
+| `PATCH /projects/{id}/members/{user}` | owner | `{ role }` | `{ member }` | `404`, `409 last_owner` (the last owner cannot become a member) |
 | `DELETE /projects/{id}/members/{user}` | owner, or the member themself | | `204`; their claims are released | `409 last_owner` |
 | `GET /projects/{id}/tasks` | member | | `{ tasks: [Task], cursor }` | |
 | `GET /projects/{id}/tasks/{task}` | member | | `{ task }` | `404` |
 | `POST /projects/{id}/tasks` | member | `{ idempotency_key, tasks: [TaskContent] }` | `201 { tasks: [Task] }`, consecutive numbers; a repeated key returns the first result | `422 invalid` |
 | `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task] }`, new numbers, ids and former keys kept | `409 id_taken`, `422 invalid` |
-| `PATCH /projects/{id}/tasks/{task}` | member | `{ revision, changes: Changes }` | `{ task }` | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 invalid` |
+| `PATCH /projects/{id}/tasks/{task}` | member | `{ revision, changes: Changes }` | `{ task }`; an organization change is recorded in the task's history with `actor` (default `person`) | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 organization { reason }` (`missing_reason`, `dependency_cycle`, `stop_run_first`, `tag_not_found`), `422 invalid` |
+| `GET /projects/{id}/tasks/{task}/history` | member | | `{ changes: [OrganizationChange] }`, oldest first | `404` |
 | `POST /projects/{id}/tasks/{task}/claim` | member | `{ kind }` | `{ task }`; also when the caller holds it already | `409 claim_held { claim }`, `409 task_merged` |
 | `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }` |
 | `POST /projects/{id}/tasks/{task}/claim/take-over` | member | `{ claim: id }` | `{ task }` | `409 claim_not_stale { claim }`, `409 claim_changed { claim }` |
 | `PUT /projects/{id}/tasks/{task}/run` | holder | `RunStatus` without `holder`, `updated_at` | `{ task }`; `merged` completes the claim, `cancelled` releases it | `409 not_holder { claim }`, `422 invalid` |
 | `POST /heartbeat` | user | `{ tasks: [id] }` | `{ lost: [{ task, claim: Claim\|null }] }` | |
+| `GET /projects/{id}/tags` | member | | `{ tags: [Tag] }`, by name | |
+| `POST /projects/{id}/tags` | member | `{ name }` | `201 { tag }` | `409 tag_exists`, `422 invalid` |
+| `PATCH /projects/{id}/tags/{tag}` | member | `{ name }` | `{ tag }` | `404`, `409 tag_exists`, `422 invalid` |
+| `POST /projects/{id}/tags/{tag}/merge` | member | `{ into: tag id }` | `{ tags: [Tag], tasks: [Task] }`: the rewritten tasks, each with a new revision and a history row | `404`, `409 same_tag` |
+| `DELETE /projects/{id}/tags/{tag}` | member | | `{ tags: [Tag], tasks: [Task] }`, as merge | `404` |
 | `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | |
 | `POST /admin/users` | admin | `{ username, display_name, admin }` | `201 { user, initial_password }` | `409 username_taken`, `422 invalid` |
@@ -297,7 +371,18 @@ or admin); **admin**; **holder** (member holding the task's claim).
 used when a project is created: Share keeps numbers. Import ignores numbers and assigns new ones, and keeps
 `former_key`, the key the task had on the uploader's computer (`KON-12`), for everyone to see. `claim: true` claims the
 task for the uploader in the same transaction; the desktop sets it for tasks with a run that has not ended on its
-computer.
+computer. An upload carries each task's organization with tags **by name** (`tag_names: [string]` instead of `tags`):
+the server matches them to the project's tags without regard to case and creates the missing ones in the same
+transaction. A blocking link to a task that is neither uploaded with it nor on the server is dropped, and the response
+lists the dropped links (`dropped_links: [{ task, blocking }]`) so the desktop can say so. History before the upload
+stays on the uploader's computer; the server's history of an uploaded task starts with the upload.
+
+`organization` reasons come from core's `OrganizationError`: an empty Blocked reason, a link that would close a cycle
+(checked over the project's links in the transaction), `canceled` while the task's reported run phase has not ended
+(`stop_run_first`, from the live run status; the holder's desktop also checks its local run before sending), a tag
+that is not the project's. Only linked unfinished tasks prevent a run; the manual Blocked reason is informational, as
+locally. Whether a link is finished is `DependencyGate::is_completed` of the blocking task's shared phase (its run
+status, or `merged` once its claim is completed).
 
 `not_editable` reasons come from core's `EditError`. A queued task with no run is locked; a task with a run must stay
 complete. "Has a run" is `has_run` on the server: someone took a `run` claim on the task, which starting work always
@@ -352,7 +437,7 @@ with their password, which issues a new token. There is nothing to copy, paste o
 | Tokens and passwords | Never in logs, errors, URLs or `Debug` output, on either side. The request log has method, route template, status, user id and duration, never headers or bodies. A server test signs in, works and asserts that neither the token nor the password appears in the captured log |
 | TLS | *Recommended:* a reverse proxy with automatic certificates (Caddy in the shipped compose example), server listening on the proxy's network. *Or:* the server's own TLS from a PEM certificate and key in its configuration. The desktop trusts the OS trust store (a team's own CA is added there); there is no "ignore certificate errors" switch |
 | Plain HTTP | The desktop accepts `http://` for `localhost`, `127.0.0.0/8` and `[::1]`. Any other `http://` server needs the person's explicit opt-in for that server, after a warning that the password and token can be read on the network. The opt-in is stored with the server entry. Redirects are never followed; a redirect is an error naming its target |
-| Membership | A project is visible only to its members: everything else answers `404`. Members read and change tasks, claim, and report status for tasks they hold. Owners also manage members and the project's name and key. Admins manage users and the members of every project, but see a project's tasks only as members |
+| Membership | A project is visible only to its members: everything else answers `404`. Members read and change tasks and their organization, manage the project's tags, claim, and report status for tasks they hold. Owners also manage members, their roles and the project's name and key. Admins manage users and the members of every project, but see a project's tasks only as members |
 | Discovery file | `orchester.toml` comes from the repository, so it is untrusted. The desktop never contacts its URL until the person confirms adding that server, with its host shown. The plain-HTTP rule applies the same way |
 | Runs | The server stores only the [live run status](#live-run-status): never transcripts or secrets |
 | At rest | The server's SQLite file is not encrypted; securing the host and backing up its data volume belong to the team running it |
@@ -369,8 +454,12 @@ UUIDv7 ids, UTC milliseconds.
 | `sessions` | id, user, token hash (unique), device, created / last used / revoked, from an initial password |
 | `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at |
 | `memberships` | project, user, role (owner, member), added by / at; unique (project, user) |
-| `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), former key, title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, revision, has run, created by / at, updated by / at |
+| `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), former key, title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, workflow status, priority, blocked reason, revision, has run, created by / at, updated by / at |
 | `task_batches` | project, idempotency key, user, task ids; unique (project, key): a repeated create or upload returns the first result |
+| `tags` | id, project, name, normalized name; unique (project, normalized) |
+| `task_tags` | task, tag; unique (task, tag) |
+| `task_links` | task, blocking task (same project), gate (review, merge); unique (task, blocking task) |
+| `organization_changes` | append-only: task, by (user), actor (person, orchester), at, before and after (JSON, core's `TaskOrganization`), tag names before and after |
 | `claims` | the current claim per task: id, task (unique), holder, kind, since, last heartbeat, taken over from |
 | `claim_events` | append-only: task, claim, action (taken, released, completed, taken over), by, from (for a takeover), at |
 | `run_status` | per task: holder, run number, phase, step, started at, phase since, updated at |
@@ -399,6 +488,7 @@ name, plain HTTP allowed, the signed-in user (id, username, display name), signe
 | `sharing` | at most one row: server id, server project id, server key, joined at, event cursor, last synced at. Without it the project is local |
 | `task_claims` | the cached current claim per task |
 | `task_run_status` | the cached run status per task |
+| `task_organization`, `project_tags`, `organization_changes` (ORC-39's tables) | for a shared project, the cache of the server's organization, tags (server ids) and history, written from what the server confirmed (the history gains the person who made each change); for a *Not shared* task, its last local organization with its tag names |
 
 `storage.md` gets these rows when S2 lands.
 
@@ -411,13 +501,17 @@ name, plain HTTP allowed, the signed-in user (id, username, display name), signe
   password once), disable, reset password.
 - **Project settings › Sharing.** *Local only* (default) or *Shared on <server>*. Actions: *Share on…* (choose a
   signed-in server), *Join* when the repository is shared already (with the review list), the not-a-member state with
-  *Check again*, *Make local* (leave), and the former-key mapping. Owners and admins manage members by username.
+  *Check again*, *Make local* (leave), and the former-key mapping. Owners and admins manage members by username and
+  change their roles.
 - **Discovery.** A local project whose checkout has `orchester.toml` with a server URL offers *Sign in and join* in
   that project; it adds the server, signs in and joins, each step confirmed.
 - **Status bar.** One item for the connection to the servers of open shared projects.
 - **Tasks.** The *Not shared* filter and *Share task*; *was KON-12* on the task page; holder and claim state on rows
   and the task page; *Take*, *Release*, *Take over* (with its
-  confirmation); the conflict state of the task editor; the offline notice; the notice that a claim was taken over.
+  confirmation); the conflict state of the task editor; the offline notice; the notice that a claim was taken over;
+  workflow status, priority, tags and blocking as in a local project, now shared.
+
+The screens were drawn on 2026-10-03: `docs/design/orchester-workspace.md`, *Shared server* (Pencil section `yYqBE`).
 
 ## Migration
 
@@ -540,6 +634,16 @@ directory.
 - [ ] Claims: of two simultaneous claims exactly one wins. A heartbeat refreshes and reports lost claims. A claim is
   stale after 15 minutes of test clock. Take-over is refused while fresh or changed, and recorded when done.
   Removing a member or disabling a user releases their claims.
+- [ ] Organization (decisions 23–24; needs ORC-39's `task::organization` on master): workflow, priority, tags,
+  blocking links and the Blocked reason in `Task` and `Changes`, under the revision; core's rules refuse an empty
+  reason, a cycle, an unknown tag and Canceled while the reported run has not ended. Every change writes a history
+  row with its person and actor, and `GET …/history` returns them. Upload and import take tags by name (created when
+  missing) and drop links to tasks outside the upload or the project, listing them.
+- [ ] Tags: create, rename, merge and delete by members; names unique without regard to case; merge and delete
+  rewrite every affected task in one transaction with a new revision, a history row and a `task` event, then a
+  `tags` event.
+- [ ] Member roles: `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted nor
+  removed (`409 last_owner`); audited, with a `members` event.
 - [ ] Events: a stream resumed with `Last-Event-ID` receives exactly the missed events. A cursor beyond retention gets
   `reset`. A revoked session or membership closes the stream.
 
@@ -558,6 +662,10 @@ directory.
 - [ ] Pipelines are sent and stored by slug; a missing local pipeline shows as missing; an edit does not clear it.
 - [ ] Project settings › Sharing with members (owners and admins add by username); `orchester.toml` offers *Sign in
   and join* only after confirmation.
+- [ ] Organization of a shared task (status, priority, tags, blocking, Blocked reason) is sent with the revision and
+  cached in ORC-39's tables; Orchester's own status changes go from the holder's desktop with `actor: orchester`; the
+  shared list and task page show priority and tags as for a local project; Manage tags works on the server's tags.
+- [ ] Owners and admins change member roles in Sharing; demoting yourself asks first; the last owner is refused.
 - [ ] Starting or continuing work on a shared task takes a run claim first and names the holder when it cannot;
   heartbeats run every minute.
 - [ ] Offline: the list is read-only from the cache with the offline notice and the last sync time; no change is
@@ -574,11 +682,15 @@ directory.
   attached, and the next run's branch uses the new key.
 - [ ] Unticked tasks are *Not shared*: read-only, out of the list, behind the filter; *Share task* uploads one later.
   Make local returns them with new numbers.
+- [ ] The upload carries each ticked task's organization: tags by name, links kept inside the upload or to server
+  tasks, dropped links named; Not shared tasks keep their tag names until Share task.
 
 **S2d · Live task list and claims.**
 - [ ] One SSE stream per open shared project, resumed from the cached cursor, with backoff and `reset` handled; two
   desktops on one project see each other's changes within a second on loopback.
 - [ ] A conflicting edit shows the other person's change, and the person's own text is kept until they choose.
+- [ ] Organization fields are merged on a conflict with core's `TaskOrganization::rebase` without asking (decision
+  26, if approved); `tags` events update the tag list; organization history shows who changed what.
 - [ ] Take, Release and Take over (with its confirmation) on the task row and page; a lost claim is announced.
 
 **S3 · Live run status.**
@@ -595,4 +707,5 @@ tasks; notifications; Postgres for several server instances; single sign-on, if 
 
 ## Open questions
 
-None. The user confirmed every *proposed* row on 2026-10-03.
+None. Every decision row is the user's, and the design's own choices (`docs/design/orchester-workspace.md`, *Shared
+server*) were approved with the frames on 2026-10-03.

@@ -362,7 +362,7 @@ admits it) and, to keep naming the version in use, this line.
 The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
 people share a project's task list on a server their team runs, and see who took a task into work. Runs, worktrees,
 transcripts and secrets stay on each person's computer. Phases S1a and S1b are server-only (no desktop UI) and are
-handed to Codex; S2a–S3 need screens that are not drawn yet and wait for the designer.
+handed to Codex; the screens of S2a–S3 are drawn and approved (2026-10-03).
 
 Rules for both phases, on top of `AGENTS.md`:
 
@@ -421,13 +421,34 @@ Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
   disabling a user releases their claims.
 - Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
   30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
+- Organization (user, 2026-10-03; `docs/architecture/server.md` decisions 23–24, *Task organization*): workflow,
+  priority, tags, blocking links and the Blocked reason are fields of `Task` and `Changes` under the revision; core's
+  ORC-39 rules refuse an empty reason, a cycle, an unknown tag and Canceled while the reported run has not ended
+  (`422 organization`); every change writes a history row (person, actor, before and after, tag names) served by
+  `GET …/tasks/{task}/history`; upload and import take tags by name and drop (and list) links outside the upload.
+  **Needs ORC-39's `task::organization` on master** (`claude/orc39` is not merged yet); S1b waits for it or merges it
+  first.
+- Tags (decision 24): create, rename, merge and delete by members; names unique without regard to case (`409
+  tag_exists`, `409 same_tag`); merge and delete rewrite every affected task in one transaction with a new revision,
+  a history row and a `task` event, then a `tags` event.
+- Member roles (decision 25): `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted
+  nor removed (`409 last_owner`); audited; a `members` event.
 - `PUT …/run` (live run status, S3's server half) is not part of S1b.
 
-### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design)
+### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, design approved; after S1b)
 
-Settings › Servers, Project settings › Sharing, the join review list, claims on task rows and the task page, the
-conflict state and the offline notice are not drawn yet. Do not start these phases; the designer draws them first
-(`docs/architecture/server.md` § *Desktop data*, "Where it is configured").
+Drawn 2026-10-03 in Pencil section `yYqBE` ("10 / Shared server", column F at x 26080); the design doc's
+[Shared server](design/orchester-workspace.md#shared-server) describes every frame and its decisions, all approved by the user on 2026-10-03 (member roles
+and shared organization included, also in S1b). Start S2a once S1b is merged. Frames per phase:
+
+- **S2a** (servers and sign-in): 10.01 `sXIz1`, 10.02 `e9DDI`, 10.03 `BWyKt`, 10.04 `X0cARN`, 10.05 `mcI7H`,
+  10.06 `YMwe5`, 10.07 `BWEZ9`, 10.08 `kT0ui`; the status bar item 10.43 `hYres`.
+- **S2b** (share, members, make local, offline, conflict): 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14
+  `NaUDV` (with roles), 10.17 `g5r5VU` (discovery), 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.41 `RmDpQ` (the revision; its live use is S2d).
+- **S2c** (join): 10.15 `y8uP2`, 10.16 `AZwJE`, 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`, 10.24 `FAKNF`,
+  10.25 `RuBhQ`, 10.26 `m7jOn9`.
+- **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
+- **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
 ### L1 · lurq: give-way order and content minimum for shrinking rows (lurq)
 

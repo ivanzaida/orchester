@@ -29,6 +29,7 @@ The root contains nine numbered sections in one horizontal band, ordered left to
 | 06 / Tools & imports | `V8h6d` |
 | 07 / Secrets & access | `b3N1Ix` |
 | 08 / Pull requests | `McWTM` |
+| 10 / Shared server (column F, index `yuqEI`; see [Shared server](#shared-server)) | `yYqBE` |
 
 Canonical screens and states, in canvas order:
 
@@ -2127,6 +2128,230 @@ The Access tab (`H97stw`) edits the allowed pipelines and steps, environment, ap
 Add-secret's successful fixture uses the unique name STAGING_READ_API_KEY. The duplicate state shows STAGING_DEPLOY_TOKEN already exists in Kontur / Staging, disables Save and links to the existing secret. Replace value remains the distinct rotation action.
 
 Audit records contain who/what requested access, capability, scope, run/step, decision, time and outcome without credential values. Revocation affects future calls immediately; completed external side effects are not reversed. Network failure must not display a successful save, deployment or query. Retries need idempotency and explicit outcome handling.
+
+## Shared server
+
+Drawn 2026-10-03 for phases S2a–S3 of `docs/architecture/server.md` (its *Desktop data* › "Where it is configured",
+*Claims*, *Live run status*, *Live updates*, *Migration*, *Two people share one repository*, *Accounts and tokens*,
+*Security*). **Approved by the user 2026-10-03** (frames and every decision below). Canvas: a sixth column at x 26080
+— the index `yuqEI` ("INDEX / F · Shared server", y 400) and the section `yYqBE` ("10 / Shared server", y 1800,
+4896 × 15582) with five groups; no existing frame moved. Frames are 1440 × 960 (1440 × 988 where the status bar
+matters, as `kpuQj`), 960 × 988 for the narrow task list; columns x 48 / 1568 / 3088 in each group, labels 32 above.
+
+**Fixture** (illustrative, never shipped): server *Kontur team* at `https://orchester.kontur.lan` (API 1), *Platform
+guild* at `https://orchester.guild.lan`, *Local test server* at `http://localhost:8740`, a plain-HTTP *Lab* at
+`http://10.0.4.20:8740`. People: Alice Moreau (`alice`, admin, owner of ORC; she shared Kontur first, so 10.11–10.13
+are her computer), Oleh Petrenko (`oleh`, owner), Bohdan Koval (`bohdan`, admin of the server, member of ORC; every
+other frame is his computer), Maria Lind (`maria`), Dmytro Savchenko (`dmytro`, disabled). Repository
+`github.com/ivanzaida/kontur`; ORC holds ORC-1 … ORC-40 from Alice; Bohdan's local key is KON with six tasks
+KON-11 … KON-16, of which KON-12, -13, -14, -16 become ORC-41 … ORC-44 and KON-11, KON-15 stay *Not shared*.
+
+**Components and variables.** No new components or variables. Two existing components gained one child each, hidden
+by default like the plan limits item `XCXvw`, so no other screen changes: `zo9Py` (sidebar) has a *Settings* item
+`s9zzPC` (settings icon) after *Import resources* in the application group, and `pmOpt` (status bar) has a *Server
+connection* item `qqtph` after *Runner* (icon `Fsj7R`, label `W92Zmn`, mono detail `CbpHY`, action `s54X8F`). The
+shared task rows follow `clVjO`'s metrics (76 high, padding 0 12, gap 16, hairline) with a Holder cell; they are
+frame rows, not instances, because `clVjO` has no Holder slot. Proposed copy namespaces: `servers.*`, `sharing.*`,
+`sharing.join.*`, `claims.*`, `tasks.conflict.*`, `statusBar.server.*`.
+
+### Settings › Servers (S2a)
+
+- **10.01** The entry point: *Settings* in the sidebar's application group opens Settings (title *Settings*, one tab
+  *Servers*); the status bar's server item opens the same page at its server. Left, the server list (380): name,
+  URL (mono), connection label (*Connected*, *Signed out*, *Offline*, *Not signed in*) and the account line. Right,
+  the selected server: name, label, URL · API · HTTPS, *Sign out*; tabs *Account* and *Users* (admins only). Account:
+  signed in as, role, signed in, shared projects there, *Change password*; *Your sessions* (device, signed in, last
+  used; *Revoke* on every row but this computer's); the keychain line.
+- **10.02 / 10.03** *Add server* checks `GET /server` before sign-in: the result card names the server, its API and
+  HTTPS. 10.03: checking; plain HTTP to another host (strong warning, opt-in *Allow plain HTTP for host:port*, Continue
+  unavailable until ticked; stored with the server); plain HTTP on loopback (allowed, says why); a redirect is an error
+  naming its target; not reached / not an Orchester server / certificate not trusted (no skip switch); `needs_bootstrap`
+  with the server-host command and Copy; already in the list; newer API.
+- **10.04 / 10.05** *Sign in to Kontur team* (username, password; says where the password goes and that the token
+  goes to the keychain). 10.05: wrong username or password (one message for both), 429 with the time, the forced
+  *Choose your password* step (only *Sign out* and *Save password*), its errors (12–256 characters, mismatch),
+  *Change your password* naming the other sessions it signs out, and *Sign out?* with what happens to the shared
+  project, claims and runs.
+- **10.06** Signed out (expired or revoked): the server says *Signed out*, a strong notice explains the causes, *Sign
+  in* is primary, *While you are signed out* lists read-only list, claims going stale, runs working, nothing queued;
+  the status bar reads *Signed out of Kontur team · Sign in*.
+- **10.07 / 10.08** Users (admins): name and username, role, state, *Reset password* and *Disable* per row (*Enable*
+  for a disabled user; your own row points to Account). 10.08: *Create user* (username, display name, Admin switch),
+  the first password shown once with Copy and *Done*, *Reset …'s password?*, *Disable …?* (sessions, released claims),
+  the last admin refused, username taken.
+
+### Project settings › Sharing (S2b, S2c)
+
+A fourth Project settings tab, *Sharing*, in the setting-row layout of General (792 column).
+
+- **10.11** Local only (default): *Task list · Local only*, the repository identity with what Orchester found on the
+  signed-in servers, *Share on* (select of signed-in servers, *Share on Kontur team…*), *What sharing sends*.
+- **10.12** The Share confirmation: tasks uploaded with their numbers, where new numbers continue, tasks claimed for
+  you (unfinished runs), the project key; switch *Write orchester.toml into the repository* (on; never committed).
+- **10.13** Shared, seen by an owner: *Shared on Kontur team* with key, role and last sync; *Discovery file* state;
+  *Members* (username field with @, role select, *Add member*; rows with role, added, *Make member* on an owner's row
+  and *Make owner* on a member's, *Remove*, *Leave* on your own); *Make local…*.
+- **10.14** Add member errors (no such user, already a member), a member's read-only view with *Leave* (no role or
+  remove actions), *Make Bohdan Koval an owner of ORC?*, *Make yourself a member of ORC?* (asked because you lose member
+  management), the last owner refused (`409 last_owner`) with *Make Oleh Petrenko an owner…* as the way out, *Remove …
+  from ORC?* (claims released), *Make local* with its consequences (organization kept as last synced, ORC's tags become
+  local tags), and *Make local* while the server can't be reached (claims go stale instead).
+- **10.15** The repository is shared there and you are a member: a strong notice with *Review and join…*; Share is not
+  offered.
+- **10.16** Not a member (owners named, your username with Copy, *Check again* and its last result; nothing uploaded);
+  can't be shared (origin is a local path, no origin); Share answered `409 remote_taken` → Join; discovery step 1
+  (*Add the server named in orchester.toml?* with the host large and the source named); discovery after steps 1–2;
+  a plain-HTTP address in the file uses 10.03 B.
+- **10.17** `orchester.toml` found: a strong notice with the three steps (add the host, sign in, review and join), each
+  confirmed when it comes, *Sign in and join…* / *Not now*.
+
+### Join review and Not shared (S2c)
+
+- **10.21** *Join ORC on Kontur team* (page under Sharing; *Cancel*, *Join and upload 4* in the topbar): the review bar
+  (*4 of 6 ticked* and what happens), rows with local key, title, the hint *Similar on ORC: ORC-23 … · Alice Moreau*,
+  workflow and run, *Becomes* ORC-4x or *Not shared*. Rows with a run that hasn't ended keep a muted tick and say why
+  they can't be unticked and that they are uploaded claimed. The note says status, priority, tags and links go with each
+  task: tags match ORC's by name (new names become ORC tags) and a link to a task that stays here is dropped.
+- **10.22** After joining: the confirmation notice and *Keys before joining* (KON-12 → ORC-41 …, Not shared rows), with
+  the branch note; it stays in Sharing.
+- **10.23** Tasks with the *Not shared* filter on (button *Not shared · 2* on the query's second line): an explaining
+  notice and the read-only rows.
+- **10.24** A Not shared task: *Not shared* label, KON-15, read-only; its organization as plain labels (*Backlog*, *Low*,
+  tag chips) with *Tags are kept by name until the task is shared.*; *Edit* unavailable, *Share task* primary; its runs
+  stay readable; the Sharing panel says what it would become.
+- **10.25** A joined task (ORC-41): *was KON-12* after the run metadata; under it ORC-39's organization row (status,
+  priority, tag chips, *Tags*), now shared; the right panel's *On Kontur team* section
+  (holder, since, heartbeat, shared status, created as KON-12, last edit); *Release* unavailable with the reason while
+  the agent works.
+- **10.26** *Share KON-15 on ORC?*; search finds a former key; *Kontur is local again* with KON-11 → ORC-45, KON-15 →
+  ORC-46; a join that failed on the way (nothing uploaded, ticks kept).
+
+### Claims and live run status (S2d, S3)
+
+- **10.31** The shared list: *Shared on Kontur team as ORC* beside the description; the query's second line has
+  *Status*, *Priority*, *Tags*, *Not shared* and *Manage tags*; columns ID, TASK / TAGS (tag chips and *was …* under the
+  title), PRIORITY 96, WORKFLOW / RUN 212 (with *⊘ Blocked* when flagged), HOLDER 172, DEPENDENCY / READINESS 160; rows
+  84 high. PIPELINE is not shown at 1440: Holder takes its width, so the combined list's breakpoints move up by Holder's
+  188 (Pipeline returns from a 1536 window; the pipeline filter stays). Another member's run reads *Running · Review · Alice ·
+  since 14:02* under the workflow label; Holder shows the person and *run claim · since 13:55*; stale is *Maria Lind ·
+  stale* (clock-alert, `$text`) with *last heartbeat 13:21*; merged is *Merged by Oleh Petrenko*; yours is *You*; free
+  is *Not taken*; a hovered free row shows a quiet *Take* in the Holder cell. Above the list, the lost-claim notice
+  (*Oleh Petrenko took over ORC-43 at 14:20*, why, what happens to your run, *Open ORC-43*, *Dismiss*).
+- **10.32** The same at 960 × 988: as in 02.03E, Priority and the tag chips drop at 960 (the filters stay); Pipeline
+  and Readiness drop too, Holder stays; the status bar drops version, tokens and count labels as before and keeps the
+  server item.
+- **10.33** Another member's live run on the task page: *Running* with *Review · Alice Moreau · since 14:02 · run #3 on
+  her computer*; the shared organization row (*Status, priority and tags are shared; any member can change them.*); a
+  notice that conversation and changes stay on her computer; *Start run* unavailable with the lock
+  line naming the holder and when it becomes possible; *Edit* stays (any member may edit); the panel's *On Kontur
+  team* (holder, claim, heartbeat, run, phase, phase since, last edit; *Take* unavailable).
+- **10.34** The panel in each claim state (not taken → *Take*; yours by hand → *Release*; yours after a succeeded run →
+  kept, *Release*; merged; someone else's fresh → *Take* unavailable with the 15-minute rule; stale → *Take over…*;
+  yours while offline → when it goes stale; taken over from you), the task page's taken-over notice, and the refusals
+  (start refused naming the holder, Take lost a race, Take over refused because the claim was refreshed, Send &
+  continue refused with the message kept).
+- **10.35** *Take over ORC-37 from Maria Lind?* names the holder, her last heartbeat and her last run status, and what
+  follows (manual claim for you, she is told on reconnect, her reports stop, it is recorded).
+
+### Conflicts and connection (S2b, S2d)
+
+- **10.41** Revision conflict in *Edit task*: the topbar says *Not saved · Alice Moreau saved a newer version*; a strong
+  notice; fields both changed show *Your version · not saved* and *Alice Moreau's version · saved 14:12* side by side,
+  one chosen; fields only she changed are marked *kept* (*added by Alice*); *Save with your version* / *Use Alice
+  Moreau's version*. Your text is never dropped until you choose.
+- **10.42** *Offline — read-only* in the description line and as a strong notice with the last sync, what waits and
+  *Try now*; *New task* unavailable; holders *as of 14:31*; status bar *Kontur team offline · since 14:31 · next try in
+  32 s*.
+- **10.43** The status bar item: connected (hint), reconnecting (attempt, next try), offline, signed out (*Sign in*),
+  not a member, two servers (worst state leads; the hint lists each), none when no shared project is open.
+- **10.44** No longer a member: the list read-only, your claims released, *Make local…* and *Check again*; status bar
+  *Not a member of ORC*.
+
+| Frame | Node | Position (group) |
+| --- | --- | --- |
+| 10.01 · Settings › Servers / Account (1440 × 988) | `sXIz1` | 48 / 100 (`A37vc0`, y 220) |
+| 10.02 · Add server / Address checked | `e9DDI` | 1568 / 100 |
+| 10.03 · Add server states (compact, 1440 × 1337) | `BWyKt` | 3088 / 100 |
+| 10.04 · Sign in / Username and password | `X0cARN` | 48 / 1548 |
+| 10.06 · Settings › Servers / Signed out (1440 × 988) | `YMwe5` | 1568 / 1548 |
+| 10.05 · Sign-in and password states (compact, 1440 × 1399) | `mcI7H` | 3088 / 1548 |
+| 10.07 · Settings › Servers / Users | `BWEZ9` | 48 / 3036 |
+| 10.08 · Admin user dialogs (compact, 1440 × 1331) | `kT0ui` | 1568 / 3036 |
+| 10.11 · Sharing / Local only | `xnhV2` | 48 / 100 (`Ux22E`, y 4784, 3682 high) |
+| 10.12 · Share on Kontur team / Confirm | `IDfLs` | 1568 / 100 |
+| 10.13 · Sharing / Shared · members | `V4ZxQG` | 3088 / 100 |
+| 10.14 · Members, roles and Make local states (compact, 1440 × 1354) | `NaUDV` | 48 / 1180 |
+| 10.15 · Sharing / Already shared → Join | `y8uP2` | 1568 / 1180 |
+| 10.16 · Join and discovery states (compact) | `AZwJE` | 3088 / 1180 |
+| 10.17 · Sharing / Discovery: Sign in and join | `g5r5VU` | 48 / 2622 |
+| 10.21 · Join ORC / Review local tasks | `UlHPB` | 48 / 100 (`idluC`, y 8562) |
+| 10.22 · Sharing / Joined · key mapping | `m9omas` | 1568 / 100 |
+| 10.23 · Tasks / Not shared filter (1440 × 988) | `l9jYZS` | 3088 / 100 |
+| 10.24 · Not shared task / Share task | `FAKNF` | 48 / 1180 |
+| 10.25 · Task page / was KON-12 · your claim | `RuBhQ` | 1568 / 1180 |
+| 10.26 · Former keys and Not shared states (compact) | `m7jOn9` | 3088 / 1180 |
+| 10.31 · Tasks / Shared list · claims and live status (1440 × 988) | `jakf4` | 48 / 100 (`sk7nC`, y 10898) |
+| 10.32 · Tasks / Shared list at 960 (960 × 988) | `ByIkx` | 1568 / 100 |
+| 10.33 · Task page / Another member's live run | `NikWo` | 3088 / 100 |
+| 10.34 · Claim states and refusals (compact) | `omHGh` | 48 / 1180 |
+| 10.35 · Take over / Confirm | `U4GzjB` | 1568 / 1180 |
+| 10.41 · Edit task / Revision conflict | `RmDpQ` | 48 / 100 (`pRtpN`, y 13234) |
+| 10.42 · Tasks / Offline — read-only (1440 × 988) | `Cc4WH` | 1568 / 100 |
+| 10.43 · Status bar server item (compact, 1504 wide) | `hYres` | 3088 / 100 |
+| 10.44 · Tasks / No longer a member (1440 × 988) | `Y6H8A` | 48 / 1180 |
+
+**Decisions (user, 2026-10-03, after the first drawing).**
+
+- **Member roles.** Owners and admins change a member's role (`PATCH …/members/{user}` `{ role }`, server decision 25):
+  *Make owner* / *Make member* on the member rows (10.13), a confirmation when you demote yourself, and the last owner
+  refused with a way out (10.14). A sole owner can hand over and then leave.
+- **Task organization is shared.** Workflow status, priority, tags, blocking links and the manual Blocked reason
+  are shared fields kept with the task's revision; tags are the server project's (create, rename, merge, delete by
+  members under ORC-39's rules) and the organization history is shared (server decisions 23–24, *Task organization*).
+  The shared list shows Priority and tag chips again (10.31, and the read-only lists 10.23, 10.42, 10.44), the task
+  pages show ORC-39's organization row (10.25, 10.33, 10.35; read-only in 10.24), and *Manage tags* is back on the
+  query line. ORC-39's own frames (section 02.3 `Yn5Wo`: pickers, Blocked fields, tag manager, history) apply
+  unchanged to a shared project; the history names the person who made each change. Offline and for a former member
+  these controls are unavailable like every other change.
+
+**Decisions the architecture does not settle — approved by the user 2026-10-03** (8 and 12 were settled first):
+
+1. *Settings* is a sidebar item in the application group (beside *All projects*), and the status bar's server item
+   opens it too. The page keeps the project's sidebar; opened with no project (from All projects) it would use the
+   welcome topbar — not drawn.
+2. Settings › Servers is a list with a detail pane; the detail has *Account* and *Users* (admins only) tabs.
+3. *Change password* on Account (the API has it; the document names only the forced change). *Revoke* acts at once
+   without a confirmation; the current session has no Revoke (Sign out instead). A session's device reads *Orchester on
+   <computer name>* with the platform.
+4. Plain-HTTP opt-in is a checkbox inside the warning; Continue stays unavailable until it is ticked.
+5. The initial password dialog has *Copy* (handing it to the person is its purpose) and is shown once; admins never
+   see a person's own password.
+6. Admin rows offer Reset password and Disable/Enable; *Sign out everywhere* and changing a user's admin flag (both in
+   the API) are not drawn.
+7. Sharing is a fourth Project settings tab; *Write orchester.toml* is a switch in the Share confirmation, on.
+8. ~~Member role change~~ — decided (user, 2026-10-03), see above.
+9. *Make local* keeps the membership (Join again later works); *Leave* on your own member row removes it.
+10. The join review is a page under Sharing, not a dialog; the similar-title hint names the server task, title and
+    creator.
+11. *Not shared* is a toggle button on the task query's second line; while on, tab counts follow it.
+12. ~~Priority and tags in shared projects~~ — decided (user, 2026-10-03): shared, see above.
+13. The shared list adds HOLDER (172) in place of PIPELINE at 1440 (Pipeline returns from a 1536 window); at 960 Readiness
+    drops too, after Priority and tag chips as in 02.03E.
+14. Rows keep no menu (ORC-16): a free row shows a quiet *Take* in its Holder cell on hover or focus; Release and Take
+    over are on the task page only (S2d's box says "on the task row and page").
+15. A takeover gives a manual claim; the lost-claim notice stays until dismissed, on the list and on the task page.
+16. *Reconnecting* until the backoff reaches 60 s, then *Offline*; both make the list read-only. The status bar shows
+    the worst state when several servers are in use.
+17. The conflict compares only fields both people changed, one choice per field; the other person's other changes are
+    kept; saving sends yours on top of the new revision.
+18. Organization fields are merged on a conflict without asking (core's `TaskOrganization::rebase`, server decision 26);
+    only content fields reach the conflict view.
+
+**Not drawn, or not expressible as a frame:** heartbeats and SSE themselves (no visible state; `reset` reloads the
+list silently), two desktops seeing changes within a second, a heartbeat from a second computer keeping claims fresh,
+a shared task whose pipeline is missing on this computer (today's preflight message applies), the Conversation and
+Changes tabs of another member's run (empty here), PATCH of a project's name or key by owners, and Settings without
+an open project.
 
 ## Copy, layout and implementation acceptance
 
