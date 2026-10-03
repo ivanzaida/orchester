@@ -96,11 +96,18 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
     task: TaskId::generate(),
     key: "ORC-142".into(),
   };
-  // At 1440 beside waiting approvals there is no room for which run it is: it does not show at all.
+  // Which run it is shows whole or drops out; it is never cut.
   let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), vec![auto.clone()]));
   assert_eq!(item_texts(&mut tree, "status-auto-approving"), ["Auto-approving"]);
-  assert!(tree.get_element_by_id("status-auto-approving-run").is_none());
   assert_eq!(item_texts(&mut tree, "status-auto-approving-stop"), ["Stop"]);
+  let layout = tree.last_layout().expect("laid out").clone();
+  assert!(
+    !tree
+      .resolve_quads(&layout)
+      .into_iter()
+      .any(|quad| matches!(quad.content, QuadContent::Text { ref text, .. } if text.starts_with(" · Run") && text.ends_with('…'))),
+    "the run is not cut"
+  );
   // A wide window names it whole.
   let bar = with((0..3).map(waiting).collect(), vec![auto]);
   let (_wide, wide) = super::plan_limits::with_bar(1920, Default::default(), bar);
@@ -117,5 +124,98 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
   assert!(
     approvals.x + approvals.width <= item.x + 0.5,
     "the approvals give way first"
+  );
+}
+
+/// From 1700 down to 900, every 10px, with approvals waiting beside a run that auto-approves or not,
+/// and every plan limits class: the bar never shows more at a narrower width. Each text it draws is
+/// one it drew at the wider width, or that text cut shorter, and it draws no more texts than there.
+#[test]
+fn status_bar_never_shows_more_at_a_narrower_width() {
+  use orchester_core::connection::AgentProvider;
+  use orchester_desktop::plan_limits::Connections;
+  let auto = AutoApprovingRun {
+    run: RunId::generate(),
+    number: RunNumber::new(NonZeroU32::new(3).expect("above zero")),
+    task: TaskId::generate(),
+    key: "KON-3".into(),
+  };
+  for (state, readings) in super::narrow::classes() {
+    for runs in [vec![auto.clone()], Vec::new()] {
+      let mut wider: Option<(u32, Vec<String>)> = None;
+      for width in (900..=1700).rev().step_by(10) {
+        let mut bar = with((0..2).map(waiting).collect(), runs.clone());
+        bar.project.as_mut().expect("project").connections =
+          Connections::Ready(AgentProvider::CLI.into_iter().map(super::plan_limits::cli).collect());
+        let (_app, mut tree) = super::plan_limits::with_bar(width, readings.clone(), bar);
+        let texts = super::narrow::drawn_texts(&mut tree);
+        // The words after the count go only once what the request asks is gone.
+        if !texts.iter().any(|text| text == " approvals waiting") {
+          assert!(
+            !texts.iter().any(|text| text.starts_with(" · Designer")),
+            "{state}, {} runs: at {width} the count's words are gone before the request's: {texts:?}",
+            runs.len()
+          );
+        }
+        if let Some((at, before)) = &wider {
+          assert!(
+            texts.len() <= before.len(),
+            "{state}, {} runs: {width} draws {texts:?}, more than {at}: {before:?}",
+            runs.len()
+          );
+          for text in &texts {
+            let shown = text.trim_end_matches('…');
+            assert!(
+              before
+                .iter()
+                .any(|earlier| earlier.trim_end_matches('…').starts_with(shown)),
+              "{state}, {} runs: {width} draws {text:?}, which {at} did not: {before:?}",
+              runs.len()
+            );
+          }
+        }
+        wider = Some((width, texts));
+      }
+    }
+  }
+}
+
+/// From 1700 down to 900, every 10px, with approvals waiting beside a run that auto-approves or not,
+/// and every plan limits class: wherever the words after the count have gone, what the request asks is
+/// gone already.
+#[test]
+fn status_bar_request_words_go_before_the_count_words() {
+  use orchester_core::connection::AgentProvider;
+  use orchester_desktop::plan_limits::Connections;
+  let auto = AutoApprovingRun {
+    run: RunId::generate(),
+    number: RunNumber::new(NonZeroU32::new(3).expect("above zero")),
+    task: TaskId::generate(),
+    key: "KON-3".into(),
+  };
+  let mut counted_words_gone = 0;
+  for (state, readings) in super::narrow::classes() {
+    for runs in [vec![auto.clone()], Vec::new()] {
+      for width in (900..=1700).rev().step_by(10) {
+        let mut bar = with((0..2).map(waiting).collect(), runs.clone());
+        bar.project.as_mut().expect("project").connections =
+          Connections::Ready(AgentProvider::CLI.into_iter().map(super::plan_limits::cli).collect());
+        let (_app, mut tree) = super::plan_limits::with_bar(width, readings.clone(), bar);
+        let texts = super::narrow::drawn_texts(&mut tree);
+        if texts.iter().any(|text| text == " approvals waiting") {
+          continue;
+        }
+        counted_words_gone += 1;
+        assert!(
+          !texts.iter().any(|text| text.starts_with(" · Designer")),
+          "{state}, {} runs: at {width} the count's words are gone before the request's: {texts:?}",
+          runs.len()
+        );
+      }
+    }
+  }
+  assert!(
+    counted_words_gone > 0,
+    "the sweep reaches widths where the count's words go"
   );
 }

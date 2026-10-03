@@ -5,13 +5,14 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
+  layout::layout_kind::ShrinkLimit,
   node::Element,
 };
 
 use super::{
   ProjectBar,
   hint::{HintAnchor, Hints},
-  item::{clickable, glyph, item, label, value},
+  item::{clickable, dropping_label, give_way, glyph, item, value},
   open::Opener,
   timed::{Retry, RetryProps},
 };
@@ -31,10 +32,14 @@ pub fn runner_item(ctx: &mut Ctx, project: &ProjectBar, opener: &Opener, hints: 
   } else {
     PaletteColor::TextSecondary
   };
+  // Its words are the last of the left group to give way ([`give_way`]); the icon keeps the state.
   let mut row = item("status-runner")
     .describe("state", state_name(badge))
+    .flex_shrink(1.0)
+    .shrink_order(give_way::RUNNER_WORDS)
+    .shrink_limit(ShrinkLimit::Content)
     .child(glyph(icon, color.clone()))
-    .child(label(&ctx.t(key), color));
+    .child(dropping_label(&ctx.t(key), color));
   match &state {
     RunnerState::Reconnecting { attempt, .. } => {
       row = row.child(ctx.mount_keyed::<Retry>(

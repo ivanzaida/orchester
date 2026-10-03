@@ -19,6 +19,8 @@ use crate::{
 };
 
 const DIALOG: &str = "tool-approval-dialog";
+/// The padding of the part that holds the time (6 before it, 8 after), which stays when the time drops.
+const TIME_PART_PADDING: f32 = 20.0;
 
 /// The waiting requests of the project, oldest first.
 fn waiting(desktop: &Desktop) -> Vec<PendingToolApproval> {
@@ -139,10 +141,10 @@ fn ended_approval_status_line_keeps_its_words_beside_auto_approving_at_960() {
   }
 }
 
-/// A request waiting beside *Auto-approving* at 960: what it asks gives way, how many wait (briefly),
-/// Review, *Auto-approving* and Stop stay whole.
+/// A request waiting beside *Auto-approving*, from 930 to 1600, and without it at 960: the parts give
+/// way in their order and never to a stub.
 #[test]
-fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
+fn ended_approval_waiting_parts_give_way_in_order() {
   let mut desktop = auto_approving_run();
   let run = latest_run(desktop.repo()).expect("the run");
   let mut db = ProjectDb::open(desktop.repo()).expect("open");
@@ -169,38 +171,61 @@ fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
   desktop.wait_until("the status bar names the request", |desktop| {
     !has(desktop, DIALOG) && has(desktop, "status-auto-approving") && has(desktop, "status-approvals-review")
   });
-  // Each part shows whole or not at all: below their widths (`theme::ApprovalsWidths`) the count reads
-  // "1 waiting", and what the request asks, its time and the run's name are left out, never cut.
-  for width in [960, 1130, 1200] {
+  // As the window narrows, what the request asks trims its end down to its minimum, then the run's
+  // name, the time and the words after the count drop out whole; the count, Review, Auto-approving and
+  // Stop always stay, and nothing is cut to a stub.
+  for width in [930, 960, 1130, 1200, 1300, 1440, 1600] {
     desktop.tree.resize(width, 700);
     desktop.pass();
-    assert_whole(&mut desktop, &["1 waiting", "Review", "Auto-approving", "Stop"]);
-    assert_nothing_cut(&mut desktop);
+    assert_whole(&mut desktop, &["1", "Review", "Auto-approving", "Stop"]);
+    assert_no_stub(&mut desktop);
   }
-  // Without auto-approval, at 960 what the request asks shows with at least its minimum beside the
-  // short count and Review.
+  // With more room, more of it shows.
+  desktop.tree.resize(1300, 700);
+  desktop.pass();
+  assert_whole(&mut desktop, &[" approval waiting"]);
+  assert!(time_shown(&mut desktop), "the time shows at 1300");
+  desktop.tree.resize(1600, 700);
+  desktop.pass();
+  assert_whole(&mut desktop, &[" approval waiting", " · Run 1 · KON-1"]);
+  assert!(time_shown(&mut desktop), "the time shows at 1600");
+  // Without auto-approval, at 960 the words after the count show; what the request asks shows with at
+  // least its minimum, or has dropped out before the count's words would (the time goes before them).
   desktop.click("task-auto-approve");
   desktop.wait_until("auto-approval is off", |desktop| !has(desktop, "status-auto-approving"));
   desktop.tree.resize(960, 700);
   desktop.pass();
-  assert_whole(&mut desktop, &["1 waiting", "Review"]);
+  assert_whole(&mut desktop, &["1", " approval waiting", "Review"]);
+  assert_no_stub(&mut desktop);
   let asks = desktop.bounds("status-approvals-asks");
   let review = desktop.bounds("status-approvals-review");
-  assert!(asks.width >= APPROVALS_ASKS_MIN, "what it asks has {} px", asks.width);
   assert!(
     asks.x + asks.width <= review.x + 0.5,
     "what it asks stays before Review"
   );
 }
 
-/// No text of the status bar is cut to an ellipsis.
-fn assert_nothing_cut(desktop: &mut Desktop) {
+/// Whether the waiting request's time is drawn: its part is wider than its padding alone.
+fn time_shown(desktop: &mut Desktop) -> bool {
+  desktop.bounds("status-approvals-time").width > TIME_PART_PADDING
+}
+
+/// No text of the status bar is cut to a stub: only what the request asks may trim its end, never below
+/// its minimum; below it, it drops out.
+fn assert_no_stub(desktop: &mut Desktop) {
   let agents = desktop.bounds("status-agents");
+  let asks = desktop.bounds("status-approvals-asks");
+  assert!(
+    asks.width == 0.0 || asks.width >= APPROVALS_ASKS_MIN,
+    "what it asks has {} px",
+    asks.width
+  );
   let layout = desktop.tree.last_layout().expect("laid out").clone();
   for quad in desktop.tree.resolve_quads(&layout) {
     if let QuadContent::Text { text, .. } = &quad.content {
+      let in_bar = quad.y >= agents.y - 4.0;
       assert!(
-        quad.y < agents.y - 4.0 || !text.ends_with('…'),
+        !in_bar || !text.ends_with('…') || text.starts_with(" · "),
         "{text:?} is cut in the status bar"
       );
     }

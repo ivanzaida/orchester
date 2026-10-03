@@ -22,17 +22,17 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::Row,
+  components::{Row, Spacer},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 
 use self::{
   activity_item::{activity_slot, shows_activity},
-  approvals_item::{ApprovalParts, RunPart},
   counts::counts,
   hint::{Anchors, Hint},
+  item::give_way,
   open::Opener,
   runner_item::runner_item,
 };
@@ -46,7 +46,7 @@ use crate::{
   },
   tabs::feed::WindowFeed,
   tasks::{approvals::ShownApproval, data::AutoApprovingRun, run_approvals::RunApprovalChange, usage::ProjectUsage},
-  theme::{ExtraColor, STATUS_BAR_HEIGHT, approvals_widths},
+  theme::{ExtraColor, STATUS_BAR_HEIGHT},
 };
 
 /// A popover or hint sits 6px above the bar (`imT2E`), which is 9px above the 22px item it
@@ -130,19 +130,12 @@ impl Component for StatusBar {
         .as_ref()
         .map_or_else(Default::default, |project| project.connections.clone()),
       readings,
-      brief: false,
     };
-    // The bar spans the window; reading its width re-renders the bar as the window resizes.
-    let width = ctx.window().logical_width();
-    // The left group takes the room the right group leaves and never more: its activity gives
-    // way with an ellipsis instead of running under the right group.
-    let mut left = Row::new()
-      .flex(1.0)
-      .clip()
-      .height(Dimension::Pct(100.0))
-      .align_items(Alignment::Center);
+    // The bar is one line: when it is narrow, the parts of both groups give way in one order
+    // ([`give_way`]), so it never shows more at a narrower width.
+    let mut left = Vec::new();
     if let Some(project) = &props.project {
-      left = left.child(runner_item(ctx, project, &opener, &hints));
+      left.push(runner_item(ctx, project, &opener, &hints));
     }
     let slot = bar::activity_slot(runner.as_ref(), &log);
     // The runs the task lists show as interrupted, once read; until then what the runner was
@@ -155,14 +148,8 @@ impl Component for StatusBar {
     let queue = ctx.use_context::<ApprovalQueue>();
     let waiting = match (&props.project, &slot) {
       (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
-      (Some(project), _) => approvals_item::approvals(
-        ctx,
-        (&project.approvals, &project.dialog),
-        queue.as_ref(),
-        parts_of(project, &limits, width),
-      ),
+      (Some(project), _) => approvals_item::approvals(ctx, (&project.approvals, &project.dialog), queue.as_ref()),
     };
-    let waiting_shown = !waiting.is_empty();
     // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
     // hides the other. Any other activity gives way to them.
     let activity = (waiting.is_empty() || slot.beside_approvals()).then(|| {
@@ -175,12 +162,16 @@ impl Component for StatusBar {
         props.project.is_some(),
       )
     });
-    left = left
-      .with_children(waiting)
-      .with_children(activity.into_iter().flatten());
+    left.extend(waiting);
+    left.extend(activity.into_iter().flatten());
     if let Some(project) = &props.project {
-      left = left.with_children(auto_approving(ctx, project, waiting_shown, (&limits, width), &stop));
+      left.extend(approvals_item::auto_approving(
+        ctx,
+        &project.auto_approving,
+        stop_press(&stop, project),
+      ));
     }
+    let right = counts(ctx, (props.project.as_ref(), mcp), &opener, &hints, &limits);
     // The popover hangs from the activity item; without it there is nothing to anchor to.
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
@@ -189,42 +180,23 @@ impl Component for StatusBar {
       .height(Dimension::Px(STATUS_BAR_HEIGHT))
       .padding_horizontal(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .justify(Justify::SpaceBetween)
+      .clip()
       .background(PaletteColor::SurfaceBase)
       .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(left)
-      .child(counts(ctx, (props.project.as_ref(), mcp), &opener, &hints, (&limits, width)))
+      .with_children(left)
+      // The room between the groups: as wide as the bar to begin with, it gives way before anything
+      // else, so the right group ends at the bar's end whenever both fit.
+      .child(
+        Spacer::new()
+          .width(Dimension::Pct(100.0))
+          .flex_shrink(1.0)
+          .shrink_order(give_way::ROOM),
+      )
+      .with_children(right)
       .with_children(popover)
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))
   }
-}
-
-/// *Auto-approving* and Stop of `project`, naming the run whole, or not at all, beside waiting approvals
-/// (`waiting`), and otherwise letting its name give way.
-fn auto_approving(
-  ctx: &Ctx,
-  project: &ProjectBar,
-  waiting: bool,
-  (limits, width): (&plan_limits::Props, f32),
-  stop: &RunApprovalAction,
-) -> Vec<Element> {
-  let run = match (waiting, parts_of(project, limits, width).run) {
-    (false, _) => RunPart::GivesWay,
-    (true, true) => RunPart::Whole,
-    (true, false) => RunPart::Hidden,
-  };
-  approvals_item::auto_approving(ctx, &project.auto_approving, run, stop_press(stop, project))
-}
-
-/// Which parts of the waiting approvals of `project` a window `width` wide has room for.
-fn parts_of(project: &ProjectBar, limits: &plan_limits::Props, width: f32) -> ApprovalParts {
-  let widths = approvals_widths(
-    plan_limits::reached_count(limits),
-    plan_limits::has_readings(limits),
-    !project.auto_approving.is_empty(),
-  );
-  ApprovalParts::at(width, widths)
 }
 
 /// *Stop*: ends the auto-approval of every run the bar names.

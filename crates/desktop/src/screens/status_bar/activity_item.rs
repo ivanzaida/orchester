@@ -6,12 +6,13 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::Button,
+  layout::layout_kind::ShrinkLimit,
   node::Element,
 };
 
 use super::{
   hint::{HintAnchor, Hints},
-  item::{action, clickable, dismiss, glyph, item, pressed, separator, truncated_label, value, yielding_value},
+  item::{action, clickable, dismiss, dropping_value, give_way, glyph, item, pressed, separator, truncated_label},
   open::Opener,
   timed::{Elapsed, ElapsedProps},
 };
@@ -76,6 +77,8 @@ fn interrupted_runs(ctx: &Ctx, count: usize, offline: bool, hints: &Hints) -> Op
   let row = item("status-activity")
     .describe("state", "interrupted")
     .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
     .child(glyph(Icon::Pause, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary));
   Some(hints.attach(row, HintAnchor::Activity, text).into())
@@ -109,10 +112,15 @@ fn failure(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Vec<Elem
   let row = item("status-activity")
     .describe("state", state)
     .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
     .background(PaletteColor::SurfaceRaised)
     .child(glyph(icon, PaletteColor::TextPrimary))
     .child(truncated_label(&text, PaletteColor::TextPrimary))
-    .child(value(&display::clock_time(event.at()), PaletteColor::TextMuted));
+    .child(dropping_value(
+      &display::clock_time(event.at()),
+      PaletteColor::TextMuted,
+    ));
   let row = hints.attach(row, HintAnchor::Activity, text);
   let mut items = vec![open_event(row, event, opener)];
   let needs_you = matches!(event.outcome(), Outcome::NeedsYou { .. });
@@ -160,6 +168,8 @@ fn running(
   let row = item("status-activity")
     .describe("state", "running")
     .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
     .child(glyph(Icon::Loader, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary))
     .child(ctx.mount_keyed::<Elapsed>(
@@ -177,6 +187,8 @@ fn several(text: &Arc<str>, log: &ActivityLog, opener: &Opener, hints: &Hints) -
   let row = item("status-activity")
     .describe("state", "several")
     .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
     .describe("running", log.running().count().to_string())
     .child(glyph(Icon::Loader, PaletteColor::TextPrimary))
     .child(truncated_label(text, PaletteColor::TextPrimary))
@@ -198,10 +210,12 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
   let row = item("status-activity")
     .describe("state", "latest")
     .flex_shrink(1.0)
+    .shrink_order(give_way::ACTIVITY)
+    .shrink_limit(ShrinkLimit::Content)
     .child(glyph(icon, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary))
-    // The time gives way before the words.
-    .child(yielding_value(&display::clock_time(event.at()), PaletteColor::TextMuted));
+    // The time drops out before the words give way.
+    .child(dropping_value(&display::clock_time(event.at()), PaletteColor::TextMuted));
   let row = hints.attach(row, HintAnchor::Activity, text);
   open_event(row, event, opener)
 }

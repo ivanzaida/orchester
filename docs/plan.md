@@ -352,7 +352,7 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.34.2: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.37.0: a shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
@@ -432,15 +432,6 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
 - **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
-### L1 · lurq: give-way order and content minimum for shrinking rows (lurq)
-
-The status bar must cut its items in a fixed order and never drop the approval count, *Review*, *Auto-approving* or
-*Stop*; lurq shares a row's overflow between all shrinking children by weight and only down to an explicit minimum.
-Orchester works around it on `claude/stale-approval` (pieces, power-of-two weights, `yielding` in
-`crates/desktop/src/screens/status_bar/item.rs`). Handoff for the lurq agent:
-`H:/projects/lurq/bugreports/lurq-flex-shrink-give-way-order.md`. Done when lurq ships a give-way order and/or a
-content minimum, and the status bar uses it instead of the workaround.
-
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.
@@ -497,6 +488,20 @@ Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
 - With a PEM certificate configured the server speaks TLS (tested with a test certificate); the log test finds neither
   token nor password; the `audit_events` table records the events the document lists.
 
+
+L1 · lurq give-way order for the status bar · branch `claude/statusbar-give-way` (2026-10-03)
+
+- lurq 0.35.0 ships `shrink_order` and `shrink_limit` (handoff `H:/projects/lurq/bugreports/lurq-flex-shrink-give-way-order.md`).
+  The status bar's left group now gives way in order: what the oldest waiting request asks trims its end down to
+  100px, then which run auto-approves and the times drop out whole, then the activity, then the words after the
+  approval count (*2 approvals waiting* → *2*), and last the runner's words; the hand, the count, *Review*,
+  *Auto-approving* and *Stop* never give way. The workaround is gone: the `ApprovalsWidths` breakpoint table and its
+  plan limits classes, the short *N waiting* count, the power-of-two weights and the `yielding` slack. The bar is one
+  line, so the right group gives way in the same order (version, Tokens today, count labels, plan limits' details,
+  after the left group's optional details) instead of the `STATUS_WIDTHS` breakpoints, and it never shows more at a
+  narrower width (sweep test 900–1700).
+- Tests: `-p orchester-desktop --test status_bar status_bar`, `--test form_keyboard ended_approval` (930 to 1600 with
+  auto-approval, 960 without), `approval_choices_`, a broad `form_keyboard _` pass for the lurq bump, `--test i18n`.
 
 A tool request whose agent is gone no longer waits forever · branch `claude/stale-approval` (2026-10-03)
 

@@ -5197,13 +5197,9 @@
       "asksTool": "{{agent}} asks to use {{server}} {{tool}} · {{task}}",
       "asksCommand": "{{agent}} asks to run {{command}} · {{task}}",
       "openSeveral": "{{asks}} · {{count}} waiting",
-      "waitingCount": {
-        "one": "1 approval waiting",
-        "other": "{{count}} approvals waiting"
-      },
-      "waitingBrief": {
-        "one": "1 waiting",
-        "other": "{{count}} waiting"
+      "waitingWords": {
+        "one": " approval waiting",
+        "other": " approvals waiting"
       },
       "waitingAsks": " · {{asks}}",
       "review": "Review",

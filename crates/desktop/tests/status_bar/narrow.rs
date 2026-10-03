@@ -17,9 +17,6 @@ use super::{
 };
 
 const WIDTHS: [u32; 5] = [1280, 1279, 1120, 1119, 960];
-/// The room the right group leaves at 960 with percentages (`VTnmr`), less a little for the
-/// varying width of reset times: no class leaves the activity less.
-const ACTIVITY_ROOM: f32 = 330.0;
 /// An activity item narrower than its padding, icon and an ellipsis has no label left.
 const SQUEEZED: f32 = 40.0;
 
@@ -40,7 +37,7 @@ fn reading(provider: AgentProvider, percent: f64, blocked: Option<LimitBlock>) -
 }
 
 /// The item's width classes: percentages, one CLI reached or refused, both.
-fn classes() -> Vec<(&'static str, PlanReadings)> {
+pub(super) fn classes() -> Vec<(&'static str, PlanReadings)> {
   let (codex, claude) = (AgentProvider::CodexCli, AgentProvider::ClaudeCodeCli);
   let credits = Some(LimitBlock::Credits);
   [
@@ -160,22 +157,62 @@ fn status_bar_narrow_right_group_never_covers_the_activity() {
   );
 }
 
+/// The right group gives way before the activity's words: wherever the activity is cut, the version,
+/// Tokens today and the counts' labels have dropped out already.
 #[test]
-fn status_bar_narrow_every_class_leaves_the_activity_its_room() {
-  let mut widths: Vec<u32> = (960..=1600).step_by(40).collect();
-  widths.extend([1119, 1279, 1439, 1599]);
+fn status_bar_narrow_right_group_gives_way_before_the_activity() {
+  let folder = tempfile::tempdir().expect("project folder");
+  let root = folder.path().to_path_buf();
+  let runner = failed_runner(&root);
+  let full = "1000000000 runs interrupted · nothing runs until the runner starts";
   for (state, readings) in classes() {
-    for &width in &widths {
+    for width in (960..=1600).step_by(40) {
       let mut bar = project(Some(2));
-      bar.project.as_mut().expect("project").connections =
-        Connections::Ready(AgentProvider::CLI.into_iter().map(cli).collect());
+      let project = bar.project.as_mut().expect("project");
+      project.connections = Connections::Ready(AgentProvider::CLI.into_iter().map(cli).collect());
+      project.repo_root = root.clone();
+      project.runner = runner.clone();
+      project.lost_to_runner = Some(1_000_000_000);
       let (_app, mut tree) = with_bar(width, readings.clone(), bar);
-      let agents = bounds(&mut tree, "status-agents");
-      assert!(
-        agents.x >= ACTIVITY_ROOM,
-        "{state} at {width}: the right group starts at {}",
-        agents.x
-      );
+      let texts = drawn_texts(&mut tree);
+      if texts.iter().any(|text| text == full) {
+        continue;
+      }
+      for gone in ["status-version", "status-tokens"] {
+        assert!(
+          !shown(&mut tree, gone),
+          "{state} at {width}: {gone} stays while the activity is cut"
+        );
+      }
+      for label in ["Agents", "Queued", "Needs you"] {
+        assert!(
+          !texts.iter().any(|text| text == label),
+          "{state} at {width}: {label} stays while the activity is cut"
+        );
+      }
     }
   }
+}
+
+/// Whether the element `id` is laid out with a width: a part that dropped out has none.
+pub(super) fn shown(tree: &mut lurq::app::Tree, id: &str) -> bool {
+  tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .is_some_and(|bounds| bounds.width > 0.0)
+}
+
+/// The texts the bar draws, icons left out.
+pub(super) fn drawn_texts(tree: &mut lurq::app::Tree) -> Vec<String> {
+  let layout = tree.last_layout().expect("laid out").clone();
+  tree
+    .resolve_quads(&layout)
+    .into_iter()
+    .filter_map(|quad| match quad.content {
+      QuadContent::Text { text, .. } if !text.chars().all(|glyph| ('\u{e000}'..='\u{f8ff}').contains(&glyph)) => {
+        Some(text)
+      }
+      _ => None,
+    })
+    .collect()
 }
