@@ -2133,7 +2133,7 @@ Audit records contain who/what requested access, capability, scope, run/step, de
 
 Drawn 2026-10-03 for phases S2a–S3 of `docs/architecture/server.md` (its *Desktop data* › "Where it is configured",
 *Claims*, *Live run status*, *Live updates*, *Migration*, *Two people share one repository*, *Accounts and tokens*,
-*Security*). **Not approved yet:** the rows marked *proposed* below wait for the user. Canvas: a sixth column at x 26080
+*Security*). **Approved by the user 2026-10-03** (frames and every decision below). Canvas: a sixth column at x 26080
 — the index `yuqEI` ("INDEX / F · Shared server", y 400) and the section `yYqBE` ("10 / Shared server", y 1800,
 4896 × 15582) with five groups; no existing frame moved. Frames are 1440 × 960 (1440 × 988 where the status bar
 matters, as `kpuQj`), 960 × 988 for the narrow task list; columns x 48 / 1568 / 3088 in each group, labels 32 above.
@@ -2166,7 +2166,7 @@ frame rows, not instances, because `clVjO` has no Holder slot. Proposed copy nam
   HTTPS. 10.03: checking; plain HTTP to another host (strong warning, opt-in *Allow plain HTTP for host:port*, Continue
   unavailable until ticked; stored with the server); plain HTTP on loopback (allowed, says why); a redirect is an error
   naming its target; not reached / not an Orchester server / certificate not trusted (no skip switch); `needs_bootstrap`
-  with the server-host command and Copy; already in the list; newer API (*proposed*).
+  with the server-host command and Copy; already in the list; newer API.
 - **10.04 / 10.05** *Sign in to Kontur team* (username, password; says where the password goes and that the token
   goes to the keychain). 10.05: wrong username or password (one message for both), 429 with the time, the forced
   *Choose your password* step (only *Sign out* and *Save password*), its errors (12–256 characters, mismatch),
@@ -2314,7 +2314,7 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
   unchanged to a shared project; the history names the person who made each change. Offline and for a former member
   these controls are unavailable like every other change.
 
-**Decisions the architecture does not settle — *proposed*, for the user** (8 and 12 were settled by the user above):
+**Decisions the architecture does not settle — approved by the user 2026-10-03** (8 and 12 were settled first):
 
 1. *Settings* is a sidebar item in the application group (beside *All projects*), and the status bar's server item
    opens it too. The page keeps the project's sidebar; opened with no project (from All projects) it would use the

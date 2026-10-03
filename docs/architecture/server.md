@@ -1,9 +1,9 @@
 # Orchester — shared server
 
 Date: 2026-10-02. Status: **agreed direction**; S1a and S1b (server only) handed to Codex on 2026-10-03 (`docs/plan.md`, *S · Shared server*). The user's decisions, including the answers to the
-first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Every row but 26 is the user's: the
+first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Every row is the user's: the
 architect's recommendations were confirmed on 2026-10-03, and after the screens were drawn the user added task
-organization and member roles (rows 23–25, 2026-10-03); row 26 is *proposed*. Nothing here changes the local (single-user)
+organization and member roles (rows 23–25) and approved row 26 with the frames (2026-10-03). Nothing here changes the local (single-user)
 version in `storage.md` except where a section says so.
 
 **Goal (user, 2026-10-02).** Several people work on one project in Orchester. They share the task list and can see
@@ -45,7 +45,7 @@ settle rows 5, 6, 10 and 12. The architect's recommendations in the other rows w
 | 23 | Task organization | ORC-39's organization is shared: workflow status, priority, tags, blocking links (a task and its gate, Review or Merge) and the manual Blocked reason are fields of a shared task, changed under its revision, with core's rules (`task::organization`). Its history is shared: every change is recorded with who made it and whether a person or Orchester did ([Task organization](#task-organization)) | user (2026-10-03) |
 | 24 | Tags | Tags belong to the server project. Members create, rename, merge and delete them under ORC-39's local rules (names unique without regard to case; merge unions into the target; delete and merge rewrite the affected tasks and record their history) | user (2026-10-03) |
 | 25 | Member roles | Owners and admins change a member's role (`PATCH …/members/{user}`); demoting or removing the last owner is refused (`409 last_owner`), so a sole owner first makes someone else an owner and can then step down or leave | user (2026-10-03) |
-| 26 | Organization on a conflict | When a change meets a newer revision, the desktop merges the organization fields with core's `TaskOrganization::rebase` (each field the person did not change keeps the current value; tags and links merge by what was added and removed) and sends again without asking; only title, brief, criteria, pipeline and limits changed by both reach the person ([Task organization](#task-organization)) | proposed |
+| 26 | Organization on a conflict | When a change meets a newer revision, the desktop merges the organization fields with core's `TaskOrganization::rebase` (each field the person did not change keeps the current value; tags and links merge by what was added and removed) and sends again without asking; only title, brief, criteria, pipeline and limits changed by both reach the person ([Task organization](#task-organization)) | user |
 
 ## Processes and crates
 
@@ -210,7 +210,7 @@ server mirrors it field for field and calls core's rules; it adds no rule of its
   on. Orchester's own changes (the workflow status that follows a run: In progress when it starts, In review when it
   succeeds, Done when it is merged) are sent by the holder's desktop, whose runner saw the run, with `actor:
   "orchester"`; they are recorded as Orchester's for that person.
-- **Conflicts** (decision 26, *proposed*). A change that meets a newer revision gets `409 revision_conflict` with the
+- **Conflicts** (decision 26). A change that meets a newer revision gets `409 revision_conflict` with the
   current task. The desktop merges the organization fields with core's `TaskOrganization::rebase`, the rule ORC-39
   already uses locally between a form and Orchester's changes, and sends again; only content fields both people changed
   are shown to the person (*Edit task* conflict). A bulk change (Set status, Add tag on several tasks) is one change per
@@ -707,5 +707,5 @@ tasks; notifications; Postgres for several server instances; single sign-on, if 
 
 ## Open questions
 
-Row 26 (organization fields merged on a conflict) is *proposed*; the other rows are the user's. The design's own proposed
-choices are listed in `docs/design/orchester-workspace.md`, *Shared server*.
+None. Every decision row is the user's, and the design's own choices (`docs/design/orchester-workspace.md`, *Shared
+server*) were approved with the frames on 2026-10-03.

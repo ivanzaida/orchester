@@ -362,7 +362,7 @@ admits it) and, to keep naming the version in use, this line.
 The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
 people share a project's task list on a server their team runs, and see who took a task into work. Runs, worktrees,
 transcripts and secrets stay on each person's computer. Phases S1a and S1b are server-only (no desktop UI) and are
-handed to Codex; the screens of S2a–S3 are drawn (2026-10-03) and wait for the user's approval.
+handed to Codex; the screens of S2a–S3 are drawn and approved (2026-10-03).
 
 Rules for both phases, on top of `AGENTS.md`:
 
@@ -435,12 +435,11 @@ Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
   nor removed (`409 last_owner`); audited; a `members` event.
 - `PUT …/run` (live run status, S3's server half) is not part of S1b.
 
-### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design approval)
+### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, design approved; after S1b)
 
 Drawn 2026-10-03 in Pencil section `yYqBE` ("10 / Shared server", column F at x 26080); the design doc's
-[Shared server](design/orchester-workspace.md#shared-server) describes every frame and its *proposed* decisions; the user
-decided member roles and shared organization on 2026-10-03 (drawn, and in S1b). Do not start
-these phases until the user approves the design. Frames per phase:
+[Shared server](design/orchester-workspace.md#shared-server) describes every frame and its decisions, all approved by the user on 2026-10-03 (member roles
+and shared organization included, also in S1b). Start S2a once S1b is merged. Frames per phase:
 
 - **S2a** (servers and sign-in): 10.01 `sXIz1`, 10.02 `e9DDI`, 10.03 `BWyKt`, 10.04 `X0cARN`, 10.05 `mcI7H`,
   10.06 `YMwe5`, 10.07 `BWEZ9`, 10.08 `kT0ui`; the status bar item 10.43 `hYres`.
