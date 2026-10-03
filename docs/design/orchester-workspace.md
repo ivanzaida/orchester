@@ -2054,7 +2054,7 @@ Drawn 2026-10-03 for phases S2a–S3 of `docs/architecture/server.md` (its *Desk
 *Claims*, *Live run status*, *Live updates*, *Migration*, *Two people share one repository*, *Accounts and tokens*,
 *Security*). **Not approved yet:** the rows marked *proposed* below wait for the user. Canvas: a sixth column at x 26080
 — the index `yuqEI` ("INDEX / F · Shared server", y 400) and the section `yYqBE` ("10 / Shared server", y 1800,
-4896 × 15300) with five groups; no existing frame moved. Frames are 1440 × 960 (1440 × 988 where the status bar
+4896 × 15582) with five groups; no existing frame moved. Frames are 1440 × 960 (1440 × 988 where the status bar
 matters, as `kpuQj`), 960 × 988 for the narrow task list; columns x 48 / 1568 / 3088 in each group, labels 32 above.
 
 **Fixture** (illustrative, never shipped): server *Kontur team* at `https://orchester.kontur.lan` (API 1), *Platform
@@ -2108,11 +2108,13 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
 - **10.12** The Share confirmation: tasks uploaded with their numbers, where new numbers continue, tasks claimed for
   you (unfinished runs), the project key; switch *Write orchester.toml into the repository* (on; never committed).
 - **10.13** Shared, seen by an owner: *Shared on Kontur team* with key, role and last sync; *Discovery file* state;
-  *Members* (username field with @, role select, *Add member*; rows with role, added, *Remove*, *Leave* on your own);
-  *Make local…*.
-- **10.14** Add member errors (no such user, already a member), a member's read-only view with *Leave*, *Remove …
-  from ORC?* (claims released), the last owner refused (409 `last_owner`), *Make local* with its consequences, and
-  *Make local* while the server can't be reached (claims go stale instead).
+  *Members* (username field with @, role select, *Add member*; rows with role, added, *Make member* on an owner's row
+  and *Make owner* on a member's, *Remove*, *Leave* on your own); *Make local…*.
+- **10.14** Add member errors (no such user, already a member), a member's read-only view with *Leave* (no role or
+  remove actions), *Make Bohdan Koval an owner of ORC?*, *Make yourself a member of ORC?* (asked because you lose member
+  management), the last owner refused (`409 last_owner`) with *Make Oleh Petrenko an owner…* as the way out, *Remove …
+  from ORC?* (claims released), *Make local* with its consequences (organization kept as last synced, ORC's tags become
+  local tags), and *Make local* while the server can't be reached (claims go stale instead).
 - **10.15** The repository is shared there and you are a member: a strong notice with *Review and join…*; Share is not
   offered.
 - **10.16** Not a member (owners named, your username with Copy, *Check again* and its last result; nothing uploaded);
@@ -2127,14 +2129,17 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
 - **10.21** *Join ORC on Kontur team* (page under Sharing; *Cancel*, *Join and upload 4* in the topbar): the review bar
   (*4 of 6 ticked* and what happens), rows with local key, title, the hint *Similar on ORC: ORC-23 … · Alice Moreau*,
   workflow and run, *Becomes* ORC-4x or *Not shared*. Rows with a run that hasn't ended keep a muted tick and say why
-  they can't be unticked and that they are uploaded claimed.
+  they can't be unticked and that they are uploaded claimed. The note says status, priority, tags and links go with each
+  task: tags match ORC's by name (new names become ORC tags) and a link to a task that stays here is dropped.
 - **10.22** After joining: the confirmation notice and *Keys before joining* (KON-12 → ORC-41 …, Not shared rows), with
   the branch note; it stays in Sharing.
 - **10.23** Tasks with the *Not shared* filter on (button *Not shared · 2* on the query's second line): an explaining
   notice and the read-only rows.
-- **10.24** A Not shared task: *Not shared* label, KON-15, read-only; *Edit* unavailable, *Share task* primary; its runs
+- **10.24** A Not shared task: *Not shared* label, KON-15, read-only; its organization as plain labels (*Backlog*, *Low*,
+  tag chips) with *Tags are kept by name until the task is shared.*; *Edit* unavailable, *Share task* primary; its runs
   stay readable; the Sharing panel says what it would become.
-- **10.25** A joined task (ORC-41): *was KON-12* after the run metadata; the right panel's *On Kontur team* section
+- **10.25** A joined task (ORC-41): *was KON-12* after the run metadata; under it ORC-39's organization row (status,
+  priority, tag chips, *Tags*), now shared; the right panel's *On Kontur team* section
   (holder, since, heartbeat, shared status, created as KON-12, last edit); *Release* unavailable with the reason while
   the agent works.
 - **10.26** *Share KON-15 on ORC?*; search finds a former key; *Kontur is local again* with KON-11 → ORC-45, KON-15 →
@@ -2142,16 +2147,21 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
 
 ### Claims and live run status (S2d, S3)
 
-- **10.31** The shared list: *Shared on Kontur team as ORC* beside the description; columns ID, TASK (with *was …*),
-  PIPELINE 120, WORKFLOW / RUN 212, HOLDER 172, READINESS 150. Another member's run reads *Running · Review · Alice ·
+- **10.31** The shared list: *Shared on Kontur team as ORC* beside the description; the query's second line has
+  *Status*, *Priority*, *Tags*, *Not shared* and *Manage tags*; columns ID, TASK / TAGS (tag chips and *was …* under the
+  title), PRIORITY 96, WORKFLOW / RUN 212 (with *⊘ Blocked* when flagged), HOLDER 172, DEPENDENCY / READINESS 160; rows
+  84 high. PIPELINE is not shown at 1440: Holder takes its width, so the combined list's breakpoints move up by Holder's
+  188 (Pipeline returns from a 1536 window; the pipeline filter stays). Another member's run reads *Running · Review · Alice ·
   since 14:02* under the workflow label; Holder shows the person and *run claim · since 13:55*; stale is *Maria Lind ·
   stale* (clock-alert, `$text`) with *last heartbeat 13:21*; merged is *Merged by Oleh Petrenko*; yours is *You*; free
   is *Not taken*; a hovered free row shows a quiet *Take* in the Holder cell. Above the list, the lost-claim notice
   (*Oleh Petrenko took over ORC-43 at 14:20*, why, what happens to your run, *Open ORC-43*, *Dismiss*).
-- **10.32** The same at 960 × 988: Pipeline and Readiness drop, Holder stays; the status bar drops version, tokens and
-  count labels as before and keeps the server item.
+- **10.32** The same at 960 × 988: as in 02.03E, Priority and the tag chips drop at 960 (the filters stay); Pipeline
+  and Readiness drop too, Holder stays; the status bar drops version, tokens and count labels as before and keeps the
+  server item.
 - **10.33** Another member's live run on the task page: *Running* with *Review · Alice Moreau · since 14:02 · run #3 on
-  her computer*; a notice that conversation and changes stay on her computer; *Start run* unavailable with the lock
+  her computer*; the shared organization row (*Status, priority and tags are shared; any member can change them.*); a
+  notice that conversation and changes stay on her computer; *Start run* unavailable with the lock
   line naming the holder and when it becomes possible; *Edit* stays (any member may edit); the panel's *On Kontur
   team* (holder, claim, heartbeat, run, phase, phase since, last edit; *Take* unavailable).
 - **10.34** The panel in each claim state (not taken → *Take*; yours by hand → *Release*; yours after a succeeded run →
@@ -2186,30 +2196,44 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
 | 10.05 · Sign-in and password states (compact, 1440 × 1399) | `mcI7H` | 3088 / 1548 |
 | 10.07 · Settings › Servers / Users | `BWEZ9` | 48 / 3036 |
 | 10.08 · Admin user dialogs (compact, 1440 × 1331) | `kT0ui` | 1568 / 3036 |
-| 10.11 · Sharing / Local only | `xnhV2` | 48 / 100 (`Ux22E`, y 4784) |
+| 10.11 · Sharing / Local only | `xnhV2` | 48 / 100 (`Ux22E`, y 4784, 3682 high) |
 | 10.12 · Share on Kontur team / Confirm | `IDfLs` | 1568 / 100 |
 | 10.13 · Sharing / Shared · members | `V4ZxQG` | 3088 / 100 |
-| 10.14 · Members and Make local states (compact) | `glugd` | 48 / 1180 |
+| 10.14 · Members, roles and Make local states (compact, 1440 × 1354) | `NaUDV` | 48 / 1180 |
 | 10.15 · Sharing / Already shared → Join | `y8uP2` | 1568 / 1180 |
 | 10.16 · Join and discovery states (compact) | `AZwJE` | 3088 / 1180 |
-| 10.17 · Sharing / Discovery: Sign in and join | `g5r5VU` | 48 / 2340 |
-| 10.21 · Join ORC / Review local tasks | `UlHPB` | 48 / 100 (`idluC`, y 8280) |
+| 10.17 · Sharing / Discovery: Sign in and join | `g5r5VU` | 48 / 2622 |
+| 10.21 · Join ORC / Review local tasks | `UlHPB` | 48 / 100 (`idluC`, y 8562) |
 | 10.22 · Sharing / Joined · key mapping | `m9omas` | 1568 / 100 |
-| 10.23 · Tasks / Not shared filter (1440 × 988) | `g7NOx` | 3088 / 100 |
+| 10.23 · Tasks / Not shared filter (1440 × 988) | `l9jYZS` | 3088 / 100 |
 | 10.24 · Not shared task / Share task | `FAKNF` | 48 / 1180 |
 | 10.25 · Task page / was KON-12 · your claim | `RuBhQ` | 1568 / 1180 |
 | 10.26 · Former keys and Not shared states (compact) | `m7jOn9` | 3088 / 1180 |
-| 10.31 · Tasks / Shared list · claims and live status (1440 × 988) | `tAWk1` | 48 / 100 (`sk7nC`, y 10616) |
-| 10.32 · Tasks / Shared list at 960 (960 × 988) | `R7iFy9` | 1568 / 100 |
+| 10.31 · Tasks / Shared list · claims and live status (1440 × 988) | `jakf4` | 48 / 100 (`sk7nC`, y 10898) |
+| 10.32 · Tasks / Shared list at 960 (960 × 988) | `ByIkx` | 1568 / 100 |
 | 10.33 · Task page / Another member's live run | `NikWo` | 3088 / 100 |
 | 10.34 · Claim states and refusals (compact) | `omHGh` | 48 / 1180 |
 | 10.35 · Take over / Confirm | `U4GzjB` | 1568 / 1180 |
-| 10.41 · Edit task / Revision conflict | `RmDpQ` | 48 / 100 (`pRtpN`, y 12952) |
-| 10.42 · Tasks / Offline — read-only (1440 × 988) | `OogEa` | 1568 / 100 |
+| 10.41 · Edit task / Revision conflict | `RmDpQ` | 48 / 100 (`pRtpN`, y 13234) |
+| 10.42 · Tasks / Offline — read-only (1440 × 988) | `Cc4WH` | 1568 / 100 |
 | 10.43 · Status bar server item (compact, 1504 wide) | `hYres` | 3088 / 100 |
-| 10.44 · Tasks / No longer a member (1440 × 988) | `HtqGH` | 48 / 1180 |
+| 10.44 · Tasks / No longer a member (1440 × 988) | `Y6H8A` | 48 / 1180 |
 
-**Decisions the architecture does not settle — all *proposed*, for the user:**
+**Decisions (user, 2026-10-03, after the first drawing).**
+
+- **Member roles.** Owners and admins change a member's role (`PATCH …/members/{user}` `{ role }`, server decision 25):
+  *Make owner* / *Make member* on the member rows (10.13), a confirmation when you demote yourself, and the last owner
+  refused with a way out (10.14). A sole owner can hand over and then leave.
+- **Task organization is shared.** Workflow status, priority, tags, blocking links and the manual Blocked reason
+  are shared fields kept with the task's revision; tags are the server project's (create, rename, merge, delete by
+  members under ORC-39's rules) and the organization history is shared (server decisions 23–24, *Task organization*).
+  The shared list shows Priority and tag chips again (10.31, and the read-only lists 10.23, 10.42, 10.44), the task
+  pages show ORC-39's organization row (10.25, 10.33, 10.35; read-only in 10.24), and *Manage tags* is back on the
+  query line. ORC-39's own frames (section 02.3 `Yn5Wo`: pickers, Blocked fields, tag manager, history) apply
+  unchanged to a shared project; the history names the person who made each change. Offline and for a former member
+  these controls are unavailable like every other change.
+
+**Decisions the architecture does not settle — *proposed*, for the user** (8 and 12 were settled by the user above):
 
 1. *Settings* is a sidebar item in the application group (beside *All projects*), and the status bar's server item
    opens it too. The page keeps the project's sidebar; opened with no project (from All projects) it would use the
@@ -2224,16 +2248,14 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
 6. Admin rows offer Reset password and Disable/Enable; *Sign out everywhere* and changing a user's admin flag (both in
    the API) are not drawn.
 7. Sharing is a fourth Project settings tab; *Write orchester.toml* is a switch in the Share confirmation, on.
-8. **Members have no role change.** The API adds members with a role but cannot make an existing member an owner
-   (`409 already_member`), so an only owner can never leave. Needs a decision (e.g. `PATCH …/members/{user}`).
+8. ~~Member role change~~ — decided (user, 2026-10-03), see above.
 9. *Make local* keeps the membership (Join again later works); *Leave* on your own member row removes it.
 10. The join review is a page under Sharing, not a dialog; the similar-title hint names the server task, title and
     creator.
 11. *Not shared* is a toggle button on the task query's second line; while on, tab counts follow it.
-12. **Priority and tags in shared projects.** The server document says the domain has neither, but ORC-39 added both;
-    they are not shared, so the shared list hides the Priority column and tag chips in v1 instead of showing values
-    that differ per computer. Needs a decision (share them, or keep them local and say so).
-13. The shared list adds HOLDER (172) and narrows PIPELINE to 120; at 960 Readiness drops too.
+12. ~~Priority and tags in shared projects~~ — decided (user, 2026-10-03): shared, see above.
+13. The shared list adds HOLDER (172) in place of PIPELINE at 1440 (Pipeline returns from a 1536 window); at 960 Readiness
+    drops too, after Priority and tag chips as in 02.03E.
 14. Rows keep no menu (ORC-16): a free row shows a quiet *Take* in its Holder cell on hover or focus; Release and Take
     over are on the task page only (S2d's box says "on the task row and page").
 15. A takeover gives a manual claim; the lost-claim notice stays until dismissed, on the list and on the task page.
@@ -2241,6 +2263,8 @@ A fourth Project settings tab, *Sharing*, in the setting-row layout of General (
     the worst state when several servers are in use.
 17. The conflict compares only fields both people changed, one choice per field; the other person's other changes are
     kept; saving sends yours on top of the new revision.
+18. Organization fields are merged on a conflict without asking (core's `TaskOrganization::rebase`, server decision 26);
+    only content fields reach the conflict view.
 
 **Not drawn, or not expressible as a frame:** heartbeats and SSE themselves (no visible state; `reset` reloads the
 list silently), two desktops seeing changes within a second, a heartbeat from a second computer keeping claims fresh,
