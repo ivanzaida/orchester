@@ -381,8 +381,7 @@ Rules for both phases, on top of `AGENTS.md`:
   settable `Clock`, and carry name filters (`cargo test -p orchester-server --test <binary> <filter>`).
 - Tokens and passwords never reach logs, errors, `Debug` output or test snapshots (rule 11); a test captures the log
   of a sign-in and work session and asserts neither appears.
-- Token idle expiry is 30 days, as *proposed* in the document; it is a constant, not a setting. If the user changes
-  it, only that constant changes.
+- Token idle expiry is 30 days (user, 2026-10-03); it is a constant, not a setting.
 - When a phase is done: `powershell -File tools/check.ps1`, the server tests, the macOS check; then move the phase to
   *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
   independent review by another agent comes first.

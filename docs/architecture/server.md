@@ -39,8 +39,8 @@ settle rows 5, 6, 10 and 12. The other rows are the architect's recommendations,
 | 17 | Visibility | Explicit membership per project. Owners and admins add members by username | user |
 | 18 | Editing a claimed task | Any member may edit any task; revisions prevent overwriting | user |
 | 19 | Removing a server project | Not in v1 | user |
-| 20 | Joining with local tasks | A review list of the joiner's local tasks, all ticked; ticked ones are uploaded with new numbers and keep their id and former key; unticked ones are archived as *Not shared* ([Two people share one repository](#two-people-share-one-repository)) | user (flow); archive: architect's choice |
-| 21 | Token | The server generates it at sign-in; nobody is shown it; the desktop keeps it in the keychain; when it expires, the person signs in again with their password. Expiry after 30 days without use | user; expiry *proposed* |
+| 20 | Joining with local tasks | A review list of the joiner's local tasks, all ticked; ticked ones are uploaded with new numbers and keep their id and former key; unticked ones are archived as *Not shared* ([Two people share one repository](#two-people-share-one-repository)) | user (flow 2026-10-02, archive confirmed 2026-10-03) |
+| 21 | Token | The server generates it at sign-in; nobody is shown it; the desktop keeps it in the keychain; when it expires, the person signs in again with their password. Expiry after 30 days without use | user (expiry confirmed 2026-10-03) |
 | 22 | Two computers, retention | A heartbeat from any of a person's computers keeps their claims fresh. Events are kept 30 days; an older cursor makes the desktop reload the full list | user |
 
 ## Processes and crates
@@ -326,7 +326,7 @@ with their password, which issues a new token. There is nothing to copy, paste o
   (`password_change_required`).
 - **Tokens.** 32 random bytes, sent as `orc_` + 64 hex characters (the prefix lets secret scanners find leaked
   tokens). The server stores only their SHA-256, which is enough for a random 256-bit value; argon2 is for passwords.
-  A token expires after 30 days without use (*proposed*). It is revoked by signing out, by the session list, by a
+  A token expires after 30 days without use (user, 2026-10-03). It is revoked by signing out, by the session list, by a
   password change (all other sessions), by an admin, or by disabling the user. Open event streams check their session
   at every wake-up and keep-alive and close when it ends.
 - **On the desktop.** The token is kept in the OS keychain under service `orchester-server:<server id>`, account
@@ -596,10 +596,5 @@ tasks; notifications; Postgres for several server instances; single sign-on, if 
 
 ## Open questions
 
-1. **Token expiry.** Proposed: a token expires after 30 days without use, and the person signs in again
-   (decision 21). Confirm, or choose no expiry.
-2. **Unticked tasks.** Archived as *Not shared* is the architect's choice
-   ([Two people share one repository](#two-people-share-one-repository)); the user asked for one to be picked, not
-   yet confirmed it.
-3. **Rows marked *proposed*** in [Decisions](#decisions-2026-10-02) (scope, SSE, offline, configuration, discovery,
+1. **Rows marked *proposed*** in [Decisions](#decisions-2026-10-02) (scope, SSE, offline, configuration, discovery,
    framework and storage, trait boundary): the user has not objected; a confirmation settles them.
