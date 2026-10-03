@@ -306,3 +306,35 @@ fn command_categories_reason_names_an_install_source() {
     assert_eq!(folders.classify(&line).reason(), Some(reason), "{line}");
   }
 }
+
+/// A registry an option names shows only its host; with no host, the manager's own.
+#[test]
+fn command_categories_registry_shows_only_its_host() {
+  let folders = Folders::new();
+  let installs = |registry: &str, package: &str| CommandReason::Installs {
+    registry: registry.to_owned(),
+    package: Some(package.to_owned()),
+    listed_in: None,
+  };
+  for (line, reason) in [
+    (
+      "pip install --index-url https://user:tok@pypi.example/simple requests",
+      installs("pypi.example", "requests"),
+    ),
+    (
+      "pip install --index-url https://pypi.example?token=x requests",
+      installs("pypi.example", "requests"),
+    ),
+    (
+      "pip install --index-url https://pypi.example#token requests",
+      installs("pypi.example", "requests"),
+    ),
+    (
+      "pip install --index-url file:///srv/wheels requests",
+      installs("PyPI", "requests"),
+    ),
+    ("npm install --registry @ left-pad", installs("npm", "left-pad")),
+  ] {
+    assert_eq!(folders.classify(line).reason(), Some(reason), "{line}");
+  }
+}

@@ -44,15 +44,14 @@ const REGISTRY: [&str; 4] = ["--registry", "--index", "--index-url", "-i"];
 /// Options that name a file listing the packages.
 const LISTED: [&str; 3] = ["-r", "--requirement", "--requirements"];
 
-/// The host of a registry an option names (`https://user:token@pypi.example/simple` is `pypi.example`): a
-/// person sees where packages come from, never a user name or token written in it.
-fn host_of(registry: &str) -> String {
+/// The host of a registry an option names (`https://user:token@pypi.example/simple?token=x` is
+/// `pypi.example`): a person sees where packages come from, never a user name or token written in it.
+/// `None` when it names no host (`file:///…`, `@`), which leaves the manager's own registry.
+fn host_of(registry: &str) -> Option<String> {
   let rest = registry.split_once("://").map_or(registry, |(_, rest)| rest);
-  let authority = rest.split('/').next().unwrap_or(rest);
-  authority
-    .rsplit_once('@')
-    .map_or(authority, |(_, host)| host)
-    .to_owned()
+  let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+  let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+  (!host.is_empty()).then(|| host.to_owned())
 }
 
 /// Where an install comes from.
@@ -82,7 +81,11 @@ impl InstallSource {
       if takes(&REGISTRY) || takes(&LISTED) || takes(&VALUED) {
         let value = attached.or_else(|| args.next().cloned());
         match value {
-          Some(value) if takes(&REGISTRY) => source.registry = host_of(&value),
+          Some(value) if takes(&REGISTRY) => {
+            if let Some(host) = host_of(&value) {
+              source.registry = host;
+            }
+          }
           Some(value) if takes(&LISTED) && source.listed_in.is_none() => source.listed_in = Some(value),
           _ => {}
         }
