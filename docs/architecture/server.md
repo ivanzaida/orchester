@@ -364,8 +364,10 @@ with their password, which issues a new token. There is nothing to copy, paste o
   every stored value unchanged create no audit event.
 - **HTTP deadlines.** Request headers and keep-alive idle connections have a 10-second deadline, as do body reads.
   Connections must send their first byte within 2 seconds (also the first HTTP byte after TLS). At most 256 HTTP
-  connections (64 per peer) and 64 concurrent direct-TLS handshakes (8 per peer) are served; excess connections close
-  immediately. Peer caps normalize mapped IPv4 and group IPv6 by /64. TLS handshakes expire at 10 seconds.
+  connections (64 per untrusted peer) and 64 concurrent direct-TLS handshakes (32 per untrusted peer) are served;
+  excess connections close immediately. Peers in `trusted_proxies` are exempt from per-peer caps, since a proxy
+  multiplexes clients, but still count toward the global caps. Trust is checked on the actual connection address
+  before /64 grouping. Peer caps normalize mapped IPv4 and group IPv6 by /64. TLS handshakes expire at 10 seconds.
 
 ## Security
 
