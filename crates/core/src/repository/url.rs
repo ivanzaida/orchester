@@ -104,7 +104,7 @@ impl fmt::Display for GitHubRepo {
 }
 
 /// `(authority, path)` of a network remote URL or an scp-like address.
-fn split_remote(url: &str) -> Option<(&str, &str)> {
+pub(super) fn split_remote(url: &str) -> Option<(&str, &str)> {
   if let Some((scheme, rest)) = url.split_once("://") {
     if !NETWORK_SCHEMES.contains(&scheme.to_ascii_lowercase().as_str()) {
       return None;
@@ -113,7 +113,12 @@ fn split_remote(url: &str) -> Option<(&str, &str)> {
   }
   // scp-like syntax: the part before the first colon is the host. As for git, a slash before
   // the colon (`./a:b`) or a single letter (`C:/repo`) means a local path.
-  let (authority, path) = url.split_once(':')?;
+  let (authority, path) = if let Some(end) = url.find("]:") {
+    let (authority, path) = url.split_at(end + 1);
+    (authority, path.strip_prefix(':')?)
+  } else {
+    url.split_once(':')?
+  };
   (authority.len() > 1 && !authority.contains(['/', '\\'])).then_some((authority, path))
 }
 

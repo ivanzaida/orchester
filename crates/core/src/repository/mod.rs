@@ -5,6 +5,7 @@
 //! `gh` happens to have active later.
 
 mod detect;
+mod identity;
 mod link;
 mod remote;
 mod url;
@@ -18,6 +19,7 @@ use thiserror::Error;
 pub(crate) use self::view::{classify_failure, unrecognized};
 pub use self::{
   detect::{DetectRequest, Detection, DetectionState, GhProgram, GitHubDetection, detect_repository},
+  identity::{RepositoryIdentity, RepositoryIdentityError},
   link::link_repository,
   remote::{Remote, git_remotes_command, parse_git_remotes, read_remotes},
   url::{GitHubRepo, RepoNameError, redact_userinfo, strip_userinfo},

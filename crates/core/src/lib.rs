@@ -26,6 +26,7 @@ pub mod resource;
 pub mod revision;
 pub mod run;
 pub mod secret;
+pub mod sharing;
 pub mod store;
 pub mod task;
 pub mod task_group;
