@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  net::SocketAddr,
+  net::{IpAddr, SocketAddr},
   sync::{
     Arc,
     atomic::{AtomicI64, Ordering},
@@ -15,7 +15,7 @@ use serde_json::json;
 use tempfile::TempDir;
 use tokio::{
   io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-  net::{TcpListener, TcpStream},
+  net::{TcpListener, TcpSocket, TcpStream},
   sync::oneshot,
   task::JoinHandle,
 };
@@ -118,11 +118,30 @@ impl TestServer {
     TcpStream::connect(self.address).await.expect("connect")
   }
 
+  pub async fn connect_from(&self, source: IpAddr) -> TcpStream {
+    let socket = TcpSocket::new_v4().expect("IPv4 test socket");
+    socket.bind(SocketAddr::new(source, 0)).expect("bind source address");
+    socket.connect(self.address).await.expect("connect from source")
+  }
+
+  pub async fn request_from(&self, source: IpAddr, tls: bool) -> Response {
+    let stream = self.connect_from(source).await;
+    if tls {
+      exchange(self.tls_on(stream).await, "GET", "/server", None, None, &[]).await
+    } else {
+      exchange(stream, "GET", "/server", None, None, &[]).await
+    }
+  }
+
   pub async fn tls_request(&self) -> Response {
     exchange(self.tls_connect().await, "GET", "/server", None, None, &[]).await
   }
 
   pub async fn tls_connect(&self) -> tokio_rustls::client::TlsStream<TcpStream> {
+    self.tls_on(self.connect().await).await
+  }
+
+  async fn tls_on(&self, tcp: TcpStream) -> tokio_rustls::client::TlsStream<TcpStream> {
     use tokio_rustls::rustls::{
       self,
       pki_types::{CertificateDer, ServerName, pem::PemObject},
@@ -137,7 +156,6 @@ impl TestServer {
       .with_root_certificates(roots)
       .with_no_client_auth();
     let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
-    let tcp = self.connect().await;
     connector
       .connect(ServerName::try_from("localhost").expect("name"), tcp)
       .await

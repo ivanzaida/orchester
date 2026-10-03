@@ -14,7 +14,9 @@ use tokio_rustls::{
   server::TlsStream,
 };
 
-use crate::{config::Config, error::ServerError};
+use crate::{config::Config, connection_limit::ConnectionLimit, error::ServerError, initial_read::InitialRead};
+
+type Stream = TlsStream<InitialRead<TcpStream>>;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PeerAddr(pub SocketAddr);
@@ -42,7 +44,8 @@ pub(crate) fn acceptor(config: &Config) -> Result<Option<TlsAcceptor>, ServerErr
 pub(crate) struct TlsListener {
   listener: TcpListener,
   acceptor: TlsAcceptor,
-  handshakes: JoinSet<Result<(TlsStream<TcpStream>, SocketAddr), ServerError>>,
+  handshakes: JoinSet<Result<(Stream, SocketAddr), ServerError>>,
+  limits: ConnectionLimit,
 }
 
 impl TlsListener {
@@ -51,23 +54,27 @@ impl TlsListener {
       listener,
       acceptor,
       handshakes: JoinSet::new(),
+      limits: ConnectionLimit::new(64, 8),
     }
   }
 }
 
 impl Listener for TlsListener {
-  type Io = TlsStream<TcpStream>;
+  type Io = Stream;
   type Addr = SocketAddr;
 
   async fn accept(&mut self) -> (Self::Io, Self::Addr) {
     loop {
       tokio::select! {
-        accepted = self.listener.accept(), if self.handshakes.len() < 64 => {
+        accepted = self.listener.accept() => {
           match accepted {
             Ok((stream, address)) => {
+              if self.handshakes.len() >= 64 { continue; }
+              let Some(lease) = self.limits.acquire(address.ip()) else { continue; };
               let acceptor = self.acceptor.clone();
               self.handshakes.spawn(async move {
-                let stream = tokio::time::timeout(Duration::from_secs(10), acceptor.accept(stream)).await
+                let _lease = lease;
+                let stream = tokio::time::timeout(Duration::from_secs(10), acceptor.accept(InitialRead::new(stream))).await
                   .map_err(|_| ServerError::Tls)?.map_err(|_| ServerError::Tls)?;
                 Ok((stream, address))
               });

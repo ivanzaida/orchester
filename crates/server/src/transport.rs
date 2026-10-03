@@ -10,7 +10,9 @@ use tokio::{net::TcpListener, sync::watch, task::JoinSet};
 
 use crate::{
   Server,
+  connection_limit::ConnectionLimit,
   error::ServerError,
+  initial_read::InitialRead,
   tls::{PeerAddr, TlsListener},
 };
 
@@ -35,19 +37,24 @@ async fn serve_listener<L: Listener<Addr = SocketAddr>>(
   shutdown: impl Future<Output = ()>,
 ) {
   let mut connections = JoinSet::new();
+  let limits = ConnectionLimit::new(256, 64);
   let (stop, stopped) = watch::channel(false);
   tokio::pin!(shutdown);
   loop {
     tokio::select! {
       _ = &mut shutdown => break,
-      (stream, address) = listener.accept(), if connections.len() < 256 => {
+      (stream, address) = listener.accept() => {
+        // Reject excess connections immediately instead of queuing a different peer behind idle sockets.
+        if connections.len() >= 256 { continue; }
+        let Some(lease) = limits.acquire(address.ip()) else { continue; };
         let service = TowerToHyperService::new(app.clone().layer(Extension(ConnectInfo(PeerAddr(address)))));
         let stopped = stopped.clone();
         connections.spawn(async move {
+          let _lease = lease;
           let mut builder = http1::Builder::new();
           // The header timer starts on accept and again after each response, bounding keep-alive idle time too.
           builder.timer(TokioTimer::new()).header_read_timeout(Duration::from_secs(10));
-          let connection = builder.serve_connection(TokioIo::new(stream), service);
+          let connection = builder.serve_connection(TokioIo::new(InitialRead::new(stream)), service);
           tokio::pin!(connection);
           let mut stopped = stopped;
           let result = tokio::select! {

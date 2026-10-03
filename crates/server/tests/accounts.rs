@@ -8,6 +8,8 @@ mod backup;
 mod concurrent_limits;
 #[path = "accounts/configuration.rs"]
 mod configuration;
+#[path = "accounts/connection_limits.rs"]
+mod connection_limits;
 #[path = "accounts/hosting.rs"]
 mod hosting;
 #[path = "accounts/lifecycle.rs"]
