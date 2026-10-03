@@ -159,75 +159,6 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
-### ORC-39 · Task statuses, priorities and tags — merged onto master, independent review and verification pending
-
-Branch `claude/orc39` (worktree `.tmp/worktrees/claude-orc39`): run #11's work merged with master twice, last at
-`51fc02f` (ORC-30, ORC-44, retry-feedback with protocol 11 and stuck runs, approval-long, lurq 0.33.1). The Review
-findings are fixed, each with a `form_keyboard` test in `organization_review.rs`: R1 a failed save no longer passes for
-the last success; R2 the header, tag manager, tag picker, bulk, Run and tag-mode observers are registered once; R3 the
-queued Retry form locks the organization fields; R4 an unavailable tag picker creates no tag. Design fixes from the
-earlier Verify are in (header pickers as buttons, bulk Add tag in place, blocked notice and readiness copy, `Ncjvt`).
-
-Integration with ORC-30 (decisions to draw in Pencil, not drawn yet):
-- **Tabs:** ORC-39's workflow tabs replace Drafts / Queue / Needs review; every tab shows its count.
-- **Query:** line 1 is ORC-30's search, pipeline filter and sort (Manual order, Newest first, Title, Status,
-  Priority); line 2 is Status, Priority, Tags and Clear filters, with Manage tags at the right.
-- **Selection bar** (`OjUxo` + `EpDpS`), 12 horizontal padding, raised fill: from 1348 wide, line 1 (44 high) is
-  select-all, "N selected", the readiness (ellipsis), then Run selected, Set pipeline and, for held tasks, Return to
-  drafts at the right; line 2 is Set status, Set priority, Add tag, Remove tag at the left, then each task's outcome.
-  Narrower, line 1 is the summary, line 2 the run actions right-aligned, line 3 the organization group. ORC-30's
-  problem lines stay under the bar.
-- **Table:** checkbox, ID, Task / tags, Pipeline, Priority, Workflow / run, Dependency / readiness. The title keeps
-  120. Pipeline goes below a 1348 window, the tag chips below 1196, Priority below 1116, where Workflow / run narrows
-  from 212 to 164; the title still has 124 at 960.
-- **Overview:** the run tabs stay behind Insights; the Needs you panel shows without Insights while anything needs you.
-
-Review follow-ups (review of `7ddd610`): a draft whose blocking task has not finished is a Run selected problem
-("KON-3 is blocked by KON-1") and the store refuses to queue it; a group member blocked after queueing is passed over
-(the members after it start), the group holds `GroupHold::Blocked { by }`, which ends on its own and keeps the runner
-busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 13 for
-`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (12 went to the approval choices, merged first); the
-organization migration is 39, after steering (37) and approval choices (38). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
-another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
-
-The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ETG` and F `lRbit`: the selection bar
-is hidden without a selection, padded 12 with 32-high lines 8 apart, Return to drafts, Set pipeline and Run selected
-last; select-all shows square-minus for a partial selection; a bulk change reads as one summary line with a line per
-failed task; held tasks read "2 tasks held after a task failed · Return to drafts"; rows are 60 high once the tag
-chips are dropped. Re-review follow-ups: a run waiting for a decision on a
-blocked task shows the Blocked notice naming the blocking tasks, and the header says Blocked for link-only blocking;
-an answer or follow-up to a blocked run is kept ("Your message is kept…") and the scheduler's pass delivers it once
-the blocking tasks finish; a blocked Pending first run holds no group slot; a group held as Blocked can be returned
-to drafts.
-
-Design verification of `329ea66` (`.tmp/verify-orc39/REPORT.md`) failed; its majors are fixed: the Canceled
-confirmations follow `N1vwaM` and `hFH4D` (one shared panel: the Work is kept or Active run notice, Keep and Stop at
-the right with icons, bulk plurals, the Set status menu closes); held group members read Queued; the footer counts
-the tab's rows, or "N tasks match" while filtered; renaming a project tag onto an existing name offers Merge into
-it; the Blocked flag sits beside the run label in 60-high rows; the blocking-task search lists results with a check,
-Add selected task and the current task apart (`tUwII`); an empty filtered list is the `rVJoA` notice with Clear
-filters.
-Re-verification follow-ups: bulk Remove tag counts the tasks that had the tag and names the others ("2 selected
-tasks did not have Desktop."), with the panel hint; asking to confirm Canceled in Edit task is no failed save (no
-status-bar failure, no inline error); the task form shows "Run unavailable" with the unfinished blocking tasks above
-its run action (`ZLhiM`); "Canceled" is the one spelling in the app's text; the bulk Add tag picker has one frame;
-the blocking search offers no linked task and adds only a task it shows.
-Merged with master `0678ce0d` (ORC-61, approval choices): the task organization history moved from the removed
-Activity tab to the end of the Summary; the header's Canceled asks the store whether a run must stop, so a task page
-that has not read the run's end yet neither asks nor skips the confirmation.
-Code review follow-ups (2026-10-03, after `ee7bab6c`; master `fee1ff89` merged): Edit task saves only the
-organization fields the person changed (`TaskOrganization::rebase`), so a status set meanwhile is kept; a confirmed
-Canceled stops only the named run (`tasks::cancel_run`), in the header, Edit task and bulk; a Canceled task's other
-fields stay editable; bulk outcomes count real changes and name failed tasks; the store's per-task
-`update_task_organization` replaces the batch shape; history icons follow the change kind; `TaskSort::Updated` is gone.
-`DependencyGate::Review` stays: the scheduler tests exercise it as a rule, though the app only creates Merge links.
-User decisions (2026-10-03, recorded in the design doc): history stays at the end of Summary; a Canceled task is
-skipped by its group (`TaskGroup::skipping`, `GroupHold::Canceled`); migration 39 backfills statuses from runs.
-
-**Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
-narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,
-Tasks) and of J9467 at 1440 and 960. Move this entry to Done after they pass.
-
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -518,6 +449,79 @@ conflict state and the offline notice are not drawn yet. Do not start these phas
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-39 · Task statuses, priorities and tags · branch `claude/orc39` (done 2026-10-03)
+
+Branch `claude/orc39` (worktree `.tmp/worktrees/claude-orc39`): run #11's work merged with master twice, last at
+`51fc02f` (ORC-30, ORC-44, retry-feedback with protocol 11 and stuck runs, approval-long, lurq 0.33.1). The Review
+findings are fixed, each with a `form_keyboard` test in `organization_review.rs`: R1 a failed save no longer passes for
+the last success; R2 the header, tag manager, tag picker, bulk, Run and tag-mode observers are registered once; R3 the
+queued Retry form locks the organization fields; R4 an unavailable tag picker creates no tag. Design fixes from the
+earlier Verify are in (header pickers as buttons, bulk Add tag in place, blocked notice and readiness copy, `Ncjvt`).
+
+Integration with ORC-30 (decisions to draw in Pencil, not drawn yet):
+- **Tabs:** ORC-39's workflow tabs replace Drafts / Queue / Needs review; every tab shows its count.
+- **Query:** line 1 is ORC-30's search, pipeline filter and sort (Manual order, Newest first, Title, Status,
+  Priority); line 2 is Status, Priority, Tags and Clear filters, with Manage tags at the right.
+- **Selection bar** (`OjUxo` + `EpDpS`), 12 horizontal padding, raised fill: from 1348 wide, line 1 (44 high) is
+  select-all, "N selected", the readiness (ellipsis), then Run selected, Set pipeline and, for held tasks, Return to
+  drafts at the right; line 2 is Set status, Set priority, Add tag, Remove tag at the left, then each task's outcome.
+  Narrower, line 1 is the summary, line 2 the run actions right-aligned, line 3 the organization group. ORC-30's
+  problem lines stay under the bar.
+- **Table:** checkbox, ID, Task / tags, Pipeline, Priority, Workflow / run, Dependency / readiness. The title keeps
+  120. Pipeline goes below a 1348 window, the tag chips below 1196, Priority below 1116, where Workflow / run narrows
+  from 212 to 164; the title still has 124 at 960.
+- **Overview:** the run tabs stay behind Insights; the Needs you panel shows without Insights while anything needs you.
+
+Review follow-ups (review of `7ddd610`): a draft whose blocking task has not finished is a Run selected problem
+("KON-3 is blocked by KON-1") and the store refuses to queue it; a group member blocked after queueing is passed over
+(the members after it start), the group holds `GroupHold::Blocked { by }`, which ends on its own and keeps the runner
+busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 13 for
+`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (12 went to the approval choices, merged first); the
+organization migration is 39, after steering (37) and approval choices (38). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
+another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
+
+The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ETG` and F `lRbit`: the selection bar
+is hidden without a selection, padded 12 with 32-high lines 8 apart, Return to drafts, Set pipeline and Run selected
+last; select-all shows square-minus for a partial selection; a bulk change reads as one summary line with a line per
+failed task; held tasks read "2 tasks held after a task failed · Return to drafts"; rows are 60 high once the tag
+chips are dropped. Re-review follow-ups: a run waiting for a decision on a
+blocked task shows the Blocked notice naming the blocking tasks, and the header says Blocked for link-only blocking;
+an answer or follow-up to a blocked run is kept ("Your message is kept…") and the scheduler's pass delivers it once
+the blocking tasks finish; a blocked Pending first run holds no group slot; a group held as Blocked can be returned
+to drafts.
+
+Design verification of `329ea66` (`.tmp/verify-orc39/REPORT.md`) failed; its majors are fixed: the Canceled
+confirmations follow `N1vwaM` and `hFH4D` (one shared panel: the Work is kept or Active run notice, Keep and Stop at
+the right with icons, bulk plurals, the Set status menu closes); held group members read Queued; the footer counts
+the tab's rows, or "N tasks match" while filtered; renaming a project tag onto an existing name offers Merge into
+it; the Blocked flag sits beside the run label in 60-high rows; the blocking-task search lists results with a check,
+Add selected task and the current task apart (`tUwII`); an empty filtered list is the `rVJoA` notice with Clear
+filters.
+Re-verification follow-ups: bulk Remove tag counts the tasks that had the tag and names the others ("2 selected
+tasks did not have Desktop."), with the panel hint; asking to confirm Canceled in Edit task is no failed save (no
+status-bar failure, no inline error); the task form shows "Run unavailable" with the unfinished blocking tasks above
+its run action (`ZLhiM`); "Canceled" is the one spelling in the app's text; the bulk Add tag picker has one frame;
+the blocking search offers no linked task and adds only a task it shows.
+Merged with master `0678ce0d` (ORC-61, approval choices): the task organization history moved from the removed
+Activity tab to the end of the Summary; the header's Canceled asks the store whether a run must stop, so a task page
+that has not read the run's end yet neither asks nor skips the confirmation.
+Code review follow-ups (2026-10-03, after `ee7bab6c`; master `fee1ff89` merged): Edit task saves only the
+organization fields the person changed (`TaskOrganization::rebase`), so a status set meanwhile is kept; a confirmed
+Canceled stops only the named run (`tasks::cancel_run`), in the header, Edit task and bulk; a Canceled task's other
+fields stay editable; bulk outcomes count real changes and name failed tasks; the store's per-task
+`update_task_organization` replaces the batch shape; history icons follow the change kind; `TaskSort::Updated` is gone.
+`DependencyGate::Review` stays: the scheduler tests exercise it as a rule, though the app only creates Merge links.
+User decisions (2026-10-03, recorded in the design doc): history stays at the end of Summary; a Canceled task is
+skipped by its group (`TaskGroup::skipping`, `GroupHold::Canceled`); migration 39 backfills statuses from runs.
+
+**Done 2026-10-03:** merged into master after three independent code reviews (PASS) and app/Pencil design
+verification of the ORC-39 states, the combined list at 1440 and 960, the Overview (attention column beside the list
+from 1340, under it below) and the Summary history, with no blocking or major mismatches left. Protocol 13, migration 39.
+Open minors (follow-ups): D1DC6T icon tiles and meta context; the Overview attention column comes after the list below
+1340; the header confirmation can open before the page read the run (no run number shown); app tests for the header/Edit
+"started since" paths.
+
 
 Approval choices, waiting requests and auto-approval · branch `claude/approval-choices` (done 2026-10-03)
 
