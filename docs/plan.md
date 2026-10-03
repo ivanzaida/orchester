@@ -357,6 +357,79 @@ scaled displays in 0.30.4. This workspace uses 0.34.2: its layout cache restores
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
 
+## S · Shared server (self-hosted)
+
+The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
+people share a project's task list on a server their team runs, and see who took a task into work. Runs, worktrees,
+transcripts and secrets stay on each person's computer. Phases S1a and S1b are server-only (no desktop UI) and are
+handed to Codex; S2a–S3 need screens that are not drawn yet and wait for the designer.
+
+Rules for both phases, on top of `AGENTS.md`:
+
+- Work in `.tmp/worktrees/codex-server-<phase>` on a branch `codex/server-<phase>`; S1b starts from S1a's branch
+  once S1a is merged, never in parallel with it.
+- New crates exactly as the document's *Processes and crates* says: `crates/api` (`orchester-api`, types only in S1a
+  and S1b; the `client` feature with reqwest comes with S2a) and `crates/server` (`orchester-server`, binary
+  `orchester-server`). New dependencies only those in its *Dependencies* table, each in `[workspace.dependencies]`
+  with the reason in the commit message.
+- Core gains only types and pure functions (`sharing`, `TaskRevision`, `RepositoryIdentity`); no HTTP, no database.
+  The server calls core's rules; it does not re-implement them.
+- The server must build and its tests pass on Windows (this host), and `cargo check -p orchester-server
+  --target aarch64-apple-darwin` must pass. Linux and Docker are the supported hosts: ship the Dockerfile and the
+  compose example with Caddy; if Docker is not available on this host, say that the image was not built.
+- Server tests live in `crates/server/tests/`, start a real server on loopback with a temporary data directory and a
+  settable `Clock`, and carry name filters (`cargo test -p orchester-server --test <binary> <filter>`).
+- Tokens and passwords never reach logs, errors, `Debug` output or test snapshots (rule 11); a test captures the log
+  of a sign-in and work session and asserts neither appears.
+- Token idle expiry is 30 days, as *proposed* in the document; it is a constant, not a setting. If the user changes
+  it, only that constant changes.
+- When a phase is done: `powershell -File tools/check.ps1`, the server tests, the macOS check; then move the phase to
+  *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
+  independent review by another agent comes first.
+
+### S1a · Server and accounts (non-UI)
+
+Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
+
+- `orchester-api` (types only) and `orchester-server` build on Windows, macOS (check) and Linux; the Docker image and
+  compose example build and start on Linux.
+- Empty data directory: `GET /api/v1/server` reports `needs_bootstrap`; `orchester-server user create --admin <name>`
+  creates the first admin and prints the initial password only to its own output; `user reset-password` works.
+- Sign-in, `password_change_required`, password change (other sessions revoked), session list and revoke, sign-out,
+  the 30-day idle expiry with the test clock; argon2id with the document's parameters; tokens `orc_` + 64 hex, stored
+  as SHA-256 only.
+- Admin user endpoints; `403` for non-admins; the last admin cannot be removed or disabled.
+- Rate limits answer `429` with `Retry-After`; an unknown username answers like a wrong password, in about the same
+  time; `X-Forwarded-For` counts only from a `trusted_proxies` hop.
+- With a PEM certificate configured the server speaks TLS (tested with a test certificate); the log test finds neither
+  token nor password; the `audit_events` table records the events the document lists.
+
+### S1b · Projects, tasks, claims and events on the server (non-UI)
+
+Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
+
+- Core: `sharing` (claim take, release, take-over, heartbeat, staleness at 15 minutes, the run phases that end a
+  claim; tests over explicit times) and `RepositoryIdentity::from_remote_url` (HTTPS, SSH and scp-like forms of one
+  repository match; local paths and no `origin` refused).
+- Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`403 not_member` with the
+  owners), members added and removed by owners and admins only, `404` for non-members; of two simultaneous creates for
+  one repository exactly one succeeds and the other gets `409 remote_taken` and changes nothing.
+- Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate; a repeated idempotency key
+  returns the first result; a stale revision gets `409 revision_conflict` with the current task; the edit lock and
+  queueing follow core's rules; import gives new numbers and keeps ids and former keys.
+- Claims: of two simultaneous claims exactly one wins; a heartbeat refreshes and reports lost claims; stale after 15
+  minutes of test clock; take-over refused while fresh or changed and recorded when done; removing a member or
+  disabling a user releases their claims.
+- Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
+  30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
+- `PUT …/run` (live run status, S3's server half) is not part of S1b.
+
+### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design)
+
+Settings › Servers, Project settings › Sharing, the join review list, claims on task rows and the task page, the
+conflict state and the offline notice are not drawn yet. Do not start these phases; the designer draws them first
+(`docs/architecture/server.md` § *Desktop data*, "Where it is configured").
+
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.

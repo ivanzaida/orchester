@@ -1,6 +1,6 @@
 # Orchester — shared server
 
-Date: 2026-10-02. Status: **agreed direction, not started**. The user's decisions, including the answers to the
+Date: 2026-10-02. Status: **agreed direction**; S1a and S1b (server only) handed to Codex on 2026-10-03 (`docs/plan.md`, *S · Shared server*). The user's decisions, including the answers to the
 first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Rows marked *proposed*
 are the architect's recommendations: the user has not objected to them, but has not confirmed them one by one either.
 [Open questions](#open-questions) lists what still needs the user. Nothing here changes the local (single-user)
