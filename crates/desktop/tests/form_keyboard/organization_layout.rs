@@ -135,6 +135,12 @@ fn organization_overview_rows_span_the_page_and_keep_run_tabs_reachable() {
   desktop.wait_for("task-row-KON-1");
   assert!(desktop.tree.get_element_by_id("overview-attention").is_some());
   assert!(desktop.tree.get_element_by_id("overview-tokens").is_some());
+  // At 1440 the attention column sits beside the task list, as on master (`NM5My`).
+  let (list, attention) = (desktop.bounds("overview-tasks"), desktop.bounds("overview-attention"));
+  assert!(
+    attention.x >= list.x + list.width && attention.y < list.y + list.height,
+    "the attention column is to the right of the list: {list:?} {attention:?}"
+  );
 }
 
 #[test]

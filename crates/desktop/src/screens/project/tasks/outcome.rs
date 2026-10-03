@@ -9,7 +9,7 @@ use lurq::{
   },
   components::{Column, Row, Text},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 
 use super::bulk::{Mutation, Outcomes};
@@ -19,7 +19,7 @@ use crate::{
     organization::{priority_copy, workflow_copy},
   },
   ui::{
-    field::field_error,
+    field::wrapping_field_error,
     icon::{Icon, IconSize, icon},
     message_text,
   },
@@ -27,7 +27,8 @@ use crate::{
 
 /// The outcome of the latest bulk change under the organization group, or that one is under way.
 pub(super) fn outcome(ctx: &Ctx, tasks: &ProjectTasks, outcomes: Option<&Outcomes>, pending: bool) -> Element {
-  let mut column = Column::new().spacing(SpacingSize::Sm);
+  // Full width, each line wrapping: a task's reason is read whole, not cut (`HI91q`).
+  let mut column = Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
   if pending {
     return column
       .child(Text::new(&ctx.t("tasks.workflow.saving")).variant(TypographyStyle::Caption))
@@ -56,7 +57,7 @@ pub(super) fn outcome(ctx: &Ctx, tasks: &ProjectTasks, outcomes: Option<&Outcome
     let Err(error) = result else {
       continue;
     };
-    let line = field_error(&failure(ctx, tasks, *id, error));
+    let line = wrapping_field_error(&failure(ctx, tasks, *id, error));
     column = column.child(line.id(format!("bulk-outcome-{id}")));
   }
   column.into()
@@ -117,6 +118,7 @@ fn unchanged_line(ctx: &Ctx, tasks: &ProjectTasks, mutation: &Mutation, count: u
   };
   Text::new(&ctx.t_args(plural(one, keys.0, keys.1), [("value", value.as_str()), count]))
     .variant(TypographyStyle::Caption)
+    .width(Dimension::Pct(100.0))
     .id("bulk-outcome-unchanged")
     .into()
 }
@@ -154,10 +156,11 @@ fn summary(ctx: &Ctx, tasks: &ProjectTasks, mutation: &Mutation, count: usize) -
   };
   Row::new()
     .id("bulk-outcome")
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(Icon::Check, IconSize::Small, PaletteColor::TextSecondary))
-    .child(Text::new(&text).variant(TypographyStyle::Caption))
+    .child(Text::new(&text).variant(TypographyStyle::Caption).flex(1.0))
     .into()
 }
 

@@ -96,7 +96,6 @@ impl Component for OverviewScreen {
     } else {
       ExtraSpacing::Rail.role()
     };
-    let queue = ctx.use_context::<ApprovalQueue>();
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -104,18 +103,19 @@ impl Component for OverviewScreen {
       .spacing(spacing)
       .with_children(notice)
       .child(heading(ctx, &props.open, &self.nav));
-    body = match &props.tasks {
-      TasksState::Loading => body,
-      TasksState::Failed(error) => body.child(RecoveryPanel::new(
-        Icon::AlertCircle,
-        &ctx.t("tasks.loadFailed"),
-        &message_text(ctx, error),
-      )),
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
-      TasksState::Ready(tasks) => {
-        let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
-        let online = props.runner == RunnerState::Online;
-        body
+    body =
+      match &props.tasks {
+        TasksState::Loading => body,
+        TasksState::Failed(error) => body.child(RecoveryPanel::new(
+          Icon::AlertCircle,
+          &ctx.t("tasks.loadFailed"),
+          &message_text(ctx, error),
+        )),
+        TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
+        TasksState::Ready(tasks) => {
+          let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
+          let online = props.runner == RunnerState::Online;
+          body
             .child(pulse::pulse(
               ctx,
               &figures,
@@ -127,20 +127,7 @@ impl Component for OverviewScreen {
                 })
                 .count(),
             ))
-            .child(task_list::task_list(
-              ctx,
-              tasks,
-              props.tab,
-              &self.nav,
-              self.insights.get() || props.tab != OverviewTab::All,
-            ))
-            .with_children(blocked_notices(ctx, tasks))
-            // What needs you, including a run that waits for a decision after its retries, shows
-            // without Insights; the rest of the attention panel comes with them.
-            .with_children(
-              (self.insights.get() || tasks.needs_you() > 0)
-                .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()))),
-            )
+            .child(self.tasks_and_attention(ctx, &props, tasks, spacing))
             .child(
               ActionButton::new(ctx.t("overview.insights"))
                 .id("overview-insights")
@@ -154,8 +141,8 @@ impl Component for OverviewScreen {
             .with_children(self.insights.get().then(|| {
               pulse::execution_context(ctx, (online, props.agents_working, tasks.lost_to_runner), props.usage)
             }))
-      }
-    };
+        }
+      };
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -240,6 +227,45 @@ fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &display::shorten_path(&open.repo_root, PATH_CHARS),
   ))
   .into()
+}
+
+impl OverviewScreen {
+  /// The task list, with the attention column beside it as on master (`NM5My`): what needs you,
+  /// including a run that waits for a decision after its retries, shows without Insights; the
+  /// rest of the attention panel comes with them. Without it the list takes the whole width
+  /// (`DtpHJ`).
+  fn tasks_and_attention(
+    &self,
+    ctx: &mut Ctx,
+    props: &OverviewProps,
+    tasks: &crate::tasks::data::ProjectTasks,
+    spacing: SpacingSize,
+  ) -> Element {
+    let queue = ctx.use_context::<ApprovalQueue>();
+    Row::new()
+      .id("overview-tasks-and-attention")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Section)
+      .align_items(Alignment::Start)
+      .child(
+        Column::new()
+          .flex(1.0)
+          .spacing(spacing)
+          .child(task_list::task_list(
+            ctx,
+            tasks,
+            props.tab,
+            &self.nav,
+            self.insights.get() || props.tab != OverviewTab::All,
+          ))
+          .with_children(blocked_notices(ctx, tasks)),
+      )
+      .with_children(
+        (self.insights.get() || tasks.needs_you() > 0)
+          .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()))),
+      )
+      .into()
+  }
 }
 
 fn blocked_notices(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks) -> Vec<Element> {

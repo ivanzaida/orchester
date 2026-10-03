@@ -40,7 +40,7 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
     .use_context::<crate::runner::Runners>()
     .expect("root provides runners");
   ctx.future_action(
-    move |(repo_root, target, details, (base, organization), named): SaveArgs| {
+    move |(repo_root, target, details, (base, organization), stop): SaveArgs| {
       let runners = runners.clone();
       let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
       async move {
@@ -56,14 +56,14 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
         };
         // Asking to confirm is not a failed save: it is not reported as one (`N1vwaM`).
         if let Some(task) = canceling
-          && named.is_none()
+          && stop == crate::tasks::cancel_run::Stop::Unconfirmed
           && active_run(&repo_root, task).await?.is_some()
         {
           return Err(Message::new(messages::CANCEL_CONFIRM_REQUIRED));
         }
         let save = async move {
           if let Some(task) = canceling {
-            crate::tasks::cancel_run::stop_named_run(&repo_root, task, named, &runners)
+            crate::tasks::cancel_run::stop_named_run(&repo_root, task, stop, &runners)
               .await
               .map_err(|refused| refused.message())?;
           }

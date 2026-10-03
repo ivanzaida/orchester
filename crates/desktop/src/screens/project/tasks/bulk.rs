@@ -30,7 +30,7 @@ use crate::{
   runner::Runners,
   tasks::{
     browse::Selection,
-    cancel_run::stop_named_run,
+    cancel_run::{Stop, stop_named_run},
     data::ProjectTasks,
     organization::{OrganizationValue, priority_copy, workflow_copy},
   },
@@ -79,8 +79,9 @@ pub(super) struct Outcomes {
   pub results: Vec<(TaskId, Result<bool, Message>)>,
 }
 impl lurq::app::component::DevtoolsInspectable for Outcomes {}
-/// The run the Canceled confirmation showed for each task, which only it stops.
-type Named = Vec<(TaskId, RunId)>;
+/// The runs the Canceled confirmation showed, by task, which only it stops; `None` without a
+/// confirmation.
+type Named = Option<Vec<(TaskId, RunId)>>;
 type Action = FutureAction<(Vec<TaskId>, Mutation, Named), Outcomes, Message>;
 
 /// The selection bar's organization group (`EpDpS` in `HI91q`): Set status, Set priority, Add tag
@@ -238,13 +239,7 @@ impl BulkOrganization {
           ))
           .icon(crate::ui::icon::Icon::Plus)
           .id("bulk-tags-apply")
-          .on_click(move || {
-            action.run((
-              selected.clone(),
-              Mutation::AddTags(tags.get().0.tags().to_vec()),
-              Vec::new(),
-            ))
-          })
+          .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), None)))
           .enabled(!pending && !self.tags.get().0.tags().is_empty())
           .render(ctx),
         );
@@ -278,7 +273,7 @@ impl BulkOrganization {
             menu.set(false);
             confirm.set(true);
           } else {
-            apply.run((ids.clone(), Mutation::Status(status), Vec::new()));
+            apply.run((ids.clone(), Mutation::Status(status), None));
           }
         })
         .id(format!("bulk-status-{status:?}")),
@@ -301,7 +296,7 @@ impl BulkOrganization {
           &ctx.t(priority_copy(priority).1),
           checked,
           !action.state().get().is_pending(),
-          move || apply.run((ids.clone(), Mutation::Priority(priority), Vec::new())),
+          move || apply.run((ids.clone(), Mutation::Priority(priority), None)),
         )
         .id(format!("bulk-priority-{priority:?}")),
       );
@@ -381,7 +376,7 @@ impl BulkOrganization {
         apply.run((
           selected.clone(),
           Mutation::RemoveTags(tags.get().0.tags().to_vec()),
-          Vec::new(),
+          None,
         ))
       })
       .enabled(!pending && !self.tags.get().0.tags().is_empty())
@@ -427,7 +422,7 @@ impl BulkOrganization {
         apply.run((
           selected.clone(),
           Mutation::Status(WorkflowStatus::Canceled),
-          named.clone(),
+          Some(named.clone()),
         ))
       },
     );
@@ -444,17 +439,17 @@ fn active_count(props: &BulkProps) -> usize {
   props.tasks.runs_not_ended(&props.selected.get().0)
 }
 
-/// Applies `mutation` to `task`: whether it changed it, or why not. Canceled stops only `named`,
+/// Applies `mutation` to `task`: whether it changed it, or why not. Canceled stops only
 /// the run the confirmation showed for the task.
 async fn apply(
   root: &std::path::Path,
   task: TaskId,
   mutation: Mutation,
-  named: Option<RunId>,
+  stop: Stop,
   runners: &Runners,
 ) -> Result<bool, Message> {
   if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled)) {
-    stop_named_run(root, task, named, runners)
+    stop_named_run(root, task, stop, runners)
       .await
       .map_err(|refused| refused.message())?;
   }
@@ -486,8 +481,11 @@ fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
     async move {
       let mut results = Vec::new();
       for task in tasks {
-        let run = named.iter().find(|(shown, _)| *shown == task).map(|(_, run)| *run);
-        let result = apply(&root, task, mutation.clone(), run, &runners).await;
+        // A task the confirmation showed no run for has none to stop: a run of it now started since.
+        let stop = named.as_ref().map_or(Stop::Unconfirmed, |named| {
+          Stop::Confirmed(named.iter().find(|(shown, _)| *shown == task).map(|(_, run)| *run))
+        });
+        let result = apply(&root, task, mutation.clone(), stop, &runners).await;
         results.push((task, result));
       }
       Ok(Outcomes { mutation, results })

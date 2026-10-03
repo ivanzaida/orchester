@@ -108,11 +108,11 @@ type SaveArgs = (
   SaveTarget,
   TaskDetails,
   (TaskOrganization, TaskOrganization),
-  Option<orchester_core::id::RunId>,
+  crate::tasks::cancel_run::Stop,
 );
 type SaveAction = FutureAction<SaveArgs, SavedDraft, Message>;
-/// A save, with the run the person confirmed stopping, if any.
-type SaveRequest = Arc<dyn Fn(Option<orchester_core::id::RunId>) + Send + Sync>;
+/// A save, with whether the person confirmed stopping a run for Canceled.
+type SaveRequest = Arc<dyn Fn(crate::tasks::cancel_run::Stop) + Send + Sync>;
 
 /// The task whose run started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -323,7 +323,9 @@ impl Component for NewTaskForm {
     let target = self.target(editing.or(recovered));
     let submit = self
       .save_request(&save, &props.project, target, state.ready.clone())
-      .map(|request| -> Arc<dyn Fn() + Send + Sync> { Arc::new(move || request(None)) })
+      .map(|request| -> Arc<dyn Fn() + Send + Sync> {
+        Arc::new(move || request(crate::tasks::cancel_run::Stop::Unconfirmed))
+      })
       .filter(|_| state.can_save());
     let start = (!state.started)
       .then(|| {
@@ -455,8 +457,8 @@ impl NewTaskForm {
     let organization = self.organization.change()?;
     let save = save.clone();
     let repo_root = project.repo_root.clone();
-    Some(Arc::new(move |named| {
-      save.run((repo_root.clone(), target, details.clone(), organization.clone(), named));
+    Some(Arc::new(move |stop| {
+      save.run((repo_root.clone(), target, details.clone(), organization.clone(), stop));
     }))
   }
 }

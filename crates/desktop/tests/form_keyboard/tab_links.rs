@@ -119,7 +119,11 @@ fn tab_links_pipeline_row() {
 #[test]
 fn tab_links_overview_activity_card() {
   let mut desktop = kontur();
-  let overview = |_: &mut Desktop| {};
+  // Recent activity comes with Insights (ORC-39) while nothing needs the person.
+  let overview = |desktop: &mut Desktop| {
+    desktop.wait_for("overview-insights");
+    desktop.click("overview-insights");
+  };
   opens_each_way(
     &mut desktop,
     overview,

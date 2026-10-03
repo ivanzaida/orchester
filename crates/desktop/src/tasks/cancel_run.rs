@@ -13,6 +13,15 @@ use crate::{
   runner::Runners,
 };
 
+/// Whether the person confirmed stopping a run for Canceled, and which run the confirmation
+/// showed for the task (none when it said the task had no active run).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stop {
+  Unconfirmed,
+  Confirmed(Option<RunId>),
+}
+impl lurq::app::component::DevtoolsInspectable for Stop {}
+
 /// Why Canceled did not go ahead: the task's active run, `run`, was not the one confirmed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StopRefused {
@@ -45,24 +54,19 @@ impl StopRefused {
   }
 }
 
-/// Stops `task`'s active run when it is `named`, the run the person confirmed stopping; without
-/// an active run there is nothing to stop.
-pub async fn stop_named_run(
-  root: &Path,
-  task: TaskId,
-  named: Option<RunId>,
-  runners: &Runners,
-) -> Result<(), StopRefused> {
+/// Stops `task`'s active run when it is the run the person confirmed stopping; without an active
+/// run there is nothing to stop. A run the confirmation did not show started after it opened.
+pub async fn stop_named_run(root: &Path, task: TaskId, stop: Stop, runners: &Runners) -> Result<(), StopRefused> {
   let root = root.to_path_buf();
   let active = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
     .await
     .map_err(StopRefused::Failed)?
     .map_err(|error| StopRefused::Failed(messages::store_error(&error)))?;
-  match (active, named) {
+  match (active, stop) {
     (None, _) => Ok(()),
-    (Some(run), None) => Err(StopRefused::Unconfirmed(run)),
-    (Some(run), Some(named)) if run != named => Err(StopRefused::StartedSince(run)),
-    (Some(run), Some(_)) => runners
+    (Some(run), Stop::Unconfirmed) => Err(StopRefused::Unconfirmed(run)),
+    (Some(run), Stop::Confirmed(shown)) if shown != Some(run) => Err(StopRefused::StartedSince(run)),
+    (Some(run), Stop::Confirmed(_)) => runners
       .control_run(Command::CancelRun { run })
       .await
       .map_err(|error| StopRefused::Failed(crate::tasks::run::control_message(&error))),

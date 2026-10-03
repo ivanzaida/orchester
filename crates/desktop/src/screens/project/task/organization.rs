@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, TagId},
-  task::organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
+  task::organization::{ChangeActor, OrganizationError, Priority, TaskOrganization, WorkflowStatus},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -31,7 +31,7 @@ use crate::{
   messages::{self, Message},
   runner::Runners,
   tasks::{
-    cancel_run::stop_named_run,
+    cancel_run::{Stop, stop_named_run},
     detail::TaskDetail,
     organization::{
       OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
@@ -55,8 +55,8 @@ pub(super) struct OrganizationProps {
 impl lurq::app::component::DevtoolsInspectable for OrganizationProps {}
 #[derive(Clone)]
 enum Mutation {
-  /// A status, with the run the person confirmed stopping for Canceled.
-  Status(WorkflowStatus, Option<RunId>),
+  /// A status, with whether the person confirmed stopping a run for Canceled.
+  Status(WorkflowStatus, Stop),
   Priority(Priority),
   Tags(Vec<TagId>),
 }
@@ -171,8 +171,8 @@ fn action(ctx: &mut Ctx, asked: &Signal<AskedRun>) -> Action {
     let (root, runners, asked) = (root.clone(), runners.clone(), asked.clone());
     async move {
       // Canceled stops only the run the confirmation named; otherwise it names the active run.
-      if let Mutation::Status(WorkflowStatus::Canceled, named) = mutation
-        && let Err(refused) = stop_named_run(&root, task, named, &runners).await
+      if let Mutation::Status(WorkflowStatus::Canceled, stop) = mutation
+        && let Err(refused) = stop_named_run(&root, task, stop, &runners).await
       {
         if let Some(run) = refused.run() {
           asked.set(AskedRun(Some(run)));
@@ -191,7 +191,13 @@ fn action(ctx: &mut Ctx, asked: &Signal<AskedRun>) -> Action {
         Ok::<_, orchester_store::StoreError>(OrganizationValue(value))
       })
       .await?
-      .map_err(|error| messages::store_error(&error))
+      .map_err(|error| {
+        // A run that started since the check: the store names it, and the confirmation stops it.
+        if let orchester_store::StoreError::Organization(OrganizationError::StopRunFirst(run)) = &error {
+          asked.set(AskedRun(Some(*run)));
+        }
+        messages::store_error(&error)
+      })
     }
   })
 }
@@ -245,7 +251,7 @@ impl OrganizationHeader {
     let (choices, submit) = (self.choices(), action.clone());
     ctx.watch(&self.status, move |choice| {
       if choice.0 != choices.stored.get_untracked().0.status() {
-        submit.run(Mutation::Status(choice.0, None));
+        submit.run(Mutation::Status(choice.0, Stop::Unconfirmed));
       }
     });
     let (submit, stored) = (action.clone(), self.stored.clone());
@@ -320,7 +326,7 @@ impl OrganizationHeader {
       ctx,
       dialog,
       move || close.set(false),
-      move || submit.run(Mutation::Status(WorkflowStatus::Canceled, named)),
+      move || submit.run(Mutation::Status(WorkflowStatus::Canceled, Stop::Confirmed(named))),
     );
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)

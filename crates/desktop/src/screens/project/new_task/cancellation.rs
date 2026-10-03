@@ -63,7 +63,7 @@ pub(super) fn confirmation(
     // Stop exactly the run the dialog shows; without one there is none to stop.
     move || {
       if let Some(submit) = &submit {
-        submit(run_id);
+        submit(crate::tasks::cancel_run::Stop::Confirmed(run_id));
       }
     },
   );

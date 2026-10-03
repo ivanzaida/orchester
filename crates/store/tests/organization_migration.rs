@@ -75,6 +75,55 @@ enum Before {
   CancelledDraft,
   /// The run was cancelled and the task stays queued.
   CancelledQueued,
+  Paused,
+  Interrupted,
+  /// The step broke twice and the run waits for a person's decision.
+  Waiting,
+  /// The run failed and the task stays queued.
+  FailedQueued,
+  /// The run failed and the task is a draft again.
+  FailedDraft,
+}
+
+/// Leaves the fixture's run paused, interrupted, waiting for a person or failed for `before`; the
+/// other states are
+/// reached in [`backfilled`].
+fn prepare(
+  db: &mut ProjectDb,
+  run: &mut orchester_core::run::Run,
+  execution: orchester_core::id::StepExecutionId,
+  before: Before,
+) {
+  use orchester_core::run::{InterruptCause, RunStatus, StepFailure};
+  let events = match before {
+    Before::Paused => run.pause(at(21)).expect("pause"),
+    Before::Interrupted => run.interrupt(InterruptCause::RunnerLost, at(21)).expect("interrupt"),
+    Before::FailedQueued | Before::FailedDraft => {
+      let events = run.start_step(execution, at(21)).expect("start step");
+      db.append_events(run, &events).expect("stored");
+      run
+        .fail_step(execution, StepFailure::ReportedFailed, at(22))
+        .expect("fail step")
+    }
+    Before::Waiting => {
+      for millis in [21, 23] {
+        let execution = run.current_attempt().expect("attempt").executions()[0].id();
+        let events = run.start_step(execution, at(millis)).expect("start step");
+        db.append_events(run, &events).expect("stored");
+        let events = run
+          .fail_step(execution, StepFailure::AgentFailed, at(millis + 1))
+          .expect("fail step");
+        db.append_events(run, &events).expect("stored");
+      }
+      assert!(matches!(run.status(), RunStatus::WaitingForPerson(_)));
+      return;
+    }
+    _ => return,
+  };
+  db.append_events(run, &events).expect("stored");
+  if matches!(before, Before::FailedQueued | Before::FailedDraft) {
+    assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  }
 }
 
 /// The status migration 39 gives the fixture's task after `before`, and a draft (Backlog) and a
@@ -85,6 +134,7 @@ fn backfilled(before: Before) -> WorkflowStatus {
   let others = db
     .create_tasks(IdempotencyKey::generate(), vec![details.clone(), details], at(20))
     .expect("tasks");
+  prepare(&mut db, &mut run, execution, before);
   if matches!(before, Before::ReadyForReview | Before::Merged) {
     let events = run.start_step(execution, at(21)).expect("start step");
     db.append_events(&run, &events).expect("stored");
@@ -111,7 +161,7 @@ fn backfilled(before: Before) -> WorkflowStatus {
     BEFORE_ORGANIZATION,
   );
   let connection = rusqlite::Connection::open(old.path().join(".orchester").join("orchester.db")).expect("open");
-  let task_status = if matches!(before, Before::CancelledDraft) {
+  let task_status = if matches!(before, Before::CancelledDraft | Before::FailedDraft) {
     "draft"
   } else {
     "queued"
@@ -151,6 +201,11 @@ fn organization_migration_backfills_statuses_from_runs() {
     (Before::Merged, WorkflowStatus::Done),
     (Before::CancelledDraft, WorkflowStatus::Backlog),
     (Before::CancelledQueued, WorkflowStatus::Todo),
+    (Before::Paused, WorkflowStatus::InProgress),
+    (Before::Interrupted, WorkflowStatus::InProgress),
+    (Before::Waiting, WorkflowStatus::InProgress),
+    (Before::FailedQueued, WorkflowStatus::Todo),
+    (Before::FailedDraft, WorkflowStatus::Backlog),
   ] {
     assert_eq!(backfilled(before), status, "{before:?}");
   }
