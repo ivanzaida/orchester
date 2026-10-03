@@ -21,6 +21,9 @@ use crate::{
 pub(in crate::screens::project::task) enum Unanswered {
   /// Request `approval` of `task` no longer waits: its agent can no longer receive an answer.
   Ended { approval: String, task: Option<TaskId> },
+  /// Request `approval` was answered already (a second click, or Orchester answered it meanwhile): it
+  /// leaves without saying it ended.
+  Answered { approval: String },
   /// Anything else, as the dialog and the card say it.
   Failed(Message),
 }
@@ -28,10 +31,11 @@ pub(in crate::screens::project::task) enum Unanswered {
 impl lurq::app::component::DevtoolsInspectable for Unanswered {}
 
 impl Unanswered {
-  /// What failed, to show beside the answers; nothing for a request that ended, which leaves.
+  /// What failed, to show beside the answers; nothing for a request that ended or was answered, which
+  /// leaves.
   pub(in crate::screens::project::task) fn failure(&self) -> Option<&Message> {
     match self {
-      Self::Ended { .. } => None,
+      Self::Ended { .. } | Self::Answered { .. } => None,
       Self::Failed(message) => Some(message),
     }
   }
@@ -40,11 +44,16 @@ impl Unanswered {
   pub(in crate::screens::project::task) fn ended(&self, id: &str) -> bool {
     matches!(self, Self::Ended { approval, .. } if approval == id)
   }
+
+  /// Whether this says request `id` was answered already.
+  pub(in crate::screens::project::task) fn answered(&self, id: &str) -> bool {
+    matches!(self, Self::Answered { approval } if approval == id)
+  }
 }
 
 /// Once the dialog's `action` comes back with an [`Unanswered::Ended`], the request leaves the dialog (the
-/// next waiting one shows, or it closes) and the status bar says it ended. Called where `action` is
-/// created.
+/// next waiting one shows, or it closes) and the status bar says it ended; with an
+/// [`Unanswered::Answered`] it only leaves. Called where `action` is created.
 pub(super) fn drop_when_ended(ctx: &mut Ctx, action: &DecisionAction) {
   let queue = ctx.use_context::<ApprovalQueue>();
   let activity = Activity::of(ctx);
@@ -52,8 +61,15 @@ pub(super) fn drop_when_ended(ctx: &mut Ctx, action: &DecisionAction) {
     .use_context::<Shown>()
     .map(|shown| (shown.open.project.name().as_str().into(), shown.open.repo_root));
   ctx.watch(&action.state(), move |state| {
-    let Some(Unanswered::Ended { approval, task }) = state.error.as_ref().filter(|_| !state.is_pending()) else {
-      return;
+    let (approval, task) = match state.error.as_ref().filter(|_| !state.is_pending()) {
+      Some(Unanswered::Ended { approval, task }) => (approval, task),
+      Some(Unanswered::Answered { approval }) => {
+        if let Some(queue) = &queue {
+          queue.drop_answered(approval);
+        }
+        return;
+      }
+      Some(Unanswered::Failed(_)) | None => return,
     };
     if let Some(queue) = &queue {
       queue.drop_ended(approval);

@@ -113,13 +113,13 @@ impl Component for ApprovalCardView {
     let props = ctx.props::<ApprovalCardProps>().clone();
     let action = approval_decision(ctx);
     let request = &props.card.request;
-    // The runner said it no longer waits, before the timeline is read again.
-    let ended = action
-      .state()
-      .get()
-      .error
-      .is_some_and(|unanswered| unanswered.ended(&request.id));
-    let waiting = props.card.decided.is_none() && !ended;
+    // The runner said it no longer waits, or was answered already, before the timeline is read again.
+    let refused = action.state().get().error;
+    let ended = refused.as_ref().is_some_and(|unanswered| unanswered.ended(&request.id));
+    let answered = refused
+      .as_ref()
+      .is_some_and(|unanswered| unanswered.answered(&request.id));
+    let waiting = props.card.decided.is_none() && !ended && !answered;
     let title = ctx.t_args(
       if request.command {
         "runs.conversation.card.asksCommand"
@@ -137,6 +137,7 @@ impl Component for ApprovalCardView {
     );
     let state = match props.card.decided {
       None if ended => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
+      None if answered => (Icon::Check, ctx.t("runs.conversation.card.answered")),
       None => (Icon::Hand, ctx.t("runs.conversation.card.waitingAnswer")),
       Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
       Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),

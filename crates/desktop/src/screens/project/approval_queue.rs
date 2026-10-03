@@ -22,8 +22,8 @@ pub struct ApprovalQueue {
   deferred: Signal<Vec<String>>,
   /// The request whose *Always allow* step is open.
   always: Signal<Option<String>>,
-  /// The requests the runner said no longer wait, which the dialog no longer shows, even before the
-  /// project's requests are read again.
+  /// The requests the runner said no longer wait (ended or answered already), which the dialog no longer
+  /// shows, even before the project's requests are read again.
   ended: Signal<Vec<String>>,
   /// A request ended while it was answered: the dialog says so until the person acts in it again.
   ended_notice: Signal<bool>,
@@ -75,6 +75,16 @@ impl ApprovalQueue {
   /// The runner answered that request `id` no longer waits: its agent can no longer receive an answer.
   /// The dialog drops it and says so over the next request.
   pub fn drop_ended(&self, id: &str) {
+    self.drop_request(id);
+    self.ended_notice.set(true);
+  }
+
+  /// The runner answered that request `id` was answered already: the dialog drops it and says nothing.
+  pub fn drop_answered(&self, id: &str) {
+    self.drop_request(id);
+  }
+
+  fn drop_request(&self, id: &str) {
     if self.always.get_untracked().as_deref() == Some(id) {
       self.always.set(None);
     }
@@ -83,7 +93,6 @@ impl ApprovalQueue {
         ended.push(id.to_owned());
       }
     });
-    self.ended_notice.set(true);
   }
 
   /// Whether the dialog says that a request it showed ended.

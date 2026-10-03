@@ -382,13 +382,16 @@ A tool request whose agent is gone no longer waits forever · branch `claude/sta
 
 - Bug seen by two design verifiers and the user: a request whose agent's invocation ended, whose runner restarted
   or whose run stopped stayed *waiting*; answering it only said it no longer waits and its dialog stayed. The runner
-  now ends such a request without an answer (existing `interrupted` state; no migration, IPC protocol unchanged at
-  12) at the run task's end, when a runner attaches, and when an answer reaches a request no live agent holds; the
+  now ends such a request without an answer (existing `interrupted` state; no migration) at the run task's end, when
+  a runner attaches (each request read, by id), and when an answer reaches a request no live agent holds; an answer
+  to a request answered already is refused as `ToolApprovalAnswered` (IPC protocol **13**); the
   desktop drops a request the runner refuses that way from the dialog (next request with a notice, or closed) and
-  the inline card (*Ended without an answer*), and the status bar says it ended. Built, not drawn (design doc,
-  "Approval choices and waiting requests"); needs design verification.
-- Tests: `-p orchester-runner --features test-agent --test stale_approvals stale_approvals`; `-p orchester-desktop
-  --test form_keyboard ended_approval`.
+  the inline card (*Ended without an answer*), and the status bar says it ended. The step row's *Waiting for you ·
+  <tool> · since* now follows the step's pending request whatever the step's state (a tool request never set the
+  Waiting state, so real runs never showed it). Built, not drawn (design doc, "Approval choices and waiting
+  requests"); code review and design verification passed.
+- Tests: `-p orchester-runner --features test-agent --test stale_approvals stale_approvals`; `-p orchester-store
+  --test tool_approvals tool`; `-p orchester-desktop --test form_keyboard ended_approval`.
 
 Approval choices, waiting requests and auto-approval · branch `claude/approval-choices` (done 2026-10-03)
 

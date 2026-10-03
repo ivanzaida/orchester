@@ -400,8 +400,11 @@ pub enum Rejection {
   /// The plan does not wait for a decision: a newer version exists, it was decided already, or
   /// its step works on it again.
   PlanNotAwaited,
-  /// The selected tool request is no longer pending in a live Codex session.
+  /// The selected tool request no longer waits: its agent can no longer receive an answer, so it ended
+  /// without one.
   ToolApprovalNotAwaited,
+  /// The selected tool request was answered already, by a person or by Orchester.
+  ToolApprovalAnswered,
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

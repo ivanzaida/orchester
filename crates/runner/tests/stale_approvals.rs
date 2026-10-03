@@ -1,6 +1,7 @@
 //! Tool requests whose agent can no longer receive an answer do not stay waiting: the agent ended
-//! while one waited, an answer names one no live agent holds, or an earlier runner left one waiting.
-//! Each ends without an answer (recorded interrupted) and an answer to it is refused. Against
+//! while one waited, an answer names one no live agent holds (the worker waits on another call, or its
+//! step's worker is gone), or an earlier runner left one waiting. Each ends without an answer (recorded
+//! interrupted) and an answer to it is refused; an answer to one answered already is refused as such. Against
 //! `orchester-fake-claude` and `orchester-fake-codex`; needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test stale_approvals stale_approvals`.
 
@@ -11,7 +12,7 @@ use std::{num::NonZeroU32, path::Path};
 use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   run::{ApprovalAnswer, PendingToolApproval},
   store::ActivityStore,
   time::Timestamp,
@@ -19,7 +20,7 @@ use orchester_core::{
 use orchester_ipc::{AttachSession, Rejection, SessionEnd};
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, pending_approval, project, scheduler, scheduler_with, wait_for};
+use self::support::{Setup, StepSpec, pending_approval, project, scheduler, scheduler_with, wait_for};
 
 /// Whether request `id` of `run` waits; panics unless it is recorded either waiting or ended without an
 /// answer.
@@ -153,4 +154,67 @@ async fn stale_approvals_left_by_an_earlier_runner_end_when_the_next_attaches() 
   assert!(db.pending_tool_approvals_all().expect("requests").is_empty());
   let answer = next.decide_tool_approval(id, left.id, ApprovalAnswer::Once).await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stale_approvals_end_when_their_steps_worker_is_gone_and_an_answered_one_says_so() {
+  let listed = AllowedCommands::new(vec![CommandPrefix::new("git").expect("prefix")]).expect("list");
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::Allowed(listed),
+      NetworkAccess::Off,
+    )),
+    steps: vec![
+      StepSpec::new("prepare", "Prepare", "Say hello.", &[]),
+      StepSpec::new("implement", "Implement", "Run `pnpm build`.", &["prepare"]),
+    ],
+    ..Setup::new("Add a greeting.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let request = pending_approval(root, &mut events, id).await;
+  let prepared = ProjectDb::open(root)
+    .expect("open")
+    .invocations(id)
+    .expect("invocations")
+    .into_iter()
+    .find(|invocation| invocation.execution != request.execution)
+    .expect("Prepare's invocation");
+  assert!(prepared.ended_at.is_some(), "Prepare's agent has ended");
+
+  // A request of the step whose agent has ended: the run still works, but no worker of it holds one.
+  let gone = PendingToolApproval {
+    execution: prepared.execution,
+    invocation: prepared.id,
+    ..request.clone()
+  };
+  let gone = recorded(root, &gone, "gone");
+  let answer = scheduler
+    .decide_tool_approval(id, gone.clone(), ApprovalAnswer::Once)
+    .await;
+  assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
+  assert!(!waits(root, id, &gone));
+  assert!(waits(root, id, &request.id));
+
+  // A second answer to a request answered already is refused as answered, not as ended.
+  scheduler
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once)
+    .await
+    .expect("approved");
+  let again = scheduler
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Deny)
+    .await;
+  assert_eq!(again, Err(Rejection::ToolApprovalAnswered));
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert!(run.status().is_terminal());
+  let again = scheduler
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .await;
+  assert_eq!(again, Err(Rejection::ToolApprovalAnswered));
 }

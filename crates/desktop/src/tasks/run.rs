@@ -207,6 +207,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NoPendingPermissions
       | Rejection::PlanNotAwaited
       | Rejection::ToolApprovalNotAwaited
+      | Rejection::ToolApprovalAnswered
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
@@ -293,6 +294,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
     RunRequestError::Rejected(Rejection::PlanNotAwaited) => Message::new("runs.plan.errors.notAwaited"),
     RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) => Message::new("runs.toolApproval.notAwaited"),
+    RunRequestError::Rejected(Rejection::ToolApprovalAnswered) => Message::new("runs.toolApproval.answeredAlready"),
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun

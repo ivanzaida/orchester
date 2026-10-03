@@ -231,7 +231,7 @@ fn native_command_requests_keep_their_shell_and_time_limit() {
 }
 
 #[test]
-fn ended_requests_no_longer_wait_and_read_as_ended_without_an_answer() {
+fn tool_requests_that_end_no_longer_wait_and_read_as_ended_without_an_answer() {
   let (_repo, mut db, run, execution) = started_run();
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(10))
@@ -265,8 +265,12 @@ fn ended_requests_no_longer_wait_and_read_as_ended_without_an_answer() {
       .end_waiting_tool_approval(run.id(), &claimed.id)
       .expect("not waiting")
   );
-  assert_eq!(db.end_waiting_tool_approvals(run.id()).expect("end the rest"), 1);
+  assert!(db.end_waiting_tool_approval(run.id(), &two.id).expect("end"));
   assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
+  // An answer that comes too late is refused as answered already only for the one answered.
+  assert!(db.tool_approval_answered(run.id(), &claimed.id).expect("answered"));
+  assert!(!db.tool_approval_answered(run.id(), &one.id).expect("ended"));
+  assert!(!db.tool_approval_answered(run.id(), "unknown").expect("unknown"));
   let decided = db.decided_tool_approvals(run.id()).expect("decided");
   let decision = |id: &str| {
     decided

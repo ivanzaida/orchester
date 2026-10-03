@@ -1350,6 +1350,7 @@
         "toolValue": "{{server}} · {{tool}}"
       },
       "notAwaited": "This tool action no longer waits for a decision.",
+      "answeredAlready": "This request was answered already.",
       "endedNotice": "The previous request ended without an answer: its agent is no longer waiting.",
       "commandTitle": "Approve command?",
       "policyExplanation": {
@@ -4920,7 +4921,7 @@
       "waitingOne": "1 approval waiting · {{asks}}",
       "waitingOther": "{{count}} approvals waiting · {{asks}}",
       "review": "Review",
-      "ended": "A request ended without an answer · its agent is no longer waiting",
+      "ended": "Request ended without an answer",
       "autoOne": "Auto-approving · Run {{run}} · {{task}}",
       "autoOther": "Auto-approving {{count}} runs",
       "stop": "Stop"

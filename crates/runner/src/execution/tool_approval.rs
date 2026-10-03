@@ -1,14 +1,15 @@
 //! Routes one person's answer to the live worker holding that exact tool request. A request no live
 //! agent holds can never be answered: the runner ends it as it refuses the answer, so it stops
-//! counting as waiting, and the desktop drops it.
+//! counting as waiting, and the desktop drops it. An answer to a request answered already is refused
+//! as such, so the desktop does not say it ended.
 
 use orchester_core::{
   id::{RunId, TaskId},
-  run::ApprovalAnswer,
+  run::{ApprovalAnswer, PendingToolApproval},
   store::RunStore,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
@@ -34,46 +35,67 @@ impl Scheduler {
     reply.await.unwrap_or_else(|_| Err(self.end_unheld(run, &id)))
   }
 
-  /// No task executes `run`, so none of its agents is at work: request `id` ends if it still waits.
-  /// The answer is refused either way.
+  /// No task executes `run`, so none of its agents is at work: request `id` ends if it still waits,
+  /// and the answer is refused.
   fn end_unheld(&self, run: RunId, id: &str) -> Rejection {
-    let ended = self.open().and_then(|mut db| {
-      let ended = db
-        .end_waiting_tool_approval(run, id)
-        .map_err(|error| failed("cannot end a tool request no agent holds", &error))?;
+    let refused = self.open().and_then(|mut db| {
+      let (ended, refusal) =
+        end_unheld(&mut db, run, id).map_err(|error| failed("cannot end a tool request no agent holds", &error))?;
       if ended {
         announce_ended(&db, &self.inner.notifier, run);
       }
-      Ok(())
+      Ok(refusal)
     });
-    match ended {
-      Ok(()) => Rejection::ToolApprovalNotAwaited,
-      Err(rejection) => rejection,
-    }
+    refused.unwrap_or_else(|rejection| rejection)
   }
 
-  /// Ends the requests left waiting by agents that are gone: those of every run this runner does not
-  /// execute. Called as a runner attaches, when no agent of an earlier runner can be at work.
+  /// Ends the requests left waiting by agents that are gone: those read as waiting in every run this
+  /// runner does not execute. Called as a runner attaches, when no agent of an earlier runner can be at
+  /// work; a request recorded after they were read is left to its own agent.
   pub(super) fn end_unheld_approvals(&self, db: &mut ProjectDb) -> Result<(), Rejection> {
     let store = |error: &dyn std::error::Error| failed("cannot end the tool requests left waiting", error);
-    let mut runs: Vec<RunId> = db
+    let unheld: Vec<PendingToolApproval> = db
       .pending_tool_approvals_all()
       .map_err(|error| store(&error))?
       .into_iter()
-      .map(|approval| approval.run)
-      .filter(|run| !self.is_active(*run))
+      .filter(|approval| !self.is_active(approval.run))
       .collect();
+    let mut runs = Vec::new();
+    for approval in unheld {
+      if db
+        .end_waiting_tool_approval(approval.run, &approval.id)
+        .map_err(|error| store(&error))?
+      {
+        runs.push(approval.run);
+      }
+    }
     runs.sort_unstable();
     runs.dedup();
     for run in runs {
-      let ended = db.end_waiting_tool_approvals(run).map_err(|error| store(&error))?;
-      if ended > 0 {
-        tracing::info!(%run, ended, "tool requests left waiting by a gone agent ended");
-        announce_ended(db, &self.inner.notifier, run);
-      }
+      tracing::info!(%run, "tool requests left waiting by a gone agent ended");
+      announce_ended(db, &self.inner.notifier, run);
     }
     Ok(())
   }
+}
+
+/// Ends request `id` of `run`, which no live agent holds, if it still waits: whether it did, and why its
+/// answer is refused ([`refusal`]).
+pub(super) fn end_unheld(db: &mut ProjectDb, run: RunId, id: &str) -> Result<(bool, Rejection), StoreError> {
+  if db.end_waiting_tool_approval(run, id)? {
+    return Ok((true, Rejection::ToolApprovalNotAwaited));
+  }
+  Ok((false, refusal(db, run, id)?))
+}
+
+/// Why an answer to request `id` of `run`, which no longer waits, is refused: it was answered already,
+/// or it ended without an answer.
+pub(super) fn refusal(db: &ProjectDb, run: RunId, id: &str) -> Result<Rejection, StoreError> {
+  Ok(if db.tool_approval_answered(run, id)? {
+    Rejection::ToolApprovalAnswered
+  } else {
+    Rejection::ToolApprovalNotAwaited
+  })
 }
 
 /// Tells the desktop that requests of `run` ended. A run that cannot be read names no task to tell
@@ -99,7 +121,7 @@ impl RunTask {
   ) -> Result<(), ExecutionError> {
     let pending = self.db.pending_tool_approvals(self.run.id())?;
     let Some(approval) = pending.iter().find(|approval| approval.id == id) else {
-      answer(ack, Err(Rejection::ToolApprovalNotAwaited));
+      answer(ack, Err(refusal(&self.db, self.run.id(), &id)?));
       return Ok(());
     };
     let worker = self
@@ -120,24 +142,31 @@ impl RunTask {
 
   /// No agent of the run holds request `id`: it ends if it still waits, and the answer is refused.
   fn end_unheld(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    if self.db.end_waiting_tool_approval(self.run.id(), id)? {
+    let (ended, refusal) = end_unheld(&mut self.db, self.run.id(), id)?;
+    if ended {
       notify(&self.notifier, self.run.id(), self.task.id());
     }
-    answer(ack, Err(Rejection::ToolApprovalNotAwaited));
+    answer(ack, Err(refusal));
     Ok(())
   }
 
-  /// The run's task no longer executes it and none of its agents is at work: whatever request is still
-  /// recorded as waiting can never be answered, and ends.
+  /// The run's task no longer executes it and none of its agents is at work: the requests read as still
+  /// waiting can never be answered, and end.
   pub(super) fn end_waiting_approvals(&mut self) {
-    match self.db.end_waiting_tool_approvals(self.run.id()) {
-      Ok(0) => {}
-      Ok(ended) => {
-        tracing::info!(run = %self.run.id(), ended, "tool requests of agents that ended no longer wait");
-        notify(&self.notifier, self.run.id(), self.task.id());
+    let run = self.run.id();
+    let ended = self.db.pending_tool_approvals(run).and_then(|waiting| {
+      waiting.iter().try_fold(false, |ended, approval| {
+        Ok(self.db.end_waiting_tool_approval(run, &approval.id)? || ended)
+      })
+    });
+    match ended {
+      Ok(false) => {}
+      Ok(true) => {
+        tracing::info!(%run, "tool requests of agents that ended no longer wait");
+        notify(&self.notifier, run, self.task.id());
       }
       // The runner keeps going; the next runner to attach ends them.
-      Err(error) => tracing::error!(run = %self.run.id(), %error, "cannot end the tool requests left waiting"),
+      Err(error) => tracing::error!(%run, %error, "cannot end the tool requests left waiting"),
     }
   }
 }

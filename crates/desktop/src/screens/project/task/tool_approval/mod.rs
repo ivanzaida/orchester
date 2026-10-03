@@ -131,6 +131,9 @@ pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> Decis
               approval: decision.approval,
               task: decision.task,
             },
+            RunRequestError::Rejected(Rejection::ToolApprovalAnswered) => Unanswered::Answered {
+              approval: decision.approval,
+            },
             error => Unanswered::Failed(control_message(&error)),
           }
         })
@@ -204,7 +207,7 @@ impl Component for ToolApprovalPanel {
     // ended itself says nothing: it is leaving.
     let problem = match state.error.as_ref().filter(|_| !busy) {
       Some(Unanswered::Failed(message)) => Some(message.clone()),
-      Some(Unanswered::Ended { .. }) => None,
+      Some(Unanswered::Ended { .. } | Unanswered::Answered { .. }) => None,
       None => props
         .queue
         .shows_ended_notice()
