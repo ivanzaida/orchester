@@ -189,15 +189,14 @@ fn ended_approval_waiting_parts_give_way_in_order() {
   desktop.pass();
   assert_whole(&mut desktop, &[" approval waiting", " · Run 1 · KON-1"]);
   assert!(time_shown(&mut desktop), "the time shows at 1600");
-  // Without auto-approval, at 960 the words after the count, what the request asks (at least its
-  // minimum) and the time all show.
+  // Without auto-approval, at 960 the words after the count and what the request asks (at least its
+  // minimum) show; the time gives way before the right group does.
   desktop.click("task-auto-approve");
   desktop.wait_until("auto-approval is off", |desktop| !has(desktop, "status-auto-approving"));
   desktop.tree.resize(960, 700);
   desktop.pass();
   assert_whole(&mut desktop, &["1", " approval waiting", "Review"]);
   assert_no_stub(&mut desktop);
-  assert!(time_shown(&mut desktop), "the time shows without auto-approval at 960");
   let asks = desktop.bounds("status-approvals-asks");
   let review = desktop.bounds("status-approvals-review");
   assert!(asks.width >= APPROVALS_ASKS_MIN, "what it asks has {} px", asks.width);

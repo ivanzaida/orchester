@@ -23,19 +23,27 @@ const ITEM_HEIGHT: f32 = 22.0;
 const SEPARATOR_WIDTH: f32 = 1.0;
 const SEPARATOR_HEIGHT: f32 = 12.0;
 
-/// The order in which the parts of the left group give way when the bar is narrow (lurq
-/// `shrink_order`): each order gives way, down to its limit, before the next shrinks at all. What the
-/// waiting approvals ask trims its end first; then which run auto-approves and the times drop out
-/// whole; then the activity drops its time and trims its words; then the words beside how many
-/// approvals wait drop out, and last the runner's words. The hand, the count, *Review*,
-/// *Auto-approving* and Stop never give way.
+/// The order in which the parts of the bar give way when it is narrow (lurq `shrink_order`); the bar
+/// is one line, so the left and the right group give way in one order and the bar never shows more at
+/// a narrower width. Each order gives way, down to its limit, before the next shrinks at all: what the
+/// waiting approvals ask trims its end; which run auto-approves and the times drop out whole; the
+/// version and Tokens today drop out; the counts' labels; the plan limits' resets and reasons; then the
+/// activity drops its time and trims its words; the words beside how many approvals wait; last the
+/// runner's words. The hand, the count, *Review*, *Auto-approving*, Stop, the counts, the plan limits
+/// and MCP never give way.
 pub mod give_way {
+  /// The room between the groups, which goes first.
+  pub const ROOM: i32 = -1;
   pub const ASKS: i32 = 0;
   pub const RUN: i32 = 1;
   pub const TIMES: i32 = 2;
-  pub const ACTIVITY: i32 = 3;
-  pub const COUNT_WORDS: i32 = 4;
-  pub const RUNNER_WORDS: i32 = 5;
+  pub const VERSION: i32 = 3;
+  pub const TOKENS: i32 = 4;
+  pub const COUNT_LABELS: i32 = 5;
+  pub const PLAN_DETAILS: i32 = 6;
+  pub const ACTIVITY: i32 = 7;
+  pub const COUNT_WORDS: i32 = 8;
+  pub const RUNNER_WORDS: i32 = 9;
 }
 
 /// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).

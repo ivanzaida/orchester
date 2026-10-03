@@ -17,8 +17,9 @@ use lurq::{
     ctx::{Ctx, Placement},
     theme::PaletteColor,
   },
-  components::{Column, Popup, Text},
+  components::{Popup, Row, Text},
   core::{ElementRef, Signal},
+  layout::layout_kind::ShrinkLimit,
   node::{CursorIcon, Element, HitTestBehavior},
 };
 use orchester_core::{
@@ -31,7 +32,7 @@ use orchester_core::{
 
 use super::{
   POPOVER_GAP,
-  item::{glyph, item, label, value},
+  item::{dropping_label, dropping_value, give_way, glyph, item, label, value},
 };
 use crate::{plan_limits::Connections, theme::ExtraTypography, ui::icon::Icon};
 
@@ -44,8 +45,6 @@ pub struct Props {
   pub project_name: String,
   pub connections: Connections,
   pub readings: PlanReadings,
-  /// Reached entries leave out their reset or reason, which the hint still gives.
-  pub brief: bool,
 }
 impl lurq::app::component::DevtoolsInspectable for Props {}
 
@@ -87,9 +86,15 @@ impl Component for PlanLimits {
     self.next_change.store(next_change(&entries, now), Ordering::Relaxed);
     let (bar, panel) = match &props.connections {
       Connections::Failed(error) => (self.unreadable(ctx), detail::unreadable(ctx, error)),
-      _ => (self.bar(ctx, &entries, props.brief), detail::panel(ctx, &entries)),
+      _ => (self.bar(ctx, &entries), detail::panel(ctx, &entries)),
     };
-    let mut result = Column::new().child(bar);
+    // When the status bar is narrow, a reached entry's reset or reason drops out; the hint still gives
+    // it ([`give_way`]).
+    let mut result = Row::new()
+      .flex_shrink(1.0)
+      .shrink_order(give_way::PLAN_DETAILS)
+      .shrink_limit(ShrinkLimit::Content)
+      .child(bar);
     if self.hover.get() {
       result = result.child(
         Popup::new(self.anchor.clone(), panel)
@@ -109,7 +114,8 @@ impl PlanLimits {
   fn frame(&self, glyph_icon: Icon, emphasis: bool) -> lurq::components::Button {
     let (enter, leave, now) = (self.hover.clone(), self.hover.clone(), self.now.clone());
     item("status-plan-limits")
-      .flex_shrink(0.0)
+      .flex_shrink(1.0)
+      .shrink_limit(ShrinkLimit::Content)
       .ref_element(self.anchor.clone())
       .cursor(CursorIcon::Default)
       .on_mouse_enter(move || {
@@ -127,7 +133,7 @@ impl PlanLimits {
       ))
   }
 
-  fn bar(&self, ctx: &Ctx, entries: &[Entry<'_>], brief: bool) -> Element {
+  fn bar(&self, ctx: &Ctx, entries: &[Entry<'_>]) -> Element {
     let reached = entries.iter().any(|entry| entry.state() == LimitState::Reached);
     let near = entries.iter().any(|entry| entry.state() == LimitState::Near);
     let icon = if reached {
@@ -145,7 +151,7 @@ impl PlanLimits {
       if index > 0 {
         bar = bar.child(label(&ctx.t("statusBar.planLimits.separator"), PaletteColor::TextMuted));
       }
-      bar = bar.with_children(compact(ctx, entry, brief));
+      bar = bar.with_children(compact(ctx, entry));
     }
     bar.into()
   }
@@ -160,7 +166,7 @@ impl PlanLimits {
   }
 }
 
-fn compact(ctx: &Ctx, entry: &Entry<'_>, brief: bool) -> Vec<Element> {
+fn compact(ctx: &Ctx, entry: &Entry<'_>) -> Vec<Element> {
   let state = entry.state();
   let color = if state == LimitState::Normal {
     PaletteColor::TextSecondary
@@ -170,17 +176,16 @@ fn compact(ctx: &Ctx, entry: &Entry<'_>, brief: bool) -> Vec<Element> {
   if state == LimitState::Reached {
     // A reason is prose in the label's role; a reset time is a value in mono, as in `WuIp9`.
     let detail = match entry.block_beyond_reset() {
-      _ if brief => None,
-      Some(LimitBlock::Credits) => Some(label(
+      Some(LimitBlock::Credits) => Some(dropping_label(
         &ctx.t("statusBar.planLimits.reasonCredits"),
         PaletteColor::TextPrimary,
       )),
-      Some(LimitBlock::Workspace) => Some(label(
+      Some(LimitBlock::Workspace) => Some(dropping_label(
         &ctx.t("statusBar.planLimits.reasonWorkspace"),
         PaletteColor::TextPrimary,
       )),
       Some(_) => None,
-      None => Some(value(
+      None => Some(dropping_value(
         &text::reset(ctx, entry.window().and_then(LimitWindow::resets), entry.now, false),
         PaletteColor::TextPrimary,
       )),
@@ -303,12 +308,4 @@ pub fn shown(props: &Props) -> bool {
       .any(|connection| AgentProvider::CLI.contains(&connection.provider())),
     Connections::Failed(_) => true,
   }
-}
-
-/// How many CLIs are reached or refused, which decides how wide the item is.
-pub fn reached_count(props: &Props) -> usize {
-  entries(props, Timestamp::now())
-    .iter()
-    .filter(|entry| entry.state() == LimitState::Reached)
-    .count()
 }

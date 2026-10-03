@@ -126,3 +126,48 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
     "the approvals give way first"
   );
 }
+
+/// From 1700 down to 900, every 10px, with approvals waiting beside a run that auto-approves or not,
+/// and every plan limits class: the bar never shows more at a narrower width. Each text it draws is
+/// one it drew at the wider width, or that text cut shorter, and it draws no more texts than there.
+#[test]
+fn status_bar_never_shows_more_at_a_narrower_width() {
+  use orchester_core::connection::AgentProvider;
+  use orchester_desktop::plan_limits::Connections;
+  let auto = AutoApprovingRun {
+    run: RunId::generate(),
+    number: RunNumber::new(NonZeroU32::new(3).expect("above zero")),
+    task: TaskId::generate(),
+    key: "KON-3".into(),
+  };
+  for (state, readings) in super::narrow::classes() {
+    for runs in [vec![auto.clone()], Vec::new()] {
+      let mut wider: Option<(u32, Vec<String>)> = None;
+      for width in (900..=1700).rev().step_by(10) {
+        let mut bar = with((0..2).map(waiting).collect(), runs.clone());
+        bar.project.as_mut().expect("project").connections =
+          Connections::Ready(AgentProvider::CLI.into_iter().map(super::plan_limits::cli).collect());
+        let (_app, mut tree) = super::plan_limits::with_bar(width, readings.clone(), bar);
+        let texts = super::narrow::drawn_texts(&mut tree);
+        if let Some((at, before)) = &wider {
+          assert!(
+            texts.len() <= before.len(),
+            "{state}, {} runs: {width} draws {texts:?}, more than {at}: {before:?}",
+            runs.len()
+          );
+          for text in &texts {
+            let shown = text.trim_end_matches('…');
+            assert!(
+              before
+                .iter()
+                .any(|earlier| earlier.trim_end_matches('…').starts_with(shown)),
+              "{state}, {} runs: {width} draws {text:?}, which {at} did not: {before:?}",
+              runs.len()
+            );
+          }
+        }
+        wider = Some((width, texts));
+      }
+    }
+  }
+}

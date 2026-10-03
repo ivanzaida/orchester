@@ -108,20 +108,20 @@ fn status_bar_plan_limits_960_preserves_limits_and_drops_labels_when_reached() {
   for reached in [false, true] {
     let readings = limits_readings(if reached { 100.0 } else { 65.0 }, true, false);
     let (mut app, mut tree) = with_limits(960, readings, AgentProvider::CLI.into_iter().map(cli).collect());
-    assert!(tree.get_element_by_id("status-version").is_none());
-    assert!(tree.get_element_by_id("status-tokens").is_none());
+    // Whatever gives way, the version and Tokens today go before the counts' labels.
+    let labels = item_texts(&mut tree, "status-agents")
+      .iter()
+      .any(|text| text == "Agents");
+    if !labels {
+      assert!(!super::narrow::shown(&mut tree, "status-version"));
+      assert!(!super::narrow::shown(&mut tree, "status-tokens"));
+    }
     let limits = bounds(&mut tree, "status-plan-limits");
     let runner = bounds(&mut tree, "status-runner");
     let mcp = bounds(&mut tree, "status-mcp");
     assert!(runner.x + runner.width <= limits.x);
     assert!(limits.x + limits.width <= mcp.x);
     assert!(mcp.x + mcp.width <= 960.0);
-    assert_eq!(
-      item_texts(&mut tree, "status-agents")
-        .iter()
-        .any(|text| text == "Agents"),
-      !reached
-    );
     hover(&mut app, &mut tree, "status-plan-limits");
     let hint = bounds(&mut tree, "status-plan-limits-hint");
     assert!(hint.x >= 0.0 && hint.x + hint.width <= 960.0);

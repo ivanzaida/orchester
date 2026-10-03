@@ -478,7 +478,10 @@ L1 · lurq give-way order for the status bar · branch `claude/statusbar-give-wa
   100px, then which run auto-approves and the times drop out whole, then the activity, then the words after the
   approval count (*2 approvals waiting* → *2*), and last the runner's words; the hand, the count, *Review*,
   *Auto-approving* and *Stop* never give way. The workaround is gone: the `ApprovalsWidths` breakpoint table and its
-  plan limits classes, the short *N waiting* count, the power-of-two weights and the `yielding` slack.
+  plan limits classes, the short *N waiting* count, the power-of-two weights and the `yielding` slack. The bar is one
+  line, so the right group gives way in the same order (version, Tokens today, count labels, plan limits' details,
+  after the left group's optional details) instead of the `STATUS_WIDTHS` breakpoints, and it never shows more at a
+  narrower width (sweep test 900–1700).
 - Tests: `-p orchester-desktop --test status_bar status_bar`, `--test form_keyboard ended_approval` (930 to 1600 with
   auto-approval, 960 without), `approval_choices_`, a broad `form_keyboard _` pass for the lurq bump, `--test i18n`.
 
