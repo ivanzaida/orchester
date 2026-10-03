@@ -22,6 +22,8 @@ pub enum ServerError {
   Worker,
   #[error("invalid stored server data")]
   StoredData,
+  #[error("online backup did not complete; retry when the database is available")]
+  BackupIncomplete,
   #[error("cannot load TLS certificate or key")]
   Tls,
   #[error("{0:?}")]
@@ -53,6 +55,7 @@ impl ServerError {
       Self::PasswordHash => "PasswordHash",
       Self::Worker => "Worker",
       Self::StoredData => "StoredData",
+      Self::BackupIncomplete => "BackupIncomplete",
       Self::Tls => "Tls",
       Self::Api(_) => "Api",
       Self::RateLimited(_) => "RateLimited",
