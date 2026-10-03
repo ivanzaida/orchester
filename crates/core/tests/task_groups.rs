@@ -21,12 +21,19 @@ fn group(mode: Scheduling) -> TaskGroup {
 fn task_group_sequential_waits_for_review_and_holds_a_blocked_next_task() {
   let group = group(Scheduling::Sequential);
   let tasks = group.tasks();
-  assert_eq!(group.eligible(&[None, None, None], TokensUsed::ZERO), vec![tasks[0]]);
+  assert_eq!(
+    group.eligible(&[None, None, None], TokensUsed::ZERO, &[]),
+    vec![tasks[0]]
+  );
   for status in [RunStatus::Running, RunStatus::Paused(PauseReason::Requested)] {
-    assert!(group.eligible(&[Some(status), None, None], TokensUsed::ZERO).is_empty());
+    assert!(
+      group
+        .eligible(&[Some(status), None, None], TokensUsed::ZERO, &[])
+        .is_empty()
+    );
   }
   assert_eq!(
-    group.eligible(&[Some(RunStatus::Succeeded), None, None], TokensUsed::ZERO),
+    group.eligible(&[Some(RunStatus::Succeeded), None, None], TokensUsed::ZERO, &[]),
     vec![tasks[1]]
   );
 }
@@ -35,17 +42,21 @@ fn task_group_sequential_waits_for_review_and_holds_a_blocked_next_task() {
 fn task_group_parallel_counts_waiting_runs_and_enforces_aggregate_cap() {
   let group = group(Scheduling::Parallel(NonZeroU32::new(2).expect("positive")));
   assert_eq!(
-    group.eligible(&[None, None, None], TokensUsed::ZERO),
+    group.eligible(&[None, None, None], TokensUsed::ZERO, &[]),
     group.tasks()[..2]
   );
   assert_eq!(
-    group.eligible(&[Some(RunStatus::Running), None, None], TokensUsed::ZERO),
+    group.eligible(&[Some(RunStatus::Running), None, None], TokensUsed::ZERO, &[]),
     vec![group.tasks()[1]]
   );
-  assert!(group.eligible(&[None, None, None], TokensUsed::new(100)).is_empty());
   assert!(
     group
-      .eligible(&[Some(RunStatus::Cancelled), None, None], TokensUsed::ZERO)
+      .eligible(&[None, None, None], TokensUsed::new(100), &[])
+      .is_empty()
+  );
+  assert!(
+    group
+      .eligible(&[Some(RunStatus::Cancelled), None, None], TokensUsed::ZERO, &[])
       .is_empty()
   );
 }
@@ -69,20 +80,20 @@ fn task_group_rejects_empty_and_duplicate_selection() {
 fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
   let sequential = group(Scheduling::Sequential);
   let running = Some(RunStatus::Running);
-  assert_eq!(sequential.hold(&[None, None, None], TokensUsed::ZERO), None);
-  let previous = sequential.hold(&[running.clone(), None, None], TokensUsed::ZERO);
+  assert_eq!(sequential.hold(&[None, None, None], TokensUsed::ZERO, &[]), None);
+  let previous = sequential.hold(&[running.clone(), None, None], TokensUsed::ZERO, &[]);
   assert_eq!(previous, Some(GroupHold::PreviousTask));
   assert!(previous.is_some_and(|hold| hold.clears_on_its_own()));
   let parallel = group(Scheduling::Parallel(NonZeroU32::new(1).expect("positive")));
   assert_eq!(
-    parallel.hold(&[running.clone(), None, None], TokensUsed::ZERO),
+    parallel.hold(&[running.clone(), None, None], TokensUsed::ZERO, &[]),
     Some(GroupHold::Concurrency)
   );
   let failed = Some(RunStatus::Cancelled);
-  let held = sequential.hold(&[failed.clone(), None, None], TokensUsed::ZERO);
+  let held = sequential.hold(&[failed.clone(), None, None], TokensUsed::ZERO, &[]);
   assert_eq!(held, Some(GroupHold::FailedTask));
   assert!(held.is_some_and(|hold| !hold.clears_on_its_own() && hold.releases_unstarted()));
-  let cap = sequential.hold(&[running.clone(), None, None], TokensUsed::new(100));
+  let cap = sequential.hold(&[running.clone(), None, None], TokensUsed::new(100), &[]);
   assert_eq!(cap, Some(GroupHold::GroupCap));
   assert!(cap.is_some_and(|hold| hold.releases_unstarted()));
   assert!(!GroupHold::SessionEnded.clears_on_its_own() && !GroupHold::SessionEnded.releases_unstarted());
@@ -98,7 +109,7 @@ fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
   // Nothing is left to start, and nothing holds the group: no hold.
   let done = Some(RunStatus::Succeeded);
   assert_eq!(
-    sequential.hold(&[done.clone(), done.clone(), running], TokensUsed::ZERO),
+    sequential.hold(&[done.clone(), done.clone(), running], TokensUsed::ZERO, &[]),
     None
   );
   assert!(!TaskGroup::finished(&[done.clone(), done.clone(), None]));
@@ -108,17 +119,104 @@ fn task_group_hold_names_why_unstarted_tasks_wait_and_who_ends_it() {
 #[test]
 fn task_group_work_of_its_own_waits_only_on_moving_members() {
   let sequential = group(Scheduling::Sequential);
-  assert!(sequential.has_work_of_its_own(&[None, None, None], TokensUsed::ZERO));
-  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::ZERO));
-  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Pending), None, None], TokensUsed::ZERO));
+  assert!(sequential.has_work_of_its_own(&[None, None, None], TokensUsed::ZERO, &[]));
+  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::ZERO, &[]));
+  assert!(sequential.has_work_of_its_own(&[Some(RunStatus::Pending), None, None], TokensUsed::ZERO, &[]));
   for stuck in [
     RunStatus::Paused(PauseReason::Requested),
     RunStatus::Interrupted(orchester_core::run::InterruptCause::RunnerLost),
     RunStatus::Cancelled,
   ] {
-    assert!(!sequential.has_work_of_its_own(&[Some(stuck), None, None], TokensUsed::ZERO));
+    assert!(!sequential.has_work_of_its_own(&[Some(stuck), None, None], TokensUsed::ZERO, &[]));
   }
-  assert!(!sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::new(100)));
+  assert!(!sequential.has_work_of_its_own(&[Some(RunStatus::Running), None, None], TokensUsed::new(100), &[]));
   let done = Some(RunStatus::Succeeded);
-  assert!(!sequential.has_work_of_its_own(&[done.clone(), done.clone(), done], TokensUsed::ZERO));
+  assert!(!sequential.has_work_of_its_own(&[done.clone(), done.clone(), done], TokensUsed::ZERO, &[]));
+}
+
+/// A blocked task in a parallel group is passed over; the tasks after it start in its place.
+#[test]
+fn task_group_parallel_passes_over_a_blocked_task() {
+  let group = group(Scheduling::Parallel(NonZeroU32::new(2).expect("two")));
+  let tasks = group.tasks().to_vec();
+  let outside = TaskId::generate();
+  let blockers = [vec![outside], vec![], vec![]];
+  assert_eq!(
+    group.eligible(&[None, None, None], TokensUsed::ZERO, &blockers),
+    vec![tasks[1], tasks[2]]
+  );
+  // Once the others run, the blocked task waits for its blocking task, not for a person.
+  let running = Some(RunStatus::Running);
+  let statuses = [None, running.clone(), running];
+  assert_eq!(
+    group.hold(&statuses, TokensUsed::ZERO, &blockers),
+    Some(GroupHold::Blocked { by: vec![outside] })
+  );
+  assert!(GroupHold::Blocked { by: vec![outside] }.clears_on_its_own());
+  assert!(GroupHold::Blocked { by: vec![outside] }.releases_unstarted());
+  // Waiting for a task outside the group is not the group's own work.
+  assert!(!group.has_work_of_its_own(&statuses, TokensUsed::ZERO, &blockers));
+  // When the blocking task finishes, the task starts.
+  assert_eq!(
+    group.eligible(
+      &[None, Some(RunStatus::Succeeded), Some(RunStatus::Succeeded)],
+      TokensUsed::ZERO,
+      &[]
+    ),
+    vec![tasks[0]]
+  );
+}
+
+/// In a sequential group a blocked first task does not hold the next: the next takes its turn.
+#[test]
+fn task_group_sequential_passes_over_a_blocked_task() {
+  let group = group(Scheduling::Sequential);
+  let tasks = group.tasks().to_vec();
+  let blockers = [vec![TaskId::generate()], vec![], vec![]];
+  assert_eq!(
+    group.eligible(&[None, None, None], TokensUsed::ZERO, &blockers),
+    vec![tasks[1]]
+  );
+  assert_eq!(group.hold(&[None, None, None], TokensUsed::ZERO, &blockers), None);
+}
+
+/// A task blocked by a later task of the same sequential group starts after it: no deadlock.
+#[test]
+fn task_group_blocker_inside_the_group_runs_first() {
+  let group = group(Scheduling::Sequential);
+  let tasks = group.tasks().to_vec();
+  let blockers = [vec![tasks[2]], vec![], vec![]];
+  assert_eq!(
+    group.eligible(&[None, None, None], TokensUsed::ZERO, &blockers),
+    vec![tasks[1]]
+  );
+  let done = Some(RunStatus::Succeeded);
+  assert_eq!(
+    group.eligible(&[None, done.clone(), None], TokensUsed::ZERO, &blockers),
+    vec![tasks[2]]
+  );
+  // The blocking task ran; its link is finished, so the first task starts last.
+  assert_eq!(
+    group.eligible(&[None, done.clone(), done], TokensUsed::ZERO, &[]),
+    vec![tasks[0]]
+  );
+}
+
+/// A blocked task's Pending first run neither holds the group's slot nor counts as work under way:
+/// the next task starts in its place, and with only it left the group waits for its blocking task.
+#[test]
+fn task_group_blocked_pending_run_holds_no_slot() {
+  let group = group(Scheduling::Sequential);
+  let tasks = group.tasks().to_vec();
+  let outside = TaskId::generate();
+  let blockers = [vec![outside], vec![], vec![]];
+  let statuses = [Some(RunStatus::Pending), None, None];
+  assert_eq!(group.eligible(&statuses, TokensUsed::ZERO, &blockers), vec![tasks[1]]);
+  let done = Some(RunStatus::Succeeded);
+  let only_blocked = [Some(RunStatus::Pending), done.clone(), done];
+  assert_eq!(
+    group.hold(&only_blocked, TokensUsed::ZERO, &blockers),
+    Some(GroupHold::Blocked { by: vec![outside] })
+  );
+  assert!(!group.has_work_of_its_own(&only_blocked, TokensUsed::ZERO, &blockers));
 }

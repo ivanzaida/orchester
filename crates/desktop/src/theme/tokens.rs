@@ -234,9 +234,18 @@ pub const CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW: f32 = 980.0;
 pub const CONVERSATION_TOOLBAR_RAW_SWITCH: f32 = 140.0;
 /// How much wider *Waits for your decision* is than *Following live*.
 pub const CONVERSATION_TOOLBAR_DECISION_STATE: f32 = 50.0;
-/// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
-/// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
-/// column is left out so the title keeps its room (not drawn yet).
-pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1152.0;
+/// The task table (`clVjO`, `qVMJh`) drops columns as the window narrows. Its fixed cells and gaps
+/// take 392 plus Workflow / run (212, or 164 without Priority) of the window less its 216 sidebar
+/// and 64 page padding; Pipeline adds 152 and Priority 112. Pipeline stays while the title keeps
+/// 200 beside every column; the tag chips under the titles while it keeps 200 without Pipeline;
+/// Priority while it keeps 120. Narrower, the title still keeps 120 down to a 956 window.
+pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1348.0;
+pub const TASK_TABLE_TAGS_MIN_WINDOW: f32 = 1196.0;
+pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = 1116.0;
+/// The narrowest window whose Overview keeps the attention column (`NM5My`, 288 and a 32 gap)
+/// beside the task list: the 216 sidebar, 64 page padding and a list row's fixed parts (state
+/// tile, the longest workflow label, tag chips, time, chevron and their gaps, about 530) leave its
+/// title and meta 200. Narrower, the column goes under the list at full width (no frame draws it).
+pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = 1340.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

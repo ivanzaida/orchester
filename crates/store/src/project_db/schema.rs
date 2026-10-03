@@ -11,6 +11,7 @@ mod invocation_permissions;
 mod mcp;
 mod memory;
 mod native_commands;
+mod organization;
 mod recovery;
 mod steering;
 mod stuck_runs;
@@ -591,4 +592,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   stuck_runs::MIGRATION,
   steering::MIGRATION,
   approval_choices::MIGRATION,
+  organization::MIGRATION,
 ];

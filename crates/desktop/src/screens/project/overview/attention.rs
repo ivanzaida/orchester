@@ -55,6 +55,7 @@ pub(super) fn attention(
   open: &OpenProject,
   tasks: &ProjectTasks,
   (nav, queue): (&ProjectNav, Option<&ApprovalQueue>),
+  beside: bool,
 ) -> Element {
   let requests: Vec<Element> = tasks
     .pending_tool_approvals
@@ -87,13 +88,22 @@ pub(super) fn attention(
       .chain(waiting.iter().map(|row| decision(ctx, row, nav)))
       .collect()
   };
-  Column::new()
-    .id("overview-attention")
-    .width(Dimension::Px(PANEL_WIDTH))
-    .height(Dimension::Pct(100.0))
-    .padding_left(SpacingSize::Lg)
-    .spacing(SpacingSize::Lg)
-    .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+  // Beside the list a column with a rule at its left; under it, in narrow windows, the full width
+  // with the rule above.
+  let column = Column::new().id("overview-attention").spacing(SpacingSize::Lg);
+  let column = if beside {
+    column
+      .width(Dimension::Px(PANEL_WIDTH))
+      .height(Dimension::Pct(100.0))
+      .padding_left(SpacingSize::Lg)
+      .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+  } else {
+    column
+      .width(Dimension::Pct(100.0))
+      .padding_top(SpacingSize::Lg)
+      .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+  };
+  column
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))

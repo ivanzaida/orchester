@@ -11,7 +11,7 @@ use crate::{
   runner::Runners,
   tasks::{
     data::{PipelineChoice, SaveTarget},
-    run::{StartOutcome, queue_in, start_messages},
+    run::{StartOutcome, start_messages},
   },
   ui::form::Submit,
   workspace::OpenProject,
@@ -34,7 +34,9 @@ impl NewTaskForm {
       None => RunArgs::New {
         repo_root: project.repo_root.clone(),
         target,
-        details: ready?,
+        details: Box::new(ready?),
+        // Invalid organization is explained beside its fields and prevents Run.
+        organization: self.organization.change()?,
         pipeline: Arc::new(
           pipelines?
             .iter()
@@ -69,15 +71,24 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
           repo_root,
           target,
           details,
+          organization,
           pipeline,
         } => {
           let selected_version = pipeline.version;
-          let queued = background::run(move || queue_in(&repo_root, target, details, selected_version))
-            .await
-            .map_err(|error| RunProblems {
-              messages: vec![error].into(),
-              queued: None,
-            })?;
+          let queued = background::run(move || {
+            crate::tasks::run::queue_organized_in(
+              &repo_root,
+              target,
+              *details,
+              (&organization.0, &organization.1),
+              selected_version,
+            )
+          })
+          .await
+          .map_err(|error| RunProblems {
+            messages: vec![error].into(),
+            queued: None,
+          })?;
           let saved = queued.map_err(|failure| {
             tracing::warn!(?failure, "the task was not queued for a run");
             RunProblems {

@@ -352,10 +352,91 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.34.0: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.34.2: its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
+
+## S · Shared server (self-hosted)
+
+The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
+people share a project's task list on a server their team runs, and see who took a task into work. Runs, worktrees,
+transcripts and secrets stay on each person's computer. Phases S1a and S1b are server-only (no desktop UI) and are
+handed to Codex; S2a–S3 need screens that are not drawn yet and wait for the designer.
+
+Rules for both phases, on top of `AGENTS.md`:
+
+- Work in `.tmp/worktrees/codex-server-<phase>` on a branch `codex/server-<phase>`; S1b starts from S1a's branch
+  once S1a is merged, never in parallel with it.
+- New crates exactly as the document's *Processes and crates* says: `crates/api` (`orchester-api`, types only in S1a
+  and S1b; the `client` feature with reqwest comes with S2a) and `crates/server` (`orchester-server`, binary
+  `orchester-server`). New dependencies only those in its *Dependencies* table, each in `[workspace.dependencies]`
+  with the reason in the commit message.
+- Core gains only types and pure functions (`sharing`, `TaskRevision`, `RepositoryIdentity`); no HTTP, no database.
+  The server calls core's rules; it does not re-implement them.
+- The server must build and its tests pass on Windows (this host), and `cargo check -p orchester-server
+  --target aarch64-apple-darwin` must pass. Linux and Docker are the supported hosts: ship the Dockerfile and the
+  compose example with Caddy; if Docker is not available on this host, say that the image was not built.
+- Server tests live in `crates/server/tests/`, start a real server on loopback with a temporary data directory and a
+  settable `Clock`, and carry name filters (`cargo test -p orchester-server --test <binary> <filter>`).
+- Tokens and passwords never reach logs, errors, `Debug` output or test snapshots (rule 11); a test captures the log
+  of a sign-in and work session and asserts neither appears.
+- Token idle expiry is 30 days (user, 2026-10-03); it is a constant, not a setting.
+- When a phase is done: `powershell -File tools/check.ps1`, the server tests, the macOS check; then move the phase to
+  *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
+  independent review by another agent comes first.
+
+### S1a · Server and accounts (non-UI)
+
+Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
+
+- `orchester-api` (types only) and `orchester-server` build on Windows, macOS (check) and Linux; the Docker image and
+  compose example build and start on Linux.
+- Empty data directory: `GET /api/v1/server` reports `needs_bootstrap`; `orchester-server user create --admin <name>`
+  creates the first admin and prints the initial password only to its own output; `user reset-password` works.
+- Sign-in, `password_change_required`, password change (other sessions revoked), session list and revoke, sign-out,
+  the 30-day idle expiry with the test clock; argon2id with the document's parameters; tokens `orc_` + 64 hex, stored
+  as SHA-256 only.
+- Admin user endpoints; `403` for non-admins; the last admin cannot be removed or disabled.
+- Rate limits answer `429` with `Retry-After`; an unknown username answers like a wrong password, in about the same
+  time; `X-Forwarded-For` counts only from a `trusted_proxies` hop.
+- With a PEM certificate configured the server speaks TLS (tested with a test certificate); the log test finds neither
+  token nor password; the `audit_events` table records the events the document lists.
+
+### S1b · Projects, tasks, claims and events on the server (non-UI)
+
+Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
+
+- Core: `sharing` (claim take, release, take-over, heartbeat, staleness at 15 minutes, the run phases that end a
+  claim; tests over explicit times) and `RepositoryIdentity::from_remote_url` (HTTPS, SSH and scp-like forms of one
+  repository match; local paths and no `origin` refused).
+- Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`403 not_member` with the
+  owners), members added and removed by owners and admins only, `404` for non-members; of two simultaneous creates for
+  one repository exactly one succeeds and the other gets `409 remote_taken` and changes nothing.
+- Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate; a repeated idempotency key
+  returns the first result; a stale revision gets `409 revision_conflict` with the current task; the edit lock and
+  queueing follow core's rules; import gives new numbers and keeps ids and former keys.
+- Claims: of two simultaneous claims exactly one wins; a heartbeat refreshes and reports lost claims; stale after 15
+  minutes of test clock; take-over refused while fresh or changed and recorded when done; removing a member or
+  disabling a user releases their claims.
+- Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
+  30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
+- `PUT …/run` (live run status, S3's server half) is not part of S1b.
+
+### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design)
+
+Settings › Servers, Project settings › Sharing, the join review list, claims on task rows and the task page, the
+conflict state and the offline notice are not drawn yet. Do not start these phases; the designer draws them first
+(`docs/architecture/server.md` § *Desktop data*, "Where it is configured").
+
+### L1 · lurq: give-way order and content minimum for shrinking rows (lurq)
+
+The status bar must cut its items in a fixed order and never drop the approval count, *Review*, *Auto-approving* or
+*Stop*; lurq shares a row's overflow between all shrinking children by weight and only down to an explicit minimum.
+Orchester works around it on `claude/stale-approval` (pieces, power-of-two weights, `yielding` in
+`crates/desktop/src/screens/status_bar/item.rs`). Handoff for the lurq agent:
+`H:/projects/lurq/bugreports/lurq-flex-shrink-give-way-order.md`. Done when lurq ships a give-way order and/or a
+content minimum, and the status bar uses it instead of the workaround.
 
 ## P · Product decisions waiting for the user
 
@@ -384,7 +465,7 @@ A tool request whose agent is gone no longer waits forever · branch `claude/sta
   or whose run stopped stayed *waiting*; answering it only said it no longer waits and its dialog stayed. The runner
   now ends such a request without an answer (existing `interrupted` state; no migration) at the run task's end, when
   a runner attaches (each request read, by id), and when an answer reaches a request no live agent holds; an answer
-  to a request answered already is refused as `ToolApprovalAnswered` (IPC protocol **13**); the
+  to a request answered already is refused as `ToolApprovalAnswered` (IPC protocol **14**, after ORC-39's 13); the
   desktop drops a request the runner refuses that way from the dialog (next request with a notice, or closed) and
   the inline card (*Ended without an answer*), and the status bar says it ended. The step row's *Waiting for you ·
   <tool> · since* now follows the step's pending request whatever the step's state (a tool request never set the
@@ -392,6 +473,79 @@ A tool request whose agent is gone no longer waits forever · branch `claude/sta
   requests"); code review and design verification passed.
 - Tests: `-p orchester-runner --features test-agent --test stale_approvals stale_approvals`; `-p orchester-store
   --test tool_approvals tool`; `-p orchester-desktop --test form_keyboard ended_approval`.
+
+ORC-39 · Task statuses, priorities and tags · branch `claude/orc39` (done 2026-10-03)
+
+Branch `claude/orc39` (worktree `.tmp/worktrees/claude-orc39`): run #11's work merged with master twice, last at
+`51fc02f` (ORC-30, ORC-44, retry-feedback with protocol 11 and stuck runs, approval-long, lurq 0.33.1). The Review
+findings are fixed, each with a `form_keyboard` test in `organization_review.rs`: R1 a failed save no longer passes for
+the last success; R2 the header, tag manager, tag picker, bulk, Run and tag-mode observers are registered once; R3 the
+queued Retry form locks the organization fields; R4 an unavailable tag picker creates no tag. Design fixes from the
+earlier Verify are in (header pickers as buttons, bulk Add tag in place, blocked notice and readiness copy, `Ncjvt`).
+
+Integration with ORC-30 (decisions to draw in Pencil, not drawn yet):
+- **Tabs:** ORC-39's workflow tabs replace Drafts / Queue / Needs review; every tab shows its count.
+- **Query:** line 1 is ORC-30's search, pipeline filter and sort (Manual order, Newest first, Title, Status,
+  Priority); line 2 is Status, Priority, Tags and Clear filters, with Manage tags at the right.
+- **Selection bar** (`OjUxo` + `EpDpS`), 12 horizontal padding, raised fill: from 1348 wide, line 1 (44 high) is
+  select-all, "N selected", the readiness (ellipsis), then Run selected, Set pipeline and, for held tasks, Return to
+  drafts at the right; line 2 is Set status, Set priority, Add tag, Remove tag at the left, then each task's outcome.
+  Narrower, line 1 is the summary, line 2 the run actions right-aligned, line 3 the organization group. ORC-30's
+  problem lines stay under the bar.
+- **Table:** checkbox, ID, Task / tags, Pipeline, Priority, Workflow / run, Dependency / readiness. The title keeps
+  120. Pipeline goes below a 1348 window, the tag chips below 1196, Priority below 1116, where Workflow / run narrows
+  from 212 to 164; the title still has 124 at 960.
+- **Overview:** the run tabs stay behind Insights; the Needs you panel shows without Insights while anything needs you.
+
+Review follow-ups (review of `7ddd610`): a draft whose blocking task has not finished is a Run selected problem
+("KON-3 is blocked by KON-1") and the store refuses to queue it; a group member blocked after queueing is passed over
+(the members after it start), the group holds `GroupHold::Blocked { by }`, which ends on its own and keeps the runner
+busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 13 for
+`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (12 went to the approval choices, merged first); the
+organization migration is 39, after steering (37) and approval choices (38). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
+another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
+
+The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ETG` and F `lRbit`: the selection bar
+is hidden without a selection, padded 12 with 32-high lines 8 apart, Return to drafts, Set pipeline and Run selected
+last; select-all shows square-minus for a partial selection; a bulk change reads as one summary line with a line per
+failed task; held tasks read "2 tasks held after a task failed · Return to drafts"; rows are 60 high once the tag
+chips are dropped. Re-review follow-ups: a run waiting for a decision on a
+blocked task shows the Blocked notice naming the blocking tasks, and the header says Blocked for link-only blocking;
+an answer or follow-up to a blocked run is kept ("Your message is kept…") and the scheduler's pass delivers it once
+the blocking tasks finish; a blocked Pending first run holds no group slot; a group held as Blocked can be returned
+to drafts.
+
+Design verification of `329ea66` (`.tmp/verify-orc39/REPORT.md`) failed; its majors are fixed: the Canceled
+confirmations follow `N1vwaM` and `hFH4D` (one shared panel: the Work is kept or Active run notice, Keep and Stop at
+the right with icons, bulk plurals, the Set status menu closes); held group members read Queued; the footer counts
+the tab's rows, or "N tasks match" while filtered; renaming a project tag onto an existing name offers Merge into
+it; the Blocked flag sits beside the run label in 60-high rows; the blocking-task search lists results with a check,
+Add selected task and the current task apart (`tUwII`); an empty filtered list is the `rVJoA` notice with Clear
+filters.
+Re-verification follow-ups: bulk Remove tag counts the tasks that had the tag and names the others ("2 selected
+tasks did not have Desktop."), with the panel hint; asking to confirm Canceled in Edit task is no failed save (no
+status-bar failure, no inline error); the task form shows "Run unavailable" with the unfinished blocking tasks above
+its run action (`ZLhiM`); "Canceled" is the one spelling in the app's text; the bulk Add tag picker has one frame;
+the blocking search offers no linked task and adds only a task it shows.
+Merged with master `0678ce0d` (ORC-61, approval choices): the task organization history moved from the removed
+Activity tab to the end of the Summary; the header's Canceled asks the store whether a run must stop, so a task page
+that has not read the run's end yet neither asks nor skips the confirmation.
+Code review follow-ups (2026-10-03, after `ee7bab6c`; master `fee1ff89` merged): Edit task saves only the
+organization fields the person changed (`TaskOrganization::rebase`), so a status set meanwhile is kept; a confirmed
+Canceled stops only the named run (`tasks::cancel_run`), in the header, Edit task and bulk; a Canceled task's other
+fields stay editable; bulk outcomes count real changes and name failed tasks; the store's per-task
+`update_task_organization` replaces the batch shape; history icons follow the change kind; `TaskSort::Updated` is gone.
+`DependencyGate::Review` stays: the scheduler tests exercise it as a rule, though the app only creates Merge links.
+User decisions (2026-10-03, recorded in the design doc): history stays at the end of Summary; a Canceled task is
+skipped by its group (`TaskGroup::skipping`, `GroupHold::Canceled`); migration 39 backfills statuses from runs.
+
+**Done 2026-10-03:** merged into master after three independent code reviews (PASS) and app/Pencil design
+verification of the ORC-39 states, the combined list at 1440 and 960, the Overview (attention column beside the list
+from 1340, under it below) and the Summary history, with no blocking or major mismatches left. Protocol 13, migration 39.
+Open minors (follow-ups): D1DC6T icon tiles and meta context; the Overview attention column comes after the list below
+1340; the header confirmation can open before the page read the run (no run number shown); app tests for the header/Edit
+"started since" paths.
+
 
 Approval choices, waiting requests and auto-approval · branch `claude/approval-choices` (done 2026-10-03)
 

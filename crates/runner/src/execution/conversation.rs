@@ -64,11 +64,18 @@ impl Scheduler {
     }
   }
 
-  fn deliver_idle(&self, run: RunId) -> Result<(), Rejection> {
+  pub(super) fn deliver_idle(&self, run: RunId) -> Result<(), Rejection> {
     // No task executes the run, or its task ended without reading the request.
     let mut db = self.open()?;
-    let Some(prepared) = deliver_idle(&mut db, &self.inner.project_root, run)? else {
-      return Ok(());
+    let prepared = match deliver_idle(&mut db, &self.inner.project_root, run) {
+      Ok(Some(prepared)) => prepared,
+      Ok(None) => return Ok(()),
+      // The messages stay queued; they are delivered once the blocking tasks finish.
+      Err(rejection) if super::blocked_runs::is_blocked(&rejection) => {
+        self.hold_for_blockers(run);
+        return Err(rejection);
+      }
+      Err(rejection) => return Err(rejection),
     };
     self.inner.notifier.send(Event::RunChanged {
       run,
@@ -84,6 +91,7 @@ impl Scheduler {
   /// messages reach, or ends again at once.
   pub(super) fn wake_answered(&self, db: &ProjectDb, waiting: Vec<Run>) -> Result<(), Rejection> {
     for run in waiting {
+      let id = run.id();
       if self.is_active(run.id()) || run.awaiting_answer().is_empty() {
         continue;
       }
@@ -94,7 +102,17 @@ impl Scheduler {
         continue;
       }
       tracing::info!(run = %run.id(), "a question was answered while no runner was attached");
-      let prepared = Prepared::continuing(db, &self.inner.project_root, run)?;
+      let prepared = match Prepared::continuing(db, &self.inner.project_root, run) {
+        Ok(prepared) => prepared,
+        Err(Rejection::RunAgainBlocked {
+          block: orchester_core::run::RunAgainBlock::TaskBlocked,
+        }) => {
+          tracing::info!("answered run remains waiting for its blocking tasks");
+          self.hold_for_blockers(id);
+          continue;
+        }
+        Err(rejection) => return Err(rejection),
+      };
       self.spawn(self.open()?, prepared)?;
     }
     Ok(())
@@ -119,6 +137,7 @@ impl Scheduler {
           self.spawn(self.open()?, prepared)?;
         }
         Ok(None) => {}
+        Err(rejection) if super::blocked_runs::is_blocked(&rejection) => self.hold_for_blockers(run),
         Err(rejection) => tracing::warn!(%run, ?rejection, "queued messages cannot be delivered; they stay queued"),
       }
     }
@@ -177,9 +196,10 @@ fn follow_up(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<Option<Pre
   // with no agent at work.
   prepare::existing_worktree(root, run.id())?;
   let events = run.follow_up(&step, Timestamp::now()).map_err(idle::rejection)?;
-  idle::store(db, &run, &events)?;
-  tracing::info!(run = %run.id(), %step, "follow-up started");
-  Prepared::continuing(db, root, run).map(Some)
+  let prepared = Prepared::continuing(db, root, run)?;
+  idle::store(db, &prepared.run, &events)?;
+  tracing::info!(run = %prepared.run.id(), %step, "follow-up started");
+  Ok(Some(prepared))
 }
 
 impl RunTask {

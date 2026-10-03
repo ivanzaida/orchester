@@ -54,12 +54,16 @@ fn new_task_tab_passes_through_the_form_in_window_order() {
   // pipeline selector without pipelines, Create & run and Create (no title yet) cannot be used
   // and are skipped. After the form Tab wraps to its first field.
   assert_eq!(
-    desktop.stops(7, false),
+    desktop.stops(11, false),
     expected(&[
       Some(TITLE),
       Some(BRIEF),
       Some(FIRST_CRITERION),
       Some(ADD_CRITERION),
+      Some("task-workflow-field"),
+      Some("task-priority-field"),
+      Some("task-tags-picker"),
+      Some("task-blocked-field"),
       Some(BUDGET),
       Some(TIME_LIMIT),
       Some(TITLE),
@@ -152,7 +156,7 @@ fn new_task_create_returns_to_the_list_with_the_task_highlighted() {
     tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
   });
   assert!(shows(&mut desktop, "task-row-KON-1", "Add switcher"));
-  assert!(shows(&mut desktop, "task-row-KON-1", "Draft"));
+  assert!(shows(&mut desktop, "task-row-KON-1", "Backlog"));
   let db = ProjectDb::open(&desktop.repo).expect("open project");
   let tasks = db.tasks().expect("read tasks");
   assert_eq!(tasks.len(), 1);

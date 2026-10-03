@@ -281,7 +281,7 @@ since no agent of an earlier runner is at work (each by id, `ProjectDb::end_wait
 new agent records meanwhile is not touched); and an answer to a request no live agent holds (no task executes the
 run, the step's worker ended, or the worker waits on another call) ends it and is refused with
 `ToolApprovalNotAwaited`. An answer to a request answered already (a second click, or Orchester answered it) is
-refused with `ToolApprovalAnswered` (IPC protocol 13), which the desktop does not read as an end. The desktop drops a request the
+refused with `ToolApprovalAnswered` (IPC protocol 14), which the desktop does not read as an end. The desktop drops a request the
 runner refuses that way from the dialog and the inline card at once, and says it ended (design doc, "Approval
 choices and waiting requests").
 

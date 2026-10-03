@@ -99,6 +99,20 @@ pub fn execution_plan(
         .flex(1.0)
         .scrollbar(gutter_scrollbar()),
     )
+    // Why Run is unavailable sits right above the run action (`qlttu` in `ZLhiM`).
+    .with_children(
+      crate::screens::project::run_blockers::run_unavailable(
+        ctx,
+        &form.organization.blockers.get(),
+        form.organization.blocked.get(),
+      )
+      .map(|notice| {
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .padding_right(Dimension::Px(gutter))
+          .child(notice)
+      }),
+    )
     .child(actions(ctx, state, save, start).padding_right(Dimension::Px(gutter)))
     .into()
 }

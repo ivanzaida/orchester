@@ -18,7 +18,11 @@ use super::ProjectNav;
 use crate::{
   display,
   navigation::route::Page,
-  tasks::list::TaskRow,
+  tasks::{
+    list::TaskRow,
+    organization::{priority_label, workflow_label},
+    tag_chips::row_tag_chips,
+  },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -34,16 +38,25 @@ use crate::{
 const SELECT_WIDTH: f32 = 18.0;
 const KEY_WIDTH: f32 = 72.0;
 const PIPELINE_WIDTH: f32 = 136.0;
-const STATUS_WIDTH: f32 = 128.0;
+const PRIORITY_WIDTH: f32 = 96.0;
+// ORC-39 qVMJh: workflow and run state occupy separate lines.
+const STATUS_WIDTH: f32 = 212.0;
 const READINESS_WIDTH: f32 = 184.0;
 const OPEN_WIDTH: f32 = 14.0;
 /// The least room a task's title keeps when the window is narrow.
 const TITLE_MIN_WIDTH: f32 = 120.0;
+/// Workflow / run once Priority has left the table: its status label and run line still fit, and
+/// the title keeps `TITLE_MIN_WIDTH` in a 960 window.
+const NARROW_STATUS_WIDTH: f32 = 164.0;
 pub(super) const HEADING_HEIGHT: f32 = 28.0;
-pub(super) const TABLE_ROW_HEIGHT: f32 = 48.0;
+/// A row with tag chips under its title, and one without them once the window drops the chips
+/// (`clVjO`, 02.03E `t7ETG`).
+const TABLE_ROW_HEIGHT: f32 = 76.0;
+const NARROW_TABLE_ROW_HEIGHT: f32 = 60.0;
 /// Overview row: row height, state tile and the width of the time column (`s0gWDM`, `aqRNL`,
 /// `XY1PR`).
-const LIST_ROW_HEIGHT: f32 = 78.0;
+// DtpHJ full-width overview task specimen.
+const LIST_ROW_HEIGHT: f32 = 136.0;
 const STATE_TILE_SIZE: f32 = 32.0;
 const TIME_WIDTH: f32 = 60.0;
 
@@ -111,10 +124,48 @@ fn opens(nav: &ProjectNav, row: &TaskRow, content: Row) -> Element {
     .into()
 }
 
-/// Whether the window is wide enough for the Pipeline column; reading the width re-renders the
-/// caller as the window resizes.
-fn shows_pipeline(ctx: &Ctx) -> bool {
-  ctx.window().logical_width() >= crate::theme::TASK_TABLE_PIPELINE_MIN_WINDOW
+/// The optional columns of the task table the window has room for. As the window narrows,
+/// Pipeline goes first, then the tag chips under the titles, then Priority, so the title keeps its
+/// room (`TASK_TABLE_*_MIN_WINDOW`). Reading the width re-renders the caller as the window resizes.
+#[derive(Clone, Copy)]
+struct Columns {
+  pipeline: bool,
+  tags: bool,
+  priority: bool,
+}
+
+impl Columns {
+  fn of(ctx: &Ctx) -> Self {
+    let width = ctx.window().logical_width();
+    Self {
+      pipeline: width >= crate::theme::TASK_TABLE_PIPELINE_MIN_WINDOW,
+      tags: width >= crate::theme::TASK_TABLE_TAGS_MIN_WINDOW,
+      priority: width >= crate::theme::TASK_TABLE_PRIORITY_MIN_WINDOW,
+    }
+  }
+
+  /// Rows are lower once their tag chips are gone.
+  const fn row_height(self) -> f32 {
+    if self.tags {
+      TABLE_ROW_HEIGHT
+    } else {
+      NARROW_TABLE_ROW_HEIGHT
+    }
+  }
+
+  /// Workflow / run is narrower once Priority is gone.
+  const fn status_width(self) -> f32 {
+    if self.priority {
+      STATUS_WIDTH
+    } else {
+      NARROW_STATUS_WIDTH
+    }
+  }
+}
+
+/// The height of a task table row in the window as it is now.
+pub(super) fn table_row_height(ctx: &Ctx) -> f32 {
+  Columns::of(ctx).row_height()
 }
 
 fn column_label(text: &str) -> Text {
@@ -123,6 +174,7 @@ fn column_label(text: &str) -> Text {
 
 /// Column labels of the task table (`B5FaIC`).
 pub fn table_heading(ctx: &Ctx) -> Element {
+  let columns = Columns::of(ctx);
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADING_HEIGHT))
@@ -137,8 +189,20 @@ pub fn table_heading(ctx: &Ctx) -> Element {
         .min_width(Dimension::Px(TITLE_MIN_WIDTH))
         .child(column_label(&ctx.t("tasks.columns.task"))),
     )
-    .with_children(shows_pipeline(ctx).then(|| cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline")))))
-    .child(cell(STATUS_WIDTH, column_label(&ctx.t("tasks.columns.status"))))
+    .with_children(
+      columns
+        .pipeline
+        .then(|| cell(PIPELINE_WIDTH, column_label(&ctx.t("tasks.columns.pipeline")))),
+    )
+    .with_children(
+      columns
+        .priority
+        .then(|| cell(PRIORITY_WIDTH, column_label(&ctx.t("tasks.columns.priority")))),
+    )
+    .child(cell(
+      columns.status_width(),
+      column_label(&ctx.t("tasks.columns.status")),
+    ))
     .child(cell(READINESS_WIDTH, column_label(&ctx.t("tasks.columns.readiness"))))
     .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
     .into()
@@ -172,9 +236,10 @@ impl Component for QueueRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let QueueRowProps { row, created } = ctx.props::<QueueRowProps>().clone();
     let select = super::tasks::selection::row_checkbox(ctx, row.id, &row.key);
+    let columns = Columns::of(ctx);
     let content = Row::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(TABLE_ROW_HEIGHT))
+      .height(Dimension::Px(columns.row_height()))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .hovered_style(Style::new().background(PaletteColor::AccentMuted))
@@ -183,21 +248,23 @@ impl Component for QueueRow {
         Text::new(&row.key).variant(TypographyStyle::Mono).nowrap(),
       ))
       .child(
-        Row::new()
+        Column::new()
           .id(format!("task-title-{}", row.key))
           .flex(1.0)
           .min_width(Dimension::Px(TITLE_MIN_WIDTH))
-          .align_items(Alignment::Center)
+          .spacing(SpacingSize::Sm)
           .child(
             Text::new(&row.title)
+              .id(format!("task-row-title-{}", row.key))
               .variant(TypographyStyle::FieldLabel)
               .color(PaletteColor::TextPrimary)
               .nowrap()
               .text_overflow(TextOverflow::Elipsis)
-              .flex(1.0),
-          ),
+              .width(Dimension::Pct(100.0)),
+          )
+          .with_children(columns.tags.then(|| row_tag_chips(ctx, row.id, &row.tags))),
       )
-      .with_children(shows_pipeline(ctx).then(|| {
+      .with_children(columns.pipeline.then(|| {
         cell(
           PIPELINE_WIDTH,
           column_label(&message_text(ctx, &row.pipeline.message()))
@@ -206,7 +273,12 @@ impl Component for QueueRow {
         )
         .id(format!("task-pipeline-{}", row.key))
       }))
-      .child(cell(STATUS_WIDTH, row_status_label(ctx, row.phase)))
+      .with_children(
+        columns
+          .priority
+          .then(|| cell(PRIORITY_WIDTH, priority_label(ctx, row.organization.priority()))),
+      )
+      .child(cell(columns.status_width(), workflow_run(ctx, &row, !columns.tags)))
       .child(cell(
         READINESS_WIDTH,
         column_label(&message_text(ctx, &row.detail))
@@ -234,7 +306,7 @@ impl Component for QueueRow {
 
 /// A task in the overview's task list (`zemhy`): state tile, title with key and readiness,
 /// status, age.
-pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
+pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> Element {
   let tile = Row::new()
     .size(Dimension::Px(STATE_TILE_SIZE), Dimension::Px(STATE_TILE_SIZE))
     .background(PaletteColor::SurfaceRaised)
@@ -243,10 +315,18 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
     .justify(Justify::Center)
     .child(icon(row_glyph(row.phase), IconSize::Option, PaletteColor::TextPrimary));
   let metadata = Row::new()
+    .wrap()
     .spacing(SpacingSize::Xs)
     .child(Text::new(&row.key).variant(TypographyStyle::Caption).nowrap())
     .child(Text::new(&ctx.t("common.separator")).variant(TypographyStyle::Caption))
-    .child(Text::new(&message_text(ctx, &row.detail)).variant(TypographyStyle::Caption));
+    .child(
+      Text::new(&message_text(ctx, &row.detail))
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .max_width(Dimension::Pct(65.0)),
+    )
+    .child(priority_label(ctx, row.organization.priority()));
   let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LIST_ROW_HEIGHT))
@@ -267,7 +347,8 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
         )
         .child(metadata),
     )
-    .child(row_status_label(ctx, row.phase))
+    .child(overview_workflow(ctx, row))
+    .child(row_tag_chips(ctx, row.id, &row.tags))
     .child(
       Row::new().width(Dimension::Px(TIME_WIDTH)).justify(Justify::End).child(
         Text::new(&message_text(ctx, &display::elapsed(now, row.created_at)))
@@ -277,4 +358,80 @@ pub fn list_row(ctx: &Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) -> E
     )
     .child(open_chevron());
   opens(nav, row, content)
+}
+
+/// The workflow label over the run label (`DWqjc`): a draft has no active run, a queued task reads
+/// Queued (a held group member too), a task with a run reads that run's label. The Blocked flag
+/// goes under them, or beside the run label in the lower rows without tag chips, so the three
+/// lines never touch the row's hairlines.
+fn workflow_run(ctx: &Ctx, row: &TaskRow, compact: bool) -> Element {
+  let run_key = match row.phase {
+    Some(TaskPhase::Draft) => "tasks.workflow.noActiveRun",
+    Some(phase) => status_copy(phase).1,
+    None => "tasks.status.unreadable",
+  };
+  let run = Text::new(&ctx.t(run_key))
+    .variant(ExtraTypography::Footnote.role())
+    .nowrap();
+  let blocked = is_blocked(row).then(|| {
+    Row::new()
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(icon(Icon::CircleMinus, IconSize::Small, PaletteColor::TextMuted))
+      .child(
+        Text::new(&ctx.t("tasks.blocked.label"))
+          .variant(TypographyStyle::Caption)
+          .nowrap(),
+      )
+  });
+  let column = Column::new()
+    .spacing(SpacingSize::Xs)
+    .child(workflow_label(ctx, row.organization.status()));
+  if compact {
+    column
+      .child(
+        Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(run)
+          .with_children(blocked),
+      )
+      .into()
+  } else {
+    column.child(run).with_children(blocked).into()
+  }
+}
+
+fn overview_workflow(ctx: &Ctx, row: &TaskRow) -> Element {
+  let (icon, key) = crate::tasks::organization::workflow_copy(row.organization.status());
+  let status = ctx.t(key);
+  let mut label = status.clone();
+  // The run's part shows only when it says more than the workflow status ("Canceled", not
+  // "Canceled · Canceled").
+  for suffix in [
+    system_label_key(row.phase),
+    is_blocked(row).then_some("tasks.blocked.label"),
+  ]
+  .into_iter()
+  .flatten()
+  .filter(|suffix| ctx.t(suffix) != status)
+  {
+    label = ctx.t_args(
+      "tasks.workflow.combined",
+      [("status", label.as_ref()), ("run", ctx.t(suffix).as_ref())],
+    );
+  }
+  status_label(icon, &label)
+}
+
+fn system_label_key(phase: Option<TaskPhase>) -> Option<&'static str> {
+  match phase {
+    Some(TaskPhase::Draft | TaskPhase::Queued | TaskPhase::Merged | TaskPhase::Succeeded) => None,
+    Some(phase) => Some(status_copy(phase).1),
+    None => Some("tasks.status.unreadable"),
+  }
+}
+
+fn is_blocked(row: &TaskRow) -> bool {
+  row.organization.blocked_reason().is_some() || row.detail.key == "tasks.blocked.rowUnfinished"
 }

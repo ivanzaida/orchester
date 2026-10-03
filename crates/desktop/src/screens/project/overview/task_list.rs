@@ -36,9 +36,20 @@ const LIST_FOOTER_HEIGHT: f32 = 54.0;
 /// Tasks shown in the overview; the task list has all of them.
 const RECENT_TASKS: usize = 6;
 
-pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, nav: &ProjectNav) -> Element {
+pub(super) fn task_list(
+  ctx: &mut Ctx,
+  tasks: &ProjectTasks,
+  selected: OverviewTab,
+  nav: &ProjectNav,
+  show_filters: bool,
+) -> Element {
   let now = Timestamp::now();
-  let rows = selected.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS);
+  let separator = ctx.t("common.listSeparator");
+  let rows: Vec<_> = selected
+    .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS)
+    .into_iter()
+    .map(|row| tasks.decorate_row(row, &separator))
+    .collect();
   let pipeline_filter = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -77,8 +88,7 @@ pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, 
   };
   Column::new()
     .id("overview-tasks")
-    .flex(1.0)
-    .height(Dimension::Pct(100.0))
+    .width(Dimension::Pct(100.0))
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -86,9 +96,9 @@ pub(super) fn task_list(ctx: &Ctx, tasks: &ProjectTasks, selected: OverviewTab, 
         .justify(Justify::SpaceBetween)
         .align_items(Alignment::Center)
         .child(Text::new(&ctx.t("tasks.title")).variant(TypographyStyle::Title))
-        .child(pipeline_filter),
+        .with_children(show_filters.then_some(pipeline_filter)),
     )
-    .child(tabs)
+    .with_children(show_filters.then_some(tabs))
     .with_children(list)
     .child(list_footer(ctx, tasks, nav))
     .into()

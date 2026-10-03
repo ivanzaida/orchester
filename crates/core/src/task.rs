@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+pub mod organization;
+
 use thiserror::Error;
 
 use crate::{
@@ -126,16 +128,17 @@ pub struct Task {
   status: TaskStatus,
   pipeline_version: Option<VersionNumber>,
   created_at: Timestamp,
+  organization: organization::TaskOrganization,
 }
 
 impl Task {
   /// A new task always starts as a draft.
-  pub const fn draft(id: TaskId, key: TaskKey, details: TaskDetails, created_at: Timestamp) -> Self {
+  pub fn draft(id: TaskId, key: TaskKey, details: TaskDetails, created_at: Timestamp) -> Self {
     Self::from_stored(id, key, details, TaskStatus::Draft, None, created_at)
   }
 
   /// Rebuilds a persisted task. A queued task without a pin is a legacy row and cannot run.
-  pub const fn from_stored(
+  pub fn from_stored(
     id: TaskId,
     key: TaskKey,
     details: TaskDetails,
@@ -150,11 +153,22 @@ impl Task {
       status,
       pipeline_version,
       created_at,
+      organization: organization::TaskOrganization::default(),
     }
   }
 
   pub const fn id(&self) -> TaskId {
     self.id
+  }
+
+  pub fn organization(&self) -> &organization::TaskOrganization {
+    &self.organization
+  }
+
+  /// Attaches persisted user metadata; run prompt details remain separate.
+  pub fn with_organization(mut self, value: organization::TaskOrganization) -> Self {
+    self.organization = value;
+    self
   }
 
   pub const fn key(&self) -> &TaskKey {

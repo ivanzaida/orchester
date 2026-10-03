@@ -50,16 +50,21 @@ pub struct PipelineChoice {
 /// The project's tasks and the pipelines they can use, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectTasks {
+  pub updated: Arc<std::collections::HashMap<TaskId, Timestamp>>,
+  pub tags: Arc<Vec<orchester_core::task::organization::Tag>>,
+  pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Why each task of a reviewed group that holds its work waits.
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
+  /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
+  pub grouped: Arc<std::collections::BTreeSet<TaskId>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
-  /// Runs started in the project, of every task, that can be read.
-  pub runs: usize,
+  /// How many runs of each task were started and can be read.
+  pub runs: Arc<BTreeMap<TaskId, usize>>,
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
   /// one is ([`Self::without_runner`]).
   pub lost_to_runner: usize,
@@ -79,12 +84,55 @@ pub struct AutoApprovingRun {
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
 
 impl ProjectTasks {
+  /// `row` with its tag names and what blocks it, the blocking tasks' keys joined by `separator`
+  /// (`common.listSeparator`).
+  pub fn decorate_row(&self, mut row: super::list::TaskRow, separator: &str) -> super::list::TaskRow {
+    row.tags = self
+      .tags
+      .iter()
+      .filter(|tag| row.organization.tags().contains(&tag.id()))
+      .map(|tag| Arc::from(tag.name().as_str()))
+      .collect();
+    if let Some(blocking) = self.blocking.get(&row.id).filter(|links| !links.is_empty()) {
+      let keys = blocking
+        .iter()
+        .filter_map(|id| self.tasks.iter().find(|task| task.id() == *id))
+        .map(|task| task.key().to_string())
+        .collect::<Vec<_>>()
+        .join(separator);
+      row.detail = UiMessage::new("tasks.blocked.rowUnfinished").with("tasks", keys);
+    } else if let Some(reason) = row.organization.blocked_reason() {
+      row.detail = UiMessage::new("tasks.blocked.informational").with("reason", reason.to_owned());
+    }
+    row
+  }
+
+  /// Runs started of the tasks in `rows` that can be read.
+  #[must_use]
+  pub fn runs_of(&self, rows: &[super::list::TaskRow]) -> usize {
+    rows.iter().filter_map(|row| self.runs.get(&row.id)).sum()
+  }
+
+  /// How many of `tasks` have a run that has not ended, which bulk Canceled stops. A latest run
+  /// that cannot be read counts: the store, which decides, may find it active.
+  pub fn runs_not_ended(&self, tasks: &std::collections::BTreeSet<TaskId>) -> usize {
+    self
+      .phases
+      .iter()
+      .filter(|(id, latest)| {
+        tasks.contains(id) && latest.phase().is_none_or(orchester_core::run::TaskPhase::run_not_ended)
+      })
+      .count()
+  }
+
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
     let pending = approvals::pending(&db, repo_root)?;
     let mut group_holds = BTreeMap::new();
+    let mut grouped = std::collections::BTreeSet::new();
     for group in db.task_groups()? {
+      grouped.extend(group.tasks().iter().copied());
       if let Some(hold) = db.task_group_hold(group.key())? {
         for task in group.tasks() {
           group_holds.insert(*task, hold.clone());
@@ -92,11 +140,11 @@ impl ProjectTasks {
       }
     }
     let mut phases = Phases::new();
+    let mut counts = BTreeMap::new();
     let mut auto_approving = Vec::new();
-    let mut count = 0;
     for task in &tasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-      count += runs.iter().filter(|run| run.is_ok()).count();
+      counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
       let latest = match runs.last() {
         Some(Ok(latest)) => {
           if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
@@ -123,12 +171,29 @@ impl ProjectTasks {
       phases.insert(task.id(), latest);
     }
     Ok(Self {
+      updated: Arc::new(
+        tasks
+          .iter()
+          .map(|task| {
+            db.task_organization_updated_at(task.id())
+              .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
+          })
+          .collect::<Result<_, _>>()?,
+      ),
+      tags: Arc::new(db.project_tags()?),
+      blocking: Arc::new(
+        tasks
+          .iter()
+          .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
+          .collect::<Result<_, _>>()?,
+      ),
       tasks: Arc::new(tasks),
       group_holds: Arc::new(group_holds),
+      grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(pending),
       phases: Arc::new(phases),
-      runs: count,
+      runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
     })
@@ -359,4 +424,21 @@ pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
   Ok(saved)
+}
+
+/// Save organization and task content as a single transaction.
+pub fn save_organized_to(
+  db: &mut ProjectDb,
+  target: SaveTarget,
+  details: TaskDetails,
+  (base, organization): (
+    &orchester_core::task::organization::TaskOrganization,
+    &orchester_core::task::organization::TaskOrganization,
+  ),
+  now: Timestamp,
+) -> Result<Task, StoreError> {
+  match target {
+    SaveTarget::New(batch) => db.create_organized_task(batch, details, organization, now),
+    SaveTarget::Task(task) => db.update_organized_task(task, details, (base, organization), now),
+  }
 }
