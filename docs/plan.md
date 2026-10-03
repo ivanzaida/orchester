@@ -390,8 +390,8 @@ Approval choices, waiting requests and auto-approval · branch `claude/approval-
   dialog's own path. Four answers for commands and MCP tools alike, and auto-approval:
   `docs/interactive-tool-approvals.md`, "Answers and waiting requests"; design doc, "Approval choices and waiting
   requests" (with the auto-approval and network decisions and the states built without frames).
-- **Pending user acceptance:** the command's Always allow step leaves out `NV6xJ`'s *A denied Network still wins*
-  card, since no category can be set to Deny yet.
+- **Accepted deviation (user, 2026-10-03):** the command's Always allow step leaves out `NV6xJ`'s *A denied Network
+  still wins* card until a category can be set to Deny.
 - Core: `permission::category` (commands split into simple commands, bash and PowerShell quoting, shells followed;
   categories by program, subcommand, options and written paths; credential reads and installs noted),
   `run::answer` (`ApprovalAnswer`, `DecidedBy`, run rules and their matching, Always allow targets, `auto_verdict`,
