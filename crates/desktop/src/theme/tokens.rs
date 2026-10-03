@@ -242,5 +242,10 @@ pub const CONVERSATION_TOOLBAR_DECISION_STATE: f32 = 50.0;
 pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1348.0;
 pub const TASK_TABLE_TAGS_MIN_WINDOW: f32 = 1196.0;
 pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = 1116.0;
+/// The narrowest window whose Overview keeps the attention column (`NM5My`, 288 and a 32 gap)
+/// beside the task list: the 216 sidebar, 64 page padding and a list row's fixed parts (state
+/// tile, the longest workflow label, tag chips, time, chevron and their gaps, about 530) leave its
+/// title and meta 200. Narrower, the column goes under the list at full width (no frame draws it).
+pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = 1340.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

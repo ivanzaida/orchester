@@ -233,7 +233,7 @@ impl OverviewScreen {
   /// The task list, with the attention column beside it as on master (`NM5My`): what needs you,
   /// including a run that waits for a decision after its retries, shows without Insights; the
   /// rest of the attention panel comes with them. Without it the list takes the whole width
-  /// (`DtpHJ`).
+  /// (`DtpHJ`); in a narrow window the column goes under the list.
   fn tasks_and_attention(
     &self,
     ctx: &mut Ctx,
@@ -242,28 +242,37 @@ impl OverviewScreen {
     spacing: SpacingSize,
   ) -> Element {
     let queue = ctx.use_context::<ApprovalQueue>();
+    let beside = ctx.window().logical_width() >= crate::theme::OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW;
+    let list = Column::new()
+      .flex(1.0)
+      .width(Dimension::Pct(100.0))
+      .spacing(spacing)
+      .child(task_list::task_list(
+        ctx,
+        tasks,
+        props.tab,
+        &self.nav,
+        self.insights.get() || props.tab != OverviewTab::All,
+      ))
+      .with_children(blocked_notices(ctx, tasks));
+    let attention = (self.insights.get() || tasks.needs_you() > 0)
+      .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()), beside));
+    if !beside {
+      return Column::new()
+        .id("overview-tasks-and-attention")
+        .width(Dimension::Pct(100.0))
+        .spacing(spacing)
+        .child(list)
+        .with_children(attention)
+        .into();
+    }
     Row::new()
       .id("overview-tasks-and-attention")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Section)
       .align_items(Alignment::Start)
-      .child(
-        Column::new()
-          .flex(1.0)
-          .spacing(spacing)
-          .child(task_list::task_list(
-            ctx,
-            tasks,
-            props.tab,
-            &self.nav,
-            self.insights.get() || props.tab != OverviewTab::All,
-          ))
-          .with_children(blocked_notices(ctx, tasks)),
-      )
-      .with_children(
-        (self.insights.get() || tasks.needs_you() > 0)
-          .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()))),
-      )
+      .child(list)
+      .with_children(attention)
       .into()
   }
 }

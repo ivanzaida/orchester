@@ -141,6 +141,17 @@ fn organization_overview_rows_span_the_page_and_keep_run_tabs_reachable() {
     attention.x >= list.x + list.width && attention.y < list.y + list.height,
     "the attention column is to the right of the list: {list:?} {attention:?}"
   );
+  // At 960 it goes under the list, which keeps the page's width for its titles.
+  desktop.tree.resize(960, 960);
+  desktop.pass();
+  let (list, attention) = (desktop.bounds("overview-tasks"), desktop.bounds("overview-attention"));
+  assert!(list.width > 600.0, "the list keeps the width: {list:?}");
+  assert!(
+    attention.y >= list.y + list.height,
+    "the attention column is under the list: {list:?} {attention:?}"
+  );
+  let title = desktop.bounds("task-row-KON-1");
+  assert!(title.width > 600.0, "a row keeps its title and meta: {title:?}");
 }
 
 #[test]

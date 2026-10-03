@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 
-use super::{button::ActionButton, field::field_error, icon::Icon};
+use super::{button::ActionButton, field::wrapping_field_error, icon::Icon};
 use crate::theme::{ExtraColor, ExtraTypography};
 
 /// The dialog's width (`hNMDh` in `N1vwaM`, `EMYqR` in `hFH4D`).
@@ -85,7 +85,7 @@ pub fn cancel_dialog(
         .width(Dimension::Pct(100.0))
     }))
     .with_children(notice)
-    .with_children(dialog.error.map(field_error))
+    .with_children(dialog.error.map(wrapping_field_error))
     .child(actions)
     .into()
 }

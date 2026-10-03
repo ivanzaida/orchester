@@ -404,13 +404,17 @@ fn workflow_run(ctx: &Ctx, row: &TaskRow, compact: bool) -> Element {
 
 fn overview_workflow(ctx: &Ctx, row: &TaskRow) -> Element {
   let (icon, key) = crate::tasks::organization::workflow_copy(row.organization.status());
-  let mut label = ctx.t(key);
+  let status = ctx.t(key);
+  let mut label = status.clone();
+  // The run's part shows only when it says more than the workflow status ("Canceled", not
+  // "Canceled · Canceled").
   for suffix in [
     system_label_key(row.phase),
     is_blocked(row).then_some("tasks.blocked.label"),
   ]
   .into_iter()
   .flatten()
+  .filter(|suffix| ctx.t(suffix) != status)
   {
     label = ctx.t_args(
       "tasks.workflow.combined",
