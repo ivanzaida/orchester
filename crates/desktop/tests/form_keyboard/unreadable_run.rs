@@ -184,7 +184,6 @@ fn unreadable_run_shows_in_the_task_list_and_on_its_task_page() {
   for (tab, state) in [
     ("task-tab-conversation", "conversation-unreadable"),
     ("task-tab-changes", "changes-unreadable"),
-    ("task-tab-activity", "activity-unreadable"),
   ] {
     desktop.click(tab);
     desktop.wait_until(state, |desktop| holds(desktop, state, "Run #2 could not be read"));

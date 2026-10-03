@@ -43,7 +43,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_ipc::{Event, Rejection};
+use orchester_ipc::Event;
 use orchester_runner::execution::{Notifier, Scheduler};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
@@ -455,45 +455,6 @@ pub async fn pending_approval(
   })
   .await
   .expect("an approval arrives")
-}
-
-/// Denies every tool decision `run` waits for until it no longer works on its own, and returns it: a
-/// turn that a denial ends without a result breaks its step, which restarts once and asks again.
-pub async fn deny_until_settled(
-  scheduler: &Scheduler,
-  root: &Path,
-  events: &mut mpsc::UnboundedReceiver<Event>,
-  run: RunId,
-) -> Run {
-  tokio::time::timeout(PATIENCE, async {
-    loop {
-      let db = ProjectDb::open(root).expect("open");
-      let current = db.run(run).expect("read").expect("run exists");
-      if settled(&current) {
-        return current;
-      }
-      let waiting = db
-        .invocations(run)
-        .expect("invocations")
-        .into_iter()
-        .filter(|invocation| invocation.timing.waiting_since().is_some())
-        .map(|invocation| invocation.id)
-        .collect::<Vec<_>>();
-      for request in db.pending_tool_approvals(run).expect("requests") {
-        if !waiting.contains(&request.invocation) {
-          continue;
-        }
-        match scheduler.decide_tool_approval(run, request.id, false).await {
-          // Decided in the meantime: the agent went on, or the run ended its turn.
-          Ok(()) | Err(Rejection::ToolApprovalNotAwaited) => {}
-          Err(other) => panic!("the denial was refused: {other:?}"),
-        }
-      }
-      events.recv().await.expect("the scheduler notifies");
-    }
-  })
-  .await
-  .expect("the run settles in time")
 }
 
 /// Waits until the run's transcript holds `count` agent turns that started.

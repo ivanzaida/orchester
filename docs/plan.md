@@ -185,9 +185,9 @@ Integration with ORC-30 (decisions to draw in Pencil, not drawn yet):
 Review follow-ups (review of `7ddd610`): a draft whose blocking task has not finished is a Run selected problem
 ("KON-3 is blocked by KON-1") and the store refuses to queue it; a group member blocked after queueing is passed over
 (the members after it start), the group holds `GroupHold::Blocked { by }`, which ends on its own and keeps the runner
-busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 12 for
-`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (`claude/approval-choices` also wants 12; whichever merges later
-takes 13). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
+busy only while a blocking task runs; rows keep the blocked text over the hold. The ipc `PROTOCOL_VERSION` is 13 for
+`RunAgainBlock::TaskBlocked` and `GroupHold::Blocked` (12 went to the approval choices, merged first); the
+organization migration is 39, after steering (37) and approval choices (38). A refused continue reads "Run is unavailable…"; Start, Resume, Continue, Continue with a raised limit and
 another attempt are unavailable while the task is blocked, and the Blocked notice names the blocking tasks.
 
 The combined list follows the approved frames 02.03C `DWqjc`, D `IYlGK`, E `t7ETG` and F `lRbit`: the selection bar
@@ -212,6 +212,9 @@ tasks did not have Desktop."), with the panel hint; asking to confirm Canceled i
 status-bar failure, no inline error); the task form shows "Run unavailable" with the unfinished blocking tasks above
 its run action (`ZLhiM`); "Canceled" is the one spelling in the app's text; the bulk Add tag picker has one frame;
 the blocking search offers no linked task and adds only a task it shows.
+Merged with master `0678ce0d` (ORC-61, approval choices): the task organization history moved from the removed
+Activity tab to the end of the Summary; the header's Canceled asks the store whether a run must stop, so a task page
+that has not read the run's end yet neither asks nor skips the confirmation.
 
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,
@@ -435,6 +438,92 @@ admits it) and, to keep naming the version in use, this line.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Approval choices, waiting requests and auto-approval · branch `claude/approval-choices` (done 2026-10-03)
+
+- **Done 2026-10-03: merged after the security reviews, code reviews and design verification passed.** Built
+  2026-10-02 (user decisions of that day). The security review made the command classifier fail closed (per-program
+  option allow-lists; unknown programs, options, variables set before a command and unread quoting are Unknown;
+  Approve similar never widens and never covers destructive or credential-reading parts; Always allow offers only
+  prefixes that stay alike) and, by the user's decision of 2026-10-03, auto-approval asks for network commands. The
+  design rounds added the dialog's subject line (category or server chip, the asking profile's real setting, waiting
+  since), the classifier's reason, the waiting step row, and the Conversation card's four answers through the
+  dialog's own path. Four answers for commands and MCP tools alike, and auto-approval:
+  `docs/interactive-tool-approvals.md`, "Answers and waiting requests"; design doc, "Approval choices and waiting
+  requests" (with the auto-approval and network decisions and the states built without frames).
+- **Accepted deviation (user, 2026-10-03):** the command's Always allow step leaves out `NV6xJ`'s *A denied Network
+  still wins* card until a category can be set to Deny.
+- Core: `permission::category` (commands split into simple commands, bash and PowerShell quoting, shells followed;
+  categories by program, subcommand, options and written paths; credential reads and installs noted),
+  `run::answer` (`ApprovalAnswer`, `DecidedBy`, run rules and their matching, Always allow targets, `auto_verdict`,
+  `denial_message`), `AgentPermissions::auto_approve` (profile version). Store migration `approval_choices`
+  (`tool_approvals.decided_by`/`rule_id`, `approval_rules`, `runs.auto_approve`; rules survive a runner restart),
+  `publish_allowed_command` (migration 38, after ORC-61's steering). IPC protocol **12** (`DecideToolApproval { answer }`; master is at 11).
+  Runner answers itself what a rule, Always allow or auto-approval covers, and a
+  person's Deny tells the agent and lets the turn go on (Claude Code: deny with the message; Codex: `decline`).
+- Desktop: the 720 dialog with *1 of N* and ‹ ›, the wider answers as tiles plus *Approve everything in this run*,
+  the scope of Approve similar on hover or focus, the Always allow step, Decide later (Esc), Deny's text; Needs you
+  counts waiting requests; status bar approvals with Review and *Auto-approving* with Stop; the Summary's Review
+  request card, the run's Approvals section (switch, counts, rules with Revoke, always allowed), *Auto-approving*
+  under the task heading; the profile's *Approve automatically (don't ask me)*; activity marks.
+- Not built: the per-category Allow / Ask me / Deny policy of "Command categories and approval policy" (so no
+  category can be Deny, and the Always allow step leaves out *A denied Network still wins*); Run temp (temporary
+  files count as outside the worktree); Undo of a revoked rule; answering requests already waiting when auto-approval is switched on (the dialog
+  says such a request came before it was on). A Codex rule prompt that offers
+  only `cancel` interrupts the turn on Deny, as Codex does.
+- Tests: `cargo test -p orchester-core --test command_categories command_categories`, `--test approval_answers
+  approval_answers`, `--test claude_approvals claude_approvals`; `-p orchester-store --test approval_rules
+  approval_rules`; `-p orchester-runner --features test-agent --test approval_choices approval_choices` (and the
+  updated `claude_approvals`, `claude_unlisted`, `codex_escalations`, `command_approvals`); `-p orchester-desktop
+  --test form_keyboard approval_choices_` and `tool_approval`; `-p orchester-core --test command_fail_closed command_fail_closed`.
+
+ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
+`claude/orc61` (from run #21's `orchester/orc-61-run-1`)
+
+- **Implemented 2026-10-02; merged with master and Review fixed 2026-10-03; merged into master 2026-10-03** after two
+  independent code reviews (PASS) and the independent design verification against `fTfl8` (with `q4fCXK`, `a5hF4`,
+  `gLVQQ`, `zyusO`, `iPHGE`) with no blocking or major mismatches left. Open minors (follow-ups): Attach sits apart
+  from the recipient at 960; step header wording (*Approved*, *Waiting for approval*, invocation count); plan card line
+  spacing, helper text and the plan repeated in *Plan done*; question card meta and focus; composer placeholder per
+  state; the working line as the last timeline item; titled problem rows; Details pane wording (master's invocation
+  panel); the timeline column 6 px left; a scrollbar drag does not count as the person scrolling, so a newly waiting
+  card can still pull the view; queued step names can overflow at 960; two profiles with the same name. The task
+  page's Conversation tab is one timeline per run (`tasks/timeline/`: step headers, agent and person messages, tool
+  groups, question, plan and tool-approval cards, problem rows, returns and restarts, result cards, the run's end),
+  with the step filter, *Show* (All, Messages, Tools), search, the Details pane (closed by default, remembered),
+  following live with *Jump to latest · N new*, and the composer in every state (steer, queue, answer, plan changes,
+  follow-up, continue with instructions, waiting for a decision, not started, closed). The Activity tab is gone.
+  *Send now* reaches the agent at work after its running tool call: Codex through `turn/steer`, Claude Code through
+  stream-json input (Claude Code now always runs with `--input-format stream-json --replay-user-messages`); messages
+  are queued, delivered mid-turn, delivered at the end of the turn, or not delivered and kept
+  (`docs/architecture/storage.md`, "Send now"). Live checks on both CLIs: `docs/evidence/orc-61-send-now-2026-10-02.md`.
+- **Merge with master:** master's Activity and old Conversation behaviour now lives in the timeline: the marks of
+  02.B7 as rows of their own (`tasks/timeline/mark.rs`, drawn by `activity/mark.rs`), the waiting run's toolbar state
+  and composer line with *Open the decision →*, the toolbar's second line when narrow, ORC-44's permission row in
+  Details (*Running with* … *change ↗*, *Ran with*), ORC-45 and approval-long through the shared `ui::command_row`
+  and `ui::value_box`. The steering migration is now 37 (after `stuck_runs`, 36); ORC-61 changes no IPC message, so
+  `PROTOCOL_VERSION` stays 11.
+- **Review fixes:** messages and cards are merged into a step's transcript before grouping, so anything that is not a
+  tool event splits a group (also in *Tools*); a declined MCP call, a memory one too, is a problem row; *Messages*
+  counts only the matches it shows; a queued message for an agent the pipeline no longer offers is not named with an
+  empty name; a Codex message accepted by `turn/steer` but not taken before `turn/completed` is delivered at the turn's
+  end, never sent again (Codex records it into the thread as the turn finishes). Second review (2026-10-03): a message
+  on its way to one agent goes into no other agent's prompt until that agent ends; an acceptance Codex sends after
+  `turn/completed` still delivers at the turn's end; *Send after this turn* and the runner's late delivery change a
+  message only while it stands as read (`ConversationStore::change_delivery`), so a race never fails the step;
+  master merged again for the Changes tab count. Design verification fixes (2026-10-03): the toolbar's state follows the run's state; the
+  step the run ended on stays open; at 960 with or without Details the toolbar and composer keep every control; a tool
+  step's failing command shows open; the queued empty state and unavailable toolbar of `zxIMy`; read-back links, result
+  card layout, approval card title, default recipient and the Messages meta.
+- Tests: `cargo test -p orchester-runner --features test-agent --test send_now send_`, `--test conversation
+  conversation`; `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`,
+  `--test form_keyboard` with `conversation`, `composer_`, `activity_`, `multiline_command`, `tool_approval`,
+  `run_permissions`, `task_graph`, `changes`, `integration`; `--test changes c`; `-p orchester-core --test app_server
+  turn`; `-p orchester-runner --features test-agent --test send_now_delivery send_now_`; `-p orchester-store --test
+  conversation conversation`.
+- **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
+  Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
+  call that asked for it when the CLI reported that call first (they are matched by time, not by call).
 
 Tool approval dialog: long values shown in full · branch `claude/approval-long`
 

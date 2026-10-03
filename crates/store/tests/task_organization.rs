@@ -384,20 +384,47 @@ fn organization_failed_follow_up_restores_review_and_retains_transition_history(
   assert_eq!(change.at, at(32));
 }
 
-/// The schema version before tasks had an organization: master's last migration, stuck runs.
-const BEFORE_ORGANIZATION: u32 = 36;
+/// The schema version before tasks had an organization: master's last migrations, ORC-61's
+/// steering (37) and the approval choices (38). Migrations are append-only.
+const BEFORE_ORGANIZATION: u32 = 38;
 
-/// A project database of schema 36 opens with its tasks and runs, each task in Backlog with no
-/// priority, tags or links, and takes organization changes.
+/// A populated project database of schema 38 (a message sent now, an approval rule, a run's own
+/// auto-approval choice) opens with all of it, each task in Backlog with no priority, tags or
+/// links, and takes organization changes.
 #[test]
-fn organization_migration_keeps_tasks_and_runs_of_schema_36() {
-  let (repo, db, run, _) = started_run();
+fn organization_migration_keeps_tasks_and_runs_of_schema_38() {
+  use orchester_core::{
+    conversation::{Message, MessageBody, Recipient, Timing},
+    run::RuleScope,
+    store::ConversationStore,
+  };
+  let (repo, mut db, run, _) = started_run();
+  let now = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    MessageBody::new("Use the new API.").expect("a message"),
+    at(12),
+  )
+  .sent(Timing::Now)
+  .expect("a person's message");
+  db.send_message(IdempotencyKey::generate(), &now).expect("sent now");
+  let scope = RuleScope::SimilarMcpTool {
+    server: "pencil".to_owned(),
+    tool: "batch_get".to_owned(),
+  };
+  db.add_approval_rule(run.id(), &scope, at(13))
+    .expect("an approval rule");
+  db.set_run_auto_approve(run.id(), Some(true)).expect("auto-approve");
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
   let old = copied_at_version(&current, BEFORE_ORGANIZATION);
   let mut db = ProjectDb::open(old.path()).expect("migrate existing project");
   let task = run.task();
   assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+  assert_eq!(db.messages(task).expect("messages"), [now]);
+  assert_eq!(db.approval_rules(run.id()).expect("rules").len(), 1);
+  assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(true));
   assert_eq!(
     db.task_organization(task).expect("organization"),
     TaskOrganization::default()

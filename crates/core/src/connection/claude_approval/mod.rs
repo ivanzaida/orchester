@@ -289,13 +289,19 @@ impl fmt::Debug for ClaudeApprovalRequest {
   }
 }
 
-/// The permission prompt's answer to a person's decision on one call.
-pub fn prompt_result(approve: bool) -> String {
-  if approve {
-    json!({"behavior": "allow", "updatedInput": {}}).to_string()
-  } else {
-    json!({"behavior": "deny", "message": DENIED}).to_string()
+/// The permission prompt's answer on one call: allowed, or denied with `denial`, which Claude Code
+/// hands to the agent as the tool's result; the agent then goes on without the call.
+pub fn prompt_result(denial: Option<&str>) -> String {
+  match denial {
+    None => json!({"behavior": "allow", "updatedInput": {}}).to_string(),
+    Some(message) => json!({"behavior": "deny", "message": message}).to_string(),
   }
+}
+
+/// The permission prompt's answer to a call nobody answered: the worker ended, or the call was asked
+/// about before.
+pub fn not_answered() -> String {
+  prompt_result(Some(DENIED))
 }
 
 /// `value` with `secrets` removed from every text in it, keys included. A number whose digits hold a

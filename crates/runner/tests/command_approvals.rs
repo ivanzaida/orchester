@@ -8,7 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, FolderBounds, LaunchPermissions, WritableFolder, WritableFolders},
   resource::{AgentProfile, StepKey},
-  run::{AttemptReason, PendingToolApproval, PermissionsApply, RunStatus},
+  run::{ApprovalAnswer, PendingToolApproval, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
   time::Timestamp,
 };
@@ -35,6 +35,15 @@ async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: 
   })
   .await
   .expect("approval arrives")
+}
+
+/// A person's approval once, or their denial.
+const fn answer(deny: bool) -> ApprovalAnswer {
+  if deny {
+    ApprovalAnswer::Deny
+  } else {
+    ApprovalAnswer::Once
+  }
 }
 
 async fn migrated(deny_command: bool, deny_tool: bool) {
@@ -83,16 +92,18 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
   assert!(!worktree.join("command-once.txt").exists());
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, "different-request".to_owned(), true)
+      .decide_tool_approval(id, "different-request".to_owned(), ApprovalAnswer::Once)
       .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   scheduler
-    .decide_tool_approval(id, command.id.clone(), !deny_command)
+    .decide_tool_approval(id, command.id.clone(), answer(deny_command))
     .await
     .expect("command decision");
   assert_eq!(
-    scheduler.decide_tool_approval(id, command.id, true).await,
+    scheduler
+      .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   if !deny_command {
@@ -106,7 +117,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
         .is_some()
     );
     scheduler
-      .decide_tool_approval(id, tool.id, !deny_tool)
+      .decide_tool_approval(id, tool.id, answer(deny_tool))
       .await
       .expect("tool decision");
   }
@@ -215,7 +226,10 @@ async fn command_approvals_soft_stop_after_delivery_prevents_automatic_replay() 
   db.send_message(IdempotencyKey::generate(), &message).expect("message");
   first.deliver_messages(id).await.expect("resume");
   let command = pending(root, &mut events, id).await;
-  first.decide_tool_approval(id, command.id, true).await.expect("approve");
+  first
+    .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
+    .await
+    .expect("approve");
   let marker = root
     .join(".orchester/worktrees")
     .join(id.to_string())
@@ -259,23 +273,11 @@ async fn verify_progress(
   let profile = before
     .profile_of(&StepKey::new("implement").expect("key"))
     .expect("profile");
-  let denied = deny_command || deny_tool;
-  let after = wait_for(root, events, id, |run| {
-    if denied {
-      run.waits_for_a_person() && run.attempts().len() == 2
-    } else {
-      run.status().is_terminal()
-    }
-  })
-  .await;
-  if denied {
-    assert!(matches!(
-      after.current_attempt().map(|attempt| attempt.reason()),
-      Some(AttemptReason::Restart { step }) if step.as_str() == "implement"
-    ));
-  } else {
-    assert_eq!(after.status(), &RunStatus::Succeeded);
-  }
+  let after = wait_for(root, events, id, |run| run.status().is_terminal()).await;
+  // A denial tells the agent, which goes on without the action: the step still succeeds.
+  assert_eq!(after.status(), &RunStatus::Succeeded);
+  let readme = std::fs::read_to_string(worktree.join("README.md")).expect("readme");
+  assert_eq!(readme.contains("went on"), deny_command || deny_tool);
   assert_eq!(after.id(), before.id());
   assert_eq!(after.branch(), before.branch());
   assert_eq!(after.snapshot(), before.snapshot());
@@ -286,7 +288,7 @@ async fn verify_progress(
   assert_eq!(worktree.join("command-once.txt").exists(), !deny_command);
   assert_eq!(worktree.join("mcp-once.txt").exists(), !deny_command && !deny_tool);
   let invocations = db.invocations(id).expect("invocations");
-  assert_eq!(invocations.len(), if denied { 4 } else { 3 });
+  assert_eq!(invocations.len(), 3, "a denial restarts nothing");
   assert_eq!(invocations[1].session, invocations[2].session);
   assert_eq!(invocations[1].execution, invocations[2].execution);
   let prepared = StepKey::new("prepare").expect("key");

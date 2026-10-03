@@ -8,8 +8,8 @@
 //!   lies in the worktree.
 //! - "Escalate `<command>`" wants to run that command outside the sandbox (`sandbox_permissions: require_escalated`,
 //!   with the model's justification as the reason) and asks; approved, it appends `escalated` to `README.md` and works
-//!   on, declined it reports the command declined and waits to be ended. Each answer is reported on standard error
-//!   (`escalation: <decision>`).
+//!   on, declined it reports the command declined, appends `went on` and works on, as Codex tells its model and the
+//!   turn continues. Each answer is reported on standard error (`escalation: <decision>`).
 //! - "Patch outside" wants to change a file outside the writable roots and asks; it reports the answer (`file change:
 //!   <decision>`) and works on.
 //! - "Use the design tools" calls the `get_screenshot` tool of the `pencil` MCP server (writing `read-once.txt`), then
@@ -18,6 +18,9 @@
 //! - "Call a tool unasked" calls `batch_design` of `pencil` and asks, as Codex 0.159.2 does even with
 //!   `mcp_elicitations` off; it reports the answer (`mcp answer: <action>`), and when declined ends the call failed and
 //!   works on.
+//! - "Design twice" calls `batch_design` of `pencil` twice in one turn, each asking; each approved call appends
+//!   `approved` to `README.md`. A declined MCP call (here or in the fixture) ends failed, appends `went on`, and the
+//!   turn works on.
 
 use std::{fs, process::ExitCode};
 
@@ -25,7 +28,7 @@ use serde_json::{Value, json};
 
 use super::{
   Session, Step, complete,
-  fake_codex_work::{append, finish, message, report_of, wait_to_be_ended},
+  fake_codex_work::{append, finish, message, report_of},
   notify, request,
 };
 
@@ -34,6 +37,8 @@ const COMMAND: u64 = 100;
 const MCP: u64 = 101;
 const ESCALATION: u64 = 200;
 const PATCH: u64 = 300;
+/// The second call of "Design twice".
+const SECOND_MCP: u64 = 102;
 
 /// The decisions a turn waits on.
 pub struct Approvals {
@@ -62,7 +67,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
   let patch = prompt.contains("Patch outside");
   let design = prompt.contains("Use the design tools");
   let unasked = prompt.contains("Call a tool unasked");
-  if !fixture && escalation.is_none() && !patch && !design && !unasked {
+  let twice = prompt.contains("Design twice");
+  if !fixture && escalation.is_none() && !patch && !design && !unasked && !twice {
     return None;
   }
   session.approvals = Some(Approvals {
@@ -89,7 +95,7 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
     );
   } else if design {
     design_calls(session);
-  } else if unasked {
+  } else if unasked || twice {
     tool_request(session, "pencil", "batch_design");
   } else if patch {
     request(
@@ -117,6 +123,8 @@ pub fn answered(session: &mut Session, answer: &Value) -> Step {
   let decision = answer["result"]["decision"].as_str().unwrap_or_default().to_owned();
   match answer["id"].as_u64() {
     Some(COMMAND) => command_answered(session, answer),
+    Some(MCP) if prompt.contains("Design twice") => twice_answered(session, answer, "mcp-1"),
+    Some(SECOND_MCP) => twice_answered(session, answer, "mcp-2"),
     Some(MCP) => mcp_answered(session, answer),
     Some(ESCALATION) => {
       eprintln!("escalation: {decision}");
@@ -126,7 +134,7 @@ pub fn answered(session: &mut Session, answer: &Value) -> Step {
           "item/completed",
           json!({"item": {"id": "escalation-1", "type": "commandExecution", "command": "escalated", "status": "declined"}}),
         );
-        wait_to_be_ended();
+        return went_on(session, &prompt, structured);
       }
       if append(&session.cwd, "escalated").is_err() {
         eprintln!("cannot write README.md");
@@ -151,6 +159,22 @@ pub fn answered(session: &mut Session, answer: &Value) -> Step {
 }
 
 fn command_answered(session: &mut Session, answer: &Value) -> Step {
+  if answer["result"] == json!({"decision": "decline"}) {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "command-1", "type": "commandExecution", "command": "disposable-command",
+        "status": "declined"}}),
+    );
+    let Some((prompt, structured)) = session
+      .approvals
+      .as_ref()
+      .map(|approvals| (approvals.prompt.clone(), approvals.structured))
+    else {
+      return Step::Exit(ExitCode::from(2));
+    };
+    return went_on(session, &prompt, structured);
+  }
   if answer["result"] != json!({"decision": "accept"}) {
     eprintln!("only an exact action grant: {answer}");
     return Step::Exit(ExitCode::from(2));
@@ -205,6 +229,21 @@ fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
       finish(session, "hello", &report)
     });
   }
+  if answer["result"]["action"] == "decline" {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "mcp-1", "type": "mcpToolCall", "status": "failed"}}),
+    );
+    let Some((prompt, structured)) = session
+      .approvals
+      .as_ref()
+      .map(|approvals| (approvals.prompt.clone(), approvals.structured))
+    else {
+      return Step::Exit(ExitCode::from(2));
+    };
+    return went_on(session, &prompt, structured);
+  }
   if answer["result"]["action"] != "accept" {
     eprintln!("only an accepted elicitation continues: {answer}");
     return Step::Exit(ExitCode::from(2));
@@ -227,6 +266,57 @@ fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
   );
   complete(session, None);
   Step::Exit(ExitCode::SUCCESS)
+}
+
+/// A declined request: the model was told and works on without it.
+fn went_on(session: &Session, prompt: &str, structured: bool) -> Step {
+  eprintln!("went on");
+  if append(&session.cwd, "went on").is_err() {
+    eprintln!("cannot write README.md");
+  }
+  finish(session, "hello", &report_of(prompt, structured))
+}
+
+/// An answer to one of the two calls of "Design twice": an approved call appends `approved`; the first
+/// is followed by the second, the second by the end of the turn.
+fn twice_answered(session: &mut Session, answer: &Value, item: &str) -> Step {
+  let accepted = answer["result"]["action"] == "accept";
+  eprintln!("{item}: {}", answer["result"]["action"].as_str().unwrap_or_default());
+  let status = if accepted { "completed" } else { "failed" };
+  if accepted && append(&session.cwd, "approved").is_err() {
+    eprintln!("cannot write README.md");
+  }
+  notify(
+    session,
+    "item/completed",
+    json!({"item": {"id": item, "type": "mcpToolCall", "server": "pencil", "tool": "batch_design", "status": status}}),
+  );
+  if !accepted && append(&session.cwd, "went on").is_err() {
+    eprintln!("cannot write README.md");
+  }
+  if item == "mcp-1" {
+    notify(
+      session,
+      "item/started",
+      json!({"item": {"id": "mcp-2", "type": "mcpToolCall", "server": "pencil", "tool": "batch_design",
+        "arguments": {}}}),
+    );
+    request(
+      session,
+      SECOND_MCP,
+      "mcpServer/elicitation/request",
+      json!({"serverName": "pencil", "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
+    );
+    return Step::Go;
+  }
+  let Some((prompt, structured)) = session
+    .approvals
+    .as_ref()
+    .map(|approvals| (approvals.prompt.clone(), approvals.structured))
+  else {
+    return Step::Exit(ExitCode::from(2));
+  };
+  finish(session, "hello", &report_of(&prompt, structured))
 }
 
 fn command_request(session: &Session) {

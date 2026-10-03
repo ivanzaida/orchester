@@ -28,6 +28,7 @@ use orchester_desktop::app_paths::runner_beside;
 use orchester_store::ProjectDb;
 
 use crate::{
+  conversation::open_group,
   github::{contains_text, shows},
   harness::Desktop,
 };
@@ -304,17 +305,22 @@ pub(crate) fn fill_new_task(desktop: &mut Desktop, brief: &str, budget: &str) {
 }
 
 #[test]
-fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
+fn create_and_run_opens_the_task_page_with_the_run_and_its_conversation() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  // The page shows the finished run before the transcript opens, so its step starts collapsed.
+  // The page shows the finished run before the timeline opens; the step it ended on stays open.
   finished_on_page(&mut desktop);
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
-  assert!(has(&mut desktop, "activity-invocation"));
-  desktop.click("activity-step-header");
-  desktop.wait_until("the step's entries", |desktop| has(desktop, "activity-entry"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
+  assert!(
+    !has(&mut desktop, "activity-invocation"),
+    "Details is closed by default"
+  );
+  open_group(&mut desktop, "Ran echo");
+  desktop.wait_until("the group's entries", |desktop| {
+    has(desktop, "activity-open-file:README.md")
+  });
   let head = Command::new("git")
     .arg("-C")
     .arg(desktop.repo())

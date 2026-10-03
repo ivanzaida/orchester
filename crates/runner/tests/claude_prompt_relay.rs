@@ -19,7 +19,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::StepKey,
-  run::{PendingToolApproval, RunStatus, StepFailure, Stuck},
+  run::{ApprovalAnswer, PendingToolApproval, RunStatus, StepFailure, Stuck},
   store::ActivityStore,
 };
 use orchester_ipc::{Event, Rejection};
@@ -71,7 +71,7 @@ async fn claude_prompt_relay_serves_only_the_one_relay_with_the_token() {
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -108,7 +108,9 @@ async fn claude_prompt_relay_leaving_while_a_person_decides_interrupts_the_reque
   );
   assert!(db.has_interrupted_tool_approval(id).expect("approvals"));
   assert_eq!(
-    scheduler.decide_tool_approval(id, request.id, true).await,
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "a later decision is not recorded as delivered"
   );

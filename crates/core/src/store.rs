@@ -384,6 +384,11 @@ pub trait ConversationStore {
   /// went to, atomically. A delivery state only moves forward.
   fn save_deliveries(&mut self, messages: &[Message]) -> Result<(), Self::Error>;
 
+  /// Stores how far a person's message got, `changed`, only while it still stands as `before` (its
+  /// delivery and timing as stored): `false`, with nothing stored, when another writer (the desktop,
+  /// the runner) moved it on first. For changes that two writers can race to make.
+  fn change_delivery(&mut self, before: &Message, changed: &Message) -> Result<bool, Self::Error>;
+
   /// The conversation of `task`, oldest first.
   fn messages(&self, task: TaskId) -> Result<Vec<Message>, Self::Error>;
 

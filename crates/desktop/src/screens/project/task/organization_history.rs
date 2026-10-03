@@ -7,7 +7,7 @@ use lurq::{
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::TaskId,
@@ -48,7 +48,7 @@ impl Component for OrganizationHistory {
     let state = load.state().get();
     let mut column = Column::new()
       .id("task-organization-history")
-      .padding(SpacingSize::Section)
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .child(Text::new(&ctx.t("tasks.history.title")).variant(TypographyStyle::Label));
     if let Some(error) = state.error {
@@ -121,32 +121,17 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
     .collect()
 }
 
-pub(super) fn activity(
-  ctx: &mut Ctx,
-  props: &super::TaskProps,
-  detail: &std::sync::Arc<crate::tasks::detail::TaskDetail>,
-  live: bool,
-) -> Element {
-  Column::new()
-    .flex(1.0)
-    .child(ctx.mount_keyed::<OrganizationHistory>(
-      "organization-history",
-      HistoryProps {
-        root: props.project.repo_root.clone(),
-        task: detail.task.id(),
-        revision: props.revision,
-      },
-    ))
-    .child(ctx.mount_keyed::<super::activity::ActivityTab>(
-      "task-activity",
-      super::activity::ActivityProps {
-        repo_root: props.project.repo_root.clone(),
-        detail: detail.clone(),
-        revision: props.revision,
-        live,
-      },
-    ))
-    .into()
+/// The task's organization history (`D1DC6T`) at the end of its Summary, since the Conversation
+/// timeline took the Activity tab's place (ORC-61); `revision` rereads it as the task changes.
+pub(super) fn history(ctx: &mut Ctx, root: &std::path::Path, task: TaskId, revision: (u64, u64)) -> Element {
+  ctx.mount_keyed::<OrganizationHistory>(
+    "organization-history",
+    HistoryProps {
+      root: root.to_path_buf(),
+      task,
+      revision,
+    },
+  )
 }
 
 /// One change: the field, the value before and after (an empty one reads "None"), who and when.

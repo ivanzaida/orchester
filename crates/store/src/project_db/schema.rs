@@ -2,6 +2,7 @@
 //! migrations live in modules of their own, named after what they add.
 
 mod agent_files;
+mod approval_choices;
 mod code_index;
 mod command_approvals;
 mod conversation;
@@ -12,6 +13,7 @@ mod memory;
 mod native_commands;
 mod organization;
 mod recovery;
+mod steering;
 mod stuck_runs;
 mod task_edits;
 mod task_groups;
@@ -588,5 +590,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   task_groups::MIGRATION,
   task_groups::FINISHED_MIGRATION,
   stuck_runs::MIGRATION,
+  steering::MIGRATION,
+  approval_choices::MIGRATION,
   organization::MIGRATION,
 ];

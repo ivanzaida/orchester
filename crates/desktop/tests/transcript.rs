@@ -3,7 +3,8 @@
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, OutputStream, ToolCommandResult},
   id::{InvocationId, StepExecutionId},
-  run::{ActivityEntry, TokenUsage},
+  permission::category::CommandCategory,
+  run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
   time::Timestamp,
 };
 use orchester_desktop::tasks::transcript::{CommandMark, EntryKind, McpToolEntry, ToolCommandEntry, entries};
@@ -312,4 +313,63 @@ fn transcript_shows_how_each_codex_mcp_call_was_decided() {
   );
   let failures: Vec<bool> = entries.iter().map(|entry| entry.is_failure()).collect();
   assert_eq!(failures, [false, true, false, true, false]);
+}
+
+#[test]
+fn transcript_marks_answered_requests_on_their_calls() {
+  let decided = |item: &str, server: &str, decided_by, told: Option<&str>| AgentEvent::ToolDecided {
+    item: item.into(),
+    server: server.into(),
+    action: "batch_design".into(),
+    decision: ToolDecision {
+      decided_by,
+      category: (server == "command").then_some(CommandCategory::Network),
+      secrets: false,
+      told: told.map(str::to_owned),
+    },
+  };
+  let activity = stored(vec![
+    // Codex asks before it starts a command: the answer waits for the command's entry.
+    decided("cmd_1", "command", DecidedBy::AutoApproved, None),
+    AgentEvent::CommandStarted {
+      item: "cmd_1".into(),
+      command: "git fetch".into(),
+    },
+    // An MCP call no command shows gets an entry of its own.
+    decided("mcp_1", "pencil", DecidedBy::SimilarRule, None),
+    AgentEvent::CommandStarted {
+      item: "cmd_2".into(),
+      command: "pnpm publish".into(),
+    },
+    decided(
+      "cmd_2",
+      "command",
+      DecidedBy::PersonDeny,
+      Some("Denied by the person reviewing this run."),
+    ),
+  ]);
+  let entries = entries(&activity);
+  let marks: Vec<Option<DecidedBy>> = entries
+    .iter()
+    .map(|entry| match &entry.kind {
+      EntryKind::Command(command) => command.mark.as_ref(),
+      EntryKind::McpTool(call) => call.mark.as_ref(),
+      _ => None,
+    })
+    .map(|mark| match mark {
+      Some(CommandMark::Decided(mark)) => Some(mark.decision.decided_by),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(
+    marks,
+    [
+      Some(DecidedBy::AutoApproved),
+      Some(DecidedBy::SimilarRule),
+      Some(DecidedBy::PersonDeny)
+    ]
+  );
+  // A denial stays open, like a failure.
+  assert!(entries[2].is_failure());
+  assert!(!entries[0].is_failure());
 }

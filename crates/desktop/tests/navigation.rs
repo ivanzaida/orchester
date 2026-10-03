@@ -159,7 +159,7 @@ fn pages() -> Vec<Page> {
     Page::Tasks(TaskTab::Done),
     Page::NewTask,
     Page::task(TaskId::generate()),
-    Page::Task(TaskId::generate(), TaskPageTab::Activity),
+    Page::Task(TaskId::generate(), TaskPageTab::Conversation),
     Page::Task(TaskId::generate(), TaskPageTab::Changes),
     Page::EditTask(TaskId::generate()),
     Page::RetryTask(TaskId::generate()),
@@ -205,6 +205,15 @@ fn route_every_page_resolves_and_reads_back() {
     let leaf = matched.last().unwrap_or_else(|| panic!("{path} resolves"));
     assert_ne!(leaf.pattern_raw(), "**", "{path} is not the fallback");
   }
+}
+
+#[test]
+fn route_the_activity_tab_of_earlier_paths_opens_the_conversation() {
+  let (project, task) = (ProjectId::generate(), TaskId::generate());
+  let conversation = Route::Project(project, Page::Task(task, TaskPageTab::Conversation));
+  let earlier = conversation.path().replace("tab=conversation", "tab=activity");
+  assert_ne!(earlier, conversation.path(), "the tab is in the path's query");
+  assert_eq!(Route::parse(&earlier), Some(conversation));
 }
 
 #[test]

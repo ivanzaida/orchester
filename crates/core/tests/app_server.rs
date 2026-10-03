@@ -212,9 +212,24 @@ fn unknown_server_request_fails_closed_and_turn_usage_is_counted_once() {
           output: 35
         }
       }),
-      Update::TurnEnded
+      Update::TurnEnded { input_kept: true }
     ]
   ));
+}
+
+#[test]
+fn an_interrupted_turn_does_not_keep_the_input_it_accepted() {
+  // Codex records accepted `turn/steer` input as a turn completes or fails, and holds it back for a
+  // turn of its own when the turn is interrupted.
+  for (status, kept) in [("completed", true), ("failed", true), ("interrupted", false)] {
+    let mut stream = AppServerStream::default();
+    let ended = json!({"method":"turn/completed","params":{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":status}}});
+    let updates = stream.parse(&ended.to_string()).expect("turn");
+    assert!(
+      matches!(updates.last(), Some(Update::TurnEnded { input_kept }) if *input_kept == kept),
+      "{status}"
+    );
+  }
 }
 
 #[test]
@@ -249,4 +264,16 @@ fn a_completed_patch_reports_the_files_it_changed() {
     "id":"patch-4","type":"fileChange","status":"declined","changes":[{"path":"a.rs","kind":"update"}]
   }}});
   assert!(stream.parse(&declined.to_string()).expect("item").is_empty());
+}
+
+#[test]
+fn a_user_message_the_turn_took_is_reported_with_its_text() {
+  // Codex 0.159.2 (probe 2026-10-02): a message added with `turn/steer` while a command ran became a
+  // `userMessage` item right after the command completed.
+  let mut stream = AppServerStream::default();
+  let taken = json!({"method":"item/completed","params":{"threadId":"thread-1","turnId":"turn-1","item":{
+    "id":"item-9","type":"userMessage","content":[{"type":"text","text":"Also cover cancel.","text_elements":[]}]
+  }}});
+  let updates = stream.parse(&taken.to_string()).expect("item");
+  assert!(matches!(updates.as_slice(), [Update::InputTaken(text)] if text == "Also cover cancel."));
 }

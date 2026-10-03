@@ -1,0 +1,328 @@
+//! The approval choices of 2026-10-02, end to end with `orchester-fake-claude` and `orchester-fake-codex`:
+//! Approve similar and Always allow answer a later call of the same invocation at once, Always allow also
+//! publishes the prefix in a new profile version or lists the tool on its server, Approve everything in this
+//! run and a profile that approves automatically answer what auto-approval may, and leave a write outside the
+//! worktree to a person. Needs `git`. Run with
+//! `cargo test -p orchester-runner --features test-agent --test approval_choices approval_choices`.
+
+mod support;
+
+use std::path::Path;
+
+use orchester_core::{
+  connection::{
+    AgentProvider,
+    mcp::{ExemptTools, McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
+    stream::AgentEvent,
+  },
+  id::{ConnectionId, IdempotencyKey, RunId},
+  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
+  resource::{AgentProfile, CommandArg, CommandProgram, StepKey},
+  run::{ApprovalAnswer, DecidedBy, PendingToolApproval, Run, RunStatus},
+  store::{ActivityStore, McpServerStore, ResourceStore, RunStore},
+  time::Timestamp,
+};
+use orchester_ipc::Event;
+use orchester_runner::execution::Scheduler;
+use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
+
+use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
+
+/// `pencil`, with no tool listed to run without asking.
+fn pencil() -> McpServer {
+  McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("pencil").expect("valid name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new(TEST_COMMAND).expect("valid program"),
+      vec![CommandArg::new("--stdio").expect("valid argument")],
+      None,
+    )),
+    McpEnvironment::default(),
+    Timestamp::now(),
+  )
+  .expect("a valid server")
+}
+
+/// A Builder on `provider` that asks before MCP actions and gets `pencil`.
+fn designer(provider: AgentProvider, brief: &'static str) -> TestProject {
+  let commands = if provider == AgentProvider::CodexCli {
+    CommandPermission::AnyInWorktree
+  } else {
+    CommandPermission::AskBefore
+  };
+  let mut permissions = AgentPermissions::new(RepositoryAccess::Write, commands, NetworkAccess::Off);
+  permissions.set_interactive_tool_approvals(true);
+  project(&Setup {
+    provider,
+    permissions: Some(permissions),
+    mcp: vec![pencil()],
+    ..Setup::new(brief)
+  })
+}
+
+/// A Claude Code Builder that runs `listed` commands and asks about others; approves automatically when
+/// `auto`.
+fn builder(brief: &'static str, listed: &[&str], auto: bool) -> TestProject {
+  let entries = listed
+    .iter()
+    .map(|entry| CommandPrefix::new(entry).expect("prefix"))
+    .collect();
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::Allowed(AllowedCommands::new(entries).expect("list")),
+    NetworkAccess::On,
+  );
+  permissions.set_auto_approve(auto);
+  project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(permissions),
+    ..Setup::new(brief)
+  })
+}
+
+struct Started {
+  project: TestProject,
+  scheduler: Scheduler,
+  events: mpsc::UnboundedReceiver<Event>,
+  id: RunId,
+}
+
+impl Started {
+  async fn new(project: TestProject) -> Self {
+    let (scheduler, events) = scheduler_with(project.repo.path(), project.vault.clone());
+    let id = scheduler
+      .start_run(IdempotencyKey::generate(), project.task)
+      .await
+      .expect("the run starts");
+    Self {
+      project,
+      scheduler,
+      events,
+      id,
+    }
+  }
+
+  fn root(&self) -> &Path {
+    self.project.repo.path()
+  }
+
+  fn db(&self) -> ProjectDb {
+    ProjectDb::open(self.root()).expect("open")
+  }
+
+  async fn pending(&mut self) -> PendingToolApproval {
+    let root = self.project.repo.path().to_path_buf();
+    let id = self.id;
+    let events = &mut self.events;
+    tokio::time::timeout(PATIENCE, async {
+      loop {
+        if let Some(request) = ProjectDb::open(&root)
+          .expect("open")
+          .pending_tool_approvals(id)
+          .expect("requests")
+          .first()
+        {
+          return request.clone();
+        }
+        events.recv().await.expect("notification");
+      }
+    })
+    .await
+    .expect("an approval arrives")
+  }
+
+  /// Answers the first request with `answer` and waits for the run to end: every later request of the
+  /// invocation is answered without a person.
+  async fn answer_first(&mut self, answer: ApprovalAnswer) -> Run {
+    let request = self.pending().await;
+    self
+      .scheduler
+      .decide_tool_approval(self.id, request.id, answer)
+      .await
+      .expect("answered");
+    self.ended().await
+  }
+
+  async fn ended(&mut self) -> Run {
+    wait_for(self.project.repo.path(), &mut self.events, self.id, |run| {
+      run.status().is_terminal()
+    })
+    .await
+  }
+
+  fn decisions(&self) -> Vec<DecidedBy> {
+    self
+      .db()
+      .activity(self.id, 0)
+      .expect("activity")
+      .into_iter()
+      .filter_map(|entry| match entry.event {
+        AgentEvent::ToolDecided { decision, .. } => Some(decision.decided_by),
+        _ => None,
+      })
+      .collect()
+  }
+
+  fn readme(&self) -> String {
+    let worktree = self.root().join(".orchester/worktrees").join(self.id.to_string());
+    std::fs::read_to_string(worktree.join("README.md")).expect("README")
+  }
+}
+
+fn approvals(readme: &str) -> usize {
+  readme.lines().filter(|line| *line == "approved").count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_similar_answers_the_next_claude_call_at_once() {
+  let mut started = Started::new(designer(AgentProvider::ClaudeCodeCli, "Change the design twice.")).await;
+  let run = started.answer_first(ApprovalAnswer::Similar).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(approvals(&started.readme()), 2);
+  assert_eq!(started.decisions(), [DecidedBy::PersonSimilar, DecidedBy::SimilarRule]);
+  let rules = started.db().approval_rules(started.id).expect("rules");
+  assert_eq!(rules.len(), 1);
+  assert_eq!(rules[0].answered, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_similar_answers_the_next_codex_call_at_once() {
+  let mut started = Started::new(designer(AgentProvider::CodexCli, "Design twice.")).await;
+  let run = started.answer_first(ApprovalAnswer::Similar).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(approvals(&started.readme()), 2);
+  assert_eq!(started.decisions(), [DecidedBy::PersonSimilar, DecidedBy::SimilarRule]);
+  assert_eq!(reported(&started.db(), started.id, "mcp-2: "), ["accept"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_always_lists_the_tool_and_applies_at_once() {
+  for (provider, brief) in [
+    (AgentProvider::ClaudeCodeCli, "Change the design twice."),
+    (AgentProvider::CodexCli, "Design twice."),
+  ] {
+    let mut started = Started::new(designer(provider, brief)).await;
+    let run = started.answer_first(ApprovalAnswer::Always { prefix: None }).await;
+    assert_eq!(run.status(), &RunStatus::Succeeded, "{provider:?}");
+    assert_eq!(approvals(&started.readme()), 2, "{provider:?}");
+    assert_eq!(
+      started.decisions(),
+      [DecidedBy::PersonAlways, DecidedBy::AlwaysAllowed],
+      "{provider:?}"
+    );
+    let servers = started.db().mcp_servers().expect("servers");
+    assert_eq!(
+      servers[0].exempt_tools(),
+      &ExemptTools::parse("batch_design").expect("tools"),
+      "{provider:?}"
+    );
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_always_publishes_the_command_prefix() {
+  let mut started = Started::new(builder("Run `cargo add serde` twice.", &["git"], false)).await;
+  let request = started.pending().await;
+  assert_eq!(request.action, "cargo add serde");
+  let prefix = CommandPrefix::new("cargo add").expect("prefix");
+  started
+    .scheduler
+    .decide_tool_approval(
+      started.id,
+      request.id,
+      ApprovalAnswer::Always {
+        prefix: Some(prefix.clone()),
+      },
+    )
+    .await
+    .expect("answered");
+  let run = started.ended().await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(approvals(&started.readme()), 2);
+  assert_eq!(started.decisions(), [DecidedBy::PersonAlways, DecidedBy::AlwaysAllowed]);
+  let profile = run
+    .profile_of(&StepKey::new("implement").expect("key"))
+    .expect("profile");
+  let latest = started
+    .db()
+    .latest_version::<AgentProfile>(profile)
+    .expect("read")
+    .expect("published");
+  assert_eq!(latest.number().get(), 2);
+  let CommandPermission::Allowed(listed) = latest.body().permissions().commands() else {
+    panic!("a list")
+  };
+  assert!(listed.entries().contains(&prefix));
+  // The run keeps its pinned version and allows the prefix as a rule until it ends.
+  assert_eq!(
+    run.snapshot(),
+    started.db().run(started.id).expect("read").expect("run").snapshot()
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_approve_run_answers_later_requests() {
+  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"], false)).await;
+  let run = started.answer_first(ApprovalAnswer::ApproveRun).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(approvals(&started.readme()), 2);
+  assert_eq!(started.decisions(), [DecidedBy::PersonRun, DecidedBy::AutoApproved]);
+  assert_eq!(started.db().run_auto_approve(started.id).expect("read"), Some(true));
+  assert_eq!(
+    started.db().decision_counts(started.id).expect("counts").auto_approved,
+    1
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_profile_auto_approval_applies_to_a_new_run() {
+  let mut started = Started::new(builder("Run `cargo test`.", &["git"], true)).await;
+  let run = started.ended().await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert!(started.readme().contains("approved"));
+  assert_eq!(started.decisions(), [DecidedBy::AutoApproved]);
+  assert!(
+    started
+      .db()
+      .pending_tool_approvals(started.id)
+      .expect("requests")
+      .is_empty()
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_auto_approval_still_asks_about_a_write_outside() {
+  let mut started = Started::new(builder("Run `cp README.md ../outside.md`.", &["git"], true)).await;
+  let request = started.pending().await;
+  assert_eq!(request.action, "cp README.md ../outside.md");
+  assert!(started.decisions().is_empty());
+  started
+    .scheduler
+    .decide_tool_approval(started.id, request.id, ApprovalAnswer::Deny)
+    .await
+    .expect("denied");
+  let run = started.ended().await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(started.decisions(), [DecidedBy::PersonDeny]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_a_credential_read_is_marked_as_one() {
+  // A dot file of the home folder that does not exist: a credential location by where it lies.
+  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"], false)).await;
+  let run = started.answer_first(ApprovalAnswer::Once).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let secrets: Vec<bool> = started
+    .db()
+    .activity(started.id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::ToolDecided { decision, .. } => Some(decision.secrets),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(secrets, [true]);
+}

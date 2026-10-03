@@ -1,6 +1,6 @@
-//! Routes one person's decision to the live worker holding that exact Codex JSON-RPC request.
+//! Routes one person's answer to the live worker holding that exact tool request.
 
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, run::ApprovalAnswer};
 use orchester_ipc::Rejection;
 
 use super::{
@@ -11,8 +11,13 @@ use super::{
 };
 
 impl Scheduler {
-  pub async fn decide_tool_approval(&self, run: RunId, approval: String, approve: bool) -> Result<(), Rejection> {
-    let Some(reply) = self.ask(run, |ack| Control::DecideToolApproval { approval, approve, ack }) else {
+  pub async fn decide_tool_approval(
+    &self,
+    run: RunId,
+    approval: String,
+    answer: ApprovalAnswer,
+  ) -> Result<(), Rejection> {
+    let Some(reply) = self.ask(run, |ack| Control::DecideToolApproval { approval, answer, ack }) else {
       return Err(Rejection::ToolApprovalNotAwaited);
     };
     reply.await.unwrap_or(Err(Rejection::ToolApprovalNotAwaited))
@@ -20,7 +25,12 @@ impl Scheduler {
 }
 
 impl RunTask {
-  pub(super) fn decide_tool_approval(&mut self, id: String, approve: bool, ack: Ack) -> Result<(), ExecutionError> {
+  pub(super) fn decide_tool_approval(
+    &mut self,
+    id: String,
+    given: ApprovalAnswer,
+    ack: Ack,
+  ) -> Result<(), ExecutionError> {
     let pending = self.db.pending_tool_approvals(self.run.id())?;
     let Some(approval) = pending.iter().find(|approval| approval.id == id) else {
       answer(ack, Err(Rejection::ToolApprovalNotAwaited));
@@ -34,7 +44,7 @@ impl RunTask {
       answer(ack, Err(Rejection::ToolApprovalNotAwaited));
       return Ok(());
     };
-    if worker.send(ApprovalDecision { id, approve, ack }).is_err() {
+    if worker.send(ApprovalDecision { id, answer: given, ack }).is_err() {
       // The worker has ended; its finalization marks the row interrupted.
       tracing::debug!(run = %self.run.id(), "tool decision arrived after the Codex worker ended");
     }

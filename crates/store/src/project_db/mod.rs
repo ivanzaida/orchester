@@ -1,5 +1,7 @@
 mod activity;
 mod agent_files;
+mod always_allow;
+mod approval_rules;
 mod blobs;
 mod code_index;
 mod connections;
@@ -43,7 +45,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-pub use self::read_only::ReadOnlyProjectDb;
+pub use self::{approval_rules::DecisionCounts, read_only::ReadOnlyProjectDb};
 use crate::{
   StoreError, git_exclude, migrate,
   rows::{corrupt, parse},

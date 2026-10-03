@@ -8,7 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::CommandPermission,
   resource::{AgentProfile, StepKey},
-  run::{PermissionsApply, RunStatus},
+  run::{ApprovalAnswer, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
   time::Timestamp,
 };
@@ -64,7 +64,7 @@ async fn permission_restart(hold_mcp: bool) {
   runner.deliver_messages(id).await.expect("resume");
   let command = pending(root, &mut events, id).await;
   runner
-    .decide_tool_approval(id, command, true)
+    .decide_tool_approval(id, command, ApprovalAnswer::Once)
     .await
     .expect("approve command");
   let tool = pending(root, &mut events, id).await;
@@ -73,7 +73,10 @@ async fn permission_restart(hold_mcp: bool) {
     .join(id.to_string())
     .join("mcp-once.txt");
   if hold_mcp {
-    runner.decide_tool_approval(id, tool, true).await.expect("approve MCP");
+    runner
+      .decide_tool_approval(id, tool, ApprovalAnswer::Once)
+      .await
+      .expect("approve MCP");
     wait_for_marker(&marker).await;
   }
   let count = db.invocations(id).expect("invocations").len();

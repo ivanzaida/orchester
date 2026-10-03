@@ -35,7 +35,6 @@ use lurq::{
 };
 use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
 
-pub(super) use self::merge::merged_notice;
 use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
 use super::{super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, progress::progress_list};
 use crate::{
@@ -310,7 +309,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
             .variant(TypographyStyle::Mono),
         ),
     )
-    .child(progress_list(ctx, run, false))
+    .child(progress_list(ctx, run, false, &[]))
     .into()
 }
 

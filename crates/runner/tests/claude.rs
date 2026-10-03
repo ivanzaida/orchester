@@ -61,8 +61,8 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   let schema = result_schema();
   assert!(
     argv.starts_with(&format!(
-      "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
-       --disable-slash-commands --json-schema {schema} --mcp-config "
+      "-p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --model haiku \
+       --effort low --strict-mcp-config --setting-sources  --disable-slash-commands --json-schema {schema} --mcp-config "
     )),
     "{argv}"
   );

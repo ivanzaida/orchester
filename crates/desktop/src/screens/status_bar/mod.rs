@@ -3,6 +3,7 @@
 //! address, and the operations popover (`E1msJS`) that opens upward from the activity item.
 
 mod activity_item;
+mod approvals_item;
 mod counts;
 mod hint;
 mod item;
@@ -13,7 +14,7 @@ mod popover;
 mod runner_item;
 mod timed;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -38,8 +39,12 @@ use crate::{
   activity::{Activity, ActivityLog, bar},
   embedded_mcp::McpStatus,
   runner::RunnerStatus,
+  screens::project::{
+    approval_queue::ApprovalQueue,
+    run_approval_action::{RunApprovalAction, RunApprovalChanges, reload_after, run_approval_action},
+  },
   tabs::feed::WindowFeed,
-  tasks::usage::ProjectUsage,
+  tasks::{approvals::ShownApproval, data::AutoApprovingRun, run_approvals::RunApprovalChange, usage::ProjectUsage},
   theme::{ExtraColor, STATUS_BAR_HEIGHT},
 };
 
@@ -63,6 +68,13 @@ pub struct ProjectBar {
   pub usage: Option<ProjectUsage>,
   /// Runs recorded as running while no runner is connected; `None` while the tasks are read.
   pub lost_to_runner: Option<usize>,
+  /// Tool requests waiting for a decision, oldest first.
+  pub approvals: Arc<Vec<ShownApproval>>,
+  /// Those the approval dialog may show on the current page: not a request shown inline on its task's
+  /// Conversation tab, unless the person opened it.
+  pub dialog: Arc<Vec<ShownApproval>>,
+  /// Active runs that auto-approve their agents' requests.
+  pub auto_approving: Arc<Vec<AutoApprovingRun>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +96,9 @@ impl Component for StatusBar {
   type Props = StatusBarProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    // *Stop* of the runs that auto-approve; the bar's tasks are read again once it is written.
+    let stop = run_approval_action(ctx);
+    reload_after(ctx, &stop);
     Self {
       activity: Activity::of(ctx),
       popover: ctx.signal(false),
@@ -94,6 +109,7 @@ impl Component for StatusBar {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StatusBarProps>().clone();
+    let stop = run_approval_action(ctx);
     let log = self.log(ctx);
     let mcp = McpStatus::of_ctx(ctx);
     let opener = Opener::new(ctx, &self.activity, props.project.as_ref(), &self.popover);
@@ -133,14 +149,35 @@ impl Component for StatusBar {
     let interrupted = props.project.as_ref().map_or(0, |project| {
       project.lost_to_runner.unwrap_or_else(|| project.runner.interrupted())
     });
-    left = left.with_children(activity_slot(
-      ctx,
-      (&slot, interrupted),
-      &log,
-      &opener,
-      &hints,
-      props.project.is_some(),
-    ));
+    // A request waiting for a person comes before the latest activity, and any run that auto-approves after it.
+    // A runner problem comes first: nothing can be answered without the runner.
+    let queue = ctx.use_context::<ApprovalQueue>();
+    let waiting = match (&props.project, &slot) {
+      (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
+      (Some(project), _) => approvals_item::approvals(ctx, (&project.approvals, &project.dialog), queue.as_ref()),
+    };
+    // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
+    // hides the other. Any other activity gives way to them.
+    let activity = (waiting.is_empty() || slot.beside_approvals()).then(|| {
+      activity_slot(
+        ctx,
+        (&slot, interrupted),
+        &log,
+        &opener,
+        &hints,
+        props.project.is_some(),
+      )
+    });
+    left = left
+      .with_children(waiting)
+      .with_children(activity.into_iter().flatten());
+    if let Some(project) = &props.project {
+      left = left.with_children(approvals_item::auto_approving(
+        ctx,
+        &project.auto_approving,
+        stop_press(&stop, project),
+      ));
+    }
     // The popover hangs from the activity item; without it there is nothing to anchor to.
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
@@ -157,6 +194,24 @@ impl Component for StatusBar {
       .with_children(popover)
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))
+  }
+}
+
+/// *Stop*: ends the auto-approval of every run the bar names.
+fn stop_press(stop: &RunApprovalAction, project: &ProjectBar) -> impl Fn() + Send + Sync + 'static {
+  let stop = stop.clone();
+  let request = RunApprovalChanges {
+    repo_root: project.repo_root.clone(),
+    changes: project
+      .auto_approving
+      .iter()
+      .map(|run| (run.run, RunApprovalChange::AutoApprove(false)))
+      .collect(),
+  };
+  move || {
+    if !stop.state().get_untracked().is_pending() {
+      stop.run(request.clone());
+    }
   }
 }
 

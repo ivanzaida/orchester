@@ -456,7 +456,7 @@ fn tool_approval_values_of_60_columns_stay_beside_their_label() {
 }
 
 #[test]
-fn tool_approval_tab_goes_through_each_copy_then_deny_and_approve() {
+fn tool_approval_tab_goes_through_each_copy_then_the_answers() {
   let mut desktop = approval_dialog(Request {
     command: true,
     action: HEREDOC,
@@ -467,12 +467,16 @@ fn tool_approval_tab_goes_through_each_copy_then_deny_and_approve() {
   let action_copy = format!("{ACTION}-copy");
   let target_copy = format!("{TARGET}-copy");
   // Each value's Copy, on its label's line, in reading order: the working directory, then the
-  // command; the boxes are not stops (lurq does not scroll a box from the keyboard).
+  // command; the boxes are not stops (lurq does not scroll a box from the keyboard). A command
+  // Orchester cannot read to the end offers neither Approve similar nor Always allow, and the only
+  // request has no ‹ or ›.
   desktop.tab_to(&target_copy, 8);
   assert_eq!(
-    desktop.stops(4, false),
+    desktop.stops(6, false),
     expected(&[
       Some(&action_copy),
+      Some("tool-approval-approve-run"),
+      Some("tool-approval-decide-later"),
       Some("tool-approval-deny"),
       Some("tool-approval-approve-once"),
       Some(&target_copy),

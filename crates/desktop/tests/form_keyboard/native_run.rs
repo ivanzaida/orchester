@@ -240,7 +240,12 @@ fn native_shell_command_asks_with_its_shell_full_string_and_time_limit() {
     "tool-approval-unsandboxed",
     "Runs outside any sandbox"
   ));
-  assert!(shows(&mut desktop, DIALOG, "One requested action only"));
+  // Deny tells the agent and it goes on (decision 2); the wider answers sit above the footer.
+  assert!(shows(
+    &mut desktop,
+    "tool-approval-deny-tells",
+    "Denied by the person reviewing this run"
+  ));
   let width = desktop.bounds(DIALOG).width;
   assert!((width - 640.0).abs() < 0.5, "{width} px wide");
 }
@@ -326,7 +331,9 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
       .expect("transcript");
   });
   open_task(&mut desktop);
-  desktop.click("task-tab-activity");
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-details");
+  desktop.click("conversation-details");
   desktop.wait_for("activity-invocation");
   let panel = "activity-invocation";
   assert!(shows(

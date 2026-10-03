@@ -44,6 +44,7 @@ impl RunTask {
       return Ok(());
     };
     self.board.release(execution);
+    self.release_steered(execution);
     if active.abandoned {
       return Ok(());
     }

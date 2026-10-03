@@ -3,6 +3,7 @@
 //! worktree — a new session,
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
+mod answer;
 mod app_server;
 mod approval;
 mod claude_approval;
@@ -15,11 +16,14 @@ mod start;
 mod stderr;
 pub(super) mod worker;
 
+use std::path::{Path, PathBuf};
+
 use orchester_core::{
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
-  conversation::{Message, latest_question},
+  conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
+  permission::{LaunchPermissions, category::CommandScope},
   resource::ModelId,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
@@ -68,6 +72,14 @@ pub(super) enum Occasion {
 }
 
 impl Occasion {
+  /// How the messages an invocation started for this occasion reach its agent.
+  const fn arrival(&self) -> Arrival {
+    match self {
+      Self::AfterTurn => Arrival::TurnEnd,
+      Self::Written | Self::Answer(_) | Self::FollowUp | Self::Recovery(_) => Arrival::Prompt,
+    }
+  }
+
   pub(super) fn as_prompt(&self) -> MessageOccasion<'_> {
     match self {
       Self::Written => MessageOccasion::Written,
@@ -83,6 +95,8 @@ impl Occasion {
 pub(super) struct Active {
   stops: mpsc::UnboundedSender<Stop>,
   pub(super) approvals: Option<mpsc::UnboundedSender<worker::ApprovalDecision>>,
+  /// Where people's messages sent now go to the agent; `None` for a command tool.
+  pub(super) steers: Option<mpsc::UnboundedSender<Vec<Message>>>,
   pub(super) workspace: Workspace,
   /// The invocation as it started, for reporting problems around it.
   pub(super) invocation: Invocation,
@@ -105,6 +119,7 @@ impl Active {
     Self {
       stops,
       approvals: None,
+      steers: None,
       workspace,
       invocation,
       budget: None,
@@ -249,7 +264,13 @@ impl RunTask {
       }
     };
     // Messages that never reached a started agent stay queued.
-    self.deliver(execution, &invocation, std::mem::take(&mut continuation.messages))?;
+    let arrival = continuation.occasion.arrival();
+    self.deliver(
+      execution,
+      &invocation,
+      std::mem::take(&mut continuation.messages),
+      arrival,
+    )?;
     self.spawn(execution, invocation, (process, start), workspace)?;
     Ok(true)
   }
@@ -280,13 +301,16 @@ impl RunTask {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
+    let (steers, steered) = mpsc::unbounded_channel();
     let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
     let worker = Worker {
+      scope: command_scope(&self.root, workspace.path(), &start.permissions),
+      profile: self.profile_of(execution),
       root: self.root.clone(),
       invocation: invocation.clone(),
       transport: match start.app_server {
         Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
-        None => Transport::Claude(ClaudeStream::with_exemptions(start.claude_exemptions)),
+        None => Transport::Claude(Box::new(ClaudeStream::with_exemptions(start.claude_exemptions))),
       },
       process,
       notifier: self.notifier.clone(),
@@ -298,6 +322,7 @@ impl RunTask {
       agent: start.agent,
       task: self.task.id(),
       decisions,
+      steers: steered,
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
@@ -311,6 +336,7 @@ impl RunTask {
       Active {
         stops,
         approvals: interactive.then_some(approvals),
+        steers: Some(steers),
         workspace,
         invocation,
         budget,
@@ -449,4 +475,22 @@ impl RunTask {
     self.board.release(execution);
     self.fail(execution, failure)
   }
+}
+
+/// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
+/// the worktree and the extra writable folders it was given, as written (relative to the repository
+/// `root`), for the host's user.
+fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> CommandScope {
+  let writable: Vec<PathBuf> = launch
+    .permissions()
+    .granted_folders()
+    .map(|folders| {
+      folders
+        .entries()
+        .iter()
+        .map(|folder| folder.lexical_path(root))
+        .collect()
+    })
+    .unwrap_or_default();
+  CommandScope::on_host(worktree, &writable)
 }

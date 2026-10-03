@@ -22,7 +22,7 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-use super::{ProjectNav, TasksState, runner::connection_notice};
+use super::{ProjectNav, TasksState, approval_queue::ApprovalQueue, runner::connection_notice};
 use crate::{
   display,
   navigation::route::Page,
@@ -96,6 +96,7 @@ impl Component for OverviewScreen {
     } else {
       ExtraSpacing::Rail.role()
     };
+    let queue = ctx.use_context::<ApprovalQueue>();
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -137,8 +138,8 @@ impl Component for OverviewScreen {
             // What needs you, including a run that waits for a decision after its retries, shows
             // without Insights; the rest of the attention panel comes with them.
             .with_children(
-              (self.insights.get() || OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases) > 0)
-                .then(|| attention::attention(ctx, &props.open, tasks, &self.nav)),
+              (self.insights.get() || tasks.needs_you() > 0)
+                .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()))),
             )
             .child(
               ActionButton::new(ctx.t("overview.insights"))

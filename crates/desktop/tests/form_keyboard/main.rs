@@ -8,12 +8,14 @@
 mod agent_permissions;
 mod agents;
 mod all_projects;
+mod approval_choices;
 mod canvas_zoom;
 mod changes;
 mod claude_run;
 mod code_index;
 mod command_approvals;
 mod conversation;
+mod conversation_composer;
 mod dialogs;
 mod draft_autosave;
 mod edit_task;

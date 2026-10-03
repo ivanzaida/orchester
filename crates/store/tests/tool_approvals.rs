@@ -3,7 +3,7 @@ mod support;
 use orchester_core::{
   id::IdempotencyKey,
   revision::Revision,
-  run::{BranchName, CommandShell, NativeCommandAsk, NewRun, PendingToolApproval, ToolApprovalDecision},
+  run::{BranchName, CommandShell, DecidedBy, NativeCommandAsk, NewRun, PendingToolApproval, ToolApprovalDecision},
   store::{ActivityStore, RunStore},
 };
 use support::{at, budget, model, started_run};
@@ -103,12 +103,12 @@ fn one_tool_request_is_decided_once_and_no_longer_pending() {
     std::slice::from_ref(&approval)
   );
   assert!(
-    db.claim_tool_approval(run.id(), &approval.id, true, at(12))
+    db.claim_tool_approval(run.id(), &approval.id, DecidedBy::Person, at(12))
       .expect("claim")
   );
   assert!(
     !db
-      .claim_tool_approval(run.id(), &approval.id, false, at(13))
+      .claim_tool_approval(run.id(), &approval.id, DecidedBy::PersonDeny, at(13))
       .expect("repeat")
   );
   assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
@@ -148,7 +148,7 @@ fn interrupted_request_cannot_be_approved_after_restart() {
   assert!(db.has_interrupted_tool_approval(run.id()).expect("interrupted"));
   assert!(
     !db
-      .claim_tool_approval(run.id(), &approval.id, true, at(12))
+      .claim_tool_approval(run.id(), &approval.id, DecidedBy::Person, at(12))
       .expect("stale")
   );
   assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
@@ -156,7 +156,7 @@ fn interrupted_request_cannot_be_approved_after_restart() {
 
 #[test]
 fn claimed_approval_or_denial_is_interrupted_if_the_worker_dies_mid_delivery() {
-  for approve in [true, false] {
+  for approve in [DecidedBy::Person, DecidedBy::PersonDeny] {
     let (_repo, mut db, run, execution) = started_run();
     let invocation = db
       .start_invocation(run.id(), execution, &model(), at(10))

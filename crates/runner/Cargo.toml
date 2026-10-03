@@ -69,6 +69,14 @@ name = "claude"
 required-features = ["test-agent"]
 
 [[test]]
+name = "send_now"
+required-features = ["test-agent"]
+
+[[test]]
+name = "send_now_delivery"
+required-features = ["test-agent"]
+
+[[test]]
 name = "settling"
 required-features = ["test-agent"]
 
@@ -138,6 +146,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "claude_unlisted"
+required-features = ["test-agent"]
+
+[[test]]
+name = "approval_choices"
 required-features = ["test-agent"]
 
 [[test]]

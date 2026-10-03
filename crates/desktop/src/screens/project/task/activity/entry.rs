@@ -1,6 +1,6 @@
-//! One transcript row: a step execution header (`mDnc3`) or an entry (`N4SlQq`) — time, glyph,
-//! a one-line header with right-aligned meta, optional body text and an optional output block. A
-//! file change entry opens its file in the Changes tab (↗).
+//! One transcript entry (`N4SlQq`): time, glyph, a one-line header with right-aligned meta, optional
+//! body text and an optional output block. A file change entry opens its file in the Changes tab
+//! (↗). A problem row has no time column: its time is in the meta, its glyph in `$text`.
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -10,24 +10,18 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
+  id::TaskId,
   tokens::compact_tokens,
 };
 
-use super::{
-  super::{super::ProjectNav, heading::step_state},
-  engine, first_edit, mark,
-  mcp::mcp_server_text,
-  mcp_call,
-  problem::problem_text,
-  rows::{Header, RowKind, TranscriptRow},
-};
+use super::{super::super::ProjectNav, mcp::mcp_server_text, mcp_call, problem::problem_text, toggles::Toggles};
 use crate::{
   display,
   navigation::route::ChangedFile,
@@ -38,7 +32,6 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{pressable, surface},
-    status_label::compact_status_label,
   },
 };
 
@@ -47,12 +40,40 @@ const TIME_WIDTH: f32 = 36.0;
 const GLYPH_SIZE: f32 = 24.0;
 const OUTPUT_LINES: usize = 200;
 
-pub(super) struct TranscriptRowView {
+/// One transcript entry on its own line: in an open tool group, a problem row or the *Tools* view.
+#[derive(Clone)]
+pub(in crate::screens::project::task) struct EntryProps {
+  pub(in crate::screens::project::task) key: Arc<str>,
+  /// The task whose run the transcript is of: its Changes tab shows a changed file.
+  pub(in crate::screens::project::task) task: TaskId,
+  pub(in crate::screens::project::task) entry: Entry,
+  pub(in crate::screens::project::task) agent: Arc<str>,
+  /// Whether unparsed lines are shown line by line.
+  pub(in crate::screens::project::task) raw: bool,
+  /// The time in a column of its own; without it, the time is in the meta (a problem row).
+  pub(in crate::screens::project::task) time_column: bool,
+  pub(in crate::screens::project::task) toggles: Toggles,
+}
+
+impl PartialEq for EntryProps {
+  fn eq(&self, other: &Self) -> bool {
+    self.key == other.key
+      && self.task == other.task
+      && self.entry == other.entry
+      && self.agent == other.agent
+      && self.raw == other.raw
+      && self.time_column == other.time_column
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for EntryProps {}
+
+pub(in crate::screens::project::task) struct EntryView {
   copied: Signal<Copied>,
 }
 
-impl Component for TranscriptRowView {
-  type Props = TranscriptRow;
+impl Component for EntryView {
+  type Props = EntryProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -61,103 +82,23 @@ impl Component for TranscriptRowView {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let row = ctx.props::<TranscriptRow>().clone();
-    match &row.kind {
-      RowKind::Mark(mark) => mark::mark_row(ctx, mark),
-      RowKind::Header(header) => header_row(ctx, &row, header),
-      RowKind::Entry { entry, agent, open } => {
-        let nav = ctx
-          .use_context::<ProjectNav>()
-          .expect("the project shell provides ProjectNav");
-        entry_row(ctx, &row, entry, (agent, *open), &nav, &self.copied)
-      }
-    }
+    let props = ctx.props::<EntryProps>().clone();
+    let nav = ctx
+      .use_context::<ProjectNav>()
+      .expect("the project shell provides ProjectNav");
+    let open = props.toggles.is_open(&props.key, entry_starts_open(&props.entry));
+    entry_row(ctx, &props, open, &nav, &self.copied)
   }
 }
 
-/// Disclosure, step number, step and agent, model and time span, tokens with those before the
-/// first edit, and state (`mDnc3`). A tool step names its tool and runs, and has no model and no
-/// tokens.
-fn header_row(ctx: &Ctx, row: &TranscriptRow, header: &Header) -> Element {
-  let meta = header_meta(ctx, header);
-  let title = ctx.t_args(
-    "runs.activity.stepTitle",
-    [("step", &*header.step), ("agent", &*header.agent)],
-  );
-  let tokens = (!header.command).then(|| {
-    let tokens = ctx.t_args(
-      "runs.tokens",
-      [("count", compact_tokens(header.usage.counted()).as_str())],
-    );
-    let tokens = first_edit::header_tokens(ctx, tokens, header.before_edit.as_ref(), header.ended.is_some());
-    Text::new(&tokens).variant(TypographyStyle::Mono).nowrap()
-  });
-  let (glyph, state) = step_state(header.status);
-  let (toggles, key, open) = (row.toggles.clone(), row.key.clone(), header.open);
-  let chevron = if open { Icon::ChevronDown } else { Icon::ChevronRight };
-  pressable(surface(), move || toggles.flip(&key, open))
-    .id("activity-step-header")
-    .width(Dimension::Pct(100.0))
-    .padding_top(ExtraSpacing::Group.role())
-    .padding_bottom(SpacingSize::Sm)
-    .spacing(ExtraSpacing::Inline.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .describe("execution", header.execution.to_string())
-    .describe("open", open.to_string())
-    .child(icon(chevron, IconSize::Small, PaletteColor::TextMuted))
-    .child(
-      Text::new(&format!("{:02}", header.number))
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted),
-    )
-    .child(Text::new(&title).variant(TypographyStyle::Label).nowrap())
-    .child(Text::new(&meta).variant(TypographyStyle::Caption).nowrap())
-    .child(Spacer::new().flex(1.0))
-    .with_children(tokens)
-    .child(compact_status_label(glyph, &ctx.t(state)))
-    .into()
-}
-
-/// "Codex / Sol · 1 invocation · 12:01–12:02", "Command tool · run 1 · started 12:05".
-fn header_meta(ctx: &Ctx, header: &Header) -> Arc<str> {
-  let start = header.started.map(display::clock).unwrap_or_default();
-  let count = header.invocations.to_string();
-  let (engine, running, one, other) = if header.command {
-    (
-      ctx.t("runs.activity.commandTool"),
-      "runs.activity.commandHeaderRunning",
-      "runs.activity.commandHeaderFinished.one",
-      "runs.activity.commandHeaderFinished.other",
-    )
-  } else {
-    let engine = engine(ctx, header.vendor.as_ref(), &header.model);
-    // Orchester runs a native agent itself (04.H10 `rL1aI`).
-    let engine = match header.provider {
-      Some(provider) if provider.is_native() => ctx.t_args("runs.activity.engineNative", [("engine", &*engine)]),
-      _ => engine,
-    };
-    (
-      engine,
-      "runs.activity.headerRunning",
-      "runs.activity.headerFinished.one",
-      "runs.activity.headerFinished.other",
-    )
-  };
-  let Some(ended) = header.ended else {
-    return ctx.t_args(running, [("engine", &*engine), ("count", &count), ("start", &start)]);
-  };
-  let key = if header.invocations == 1 { one } else { other };
-  let end = display::clock(ended);
-  ctx.t_args(
-    key,
-    [
-      ("engine", &*engine),
-      ("count", &count),
-      ("start", &start),
-      ("end", &end),
-    ],
-  )
+/// Failures start open; commands, reasoning and unparsed lines start closed.
+fn entry_starts_open(entry: &Entry) -> bool {
+  match entry.kind {
+    EntryKind::Command(_) | EntryKind::ToolCommand(_) | EntryKind::Reasoning(_) | EntryKind::Raw(_) => {
+      entry.is_failure()
+    }
+    _ => true,
+  }
 }
 
 /// What an entry shows, apart from its time and whether it is open.
@@ -192,15 +133,20 @@ impl Shown {
   }
 }
 
-fn entry_row(
-  ctx: &Ctx,
-  row: &TranscriptRow,
-  entry: &Entry,
-  (agent, open): (&Arc<str>, bool),
-  nav: &ProjectNav,
-  copied: &Signal<Copied>,
-) -> Element {
-  let shown = shown(ctx, entry, agent, row.raw);
+fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: &Signal<Copied>) -> Element {
+  let entry = &row.entry;
+  let mut shown = shown(ctx, entry, &row.agent, row.raw);
+  if !row.time_column {
+    let time = display::clock(entry.at);
+    shown.meta = if shown.meta.is_empty() {
+      time.as_str().into()
+    } else {
+      ctx.t_args(
+        "runs.conversation.problemMeta",
+        [("meta", &*shown.meta), ("time", time.as_str())],
+      )
+    };
+  }
   let raw = matches!(entry.kind, EntryKind::Raw(_));
   let open = open || (raw && row.raw);
   let content = Column::new()
@@ -215,7 +161,7 @@ fn entry_row(
     .padding_vertical(SpacingSize::Sm)
     .spacing(ExtraSpacing::Stack.role())
     .describe("entry", entry.sequence.to_string())
-    .child(
+    .with_children(row.time_column.then(|| {
       Row::new()
         .id(format!("activity-entry-time-{}", entry.sequence))
         .size(Dimension::Px(TIME_WIDTH), Dimension::Px(GLYPH_SIZE))
@@ -226,9 +172,9 @@ fn entry_row(
             .variant(TypographyStyle::Mono)
             .color(PaletteColor::TextMuted)
             .nowrap(),
-        ),
-    )
-    .child(glyph(shown.glyph, entry.sequence))
+        )
+    }))
+    .child(glyph(shown.glyph, entry.sequence, !row.time_column))
     .child(content);
   let line = if raw { line.opacity(UNPARSED_OPACITY) } else { line };
   if let Some(path) = &shown.opens {
@@ -248,6 +194,8 @@ fn entry_row(
 fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied>) -> Option<Column> {
   let command = match &entry.kind {
     EntryKind::Command(command) => Some(&*command.command),
+    // A tool step's one-line command is whole in the row's title: its output follows (`hep0l`).
+    EntryKind::ToolCommand(command) if matches!(command_preview(&command.command), Cow::Borrowed(_)) => None,
     EntryKind::ToolCommand(command) => Some(&*command.command),
     _ => None,
   };
@@ -285,7 +233,7 @@ fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied
 }
 
 /// `line`, pressed to open the changed file at `path` in the Changes tab (↗).
-fn opens_file(nav: &ProjectNav, row: &TranscriptRow, path: &Arc<str>, line: Element) -> Element {
+fn opens_file(nav: &ProjectNav, row: &EntryProps, path: &Arc<str>, line: Element) -> Element {
   let file = ChangedFile {
     path: path.to_string(),
     worktree: false,
@@ -337,7 +285,13 @@ fn entry_header(shown: &Shown, open: bool, sequence: u64) -> Element {
     .into()
 }
 
-fn glyph(glyph: Icon, sequence: u64) -> Element {
+/// The entry's glyph on its tile; a problem row's in `$text` (`OlLGD`).
+fn glyph(glyph: Icon, sequence: u64, problem: bool) -> Element {
+  let color = if problem {
+    PaletteColor::TextPrimary
+  } else {
+    PaletteColor::TextSecondary
+  };
   Row::new()
     .id(format!("activity-entry-icon-{sequence}"))
     .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
@@ -346,7 +300,7 @@ fn glyph(glyph: Icon, sequence: u64) -> Element {
     .rounded(RadiusSize::Sm)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(glyph, IconSize::Entry, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Entry, color))
     .into()
 }
 
@@ -512,6 +466,8 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
     None => meta,
   };
+  // A person's Deny: what the agent was told says why the command did not run.
+  let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
   Shown {
     glyph,
     title: preview_title(&entry.command),

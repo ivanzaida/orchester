@@ -9,6 +9,4 @@ pub(crate) struct TaskScrolls {
   pub(super) this_run: ScrollState,
   /// The Summary of a run that cannot be read (02.R).
   pub(super) unreadable: ScrollState,
-  /// The Conversation tab's active work.
-  pub(super) work: ScrollState,
 }

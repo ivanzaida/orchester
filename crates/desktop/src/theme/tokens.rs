@@ -76,6 +76,11 @@ pub const RADIUS_MARK: f32 = 2.0;
 pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 /// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
+/// Corner radius of a category chip (`EfQuh`).
+pub const RADIUS_CHIP: f32 = 5.0;
+/// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
+/// style (toolbar of `RrScB`).
+pub const RADIUS_SEGMENT: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
@@ -119,6 +124,9 @@ pub const SPACE_CHECK_INDENT: f32 = 28.0;
 /// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
 /// `L1B0m` in 04.B `W0Owo`).
 pub const SPACE_REASON_INDENT: f32 = 22.0;
+/// A tool group and a card's body in the conversation timeline start where a message's text does:
+/// past its 24px glyph and the 12px gap (`uoK7y`, the cards of `ZxYGh`, `haIEI`).
+pub const SPACE_TIMELINE_INDENT: f32 = 36.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -212,11 +220,20 @@ pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
 /// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
 /// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
 pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
-/// The narrowest window whose Activity toolbar (`c1dmZ`) holds everything on one line: the 216
-/// sidebar, the 320 invocation inspector, the transcript's 64 padding, the 240 step filter, Show
-/// raw lines and the widest live state ("Waits for your decision") with their gaps. Narrower, Show
-/// raw lines goes to a second line (not drawn yet).
-pub const ACTIVITY_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1240.0;
+/// The narrowest window whose Conversation toolbar (`JKl4s` in `RrScB`) holds everything on one line
+/// with Details closed: the 216 sidebar, the toolbar's 64 padding, the 240 step filter, *Show* (164),
+/// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
+/// Narrower, *Show* and the search go to a second line (not drawn yet).
+pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
+/// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its
+/// recipient, *Attach* and both send buttons on one line: the 216 sidebar, the column's 64 padding,
+/// the composer's 24, the 260 recipient, *Attach* (104), *Send after this turn* (166), *Send now*
+/// (104) and three 10 gaps. Narrower, the buttons go to a line of their own (not drawn yet).
+pub const CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW: f32 = 980.0;
+/// What the Tools view adds to that line: *Show raw lines* (`q4fCXK`) and its gap.
+pub const CONVERSATION_TOOLBAR_RAW_SWITCH: f32 = 140.0;
+/// How much wider *Waits for your decision* is than *Following live*.
+pub const CONVERSATION_TOOLBAR_DECISION_STATE: f32 = 50.0;
 /// The task table (`clVjO`, `qVMJh`) drops columns as the window narrows. Its fixed cells and gaps
 /// take 392 plus Workflow / run (212, or 164 without Priority) of the window less its 216 sidebar
 /// and 64 page padding; Pipeline adds 152 and Priority 112. Pipeline stays while the title keeps

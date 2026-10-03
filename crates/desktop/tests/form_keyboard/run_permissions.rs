@@ -128,9 +128,9 @@ fn within(inner: &ElementRect, outer: &ElementRect) -> bool {
   across(inner, outer) && inner.y >= outer.y - 0.5 && inner.y + inner.height <= outer.y + outer.height + 0.5
 }
 
-/// The row keeps its link whole at both widths (`iPHGE`): in the "This run" panel the full value
-/// stacks above it; in the Conversation tab's wide column it follows the value at 1440 and moves
-/// under it at 960. The value only breaks at its "·" separators.
+/// The row keeps its link whole at both widths (`iPHGE`): in the "This run" panel and in the
+/// Conversation tab's Details pane the full value stacks above it. The value only breaks at its
+/// "·" separators.
 #[test]
 fn run_permissions_row_keeps_its_link_at_1440_and_960() {
   let mut desktop = desktop_running("Wait for release.");
@@ -164,9 +164,13 @@ fn run_permissions_row_keeps_its_link_at_1440_and_960() {
     value.contains("Any\u{a0}command\u{a0}· "),
     "{value:?} breaks only after a separator"
   );
+  // The Conversation tab has it in its Details pane, about the invocation that runs: the 320 pane
+  // stacks the value above the link, as the "This run" panel does (`gNa91`, `iPHGE`).
   desktop.click("task-tab-conversation");
-  desktop.wait_for("task-working-context");
-  for (width, height, one_line) in [(1440, 960, true), (960, 700, false)] {
+  desktop.wait_for("conversation-details");
+  desktop.click("conversation-details");
+  desktop.wait_for("task-permissions");
+  for (width, height) in [(1440, 960), (960, 700)] {
     desktop.tree.resize(width, height);
     desktop.pass();
     let (row, value, link) = (
@@ -177,24 +181,12 @@ fn run_permissions_row_keeps_its_link_at_1440_and_960() {
     assert!(within(&link, &row), "{width}: {link:?} {row:?}");
     // The whole value is shown: it wraps inside the row rather than running past it.
     assert!(within(&value, &row), "{width}: {value:?} {row:?}");
-    let context = desktop.bounds("task-working-context");
-    assert!(across(&row, &context), "{width}: {row:?} {context:?}");
-    if one_line {
-      // Label, value and link share one line box, so their text lines up.
-      let label = desktop.bounds("task-permissions-label");
-      let middle = |bounds: &ElementRect| bounds.y + bounds.height / 2.0;
-      assert!((middle(&label) - middle(&value)).abs() < 0.5, "{label:?} {value:?}");
-      assert!((middle(&link) - middle(&value)).abs() < 0.5, "{link:?} {value:?}");
-      assert!(
-        (link.y - value.y).abs() < 4.0,
-        "{width}: the link follows the value: {link:?} {value:?}"
-      );
-    } else {
-      assert!(
-        link.y >= value.y + value.height - 0.5,
-        "{width}: the link is under the value"
-      );
-    }
+    let pane = desktop.bounds("activity-invocation-content");
+    assert!(across(&row, &pane), "{width}: {row:?} {pane:?}");
+    assert!(
+      link.y >= value.y + value.height - 0.5,
+      "{width}: the link is under the value"
+    );
   }
   fs::write(orchester(desktop.repo()).join("fake-release"), "go").expect("release");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));

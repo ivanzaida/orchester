@@ -8,7 +8,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
-    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, result_schema},
+    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, input_line, result_schema},
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
@@ -74,11 +74,14 @@ fn args(invocation: &ClaudeInvocation<'_>) -> Vec<String> {
     .collect()
 }
 
-const BASE: [&str; 12] = [
+const BASE: [&str; 15] = [
   "-p",
+  "--input-format",
+  "stream-json",
   "--output-format",
   "stream-json",
   "--verbose",
+  "--replay-user-messages",
   "--model",
   "haiku",
   "--effort",
@@ -290,7 +293,7 @@ fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
       writable_roots: roots,
       ..invocation(permissions)
     }
-    .command("Do it".into(), Vec::new(), &CommandEnvironment::default())
+    .command("Do it", Vec::new(), &CommandEnvironment::default())
     .err()
   };
   let by_rule = enforced(
@@ -399,7 +402,7 @@ fn claude_invocation_passes_a_full_model_id_to_new_and_resumed_sessions() {
     current.effort = Some("max");
     current.session = session;
     let args = args(&current);
-    assert_eq!(&args[4..8], ["--model", "claude-opus-5-5", "--effort", "max"]);
+    assert_eq!(&args[7..11], ["--model", "claude-opus-5-5", "--effort", "max"]);
     assert_eq!(args.iter().filter(|arg| *arg == "--model").count(), 1);
   }
 }
@@ -438,11 +441,16 @@ fn claude_invocation_command_runs_in_the_worktree_without_the_agent_hosts_variab
     Platform::current(),
   );
   let command = invocation(&permissions)
-    .command("Do it".into(), environment, &CommandEnvironment::default())
+    .command("Do it", environment, &CommandEnvironment::default())
     .expect("unicode worktree");
   assert_eq!(command.program(), Path::new("/bin/claude"));
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
-  assert_eq!(command.stdin(), Some("Do it"));
+  // The prompt is the first stream-json user message; the input stays open for messages sent now.
+  assert_eq!(command.stdin(), Some(input_line("Do it").as_str()));
+  assert!(command.interactive_stdin());
+  let line: serde_json::Value = serde_json::from_str(&input_line("Do it")).expect("JSON");
+  assert_eq!(line["type"], "user");
+  assert_eq!(line["message"]["content"][0]["text"], "Do it");
   assert!(!command.inherits_env());
   let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
   assert_eq!(names, ["PATH", "USERPROFILE", "CLAUDE_CONFIG_DIR"]);
@@ -461,7 +469,7 @@ fn claude_invocation_command_adds_the_project_variables() {
     CommandEnvironment::new(BTreeMap::from([(name, "/repo/.orchester/target".to_owned())])).expect("valid variables");
   let environment = [(OsString::from("PATH"), OsString::from("/usr/bin"))];
   let command = invocation(&permissions)
-    .command("Do it".into(), environment, &project)
+    .command("Do it", environment, &project)
     .expect("unicode worktree");
   assert_eq!(
     command.env(),
