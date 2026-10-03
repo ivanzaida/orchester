@@ -9,7 +9,7 @@
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
-  run::{Invocation, PendingToolApproval, RuleScope, Run, WaitReason},
+  run::{Invocation, PendingToolApproval, RuleScope, Run},
   store::{ActivityStore, RunStore},
 };
 use orchester_desktop::tasks::approvals::agent_worktree;
@@ -252,8 +252,8 @@ fn mcp_request(run: &Run, invocation: &Invocation, number: i64) -> PendingToolAp
   }
 }
 
-/// KON-1's run #1 waiting on one request, and run #2, which the task page shows, whose step waits for
-/// one request of its own.
+/// KON-1's run #1 waiting on one request, and run #2, which the task page shows, whose working step's
+/// agent waits on one request of its own.
 fn two_runs_waiting() -> Desktop {
   Desktop::with_seeded_project(|repo| {
     let (first, invocation) = native_run(repo);
@@ -262,12 +262,8 @@ fn two_runs_waiting() -> Desktop {
       .expect("pending approval");
     let mut second = started(&mut db, (first.task(), first.snapshot()), 2, 30);
     let execution = second.attempts()[0].executions()[0].id();
-    let mut events = second.start_step(execution, at(31)).expect("start the step");
-    events.extend(
-      second
-        .wait_step(execution, WaitReason::Approval, at(33))
-        .expect("waits"),
-    );
+    // A tool request leaves its step working, as the runner records it.
+    let events = second.start_step(execution, at(31)).expect("start the step");
     db.append_events(&second, &events).expect("append");
     let invocation = db
       .start_invocation(

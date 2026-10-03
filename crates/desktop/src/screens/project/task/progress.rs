@@ -22,20 +22,20 @@ use crate::{
   ui::{check_row::check_row, icon::Icon, message_text},
 };
 
-/// Every step of `run`. `lost`: the run is recorded as running but has no runner. A step that waits on
-/// one of `waiting`, the requests the run waits on, says what it waits on and since when (`G0rzJy`).
+/// Every step of `run`. `lost`: the run is recorded as running but has no runner. A step whose agent
+/// waits on one of `waiting`, the requests of the run, says what it waits on and since when (`G0rzJy`),
+/// whatever its recorded state: a tool request does not change the step's state, its agent is at work.
 pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool, waiting: &[ShownApproval]) -> Element {
   let rows = progress(run, lost, Timestamp::now());
   Column::new()
     .id("task-progress-steps")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .with_children(rows.iter().map(|row| {
-      let waiting_on = (row.state == ProgressState::NeedsYou)
-        .then(|| waiting_on(ctx, waiting, &row.id))
-        .flatten();
-      progress_row(ctx, row, waiting_on)
-    }))
+    .with_children(
+      rows
+        .iter()
+        .map(|row| progress_row(ctx, row, waiting_on(ctx, waiting, &row.id))),
+    )
     .into()
 }
 

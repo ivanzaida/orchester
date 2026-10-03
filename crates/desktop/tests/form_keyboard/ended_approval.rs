@@ -1,7 +1,8 @@
 //! A request whose agent can no longer receive an answer, headlessly with the real runner: the step's
 //! agent (`orchester-fake-claude`) asks twice, and a request recorded for the same invocation that the
 //! agent does not wait on is answered. The runner ends it and refuses the answer; the dialog drops it
-//! at once for the agent's own request, says the previous one ended, and Needs you counts one less.
+//! at once for the agent's own request, says the previous one ended, and Needs you counts one less. The
+//! step's progress row says what its agent waits on, from the real request.
 
 use orchester_core::{connection::AgentProvider, run::PendingToolApproval};
 use orchester_store::ProjectDb;
@@ -39,6 +40,15 @@ fn ended_approval_leaves_the_dialog_for_the_next_and_needs_you_counts_one_less()
   });
   create_and_run(&mut desktop, "Add serde.", "1400000");
   desktop.wait_for(DIALOG);
+  // The step's row says what its agent waits on, though a tool request leaves the step working.
+  desktop.wait_until("the step row waits on the request", |desktop| {
+    has(desktop, "task-progress-steps")
+      && shows(
+        desktop,
+        "task-progress-steps",
+        "Waiting for you · cargo add serde · since",
+      )
+  });
   let first = waiting(&desktop).remove(0);
   // Recorded for the agent's invocation, but not the call it waits on: no agent can take its answer.
   let unheld = PendingToolApproval {
