@@ -1,0 +1,7 @@
+listen = "127.0.0.1:8080"
+data_dir = "data"
+name = "Orchester"
+trusted_proxies = []
+# For direct TLS, supply both PEM paths:
+# tls_cert = "certificate.pem"
+# tls_key = "private-key.pem"

@@ -43,6 +43,14 @@ macro_rules! define_id {
 }
 
 define_id!(
+  /// An account on a shared server.
+  UserId
+);
+define_id!(
+  /// A revocable sign-in on a shared server.
+  SessionId
+);
+define_id!(
   /// A project, i.e. one repository managed by Orchester.
   ProjectId
 );

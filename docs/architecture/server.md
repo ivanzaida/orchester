@@ -87,14 +87,16 @@ Each goes into `[workspace.dependencies]` with its reason.
 | Crate | Where | Why it is needed |
 | --- | --- | --- |
 | `axum` | server | HTTP routing, JSON extraction and SSE responses on tokio; built on `hyper` 1, already in the lock file through lurq |
+| `hyper`, `hyper-util` | server | HTTP/1 header/idle deadlines, bounded connections, Tokio timer/IO and the axum service adapter; exposed directly for S1a review finding m1, already in the lock file |
 | `argon2` | server | Password hashing (argon2id); not something to write by hand |
 | `tokio-rustls` | server | The server's own TLS; same `rustls` the client brings, no OpenSSL on any platform |
 | `reqwest` (rustls, OS trust store) | api `client` | The HTTP client already chosen for `orchester-agent` (`native-agent.md` §3.0); the second user adds nothing new |
 
 Tokens come from `getrandom` (already in the lock file through `uuid`) and are hashed with `sha2` (already a workspace
-dependency). The configuration is TOML (`toml`, already there). The command line has three subcommands and is parsed by
+dependency). The configuration is TOML (`toml`, already there). The command line has four subcommands and is parsed by
 hand. The SSE parser on the desktop is the ~100-line parser `native-agent.md` §3.0 plans. Whichever phase lands first
 writes it where both can use it; nobody writes it twice.
+The server enables existing rusqlite's `backup` feature for the host's online backup command (S1a review finding m8).
 
 ### Framework and storage
 
@@ -388,7 +390,9 @@ status, or `merged` once its claim is completed).
 complete. "Has a run" is `has_run` on the server: someone took a `run` claim on the task, which starting work always
 does. Claiming a task one holds already as `run` turns a manual claim into a run claim.
 
-Common errors on every endpoint: `400 bad_request` (malformed body), `401 unauthorized` (no, unknown, revoked or
+Common errors on every endpoint: `400 bad_request` (malformed body, including unknown request fields),
+`413 payload_too_large` (body over 1 MiB), `405 method_not_allowed` (unsupported method),
+`408 request_timeout` (body read exceeds 10 seconds), `401 unauthorized` (no, unknown, revoked or
 expired token), `403 password_change_required` (a session from an initial password, before the change; only
 `POST /auth/password` and sign-out work), `403 forbidden`, `404 not_found`, which is also the answer for a project
 the caller is not a member of.
@@ -413,6 +417,8 @@ with their password, which issues a new token. There is nothing to copy, paste o
   A token expires after 30 days without use (user, 2026-10-03). It is revoked by signing out, by the session list, by a
   password change (all other sessions), by an admin, or by disabling the user. Open event streams check their session
   at every wake-up and keep-alive and close when it ends.
+  The server persists last use only when it has moved by more than a minute; idle-expiry precision is therefore
+  within one minute, with expiry still refused exactly 30 days after the persisted timestamp.
 - **On the desktop.** The token is kept in the OS keychain under service `orchester-server:<server id>`, account
   `token` (Windows Credential Manager; the macOS login keychain), through `orchester-vault` like project secrets. It is
   a `SecretValue`: redacted in `Debug`, no `Display`, never logged or copied. The application database keeps only the
@@ -425,10 +431,27 @@ with their password, which issues a new token. There is nothing to copy, paste o
 - **Rate limiting of sign-in.** In memory, per username and per client address. 5 failures for a username in 15
   minutes block it for 15 minutes; 20 failures from one address in 15 minutes block that address. Both answer
   `429 rate_limited` with `Retry-After`. The client address is the connection's, or the `X-Forwarded-For` hop added
-  by a proxy listed in `trusted_proxies`; otherwise the header is ignored. A restart clears the counters, which is
-  acceptable for v1.
+  by a proxy listed in `trusted_proxies`; otherwise the header is ignored. Entries accept exact IPs or CIDRs.
+  All header lines form an ordered comma list; malformed lists fall back to the connection peer. Walk from the right,
+  skipping trusted proxies, to the first untrusted hop. IPv4-mapped IPv6 is canonicalized; hops may include ports or
+  IPv6 brackets. IPv6 address counters group clients by /64. A restart clears the counters, which is acceptable for v1.
+- **Rate limiting of password changes.** 5 failed current-password checks per user in 15 minutes block password
+  changes for 15 minutes with `429 rate_limited` and `Retry-After`. Check before queueing for password hashing;
+  password-change counters are separate from sign-in counters.
+- **Concurrent password checks.** Both limiters atomically reserve capacity before entering the hashing queue;
+  failures and in-flight checks together must fit their username/address/user budgets. Recheck after acquiring a
+  hashing slot, before verification. Success releases the reservation. A full in-flight budget returns
+  `Retry-After: 1`; a failure block returns its remaining duration. Rejected requests perform no Argon2 work.
 - **Audit.** The server records sign-ins and failures (username and address, never the password), session revocations,
-  password changes, user and membership changes, and claim takeovers, in an append-only `audit_events` table.
+  password changes and failed current-password checks (`password_change_failed`, actor/target user id and address),
+  user and membership changes, and claim takeovers, in an append-only `audit_events` table. User changes that leave
+  every stored value unchanged create no audit event.
+- **HTTP deadlines.** Request headers and keep-alive idle connections have a 10-second deadline, as do body reads.
+  Connections must send their first byte within 2 seconds (also the first HTTP byte after TLS). At most 256 HTTP
+  connections (64 per untrusted peer) and 64 concurrent direct-TLS handshakes (32 per untrusted peer) are served;
+  excess connections close immediately. Peers in `trusted_proxies` are exempt from per-peer caps, since a proxy
+  multiplexes clients, but still count toward the global caps. Trust is checked on the actual connection address
+  before /64 grouping. Peer caps normalize mapped IPv4 and group IPv6 by /64. TLS handshakes expire at 10 seconds.
 
 ## Security
 
