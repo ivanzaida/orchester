@@ -88,6 +88,9 @@ The database is copied in one step under a read snapshot, so ongoing commits can
 This holds the read lock for the copy and may briefly delay writers on non-WAL databases. If SQLite cannot complete
 the step because the database is busy or locked, the command reports failure, removes its incomplete file, and can
 be retried with the same filename.
+With the server stopped, a read-only backup can leave SQLite's `orchester-server.db-wal` and `-shm` files beside the
+database. Run host commands as the server's user (uid 10001 in the image, e.g. `docker compose exec server …`), not as
+root against a bind-mounted directory, or the server may later fail to open root-owned files.
 For a standalone binary: `orchester-server --config server.toml backup /secure/backups/snapshot.db`. The destination's
 parent directory must exist. Unix snapshots are created with mode 0600; on Windows they inherit the directory ACLs.
 Protect the copied snapshot as carefully as the live data: it contains password hashes and session-token digests.

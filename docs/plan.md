@@ -366,8 +366,7 @@ handed to Codex; the screens of S2a–S3 are drawn and approved (2026-10-03).
 
 Rules for both phases, on top of `AGENTS.md`:
 
-- Work in `.tmp/worktrees/codex-server-<phase>` on a branch `codex/server-<phase>`; S1b starts from S1a's branch
-  once S1a is merged, never in parallel with it.
+- Work in `.tmp/worktrees/codex-server-<phase>` on a branch `codex/server-<phase>`, created from master (S1a is merged).
 - New crates exactly as the document's *Processes and crates* says: `crates/api` (`orchester-api`, types only in S1a
   and S1b; the `client` feature with reqwest comes with S2a) and `crates/server` (`orchester-server`, binary
   `orchester-server`). New dependencies only those in its *Dependencies* table, each in `[workspace.dependencies]`
@@ -385,41 +384,6 @@ Rules for both phases, on top of `AGENTS.md`:
 - When a phase is done: `powershell -File tools/check.ps1`, the server tests, the macOS check; then move the phase to
   *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
   independent review by another agent comes first.
-
-### S1a · Server and accounts (non-UI)
-
-Implemented for review on `codex/server-s1a` (2026-10-03), in `.tmp/worktrees/codex-server-s1a`.
-The workspace gate passed; the 43 filtered server tests passed on Windows and Linux (Debian WSL), including TLS,
-host commands, idle expiry, rate limits and credential redaction. The macOS check was attempted but cannot complete
-without Apple SDK headers for bundled SQLite and ring. The Docker release image and Compose stack built and started;
-Caddy HTTPS with a local CA, host bootstrap/reset and the container session flow passed. The disposable test stack
-was removed. Independent review's M1 and m1–m8 findings were fixed, with regression tests and an online backup CLI;
-the documented Docker backup/copy procedure passed too. The second review's concurrent password-change major and
-four minors are fixed with atomic pre-hash reservations, per-peer connection caps, a two-second first-byte deadline,
-proxy-trust guidance and a single-step backup. The release image and container smoke checks passed again.
-The third review's proxy-cap regression and minors are fixed: trusted proxies bypass peer caps while retaining
-global caps, direct TLS admits 32 handshakes per untrusted peer, CLI backup opens read-only without migrations,
-and hosting docs describe lock/retry and username-lockout behaviour. With 64 slow HTTPS bodies through Caddy,
-the 65th request succeeds within one second; the rebuilt release image and account/backup smoke checks passed.
-S1a stays active until the remaining required platform
-validation and independent re-review are complete;
-S1b has not started. Evidence:
-`docs/evidence/server-s1a-2026-10-03.md`.
-
-Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
-
-- `orchester-api` (types only) and `orchester-server` build on Windows, macOS (check) and Linux; the Docker image and
-  compose example build and start on Linux.
-- Empty data directory: `GET /api/v1/server` reports `needs_bootstrap`; `orchester-server user create --admin <name>`
-  creates the first admin and prints the initial password only to its own output; `user reset-password` works.
-- Sign-in, `password_change_required`, password change (other sessions revoked), session list and revoke, sign-out,
-  the 30-day idle expiry with the test clock; argon2id with the document's parameters; tokens `orc_` + 64 hex, stored
-  as SHA-256 only.
-- Admin user endpoints; `403` for non-admins; the last admin cannot be removed or disabled.
-- Rate limits answer `429` with `Retry-After`; an unknown username answers like a wrong password, in about the same
-  time; `X-Forwarded-For` counts only from a `trusted_proxies` hop.
-- With a PEM certificate configured the server speaks TLS (tested with a test certificate); the log test finds neither
-  token nor password; the `audit_events` table records the events the document lists.
 
 ### S1b · Projects, tasks, claims and events on the server (non-UI)
 
@@ -497,6 +461,42 @@ content minimum, and the status bar uses it instead of the workaround.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
+
+Implemented for review on `codex/server-s1a` (2026-10-03), in `.tmp/worktrees/codex-server-s1a`.
+The workspace gate passed; the 43 filtered server tests passed on Windows and Linux (Debian WSL), including TLS,
+host commands, idle expiry, rate limits and credential redaction. The macOS check was attempted but cannot complete
+without Apple SDK headers for bundled SQLite and ring. The Docker release image and Compose stack built and started;
+Caddy HTTPS with a local CA, host bootstrap/reset and the container session flow passed. The disposable test stack
+was removed. Independent review's M1 and m1–m8 findings were fixed, with regression tests and an online backup CLI;
+the documented Docker backup/copy procedure passed too. The second review's concurrent password-change major and
+four minors are fixed with atomic pre-hash reservations, per-peer connection caps, a two-second first-byte deadline,
+proxy-trust guidance and a single-step backup. The release image and container smoke checks passed again.
+The third review's proxy-cap regression and minors are fixed: trusted proxies bypass peer caps while retaining
+global caps, direct TLS admits 32 handshakes per untrusted peer, CLI backup opens read-only without migrations,
+and hosting docs describe lock/retry and username-lockout behaviour. With 64 slow HTTPS bodies through Caddy,
+the 65th request succeeds within one second; the rebuilt release image and account/backup smoke checks passed.
+**Done 2026-10-03:** merged into master after three independent security reviews (the third PASS, "ready to
+merge"). Known gap: the `aarch64-apple-darwin` check cannot complete on this Windows host without the Apple SDK
+(bundled SQLite and ring need its headers), as for the rest of the workspace; run it on a Mac. S1b starts from master. Evidence:
+`docs/evidence/server-s1a-2026-10-03.md`.
+
+Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
+
+- `orchester-api` (types only) and `orchester-server` build on Windows, macOS (check) and Linux; the Docker image and
+  compose example build and start on Linux.
+- Empty data directory: `GET /api/v1/server` reports `needs_bootstrap`; `orchester-server user create --admin <name>`
+  creates the first admin and prints the initial password only to its own output; `user reset-password` works.
+- Sign-in, `password_change_required`, password change (other sessions revoked), session list and revoke, sign-out,
+  the 30-day idle expiry with the test clock; argon2id with the document's parameters; tokens `orc_` + 64 hex, stored
+  as SHA-256 only.
+- Admin user endpoints; `403` for non-admins; the last admin cannot be removed or disabled.
+- Rate limits answer `429` with `Retry-After`; an unknown username answers like a wrong password, in about the same
+  time; `X-Forwarded-For` counts only from a `trusted_proxies` hop.
+- With a PEM certificate configured the server speaks TLS (tested with a test certificate); the log test finds neither
+  token nor password; the `audit_events` table records the events the document lists.
+
 
 A tool request whose agent is gone no longer waits forever · branch `claude/stale-approval` (2026-10-03)
 
