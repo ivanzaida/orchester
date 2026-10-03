@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -28,14 +28,7 @@ use crate::{
 /// The chip, the policy and *waiting since*, on one line.
 pub(super) fn line(ctx: &Ctx, shown: &ShownApproval) -> Element {
   let approval = &shown.approval;
-  let chip = match shown.choices.category {
-    Some(category) if approval.command => category_chip(
-      "tool-approval-category",
-      glyph(category, shown.choices.secrets),
-      &ctx.t(subject_key(category, shown.choices.secrets)),
-    ),
-    _ => category_chip("tool-approval-category", Icon::Plug, &approval.server),
-  };
+  let chip = chip(ctx, "tool-approval-category", shown);
   let waiting = ctx.t_args(
     "runs.toolApproval.waitingSince",
     [("time", display::clock(approval.requested_at).as_str())],
@@ -60,6 +53,40 @@ pub(super) fn line(ctx: &Ctx, shown: &ShownApproval) -> Element {
         .color(PaletteColor::TextMuted)
         .nowrap(),
     )
+    .into()
+}
+
+/// What the request is (`EfQuh`): a command's category chip, or *Credential read*, or the MCP server
+/// of a tool call; with id `id`.
+pub(in crate::screens::project::task) fn chip(ctx: &Ctx, id: &'static str, shown: &ShownApproval) -> Element {
+  match shown.choices.category {
+    Some(category) if shown.approval.command => category_chip(
+      id,
+      glyph(category, shown.choices.secrets),
+      &ctx.t(subject_key(category, shown.choices.secrets)),
+    ),
+    _ => category_chip(id, Icon::Plug, &shown.approval.server),
+  }
+}
+
+/// Why a command asks, quietly, beside its chip in its Conversation card (`ILPeo` in `sACJF`).
+pub(in crate::screens::project::task) fn quiet_reason(ctx: &Ctx, reason: &CommandReason) -> Element {
+  let words = Words::of(ctx, reason);
+  Row::new()
+    .id("conversation-approval-reason")
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t(words.line)).variant(TypographyStyle::Caption).nowrap())
+    .with_children(words.value.map(|value| {
+      Text::new(&value)
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .min_width(Dimension::Px(0.0))
+        .flex_shrink(1.0)
+    }))
     .into()
 }
 

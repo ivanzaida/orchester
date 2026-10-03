@@ -83,6 +83,7 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
       usage: None,
       lost_to_runner: Some(0),
       approvals: Default::default(),
+      dialog: Default::default(),
       auto_approving: Default::default(),
     }),
   }

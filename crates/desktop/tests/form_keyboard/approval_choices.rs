@@ -353,3 +353,62 @@ fn approval_choices_agent_worktree_is_the_step_executions_own_or_the_runs() {
     worktrees.join(execution.to_string())
   );
 }
+
+/// KON-1's run waiting on `cargo test -p core`, which Builder's Allowed commands can take; the
+/// request's id.
+fn waiting_command() -> (Desktop, String) {
+  let mut seeded = None;
+  let desktop = Desktop::with_seeded_project(|repo| {
+    let (run, invocation) = native_run(repo);
+    let approval = PendingToolApproval {
+      command: true,
+      server: "command".to_owned(),
+      action: "cargo test -p core".to_owned(),
+      ..mcp_request(&run, &invocation, 0)
+    };
+    ProjectDb::open(repo)
+      .expect("open the project")
+      .request_tool_approval(&approval)
+      .expect("pending approval");
+    seeded = Some(approval.id);
+  });
+  (desktop, seeded.expect("seeded"))
+}
+
+/// The task's Conversation tab, after Decide later on the dialog that opened by itself.
+fn conversation_of_waiting(desktop: &mut Desktop) {
+  desktop.wait_for(DIALOG);
+  desktop.press("tool-approval-decide-later");
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
+  open_task(desktop);
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-approval-always");
+}
+
+#[test]
+fn approval_choices_card_shows_the_request_as_the_dialog_does() {
+  let (mut desktop, request) = waiting_command();
+  conversation_of_waiting(&mut desktop);
+  assert!(shows(&mut desktop, "conversation-approval-category", "Worktree"));
+  assert!(shows(
+    &mut desktop,
+    "conversation-approval-reason",
+    "Changes the worktree:"
+  ));
+  let command = format!("conversation-approval-command-{request}");
+  assert!(shows(&mut desktop, &command, "cargo test -p core"));
+  // Nothing reopens the dialog after Decide later, on this tab or another page.
+  assert!(!has(&mut desktop, DIALOG));
+}
+
+#[test]
+fn approval_choices_card_always_allow_opens_the_step_and_back_returns_to_the_request() {
+  let (mut desktop, _) = waiting_command();
+  conversation_of_waiting(&mut desktop);
+  desktop.click("conversation-approval-always");
+  desktop.wait_for("tool-approval-always-title");
+  desktop.press("tool-approval-back");
+  desktop.wait_until("the request step of the same request", |desktop| {
+    has(desktop, DIALOG) && !has(desktop, "tool-approval-always-title") && shows(desktop, DIALOG, "cargo test -p core")
+  });
+}

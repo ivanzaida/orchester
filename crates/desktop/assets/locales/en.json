@@ -1788,6 +1788,8 @@
         "asksCommand": "{{agent}} asks to run a command",
         "alwaysCommand": "Always allow for this profile…",
         "alwaysTool": "Always allow for this server…",
+        "workingDirectory": "Working directory · {{folder}}",
+        "target": "Target · {{target}}",
         "waitingAnswer": "Waiting for your answer",
         "answered": "Answered",
         "waitingApproval": "Waiting for approval",

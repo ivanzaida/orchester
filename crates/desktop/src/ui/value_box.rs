@@ -10,7 +10,7 @@ use lurq::{
   components::{Column, Row, ScrollBoth, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
-  node::dimension::Dimension,
+  node::{Element, dimension::Dimension},
 };
 
 use super::command_row::{Copied, command_box, copy_button, recorded_lines, with_copy_failure};
@@ -39,6 +39,19 @@ pub struct BoxText<'a> {
 /// `{id}-copy`; Copy records its outcome and its hover in `copy`. Copy comes before the box, so Tab reaches it
 /// first. Callers may add a note under the box.
 pub fn value_box(ctx: &Ctx, (label, id): (&str, &str), text: BoxText<'_>, max_height: f32, copy: &CopyState) -> Column {
+  let label = Text::new(label).variant(TypographyStyle::Caption);
+  value_box_under(ctx, (label.into(), id), text, max_height, copy)
+}
+
+/// The box under `heading` in place of a label (a request's category chip and reason in its
+/// Conversation card, `sACJF`), Copy at the right of the heading's line.
+pub fn value_box_under(
+  ctx: &Ctx,
+  (heading, id): (Element, &str),
+  text: BoxText<'_>,
+  max_height: f32,
+  copy: &CopyState,
+) -> Column {
   let copy_id: Arc<str> = Arc::from(format!("{id}-copy"));
   let (button, outcome) = copy_button(ctx, copy_id.clone(), text.original, &copy.copied);
   let hovered = copy.hovered.get().as_deref() == Some(&*copy_id);
@@ -57,7 +70,7 @@ pub fn value_box(ctx: &Ctx, (label, id): (&str, &str), text: BoxText<'_>, max_he
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
     .justify(Justify::SpaceBetween)
-    .child(Text::new(label).variant(TypographyStyle::Caption))
+    .child(heading)
     .child(button.in_form().render(ctx));
   let lines = ScrollBoth::new(recorded_lines(id, text.shown))
     .id(format!("{id}-scroll"))

@@ -4,7 +4,11 @@
 //! box (`uA3Sh`) across the full width, lines as recorded, scrolling both ways inside a box no taller
 //! than 12 lines (`E5NBo`); a quiet Copy sits at the right of the label's line (`ui::value_box`).
 
-use lurq::{app::ctx::Ctx, components::Text, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::TypographyStyle},
+  components::Text,
+  node::Element,
+};
 use orchester_core::run::ARGUMENTS_CEILING;
 
 use super::approval_arguments::ArgumentsCache;
@@ -12,7 +16,7 @@ use crate::{
   theme::{APPROVAL_VALUE_MAX_HEIGHT, ExtraTypography},
   ui::{
     property::{ValueStyle, styled_property},
-    value_box::{BoxText, CopyState, value_box},
+    value_box::{BoxText, CopyState, value_box, value_box_under},
   },
 };
 
@@ -78,6 +82,15 @@ impl<'a> ValueRows<'a> {
     self.boxed(Self::ACTION, label, command)
   }
 
+  /// `value` whole in its box under `heading` with box id `id`, however short it is.
+  pub(super) fn under(&self, (heading, id): (Element, &str), value: &str) -> Element {
+    let text = BoxText {
+      shown: value,
+      original: value,
+    };
+    value_box_under(self.ctx, (heading, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copy).into()
+  }
+
   fn boxed(&self, id: &str, label: &str, value: &str) -> Element {
     let text = BoxText {
       shown: value,
@@ -90,7 +103,12 @@ impl<'a> ValueRows<'a> {
   /// as recorded. Arguments cut when they were recorded end with a line that says so; arguments too
   /// large to lay out are shown as recorded, with a note that says so. Copy takes them as recorded.
   pub(super) fn arguments(&self, label: &str, approval: &str, recorded: &str) -> Element {
-    let id = Self::ARGUMENTS;
+    let label = Text::new(label).variant(TypographyStyle::Caption);
+    self.arguments_under((label.into(), Self::ARGUMENTS), approval, recorded)
+  }
+
+  /// The arguments of `approval` as [`Self::arguments`] shows them, under `heading` with box id `id`.
+  pub(super) fn arguments_under(&self, (heading, id): (Element, &str), approval: &str, recorded: &str) -> Element {
     let laid_out = self.arguments.get(approval, recorded);
     let cut_line = laid_out.cut.then(|| {
       let kilobytes = (ARGUMENTS_CEILING / 1024).to_string();
@@ -111,7 +129,7 @@ impl<'a> ValueRows<'a> {
         .id("tool-approval-arguments-note")
         .variant(ExtraTypography::Hint.role())
     });
-    value_box(self.ctx, (label, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copy)
+    value_box_under(self.ctx, (heading, id), text, APPROVAL_VALUE_MAX_HEIGHT, self.copy)
       .with_children(note)
       .into()
   }

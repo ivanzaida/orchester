@@ -63,6 +63,7 @@ fn waiting(number: usize) -> ShownApproval {
 fn with(approvals: Vec<ShownApproval>, auto: Vec<AutoApprovingRun>) -> StatusBarProps {
   let mut props = project(Some(approvals.len()));
   if let Some(bar) = props.project.as_mut() {
+    bar.dialog = Arc::new(approvals.clone());
     bar.approvals = Arc::new(approvals);
     bar.auto_approving = Arc::new(auto);
   }

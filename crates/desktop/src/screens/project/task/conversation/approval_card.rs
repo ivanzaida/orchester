@@ -2,8 +2,10 @@
 //! approval dialog's answers in one row (`KpZxA`): *Always allow…* at the left, then *Deny*, *Approve
 //! similar in this run* and *Approve once*. Each answer goes the dialog's own way
 //! ([`ApprovalDecision::of`], the same action and runner command); *Always allow…* opens the dialog's
-//! Always allow step on this request. What the request offers is the dialog's too: an answer it does
-//! not offer stays at 0.4, and why is said under the row in the dialog's words.
+//! Always allow step on this request. Over the answers, what it asks as the dialog shows it: the
+//! category chip and why it asks (or the MCP server and tool), the command or the arguments whole in
+//! their box, and where it runs. What the request offers is the dialog's too: an answer it does not
+//! offer stays at 0.4, and why is said on one line under the row in the dialog's words.
 
 use std::sync::Arc;
 
@@ -13,17 +15,21 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, Spacer, Text},
+  components::{Button, Column, Row, Spacer, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, dimension::Dimension},
 };
-use orchester_core::run::{ApprovalAnswer, SimilarUnavailable, ToolApprovalDecision};
+use orchester_core::run::{ApprovalAnswer, PendingToolApproval, SimilarUnavailable, ToolApprovalDecision};
 
 use super::{
-  super::tool_approval::{
-    Decision as ApprovalDecision, DecisionAction, always_blocked, decision_action as approval_decision,
-    similar_unavailable,
+  super::{
+    approval_arguments::ArgumentsCache,
+    approval_value::ValueRows,
+    tool_approval::{
+      Decision as ApprovalDecision, DecisionAction, always_blocked, chip, decision_action as approval_decision,
+      quiet_reason, similar_unavailable,
+    },
   },
   cards::{frame, header},
 };
@@ -34,14 +40,16 @@ use crate::{
     approvals::{AlwaysBlocked, ShownApproval},
     timeline::ApprovalCard,
   },
-  theme::DISABLED_OPACITY,
+  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
+    category_chip::category_chip,
+    command_row::Copied,
     field::field_error,
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{Ring, keyboard_stop},
-    property::{ValueStyle, styled_property},
+    value_box::CopyState,
   },
 };
 
@@ -77,6 +85,8 @@ impl CardAnswer {
 
 pub(super) struct ApprovalCardView {
   requested: Signal<Option<CardAnswer>>,
+  copy: CopyState,
+  arguments: ArgumentsCache,
 }
 
 impl Component for ApprovalCardView {
@@ -86,6 +96,11 @@ impl Component for ApprovalCardView {
     approval_decision(ctx);
     Self {
       requested: ctx.signal(None),
+      copy: CopyState {
+        copied: ctx.signal(Copied::default()),
+        hovered: ctx.signal(None),
+      },
+      arguments: ArgumentsCache::default(),
     }
   }
 
@@ -110,47 +125,91 @@ impl Component for ApprovalCardView {
       ],
     );
     let state = match props.card.decided {
-      None => (Icon::Hand, ctx.t("runs.conversation.state.waiting")),
+      None => (Icon::Hand, ctx.t("runs.conversation.card.waitingAnswer")),
       Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
       Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),
       Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.interrupted")),
     };
-    let mut body: Vec<Element> = Vec::new();
-    if !request.command {
-      body.push(styled_property(
-        &ctx.t("runs.toolApproval.server"),
-        &request.server,
-        ValueStyle::Mono,
-      ));
-    }
-    body.push(styled_property(
-      &ctx.t(if request.command {
-        "runs.toolApproval.command"
-      } else {
-        "runs.toolApproval.action"
-      }),
-      &request.action,
-      ValueStyle::Mono,
-    ));
-    if let Some(target) = request.target.as_deref() {
-      body.push(styled_property(
-        &ctx.t("runs.toolApproval.target"),
-        target,
-        ValueStyle::Mono,
-      ));
-    }
+    let shown = shown_request(ctx, &request.id);
+    let mut body = self.request_body(ctx, request, shown.as_ref());
     if waiting {
-      let shown = shown_request(ctx, &request.id);
       let queue = ctx.use_context::<ApprovalQueue>();
       body.push(self.answers(ctx, (&props.card, shown.as_ref()), &action, queue));
     }
     frame(
       format!("conversation-approval-{}", request.id),
       waiting,
-      header(Icon::ShieldAlert, &title, &meta, state),
+      header(Icon::Hand, &title, &meta, state),
       body,
     )
   }
+}
+
+impl ApprovalCardView {
+  /// What the request asks (`sACJF`): its chip and why it asks, then the command whole in its box, or
+  /// an MCP call's arguments; then where it runs, as the dialog names it.
+  fn request_body(&self, ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Vec<Element> {
+    let values = ValueRows::new(ctx, &self.copy, &self.arguments);
+    let heading = heading(ctx, request, shown);
+    let mut body = Vec::new();
+    match (request.command, request.scope.as_deref()) {
+      (true, _) => {
+        let id = format!("conversation-approval-command-{}", request.id);
+        body.push(values.under((heading, &id), &request.action));
+      }
+      (false, Some(arguments)) => {
+        let id = format!("conversation-approval-arguments-{}", request.id);
+        body.push(values.arguments_under((heading, &id), &request.id, arguments));
+      }
+      (false, None) => body.push(heading),
+    }
+    let place = if request.command {
+      shown
+        .and_then(|shown| shown.cwd.as_deref())
+        .or(request.target.as_deref())
+        .map(|folder| ctx.t_args("runs.conversation.card.workingDirectory", [("folder", folder)]))
+    } else {
+      request
+        .target
+        .as_deref()
+        .map(|target| ctx.t_args("runs.conversation.card.target", [("target", target)]))
+    };
+    body.extend(place.map(|place| {
+      Text::new(&place)
+        .id("conversation-approval-place")
+        .variant(TypographyStyle::Caption)
+        .into()
+    }));
+    body
+  }
+}
+
+/// The line over the request's box: a command's chip and why it asks (the dialog's), or the MCP
+/// server's chip and the tool.
+fn heading(ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Element {
+  let row = Row::new()
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Inline.role())
+    .align_items(Alignment::Center);
+  let row = match (request.command, shown) {
+    (true, Some(shown)) => row
+      .child(chip(ctx, "conversation-approval-category", shown))
+      .with_children(shown.choices.reason.as_ref().map(|reason| quiet_reason(ctx, reason))),
+    (true, None) => row.child(Text::new(&ctx.t("runs.toolApproval.command")).variant(TypographyStyle::Caption)),
+    (false, _) => row
+      .child(category_chip(
+        "conversation-approval-category",
+        Icon::Plug,
+        &request.server,
+      ))
+      .child(
+        Text::new(&request.action)
+          .variant(ExtraTypography::MonoValue.role())
+          .nowrap(),
+      ),
+  };
+  row.into()
 }
 
 /// The request with its choices, as the project's waiting requests know it.
@@ -212,21 +271,19 @@ impl Offers {
     }
   }
 
-  /// Why an answer is unavailable, in the dialog's words.
-  fn reasons(&self, ctx: &Ctx) -> Vec<Arc<str>> {
-    [
-      self
-        .similar
-        .and_then(Result::err)
-        .map(|unavailable| ctx.t(similar_unavailable(unavailable))),
-      self
-        .always
-        .and_then(Result::err)
-        .map(|blocked| always_blocked(ctx, blocked)),
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
+  /// Why an answer is unavailable, in the dialog's words, on one line: Approve similar's reason, else
+  /// Always allow's.
+  fn reason(&self, ctx: &Ctx) -> Option<Arc<str>> {
+    self
+      .similar
+      .and_then(Result::err)
+      .map(|unavailable| ctx.t(similar_unavailable(unavailable)))
+      .or_else(|| {
+        self
+          .always
+          .and_then(Result::err)
+          .map(|blocked| always_blocked(ctx, blocked))
+      })
   }
 }
 
@@ -257,10 +314,13 @@ impl ApprovalCardView {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(row)
-      .with_children(offers.reasons(ctx).into_iter().map(|reason| {
+      .with_children(offers.reason(ctx).map(|reason| {
         Text::new(&reason)
           .id("conversation-approval-unavailable")
           .variant(TypographyStyle::Caption)
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .width(Dimension::Pct(100.0))
       }))
       .with_children(
         state

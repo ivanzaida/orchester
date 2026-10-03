@@ -36,7 +36,10 @@ use orchester_core::{
 };
 use orchester_ipc::{Command, Rejection};
 
-pub(in crate::screens::project::task) use self::wider::{always_blocked, similar_unavailable};
+pub(in crate::screens::project::task) use self::{
+  subject_line::{chip, quiet_reason},
+  wider::{always_blocked, similar_unavailable},
+};
 use super::{approval_arguments::ArgumentsCache, native_approval};
 use crate::{
   messages::Message,
@@ -295,10 +298,10 @@ pub(in crate::screens) fn command_line(ctx: &Ctx, shown: &ShownApproval) -> Arc<
 /// The dialog of the request the queue shows among `pending`; nothing while it is closed.
 pub(in crate::screens::project) fn modal(
   ctx: &mut Ctx,
-  pending: &[ShownApproval],
+  (pending, all): (&[ShownApproval], &[ShownApproval]),
   queue: &ApprovalQueue,
 ) -> Option<Element> {
-  let mut place = queue.place(pending)?;
+  let mut place = queue.place(pending, all)?;
   let shown = pending.get(place.index)?.clone();
   // The Always allow step opens only while the request offers it.
   place.always &= shown.choices.always.is_ok();
@@ -311,7 +314,7 @@ pub(in crate::screens::project) fn modal(
       shown,
       place,
       queue: queue.clone(),
-      waiting: Arc::new(pending.iter().map(|shown| shown.approval.id.clone()).collect()),
+      waiting: Arc::new(all.iter().map(|shown| shown.approval.id.clone()).collect()),
     },
   ))
 }

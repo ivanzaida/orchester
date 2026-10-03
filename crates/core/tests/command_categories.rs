@@ -208,38 +208,6 @@ fn command_categories_reason_names_what_asks() {
   };
   let cases = [
     (
-      "cargo add serde --features derive".to_owned(),
-      CommandReason::Installs {
-        registry: "crates.io".to_owned(),
-        package: Some("serde".to_owned()),
-        listed_in: None,
-      },
-    ),
-    (
-      "cargo add --features derive serde".to_owned(),
-      CommandReason::Installs {
-        registry: "crates.io".to_owned(),
-        package: Some("serde".to_owned()),
-        listed_in: None,
-      },
-    ),
-    (
-      "pip install -r requirements.txt".to_owned(),
-      CommandReason::Installs {
-        registry: "PyPI".to_owned(),
-        package: None,
-        listed_in: Some("requirements.txt".to_owned()),
-      },
-    ),
-    (
-      "npm install --registry https://registry.example left-pad".to_owned(),
-      CommandReason::Installs {
-        registry: "https://registry.example".to_owned(),
-        package: Some("left-pad".to_owned()),
-        listed_in: None,
-      },
-    ),
-    (
       format!("cp src/a.rs {outside}"),
       CommandReason::WritesOutside { path: outside },
     ),
@@ -273,6 +241,64 @@ fn command_categories_reason_names_what_asks() {
       "git status".to_owned(),
       CommandReason::ReadOnly {
         command: "git status".to_owned(),
+      },
+    ),
+  ];
+  for (line, reason) in cases {
+    assert_eq!(folders.classify(&line).reason(), Some(reason), "{line}");
+  }
+}
+
+#[test]
+fn command_categories_reason_names_an_install_source() {
+  let folders = Folders::new();
+  let cases = [
+    (
+      "cargo add serde --features derive".to_owned(),
+      CommandReason::Installs {
+        registry: "crates.io".to_owned(),
+        package: Some("serde".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "cargo add --features derive serde".to_owned(),
+      CommandReason::Installs {
+        registry: "crates.io".to_owned(),
+        package: Some("serde".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "pip install -r requirements.txt".to_owned(),
+      CommandReason::Installs {
+        registry: "PyPI".to_owned(),
+        package: None,
+        listed_in: Some("requirements.txt".to_owned()),
+      },
+    ),
+    (
+      "npm install --registry https://registry.example left-pad".to_owned(),
+      CommandReason::Installs {
+        registry: "registry.example".to_owned(),
+        package: Some("left-pad".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "pip install --index-url https://user:tok@pypi.example/simple requests".to_owned(),
+      CommandReason::Installs {
+        registry: "pypi.example".to_owned(),
+        package: Some("requests".to_owned()),
+        listed_in: None,
+      },
+    ),
+    (
+      "npm install --registry=registry.example left-pad".to_owned(),
+      CommandReason::Installs {
+        registry: "registry.example".to_owned(),
+        package: Some("left-pad".to_owned()),
+        listed_in: None,
       },
     ),
   ];

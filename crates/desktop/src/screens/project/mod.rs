@@ -33,6 +33,8 @@ mod task_rows;
 mod tasks;
 mod tools;
 
+use std::sync::Arc;
+
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::{Column, Outlet, Row},
@@ -388,7 +390,7 @@ impl Component for ProjectShell {
     let page = Route::current_page(ctx);
     let dialogs: Vec<ShownApproval> = pending
       .iter()
-      .filter(|approval| approval.opens_on(page) || self.approvals.always_open(&approval.approval.id))
+      .filter(|approval| approval.opens_on(page) || self.approvals.opened(&approval.approval.id))
       .cloned()
       .collect();
     ctx.provide(Shown {
@@ -413,6 +415,7 @@ impl Component for ProjectShell {
         .ready()
         .map(|tasks| tasks.pending_tool_approvals.clone())
         .unwrap_or_default(),
+      dialog: Arc::new(dialogs.clone()),
       auto_approving: tasks
         .ready()
         .map(|tasks| tasks.auto_approving.clone())
@@ -445,6 +448,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
-      .with_children(task::tool_approval_modal(ctx, &dialogs, &self.approvals))
+      .with_children(task::tool_approval_modal(ctx, (&dialogs, pending), &self.approvals))
   }
 }

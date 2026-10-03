@@ -18,15 +18,20 @@ use crate::{
   ui::{icon::Icon, link::Press},
 };
 
-/// The waiting requests, oldest first; nothing when none waits.
-pub fn approvals(ctx: &Ctx, pending: &[ShownApproval], queue: Option<&ApprovalQueue>) -> Vec<Element> {
+/// The waiting requests, oldest first; nothing when none waits. `dialog`: those of `pending` the
+/// dialog may show on this page, the one it shows while it is open.
+pub fn approvals(
+  ctx: &Ctx,
+  (pending, dialog): (&[ShownApproval], &[ShownApproval]),
+  queue: Option<&ApprovalQueue>,
+) -> Vec<Element> {
   let Some(oldest) = pending.first() else {
     return Vec::new();
   };
-  let open = queue.and_then(|queue| queue.place(pending));
+  let open = queue.and_then(|queue| queue.place(dialog, pending));
   let shown = open
     .as_ref()
-    .and_then(|place| pending.get(place.index))
+    .and_then(|place| dialog.get(place.index))
     .unwrap_or(oldest);
   let asks = asks(ctx, shown);
   let count = pending.len().to_string();

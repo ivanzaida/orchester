@@ -1,8 +1,9 @@
 //! Which waiting request the approval dialog shows ("Approval choices and waiting requests"): one at a
 //! time, the oldest first unless the person moved to another with ‹ › or opened one with *Review*.
-//! *Decide later* closes the dialog and answers nothing; while a request it put off still waits, the
-//! dialog does not open by itself, and a new request only adds to the count. It opens by itself when
-//! nothing was put off.
+//! *Decide later* closes the dialog and answers nothing, and puts off every request waiting then,
+//! wherever it shows; while one of them still waits, the dialog does not open by itself, and a new
+//! request only adds to the count. It opens by itself when nothing was put off. A request the person
+//! opened (*Review*, its card's *Always allow…*) shows in the dialog also where it is otherwise inline.
 
 use std::sync::Arc;
 
@@ -52,11 +53,11 @@ impl ApprovalQueue {
     }
   }
 
-  /// Where the dialog stands among `pending`, oldest first; `None` while it is closed: nothing waits,
-  /// or a request the person put off still does.
-  pub fn place(&self, pending: &[ShownApproval]) -> Option<QueuePlace> {
+  /// Where the dialog stands among `pending`, the requests it may show, oldest first; `None` while it
+  /// is closed: none waits, or a request the person put off still waits among `all`, the project's.
+  pub fn place(&self, pending: &[ShownApproval], all: &[ShownApproval]) -> Option<QueuePlace> {
     let deferred = self.deferred.get();
-    if pending.iter().any(|shown| deferred.contains(&shown.approval.id)) {
+    if all.iter().any(|shown| deferred.contains(&shown.approval.id)) {
       return None;
     }
     let selected = self.selected.get();
@@ -81,16 +82,16 @@ impl ApprovalQueue {
     self.selected.set(Some(id.to_owned()));
   }
 
-  /// *Decide later*: closes the dialog over the requests `pending` now.
+  /// *Decide later*: closes the dialog and puts off `pending`, every request waiting now.
   pub fn defer(&self, pending: impl IntoIterator<Item = String>) {
     self.always.set(None);
     self.deferred.set(pending.into_iter().collect());
   }
 
-  /// Whether the *Always allow* step of request `id` is open, which opens the dialog on it also where
-  /// the request shows inline (its task's Conversation tab).
-  pub fn always_open(&self, id: &str) -> bool {
-    self.always.get().as_deref() == Some(id)
+  /// Whether the person opened request `id` (*Review*, ‹ ›, its card's *Always allow…*), which shows it
+  /// in the dialog also where it is otherwise inline (its task's Conversation tab).
+  pub fn opened(&self, id: &str) -> bool {
+    self.selected.get().as_deref() == Some(id) || self.always.get().as_deref() == Some(id)
   }
 
   /// Opens the dialog on the *Always allow* step of request `id`, from its inline card.

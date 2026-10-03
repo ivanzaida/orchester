@@ -70,6 +70,9 @@ pub struct ProjectBar {
   pub lost_to_runner: Option<usize>,
   /// Tool requests waiting for a decision, oldest first.
   pub approvals: Arc<Vec<ShownApproval>>,
+  /// Those the approval dialog may show on the current page: not a request shown inline on its task's
+  /// Conversation tab, unless the person opened it.
+  pub dialog: Arc<Vec<ShownApproval>>,
   /// Active runs that auto-approve their agents' requests.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
 }
@@ -151,7 +154,7 @@ impl Component for StatusBar {
     let queue = ctx.use_context::<ApprovalQueue>();
     let waiting = match (&props.project, &slot) {
       (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
-      (Some(project), _) => approvals_item::approvals(ctx, &project.approvals, queue.as_ref()),
+      (Some(project), _) => approvals_item::approvals(ctx, (&project.approvals, &project.dialog), queue.as_ref()),
     };
     // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
     // hides the other. Any other activity gives way to them.
