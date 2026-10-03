@@ -131,7 +131,6 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
 /// and every plan limits class: the bar never shows more at a narrower width. Each text it draws is
 /// one it drew at the wider width, or that text cut shorter, and it draws no more texts than there.
 #[test]
-#[ignore = "lurq 0.36.0 gives a later order's freed width back to an earlier order's dropped part (the time, Tokens today), which then shows again at the narrower width; waits for the lurq fix"]
 fn status_bar_never_shows_more_at_a_narrower_width() {
   use orchester_core::connection::AgentProvider;
   use orchester_desktop::plan_limits::Connections;
