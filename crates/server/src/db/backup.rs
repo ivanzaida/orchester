@@ -1,11 +1,26 @@
-use std::{fs::OpenOptions, path::Path};
+use std::{
+  fs::OpenOptions,
+  path::{Path, PathBuf},
+  time::Duration,
+};
 
 use rusqlite::{
-  Connection,
+  Connection, OpenFlags,
   backup::{Backup, StepResult},
 };
 
 use crate::error::ServerError;
+
+/// Backs up an existing database without creating data, changing journal mode or running migrations.
+pub async fn backup_existing(directory: PathBuf, path: PathBuf) -> Result<(), ServerError> {
+  tokio::task::spawn_blocking(move || {
+    let source = Connection::open_with_flags(directory.join("orchester-server.db"), OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    source.busy_timeout(Duration::from_secs(5))?;
+    backup(&source, &path)
+  })
+  .await
+  .map_err(|_| ServerError::Worker)?
+}
 
 pub(crate) fn backup(source: &Connection, path: &Path) -> Result<(), ServerError> {
   let mut options = OpenOptions::new();

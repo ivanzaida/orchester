@@ -13,6 +13,7 @@ use std::{
 };
 
 pub(crate) use backup::backup;
+pub use backup::backup_existing;
 use parking_lot::Mutex;
 pub(crate) use rows::user_row;
 use rusqlite::{Connection, TransactionBehavior};

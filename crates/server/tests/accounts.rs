@@ -12,6 +12,8 @@ mod concurrent_limits;
 mod configuration;
 #[path = "accounts/connection_limits.rs"]
 mod connection_limits;
+#[path = "accounts/host_locks.rs"]
+mod host_locks;
 #[path = "accounts/hosting.rs"]
 mod hosting;
 #[path = "accounts/lifecycle.rs"]

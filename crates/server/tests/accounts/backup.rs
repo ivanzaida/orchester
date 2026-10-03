@@ -1,17 +1,24 @@
-use std::{path::Path, process::Command};
+use std::{path::Path, time::Duration};
 
 use orchester_api::ServerInfo;
 use rusqlite::Connection;
+use tokio::process::Command;
 
 use crate::support::{TestServer, credential};
 
-fn backup_command(server: &TestServer, path: &Path) -> std::process::Output {
-  Command::new(env!("CARGO_BIN_EXE_orchester-server"))
-    .arg("backup")
-    .arg(path)
-    .env("ORCHESTER_SERVER_DATA_DIR", server.directory.path())
-    .output()
-    .expect("backup command")
+pub(super) async fn backup_command(server: &TestServer, path: &Path) -> std::process::Output {
+  tokio::time::timeout(
+    Duration::from_secs(8),
+    Command::new(env!("CARGO_BIN_EXE_orchester-server"))
+      .arg("backup")
+      .arg(path)
+      .env("ORCHESTER_SERVER_DATA_DIR", server.directory.path())
+      .kill_on_drop(true)
+      .output(),
+  )
+  .await
+  .expect("backup command deadline")
+  .expect("backup command")
 }
 
 #[tokio::test]
@@ -29,7 +36,7 @@ async fn s1a_online_backup_cli_captures_wal_and_restores_without_overwriting_fil
       > 0
   );
   let path = server.directory.path().join("snapshot.db");
-  let output = backup_command(&server, &path);
+  let output = backup_command(&server, &path).await;
   assert!(output.status.success());
   assert!(output.stdout.is_empty());
   let snapshot = Connection::open(&path).expect("snapshot database");
@@ -47,16 +54,18 @@ async fn s1a_online_backup_cli_captures_wal_and_restores_without_overwriting_fil
   assert_eq!(audits, 1);
   drop(snapshot);
   let bytes = std::fs::read(&path).expect("snapshot bytes");
-  let refused = backup_command(&server, &path);
+  let refused = backup_command(&server, &path).await;
   assert!(!refused.status.success());
   assert!(bytes == std::fs::read(&path).expect("preserved snapshot"));
   assert!(
     !backup_command(&server, &server.directory.path().join("orchester-server.db"))
+      .await
       .status
       .success()
   );
   assert!(
     !backup_command(&server, &server.directory.path().join("missing/snapshot.db"))
+      .await
       .status
       .success()
   );

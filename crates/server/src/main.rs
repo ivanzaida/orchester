@@ -13,9 +13,13 @@ mod shutdown;
 
 enum Command {
   Serve,
+  User(UserCommand),
+  Backup { path: PathBuf },
+}
+
+enum UserCommand {
   Create { username: String, admin: bool },
   Reset { username: String },
-  Backup { path: PathBuf },
 }
 
 #[tokio::main]
@@ -38,16 +42,24 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), ServerError> {
   let (command, path) = arguments()?;
   let config = Config::load(path.as_deref())?;
-  let listen = config.listen;
-  let server = Server::open(config, Arc::new(SystemClock)).await?;
   match command {
     Command::Serve => {
+      let listen = config.listen;
+      let server = Server::open(config, Arc::new(SystemClock)).await?;
       let shutdown = shutdown::Shutdown::install()?;
       let listener = TcpListener::bind(listen).await?;
       tracing::info!(address = %listener.local_addr()?, "server listening");
       orchester_server::serve(server, listener, shutdown.wait()).await
     }
-    Command::Create { username, admin } => {
+    Command::User(command) => run_user(config, command).await,
+    Command::Backup { path } => orchester_server::backup_existing(config.data_dir, path).await,
+  }
+}
+
+async fn run_user(config: Config, command: UserCommand) -> Result<(), ServerError> {
+  let server = Server::open(config, Arc::new(SystemClock)).await?;
+  match command {
+    UserCommand::Create { username, admin } => {
       let created = server
         .host_create_user(CreateUser {
           display_name: username.clone(),
@@ -59,12 +71,11 @@ async fn run() -> Result<(), ServerError> {
       writeln!(io::stdout().lock(), "{}", created.initial_password.expose())?;
       Ok(())
     }
-    Command::Reset { username } => {
+    UserCommand::Reset { username } => {
       let initial = server.host_reset_password(username).await?;
       writeln!(io::stdout().lock(), "{}", initial.expose())?;
       Ok(())
     }
-    Command::Backup { path } => server.host_backup(path).await,
   }
 }
 
@@ -88,17 +99,19 @@ fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
     [] => Command::Serve,
     [serve] if serve == "serve" => Command::Serve,
     [backup, path] if backup == "backup" => Command::Backup { path: path.into() },
-    [user, create, flag, username] if user == "user" && create == "create" && flag == "--admin" => Command::Create {
-      username: username.clone(),
-      admin: true,
-    },
-    [user, create, username] if user == "user" && create == "create" => Command::Create {
+    [user, create, flag, username] if user == "user" && create == "create" && flag == "--admin" => {
+      Command::User(UserCommand::Create {
+        username: username.clone(),
+        admin: true,
+      })
+    }
+    [user, create, username] if user == "user" && create == "create" => Command::User(UserCommand::Create {
       username: username.clone(),
       admin: false,
-    },
-    [user, reset, username] if user == "user" && reset == "reset-password" => Command::Reset {
+    }),
+    [user, reset, username] if user == "user" && reset == "reset-password" => Command::User(UserCommand::Reset {
       username: username.clone(),
-    },
+    }),
     _ => return Err(usage()),
   };
   Ok((command, path))

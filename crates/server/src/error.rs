@@ -70,9 +70,19 @@ impl ServerError {
           rusqlite::Error::SqliteFailure(error, _) | rusqlite::Error::SqlInputError { error, .. } => Some(error),
           _ => None,
         };
+        let message = if sqlite.is_some_and(|error| {
+          matches!(
+            error.code,
+            rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+          )
+        }) {
+          "server database is busy or locked; retry after the writer releases the lock"
+        } else {
+          "server operation failed"
+        };
         tracing::error!(error_kind = self.kind(), database_variant = database_variant(error),
           sqlite_code = ?sqlite.map(|error| error.code), sqlite_extended_code = sqlite.map(|error| error.extended_code),
-          "server operation failed");
+          "{message}");
       }
       Self::Io(error) => tracing::error!(error_kind = self.kind(), io_kind = ?error.kind(),
         os_error = error.raw_os_error(), "server operation failed"),

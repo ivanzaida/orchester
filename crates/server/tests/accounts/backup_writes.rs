@@ -70,11 +70,11 @@ async fn s1a_large_online_backup_completes_during_continuous_wal_commits() {
   assert!(pages > 100);
   let writer = Writer::start(server.directory.path().join("orchester-server.db")).await;
   let path = server.directory.path().join("busy-snapshot.db");
-  let result = tokio::time::timeout(Duration::from_secs(5), server.server.host_backup(path.clone())).await;
+  let result = tokio::time::timeout(Duration::from_secs(5), super::backup::backup_command(&server, &path)).await;
   let writes = writer.finish().await;
-  result
-    .expect("backup cannot restart indefinitely under writes")
-    .expect("completed snapshot");
+  let output = result.expect("backup CLI cannot restart indefinitely under writes");
+  assert!(output.status.success());
+  assert!(output.stdout.is_empty());
   assert!(writes > 1);
   let snapshot = Connection::open(path).expect("snapshot");
   let integrity: String = snapshot

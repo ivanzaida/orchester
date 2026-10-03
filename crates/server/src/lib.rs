@@ -15,4 +15,5 @@ mod tls;
 mod transport;
 
 pub use accounts::Server;
+pub use db::backup_existing;
 pub use transport::serve;
