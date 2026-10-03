@@ -17,7 +17,8 @@ impl MergeStore for ProjectDb {
   type Error = StoreError;
 
   fn save_run_merge(&mut self, merge: &RunMerge) -> Result<(), StoreError> {
-    let inserted = self.connection.execute(
+    let transaction = self.connection.transaction()?;
+    let inserted = transaction.execute(
       "INSERT INTO run_merges (run_id, into_branch, revision, kind, merged_at) VALUES (?1, ?2, ?3, ?4, ?5) \
        ON CONFLICT (run_id) DO NOTHING",
       params![
@@ -31,6 +32,18 @@ impl MergeStore for ProjectDb {
     if inserted == 0 {
       return Err(StoreError::AlreadyMerged(merge.run));
     }
+    let task: String = transaction.query_row(
+      "SELECT task_id FROM runs WHERE id = ?1",
+      [merge.run.to_string()],
+      |row| row.get(0),
+    )?;
+    super::organization::automatic(
+      &transaction,
+      crate::rows::parse("task id", &task)?,
+      orchester_core::task::organization::WorkflowStatus::Done,
+      merge.merged_at,
+    )?;
+    transaction.commit()?;
     Ok(())
   }
 

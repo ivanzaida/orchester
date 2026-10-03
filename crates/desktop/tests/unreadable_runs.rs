@@ -49,7 +49,7 @@ fn unreadable_latest_run_keeps_the_task_list_and_its_counts() {
   assert_eq!(row.detail.args, [("run", bad.number().get().to_string())]);
 
   // Counts leave the unreadable run out; the task stays in All.
-  assert_eq!(loaded.runs, 2);
+  assert_eq!(loaded.runs.values().sum::<usize>(), 2);
   assert_eq!(OverviewTab::All.count(&loaded.tasks, &loaded.phases), 2);
   assert_eq!(OverviewTab::Running.count(&loaded.tasks, &loaded.phases), 1);
   assert_eq!(list::queued(&loaded.tasks, &loaded.phases), 0);
@@ -103,7 +103,7 @@ fn unreadable_earlier_run_is_named_on_the_page_of_the_latest_run() {
 
   let loaded = ProjectTasks::load(fixture.repo.path()).expect("the task list reads");
   assert_eq!(loaded.phases[&task].phase(), Some(TaskPhase::Running));
-  assert_eq!(loaded.runs, 1);
+  assert_eq!(loaded.runs.values().sum::<usize>(), 1);
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("the task page reads");
   assert_eq!(detail.run.as_ref().map(|run| run.id()), Some(latest.id()));
   assert!(detail.latest_unreadable.is_none());

@@ -321,8 +321,14 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
     db.release_held_tasks(&ids[1..]),
     Err(StoreError::TaskNotHeld(_))
   ));
-  db.set_task_group_hold(group.key(), Some(&GroupHold::FailedTask))
-    .expect("hold");
+  // Tasks waiting for blocking tasks may wait for good: they can be taken back too.
+  db.set_task_group_hold(
+    group.key(),
+    Some(&GroupHold::Blocked {
+      by: vec![orchester_core::id::TaskId::generate()],
+    }),
+  )
+  .expect("hold");
   db.release_held_tasks(&ids[1..]).expect("release");
   let released = db.task(ids[1]).expect("task").expect("exists");
   assert_eq!(released.status(), TaskStatus::Draft);
@@ -354,4 +360,46 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
   // Releasing the last member removes the group.
   db.release_held_tasks(&ids[..1]).expect("release the rest");
   assert!(db.task_groups().expect("groups").is_empty());
+}
+
+/// A draft whose blocking task has not finished cannot enter a group: the runner would refuse it.
+#[test]
+fn task_group_refuses_a_blocked_draft_and_queues_nothing() {
+  use orchester_core::task::organization::{
+    BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus,
+  };
+  let (_, mut db, run, _) = started_run();
+  let (_, drafts) = drafts(&mut db);
+  let blocked = TaskOrganization::new(
+    WorkflowStatus::Todo,
+    Priority::None,
+    Some("Waits for the running task.".into()),
+    vec![BlockingTask {
+      task: run.task(),
+      gate: DependencyGate::Review,
+    }],
+    vec![],
+  )
+  .expect("organization");
+  db.set_task_organization(drafts[1].id(), &blocked, ChangeActor::Person, at(10))
+    .expect("link");
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    drafts.iter().map(|t| t.id()).collect(),
+    Scheduling::Sequential,
+    budget(2_000_000),
+  )
+  .expect("group");
+  assert!(matches!(
+    db.queue_task_group(&group, None, &reviewed(&db, &group)),
+    Err(StoreError::TaskNotSelectable {
+      problem: SelectionProblem::Blocked { by },
+      ..
+    }) if by == vec![run.task()]
+  ));
+  assert!(db.task_groups().expect("groups").is_empty());
+  assert_eq!(
+    db.task(drafts[0].id()).expect("task").expect("exists").status(),
+    TaskStatus::Draft
+  );
 }

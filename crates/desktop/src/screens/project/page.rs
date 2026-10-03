@@ -66,3 +66,16 @@ pub fn heading(title: &str, description: &str) -> Element {
     .child(Text::new(description).variant(TypographyStyle::Description))
     .into()
 }
+
+/// ORC-39 qVMJh/y3ohgK: title-to-subtitle rhythm of organization screens.
+pub fn organization_heading(title: &str, description: &str) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_top(ExtraSpacing::HeadingTop.role())
+    .padding_horizontal(SpacingSize::Section)
+    .padding_bottom(ExtraSpacing::HeadingBottom.role())
+    .spacing(SpacingSize::Section)
+    .child(Text::new(title).variant(ExtraTypography::ScreenTitle.role()))
+    .child(Text::new(description).variant(TypographyStyle::Description))
+    .into()
+}

@@ -17,15 +17,21 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum RunAgainBlock {
+  TaskBlocked,
   /// The task's latest run neither failed nor was cancelled, or it is not the run the request was
   /// made after: only a run that ended that way is run again.
   NotEnded,
   /// Run `number` of the task has not ended: a task has one active run at a time.
-  RunActive { number: RunNumber },
+  RunActive {
+    number: RunNumber,
+  },
   /// The task's pipeline has no published version for the new run to use.
   PipelineNotPublished,
   /// The project's runs used today's token budget: new runs wait until the day has room.
-  DailyBudgetUsed { used: TokensUsed, budget: TokenBudget },
+  DailyBudgetUsed {
+    used: TokensUsed,
+    budget: TokenBudget,
+  },
 }
 
 /// What deciding whether a task can run again needs.

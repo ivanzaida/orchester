@@ -15,6 +15,7 @@
 
 mod again;
 mod attach;
+mod blocked_runs;
 mod board;
 mod checkpoint;
 mod codebase_index;
@@ -119,6 +120,7 @@ struct Inner {
   /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
   group_retries: task_groups::GroupRetries,
+  blocked_runs: blocked_runs::BlockedRuns,
 }
 
 impl Scheduler {
@@ -133,6 +135,7 @@ impl Scheduler {
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
         group_retries: task_groups::GroupRetries::default(),
+        blocked_runs: blocked_runs::BlockedRuns::default(),
       }),
     }
   }
@@ -172,7 +175,10 @@ impl Scheduler {
     if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() {
       return false;
     }
-    match self.has_pending_task_groups() {
+    match self
+      .has_pending_task_groups()
+      .and_then(|pending| Ok(pending || self.blocked_runs_wait_for_work()?))
+    {
       Ok(pending) => !pending,
       Err(error) => {
         tracing::error!(?error, "cannot establish whether queued groups are idle");

@@ -8,9 +8,11 @@
 //!
 //! The dialog answers through the runner; which answers a request offers is decided in core
 //! (`crate::tasks::approvals::ApprovalChoices`). Decide later answers nothing: the request keeps waiting
-//! in *Needs you*, on the task page and in the status bar ([`ApprovalQueue`]).
+//! in *Needs you*, on the task page and in the status bar ([`ApprovalQueue`]). A request whose agent can
+//! no longer receive an answer leaves the dialog once the runner says so ([`ended`]).
 
 mod always;
+mod ended;
 mod footer;
 mod request;
 mod scope;
@@ -31,12 +33,14 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  id::RunId,
+  id::{RunId, TaskId},
   run::{ApprovalAnswer, PendingToolApproval},
 };
 use orchester_ipc::{Command, Rejection};
 
+use self::ended::drop_when_ended;
 pub(in crate::screens::project::task) use self::{
+  ended::Unanswered,
   subject_line::{chip, quiet_reason},
   wider::{always_blocked, similar_unavailable},
 };
@@ -82,25 +86,29 @@ pub(in crate::screens::project::task) struct Decision {
   pub(in crate::screens::project::task) run: RunId,
   pub(in crate::screens::project::task) approval: String,
   pub(in crate::screens::project::task) answer: ApprovalAnswer,
-  /// The request is a command, which an error names as such.
-  pub(in crate::screens::project::task) command: bool,
+  /// The task whose agent asks, which says where a request that ended leads.
+  pub(in crate::screens::project::task) task: Option<TaskId>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
 
 impl Decision {
-  /// `answer` to `approval`, as the dialog and the timeline's inline card both give it.
-  pub(in crate::screens::project::task) fn of(approval: &PendingToolApproval, answer: ApprovalAnswer) -> Self {
+  /// `answer` to `approval` of `task`, as the dialog and the timeline's inline card both give it.
+  pub(in crate::screens::project::task) fn of(
+    approval: &PendingToolApproval,
+    task: Option<TaskId>,
+    answer: ApprovalAnswer,
+  ) -> Self {
     Self {
       run: approval.run,
       approval: approval.id.clone(),
       answer,
-      command: approval.command,
+      task,
     }
   }
 }
 
-pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
+pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Unanswered>;
 
 pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   let runners = ctx
@@ -112,17 +120,21 @@ pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> Decis
       runners
         .control_run(Command::DecideToolApproval {
           run: decision.run,
-          approval: decision.approval,
+          approval: decision.approval.clone(),
           answer: decision.answer,
         })
         .await
         .map_err(|error| {
           tracing::warn!(%error, "the runner did not take the tool approval decision");
           match error {
-            RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) if decision.command => {
-              Message::new("runs.toolApproval.notAwaitedCommand")
-            }
-            error => control_message(&error),
+            RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) => Unanswered::Ended {
+              approval: decision.approval,
+              task: decision.task,
+            },
+            RunRequestError::Rejected(Rejection::ToolApprovalAnswered) => Unanswered::Answered {
+              approval: decision.approval,
+            },
+            error => Unanswered::Failed(control_message(&error)),
           }
         })
     }
@@ -169,7 +181,8 @@ impl Component for ToolApprovalPanel {
   type Props = ToolApprovalProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    decision_action(ctx);
+    let action = decision_action(ctx);
+    drop_when_ended(ctx, &action);
     let primary = ElementRef::new();
     ctx.focus(&primary);
     Self {
@@ -190,12 +203,21 @@ impl Component for ToolApprovalPanel {
     let action = decision_action(ctx);
     let state = action.state().get();
     let busy = state.is_pending() || state.data.is_some();
-    let error = state.error.filter(|_| !busy);
+    // Why the last answer did not go through, else that the request shown before ended. One that just
+    // ended itself says nothing: it is leaving.
+    let problem = match state.error.as_ref().filter(|_| !busy) {
+      Some(Unanswered::Failed(message)) => Some(message.clone()),
+      Some(Unanswered::Ended { .. } | Unanswered::Answered { .. }) => None,
+      None => props
+        .queue
+        .shows_ended_notice()
+        .then(|| Message::new("runs.toolApproval.endedNotice")),
+    };
     let view = View {
       props: &props,
       busy,
       pressed: self.pressed.get(),
-      error: error.as_ref(),
+      error: problem.as_ref(),
       action: &action,
       pressed_signal: &self.pressed,
       copy: &self.copy,
@@ -269,12 +291,14 @@ impl View<'_> {
   fn answer(&self, pressed: Pressed, answer: ApprovalAnswer) -> impl Fn() + Send + Sync + 'static {
     let action = self.action.clone();
     let requested = self.pressed_signal.clone();
-    let decision = Decision::of(&self.shown().approval, answer);
+    let queue = self.props.queue.clone();
+    let decision = Decision::of(&self.shown().approval, self.shown().task_id, answer);
     move || {
       let state = action.state().get_untracked();
       if state.is_pending() || state.data.is_some() {
         return;
       }
+      queue.clear_ended_notice();
       requested.set(Some(pressed));
       action.run(decision.clone());
     }

@@ -229,3 +229,56 @@ fn native_command_requests_keep_their_shell_and_time_limit() {
   db.request_tool_approval(&direct).expect("direct request");
   assert_eq!(db.pending_tool_approvals(run.id()).expect("pending"), [shell, direct]);
 }
+
+#[test]
+fn tool_requests_that_end_no_longer_wait_and_read_as_ended_without_an_answer() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let request = |key: &str| PendingToolApproval {
+    id: format!("{}:{key}", invocation.id),
+    run: run.id(),
+    execution,
+    invocation: invocation.id,
+    agent: "Designer".to_owned(),
+    command: false,
+    scope: None,
+    server: "pencil".to_owned(),
+    action: "batch_design".to_owned(),
+    target: None,
+    requested_at: at(11),
+    native: None,
+  };
+  let (one, two, claimed) = (request("one"), request("two"), request("claimed"));
+  for approval in [&one, &two, &claimed] {
+    db.request_tool_approval(approval).expect("request");
+  }
+  assert!(
+    db.claim_tool_approval(run.id(), &claimed.id, DecidedBy::Person, at(12))
+      .expect("claim")
+  );
+  assert!(db.end_waiting_tool_approval(run.id(), &one.id).expect("end"));
+  assert!(!db.end_waiting_tool_approval(run.id(), &one.id).expect("ended once"));
+  assert!(
+    !db
+      .end_waiting_tool_approval(run.id(), &claimed.id)
+      .expect("not waiting")
+  );
+  assert!(db.end_waiting_tool_approval(run.id(), &two.id).expect("end"));
+  assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
+  // An answer that comes too late is refused as answered already only for the one answered.
+  assert!(db.tool_approval_answered(run.id(), &claimed.id).expect("answered"));
+  assert!(!db.tool_approval_answered(run.id(), &one.id).expect("ended"));
+  assert!(!db.tool_approval_answered(run.id(), "unknown").expect("unknown"));
+  let decided = db.decided_tool_approvals(run.id()).expect("decided");
+  let decision = |id: &str| {
+    decided
+      .iter()
+      .find(|decided| decided.request.id == id)
+      .map(|decided| decided.decision)
+  };
+  assert_eq!(decision(&one.id), Some(None));
+  assert_eq!(decision(&two.id), Some(None));
+  assert_eq!(decision(&claimed.id), Some(Some(ToolApprovalDecision::Approved)));
+}

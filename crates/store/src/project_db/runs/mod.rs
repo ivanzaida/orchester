@@ -61,6 +61,7 @@ impl ProjectDb {
     if queued && !is_queued(&transaction, new.task)? {
       return Err(RunStoreError::TaskNotQueued(new.task));
     }
+    super::organization::check_readiness(&transaction, new.task)?;
     let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
     let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
     insert_run(&transaction, &run, &key)?;
@@ -194,10 +195,23 @@ impl ProjectDb {
         found,
       });
     }
+    if events.iter().any(|event| event.kind().starts_execution()) {
+      super::organization::check_readiness(&transaction, run.task())?;
+    }
     update_run(&transaction, run)?;
     write_attempts(&transaction, run)?;
     for event in events {
       insert_event(&transaction, event)?;
+      let status = match event.kind() {
+        kind if kind.starts_execution() => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
+        RunEventKind::Succeeded | RunEventKind::FollowUpFailed => {
+          Some(orchester_core::task::organization::WorkflowStatus::InReview)
+        }
+        _ => None,
+      };
+      if let Some(status) = status {
+        super::organization::automatic(&transaction, run.task(), status, event.at())?;
+      }
     }
     if let Some(plan) = plan {
       plans::save(&transaction, plan)?;

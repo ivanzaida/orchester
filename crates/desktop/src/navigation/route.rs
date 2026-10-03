@@ -21,6 +21,7 @@ const SETUP: &str = "setup";
 const ALL_PROJECTS: &str = "projects";
 const PROJECT: &str = "project";
 const TASKS: &str = "tasks";
+const TAGS: &str = "tags";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 const RETRY: &str = "retry";
@@ -43,9 +44,10 @@ const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
 const MCP_SERVERS: &str = "mcp-servers";
-const DRAFTS: &str = "drafts";
-const QUEUE: &str = "queue";
-const NEEDS_REVIEW: &str = "needs-review";
+const BACKLOG: &str = "backlog";
+const TODO: &str = "todo";
+const IN_PROGRESS: &str = "in-progress";
+const IN_REVIEW: &str = "in-review";
 const DONE: &str = "done";
 const RUNNING: &str = "running";
 const NEEDS_YOU: &str = "needs-you";
@@ -85,6 +87,7 @@ pub enum Page {
   Overview(OverviewTab),
   /// `J9467`, on a tab.
   Tasks(TaskTab),
+  ProjectTags,
   /// `l2YA4`.
   NewTask,
   /// One task and its latest run, on a tab (`RD4pc`, `SfXU1`, `vpgrJ`).
@@ -279,6 +282,7 @@ impl Page {
     Some(match segments {
       [] => Self::Overview(overview_tab(tab)),
       [TASKS] => Self::Tasks(task_tab(tab)),
+      [TASKS, TAGS] => Self::ProjectTags,
       [TASKS, NEW] => Self::NewTask,
       [TASKS, task] => Self::Task(task.parse().ok()?, task_page_tab(tab)),
       [TASKS, task, EDIT] => Self::EditTask(task.parse().ok()?),
@@ -314,6 +318,7 @@ impl Page {
     let root = format!("/{PROJECT}/{project}");
     match self {
       Self::Overview(tab) => with_tab(root, overview_query(*tab)),
+      Self::ProjectTags => format!("{root}/{TASKS}/{TAGS}"),
       Self::Tasks(tab) => with_tab(format!("{root}/{TASKS}"), task_query(*tab)),
       Self::NewTask => format!("{root}/{TASKS}/{NEW}"),
       Self::Task(task, tab) => with_tab(format!("{root}/{TASKS}/{task}"), task_page_query(*tab)),
@@ -353,7 +358,9 @@ impl Page {
   pub const fn sidebar_item(&self) -> SidebarItem {
     match self {
       Self::Overview(_) => SidebarItem::Overview,
-      Self::Tasks(_) | Self::NewTask | Self::Task(..) | Self::EditTask(_) | Self::RetryTask(_) => SidebarItem::Tasks,
+      Self::ProjectTags | Self::Tasks(_) | Self::NewTask | Self::Task(..) | Self::EditTask(_) | Self::RetryTask(_) => {
+        SidebarItem::Tasks
+      }
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
       Self::Pipelines | Self::Pipeline(..) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
@@ -411,20 +418,24 @@ const fn overview_query(tab: OverviewTab) -> Option<&'static str> {
 /// Every task tab has a stable route; an unknown tab falls back to All.
 fn task_tab(tab: Option<&str>) -> TaskTab {
   match tab {
-    Some(DRAFTS) => TaskTab::Drafts,
-    Some(QUEUE) => TaskTab::Queue,
-    Some(NEEDS_REVIEW) => TaskTab::NeedsReview,
+    Some(BACKLOG) => TaskTab::Backlog,
+    Some(TODO) => TaskTab::Todo,
+    Some(IN_PROGRESS) => TaskTab::InProgress,
+    Some(IN_REVIEW) => TaskTab::InReview,
     Some(DONE) => TaskTab::Done,
+    Some(NEEDS_YOU) => TaskTab::NeedsYou,
     _ => TaskTab::All,
   }
 }
 
 const fn task_query(tab: TaskTab) -> Option<&'static str> {
   match tab {
-    TaskTab::Drafts => Some(DRAFTS),
-    TaskTab::Queue => Some(QUEUE),
-    TaskTab::NeedsReview => Some(NEEDS_REVIEW),
+    TaskTab::Backlog => Some(BACKLOG),
+    TaskTab::Todo => Some(TODO),
+    TaskTab::InProgress => Some(IN_PROGRESS),
+    TaskTab::InReview => Some(IN_REVIEW),
     TaskTab::Done => Some(DONE),
+    TaskTab::NeedsYou => Some(NEEDS_YOU),
     TaskTab::All => None,
   }
 }

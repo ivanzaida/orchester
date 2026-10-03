@@ -5,7 +5,8 @@
 //! that only waits for a person's decision had no agent at work: it still waits, untouched, unless
 //! people's messages written meanwhile answer its agent's question. A run that succeeded while
 //! messages to its agents were written is followed up. A run whose record cannot be read back is left
-//! as it is: it is logged and nothing continues it.
+//! as it is: it is logged and nothing continues it. A tool request still waiting in a run this runner
+//! does not execute lost its agent: it ends without an answer.
 
 use std::num::NonZeroU32;
 
@@ -59,6 +60,7 @@ impl Scheduler {
       self.announce(&run);
       attached.interrupted.push(run.id());
     }
+    self.end_unheld_approvals(&mut db)?;
     self.wake_answered(&db, waiting)?;
     self.follow_up_queued(&mut db)?;
     if session == AttachSession::Reconnect {

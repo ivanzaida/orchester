@@ -305,6 +305,13 @@ pub fn shown(props: &Props) -> bool {
   }
 }
 
+/// Whether any CLI has a reading: without one, each entry is a dash and the item is narrow.
+pub fn has_readings(props: &Props) -> bool {
+  entries(props, Timestamp::now())
+    .iter()
+    .any(|entry| entry.reading.is_some())
+}
+
 /// How many CLIs are reached or refused, which decides how wide the item is.
 pub fn reached_count(props: &Props) -> usize {
   entries(props, Timestamp::now())

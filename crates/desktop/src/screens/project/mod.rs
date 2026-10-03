@@ -14,6 +14,7 @@ pub(crate) mod connections;
 mod import;
 mod instructions;
 mod new_task;
+mod organization_fields;
 mod overview;
 mod page;
 mod pages;
@@ -21,6 +22,7 @@ mod pipelines;
 mod pull_requests;
 mod repository_import;
 pub(crate) mod run_approval_action;
+pub(crate) mod run_blockers;
 mod runner;
 mod runner_card;
 mod secrets;
@@ -28,7 +30,10 @@ mod settings;
 mod sidebar;
 mod skills;
 mod switcher;
+mod tag_manager;
+mod tag_picker;
 mod task;
+mod task_filters;
 mod task_rows;
 mod tasks;
 mod tools;
@@ -388,7 +393,9 @@ impl Component for ProjectShell {
       .unwrap_or_default();
     let usage = feed.usage.get();
     let page = Route::current_page(ctx);
-    let dialogs: Vec<ShownApproval> = pending
+    // A request the runner said ended leaves the dialog before the requests are read again.
+    let waiting = self.approvals.still_waiting(pending);
+    let dialogs: Vec<ShownApproval> = waiting
       .iter()
       .filter(|approval| approval.opens_on(page) || self.approvals.opened(&approval.approval.id))
       .cloned()
@@ -448,6 +455,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
-      .with_children(task::tool_approval_modal(ctx, (&dialogs, pending), &self.approvals))
+      .with_children(task::tool_approval_modal(ctx, (&dialogs, &waiting), &self.approvals))
   }
 }

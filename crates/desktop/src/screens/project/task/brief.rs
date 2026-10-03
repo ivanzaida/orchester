@@ -102,7 +102,7 @@ fn criterion(number: usize, text: &str) -> Row {
 /// *This task* (`FLGqL`): the pipeline a run would start with, at its latest published version, and
 /// the limits; *No pipeline chosen* and *No limits set* while they are not (`h3IIs`).
 pub(super) fn this_task(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   detail: &TaskDetail,
   pipelines: Option<&[PipelineChoice]>,
   scroll: &ScrollState,
@@ -131,12 +131,24 @@ pub(super) fn this_task(
       property(&ctx.t("runs.summary.pipeline"), &value)
     }
   };
+  let shown = ctx
+    .use_context::<super::super::pages::Shown>()
+    .expect("shell provides project data");
+  let dependencies = ctx.mount_keyed::<super::dependencies::TaskDependencies>(
+    "task-dependencies",
+    super::dependencies::DependencyProps {
+      root: shown.open.repo_root.clone(),
+      task: detail.task.clone(),
+      revision: shown.revision,
+    },
+  );
   let rows = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
     .child(Text::new(&ctx.t("runs.summary.thisTask")).variant(ExtraTypography::CardTitle.role()))
     .child(pipeline)
-    .with_children(limit_rows(ctx, details.limits));
+    .with_children(limit_rows(ctx, details.limits))
+    .child(dependencies);
   this_run_panel(rows, scroll, &ctx.t("runs.summary.taskNote"))
 }
 

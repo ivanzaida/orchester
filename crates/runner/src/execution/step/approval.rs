@@ -21,7 +21,7 @@ use orchester_store::StoreError;
 use tokio::sync::oneshot;
 
 use super::{
-  super::control::answer,
+  super::{control::answer, tool_approval::end_unheld},
   answer::Settled,
   claude_approval::{Asked, PromptAnswer},
   worker::{ApprovalDecision, Watch, Worker},
@@ -250,13 +250,23 @@ impl Worker {
     watch: &mut Watch,
     decision: &ApprovalDecision,
   ) -> Result<Result<(), Rejection>, StoreError> {
-    // A stopping agent (a pause checkpointing at the decision) takes none any more.
-    if watch.stop.is_some()
-      || watch
-        .approval
-        .as_ref()
-        .is_none_or(|(pending, _)| pending.id != decision.id)
-    {
+    let held = watch
+      .approval
+      .as_ref()
+      .is_some_and(|(pending, _)| pending.id == decision.id);
+    if !held {
+      // Not the call this agent waits on (one of an earlier invocation, or recorded without one): no
+      // agent can take its answer, so it ends, unless it was answered already.
+      let run = watch.invocation.run;
+      let (ended, refusal) = end_unheld(&mut watch.db, run, &decision.id)?;
+      if ended {
+        self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
+      }
+      return Ok(Err(refusal));
+    }
+    // A stopping agent (a pause checkpointing at the decision) takes none any more; its end interrupts
+    // the request.
+    if watch.stop.is_some() {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
     let (approval, awaiting) = watch.approval.take().expect("the pending approval was matched above");

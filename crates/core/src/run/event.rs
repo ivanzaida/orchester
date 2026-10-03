@@ -241,6 +241,20 @@ impl RunEventKind {
     }
   }
 
+  /// Starts or resumes execution, including follow-ups, a retry a person allows and failed-run
+  /// recovery.
+  pub const fn starts_execution(&self) -> bool {
+    matches!(
+      self,
+      Self::Started
+        | Self::Resumed
+        | Self::Continued { .. }
+        | Self::Reopened
+        | Self::RecoveryRequested
+        | Self::RetryAllowed
+    )
+  }
+
   /// Stable name of the kind, as stored and shown in errors.
   pub const fn name(&self) -> &'static str {
     match self {

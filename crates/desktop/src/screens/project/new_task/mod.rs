@@ -9,10 +9,13 @@
 //! starting another run from this form.
 
 mod brief;
+mod cancellation;
 mod edit;
 mod header;
+mod persistence;
 mod plan;
 mod start;
+mod state;
 
 /// Room the brief's scroll content keeps on its left for the outer focus rings of controls on
 /// its edge: the ring (`focus-extent`) and the padding of a link inside it.
@@ -34,33 +37,31 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
   limits::ProjectLimits,
-  repository::RepositoryLink,
-  store::RepositoryStore,
-  task::{MissingDetail, Task, TaskDetails},
+  task::{MissingDetail, Task, TaskDetails, organization::TaskOrganization},
   tokens::grouped,
 };
-use orchester_store::ProjectDb;
 
 pub use self::edit::{Editing, Recovering};
-use self::{brief::Criterion, start::run_action};
-use super::ProjectNav;
+use self::{
+  brief::Criterion,
+  persistence::{repository_link, save_action},
+  start::run_action,
+};
+use super::{ProjectNav, organization_fields::OrganizationDraft};
 use crate::{
-  activity::{Activity, operations},
-  background,
   budget::minutes_text,
-  messages,
   messages::Message,
   navigation::route::Page,
   tabs::dirty::EditMark,
   tasks::{
-    data::{PipelineChoice, SaveTarget, TaskDraftSaveError, save_draft_in},
-    form::{FormErrors, TaskForm},
+    data::{PipelineChoice, SaveTarget},
+    form::FormErrors,
     list::missing_key,
     run::StartOutcome,
   },
   theme::{ExtraSpacing, gutter_width},
   ui::{
-    form::{Submit, form},
+    form::form,
     icon::{Icon, IconSize, icon},
     unit_input::FocusedInput,
   },
@@ -92,14 +93,26 @@ impl lurq::app::component::DevtoolsInspectable for PipelineSelection {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedDraft {
   details: TaskDetails,
+  organization: TaskOrganization,
   /// The task Create made; `None` when the form saved over a task it edits.
   created: Option<TaskId>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
-type SaveArgs = (PathBuf, SaveTarget, TaskDetails);
+/// Where to save, what: the details and the organization as the form loaded it and as it is now
+/// (only what the person changed is saved), and the run the person confirmed stopping for
+/// Canceled.
+type SaveArgs = (
+  PathBuf,
+  SaveTarget,
+  TaskDetails,
+  (TaskOrganization, TaskOrganization),
+  crate::tasks::cancel_run::Stop,
+);
 type SaveAction = FutureAction<SaveArgs, SavedDraft, Message>;
+/// A save, with whether the person confirmed stopping a run for Canceled.
+type SaveRequest = Arc<dyn Fn(crate::tasks::cancel_run::Stop) + Send + Sync>;
 
 /// The task whose run started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,7 +149,9 @@ enum RunArgs {
   New {
     repo_root: PathBuf,
     target: SaveTarget,
-    details: TaskDetails,
+    details: Box<TaskDetails>,
+    /// As loaded and as edited.
+    organization: (TaskOrganization, TaskOrganization),
     pipeline: Arc<PipelineChoice>,
   },
   Retry {
@@ -194,6 +209,9 @@ impl FormState {
 }
 
 pub struct NewTaskForm {
+  organization: OrganizationDraft,
+  /// The confirmation that saving Canceled stops the task's active run is open.
+  cancel_confirmation: Signal<bool>,
   title: Signal<String>,
   brief: Signal<String>,
   criteria: Signal<Vec<Criterion>>,
@@ -224,10 +242,27 @@ impl Component for NewTaskForm {
       .expect("the project shell provides ProjectNav");
     let save = save_action(ctx);
     let saved = nav.clone();
+    let cancel_confirmation = ctx.signal(false);
+    let confirm = cancel_confirmation.clone();
+    let organization = OrganizationDraft::new(ctx);
+    let loaded = organization.loaded.clone();
     ctx.watch(&save.state(), move |state| {
-      let Some(draft) = state.data.as_ref().filter(|_| !state.is_pending()) else {
+      if state.is_rejected() {
+        if state.error.as_ref().is_some_and(persistence::needs_cancel_confirmation) {
+          confirm.set(true);
+        }
+        return;
+      }
+      // A failed save keeps the data of the last one that succeeded: only a save that has just
+      // succeeded closes the confirmation and reports the change.
+      let Some(draft) = state.data.as_ref().filter(|_| state.is_fulfilled()) else {
         return;
       };
+      confirm.set(false);
+      // The next save writes what the person changes from here.
+      loaded.set(crate::tasks::organization::OrganizationValue(
+        draft.organization.clone(),
+      ));
       saved.tasks_changed();
       if let Some(task) = draft.created {
         saved.show_created(task);
@@ -253,6 +288,8 @@ impl Component for NewTaskForm {
       }
     });
     Self {
+      organization,
+      cancel_confirmation,
       title: ctx.signal(String::new()),
       brief: ctx.signal(String::new()),
       criteria: ctx.signal(vec![Criterion::new(0)]),
@@ -285,7 +322,10 @@ impl Component for NewTaskForm {
     self.mark_unsaved(&state, editing);
     let target = self.target(editing.or(recovered));
     let submit = self
-      .save_handler(&save, &props.project, target, state.ready.clone())
+      .save_request(&save, &props.project, target, state.ready.clone())
+      .map(|request| -> Arc<dyn Fn() + Send + Sync> {
+        Arc::new(move || request(crate::tasks::cancel_run::Stop::Unconfirmed))
+      })
       .filter(|_| state.can_save());
     let start = (!state.started)
       .then(|| {
@@ -297,7 +337,12 @@ impl Component for NewTaskForm {
         )
       })
       .flatten()
-      .filter(|_| !state.saving && !state.starting && (state.queued_task.is_some() || state.missing.is_empty()));
+      .filter(|_| {
+        self.organization.ready.get()
+          && !state.saving
+          && !state.starting
+          && (state.queued_task.is_some() || state.missing.is_empty())
+      });
     // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
     // same amount, so the content stays at the designed inset and keeps room for focus rings.
     let indent = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0);
@@ -339,6 +384,13 @@ impl Component for NewTaskForm {
       ))
       .child(header::heading(ctx, still_editing, &state))
       .child(form(submit, content))
+      .child(cancellation::confirmation(
+        ctx,
+        self.cancel_confirmation.clone(),
+        &props,
+        &save,
+        self.save_request(&save, &props.project, target, state.ready.clone()),
+      ))
   }
 }
 
@@ -391,137 +443,24 @@ impl NewTaskForm {
     }
   }
 
-  fn state(
-    &self,
-    save: &SaveAction,
-    run: &RunAction,
-    separator: &str,
-    (limits, editing): (ProjectLimits, Option<&Editing>),
-    recovered: bool,
-  ) -> FormState {
-    let criteria: Vec<String> = self
-      .criteria
-      .get()
-      .iter()
-      .map(|criterion| criterion.text.get())
-      .collect();
-    let (title, brief, budget, time_limit) = (
-      self.title.get(),
-      self.brief.get(),
-      self.budget.get(),
-      self.time_limit.get(),
-    );
-    let form = TaskForm {
-      title: &title,
-      brief: &brief,
-      criteria: &criteria,
-      pipeline: self.pipeline.get().0,
-      budget: &budget,
-      time_limit: &time_limit,
-      separator,
-      max_budget: limits.max_run_budget(),
-    };
-    let saving = save.state().get();
-    let (ready, errors) = match form.details() {
-      Ok(details) => (Some(details), FormErrors::default()),
-      Err(errors) => (None, errors),
-    };
-    let starting = run.state().get();
-    let queued_task = self.queued_task.get();
-    let queued = queued_task.is_some();
-    let stored = saving
-      .data
-      .as_ref()
-      .map(|saved| &saved.details)
-      .or_else(|| editing.map(|editing| editing.task.details()));
-    FormState {
-      errors,
-      missing: form.missing(),
-      saved: !queued && ready.as_ref().is_some_and(|details| stored == Some(details)),
-      editing: editing.is_some(),
-      // A task this form queued has no run until the runner starts one; until then it keeps
-      // Retry run.
-      started: editing.is_some_and(|editing| editing.has_run),
-      queued,
-      recovered,
-      ready,
-      saving: saving.is_pending(),
-      save_error: saving.error.clone().filter(|_| !saving.is_pending()),
-      starting: starting.is_pending(),
-      retrying: self.retrying.get(),
-      starting_pipeline: starting
-        .is_pending()
-        .then(|| self.starting_pipeline.get().map(|held| held.0))
-        .flatten(),
-      queued_task,
-      run_problems: starting.error.clone().filter(|_| !starting.is_pending()),
-    }
-  }
-
-  /// Saves the valid form: Create under the form's key, or over the task it edits; `None` while it
-  /// cannot be saved.
-  fn save_handler(
+  /// Saves the valid form: Create under the form's key, or over the task it edits, stopping the
+  /// run the person confirmed for Canceled; `None` while it cannot be saved.
+  fn save_request(
     &self,
     save: &SaveAction,
     project: &OpenProject,
     target: SaveTarget,
     ready: Option<TaskDetails>,
-  ) -> Submit {
+  ) -> Option<SaveRequest> {
     let details = ready?;
+    // The organization fields explain their own errors; the form cannot be saved meanwhile.
+    let organization = self.organization.change()?;
     let save = save.clone();
     let repo_root = project.repo_root.clone();
-    Some(Arc::new(move || {
-      save.run((repo_root.clone(), target, details.clone()));
+    Some(Arc::new(move |stop| {
+      save.run((repo_root.clone(), target, details.clone(), organization.clone(), stop));
     }))
   }
-}
-
-/// The project's repository link, once read. Without it the form shows the local folder, which
-/// is the repository either way, so a failed read is logged and the folder shown.
-fn repository_link(ctx: &mut Ctx, project: &OpenProject) -> Option<Arc<RepositoryLink>> {
-  /// The link as the future holds it.
-  #[derive(Clone, PartialEq)]
-  struct Linked(Option<Arc<RepositoryLink>>);
-  impl lurq::app::component::DevtoolsInspectable for Linked {}
-
-  let load = ctx.future(project.repo_root.clone(), |repo_root| async move {
-    background::run(move || ProjectDb::open(&repo_root).and_then(|db| db.repository_link()))
-      .await?
-      .map(|link| Linked(link.map(Arc::new)))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the project's repository link");
-        messages::store_error(&error)
-      })
-  });
-  load.state().get().data.and_then(|linked| linked.0)
-}
-
-fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
-  let open = ctx.props::<NewTaskProps>().project.clone();
-  ctx.future_action(move |(repo_root, target, details): SaveArgs| {
-    let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
-    async move {
-      let save = async move {
-        let created = matches!(target, SaveTarget::New(_));
-        let saved = background::run(move || save_draft_in(&repo_root, target, &details)).await?;
-        saved
-          .map(|task| SavedDraft {
-            created: created.then(|| task.id()),
-            details: task.details().clone(),
-          })
-          .map_err(|error| {
-            tracing::error!(%error, "cannot save the task draft");
-            match error {
-              TaskDraftSaveError::Store(error) => messages::store_error(&error),
-              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
-              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
-            }
-          })
-      };
-      activity.track(spec, save).await
-    }
-  })
 }
 
 /// The detail is needed before the task can run; a draft may still be saved without it.

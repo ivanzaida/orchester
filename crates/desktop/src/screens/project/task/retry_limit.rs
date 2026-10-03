@@ -44,20 +44,21 @@ use crate::{
 const REPORT_BUTTON_WIDTH: f32 = 216.0;
 
 /// The Summary tab of a run whose `step` used up its retries or broke again: with the person's
-/// decisions while the run waits for them (`waiting`); `reason` says why its task cannot run again,
+/// decisions while the run waits for them (`waiting`, with whether unfinished blocking tasks keep it
+/// from going on); `reason` says why its task cannot run again,
 /// under the notice.
 pub(super) fn retry_limit(
   ctx: &mut Ctx,
   run: &RunView,
   step: &StepKey,
-  waiting: Option<&Stuck>,
+  waiting: Option<(&Stuck, bool)>,
   reason: Option<Element>,
 ) -> Element {
-  let broke = matches!(waiting, Some(Stuck::BrokeAgain(_)));
+  let broke = matches!(waiting, Some((Stuck::BrokeAgain(_), _)));
   // Reading the window's width re-renders the page as the window resizes.
   let stacked = ctx.window().logical_width() < crate::theme::RETRY_LIMIT_COLUMNS_MIN_WINDOW;
-  let panel = waiting.map(|stuck| {
-    let props = decision_props(ctx, run, stuck, stacked);
+  let panel = waiting.map(|(stuck, blocked)| {
+    let props = decision_props(ctx, run, stuck, (stacked, blocked));
     ctx.mount_keyed::<RetryDecisionPanel>(
       &format!("retry-decision-{}-{}", run.id(), run.run.last_sequence().get()),
       props,
@@ -111,7 +112,7 @@ pub(super) fn open_conversation(ctx: &Ctx, nav: &ProjectNav, detail: &TaskDetail
 }
 
 /// What the decision panel shows of the waiting run.
-fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck, stacked: bool) -> RetryDecisionProps {
+fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck, (stacked, blocked): (bool, bool)) -> RetryDecisionProps {
   let failed = stuck.step();
   let retry_from = run.run.retry_from().unwrap_or(failed).clone();
   let left = ctx.t_args(
@@ -140,6 +141,7 @@ fn decision_props(ctx: &Ctx, run: &RunView, stuck: &Stuck, stacked: bool) -> Ret
     failed: Arc::from(step_name(run, failed)),
     targets,
     stacked,
+    blocked,
   }
 }
 

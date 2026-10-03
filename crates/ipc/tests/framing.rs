@@ -126,7 +126,8 @@ fn plan_commands(run: RunId) -> Vec<Command> {
   ]
 }
 
-/// A plan proposed, and a decision on a plan that no longer waits.
+/// A plan proposed, a decision on a plan that no longer waits, and an answer to a tool request answered
+/// already.
 fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
   vec![
     Event::PlanProposed {
@@ -138,6 +139,10 @@ fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
     Event::Reply {
       id: RequestId::new(9),
       reply: Reply::Rejected(Rejection::PlanNotAwaited),
+    },
+    Event::Reply {
+      id: RequestId::new(10),
+      reply: Reply::Rejected(Rejection::ToolApprovalAnswered),
     },
   ]
 }

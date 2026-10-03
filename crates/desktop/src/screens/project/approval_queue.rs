@@ -4,6 +4,8 @@
 //! wherever it shows; while one of them still waits, the dialog does not open by itself, and a new
 //! request only adds to the count. It opens by itself when nothing was put off. A request the person
 //! opened (*Review*, its card's *Always allow…*) shows in the dialog also where it is otherwise inline.
+//! A request the runner says no longer waits (its agent ended) leaves the dialog at once, and the
+//! dialog says so over the next request until the person acts there (built, not drawn).
 
 use std::sync::Arc;
 
@@ -20,6 +22,11 @@ pub struct ApprovalQueue {
   deferred: Signal<Vec<String>>,
   /// The request whose *Always allow* step is open.
   always: Signal<Option<String>>,
+  /// The requests the runner said no longer wait (ended or answered already), which the dialog no longer
+  /// shows, even before the project's requests are read again.
+  ended: Signal<Vec<String>>,
+  /// A request ended while it was answered: the dialog says so until the person acts in it again.
+  ended_notice: Signal<bool>,
   /// Identity, for comparing props that hold the queue.
   id: Arc<()>,
 }
@@ -49,7 +56,54 @@ impl ApprovalQueue {
       selected: ctx.signal(None),
       deferred: ctx.signal(Vec::new()),
       always: ctx.signal(None),
+      ended: ctx.signal(Vec::new()),
+      ended_notice: ctx.signal(false),
       id: Arc::default(),
+    }
+  }
+
+  /// The requests of `pending` the dialog may still show: those the runner has not said ended.
+  pub fn still_waiting(&self, pending: &[ShownApproval]) -> Vec<ShownApproval> {
+    let ended = self.ended.get();
+    pending
+      .iter()
+      .filter(|shown| !ended.contains(&shown.approval.id))
+      .cloned()
+      .collect()
+  }
+
+  /// The runner answered that request `id` no longer waits: its agent can no longer receive an answer.
+  /// The dialog drops it and says so over the next request.
+  pub fn drop_ended(&self, id: &str) {
+    self.drop_request(id);
+    self.ended_notice.set(true);
+  }
+
+  /// The runner answered that request `id` was answered already: the dialog drops it and says nothing.
+  pub fn drop_answered(&self, id: &str) {
+    self.drop_request(id);
+  }
+
+  fn drop_request(&self, id: &str) {
+    if self.always.get_untracked().as_deref() == Some(id) {
+      self.always.set(None);
+    }
+    self.ended.update(|ended| {
+      if !ended.iter().any(|known| known == id) {
+        ended.push(id.to_owned());
+      }
+    });
+  }
+
+  /// Whether the dialog says that a request it showed ended.
+  pub fn shows_ended_notice(&self) -> bool {
+    self.ended_notice.get()
+  }
+
+  /// The person acted in the dialog again: the notice that a request ended has been seen.
+  pub fn clear_ended_notice(&self) {
+    if self.ended_notice.get_untracked() {
+      self.ended_notice.set(false);
     }
   }
 
@@ -77,6 +131,7 @@ impl ApprovalQueue {
 
   /// Opens the dialog on request `id`: *Review*, a row of *Needs you*, ‹ and ›.
   pub fn review(&self, id: &str) {
+    self.clear_ended_notice();
     self.always.set(None);
     self.deferred.set(Vec::new());
     self.selected.set(Some(id.to_owned()));
@@ -84,6 +139,7 @@ impl ApprovalQueue {
 
   /// *Decide later*: closes the dialog and puts off `pending`, every request waiting now.
   pub fn defer(&self, pending: impl IntoIterator<Item = String>) {
+    self.clear_ended_notice();
     self.always.set(None);
     self.deferred.set(pending.into_iter().collect());
   }
