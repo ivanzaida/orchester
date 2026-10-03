@@ -1,0 +1,40 @@
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: deploy/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
+      ORCHESTER_SERVER_TRUSTED_PROXIES: 172.29.0.2
+    volumes:
+      - server_data:/data
+    networks:
+      backend:
+        ipv4_address: 172.29.0.3
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      ORCHESTER_HOST: ${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      backend:
+        ipv4_address: 172.29.0.2
+    depends_on:
+      - server
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+volumes:
+  server_data:
+  caddy_data:
+  caddy_config:

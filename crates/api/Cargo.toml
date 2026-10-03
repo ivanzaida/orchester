@@ -1,0 +1,17 @@
+[package]
+name = "orchester-api"
+description = "Orchester shared-server JSON contract."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+orchester-core.workspace = true
+serde.workspace = true
+# Passwords permit whitespace-only values; core's project SecretValue rejects them.
+# Wipe this JSON-boundary credential's memory on drop using the existing workspace dependency.
+zeroize.workspace = true

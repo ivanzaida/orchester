@@ -388,6 +388,17 @@ Rules for both phases, on top of `AGENTS.md`:
 
 ### S1a · Server and accounts (non-UI)
 
+Implemented for review on `codex/server-s1a` (2026-10-03), in `.tmp/worktrees/codex-server-s1a`.
+The workspace gate passed; the 30 filtered server tests passed on Windows and Linux (Debian WSL), including TLS,
+host commands, idle expiry, rate limits and credential redaction. The macOS check was attempted but cannot complete
+without Apple SDK headers for bundled SQLite and ring. The Docker release image and Compose stack built and started;
+Caddy HTTPS with a local CA, host bootstrap/reset and the container session flow passed. The disposable test stack
+was removed. Independent review's M1 and m1–m8 findings were fixed, with regression tests and an online backup CLI;
+the documented Docker backup/copy procedure passed too. S1a stays active until the remaining required platform
+validation and independent re-review are complete;
+S1b has not started. Evidence:
+`docs/evidence/server-s1a-2026-10-03.md`.
+
 Done when every S1a box in `docs/architecture/server.md` § *Phasing* holds:
 
 - `orchester-api` (types only) and `orchester-server` build on Windows, macOS (check) and Linux; the Docker image and
