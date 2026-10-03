@@ -1,9 +1,8 @@
 # Orchester — shared server
 
 Date: 2026-10-02. Status: **agreed direction**; S1a and S1b (server only) handed to Codex on 2026-10-03 (`docs/plan.md`, *S · Shared server*). The user's decisions, including the answers to the
-first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Rows marked *proposed*
-are the architect's recommendations: the user has not objected to them, but has not confirmed them one by one either.
-[Open questions](#open-questions) lists what still needs the user. Nothing here changes the local (single-user)
+first draft's open questions, are recorded in [Decisions (2026-10-02)](#decisions-2026-10-02). Every row is now the user's: the
+architect's recommendations were confirmed on 2026-10-03. Nothing here changes the local (single-user)
 version in `storage.md` except where a section says so.
 
 **Goal (user, 2026-10-02).** Several people work on one project in Orchester. They share the task list and can see
@@ -16,24 +15,24 @@ run working on it. Runs themselves (worktrees, agents, transcripts) stay on the 
 ## Decisions (2026-10-02)
 
 The user set rows 1–3 and answered the first draft's open questions on 2026-10-02 (rows 15–22); those answers also
-settle rows 5, 6, 10 and 12. The other rows are the architect's recommendations, still *proposed*.
+settle rows 5, 6, 10 and 12. The architect's recommendations in the other rows were confirmed on 2026-10-03.
 
 | # | Topic | Decision | State |
 | --- | --- | --- | --- |
 | 1 | Hosting | Self-hosted: one server binary a team runs itself, Docker is fine. No cloud service, no GitHub OAuth | user |
 | 2 | Accounts | Accounts live on the server; an admin creates users. A user signs in from the desktop and receives a token, kept in the OS keychain like every secret. Passwords are hashed with argon2id; tokens can be revoked; the first admin is created on the server host ([Accounts](#accounts-and-tokens)) | user |
 | 3 | Transport security | HTTPS, from a reverse proxy or the server's own TLS. The desktop accepts `http://` only for a loopback host, or for another host after an explicit opt-in for that server | user |
-| 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline by name, limits, status), the claim, a short live run status per task. The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, secrets, agent profiles and pipelines. The domain has no priority or tags, so none are shared | proposed |
+| 4 | v1 scope | Shared: tasks (title, brief, criteria, pipeline by name, limits, status), the claim, a short live run status per task. The server assigns task numbers. Local: runs, worktrees, transcripts, Activity, conversations, memory, secrets, agent profiles and pipelines. The domain has no priority or tags, so none are shared | user (confirmed 2026-10-03) |
 | 5 | Claim | Atomic "take if free" on the server. Starting work on a task takes the claim. Heartbeat every 60 s; no heartbeat for 15 min makes it stale; a stale claim can be taken over after confirmation, and the takeover is recorded. Manual Take and Release exist ([Claims](#claims)) | user |
 | 6 | Concurrency | Every shared task has a revision. A change names the revision it was made on; a mismatch returns a conflict with the current task, and the desktop shows the other person's change instead of overwriting it | user |
-| 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)) | proposed |
-| 8 | Offline | Without the server, a shared project's task list is read-only from the local cache, in a visible offline state. Changes wait for the connection; nothing is queued silently | proposed |
-| 9 | Configuration | Application level: Settings › Servers (several servers, each signed in; the status bar shows the connection). Project level: Project settings › Sharing, *Local only* (default) or *Shared on <server>* | proposed |
+| 7 | Live updates | Server-Sent Events with a resume cursor; the desktop reconnects with backoff ([Live updates](#live-updates)) | user (confirmed 2026-10-03) |
+| 8 | Offline | Without the server, a shared project's task list is read-only from the local cache, in a visible offline state. Changes wait for the connection; nothing is queued silently | user (confirmed 2026-10-03) |
+| 9 | Configuration | Application level: Settings › Servers (several servers, each signed in; the status bar shows the connection). Project level: Project settings › Sharing, *Local only* (default) or *Shared on <server>* | user (confirmed 2026-10-03) |
 | 10 | Project identity | A server project is identified by the normalized URL of the repository's `origin` remote, unique per server; the server enforces it | user |
-| 11 | Discovery | An optional committed `orchester.toml` at the repository root (`server = "https://…"`, no secrets) offers *Sign in and join*. Adding a server by hand always works | proposed |
+| 11 | Discovery | An optional committed `orchester.toml` at the repository root (`server = "https://…"`, no secrets) offers *Sign in and join*. Adding a server by hand always works | user (confirmed 2026-10-03) |
 | 12 | Numbers on Share | The first person to share keeps their task numbers; the server continues after the highest | user |
-| 13 | Framework, storage | `axum` on the workspace's tokio; SQLite through rusqlite for v1 | proposed |
-| 14 | Trait boundary | `TaskStore`, with a revision on updates; no new core trait ([The desktop's trait boundary](#the-desktops-trait-boundary)) | proposed |
+| 13 | Framework, storage | `axum` on the workspace's tokio; SQLite through rusqlite for v1 | user (confirmed 2026-10-03) |
+| 14 | Trait boundary | `TaskStore`, with a revision on updates; no new core trait ([The desktop's trait boundary](#the-desktops-trait-boundary)) | user (confirmed 2026-10-03) |
 | 15 | Claim after a run ends | Kept when the run succeeds or fails (review, merge and recovery happen on the holder's computer); released on cancel; completed on merge | user |
 | 16 | Who may share | Any user. The first to share a repository creates its server project and becomes its owner; everyone after joins it ([Two people share one repository](#two-people-share-one-repository)) | user |
 | 17 | Visibility | Explicit membership per project. Owners and admins add members by username | user |
@@ -596,5 +595,4 @@ tasks; notifications; Postgres for several server instances; single sign-on, if 
 
 ## Open questions
 
-1. **Rows marked *proposed*** in [Decisions](#decisions-2026-10-02) (scope, SSE, offline, configuration, discovery,
-   framework and storage, trait boundary): the user has not objected; a confirmation settles them.
+None. The user confirmed every *proposed* row on 2026-10-03.
