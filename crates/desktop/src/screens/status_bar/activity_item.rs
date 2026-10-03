@@ -11,7 +11,7 @@ use lurq::{
 
 use super::{
   hint::{HintAnchor, Hints},
-  item::{action, clickable, dismiss, glyph, item, pressed, separator, truncated_label, value},
+  item::{action, clickable, dismiss, glyph, item, pressed, separator, truncated_label, value, yielding_value},
   open::Opener,
   timed::{Elapsed, ElapsedProps},
 };
@@ -200,7 +200,8 @@ fn latest(ctx: &Ctx, event: &Event, opener: &Opener, hints: &Hints) -> Element {
     .flex_shrink(1.0)
     .child(glyph(icon, PaletteColor::TextSecondary))
     .child(truncated_label(&text, PaletteColor::TextSecondary))
-    .child(value(&display::clock_time(event.at()), PaletteColor::TextMuted));
+    // The time gives way before the words.
+    .child(yielding_value(&display::clock_time(event.at()), PaletteColor::TextMuted));
   let row = hints.attach(row, HintAnchor::Activity, text);
   open_event(row, event, opener)
 }

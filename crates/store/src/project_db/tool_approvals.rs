@@ -158,6 +158,30 @@ impl ProjectDb {
     Ok(changed > 0 || uncertain > 0)
   }
 
+  /// Request `id` of `run` waits for an agent that can no longer receive an answer: its invocation
+  /// ended, its runner is gone, or no live agent ever held it. It ends interrupted, which reads as
+  /// ended without an answer; whether it was still waiting.
+  pub fn end_waiting_tool_approval(&mut self, run: RunId, id: &str) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE tool_approvals SET state = 'interrupted', decided_at = ?3 \
+       WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
+      params![run.to_string(), id, Timestamp::now().unix_millis()],
+    )?;
+    Ok(changed == 1)
+  }
+
+  /// Whether request `id` of `run` was answered, by a person or by Orchester: its answer is recorded,
+  /// delivered or on its way. One that ended without an answer, or is unknown, was not.
+  pub fn tool_approval_answered(&self, run: RunId, id: &str) -> Result<bool, StoreError> {
+    let count: i64 = self.connection.query_row(
+      "SELECT COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND id = ?2 \
+       AND state IN ('dispatching_approval', 'dispatching_denial', 'approved', 'denied')",
+      params![run.to_string(), id],
+      |row| row.get(0),
+    )?;
+    Ok(count > 0)
+  }
+
   pub fn has_interrupted_tool_approval(&self, run: RunId) -> Result<bool, StoreError> {
     let count: i64 = self.connection.query_row(
       "SELECT COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND (state = 'interrupted' OR \

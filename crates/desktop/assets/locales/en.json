@@ -1629,7 +1629,8 @@
         "toolValue": "{{server}} · {{tool}}"
       },
       "notAwaited": "This tool action no longer waits for a decision.",
-      "notAwaitedCommand": "This command no longer waits for a decision.",
+      "answeredAlready": "This request was answered already.",
+      "endedNotice": "The previous request ended without an answer: its agent is no longer waiting.",
       "commandTitle": "Approve command?",
       "policyExplanation": {
         "readOnly": "{{agent}}’s policy asks you about commands that only read. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
@@ -2076,7 +2077,7 @@
         "changesRequested": "Changes requested",
         "superseded": "Earlier version",
         "denied": "Denied",
-        "interrupted": "Interrupted",
+        "ended": "Ended without an answer",
         "wholePlan": "Show the whole plan · {{count}} lines"
       },
       "result": {
@@ -5196,11 +5197,20 @@
       "asksTool": "{{agent}} asks to use {{server}} {{tool}} · {{task}}",
       "asksCommand": "{{agent}} asks to run {{command}} · {{task}}",
       "openSeveral": "{{asks}} · {{count}} waiting",
-      "waitingOne": "1 approval waiting · {{asks}}",
-      "waitingOther": "{{count}} approvals waiting · {{asks}}",
+      "waitingCount": {
+        "one": "1 approval waiting",
+        "other": "{{count}} approvals waiting"
+      },
+      "waitingBrief": {
+        "one": "1 waiting",
+        "other": "{{count}} waiting"
+      },
+      "waitingAsks": " · {{asks}}",
       "review": "Review",
-      "autoOne": "Auto-approving · Run {{run}} · {{task}}",
-      "autoOther": "Auto-approving {{count}} runs",
+      "ended": "Request ended",
+      "auto": "Auto-approving",
+      "autoOne": " · Run {{run}} · {{task}}",
+      "autoOther": " · {{count}} runs",
       "stop": "Stop"
     }
   },

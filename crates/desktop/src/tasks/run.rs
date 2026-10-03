@@ -240,6 +240,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NoPendingPermissions
       | Rejection::PlanNotAwaited
       | Rejection::ToolApprovalNotAwaited
+      | Rejection::ToolApprovalAnswered
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
@@ -326,6 +327,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::NoPendingPermissions) => Message::new("runs.permissions.errors.noPending"),
     RunRequestError::Rejected(Rejection::PlanNotAwaited) => Message::new("runs.plan.errors.notAwaited"),
     RunRequestError::Rejected(Rejection::ToolApprovalNotAwaited) => Message::new("runs.toolApproval.notAwaited"),
+    RunRequestError::Rejected(Rejection::ToolApprovalAnswered) => Message::new("runs.toolApproval.answeredAlready"),
     // Unfinished blocking tasks keep the run from going on; the task page names them.
     RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: orchester_core::run::RunAgainBlock::TaskBlocked,

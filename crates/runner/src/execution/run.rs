@@ -159,6 +159,7 @@ impl RunTask {
     if result.is_err() {
       self.end_agents().await;
     }
+    self.end_waiting_approvals();
     self.board.settled(&self.run);
     match result {
       Ok(()) => tracing::info!(%run, status = ?self.run.status(), "run settled"),

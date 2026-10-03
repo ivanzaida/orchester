@@ -139,7 +139,7 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
 Built 2026-10-02 from the user's decisions of that day (design doc, "Approval choices and waiting requests";
 frames `kpuQj`, `NV6xJ`, `XKja4`, `bjrgu`, `G0rzJy`, `ZkOPf`). A person answers a waiting request with one of
 `orchester_core::run::ApprovalAnswer`, for commands and MCP calls alike, through `Command::DecideToolApproval`
-(IPC protocol 12). Towards the agent's CLI every answer still answers that one request: no session grant,
+(IPC protocol 12; 13 adds `Rejection::ToolApprovalAnswered`, below). Towards the agent's CLI every answer still answers that one request: no session grant,
 `acceptForSession`, `updatedPermissions` or execpolicy amendment is ever given. What a wider answer promises
 Orchester keeps itself, and before a request waits for a person the runner answers it itself when that covers it
 (`step/answer.rs`), recording who answered (`tool_approvals.decided_by`, `DecidedBy`) and marking the call in the
@@ -272,6 +272,18 @@ while a tool waits, or after approval was delivered before the turn completed, O
 interruption and does not automatically resume the
 run. The task page shows the interrupted run for a person to review before choosing to continue.
 The old decision cannot approve a later tool call.
+
+A request waits only while a live agent holds it. The runner ends one whose agent can no longer receive an
+answer (state `interrupted`, read as *ended without an answer*): its invocation's end interrupts what the worker
+held; a run whose task stops executing it (it ends, stops, fails or waits for a person) ends the requests of it it
+reads as still waiting; an attaching runner ends the waiting requests it reads in every run it does not execute,
+since no agent of an earlier runner is at work (each by id, `ProjectDb::end_waiting_tool_approval`, so a request a
+new agent records meanwhile is not touched); and an answer to a request no live agent holds (no task executes the
+run, the step's worker ended, or the worker waits on another call) ends it and is refused with
+`ToolApprovalNotAwaited`. An answer to a request answered already (a second click, or Orchester answered it) is
+refused with `ToolApprovalAnswered` (IPC protocol 14), which the desktop does not read as an end. The desktop drops a request the
+runner refuses that way from the dialog and the inline card at once, and says it ended (design doc, "Approval
+choices and waiting requests").
 
 ## Claude Code
 

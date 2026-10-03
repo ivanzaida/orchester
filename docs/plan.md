@@ -459,6 +459,21 @@ content minimum, and the status bar uses it instead of the workaround.
 
 ## Done
 
+A tool request whose agent is gone no longer waits forever · branch `claude/stale-approval` (2026-10-03)
+
+- Bug seen by two design verifiers and the user: a request whose agent's invocation ended, whose runner restarted
+  or whose run stopped stayed *waiting*; answering it only said it no longer waits and its dialog stayed. The runner
+  now ends such a request without an answer (existing `interrupted` state; no migration) at the run task's end, when
+  a runner attaches (each request read, by id), and when an answer reaches a request no live agent holds; an answer
+  to a request answered already is refused as `ToolApprovalAnswered` (IPC protocol **14**, after ORC-39's 13); the
+  desktop drops a request the runner refuses that way from the dialog (next request with a notice, or closed) and
+  the inline card (*Ended without an answer*), and the status bar says it ended. The step row's *Waiting for you ·
+  <tool> · since* now follows the step's pending request whatever the step's state (a tool request never set the
+  Waiting state, so real runs never showed it). Built, not drawn (design doc, "Approval choices and waiting
+  requests"); code review and design verification passed.
+- Tests: `-p orchester-runner --features test-agent --test stale_approvals stale_approvals`; `-p orchester-store
+  --test tool_approvals tool`; `-p orchester-desktop --test form_keyboard ended_approval`.
+
 ORC-39 · Task statuses, priorities and tags · branch `claude/orc39` (done 2026-10-03)
 
 Branch `claude/orc39` (worktree `.tmp/worktrees/claude-orc39`): run #11's work merged with master twice, last at

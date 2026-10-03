@@ -22,6 +22,7 @@ use orchester_ipc::{Event, Rejection};
 use orchester_store::StoreError;
 
 use super::{
+  super::tool_approval::refusal,
   approval::Awaiting,
   worker::{Watch, Worker},
 };
@@ -202,7 +203,7 @@ impl Worker {
       .db
       .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
     {
-      return Ok(Err(Rejection::ToolApprovalNotAwaited));
+      return Ok(Err(refusal(&watch.db, run, &approval.id)?));
     }
     if let Some(rule) = settled.rule {
       watch.db.rule_answered(run, rule, &approval.id)?;

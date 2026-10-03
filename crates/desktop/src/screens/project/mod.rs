@@ -393,7 +393,9 @@ impl Component for ProjectShell {
       .unwrap_or_default();
     let usage = feed.usage.get();
     let page = Route::current_page(ctx);
-    let dialogs: Vec<ShownApproval> = pending
+    // A request the runner said ended leaves the dialog before the requests are read again.
+    let waiting = self.approvals.still_waiting(pending);
+    let dialogs: Vec<ShownApproval> = waiting
       .iter()
       .filter(|approval| approval.opens_on(page) || self.approvals.opened(&approval.approval.id))
       .cloned()
@@ -453,6 +455,6 @@ impl Component for ProjectShell {
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
       .child(repository_import::dialog(ctx, &open))
-      .with_children(task::tool_approval_modal(ctx, (&dialogs, pending), &self.approvals))
+      .with_children(task::tool_approval_modal(ctx, (&dialogs, &waiting), &self.approvals))
   }
 }

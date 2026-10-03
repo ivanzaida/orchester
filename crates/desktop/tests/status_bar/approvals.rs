@@ -3,6 +3,7 @@
 
 use std::{num::NonZeroU32, sync::Arc};
 
+use lurq::layout::quad::QuadContent;
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId, TaskId},
   run::{PendingToolApproval, RunNumber, SimilarUnavailable},
@@ -73,10 +74,16 @@ fn with(approvals: Vec<ShownApproval>, auto: Vec<AutoApprovingRun>) -> StatusBar
 #[test]
 fn status_bar_approvals_name_the_oldest_and_count_the_others() {
   let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), Vec::new()));
-  let texts = item_texts(&mut tree, "status-approvals").join(" ");
-  assert!(
-    texts.starts_with("3 approvals waiting · Designer asks to use pencil batch_design · ORC-146"),
-    "{texts}"
+  // How many wait, then what the oldest asks, in parts that give way one after another.
+  let texts = [
+    item_texts(&mut tree, "status-approvals"),
+    item_texts(&mut tree, "status-approvals-asks"),
+  ]
+  .concat()
+  .concat();
+  assert_eq!(
+    texts,
+    "3 approvals waiting · Designer asks to use pencil batch_design · ORC-146"
   );
   assert_eq!(item_texts(&mut tree, "status-needs-you"), ["Needs you", "3"]);
 }
@@ -89,14 +96,24 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
     task: TaskId::generate(),
     key: "ORC-142".into(),
   };
-  let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), vec![auto]));
-  assert_eq!(
-    item_texts(&mut tree, "status-auto-approving"),
-    ["Auto-approving · Run 142 · ORC-142"]
-  );
+  // At 1440 beside waiting approvals there is no room for which run it is: it does not show at all.
+  let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), vec![auto.clone()]));
+  assert_eq!(item_texts(&mut tree, "status-auto-approving"), ["Auto-approving"]);
+  assert!(tree.get_element_by_id("status-auto-approving-run").is_none());
   assert_eq!(item_texts(&mut tree, "status-auto-approving-stop"), ["Stop"]);
+  // A wide window names it whole.
+  let bar = with((0..3).map(waiting).collect(), vec![auto]);
+  let (_wide, wide) = super::plan_limits::with_bar(1920, Default::default(), bar);
+  let layout = wide.last_layout().expect("laid out").clone();
+  assert!(
+    wide
+      .resolve_quads(&layout)
+      .into_iter()
+      .any(|quad| matches!(quad.content, QuadContent::Text { ref text, .. } if text == " · Run 142 · ORC-142")),
+    "the run is named whole"
+  );
   let item = bounds(&mut tree, "status-auto-approving");
-  let approvals = bounds(&mut tree, "status-approvals");
+  let approvals = bounds(&mut tree, "status-approvals-time");
   assert!(
     approvals.x + approvals.width <= item.x + 0.5,
     "the approvals give way first"

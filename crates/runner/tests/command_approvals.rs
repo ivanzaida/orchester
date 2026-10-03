@@ -104,7 +104,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
     scheduler
       .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
       .await,
-    Err(Rejection::ToolApprovalNotAwaited)
+    Err(Rejection::ToolApprovalAnswered)
   );
   if !deny_command {
     let tool = pending(root, &mut events, id).await;

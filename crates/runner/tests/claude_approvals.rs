@@ -152,7 +152,7 @@ async fn claude_approvals_run_an_approved_command_once() {
     scheduler
       .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
       .await,
-    Err(Rejection::ToolApprovalNotAwaited),
+    Err(Rejection::ToolApprovalAnswered),
     "a decision is taken once"
   );
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
