@@ -45,7 +45,7 @@ use crate::{
   },
   tabs::feed::WindowFeed,
   tasks::{approvals::ShownApproval, data::AutoApprovingRun, run_approvals::RunApprovalChange, usage::ProjectUsage},
-  theme::{ExtraColor, STATUS_BAR_HEIGHT},
+  theme::{APPROVALS_BRIEF_BELOW, ExtraColor, STATUS_BAR_HEIGHT},
 };
 
 /// A popover or hint sits 6px above the bar (`imT2E`), which is 9px above the 22px item it
@@ -154,7 +154,12 @@ impl Component for StatusBar {
     let queue = ctx.use_context::<ApprovalQueue>();
     let waiting = match (&props.project, &slot) {
       (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
-      (Some(project), _) => approvals_item::approvals(ctx, (&project.approvals, &project.dialog), queue.as_ref()),
+      (Some(project), _) => approvals_item::approvals(
+        ctx,
+        (&project.approvals, &project.dialog),
+        queue.as_ref(),
+        width < APPROVALS_BRIEF_BELOW,
+      ),
     };
     // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
     // hides the other. Any other activity gives way to them.

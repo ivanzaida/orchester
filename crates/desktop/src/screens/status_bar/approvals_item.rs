@@ -23,11 +23,13 @@ use crate::{
 };
 
 /// The waiting requests, oldest first; nothing when none waits. `dialog`: those of `pending` the
-/// dialog may show on this page, the one it shows while it is open.
+/// dialog may show on this page, the one it shows while it is open. `brief`: the window is narrow,
+/// and the count reads *2 waiting* ([`crate::theme::APPROVALS_BRIEF_BELOW`]).
 pub fn approvals(
   ctx: &Ctx,
   (pending, dialog): (&[ShownApproval], &[ShownApproval]),
   queue: Option<&ApprovalQueue>,
+  brief: bool,
 ) -> Vec<Element> {
   let Some(oldest) = pending.first() else {
     return Vec::new();
@@ -51,11 +53,22 @@ pub fn approvals(
       ),
     ),
     (None, 1) => (
-      Some(ctx.t("statusBar.approvals.waitingCount.one")),
+      Some(ctx.t(if brief {
+        "statusBar.approvals.waitingBrief.one"
+      } else {
+        "statusBar.approvals.waitingCount.one"
+      })),
       ctx.t_args("statusBar.approvals.waitingAsks", [("asks", &*asks)]),
     ),
     (None, _) => (
-      Some(ctx.t_args("statusBar.approvals.waitingCount.other", [("count", count.as_str())])),
+      Some(ctx.t_args(
+        if brief {
+          "statusBar.approvals.waitingBrief.other"
+        } else {
+          "statusBar.approvals.waitingCount.other"
+        },
+        [("count", count.as_str())],
+      )),
       ctx.t_args("statusBar.approvals.waitingAsks", [("asks", &*asks)]),
     ),
   };

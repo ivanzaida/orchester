@@ -139,8 +139,8 @@ fn ended_approval_status_line_keeps_its_words_beside_auto_approving_at_960() {
   }
 }
 
-/// A request waiting beside *Auto-approving* at 960: what it asks gives way, how many wait, Review,
-/// *Auto-approving* and Stop stay.
+/// A request waiting beside *Auto-approving* at 960: what it asks gives way, how many wait (briefly),
+/// Review, *Auto-approving* and Stop stay whole.
 #[test]
 fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
   let mut desktop = auto_approving_run();
@@ -169,12 +169,13 @@ fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
   desktop.wait_until("the status bar names the request", |desktop| {
     !has(desktop, DIALOG) && has(desktop, "status-auto-approving") && has(desktop, "status-approvals-review")
   });
-  desktop.tree.resize(960, 700);
-  desktop.pass();
-  assert_whole(
-    &mut desktop,
-    &["1 approval waiting", "Review", "Auto-approving", "Stop"],
-  );
+  // Below 1120 the count reads "1 waiting", which keeps its words at 960 and narrower, as a longer MCP
+  // address leaves less room.
+  for width in [960, 930] {
+    desktop.tree.resize(width, 700);
+    desktop.pass();
+    assert_whole(&mut desktop, &["1 waiting", "Review", "Auto-approving", "Stop"]);
+  }
 }
 
 /// Each of `texts` is drawn whole in the status bar, before its right group, and Stop is whole there.

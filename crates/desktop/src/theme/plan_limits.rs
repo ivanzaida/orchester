@@ -19,6 +19,11 @@ pub struct StatusBarWidths {
   pub details: f32,
 }
 
+/// The window width below which the waiting approvals' count reads *2 waiting* instead of *2 approvals
+/// waiting*: at 960 the long form does not fit beside *Auto-approving* and Stop with the right group
+/// whole; the hand and *Review* still say what waits (built, not drawn).
+pub const APPROVALS_BRIEF_BELOW: f32 = 1120.0;
+
 /// With the plan limits item showing percentages (about 170px). The activity then keeps at
 /// least the room it has at 960 (`VTnmr`), which every other class keeps too.
 pub const STATUS_WIDTHS: StatusBarWidths = StatusBarWidths {

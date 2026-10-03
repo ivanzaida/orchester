@@ -4922,6 +4922,10 @@
         "one": "1 approval waiting",
         "other": "{{count}} approvals waiting"
       },
+      "waitingBrief": {
+        "one": "1 waiting",
+        "other": "{{count}} waiting"
+      },
       "waitingAsks": " · {{asks}}",
       "review": "Review",
       "ended": "Request ended",
