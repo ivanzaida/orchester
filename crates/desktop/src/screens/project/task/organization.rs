@@ -70,8 +70,6 @@ pub(super) struct OrganizationHeader {
   /// What is stored: the detail's organization, or what the latest change saved before the detail
   /// is read again. A choice equal to it saves nothing.
   stored: Signal<OrganizationValue>,
-  /// The task has a run that has not ended, which Canceled stops.
-  active: Signal<bool>,
   confirm: Signal<bool>,
 }
 impl Component for OrganizationHeader {
@@ -83,7 +81,6 @@ impl Component for OrganizationHeader {
       value: ctx.signal(OrganizationValue::default()),
       shown: ctx.signal(None),
       stored: ctx.signal(OrganizationValue::default()),
-      active: ctx.signal(false),
       confirm: ctx.signal(false),
     };
     let action = action(ctx);
@@ -228,17 +225,12 @@ impl OrganizationHeader {
     }
   }
 
-  /// Seeds the pickers when the detail shows another organization, and notes whether the task
-  /// has an active run.
+  /// Seeds the pickers when the detail shows another organization.
   fn follow(&self, detail: &TaskDetail) {
     let current = detail.task.organization();
     if self.shown.get_untracked().as_ref().map(|shown| &shown.0) != Some(current) {
       self.shown.set(Some(OrganizationValue(current.clone())));
       self.choices().show_stored(current.clone());
-    }
-    let active = detail.run.as_ref().is_some_and(|run| !run.run.status().is_terminal());
-    if self.active.get_untracked() != active {
-      self.active.set(active);
     }
   }
 
@@ -246,16 +238,11 @@ impl OrganizationHeader {
   /// choice is made.
   fn observe(&self, ctx: &mut Ctx, action: &Action) {
     self.observe_saves(ctx, action);
-    let (choices, submit, active) = (self.choices(), action.clone(), self.active.clone());
+    // Whether Canceled has a run to stop is the store's to say: the detail may not show yet that
+    // a run started or ended. A refused Canceled opens the confirmation (`observe_saves`).
+    let (choices, submit) = (self.choices(), action.clone());
     ctx.watch(&self.status, move |choice| {
-      let expected = choices.stored.get_untracked().0.status();
-      if choice.0 == expected {
-        return;
-      }
-      if choice.0 == WorkflowStatus::Canceled && active.get_untracked() {
-        choices.confirm.set(true);
-        choices.status.set(WorkflowChoice(expected));
-      } else {
+      if choice.0 != choices.stored.get_untracked().0.status() {
         submit.run(Mutation::Status(choice.0, false));
       }
     });

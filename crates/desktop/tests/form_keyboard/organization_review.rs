@@ -213,6 +213,8 @@ fn organization_header_follows_the_run_ending() {
     stored_status(desktop) == WorkflowStatus::Canceled
       && desktop.tree.get_element_by_id("task-cancel-confirmation").is_none()
       && crate::github::shows(desktop, "task-page", "Canceled")
+      // The page shows the ended run, so no earlier read of the task is still on its way.
+      && crate::github::shows(desktop, "task-page", "Canceled run")
   });
   choose_in_header(&mut desktop, "task-header-status", "Todo", |desktop| {
     stored_status(desktop) == WorkflowStatus::Todo
