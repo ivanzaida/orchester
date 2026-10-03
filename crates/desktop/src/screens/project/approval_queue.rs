@@ -87,6 +87,18 @@ impl ApprovalQueue {
     self.deferred.set(pending.into_iter().collect());
   }
 
+  /// Whether the *Always allow* step of request `id` is open, which opens the dialog on it also where
+  /// the request shows inline (its task's Conversation tab).
+  pub fn always_open(&self, id: &str) -> bool {
+    self.always.get().as_deref() == Some(id)
+  }
+
+  /// Opens the dialog on the *Always allow* step of request `id`, from its inline card.
+  pub fn review_always(&self, id: &str) {
+    self.review(id);
+    self.always.set(Some(id.to_owned()));
+  }
+
   /// Opens or closes the *Always allow* step of request `id`.
   pub fn always(&self, id: Option<&str>) {
     self.always.set(id.map(str::to_owned));

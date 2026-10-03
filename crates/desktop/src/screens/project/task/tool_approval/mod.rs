@@ -30,9 +30,13 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::RunId, run::ApprovalAnswer};
+use orchester_core::{
+  id::RunId,
+  run::{ApprovalAnswer, PendingToolApproval},
+};
 use orchester_ipc::{Command, Rejection};
 
+pub(in crate::screens::project::task) use self::wider::{always_blocked, similar_unavailable};
 use super::{approval_arguments::ArgumentsCache, native_approval};
 use crate::{
   messages::Message,
@@ -80,6 +84,18 @@ pub(in crate::screens::project::task) struct Decision {
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
+
+impl Decision {
+  /// `answer` to `approval`, as the dialog and the timeline's inline card both give it.
+  pub(in crate::screens::project::task) fn of(approval: &PendingToolApproval, answer: ApprovalAnswer) -> Self {
+    Self {
+      run: approval.run,
+      approval: approval.id.clone(),
+      answer,
+      command: approval.command,
+    }
+  }
+}
 
 pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
 
@@ -250,12 +266,7 @@ impl View<'_> {
   fn answer(&self, pressed: Pressed, answer: ApprovalAnswer) -> impl Fn() + Send + Sync + 'static {
     let action = self.action.clone();
     let requested = self.pressed_signal.clone();
-    let decision = Decision {
-      run: self.shown().approval.run,
-      approval: self.shown().approval.id.clone(),
-      answer,
-      command: self.shown().approval.command,
-    };
+    let decision = Decision::of(&self.shown().approval, answer);
     move || {
       let state = action.state().get_untracked();
       if state.is_pending() || state.data.is_some() {

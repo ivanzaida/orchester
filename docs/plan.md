@@ -403,8 +403,7 @@ Approval choices, waiting requests and auto-approval · branch `claude/approval-
   under the task heading; the profile's *Approve automatically (don't ask me)*; activity marks.
 - Not built: the per-category Allow / Ask me / Deny policy of "Command categories and approval policy" (so no
   category can be Deny, and the Always allow step leaves out *A denied Network still wins*); Run temp (temporary
-  files count as outside the worktree); Undo of a revoked rule; the wider answers on the Conversation tab's inline request card (ORC-61's card
-  offers Approve once and Deny); answering requests already waiting when auto-approval is switched on (the dialog
+  files count as outside the worktree); Undo of a revoked rule; answering requests already waiting when auto-approval is switched on (the dialog
   says such a request came before it was on). A Codex rule prompt that offers
   only `cancel` interrupts the turn on Deny, as Codex does.
 - Tests: `cargo test -p orchester-core --test command_categories command_categories`, `--test approval_answers

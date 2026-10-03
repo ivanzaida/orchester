@@ -1,9 +1,10 @@
 //! Cards for decisions and results in the timeline (`ZxYGh`, `haIEI`, `OlLGD`, `AzKYQ`, `hep0l`): on
 //! `$raised` with `$border`, radius 8 and padding 14, a header (glyph on `$hover`, title, step and
 //! time, status label at the right), the body indented 36 and the actions under it. A question the
-//! composer answers; a plan with *Approve plan & continue*; a tool request with *Deny* and *Approve
-//! once* (ORC-41). After the decision a card loses the raised fill and reads *Answered*, *Approved*
-//! or *Denied*. A step's result card has a border only; the run's end is a centred hairline marker.
+//! composer answers; a plan with *Approve plan & continue*; a tool request with the approval dialog's
+//! answers ([`super::approval_card`]). After the decision a card loses the raised fill and reads
+//! *Answered*, *Approved* or *Denied*. A step's result card has a border only; the run's end is a
+//! centred hairline marker.
 
 use std::sync::Arc;
 
@@ -18,16 +19,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{
-  run::{ApprovalAnswer, PlanDecision, ToolApprovalDecision},
-  tokens::compact_tokens,
-};
+use orchester_core::{run::PlanDecision, tokens::compact_tokens};
 
 use super::{
-  super::{
-    plan_review::{Decision as PlanDecisionRequest, decision_action as plan_decision},
-    tool_approval::{Decision as ApprovalDecision, decision_action as approval_decision},
-  },
+  super::plan_review::{Decision as PlanDecisionRequest, decision_action as plan_decision},
   Timeline, nav,
 };
 use crate::{
@@ -35,7 +30,7 @@ use crate::{
   navigation::route::{Page, TaskPageTab},
   tasks::{
     conversation::{Author, Entry, EntryState},
-    timeline::{ApprovalCard, PlanCard, ResultCard, RunEnd},
+    timeline::{PlanCard, ResultCard, RunEnd},
   },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -44,7 +39,6 @@ use crate::{
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{pressable, surface},
-    property::{ValueStyle, styled_property},
     status_label::compact_status_label,
   },
 };
@@ -55,7 +49,7 @@ const GLYPH_SIZE: f32 = 24.0;
 const PLAN_LINES: usize = 6;
 
 /// A card's frame: raised while it waits for the person, a border only once decided.
-fn frame(id: String, waiting: bool, header: Element, body: Vec<Element>) -> Element {
+pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Element>) -> Element {
   let card = Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -80,7 +74,7 @@ fn frame(id: String, waiting: bool, header: Element, body: Vec<Element>) -> Elem
 }
 
 /// Glyph on `$hover`, title (12/500), meta, and the status label at the right.
-fn header(glyph: Icon, title: &str, meta: &str, (state_glyph, state): (Icon, Arc<str>)) -> Element {
+pub(super) fn header(glyph: Icon, title: &str, meta: &str, (state_glyph, state): (Icon, Arc<str>)) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
@@ -272,173 +266,6 @@ fn approve(ctx: &Ctx, card: &PlanCard, action: &super::super::plan_review::Decis
         .map(|error| field_error(&message_text(ctx, &error))),
     )
     .into()
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ApprovalCardProps {
-  pub(super) card: ApprovalCard,
-}
-
-impl lurq::app::component::DevtoolsInspectable for ApprovalCardProps {}
-
-/// The answers the inline card gives.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CardAnswer {
-  Once,
-  Deny,
-}
-
-impl lurq::app::component::DevtoolsInspectable for CardAnswer {}
-
-impl CardAnswer {
-  const fn answer(self) -> ApprovalAnswer {
-    match self {
-      Self::Once => ApprovalAnswer::Once,
-      Self::Deny => ApprovalAnswer::Deny,
-    }
-  }
-}
-
-/// A tool request (ORC-41) inline: who asks for what, and *Deny* and *Approve once* while it waits.
-pub(super) struct ApprovalCardView {
-  requested: Signal<Option<CardAnswer>>,
-}
-
-impl Component for ApprovalCardView {
-  type Props = ApprovalCardProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    approval_decision(ctx);
-    Self {
-      requested: ctx.signal(None),
-    }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<ApprovalCardProps>().clone();
-    let action = approval_decision(ctx);
-    let request = &props.card.request;
-    let waiting = props.card.decided.is_none();
-    let title = ctx.t_args(
-      if request.command {
-        "runs.conversation.card.asksCommand"
-      } else {
-        "runs.conversation.card.asksMcp"
-      },
-      [("agent", request.agent.as_str())],
-    );
-    let meta = ctx.t_args(
-      "runs.conversation.agentMeta",
-      [
-        ("step", &*props.card.step),
-        ("time", display::clock(request.requested_at).as_str()),
-      ],
-    );
-    let state = match props.card.decided {
-      None => (Icon::Hand, ctx.t("runs.conversation.state.waiting")),
-      Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
-      Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),
-      Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.interrupted")),
-    };
-    let mut body: Vec<Element> = Vec::new();
-    if !request.command {
-      body.push(styled_property(
-        &ctx.t("runs.toolApproval.server"),
-        &request.server,
-        ValueStyle::Mono,
-      ));
-    }
-    body.push(styled_property(
-      &ctx.t(if request.command {
-        "runs.toolApproval.command"
-      } else {
-        "runs.toolApproval.action"
-      }),
-      &request.action,
-      ValueStyle::Mono,
-    ));
-    if let Some(target) = request.target.as_deref() {
-      body.push(styled_property(
-        &ctx.t("runs.toolApproval.target"),
-        target,
-        ValueStyle::Mono,
-      ));
-    }
-    if waiting {
-      body.push(self.decisions(ctx, &props.card, &action));
-    }
-    frame(
-      format!("conversation-approval-{}", request.id),
-      waiting,
-      header(Icon::ShieldAlert, &title, &meta, state),
-      body,
-    )
-  }
-}
-
-impl ApprovalCardView {
-  fn decisions(&self, ctx: &Ctx, card: &ApprovalCard, action: &super::super::tool_approval::DecisionAction) -> Element {
-    let state = action.state().get();
-    let busy = state.is_pending() || state.data.is_some();
-    let requested = self.requested.get();
-    let press = |answer: CardAnswer| {
-      let (action, requested) = (action.clone(), self.requested.clone());
-      let decision = ApprovalDecision {
-        run: card.request.run,
-        approval: card.request.id.clone(),
-        answer: answer.answer(),
-        command: card.request.command,
-      };
-      move || {
-        requested.set(Some(answer));
-        action.run(decision.clone());
-      }
-    };
-    // The answer under way says so on its button.
-    let label = |answer: CardAnswer, idle: &str, under_way: &str| {
-      ctx.t(if busy && requested == Some(answer) {
-        under_way
-      } else {
-        idle
-      })
-    };
-    let deny = ActionButton::new(label(
-      CardAnswer::Deny,
-      "runs.toolApproval.deny",
-      "runs.toolApproval.denying",
-    ))
-    .id("conversation-approval-deny")
-    .icon(Icon::X)
-    .on_click(press(CardAnswer::Deny))
-    .enabled(!busy);
-    let approve = ActionButton::new(label(
-      CardAnswer::Once,
-      "runs.toolApproval.approveOnce",
-      "runs.toolApproval.approving",
-    ))
-    .id("conversation-approval-approve")
-    .icon(Icon::Check)
-    .primary()
-    .on_click(press(CardAnswer::Once))
-    .enabled(!busy);
-    Column::new()
-      .spacing(SpacingSize::Sm)
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Sm)
-          .align_items(Alignment::Center)
-          .child(deny.render(ctx))
-          .child(approve.render(ctx))
-          .child(Text::new(&ctx.t("runs.conversation.card.approveOnce")).variant(TypographyStyle::Caption)),
-      )
-      .with_children(
-        state
-          .error
-          .filter(|_| !busy)
-          .map(|error| field_error(&message_text(ctx, &error))),
-      )
-      .into()
-  }
 }
 
 /// A step's result card (`AzKYQ`, `hep0l`): *Review done* or *Run checks failed*, what the agent or

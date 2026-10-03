@@ -388,7 +388,7 @@ impl Component for ProjectShell {
     let page = Route::current_page(ctx);
     let dialogs: Vec<ShownApproval> = pending
       .iter()
-      .filter(|approval| approval.opens_on(page))
+      .filter(|approval| approval.opens_on(page) || self.approvals.always_open(&approval.approval.id))
       .cloned()
       .collect();
     ctx.provide(Shown {

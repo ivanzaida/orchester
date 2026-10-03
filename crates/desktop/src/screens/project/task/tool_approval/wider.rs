@@ -96,10 +96,7 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
       ),
       Offer::Press(Arc::new(view.answer(Pressed::Similar, ApprovalAnswer::Similar))),
     ),
-    Err(SimilarUnavailable::Unknown) => (ctx.t("runs.toolApproval.wider.similarUnknown"), Offer::Unavailable),
-    Err(SimilarUnavailable::SeveralAsk) => (ctx.t("runs.toolApproval.wider.severalAsk"), Offer::Unavailable),
-    Err(SimilarUnavailable::Destructive) => (ctx.t("runs.toolApproval.wider.similarDestructive"), Offer::Unavailable),
-    Err(SimilarUnavailable::Secrets) => (ctx.t("runs.toolApproval.wider.secrets"), Offer::Unavailable),
+    Err(unavailable) => (ctx.t(similar_unavailable(*unavailable)), Offer::Unavailable),
   };
   Tile {
     id: "tool-approval-similar",
@@ -146,8 +143,18 @@ fn always(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
   }
 }
 
-/// Why Always allow is unavailable, in the tile.
-fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
+/// Why Approve similar is unavailable, in the tile and under the inline card's answers.
+pub(in crate::screens::project::task) const fn similar_unavailable(unavailable: SimilarUnavailable) -> &'static str {
+  match unavailable {
+    SimilarUnavailable::Unknown => "runs.toolApproval.wider.similarUnknown",
+    SimilarUnavailable::SeveralAsk => "runs.toolApproval.wider.severalAsk",
+    SimilarUnavailable::Destructive => "runs.toolApproval.wider.similarDestructive",
+    SimilarUnavailable::Secrets => "runs.toolApproval.wider.secrets",
+  }
+}
+
+/// Why Always allow is unavailable, in the tile and under the inline card's answers.
+pub(in crate::screens::project::task) fn always_blocked(ctx: &Ctx, blocked: AlwaysBlocked) -> Arc<str> {
   ctx.t(match blocked {
     AlwaysBlocked::Command(AlwaysUnavailable::Unknown) => "runs.toolApproval.wider.alwaysUnknown",
     AlwaysBlocked::Command(AlwaysUnavailable::SeveralAsk) => "runs.toolApproval.wider.severalAsk",

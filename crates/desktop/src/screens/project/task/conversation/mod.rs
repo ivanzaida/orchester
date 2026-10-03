@@ -5,6 +5,7 @@
 //! working line, the composer ([`composer`]) and the Details pane ([`details`]). The transcript and
 //! the run's tool requests are read again whenever the runner reports a change.
 
+mod approval_card;
 mod cards;
 mod composer;
 mod composer_text;
