@@ -429,6 +429,15 @@ Settings › Servers, Project settings › Sharing, the join review list, claims
 conflict state and the offline notice are not drawn yet. Do not start these phases; the designer draws them first
 (`docs/architecture/server.md` § *Desktop data*, "Where it is configured").
 
+### L1 · lurq: give-way order and content minimum for shrinking rows (lurq)
+
+The status bar must cut its items in a fixed order and never drop the approval count, *Review*, *Auto-approving* or
+*Stop*; lurq shares a row's overflow between all shrinking children by weight and only down to an explicit minimum.
+Orchester works around it on `claude/stale-approval` (pieces, power-of-two weights, `yielding` in
+`crates/desktop/src/screens/status_bar/item.rs`). Handoff for the lurq agent:
+`H:/projects/lurq/bugreports/lurq-flex-shrink-give-way-order.md`. Done when lurq ships a give-way order and/or a
+content minimum, and the status bar uses it instead of the workaround.
+
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.
