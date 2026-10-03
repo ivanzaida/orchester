@@ -96,11 +96,18 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
     task: TaskId::generate(),
     key: "ORC-142".into(),
   };
-  // At 1440 beside waiting approvals there is no room for which run it is: it does not show at all.
+  // Which run it is shows whole or drops out; it is never cut.
   let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), vec![auto.clone()]));
   assert_eq!(item_texts(&mut tree, "status-auto-approving"), ["Auto-approving"]);
-  assert!(tree.get_element_by_id("status-auto-approving-run").is_none());
   assert_eq!(item_texts(&mut tree, "status-auto-approving-stop"), ["Stop"]);
+  let layout = tree.last_layout().expect("laid out").clone();
+  assert!(
+    !tree
+      .resolve_quads(&layout)
+      .into_iter()
+      .any(|quad| matches!(quad.content, QuadContent::Text { ref text, .. } if text.starts_with(" · Run") && text.ends_with('…'))),
+    "the run is not cut"
+  );
   // A wide window names it whole.
   let bar = with((0..3).map(waiting).collect(), vec![auto]);
   let (_wide, wide) = super::plan_limits::with_bar(1920, Default::default(), bar);

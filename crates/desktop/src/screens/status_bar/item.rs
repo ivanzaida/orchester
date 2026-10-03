@@ -4,8 +4,8 @@
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Rect, Row, Text, TextOverflow},
-  layout::Alignment,
+  components::{Button, Rect, Text, TextOverflow},
+  layout::{Alignment, layout_kind::ShrinkLimit},
   node::{Element, Style, dimension::Dimension},
 };
 
@@ -22,21 +22,21 @@ use crate::{
 const ITEM_HEIGHT: f32 = 22.0;
 const SEPARATOR_WIDTH: f32 = 1.0;
 const SEPARATOR_HEIGHT: f32 = 12.0;
-/// The slack after a label that gives way ([`yielding`]), and how readily it goes: before the label,
-/// by a power of two whose sum with the label's factor stays exact in `f32`.
-const SLACK_WIDTH: f32 = 1.0;
-const SLACK_GIVES_WAY: f32 = 4_194_304.0;
 
-/// How readily a part of the left group gives way when the bar is narrow, as its flex shrink factor:
-/// what the waiting approvals ask first, then which run auto-approves (while no approvals wait), and
-/// last the activity and how many approvals wait (factor 1). Beside waiting approvals, which parts
-/// show at all is decided by the window's width (`theme::ApprovalsWidths`). lurq shares an overflow by these factors,
-/// so a part behind in line gives way only by a fraction of a pixel, which its slack takes
-/// ([`truncated_label`]), until the one before it has gone. Powers of two whose sum stays exact in
-/// `f32`: lurq subtracts a part's factor once the part reaches its minimum, and a sum that lost the
-/// smaller factors would leave the rest of the overflow unshared.
-pub const GIVES_WAY_FIRST: f32 = 4_194_304.0;
-pub const GIVES_WAY_NEXT: f32 = 2_048.0;
+/// The order in which the parts of the left group give way when the bar is narrow (lurq
+/// `shrink_order`): each order gives way, down to its limit, before the next shrinks at all. What the
+/// waiting approvals ask trims its end first; then which run auto-approves and the times drop out
+/// whole; then the activity drops its time and trims its words; then the words beside how many
+/// approvals wait drop out, and last the runner's words. The hand, the count, *Review*,
+/// *Auto-approving* and Stop never give way.
+pub mod give_way {
+  pub const ASKS: i32 = 0;
+  pub const RUN: i32 = 1;
+  pub const TIMES: i32 = 2;
+  pub const ACTIVITY: i32 = 3;
+  pub const COUNT_WORDS: i32 = 4;
+  pub const RUNNER_WORDS: i32 = 5;
+}
 
 /// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).
 pub fn item(id: &'static str) -> Button {
@@ -50,9 +50,8 @@ pub fn item(id: &'static str) -> Button {
     .rounded(RadiusSize::Sm)
 }
 
-/// The start of an item split in two, so that its end can give way alone: lurq shrinks a child of
-/// the bar down to a declared minimum, never to the words it holds, so a single item would lose its
-/// words too. The start keeps the item's start padding and corners.
+/// The start of an item split in parts that give way in different orders. The start keeps the item's
+/// start padding and corners.
 pub fn item_start(id: &'static str) -> Button {
   surface()
     .id(id)
@@ -64,7 +63,7 @@ pub fn item_start(id: &'static str) -> Button {
     .corner_radius_bottom_left(RadiusSize::Sm)
 }
 
-/// The middle of an item split in three: what gives way first, without padding or corners.
+/// The middle of an item split in parts ([`item_start`]), without padding or corners.
 pub fn item_middle(id: &'static str) -> Button {
   surface()
     .id(id)
@@ -72,8 +71,7 @@ pub fn item_middle(id: &'static str) -> Button {
     .align_items(Alignment::Center)
 }
 
-/// The end of an item split in two ([`item_start`]): what gives way, with the item's end padding
-/// and corners.
+/// The end of an item split in parts ([`item_start`]), with the item's end padding and corners.
 pub fn item_end(id: &'static str) -> Button {
   surface()
     .id(id)
@@ -113,14 +111,36 @@ pub fn label(text: &str, color: PaletteColor) -> Element {
 
 /// A label that gives way first when the bar is narrow; the full text is in its hint.
 pub fn truncated_label(text: &str, color: PaletteColor) -> Element {
-  yielding(
-    Text::new(text)
-      .variant(TypographyStyle::Caption)
-      .color(color)
-      .nowrap()
-      .text_overflow(TextOverflow::Elipsis),
-    1.0,
-  )
+  Text::new(text)
+    .variant(TypographyStyle::Caption)
+    .color(color)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .flex_shrink(1.0)
+    .into()
+}
+
+/// A [`value`] that keeps its natural size or drops out whole when its line gives way (lurq
+/// `ShrinkLimit::Drop`), e.g. a time: it is never cut to a stub.
+pub fn dropping_value(text: &str, color: PaletteColor) -> Element {
+  Text::new(text)
+    .variant(ExtraTypography::MonoValue.role())
+    .color(color)
+    .nowrap()
+    .flex_shrink(1.0)
+    .shrink_limit(ShrinkLimit::Drop)
+    .into()
+}
+
+/// A [`label`] that keeps its natural size or drops out whole when its line gives way.
+pub fn dropping_label(text: &str, color: PaletteColor) -> Element {
+  Text::new(text)
+    .variant(TypographyStyle::Caption)
+    .color(color)
+    .nowrap()
+    .flex_shrink(1.0)
+    .shrink_limit(ShrinkLimit::Drop)
+    .into()
 }
 
 /// Geist Mono 11: counts in `$text`, times, zeros and unknowns in `$subtle`.
@@ -129,31 +149,6 @@ pub fn value(text: &str, color: PaletteColor) -> Element {
     .variant(ExtraTypography::MonoValue.role())
     .color(color)
     .nowrap()
-    .into()
-}
-
-/// A [`value`] that gives way before the label beside it when the bar is narrow, e.g. the time of the
-/// latest event.
-pub fn yielding_value(text: &str, color: PaletteColor) -> Element {
-  yielding(
-    Text::new(text)
-      .variant(ExtraTypography::MonoValue.role())
-      .color(color)
-      .nowrap()
-      .text_overflow(TextOverflow::Elipsis),
-    GIVES_WAY_NEXT,
-  )
-}
-
-/// `text`, which shrinks by `factor` with an ellipsis, after a pixel of slack. lurq gives every
-/// shrinking part its share of an overflow, so a part behind in line (see [`GIVES_WAY_FIRST`]) is
-/// given a fraction of a pixel, and an ellipsis would show for it: the slack takes that fraction.
-fn yielding(text: Text, factor: f32) -> Element {
-  Row::new()
-    .flex_shrink(factor)
-    .align_items(Alignment::Center)
-    .child(text.flex_shrink(1.0))
-    .child(Rect::new(Dimension::Px(SLACK_WIDTH), Dimension::Px(SLACK_WIDTH)).flex_shrink(SLACK_GIVES_WAY))
     .into()
 }
 

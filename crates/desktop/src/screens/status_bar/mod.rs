@@ -30,7 +30,6 @@ use lurq::{
 
 use self::{
   activity_item::{activity_slot, shows_activity},
-  approvals_item::{ApprovalParts, RunPart},
   counts::counts,
   hint::{Anchors, Hint},
   open::Opener,
@@ -46,7 +45,7 @@ use crate::{
   },
   tabs::feed::WindowFeed,
   tasks::{approvals::ShownApproval, data::AutoApprovingRun, run_approvals::RunApprovalChange, usage::ProjectUsage},
-  theme::{ExtraColor, STATUS_BAR_HEIGHT, approvals_widths},
+  theme::{ExtraColor, STATUS_BAR_HEIGHT},
 };
 
 /// A popover or hint sits 6px above the bar (`imT2E`), which is 9px above the 22px item it
@@ -155,14 +154,8 @@ impl Component for StatusBar {
     let queue = ctx.use_context::<ApprovalQueue>();
     let waiting = match (&props.project, &slot) {
       (_, bar::ActivitySlot::RunnerProblem(_)) | (None, _) => Vec::new(),
-      (Some(project), _) => approvals_item::approvals(
-        ctx,
-        (&project.approvals, &project.dialog),
-        queue.as_ref(),
-        parts_of(project, &limits, width),
-      ),
+      (Some(project), _) => approvals_item::approvals(ctx, (&project.approvals, &project.dialog), queue.as_ref()),
     };
-    let waiting_shown = !waiting.is_empty();
     // A run that waits for the person's decision keeps its item beside the waiting approvals: neither
     // hides the other. Any other activity gives way to them.
     let activity = (waiting.is_empty() || slot.beside_approvals()).then(|| {
@@ -179,7 +172,11 @@ impl Component for StatusBar {
       .with_children(waiting)
       .with_children(activity.into_iter().flatten());
     if let Some(project) = &props.project {
-      left = left.with_children(auto_approving(ctx, project, waiting_shown, (&limits, width), &stop));
+      left = left.with_children(approvals_item::auto_approving(
+        ctx,
+        &project.auto_approving,
+        stop_press(&stop, project),
+      ));
     }
     // The popover hangs from the activity item; without it there is nothing to anchor to.
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
@@ -198,33 +195,6 @@ impl Component for StatusBar {
       // A hint would cover the popover it belongs to.
       .with_children(hints.popup().filter(|_| !self.popover.get()))
   }
-}
-
-/// *Auto-approving* and Stop of `project`, naming the run whole, or not at all, beside waiting approvals
-/// (`waiting`), and otherwise letting its name give way.
-fn auto_approving(
-  ctx: &Ctx,
-  project: &ProjectBar,
-  waiting: bool,
-  (limits, width): (&plan_limits::Props, f32),
-  stop: &RunApprovalAction,
-) -> Vec<Element> {
-  let run = match (waiting, parts_of(project, limits, width).run) {
-    (false, _) => RunPart::GivesWay,
-    (true, true) => RunPart::Whole,
-    (true, false) => RunPart::Hidden,
-  };
-  approvals_item::auto_approving(ctx, &project.auto_approving, run, stop_press(stop, project))
-}
-
-/// Which parts of the waiting approvals of `project` a window `width` wide has room for.
-fn parts_of(project: &ProjectBar, limits: &plan_limits::Props, width: f32) -> ApprovalParts {
-  let widths = approvals_widths(
-    plan_limits::reached_count(limits),
-    plan_limits::has_readings(limits),
-    !project.auto_approving.is_empty(),
-  );
-  ApprovalParts::at(width, widths)
 }
 
 /// *Stop*: ends the auto-approval of every run the bar names.
