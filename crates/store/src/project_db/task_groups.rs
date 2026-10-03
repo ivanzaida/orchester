@@ -108,7 +108,11 @@ impl ProjectDb {
         [id.to_string()],
         |row| row.get(0),
       )?;
-      if let Some(problem) = task_selection::problems(&task, has_run, &[pipeline]).into_iter().next() {
+      let blocked_by = super::organization::unfinished(&transaction, *id)?;
+      if let Some(problem) = task_selection::problems(&task, has_run, &[pipeline], &blocked_by)
+        .into_iter()
+        .next()
+      {
         return Err(StoreError::TaskNotSelectable { task: *id, problem });
       }
       task

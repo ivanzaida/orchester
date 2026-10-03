@@ -106,7 +106,7 @@ fn step_name(run: &Run, step: &StepKey) -> String {
     .map_or_else(|| step.as_str().to_owned(), |step| step.name.as_str().to_owned())
 }
 
-/// "Cancelled at Implement · work kept on orc/repo-switcher", at the step of the run's last agent or
+/// "Canceled at Implement · work kept on orc/repo-switcher", at the step of the run's last agent or
 /// command, if one ran.
 fn cancelled(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
   if run.current_attempt().is_none() {

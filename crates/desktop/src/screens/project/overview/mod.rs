@@ -16,7 +16,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Row, ScrollVertical, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -68,6 +68,7 @@ impl lurq::app::component::DevtoolsInspectable for OverviewProps {}
 pub struct OverviewScreen {
   nav: ProjectNav,
   runners: Runners,
+  insights: lurq::core::Signal<bool>,
 }
 
 impl Component for OverviewScreen {
@@ -75,6 +76,7 @@ impl Component for OverviewScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      insights: ctx.signal(false),
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
@@ -94,7 +96,6 @@ impl Component for OverviewScreen {
     } else {
       ExtraSpacing::Rail.role()
     };
-    let queue = ctx.use_context::<ApprovalQueue>();
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -102,45 +103,51 @@ impl Component for OverviewScreen {
       .spacing(spacing)
       .with_children(notice)
       .child(heading(ctx, &props.open, &self.nav));
-    body = match &props.tasks {
-      TasksState::Loading => body,
-      TasksState::Failed(error) => body.child(RecoveryPanel::new(
-        Icon::AlertCircle,
-        &ctx.t("tasks.loadFailed"),
-        &message_text(ctx, error),
-      )),
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
-      TasksState::Ready(tasks) => {
-        let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
-        let online = props.runner == RunnerState::Online;
-        body
-          .child(pulse::pulse(
-            ctx,
-            &figures,
-            (online, props.agents_working, tasks.lost_to_runner),
-            props.usage,
-          ))
-          .child(
-            Row::new()
-              .id("overview-tasks-and-attention")
-              .width(Dimension::Pct(100.0))
-              .flex(1.0)
-              .spacing(SpacingSize::Section)
-              .child(task_list::task_list(ctx, tasks, props.tab, &self.nav))
-              .child(attention::attention(
-                ctx,
-                &props.open,
-                tasks,
-                (&self.nav, queue.as_ref()),
-              )),
-          )
-      }
-    };
+    body =
+      match &props.tasks {
+        TasksState::Loading => body,
+        TasksState::Failed(error) => body.child(RecoveryPanel::new(
+          Icon::AlertCircle,
+          &ctx.t("tasks.loadFailed"),
+          &message_text(ctx, error),
+        )),
+        TasksState::Ready(tasks) if tasks.tasks.is_empty() => body.child(empty_overview(ctx, &props.open)),
+        TasksState::Ready(tasks) => {
+          let figures = Pulse::of(&tasks.phases, Timestamp::now().local_day_start());
+          let online = props.runner == RunnerState::Online;
+          body
+            .child(pulse::pulse(
+              ctx,
+              &figures,
+              tasks
+                .tasks
+                .iter()
+                .filter(|task| {
+                  task.organization().status() == orchester_core::task::organization::WorkflowStatus::InReview
+                })
+                .count(),
+            ))
+            .child(self.tasks_and_attention(ctx, &props, tasks, spacing))
+            .child(
+              ActionButton::new(ctx.t("overview.insights"))
+                .id("overview-insights")
+                .icon(Icon::Activity)
+                .on_click({
+                  let insights = self.insights.clone();
+                  move || insights.update(|show| *show = !*show)
+                })
+                .render(ctx),
+            )
+            .with_children(self.insights.get().then(|| {
+              pulse::execution_context(ctx, (online, props.agents_working, tasks.lost_to_runner), props.usage)
+            }))
+        }
+      };
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(project_bar(ctx, &props.open))
-      .child(body)
+      .child(ScrollVertical::new(body).flex(1.0))
   }
 }
 
@@ -220,4 +227,71 @@ fn empty_overview(ctx: &Ctx, open: &OpenProject) -> Element {
     &display::shorten_path(&open.repo_root, PATH_CHARS),
   ))
   .into()
+}
+
+impl OverviewScreen {
+  /// The task list, with the attention column beside it as on master (`NM5My`): what needs you,
+  /// including a run that waits for a decision after its retries, shows without Insights; the
+  /// rest of the attention panel comes with them. Without it the list takes the whole width
+  /// (`DtpHJ`); in a narrow window the column goes under the list.
+  fn tasks_and_attention(
+    &self,
+    ctx: &mut Ctx,
+    props: &OverviewProps,
+    tasks: &crate::tasks::data::ProjectTasks,
+    spacing: SpacingSize,
+  ) -> Element {
+    let queue = ctx.use_context::<ApprovalQueue>();
+    let beside = ctx.window().logical_width() >= crate::theme::OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW;
+    let list = Column::new()
+      .flex(1.0)
+      .width(Dimension::Pct(100.0))
+      .spacing(spacing)
+      .child(task_list::task_list(
+        ctx,
+        tasks,
+        props.tab,
+        &self.nav,
+        self.insights.get() || props.tab != OverviewTab::All,
+      ))
+      .with_children(blocked_notices(ctx, tasks));
+    let attention = (self.insights.get() || tasks.needs_you() > 0)
+      .then(|| attention::attention(ctx, &props.open, tasks, (&self.nav, queue.as_ref()), beside));
+    if !beside {
+      return Column::new()
+        .id("overview-tasks-and-attention")
+        .width(Dimension::Pct(100.0))
+        .spacing(spacing)
+        .child(list)
+        .with_children(attention)
+        .into();
+    }
+    Row::new()
+      .id("overview-tasks-and-attention")
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Section)
+      .align_items(Alignment::Start)
+      .child(list)
+      .with_children(attention)
+      .into()
+  }
+}
+
+fn blocked_notices(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks) -> Vec<Element> {
+  tasks
+    .tasks
+    .iter()
+    .filter(|task| tasks.blocking.get(&task.id()).is_some_and(|links| !links.is_empty()))
+    .map(|task| {
+      let row = tasks.decorate_row(
+        crate::tasks::list::TaskRow::new(task, &tasks.pipelines, tasks.phases.get(&task.id())),
+        &ctx.t("common.listSeparator"),
+      );
+      crate::ui::organization_notice::organization_notice(
+        &ctx.t_args("overview.blockedTask", [("task", task.key().to_string().as_str())]),
+        &message_text(ctx, &row.detail),
+      )
+      .into()
+    })
+    .collect()
 }

@@ -21,7 +21,7 @@ use crate::{
   theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{styled_input, text_input, wrapping_field_error},
+    field::{locked_input, styled_input, text_input, wrapping_field_error},
     github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     message_text,
@@ -69,7 +69,7 @@ impl Criterion {
 }
 
 pub fn brief_form(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   form: &NewTaskForm,
   project: &OpenProject,
   link: Option<&RepositoryLink>,
@@ -87,6 +87,7 @@ pub fn brief_form(
     .child(title_field(ctx, form, state))
     .child(brief_field(ctx, form, state))
     .child(criteria_field(ctx, form, state))
+    .child(organization_fields(ctx, form, project, state.queued || state.starting))
     .child(labelled(
       ctx,
       "tasks.new.context",
@@ -391,12 +392,21 @@ fn criterion_row(
     .into()
 }
 
-fn locked_input(input: TextInput, locked: bool) -> TextInput {
-  if locked {
-    input
-      .on_input(|event: lurq::app::events::TextInputEvent| event.prevent_default())
-      .focusable(false)
-  } else {
-    input
-  }
+/// Status, priority, tags and Blocked; locked with the rest of the form while the task is queued
+/// or starting, since Retry run starts the task as stored.
+fn organization_fields(ctx: &mut Ctx, form: &NewTaskForm, project: &OpenProject, locked: bool) -> Element {
+  let task = ctx
+    .props::<super::NewTaskProps>()
+    .editing
+    .as_ref()
+    .map(|editing| editing.task.id());
+  ctx.mount_keyed::<super::super::organization_fields::OrganizationFields>(
+    "task-organization-fields",
+    super::super::organization_fields::OrganizationFieldsProps {
+      draft: form.organization.clone(),
+      root: project.repo_root.clone(),
+      task,
+      locked,
+    },
+  )
 }

@@ -171,7 +171,7 @@ fn unreadable_run_shows_in_the_task_list_and_on_its_task_page() {
     "are unavailable for run #2 until it can be read"
   ));
   assert!(shows(&mut desktop, "task-other-runs", "Run #1"));
-  assert!(shows(&mut desktop, "task-other-runs", "Cancelled"));
+  assert!(shows(&mut desktop, "task-other-runs", "Canceled"));
   // Cancel run is shown, unavailable: pressing it asks the runner nothing.
   assert!(shows(&mut desktop, "task-cancel-run", "Cancel run"));
   desktop.click("task-cancel-run");

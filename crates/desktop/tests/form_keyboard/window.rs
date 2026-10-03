@@ -42,7 +42,7 @@ fn clicking_a_tab_selects_it_without_focusing_it() {
   let mut desktop = overview();
   desktop.click("nav-tasks");
   desktop.wait_for("tasks-new-task");
-  desktop.press("tasks-tab-drafts");
+  desktop.press("tasks-tab-backlog");
   desktop.wait_for("empty-new-task");
   assert_eq!(desktop.focused(), None);
 }

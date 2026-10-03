@@ -8,7 +8,10 @@ use orchester_core::{
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, RunStatus},
   store::{ResourceStore, RunStore, TaskStore},
-  task::{TaskDetails, TaskLimits},
+  task::{
+    TaskDetails, TaskLimits,
+    organization::{ChangeActor, WorkflowStatus},
+  },
   task_group::{GroupHold, ReviewedPipeline, Scheduling, TaskGroup},
   time::Timestamp,
   tokens::TokenBudget,
@@ -133,6 +136,21 @@ fn fixture(repo: &Path, fake: &Path) {
       db.append_events(&run, &events).expect("events");
     }
   }
+  // One task on each workflow tab: queued In progress, reviewed In review, cancelled Done, the
+  // draft in Backlog.
+  for (task, status) in tasks.iter().zip([
+    WorkflowStatus::InProgress,
+    WorkflowStatus::InReview,
+    WorkflowStatus::Done,
+    WorkflowStatus::Backlog,
+  ]) {
+    let value = db
+      .task_organization(task.id())
+      .expect("organization")
+      .with_status(status);
+    db.set_task_organization(task.id(), &value, ChangeActor::Person, Timestamp::now())
+      .expect("status");
+  }
   let version = db
     .latest_version::<Pipeline>(pipeline)
     .expect("version")
@@ -171,11 +189,11 @@ fn task_bulk_tab_navigation_preserves_queue_review_done_with_combined_filters() 
   pick(&mut desktop, "tasks-pipeline-filter", 1);
   pick(&mut desktop, "tasks-sort", 2);
   for (tab, number) in [
-    ("queue", 1),
-    ("needs-review", 2),
+    ("in-progress", 1),
+    ("in-review", 2),
     ("done", 3),
-    ("drafts", 4),
-    ("queue", 1),
+    ("backlog", 4),
+    ("in-progress", 1),
   ] {
     desktop.click(&format!("tasks-tab-{tab}"));
     desktop.wait_until("only the navigated tab's matching row", |desktop| {
@@ -207,14 +225,14 @@ fn task_bulk_tab_navigation_preserves_queue_review_done_with_combined_filters() 
     desktop.key("Backspace", "Backspace");
   }
   desktop.type_text("queue");
-  for tab in ["needs-review", "done"] {
+  for tab in ["in-review", "done"] {
     desktop.click(&format!("tasks-tab-{tab}"));
     desktop.wait_until("combined query excludes other tabs", |desktop| {
       (1..=4).all(|row| desktop.tree.get_element_by_id(&format!("task-row-KON-{row}")).is_none())
     });
     assert_eq!(desktop.value("tasks-search"), "queue");
   }
-  desktop.click("tasks-tab-queue");
+  desktop.click("tasks-tab-in-progress");
   desktop.wait_for("task-row-KON-1");
 }
 

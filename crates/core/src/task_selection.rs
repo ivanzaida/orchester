@@ -1,7 +1,7 @@
 //! Readiness of drafts selected for their first run and draft-only pipeline assignment.
 
 use crate::{
-  id::ResourceId,
+  id::{ResourceId, TaskId},
   task::{MissingDetail, Task, TaskStatus},
 };
 
@@ -11,10 +11,15 @@ pub enum SelectionProblem {
   HasRun,
   Missing(MissingDetail),
   PipelineNotPublished,
+  /// Linked blocking tasks have not finished: the runner would refuse to start it.
+  Blocked {
+    by: Vec<TaskId>,
+  },
 }
 
 /// All reasons this task cannot enter a first-run group. A persisted run always wins over status.
-pub fn problems(task: &Task, has_run: bool, published: &[ResourceId]) -> Vec<SelectionProblem> {
+/// `blocked_by` are its linked blocking tasks that have not finished.
+pub fn problems(task: &Task, has_run: bool, published: &[ResourceId], blocked_by: &[TaskId]) -> Vec<SelectionProblem> {
   let mut problems = Vec::new();
   if has_run {
     problems.push(SelectionProblem::HasRun);
@@ -26,6 +31,11 @@ pub fn problems(task: &Task, has_run: bool, published: &[ResourceId]) -> Vec<Sel
     && !published.contains(&pipeline)
   {
     problems.push(SelectionProblem::PipelineNotPublished);
+  }
+  if !blocked_by.is_empty() {
+    problems.push(SelectionProblem::Blocked {
+      by: blocked_by.to_vec(),
+    });
   }
   problems
 }

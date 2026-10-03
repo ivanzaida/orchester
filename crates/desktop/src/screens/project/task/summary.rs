@@ -59,17 +59,29 @@ pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
   (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
-  (repo_root, scrolls): (&Path, &TaskScrolls),
+  (repo_root, scrolls, revision): (&Path, &TaskScrolls, (u64, u64)),
   reason: Option<Element>,
 ) -> Element {
   if let Some(run) = &detail.run {
     match run.run.status() {
-      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => return retry_limit(ctx, run, step, None, reason),
-      RunStatus::WaitingForPerson(stuck) => return retry_limit(ctx, run, stuck.step(), Some(stuck), reason),
+      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
+        let reason = with_blocked(reason, blocked_notice(ctx, detail));
+        return retry_limit(ctx, run, step, None, reason);
+      }
+      RunStatus::WaitingForPerson(stuck) => {
+        // The decisions that let the run go on are unavailable while it is blocked: the notice
+        // says why, naming the blocking tasks.
+        let waiting = (stuck, !detail.blocked_by.is_empty());
+        let reason = with_blocked(reason, blocked_notice(ctx, detail));
+        return retry_limit(ctx, run, stuck.step(), Some(waiting), reason);
+      }
       _ => {}
     }
   }
-  let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
+  let raise = detail
+    .run
+    .as_ref()
+    .and_then(|run| raise_panel(ctx, run, (limits, !detail.blocked_by.is_empty())));
   // Brief and criteria on a run page describe what that run was asked to do, even after the
   // task is edited for a later run.
   let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
@@ -89,7 +101,10 @@ pub(super) fn summary(
       let waiting = waiting_requests(ctx, run);
       progress_list(ctx, run, lost.is_some(), &waiting)
     }))
-    .with_children(brief_section(ctx, details));
+    .with_children(blocked_notice(ctx, detail))
+    .with_children(brief_section(ctx, details))
+    .child(super::organization_history::history(ctx, repo_root, detail.task.id(), revision));
+
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let panel = match &detail.run {
     Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run)),
@@ -136,7 +151,7 @@ fn progress_column(content: Column, latest: Option<Element>, scroll: &ScrollStat
 }
 
 /// Raise the limit to continue (`ZUYM0`), for a run stopped at a limit.
-fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> Option<Element> {
+fn raise_panel(ctx: &mut Ctx, run: &RunView, (limits, blocked): (Option<ProjectLimits>, bool)) -> Option<Element> {
   // A daily budget stop continues with a plain resume: the run's own limits were not reached.
   let RunStatus::Paused(PauseReason::LimitReached(limit)) = run.run.status() else {
     return None;
@@ -144,7 +159,7 @@ fn raise_panel(ctx: &mut Ctx, run: &RunView, limits: Option<ProjectLimits>) -> O
   if *limit == RunLimit::DailyBudget {
     return None;
   }
-  let props = RaiseLimitProps::of(run, *limit, limits?)?;
+  let props = RaiseLimitProps::of(run, *limit, limits?, blocked)?;
   Some(ctx.mount_keyed::<RaiseLimitPanel>(
     &format!("raise-limit-{}-{}", run.id(), run.run.last_sequence().get()),
     props,
@@ -313,5 +328,41 @@ pub(super) fn budget_value(ctx: &Ctx, run: &RunView) -> Arc<str> {
       ("used", compact_tokens(run.run.used().get()).as_str()),
       ("budget", compact_tokens(run.run.budget().get()).as_str()),
     ],
+  )
+}
+
+/// `reason` with the Blocked notice under it, either alone, or neither.
+fn with_blocked(reason: Option<Element>, blocked: Option<Element>) -> Option<Element> {
+  match (reason, blocked) {
+    (Some(reason), Some(blocked)) => Some(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(reason)
+        .child(blocked)
+        .into(),
+    ),
+    (reason, blocked) => reason.or(blocked),
+  }
+}
+
+/// The Blocked notice (`Ncjvt`): the reason, and while linked blocking tasks have not finished,
+/// that the run neither starts nor goes on until they do.
+fn blocked_notice(ctx: &Ctx, detail: &TaskDetail) -> Option<Element> {
+  let reason = detail.task.organization().blocked_reason();
+  if reason.is_none() && detail.blocked_by.is_empty() {
+    return None;
+  }
+  let notice =
+    crate::ui::organization_notice::organization_notice(&ctx.t("tasks.blocked.label"), reason.unwrap_or_default());
+  let blockers = detail.blocked_by.join(&ctx.t("common.listSeparator"));
+  Some(
+    notice
+      .with_children((!detail.blocked_by.is_empty()).then(|| {
+        Text::new(&ctx.t_args("tasks.blocked.runUnavailableWhile", [("tasks", blockers.as_str())]))
+          .id("task-blocked-run-unavailable")
+          .variant(crate::theme::ExtraTypography::Explanation.role())
+      }))
+      .into(),
   )
 }

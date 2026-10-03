@@ -13,7 +13,9 @@
     "close": "Close",
     "copy": "Copy",
     "copied": "Copied",
-    "copyFailed": "The command could not be copied. Select it and copy it by hand."
+    "copyFailed": "The command could not be copied. Select it and copy it by hand.",
+    "confirm": "Confirm",
+    "retry": "Retry"
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -349,8 +351,17 @@
       "succeeded": "Run #{{run}} completed",
       "merged": "Run #{{run}} merged",
       "failed": "Run #{{run}} failed",
-      "cancelled": "Run #{{run}} was cancelled"
-    }
+      "cancelled": "Run #{{run}} was canceled"
+    },
+    "insights": "Run activity and attention",
+    "summary": {
+      "running": "{{count}} running",
+      "needsInputOne": "{{count}} task needs your input",
+      "needsInputOther": "{{count}} tasks need your input",
+      "inReview": "{{count}} in review",
+      "completed": "{{count}} completed today"
+    },
+    "blockedTask": "Blocked · {{task}}"
   },
   "tasks": {
     "bulk": {
@@ -361,8 +372,56 @@
         "previous": "Waiting for the previous task to be ready for review",
         "concurrency": "Waiting for task concurrency",
         "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
-        "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
-        "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
+        "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
+        "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
+      "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+      },
+      "heldLine": {
+        "sessionEnded": {
+          "one": "{{task}} held after the project was reopened · Start run goes on",
+          "other": "{{count}} tasks held after the project was reopened · Start run goes on"
+        },
+        "capacity": {
+          "one": "{{task}} waits for an agent slot",
+          "other": "{{count}} tasks wait for an agent slot"
+        },
+        "dailyBudget": {
+          "one": "{{task}} waits for the daily budget",
+          "other": "{{count}} tasks wait for the daily budget"
+        },
+        "groupCap": {
+          "one": "{{task}} held at the group token cap · Return to drafts",
+          "other": "{{count}} tasks held at the group token cap · Return to drafts"
+        },
+        "previous": {
+          "one": "{{task}} waits for the previous task",
+          "other": "{{count}} tasks wait for the previous task"
+        },
+        "concurrency": {
+          "one": "{{task}} waits for a task slot",
+          "other": "{{count}} tasks wait for a task slot"
+        },
+        "failure": {
+          "one": "{{task}} held after a task failed · Return to drafts",
+          "other": "{{count}} tasks held after a task failed · Return to drafts"
+        },
+        "preflight": {
+          "one": "{{task}} held: it cannot start yet · Return to drafts",
+          "other": "{{count}} tasks held: they cannot start yet · Return to drafts"
+        },
+        "startFailed": {
+          "one": "{{task}} held after a start failed · Return to drafts",
+          "other": "{{count}} tasks held after a start failed · Return to drafts"
+        },
+        "blocked": {
+          "one": "{{task}} waits for its blocking tasks · Return to drafts",
+          "other": "{{count}} tasks wait for their blocking tasks · Return to drafts"
+        },
+        "canceled": {
+          "one": "{{task}} is Canceled: its group does not start it",
+          "other": "{{count}} tasks are Canceled: their group does not start them"
+        }
       },
       "held": {
         "sessionEnded": "Held · project reopened",
@@ -373,7 +432,9 @@
         "concurrency": "Waiting for a task slot",
         "failure": "Held · a task failed",
         "preflight": "Held · cannot start yet",
-        "startFailed": "Held · start failed"
+        "startFailed": "Held · start failed",
+        "blocked": "Waiting for blocking tasks",
+        "canceled": "Canceled · not started by its group"
       },
       "selected": "{{count}} selected",
       "runSelected": "Run selected · {{count}}",
@@ -383,6 +444,8 @@
       "hasRunMany": "{{count}} tasks already have a run.",
       "notHeld": "This task is no longer held by its group, so it stays queued.",
       "notReady": "{{task}}: {{reason}}",
+      "blocked": "Blocked by an unfinished task.",
+      "blockedBy": "{{task}} is blocked by {{blockers}}",
       "notReadyMany": "{{count}} tasks: {{reason}}",
       "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
       "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
@@ -444,40 +507,97 @@
     },
     "title": "Tasks",
     "breadcrumb": "{{project}} / Tasks",
-    "description": "Prepare your backlog, then choose what agents should work on.",
+    "description": "Workflow status describes your work. Run labels describe the agent.",
     "createMultiple": "Create multiple",
     "editingHint": "Open a task to edit its brief, pipeline and limits.",
     "loadFailed": "Tasks cannot be read",
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
-    "emptyQuery": "No tasks in this tab match the search or pipeline filter.",
-    "clearQuery": "Clear search and filter",
+    "emptyQuery": {
+      "title": "No tasks match these filters",
+      "detail": "Try another status, priority or tag, or clear your filters."
+    },
     "tabs": {
-      "all": "All tasks",
-      "drafts": "Drafts",
-      "queue": "Queue",
-      "needsReview": "Needs review",
-      "done": "Done"
+      "all": "All",
+      "needsYou": "Needs you"
     },
     "filters": {
       "search": "Search tasks…",
       "allPipelines": "All pipelines",
       "manualOrder": "Manual order",
       "newest": "Newest first",
-      "title": "Title"
+      "title": "Title",
+      "status": "Status",
+      "priority": "Priority",
+      "clear": "Clear filters",
+      "matchAll": "Match all selected tags",
+      "matchAny": "Match any selected tag",
+      "searchTags": "Search tags",
+      "facetCount": "{{facet}} · {{count}}",
+      "tagSummary": "{{names}} · {{mode}}",
+      "valueSeparator": " + ",
+      "all": "all",
+      "any": "any"
     },
     "selection": {
       "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
       "readinessStarted": "{{ready}} ready to queue · {{incomplete}} incomplete · {{started}} already queued or started",
-      "setPipeline": "Set pipeline"
+      "setPipeline": "Set pipeline",
+      "runSelected": "Run selected",
+      "setStatus": "Set status",
+      "setPriority": "Set priority",
+      "addTag": "Add tag",
+      "removeTag": "Remove tag",
+      "statusSet": {
+        "one": "Status set to {{status}} for {{count}} task.",
+        "other": "Status set to {{status}} for {{count}} tasks."
+      },
+      "prioritySet": {
+        "one": "Priority set to {{priority}} for {{count}} task.",
+        "other": "Priority set to {{priority}} for {{count}} tasks."
+      },
+      "tagsAdded": {
+        "one": "Added {{tags}} to {{count}} task.",
+        "other": "Added {{tags}} to {{count}} tasks."
+      },
+      "tagsRemoved": {
+        "one": "Removed {{tags}} from {{count}} task.",
+        "other": "Removed {{tags}} from {{count}} tasks."
+      },
+      "tagsMissing": {
+        "one": "{{count}} selected task did not have {{value}}.",
+        "other": "{{count}} selected tasks did not have {{value}}."
+      },
+      "alreadyStatus": {
+        "one": "{{count}} selected task was already {{value}}.",
+        "other": "{{count}} selected tasks were already {{value}}."
+      },
+      "alreadyPriority": {
+        "one": "{{count}} selected task already had priority {{value}}.",
+        "other": "{{count}} selected tasks already had priority {{value}}."
+      },
+      "alreadyTagged": {
+        "one": "{{count}} selected task already had {{value}}.",
+        "other": "{{count}} selected tasks already had {{value}}."
+      },
+      "removeHint": {
+        "one": "{{tags}} is removed wherever present. Other tags stay.",
+        "other": "{{tags}} are removed wherever present. Other tags stay."
+      },
+      "failed": "{{task}} could not be updated: {{reason}}",
+      "run": "Run",
+      "tagMembership": "{{tag}} · on {{count}} of {{total}} tasks",
+      "removeFromCount": "Remove from {{count}} tasks",
+      "addToCount": "Add to {{count}} tasks"
     },
     "columns": {
       "key": "ID",
-      "task": "Task",
-      "pipeline": "Pipeline",
-      "status": "Status",
-      "readiness": "Dependency / readiness"
+      "task": "TASK / TAGS",
+      "priority": "PRIORITY",
+      "pipeline": "PIPELINE",
+      "status": "WORKFLOW / RUN",
+      "readiness": "DEPENDENCY / READINESS"
     },
     "status": {
       "draft": "Draft",
@@ -490,7 +610,7 @@
       "succeeded": "Completed",
       "merged": "Merged",
       "failed": "Failed",
-      "cancelled": "Cancelled",
+      "cancelled": "Canceled",
       "unreadable": "Unreadable"
     },
     "readiness": {
@@ -515,7 +635,7 @@
       "succeeded": "Every step passed",
       "merged": "Merged into {{branch}}",
       "failed": "Run failed",
-      "cancelled": "Run cancelled"
+      "cancelled": "Run canceled"
     },
     "pipeline": {
       "notChosen": "No pipeline",
@@ -527,6 +647,10 @@
       "other": "{{count}} tasks"
     },
     "footer": {
+      "matches": {
+        "one": "{{count}} task matches · Workflow tab and each active filter apply together.",
+        "other": "{{count}} tasks match · Workflow tab and each active filter apply together."
+      },
       "noRuns": {
         "one": "{{count}} task · no runs started",
         "other": "{{count}} tasks · no runs started"
@@ -607,6 +731,161 @@
       "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved task stays as it was.",
       "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
       "incomplete": "A task that has started must keep a brief, acceptance criteria, pipeline and limits."
+    },
+    "workflow": {
+      "label": "Status",
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In progress",
+      "inReview": "In review",
+      "done": "Done",
+      "canceled": "Canceled",
+      "noActiveRun": "No active run",
+      "canceledRun": "Canceled run",
+      "saving": "Saving changes…",
+      "combined": "{{status}} · {{run}}",
+      "runSuffix": "· {{run}}"
+    },
+    "priority": {
+      "label": "Priority",
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "No priority"
+    },
+    "blocked": {
+      "label": "Blocked",
+      "reason": "Reason",
+      "reasonRequired": "Enter a reason when marking a task Blocked.",
+      "links": "Blocking tasks · optional",
+      "addLink": "Add blocking task",
+      "addSelected": "Add selected task",
+      "currentTask": "{{key}} · Current task — cannot block itself",
+      "removeLink": "Remove",
+      "cycle": "This link would create a dependency cycle. Choose another task.",
+      "unfinished": "Blocked · {{tasks}} unfinished. {{reason}}",
+      "rowUnfinished": "Blocked · {{tasks}} unfinished",
+      "informational": "Blocked · {{reason}}",
+      "runUnavailable": "Run is unavailable until the linked blocking tasks finish.",
+      "runUnavailableTitle": "Run unavailable",
+      "blockerLabel": "{{task}} — {{title}}",
+      "runUnavailableOne": "Blocked by {{task}} — {{title}}. This task is still {{status}}.",
+      "runUnavailableMany": "Blocked by {{tasks}}. These tasks are not finished.",
+      "finishedLink": "{{task}} is {{status}} and does not block Run.",
+      "unblockHint": "Clear Blocked to remove the manual flag and reason. Blocking links are edited separately.",
+      "runUnavailableWhile": "Run is unavailable while {{tasks}} is unfinished.",
+      "messageKept": "Your message is kept. The agent reads it once the blocking tasks finish.",
+      "linkLabel": "{{key}} · {{title}}",
+      "search": "Search tasks",
+      "helper": "Add a reason and optional blocking tasks.",
+      "readinessHeading": "Dependency / readiness",
+      "pickerLabel": "{{key}} · {{title}} · {{status}}"
+    },
+    "cancel": {
+      "title": "Cancel this task and stop its run?",
+      "explanation": "{{task}} — {{title}} has an active run. Confirming stops Run #{{run}} and sets the task to Canceled. Its work stays on its branch.",
+      "workKept": "Work is kept",
+      "workKeptDetail": "Branch: {{branch}}. No branch or files are deleted.",
+      "keep": "Keep task",
+      "confirm": "Stop run and cancel task",
+      "stopping": "Stopping…",
+      "confirmRequired": "Confirm stopping the active run before canceling this task.",
+      "startedSince": "A run started after the confirmation opened. It was not stopped and the task was not canceled.",
+      "bulkTitle": {
+        "oneTask": "Cancel 1 task and stop its active run?",
+        "oneRun": "Cancel {{tasks}} tasks and stop 1 active run?",
+        "other": "Cancel {{tasks}} tasks and stop {{runs}} active runs?"
+      },
+      "bulkExplanation": {
+        "oneTask": "Confirming stops Run #{{run}} on {{task}} and sets the task to Canceled. Its work stays on its branch.",
+        "oneRun": "Confirming stops Run #{{run}} on {{task}} and sets all {{tasks}} selected tasks to Canceled. Each task’s work stays on its branch.",
+        "other": "Confirming stops {{runs}} active runs and sets all {{tasks}} selected tasks to Canceled. Each task’s work stays on its branch."
+      },
+      "activeRunHeading": {
+        "one": "Active run",
+        "other": "Active runs"
+      },
+      "activeRunLine": "{{task}} — {{title}} · Run #{{run}}",
+      "activeRunUnread": "{{task}} — {{title}}",
+      "activeRuns": "{{runs}}.",
+      "noticeWithIdle": {
+        "one": "{{runs}} {{tasks}} has no active run.",
+        "other": "{{runs}} {{tasks}} have no active run."
+      },
+      "idlePair": "{{first}} and {{second}}",
+      "bulkKeep": "Keep tasks",
+      "bulkConfirm": {
+        "oneTask": "Stop run and cancel task",
+        "oneRun": "Stop run and cancel {{tasks}} tasks",
+        "other": "Stop runs and cancel {{tasks}} tasks"
+      }
+    },
+    "tags": {
+      "label": "Tags",
+      "edit": "Edit tags",
+      "search": "Search or create a tag",
+      "createNamed": "Create “{{name}}”",
+      "manage": "Manage project tags",
+      "saving": "Saving tags…",
+      "loading": "Loading tags…",
+      "new": "New tag",
+      "empty": "No tags yet. Create a tag here or while tagging a task.",
+      "taskCount": "{{count}} tasks",
+      "rename": "Rename",
+      "merge": "Merge",
+      "delete": "Delete",
+      "chooseTarget": "Choose another tag",
+      "mergeExplanation": "Confirm replacing the source tag on all its tasks with the selected target. Existing target assignments are kept once. The source tag is removed.",
+      "deleteExplanation": "This tag will be removed from {{count}} tasks and the project tag list. Tasks and their other tags stay. Recreating the name does not restore assignments.",
+      "duplicate": "A tag with that name already exists, ignoring case.",
+      "stale": "This tag no longer exists. Reload the project tag list.",
+      "sameTarget": "A tag cannot merge into itself.",
+      "back": "Back to Tasks",
+      "breadcrumb": "{{project}} / Project tags",
+      "description": "Tag names are unique, ignoring letter case. Tags use the same neutral theme style throughout this project.",
+      "more": "+{{count}}",
+      "pickerEmpty": "No tags yet. Type a name to create the first tag.",
+      "chooseExisting": "{{tag}} already exists. Select it to add it to this task.",
+      "alreadyExists": "{{tag}} already exists in {{project}}.",
+      "styleNote": "Tags use the same neutral theme style throughout this project.",
+      "add": "Add tags",
+      "manageShort": "Manage tags",
+      "projectTitle": "Project tags",
+      "projectHint": "{{project}} · Tag names are unique, ignoring letter case.",
+      "nameLabel": "Name",
+      "preview": "Preview",
+      "renameNamed": "Rename {{tag}}",
+      "mergeNamed": "Merge {{source}} into {{target}}?",
+      "mergeSource": "Merge {{source}}",
+      "deleteNamed": "Delete {{tag}}?",
+      "saveName": "Save name",
+      "createTag": "Create tag",
+      "mergeInto": "Merge into {{target}}",
+      "keepTag": "Keep tag",
+      "deleteTag": "Delete tag",
+      "renameImpact": "The name changes on all {{count}} tagged tasks.",
+      "deleteImpact": "{{tag}} will be removed from all {{count}} tagged tasks and from {{project}}’s project tag list. The tasks and their other tags stay.",
+      "cannotUndo": "Cannot be undone",
+      "deleteWarning": "You can create {{tag}} again, but its task assignments will not be restored.",
+      "mergeImpact": "{{source}} is on {{count}} tasks. These tasks will get {{target}}, and {{source}} will be removed from this project. A task that already has both tags keeps one {{target}} tag.",
+      "affected": "Affects {{count}} tasks",
+      "otherTagsStay": "The tasks remain. Their other tags are kept.",
+      "mergeLabel": "Merge into",
+      "taskCountOne": "1 task",
+      "nameRequired": "Enter a tag name.",
+      "targetCount": "{{tag}} · {{count}} tasks",
+      "targetCountOne": "{{tag}} · 1 task"
+    },
+    "history": {
+      "title": "Task history",
+      "person": "You",
+      "orchester": "Orchester",
+      "change": "{{time}} · {{actor}} · {{field}}: {{from}} → {{to}}",
+      "valueChange": "{{field}} · {{from}} → {{to}}",
+      "attribution": "{{actor}} · {{date}}",
+      "none": "None",
+      "date": "{{month}} {{day}}, {{year}}, {{time}}"
     }
   },
   "runs": {
@@ -646,8 +925,8 @@
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
-        "cancelled": "Run {{run}} · Attempt {{attempt}} · cancelled",
-        "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
+        "cancelled": "Run {{run}} · Attempt {{attempt}} · canceled",
+        "cancelledBeforeStart": "Run {{run}} · canceled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
         "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
@@ -679,9 +958,9 @@
         "run": "Run #{{run}}",
         "runUnnumbered": "Run",
         "failedAt": "Failed at {{step}}",
-        "cancelledAt": "Cancelled at {{step}} · work kept on {{branch}}",
-        "cancelled": "Cancelled · work kept on {{branch}}",
-        "cancelledBeforeStart": "Cancelled before it started"
+        "cancelledAt": "Canceled at {{step}} · work kept on {{branch}}",
+        "cancelled": "Canceled · work kept on {{branch}}",
+        "cancelledBeforeStart": "Canceled before it started"
       },
       "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s other runs.",
       "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
@@ -695,7 +974,7 @@
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped",
-      "cancelled": "Cancelled",
+      "cancelled": "Canceled",
       "notStarted": "Not started"
     },
     "permissions": {
@@ -820,7 +1099,7 @@
         "failedCommandDetail": "Activity shows the command, its exit code and its output.",
         "waitingTitle": "{{step}} needs your decision",
         "waitingDetail": "Automatic execution has stopped. Allow another attempt, return the work to an earlier step, or stop the run.",
-        "cancelledTitle": "The run was cancelled",
+        "cancelledTitle": "The run was canceled",
         "cancelledDetail": "Completed work stays on {{branch}}."
       },
       "approval": {
@@ -874,7 +1153,7 @@
         "complete": "Complete",
         "failed": "Failed",
         "skipped": "Skipped",
-        "cancelled": "Cancelled"
+        "cancelled": "Canceled"
       },
       "failure": {
         "reported": "Reported failed",
@@ -1656,7 +1935,7 @@
         "ready": "Ready for review",
         "merged": "Merged",
         "failed": "Failed",
-        "cancelled": "Cancelled"
+        "cancelled": "Canceled"
       },
       "allStepsNone": "All steps · none yet",
       "show": {
@@ -1811,7 +2090,7 @@
         "ready": "Run {{run}} is ready for your review · {{time}}",
         "merged": "Run {{run}} was merged into {{branch}} · {{time}}",
         "failed": "Run {{run}} failed at {{step}} · {{time}}",
-        "cancelled": "Run {{run}} was cancelled · {{time}}"
+        "cancelled": "Run {{run}} was canceled · {{time}}"
       },
       "composer": {
         "sendNow": "Send now",
@@ -3132,7 +3411,7 @@
       "installingDetail": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes, you cancel it or you close Orchester.",
       "installingDetailContinues": "Agents that start before it finishes still use slower search. You can leave this page; the install continues until it finishes or you cancel it, also after you close Orchester.",
       "cancelInstall": "Cancel",
-      "installCancelled": "You cancelled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
+      "installCancelled": "You canceled the install; {{installer}} was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
       "installTimedOut": "{{installer}} did not finish within {{minutes}} minutes and was stopped. Agents keep falling back to slower search; install ripgrep yourself and choose Check again, or try again.",
       "running": "Running",
       "lastOutput": "Last output: {{line}}",

@@ -158,33 +158,33 @@ fn history_create_returns_to_the_list_and_is_not_visited_again() {
 fn history_back_restores_the_tab() {
   let mut desktop = saved_draft();
   assert!(tab_selected(&mut desktop.tree, "tasks-tab-all"));
-  assert!(!tab_selected(&mut desktop.tree, "tasks-tab-drafts"));
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  assert!(!tab_selected(&mut desktop.tree, "tasks-tab-backlog"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.press("task-row-KON-1");
   desktop.wait_for(TASK_PAGE);
   side_button(&mut desktop, BACK);
-  desktop.settle("the list on the Drafts tab", |tree| {
-    tree.get_element_by_id(TASK_PAGE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the list on the Backlog tab", |tree| {
+    tree.get_element_by_id(TASK_PAGE).is_none() && tab_selected(tree, "tasks-tab-backlog")
   });
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| {
-    tab_selected(tree, "tasks-tab-all") && !tab_selected(tree, "tasks-tab-drafts")
+    tab_selected(tree, "tasks-tab-all") && !tab_selected(tree, "tasks-tab-backlog")
   });
 }
 
 #[test]
 fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
   let mut desktop = saved_draft();
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
   create(&mut desktop, "Second draft");
-  desktop.settle("the second draft on the Drafts tab", |tree| {
-    highlighted(tree, "KON-2") && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the second draft on the Backlog tab", |tree| {
+    highlighted(tree, "KON-2") && tab_selected(tree, "tasks-tab-backlog")
   });
-  // The Drafts tab is one entry: going back leads to the All tab before it.
+  // The Backlog tab is one entry: going back leads to the All tab before it.
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
 }
@@ -194,20 +194,20 @@ fn history_saved_draft_returns_to_the_tab_it_was_written_from() {
 #[test]
 fn history_new_task_back_arrow_returns_to_the_list_and_its_tab() {
   let mut desktop = saved_draft();
-  desktop.press("tasks-tab-drafts");
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.press("tasks-tab-backlog");
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   desktop.click(TASKS);
   desktop.wait_for(TITLE);
   desktop.press("new-task-back");
-  desktop.settle("the list on the Drafts tab", |tree| {
-    tree.get_element_by_id(TITLE).is_none() && tab_selected(tree, "tasks-tab-drafts")
+  desktop.settle("the list on the Backlog tab", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && tab_selected(tree, "tasks-tab-backlog")
   });
   // The list was not opened again: going back leads to the All tab before it, and forward to
   // the form that was left.
   side_button(&mut desktop, BACK);
   desktop.settle("the All tab", |tree| tab_selected(tree, "tasks-tab-all"));
   side_button(&mut desktop, FORWARD);
-  desktop.settle("the Drafts tab", |tree| tab_selected(tree, "tasks-tab-drafts"));
+  desktop.settle("the Backlog tab", |tree| tab_selected(tree, "tasks-tab-backlog"));
   side_button(&mut desktop, FORWARD);
   desktop.wait_for(TITLE);
 }
@@ -249,6 +249,9 @@ fn history_create_from_the_overview_takes_the_form_s_place() {
 fn history_overview_tab_is_restored() {
   let mut desktop = saved_draft();
   desktop.press("nav-overview");
+  // The run-state tabs are behind Insights while the All tab is shown.
+  desktop.wait_for("overview-insights");
+  desktop.press("overview-insights");
   desktop.wait_for("overview-tab-running");
   desktop.press("overview-tab-running");
   // A draft is not running: the Running tab lists no task.

@@ -99,6 +99,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         tasks: shown.tasks,
       },
     ),
+    Page::ProjectTags => ctx.mount_keyed::<super::tag_manager::TagManager>("project-tags", open),
     Page::NewTask => ctx.mount_keyed::<NewTaskForm>(
       "new-task",
       NewTaskProps {

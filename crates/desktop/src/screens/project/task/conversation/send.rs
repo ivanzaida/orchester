@@ -10,14 +10,14 @@ use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
   conversation::{Recipient, Timing},
   id::{IdempotencyKey, MessageId, RunId, TaskId},
-  run::EventSequence,
+  run::{EventSequence, RunAgainBlock},
 };
-use orchester_ipc::Command;
+use orchester_ipc::{Command, Rejection};
 
 use crate::{
   background,
   messages::Message,
-  runner::Runners,
+  runner::{RunRequestError, Runners},
   tasks::{
     conversation::{send_after_turn_in, send_in},
     run::control_message,
@@ -60,6 +60,10 @@ fn runners(ctx: &mut Ctx) -> Runners {
 async fn tell(runners: &Runners, run: RunId) -> Sent {
   match runners.control_run(Command::DeliverMessages { run }).await {
     Ok(()) => Sent::Taken,
+    // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
+    Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
+      block: RunAgainBlock::TaskBlocked,
+    })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
     Err(error) => {
       tracing::warn!(%error, "the runner did not take the message");
       Sent::Queued(control_message(&error))

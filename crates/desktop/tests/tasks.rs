@@ -211,16 +211,12 @@ fn tabs_filter_and_count_tasks() {
   let tasks = stored_tasks();
   let count = |tab| list::rows(&tasks, &[], &Default::default(), tab).len();
   assert_eq!(count(TaskTab::All), 2);
-  assert_eq!(count(TaskTab::Drafts), 1);
-  assert_eq!(
-    count(TaskTab::Queue),
-    1,
-    "a queued task waits in the queue before its run"
-  );
-  assert_eq!(count(TaskTab::NeedsReview), 0);
-  assert_eq!(count(TaskTab::Done), 0);
-  let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Drafts);
-  assert_eq!(drafts.len(), 1);
+  assert_eq!(count(TaskTab::Backlog), 2);
+  for other in [TaskTab::Todo, TaskTab::InProgress, TaskTab::InReview, TaskTab::Done] {
+    assert_eq!(count(other), 0);
+  }
+  let drafts = list::rows(&tasks, &[], &Default::default(), TaskTab::Backlog);
+  assert_eq!(drafts.len(), 2);
   assert_eq!(&*drafts[0].title, "Incomplete");
   assert_eq!(drafts[0].phase, Some(orchester_core::run::TaskPhase::Draft));
   assert_eq!(
@@ -305,7 +301,7 @@ fn task_list_keeps_task_order_and_overview_shows_newest_first() {
 
 #[test]
 fn task_list_footer_counts_tasks_and_started_runs() {
-  let footer = |tasks, runs| list::footer(tasks, runs);
+  let footer = |tasks, runs| list::footer(tasks, runs, false);
   assert_eq!(footer(10, 0).key, "tasks.footer.noRuns.other");
   assert_eq!(footer(1, 0).key, "tasks.footer.noRuns.one");
   assert_eq!(footer(3, 1).key, "tasks.footer.oneRun.other");
@@ -314,6 +310,8 @@ fn task_list_footer_counts_tasks_and_started_runs() {
     footer(3, 4).args,
     vec![("count", "3".to_owned()), ("runs", "4".to_owned())]
   );
+  assert_eq!(list::footer(1, 2, true).key, "tasks.footer.matches.one");
+  assert_eq!(list::footer(5, 0, true).key, "tasks.footer.matches.other");
 }
 
 #[test]
@@ -326,11 +324,13 @@ fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
   fixture.started_run(first, support::at(40));
   fixture.started_run(second, support::at(50));
   let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
-  assert_eq!(loaded.runs, 3);
+  assert_eq!((loaded.runs[&first], loaded.runs[&second]), (2, 1));
+  let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, list::TaskTab::All);
   assert_eq!(
-    list::footer(loaded.tasks.len(), loaded.runs).key,
+    list::footer(rows.len(), loaded.runs_of(&rows), false).key,
     "tasks.footer.runs.other"
   );
+  assert_eq!(loaded.runs_of(&rows[1..]), 1);
   let latest = loaded.phases[&first].run().expect("a readable run");
   assert_eq!(latest.phase, TaskPhase::Running);
   assert_eq!(latest.number.get(), 2);
@@ -343,7 +343,7 @@ fn task_list_reads_run_counts_and_interrupts_running_runs_without_a_runner() {
     away.phases[&first].message().key,
     "tasks.progress.interruptedNoCheckpoint"
   );
-  assert_eq!(away.runs, 3);
+  assert_eq!(away.runs.values().sum::<usize>(), 3);
 }
 
 #[test]
@@ -374,7 +374,7 @@ fn task_list_and_page_read_a_run_cancelled_before_it_started() {
   fixture.record(&run, &events);
 
   let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
-  assert_eq!(loaded.runs, 1);
+  assert_eq!(loaded.runs.values().sum::<usize>(), 1);
   assert_eq!(loaded.phases[&task].phase(), Some(TaskPhase::Cancelled));
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
   let run = detail.run.expect("the task has a run");
@@ -461,4 +461,16 @@ fn task_page_progress_reads_stopped_at_limit_for_every_limit_and_paused_for_a_pa
   let events = run.pause(support::at(52)).expect("pause");
   fixture.record(&run, &events);
   assert_eq!(step_states(&fixture, task), [ProgressState::Paused]);
+}
+
+/// A run its blocking tasks keep from going on says so, rather than that the runner failed.
+#[test]
+fn task_blocked_refusal_reads_as_run_unavailable() {
+  use orchester_core::run::RunAgainBlock;
+  use orchester_desktop::{runner::RunRequestError, tasks::run::control_message};
+  use orchester_ipc::Rejection;
+  let refused = RunRequestError::Rejected(Rejection::RunAgainBlocked {
+    block: RunAgainBlock::TaskBlocked,
+  });
+  assert_eq!(control_message(&refused).key, "tasks.blocked.runUnavailable");
 }
