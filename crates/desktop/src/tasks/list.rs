@@ -67,6 +67,7 @@ impl TaskTab {
 /// Where a task's latest run stands, for its row's status and its dependency / readiness cell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LatestRun {
+  pub id: orchester_core::id::RunId,
   /// The configuration the latest readable run actually executes.
   pub pipeline: PinnedVersion,
   pub phase: TaskPhase,
@@ -172,6 +173,7 @@ impl LatestRun {
   /// `updated_at`, with the plan or the question it waits on, if any.
   pub fn of(task: &Task, (run, merge): (&Run, Option<&RunMerge>), updated_at: Timestamp, awaited: Awaited) -> Self {
     Self {
+      id: run.id(),
       pipeline: run.snapshot().pipeline(),
       phase: TaskPhase::of(task, Some(run), merge),
       merged_into: merge.map(|merge| merge.into.as_str().into()),

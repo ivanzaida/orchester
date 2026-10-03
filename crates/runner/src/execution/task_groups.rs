@@ -8,6 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, TaskId},
   run::{Run, RunStatus},
   store::RunStore,
+  task::organization::WorkflowStatus,
   task_group::{GroupHold, TaskGroup},
   tokens::TokensUsed,
 };
@@ -89,6 +90,40 @@ fn first_runs(db: &ProjectDb, group: &TaskGroup) -> Result<Vec<Option<Run>>, Rej
     .map(|task| db.run_with_key(task.first_run_key()))
     .collect::<Result<Vec<_>, _>>()
     .map_err(|error| read_failed("cannot read group runs", error))
+}
+
+/// A group as its scheduling sees it, with the first run of each of its tasks.
+type Scheduled = (TaskGroup, Vec<Option<Run>>);
+
+/// The group as its scheduling sees it: without its Canceled tasks that never started
+/// ([`TaskGroup::skipping`]), with the first runs of the others in order; `None` when every task
+/// is skipped, which finishes the group.
+fn scheduled(db: &ProjectDb, group: &TaskGroup) -> Result<Option<Scheduled>, Rejection> {
+  let runs = first_runs(db, group)?;
+  let mut skipped = Vec::new();
+  for (task, run) in group.tasks().iter().zip(&runs) {
+    let unstarted = run.as_ref().is_none_or(|run| run.status() == &RunStatus::Pending);
+    if unstarted
+      && db
+        .task_organization(*task)
+        .map_err(|error| super::failed("cannot read a task's status", &error))?
+        .status()
+        == WorkflowStatus::Canceled
+    {
+      skipped.push(*task);
+    }
+  }
+  let Some(view) = group.skipping(&skipped) else {
+    return Ok(None);
+  };
+  let runs = group
+    .tasks()
+    .iter()
+    .zip(runs)
+    .filter(|(task, _)| !skipped.contains(task))
+    .map(|(_, run)| run)
+    .collect();
+  Ok(Some((view, runs)))
 }
 
 fn statuses(runs: &[Option<Run>]) -> Vec<Option<RunStatus>> {
@@ -179,7 +214,16 @@ impl Scheduler {
         hold: GroupHold::SessionEnded,
       });
     }
-    let runs = first_runs(db, &group)?;
+    // A Canceled task is not started by its group.
+    let canceled = Rejection::TaskGroupWaiting {
+      hold: GroupHold::Canceled,
+    };
+    let Some((group, runs)) = scheduled(db, &group)? else {
+      return Err(canceled);
+    };
+    if !group.tasks().contains(&task) {
+      return Err(canceled);
+    }
     // The task's own Pending first run is the one being started, so it counts as unstarted.
     let statuses: Vec<_> = group
       .tasks()
@@ -210,7 +254,9 @@ impl Scheduler {
       if stored.as_ref().is_some_and(|hold| !hold.clears_on_its_own()) {
         continue;
       }
-      let runs = first_runs(&db, &group)?;
+      let Some((group, runs)) = scheduled(&db, &group)? else {
+        continue;
+      };
       let statuses = statuses(&runs);
       let (used, blockers) = (usage(&runs), blockers(&db, &group, &statuses)?);
       // The free slot or the day's budget the runner waits for comes without a person.
@@ -257,7 +303,13 @@ impl Scheduler {
     if stored == Some(GroupHold::SessionEnded) {
       return Ok(());
     }
-    let runs = first_runs(db, group)?;
+    let Some((view, runs)) = scheduled(db, group)? else {
+      self.inner.group_retries.clear(group.key());
+      return db
+        .finish_task_group(group.key())
+        .map_err(|e| super::failed("cannot record a finished group", &e));
+    };
+    let group = &view;
     let statuses = statuses(&runs);
     if TaskGroup::finished(&statuses) {
       self.inner.group_retries.clear(group.key());
@@ -345,7 +397,9 @@ impl Scheduler {
       .unfinished_task_groups()
       .map_err(|e| super::failed("cannot read task groups", &e))?
     {
-      let runs = first_runs(db, &group)?;
+      let Some((group, runs)) = scheduled(db, &group)? else {
+        continue;
+      };
       let unstarted = runs
         .iter()
         .any(|run| run.as_ref().is_none_or(|run| run.status() == &RunStatus::Pending));

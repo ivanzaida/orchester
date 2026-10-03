@@ -47,21 +47,25 @@ impl ProjectDb {
     Ok(task.with_organization(value.clone()))
   }
 
+  /// Saves an edited task: its details, and the organization changes the person made from `base`
+  /// (what the form loaded) to `edited`, over what is stored now ([`TaskOrganization::rebase`]),
+  /// so a status Orchester or a bulk change set meanwhile is not overwritten.
   pub fn update_organized_task(
     &mut self,
     id: TaskId,
     details: TaskDetails,
-    value: &TaskOrganization,
+    (base, edited): (&TaskOrganization, &TaskOrganization),
     at: Timestamp,
   ) -> Result<Task, StoreError> {
     let transaction = self.connection.transaction()?;
     let task = tasks::load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
       .pop()
       .ok_or(StoreError::TaskNotFound(id))?;
-    organization::validate(&transaction, id, value)?;
+    let value = edited.rebase(base, &organization::load(&transaction, id)?);
+    organization::validate(&transaction, id, &value)?;
     let task = tasks::edit_task(&transaction, task, details)?;
-    organization::write(&transaction, id, value, ChangeActor::Person, at)?;
+    organization::write(&transaction, id, &value, ChangeActor::Person, at)?;
     transaction.commit()?;
-    Ok(task.with_organization(value.clone()))
+    Ok(task.with_organization(value))
   }
 }

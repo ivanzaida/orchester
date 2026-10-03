@@ -50,22 +50,22 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// Atomic bulk update: validation failures leave every selected task unchanged.
-  pub fn update_task_organizations(
+  /// Applies `update` to what `task` has stored, in one transaction; whether that changed it. A
+  /// bulk change calls it per task, so each task's failure is its own.
+  pub fn update_task_organization(
     &mut self,
-    tasks: &[TaskId],
+    task: TaskId,
     actor: ChangeActor,
     at: Timestamp,
-    update: impl Fn(TaskOrganization) -> TaskOrganization,
-  ) -> Result<(), StoreError> {
+    update: impl FnOnce(TaskOrganization) -> TaskOrganization,
+  ) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
-    for task in tasks {
-      let value = update(load(&transaction, *task)?);
-      validate(&transaction, *task, &value)?;
-      write(&transaction, *task, &value, actor, at)?;
-    }
+    let before = load(&transaction, task)?;
+    let value = update(before.clone());
+    validate(&transaction, task, &value)?;
+    write(&transaction, task, &value, actor, at)?;
     transaction.commit()?;
-    Ok(())
+    Ok(value != before)
   }
 
   pub fn task_organization_history(&self, task: TaskId) -> Result<Vec<OrganizationChange>, StoreError> {
@@ -180,7 +180,10 @@ fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, St
 }
 
 pub(super) fn validate(connection: &Connection, task: TaskId, value: &TaskOrganization) -> Result<(), StoreError> {
-  value.status().check_change(active_run(connection, task)?)?;
+  // Only a change to Canceled stops at an active run; a Canceled task's other fields stay editable.
+  if load(connection, task)?.status() != value.status() {
+    value.status().check_change(active_run(connection, task)?)?;
+  }
   for tag in value.tags() {
     super::tags::ensure_tag(connection, *tag)?;
   }

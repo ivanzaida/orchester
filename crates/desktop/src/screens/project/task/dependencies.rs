@@ -131,7 +131,8 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
           &root,
           SaveTarget::Task(task.id()),
           task.details().clone(),
-          task.organization(),
+          // Nothing changed here: what is stored stays.
+          (task.organization(), task.organization()),
           version,
         )
         .map_err(|error| Problems(error.messages().into()))

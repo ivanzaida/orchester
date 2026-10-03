@@ -16,11 +16,10 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  id::{TagId, TaskId},
+  id::{RunId, TagId},
   task::organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
   time::Timestamp,
 };
-use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
 use super::super::{
@@ -32,6 +31,7 @@ use crate::{
   messages::{self, Message},
   runner::Runners,
   tasks::{
+    cancel_run::stop_named_run,
     detail::TaskDetail,
     organization::{
       OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
@@ -55,7 +55,8 @@ pub(super) struct OrganizationProps {
 impl lurq::app::component::DevtoolsInspectable for OrganizationProps {}
 #[derive(Clone)]
 enum Mutation {
-  Status(WorkflowStatus, bool),
+  /// A status, with the run the person confirmed stopping for Canceled.
+  Status(WorkflowStatus, Option<RunId>),
   Priority(Priority),
   Tags(Vec<TagId>),
 }
@@ -71,7 +72,16 @@ pub(super) struct OrganizationHeader {
   /// is read again. A choice equal to it saves nothing.
   stored: Signal<OrganizationValue>,
   confirm: Signal<bool>,
+  /// The active run the store reported when Canceled was refused: the one the confirmation names
+  /// and stops, even before the page has read it.
+  asked: Signal<AskedRun>,
 }
+
+/// The active run the store named when it refused Canceled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct AskedRun(Option<RunId>);
+impl lurq::app::component::DevtoolsInspectable for AskedRun {}
+
 impl Component for OrganizationHeader {
   type Props = OrganizationProps;
   fn create(ctx: &mut Ctx) -> Self {
@@ -82,14 +92,15 @@ impl Component for OrganizationHeader {
       shown: ctx.signal(None),
       stored: ctx.signal(OrganizationValue::default()),
       confirm: ctx.signal(false),
+      asked: ctx.signal(AskedRun(None)),
     };
-    let action = action(ctx);
+    let action = action(ctx, &header.asked);
     header.observe(ctx, &action);
     header
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<OrganizationProps>().clone();
-    let action = action(ctx);
+    let action = action(ctx, &self.asked);
     self.follow(&props.detail);
     let current = props.detail.task.organization();
     let state = action.state().get();
@@ -151,15 +162,22 @@ impl Component for OrganizationHeader {
 
 /// Saves one choice for the task the page shows. The call in the header's `create` and every
 /// `render` refer to the same action; each render points it at the current task.
-fn action(ctx: &mut Ctx) -> Action {
+fn action(ctx: &mut Ctx, asked: &Signal<AskedRun>) -> Action {
   let props = ctx.props::<OrganizationProps>();
   let (root, task) = (props.root.clone(), props.detail.task.id());
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let asked = asked.clone();
   ctx.future_action(move |mutation: Mutation| {
-    let (root, runners) = (root.clone(), runners.clone());
+    let (root, runners, asked) = (root.clone(), runners.clone(), asked.clone());
     async move {
-      if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled, true)) {
-        stop_active_run(&root, task, &runners).await?;
+      // Canceled stops only the run the confirmation named; otherwise it names the active run.
+      if let Mutation::Status(WorkflowStatus::Canceled, named) = mutation
+        && let Err(refused) = stop_named_run(&root, task, named, &runners).await
+      {
+        if let Some(run) = refused.run() {
+          asked.set(AskedRun(Some(run)));
+        }
+        return Err(refused.message());
       }
       background::run(move || {
         let mut db = ProjectDb::open(&root)?;
@@ -176,22 +194,6 @@ fn action(ctx: &mut Ctx) -> Action {
       .map_err(|error| messages::store_error(&error))
     }
   })
-}
-
-/// Cancels the task's active run through the runner, as the run's own Cancel does; the run's work
-/// stays on its branch.
-async fn stop_active_run(root: &std::path::Path, task: TaskId, runners: &Runners) -> Result<(), Message> {
-  let root = root.to_path_buf();
-  let run = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
-    .await?
-    .map_err(|error| messages::store_error(&error))?;
-  if let Some(run) = run {
-    runners
-      .control_run(Command::CancelRun { run })
-      .await
-      .map_err(|error| crate::tasks::run::control_message(&error))?;
-  }
-  Ok(())
 }
 
 /// The header's signals, shared with the observers registered in `create`.
@@ -243,7 +245,7 @@ impl OrganizationHeader {
     let (choices, submit) = (self.choices(), action.clone());
     ctx.watch(&self.status, move |choice| {
       if choice.0 != choices.stored.get_untracked().0.status() {
-        submit.run(Mutation::Status(choice.0, false));
+        submit.run(Mutation::Status(choice.0, None));
       }
     });
     let (submit, stored) = (action.clone(), self.stored.clone());
@@ -292,9 +294,14 @@ impl OrganizationHeader {
     if !self.confirm.get() {
       return Modal::new(Column::new()).open_when(false).into();
     }
-    let Some(run) = &props.detail.run else {
-      return Modal::new(Column::new()).open_when(false).into();
-    };
+    // The run the store named; the page shows its number and branch once it has read it.
+    let named = self.asked.get().0;
+    let run = props
+      .detail
+      .run
+      .as_ref()
+      .map(|run| &run.run)
+      .filter(|run| Some(run.id()) == named);
     let state = action.state().get();
     let pending = state.is_pending();
     let error = state
@@ -304,7 +311,7 @@ impl OrganizationHeader {
     let (close, submit) = (self.confirm.clone(), action.clone());
     let dialog = single_cancel(
       ctx,
-      (&props.detail.task, Some(&run.run)),
+      (&props.detail.task, run),
       ("task-cancel-confirmation", "task-cancel-keep", "task-cancel-stop"),
       pending,
       error.as_deref(),
@@ -313,7 +320,7 @@ impl OrganizationHeader {
       ctx,
       dialog,
       move || close.set(false),
-      move || submit.run(Mutation::Status(WorkflowStatus::Canceled, true)),
+      move || submit.run(Mutation::Status(WorkflowStatus::Canceled, named)),
     );
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)

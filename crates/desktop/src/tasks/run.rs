@@ -58,7 +58,10 @@ pub fn queue_organized_in(
   repo_root: &Path,
   target: SaveTarget,
   details: TaskDetails,
-  organization: &orchester_core::task::organization::TaskOrganization,
+  organization: (
+    &orchester_core::task::organization::TaskOrganization,
+    &orchester_core::task::organization::TaskOrganization,
+  ),
   version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut db = ProjectDb::open(repo_root)?;

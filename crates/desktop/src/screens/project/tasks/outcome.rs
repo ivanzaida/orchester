@@ -49,40 +49,76 @@ pub(super) fn outcome(ctx: &Ctx, tasks: &ProjectTasks, outcomes: Option<&Outcome
     .iter()
     .filter(|(_, result)| result == &Ok(false))
     .count();
-  if let (Mutation::RemoveTags(ids), 1..) = (&outcomes.mutation, unchanged) {
-    let text = ctx.t_args(
-      plural(
-        unchanged == 1,
-        "tasks.selection.tagsMissing.one",
-        "tasks.selection.tagsMissing.other",
-      ),
-      [
-        ("tags", tag_names(ctx, tasks, ids).as_str()),
-        ("count", unchanged.to_string().as_str()),
-      ],
-    );
-    column = column.child(
-      Text::new(&text)
-        .variant(TypographyStyle::Caption)
-        .id("bulk-outcome-unchanged"),
-    );
+  if unchanged > 0 {
+    column = column.child(unchanged_line(ctx, tasks, &outcomes.mutation, unchanged));
   }
   for (id, result) in &outcomes.results {
     let Err(error) = result else {
       continue;
     };
-    let key = tasks
-      .tasks
-      .iter()
-      .find(|task| task.id() == *id)
-      .map_or_else(|| id.to_string(), |task| task.key().to_string());
-    let line = field_error(&ctx.t_args(
-      "tasks.selection.failed",
-      [("task", key.as_str()), ("reason", &message_text(ctx, error))],
-    ));
+    let line = field_error(&failure(ctx, tasks, *id, error));
     column = column.child(line.id(format!("bulk-outcome-{id}")));
   }
   column.into()
+}
+
+/// "ORC-131 could not be updated: …", naming the task.
+pub(super) fn failure(
+  ctx: &Ctx,
+  tasks: &ProjectTasks,
+  id: orchester_core::id::TaskId,
+  error: &crate::messages::Message,
+) -> String {
+  let key = tasks
+    .tasks
+    .iter()
+    .find(|task| task.id() == id)
+    .map_or_else(|| id.to_string(), |task| task.key().to_string());
+  ctx
+    .t_args(
+      "tasks.selection.failed",
+      [("task", key.as_str()), ("reason", &message_text(ctx, error))],
+    )
+    .to_string()
+}
+
+/// The selected tasks the change left as they were: "2 selected tasks did not have Desktop.",
+/// "1 selected task already had Todo."
+fn unchanged_line(ctx: &Ctx, tasks: &ProjectTasks, mutation: &Mutation, count: usize) -> Element {
+  let one = count == 1;
+  let count_text = count.to_string();
+  let count = ("count", count_text.as_str());
+  let (keys, value) = match mutation {
+    Mutation::Status(status) => (
+      (
+        "tasks.selection.alreadyStatus.one",
+        "tasks.selection.alreadyStatus.other",
+      ),
+      ctx.t(workflow_copy(*status).1).to_string(),
+    ),
+    Mutation::Priority(priority) => (
+      (
+        "tasks.selection.alreadyPriority.one",
+        "tasks.selection.alreadyPriority.other",
+      ),
+      ctx.t(priority_copy(*priority).1).to_string(),
+    ),
+    Mutation::AddTags(ids) => (
+      (
+        "tasks.selection.alreadyTagged.one",
+        "tasks.selection.alreadyTagged.other",
+      ),
+      tag_names(ctx, tasks, ids),
+    ),
+    Mutation::RemoveTags(ids) => (
+      ("tasks.selection.tagsMissing.one", "tasks.selection.tagsMissing.other"),
+      tag_names(ctx, tasks, ids),
+    ),
+  };
+  Text::new(&ctx.t_args(plural(one, keys.0, keys.1), [("value", value.as_str()), count]))
+    .variant(TypographyStyle::Caption)
+    .id("bulk-outcome-unchanged")
+    .into()
 }
 
 /// "Status set to Todo for 3 tasks.": check 12 and Inter 11, both muted.

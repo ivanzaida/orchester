@@ -75,7 +75,9 @@ impl ProjectDb {
   /// How many tasks carry each tag, read in one query; a tag on no task is left out.
   pub fn tag_task_counts(&self) -> Result<std::collections::HashMap<TagId, usize>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT tag.value, COUNT(DISTINCT organization.task_id)        FROM task_organization AS organization, json_each(organization.body, '$.body.tags') AS tag        GROUP BY tag.value",
+      "SELECT tag.value, COUNT(DISTINCT organization.task_id)
+       FROM task_organization AS organization, json_each(organization.body, '$.body.tags') AS tag
+       GROUP BY tag.value",
     )?;
     let rows = statement
       .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?

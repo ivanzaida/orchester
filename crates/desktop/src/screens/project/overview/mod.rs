@@ -248,11 +248,10 @@ fn blocked_notices(ctx: &Ctx, tasks: &crate::tasks::data::ProjectTasks) -> Vec<E
     .iter()
     .filter(|task| tasks.blocking.get(&task.id()).is_some_and(|links| !links.is_empty()))
     .map(|task| {
-      let row = tasks.decorate_row(crate::tasks::list::TaskRow::new(
-        task,
-        &tasks.pipelines,
-        tasks.phases.get(&task.id()),
-      ));
+      let row = tasks.decorate_row(
+        crate::tasks::list::TaskRow::new(task, &tasks.pipelines, tasks.phases.get(&task.id())),
+        &ctx.t("common.listSeparator"),
+      );
       crate::ui::organization_notice::organization_notice(
         &ctx.t_args("overview.blockedTask", [("task", task.key().to_string().as_str())]),
         &message_text(ctx, &row.detail),

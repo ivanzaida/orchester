@@ -44,10 +44,11 @@ pub(super) fn task_list(
   show_filters: bool,
 ) -> Element {
   let now = Timestamp::now();
+  let separator = ctx.t("common.listSeparator");
   let rows: Vec<_> = selected
     .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, RECENT_TASKS)
     .into_iter()
-    .map(|row| tasks.decorate_row(row))
+    .map(|row| tasks.decorate_row(row, &separator))
     .collect();
   let pipeline_filter = Row::new()
     .spacing(SpacingSize::Sm)

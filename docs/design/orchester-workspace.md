@@ -1136,6 +1136,13 @@ All 24 frames received `get_screenshot` and `snapshot_layout` inspection in the 
 
 Repository gate (2026-09-30): `powershell -File tools/check.ps1` **passed** (formatting, workspace Clippy with warnings denied, file size and UI literals), using the authorized worktree-local `CARGO_TARGET_DIR=.tmp/orc39-check/target`. The initial attempt could not write to the inherited target outside the worktree; the local-target retry resolved that access failure. `git diff --check` passed. Only this handoff document changed in the worktree; ORC-39 is not moved to Done in the implementation backlog because the approval and implementation steps remain.
 
+**Decisions (user, 2026-10-03).**
+- *Organization history* (`D1DC6T` content) sits at the end of the task's Summary, since ORC-61's Conversation timeline replaced the Activity tab that held it.
+- *A Canceled task is skipped by its group's scheduling.* The group never starts a Canceled member that has not started (no run, or only a Pending first run), so its status never flips to In progress, and goes on with its other tasks as if that member had ended; a group whose remaining members are all Canceled finishes. Its row reads *Canceled · not started by its group*; a Start request for it is refused with the same reason.
+- *Existing tasks get a status from their runs* when the organization migration (39) runs: a run that has not ended (pending, running, paused, interrupted) → In progress; latest run merged → Done; latest run ready for review (succeeded, not merged) → In review; a queued task without one of those (no run yet, or a latest run that failed or was cancelled) → Todo; any other task (a draft, including one whose latest run failed or was cancelled) → Backlog. No history row is written for it.
+
+**Review follow-ups (2026-10-03).** Saving Edit task writes only the organization fields the person changed from what the form loaded, over what is stored now (a status Orchester set meanwhile, or tags and priority a bulk change set, stay). A confirmed Canceled stops only the run the confirmation named; a run that started after it opened is not stopped, and the task is not canceled (*A run started after the confirmation opened…*). Only a change *to* Canceled waits for an active run; a Canceled task's other fields stay editable. A bulk change counts only the tasks it changed and names the rest (*1 selected task was already Todo.*).
+
 Implementation handoff: [ORC-39 implementation](../evidence/orc39-implementation.md). Approval and readiness policy B are recorded above; implementation checks pass, and independent Review/app-Pencil Verify remain.
 
 ## Project orchestrator conversation

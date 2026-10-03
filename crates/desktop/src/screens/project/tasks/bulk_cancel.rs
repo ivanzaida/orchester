@@ -4,7 +4,10 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{id::TaskId, run::TaskPhase};
+use orchester_core::{
+  id::{RunId, TaskId},
+  run::TaskPhase,
+};
 
 use crate::tasks::data::ProjectTasks;
 
@@ -15,10 +18,14 @@ pub(super) struct BulkCancelText {
   pub heading: Arc<str>,
   pub notice: Arc<str>,
   pub confirm: Arc<str>,
+  /// The runs the notice names, by task: Stop stops these and no other.
+  pub runs: Vec<(TaskId, RunId)>,
 }
 
 /// One selected task with a run that has not ended: its key, title and run number, when readable.
 struct Active {
+  task: TaskId,
+  run_id: Option<RunId>,
   key: String,
   title: String,
   run: Option<u32>,
@@ -30,6 +37,8 @@ pub(super) fn bulk_cancel_text(ctx: &Ctx, tasks: &ProjectTasks, selected: &BTree
     let latest = tasks.phases.get(&task.id());
     if latest.is_some_and(|latest| latest.phase().is_none_or(TaskPhase::run_not_ended)) {
       active.push(Active {
+        task: task.id(),
+        run_id: latest.and_then(|latest| latest.run()).map(|run| run.id),
         key: task.key().to_string(),
         title: task.details().title.as_str().to_owned(),
         run: latest.and_then(|latest| latest.run()).map(|run| run.number.get()),
@@ -46,6 +55,10 @@ pub(super) fn bulk_cancel_text(ctx: &Ctx, tasks: &ProjectTasks, selected: &BTree
     heading,
     notice,
     confirm,
+    runs: active
+      .iter()
+      .filter_map(|active| active.run_id.map(|run| (active.task, run)))
+      .collect(),
   }
 }
 

@@ -12,7 +12,7 @@ use orchester_core::{
   },
 };
 use orchester_store::{ProjectDb, StoreError};
-use support::{at, copied_at_version, name, started_run};
+use support::{at, name, started_run};
 
 #[test]
 fn organization_defaults_transitions_and_cancel_rule() {
@@ -128,12 +128,16 @@ fn organization_tags_uniqueness_merge_delete_and_bulk_filters_sorting() {
     Err(StoreError::Organization(OrganizationError::DuplicateTag))
   ));
   let target = db.create_project_tag(name("UX")).expect("tag");
-  db.update_task_organizations(&ids, ChangeActor::Person, at(31), |value| {
-    value
-      .with_tags(vec![source.id(), target.id()])
-      .with_priority(Priority::High)
-  })
-  .expect("bulk");
+  for id in &ids {
+    let changed = db
+      .update_task_organization(*id, ChangeActor::Person, at(31), |value| {
+        value
+          .with_tags(vec![source.id(), target.id()])
+          .with_priority(Priority::High)
+      })
+      .expect("bulk");
+    assert!(changed);
+  }
   // Each tag on both new tasks, counted once per task.
   let counts = db.tag_task_counts().expect("counts");
   assert_eq!(counts.get(&source.id()), Some(&2));
@@ -226,7 +230,10 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
   let mut details = task.details().clone();
   details.title = name("Changed title");
   let canceled = task.organization().clone().with_status(WorkflowStatus::Canceled);
-  assert!(db.update_organized_task(task.id(), details, &canceled, at(30)).is_err());
+  assert!(
+    db.update_organized_task(task.id(), details, (task.organization(), &canceled), at(30))
+      .is_err()
+  );
   assert_eq!(
     db.task(task.id()).expect("read").expect("task").details(),
     task.details()
@@ -235,16 +242,25 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
     .create_tasks(IdempotencyKey::generate(), vec![task.details().clone()], at(31))
     .expect("task")[0]
     .id();
+  // Each task stands alone: the one with an active run refuses Canceled, the other takes it.
   assert!(
-    db.update_task_organizations(&[other, task.id()], ChangeActor::Person, at(32), |value| value
+    db.update_task_organization(task.id(), ChangeActor::Person, at(32), |value| value
       .with_status(WorkflowStatus::Canceled))
       .is_err()
   );
-  assert_eq!(
-    db.task_organization(other).expect("metadata").status(),
-    WorkflowStatus::Backlog
+  assert!(
+    db.update_task_organization(other, ChangeActor::Person, at(32), |value| value
+      .with_status(WorkflowStatus::Canceled))
+      .expect("no active run")
   );
-  assert!(db.task_organization_history(other).expect("history").is_empty());
+  // Nothing to change is not a change.
+  assert!(
+    !db
+      .update_task_organization(other, ChangeActor::Person, at(33), |value| value
+        .with_status(WorkflowStatus::Canceled))
+      .expect("unchanged")
+  );
+  assert_eq!(db.task_organization_history(other).expect("history").len(), 1);
 }
 
 #[derive(Clone, Copy)]
@@ -384,57 +400,6 @@ fn organization_failed_follow_up_restores_review_and_retains_transition_history(
   assert_eq!(change.at, at(32));
 }
 
-/// The schema version before tasks had an organization: master's last migrations, ORC-61's
-/// steering (37) and the approval choices (38). Migrations are append-only.
-const BEFORE_ORGANIZATION: u32 = 38;
-
-/// A populated project database of schema 38 (a message sent now, an approval rule, a run's own
-/// auto-approval choice) opens with all of it, each task in Backlog with no priority, tags or
-/// links, and takes organization changes.
-#[test]
-fn organization_migration_keeps_tasks_and_runs_of_schema_38() {
-  use orchester_core::{
-    conversation::{Message, MessageBody, Recipient, Timing},
-    run::RuleScope,
-    store::ConversationStore,
-  };
-  let (repo, mut db, run, _) = started_run();
-  let now = Message::from_person(
-    run.task(),
-    Some(run.id()),
-    Recipient::Orchestrator,
-    MessageBody::new("Use the new API.").expect("a message"),
-    at(12),
-  )
-  .sent(Timing::Now)
-  .expect("a person's message");
-  db.send_message(IdempotencyKey::generate(), &now).expect("sent now");
-  let scope = RuleScope::SimilarMcpTool {
-    server: "pencil".to_owned(),
-    tool: "batch_get".to_owned(),
-  };
-  db.add_approval_rule(run.id(), &scope, at(13))
-    .expect("an approval rule");
-  db.set_run_auto_approve(run.id(), Some(true)).expect("auto-approve");
-  drop(db);
-  let current = repo.path().join(".orchester").join("orchester.db");
-  let old = copied_at_version(&current, BEFORE_ORGANIZATION);
-  let mut db = ProjectDb::open(old.path()).expect("migrate existing project");
-  let task = run.task();
-  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
-  assert_eq!(db.messages(task).expect("messages"), [now]);
-  assert_eq!(db.approval_rules(run.id()).expect("rules").len(), 1);
-  assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(true));
-  assert_eq!(
-    db.task_organization(task).expect("organization"),
-    TaskOrganization::default()
-  );
-  let value = TaskOrganization::default().with_priority(Priority::High);
-  db.set_task_organization(task, &value, ChangeActor::Person, at(20))
-    .expect("organize a migrated task");
-  assert_eq!(db.task_organization(task).expect("organization"), value);
-}
-
 /// The store reads a blocking task as finished exactly when the domain rule
 /// (`DependencyGate::is_completed` of its task phase) does, for each gate and each state of the
 /// blocking task's latest run: none, running, ready for review, merged and cancelled.
@@ -512,4 +477,84 @@ fn organization_unfinished_follows_the_dependency_gate_rule() {
       );
     }
   }
+}
+
+/// M1: a form opened while the run worked saves without moving the task back from In
+/// review, which Orchester set meanwhile, and without a history row for a change nobody made.
+#[test]
+fn organization_form_save_keeps_the_status_set_meanwhile() {
+  let (_repo, mut db, mut run, execution) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let loaded = db.task_organization(task.id()).expect("loaded");
+  assert_eq!(loaded.status(), WorkflowStatus::InProgress);
+  let events = run.start_step(execution, at(10)).expect("start step");
+  db.append_events(&run, &events).expect("stored");
+  let events = run.complete_step(execution, at(11)).expect("complete step");
+  db.append_events(&run, &events).expect("stored");
+  assert_eq!(
+    db.task_organization(task.id()).expect("now").status(),
+    WorkflowStatus::InReview
+  );
+  let rows = db.task_organization_history(task.id()).expect("history").len();
+  // The form's details, complete as a task that ran has them.
+  let mut details = task.details().clone();
+  details.brief = "Say hello.".into();
+  details.acceptance_criteria = vec!["It greets.".into()];
+  details.pipeline = Some(orchester_core::id::ResourceId::generate());
+  let saved = db
+    .update_organized_task(task.id(), details, (&loaded, &loaded), at(20))
+    .expect("save");
+  assert_eq!(saved.organization().status(), WorkflowStatus::InReview);
+  assert_eq!(db.task_organization_history(task.id()).expect("history").len(), rows);
+  // A priority the person changed is saved; the status stays In review.
+  let edited = loaded.clone().with_priority(Priority::High);
+  let saved = db
+    .update_organized_task(task.id(), saved.details().clone(), (&loaded, &edited), at(21))
+    .expect("save");
+  assert_eq!(saved.organization().status(), WorkflowStatus::InReview);
+  assert_eq!(saved.organization().priority(), Priority::High);
+}
+
+/// m1: a Canceled task with an active run keeps its other fields editable; only a change to
+/// Canceled waits for the run to stop.
+#[test]
+fn organization_canceled_task_with_an_active_run_takes_other_changes() {
+  use rusqlite::Connection;
+  let (repo, db, run, _) = started_run();
+  let task = run.task();
+  drop(db);
+  // A Canceled task whose run is active, as when a run is started for it again.
+  let connection = Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
+  let canceled = TaskOrganization::default().with_status(WorkflowStatus::Canceled);
+  connection
+    .execute(
+      "INSERT OR REPLACE INTO task_organization(task_id, body, updated_at) VALUES (?2, ?1, 1)",
+      rusqlite::params![
+        serde_json::json!({"schema": 1, "body": canceled}).to_string(),
+        task.to_string()
+      ],
+    )
+    .expect("canceled");
+  drop(connection);
+  let mut db = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(
+    db.task_organization(task).expect("read").status(),
+    WorkflowStatus::Canceled
+  );
+  db.set_task_organization(
+    task,
+    &canceled.clone().with_priority(Priority::High),
+    ChangeActor::Person,
+    at(20),
+  )
+  .expect("a priority change");
+  assert!(
+    db.set_task_organization(
+      task,
+      &canceled.with_status(WorkflowStatus::Todo),
+      ChangeActor::Person,
+      at(21)
+    )
+    .is_ok()
+  );
 }

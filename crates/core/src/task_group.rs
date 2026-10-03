@@ -35,6 +35,8 @@ pub enum GroupHold {
   Blocked {
     by: Vec<TaskId>,
   },
+  /// The task is Canceled: its group never starts it and goes on with the others.
+  Canceled,
 }
 
 impl GroupHold {
@@ -118,6 +120,20 @@ impl TaskGroup {
   }
   pub const fn cap(&self) -> TokenBudget {
     self.cap
+  }
+
+  /// The group as its scheduling sees it with the `skipped` tasks (Canceled ones that never
+  /// started) left out: they never start and hold no turn, so the others go on as if they had
+  /// ended. `None` when every task is skipped, which finishes the group.
+  #[must_use]
+  pub fn skipping(&self, skipped: &[TaskId]) -> Option<Self> {
+    let tasks: Vec<TaskId> = self
+      .tasks
+      .iter()
+      .copied()
+      .filter(|task| !skipped.contains(task))
+      .collect();
+    (!tasks.is_empty()).then(|| Self { tasks, ..self.clone() })
   }
 
   /// Why a task of the group that cannot start now waits: the spent cap, a failed or cancelled

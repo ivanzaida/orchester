@@ -39,68 +39,70 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
   let runners = ctx
     .use_context::<crate::runner::Runners>()
     .expect("root provides runners");
-  ctx.future_action(move |(repo_root, target, details, organization, confirmed): SaveArgs| {
-    let runners = runners.clone();
-    let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
-    async move {
-      let canceling = match target {
-        crate::tasks::data::SaveTarget::Task(task)
-          if organization.status() == orchester_core::task::organization::WorkflowStatus::Canceled =>
+  ctx.future_action(
+    move |(repo_root, target, details, (base, organization), named): SaveArgs| {
+      let runners = runners.clone();
+      let (activity, spec) = (activity.clone(), operations::task_draft(&open, details.title.as_str()));
+      async move {
+        use orchester_core::task::organization::WorkflowStatus;
+        // Only a person's change to Canceled stops a run, and only the run the person confirmed.
+        let canceling = match target {
+          crate::tasks::data::SaveTarget::Task(task)
+            if organization.status() == WorkflowStatus::Canceled && base.status() != WorkflowStatus::Canceled =>
+          {
+            Some(task)
+          }
+          _ => None,
+        };
+        // Asking to confirm is not a failed save: it is not reported as one (`N1vwaM`).
+        if let Some(task) = canceling
+          && named.is_none()
+          && active_run(&repo_root, task).await?.is_some()
         {
-          Some(task)
+          return Err(Message::new(messages::CANCEL_CONFIRM_REQUIRED));
         }
-        _ => None,
-      };
-      // Asking to confirm is not a failed save: it is not reported as one (`N1vwaM`).
-      let active = match canceling {
-        Some(task) => active_run(&repo_root, task).await?,
-        None => None,
-      };
-      if active.is_some() && !confirmed {
-        return Err(Message::new(messages::CANCEL_CONFIRM_REQUIRED));
-      }
-      let save = async move {
-        if confirmed && let Some(run) = active {
-          runners
-            .control_run(orchester_ipc::Command::CancelRun { run })
-            .await
-            .map_err(|error| crate::tasks::run::control_message(&error))?;
-        }
-        let saved = background::run(move || {
-          let mut db = ProjectDb::open(&repo_root).map_err(TaskDraftSaveError::Store)?;
-          let task = save_organized_to(
-            &mut db,
-            target,
-            details.clone(),
-            &organization,
-            orchester_core::time::Timestamp::now(),
-          )?;
-          if task.details() != &details {
-            return Err(TaskDraftSaveError::DetailsMismatch);
+        let save = async move {
+          if let Some(task) = canceling {
+            crate::tasks::cancel_run::stop_named_run(&repo_root, task, named, &runners)
+              .await
+              .map_err(|refused| refused.message())?;
           }
-          let created = matches!(target, crate::tasks::data::SaveTarget::New(_));
-          if created && task.status() != orchester_core::task::TaskStatus::Draft {
-            return Err(TaskDraftSaveError::NotDraft(task.status()));
-          }
-          Ok(SavedDraft {
-            details,
-            organization,
-            created: created.then(|| task.id()),
+          let saved = background::run(move || {
+            let mut db = ProjectDb::open(&repo_root).map_err(TaskDraftSaveError::Store)?;
+            let task = save_organized_to(
+              &mut db,
+              target,
+              details.clone(),
+              (&base, &organization),
+              orchester_core::time::Timestamp::now(),
+            )?;
+            if task.details() != &details {
+              return Err(TaskDraftSaveError::DetailsMismatch);
+            }
+            let created = matches!(target, crate::tasks::data::SaveTarget::New(_));
+            if created && task.status() != orchester_core::task::TaskStatus::Draft {
+              return Err(TaskDraftSaveError::NotDraft(task.status()));
+            }
+            Ok(SavedDraft {
+              details,
+              organization,
+              created: created.then(|| task.id()),
+            })
           })
-        })
-        .await?;
-        saved.map_err(|error| {
-          tracing::error!(%error, "cannot save the task draft");
-          match error {
-            TaskDraftSaveError::Store(error) => messages::store_error(&error),
-            TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
-            TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
-          }
-        })
-      };
-      activity.track(spec, save).await
-    }
-  })
+          .await?;
+          saved.map_err(|error| {
+            tracing::error!(%error, "cannot save the task draft");
+            match error {
+              TaskDraftSaveError::Store(error) => messages::store_error(&error),
+              TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
+              TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+            }
+          })
+        };
+        activity.track(spec, save).await
+      }
+    },
+  )
 }
 
 /// The save was refused because the task has an active run that Canceled would stop: the form

@@ -14,11 +14,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::{TagId, TaskId},
+  id::{RunId, TagId, TaskId},
   task::organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
   time::Timestamp,
 };
-use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
 use super::super::{
@@ -31,6 +30,7 @@ use crate::{
   runner::Runners,
   tasks::{
     browse::Selection,
+    cancel_run::stop_named_run,
     data::ProjectTasks,
     organization::{OrganizationValue, priority_copy, workflow_copy},
   },
@@ -40,7 +40,6 @@ use crate::{
     button::ActionButton,
     cancel_dialog::{CancelDialog, cancel_dialog},
     form::form,
-    message_text,
   },
 };
 
@@ -80,7 +79,9 @@ pub(super) struct Outcomes {
   pub results: Vec<(TaskId, Result<bool, Message>)>,
 }
 impl lurq::app::component::DevtoolsInspectable for Outcomes {}
-type Action = FutureAction<(Vec<TaskId>, Mutation, bool), Outcomes, Message>;
+/// The run the Canceled confirmation showed for each task, which only it stops.
+type Named = Vec<(TaskId, RunId)>;
+type Action = FutureAction<(Vec<TaskId>, Mutation, Named), Outcomes, Message>;
 
 /// The selection bar's organization group (`EpDpS` in `HI91q`): Set status, Set priority, Add tag
 /// and Remove tag, with their menus, the Canceled confirmation and each task's outcome.
@@ -237,7 +238,13 @@ impl BulkOrganization {
           ))
           .icon(crate::ui::icon::Icon::Plus)
           .id("bulk-tags-apply")
-          .on_click(move || action.run((selected.clone(), Mutation::AddTags(tags.get().0.tags().to_vec()), false)))
+          .on_click(move || {
+            action.run((
+              selected.clone(),
+              Mutation::AddTags(tags.get().0.tags().to_vec()),
+              Vec::new(),
+            ))
+          })
           .enabled(!pending && !self.tags.get().0.tags().is_empty())
           .render(ctx),
         );
@@ -271,7 +278,7 @@ impl BulkOrganization {
             menu.set(false);
             confirm.set(true);
           } else {
-            apply.run((ids.clone(), Mutation::Status(status), false));
+            apply.run((ids.clone(), Mutation::Status(status), Vec::new()));
           }
         })
         .id(format!("bulk-status-{status:?}")),
@@ -294,7 +301,7 @@ impl BulkOrganization {
           &ctx.t(priority_copy(priority).1),
           checked,
           !action.state().get().is_pending(),
-          move || apply.run((ids.clone(), Mutation::Priority(priority), false)),
+          move || apply.run((ids.clone(), Mutation::Priority(priority), Vec::new())),
         )
         .id(format!("bulk-priority-{priority:?}")),
       );
@@ -374,7 +381,7 @@ impl BulkOrganization {
         apply.run((
           selected.clone(),
           Mutation::RemoveTags(tags.get().0.tags().to_vec()),
-          false,
+          Vec::new(),
         ))
       })
       .enabled(!pending && !self.tags.get().0.tags().is_empty())
@@ -389,6 +396,7 @@ impl BulkOrganization {
     }
     let selected = props.selected.get().0;
     let text = super::bulk_cancel::bulk_cancel_text(ctx, &props.tasks, &selected);
+    let named = text.runs.clone();
     let selected: Vec<_> = selected.into_iter().collect();
     let state = action.state().get();
     let pending = state.is_pending();
@@ -396,10 +404,10 @@ impl BulkOrganization {
       .data
       .iter()
       .flat_map(|outcomes| outcomes.results.iter())
-      .filter_map(|(_, result)| result.as_ref().err())
-      .map(|error| message_text(ctx, error).to_string())
+      .filter_map(|(id, result)| result.as_ref().err().map(|error| (id, error)))
+      .map(|(id, error)| super::outcome::failure(ctx, &props.tasks, *id, error))
       .collect();
-    let error = (!failures.is_empty()).then(|| failures.join(" "));
+    let error = (!failures.is_empty()).then(|| failures.join(&ctx.t("common.listSeparator")));
     let (close, apply) = (self.confirm.clone(), action.clone());
     let dialog = CancelDialog {
       id: "bulk-cancel-confirmation",
@@ -415,7 +423,13 @@ impl BulkOrganization {
       ctx,
       dialog,
       move || close.set(false),
-      move || apply.run((selected.clone(), Mutation::Status(WorkflowStatus::Canceled), true)),
+      move || {
+        apply.run((
+          selected.clone(),
+          Mutation::Status(WorkflowStatus::Canceled),
+          named.clone(),
+        ))
+      },
     );
     Modal::new(backdrop(ctx, form(None, content)))
       .target(ModalTarget::Root)
@@ -430,36 +444,25 @@ fn active_count(props: &BulkProps) -> usize {
   props.tasks.runs_not_ended(&props.selected.get().0)
 }
 
+/// Applies `mutation` to `task`: whether it changed it, or why not. Canceled stops only `named`,
+/// the run the confirmation showed for the task.
 async fn apply(
   root: &std::path::Path,
   task: TaskId,
   mutation: Mutation,
-  confirmed: bool,
+  named: Option<RunId>,
   runners: &Runners,
 ) -> Result<bool, Message> {
-  if confirmed && matches!(mutation, Mutation::Status(WorkflowStatus::Canceled)) {
-    let root = root.to_owned();
-    let run = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
-      .await?
-      .map_err(|error| messages::store_error(&error))?;
-    if let Some(run) = run {
-      runners
-        .control_run(Command::CancelRun { run })
-        .await
-        .map_err(|error| crate::tasks::run::control_message(&error))?;
-    }
+  if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled)) {
+    stop_named_run(root, task, named, runners)
+      .await
+      .map_err(|refused| refused.message())?;
   }
   let root = root.to_owned();
   background::run(move || {
-    let mut db = ProjectDb::open(&root)?;
-    let had = std::cell::Cell::new(false);
-    db.update_task_organizations(&[task], ChangeActor::Person, Timestamp::now(), |value| {
-      if let Mutation::RemoveTags(tags) = &mutation {
-        had.set(had.get() || value.tags().iter().any(|tag| tags.contains(tag)));
-      }
+    ProjectDb::open(&root)?.update_task_organization(task, ChangeActor::Person, Timestamp::now(), |value| {
       update(value, &mutation)
-    })?;
-    Ok::<_, orchester_store::StoreError>(had.get() || !matches!(mutation, Mutation::RemoveTags(_)))
+    })
   })
   .await?
   .map_err(|error| messages::store_error(&error))
@@ -478,12 +481,13 @@ fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
 fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
   let root = props.root.clone();
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
-  ctx.future_action(move |(tasks, mutation, confirmed): (Vec<TaskId>, Mutation, bool)| {
+  ctx.future_action(move |(tasks, mutation, named): (Vec<TaskId>, Mutation, Named)| {
     let (root, runners) = (root.clone(), runners.clone());
     async move {
       let mut results = Vec::new();
       for task in tasks {
-        let result = apply(&root, task, mutation.clone(), confirmed, &runners).await;
+        let run = named.iter().find(|(shown, _)| *shown == task).map(|(_, run)| *run);
+        let result = apply(&root, task, mutation.clone(), run, &runners).await;
         results.push((task, result));
       }
       Ok(Outcomes { mutation, results })

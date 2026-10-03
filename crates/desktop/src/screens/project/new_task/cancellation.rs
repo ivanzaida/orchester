@@ -9,16 +9,11 @@ use lurq::{
 use orchester_core::{id::TaskId, store::RunStore};
 use orchester_store::ProjectDb;
 
-use super::{NewTaskProps, SaveAction};
+use super::{NewTaskProps, SaveAction, SaveRequest};
 use crate::{
   background,
   messages::{self, Message},
-  ui::{
-    backdrop::backdrop,
-    cancel_dialog::cancel_dialog,
-    form::{Submit, form},
-    message_text,
-  },
+  ui::{backdrop::backdrop, cancel_dialog::cancel_dialog, form::form, message_text},
 };
 
 #[derive(Clone, PartialEq)]
@@ -30,7 +25,7 @@ pub(super) fn confirmation(
   open: Signal<bool>,
   props: &NewTaskProps,
   save: &SaveAction,
-  submit: Submit,
+  submit: Option<SaveRequest>,
 ) -> Element {
   if !open.get() {
     return Modal::new(Column::new()).open_when(false).into();
@@ -39,7 +34,9 @@ pub(super) fn confirmation(
     return Modal::new(Column::new()).open_when(false).into();
   };
   let task = editing.task.id();
-  let load = active_run(ctx, &props.project.repo_root, task);
+  // Read again after each refusal: a run that started since is the one to name.
+  let refusal = save.state().get().error;
+  let load = active_run(ctx, &props.project.repo_root, task, refusal);
   let pending = save.state().get().is_pending();
   // The run is shown once read; a failed read says why in place of the save's error.
   let run = load.data.and_then(|ActiveRun(run)| run);
@@ -51,6 +48,7 @@ pub(super) fn confirmation(
     .or(load.error)
     .map(|error| message_text(ctx, &error).to_string());
   let close = open.clone();
+  let run_id = run.as_ref().map(orchester_core::run::Run::id);
   let dialog = crate::screens::project::task::single_cancel(
     ctx,
     (&editing.task, run.as_ref()),
@@ -62,9 +60,10 @@ pub(super) fn confirmation(
     ctx,
     dialog,
     move || close.set(false),
+    // Stop exactly the run the dialog shows; without one there is none to stop.
     move || {
       if let Some(submit) = &submit {
-        submit();
+        submit(run_id);
       }
     },
   );
@@ -75,9 +74,14 @@ pub(super) fn confirmation(
     .into()
 }
 
-fn active_run(ctx: &mut Ctx, root: &std::path::Path, task: TaskId) -> FutureState<ActiveRun, Message> {
+fn active_run(
+  ctx: &mut Ctx,
+  root: &std::path::Path,
+  task: TaskId,
+  refusal: Option<Message>,
+) -> FutureState<ActiveRun, Message> {
   ctx
-    .future((root.to_path_buf(), task), |(root, task)| async move {
+    .future((root.to_path_buf(), task, refusal), |(root, task, _)| async move {
       background::run(move || {
         let db = ProjectDb::open(&root)?;
         let run = db

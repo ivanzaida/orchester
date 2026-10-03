@@ -215,6 +215,14 @@ the blocking search offers no linked task and adds only a task it shows.
 Merged with master `0678ce0d` (ORC-61, approval choices): the task organization history moved from the removed
 Activity tab to the end of the Summary; the header's Canceled asks the store whether a run must stop, so a task page
 that has not read the run's end yet neither asks nor skips the confirmation.
+Code review follow-ups (2026-10-03, after `ee7bab6c`; master `fee1ff89` merged): Edit task saves only the
+organization fields the person changed (`TaskOrganization::rebase`), so a status set meanwhile is kept; a confirmed
+Canceled stops only the named run (`tasks::cancel_run`), in the header, Edit task and bulk; a Canceled task's other
+fields stay editable; bulk outcomes count real changes and name failed tasks; the store's per-task
+`update_task_organization` replaces the batch shape; history icons follow the change kind; `TaskSort::Updated` is gone.
+`DependencyGate::Review` stays: the scheduler tests exercise it as a rule, though the app only creates Merge links.
+User decisions (2026-10-03, recorded in the design doc): history stays at the end of Summary; a Canceled task is
+skipped by its group (`TaskGroup::skipping`, `GroupHold::Canceled`); migration 39 backfills statuses from runs.
 
 **Remaining:** an independent Review of both merges and the fixes, Pencil frames for the combined bar, query lines and
 narrow table, and independent app/Pencil verification of the 24 ORC-39 states (`docs/design/orchester-workspace.md`,

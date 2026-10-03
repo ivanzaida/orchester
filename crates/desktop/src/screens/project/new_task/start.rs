@@ -36,7 +36,7 @@ impl NewTaskForm {
         target,
         details: Box::new(ready?),
         // Invalid organization is explained beside its fields and prevents Run.
-        organization: self.organization.snapshot().ok()?,
+        organization: self.organization.change()?,
         pipeline: Arc::new(
           pipelines?
             .iter()
@@ -76,7 +76,13 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
         } => {
           let selected_version = pipeline.version;
           let queued = background::run(move || {
-            crate::tasks::run::queue_organized_in(&repo_root, target, *details, &organization, selected_version)
+            crate::tasks::run::queue_organized_in(
+              &repo_root,
+              target,
+              *details,
+              (&organization.0, &organization.1),
+              selected_version,
+            )
           })
           .await
           .map_err(|error| RunProblems {

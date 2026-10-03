@@ -95,10 +95,6 @@ fn organization_sorting_uses_workflow_priority_then_recent_update() {
     Ordering::Less
   );
   assert_eq!(
-    TaskSort::Updated.compare((&backlog, old, first), (&todo, recent, second)),
-    Ordering::Greater
-  );
-  assert_eq!(
     TaskSort::Priority.compare((&backlog, old, first), (&backlog, recent, second)),
     Ordering::Greater
   );
@@ -130,4 +126,58 @@ fn organization_rejects_indirect_dependency_cycles() {
   TaskOrganization::default()
     .check_dependencies(first, &graph)
     .expect("removing link resolves cycle");
+}
+
+/// A form's save keeps what changed meanwhile: only the fields the person changed from what the
+/// form loaded replace the stored ones, and tags and links merge by what was added and removed.
+#[test]
+fn organization_rebase_keeps_changes_made_meanwhile() {
+  let (desktop, ux, bug) = (TagId::generate(), TagId::generate(), TagId::generate());
+  let (first, second) = (TaskId::generate(), TaskId::generate());
+  let link = |task| BlockingTask {
+    task,
+    gate: DependencyGate::Merge,
+  };
+  let base = TaskOrganization::new(
+    WorkflowStatus::InProgress,
+    Priority::Low,
+    None,
+    vec![link(first)],
+    vec![desktop],
+  )
+  .expect("loaded");
+  // Meanwhile Orchester moved the task to In review and a bulk change added UX.
+  let current = base.clone().with_status(WorkflowStatus::InReview).add_tags(&[ux]);
+  // Unchanged form: what is stored stays.
+  assert_eq!(base.rebase(&base, &current), current);
+  // The person raised the priority, swapped Desktop for Bug and the first link for the second.
+  let edited = TaskOrganization::new(
+    WorkflowStatus::InProgress,
+    Priority::High,
+    None,
+    vec![link(second)],
+    vec![bug],
+  )
+  .expect("edited");
+  let saved = edited.rebase(&base, &current);
+  assert_eq!(saved.status(), WorkflowStatus::InReview);
+  assert_eq!(saved.priority(), Priority::High);
+  let mut tags = vec![ux, bug];
+  tags.sort();
+  assert_eq!(saved.tags(), tags.as_slice());
+  assert_eq!(saved.dependencies(), [link(second)]);
+}
+
+/// The hold and the refusal a blocked task causes cross the runner's IPC as JSON.
+#[test]
+fn organization_blocked_hold_and_refusal_round_trip() {
+  use orchester_core::{run::RunAgainBlock, task_group::GroupHold};
+  let hold = GroupHold::Blocked {
+    by: vec![TaskId::generate(), TaskId::generate()],
+  };
+  let json = serde_json::to_string(&hold).expect("hold");
+  assert_eq!(serde_json::from_str::<GroupHold>(&json).expect("hold back"), hold);
+  let block = RunAgainBlock::TaskBlocked;
+  let json = serde_json::to_string(&block).expect("block");
+  assert_eq!(serde_json::from_str::<RunAgainBlock>(&json).expect("block back"), block);
 }

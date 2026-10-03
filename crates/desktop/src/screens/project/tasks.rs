@@ -329,10 +329,12 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
 /// is highlighted and scrolled into view once the tasks as read include it.
 fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks, tab: TaskTab) -> Element {
   let (search, filter) = (screen.search.get(), screen.filter.get());
+  let separator = ctx.t("common.listSeparator");
   let query = Query {
     text: &search,
     pipeline: screen.pipeline.get(),
     organization: &filter.0,
+    separator: &separator,
   };
   let rows = Arc::new(browse::rows(tasks, tab, query, screen.sort.get()));
   let visible = rows.clone();

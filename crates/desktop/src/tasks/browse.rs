@@ -6,7 +6,7 @@ use orchester_core::{
   run::TaskPhase,
   task::{
     Task,
-    organization::{self, TaskFilter},
+    organization::{self, TaskFilter, WorkflowStatus},
   },
   task_group::GroupHold,
 };
@@ -63,6 +63,8 @@ pub struct Query<'a> {
   pub text: &'a str,
   pub pipeline: PipelineFilter,
   pub organization: &'a TaskFilter,
+  /// Joins the keys of a row's blocking tasks (`common.listSeparator`).
+  pub separator: &'a str,
 }
 
 pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort) -> Vec<TaskRow> {
@@ -87,9 +89,17 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
   list::rows(&tasks, &data.pipelines, &data.phases, tab)
     .into_iter()
     .map(|row| {
-      let mut row = data.decorate_row(row);
+      let mut row = data.decorate_row(row, query.separator);
       // A blocked task says what blocks it rather than how its group waits.
       if data.blocking.get(&row.id).is_some_and(|by| !by.is_empty()) {
+        return row;
+      }
+      // A Canceled task its group will not start says so rather than how the group waits.
+      if row.phase == Some(TaskPhase::Queued)
+        && row.organization.status() == WorkflowStatus::Canceled
+        && data.grouped.contains(&row.id)
+      {
+        row.detail = hold_row_message(&GroupHold::Canceled);
         return row;
       }
       match (data.group_holds.get(&row.id), row.phase) {

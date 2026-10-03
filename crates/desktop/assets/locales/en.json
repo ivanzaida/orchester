@@ -374,7 +374,8 @@
         "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
-        "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks."
+        "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
+      "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
       },
       "heldLine": {
         "sessionEnded": {
@@ -416,6 +417,10 @@
         "blocked": {
           "one": "{{task}} waits for its blocking tasks · Return to drafts",
           "other": "{{count}} tasks wait for their blocking tasks · Return to drafts"
+        },
+        "canceled": {
+          "one": "{{task}} is Canceled: its group does not start it",
+          "other": "{{count}} tasks are Canceled: their group does not start them"
         }
       },
       "held": {
@@ -428,7 +433,8 @@
         "failure": "Held · a task failed",
         "preflight": "Held · cannot start yet",
         "startFailed": "Held · start failed",
-        "blocked": "Waiting for blocking tasks"
+        "blocked": "Waiting for blocking tasks",
+        "canceled": "Canceled · not started by its group"
       },
       "selected": "{{count}} selected",
       "runSelected": "Run selected · {{count}}",
@@ -560,8 +566,20 @@
         "other": "Removed {{tags}} from {{count}} tasks."
       },
       "tagsMissing": {
-        "one": "{{count}} selected task did not have {{tags}}.",
-        "other": "{{count}} selected tasks did not have {{tags}}."
+        "one": "{{count}} selected task did not have {{value}}.",
+        "other": "{{count}} selected tasks did not have {{value}}."
+      },
+      "alreadyStatus": {
+        "one": "{{count}} selected task was already {{value}}.",
+        "other": "{{count}} selected tasks were already {{value}}."
+      },
+      "alreadyPriority": {
+        "one": "{{count}} selected task already had priority {{value}}.",
+        "other": "{{count}} selected tasks already had priority {{value}}."
+      },
+      "alreadyTagged": {
+        "one": "{{count}} selected task already had {{value}}.",
+        "other": "{{count}} selected tasks already had {{value}}."
       },
       "removeHint": {
         "one": "{{tags}} is removed wherever present. Other tags stay.",
@@ -773,6 +791,7 @@
       "confirm": "Stop run and cancel task",
       "stopping": "Stopping…",
       "confirmRequired": "Confirm stopping the active run before canceling this task.",
+      "startedSince": "A run started after the confirmation opened. It was not stopped and the task was not canceled.",
       "bulkTitle": {
         "oneTask": "Cancel 1 task and stop its active run?",
         "oneRun": "Cancel {{tasks}} tasks and stop 1 active run?",

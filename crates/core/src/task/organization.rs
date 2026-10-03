@@ -199,6 +199,52 @@ impl TaskOrganization {
     Ok(())
   }
 
+  /// `current` with the changes a person made from `base` to `self` in a form, so what changed
+  /// meanwhile elsewhere (Orchester moving the task to In review, a bulk tag) is kept: each field
+  /// the person did not change keeps its current value, and tags and links are merged by what was
+  /// added and removed.
+  #[must_use]
+  pub fn rebase(&self, base: &Self, current: &Self) -> Self {
+    fn pick<T: PartialEq + Clone>(edited: &T, base: &T, current: &T) -> T {
+      if edited == base { current } else { edited }.clone()
+    }
+    let removed_tags: Vec<TagId> = base
+      .tags
+      .iter()
+      .copied()
+      .filter(|tag| !self.tags.contains(tag))
+      .collect();
+    let added_tags: Vec<TagId> = self
+      .tags
+      .iter()
+      .copied()
+      .filter(|tag| !base.tags.contains(tag))
+      .collect();
+    // A link the person removed goes; one the person added (or gave another gate) replaces
+    // the current link to the same task.
+    let added: Vec<&BlockingTask> = self
+      .dependencies
+      .iter()
+      .filter(|link| !base.dependencies.contains(link))
+      .collect();
+    let mut dependencies: Vec<BlockingTask> = current
+      .dependencies
+      .iter()
+      .filter(|link| self.dependencies.contains(link) || !base.dependencies.contains(link))
+      .filter(|link| !added.iter().any(|new| new.task == link.task))
+      .cloned()
+      .collect();
+    dependencies.extend(added.into_iter().cloned());
+    Self {
+      status: pick(&self.status, &base.status, &current.status),
+      priority: pick(&self.priority, &base.priority, &current.priority),
+      blocked_reason: pick(&self.blocked_reason, &base.blocked_reason, &current.blocked_reason),
+      dependencies,
+      tags: Vec::new(),
+    }
+    .with_tags(current.clone().remove_tags(&removed_tags).add_tags(&added_tags).tags)
+  }
+
   /// The manual flag is informational and remains visible after links resolve.
   pub fn unfinished(&self, completed: impl Fn(&BlockingTask) -> bool) -> Vec<TaskId> {
     self
@@ -269,10 +315,8 @@ pub struct OrganizationChange {
   pub to_tag_names: Vec<Name>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskSort {
-  #[default]
-  Updated,
   Status,
   Priority,
 }
@@ -284,7 +328,6 @@ impl TaskSort {
     right: (&TaskOrganization, Timestamp, TaskId),
   ) -> std::cmp::Ordering {
     let order = match self {
-      Self::Updated => std::cmp::Ordering::Equal,
       Self::Status => left.0.status().cmp(&right.0.status()),
       Self::Priority => left.0.priority().cmp(&right.0.priority()),
     };

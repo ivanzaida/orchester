@@ -63,6 +63,16 @@ impl Component for OrganizationHistory {
   }
 }
 
+/// What a history line changed, which picks its icon.
+#[derive(Clone, Copy)]
+enum Kind {
+  Status,
+  Priority,
+  Blocked,
+  Tags,
+  Links,
+}
+
 fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   let actor = ctx.t(match change.actor {
     ChangeActor::Person => "tasks.history.person",
@@ -72,6 +82,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   let mut changes = Vec::new();
   if change.from.status() != change.to.status() {
     changes.push((
+      Kind::Status,
       ctx.t("tasks.workflow.label").to_string(),
       ctx.t(workflow_copy(change.from.status()).1).to_string(),
       ctx.t(workflow_copy(change.to.status()).1).to_string(),
@@ -79,6 +90,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   if change.from.priority() != change.to.priority() {
     changes.push((
+      Kind::Priority,
       ctx.t("tasks.priority.label").to_string(),
       ctx.t(priority_copy(change.from.priority()).1).to_string(),
       ctx.t(priority_copy(change.to.priority()).1).to_string(),
@@ -86,6 +98,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   if change.from.blocked_reason() != change.to.blocked_reason() {
     changes.push((
+      Kind::Blocked,
       ctx.t("tasks.blocked.label").to_string(),
       change.from.blocked_reason().unwrap_or_default().to_owned(),
       change.to.blocked_reason().unwrap_or_default().to_owned(),
@@ -93,6 +106,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   if change.from.tags() != change.to.tags() {
     changes.push((
+      Kind::Tags,
       ctx.t("tasks.tags.label").to_string(),
       change
         .from_tag_names
@@ -110,6 +124,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   if change.from.dependencies() != change.to.dependencies() {
     changes.push((
+      Kind::Links,
       ctx.t("tasks.blocked.links").to_string(),
       change.from.dependencies().len().to_string(),
       change.to.dependencies().len().to_string(),
@@ -117,7 +132,7 @@ fn change_lines(ctx: &Ctx, change: &OrganizationChange) -> Vec<Element> {
   }
   changes
     .into_iter()
-    .map(|(field, from, to)| history_row(ctx, &field, &from, &to, &actor, &time))
+    .map(|(kind, field, from, to)| history_row(ctx, (kind, &field), (&from, &to), (&actor, &time)))
     .collect()
 }
 
@@ -135,7 +150,12 @@ pub(super) fn history(ctx: &mut Ctx, root: &std::path::Path, task: TaskId, revis
 }
 
 /// One change: the field, the value before and after (an empty one reads "None"), who and when.
-fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: &str) -> Element {
+fn history_row(
+  ctx: &Ctx,
+  (kind, field): (Kind, &str),
+  (from, to): (&str, &str),
+  (actor, date): (&str, &str),
+) -> Element {
   let none = ctx.t("tasks.history.none");
   let shown = |value: &str| {
     if value.is_empty() {
@@ -145,12 +165,11 @@ fn history_row(ctx: &Ctx, field: &str, from: &str, to: &str, actor: &str, date: 
     }
   };
   let (from, to) = (shown(from), shown(to));
-  let glyph = if field == ctx.t("tasks.tags.label").as_ref() {
-    crate::ui::icon::Icon::Tag
-  } else if field == ctx.t("tasks.priority.label").as_ref() {
-    crate::ui::icon::Icon::SignalHigh
-  } else {
-    crate::ui::icon::Icon::GitCompareArrows
+  let glyph = match kind {
+    Kind::Tags => crate::ui::icon::Icon::Tag,
+    Kind::Priority => crate::ui::icon::Icon::SignalHigh,
+    Kind::Blocked => crate::ui::icon::Icon::CircleMinus,
+    Kind::Status | Kind::Links => crate::ui::icon::Icon::GitCompareArrows,
   };
   Row::new()
     .spacing(SpacingSize::Sm)

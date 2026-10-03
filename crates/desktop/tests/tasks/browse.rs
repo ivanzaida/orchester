@@ -18,6 +18,7 @@ fn query(
     text,
     pipeline,
     organization,
+    separator: ", ",
   };
   browse::rows(data, tab, query, sort)
 }

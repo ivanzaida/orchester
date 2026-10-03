@@ -57,6 +57,8 @@ pub struct ProjectTasks {
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Why each task of a reviewed group that holds its work waits.
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
+  /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
+  pub grouped: Arc<std::collections::BTreeSet<TaskId>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
@@ -82,7 +84,9 @@ pub struct AutoApprovingRun {
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
 
 impl ProjectTasks {
-  pub fn decorate_row(&self, mut row: super::list::TaskRow) -> super::list::TaskRow {
+  /// `row` with its tag names and what blocks it, the blocking tasks' keys joined by `separator`
+  /// (`common.listSeparator`).
+  pub fn decorate_row(&self, mut row: super::list::TaskRow, separator: &str) -> super::list::TaskRow {
     row.tags = self
       .tags
       .iter()
@@ -95,7 +99,7 @@ impl ProjectTasks {
         .filter_map(|id| self.tasks.iter().find(|task| task.id() == *id))
         .map(|task| task.key().to_string())
         .collect::<Vec<_>>()
-        .join(", ");
+        .join(separator);
       row.detail = UiMessage::new("tasks.blocked.rowUnfinished").with("tasks", keys);
     } else if let Some(reason) = row.organization.blocked_reason() {
       row.detail = UiMessage::new("tasks.blocked.informational").with("reason", reason.to_owned());
@@ -126,7 +130,9 @@ impl ProjectTasks {
     let tasks = db.tasks()?;
     let pending = approvals::pending(&db, repo_root)?;
     let mut group_holds = BTreeMap::new();
+    let mut grouped = std::collections::BTreeSet::new();
     for group in db.task_groups()? {
+      grouped.extend(group.tasks().iter().copied());
       if let Some(hold) = db.task_group_hold(group.key())? {
         for task in group.tasks() {
           group_holds.insert(*task, hold.clone());
@@ -183,6 +189,7 @@ impl ProjectTasks {
       ),
       tasks: Arc::new(tasks),
       group_holds: Arc::new(group_holds),
+      grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(&db)?),
       pending_tool_approvals: Arc::new(pending),
       phases: Arc::new(phases),
@@ -424,11 +431,14 @@ pub fn save_organized_to(
   db: &mut ProjectDb,
   target: SaveTarget,
   details: TaskDetails,
-  organization: &orchester_core::task::organization::TaskOrganization,
+  (base, organization): (
+    &orchester_core::task::organization::TaskOrganization,
+    &orchester_core::task::organization::TaskOrganization,
+  ),
   now: Timestamp,
 ) -> Result<Task, StoreError> {
   match target {
     SaveTarget::New(batch) => db.create_organized_task(batch, details, organization, now),
-    SaveTarget::Task(task) => db.update_organized_task(task, details, organization, now),
+    SaveTarget::Task(task) => db.update_organized_task(task, details, (base, organization), now),
   }
 }

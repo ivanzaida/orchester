@@ -61,7 +61,7 @@ use crate::{
   },
   theme::{ExtraSpacing, gutter_width},
   ui::{
-    form::{Submit, form},
+    form::form,
     icon::{Icon, IconSize, icon},
     unit_input::FocusedInput,
   },
@@ -100,9 +100,19 @@ pub struct SavedDraft {
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
-/// Where to save, what, and whether moving a task with an active run to Canceled was confirmed.
-type SaveArgs = (PathBuf, SaveTarget, TaskDetails, TaskOrganization, bool);
+/// Where to save, what: the details and the organization as the form loaded it and as it is now
+/// (only what the person changed is saved), and the run the person confirmed stopping for
+/// Canceled.
+type SaveArgs = (
+  PathBuf,
+  SaveTarget,
+  TaskDetails,
+  (TaskOrganization, TaskOrganization),
+  Option<orchester_core::id::RunId>,
+);
 type SaveAction = FutureAction<SaveArgs, SavedDraft, Message>;
+/// A save, with the run the person confirmed stopping, if any.
+type SaveRequest = Arc<dyn Fn(Option<orchester_core::id::RunId>) + Send + Sync>;
 
 /// The task whose run started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,7 +150,8 @@ enum RunArgs {
     repo_root: PathBuf,
     target: SaveTarget,
     details: Box<TaskDetails>,
-    organization: TaskOrganization,
+    /// As loaded and as edited.
+    organization: (TaskOrganization, TaskOrganization),
     pipeline: Arc<PipelineChoice>,
   },
   Retry {
@@ -233,6 +244,8 @@ impl Component for NewTaskForm {
     let saved = nav.clone();
     let cancel_confirmation = ctx.signal(false);
     let confirm = cancel_confirmation.clone();
+    let organization = OrganizationDraft::new(ctx);
+    let loaded = organization.loaded.clone();
     ctx.watch(&save.state(), move |state| {
       if state.is_rejected() {
         if state.error.as_ref().is_some_and(persistence::needs_cancel_confirmation) {
@@ -246,6 +259,10 @@ impl Component for NewTaskForm {
         return;
       };
       confirm.set(false);
+      // The next save writes what the person changes from here.
+      loaded.set(crate::tasks::organization::OrganizationValue(
+        draft.organization.clone(),
+      ));
       saved.tasks_changed();
       if let Some(task) = draft.created {
         saved.show_created(task);
@@ -271,7 +288,7 @@ impl Component for NewTaskForm {
       }
     });
     Self {
-      organization: OrganizationDraft::new(ctx),
+      organization,
       cancel_confirmation,
       title: ctx.signal(String::new()),
       brief: ctx.signal(String::new()),
@@ -305,7 +322,8 @@ impl Component for NewTaskForm {
     self.mark_unsaved(&state, editing);
     let target = self.target(editing.or(recovered));
     let submit = self
-      .save_handler(&save, &props.project, target, state.ready.clone(), false)
+      .save_request(&save, &props.project, target, state.ready.clone())
+      .map(|request| -> Arc<dyn Fn() + Send + Sync> { Arc::new(move || request(None)) })
       .filter(|_| state.can_save());
     let start = (!state.started)
       .then(|| {
@@ -369,7 +387,7 @@ impl Component for NewTaskForm {
         self.cancel_confirmation.clone(),
         &props,
         &save,
-        self.save_handler(&save, &props.project, target, state.ready.clone(), true),
+        self.save_request(&save, &props.project, target, state.ready.clone()),
       ))
   }
 }
@@ -423,29 +441,22 @@ impl NewTaskForm {
     }
   }
 
-  /// Saves the valid form: Create under the form's key, or over the task it edits; `None` while it
-  /// cannot be saved.
-  fn save_handler(
+  /// Saves the valid form: Create under the form's key, or over the task it edits, stopping the
+  /// run the person confirmed for Canceled; `None` while it cannot be saved.
+  fn save_request(
     &self,
     save: &SaveAction,
     project: &OpenProject,
     target: SaveTarget,
     ready: Option<TaskDetails>,
-    confirmed: bool,
-  ) -> Submit {
+  ) -> Option<SaveRequest> {
     let details = ready?;
     // The organization fields explain their own errors; the form cannot be saved meanwhile.
-    let organization = self.organization.snapshot().ok()?;
+    let organization = self.organization.change()?;
     let save = save.clone();
     let repo_root = project.repo_root.clone();
-    Some(Arc::new(move || {
-      save.run((
-        repo_root.clone(),
-        target,
-        details.clone(),
-        organization.clone(),
-        confirmed,
-      ));
+    Some(Arc::new(move |named| {
+      save.run((repo_root.clone(), target, details.clone(), organization.clone(), named));
     }))
   }
 }

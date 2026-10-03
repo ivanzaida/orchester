@@ -42,6 +42,9 @@ pub struct OrganizationDraft {
   pub blocked: Signal<bool>,
   pub reason: Signal<String>,
   pub value: Signal<OrganizationValue>,
+  /// What the form loaded, or saved last: a save keeps what changed elsewhere since and writes
+  /// only what the person changed from it.
+  pub loaded: Signal<OrganizationValue>,
   pub ready: Signal<bool>,
   /// What blocks Run, shown beside the run action (`ZLhiM`).
   pub blockers: Signal<RunBlockers>,
@@ -55,6 +58,7 @@ impl OrganizationDraft {
       blocked: ctx.signal(false),
       reason: ctx.signal(String::new()),
       value: ctx.signal(OrganizationValue::default()),
+      loaded: ctx.signal(OrganizationValue::default()),
       ready: ctx.signal(true),
       blockers: ctx.signal(RunBlockers::default()),
     }
@@ -65,6 +69,13 @@ impl OrganizationDraft {
     self.blocked.set(value.blocked_reason().is_some());
     self.reason.set(value.blocked_reason().unwrap_or_default().to_owned());
     self.value.set(OrganizationValue(value.clone()));
+    self.loaded.set(OrganizationValue(value.clone()));
+  }
+
+  /// What the form loaded and what it has now, for a save; `None` while the fields are invalid,
+  /// which they explain.
+  pub fn change(&self) -> Option<(TaskOrganization, TaskOrganization)> {
+    Some((self.loaded.get().0, self.snapshot().ok()?))
   }
   pub fn snapshot(&self) -> Result<TaskOrganization, OrganizationError> {
     let value = self.value.get().0;
