@@ -43,11 +43,19 @@ or CIDR ranges, for example `172.29.0.2,10.20.0.0/16`). Both PEM paths are requi
 connection addresses or networks you control: forwarded addresses are ignored from other peers. The server combines
 all forwarding-header lines and walks the chain from the connection backwards; malformed lists use the peer.
 Mapped IPv4 addresses are normalized, and IPv6 rate limits group clients by /64.
+Never include a client address or a CIDR range containing clients in `trusted_proxies`: clients inside a trusted range
+can forge forwarding hops and evade the address limit. Trust the proxy's connection address as narrowly as possible.
 
+Connections must send their first byte within 2 seconds; after TLS, the same deadline applies to the first HTTP byte.
 Header reads, keep-alive idle time and body reads each have a 10-second deadline. The server accepts at most 256
-HTTP connections, with at most 64 concurrent 10-second TLS handshakes. Sign-in has username and address failure
+HTTP connections (64 per peer), with at most 64 concurrent 10-second TLS handshakes (8 per peer). Peer caps use the
+connection address, normalize mapped IPv4, and group IPv6 by /64; excess connections are closed immediately.
+Sign-in has username and address failure
 limits; password changes separately block a user after 5 failed current-password checks in 15 minutes, for 15 minutes.
 Both return `429` with `Retry-After`. A password-change block does not prevent that user's sign-in.
+Failures and in-flight checks share the same budget, reserved atomically before entering the hashing queue and
+rechecked after acquiring a slot. Successful checks release their reservation. A full in-flight budget returns
+`Retry-After: 1`; a failure block returns its remaining duration. Requests rejected by either check do no Argon2 work.
 
 The data directory contains `orchester-server.db` (SQLite WAL) with forward-only versioning and append-only audit
 records. Create an online snapshot, including committed WAL contents, while the server is running:
@@ -60,6 +68,10 @@ docker compose cp server:/data/backups/orchester-server-2026-10-03.db ./orcheste
 
 Use a fresh filename for each snapshot: the command refuses to overwrite any existing file, including the live
 database. It exits successfully only after SQLite's online backup completes; no `sqlite3` installation is required.
+The database is copied in one step under a read snapshot, so ongoing commits cannot keep restarting the backup.
+This holds the read lock for the copy and may briefly delay writers on non-WAL databases. If SQLite cannot complete
+the step because the database is busy or locked, the command reports failure, removes its incomplete file, and can
+be retried with the same filename.
 For a standalone binary: `orchester-server --config server.toml backup /secure/backups/snapshot.db`. The destination's
 parent directory must exist. Unix snapshots are created with mode 0600; on Windows they inherit the directory ACLs.
 Protect the copied snapshot as carefully as the live data: it contains password hashes and session-token digests.

@@ -354,12 +354,18 @@ with their password, which issues a new token. There is nothing to copy, paste o
 - **Rate limiting of password changes.** 5 failed current-password checks per user in 15 minutes block password
   changes for 15 minutes with `429 rate_limited` and `Retry-After`. Check before queueing for password hashing;
   password-change counters are separate from sign-in counters.
+- **Concurrent password checks.** Both limiters atomically reserve capacity before entering the hashing queue;
+  failures and in-flight checks together must fit their username/address/user budgets. Recheck after acquiring a
+  hashing slot, before verification. Success releases the reservation. A full in-flight budget returns
+  `Retry-After: 1`; a failure block returns its remaining duration. Rejected requests perform no Argon2 work.
 - **Audit.** The server records sign-ins and failures (username and address, never the password), session revocations,
   password changes and failed current-password checks (`password_change_failed`, actor/target user id and address),
   user and membership changes, and claim takeovers, in an append-only `audit_events` table. User changes that leave
   every stored value unchanged create no audit event.
 - **HTTP deadlines.** Request headers and keep-alive idle connections have a 10-second deadline, as do body reads.
-  At most 256 HTTP connections and 64 concurrent direct-TLS handshakes are served; TLS handshakes expire at 10 seconds.
+  Connections must send their first byte within 2 seconds (also the first HTTP byte after TLS). At most 256 HTTP
+  connections (64 per peer) and 64 concurrent direct-TLS handshakes (8 per peer) are served; excess connections close
+  immediately. Peer caps normalize mapped IPv4 and group IPv6 by /64. TLS handshakes expire at 10 seconds.
 
 ## Security
 
