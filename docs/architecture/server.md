@@ -145,7 +145,7 @@ local implementation that does nothing, a silent no-op (rule 6). A trait of thei
 `take_over`, `heartbeat`, `is_stale`, the run phases that end a claim) live in `orchester_core::sharing`, so the
 server enforces and the desktop displays the same rules.
 
-**Organization writes.** ORC-39 (branch `claude/orc39`, not merged yet) writes organization through `ProjectDb`
+**Organization writes.** ORC-39 (merged into master on 2026-10-03) writes organization through `ProjectDb`
 (`set_task_organization`, `update_task_organization`, the project tag methods), not through `TaskStore`. For a shared
 project these writes go to the server like the content writes: the organization fields travel in the same `PATCH
 …/tasks/{id}` with the revision, tags through the tag endpoints, and what the server confirms is written to the cache
@@ -271,7 +271,8 @@ status above is all it gets.
   carries no data, as with the IPC notifications. Event `id` is the event's sequence number.
 - **Kinds.** `task` (the full task snapshot, with organization, claim and run status), `members` (the project's
   members or their roles changed), `tags` (the project's tags after a create, rename, merge or delete; a merge or
-  delete also sends a `task` event for every task it rewrote), `project` (name or key changed), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
+  delete also sends a `task` event for every task it rewrote), `project` (name or key changed; payload `{ id, key, name }`
+  contains no recipient-specific role), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
   list and continues from the cursor the list returns), and `revoked` (the session or membership ended; the stream
   closes).
 - **Keep-alive.** A comment line every 20 s, so proxies do not close an idle stream; also `X-Accel-Buffering: no`
@@ -323,6 +324,9 @@ Error       { error: code, message, ...details }   // message is English for log
 ```
 
 Every response carries `Orchester-Server-Time` (the server's clock, for staleness).
+
+`not_queueable` always includes `missing`. When the task is already queued, it is an empty array and
+`reason: "not_draft"` explains the status refusal; incomplete drafts name their missing details.
 
 ### Endpoints
 
@@ -475,10 +479,11 @@ UUIDv7 ids, UTC milliseconds.
 | `meta` | schema version |
 | `users` | id, username (unique, case-insensitive), display name, password hash, admin, disabled at, must change password, created / password changed |
 | `sessions` | id, user, token hash (unique), device, created / last used / revoked, from an initial password |
-| `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at |
-| `memberships` | project, user, role (owner, member), added by / at; unique (project, user) |
+| `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at, expired event cursor floor |
+| `project_batches` | user, idempotency key, first response (JSON); unique (user, key) |
+| `memberships` | project, user, role (owner, member), added by / at, membership lifetime id; unique (project, user) |
 | `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), former key, title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, workflow status, priority, blocked reason, revision, has run, created by / at, updated by / at |
-| `task_batches` | project, idempotency key, user, task ids; unique (project, key): a repeated create or upload returns the first result |
+| `task_batches` | project, idempotency key, user, first response (JSON); unique (project, key): a repeated create or upload returns the first result even after those tasks are edited |
 | `tags` | id, project, name, normalized name; unique (project, normalized) |
 | `task_tags` | task, tag; unique (task, tag) |
 | `task_links` | task, blocking task (same project), gate (review, merge); unique (task, blocking task) |
@@ -491,6 +496,8 @@ UUIDv7 ids, UTC milliseconds.
 
 **Task numbers** come from `projects.next_task_number`, read and raised in the transaction that inserts the tasks, so
 concurrent creates never share or skip a number. As in `storage.md`, numbers are for people; every reference is an id.
+The counter can reach `u32::MAX + 1` to represent exhaustion; allocating beyond that returns `422 invalid`.
+Token and duration limits retain core's full unsigned 64-bit range, stored as decimal text rather than SQLite REAL.
 
 **Project identity.** `RepositoryIdentity::from_remote_url` in core normalizes the `origin` fetch URL. Credentials
 (already dropped by `strip_userinfo`), scheme and port are dropped. scp-like `git@host:owner/name` becomes
@@ -646,28 +653,32 @@ directory.
   the token nor the password.
 
 **S1b · Projects, tasks, claims and events on the server.**
-- [ ] Core: `sharing` (claim rules and staleness with tests over explicit times), `RepositoryIdentity` (HTTPS, SSH
+Implemented on `codex/server-s1b`, awaiting independent review; no merge. The functional boxes below pass on
+Windows. The macOS cross-check is blocked by missing Apple SDK headers; Linux and Docker were not rerun for S1b.
+Validation: [S1b evidence](../evidence/server-s1b-2026-10-04.md).
+
+- [x] Core: `sharing` (claim rules and staleness with tests over explicit times), `RepositoryIdentity` (HTTPS, SSH
   and scp-like forms of one repository match; local paths refused).
-- [ ] Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`not_member` with
+- [x] Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`not_member` with
   owners), members added and removed by owners and admins only, `404` for non-members. Two simultaneous creates for
   one repository: exactly one succeeds; the other gets `409 remote_taken` and changes nothing.
-- [ ] Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate. A repeated batch key
+- [x] Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate. A repeated batch key
   returns the first tasks. A stale revision gets `409 revision_conflict` with the current task. The edit lock and
   queueing follow core's rules. Import gives new numbers and keeps ids and former keys.
-- [ ] Claims: of two simultaneous claims exactly one wins. A heartbeat refreshes and reports lost claims. A claim is
+- [x] Claims: of two simultaneous claims exactly one wins. A heartbeat refreshes and reports lost claims. A claim is
   stale after 15 minutes of test clock. Take-over is refused while fresh or changed, and recorded when done.
   Removing a member or disabling a user releases their claims.
-- [ ] Organization (decisions 23–24; needs ORC-39's `task::organization` on master): workflow, priority, tags,
+- [x] Organization (decisions 23–24; reuses ORC-39's `task::organization` on master): workflow, priority, tags,
   blocking links and the Blocked reason in `Task` and `Changes`, under the revision; core's rules refuse an empty
   reason, a cycle, an unknown tag and Canceled while the reported run has not ended. Every change writes a history
   row with its person and actor, and `GET …/history` returns them. Upload and import take tags by name (created when
   missing) and drop links to tasks outside the upload or the project, listing them.
-- [ ] Tags: create, rename, merge and delete by members; names unique without regard to case; merge and delete
+- [x] Tags: create, rename, merge and delete by members; names unique without regard to case; merge and delete
   rewrite every affected task in one transaction with a new revision, a history row and a `task` event, then a
   `tags` event.
-- [ ] Member roles: `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted nor
+- [x] Member roles: `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted nor
   removed (`409 last_owner`); audited, with a `members` event.
-- [ ] Events: a stream resumed with `Last-Event-ID` receives exactly the missed events. A cursor beyond retention gets
+- [x] Events: a stream resumed with `Last-Event-ID` receives exactly the missed events. A cursor beyond retention gets
   `reset`. A revoked session or membership closes the stream.
 
 **S2a · Desktop: servers and sign-in.**
