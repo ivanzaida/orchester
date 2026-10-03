@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 
 use super::item::{
@@ -18,7 +18,7 @@ use crate::{
   display,
   screens::project::{approval_queue::ApprovalQueue, command_line},
   tasks::{approvals::ShownApproval, data::AutoApprovingRun},
-  theme::{ApprovalsWidths, ExtraSpacing},
+  theme::{APPROVALS_ASKS_MIN, ApprovalsWidths, ExtraSpacing},
   ui::{icon::Icon, link::Press},
 };
 
@@ -106,6 +106,7 @@ pub fn approvals(
   let middle = detail.map(|detail| {
     item_middle("status-approvals-asks")
       .flex_shrink(GIVES_WAY_FIRST)
+      .min_width(Dimension::Px(APPROVALS_ASKS_MIN))
       .background(PaletteColor::SurfaceRaised)
       .child(truncated_label(&detail, PaletteColor::TextPrimary))
   });

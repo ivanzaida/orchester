@@ -6,7 +6,7 @@
 
 use lurq::layout::quad::QuadContent;
 use orchester_core::{connection::AgentProvider, run::PendingToolApproval, store::ActivityStore};
-use orchester_desktop::{activity::Target, messages::Message};
+use orchester_desktop::{activity::Target, messages::Message, theme::APPROVALS_ASKS_MIN};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -177,6 +177,20 @@ fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
     assert_whole(&mut desktop, &["1 waiting", "Review", "Auto-approving", "Stop"]);
     assert_nothing_cut(&mut desktop);
   }
+  // Without auto-approval, at 960 what the request asks shows with at least its minimum beside the
+  // short count and Review.
+  desktop.click("task-auto-approve");
+  desktop.wait_until("auto-approval is off", |desktop| !has(desktop, "status-auto-approving"));
+  desktop.tree.resize(960, 700);
+  desktop.pass();
+  assert_whole(&mut desktop, &["1 waiting", "Review"]);
+  let asks = desktop.bounds("status-approvals-asks");
+  let review = desktop.bounds("status-approvals-review");
+  assert!(asks.width >= APPROVALS_ASKS_MIN, "what it asks has {} px", asks.width);
+  assert!(
+    asks.x + asks.width <= review.x + 0.5,
+    "what it asks stays before Review"
+  );
 }
 
 /// No text of the status bar is cut to an ellipsis.
@@ -193,14 +207,9 @@ fn assert_nothing_cut(desktop: &mut Desktop) {
   }
 }
 
-/// Each of `texts` is drawn whole in the status bar, before its right group, and Stop is whole there.
+/// Each of `texts` is drawn whole in the status bar, before its right group.
 fn assert_whole(desktop: &mut Desktop, texts: &[&str]) {
   let agents = desktop.bounds("status-agents");
-  let stop = desktop.bounds("status-auto-approving-stop");
-  assert!(
-    stop.x + stop.width <= agents.x + 0.5,
-    "Stop stays whole before the right group"
-  );
   let layout = desktop.tree.last_layout().expect("laid out").clone();
   let quads = desktop.tree.resolve_quads(&layout);
   // The task page has a Stop of its own; only what the status bar draws counts.

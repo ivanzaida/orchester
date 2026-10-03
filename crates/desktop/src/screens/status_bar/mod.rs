@@ -219,7 +219,11 @@ fn auto_approving(
 
 /// Which parts of the waiting approvals of `project` a window `width` wide has room for.
 fn parts_of(project: &ProjectBar, limits: &plan_limits::Props, width: f32) -> ApprovalParts {
-  let widths = approvals_widths(plan_limits::reached_count(limits), !project.auto_approving.is_empty());
+  let widths = approvals_widths(
+    plan_limits::reached_count(limits),
+    plan_limits::has_readings(limits),
+    !project.auto_approving.is_empty(),
+  );
   ApprovalParts::at(width, widths)
 }
 
