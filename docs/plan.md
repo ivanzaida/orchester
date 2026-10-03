@@ -362,7 +362,7 @@ admits it) and, to keep naming the version in use, this line.
 The design is `docs/architecture/server.md`: read it whole before starting, it is the specification. The goal: several
 people share a project's task list on a server their team runs, and see who took a task into work. Runs, worktrees,
 transcripts and secrets stay on each person's computer. Phases S1a and S1b are server-only (no desktop UI) and are
-handed to Codex; S2a–S3 need screens that are not drawn yet and wait for the designer.
+handed to Codex; the screens of S2a–S3 are drawn (2026-10-03) and wait for the user's approval.
 
 Rules for both phases, on top of `AGENTS.md`:
 
@@ -423,11 +423,21 @@ Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
   30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
 - `PUT …/run` (live run status, S3's server half) is not part of S1b.
 
-### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design)
+### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, waits for design approval)
 
-Settings › Servers, Project settings › Sharing, the join review list, claims on task rows and the task page, the
-conflict state and the offline notice are not drawn yet. Do not start these phases; the designer draws them first
-(`docs/architecture/server.md` § *Desktop data*, "Where it is configured").
+Drawn 2026-10-03 in Pencil section `yYqBE` ("10 / Shared server", column F at x 26080); the design doc's
+[Shared server](design/orchester-workspace.md#shared-server) describes every frame and lists 17 *proposed* decisions,
+two of them gaps in the API or the domain (no member role change; priority and tags in shared projects). Do not start
+these phases until the user approves the design. Frames per phase:
+
+- **S2a** (servers and sign-in): 10.01 `sXIz1`, 10.02 `e9DDI`, 10.03 `BWyKt`, 10.04 `X0cARN`, 10.05 `mcI7H`,
+  10.06 `YMwe5`, 10.07 `BWEZ9`, 10.08 `kT0ui`; the status bar item 10.43 `hYres`.
+- **S2b** (share, members, make local, offline, conflict): 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14
+  `glugd`, 10.17 `g5r5VU` (discovery), 10.42 `OogEa`, 10.44 `HtqGH`, 10.41 `RmDpQ` (the revision; its live use is S2d).
+- **S2c** (join): 10.15 `y8uP2`, 10.16 `AZwJE`, 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `g7NOx`, 10.24 `FAKNF`,
+  10.25 `RuBhQ`, 10.26 `m7jOn9`.
+- **S2d** (live list and claims): 10.31 `tAWk1`, 10.32 `R7iFy9`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
+- **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
 ## P · Product decisions waiting for the user
 
