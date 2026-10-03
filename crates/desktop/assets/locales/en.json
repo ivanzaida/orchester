@@ -1350,7 +1350,7 @@
         "toolValue": "{{server}} · {{tool}}"
       },
       "notAwaited": "This tool action no longer waits for a decision.",
-      "notAwaitedCommand": "This command no longer waits for a decision.",
+      "endedNotice": "The previous request ended without an answer: its agent is no longer waiting.",
       "commandTitle": "Approve command?",
       "policyExplanation": {
         "readOnly": "{{agent}}’s policy asks you about commands that only read. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
@@ -1797,7 +1797,7 @@
         "changesRequested": "Changes requested",
         "superseded": "Earlier version",
         "denied": "Denied",
-        "interrupted": "Interrupted",
+        "ended": "Ended without an answer",
         "wholePlan": "Show the whole plan · {{count}} lines"
       },
       "result": {
@@ -4920,6 +4920,7 @@
       "waitingOne": "1 approval waiting · {{asks}}",
       "waitingOther": "{{count}} approvals waiting · {{asks}}",
       "review": "Review",
+      "ended": "A request ended without an answer · its agent is no longer waiting",
       "autoOne": "Auto-approving · Run {{run}} · {{task}}",
       "autoOther": "Auto-approving {{count}} runs",
       "stop": "Stop"

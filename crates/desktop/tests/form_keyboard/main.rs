@@ -19,6 +19,7 @@ mod conversation_composer;
 mod dialogs;
 mod draft_autosave;
 mod edit_task;
+mod ended_approval;
 mod first_edit;
 mod github;
 mod harness;

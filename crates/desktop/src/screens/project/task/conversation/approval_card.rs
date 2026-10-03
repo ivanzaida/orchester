@@ -5,7 +5,9 @@
 //! Always allow step on this request. Over the answers, what it asks as the dialog shows it: the
 //! category chip and why it asks (or the MCP server and tool), the command or the arguments whole in
 //! their box, and where it runs. What the request offers is the dialog's too: an answer it does not
-//! offer stays at 0.4, and why is said on one line under the row in the dialog's words.
+//! offer stays at 0.4, and why is said on one line under the row in the dialog's words. A request whose
+//! agent can no longer receive an answer reads *Ended without an answer* and has no answers, as soon as
+//! the runner says so.
 
 use std::sync::Arc;
 
@@ -20,15 +22,18 @@ use lurq::{
   layout::Alignment,
   node::{CursorIcon, Element, dimension::Dimension},
 };
-use orchester_core::run::{ApprovalAnswer, PendingToolApproval, SimilarUnavailable, ToolApprovalDecision};
+use orchester_core::{
+  id::TaskId,
+  run::{ApprovalAnswer, PendingToolApproval, SimilarUnavailable, ToolApprovalDecision},
+};
 
 use super::{
   super::{
     approval_arguments::ArgumentsCache,
     approval_value::ValueRows,
     tool_approval::{
-      Decision as ApprovalDecision, DecisionAction, always_blocked, chip, decision_action as approval_decision,
-      quiet_reason, similar_unavailable,
+      Decision as ApprovalDecision, DecisionAction, Unanswered, always_blocked, chip,
+      decision_action as approval_decision, quiet_reason, similar_unavailable,
     },
   },
   cards::{frame, header},
@@ -108,7 +113,13 @@ impl Component for ApprovalCardView {
     let props = ctx.props::<ApprovalCardProps>().clone();
     let action = approval_decision(ctx);
     let request = &props.card.request;
-    let waiting = props.card.decided.is_none();
+    // The runner said it no longer waits, before the timeline is read again.
+    let ended = action
+      .state()
+      .get()
+      .error
+      .is_some_and(|unanswered| unanswered.ended(&request.id));
+    let waiting = props.card.decided.is_none() && !ended;
     let title = ctx.t_args(
       if request.command {
         "runs.conversation.card.asksCommand"
@@ -125,10 +136,11 @@ impl Component for ApprovalCardView {
       ],
     );
     let state = match props.card.decided {
+      None if ended => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
       None => (Icon::Hand, ctx.t("runs.conversation.card.waitingAnswer")),
       Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
       Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),
-      Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.interrupted")),
+      Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
     };
     let shown = shown_request(ctx, &request.id);
     let mut body = self.request_body(ctx, request, shown.as_ref());
@@ -299,7 +311,8 @@ impl ApprovalCardView {
     let state = action.state().get();
     let busy = state.is_pending() || state.data.is_some();
     let offers = Offers::of(shown);
-    let button = |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action), (answer, busy, offered));
+    let task = shown.and_then(|shown| shown.task_id);
+    let button = |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action, task), (answer, busy, offered));
     let always = queue.filter(|_| matches!(offers.always, Some(Ok(()))) && !busy);
     let row = Row::new()
       .width(Dimension::Pct(100.0))
@@ -325,8 +338,10 @@ impl ApprovalCardView {
       .with_children(
         state
           .error
+          .as_ref()
           .filter(|_| !busy)
-          .map(|error| field_error(&message_text(ctx, &error))),
+          .and_then(Unanswered::failure)
+          .map(|error| field_error(&message_text(ctx, error))),
       )
       .into()
   }
@@ -335,7 +350,7 @@ impl ApprovalCardView {
   fn answer(
     &self,
     ctx: &Ctx,
-    (card, action): (&ApprovalCard, &DecisionAction),
+    (card, action, task): (&ApprovalCard, &DecisionAction, Option<TaskId>),
     (answer, busy, offered): (CardAnswer, bool, bool),
   ) -> Element {
     let (id, glyph, idle, under_way) = answer.look();
@@ -345,7 +360,7 @@ impl ApprovalCardView {
       idle
     });
     let (action, requested) = (action.clone(), self.requested.clone());
-    let decision = ApprovalDecision::of(&card.request, answer.answer());
+    let decision = ApprovalDecision::of(&card.request, task, answer.answer());
     let button = ActionButton::new(label)
       .id(id)
       .icon(glyph)

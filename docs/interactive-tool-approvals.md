@@ -273,6 +273,16 @@ interruption and does not automatically resume the
 run. The task page shows the interrupted run for a person to review before choosing to continue.
 The old decision cannot approve a later tool call.
 
+A request waits only while a live agent holds it. The runner ends one whose agent can no longer receive an
+answer (state `interrupted`, read as *ended without an answer*): its invocation's end interrupts what the worker
+held; a run whose task stops executing it (it ends, stops, fails or waits for a person) ends whatever of it still
+waits (`ProjectDb::end_waiting_tool_approvals`); an attaching runner ends the waiting requests of every run it does
+not execute, since no agent of an earlier runner is at work; and an answer to a request no live agent holds (no
+task executes the run, the step's worker ended, or the worker waits on another call) ends it
+(`end_waiting_tool_approval`) and is refused with `ToolApprovalNotAwaited`. The desktop drops a request the
+runner refuses that way from the dialog and the inline card at once, and says it ended (design doc, "Approval
+choices and waiting requests").
+
 ## Claude Code
 
 A Claude Code profile, pipeline step or run can use the same two choices, and a step with allowed
