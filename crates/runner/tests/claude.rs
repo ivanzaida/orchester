@@ -14,14 +14,14 @@ use orchester_core::{
   },
   id::{IdempotencyKey, RunId},
   resource::{ModelId, StepKey},
-  run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus},
+  run::{PauseReason, RaisedLimits, RunLimit, RunStatus, StepFailure, StepStatus, Stuck},
   store::{ActivityStore, ConnectionStore, ConversationStore},
   tokens::{TokenBudget, TokensUsed},
 };
 use orchester_store::ProjectDb;
 
 use self::support::{
-  PATIENCE, Setup, TestProject, git, is_running, project, reported, scheduler, wait_for, wait_for_turns,
+  PATIENCE, Setup, TestProject, git, is_running, project, reported, scheduler, settled, wait_for, wait_for_turns,
 };
 
 /// Counted tokens of one message of the fake CLI.
@@ -61,8 +61,8 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   let schema = result_schema();
   assert!(
     argv.starts_with(&format!(
-      "-p --output-format stream-json --verbose --model haiku --effort low --strict-mcp-config --setting-sources  \
-       --disable-slash-commands --json-schema {schema} --mcp-config "
+      "-p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --model haiku \
+       --effort low --strict-mcp-config --setting-sources  --disable-slash-commands --json-schema {schema} --mcp-config "
     )),
     "{argv}"
   );
@@ -123,10 +123,7 @@ async fn finished(brief: &'static str) -> (TestProject, orchester_core::run::Run
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events_in, id, |run| {
-    run.status().is_terminal() || run.waits_for_a_person()
-  })
-  .await;
+  let run = wait_for(root, &mut events_in, id, |run| settled(run) || run.waits_for_a_person()).await;
   (project, run)
 }
 
@@ -160,7 +157,11 @@ async fn claude_result_after_prose_fails_the_step_it_reports_failed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn claude_prose_without_a_result_never_passes_the_step() {
   let (project, run) = finished("Answer without JSON.").await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
   let db = ProjectDb::open(project.repo.path()).expect("open");
   assert!(matches!(
@@ -182,7 +183,7 @@ async fn claude_refused_model_names_the_version_it_needs_and_the_connection_keep
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
+  let run = wait_for(root, &mut events_in, id, settled).await;
   assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
   let db = ProjectDb::open(root).expect("open");
   assert!(events(&db, id).contains(&AgentEvent::RunnerProblem {
@@ -224,8 +225,12 @@ async fn claude_that_is_not_signed_in_fails_the_step_with_a_typed_outcome() {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events_in, id, |run| run.status().is_terminal()).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  let run = wait_for(root, &mut events_in, id, settled).await;
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");

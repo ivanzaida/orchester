@@ -40,8 +40,11 @@ impl Scheduler {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
-    self.inner.board.set_slots(slots);
     let mut db = self.open()?;
+    if matches!(session, AttachSession::Fresh { .. }) {
+      self.hold_groups_after_session_end(&db)?;
+    }
+    self.inner.board.set_slots(slots);
     let cause = session.interrupt_cause();
     let stale = readable(
       db.running_runs()
@@ -72,11 +75,34 @@ impl Scheduler {
     let mut refused = Vec::new();
     for &run in runs {
       match self.continue_idle(run, |db, root| idle::continue_interrupted(db, root, run)) {
-        Ok(()) => continued.push(run),
+        Ok(()) => {
+          // The run continues whatever happens to its group's hold: a hold that could not be
+          // released keeps only the group's other tasks waiting, and Start run releases it later.
+          if let Err(error) = self.release_hold_of_continued(run) {
+            tracing::error!(?error, %run, "continued run left its group's session hold in place");
+          }
+          continued.push(run);
+        }
         Err(rejection) => refused.push(RefusedRun { run, rejection }),
       }
     }
     (continued, refused)
+  }
+
+  fn release_hold_of_continued(&self, run: RunId) -> Result<(), Rejection> {
+    let db = self.open()?;
+    let saved = db
+      .run(run)
+      .map_err(|e| super::read_failed("cannot read continued run", e))?
+      .ok_or(Rejection::RunNotFound)?;
+    if db
+      .task_group_for_run(&saved)
+      .map_err(|e| super::read_failed("cannot read continued group", e))?
+      .is_some()
+    {
+      self.release_group_session_hold(&db, saved.task())?;
+    }
+    Ok(())
   }
 
   fn continue_after_reconnect(&self, db: &ProjectDb) -> Result<Vec<RunId>, Rejection> {

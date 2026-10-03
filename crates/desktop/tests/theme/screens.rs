@@ -15,6 +15,30 @@ use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraShadow, Extra
 use super::themed_app;
 
 #[test]
+fn plan_limits_emphasis_follows_pencil() {
+  let app = themed_app();
+  let percent = app.theme().typography_style(ExtraTypography::MonoLimit.role());
+  assert_eq!(percent.font_size, 11.0);
+  assert_eq!(percent.weight, FontWeight::Medium);
+  assert_eq!(&*percent.font_family, "Geist Mono");
+  assert_eq!(
+    app.theme().spacing_value(ExtraSpacing::PlanRows.role()),
+    Dimension::Px(6.0)
+  );
+  assert_eq!(theme::PLAN_HINT_WIDTH, 360.0);
+  assert_eq!(theme::PLAN_WINDOW_LABEL, 44.0);
+  assert_eq!((theme::PLAN_METER_WIDTH, theme::PLAN_METER_HEIGHT), (100.0, 4.0));
+  assert_eq!(theme::PLAN_PERCENT_WIDTH, 32.0);
+  let widths = |widths: theme::StatusBarWidths| (widths.version, widths.tokens, widths.labels, widths.details);
+  assert_eq!(widths(theme::STATUS_WIDTHS), (1280.0, 1120.0, 960.0, 0.0));
+  assert_eq!(widths(theme::STATUS_WIDTHS_ONE_REACHED), (1440.0, 1280.0, 1120.0, 0.0));
+  assert_eq!(
+    widths(theme::STATUS_WIDTHS_BOTH_REACHED),
+    (1600.0, 1440.0, 1280.0, 1120.0)
+  );
+}
+
+#[test]
 fn task_screen_roles_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
@@ -236,6 +260,43 @@ fn select_menu_roles_follow_pencil() {
   assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
 }
 
+/// Transcript command box (`uA3Sh` in `N4SlQq`): its lines 4 from the viewport's top and bottom;
+/// the horizontal thumb (`hpzPu` in `G9skx`) 4px in `border`, radius 2, no track, overlaid 1 from
+/// the box's bottom and 12 from the viewport's ends.
+#[test]
+fn transcript_command_box_follows_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::CommandLines.role()),
+    Dimension::Px(4.0)
+  );
+  let scrollbar = theme::command_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Overlay);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(
+    (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
+    (1.0, 12.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+  assert_eq!(scrollbar.track_color, Color::from_hex("#00000000"));
+}
+
+/// Capped value box of the approval dialog (`E5NBo`, `e0vyng` in `bjrgu`): the transcript command's
+/// thumbs, each in a 6px lane of its own (4 wide, 1 from each side), so neither covers a glyph,
+/// running from the viewport's start.
+#[test]
+fn approval_value_box_scrollbars_keep_lanes_of_their_own() {
+  let scrollbar = theme::value_box_scrollbar();
+  assert!(scrollbar.placement == ScrollBarPlacement::Reserved);
+  assert_eq!((scrollbar.width, scrollbar.thumb_radius), (4.0, 2.0));
+  assert_eq!(
+    (scrollbar.resolved_edge_inset(), scrollbar.resolved_end_inset()),
+    (1.0, 0.0)
+  );
+  assert_eq!(scrollbar.thumb_color, Color::from_hex("#363636"));
+}
+
 /// Scroll gutter (`nf9DG` in `NwsEg`, 04.01 `JuVaA`): a 12px gutter of its own; the thumb is 4px
 /// in `border`, radius 2, centred in the gutter, 4px from the viewport's top and bottom, at least
 /// 24px long and as long as the visible share of the track; no track.
@@ -392,4 +453,21 @@ fn tab_roles_follow_pencil() {
   ] {
     assert_eq!(theme.palette_color(light.role()), Color::from_hex(hex));
   }
+}
+
+#[test]
+fn conversation_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // A timeline message's text (`V17jfc`): 13 at 1.6 in `$text`.
+  let message = theme.typography_style(ExtraTypography::TimelineMessage.role());
+  assert_eq!((message.font_size, message.line_height), (13.0, 1.6));
+  assert_eq!(message.color, Color::from_hex("#EEEEEE"));
+  // A tool group and a card's body start where a message's text does (`uoK7y`).
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::TimelineIndent.role()),
+    Dimension::Px(36.0)
+  );
+  // A segment of the Show control, in the usage period style.
+  assert_eq!(theme.radius_value(ExtraRadius::Segment.role()), 5.0);
 }

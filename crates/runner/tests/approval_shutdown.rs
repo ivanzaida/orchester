@@ -8,7 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   permission::CommandPermission,
   resource::{AgentProfile, StepKey},
-  run::{PauseReason, PendingToolApproval, PermissionsApply, RunStatus, StepStatus},
+  run::{ApprovalAnswer, PauseReason, PendingToolApproval, PermissionsApply, RunStatus, StepStatus},
   store::{ActivityStore, ConversationStore, ResourceStore, RunStore},
   time::Timestamp,
 };
@@ -47,7 +47,7 @@ async fn shutdown_at_approval(approve_command: bool, pause_while_active: bool) {
   std::fs::write(worktree.join("progress.txt"), "keep actual progress").expect("work");
   if approve_command {
     runner
-      .decide_tool_approval(id, command.id, true)
+      .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
       .await
       .expect("approve command");
     if !pause_while_active {

@@ -3,7 +3,7 @@ mod support;
 use orchester_core::{
   id::IdempotencyKey,
   revision::Revision,
-  run::{BranchName, NewRun, PendingToolApproval, ToolApprovalDecision},
+  run::{BranchName, CommandShell, DecidedBy, NativeCommandAsk, NewRun, PendingToolApproval, ToolApprovalDecision},
   store::{ActivityStore, RunStore},
 };
 use support::{at, budget, model, started_run};
@@ -44,6 +44,7 @@ fn project_pending_requests_span_runs_in_request_time_order() {
     action: "batch_design".to_owned(),
     target: None,
     requested_at: at(25),
+    native: None,
   };
   let second_request = PendingToolApproval {
     id: format!("{}:2", second_invocation.id),
@@ -57,6 +58,7 @@ fn project_pending_requests_span_runs_in_request_time_order() {
     action: "batch_design".to_owned(),
     target: None,
     requested_at: at(24),
+    native: None,
   };
   db.request_tool_approval(&first_request).expect("first request");
   db.request_tool_approval(&second_request).expect("second request");
@@ -93,6 +95,7 @@ fn one_tool_request_is_decided_once_and_no_longer_pending() {
     action: "batch_design".to_owned(),
     target: Some("/scratch/disposable.pen".to_owned()),
     requested_at: at(11),
+    native: None,
   };
   db.request_tool_approval(&approval).expect("request");
   assert_eq!(
@@ -100,12 +103,12 @@ fn one_tool_request_is_decided_once_and_no_longer_pending() {
     std::slice::from_ref(&approval)
   );
   assert!(
-    db.claim_tool_approval(run.id(), &approval.id, true, at(12))
+    db.claim_tool_approval(run.id(), &approval.id, DecidedBy::Person, at(12))
       .expect("claim")
   );
   assert!(
     !db
-      .claim_tool_approval(run.id(), &approval.id, false, at(13))
+      .claim_tool_approval(run.id(), &approval.id, DecidedBy::PersonDeny, at(13))
       .expect("repeat")
   );
   assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
@@ -138,13 +141,14 @@ fn interrupted_request_cannot_be_approved_after_restart() {
     action: "batch_design".to_owned(),
     target: None,
     requested_at: at(11),
+    native: None,
   };
   db.request_tool_approval(&approval).expect("request");
   assert!(db.interrupt_tool_approvals(run.id(), invocation.id).expect("interrupt"));
   assert!(db.has_interrupted_tool_approval(run.id()).expect("interrupted"));
   assert!(
     !db
-      .claim_tool_approval(run.id(), &approval.id, true, at(12))
+      .claim_tool_approval(run.id(), &approval.id, DecidedBy::Person, at(12))
       .expect("stale")
   );
   assert!(db.pending_tool_approvals(run.id()).expect("pending").is_empty());
@@ -152,7 +156,7 @@ fn interrupted_request_cannot_be_approved_after_restart() {
 
 #[test]
 fn claimed_approval_or_denial_is_interrupted_if_the_worker_dies_mid_delivery() {
-  for approve in [true, false] {
+  for approve in [DecidedBy::Person, DecidedBy::PersonDeny] {
     let (_repo, mut db, run, execution) = started_run();
     let invocation = db
       .start_invocation(run.id(), execution, &model(), at(10))
@@ -169,6 +173,7 @@ fn claimed_approval_or_denial_is_interrupted_if_the_worker_dies_mid_delivery() {
       action: "batch_design".to_owned(),
       target: None,
       requested_at: at(11),
+      native: None,
     };
     db.request_tool_approval(&approval).expect("request");
     assert!(
@@ -184,4 +189,43 @@ fn claimed_approval_or_denial_is_interrupted_if_the_worker_dies_mid_delivery() {
         .expect("stale")
     );
   }
+}
+
+#[test]
+fn native_command_requests_keep_their_shell_and_time_limit() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let request = |id: &str, native| PendingToolApproval {
+    id: format!("{}:{id}", invocation.id),
+    run: run.id(),
+    execution,
+    invocation: invocation.id,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "Orchester".to_owned(),
+    action: "pnpm test | tee out.txt".to_owned(),
+    target: Some(".orchester/worktrees/01J8Z9B2".to_owned()),
+    requested_at: at(11),
+    native,
+  };
+  let shell = request(
+    "call_1",
+    Some(NativeCommandAsk {
+      shell: Some(CommandShell::WindowsPowerShell),
+      time_limit_seconds: 120,
+    }),
+  );
+  let direct = request(
+    "call_2",
+    Some(NativeCommandAsk {
+      shell: None,
+      time_limit_seconds: 1_800,
+    }),
+  );
+  db.request_tool_approval(&shell).expect("shell request");
+  db.request_tool_approval(&direct).expect("direct request");
+  assert_eq!(db.pending_tool_approvals(run.id()).expect("pending"), [shell, direct]);
 }

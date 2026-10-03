@@ -15,7 +15,7 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
   },
   id::{InvocationId, StepExecutionId},
-  run::{ActivityEntry, TokenUsage},
+  run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
   time::Timestamp,
 };
 
@@ -60,6 +60,26 @@ pub enum CommandMark {
   ApprovedByYou { server: Arc<str> },
   /// A person was asked, and the call did not run to its end.
   AskedYou { server: Arc<str> },
+  /// Orchester recorded how the request was answered: by a person, a rule of the run, or auto-approval.
+  Decided(DecidedMark),
+}
+
+impl CommandMark {
+  /// A person denied the request: the row stays open and shows what the agent was told.
+  pub fn is_denial(&self) -> bool {
+    matches!(self, Self::Decided(mark) if mark.decision.decided_by == DecidedBy::PersonDeny)
+  }
+}
+
+/// A request's answer, as its mark names it: an MCP call by its server and tool, a command by its
+/// category.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecidedMark {
+  pub server: Arc<str>,
+  pub action: Arc<str>,
+  /// Whether the request was about a command (not an MCP tool).
+  pub command: bool,
+  pub decision: ToolDecision,
 }
 
 /// An MCP tool call that no command shows.
@@ -122,13 +142,18 @@ impl Entry {
   /// A failed or declined command, an error or a runner problem: shown open, marked.
   pub fn is_failure(&self) -> bool {
     match &self.kind {
-      EntryKind::Command(command) => matches!(command.status, Some(CommandStatus::Failed | CommandStatus::Declined)),
+      EntryKind::Command(command) => {
+        matches!(command.status, Some(CommandStatus::Failed | CommandStatus::Declined))
+          || command.mark.as_ref().is_some_and(CommandMark::is_denial)
+      }
       EntryKind::ToolCommand(command) => matches!(
         command.result,
         Some(ToolCommandResult::Failed | ToolCommandResult::TimedOut)
       ),
       EntryKind::McpTool(call) => {
-        matches!(call.mark, Some(CommandMark::Declined { .. })) || call.status == Some(CommandStatus::Failed)
+        matches!(call.mark, Some(CommandMark::Declined { .. }))
+          || call.mark.as_ref().is_some_and(CommandMark::is_denial)
+          || call.status == Some(CommandStatus::Failed)
       }
       EntryKind::Error(_) | EntryKind::NotSignedIn(_) | EntryKind::Problem(_) | EntryKind::McpServer(..) => true,
       _ => false,
@@ -139,6 +164,8 @@ impl Entry {
 /// The entries of `activity`, in order.
 pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   let mut entries: Vec<Entry> = Vec::new();
+  // Answers recorded before the command they answer started (Codex asks before it starts a command).
+  let mut early: Vec<(InvocationId, Arc<str>, CommandMark)> = Vec::new();
   for stored in activity {
     let entry = |kind| Entry {
       sequence: stored.sequence,
@@ -149,18 +176,25 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       kind,
     };
     match &stored.event {
-      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted => {}
+      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted | AgentEvent::PlanLimits { .. } => {}
       AgentEvent::Message { text } => entries.push(entry(EntryKind::Message(text.as_str().into()))),
       AgentEvent::Reasoning { text } => entries.push(entry(EntryKind::Reasoning(text.as_str().into()))),
-      AgentEvent::CommandStarted { item, command } => entries.push(entry(EntryKind::Command(CommandEntry {
-        item: item.as_str().into(),
-        command: command.as_str().into(),
-        output: "".into(),
-        status: None,
-        exit_code: None,
-        duration: None,
-        mark: None,
-      }))),
+      AgentEvent::CommandStarted { item, command } => {
+        let mark = early
+          .iter()
+          .position(|(invocation, early, _)| *invocation == stored.invocation && **early == **item)
+          .map(|at| early.remove(at).2);
+        entries.push(entry(EntryKind::Command(CommandEntry {
+          item: item.as_str().into(),
+          command: command.as_str().into(),
+          output: "".into(),
+          status: None,
+          exit_code: None,
+          duration: None,
+          mark,
+        })));
+      }
+      AgentEvent::ToolDecided { .. } => decided(&mut entries, &mut early, stored),
       AgentEvent::CommandFinished { .. } => finish_command(&mut entries, stored),
       AgentEvent::FileChanged { changes, .. } => {
         entries.extend(changes.iter().enumerate().map(|(part, change)| Entry {
@@ -285,6 +319,51 @@ fn mcp_tool_finished(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
         tool: tool.as_str().into(),
         mark: decided,
         status: Some(*status),
+      },
+    ),
+  }
+}
+
+/// Marks the entry of the call a request was about with its answer. A command whose start comes later
+/// gets the mark then; an MCP call that no command shows gets an entry of its own, as for Codex.
+fn decided(entries: &mut Vec<Entry>, early: &mut Vec<(InvocationId, Arc<str>, CommandMark)>, stored: &ActivityEntry) {
+  let AgentEvent::ToolDecided {
+    item,
+    server,
+    action,
+    decision,
+  } = &stored.event
+  else {
+    return;
+  };
+  let command = server == "command";
+  let mark = CommandMark::Decided(DecidedMark {
+    server: server.as_str().into(),
+    action: action.as_str().into(),
+    command,
+    decision: decision.clone(),
+  });
+  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
+    EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.item == **item => {
+      Some(&mut shown.mark)
+    }
+    EntryKind::McpTool(shown) if entry.invocation == stored.invocation && *shown.item == **item => {
+      Some(&mut shown.mark)
+    }
+    _ => None,
+  });
+  match shown {
+    Some(shown) => *shown = Some(mark),
+    None if command => early.push((stored.invocation, item.as_str().into(), mark)),
+    None => push_mcp_tool(
+      entries,
+      stored,
+      McpToolEntry {
+        item: item.as_str().into(),
+        server: server.as_str().into(),
+        tool: action.as_str().into(),
+        mark: Some(mark),
+        status: None,
       },
     ),
   }

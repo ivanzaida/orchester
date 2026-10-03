@@ -114,6 +114,9 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | button that cannot be pressed, primary or secondary: its own colors at 40 % (`kLJJb`, `HN7cO`) | `theme::DISABLED_OPACITY`, applied by `ui::button::ActionButton` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |
+| transcript command box: lines 4 from the viewport's top and bottom (`Z3M6Nz` in `uA3Sh`); horizontal thumb 4px `border`, radius 2, overlaid 1 from the box's bottom and 12 from the viewport's ends (`hpzPu` in `G9skx`) | `ExtraSpacing::CommandLines.role()` / `theme::command_scrollbar()` |
+| a long value's box in the approval dialog: 12 lines with its padding, then its lines scroll (`E5NBo` in `bjrgu`); the 04.H9 shell string (`bwWuT`) shares it; its thumbs in 6px lanes of their own inside its 6px padding, from the viewport's start (`e0vyng`); 12 under its label | `theme::APPROVAL_VALUE_MAX_HEIGHT` (232) / `theme::value_box_scrollbar()` / `ExtraSpacing::Stack.role()`, through `ui::value_box` |
+| quiet text action beside a label, e.g. a value's Copy (`feLwP`): 22 high, 6 at each side and between icon and label, no fill or border, `muted` icon and label; under the pointer the `hover` fill and `text` (`oriyY`); focus ring in a form | `ui::button::ActionButton::quiet` (`TextSecondary` / `TextPrimary`, `AccentMuted`, `ExtraSpacing::Tight`) |
 | operations popover drop shadow 0 8 24 #00000066 (`E1msJS`) | `ExtraShadow::Popover.role()` |
 | `focus-ring` #EEEEEE / `focus-gap` #101010 (`xURvJ`) | `ExtraColor::FocusRing.role()` / `ExtraColor::FocusGap.role()` |
 | focus ring, outer / inset: spreads `focus-width` 2 and `focus-extent` 4 (`xURvJ`, `Oz9EN`) | `ExtraShadow::FocusRing.role()` / `FocusRingInset.role()`, applied only through `ui::pressable::Ring` |
@@ -123,6 +126,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | macOS traffic lights #FF5F57 / #FEBC2E / #28C840 (`R3RtGs` in `V70DN`) | `ExtraColor::TrafficClose` / `TrafficMinimize` / `TrafficZoom` |
 | title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
 | switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
+| conversation *Show* segment radius 5, usage period style (toolbar of `RrScB`) | `ExtraRadius::Segment.role()` |
+| conversation tool group and card body, indented 36 to a message's text (`uoK7y`) | `ExtraSpacing::TimelineIndent.role()` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
@@ -138,6 +143,8 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `Mono` | 10 | revisions, shortcuts, counts (Geist Mono) |
 | `ExtraTypography::SectionHeading.role()` | 15/500 | content section heading ("What changed") |
 | `ExtraTypography::CardTitle.role()` | 14/500 | card and panel titles ("Needs you") |
+| `ExtraTypography::ReadBack.role()` | 10 subtle | a value read back on one line under a field ("≈ 14M tokens", `n5Wrl` in `W1Dq6`) |
+| `ExtraTypography::ReviewHeading.role()` | 14 | column heading of the scheduling review ("Task priority", `Y68u8` in `W1Dq6`) |
 | `ExtraTypography::Overline.role()` | 9/600 subtle | uppercase category label ("REVIEW PULL REQUEST") |
 | `ExtraTypography::Metric.role()` | mono 23 | large metric figure |
 | `ExtraTypography::DialogTitle.role()` | 20/500 | dialog title (`bhcaX`) |
@@ -176,7 +183,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::PromptText.role()` | mono 12, 1.8 | instruction prompt, edited and resolved (`g2Tkg`, `iJdsS`) |
 | `ExtraTypography::VariableName.role()` | mono 20/500 | variable shown in the catalog (`Z69wX` in `EfTiT`); skill being edited (`ERFw4` in `ecJtg`) |
 | `ExtraTypography::ContextNote.role()` | 9 muted | preview execution context notes (`HvDGw`, `utiRC` in `TnjFo`) |
-| `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`) |
+| `ExtraTypography::CellLabel.role()` | 11 muted, 1.5 | table cell label that wraps beside its icon (worktree state `VHSnL` in `Py65X`); a note between the scheduling review's settings (`q6NwTY` in `W1Dq6`) |
 | `ExtraTypography::WrappingError.role()` | 11 `text`, 1.5 | field error that wraps beside its icon, e.g. why a dialog's action is unavailable (`foNvP` in `glurU`, `eeksu` in `XIEn8`); through `ui::field::wrapping_field_error` |
 | `ExtraTypography::WrappingProperty.role()` | 11 `text`, 1.6 | long remote MCP Authentication value that wraps in the inspector (`K8qeZv` in `a4lm6D`) |
 | `ExtraTypography::InspectorNote.role()` | 10 muted, 1.6 | note under an inspector's details or actions (model source `xK9v9`, status detail `Thdx2`) |
@@ -190,6 +197,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::AgentText.role()` | 12, 1.6 | text an agent wrote: a message body, a plan under review (`FP6BD` in `J5MIT`); also the Markdown body |
 | `ExtraTypography::TabInitial.role()` | 9/600 | a project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`) |
 | `ExtraTypography::Criterion.role()` | 12, 1.5 | an acceptance criterion and its number (`TextMuted`) on a task's Summary (`j0Ye4t`, `a88TT` in `tqn5P`) |
+| `ExtraTypography::TimelineMessage.role()` | 13, 1.6 | what a message in the conversation timeline says, a person's or an agent's (`V17jfc`) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

@@ -23,7 +23,8 @@ use rusqlite::{Connection, OptionalExtension, Params, Row};
 use super::{
   EVENT_SCHEMA, PERMISSIONS_SCHEMA, SNAPSHOT_SCHEMA,
   columns::{
-    parse_attempt_reason, parse_attempt_status, parse_run_status, parse_step_failure, parse_step_status, step_key,
+    AttemptReasonColumns, parse_attempt_reason, parse_attempt_status, parse_run_status, parse_step_failure,
+    parse_step_status, step_key,
   },
   legacy::{self, CreationLimits},
   run_number,
@@ -40,7 +41,20 @@ const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_re
 
 /// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
 /// fails the listing: it cannot be told which run it is.
+///
+/// A run is stored in several tables (its row, attempts, step executions, checkpoints, events),
+/// read by separate statements in one [consistent read](super::super::consistent::read), so a run
+/// row is never paired with rows written after it (the runner recording an attempt while the
+/// desktop reads).
 pub(super) fn load_runs(
+  connection: &Connection,
+  clause: &str,
+  params: impl Params,
+) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
+  super::super::consistent::read(connection, || read_runs(connection, clause, params))
+}
+
+fn read_runs(
   connection: &Connection,
   clause: &str,
   params: impl Params,
@@ -162,9 +176,17 @@ fn load_permissions(connection: &Connection, run: &str) -> Result<BTreeMap<Resou
 
 fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, StoreError> {
   let mut statement = connection.prepare(
-    "SELECT id, number, reason, failed_step, return_to, status FROM attempts WHERE run_id = ?1 ORDER BY number",
+    "SELECT id, number, reason, failed_step, return_to, note, status FROM attempts WHERE run_id = ?1 ORDER BY number",
   )?;
-  type AttemptColumns = (String, i64, String, Option<String>, Option<String>, String);
+  type AttemptColumns = (
+    String,
+    i64,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+  );
   let rows = statement
     .query_map([run], |row| {
       Ok((
@@ -174,12 +196,13 @@ fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, Sto
         row.get(3)?,
         row.get(4)?,
         row.get(5)?,
+        row.get(6)?,
       ))
     })?
     .collect::<Result<Vec<AttemptColumns>, _>>()?;
   rows
     .into_iter()
-    .map(|(id, number, reason, failed_step, return_to, status)| {
+    .map(|(id, number, reason, failed_step, return_to, note, status)| {
       let number = u32::try_from(number)
         .ok()
         .and_then(NonZeroU32::new)
@@ -187,7 +210,12 @@ fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, Sto
       Ok(Attempt::new(
         parse("attempt id", &id)?,
         number,
-        parse_attempt_reason(&reason, failed_step.as_deref(), return_to.as_deref())?,
+        parse_attempt_reason(&AttemptReasonColumns {
+          reason: &reason,
+          failed_step: failed_step.as_deref(),
+          return_to: return_to.as_deref(),
+          note: note.as_deref(),
+        })?,
         parse_attempt_status(&status)?,
         load_executions(connection, &id)?,
       ))

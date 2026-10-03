@@ -2,14 +2,12 @@
 
 mod support;
 
-use std::{collections::BTreeMap, fs};
-
 use orchester_core::{
   id::IdempotencyKey,
   name::Name,
-  resource::{CommandEnvironment, Pipeline, VariableName, VersionNumber},
+  resource::{Pipeline, VersionNumber},
   run::PreflightProblem,
-  store::{ResourceStore, RunStore, SettingsStore, TaskStore},
+  store::{ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -41,21 +39,11 @@ async fn queued_task_runs_its_pinned_pipeline_after_a_new_version_is_published()
   let (scheduler, _events) = scheduler(root);
   let key = IdempotencyKey::generate();
   let run_id = scheduler.start_run(key, fixture.task).await.expect("start pinned run");
-  let mut db = ProjectDb::open(root).expect("reopen");
+  let db = ProjectDb::open(root).expect("reopen");
   let run = db.run(run_id).expect("read run").expect("run exists");
   assert_eq!(run.snapshot().pipeline().version, v1.id());
   assert_eq!(run.snapshot().pipeline().number, v1.number());
   assert_eq!(run.snapshot().body().steps()[0].name.as_str(), "Implement");
-  let blocked = root.join("blocked-target");
-  fs::write(&blocked, "not a directory").expect("block target");
-  db.save_project_environment(
-    &CommandEnvironment::new(BTreeMap::from([(
-      VariableName::new("CARGO_TARGET_DIR").expect("variable name"),
-      blocked.to_str().expect("Unicode path").into(),
-    )]))
-    .expect("environment"),
-  )
-  .expect("save blocked target");
   assert_eq!(scheduler.start_run(key, fixture.task).await, Ok(run_id));
   scheduler.wait_for_current_tasks().await;
 }

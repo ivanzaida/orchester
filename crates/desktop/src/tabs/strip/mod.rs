@@ -41,7 +41,7 @@ use super::{
   window::LEADING_WIDTH,
 };
 use crate::{
-  tasks::overview::OverviewTab,
+  tasks::data::ProjectTasks,
   theme::{ExtraColor, ExtraShadow, ExtraSpacing, TITLE_BAR_HEIGHT},
   ui::{
     icon::{Icon, IconSize, icon},
@@ -377,9 +377,7 @@ fn labels(ctx: &mut Ctx, tabs: &Tabs, set: &TabSet) -> Vec<Labeled> {
 fn attention(ctx: &Ctx, feeds: &ProjectFeeds, label: &TabLabel, failures: &Failures) -> Option<Arc<str>> {
   let (project, name) = (label.project?, label.project_name.as_deref()?);
   let tasks = feeds.of(project).tasks.get();
-  let needs_you = tasks
-    .ready()
-    .map_or(0, |tasks| OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases));
+  let needs_you = tasks.ready().map_or(0, ProjectTasks::needs_you);
   let location = &*label.text;
   match needs_you {
     0 => {}

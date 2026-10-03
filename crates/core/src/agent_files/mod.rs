@@ -57,6 +57,11 @@ pub enum AgentFilesMechanism {
   CodexLeftOut,
   /// `--setting-sources ""`: Claude Code reads neither `CLAUDE.md` nor `.claude/skills`, in both states.
   ClaudeNoProjectSettings,
+  /// A native agent: Orchester puts `AGENTS.md` and the repository's skills into its prompt
+  /// (`docs/design/orchester-workspace.md`, "Native agent connections", decisions).
+  OrchesterLoads,
+  /// A native agent: Orchester's prompt holds neither.
+  OrchesterLeftOut,
 }
 
 impl RepositoryAgentFiles {
@@ -64,14 +69,14 @@ impl RepositoryAgentFiles {
     matches!(self, Self::On)
   }
 
-  /// How `provider` treats the repository's agent files under this setting; `None` for a native
-  /// provider, which runs no agent in this version.
-  pub const fn mechanism(self, provider: AgentProvider) -> Option<AgentFilesMechanism> {
+  /// How `provider` treats the repository's agent files under this setting.
+  pub const fn mechanism(self, provider: AgentProvider) -> AgentFilesMechanism {
     match (provider, self) {
-      (AgentProvider::CodexCli, Self::On) => Some(AgentFilesMechanism::CodexLoads),
-      (AgentProvider::CodexCli, Self::Off) => Some(AgentFilesMechanism::CodexLeftOut),
-      (AgentProvider::ClaudeCodeCli, _) => Some(AgentFilesMechanism::ClaudeNoProjectSettings),
-      (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, _) => None,
+      (AgentProvider::CodexCli, Self::On) => AgentFilesMechanism::CodexLoads,
+      (AgentProvider::CodexCli, Self::Off) => AgentFilesMechanism::CodexLeftOut,
+      (AgentProvider::ClaudeCodeCli, _) => AgentFilesMechanism::ClaudeNoProjectSettings,
+      (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, Self::On) => AgentFilesMechanism::OrchesterLoads,
+      (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, Self::Off) => AgentFilesMechanism::OrchesterLeftOut,
     }
   }
 }

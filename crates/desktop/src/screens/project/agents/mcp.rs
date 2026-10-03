@@ -28,7 +28,7 @@ use super::{
   enforcement::row,
 };
 use crate::{
-  agents::permissions::native_unavailable,
+  agents::permissions::native_mcp_unavailable,
   navigation::route::{ConnectionTab, Page},
   screens::project::page::TOPBAR_BUTTON_HEIGHT,
   theme::{ExtraSpacing, ExtraTypography},
@@ -40,7 +40,7 @@ impl ProfileEditor {
   /// connection, which runs no agent yet, the switches and the way to add one are locked with the reason.
   pub(super) fn mcp_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let servers = &self.context.agents.mcp;
-    let native = native_unavailable(ctx, provider);
+    let native = native_mcp_unavailable(ctx, provider);
     let column = Column::new()
       .id("agent-mcp")
       .width(Dimension::Pct(100.0))

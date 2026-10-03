@@ -25,7 +25,7 @@ use orchester_core::{
 use super::editor::{ProfileEditor, Resets};
 use crate::{
   agents::permissions::{
-    file_command_hints, native_unavailable, option_detail, option_title, unavailable, with_command, without_command,
+    file_command_hints, native_mcp_unavailable, option_detail, option_title, unavailable, with_command, without_command,
   },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -65,6 +65,7 @@ impl ProfileEditor {
       .child(self.commands_setting(ctx, provider))
       .child(self.network_setting(ctx, provider))
       .child(self.tool_approvals_setting(ctx, provider))
+      .child(self.auto_approve_setting(ctx, provider))
       .child(self.mcp_setting(ctx, provider));
     let body = Row::new()
       .width(Dimension::Pct(100.0))
@@ -93,7 +94,7 @@ impl ProfileEditor {
     );
     // Both CLIs route approvals to Orchester; a profile without a connection cannot choose, nor can
     // one on a native connection, which runs no agent yet.
-    let native = native_unavailable(ctx, provider);
+    let native = native_mcp_unavailable(ctx, provider);
     let control = if native.is_none() && (provider.is_some() || enabled) {
       let permissions = self.permissions.clone();
       switch.render(move || permissions.update(|permissions| permissions.set_interactive_tool_approvals(!enabled)))
@@ -105,6 +106,27 @@ impl ProfileEditor {
       .child(control)
       .with_children(native.map(|reason| unavailable_reason(&reason)));
     setting(ctx, "agents.permissions.toolApprovalsHeading", content.into())
+  }
+
+  /// *Approve automatically (don't ask me)*: Orchester answers what the profile's agents ask a person,
+  /// but for what is dangerous, in every run that starts with this version (user decision 2026-10-02).
+  /// A profile on a native connection cannot choose it, as its agents ask Orchester nothing yet.
+  fn auto_approve_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
+    let enabled = self.permissions.get().auto_approve();
+    let switch = Switch::new("agent-auto-approve", ctx.t("agents.permissions.autoApprove"), enabled)
+      .note(ctx.t("agents.permissions.autoApproveNote"));
+    let native = native_mcp_unavailable(ctx, provider);
+    let control = if native.is_none() && (provider.is_some() || enabled) {
+      let permissions = self.permissions.clone();
+      switch.render(move || permissions.update(|permissions| permissions.set_auto_approve(!enabled)))
+    } else {
+      switch.locked()
+    };
+    let content = Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(control)
+      .with_children(native.map(|reason| unavailable_reason(&reason)));
+    setting(ctx, "agents.permissions.autoApproveHeading", content.into())
   }
 
   /// An option card for `option`, chosen by `choose`, or disabled with the reason when the
@@ -294,8 +316,7 @@ impl ProfileEditor {
 
   /// The network switch (`k1QWD`), locked on with the reason when off cannot be enforced
   /// (`lW7Sp`). It shows the network access a run gets, which is on wherever off cannot be
-  /// enforced, whatever was chosen. On a native connection, where no run starts, it shows the chosen
-  /// access, locked with the reason, as the permission summary does.
+  /// enforced, whatever was chosen.
   fn network_setting(&self, ctx: &Ctx, provider: Option<AgentProvider>) -> Element {
     let chosen = self.permissions.get();
     let network = provider.map_or(chosen.network(), |provider| {

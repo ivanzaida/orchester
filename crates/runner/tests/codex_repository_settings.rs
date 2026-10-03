@@ -13,7 +13,7 @@ use orchester_core::{
   agent_files::RepositoryAgentFiles,
   connection::stream::{AgentEvent, RunnerProblem},
   id::{IdempotencyKey, RunId},
-  run::RunStatus,
+  run::{RunStatus, Stuck},
   store::{ActivityStore, SettingsStore},
 };
 use orchester_store::ProjectDb;
@@ -108,7 +108,10 @@ async fn codex_repository_settings_codex_loaded_anyway_refuse_the_step() {
   let project = project(&Setup::new("Say hello."));
   let root = project.repo.path();
   commit(root, &[SETTINGS[1], (".codex/fake-loads-anyway", "")]);
-  let run = run_until(root, project.task, |status| matches!(status, RunStatus::Failed(_))).await;
+  let run = run_until(root, project.task, |status| {
+    matches!(status, RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)))
+  })
+  .await;
   let db = ProjectDb::open(root).expect("open");
   assert!(threads(&db, run).is_empty(), "no thread starts");
   let failures: Vec<String> = db

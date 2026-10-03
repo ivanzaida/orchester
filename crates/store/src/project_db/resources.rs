@@ -209,7 +209,10 @@ pub(super) fn load_resources(
   rows.into_iter().map(ResourceRow::into_resource).collect()
 }
 
-fn load_draft<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<Option<Draft<B>>, StoreError> {
+pub(super) fn load_draft<B: ResourceBody>(
+  connection: &Connection,
+  resource: ResourceId,
+) -> Result<Option<Draft<B>>, StoreError> {
   let row: Option<(String, Option<i64>, i64)> = connection
     .query_row(
       "SELECT body, based_on, updated_at FROM resource_drafts WHERE resource_id = ?1",
@@ -227,7 +230,7 @@ fn load_draft<B: ResourceBody>(connection: &Connection, resource: ResourceId) ->
   )))
 }
 
-fn load_versions<B: ResourceBody>(
+pub(super) fn load_versions<B: ResourceBody>(
   connection: &Connection,
   clause: &str,
   params: impl Params,

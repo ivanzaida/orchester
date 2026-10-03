@@ -5,11 +5,12 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
   conversation::{Message, latest_question},
-  id::{IdempotencyKey, ResourceId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{Run, RunEvent, StepExecutor},
+  run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
   task::{Task, TaskDetails, TaskStatus},
+  task_group::GroupHold,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -18,7 +19,9 @@ use thiserror::Error;
 use super::{
   approvals::{self, ShownApproval},
   detail::run_store_error,
-  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases},
+  list::{Awaited, AwaitedPlan, AwaitedQuestion, Latest, LatestRun, Phases, phase_of},
+  overview::OverviewTab,
+  run_approvals,
   unreadable::Unreadable,
 };
 use crate::{
@@ -49,6 +52,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// Why each task of a reviewed group that holds its work waits.
+  pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// Tool requests awaiting a decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
@@ -58,6 +63,17 @@ pub struct ProjectTasks {
   /// Runs recorded as running that lost their agent because no runner is connected; 0 while
   /// one is ([`Self::without_runner`]).
   pub lost_to_runner: usize,
+  /// The active runs that auto-approve their agents' requests, oldest task first.
+  pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+}
+
+/// An active run that auto-approves, as the status bar names it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutoApprovingRun {
+  pub run: RunId,
+  pub number: RunNumber,
+  pub task: TaskId,
+  pub key: Arc<str>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ProjectTasks {}
@@ -66,13 +82,41 @@ impl ProjectTasks {
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
+    let pending = approvals::pending(&db, repo_root)?;
+    let mut group_holds = BTreeMap::new();
+    for group in db.task_groups()? {
+      if let Some(hold) = db.task_group_hold(group.key())? {
+        for task in group.tasks() {
+          group_holds.insert(*task, hold.clone());
+        }
+      }
+    }
     let mut phases = Phases::new();
+    let mut auto_approving = Vec::new();
     let mut count = 0;
     for task in &tasks {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       count += runs.iter().filter(|run| run.is_ok()).count();
       let latest = match runs.last() {
-        Some(Ok(latest)) => Latest::Run(latest_run(&db, task, latest)?),
+        Some(Ok(latest)) => {
+          if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
+            group_holds.remove(&task.id());
+          }
+          let mut shown = latest_run(&db, task, latest)?;
+          // A run whose agent waits for a tool decision waits for a person, as one at a plan does.
+          if shown.phase == TaskPhase::Running && pending.iter().any(|shown| shown.approval.run == latest.id()) {
+            shown.phase = TaskPhase::Waiting;
+          }
+          if shown.phase.is_active() && run_approvals::auto_approving(&db, latest)? {
+            auto_approving.push(AutoApprovingRun {
+              run: latest.id(),
+              number: latest.number(),
+              task: task.id(),
+              key: task.key().to_string().into(),
+            });
+          }
+          Latest::Run(shown)
+        }
         Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
         None => continue,
       };
@@ -80,12 +124,30 @@ impl ProjectTasks {
     }
     Ok(Self {
       tasks: Arc::new(tasks),
+      group_holds: Arc::new(group_holds),
       pipelines: Arc::new(published_pipelines(&db)?),
-      pending_tool_approvals: Arc::new(approvals::pending(&db)?),
+      pending_tool_approvals: Arc::new(pending),
       phases: Arc::new(phases),
       runs: count,
       lost_to_runner: 0,
+      auto_approving: Arc::new(auto_approving),
     })
+  }
+
+  /// What *Needs you* counts: each request waiting for a decision, and each other task waiting for a
+  /// person (a plan, a question). Whether the dialog is open changes nothing.
+  pub fn needs_you(&self) -> usize {
+    let asking: Vec<TaskId> = self
+      .pending_tool_approvals
+      .iter()
+      .filter_map(|shown| shown.task_id)
+      .collect();
+    let other_waiting = self
+      .tasks
+      .iter()
+      .filter(|task| OverviewTab::NeedsYou.includes(phase_of(task, &self.phases)) && !asking.contains(&task.id()))
+      .count();
+    other_waiting + self.pending_tool_approvals.len()
   }
 
   /// The tasks as they stand while no runner is connected: runs recorded as running are

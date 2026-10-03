@@ -17,6 +17,12 @@
 //! ([`StepResult::at_end`]). Either becomes the invocation's last message, as a JSON document. A
 //! turn that ends without one fails: the prompt asks for it, and prose alone must never pass a step
 //! that the agent may have meant to fail or to ask about.
+//!
+//! The prompt and a person's messages sent now arrive as stream-json user messages on standard
+//! input; with `--replay-user-messages` the CLI prints each back (`isReplay`) as it takes it into
+//! the conversation. Claude Code 2.1.286 (probe 2026-10-02) takes a message written during a tool
+//! call right after that call's result, and one written after its last tool call as the next turn,
+//! after the result ([`ClaudeStream::take_replayed`], [`ClaudeStream::results`]).
 
 use std::collections::HashMap;
 
@@ -52,6 +58,10 @@ pub struct ClaudeStream {
   signed_out: bool,
   /// The MCP tools that run without asking, in a step that asks before MCP actions.
   exemptions: InvocationExemptions,
+  /// What the CLI printed back of its input since it was last taken, oldest first.
+  replayed: Vec<String>,
+  /// Results seen: each ends a turn.
+  results: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +98,14 @@ impl ClaudeStream {
       return vec![raw()];
     };
     let events = match value.get("type").and_then(Value::as_str) {
+      // Account limits never reach the transcript; one this version cannot read is left out.
+      Some("rate_limit_event") => Some(
+        value
+          .get("rate_limit_info")
+          .and_then(super::super::plan_limits::claude_limits)
+          .map(|limits| vec![AgentEvent::PlanLimits { limits }])
+          .unwrap_or_default(),
+      ),
       Some("system") => system(&value),
       Some("assistant") => self.assistant(&value).map(|(mut events, understood)| {
         if !understood {
@@ -100,6 +118,16 @@ impl ClaudeStream {
       _ => None,
     };
     events.unwrap_or_else(|| vec![raw()])
+  }
+
+  /// The user messages the CLI took from its input since the last call, as it printed them back.
+  pub fn take_replayed(&mut self) -> Vec<String> {
+    std::mem::take(&mut self.replayed)
+  }
+
+  /// How many results the CLI printed: how many turns it ended.
+  pub const fn results(&self) -> usize {
+    self.results
   }
 
   /// The message's events, and whether every content block was understood.
@@ -183,8 +211,12 @@ impl ClaudeStream {
     })
   }
 
-  /// Tool results; a user message without any is not understood.
+  /// Tool results, or input the CLI printed back; a user message without either is not understood.
   fn user(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {
+    if value.get("isReplay").and_then(Value::as_bool) == Some(true) {
+      self.replayed.push(result_text(value.get("message")?.get("content")));
+      return Some(Vec::new());
+    }
     let results: Vec<&Value> = value
       .get("message")?
       .get("content")?
@@ -236,6 +268,7 @@ impl ClaudeStream {
 
   fn result(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {
     let is_error = value.get("is_error")?.as_bool()?;
+    self.results += 1;
     let mut events = Vec::new();
     let total = value.get("usage").and_then(usage).unwrap_or_default();
     if let Some(grown) = growth(total, self.counted) {

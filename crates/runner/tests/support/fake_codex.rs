@@ -6,7 +6,7 @@
 //! `fake_app_server`.
 //!
 //! On standard error it reports what it was given: its arguments (`argv: `), the names of its
-//! environment variables, its `PATH`, `CARGO_TARGET_DIR`, its process id and its MCP servers
+//! environment variables, its `PATH`, `BUILD_DIR`, its process id and its MCP servers
 //! (`fake_mcp`) as it starts; the parameters of `thread/start` or `thread/resume` (`thread: `) and of
 //! `turn/start` without the prompt (`turn: `); and the prompt (its first line, then each line). The
 //! runner keeps standard error in the activity, so tests can check how it was started.
@@ -93,8 +93,8 @@ fn report_start(args: &[String]) {
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
   );
-  if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
-    eprintln!("cargo target: {}", PathBuf::from(target).display());
+  if let Some(folder) = std::env::var_os("BUILD_DIR") {
+    eprintln!("build dir: {}", folder.to_string_lossy());
   }
   eprintln!("pid: {}", std::process::id());
 }
@@ -120,6 +120,9 @@ pub struct Session {
   pub approved_tools: BTreeSet<String>,
   /// The person's decisions the turn waits on, if any.
   pub approvals: Option<fake_app_server::Approvals>,
+  /// The turn waits for a message sent now (`turn/steer`): its prompt, whether it has an output
+  /// schema, and whether the steer is refused.
+  pub awaits_message: Option<fake_codex_work::AwaitsMessage>,
 }
 
 impl Session {
@@ -134,6 +137,7 @@ impl Session {
       user_server_off: false,
       approved_tools: BTreeSet::new(),
       approvals: None,
+      awaits_message: None,
     }
   }
 
@@ -150,6 +154,7 @@ impl Session {
       }
       Some("mcpServerStatus/list") => emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}})),
       Some("turn/start") => return self.turn(params),
+      Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None => return fake_app_server::answered(self, message),
       Some(other) => {
         eprintln!("unexpected request: {other}");

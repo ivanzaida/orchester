@@ -65,4 +65,18 @@ impl AgentProvider {
   pub const fn runs_agents(self) -> bool {
     !self.is_native()
   }
+
+  /// Whether an agent at work on the provider takes a person's message while its turn runs (*Send
+  /// now*): Codex through App Server's `turn/steer`, Claude Code through its stream-json input.
+  /// Checked live 2026-10-02 with Codex 0.159.2 and Claude Code 2.1.286: both take it after the tool
+  /// call that is running (`docs/evidence/orc-61-send-now-2026-10-02.md`).
+  pub const fn takes_messages_mid_turn(self) -> bool {
+    matches!(self, Self::CodexCli | Self::ClaudeCodeCli)
+  }
+
+  /// Whether a connection to the provider can be added in this version. OpenAI Responses comes after
+  /// Anthropic's Messages API (§9, P2).
+  pub const fn can_be_added(self) -> bool {
+    !matches!(self, Self::OpenAiApi)
+  }
 }

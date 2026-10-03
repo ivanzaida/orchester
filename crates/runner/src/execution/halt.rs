@@ -48,11 +48,8 @@ impl RunTask {
       Control::ChangePermissions(change, ack) => self.change_permissions(change, ack),
       Control::KeepPermissions(profile, ack) => self.keep_permissions(profile, ack),
       Control::DecidePlan(request, ack) => self.decide_plan(request, ack),
-      Control::DecideToolApproval { approval, approve, ack } => self.decide_tool_approval(approval, approve, ack),
-      Control::DeliverMessages(ack) => {
-        Self::deliver_messages(ack);
-        Ok(())
-      }
+      Control::DecideToolApproval { approval, answer, ack } => self.decide_tool_approval(approval, answer, ack),
+      Control::DeliverMessages(ack) => self.deliver_messages(ack),
       Control::Interrupt(cause) => {
         self.pending.interrupt = Some(cause);
         self.stop_agents(Stop::Now(StopCause::Requested));
@@ -116,6 +113,12 @@ impl RunTask {
       Some(RunLimit::Time)
     } else if idle::daily_budget_used(&self.db)? {
       Some(RunLimit::DailyBudget)
+    } else if self
+      .db
+      .task_group_limit_reached(&self.run)
+      .map_err(super::record::RecordError::from)?
+    {
+      Some(RunLimit::GroupBudget)
     } else {
       self
         .used_step_budget()?
@@ -160,6 +163,12 @@ impl RunTask {
         Some(RunLimit::Tokens)
       } else if idle::daily_budget_used(&self.db)? {
         Some(RunLimit::DailyBudget)
+      } else if self
+        .db
+        .task_group_limit_reached(&self.run)
+        .map_err(super::record::RecordError::from)?
+      {
+        Some(RunLimit::GroupBudget)
       } else {
         None
       };

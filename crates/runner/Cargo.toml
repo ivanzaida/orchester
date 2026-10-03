@@ -53,6 +53,10 @@ name = "graph"
 required-features = ["test-agent"]
 
 [[test]]
+name = "retries"
+required-features = ["test-agent"]
+
+[[test]]
 name = "step_budget"
 required-features = ["test-agent"]
 
@@ -62,6 +66,14 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "claude"
+required-features = ["test-agent"]
+
+[[test]]
+name = "send_now"
+required-features = ["test-agent"]
+
+[[test]]
+name = "send_now_delivery"
 required-features = ["test-agent"]
 
 [[test]]
@@ -137,6 +149,10 @@ name = "claude_unlisted"
 required-features = ["test-agent"]
 
 [[test]]
+name = "approval_choices"
+required-features = ["test-agent"]
+
+[[test]]
 name = "codex_escalations"
 required-features = ["test-agent"]
 
@@ -164,6 +180,10 @@ required-features = ["test-agent"]
 name = "memory"
 required-features = ["test-agent"]
 
+[[test]]
+name = "plan_limits"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -174,7 +194,6 @@ orchester-exec.workspace = true
 orchester-index.workspace = true
 orchester-ipc.workspace = true
 orchester-store.workspace = true
-fs4.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true

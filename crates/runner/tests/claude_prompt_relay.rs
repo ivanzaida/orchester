@@ -19,14 +19,14 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::StepKey,
-  run::{PendingToolApproval, RunStatus, StepFailure},
+  run::{ApprovalAnswer, PendingToolApproval, RunStatus, StepFailure, Stuck},
   store::ActivityStore,
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, wait_for};
+use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, settled, wait_for};
 
 const RELAY: &str = env!("CARGO_BIN_EXE_orchester-runner");
 
@@ -71,7 +71,7 @@ async fn claude_prompt_relay_serves_only_the_one_relay_with_the_token() {
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   scheduler
-    .decide_tool_approval(id, request.id, true)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -97,16 +97,24 @@ async fn claude_prompt_relay_leaving_while_a_person_decides_interrupts_the_reque
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   std::fs::write(root.join(".orchester").join("fake-release"), "").expect("release");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  // The turn broke without a result: its step restarts as a fresh session.
+  wait_for(root, &mut events, id, |run| run.attempts().len() == 2).await;
   let db = ProjectDb::open(root).expect("open");
-  assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
+  assert!(
+    db.pending_tool_approvals(id)
+      .expect("requests")
+      .iter()
+      .all(|pending| pending.id != request.id)
+  );
   assert!(db.has_interrupted_tool_approval(id).expect("approvals"));
   assert_eq!(
-    scheduler.decide_tool_approval(id, request.id, true).await,
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "a later decision is not recorded as delivered"
   );
+  scheduler.cancel_run(id).await.expect("cancelled");
 }
 
 /// Runs `brief` on a step that asks before commands to its end; its run and runner problems.
@@ -118,7 +126,7 @@ async fn finished(brief: &'static str) -> (orchester_core::run::Run, Vec<RunnerP
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let run = wait_for(root, &mut events, id, settled).await;
   let problems = ProjectDb::open(root)
     .expect("open")
     .activity(id, 0)
@@ -136,8 +144,19 @@ async fn finished(brief: &'static str) -> (orchester_core::run::Run, Vec<RunnerP
 async fn claude_prompt_relay_that_never_reached_the_runner_fails_the_step() {
   // The fake CLI starts its session and works without ever starting the prompt server.
   let (run, problems) = finished("Leave the prompt unstarted. Append one line.").await;
-  assert_eq!(problems, [RunnerProblem::PermissionPromptUnreachable]);
-  assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  // The step restarts once and its prompt again never reaches the runner.
+  assert_eq!(
+    problems,
+    [
+      RunnerProblem::PermissionPromptUnreachable,
+      RunnerProblem::PermissionPromptUnreachable
+    ]
+  );
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");

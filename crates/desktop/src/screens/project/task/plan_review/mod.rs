@@ -26,10 +26,15 @@ use orchester_core::{
 };
 use orchester_ipc::Command;
 
+pub(super) use self::aside::note_field;
 use crate::{
   messages::Message,
   runner::Runners,
-  tasks::{plan::PlanReview, run::control_message},
+  tasks::{
+    detail::{RunView, TaskDetail},
+    plan::PlanReview,
+    run::control_message,
+  },
   ui::form::form,
 };
 
@@ -63,18 +68,18 @@ impl lurq::app::component::DevtoolsInspectable for Choice {}
 
 /// A decision on one plan, as the runner takes it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Decision {
-  run: RunId,
-  execution: StepExecutionId,
-  version: PlanVersion,
-  decision: PlanDecision,
+pub(in crate::screens::project::task) struct Decision {
+  pub(in crate::screens::project::task) run: RunId,
+  pub(in crate::screens::project::task) execution: StepExecutionId,
+  pub(in crate::screens::project::task) version: PlanVersion,
+  pub(in crate::screens::project::task) decision: PlanDecision,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Decision {}
 
-type DecisionAction = FutureAction<Decision, (), Message>;
+pub(in crate::screens::project::task) type DecisionAction = FutureAction<Decision, (), Message>;
 
-fn decision_action(ctx: &mut Ctx) -> DecisionAction {
+pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> DecisionAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
@@ -173,4 +178,18 @@ impl PlanReviewPanel {
       failure: state.error.filter(|_| idle),
     }
   }
+}
+
+/// The Summary while a plan waits for a decision (02.11 `x3lVC`); a new version mounts it anew,
+/// with an empty note.
+pub(super) fn screen(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
+  let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
+  let task = detail.run_task.as_ref().unwrap_or(&detail.task).details();
+  let props = PlanReviewProps {
+    review: Arc::new(review),
+    task: task.title.as_str().into(),
+    criteria: task.acceptance_criteria.clone().into(),
+    tokens: super::summary::budget_value(ctx, run),
+  };
+  ctx.mount_keyed::<PlanReviewPanel>(&key, props)
 }

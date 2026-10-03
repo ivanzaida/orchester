@@ -9,6 +9,7 @@
     "notAvailableYet": "Not available in this version yet",
     "separator": "·",
     "listSeparator": ", ",
+    "listAnd": "{{rest}} and {{last}}",
     "close": "Close",
     "copy": "Copy",
     "copied": "Copied",
@@ -323,7 +324,13 @@
       "open": "Open task  →",
       "clarification": "CLARIFICATION",
       "questionContext": "{{agent}} is waiting · {{task}}",
-      "answer": "Answer question  →"
+      "answer": "Answer question  →",
+      "approval": "APPROVAL",
+      "requestTool": "{{agent}} asks to use {{server}} {{tool}}",
+      "requestCommand": "{{agent}} asks to run {{command}}",
+      "requestContext": "{{task}} · Run {{run}} · {{step}} · since {{time}}",
+      "review": "Review",
+      "requestContextCommand": "{{task}} · Run {{run}} · {{step}} · {{category}} · since {{time}}"
     },
     "activity": {
       "title": "Recent activity",
@@ -346,14 +353,106 @@
     }
   },
   "tasks": {
+    "bulk": {
+      "reviewChanged": "A selected task’s pipeline changed. Close this review and review the selection again.",
+      "hold": {
+        "sessionEnded": "Scheduling is held after reopening. Use Start run on a pending first run, or Create & run on a queued task, to continue this group.",
+        "capacity": "Waiting for agent capacity",
+        "previous": "Waiting for the previous task to be ready for review",
+        "concurrency": "Waiting for task concurrency",
+        "groupCap": "Held at the group token cap. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "failure": "Held after a task failed or was cancelled. Select the waiting tasks and choose Return to drafts to schedule them again.",
+        "startFailed": "Start failed. Check the runner log and retry after resolving the problem."
+      },
+      "held": {
+        "sessionEnded": "Held · project reopened",
+        "capacity": "Waiting for an agent slot",
+        "dailyBudget": "Waiting for the daily budget",
+        "groupCap": "Held · group token cap",
+        "previous": "Waiting for the previous task",
+        "concurrency": "Waiting for a task slot",
+        "failure": "Held · a task failed",
+        "preflight": "Held · cannot start yet",
+        "startFailed": "Held · start failed"
+      },
+      "selected": "{{count}} selected",
+      "runSelected": "Run selected · {{count}}",
+      "notDraft": "This task is already queued.",
+      "notDraftMany": "{{count}} tasks are already queued.",
+      "hasRun": "This task already has a run.",
+      "hasRunMany": "{{count}} tasks already have a run.",
+      "notHeld": "This task is no longer held by its group, so it stays queued.",
+      "notReady": "{{task}}: {{reason}}",
+      "notReadyMany": "{{count}} tasks: {{reason}}",
+      "skippedHasRun": "{{task}} skipped: tasks with runs keep their pipeline.",
+      "skippedNotDraft": "{{task}} skipped: only drafts can be assigned a pipeline.",
+      "applyPipeline": "Apply pipeline",
+      "releaseHeld": "Return to drafts",
+      "reviewTitle": "Run {{count}} tasks",
+      "reviewDescription": "Choose how this group runs. Each task keeps its own pipeline, conversation and result.",
+      "emptySelection": "Select at least one ready draft.",
+      "breadcrumb": "{{project}} / Tasks / Run selected",
+      "back": "Back to tasks",
+      "priority": "Task priority",
+      "order": "Execution order",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "undoOrder": "Undo",
+      "orderTask": "Task to reorder",
+      "orderTaskValue": "{{task}} · {{title}}",
+      "dragToReorder": "Drag to reorder",
+      "taskPipeline": "{{task}} · {{pipeline}}",
+      "taskPipelineVersion": "{{task}} · {{pipeline}} {{version}}",
+      "parallel": "Parallel",
+      "parallelDetail": "Run ready tasks together.",
+      "sequential": "Sequential",
+      "sequentialDetail": "One task at a time, in order.",
+      "concurrentCount": "{{count}} tasks",
+      "concurrent": "Maximum concurrent tasks",
+      "nextWhen": "Start next task when",
+      "reviewGate": "Previous task is ready for review",
+      "executionMode": "Execution mode",
+      "capacityNote": "Task runs and agent slots are separate limits. The runner still limits agent capacity.",
+      "failure": "If a task fails",
+      "pauseRemaining": "Pause remaining tasks",
+      "groupCap": "Group token cap",
+      "perTask": "Token budget / task",
+      "timeLimit": "Time limit / task",
+      "timeValue": "{{minutes}} min active agent time",
+      "limitsReplace": "These limits replace each selected task’s own token budget and time limit.",
+      "finishTime": "Done",
+      "pipelineVersion": "Pipeline version",
+      "pipelineValue": "{{pipeline}} · {{version}}",
+      "pipelineSeparator": "; ",
+      "summaryParallel": "{{count}} tasks · up to {{concurrent}} at once",
+      "summarySequential": "{{count}} tasks · one at a time",
+      "totalTokens": "≈ {{count}} tokens",
+      "eachTokens": "≈ {{count}} tokens",
+      "capacitySlots": "Task runs and agent slots are separate limits. Runner: {{slots}} agent slots.",
+      "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
+      "planApprovalHeading": "Plan approval stays on",
+      "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
+      "sequentialApprovalNote": "Each task waits for your plan approval. The next task starts only when the previous task is ready for review.",
+      "approvalHeading": "Pipeline approvals stay in place",
+      "approvalNote": "Each task follows its published pipeline. Waiting runs count toward the task limit.",
+      "branchNote": "Each task works in a separate branch and worktree.",
+      "queue": "Queue {{count}} tasks",
+      "queued": "The reviewed group is queued. The runner starts tasks as capacity becomes available.",
+      "queuedHeading": "Group queued",
+      "stoppedGroup": "Stopped at the group token cap",
+      "stoppedGroupDetail": "This group used its shared token cap. Further task starts are held; raising this run's own limit does not raise the group cap."
+    },
     "title": "Tasks",
     "breadcrumb": "{{project}} / Tasks",
     "description": "Prepare your backlog, then choose what agents should work on.",
     "createMultiple": "Create multiple",
+    "editingHint": "Open a task to edit its brief, pipeline and limits.",
     "loadFailed": "Tasks cannot be read",
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
+    "emptyQuery": "No tasks in this tab match the search or pipeline filter.",
+    "clearQuery": "Clear search and filter",
     "tabs": {
       "all": "All tasks",
       "drafts": "Drafts",
@@ -364,13 +463,14 @@
     "filters": {
       "search": "Search tasks…",
       "allPipelines": "All pipelines",
-      "manualOrder": "Manual order"
+      "manualOrder": "Manual order",
+      "newest": "Newest first",
+      "title": "Title"
     },
     "selection": {
-      "unavailable": "Selecting tasks is not available yet",
       "readiness": "{{ready}} ready to queue · {{incomplete}} incomplete",
-      "setPipeline": "Set pipeline",
-      "runSelected": "Run selected"
+      "readinessStarted": "{{ready}} ready to queue · {{incomplete}} incomplete · {{started}} already queued or started",
+      "setPipeline": "Set pipeline"
     },
     "columns": {
       "key": "ID",
@@ -519,6 +619,8 @@
       "pausing": "Pausing…",
       "resume": "Resume run",
       "resuming": "Resuming…",
+      "start": "Start run",
+      "starting": "Starting…",
       "continue": "Continue run",
       "continuing": "Continuing…",
       "cancel": "Cancel run",
@@ -529,7 +631,8 @@
       "draft": "Draft · not queued for a run",
       "queued": "Queued · its run has not started",
       "describe": {
-        "pending": "Run {{run}} · starting",
+        "pending": "Run {{run}} · not started",
+        "schedulingHeld": "Run {{run}} · scheduling held after reopening",
         "starting": "Run {{run}} · Attempt {{attempt}} · starting",
         "working": "Run {{run}} · Attempt {{attempt}} · {{step}} · {{agent}} working",
         "awaitingPlan": "Run {{run}} · Attempt {{attempt}} · {{pipeline}} {{version}} · {{agent}} finished",
@@ -547,16 +650,18 @@
         "cancelledBeforeStart": "Run {{run}} · cancelled before it started",
         "workingParallel": "Run {{run}} · Attempt {{attempt}} · {{steps}} working",
         "retriesExhausted": "Run {{run}} · Attempt {{attempt}} · Automatic retries exhausted",
+        "brokeAgain": "Run {{run}} · Attempt {{attempt}} · {{step}} stopped again without a result",
         "unreadable": "Run {{run}} · could not be read",
-        "unreadableUnnumbered": "Its latest run could not be read"
+        "unreadableUnnumbered": "Its latest run could not be read",
+        "waitsForAnswer": "Run {{run}} · {{pipeline}} {{version}} · {{step}} · {{agent}} waits for your answer, {{time}}"
       },
       "tabs": {
         "summary": "Summary",
         "conversation": "Conversation",
         "changes": "Changes",
-        "activity": "Activity",
         "artifacts": "Artifacts"
-      }
+      },
+      "needsYou": "Needs you"
     },
     "unreadable": {
       "title": "Run #{{run}} could not be read",
@@ -590,14 +695,40 @@
       "passed": "Done",
       "failed": "Failed",
       "skipped": "Skipped",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "notStarted": "Not started"
     },
     "permissions": {
-      "value": "{{agent}} · {{repository}} · {{commands}} · {{network}}",
+      "label": {
+        "runningWith": "Running with",
+        "lastRanWith": "Last ran with",
+        "nextRunUses": "Next run uses",
+        "ranWith": "Ran with"
+      },
+      "policyValue": "{{agent}} · {{repository}} · {{commands}} · {{network}} · {{mcp}}",
+      "commandsAsk": "Commands ask",
+      "mcpAsks": "MCP asks",
+      "mcpAuto": "MCP auto",
+      "starting": "starting…",
+      "notRecorded": "not recorded",
+      "notStarted": "no permissions · it did not start",
+      "changed": {
+        "added": "{{command}} added",
+        "removed": "{{command}} removed"
+      },
+      "nextTitle": "Saved for the next invocation",
+      "nextTitleChange": "Saved for the next invocation · {{change}}",
+      "nextDetail": "{{agent}} keeps running with the permissions it started with. Its next invocation in Run {{run}} (a retry, or continuing after a pause, a limit or the conversation) starts with the new permissions.",
+      "restartingTitle": "Restarting with the new permissions…",
+      "restartingDetail": "{{agent}} stopped at checkpoint {{checkpoint}}. {{step}} restarts with the new permissions as soon as the run continues.",
+      "restartingDetailNoCheckpoint": "{{agent}} stopped at its checkpoint. {{step}} restarts with the new permissions as soon as the run continues.",
+      "restartFailedTitle": "New permissions not active: {{agent}} did not restart",
+      "restartFailedDetail": "{{agent}} stopped at checkpoint {{checkpoint}}, but {{step}} did not start again. Activity shows why; the run keeps the permissions it last ran with.",
+      "restartFailedDetailNoCheckpoint": "{{agent}} stopped at its checkpoint, but {{step}} did not start again. Activity shows why; the run keeps the permissions it last ran with.",
       "view": "view ↗",
       "change": "change ↗",
-      "applyingValue": "{{agent}} · Applying at next checkpoint…",
       "pendingTitle": "Applying new permissions at the next checkpoint…",
+      "pendingTitleChange": "Applying {{change}} at the next checkpoint…",
       "pendingDetail": "{{agent}} finishes the command it is running, then stops. Its changes are committed as a checkpoint and {{step}} restarts from it with the new permissions. Nothing in the worktree is lost; the agent’s unsaved reasoning since its last turn is not carried over unless the CLI can resume its session.",
       "keepForNext": "Keep for next invocation instead",
       "appliedTitle": "New permissions active since {{time}}",
@@ -608,7 +739,9 @@
       "popover": {
         "title": "Permissions for this run",
         "subtitle": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}}",
-        "takesEffect": "Apply from next invocation: the invocation running now keeps its permissions. Apply now: {{agent}} stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
+        "subtitleEnded": "{{agent}} · {{step}} · {{connection}} / {{model}} · from profile {{version}} · run ended",
+        "takesEffect": "Apply from next invocation: {{agent}} keeps these until it next starts. Apply now: it stops at its next checkpoint and {{step}} restarts from it with the new permissions. Both change Run {{run}} only.",
+        "ended": "This run has ended, so its permissions can’t be changed here. Continuing the conversation starts a new invocation of {{agent}} with these settings.",
         "added": "{{commands}} added for this run",
         "removed": "{{commands}} removed for this run",
         "applyNow": "Apply now",
@@ -660,6 +793,9 @@
       "notice": {
         "draftTitle": "This task is a draft",
         "draftDetail": "A run starts from Create & run once the task has every detail.",
+        "pendingTitle": "This run has not started",
+        "pendingDetail": "Start run retries this recorded first run with its reviewed pipeline and saved snapshot. It does not create another run.",
+        "pendingHeldDetail": "Scheduling is held after reopening. Start run continues this existing first run and releases its group’s scheduling hold, keeping its reviewed pipeline and saved snapshot.",
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
         "runningTitle": "{{step}} is running",
@@ -682,8 +818,43 @@
         "failedTitle": "The run failed at {{step}}",
         "failedDetail": "Activity shows what the agent reported.",
         "failedCommandDetail": "Activity shows the command, its exit code and its output.",
+        "waitingTitle": "{{step}} needs your decision",
+        "waitingDetail": "Automatic execution has stopped. Allow another attempt, return the work to an earlier step, or stop the run.",
         "cancelledTitle": "The run was cancelled",
         "cancelledDetail": "Completed work stays on {{branch}}."
+      },
+      "approval": {
+        "titleTool": "{{agent}} waits for your answer · {{server}} {{tool}}",
+        "titleCommand": "{{agent}} waits for your answer · a command",
+        "detail": "Waiting since {{time}}; its active time stopped. Nothing runs until you answer.",
+        "detailOthers": {
+          "one": "Waiting since {{time}}; its active time stopped. {{count}} more request waits in another run.",
+          "other": "Waiting since {{time}}; its active time stopped. {{count}} more requests wait in other runs."
+        },
+        "review": "Review request"
+      },
+      "approvals": {
+        "title": "Approvals",
+        "approveRun": "Approve everything in this run",
+        "approveRunNote": "Orchester answers this run’s requests itself. Network commands, writes outside the worktree, secrets, installs, destructive and unreadable commands still ask you.",
+        "byYou": "Approved by you",
+        "bySimilarRule": "By similar rule",
+        "alwaysAllowed": "Always allowed",
+        "autoApproved": "Auto-approved",
+        "denied": "Denied by you",
+        "waiting": "Waiting",
+        "similarTitle": "Approved as similar in this run",
+        "alwaysTitle": "Always allowed during this run",
+        "toolRule": "{{server}} · {{tool}}",
+        "commandRule": "{{words}} … · {{category}}",
+        "revoked": "revoked at {{time}} · approved {{count}} before",
+        "revoke": "Revoke",
+        "alwaysAdded": "added to the profile’s Allowed commands at {{time}}, by you",
+        "autoApproving": "Auto-approving",
+        "autoApprovingDetail": "Orchester answers this run’s requests itself; dangerous ones still ask you.",
+        "stop": "Stop",
+        "sinceTool": "since {{time}} · approved {{count}} calls without asking you",
+        "sinceCommand": "since {{time}} · approved {{count}} commands without asking you"
       }
     },
     "progress": {
@@ -691,6 +862,8 @@
       "together": " + ",
       "detail": "{{state}} · attempt {{attempt}} · {{tokens}} tokens · {{duration}}",
       "commandDetail": "{{state}} · attempt {{attempt}} · {{duration}}",
+      "waitingOn": "Waiting for you · {{subject}} · since {{time}}",
+      "toolSubject": "{{server}} {{tool}}",
       "state": {
         "waiting": "Waiting",
         "working": "Working",
@@ -718,6 +891,8 @@
         "other": "{{step}} still fails after {{retries}} retries"
       },
       "detail": "Automatic execution has stopped. Review what the latest attempt left behind.",
+      "brokeTitle": "{{step}} stopped again without a result",
+      "brokeDetail": "Its agent or command ended without a verdict on the work, also after a fresh restart. Review what the latest attempt left behind.",
       "latest": "Latest attempt · {{revision}}",
       "latestWithoutCheckpoint": "Latest attempt {{attempt}}",
       "reported": "What {{step}} reported",
@@ -732,11 +907,28 @@
       "additionalValue": "1 additional attempt",
       "resumeFrom": "Resume from",
       "resumeValue": "{{step}} · latest checkpoint",
-      "unavailable": "Allowing another attempt is not available in this version yet. The run stays failed and its work stays on its branch.",
+      "retryMeaning": "{{step}} receives what {{failed}} reported. The steps after it run again on the new work.",
+      "restartMeaning": "{{step}} starts again as a fresh session from the latest checkpoint.",
       "allow": "Allow 1 retry & continue",
-      "revisePlan": "Revise plan first"
+      "returnTo": "Return the work to",
+      "notePlaceholder": "What should change before the next attempt",
+      "returnWithNote": "Return to {{step}} with note",
+      "stop": "Stop and fail the run"
     },
     "activity": {
+      "mark": {
+        "returnedTitle": "Returned to {{step}} · {{failed}} failed (attempt {{attempt}})",
+        "returnedDetail": "{{agent}} receives what {{failed}} reported. {{steps}} run again on the new work.",
+        "returnedDetailAlone": "{{agent}} receives what {{failed}} reported.",
+        "and": " and ",
+        "restartedTitle": "Restarted {{step}} · it stopped without a result",
+        "restartedDetail": "A fresh session from the latest checkpoint. If it stops again without a result, the run waits for you.",
+        "returnedWithNoteTitle": "Returned to {{step}} with your note",
+        "note": "“{{note}}”",
+        "automaticRetry": "automatic · retry {{retry}} of {{max}} · {{time}}",
+        "automaticAttempt": "automatic · attempt {{attempt}} · {{time}}",
+        "byYou": "by you · {{time}}"
+      },
       "allSteps": {
         "one": "All steps · {{count}} execution",
         "other": "All steps · {{count}} executions"
@@ -746,8 +938,10 @@
       "following": "Following live",
       "notFollowing": "Not following",
       "ended": "Run ended",
+      "waitingDecision": "Waits for your decision",
       "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
+      "engineNative": "{{engine}} · native",
       "headerRunning": "{{engine}} · invocation {{count}} · started {{start}}",
       "headerFinished": {
         "one": "{{engine}} · {{count}} invocation · {{start}}–{{end}}",
@@ -878,7 +1072,22 @@
         "soFar": "{{count}} so far",
         "cachedSoFar": "{{count}} so far · not counted",
         "atMost": "≤ {{count}}",
-        "cachedAtMost": "≤ {{count}} · not counted"
+        "cachedAtMost": "≤ {{count}} · not counted",
+        "nativeTitle": "{{step}} invocation",
+        "startedValue": "{{start}} · {{took}}",
+        "runBudget": "Run budget",
+        "permissionsValue": "{{repository}} · {{commands}} ↗",
+        "runs": "Runs",
+        "runsHere": "This computer (Orchester)",
+        "endpointNow": "Endpoint now",
+        "network": "Network",
+        "networkStaysOn": "Stays on · off not enforceable",
+        "networkOn": "On",
+        "toolCalls": "Tool calls",
+        "toolCallsDenied": "{{count}} · {{denied}} denied",
+        "noteNative": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeFirstEdit": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "noteNativeAtMost": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file; ≤ means the request of that edit was reported whole, so its later part is counted too. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent."
       },
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
@@ -892,7 +1101,27 @@
         "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
         "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
         "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
-        "withMeta": "{{meta}} · {{mark}}"
+        "withMeta": "{{meta}} · {{mark}}",
+        "tool": "{{server}} {{tool}}",
+        "aCommand": "command",
+        "approvedByYouOnce": "approved by you · {{subject}}",
+        "approvedSimilarAdded": "approved by you · {{subject}} · similar rule added",
+        "approvedAlwaysAdded": "approved by you · {{subject}} · always allowed",
+        "approvedRunAdded": "approved by you · {{subject}} · auto-approving this run",
+        "deniedByYou": "denied by you · the agent continued",
+        "bySimilarRule": "approved by similar rule · {{subject}}",
+        "alwaysAllowed": "always allowed · {{subject}}",
+        "autoApproved": "auto-approved · {{subject}}",
+        "told": "Told the agent: {{message}}",
+        "category": {
+          "readOnly": "Read-only",
+          "worktree": "Worktree",
+          "network": "Network",
+          "outsideWrite": "Outside write",
+          "unknown": "Unknown",
+          "historyDestructive": "History / destructive",
+          "credentialRead": "Credential read"
+        }
       },
       "mcp": {
         "title": "Working without MCP server {{server}}",
@@ -987,30 +1216,178 @@
         "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
       }
     },
+    "notEnforced": {
+      "heading": "What Orchester could not enforce for {{agent}}",
+      "networkStayedOn": "Network stayed on. {{agent}}’s profile asks for network off, but commands the agent runs could reach the network: Orchester can’t block it for a native connection yet.",
+      "listedUnconfined": "Listed commands were not confined. {{commands}} ran with your account’s access, outside the worktree’s limits; Orchester’s file tools stayed in the worktree.",
+      "permissionsLink": "{{agent}}’s permissions ↗"
+    },
     "toolApproval": {
       "title": "Approve tool action?",
-      "explanation": "{{agent}} requests {{action}} from the {{server}} MCP server. Review the target before deciding. Approve once applies only to this request; Deny fails this step.",
+      "explanation": "{{agent}} asks to call one tool of the {{server}} MCP server. Approve once runs this call only. Deny tells {{agent}} and it goes on; the step does not fail.",
       "agent": "Agent",
       "server": "MCP server",
       "action": "Action",
       "target": "Target",
-      "remaining": "Additional requests waiting: {{count}}",
       "deny": "Deny",
       "denying": "Denying…",
       "approveOnce": "Approve once",
       "approving": "Approving…",
+      "decideLater": "Decide later",
+      "decideLaterKey": "Esc",
+      "queuePosition": "{{position}} of {{count}} waiting",
+      "agentValue": "{{agent}} · {{step}} · Run {{run}} · {{task}}",
+      "denyTells": "Deny tells {{agent}}: “{{message}}”",
+      "denyTellsCodex": "Deny declines it, and Codex tells {{agent}}: “{{message}}”",
+      "waitingSince": "waiting since {{time}}",
+      "policy": {
+        "commandsAsk": "Asks before commands · {{profile}} {{version}}",
+        "notListed": "Not an allowed command · {{profile}} {{version}}",
+        "beyondSandbox": "Asks to leave the sandbox · {{profile}} {{version}}",
+        "mcpActions": "Asks before MCP actions · {{profile}} {{version}}",
+        "profile": "{{profile}} {{version}}"
+      },
+      "reason": {
+        "unknown": "Orchester could not read it to the end.",
+        "installs": "Installs a package from the network:",
+        "installsSource": "{{registry}} · {{package}}",
+        "installsListed": "Installs the packages a file lists from the network:",
+        "deletesOutside": "Deletes outside the worktree:",
+        "rewritesHistory": "Rewrites or discards history:",
+        "readsCredentials": "Reads credentials:",
+        "writesOutside": "Writes outside the worktree:",
+        "network": "Uses the network:",
+        "worktree": "Changes the worktree:",
+        "readOnly": "Only reads:"
+      },
+      "commandBecause": {
+        "installs": "Command · installs a package from the network: {{value}}",
+        "installsListed": "Command · installs the packages a file lists from the network: {{value}}",
+        "deletesOutside": "Command · deletes outside the worktree: {{value}}",
+        "rewritesHistory": "Command · rewrites or discards history: {{value}}",
+        "readsCredentials": "Command · reads credentials: {{value}}",
+        "writesOutside": "Command · writes outside the worktree: {{value}}",
+        "network": "Command · uses the network: {{value}}",
+        "worktree": "Command · changes the worktree: {{value}}",
+        "readOnly": "Command · only reads: {{value}}"
+      },
+      "wider": {
+        "heading": "Or answer more widely",
+        "similar": "Approve similar in this run",
+        "similarTool": "{{server}} {{tool}}, every call until Run {{run}} ends. Starts now, for this invocation too.",
+        "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Flags and packages may differ; another subcommand or category still asks.",
+        "always": "Always allow…",
+        "alwaysTool": "Add {{tool}} to {{server}}’s tools that run without asking, for every profile that uses {{server}}.",
+        "alwaysCommand": "Add {{prefix}} to {{profile}}’s Allowed commands, in a new profile version, for runs that start later.",
+        "runHeading": "Or stop asking for this run",
+        "run": "Approve everything in this run",
+        "runCovers": "Orchester answers this and every later request of Run {{run}} itself, until the run ends or you stop it. Network commands, writes outside the worktree, secrets, installs, destructive and unreadable commands still ask you.",
+        "runOn": "On: Orchester already answers Run {{run}}’s requests itself. It leaves this one to you, as it never answers a request like it.",
+        "runOnEarlier": "On: Orchester answers Run {{run}}’s new requests itself. This one came before it was on, so it waits for you.",
+        "severalAsk": "Several parts ask: approve once or deny.",
+        "destructive": "A command that rewrites or discards history can’t be always allowed.",
+        "widerForms": "Its prefix would also allow riskier forms, such as rm ‑rf, git reset ‑‑hard or an option that starts another program.",
+        "secrets": "Unavailable for a command that reads credentials: approve once or deny.",
+        "similarDestructive": "Unavailable for a command that rewrites history or deletes outside the worktree: approve once or deny.",
+        "noAllowedList": "The profile has no Allowed commands to add to: it asks before every command, or its CLI keeps no list.",
+        "listFull": "The profile lists as many commands as a profile can.",
+        "toolName": "This tool’s name can’t be listed: a listed name has only letters, digits, - and _.",
+        "missing": "The step’s profile or the server can no longer be read.",
+        "similarUnknown": "Unavailable: Orchester can’t tell which later commands would be alike.",
+        "alwaysUnknown": "Unavailable for an Unknown command."
+      },
+      "similarScope": {
+        "heading": "Approve similar in this run covers",
+        "runs": "Runs without asking",
+        "asks": "Still asks you",
+        "toolRule": "{{server}} · {{tool}}",
+        "anyArguments": "any arguments",
+        "toolUntil": "until Run {{run}} ends · starts with this invocation",
+        "toolCall": "{{server}} · {{tool}}",
+        "otherArguments": "with other arguments",
+        "laterInvocation": "in a later invocation of Run {{run}}",
+        "otherTool": "{{server}} · …",
+        "otherToolWhy": "another tool of {{server}}",
+        "otherServer": "… · {{tool}}",
+        "otherServerWhy": "another server",
+        "otherRun": "{{tool}} in another run",
+        "otherRunWhy": "another run",
+        "toolNote": "Same server and tool, any arguments. Orchester answers each later call itself, one at a time, marked “approved by similar rule · {{server}} {{tool}}”. Revoke the rule in the run’s Approvals.",
+        "commandRule": "{{words}} …",
+        "inCategory": "in {{category}}",
+        "commandUntil": "until Run {{run}} ends · starts with this invocation",
+        "commandCall": "{{words}} …",
+        "otherFlags": "other flags, arguments or packages, still {{category}}",
+        "otherSubcommand": "another subcommand",
+        "otherSubcommandWhy": "not {{words}}",
+        "otherPart": "… && another command",
+        "otherPartWhy": "a part in another category, or another part that asks",
+        "commandNote": "Same program and subcommand in {{category}}. Orchester answers each later command itself, one at a time, marked “approved by similar rule · {{category}}”. Revoke the rule in the run’s Approvals."
+      },
+      "scope": "One requested action only; no session or permanent grant",
+      "always": {
+        "back": "Back",
+        "commandTitle": "Always allow {{prefix}} for {{profile}}?",
+        "commandExplanation": "Adds exactly the prefix you choose to {{profile}}’s Allowed commands, in a new profile version. Commands that start with it run without asking in runs that start later. This request is approved as well.",
+        "prefixLabel": "Prefix to add",
+        "widest": "also its other arguments",
+        "narrowest": "only this command and what follows it",
+        "versionHeading": "Adds {{prefix}} to {{profile}} › Permissions › Allowed commands, published as {{profile}} {{version}}",
+        "versionStarts": "Runs that start from now use {{version}}. Run {{run}} keeps {{pinned}} and also allows {{prefix}} until it ends.",
+        "versionDraft": "{{profile}}’s unsaved draft is kept and gets {{prefix}} too.",
+        "versionPipelines": "{{profile}} is used in {{pipelines}}.",
+        "addCommand": "Add to {{version}} and approve",
+        "toolTitle": "Always allow {{tool}} of {{server}}?",
+        "toolExplanation": "Adds {{tool}} to the {{server}} server’s Tools that run without asking. Every profile that gets {{server}} and asks before MCP actions then runs it without asking. This call is approved as well.",
+        "toolLabel": "What is added, where, and who it affects",
+        "toolWhere": "to Connections › MCP servers › {{server}} › Tools that run without asking",
+        "toolProfiles": "every profile that gets {{server}}, not {{others}}",
+        "toolProfilesAll": "every profile that gets {{server}}",
+        "toolStartsHeading": "Starts now, and for every agent that starts later",
+        "toolStarts": "Agents that start later get it from their CLI and are not asked. The CLI reads the list only when an agent starts, so for {{agent}}’s current invocation Orchester answers later {{tool}} calls itself.",
+        "addTool": "Add to {{server}} and approve",
+        "tool": "Tool",
+        "toolValue": "{{server}} · {{tool}}"
+      },
       "notAwaited": "This tool action no longer waits for a decision.",
+      "notAwaitedCommand": "This command no longer waits for a decision.",
       "commandTitle": "Approve command?",
-      "commandExplanation": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action, including its requested sandbox exception; it does not change later permissions. Deny prevents execution and fails this step.",
-      "commandExplanationClaude": "{{agent}} requests this command in {{cwd}}. Claude Code runs an approved command outside any sandbox. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
-      "commandExplanationReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
-      "commandExplanationNative": "{{agent}} requests this command in {{cwd}}. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
-      "commandExplanationClaudeReadOnly": "{{agent}} requests this command in {{cwd}}. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny prevents execution and fails this step.",
+      "policyExplanation": {
+        "readOnly": "{{agent}}’s policy asks you about commands that only read. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "worktree": "{{agent}}’s policy asks you about commands that change the worktree. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "network": "{{agent}}’s policy asks you about commands that use the network. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "outsideWrite": "{{agent}}’s policy asks you about commands that write outside the worktree. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "historyDestructive": "{{agent}}’s policy asks you about commands that rewrite or discard history. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "credentials": "{{agent}}’s policy asks you about commands that read credentials. Approve once runs this command only. Deny tells {{agent}} and it goes on; the step does not fail.",
+        "unknown": "Orchester could not read this command to the end, so it is Unknown and {{agent}}’s policy asks you. Approve once runs it once. Deny tells {{agent}} and it goes on; the step does not fail."
+      },
+      "commandExplanationReadOnly": "{{agent}} asks to run this command. This step only reads, but an approved command runs outside the sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
+      "commandExplanationNative": "{{agent}} asks to run this command. Approve once permits only this action; it does not change later permissions. Deny tells the agent, and it continues without the command; the step does not fail.",
+      "commandExplanationClaudeReadOnly": "{{agent}} asks to run this command. This step only reads, but Claude Code runs an approved command outside any sandbox, where it can change files. Approve once permits only this action; it does not change later permissions. Deny tells {{agent}}, which goes on without the command; the step does not fail.",
       "command": "Command",
+      "commandLines": {
+        "one": "Command · {{lines}} line, as recorded",
+        "other": "Command · {{lines}} lines, as recorded"
+      },
       "cwd": "Working directory",
       "note": "Agent’s note",
       "arguments": "Arguments",
-      "scope": "One requested action only; no session or permanent grant"
+      "argumentsCut": "… cut at {{kilobytes}} KB",
+      "argumentsAsRecorded": "Shown as recorded: laid out one member a line, these arguments would be too large to read.",
+      "native": {
+        "explanation": "{{agent}} asks to run this command in the task worktree. It is not on the allowed list and not known to be safe, so it asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "explanationReadOnly": "{{agent}} asks to run this command in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanation": "{{agent}} asks to run this command through a shell in the task worktree. A shell command is never on the allowed list and never known-safe, so it always asks you. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shellExplanationReadOnly": "{{agent}} asks to run this command through a shell in the task worktree. This step only reads, but an approved command runs outside any sandbox, where it can change files. Deny tells the agent, and it continues without the command; the step does not fail.",
+        "shell": "Shell",
+        "shellValue": "{{shell}} · {{invocation}}",
+        "commandLabel": "Command · the full string the shell receives",
+        "timeLimit": "Time limit",
+        "timeLimitValue": "{{seconds}} s",
+        "unsandboxedTitle": "Runs outside any sandbox",
+        "unsandboxedDetail": "Orchester keeps its file tools inside the worktree, but not commands. This one runs as you: it can read and change whatever your account can and reach the network. Secrets are not in its environment."
+      },
+      "firstLineMore": "{{line}} …"
     },
     "ready": {
       "status": "Ready for review",
@@ -1053,7 +1430,6 @@
       "merging": "Merging…",
       "unavailable": "Merge is unavailable: this run didn’t record the branch your checkout had when it started (it started before Orchester kept it, or on a detached HEAD). Merge its branch yourself with git.",
       "mergedTitle": "Merged into {{branch}}",
-      "noticeDetail": "{{merged}} {{left}}",
       "mergedDetail": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "Merge commit {{revision}} joined the run’s work into {{branch}} at {{time}}.",
@@ -1192,9 +1568,7 @@
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from.",
-      "buildSpaceLow": "Low disk space for CARGO_TARGET_DIR ({{target}}): {{available}} GiB free; at least {{required}} GiB is needed before this run can start. Free space or choose another build folder.",
-      "buildSpaceUnavailable": "Cannot check free space for CARGO_TARGET_DIR ({{target}}). Check that the folder or its volume is accessible before starting this run."
+      "noCommits": "The repository has no commit to start the run from."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -1269,66 +1643,227 @@
       "ended": "The run has already ended.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notInterrupted": "The run is not interrupted.",
+      "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details."
+    },
+    "conversation": {
+      "state": {
+        "waiting": "Waiting for you",
+        "queued": "Queued",
+        "paused": "Paused",
+        "stopped": "Stopped at limit",
+        "interrupted": "Interrupted",
+        "ready": "Ready for review",
+        "merged": "Merged",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "allStepsNone": "All steps · none yet",
+      "show": {
+        "all": "All",
+        "messages": "Messages",
+        "tools": "Tools"
+      },
+      "search": "Search this run…",
+      "details": "Details",
+      "stepLabel": "{{number}} {{step}}",
+      "showingOnly": {
+        "one": "Showing {{step}} only · {{hidden}} is hidden.",
+        "other": "Showing {{step}} only · {{hidden}} are hidden."
+      },
+      "showingOnlyAlone": "Showing {{step}} only.",
+      "showAllSteps": "Show all steps",
+      "clearSearch": "Clear search",
+      "showAll": "Show all",
+      "matches": {
+        "one": "1 match for “{{query}}” in {{steps}} · items without a match are hidden.",
+        "other": "{{count}} matches for “{{query}}” in {{steps}} · items without a match are hidden."
+      },
+      "matchesElsewhere": {
+        "one": "1 match in {{steps}}.",
+        "other": "{{count}} matches in {{steps}}."
+      },
+      "nothingInRun": "Nothing in Run {{run}} matches “{{query}}”",
+      "nothingInStep": "Nothing in {{step}} matches “{{query}}”",
+      "searched": {
+        "one": "Searched the messages, commands, paths and output of the step that ran.",
+        "other": "Searched the messages, commands, paths and output of {{count}} steps."
+      },
+      "toolsHidden": {
+        "one": "{{calls}} tool calls in 1 group hidden",
+        "other": "{{calls}} tool calls in {{groups}} groups hidden"
+      },
+      "empty": {
+        "noRun": "This task has not run yet",
+        "nothingYet": "Nothing in this conversation yet",
+        "queued": "Run {{run}} is queued and starts when an agent slot is free. The agents’ messages, their tool activity and your messages will appear here.",
+        "step": "{{number}} {{step}} · {{agent}}",
+        "toolStep": "{{number}} {{step}}"
+      },
+      "agentMeta": "{{step}} · {{time}}",
+      "you": "You",
+      "toAgent": "to {{agent}} · {{time}}",
+      "toOrchestrator": "to Orchestrator · {{time}}",
+      "problemMeta": "{{meta}} · {{time}}",
+      "editInComposer": "Edit in composer",
+      "line": {
+        "message": "message",
+        "agent": "{{agent}}: {{text}}",
+        "you": "You: {{text}}",
+        "youTo": "You to {{agent}}: {{text}}"
+      },
+      "delivery": {
+        "sendingNow": "Sending now · {{agent}} gets it at its next tool call",
+        "afterTurn": "Queued · {{agent}} reads it when its turn ends",
+        "midTurn": "Delivered mid-turn to {{agent}} · {{time}}, at its next tool call",
+        "turnEnd": "Delivered at end of turn to {{agent}} · {{time}}",
+        "turnEndedFirst": "Delivered at end of turn to {{agent}} · {{time}} · its turn ended before another tool call",
+        "delivered": "Delivered to {{agent}} · {{time}}",
+        "notDelivered": "Could not deliver to {{agent}}: {{reason}}. Your message is kept here.",
+        "refused": "its CLI refused to add it to the running turn",
+        "unwritable": "its CLI did not take its input"
+      },
+      "group": {
+        "read": {
+          "one": "read 1 file",
+          "other": "read {{count}} files"
+        },
+        "searched": {
+          "one": "searched once",
+          "other": "searched {{count}} times"
+        },
+        "memory": "searched memory",
+        "ranOne": "ran {{command}}",
+        "ranTwo": "ran {{first}} and {{second}}",
+        "ranMany": "ran {{count}} commands",
+        "exit": "exit {{code}}",
+        "failedCommand": "{{command}} · exit {{code}}",
+        "edited": {
+          "one": "edited 1 file",
+          "other": "edited {{count}} files"
+        },
+        "mcp": {
+          "one": "1 MCP call",
+          "other": "{{count}} MCP calls"
+        },
+        "running": "running {{command}}",
+        "separator": " · ",
+        "span": "{{first}}–{{last}}",
+        "calls": {
+          "one": "1 tool call · {{times}}",
+          "other": "{{count}} tool calls · {{times}}"
+        },
+        "more": "Show {{count}} more · {{kinds}}",
+        "withoutMatch": "Show {{count}} without a match · {{kinds}}",
+        "kinds": {
+          "reads": {
+            "one": "1 read",
+            "other": "{{count}} reads"
+          },
+          "searches": {
+            "one": "1 search",
+            "other": "{{count}} searches"
+          },
+          "commands": {
+            "one": "1 command",
+            "other": "{{count}} commands"
+          },
+          "edits": {
+            "one": "1 edit",
+            "other": "{{count}} edits"
+          },
+          "mcp": {
+            "one": "1 MCP call",
+            "other": "{{count}} MCP calls"
+          },
+          "other": {
+            "one": "1 note",
+            "other": "{{count}} notes"
+          }
+        }
+      },
+      "card": {
+        "asks": "{{agent}} asks you",
+        "asksMcp": "{{agent}} asks to use an MCP tool",
+        "asksCommand": "{{agent}} asks to run a command",
+        "alwaysCommand": "Always allow for this profile…",
+        "alwaysTool": "Always allow for this server…",
+        "workingDirectory": "Working directory · {{folder}}",
+        "target": "Target · {{target}}",
+        "waitingAnswer": "Waiting for your answer",
+        "answered": "Answered",
+        "waitingApproval": "Waiting for approval",
+        "approved": "Approved",
+        "changesRequested": "Changes requested",
+        "superseded": "Earlier version",
+        "denied": "Denied",
+        "interrupted": "Interrupted",
+        "wholePlan": "Show the whole plan · {{count}} lines"
+      },
+      "result": {
+        "done": "{{step}} done",
+        "failed": "{{step}} failed",
+        "meta": "{{took}} · {{tokens}} tokens",
+        "changes": "Changes ↗",
+        "summary": "Summary ↗"
+      },
+      "end": {
+        "ready": "Run {{run}} is ready for your review · {{time}}",
+        "merged": "Run {{run}} was merged into {{branch}} · {{time}}",
+        "failed": "Run {{run}} failed at {{step}} · {{time}}",
+        "cancelled": "Run {{run}} was cancelled · {{time}}"
+      },
+      "composer": {
+        "sendNow": "Send now",
+        "sendAfterTurn": "Send after this turn",
+        "sendAnswer": "Send answer",
+        "sendFollowUp": "Send follow-up",
+        "continue": "Continue with instructions",
+        "sendWhenStarts": "Send when the run starts",
+        "answering": "Answering {{agent}}’s question from {{time}}",
+        "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
+        "deciding": "Waiting for your decision"
+      },
+      "to": {
+        "working": "To: {{agent}} · working",
+        "resumes": "To: {{agent}} · resumes its session",
+        "continues": "To: {{agent}} · continues the run",
+        "firstStep": "To: {{agent}} · first step"
+      },
+      "hint": {
+        "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
+        "steerMac": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Cmd+Enter sends after this turn.",
+        "steerUnavailable": "{{agent}}’s connection takes no message while its turn runs, so Send now is unavailable. Send after this turn waits until {{agent}} finishes its turn.",
+        "toolStep": "A command tool runs this step, not an agent. Your message waits for the next agent’s turn.",
+        "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
+        "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
+        "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan."
+      }
     }
   },
   "conversation": {
-    "title": "Task conversation",
-    "status": {
-      "notStarted": "Not started",
-      "live": "Live",
-      "waiting": "Waiting for you",
-      "paused": "Paused",
-      "stopped": "Stopped",
-      "interrupted": "Interrupted",
-      "ready": "Ready for review",
-      "merged": "Merged",
-      "failed": "Failed",
-      "ended": "Ended"
-    },
     "to": {
       "orchestrator": "To: Orchestrator · this task",
       "agent": "To: {{agent}}"
-    },
-    "participants": {
-      "working": "{{agents}} working · {{available}} available",
-      "workingOnly": "{{agents}} working",
-      "asking": "{{agents}} asks you · {{available}} available",
-      "askingOnly": "{{agents}} asks you",
-      "available": "{{available}} available",
-      "cannotContinue": "{{agents}} cannot continue",
-      "paused": "{{agent}} paused · messages stay in this task",
-      "stopped": "{{agent}} stopped at the limit · messages wait in this task",
-      "interrupted": "{{agent}} interrupted · messages wait in this task",
-      "none": "No agent takes part in this task yet"
-    },
-    "author": {
-      "you": "You · {{time}}",
-      "youTo": "You to {{agent}} · {{time}}",
-      "agent": "{{agent}} · {{time}}"
     },
     "delivery": {
       "queued": "Queued · waiting for the next checkpoint",
       "queuedRunStart": "Queued · waiting for the run to start",
       "queuedRunResume": "Queued · delivered before the next action on resume",
       "queuedRunContinue": "Queued · delivered when the run continues",
-      "queuedAgentNextTurn": "Queued · waiting for this agent’s next turn",
+      "queuedAgentNextTurn": "Queued · waiting for {{agent}}’s next turn",
       "notDelivered": "Not delivered · the run has ended",
       "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
-      "delivered": "Delivered to {{agent}}",
-      "acknowledged": "Acknowledged by {{agent}}",
       "reply": "Reply · {{step}}",
       "question": "Question · waiting for your answer",
       "answered": "Question · answered"
     },
     "reply": "Reply  →",
-    "empty": "No messages yet. Questions and clarifications you write here stay with this task.",
-    "emptyWorktreeRemoved": "No messages were sent before this run’s worktree was removed.",
+    "openDecision": "Open the decision  →",
     "composer": {
       "placeholder": "Ask, clarify or redirect this task…",
       "attach": "Attach",
       "send": "Send",
-      "sendAndContinue": "Send & continue",
       "sending": "Sending…",
       "closed": "No agent of this run reads messages any more."
     },
@@ -1339,6 +1874,7 @@
       "queued": "Messages stay queued until the run continues.",
       "paused": "You can write while paused. Resume keeps this run and its saved versions.",
       "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
+      "deciding": "The run waits for your decision on its Summary. Messages stay queued until it continues.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
       "failed": "Your message continues this run from its saved work. The agent resumes its session when available; dependent steps run again.",
@@ -1349,19 +1885,8 @@
     },
     "errors": {
       "blank": "Write a message first.",
-      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again."
-    },
-    "policy": "Questions and clarifications stay in this task. An agent reads your messages when its current turn ends.",
-    "worktreeRemovedNoticeDetail": "Its committed changes remain ready for review. No agent can continue this run.",
-    "work": {
-      "title": "Working context",
-      "noCheckpoint": "No checkpoint yet",
-      "changedFiles": "Changed files",
-      "files": {
-        "one": "1 file · view changes ↗",
-        "other": "{{count}} files · view changes ↗"
-      },
-      "filesUnknown": "view changes ↗"
+      "invalidRecovery": "This message cannot continue a run. Refresh the task and try again.",
+      "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now."
     }
   },
   "pullRequests": {
@@ -1646,7 +2171,8 @@
         "allowed": {
           "title": "Allowed commands",
           "detail": "Only these commands run. Anything else is denied and the agent is told why.",
-          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first."
+          "claudeDetail": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first.",
+          "nativeDetail": "Listed commands run, and once a command is listed, known-safe read-only ones too. Every other command asks you first."
         },
         "any": {
           "title": "Any command in the worktree",
@@ -1656,6 +2182,9 @@
       },
       "addCommand": "Add command",
       "toolApprovals": "Ask before MCP actions that require approval",
+      "autoApproveHeading": "When the agent asks",
+      "autoApprove": "Approve automatically (don’t ask me)",
+      "autoApproveNote": "Orchester answers this profile’s requests itself in every run that starts with this version: commands that read or stay inside the worktree, and MCP tool calls. Network commands, writes outside the worktree, secrets, installs, destructive and unreadable commands still ask you. A run can stop it.",
       "toolApprovalsHeading": "MCP approvals",
       "toolApprovalsDisabled": "MCP approval requests are denied",
       "transport": "Codex App Server uses your normal account. Your own MCP servers, plugins and notify program are turned off.",
@@ -1675,7 +2204,7 @@
         "tooMany": "At most {{max}} commands can be allowed."
       },
       "addFolder": "Add folder",
-      "folderPlaceholder": "e.g. .orchester/target",
+      "folderPlaceholder": "e.g. .orchester/build",
       "noFolders": "Agents write only inside their task worktree. Add a folder outside it, such as a shared build folder: absolute, or relative to the repository root.",
       "foldersMeaning": "Agents that edit files may also write here, commands included. Absolute, or relative to the repository root; never the repository itself or your home folder.",
       "foldersReadOnly": "Used only when agents edit files in the task worktree. With Read-only they write nowhere.",
@@ -1697,9 +2226,6 @@
         "duplicate": "{{folder}} is already listed.",
         "tooMany": "At most {{max}} folders can be listed."
       },
-      "targetTitle": "Allow agents to write to {{variable}}",
-      "targetDetail": "Environment sets {{variable}} to {{folder}}. Agents that edit files write only inside their worktree, so their builds cannot write there until you add it.",
-      "addTargetFolder": "Add folder",
       "networkOff": "Off",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
@@ -1738,13 +2264,19 @@
         "cannotLimitCommands": "Unavailable on this connection: {{cli}} can’t limit commands to a list.",
         "cannotConfineCommands": "Unavailable on this connection: {{cli}} can’t confine commands to the worktree.",
         "cannotBlockNetwork": "Off is unavailable on this connection: {{cli}} can’t block network use by commands, so network stays on. The run summary says so.",
-        "nativeNotAvailable": "Unavailable on this connection: {{cli}} agents are not available in this version yet."
+        "nativeMcp": "Unavailable on this connection: {{cli}} agents get no MCP servers in this version, so they are left out."
       },
       "enforcement": {
         "title": "Enforced by {{cli}}",
         "source": "{{connection}} · known limits on {{platform}}",
-        "nativeTitle": "Not enforced yet · native agents are not available",
-        "nativeSource": "{{connection}} · {{provider}}",
+        "nativeTitle": "Enforced by Orchester",
+        "native": {
+          "anyCommand": "Any command · not enforceable",
+          "anyCommandHow": "no sandbox · commands can’t be confined",
+          "mcp": "MCP servers are left out",
+          "mcpHow": "none start for native agents yet",
+          "listedNotConfined": "A listed command is chosen by Orchester, not confined: it runs as you and can write anywhere you can."
+        },
         "platform": {
           "windows": "Windows",
           "macos": "macOS"
@@ -1758,7 +2290,6 @@
         "notEnforceable": "{{setting}} · not enforceable",
         "networkShare": "Edits on a network share can’t be allowed by rule, so a run can’t start.",
         "noConnection": "Choose a connection on the Profile tab to see what it can enforce.",
-        "nativeNotAvailable": "This version enforces none of these settings and starts no agent on this connection.",
         "noBypass": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
         "stepsNarrow": "A pipeline step can make these stricter for its own work, never wider.",
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
@@ -1791,6 +2322,8 @@
           "codexLeftOut": "project_doc_max_bytes=0 · skills off",
           "codexLoads": "loads AGENTS.md · .agents/skills",
           "claude": "--setting-sources \"\" · loads neither",
+          "orchesterLoads": "prompt adds AGENTS.md · repository skills",
+          "orchesterLeftOut": "prompt holds neither",
           "note": "Repository agent files is set for all of {{project}} in Project settings › General, not per profile.",
           "summary": "· Repository files off"
         }
@@ -1815,7 +2348,14 @@
         "claudeWebTools": "web tools allowed",
         "claudeWebToolsRemoved": "web tools removed · commands keep network",
         "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command"
+        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "nativeWriteToolsWithheld": "write tools withheld · reads stay in the worktree",
+        "nativeFileScope": "file tools · worktree only, .git protected",
+        "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
+        "nativeCommandApprovals": "Orchester asks you before each command",
+        "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
+        "nativeCommandListEmpty": "no command listed · every command asks you",
+        "nativeNetwork": "commands keep the network · no web tools"
       },
       "problem": {
         "noEnforceableOption": "{{cli}} cannot enforce any option of {{setting}}, so this profile cannot run on its connection.",
@@ -1992,13 +2532,146 @@
       "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
       "detail": "A run found this when the model’s provider refused the CLI. Update the CLI, then check the connection again."
     },
+    "kind": {
+      "label": "Kind",
+      "codexDetail": "Runs the codex program, signed in on this computer.",
+      "claudeDetail": "Runs the claude program, signed in on this computer.",
+      "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
+      "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
+      "notYet": "OpenAI API connections come in a later version of Orchester."
+    },
     "native": {
       "row": "{{provider}} · {{preset}} · {{host}}",
       "preset": {
         "official": "Official preset",
         "deepseek": "DeepSeek preset",
-        "custom": "Custom preset"
+        "custom": "Custom preset",
+        "label": "Preset",
+        "officialTitle": "Official",
+        "deepseekTitle": "DeepSeek",
+        "customTitle": "Custom",
+        "customHost": "your server",
+        "deepseekOnAnthropic": "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
+        "later": "Compatible endpoints come in a later version of Orchester.",
+        "deepseekOnAnthropicLater": "The DeepSeek preset uses OpenAI Responses; DeepSeek’s Anthropic route is reachable through Custom, and compatible endpoints come in a later version of Orchester.",
+        "notOffered": "This preset is not offered on this provider."
+      },
+      "url": {
+        "label": "Base URL",
+        "advanced": "Advanced",
+        "presetHint": "Set by the preset. Prompts, repository content and command output are sent to {{host}}. Change it under Advanced.",
+        "hint": "https://, or http:// for localhost, 127.0.0.1 or [::1]. Shown in full wherever the connection is.",
+        "wireMessages": "Wire format · Anthropic Messages",
+        "wireResponses": "Wire format · OpenAI Responses",
+        "blank": "Enter the base URL.",
+        "scheme": "Use https://, or http:// for localhost, 127.0.0.1 or [::1].",
+        "host": "Enter a valid host and port.",
+        "credentials": "Keep user names and passwords out of the URL.",
+        "query": "Remove the query or fragment.",
+        "characters": "Remove spaces and backslashes from the URL.",
+        "tooLong": "The URL is too long."
+      },
+      "key": {
+        "label": "API key · project secret",
+        "none": "Choose a secret…",
+        "option": "{{name}} ({{environment}})",
+        "new": "New secret…",
+        "name": "Secret name",
+        "namePlaceholder": "ANTHROPIC_API_KEY",
+        "value": "Value",
+        "environment": "Environment",
+        "newLabel": "API key · new project secret",
+        "chooseExisting": "Choose an existing secret",
+        "keepsHint": "The connection keeps only which secret it uses. Orchester reads the value from the system keychain when an agent starts; it is never shown again.",
+        "newHint": "Saved to {{project}}’s secrets as an API key in {{environment}} when the connection is saved. The value goes to the system keychain and is never shown again; to change it, replace it in Secrets.",
+        "nameInvalid": "Use letters, digits and underscores for the secret name.",
+        "taken": "{{project}} already has a secret {{name}}.",
+        "valueRequired": "Enter the key’s value.",
+        "authentication": "API key · {{name}} ({{environment}})",
+        "gone": "API key · secret missing",
+        "choose": "Choose a secret",
+        "openSecrets": "Open Secrets",
+        "replace": "Replace in Secrets"
+      },
+      "afterSaving": "After saving, choose this connection and a model in an agent profile. Its Permissions tab shows what Orchester enforces.",
+      "save": {
+        "noKey": "Choose or create the API key’s secret.",
+        "noModels": "Add at least one model.",
+        "defaultsInvalid": "Choose the default model and effort again."
+      },
+      "fallback": {
+        "label": "Provider fallback",
+        "switch": "Retry declined requests on another model",
+        "detail": "Off: a declined request stops the step and is shown as a problem with its reason. On: Anthropic may answer with another model, and Activity names the model that answered.",
+        "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
+      },
+      "testAgain": "Test again",
+      "testUnavailable": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches the API nor reads the key.",
+      "execution": "This computer (Orchester runs the agent)",
+      "modelTraffic": "Orchester’s own HTTPS",
+      "property": {
+        "preset": "Preset",
+        "modelTraffic": "Model traffic",
+        "balance": "Balance"
       }
+    },
+    "models": {
+      "title": "Models",
+      "none": "No models yet. Add one by hand.",
+      "default": "Default",
+      "source": {
+        "endpoint": "From the endpoint · {{time}}",
+        "preset": "From the preset",
+        "manual": "Added by hand"
+      },
+      "context": "{{tokens}} context",
+      "maxOutput": "{{tokens}} output",
+      "joined": "{{first}} · {{second}}",
+      "separator": " · ",
+      "noEfforts": "no effort",
+      "edit": "Edit models",
+      "fetch": "Fetch models",
+      "fetchUnavailable": "Fetching models needs a test of the connection, which comes in a later version. Add models by hand meanwhile.",
+      "addByHand": "Add a model by hand",
+      "add": "Add a model",
+      "editModel": "Edit",
+      "remove": "Remove",
+      "removeModel": "Remove model",
+      "save": "Save model",
+      "saveAll": "Save models",
+      "dialogTitle": "Models · {{connection}}",
+      "dialogExplanation": "Models are added by hand in this version: fetching them from {{host}} needs a test of the connection, which comes later. Agents get only the models listed here; each profile chooses one.",
+      "saveNote": "Agent invocations that start after you save use the new list.",
+      "id": "Model id",
+      "idHint": "Exactly as the endpoint expects it in requests.",
+      "editTitle": "Edit model",
+      "newTitle": "New model",
+      "contextWindow": "Context window · tokens · optional",
+      "maxOutputLabel": "Max output · tokens · optional",
+      "efforts": "Efforts",
+      "effortsHint": "The effort values the endpoint accepts. With none, the effort control is hidden for this model and none is sent.",
+      "inUse": "{{profiles}} uses {{model}}. Switch to another model before removing it.",
+      "idInUse": "{{profile}} uses {{model}}. Switch to another model before changing its id.",
+      "usedDropped": "{{profile}} uses {{model}}, which is no longer listed. Switch to another model first.",
+      "idInUseByStep": "Step {{step}} of {{pipeline}} runs on {{model}}. Switch it to another model before changing its id.",
+      "usedDroppedByStep": "Step {{step}} of {{pipeline}} runs on {{model}}, which is no longer listed. Switch it to another model first.",
+      "stepUser": "{{pipeline}} · {{step}}",
+      "invalidId": "Enter the model id as the API names it, without spaces.",
+      "listedAlready": "{{model}} is listed already.",
+      "invalidTokens": "Enter a whole number of tokens, or leave it empty.",
+      "defaultModel": "Default model",
+      "defaultModelHint": "Used by agent profiles that do not choose a model.",
+      "defaultEffortHint": "The model’s own efforts: {{efforts}}.",
+      "defaultEffortNone": "The default model takes no effort setting.",
+      "defaultEffortNoModel": "The efforts come from the default model.",
+      "defaultEffort": "Default effort",
+      "noDefault": "No default",
+      "modelsEffort": "The model’s own"
+    },
+    "dataNotice": {
+      "sent": "Prompts, repository content and command output are sent to {{host}}.",
+      "storedInPrc": "Data is stored in the PRC, per DeepSeek’s privacy policy."
     },
     "nativeNotAvailable": {
       "heading": "{{connection}} uses {{provider}}, which is not available yet",
@@ -2025,7 +2698,10 @@
       "notRecognized": "Not recognized",
       "couldNotRun": "Could not run",
       "checking": "Checking…",
-      "notAvailable": "Not available yet"
+      "keyMissing": "Key missing",
+      "keyRejected": "Key rejected",
+      "billingProblem": "Billing problem",
+      "endpointUnreachable": "Endpoint unreachable"
     },
     "detail": {
       "notChecked": "This connection has not been checked yet.",
@@ -2036,7 +2712,12 @@
       "executableMissing": "The program file does not exist. Edit the connection to choose it again, then check again.",
       "notRecognized": "The program answered, but not as the expected CLI. Edit the connection to choose the right file.",
       "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection.",
-      "nativeNotAvailable": "Native agents are not available in this version yet. Orchester does not test this connection or start agents on it; profiles that use it cannot run."
+      "nativeConnected": "The API accepted the key when it was last tested. Orchester runs agents with it once native agents are available.",
+      "nativeNotChecked": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run.",
+      "keyMissing": "The key’s secret is archived or gone. Choose another secret, or add one in Secrets.",
+      "keyRejected": "The API refused the key (401). Replace its value in Secrets, then test again.",
+      "billingProblem": "The API accepted the key but refuses to serve it (402): the balance is empty or billing is not set up.",
+      "endpointUnreachable": "The endpoint could not be reached or did not answer in time. Check the base URL and the network, then test again."
     },
     "property": {
       "provider": "Provider",
@@ -2492,11 +3173,6 @@
       "detail": "Added to the environment of every agent CLI and command tool this project’s runs start, on top of the cleaned environment every program gets (PATH, HOME, TEMP and the like). A command tool’s own variables win over these.",
       "variables": "Variables · NAME=value per line",
       "hint": "Stored and shown in plain text, so never put secrets here.",
-      "targetTitle": "Share one build folder between run worktrees",
-      "targetDetail": "Each run works in its own worktree, and Cargo builds each one into a target folder of its own, often 10–20 GB. With CARGO_TARGET_DIR every run builds into .orchester/target beside the worktrees instead.",
-      "addTarget": "Add CARGO_TARGET_DIR",
-      "agentsTitle": "Agents need permission to write to {{variable}}",
-      "agentsDetail": "Agents that edit files write only inside their worktree. Add {{folder}} to Extra writable folders under Agents › Permissions for each profile that builds.",
       "changesTitle": "Changes apply to the next agent or command that starts",
       "changesDetail": "An agent or command already running keeps the environment it started with."
     },
@@ -2574,6 +3250,15 @@
       "oct": "Oct",
       "nov": "Nov",
       "dec": "Dec"
+    },
+    "weekday": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
     }
   },
   "recovery": {
@@ -2590,6 +3275,7 @@
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "storage": "The data could not be read or written. The log has the details.",
+    "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
     "executableLocation": "The folder of the Orchester program could not be determined.",
     "runnerMissing": "The runner program was not found at {{path}}.",
@@ -3817,6 +4503,70 @@
     }
   },
   "statusBar": {
+    "planLimits": {
+      "claudeFull": "Claude Code",
+      "title": "Plan limits",
+      "planPro": "Pro plan",
+      "planPlus": "Plus plan",
+      "planOther": "{{plan}} plan",
+      "stateNotRead": "Not read yet",
+      "stateSignedOut": "Not signed in",
+      "stateUnavailable": "No working connection",
+      "headerReached": "· {{window}} limit reached",
+      "headerCredits": "· No credits left",
+      "headerWorkspace": "· Workspace usage limit reached",
+      "headerOther": "· Limit reached",
+      "creditsLabel": "Credits",
+      "creditsValue": "{{balance}} left",
+      "extraLabel": "Extra usage",
+      "extraValue": "In use: turns past the limit use it",
+      "checkUnknown": "time not recorded",
+      "separator": "·",
+      "percent": "{{used}}%",
+      "reached": "{{cli}} limit reached",
+      "reasonCredits": "no credits left",
+      "reasonWorkspace": "workspace limit",
+      "resetsAt": "resets {{time}}",
+      "resetsIn": "resets in {{hours}} h {{minutes}} min",
+      "resetsInMinutes": "resets in {{minutes}} min",
+      "resetsInHours": "resets in {{hours}} h",
+      "resetsOnDay": "resets {{weekday}} {{time}}",
+      "resetUnknown": "Reset not reported",
+      "fiveHour": "5-hour",
+      "weekly": "Weekly",
+      "minutes": "{{count}}-minute",
+      "hours": "{{count}}-hour",
+      "days": "{{count}}-day",
+      "windowNear": "Near the {{window}} limit",
+      "nearWeekly": "Near the weekly limit",
+      "nearFiveHour": "Near the 5-hour limit",
+      "notReported": "Not reported yet",
+      "refuses": "{{cli}} refuses new turns until {{time}}.",
+      "refusesOnDay": "{{cli}} refuses new turns until {{weekday}} {{time}}.",
+      "refusesCredits": "{{cli}} refuses new turns: the workspace has no credits left.",
+      "refusesWorkspace": "{{cli}} refuses new turns: the workspace’s usage limit is reached.",
+      "refusesOther": "{{cli}} refuses new turns; it did not say until when.",
+      "unlimited": "Unlimited",
+      "source": {
+        "justNow": "From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "windowSource": {
+        "justNow": "{{window}} · From the last {{cli}} turn · {{time}}, just now",
+        "minutes": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} min ago",
+        "hours": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} h ago",
+        "days": "{{window}} · From the last {{cli}} turn · {{time}}, {{count}} d ago"
+      },
+      "notRead": "{{cli}} reports its limits with each turn. They appear after the next {{cli}} turn in any open project.",
+      "unreadable": "This project’s connections could not be read, so its plan limits are not shown.",
+      "signedOut": "{{cli}} is not signed in on this computer, so it reports no limits. Sign in to it in a terminal, then test the connection in Connections.",
+      "cannotStart": "{{connection}} · {{project}} could not start {{cli}} when it was checked at {{time}}, so no limits can be read. Connections shows why.",
+      "checked": "Connection checked · {{time}}",
+      "expired": "Reset at {{time}} · read again with the next turn",
+      "footnote": "Plan limits belong to the account each CLI is signed in to and include its use outside Orchester. Tokens today is this project’s own daily budget."
+    },
     "runner": {
       "starting": "Starting runner…",
       "online": "Runner online",
@@ -3855,6 +4605,7 @@
       },
       "planReady": "Plan ready for review · {{task}}",
       "agentAsks": "{{agent}} asks · {{task}}",
+      "needsDecision": "{{step}} needs your decision · {{task}}",
       "runReady": "Run #{{run}} ready for review"
     },
     "counts": {
@@ -4159,7 +4910,19 @@
       "instruction": "Open instruction",
       "skill": "Open skill",
       "task": "Open task",
+      "decision": "Open",
       "secrets": "Open secrets"
+    },
+    "approvals": {
+      "asksTool": "{{agent}} asks to use {{server}} {{tool}} · {{task}}",
+      "asksCommand": "{{agent}} asks to run {{command}} · {{task}}",
+      "openSeveral": "{{asks}} · {{count}} waiting",
+      "waitingOne": "1 approval waiting · {{asks}}",
+      "waitingOther": "{{count}} approvals waiting · {{asks}}",
+      "review": "Review",
+      "autoOne": "Auto-approving · Run {{run}} · {{task}}",
+      "autoOther": "Auto-approving {{count}} runs",
+      "stop": "Stop"
     }
   },
   "tokens": {

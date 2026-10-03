@@ -152,9 +152,12 @@ fn pages() -> Vec<Page> {
     Page::Overview(OverviewTab::Failed),
     Page::TASKS,
     Page::Tasks(TaskTab::Drafts),
+    Page::Tasks(TaskTab::Queue),
+    Page::Tasks(TaskTab::NeedsReview),
+    Page::Tasks(TaskTab::Done),
     Page::NewTask,
     Page::task(TaskId::generate()),
-    Page::Task(TaskId::generate(), TaskPageTab::Activity),
+    Page::Task(TaskId::generate(), TaskPageTab::Conversation),
     Page::Task(TaskId::generate(), TaskPageTab::Changes),
     Page::EditTask(TaskId::generate()),
     Page::RetryTask(TaskId::generate()),
@@ -203,6 +206,15 @@ fn route_every_page_resolves_and_reads_back() {
 }
 
 #[test]
+fn route_the_activity_tab_of_earlier_paths_opens_the_conversation() {
+  let (project, task) = (ProjectId::generate(), TaskId::generate());
+  let conversation = Route::Project(project, Page::Task(task, TaskPageTab::Conversation));
+  let earlier = conversation.path().replace("tab=conversation", "tab=activity");
+  assert_ne!(earlier, conversation.path(), "the tab is in the path's query");
+  assert_eq!(Route::parse(&earlier), Some(conversation));
+}
+
+#[test]
 fn route_params_hold_the_ids_of_the_path() {
   let (project, task) = (ProjectId::generate(), TaskId::generate());
   let path = Route::Project(project, Page::task(task)).path();
@@ -243,9 +255,14 @@ fn route_tabs_are_part_of_the_path() {
   let project = ProjectId::generate();
   let drafts = Route::Project(project, Page::Tasks(TaskTab::Drafts)).path();
   assert_eq!(drafts, format!("/project/{project}/tasks?tab=drafts"));
-  // A tab that cannot be opened yet, or does not exist, is the first tab.
   let queue = format!("/project/{project}/tasks?tab=queue");
-  assert_eq!(Route::parse(&queue), Some(Route::Project(project, Page::TASKS)));
+  assert_eq!(
+    Route::parse(&queue),
+    Some(Route::Project(project, Page::Tasks(TaskTab::Queue)))
+  );
+  // A tab that does not exist is the first tab.
+  let nothing = format!("/project/{project}/tasks?tab=nothing");
+  assert_eq!(Route::parse(&nothing), Some(Route::Project(project, Page::TASKS)));
   let unknown = format!("/project/{project}?tab=nothing");
   assert_eq!(Route::parse(&unknown), Some(Route::Project(project, Page::OVERVIEW)));
   let roles = Route::Project(project, Page::Instructions(InstructionsTab::AgentRoles, None)).path();

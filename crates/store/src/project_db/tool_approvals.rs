@@ -3,13 +3,20 @@
 
 use orchester_core::{
   id::{InvocationId, RunId},
-  run::{PendingToolApproval, ToolApprovalDecision},
+  run::{CommandShell, DecidedBy, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision},
   time::Timestamp,
 };
 use rusqlite::params;
 
 use super::ProjectDb;
-use crate::{StoreError, rows::parse};
+use crate::{
+  StoreError,
+  rows::{corrupt, parse},
+};
+
+/// The columns [`StoredApproval::read`] reads, in its order.
+const COLUMNS: &str = "id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, \
+                       command, scope, native_shell, native_time_limit";
 
 impl ProjectDb {
   pub fn pending_tool_approvals(&self, run: RunId) -> Result<Vec<PendingToolApproval>, StoreError> {
@@ -22,55 +29,58 @@ impl ProjectDb {
   }
 
   fn pending_tool_approvals_for(&self, run: Option<RunId>) -> Result<Vec<PendingToolApproval>, StoreError> {
-    let mut query = self.connection.prepare(
-      "SELECT id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, command, scope \
-       FROM tool_approvals WHERE state = 'pending' AND (?1 IS NULL OR run_id = ?1) ORDER BY requested_at, id",
-    )?;
+    let mut query = self.connection.prepare(&format!(
+      "SELECT {COLUMNS} FROM tool_approvals WHERE state = 'pending' AND (?1 IS NULL OR run_id = ?1) \
+       ORDER BY requested_at, id"
+    ))?;
     let rows = query
-      .query_map([run.map(|id| id.to_string())], |row| {
+      .query_map([run.map(|id| id.to_string())], StoredApproval::read)?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter().map(StoredApproval::into_pending).collect()
+  }
+
+  /// `run`'s requests that are no longer pending, oldest first: how each was decided, or that it was
+  /// interrupted. One whose decision is still on its way to the agent reads as that decision.
+  pub fn decided_tool_approvals(&self, run: RunId) -> Result<Vec<DecidedToolApproval>, StoreError> {
+    let mut query = self.connection.prepare(&format!(
+      "SELECT {COLUMNS}, state, decided_at FROM tool_approvals WHERE state != 'pending' AND run_id = ?1 \
+       ORDER BY requested_at, id"
+    ))?;
+    let rows = query
+      .query_map([run.to_string()], |row| {
         Ok((
-          row.get::<_, String>(0)?,
-          row.get::<_, String>(1)?,
-          row.get::<_, String>(2)?,
-          row.get::<_, String>(3)?,
-          row.get::<_, String>(4)?,
-          row.get::<_, String>(5)?,
-          row.get::<_, String>(6)?,
-          row.get::<_, Option<String>>(7)?,
-          row.get::<_, i64>(8)?,
-          row.get::<_, bool>(9)?,
-          row.get::<_, Option<String>>(10)?,
+          StoredApproval::read(row)?,
+          row.get::<_, String>(13)?,
+          row.get::<_, i64>(14)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     rows
       .into_iter()
-      .map(
-        |(id, run, execution, invocation, agent, server, action, target, requested_at, command, scope)| {
-          Ok(PendingToolApproval {
-            id,
-            run: parse("approval run id", &run)?,
-            execution: parse("approval execution id", &execution)?,
-            invocation: parse("approval invocation id", &invocation)?,
-            agent,
-            command,
-            scope,
-            server,
-            action,
-            target,
-            requested_at: Timestamp::from_unix_millis(requested_at),
-          })
-        },
-      )
+      .map(|(stored, state, decided_at)| {
+        let decision = match state.as_str() {
+          "approved" | "dispatching_approval" => Some(ToolApprovalDecision::Approved),
+          "denied" | "dispatching_denial" => Some(ToolApprovalDecision::Denied),
+          "interrupted" => None,
+          other => return Err(corrupt("tool approval state", other)),
+        };
+        Ok(DecidedToolApproval {
+          request: stored.into_pending()?,
+          decision,
+          decided_at: Timestamp::from_unix_millis(decided_at),
+        })
+      })
       .collect()
   }
 
   /// Creates one pending request. A repeated JSON-RPC request ID is refused rather than
   /// displaying a second prompt that might approve a different call.
   pub fn request_tool_approval(&mut self, approval: &PendingToolApproval) -> Result<(), StoreError> {
+    let native = approval.native.as_ref();
     self.connection.execute(
       "INSERT INTO tool_approvals (id, run_id, step_execution_id, invocation_id, agent, server, action, \
-       target, requested_at, command, scope) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+       target, requested_at, command, scope, native_shell, native_time_limit) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
       params![
         approval.id,
         approval.run.to_string(),
@@ -83,28 +93,30 @@ impl ProjectDb {
         approval.requested_at.unix_millis(),
         approval.command,
         approval.scope,
+        native.and_then(|native| native.shell).map(CommandShell::as_str),
+        native.map(|native| native.time_limit_seconds),
       ],
     )?;
     Ok(())
   }
 
-  /// Atomically removes the request from pending before sending its JSON-RPC response.
+  /// Atomically removes the request from pending before its answer is sent, recording who answered.
   pub fn claim_tool_approval(
     &mut self,
     run: RunId,
     id: &str,
-    approve: bool,
+    decided_by: DecidedBy,
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    let state = if approve {
+    let state = if decided_by.approves() {
       "dispatching_approval"
     } else {
       "dispatching_denial"
     };
     let changed = self.connection.execute(
-      "UPDATE tool_approvals SET state = ?3, decided_at = ?4 \
+      "UPDATE tool_approvals SET state = ?3, decided_at = ?4, decided_by = ?5 \
        WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
-      params![run.to_string(), id, state, at.unix_millis()],
+      params![run.to_string(), id, state, at.unix_millis(), decided_by.as_str()],
     )?;
     Ok(changed == 1)
   }
@@ -154,5 +166,68 @@ impl ProjectDb {
       |row| row.get(0),
     )?;
     Ok(count > 0)
+  }
+}
+
+/// A `tool_approvals` row as read, before its ids and native details are checked.
+struct StoredApproval {
+  id: String,
+  run: String,
+  execution: String,
+  invocation: String,
+  agent: String,
+  server: String,
+  action: String,
+  target: Option<String>,
+  requested_at: i64,
+  command: bool,
+  scope: Option<String>,
+  native_shell: Option<String>,
+  native_time_limit: Option<u32>,
+}
+
+impl StoredApproval {
+  fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+    Ok(Self {
+      id: row.get(0)?,
+      run: row.get(1)?,
+      execution: row.get(2)?,
+      invocation: row.get(3)?,
+      agent: row.get(4)?,
+      server: row.get(5)?,
+      action: row.get(6)?,
+      target: row.get(7)?,
+      requested_at: row.get(8)?,
+      command: row.get(9)?,
+      scope: row.get(10)?,
+      native_shell: row.get(11)?,
+      native_time_limit: row.get(12)?,
+    })
+  }
+
+  fn into_pending(self) -> Result<PendingToolApproval, StoreError> {
+    let shell = self
+      .native_shell
+      .as_deref()
+      .map(|shell| parse::<CommandShell>("approval shell", shell))
+      .transpose()?;
+    let native = self.native_time_limit.map(|time_limit_seconds| NativeCommandAsk {
+      shell,
+      time_limit_seconds,
+    });
+    Ok(PendingToolApproval {
+      id: self.id,
+      run: parse("approval run id", &self.run)?,
+      execution: parse("approval execution id", &self.execution)?,
+      invocation: parse("approval invocation id", &self.invocation)?,
+      agent: self.agent,
+      command: self.command,
+      scope: self.scope,
+      server: self.server,
+      action: self.action,
+      target: self.target,
+      requested_at: Timestamp::from_unix_millis(self.requested_at),
+      native,
+    })
   }
 }

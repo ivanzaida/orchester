@@ -3,7 +3,7 @@ use lurq::{
     App,
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  layout::text_style::{FontFeature, FontFeatures, FontWeight},
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::{color::Color, dimension::Dimension},
 };
 use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography};
@@ -51,6 +51,13 @@ fn window_chrome_follows_pencil() {
 }
 
 #[test]
+fn approval_values_scroll_past_twelve_lines() {
+  // A long value's box in the approval dialog is at most 12 lines with its padding, 232 (`E5NBo`
+  // in `bjrgu`); the full shell string of 04.H9 (`bwWuT`) shares the cap.
+  assert_eq!(theme::APPROVAL_VALUE_MAX_HEIGHT, 232.0);
+}
+
+#[test]
 fn disabled_buttons_follow_pencil() {
   // A button that cannot be pressed, primary or secondary, at 40 % (`kLJJb`, `HN7cO`).
   assert_eq!(theme::DISABLED_OPACITY, 0.4);
@@ -93,6 +100,13 @@ fn extra_typography_follows_pencil() {
     theme.typography_style(ExtraTypography::CardTitle.role()).font_size,
     14.0
   );
+  let read_back = theme.typography_style(ExtraTypography::ReadBack.role());
+  assert_eq!(
+    (read_back.font_size, read_back.line_height),
+    (10.0, TextStyle::default().line_height)
+  );
+  let review = theme.typography_style(ExtraTypography::ReviewHeading.role());
+  assert_eq!((review.font_size, review.weight), (14.0, FontWeight::Normal));
   assert_eq!(theme.typography_style(ExtraTypography::Metric.role()).font_size, 23.0);
   let wrapped = theme.typography_style(ExtraTypography::WrappingProperty.role());
   assert_eq!((wrapped.font_size, wrapped.line_height), (11.0, 1.6));

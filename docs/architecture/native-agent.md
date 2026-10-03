@@ -37,6 +37,13 @@ The user answered the proposal's questions on 2026-10-01:
 9. **No `task_budget`** for now; revisit after P1 (§3.1).
 10. **One acknowledgement per project** is enough for presets with a data-location notice, such as DeepSeek (§7).
 
+On 2026-10-02 the user decided:
+
+11. **The native transcript rows of 04.H10 belong to P1d**, with the new `AgentEvent` data they need: the file-tool
+    kind, lines and size, the search match count, edit +/−, the shell name, *approved by you · waited*, *denied by a
+    person*, and the denial's result given to the agent (§2.2). P1e (ORC-60) builds the step header and the
+    invocation panel of 04.H10.
+
 ## 1. Goals and non-goals
 
 ### Day-one parity with the CLI agents
@@ -187,7 +194,7 @@ job object and the macOS process group apply to every command.
 
 | Concern | How it works for a native invocation |
 |---|---|
-| Events | The loop emits ordinary `AgentEvent`s. `SessionStarted{session: conversation id}`. `TurnStarted`/`TurnCompleted{usage}` around **each model response**. `Message`, `Reasoning` (summaries only). `CommandStarted`/`CommandFinished` for every tool call (`read_file src/a.rs:1-200`, `run_command cargo test`). `FileChanged` after edits and writes. `PermissionDenied` for refusals. `RunnerProblem` for retries given up, compaction and recoveries. No new `AgentEvent` variant in P1. |
+| Events | The loop emits ordinary `AgentEvent`s. `SessionStarted{session: conversation id}`. `TurnStarted`/`TurnCompleted{usage}` around **each model response**. `Message`, `Reasoning` (summaries only). `CommandStarted`/`CommandFinished` for every tool call (`read_file src/a.rs:1-200`, `run_command cargo test`). `FileChanged` after edits and writes. `PermissionDenied` for refusals. `RunnerProblem` for retries given up, compaction and recoveries. P1d adds the event data the native transcript rows of 04.H10 need: the tool call's kind, lines and size, search matches, edit counts, the shell, approvals with their wait, denials by a person and the result the agent was given (decision of 2026-10-02). |
 | Usage | `TurnCompleted{usage}` per response. `WorkerEvent::Usage` → `run.record_usage` as today. Anthropic: `input = input_tokens + cache_creation_input_tokens + cache_read_input_tokens`, `cached_input = cache_read_input_tokens`, so cache writes count, as `docs/design` § Token budgets requires. OpenAI: `input = input_tokens` (cached included), `cached_input = input_tokens_details.cached_tokens`, `output = output_tokens` (reasoning included). |
 | Budgets | `Stop::AfterTurn` is checked before every model call: the current response finishes, its tool calls are **not** run, and the loop ends `Stopped`. The 5 s `TURN_GRACE` timer is not needed for native. |
 | Time limit | `Stop::Now` drops the in-flight HTTP future and terminates a running command through `Supervised`. Active time excludes approval waits (`InvocationTiming`), as today. |

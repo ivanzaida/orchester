@@ -1131,16 +1131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs4"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e72ed92b67c146290f88e9c89d60ca163ea417a446f61ffd7b72df3e7f1dfd5"
-dependencies = [
- "rustix 1.1.5",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "futures"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1921,9 +1911,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.30.4"
+version = "0.34.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1b7fb18df0cc2cbcf5b431dfdd49db6b1355f5d77d45c2ab07e0b3437fca937"
+checksum = "032e2783a1655379f33b8aca2b24d421006b53d30979c34b9242225285f2b008"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2560,6 +2550,7 @@ dependencies = [
  "parking_lot",
  "rfd",
  "rusqlite",
+ "serde",
  "serde_json",
  "syntect",
  "tempfile",
@@ -2625,7 +2616,6 @@ dependencies = [
 name = "orchester-runner"
 version = "0.1.0"
 dependencies = [
- "fs4",
  "orchester-core",
  "orchester-exec",
  "orchester-index",

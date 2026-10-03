@@ -1,5 +1,8 @@
 //! How `orchester-fake-claude` asks its permission prompt about a tool call (`fake_permission_prompt`), and takes up
-//! a call its session was ended while waiting on.
+//! a call its session was ended while waiting on. A denied call is answered with the prompt's message, which the
+//! fake reports (`told: <message>`), and the fake goes on (`went on` in `README.md`), as Claude Code's agent does.
+//! A prompt with "twice" makes a second call of the same tool after the first is approved (`toolu_…_second`, its
+//! command's last word replaced by `tokio` for a command), which appends `approved` again when it is approved.
 
 use std::{fs, path::Path, process::ExitCode};
 
@@ -116,31 +119,68 @@ impl Fake {
     if let Err(error) = fs::write(&pending, kept.to_string()) {
       eprintln!("cannot keep the pending call: {error}");
     }
-    let decision = prompt
+    let (decision, told) = prompt
       .ask(&ask.tool, &ask.input, &ask.call)
-      .unwrap_or_else(|| "none".to_owned());
+      .unwrap_or_else(|| ("none".to_owned(), String::new()));
     if fs::remove_file(&pending).is_err() {
       eprintln!("the pending call was not kept");
     }
     eprintln!("permission: {} {decision}", &ask.call);
-    if decision == "allow" {
-      if let Err(error) = append(worktree, "approved") {
-        eprintln!("cannot write README.md: {error}");
-        return ExitCode::from(2);
-      }
-      self.tool_result(&ask.call, "ok", false);
-      let again = prompt
-        .ask(&ask.tool, &ask.input, &ask.call)
-        .unwrap_or_else(|| "none".to_owned());
-      eprintln!("permission again: {} {again}", &ask.call);
-      if knocks {
-        eprintln!("second: {}", fake_permission_prompt::knock(args, None));
-      }
-    } else {
-      self.tool_result(&ask.call, "Denied in Orchester.", true);
+    if decision != "allow" {
+      self.denied(worktree, &ask.call, &told);
+      flush();
+      return self.finish(worktree, "hello", step);
+    }
+    if let Err(error) = append(worktree, "approved") {
+      eprintln!("cannot write README.md: {error}");
+      return ExitCode::from(2);
+    }
+    self.tool_result(&ask.call, "ok", false);
+    let (again, _) = prompt
+      .ask(&ask.tool, &ask.input, &ask.call)
+      .unwrap_or_else(|| ("none".to_owned(), String::new()));
+    eprintln!("permission again: {} {again}", &ask.call);
+    if knocks {
+      eprintln!("second: {}", fake_permission_prompt::knock(args, None));
+    }
+    if self.prompt.to_lowercase().contains("twice") {
+      self.ask_second(worktree, &mut prompt, ask);
     }
     flush();
     self.finish(worktree, "hello", step)
+  }
+
+  /// A denied call: the agent reads what it was told and goes on without it.
+  fn denied(&self, worktree: &Path, call: &str, told: &str) {
+    eprintln!("told: {told}");
+    self.tool_result(call, told, true);
+    if append(worktree, "went on").is_err() {
+      eprintln!("cannot write README.md");
+    }
+  }
+
+  /// A second call of `first`'s tool, in the same session.
+  fn ask_second(&self, worktree: &Path, prompt: &mut fake_permission_prompt::Prompt, first: &Ask) {
+    let call = format!("{}_second", first.call);
+    let mut input = first.input.clone();
+    if let Some(command) = first.input.get("command").and_then(serde_json::Value::as_str) {
+      let head = command.rsplit_once(' ').map_or(command, |(head, _)| head);
+      input["command"] = serde_json::json!(format!("{head} tokio"));
+    }
+    let block = serde_json::json!({"type": "tool_use", "id": call, "name": first.tool, "input": input});
+    self.assistant("msg_second", &block.to_string());
+    let (decision, told) = prompt
+      .ask(&first.tool, &input, &call)
+      .unwrap_or_else(|| ("none".to_owned(), String::new()));
+    eprintln!("permission second: {call} {decision}");
+    if decision == "allow" {
+      if append(worktree, "approved").is_err() {
+        eprintln!("cannot write README.md");
+      }
+      self.tool_result(&call, "ok", false);
+    } else {
+      self.denied(worktree, &call, &told);
+    }
   }
 
   /// A continued session: it takes up a call it was ended while waiting on, else appends

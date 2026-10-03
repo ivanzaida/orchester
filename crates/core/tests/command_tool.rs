@@ -252,3 +252,18 @@ fn command_tool_process_runs_in_the_worktree_with_the_cleaned_environment_and_it
     ]
   );
 }
+
+/// A failing tool's output reaches the prompt of the step its failure returns to unredacted
+/// (`orchester_core::run::FailureReport::Command`). That is safe only while a tool's process holds
+/// no secret: this fails as soon as one is handed a secret variable.
+#[test]
+fn command_tool_process_gets_no_secret_variable() {
+  let worktree = std::env::temp_dir().join("worktree");
+  let environment = [("PATH", "/usr/bin"), ("GH_TOKEN", "must not pass")]
+    .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+  let project =
+    CommandEnvironment::new(BTreeMap::from([(variable("RUST_LOG"), "warn".to_owned())])).expect("valid variables");
+  let process = full_command().process(&PathBuf::from("/usr/bin/cargo"), &worktree, environment, &project);
+  assert!(process.secret_env().is_empty());
+  assert!(process.env().iter().all(|(name, _)| name != "GH_TOKEN"));
+}

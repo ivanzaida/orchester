@@ -5,8 +5,9 @@ use lurq::{
 };
 
 use super::tokens::{
-  BORDER, BUTTON_HEIGHT, CONTROL_PADDING_X, FIELD_HEIGHT, GUTTER_SCROLLBAR_INSET, NO_TRACK, SCROLLBAR_MIN_THUMB,
-  SCROLLBAR_RADIUS, SCROLLBAR_WIDTH, SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET,
+  BORDER, BUTTON_HEIGHT, COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET, CONTROL_PADDING_X, FIELD_HEIGHT,
+  GUTTER_SCROLLBAR_INSET, NO_TRACK, SCROLLBAR_MIN_THUMB, SCROLLBAR_RADIUS, SCROLLBAR_WIDTH,
+  SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET, VALUE_BOX_SCROLLBAR_END_INSET,
 };
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
@@ -68,6 +69,28 @@ fn thumb() -> ScrollBarStyle {
 /// Overlay scrollbar of a select menu longer than eight options (`g3poI`).
 pub fn select_menu_scrollbar() -> ScrollBarStyle {
   thumb().insets(SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET)
+}
+
+/// Horizontal scrollbar of a transcript command whose lines run past its box (`hpzPu` in `G9skx`):
+/// the design's thumb, overlaid on the box's bottom padding. The design adds a 6px lane for it
+/// only while a line overflows; lurq reserves a lane always or never, so the thumb overlays the
+/// padding instead and the box keeps its height.
+pub fn command_scrollbar() -> ScrollBarStyle {
+  thumb().insets(COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET)
+}
+
+/// Scrollbars of a capped value box in the approval dialog (`E5NBo`, `e0vyng` in `bjrgu`): the
+/// transcript command's thumbs, each in a 6px lane of its own beside the text, so neither covers a
+/// glyph, and running from the viewport's start: the vertical one 6 under the box's top. lurq has
+/// one end inset for both bars, so the sideways thumb starts at the viewport's left too. The
+/// design adds the sideways lane only while a line overflows; lurq reserves a lane always or
+/// never, so it is always there.
+pub fn value_box_scrollbar() -> ScrollBarStyle {
+  ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    ..thumb()
+  }
+  .insets(COMMAND_SCROLLBAR_EDGE_INSET, VALUE_BOX_SCROLLBAR_END_INSET)
 }
 
 /// Scrollbar of a viewport with a scroll gutter (design doc "Scroll gutter", 04.01 `JuVaA`): a

@@ -3,6 +3,7 @@
 pub mod backdrop;
 pub mod brand;
 pub mod button;
+pub mod category_chip;
 pub mod check_row;
 pub mod command_chip;
 pub mod command_row;
@@ -18,11 +19,13 @@ pub mod option_card;
 pub mod panel;
 pub mod pressable;
 pub mod property;
+pub mod radio;
 pub mod status_label;
 pub mod summary_step;
 pub mod switch;
 pub mod tab;
 pub mod unit_input;
+pub mod value_box;
 
 use std::sync::Arc;
 

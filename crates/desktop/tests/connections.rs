@@ -132,7 +132,7 @@ fn used_by_lists_the_profiles_on_each_connection() {
   let connections = ProjectConnections::load(&db).expect("load");
   let roles: Vec<&str> = connections.used_by(claude).map(|used| &*used.role).collect();
   assert_eq!(roles, ["Explorer", "Reviewer"]);
-  assert!(connections.used_by(claude).all(|used| &*used.model == "opus"));
+  assert!(connections.used_by(claude).all(|used| used.model.as_str() == "opus"));
   assert_eq!(connections.used_by(other).count(), 1);
 }
 

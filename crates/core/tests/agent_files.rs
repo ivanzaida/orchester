@@ -153,9 +153,11 @@ fn each_cli_says_how_it_treats_the_repository_agent_files() {
       RepositoryAgentFiles::Off,
       M::ClaudeNoProjectSettings,
     ),
+    (AgentProvider::AnthropicApi, RepositoryAgentFiles::On, M::OrchesterLoads),
+    (AgentProvider::OpenAiApi, RepositoryAgentFiles::Off, M::OrchesterLeftOut),
   ];
   for (provider, setting, mechanism) in cases {
-    assert_eq!(setting.mechanism(provider), Some(mechanism));
+    assert_eq!(setting.mechanism(provider), mechanism);
   }
   assert_eq!(RepositoryAgentFiles::default(), RepositoryAgentFiles::On);
 }

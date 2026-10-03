@@ -16,11 +16,10 @@ use orchester_core::{
   name::Name,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, StepPermissions},
   resource::{
-    AgentProfile, CommandEnvironment, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
-    StepKey, StepKind, VariableName,
+    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
   run::RunStatus,
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, SettingsStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::TaskStatus,
   time::Timestamp,
   tokens::TokenBudget,
@@ -29,6 +28,7 @@ use orchester_desktop::app_paths::runner_beside;
 use orchester_store::ProjectDb;
 
 use crate::{
+  conversation::open_group,
   github::{contains_text, shows},
   harness::Desktop,
 };
@@ -305,17 +305,22 @@ pub(crate) fn fill_new_task(desktop: &mut Desktop, brief: &str, budget: &str) {
 }
 
 #[test]
-fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
+fn create_and_run_opens_the_task_page_with_the_run_and_its_conversation() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   create_and_run(&mut desktop, "Append one line to README.md.", "1400000");
-  // The page shows the finished run before the transcript opens, so its step starts collapsed.
+  // The page shows the finished run before the timeline opens; the step it ended on stays open.
   finished_on_page(&mut desktop);
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
-  assert!(has(&mut desktop, "activity-invocation"));
-  desktop.click("activity-step-header");
-  desktop.wait_until("the step's entries", |desktop| has(desktop, "activity-entry"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
+  assert!(
+    !has(&mut desktop, "activity-invocation"),
+    "Details is closed by default"
+  );
+  open_group(&mut desktop, "Ran echo");
+  desktop.wait_until("the group's entries", |desktop| {
+    has(desktop, "activity-open-file:README.md")
+  });
   let head = Command::new("git")
     .arg("-C")
     .arg(desktop.repo())
@@ -325,40 +330,36 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_activity() {
   assert_eq!(String::from_utf8_lossy(&head.stdout), "hi\nhello\n");
 }
 
-fn block_shared_target(repo: &Path) {
-  let blocker = repo.join("not-a-directory");
-  fs::write(&blocker, "x").expect("write target blocker");
-  let environment = CommandEnvironment::new(BTreeMap::from([(
-    VariableName::new("CARGO_TARGET_DIR").expect("name"),
-    blocker.join("target").to_string_lossy().into_owned(),
-  )]))
-  .expect("environment");
-  ProjectDb::open(repo)
-    .expect("open project")
-    .save_project_environment(&environment)
-    .expect("save environment");
+/// Points `HEAD` at a branch with no commit, so the runner refuses to start a run (no commit to
+/// start from) after the task is queued.
+fn unborn_head(repo: &Path) {
+  git(repo, &["symbolic-ref", "HEAD", "refs/heads/unborn"]);
+}
+
+fn restore_head(repo: &Path) {
+  git(repo, &["symbolic-ref", "HEAD", "refs/heads/main"]);
 }
 
 #[test]
-fn create_and_run_keeps_a_queued_task_truthful_and_retries_it_after_space_recovers() {
+fn create_and_run_keeps_a_queued_task_truthful_and_retries_it_after_the_repository_recovers() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     seed(repo, &fake, false);
-    block_shared_target(repo);
+    unborn_head(repo);
   });
-  fill_new_task(&mut desktop, "Check the shared target.", "1400000");
+  fill_new_task(&mut desktop, "Check the repository.", "1400000");
   desktop.wait_until("the runner online", |desktop| {
     shows(desktop, "status-runner", "Runner online")
   });
   desktop.click("create-and-run");
-  desktop.wait_until("the host space error on the queued task", |desktop| {
+  desktop.wait_until("the repository error on the queued task", |desktop| {
     shows(
       desktop,
       "execution-plan",
-      "Cannot check free space for CARGO_TARGET_DIR",
+      "The repository has no commit to start the run from.",
     ) && shows(desktop, "new-task-state", "Queued · run not started")
   });
-  let mut db = ProjectDb::open(desktop.repo()).expect("open project");
+  let db = ProjectDb::open(desktop.repo()).expect("open project");
   let tasks = db.tasks().expect("tasks");
   assert_eq!(tasks.len(), 1);
   let task = &tasks[0];
@@ -383,8 +384,7 @@ fn create_and_run_keeps_a_queued_task_truthful_and_retries_it_after_space_recove
   desktop.click("task-title");
   desktop.type_text("X");
   assert_eq!(desktop.value("task-title"), title);
-  db.save_project_environment(&CommandEnvironment::new(BTreeMap::new()).expect("environment"))
-    .expect("clear target");
+  restore_head(desktop.repo());
   desktop.click("create-and-run");
   desktop.wait_until("the same task's run page", |desktop| has(desktop, "task-page"));
   let db = ProjectDb::open(desktop.repo()).expect("open project");
@@ -399,9 +399,9 @@ fn queued_task_reopens_for_retry_with_the_same_first_run_key() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     seed(repo, &fake, false);
-    block_shared_target(repo);
+    unborn_head(repo);
   });
-  fill_new_task(&mut desktop, "Check the shared target.", "1400000");
+  fill_new_task(&mut desktop, "Check the repository.", "1400000");
   desktop.wait_until("the runner online", |desktop| {
     shows(desktop, "status-runner", "Runner online")
   });
@@ -427,10 +427,7 @@ fn queued_task_reopens_for_retry_with_the_same_first_run_key() {
   desktop.click("task-title");
   desktop.type_text("X");
   assert_eq!(desktop.value("task-title"), title);
-  ProjectDb::open(desktop.repo())
-    .expect("open project")
-    .save_project_environment(&CommandEnvironment::new(BTreeMap::new()).expect("environment"))
-    .expect("clear target");
+  restore_head(desktop.repo());
   desktop.click("create-and-run");
   desktop.wait_until("the same task's run page", |desktop| has(desktop, "task-page"));
   let db = ProjectDb::open(desktop.repo()).expect("open project");

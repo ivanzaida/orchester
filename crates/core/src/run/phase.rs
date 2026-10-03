@@ -20,6 +20,9 @@ pub enum TaskPhase {
   Running,
   /// Running, with a step waiting for a person (an approval, a plan decision or a message).
   Waiting,
+  /// Automatic execution stopped: a step's retries ran out or it broke again after its restart, and
+  /// the run waits for a person to decide how it goes on. No agent works for it.
+  Stuck,
   Paused,
   /// Reached its token or time limit and waits for the limit to be raised.
   StoppedAtLimit,
@@ -49,11 +52,17 @@ impl TaskPhase {
       RunStatus::Paused(PauseReason::Requested) => Self::Paused,
       RunStatus::Paused(PauseReason::LimitReached(_)) => Self::StoppedAtLimit,
       RunStatus::Interrupted(_) => Self::Interrupted,
+      RunStatus::WaitingForPerson(_) => Self::Stuck,
       RunStatus::Succeeded if merge.is_some_and(|merge| merge.run == run.id()) => Self::Merged,
       RunStatus::Succeeded => Self::Succeeded,
       RunStatus::Failed(_) => Self::Failed,
       RunStatus::Cancelled => Self::Cancelled,
     }
+  }
+
+  /// Whether the run waits for a person (*Needs you*): a step waits for them, or the run does.
+  pub const fn needs_you(self) -> bool {
+    matches!(self, Self::Waiting | Self::Stuck)
   }
 
   /// An agent may be working: the run has started and not settled.

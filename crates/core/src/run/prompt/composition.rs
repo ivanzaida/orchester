@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index, memory::push_memory,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index, memory::push_memory, retry,
 };
 use crate::{
   conversation::Message,
@@ -247,8 +247,9 @@ fn step_section(input: &PromptInput<'_>) -> PromptSection {
   )
 }
 
-/// Brief and criteria, the outputs of earlier steps, the changes a reviewer requested to the step's
-/// plan, and how to report the result: plain text, already laid out.
+/// Brief and criteria, the outputs of earlier steps, the failure that sent the work back, the changes
+/// a reviewer requested to the step's plan, and how to report the result: plain text, already laid
+/// out.
 fn task_section(input: &PromptInput<'_>) -> PromptSection {
   let details = input.task.details();
   let mut text = String::new();
@@ -258,6 +259,7 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
     text.push_str(&criteria(&details.acceptance_criteria));
   }
   push_dependencies(&mut text, input.dependencies);
+  retry::push(&mut text, input);
   if let Some(revision) = input.revision {
     // Writing to a String cannot fail.
     let _ = writeln!(text, "\n# Changes requested to your plan v{}", revision.version);

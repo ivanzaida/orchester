@@ -63,6 +63,8 @@ pub enum Environment {
 
 impl Environment {
   pub const ALL: [Self; 3] = [Self::Development, Self::Staging, Self::Production];
+  /// Where a new secret goes unless a person chooses another environment.
+  pub const NEW_SECRET: Self = Self::Development;
 
   pub const fn as_str(self) -> &'static str {
     match self {

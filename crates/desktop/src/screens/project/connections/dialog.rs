@@ -2,7 +2,8 @@
 //! is looked up on the `PATH` (or chosen as a file) and checked as soon as it is known; the
 //! connection can be saved only when the check found the expected CLI. Checking runs only
 //! the CLI's read-only commands (`orchester_core::connection`). The fields are in `form`; a new
-//! connection's type can be switched to GitHub (`github_dialog`).
+//! connection's type can be switched to GitHub (`github_dialog`), and its kind to a native model API
+//! (`native_dialog`).
 
 use std::{
   path::{Path, PathBuf},
@@ -127,8 +128,11 @@ impl Component for ConnectionDialog {
         connection.name().as_str().to_owned(),
         connection.executable().map(Path::to_path_buf),
       ),
-      _ => {
-        let provider = AgentProvider::CodexCli;
+      mode => {
+        let provider = match mode {
+          DialogMode::AddAgent(provider) => *provider,
+          _ => AgentProvider::CodexCli,
+        };
         (provider, suggested_name(ctx, &context, provider), None)
       }
     };
@@ -175,7 +179,7 @@ impl ConnectionDialog {
   fn watch(&self, ctx: &mut Ctx) {
     let retype = self.context.retype.clone();
     ctx.watch(&self.kind, move |kind| retype(*kind));
-    if self.context.mode == DialogMode::AddAgent {
+    if matches!(self.context.mode, DialogMode::AddAgent(_)) {
       let suggestions = AgentProvider::CLI.map(|provider| suggested_name(ctx, &self.context, provider));
       let (name, picked) = (self.name.clone(), self.picked.clone());
       ctx.watch(&self.provider, move |choice| {

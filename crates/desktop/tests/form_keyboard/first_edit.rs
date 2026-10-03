@@ -1,4 +1,4 @@
-//! The code index and the tokens before the first edit in the Activity tab (ORC-38 `BbGhA`,
+//! The code index and the tokens before the first edit in the Conversation tab's Details (ORC-38 `BbGhA`,
 //! `rd1Vo`, `F3XhQ`), headlessly: the real runner runs the step on `orchester-fake-codex`, which
 //! reports a file change, with the project's code index on (the default) or off.
 
@@ -15,11 +15,14 @@ use crate::{
 
 const PANEL: &str = "activity-invocation";
 
+/// The finished run's Conversation tab with its Details pane open.
 fn activity(desktop: &mut Desktop) {
   create_and_run(desktop, "Append one line to README.md.", "1400000");
   finished_on_page(desktop);
-  desktop.click("task-tab-activity");
-  desktop.wait_until("the transcript", |desktop| has(desktop, "activity-step-header"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
+  desktop.click("conversation-details");
+  desktop.wait_for(PANEL);
 }
 
 fn short_head(desktop: &Desktop) -> String {

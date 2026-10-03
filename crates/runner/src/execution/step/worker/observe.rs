@@ -1,17 +1,29 @@
 //! What a worker does with each event of its agent, whatever drives it: the event is redacted,
 //! followed for the invocation's session, usage and first edit, recorded in batches, and a turn's
-//! usage is handed to the run.
+//! usage is handed to the run. Plan limits are not part of the transcript: they go to the desktop only.
 
-use orchester_core::{connection::stream::AgentEvent, store::ActivityStore, time::Timestamp};
+use orchester_core::{
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitReading, PlanLimits},
+    stream::AgentEvent,
+  },
+  store::ActivityStore,
+  time::Timestamp,
+};
 use orchester_ipc::Event;
 use orchester_store::StoreError;
 
-use super::{FLUSH_BATCH, Watch, Worker, WorkerEvent};
+use super::{FLUSH_BATCH, Transport, Watch, Worker, WorkerEvent};
 
 impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
   /// ends the agent.
   pub(in super::super) fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
+    if let AgentEvent::PlanLimits { limits } = event {
+      self.publish_limits(limits);
+      return Ok(());
+    }
     if self.app_server().is_some() || !self.mcp_secrets.is_empty() {
       event.redact(&|text| self.redact(text));
     }
@@ -49,6 +61,19 @@ impl Worker {
       }
     }
     Ok(())
+  }
+
+  /// Hands the account's limits the CLI reported to the desktop, as of now; never stored.
+  fn publish_limits(&self, limits: PlanLimits) {
+    let provider = match self.transport {
+      Transport::AppServer(_) => AgentProvider::CodexCli,
+      Transport::Claude(_) => AgentProvider::ClaudeCodeCli,
+    };
+    self.notifier.send(Event::PlanLimits(LimitReading {
+      provider,
+      at: Timestamp::now(),
+      limits,
+    }));
   }
 
   pub(super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {

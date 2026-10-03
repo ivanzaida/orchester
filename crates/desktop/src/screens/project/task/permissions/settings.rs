@@ -2,7 +2,8 @@
 //! `q4Nelz` in `NNRH8`): repository access and commands as radio options, the allowed commands as
 //! entries that remove themselves with an add button, and network as a switch. An option the
 //! step's connection cannot enforce is faded with the reason and cannot be chosen, as in the
-//! profile editor (04.B); commands the run adds to the profile's are outlined and named.
+//! profile editor (04.B); commands the run adds to the profile's are outlined and named. An ended
+//! run's settings are only shown (`YgLEg`): faded to 0.5, without removing or adding commands.
 
 use std::sync::Arc;
 
@@ -39,6 +40,7 @@ use crate::{
     message_text,
     option_card::unavailable_reason,
     pressable::{Ring, keyboard_stop},
+    radio::Radio,
     switch::Switch,
   },
 };
@@ -88,12 +90,93 @@ impl Edit {
 
 /// Repository access, commands and network for `draft`.
 pub(super) fn settings(ctx: &Ctx, edit: &Edit, props: &RunPermissionsProps, draft: &AgentPermissions) -> Vec<Element> {
+  if !props.live {
+    return shown_only(ctx, props, draft);
+  }
   let provider = props.step.provider;
   vec![
     repository(ctx, edit, provider, draft),
     commands(ctx, edit, props, draft),
     network(ctx, edit, provider, draft),
     tool_approvals(ctx, edit, props, draft),
+  ]
+}
+
+/// An ended run's settings (`aBWCr`, `BCCfS`, `Ex8Mg` in `YgLEg`): the options and switches faded
+/// and not choosable, the commands as plain entries; no reasons or notes.
+fn shown_only(ctx: &Ctx, props: &RunPermissionsProps, draft: &AgentPermissions) -> Vec<Element> {
+  let shown = |id, option, selected| radio(ctx, (id, option), selected, false, || {});
+  let repository = options(vec![
+    shown(
+      "task-permissions-read-only",
+      PermissionOption::ReadOnly,
+      draft.repository() == RepositoryAccess::ReadOnly,
+    ),
+    shown(
+      "task-permissions-edit",
+      PermissionOption::EditWorktree,
+      draft.repository() == RepositoryAccess::Write,
+    ),
+  ]);
+  let mut commands = vec![
+    Column::new()
+      .spacing(SpacingSize::Sm)
+      .child(shown(
+        "task-permissions-ask",
+        PermissionOption::AskBeforeCommands,
+        *draft.commands() == CommandPermission::AskBefore,
+      ))
+      .child(shown(
+        "task-permissions-allowed",
+        PermissionOption::AllowedCommands,
+        matches!(draft.commands(), CommandPermission::Allowed(_)),
+      ))
+      .child(shown(
+        "task-permissions-any",
+        PermissionOption::AnyCommand,
+        *draft.commands() == CommandPermission::AnyInWorktree,
+      ))
+      .into(),
+  ];
+  if let CommandPermission::Allowed(list) = draft.commands() {
+    let entries = list.entries().iter().enumerate().map(|(index, entry)| {
+      Element::from(CommandChip::new(
+        format!("task-permissions-command-{index}"),
+        entry.as_str().into(),
+      ))
+    });
+    commands.push(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .wrap()
+        .spacing(ExtraSpacing::Tight.role())
+        .opacity(UNAVAILABLE_OPTION_OPACITY)
+        .with_children(entries)
+        .into(),
+    );
+  }
+  let network = Switch::new(
+    "task-permissions-network",
+    ctx.t(match draft.network() {
+      NetworkAccess::Off => "agents.permissions.networkOff",
+      NetworkAccess::On => "agents.permissions.networkOn",
+    }),
+    draft.network() == NetworkAccess::On,
+  )
+  .emphasized()
+  .locked();
+  let required = props.permissions.tool_approvals_required;
+  let tool_approvals = Switch::new(
+    "task-permissions-tool-approvals",
+    ctx.t("agents.permissions.toolApprovals"),
+    required || draft.interactive_tool_approvals(),
+  )
+  .locked();
+  vec![
+    group(ctx, "agents.permissions.repository", vec![repository]),
+    group(ctx, "agents.permissions.commands", commands),
+    group(ctx, "agents.permissions.network", vec![network]),
+    group(ctx, "agents.permissions.toolApprovalsHeading", vec![tool_approvals]),
   ]
 }
 
@@ -130,37 +213,12 @@ fn radio(
   available: bool,
   choose: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let (glyph, color) = if selected {
-    (Icon::CircleDot, PaletteColor::TextPrimary)
+  let radio = Radio::new(id, ctx.t(option_title(option)), selected);
+  if available {
+    radio.render(choose)
   } else {
-    (Icon::Circle, PaletteColor::TextSecondary)
-  };
-  let row = Button::empty()
-    .button()
-    .id(id)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Sm)
-    .describe("selected", if selected { "true" } else { "false" })
-    .child(icon(glyph, IconSize::Event, color.clone()))
-    .child(
-      Text::new(&ctx.t(option_title(option)))
-        .variant(TypographyStyle::FieldLabel)
-        .color(color),
-    );
-  if !available {
-    return row
-      .focusable(false)
-      .cursor(CursorIcon::NotAllowed)
-      .opacity(UNAVAILABLE_OPTION_OPACITY)
-      .describe("state", "unavailable")
-      .into();
+    radio.unavailable()
   }
-  keyboard_stop(row, Ring::Outer)
-    .cursor(CursorIcon::Pointer)
-    .describe("state", "available")
-    .on_click(move |_| choose())
-    .into()
 }
 
 fn options(options: Vec<Element>) -> Element {

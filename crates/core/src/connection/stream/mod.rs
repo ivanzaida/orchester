@@ -48,6 +48,10 @@ pub struct FileChange {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AgentEvent {
+  /// Live account limits, sent to the desktop without persisting the reading.
+  PlanLimits {
+    limits: super::plan_limits::PlanLimits,
+  },
   /// The CLI's session id, with which the session can be resumed.
   SessionStarted {
     session: String,
@@ -142,6 +146,15 @@ pub enum AgentEvent {
     item: String,
     server: String,
     tool: String,
+  },
+  /// A request about call `item` (a command, or `action` of MCP server `server`) was answered as
+  /// `decision` says: by a person, by a rule of the run, or by auto-approval. The call's own entry
+  /// carries the mark; a denial says what the agent was told.
+  ToolDecided {
+    item: String,
+    server: String,
+    action: String,
+    decision: crate::run::ToolDecision,
   },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
@@ -249,6 +262,7 @@ impl AgentEvent {
   /// Stable name of the kind, as stored.
   pub const fn name(&self) -> &'static str {
     match self {
+      Self::PlanLimits { .. } => "plan_limits",
       Self::SessionStarted { .. } => "session_started",
       Self::TurnStarted => "turn_started",
       Self::Message { .. } => "message",
@@ -268,6 +282,7 @@ impl AgentEvent {
       Self::McpExemptionNotApplied { .. } => "mcp_exemption_not_applied",
       Self::McpToolDeclined { .. } => "mcp_tool_declined",
       Self::McpToolFinished { .. } => "mcp_tool_finished",
+      Self::ToolDecided { .. } => "tool_decided",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }

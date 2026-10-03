@@ -1,8 +1,11 @@
 mod activity;
 mod agent_files;
+mod always_allow;
+mod approval_rules;
 mod blobs;
 mod code_index;
 mod connections;
+mod consistent;
 mod environment;
 mod import;
 mod invocation_prompts;
@@ -24,6 +27,7 @@ mod runs;
 mod schema;
 mod secrets;
 mod step_outputs;
+mod task_groups;
 mod tasks;
 mod tool_approvals;
 
@@ -38,7 +42,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-pub use self::read_only::ReadOnlyProjectDb;
+pub use self::{approval_rules::DecisionCounts, read_only::ReadOnlyProjectDb};
 use crate::{
   StoreError, git_exclude, migrate,
   rows::{corrupt, parse},

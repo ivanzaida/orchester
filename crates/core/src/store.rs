@@ -384,6 +384,11 @@ pub trait ConversationStore {
   /// went to, atomically. A delivery state only moves forward.
   fn save_deliveries(&mut self, messages: &[Message]) -> Result<(), Self::Error>;
 
+  /// Stores how far a person's message got, `changed`, only while it still stands as `before` (its
+  /// delivery and timing as stored): `false`, with nothing stored, when another writer (the desktop,
+  /// the runner) moved it on first. For changes that two writers can race to make.
+  fn change_delivery(&mut self, before: &Message, changed: &Message) -> Result<bool, Self::Error>;
+
   /// The conversation of `task`, oldest first.
   fn messages(&self, task: TaskId) -> Result<Vec<Message>, Self::Error>;
 
@@ -466,6 +471,10 @@ pub trait ActivityStore {
   /// The last message the agent of `execution` wrote in `run`'s transcript, with its sequence: its
   /// final message once its latest invocation ended.
   fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, Self::Error>;
+
+  /// How the last command tool run of `execution` in `run` ended, as its transcript recorded it: an
+  /// [`AgentEvent::ToolCommandFinished`] with what the program printed.
+  fn last_command_finished(&self, run: RunId, execution: StepExecutionId) -> Result<Option<AgentEvent>, Self::Error>;
 
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
   /// usage each completed turn reported.

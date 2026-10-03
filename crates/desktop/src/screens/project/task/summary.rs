@@ -1,8 +1,8 @@
 //! The Summary tab (`Nlcnu` in 02.10 `RD4pc`): what the run is doing in a notice, for a run
 //! stopped at a limit the panel that raises it (02.L `ZUYM0`), the run's progress per step
 //! (`qB7mj` in 02.12, `l3hyb` rows), the latest agent launch, and the run's pinned configuration,
-//! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries shows
-//! 02.B (`J3JZaT`) instead.
+//! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries or broke
+//! again shows 02.B (`J3JZaT`) instead, with the person's decisions while it waits for them.
 
 use std::{path::Path, sync::Arc};
 
@@ -25,6 +25,7 @@ use orchester_core::{
 
 use super::{
   TaskScrolls,
+  approval_card::{review_card, waiting_requests},
   brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
@@ -32,6 +33,7 @@ use super::{
   permissions::{RunPermissionsProps, RunPermissionsRow},
   progress::progress_list,
   retry_limit::retry_limit,
+  run_approvals::{RunApprovalsPanel, RunApprovalsProps},
 };
 use crate::{
   budget::whole_minutes,
@@ -60,24 +62,33 @@ pub(super) fn summary(
   (repo_root, scrolls): (&Path, &TaskScrolls),
   reason: Option<Element>,
 ) -> Element {
-  if let Some(run) = &detail.run
-    && let RunStatus::Failed(RunFailure::RetriesExhausted(step)) = run.run.status()
-  {
-    return retry_limit(ctx, run, step, reason);
+  if let Some(run) = &detail.run {
+    match run.run.status() {
+      RunStatus::Failed(RunFailure::RetriesExhausted(step)) => return retry_limit(ctx, run, step, None, reason),
+      RunStatus::WaitingForPerson(stuck) => return retry_limit(ctx, run, stuck.step(), Some(stuck), reason),
+      _ => {}
+    }
   }
   let raise = detail.run.as_ref().and_then(|run| raise_panel(ctx, run, limits));
   // Brief and criteria on a run page describe what that run was asked to do, even after the
   // task is edited for a later run.
   let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
+  // A request the run's agent waits on comes first, with Review request.
+  let waiting = detail.run.as_ref().and_then(|run| review_card(ctx, run));
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
-    .child(with_reason(notice(ctx, detail, lost), reason))
+    // The card says what the run waits for; the run's own notice would say it is at work.
+    .with_children(waiting.is_none().then(|| with_reason(notice(ctx, detail, lost), reason)))
+    .with_children(waiting)
     .with_children(raise)
-    .with_children(detail.run.as_ref().map(|run| progress_list(ctx, run, lost.is_some())))
+    .with_children(detail.run.as_ref().map(|run| {
+      let waiting = waiting_requests(ctx, run);
+      progress_list(ctx, run, lost.is_some(), &waiting)
+    }))
     .with_children(brief_section(ctx, details));
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let panel = match &detail.run {
@@ -227,7 +238,17 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
     .child(property(&ctx.t("runs.summary.time"), &time))
-    .with_children(permissions);
+    .with_children(permissions)
+    .child(ctx.mount_keyed::<RunApprovalsPanel>(
+      &format!("task-run-approvals-{}", run.id()),
+      RunApprovalsProps {
+        run: run.id(),
+        number: run.run.number(),
+        approvals: run.approvals.clone(),
+        live: !run.run.status().is_terminal(),
+        repo_root: repo_root.to_path_buf(),
+      },
+    ));
   this_run_panel(rows, scroll, &ctx.t("runs.summary.snapshotNote"))
 }
 

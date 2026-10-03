@@ -169,7 +169,7 @@ fn agents(ctx: &Ctx, run: &RunView) -> Option<Element> {
 
 /// "Codex / gpt-5.5", or the model alone when the step's connection is gone.
 fn on_engine(ctx: &Ctx, step: &StepView) -> Arc<str> {
-  engine(ctx, step.provider, step.model.as_deref().unwrap_or_default())
+  engine(ctx, step.vendor.as_ref(), step.model.as_deref().unwrap_or_default())
 }
 
 /// One agent (`mBkeJ`): its glyph, its role and what it ran on.

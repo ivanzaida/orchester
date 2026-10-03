@@ -12,7 +12,8 @@ use orchester_core::{
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
   run::{
-    InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber,
+    ApprovalAnswer, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock,
+    RunLimit, RunNumber, StuckDecision,
   },
   tokens::TokenBudget,
 };
@@ -63,7 +64,8 @@ pub enum Command {
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
   /// a lost reply) answers with the run the first request created. Answered with
-  /// [`Reply::RunStarted`] or [`Reply::Rejected`].
+  /// [`Reply::RunStarted`] or [`Reply::Rejected`]. An explicit first-run request also releases
+  /// its scheduling group’s persisted session-end hold; it does not bypass group eligibility.
   StartRun { key: IdempotencyKey, task: TaskId },
   /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
   /// again): from the first step, in a new worktree on a new branch from the current base, with
@@ -125,12 +127,19 @@ pub enum Command {
     version: PlanVersion,
     decision: PlanDecision,
   },
-  /// One decision on a live Codex tool call; the same App Server session resumes on approval.
-  /// A stale or already-decided request is rejected.
+  /// A person's `decision` on run `run`, which waits for one after its retries ran out or its step
+  /// broke again: one more retry or work returned to an agent step continue the run as a new
+  /// attempt, answered with [`Reply::Accepted`] once it runs again; a stop fails it, answered once
+  /// that is recorded. [`Rejection::RunNotWaiting`] when the run does not wait for a person.
+  DecideStuckRun { run: RunId, decision: StuckDecision },
+  /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
+  /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
+  /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
+  /// lets it continue. A stale or already-decided request is rejected.
   DecideToolApproval {
     run: RunId,
     approval: String,
-    approve: bool,
+    answer: ApprovalAnswer,
   },
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
@@ -209,12 +218,16 @@ pub enum ShutdownMode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Event {
+  /// Live account reading; session-only, never reconstructed from project storage.
+  PlanLimits(orchester_core::connection::plan_limits::LimitReading),
   /// The answer to request `id`.
   Reply { id: RequestId, reply: Reply },
   /// The last event of a connection: the runner has stopped all work and exits.
   Stopped { mode: ShutdownMode },
   /// Run `run` of task `task` changed state (status, step, attempt); read it from the database.
   RunChanged { run: RunId, task: TaskId },
+  /// A reviewed queue group's waiting reason changed; reread the task list.
+  TaskGroupChanged { key: IdempotencyKey },
   /// Run `run`'s transcript grew to `sequence` entries. Coalesced: one notification can stand
   /// for many entries.
   AgentActivity { run: RunId, sequence: u64 },
@@ -229,6 +242,15 @@ pub enum Event {
     task: TaskId,
     task_key: String,
     version: PlanVersion,
+  },
+  /// Run `run` of task `task` (`task_key`) waits for a person's decision: the retries of its step
+  /// `step` (the step's name) ran out, or the step broke again. The status bar says so ("Review
+  /// needs your decision · ORC-128"). The run itself changed as an [`Event::RunChanged`] says.
+  RunWaitsForPerson {
+    run: RunId,
+    task: TaskId,
+    task_key: String,
+    step: String,
   },
   /// Run `run` (number `number`) of task `task` succeeded: it is ready for review, and the status
   /// bar says so ("Run #128 ready for review"). The run itself changed as an [`Event::RunChanged`]
@@ -300,6 +322,10 @@ pub enum Rejection {
   TaskNotFound,
   /// Only queued tasks start a run.
   TaskNotQueued,
+  /// A reviewed group's order, concurrency or shared cap holds this task.
+  TaskGroupWaiting {
+    hold: orchester_core::task_group::GroupHold,
+  },
   /// The run cannot start until these are resolved.
   Preflight {
     problems: Vec<PreflightProblem>,
@@ -317,6 +343,8 @@ pub enum Rejection {
   RunNotPaused,
   /// Continuing from a checkpoint needs an interrupted run.
   RunNotInterrupted,
+  /// A decision on a stuck run needs a run that waits for a person.
+  RunNotWaiting,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)

@@ -5,7 +5,7 @@
 
 mod support;
 
-use std::{collections::BTreeMap, fs, path::Path, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -13,8 +13,8 @@ use orchester_core::{
   integration::{Leftovers, leftovers},
   limits::ProjectLimits,
   name::Name,
-  resource::{CommandEnvironment, Pipeline, Slug, StepKind, VariableName},
-  run::{BranchName, InterruptCause, NewRun, PreflightProblem, Run, RunAgainBlock, RunStatus},
+  resource::{Pipeline, Slug, StepKind},
+  run::{InterruptCause, Run, RunAgainBlock, RunStatus},
   store::{ResourceStore, RunStore, SettingsStore, TaskStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -57,7 +57,7 @@ fn blocked(block: RunAgainBlock) -> Rejection {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_after_a_failed_run_starts_the_next_run_from_the_first_step() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
@@ -156,54 +156,6 @@ async fn run_again_after_a_cancelled_run_starts_once_per_request() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn recorded_pending_run_again_rechecks_space_before_creating_its_worktree() {
-  let project = project(&Setup::new("Please fail."));
-  let root = project.repo.path();
-  let (scheduler, mut events) = scheduler(root);
-  let first = start(&scheduler, project.task).await;
-  let previous = wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
-  let mut db = ProjectDb::open(root).expect("open");
-  let task = db.task(project.task).expect("read task").expect("task");
-  let key = IdempotencyKey::generate();
-  let pending = db
-    .create_run(
-      key,
-      NewRun {
-        task: project.task,
-        snapshot: previous.snapshot().clone(),
-        branch: BranchName::for_next_run(task.key(), 1),
-        base: previous.base().clone(),
-        base_branch: previous.base_branch().cloned(),
-        budget: previous.budget(),
-        max_duration: previous.max_duration(),
-      },
-      Timestamp::now(),
-    )
-    .expect("record pending run");
-  assert_eq!(pending.status(), &RunStatus::Pending);
-  let blocked = root.join("blocked-target");
-  fs::write(&blocked, "not a directory").expect("block target");
-  db.save_project_environment(
-    &CommandEnvironment::new(BTreeMap::from([(
-      VariableName::new("CARGO_TARGET_DIR").expect("variable name"),
-      blocked.to_str().expect("Unicode path").into(),
-    )]))
-    .expect("environment"),
-  )
-  .expect("save target");
-  drop(db);
-
-  assert_eq!(
-    scheduler.run_again(key, project.task, first, None).await,
-    Err(Rejection::Preflight {
-      problems: vec![PreflightProblem::BuildSpaceUnavailable { target: blocked }],
-    })
-  );
-  assert_eq!(run(root, pending.id()).status(), &RunStatus::Pending);
-  assert!(!worktree(root, pending.id()).exists());
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn run_again_is_refused_for_a_run_that_has_not_ended() {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
@@ -223,7 +175,7 @@ async fn run_again_is_refused_for_a_run_that_has_not_ended() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_needs_a_published_pipeline() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;
@@ -298,7 +250,7 @@ async fn run_again_waits_while_the_daily_budget_is_used() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn run_again_removes_the_worktree_of_the_run_before_as_confirmed() {
-  let project = project(&Setup::new("Please fail."));
+  let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let first = start(&scheduler, project.task).await;

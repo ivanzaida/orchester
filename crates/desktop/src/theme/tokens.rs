@@ -76,6 +76,11 @@ pub const RADIUS_MARK: f32 = 2.0;
 pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 /// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
+/// Corner radius of a category chip (`EfQuh`).
+pub const RADIUS_CHIP: f32 = 5.0;
+/// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
+/// style (toolbar of `RrScB`).
+pub const RADIUS_SEGMENT: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
@@ -107,6 +112,8 @@ pub const SPACE_FIELD: f32 = 9.0;
 pub const SPACE_PROPERTY: f32 = 15.0;
 pub const SPACE_DIVIDER: f32 = 18.0;
 pub const SPACE_SELECT_MENU: f32 = 4.0;
+/// Above and below a transcript command's lines in its viewport (`Z3M6Nz` in `uA3Sh`).
+pub const SPACE_COMMAND_LINES: f32 = 4.0;
 pub const SPACE_DIALOG_MARGIN: f32 = 32.0;
 /// Padding of a note field (`NbNN0`, the changes a plan needs).
 pub const SPACE_TEXT_AREA: f32 = 14.0;
@@ -117,6 +124,9 @@ pub const SPACE_CHECK_INDENT: f32 = 28.0;
 /// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
 /// `L1B0m` in 04.B `W0Owo`).
 pub const SPACE_REASON_INDENT: f32 = 22.0;
+/// A tool group and a card's body in the conversation timeline start where a message's text does:
+/// past its 24px glyph and the 12px gap (`uoK7y`, the cards of `ZxYGh`, `haIEI`).
+pub const SPACE_TIMELINE_INDENT: f32 = 36.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -130,6 +140,10 @@ pub const WINDOW_CONTROL_WIDTH: f32 = 46.0;
 /// Width of the lifecycle dialogs at most: close with active work, waiting and start-up
 /// recovery (`um9B1`, `KS2RU`, `BovYZ`).
 pub const LIFECYCLE_DIALOG_WIDTH: f32 = 880.0;
+/// The tallest a long value's box in the approval dialog grows before its lines scroll inside it:
+/// 12 lines with the box's padding (`E5NBo` in `bjrgu`, "Approval choices"). The full shell string
+/// of 04.H9 (`bwWuT` in `coKjY`) shares it.
+pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = 232.0;
 
 /// Drop shadow of the status bar operations popover (`E1msJS`): outer, x 0, y 8, blur 24,
 /// no spread. The only shadow in the design.
@@ -157,6 +171,13 @@ pub const SELECT_SCROLLBAR_END_INSET: f32 = 11.0;
 /// Scroll gutter thumb (`nf9DG` in `NwsEg`): centred in the 12px gutter, 4px from either side,
 /// and 4px from the viewport's top and bottom.
 pub const GUTTER_SCROLLBAR_INSET: f32 = 4.0;
+/// Horizontal thumb of a transcript command (`hpzPu` in `G9skx`): centred in the 6px band at the
+/// bottom of the box, and starting where the text does, 12px in.
+pub const COMMAND_SCROLLBAR_EDGE_INSET: f32 = 1.0;
+pub const COMMAND_SCROLLBAR_END_INSET: f32 = 12.0;
+/// Thumbs of a capped value box in the approval dialog (`e0vyng` in `bjrgu`): from the very start
+/// of the viewport, which the box's 6px padding already holds off its border.
+pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;
@@ -169,3 +190,53 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// A switch whose value is fixed fades as one row, its label with it, to 45 % (`lW7Sp` in 04.B
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
+
+/// Scheduling review (02.05 `W1Dq6`, 02.06 `IyJ5a`): a task in the order (`gj5Cf`, a `zemhy` row).
+pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;
+/// The 508px execution settings (`qdApo`) plus their reserved scroll gutter, which sits in the
+/// page padding.
+pub const TASK_REVIEW_RAIL_WIDTH: f32 = 508.0 + SPACE_STACK;
+/// Execution-mode cards (`YZcH2`, `jPX6u`).
+pub const TASK_REVIEW_MODE_HEIGHT: f32 = 88.0;
+/// The settings' selects and token fields (`gIQBb`, `MUKob`, `dMiX2`, `XZCQ5`).
+pub const TASK_REVIEW_FIELD_HEIGHT: f32 = 38.0;
+/// The drag handle tile of an order row (`aqRNL` in `gj5Cf`).
+pub const TASK_REVIEW_HANDLE_SIZE: f32 = 32.0;
+/// The action strip under the review (`JV6sD`).
+pub const TASK_REVIEW_FOOTER_HEIGHT: f32 = 76.0;
+/// Queue N tasks, the strip's primary action (`QAYeP`).
+pub const TASK_REVIEW_ACTION_HEIGHT: f32 = 40.0;
+pub const TASK_REVIEW_QUEUE_WIDTH: f32 = 154.0;
+/// A key/value setting: time limit and pipeline version (`U673I`, `RG0FF`, `tfGRt`).
+pub const TASK_REVIEW_PROPERTY_HEIGHT: f32 = 22.0;
+/// Back to tasks in the review's topbar (`uBqK9`).
+pub const TASK_REVIEW_BACK_WIDTH: f32 = 132.0;
+/// The narrowest window that holds the review's two columns: the 216 sidebar, 32 page padding, an
+/// order column of 440 (its rows and its Move and Undo buttons), the 32 gap, the 520 settings with
+/// their gutter and 20 padding. Narrower, the settings go under the order (not drawn yet).
+pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
+/// The narrowest window that holds the retry limit's evidence beside its 360 decision panel
+/// (`Q4LnK`, `Bi6pU` in 02.B3): the 216 sidebar, the evidence's 64 padding, a check row of 560 (its
+/// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
+/// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
+pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
+/// The narrowest window whose Conversation toolbar (`JKl4s` in `RrScB`) holds everything on one line
+/// with Details closed: the 216 sidebar, the toolbar's 64 padding, the 240 step filter, *Show* (164),
+/// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
+/// Narrower, *Show* and the search go to a second line (not drawn yet).
+pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
+/// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its
+/// recipient, *Attach* and both send buttons on one line: the 216 sidebar, the column's 64 padding,
+/// the composer's 24, the 260 recipient, *Attach* (104), *Send after this turn* (166), *Send now*
+/// (104) and three 10 gaps. Narrower, the buttons go to a line of their own (not drawn yet).
+pub const CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW: f32 = 980.0;
+/// What the Tools view adds to that line: *Show raw lines* (`q4fCXK`) and its gap.
+pub const CONVERSATION_TOOLBAR_RAW_SWITCH: f32 = 140.0;
+/// How much wider *Waits for your decision* is than *Following live*.
+pub const CONVERSATION_TOOLBAR_DECISION_STATE: f32 = 50.0;
+/// The narrowest window whose task table (`clVjO`) keeps its Pipeline column: the 216 sidebar, 64
+/// page padding, the row's fixed cells and gaps (672) and a 200 title. Narrower, the Pipeline
+/// column is left out so the title keeps its room (not drawn yet).
+pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1152.0;
+/// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
+pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

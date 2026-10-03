@@ -1,11 +1,22 @@
 //! What a turn of `orchester-fake-codex` does, by its prompt:
 //!
 //! - "Please fail": fails the turn as Codex did for an unsupported model;
+//! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
 //! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
-//!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
+//!   then it waits until it is ended when the prompt also says "Then keep working" (writing "Released." first when it
+//!   also says "Note the release"), else works as below;
+//! - "Wait for a message": runs a command (`pnpm test`) until a message sent now arrives (`turn/steer`), answers it,
+//!   completes the command, reports the message as a `userMessage` item and writes "Noted: <message>", as Codex 0.159.2
+//!   did in the probe of 2026-10-02; then works as below. "Refuse a message" refuses the steer instead ("steering is
+//!   not available for this turn") and works as below. "Keep a message for the turn's end" accepts the steer, completes
+//!   the command and the turn without a `userMessage` item, as Codex does with input it accepted but had not given the
+//!   model when the turn finished (it records it into the thread then); "Answer the steer late" does the same but
+//!   answers the steer only after `turn/completed`. "Interrupt after a message" accepts the steer and ends the turn
+//!   `interrupted`, keeping the message back as Codex does; "Die after a message" accepts it and exits with 1. A steer
+//!   while no turn waits for one is answered "no active turn to steer", as Codex answers it while no turn runs;
 //! - "Report failure": works as below, but its result says it failed;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
@@ -31,7 +42,10 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, complete, fake_app_server, notify};
+use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, notify};
+
+/// The account's limits App Server reports during a turn.
+const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
 
 /// What an unsupported model's turn failed with.
 const UNSUPPORTED: &str = "The 'no-such-model-probe' model is not supported when using Codex with a ChatGPT account.";
@@ -45,12 +59,69 @@ pub struct StepReport {
   handoff: bool,
 }
 
+/// A turn that waits for a message sent now.
+pub struct AwaitsMessage {
+  prompt: String,
+  structured: bool,
+  answer: SteerAnswer,
+}
+
+/// What the turn does with the message sent now.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SteerAnswer {
+  /// Accepts it and gives it to the model after the running command.
+  Take,
+  /// Refuses it.
+  Refuse,
+  /// Accepts it, but the turn ends before the model reads it.
+  KeepForTurnEnd,
+  /// As `KeepForTurnEnd`, but the answer comes after `turn/completed`.
+  AnswerLate,
+  /// Accepts it, then the turn is interrupted.
+  Interrupt,
+  /// Accepts it, then the process exits.
+  Die,
+}
+
+/// The answers to a message sent now that the prompt asks for, by the words that ask for them.
+const ANSWERS: [(&str, SteerAnswer); 6] = [
+  ("Refuse a message", SteerAnswer::Refuse),
+  ("Keep a message for the turn's end", SteerAnswer::KeepForTurnEnd),
+  ("Answer the steer late", SteerAnswer::AnswerLate),
+  ("Interrupt after a message", SteerAnswer::Interrupt),
+  ("Die after a message", SteerAnswer::Die),
+  ("Wait for a message", SteerAnswer::Take),
+];
+
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   let worktree = session.cwd.clone();
+  let answer = ANSWERS
+    .iter()
+    .find(|(words, _)| prompt.contains(words))
+    .map(|(_, answer)| *answer);
+  if let Some(answer) = answer.filter(|_| !session.resumed) {
+    notify(
+      session,
+      "item/started",
+      json!({"item": {"id": "item_8", "type": "commandExecution", "command": "pnpm test"}}),
+    );
+    session.awaits_message = Some(AwaitsMessage {
+      prompt: prompt.to_owned(),
+      structured,
+      answer,
+    });
+    return Step::Go;
+  }
   if prompt.contains("Please fail") {
     notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
     complete(session, Some(UNSUPPORTED));
     return Step::Exit(ExitCode::SUCCESS);
+  }
+  if prompt.contains("Report plan limits") {
+    match serde_json::from_str(LIMITS) {
+      Ok(limits) => emit(&limits),
+      Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
+    }
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
@@ -83,6 +154,57 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     "hello".to_owned()
   };
   finish(session, &line, &result)
+}
+
+/// A message sent now (`turn/steer` with `id`): taken after the running command, refused, accepted and
+/// left for the turn's end (answered at once or late), or accepted before the turn is interrupted or
+/// the process dies; then the turn works as usual.
+pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_json::Value) -> Step {
+  let Some(awaits) = session.awaits_message.take() else {
+    emit(&json!({"id": id, "error": {"code": -32600, "message": "no active turn to steer"}}));
+    return Step::Go;
+  };
+  let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
+  let accepted = json!({"id": id, "result": {"turnId": params["expectedTurnId"]}});
+  match awaits.answer {
+    SteerAnswer::Refuse => {
+      emit(&json!({"id": id, "error": {"code": -32600, "message": "steering is not available for this turn"}}));
+    }
+    SteerAnswer::AnswerLate => {}
+    SteerAnswer::Die => {
+      emit(&accepted);
+      return Step::Exit(ExitCode::from(1));
+    }
+    SteerAnswer::Interrupt => {
+      emit(&accepted);
+      notify(
+        session,
+        "turn/completed",
+        json!({"turn": {"id": TURN, "status": "interrupted"}}),
+      );
+      return Step::Go;
+    }
+    SteerAnswer::Take | SteerAnswer::KeepForTurnEnd => emit(&accepted),
+  }
+  notify(
+    session,
+    "item/completed",
+    json!({"item": {"id": "item_8", "type": "commandExecution", "command": "pnpm test", "status": "completed", "exitCode": 0, "aggregatedOutput": "ok"}}),
+  );
+  if awaits.answer == SteerAnswer::Take {
+    notify(
+      session,
+      "item/completed",
+      json!({"item": {"id": "item_7", "type": "userMessage", "content": [{"type": "text", "text": text, "text_elements": []}]}}),
+    );
+    message(session, "item_6", &format!("Noted: {text}"));
+  }
+  let result = report_of(&awaits.prompt, awaits.structured);
+  let step = finish(session, "hello", &result);
+  if awaits.answer == SteerAnswer::AnswerLate {
+    emit(&accepted);
+  }
+  step
 }
 
 /// What App Server writes when the user's configuration has a setting it does not know, then more
@@ -200,6 +322,9 @@ fn before_finishing(session: &Session, prompt: &str) {
   if prompt.contains("Wait for release") {
     wait_for_release(session, prompt.contains("Draft first"));
     if prompt.contains("Then keep working") {
+      if prompt.contains("Note the release") {
+        message(session, "item_r", "Released.");
+      }
       wait_to_be_ended();
     }
   }

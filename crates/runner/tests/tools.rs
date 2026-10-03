@@ -13,12 +13,14 @@ use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem, ToolCommandResult},
   id::{IdempotencyKey, RunId},
   resource::StepKey,
-  run::{InvocationKind, PauseReason, Run, RunFailure, RunLimit, RunStatus, StepFailure, StepOutcome},
+  run::{InvocationKind, PauseReason, Run, RunFailure, RunLimit, RunStatus, StepFailure, StepOutcome, Stuck},
   store::ActivityStore,
 };
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, StepSpec, git, is_running, project, reported, scheduler, tools::ToolSpec, wait_for};
+use self::support::{
+  Setup, StepSpec, git, is_running, project, reported, scheduler, settled, tools::ToolSpec, wait_for,
+};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -71,7 +73,7 @@ async fn run_to_the_end(setup: &Setup) -> (support::TestProject, Run) {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("the run starts");
-  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  let run = wait_for(root, &mut events, id, settled).await;
   (project, run)
 }
 
@@ -138,10 +140,27 @@ async fn tools_command_step_passes_beside_an_agent_and_its_output_reaches_later_
 async fn tools_command_step_fails_by_its_exit_code_and_retries_through_its_route() {
   // The marker lies next to the worktrees (`<repo>/.orchester/`): the retry works in a new one.
   let checks = ToolSpec::test_command(&["fail-once", "../../checks-failed-once"]);
-  let (_project, run) = run_to_the_end(&delivery(checks)).await;
+  let (project, run) = run_to_the_end(&delivery(checks)).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(failures(&run), [("checks".to_owned(), StepFailure::CommandFailed)]);
   assert_eq!(run.attempts().len(), 2);
+  // A failing check is a verdict: Implement, the route's target, reads how its command ended and
+  // what it printed.
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let prompts = reported(&db, run.id(), "prompt| ");
+  assert!(
+    prompts
+      .iter()
+      .any(|line| line == "# Returned from Checks (`checks`), attempt 1"),
+    "{prompts:?}"
+  );
+  assert!(
+    prompts
+      .iter()
+      .any(|line| line.starts_with("> `") && line.ends_with("exited with code 1, which the tool does not expect.")),
+    "{prompts:?}"
+  );
+  assert!(prompts.iter().any(|line| line.starts_with("> pid: ")), "{prompts:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -288,14 +307,24 @@ async fn tools_a_program_that_is_not_found_does_not_start() {
     ..Setup::new("Say hello.")
   };
   let (project, run) = run_to_the_end(&setup).await;
-  assert_eq!(failures(&run), [("checks".to_owned(), StepFailure::NotStarted)]);
-  let db = ProjectDb::open(project.repo.path()).expect("open");
+  // A program that cannot start is a breakage, not a verdict: the step restarts once, then the run
+  // waits for a person.
   assert_eq!(
-    problems(&db, run.id()),
-    [RunnerProblem::ProgramNotFound {
-      program: "orchester-no-such-program".into(),
-    }]
+    failures(&run),
+    [
+      ("checks".to_owned(), StepFailure::NotStarted),
+      ("checks".to_owned(), StepFailure::NotStarted)
+    ]
   );
+  assert_eq!(
+    run.status(),
+    &RunStatus::WaitingForPerson(Stuck::BrokeAgain(key("checks")))
+  );
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let not_found = RunnerProblem::ProgramNotFound {
+    program: "orchester-no-such-program".into(),
+  };
+  assert_eq!(problems(&db, run.id()), [not_found.clone(), not_found]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

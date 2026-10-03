@@ -29,10 +29,17 @@ impl AgentEvent {
         }
         problem.redact(redact);
       }
+      Self::ToolDecided { action, decision, .. } => {
+        *action = redact(action);
+        if let Some(told) = &mut decision.told {
+          *told = redact(told);
+        }
+      }
       // A tool name the server reported.
       Self::McpToolDeclined { tool, .. } | Self::McpToolFinished { tool, .. } => *tool = redact(tool),
-      // Servers and tools named as the project configured them.
-      Self::SessionStarted { .. }
+      // Servers and tools named as the project configured them; plan limits are numbers and the CLI's plan name.
+      Self::PlanLimits { .. }
+      | Self::SessionStarted { .. }
       | Self::TurnStarted
       | Self::TurnCompleted { .. }
       | Self::McpToolNotAsked { .. }

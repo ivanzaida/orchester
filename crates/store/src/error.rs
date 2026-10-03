@@ -3,8 +3,9 @@ use std::{io, path::PathBuf};
 use orchester_core::{
   id::{ConnectionId, InvocationId, MemoryId, ResourceId, RunId, SecretId, TaskId},
   resource::{PublishError, ResourceKind},
-  run::RunError,
+  run::{AlwaysAllowError, RunError},
   task::EditError,
+  task_selection::SelectionProblem,
 };
 use thiserror::Error;
 
@@ -41,6 +42,18 @@ pub enum StoreError {
   TaskNotEditable { task: TaskId, source: EditError },
   #[error("a task batch must contain at least one task")]
   EmptyBatch,
+  #[error("task {0} no longer uses its reviewed pipeline; review again")]
+  TaskGroupReviewChanged(TaskId),
+  /// A task of a group being queued is not a draft ready for its first run; nothing was queued.
+  #[error("task {task} cannot join a group: {problem:?}")]
+  TaskNotSelectable { task: TaskId, problem: SelectionProblem },
+  /// The pipeline has no published version to assign; nothing was changed.
+  #[error("pipeline {0} has no published version")]
+  PipelineNotPublished(ResourceId),
+  /// The task is not an unstarted member of a group that holds its work, so it stays in its group;
+  /// nothing was changed.
+  #[error("task {0} is not held by its group")]
+  TaskNotHeld(TaskId),
   #[error("resource {0} does not exist")]
   ResourceNotFound(ResourceId),
   #[error("resource {resource} is a {found:?}, not a {expected:?}")]
@@ -55,6 +68,8 @@ pub enum StoreError {
   NoDraft(ResourceId),
   #[error(transparent)]
   Publish(#[from] PublishError),
+  #[error(transparent)]
+  AlwaysAllow(#[from] AlwaysAllowError),
   #[error("a connection named `{0}` already exists")]
   DuplicateConnectionName(String),
   #[error("connection {0} does not exist")]
@@ -103,6 +118,9 @@ pub enum RunStoreError {
   Run(#[from] RunError),
   #[error("run {0} does not exist")]
   RunNotFound(RunId),
+  /// Only a queued task gets a run; the task is not (any more). Nothing was recorded.
+  #[error("task {0} is not queued")]
+  TaskNotQueued(TaskId),
   /// The stored record of run `run` cannot be read back: it breaks the run's rules or a value in
   /// it cannot be decoded. The record is kept unchanged.
   #[error("run {run} cannot be read: {source}")]

@@ -2,6 +2,7 @@
 //! migrations live in modules of their own, named after what they add.
 
 mod agent_files;
+mod approval_choices;
 mod code_index;
 mod command_approvals;
 mod conversation;
@@ -9,8 +10,12 @@ mod import;
 mod invocation_permissions;
 mod mcp;
 mod memory;
+mod native_commands;
 mod recovery;
+mod steering;
+mod stuck_runs;
 mod task_edits;
+mod task_groups;
 mod tool_approvals;
 
 pub(super) const MIGRATIONS: &[&str] = &[
@@ -580,4 +585,10 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   invocation_permissions::MIGRATION,
   code_index::MIGRATION,
   memory::MIGRATION,
+  native_commands::MIGRATION,
+  task_groups::MIGRATION,
+  task_groups::FINISHED_MIGRATION,
+  stuck_runs::MIGRATION,
+  steering::MIGRATION,
+  approval_choices::MIGRATION,
 ];
