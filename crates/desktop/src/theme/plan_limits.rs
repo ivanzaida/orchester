@@ -8,5 +8,6 @@ pub const PLAN_METER_HEIGHT: f32 = 4.0;
 pub const PLAN_PERCENT_WIDTH: f32 = 32.0;
 
 /// The least of what a waiting request asks that the status bar shows, in px: when the bar is narrow
-/// the request's words trim their end down to this, so they never become a stub (built, not drawn).
+/// the request's words trim their end down to this, then drop out, so they never become a stub (built,
+/// not drawn).
 pub const APPROVALS_ASKS_MIN: f32 = 100.0;

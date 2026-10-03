@@ -26,7 +26,8 @@ const SEPARATOR_HEIGHT: f32 = 12.0;
 /// The order in which the parts of the bar give way when it is narrow (lurq `shrink_order`); the bar
 /// is one line, so the left and the right group give way in one order and the bar never shows more at
 /// a narrower width. Each order gives way, down to its limit, before the next shrinks at all: what the
-/// waiting approvals ask trims its end; which run auto-approves and the times drop out whole; the
+/// waiting approvals ask trims its end down to 100px, then drops out; which run auto-approves and the
+/// times drop out whole; the
 /// version and Tokens today drop out; the counts' labels; the plan limits' resets and reasons; then the
 /// activity drops its time and trims its words; the words beside how many approvals wait; last the
 /// runner's words. The hand, the count, *Review*, *Auto-approving*, Stop, the counts, the plan limits

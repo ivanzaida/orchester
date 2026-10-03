@@ -9,7 +9,7 @@ use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::Row,
   layout::{Alignment, layout_kind::ShrinkLimit},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 
 use super::item::{
@@ -27,8 +27,8 @@ use crate::{
 /// The waiting requests, oldest first; nothing when none waits. `dialog`: those of `pending` the
 /// dialog may show on this page, the one it shows while it is open. When the bar is narrow, the parts
 /// give way in their order ([`give_way`]): what the oldest asks trims its end down to
-/// [`APPROVALS_ASKS_MIN`], the time drops out, then the words beside the count; the hand, the count
-/// and *Review* stay.
+/// [`APPROVALS_ASKS_MIN`] and then drops out, the time drops out, and later the words beside the count;
+/// the hand, the count and *Review* stay.
 pub fn approvals(
   ctx: &Ctx,
   (pending, dialog): (&[ShownApproval], &[ShownApproval]),
@@ -69,7 +69,7 @@ pub fn approvals(
   let middle = item_middle("status-approvals-asks")
     .flex_shrink(1.0)
     .shrink_order(give_way::ASKS)
-    .min_width(Dimension::Px(APPROVALS_ASKS_MIN))
+    .shrink_drop_below(APPROVALS_ASKS_MIN)
     .background(PaletteColor::SurfaceRaised)
     .child(truncated_label(&detail, PaletteColor::TextPrimary));
   // The end closes the item; its time drops out whole.

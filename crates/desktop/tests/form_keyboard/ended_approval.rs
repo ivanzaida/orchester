@@ -189,8 +189,8 @@ fn ended_approval_waiting_parts_give_way_in_order() {
   desktop.pass();
   assert_whole(&mut desktop, &[" approval waiting", " · Run 1 · KON-1"]);
   assert!(time_shown(&mut desktop), "the time shows at 1600");
-  // Without auto-approval, at 960 the words after the count and what the request asks (at least its
-  // minimum) show; the time gives way before the right group does.
+  // Without auto-approval, at 960 the words after the count show; what the request asks shows with at
+  // least its minimum, or has dropped out before the count's words would (the time goes before them).
   desktop.click("task-auto-approve");
   desktop.wait_until("auto-approval is off", |desktop| !has(desktop, "status-auto-approving"));
   desktop.tree.resize(960, 700);
@@ -199,7 +199,6 @@ fn ended_approval_waiting_parts_give_way_in_order() {
   assert_no_stub(&mut desktop);
   let asks = desktop.bounds("status-approvals-asks");
   let review = desktop.bounds("status-approvals-review");
-  assert!(asks.width >= APPROVALS_ASKS_MIN, "what it asks has {} px", asks.width);
   assert!(
     asks.x + asks.width <= review.x + 0.5,
     "what it asks stays before Review"
@@ -211,12 +210,16 @@ fn time_shown(desktop: &mut Desktop) -> bool {
   desktop.bounds("status-approvals-time").width > TIME_PART_PADDING
 }
 
-/// No text of the status bar is cut to a stub: only what the request asks may trim its end, and never
-/// below its minimum.
+/// No text of the status bar is cut to a stub: only what the request asks may trim its end, never below
+/// its minimum; below it, it drops out.
 fn assert_no_stub(desktop: &mut Desktop) {
   let agents = desktop.bounds("status-agents");
   let asks = desktop.bounds("status-approvals-asks");
-  assert!(asks.width >= APPROVALS_ASKS_MIN, "what it asks has {} px", asks.width);
+  assert!(
+    asks.width == 0.0 || asks.width >= APPROVALS_ASKS_MIN,
+    "what it asks has {} px",
+    asks.width
+  );
   let layout = desktop.tree.last_layout().expect("laid out").clone();
   for quad in desktop.tree.resolve_quads(&layout) {
     if let QuadContent::Text { text, .. } = &quad.content {
