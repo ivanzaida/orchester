@@ -15,7 +15,7 @@ use orchester_core::{
     RepositoryAccess,
   },
   resource::StepKey,
-  run::{PendingToolApproval, Run, RunStatus, StepStatus, Stuck},
+  run::{ApprovalAnswer, PendingToolApproval, Run, RunStatus, StepStatus},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -23,9 +23,7 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
-use self::support::{
-  Setup, TestProject, deny_until_settled, git, pending_approval, project, reported, scheduler, settled, wait_for,
-};
+use self::support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, settled, wait_for};
 
 fn listed(repository: RepositoryAccess, entries: &[&str]) -> AgentPermissions {
   let entries = entries
@@ -71,17 +69,14 @@ impl Started {
     pending_approval(self.project.repo.path(), &mut self.events, self.id).await
   }
 
-  async fn decide(&mut self, request: PendingToolApproval, approve: bool) -> Run {
+  async fn decide(&mut self, request: PendingToolApproval, answer: ApprovalAnswer) -> Run {
     self
       .scheduler
-      .decide_tool_approval(self.id, request.id, approve)
+      .decide_tool_approval(self.id, request.id, answer)
       .await
       .expect("decided");
-    if approve {
-      return self.ended().await;
-    }
-    // A denied turn that ends without a result restarts its step, which asks again.
-    deny_until_settled(&self.scheduler, self.project.repo.path(), &mut self.events, self.id).await
+    // A denial tells the agent, which goes on: the run settles as after an approval.
+    self.ended().await
   }
 
   async fn ended(&mut self) -> Run {
@@ -144,7 +139,7 @@ async fn claude_unlisted_command_asks_and_runs_once_when_approved() {
   assert_eq!(request.action, "pnpm build");
   assert!(request.id.ends_with(":toolu_run"), "{}", request.id);
   assert_eq!(started.readme(), "hi\n", "nothing runs before the decision");
-  let run = started.decide(request, true).await;
+  let run = started.decide(request, ApprovalAnswer::Once).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(started.reported("permission: "), ["toolu_run allow"]);
   assert_eq!(
@@ -160,20 +155,21 @@ async fn claude_unlisted_command_asks_and_runs_once_when_approved() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn claude_unlisted_command_denied_fails_the_step() {
+async fn claude_unlisted_command_denied_tells_the_agent_and_goes_on() {
   let mut started = Started::new("Run `pnpm build`.", listed(RepositoryAccess::Write, &["git"])).await;
   let request = started.pending().await;
-  let run = started.decide(request, false).await;
-  assert!(
-    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
-    "{:?}",
-    run.status()
-  );
+  let run = started.decide(request, ApprovalAnswer::Deny).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
   let implement = run
     .latest_execution(&StepKey::new("implement").expect("key"))
     .expect("the step ran");
-  assert_eq!(implement.status(), StepStatus::Failed);
-  assert!(!started.readme().contains("approved"));
+  assert_eq!(implement.status(), StepStatus::Passed);
+  assert_eq!(
+    started.reported("told: "),
+    ["Denied by the person reviewing this run. Continue without it."]
+  );
+  let readme = started.readme();
+  assert!(!readme.contains("approved") && readme.contains("went on"), "{readme}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -186,7 +182,7 @@ async fn claude_unlisted_expansions_and_compound_commands_ask() {
     let mut started = Started::new(brief, listed(RepositoryAccess::Write, &["git"])).await;
     let request = started.pending().await;
     assert_eq!(request.action, command);
-    started.decide(request, false).await;
+    started.decide(request, ApprovalAnswer::Deny).await;
   }
   let mut started = Started::new("Run `git status | git log`.", listed(RepositoryAccess::Write, &["git"])).await;
   assert_eq!(started.ended().await.status(), &RunStatus::Succeeded);
@@ -215,7 +211,7 @@ async fn claude_unlisted_file_commands_run_listed_forms_and_ask_for_others() {
     let mut started = Started::new(brief, listed(RepositoryAccess::Write, &entries)).await;
     let request = started.pending().await;
     assert_eq!(request.action, command, "{brief}");
-    started.decide(request, false).await;
+    started.decide(request, ApprovalAnswer::Deny).await;
   }
 }
 
@@ -241,10 +237,7 @@ async fn claude_unlisted_command_in_a_read_only_step_asks() {
     .expect("recorded");
   assert_eq!(launched.permissions().repository(), RepositoryAccess::ReadOnly);
   assert_eq!(launched.outside_commands(), Some(OutsideCommands::PermissionPrompt));
-  let run = started.decide(request, false).await;
-  assert!(
-    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
-    "{:?}",
-    run.status()
-  );
+  let run = started.decide(request, ApprovalAnswer::Deny).await;
+  assert!(!matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());
+  assert_eq!(started.reported("told: ").len(), 1);
 }

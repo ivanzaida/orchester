@@ -76,6 +76,8 @@ pub const RADIUS_MARK: f32 = 2.0;
 pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 /// Corner radius of the *Open in new tab* button on a project switcher row (`NcJQ0`).
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
+/// Corner radius of a category chip (`EfQuh`).
+pub const RADIUS_CHIP: f32 = 5.0;
 /// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
 /// style (toolbar of `RrScB`).
 pub const RADIUS_SEGMENT: f32 = 5.0;

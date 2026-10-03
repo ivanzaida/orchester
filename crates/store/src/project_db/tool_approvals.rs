@@ -3,7 +3,7 @@
 
 use orchester_core::{
   id::{InvocationId, RunId},
-  run::{CommandShell, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision},
+  run::{CommandShell, DecidedBy, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision},
   time::Timestamp,
 };
 use rusqlite::params;
@@ -100,23 +100,23 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// Atomically removes the request from pending before sending its JSON-RPC response.
+  /// Atomically removes the request from pending before its answer is sent, recording who answered.
   pub fn claim_tool_approval(
     &mut self,
     run: RunId,
     id: &str,
-    approve: bool,
+    decided_by: DecidedBy,
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    let state = if approve {
+    let state = if decided_by.approves() {
       "dispatching_approval"
     } else {
       "dispatching_denial"
     };
     let changed = self.connection.execute(
-      "UPDATE tool_approvals SET state = ?3, decided_at = ?4 \
+      "UPDATE tool_approvals SET state = ?3, decided_at = ?4, decided_by = ?5 \
        WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
-      params![run.to_string(), id, state, at.unix_millis()],
+      params![run.to_string(), id, state, at.unix_millis(), decided_by.as_str()],
     )?;
     Ok(changed == 1)
   }

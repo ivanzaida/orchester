@@ -10,6 +10,7 @@
 
 mod activity;
 mod approval_arguments;
+mod approval_card;
 mod approval_value;
 mod brief;
 mod changes;
@@ -26,6 +27,7 @@ mod ready;
 mod retry_decision;
 mod retry_limit;
 mod run_again;
+mod run_approvals;
 mod summary;
 mod tab_state;
 mod tool_approval;
@@ -55,8 +57,10 @@ use orchester_core::{
   run::{RunStatus, TaskPhase},
   task::TaskStatus,
 };
+pub(in crate::screens) use tool_approval::command_line;
 pub(super) use tool_approval::modal as tool_approval_modal;
 
+pub(super) use self::activity::subject_key;
 use self::{
   changes::{ChangesProps, ChangesTab, RunChanges},
   controls::{ControlAction, RunControl, control_action, control_buttons},
@@ -247,15 +251,11 @@ impl Component for TaskScreen {
     let control_error = self.error_rows(ctx, &control);
     let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
     let ended = removal.into_iter().chain(again.action).collect();
-    let earlier_unreadable = detail
-      .earlier_unreadable
-      .iter()
-      .map(|run| unreadable::earlier_notice(ctx, run));
+    let heading = heading::with_notices(ctx, &detail, lost.is_some(), &props.project.repo_root);
     column
       .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
       .with_children(runner_notice)
-      .child(heading::heading(ctx, &detail, lost.is_some()))
-      .with_children(earlier_unreadable)
+      .with_children(heading)
       .with_children(control_error)
       .child(self.tabs(ctx, &props, files))
       .child(body)

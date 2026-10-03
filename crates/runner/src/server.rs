@@ -13,7 +13,7 @@ use std::{
 
 use orchester_core::{
   id::{RunId, StepExecutionId},
-  run::{InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  run::{ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
 use orchester_ipc::{
   Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
@@ -333,8 +333,8 @@ async fn answer(
     Command::DecideToolApproval {
       run,
       ref approval,
-      approve,
-    } => return answer_tool_approval(&later, handle, run, approval, approve),
+      ref answer,
+    } => return answer_tool_approval(&later, handle, run, approval, answer.clone()),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -342,10 +342,16 @@ async fn answer(
   Answer::Reply(Event::Reply { id, reply })
 }
 
-fn answer_tool_approval(later: &Later<'_>, scheduler: Scheduler, run: RunId, approval: &str, approve: bool) -> Answer {
+fn answer_tool_approval(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  run: RunId,
+  approval: &str,
+  answer: ApprovalAnswer,
+) -> Answer {
   let approval = approval.to_owned();
   later.answer(run, async move {
-    scheduler.decide_tool_approval(run, approval, approve).await
+    scheduler.decide_tool_approval(run, approval, answer).await
   })
 }
 

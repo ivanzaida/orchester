@@ -22,7 +22,7 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-use super::{ProjectNav, TasksState, runner::connection_notice};
+use super::{ProjectNav, TasksState, approval_queue::ApprovalQueue, runner::connection_notice};
 use crate::{
   display,
   navigation::route::Page,
@@ -94,6 +94,7 @@ impl Component for OverviewScreen {
     } else {
       ExtraSpacing::Rail.role()
     };
+    let queue = ctx.use_context::<ApprovalQueue>();
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -126,7 +127,12 @@ impl Component for OverviewScreen {
               .flex(1.0)
               .spacing(SpacingSize::Section)
               .child(task_list::task_list(ctx, tasks, props.tab, &self.nav))
-              .child(attention::attention(ctx, &props.open, tasks, &self.nav)),
+              .child(attention::attention(
+                ctx,
+                &props.open,
+                tasks,
+                (&self.nav, queue.as_ref()),
+              )),
           )
       }
     };

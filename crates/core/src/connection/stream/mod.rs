@@ -147,6 +147,15 @@ pub enum AgentEvent {
     server: String,
     tool: String,
   },
+  /// A request about call `item` (a command, or `action` of MCP server `server`) was answered as
+  /// `decision` says: by a person, by a rule of the run, or by auto-approval. The call's own entry
+  /// carries the mark; a denial says what the agent was told.
+  ToolDecided {
+    item: String,
+    server: String,
+    action: String,
+    decision: crate::run::ToolDecision,
+  },
   /// A tool step started the program of command tool `tool`; `command` is its command line as
   /// [`crate::resource::CommandAction::command_line`] writes it.
   ToolCommandStarted {
@@ -273,6 +282,7 @@ impl AgentEvent {
       Self::McpExemptionNotApplied { .. } => "mcp_exemption_not_applied",
       Self::McpToolDeclined { .. } => "mcp_tool_declined",
       Self::McpToolFinished { .. } => "mcp_tool_finished",
+      Self::ToolDecided { .. } => "tool_decided",
       Self::ToolCommandStarted { .. } => "tool_command_started",
       Self::ToolCommandFinished { .. } => "tool_command_finished",
     }

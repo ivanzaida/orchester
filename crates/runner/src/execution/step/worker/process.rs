@@ -61,7 +61,7 @@ impl Worker {
           None => steering = false,
         },
         Some(asked) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => {
-          self.request_claude_approval(&mut watch, asked)?;
+          self.request_claude_approval(&mut watch, asked).await?;
           self.stop_at_checkpoint(&mut watch);
         },
         // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
@@ -186,7 +186,7 @@ impl Worker {
   async fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
     match update {
       Update::Activity(event) => self.observe(watch, event),
-      Update::Approval(request) => self.request_approval(watch, request),
+      Update::Approval(request) => self.request_approval(watch, request).await,
       Update::Declined(response) => {
         // A process that cannot take the answer is ending; its exit says how.
         if let Err(error) = self.process.send_line(response).await {

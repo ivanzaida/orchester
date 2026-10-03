@@ -466,6 +466,8 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
     None => meta,
   };
+  // A person's Deny: what the agent was told says why the command did not run.
+  let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
   Shown {
     glyph,
     title: preview_title(&entry.command),

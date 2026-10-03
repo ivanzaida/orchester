@@ -20,6 +20,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::connection::EngineVendor;
 
+pub(in crate::screens::project) use self::mcp_call::{category_key, subject_key};
 pub(super) use self::{
   entry::{EntryProps, EntryView},
   footer::{LiveFooter, LiveFooterProps},

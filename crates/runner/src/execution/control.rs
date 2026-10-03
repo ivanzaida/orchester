@@ -1,7 +1,10 @@
 //! Requests the scheduler hands to the task that executes a run. The task owns the run's state,
 //! so every change to an executing run goes through it.
 
-use orchester_core::{id::ResourceId, run::InterruptCause};
+use orchester_core::{
+  id::ResourceId,
+  run::{ApprovalAnswer, InterruptCause},
+};
 use orchester_ipc::Rejection;
 use tokio::sync::oneshot;
 
@@ -21,8 +24,12 @@ pub(super) enum Control {
   KeepPermissions(ResourceId, Ack),
   /// Record a person's decision on a plan; answered once it is recorded.
   DecidePlan(PlanRequest, Ack),
-  /// Send a one-call tool decision to the worker that owns the pending App Server request.
-  DecideToolApproval { approval: String, approve: bool, ack: Ack },
+  /// Send a person's answer to the worker that owns the pending tool request.
+  DecideToolApproval {
+    approval: String,
+    answer: ApprovalAnswer,
+    ack: Ack,
+  },
   /// People's messages were stored; answered at once, delivered at the next boundary.
   DeliverMessages(Ack),
   /// The runner stops: end the agent and record the run as interrupted.

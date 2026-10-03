@@ -28,6 +28,7 @@ pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
   index_use::IndexUses,
   permissions::run_permissions,
+  run_approvals::RunApprovals,
   unreadable::{EarlierRun, Unreadable},
 };
 
@@ -91,6 +92,8 @@ pub struct RunView {
   /// When each of its attempts started, and whether a person's decision started it; empty for a
   /// run of one attempt.
   pub attempt_starts: Vec<AttemptStart>,
+  /// Its auto-approval, its rules from the wider answers and how its requests were answered.
+  pub approvals: RunApprovals,
 }
 
 impl RunView {
@@ -353,6 +356,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     attempt_starts,
     first_run,
     group_hold,
+    approvals: RunApprovals::read(db, &run)?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
     outputs: db.step_outputs(run.id())?,

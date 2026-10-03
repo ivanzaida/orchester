@@ -6,11 +6,12 @@ use orchester_core::{
   connection::AgentProvider,
   resource::{RepositoryAccess, Step, StepKind},
 };
+use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, fake_claude, init_repository, programs, seed_agent},
+  task_run::{agent_step, create_and_run, fake_claude, has, init_repository, programs, seed_agent},
 };
 
 /// A step that only reads, doing what `instructions` tell the fake CLI.
@@ -59,7 +60,7 @@ fn command_approvals_claude_unlisted_command_in_a_writing_step_asks_without_the_
   assert!(shows(
     &mut desktop,
     "tool-approval-dialog",
-    "Claude Code runs an approved command outside any sandbox."
+    "policy asks you about commands that change the worktree"
   ));
   assert!(!shows(&mut desktop, "tool-approval-dialog", "This step only reads"));
 }
@@ -74,4 +75,26 @@ fn command_approvals_codex_escalation_in_a_read_only_step_says_it_can_change_fil
     "Do you want to reach the package registry?"
   ));
   assert!(shows(&mut desktop, "tool-approval-dialog", CODEX_READ_ONLY));
+}
+
+#[test]
+fn command_approvals_approve_similar_from_the_conversation_card() {
+  let mut desktop = approval_of(AgentProvider::ClaudeCodeCli, "Run `cargo add serde` twice.", false);
+  let run = ProjectDb::open(desktop.repo())
+    .expect("open")
+    .pending_tool_approvals_all()
+    .expect("requests")[0]
+    .run;
+  desktop.press("tool-approval-decide-later");
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, "tool-approval-dialog"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-approval-similar");
+  // The card offers the dialog's answers, Always allow… among them.
+  assert!(has(&mut desktop, "conversation-approval-always"));
+  desktop.click("conversation-approval-similar");
+  desktop.wait_until("the similar rule answers the next request", |desktop| {
+    let db = ProjectDb::open(desktop.repo()).expect("open");
+    db.approval_rules(run).expect("rules").len() == 1 && db.pending_tool_approvals(run).expect("requests").is_empty()
+  });
+  assert!(!has(&mut desktop, "tool-approval-dialog"));
 }

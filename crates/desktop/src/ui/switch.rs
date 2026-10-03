@@ -26,6 +26,8 @@ pub struct Switch {
   emphasized: bool,
   detail: Option<Arc<str>>,
   note: Option<Arc<str>>,
+  /// Where the focus ring of an option is drawn.
+  ring: Ring,
 }
 
 impl Switch {
@@ -38,7 +40,15 @@ impl Switch {
       emphasized: false,
       detail: None,
       note: None,
+      ring: Ring::Outer,
     }
+  }
+
+  /// The option's focus ring on its edge, for a switch in a panel that clips what reaches past it
+  /// (the run's Approvals in its scrolling panel).
+  pub const fn inset_ring(mut self) -> Self {
+    self.ring = Ring::Inset;
+    self
   }
 
   /// A control beside a separate setting label (`UCOuw`); retain its name in the MCP tree.
@@ -157,7 +167,7 @@ impl Switch {
           .variant(ExtraTypography::CellLabel.role())
           .width(Dimension::Pct(100.0)),
       );
-    keyboard_stop(Button::empty().button(), Ring::Outer)
+    keyboard_stop(Button::empty().button(), self.ring)
       .id(self.id.clone())
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Stack.role())

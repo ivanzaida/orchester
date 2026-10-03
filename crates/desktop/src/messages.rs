@@ -89,6 +89,7 @@ pub fn store_error(error: &StoreError) -> Message {
       Message::new("agents.permissions.publish.connectionMissing")
     }
     StoreError::Publish(PublishError::Permissions(_)) => Message::new("agents.permissions.publish.notEnforceable"),
+    StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
   }
 }
 

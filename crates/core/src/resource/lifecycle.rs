@@ -114,7 +114,8 @@ impl VersionNumber {
     self.0.get()
   }
 
-  fn next(self) -> Option<Self> {
+  /// The version after this one; `None` past the last number.
+  pub fn next(self) -> Option<Self> {
     self.0.checked_add(1).map(Self)
   }
 }

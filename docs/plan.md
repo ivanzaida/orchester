@@ -378,6 +378,44 @@ admits it) and, to keep naming the version in use, this line.
 
 ## Done
 
+Approval choices, waiting requests and auto-approval · branch `claude/approval-choices` (done 2026-10-03)
+
+- **Done 2026-10-03: merged after the security reviews, code reviews and design verification passed.** Built
+  2026-10-02 (user decisions of that day). The security review made the command classifier fail closed (per-program
+  option allow-lists; unknown programs, options, variables set before a command and unread quoting are Unknown;
+  Approve similar never widens and never covers destructive or credential-reading parts; Always allow offers only
+  prefixes that stay alike) and, by the user's decision of 2026-10-03, auto-approval asks for network commands. The
+  design rounds added the dialog's subject line (category or server chip, the asking profile's real setting, waiting
+  since), the classifier's reason, the waiting step row, and the Conversation card's four answers through the
+  dialog's own path. Four answers for commands and MCP tools alike, and auto-approval:
+  `docs/interactive-tool-approvals.md`, "Answers and waiting requests"; design doc, "Approval choices and waiting
+  requests" (with the auto-approval and network decisions and the states built without frames).
+- **Accepted deviation (user, 2026-10-03):** the command's Always allow step leaves out `NV6xJ`'s *A denied Network
+  still wins* card until a category can be set to Deny.
+- Core: `permission::category` (commands split into simple commands, bash and PowerShell quoting, shells followed;
+  categories by program, subcommand, options and written paths; credential reads and installs noted),
+  `run::answer` (`ApprovalAnswer`, `DecidedBy`, run rules and their matching, Always allow targets, `auto_verdict`,
+  `denial_message`), `AgentPermissions::auto_approve` (profile version). Store migration `approval_choices`
+  (`tool_approvals.decided_by`/`rule_id`, `approval_rules`, `runs.auto_approve`; rules survive a runner restart),
+  `publish_allowed_command` (migration 38, after ORC-61's steering). IPC protocol **12** (`DecideToolApproval { answer }`; master is at 11).
+  Runner answers itself what a rule, Always allow or auto-approval covers, and a
+  person's Deny tells the agent and lets the turn go on (Claude Code: deny with the message; Codex: `decline`).
+- Desktop: the 720 dialog with *1 of N* and ‹ ›, the wider answers as tiles plus *Approve everything in this run*,
+  the scope of Approve similar on hover or focus, the Always allow step, Decide later (Esc), Deny's text; Needs you
+  counts waiting requests; status bar approvals with Review and *Auto-approving* with Stop; the Summary's Review
+  request card, the run's Approvals section (switch, counts, rules with Revoke, always allowed), *Auto-approving*
+  under the task heading; the profile's *Approve automatically (don't ask me)*; activity marks.
+- Not built: the per-category Allow / Ask me / Deny policy of "Command categories and approval policy" (so no
+  category can be Deny, and the Always allow step leaves out *A denied Network still wins*); Run temp (temporary
+  files count as outside the worktree); Undo of a revoked rule; answering requests already waiting when auto-approval is switched on (the dialog
+  says such a request came before it was on). A Codex rule prompt that offers
+  only `cancel` interrupts the turn on Deny, as Codex does.
+- Tests: `cargo test -p orchester-core --test command_categories command_categories`, `--test approval_answers
+  approval_answers`, `--test claude_approvals claude_approvals`; `-p orchester-store --test approval_rules
+  approval_rules`; `-p orchester-runner --features test-agent --test approval_choices approval_choices` (and the
+  updated `claude_approvals`, `claude_unlisted`, `codex_escalations`, `command_approvals`); `-p orchester-desktop
+  --test form_keyboard approval_choices_` and `tool_approval`; `-p orchester-core --test command_fail_closed command_fail_closed`.
+
 ORC-61 · Conversation merged with Activity, Send now and following live (absorbs ORC-42 and ORC-36) · branch
 `claude/orc61` (from run #21's `orchester/orc-61-run-1`)
 

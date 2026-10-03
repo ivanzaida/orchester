@@ -3,6 +3,7 @@
 //! worktree — a new session,
 //! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
 
+mod answer;
 mod app_server;
 mod approval;
 mod claude_approval;
@@ -15,11 +16,14 @@ mod start;
 mod stderr;
 pub(super) mod worker;
 
+use std::path::{Path, PathBuf};
+
 use orchester_core::{
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
+  permission::{LaunchPermissions, category::CommandScope},
   resource::ModelId,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore},
@@ -300,6 +304,8 @@ impl RunTask {
     let (steers, steered) = mpsc::unbounded_channel();
     let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
     let worker = Worker {
+      scope: command_scope(&self.root, workspace.path(), &start.permissions),
+      profile: self.profile_of(execution),
       root: self.root.clone(),
       invocation: invocation.clone(),
       transport: match start.app_server {
@@ -469,4 +475,22 @@ impl RunTask {
     self.board.release(execution);
     self.fail(execution, failure)
   }
+}
+
+/// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
+/// the worktree and the extra writable folders it was given, as written (relative to the repository
+/// `root`), for the host's user.
+fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> CommandScope {
+  let writable: Vec<PathBuf> = launch
+    .permissions()
+    .granted_folders()
+    .map(|folders| {
+      folders
+        .entries()
+        .iter()
+        .map(|folder| folder.lexical_path(root))
+        .collect()
+    })
+    .unwrap_or_default();
+  CommandScope::on_host(worktree, &writable)
 }

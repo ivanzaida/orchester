@@ -28,8 +28,8 @@ use std::{
 use orchester_core::{
   connection::{
     claude_approval::{
-      ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, prompt_result,
-      refusal,
+      ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, not_answered,
+      prompt_result, refusal,
     },
     stream::RunnerProblem,
   },
@@ -63,7 +63,25 @@ const TOKEN_LINE: u64 = 128;
 /// A call waiting for a person, and where the decision goes.
 pub(in super::super) struct Asked {
   pub(in super::super) request: ClaudeApprovalRequest,
-  pub(in super::super) reply: oneshot::Sender<bool>,
+  pub(in super::super) reply: oneshot::Sender<PromptAnswer>,
+}
+
+/// The answer on one call: it runs, or it does not and the agent is told this and goes on.
+pub(in super::super) enum PromptAnswer {
+  Allow,
+  Deny(String),
+  /// Asked about before: denied without asking again.
+  Repeated,
+}
+
+impl PromptAnswer {
+  fn result(&self) -> String {
+    match self {
+      Self::Allow => prompt_result(None),
+      Self::Deny(told) => prompt_result(Some(told)),
+      Self::Repeated => not_answered(),
+    }
+  }
 }
 
 /// The permission prompt of one Claude Code invocation.
@@ -220,11 +238,11 @@ impl Relay {
   async fn ask(&self, request: ClaudeApprovalRequest, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
     let (reply, decision) = oneshot::channel();
     if self.requests.send(Asked { request, reply }).is_err() {
-      return Some(prompt_result(false));
+      return Some(not_answered());
     }
     tokio::select! {
       // A dropped sender is a worker that ended without a decision: the call is denied.
-      decision = decision => Some(prompt_result(decision.unwrap_or(false))),
+      decision = decision => Some(decision.map_or_else(|_| not_answered(), |answer| answer.result())),
       // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait.
       _ = lines.next_line() => None,
     }

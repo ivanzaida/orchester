@@ -2,7 +2,7 @@
 //! Attempt 1 · Implement · Builder working", and the words and icons for step states. A run ready
 //! for review shows its status label and when it finished instead (`ruBkY` in 02.13 `vpgrJ`).
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -15,10 +15,15 @@ use lurq::{
 };
 use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, Stuck, TaskPhase};
 
-use super::super::page;
+use super::{
+  super::page,
+  approval_card::waiting_request,
+  run_approvals::{AutoApprovingLine, AutoApprovingProps},
+};
 use crate::{
   display,
   tasks::{
+    approvals::ShownApproval,
     detail::{RunView, StepView, TaskDetail},
     unreadable::Unreadable,
   },
@@ -26,16 +31,80 @@ use crate::{
   ui::{icon::Icon, status_label::status_label},
 };
 
-/// `lost`: the run is recorded as running but no runner is connected, so it is interrupted.
-pub(super) fn heading(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Element {
+/// The heading, then a notice for each earlier run that cannot be read.
+pub(super) fn with_notices(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> Vec<Element> {
+  let heading = heading(ctx, detail, lost, repo_root);
+  std::iter::once(heading)
+    .chain(
+      detail
+        .earlier_unreadable
+        .iter()
+        .map(|run| super::unreadable::earlier_notice(ctx, run)),
+    )
+    .collect()
+}
+
+/// `lost`: the run is recorded as running but no runner is connected, so it is interrupted. While the
+/// run auto-approves, *Auto-approving* and *Stop* follow (`run_approvals`).
+fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> Element {
   let title = detail.task.details().title.as_str();
   if let Some(unreadable) = &detail.latest_unreadable {
     return page::heading(title, &unreadable_description(ctx, unreadable));
   }
-  match &detail.run {
-    Some(run) if *run.run.status() == RunStatus::Succeeded => ready_heading(ctx, title, run, detail.merge.is_some()),
+  let waiting = detail
+    .run
+    .as_ref()
+    .filter(|_| !lost)
+    .and_then(|run| waiting_request(ctx, run).map(|shown| (run, shown)));
+  let heading = match (&detail.run, waiting) {
+    (_, Some((run, shown))) => waiting_heading(ctx, title, run, &shown),
+    (Some(run), None) if *run.run.status() == RunStatus::Succeeded => {
+      ready_heading(ctx, title, run, detail.merge.is_some())
+    }
     _ => page::heading(title, &description(ctx, detail, lost)).id("task-heading"),
-  }
+  };
+  let auto = detail
+    .run
+    .as_ref()
+    .filter(|run| !run.run.status().is_terminal() && run.approvals.auto_approving());
+  let Some(run) = auto else {
+    return heading;
+  };
+  let line = ctx.mount_keyed::<AutoApprovingLine>(
+    &format!("task-auto-approving-{}", run.id()),
+    AutoApprovingProps {
+      run: run.id(),
+      repo_root: repo_root.to_path_buf(),
+    },
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(heading)
+    .child(line)
+    .into()
+}
+
+/// The title over "Needs you" and "Run 146 · Design review v2 · Design · Designer waits for your answer,
+/// 14:06" while the run's agent waits for a tool decision (`wSMj8` in `G0rzJy`).
+fn waiting_heading(ctx: &Ctx, title: &str, run: &RunView, shown: &ShownApproval) -> Element {
+  let step = run.step_of(shown.approval.execution).map_or("", |step| &*step.name);
+  let meta = ctx.t_args(
+    "runs.page.describe.waitsForAnswer",
+    [
+      ("run", run.run.number().get().to_string().as_str()),
+      ("pipeline", &*run.pipeline),
+      ("version", run.version.to_string().as_str()),
+      ("step", step),
+      ("agent", shown.approval.agent.as_str()),
+      ("time", display::clock(shown.approval.requested_at).as_str()),
+    ],
+  );
+  status_heading(
+    title,
+    (Icon::Hand, &ctx.t("runs.page.needsYou")),
+    &meta,
+    "task-waiting-meta",
+  )
 }
 
 /// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`);
@@ -56,6 +125,11 @@ fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element
       ("time", finished.as_str()),
     ],
   );
+  status_heading(title, (glyph, &status), &meta, "task-ready-meta")
+}
+
+/// The title over a status label and the run's line (`ruBkY`, `wSMj8`).
+fn status_heading(title: &str, (glyph, status): (Icon, &str), meta: &str, meta_id: &'static str) -> Element {
   Column::new()
     .id("task-heading")
     .width(Dimension::Pct(100.0))
@@ -68,13 +142,8 @@ fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element
       Row::new()
         .spacing(ExtraSpacing::Group.role())
         .align_items(Alignment::Center)
-        .child(status_label(glyph, &status))
-        .child(
-          Text::new(&meta)
-            .id("task-ready-meta")
-            .variant(TypographyStyle::Caption)
-            .nowrap(),
-        ),
+        .child(status_label(glyph, status))
+        .child(Text::new(meta).id(meta_id).variant(TypographyStyle::Caption).nowrap()),
     )
     .into()
 }

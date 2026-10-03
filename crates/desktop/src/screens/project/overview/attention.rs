@@ -1,25 +1,32 @@
-//! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — runs waiting for a
-//! plan decision (a review card, `dpeD7`), an answer to an agent's question (`Mt22P`, which opens
-//! the task's conversation), an approval or its own decision after its retries (`Np9kc`, 02.B6) — and
-//! the recent activity of the project's runs
-//! (`YJ8PV`, `mBkeJ` events). Each opens its task; they are outside any form, so pointer-only.
+//! Beside the overview's task list (`EKUWS`): what needs the user (`jWEn1`) — each tool request
+//! waiting for a decision, oldest first, with *Review*, which opens the approval dialog on it (`ZkOPf`),
+//! then runs waiting for a plan decision (a review card, `dpeD7`), an answer to an agent's question
+//! (`Mt22P`, which opens the task's conversation), another approval or its own decision after its retries
+//! (`Np9kc`, 02.B6) — and the recent activity of the project's runs (`YJ8PV`, `mBkeJ` events). Each opens its task;
+//! they are outside any form, so pointer-only.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 
-use super::super::{ProjectNav, task_rows::status_copy};
+use super::super::{
+  ProjectNav,
+  approval_queue::ApprovalQueue,
+  task::{command_line, subject_key},
+  task_rows::status_copy,
+};
 use crate::{
   display,
   navigation::route::{Page, TaskPageTab},
   tasks::{
+    approvals::ShownApproval,
     data::ProjectTasks,
     list::{AwaitedPlan, TaskRow},
     overview::{OverviewTab, RecentRun, activity_empty, figure, recent_runs},
@@ -43,17 +50,42 @@ const GLYPH_SIZE: f32 = 28.0;
 /// Waiting runs and recent events shown; the task list has the rest.
 const SHOWN: usize = 3;
 
-pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
-  let waiting = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, SHOWN);
-  let count = OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases);
-  let decisions: Vec<Element> = if waiting.is_empty() {
+pub(super) fn attention(
+  ctx: &Ctx,
+  open: &OpenProject,
+  tasks: &ProjectTasks,
+  (nav, queue): (&ProjectNav, Option<&ApprovalQueue>),
+) -> Element {
+  let requests: Vec<Element> = tasks
+    .pending_tool_approvals
+    .iter()
+    .take(SHOWN)
+    .map(|shown| request(ctx, shown, queue))
+    .collect();
+  // A task whose requests are listed is not listed again.
+  let asking: Vec<_> = tasks
+    .pending_tool_approvals
+    .iter()
+    .filter_map(|shown| shown.task_id)
+    .collect();
+  let waiting: Vec<TaskRow> = OverviewTab::NeedsYou
+    .rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, SHOWN)
+    .into_iter()
+    .filter(|row| !asking.contains(&row.id))
+    .take(SHOWN.saturating_sub(requests.len()))
+    .collect();
+  let count = tasks.needs_you();
+  let decisions: Vec<Element> = if waiting.is_empty() && requests.is_empty() {
     vec![
       Text::new(&ctx.t("overview.attention.empty"))
         .variant(ExtraTypography::Detail.role())
         .into(),
     ]
   } else {
-    waiting.iter().map(|row| decision(ctx, row, nav)).collect()
+    requests
+      .into_iter()
+      .chain(waiting.iter().map(|row| decision(ctx, row, nav)))
+      .collect()
   };
   Column::new()
     .id("overview-attention")
@@ -75,6 +107,86 @@ pub(super) fn attention(ctx: &Ctx, open: &OpenProject, tasks: &ProjectTasks, nav
     )
     .with_children(decisions)
     .child(activity(ctx, open, tasks, nav))
+    .into()
+}
+
+/// A tool request waiting for a decision (`ZkOPf`): who asks for what, its task, run, step and since
+/// when, and *Review*, which opens the approval dialog on it.
+fn request(ctx: &Ctx, shown: &ShownApproval, queue: Option<&ApprovalQueue>) -> Element {
+  let approval = &shown.approval;
+  let title = if approval.command {
+    let command = command_line(ctx, shown);
+    ctx.t_args(
+      "overview.attention.requestCommand",
+      [("agent", approval.agent.as_str()), ("command", &*command)],
+    )
+  } else {
+    ctx.t_args(
+      "overview.attention.requestTool",
+      [
+        ("agent", approval.agent.as_str()),
+        ("server", approval.server.as_str()),
+        ("tool", approval.action.as_str()),
+      ],
+    )
+  };
+  let category = shown
+    .choices
+    .category
+    .map(|category| ctx.t(subject_key(category, shown.choices.secrets)))
+    .unwrap_or_default();
+  let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
+  let since = display::clock(approval.requested_at);
+  let names = [
+    ("task", shown.task.as_deref().unwrap_or_default()),
+    ("run", run.as_str()),
+    ("step", shown.step.as_deref().unwrap_or_default()),
+    ("category", &*category),
+    ("time", since.as_str()),
+  ];
+  let context = if approval.command {
+    ctx.t_args("overview.attention.requestContextCommand", names)
+  } else {
+    ctx.t_args("overview.attention.requestContext", names)
+  };
+  let review = ActionButton::new(ctx.t("overview.attention.review"))
+    .id(format!("overview-request-review-{}", approval.id))
+    .icon(Icon::Hand)
+    .fill_width();
+  let review = match queue {
+    Some(queue) => {
+      let (queue, id) = (queue.clone(), approval.id.clone());
+      review.on_click(move || queue.review(&id))
+    }
+    None => review,
+  };
+  Column::new()
+    .id(format!("overview-request-{}", approval.id))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Stack.role())
+    .child(Text::new(&ctx.t("overview.attention.approval")).variant(ExtraTypography::Overline.role()))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Start)
+        .child(icon(Icon::Hand, IconSize::Small, PaletteColor::TextPrimary))
+        .child(
+          Text::new(&title)
+            .variant(TypographyStyle::Label)
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .flex(1.0),
+        ),
+    )
+    .child(
+      Text::new(&context)
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(review.render(ctx))
     .into()
 }
 

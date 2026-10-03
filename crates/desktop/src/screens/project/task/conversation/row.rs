@@ -13,7 +13,8 @@ use lurq::{
 use super::{
   super::activity::{EntryProps, EntryView, mark_row, step_header},
   Timeline,
-  cards::{self, ApprovalCardProps, ApprovalCardView, PlanCardProps, PlanCardView},
+  approval_card::{ApprovalCardProps, ApprovalCardView},
+  cards::{self, PlanCardProps, PlanCardView},
   column, group,
   message::{self, PersonMessageProps, PersonMessageView},
 };

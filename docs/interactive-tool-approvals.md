@@ -20,7 +20,9 @@ write access. Codex 0.159.2's instructions to the model name both (network while
 outside the writable roots, GUI apps, destructive commands it was not asked for). **Approve once**
 answers `accept` for exactly that request: Codex runs that one command outside the sandbox; no
 session grant, `acceptForSession`, execpolicy amendment or network policy amendment is ever chosen.
-**Deny** prevents the command and fails the step visibly. A request with an additional permission
+**Deny** answers `decline` (or, where Codex offers only `cancel`, `cancel`): the command does not run, Codex tells
+its model in its own words that it was declined, and the turn goes on; the step does not fail
+([Answers](#answers-and-waiting-requests)). A request with an additional permission
 overlay (`with_additional_permissions`, off unless `features.exec_permission_approvals` is enabled)
 and unsupported request forms fail the step. Two requests are declined at once without a person: a
 file change outside the writable roots (`item/fileChange/requestApproval`: edits keep their rules,
@@ -68,7 +70,8 @@ The verified Codex 0.159 path for an ordinary MCP tool emits `item/started` with
 `mcpToolCall`, followed by `mcpServer/elicitation/request` with an empty confirmation form.
 Orchester correlates its thread, turn and server with exactly one active tool call. A real
 disposable write tool was independently approved and denied through the desktop and runner;
-approval resumed the same session and wrote once, while denial failed the step without writing.
+approval resumed the same session and wrote once, while denial (then still failing the step) wrote nothing. Since
+2026-10-02 a denial declines the call and the turn goes on.
 
 [Codex App Server also documents app tool approvals](https://learn.chatgpt.com/docs/app-server#mcp-tool-call-approvals-apps)
 as Accept, Decline or Cancel questions. The local schema names that request
@@ -130,6 +133,70 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
   fields; the Connections inspector lists the names after the variables, or *None*; while the profile asks before MCP
   actions, its enforcement panel has a row per server (*pencil: 6 tools run without asking*, with the CLI's rule), and
   the pipeline step inspector repeats the line under *Ask when a tool needs approval*.
+
+## Answers and waiting requests
+
+Built 2026-10-02 from the user's decisions of that day (design doc, "Approval choices and waiting requests";
+frames `kpuQj`, `NV6xJ`, `XKja4`, `bjrgu`, `G0rzJy`, `ZkOPf`). A person answers a waiting request with one of
+`orchester_core::run::ApprovalAnswer`, for commands and MCP calls alike, through `Command::DecideToolApproval`
+(IPC protocol 12). Towards the agent's CLI every answer still answers that one request: no session grant,
+`acceptForSession`, `updatedPermissions` or execpolicy amendment is ever given. What a wider answer promises
+Orchester keeps itself, and before a request waits for a person the runner answers it itself when that covers it
+(`step/answer.rs`), recording who answered (`tool_approvals.decided_by`, `DecidedBy`) and marking the call in the
+activity (`AgentEvent::ToolDecided`):
+
+- **Approve once**: this request only.
+- **Approve similar in this run** adds a run rule (`approval_rules`, `RuleScope`). For a command it names the
+  program and subcommand of its asking part in that part's category (`cargo add` in Network, `cp` in Outside write;
+  `permission::category`); a later command is answered when a rule covers one of its parts and every other part is
+  covered too or is a plain read (Read-only, reading no credential location, installing nothing). A rule never
+  covers a part that rewrites history, deletes outside the worktree, reads a credential or is Unknown, and covers a
+  part that reaches outside the worktree only in the folders the approved part reached (`cp … /tmp/x` covers
+  `cp … /tmp/y`, not `cp … ~/AppData/…`); `ssh`, `scp` and `rsync` make none. Unavailable for a command Orchester
+  cannot read to the end, with several asking parts, that rewrites history or deletes outside, or reads a credential. For an MCP call it names the server and
+  the tool, any arguments. Rules are read at each request, so they apply at once, in the current invocation too;
+  later answers are marked *approved by similar rule*. The run's Summary lists them with **Revoke** (the desktop
+  marks the rule revoked; the next request asks again); calls approved before keep their mark. Rules end with the
+  run and survive a runner restart.
+- **Always allow…** shows a second step with exactly what is added. A command's prefix (program and subcommand, or
+  the whole command) goes into the profile's Allowed commands: the runner publishes the profile's latest version
+  with it as the next version and adds it to an unsaved draft, which is then based on that version
+  (`ProjectDb::publish_allowed_command`, one transaction). The run keeps its pinned version and keeps the prefix as
+  a rule (*always allowed*), until it ends. It is unavailable for a profile that asks before every command or whose
+  CLI keeps no list (Codex), for History / destructive and Unknown commands and those that read a credential, and for a
+  prefix that would also allow a more dangerous form: only builds, tests and installs (which run the worktree's or
+  the packages' code whatever their arguments) and the git subcommands that stay in the repository (`git status`,
+  `git add`, …) offer one; `git config`, `gh`, `git fetch`, `curl`, `cat`, `rm`, … do not. An MCP tool goes into its server's Tools that run without asking (a
+  connection setting, saved at once); later calls of the current invocation, whose CLI read the list when it
+  started, are answered by the runner (*always allowed*), and later invocations get the CLI rule.
+- **Approve everything in this run** turns on the run's auto-approval (`runs.auto_approve`), below.
+- **Deny**: the call does not run; the agent is told and continues (Claude Code: the message; Codex: `decline`).
+  The activity reads *denied by you · the agent continued* with what the agent was told. Checked 2026-10-02 with
+  the real CLIs against local mocks of the model APIs (no model; scripts in `.tmp/approval-choices/`): Claude Code
+  2.1.286 handed the agent the message as an error tool result, ran nothing, and the turn ended with the model's
+  final message (`permission_denials` lists the call); Codex 0.159.2 told its model `user rejected MCP tool call`
+  for an MCP call and `exec_command failed: CreateProcess { message: "Rejected(\"rejected by user\")" }` for an
+  escalated command (`run::codex_denial`), ran nothing, and the turn completed.
+
+**Auto-approval** (user decisions 2026-10-02 and 2026-10-03) is a run's own choice (*Approve everything in this run*, the switch in
+the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the
+profile setting *Approve automatically (don't ask me)* (`AgentPermissions::auto_approve`, part of the profile
+version). It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
+`run::auto_verdict` leaves to a person: a command that reaches the network, a write, move or delete outside the worktree and its writable folders (the
+temporary folder too: Run temp is not told apart yet), a read of a credential location (dot files and folders of
+the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, everything under `AppData` and `Library` but
+the temporary folder (CLI tokens, the Windows credential folders, the macOS keychains, browser and editor
+profiles), or a credential store program), an install of software or packages (`npm install`, `cargo add`,
+`pip install`, `npx`, global installs, …), History / destructive commands (whose category cannot be allowed) and
+anything not read to the end. What the step's permissions refuse never reaches a person, so it stays refused.
+Answers read *auto-approved · <category>* (or the MCP tool). The per-category Allow / Ask me / Deny policy of
+"Command categories and approval policy" is not built, so no category can be set to Deny yet.
+
+**Waiting requests.** The dialog shows one request at a time, oldest first, with *1 of 3 waiting* and ‹ ›.
+*Decide later* (or Esc) closes it and answers nothing: the agent keeps waiting with its active time stopped, the
+request stays in *Needs you* (which counts each waiting request, the dialog open or not), on the task page (*Review
+request*) and in the status bar (*3 approvals waiting · … · Review*). While a request put off waits, a new one does
+not open the dialog by itself; a click on the backdrop does nothing.
 
 ## Codex profile
 
@@ -237,7 +304,10 @@ server's own approval hints to the prompt; only the tools a server lists to run 
 
 **Approve once** answers `{"behavior":"allow","updatedInput":{}}`: the call runs with its own input
 (2.1.89 keeps the input when `updatedInput` is empty), no `updatedPermissions` rule is returned, and
-the input is never echoed back. **Deny** answers `{"behavior":"deny"}` and fails the step, as for
+the input is never echoed back. **Deny** answers `{"behavior":"deny","message":"…"}` with what the agent is told
+(`orchester_core::run::denial_message`: *Denied by the person reviewing this run. Continue without it.* for a
+command, *The person reviewing this run denied <server> <tool>. Continue without it.* for an MCP call) and no
+`interrupt`, so Claude Code hands the message to the agent as the tool's result and the turn goes on, as for
 Codex. Decisions use the same `tool_approvals` rows, ids (`<invocation>:<tool use id>`), claim and
 delivery states and the same "Needs you" modal. A tool use id is asked about once per invocation; a
 repeated call is denied without a prompt. A decision that does not match the waiting call, arrives

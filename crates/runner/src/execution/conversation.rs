@@ -230,7 +230,7 @@ impl RunTask {
   }
 
   /// The agent profile `execution`'s step runs on; `None` for a tool step.
-  fn profile_of(&self, execution: StepExecutionId) -> Option<ResourceId> {
+  pub(super) fn profile_of(&self, execution: StepExecutionId) -> Option<ResourceId> {
     self
       .run
       .execution(execution)

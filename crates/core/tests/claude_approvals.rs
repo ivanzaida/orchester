@@ -8,7 +8,8 @@ use orchester_core::{
   connection::{
     AgentProvider,
     claude_approval::{
-      ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalScope, ClaudeAsk, PROMPT_TOOL, prompt_result, refusal,
+      ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalScope, ClaudeAsk, PROMPT_TOOL, not_answered, prompt_result,
+      refusal,
       relay::{RelayStep, ask_result, relay_step},
     },
     invocation::{ClaudeInvocation, ClaudeMcp, ClaudeSession, InvocationError, Platform},
@@ -180,11 +181,15 @@ fn claude_approvals_cut_only_pathological_arguments_visibly_and_never_inside_a_s
 
 #[test]
 fn claude_approvals_answer_one_call_without_grants_or_its_input() {
-  let allow: Value = serde_json::from_str(&prompt_result(true)).expect("JSON");
+  let allow: Value = serde_json::from_str(&prompt_result(None)).expect("JSON");
   assert_eq!(allow, json!({"behavior": "allow", "updatedInput": {}}));
-  let deny: Value = serde_json::from_str(&prompt_result(false)).expect("JSON");
-  assert_eq!(deny["behavior"], "deny");
+  let told = "The person reviewing this run denied pencil batch_design. Continue without it.";
+  let deny: Value = serde_json::from_str(&prompt_result(Some(told))).expect("JSON");
+  // Denied with what the agent is told, and without interrupting it: the turn goes on.
+  assert_eq!(deny, json!({"behavior": "deny", "message": told}));
   assert!(deny.get("updatedPermissions").is_none() && deny.get("interrupt").is_none());
+  let unanswered: Value = serde_json::from_str(&not_answered()).expect("JSON");
+  assert_eq!(unanswered["behavior"], "deny");
   let refused: Value = serde_json::from_str(&refusal()).expect("JSON");
   assert_eq!(refused["behavior"], "deny");
 }
@@ -221,9 +226,9 @@ fn claude_approvals_relay_answers_the_handshake_and_hands_over_calls() {
     panic!("an unknown request is answered");
   };
   assert!(unknown.contains("-32601"));
-  let answer: Value = serde_json::from_str(&ask_result(&json!(2), &prompt_result(true))).expect("JSON");
+  let answer: Value = serde_json::from_str(&ask_result(&json!(2), &prompt_result(None))).expect("JSON");
   assert_eq!(answer["id"], 2);
-  assert_eq!(answer["result"]["content"][0]["text"], prompt_result(true));
+  assert_eq!(answer["result"]["content"][0]["text"], prompt_result(None));
 }
 
 #[test]

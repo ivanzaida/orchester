@@ -26,6 +26,7 @@ use orchester_desktop::{
 use orchester_ipc::SessionEnd;
 use tokio::runtime::Runtime;
 
+mod approvals;
 mod narrow;
 mod plan_limits;
 
@@ -81,6 +82,9 @@ fn project(needs_you: Option<usize>) -> StatusBarProps {
       needs_you,
       usage: None,
       lost_to_runner: Some(0),
+      approvals: Default::default(),
+      dialog: Default::default(),
+      auto_approving: Default::default(),
     }),
   }
 }

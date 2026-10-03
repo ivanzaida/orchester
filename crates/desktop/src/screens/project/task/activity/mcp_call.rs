@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::connection::stream::CommandStatus;
+use orchester_core::{connection::stream::CommandStatus, permission::category::CommandCategory, run::DecidedBy};
 
 use super::entry::Shown;
 use crate::{
-  tasks::transcript::{CommandMark, McpToolEntry},
+  tasks::transcript::{CommandMark, DecidedMark, McpToolEntry},
   ui::icon::Icon,
 };
 
@@ -27,7 +27,17 @@ pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
     ),
     _ => (Icon::Plug, meta),
   };
-  Shown::plain(glyph, call.tool.clone(), meta, None)
+  let told = denial_told(ctx, call.mark.as_ref());
+  Shown::plain(glyph, call.tool.clone(), meta, told)
+}
+
+/// What a person's Deny told the agent, under the row of the call it denied.
+pub(super) fn denial_told(ctx: &Ctx, mark: Option<&CommandMark>) -> Option<Arc<str>> {
+  let CommandMark::Decided(mark) = mark? else {
+    return None;
+  };
+  let told = mark.decision.told.as_deref()?;
+  Some(ctx.t_args("runs.activity.decision.told", [("message", told)]))
 }
 
 /// A listed tool that got no Claude Code rule: `(server, tool, other)`.
@@ -52,10 +62,57 @@ fn with_mark_text(ctx: &Ctx, meta: &str, mark: &str) -> Arc<str> {
 
 fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
   let (key, server) = match mark {
+    CommandMark::Decided(mark) => return decided_text(ctx, mark),
     CommandMark::ExemptTool { server } => ("runs.activity.decision.notAskedExempt", server),
     CommandMark::Declined { server } => ("runs.activity.decision.declinedUnasked", server),
     CommandMark::ApprovedByYou { server } => ("runs.activity.decision.approvedByYou", server),
     CommandMark::AskedYou { server } => ("runs.activity.decision.askedYou", server),
   };
   ctx.t_args(key, [("server", &**server)])
+}
+
+/// The mark of an answered request (`ZkOPf`): who answered, and what about (*pencil batch_design*, or a
+/// command's category).
+fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
+  let subject = match (mark.command, mark.decision.category) {
+    (true, Some(category)) => ctx.t(subject_key(category, mark.decision.secrets)),
+    (true, None) => ctx.t("runs.activity.decision.aCommand"),
+    (false, _) => ctx.t_args(
+      "runs.activity.decision.tool",
+      [("server", &*mark.server), ("tool", &*mark.action)],
+    ),
+  };
+  let key = match mark.decision.decided_by {
+    DecidedBy::Person => "runs.activity.decision.approvedByYouOnce",
+    DecidedBy::PersonSimilar => "runs.activity.decision.approvedSimilarAdded",
+    DecidedBy::PersonAlways => "runs.activity.decision.approvedAlwaysAdded",
+    DecidedBy::PersonRun => "runs.activity.decision.approvedRunAdded",
+    DecidedBy::PersonDeny => "runs.activity.decision.deniedByYou",
+    DecidedBy::SimilarRule => "runs.activity.decision.bySimilarRule",
+    DecidedBy::AlwaysAllowed => "runs.activity.decision.alwaysAllowed",
+    DecidedBy::AutoApproved => "runs.activity.decision.autoApproved",
+  };
+  ctx.t_args(key, [("subject", &*subject)])
+}
+
+/// A command category's name in a mark.
+pub(in crate::screens::project) const fn category_key(category: CommandCategory) -> &'static str {
+  match category {
+    CommandCategory::ReadOnly => "runs.activity.decision.category.readOnly",
+    CommandCategory::Worktree => "runs.activity.decision.category.worktree",
+    CommandCategory::Network => "runs.activity.decision.category.network",
+    CommandCategory::OutsideWrite => "runs.activity.decision.category.outsideWrite",
+    CommandCategory::Unknown => "runs.activity.decision.category.unknown",
+    CommandCategory::HistoryDestructive => "runs.activity.decision.category.historyDestructive",
+  }
+}
+
+/// What a command is called where its category shows: *Credential read* when it reads a credential
+/// location, else its category.
+pub(in crate::screens::project) const fn subject_key(category: CommandCategory, secrets: bool) -> &'static str {
+  if secrets {
+    "runs.activity.decision.category.credentialRead"
+  } else {
+    category_key(category)
+  }
 }
