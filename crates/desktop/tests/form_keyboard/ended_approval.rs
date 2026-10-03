@@ -5,14 +5,17 @@
 //! step's progress row says what its agent waits on, from the real request.
 
 use lurq::layout::quad::QuadContent;
-use orchester_core::{connection::AgentProvider, run::PendingToolApproval};
+use orchester_core::{connection::AgentProvider, run::PendingToolApproval, store::ActivityStore};
 use orchester_desktop::{activity::Target, messages::Message};
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, fake_claude, has, init_repository, programs, seed, seed_agent},
+  task_run::{
+    agent_started, agent_step, create_and_run, fake_claude, has, init_repository, latest_run, programs, seed,
+    seed_agent,
+  },
 };
 
 const DIALOG: &str = "tool-approval-dialog";
@@ -103,14 +106,21 @@ fn ended_approval_leaves_the_dialog_for_the_next_and_needs_you_counts_one_less()
   desktop.wait_until("Esc closes the dialog", |desktop| !has(desktop, DIALOG));
 }
 
+/// A run of the Builder that works until it is ended and auto-approves, with the task page open.
+fn auto_approving_run() -> Desktop {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  create_and_run(&mut desktop, "Keep working.", "1400000");
+  desktop.wait_until("the agent works", |desktop| agent_started(desktop.repo()));
+  desktop.wait_for("task-auto-approve");
+  desktop
+}
+
 /// *Request ended* in the status bar keeps its words beside *Auto-approving* and Stop at 960, on a run
 /// that auto-approves while its agent works.
 #[test]
 fn ended_approval_status_line_keeps_its_words_beside_auto_approving_at_960() {
-  let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
-  create_and_run(&mut desktop, "Keep working.", "1400000");
-  desktop.wait_for("task-auto-approve");
+  let mut desktop = auto_approving_run();
   desktop.click("task-auto-approve");
   desktop.wait_for("status-auto-approving");
   desktop.activity.record(
@@ -125,11 +135,50 @@ fn ended_approval_status_line_keeps_its_words_beside_auto_approving_at_960() {
     desktop.wait_until("the ended line", |desktop| {
       has(desktop, "status-activity") && shows(desktop, "status-activity", "Request ended")
     });
-    assert_keeps_its_words(&mut desktop);
+    assert_whole(&mut desktop, &["Request ended", "Auto-approving", "Stop"]);
   }
 }
 
-fn assert_keeps_its_words(desktop: &mut Desktop) {
+/// A request waiting beside *Auto-approving* at 960: what it asks gives way, how many wait, Review,
+/// *Auto-approving* and Stop stay.
+#[test]
+fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
+  let mut desktop = auto_approving_run();
+  let run = latest_run(desktop.repo()).expect("the run");
+  let mut db = ProjectDb::open(desktop.repo()).expect("open");
+  let invocation = db.invocations(run.id()).expect("invocations").remove(0);
+  let request = PendingToolApproval {
+    id: format!("{}:waiting", invocation.id),
+    run: run.id(),
+    execution: invocation.execution,
+    invocation: invocation.id,
+    agent: "Builder".to_owned(),
+    command: false,
+    scope: None,
+    server: "pencil".to_owned(),
+    action: "batch_design".to_owned(),
+    target: None,
+    requested_at: invocation.started_at,
+    native: None,
+  };
+  db.request_tool_approval(&request).expect("recorded");
+  // Turning auto-approval on reads the requests again; the dialog then opens on this one.
+  desktop.click("task-auto-approve");
+  desktop.wait_for(DIALOG);
+  desktop.key("Escape", "Escape");
+  desktop.wait_until("the status bar names the request", |desktop| {
+    !has(desktop, DIALOG) && has(desktop, "status-auto-approving") && has(desktop, "status-approvals-review")
+  });
+  desktop.tree.resize(960, 700);
+  desktop.pass();
+  assert_whole(
+    &mut desktop,
+    &["1 approval waiting", "Review", "Auto-approving", "Stop"],
+  );
+}
+
+/// Each of `texts` is drawn whole in the status bar, before its right group, and Stop is whole there.
+fn assert_whole(desktop: &mut Desktop, texts: &[&str]) {
   let agents = desktop.bounds("status-agents");
   let stop = desktop.bounds("status-auto-approving-stop");
   assert!(
@@ -137,22 +186,20 @@ fn assert_keeps_its_words(desktop: &mut Desktop) {
     "Stop stays whole before the right group"
   );
   let layout = desktop.tree.last_layout().expect("laid out").clone();
-  let drawn = |text: &str| {
-    desktop
-      .tree
-      .resolve_quads(&layout)
-      .into_iter()
-      .find_map(|quad| match quad.content {
-        QuadContent::Text { text: drawn, .. } if drawn == text => Some(quad.x + quad.width),
+  let quads = desktop.tree.resolve_quads(&layout);
+  // The task page has a Stop of its own; only what the status bar draws counts.
+  for text in texts {
+    let end = quads
+      .iter()
+      .find_map(|quad| match &quad.content {
+        QuadContent::Text { text: drawn, .. } if drawn == text && quad.y >= agents.y - 4.0 => Some(quad.x + quad.width),
         _ => None,
       })
-  };
-  let ended = drawn("Request ended").expect("the ended line keeps its words");
-  assert!(
-    ended <= agents.x,
-    "the ended line ends at {ended}, past the right group at {}",
-    agents.x
-  );
-  assert!(drawn("Auto-approving").is_some(), "Auto-approving keeps its word");
-  assert!(drawn("Stop").is_some(), "Stop keeps its word");
+      .unwrap_or_else(|| panic!("{text} is drawn whole"));
+    assert!(
+      end <= agents.x,
+      "{text} ends at {end}, past the right group at {}",
+      agents.x
+    );
+  }
 }

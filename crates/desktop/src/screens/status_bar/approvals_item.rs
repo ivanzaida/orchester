@@ -10,11 +10,15 @@ use lurq::{
   node::Element,
 };
 
-use super::item::{GIVES_WAY_FIRST, GIVES_WAY_NEXT, action, glyph, item, label, separator, truncated_label, value};
+use super::item::{
+  GIVES_WAY_FIRST, GIVES_WAY_NEXT, GIVES_WAY_THEN, action, glyph, item_end, item_middle, item_start, label, separator,
+  truncated_label, yielding_value,
+};
 use crate::{
   display,
   screens::project::{approval_queue::ApprovalQueue, command_line},
   tasks::{approvals::ShownApproval, data::AutoApprovingRun},
+  theme::ExtraSpacing,
   ui::{icon::Icon, link::Press},
 };
 
@@ -35,29 +39,49 @@ pub fn approvals(
     .unwrap_or(oldest);
   let asks = asks(ctx, shown);
   let count = pending.len().to_string();
-  let text = match (&open, pending.len()) {
-    (Some(_), 1) => asks,
-    (Some(_), _) => ctx.t_args(
-      "statusBar.approvals.openSeveral",
-      [("asks", &*asks), ("count", count.as_str())],
+  // What stays: the hand and, while the dialog is closed, how many wait; what the oldest asks gives way
+  // first, and the time last.
+  let (counted, detail) = match (&open, pending.len()) {
+    (Some(_), 1) => (None, asks),
+    (Some(_), _) => (
+      None,
+      ctx.t_args(
+        "statusBar.approvals.openSeveral",
+        [("asks", &*asks), ("count", count.as_str())],
+      ),
     ),
-    (None, 1) => ctx.t_args("statusBar.approvals.waitingOne", [("asks", &*asks)]),
-    (None, _) => ctx.t_args(
-      "statusBar.approvals.waitingOther",
-      [("asks", &*asks), ("count", count.as_str())],
+    (None, 1) => (
+      Some(ctx.t("statusBar.approvals.waitingCount.one")),
+      ctx.t_args("statusBar.approvals.waitingAsks", [("asks", &*asks)]),
+    ),
+    (None, _) => (
+      Some(ctx.t_args("statusBar.approvals.waitingCount.other", [("count", count.as_str())])),
+      ctx.t_args("statusBar.approvals.waitingAsks", [("asks", &*asks)]),
     ),
   };
-  let row = item("status-approvals")
+  let start = item_start("status-approvals")
     .describe("state", if open.is_some() { "open" } else { "waiting" })
+    .flex_shrink(1.0)
+    .background(PaletteColor::SurfaceRaised)
+    .child(glyph(Icon::Hand, PaletteColor::TextPrimary));
+  let start = match counted {
+    Some(counted) => start.child(truncated_label(&counted, PaletteColor::TextPrimary)),
+    // The words of the request follow the hand at the item's gap.
+    None => start.padding_right(ExtraSpacing::Tight.role()),
+  };
+  let middle = item_middle("status-approvals-asks")
     .flex_shrink(GIVES_WAY_FIRST)
     .background(PaletteColor::SurfaceRaised)
-    .child(glyph(Icon::Hand, PaletteColor::TextPrimary))
-    .child(truncated_label(&text, PaletteColor::TextPrimary))
-    .child(value(
+    .child(truncated_label(&detail, PaletteColor::TextPrimary));
+  let time = item_end("status-approvals-time")
+    .padding_left(ExtraSpacing::Tight.role())
+    .flex_shrink(GIVES_WAY_THEN)
+    .background(PaletteColor::SurfaceRaised)
+    .child(yielding_value(
       &display::clock(shown.approval.requested_at),
       PaletteColor::TextMuted,
     ));
-  let mut items = vec![separator(), row.into()];
+  let mut items = vec![separator(), start.into(), middle.into(), time.into()];
   if let (None, Some(queue)) = (&open, queue) {
     let (queue, id) = (queue.clone(), oldest.approval.id.clone());
     items.push(action(
@@ -111,15 +135,18 @@ pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], stop: impl Fn() + Se
     ),
   };
   // A safety indicator: *Auto-approving* and Stop keep their words. Which run it is gives way when the
-  // bar is narrow, after the waiting approvals and before the activity's words.
-  let row = item("status-auto-approving")
-    .flex_shrink(GIVES_WAY_NEXT)
+  // bar is narrow, after what the waiting approvals ask and before the activity's words.
+  let start = item_start("status-auto-approving")
+    .flex_shrink(0.0)
     .child(glyph(Icon::Zap, PaletteColor::TextPrimary))
-    .child(label(&ctx.t("statusBar.approvals.auto"), PaletteColor::TextPrimary))
+    .child(label(&ctx.t("statusBar.approvals.auto"), PaletteColor::TextPrimary));
+  let run = item_end("status-auto-approving-run")
+    .flex_shrink(GIVES_WAY_NEXT)
     .child(truncated_label(&detail, PaletteColor::TextPrimary));
   vec![
     separator(),
-    row.into(),
+    start.into(),
+    run.into(),
     action(
       "status-auto-approving-stop",
       &ctx.t("statusBar.approvals.stop"),

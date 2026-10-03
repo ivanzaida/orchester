@@ -4918,13 +4918,16 @@
       "asksTool": "{{agent}} asks to use {{server}} {{tool}} · {{task}}",
       "asksCommand": "{{agent}} asks to run {{command}} · {{task}}",
       "openSeveral": "{{asks}} · {{count}} waiting",
-      "waitingOne": "1 approval waiting · {{asks}}",
-      "waitingOther": "{{count}} approvals waiting · {{asks}}",
+      "waitingCount": {
+        "one": "1 approval waiting",
+        "other": "{{count}} approvals waiting"
+      },
+      "waitingAsks": " · {{asks}}",
       "review": "Review",
       "ended": "Request ended",
       "auto": "Auto-approving",
-      "autoOne": "· Run {{run}} · {{task}}",
-      "autoOther": "· {{count}} runs",
+      "autoOne": " · Run {{run}} · {{task}}",
+      "autoOther": " · {{count}} runs",
       "stop": "Stop"
     }
   },
