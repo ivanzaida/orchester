@@ -92,7 +92,7 @@ fn status_bar_auto_approving_keeps_its_words_and_has_stop() {
   let (_app, mut tree) = laid_out(with((0..3).map(waiting).collect(), vec![auto]));
   assert_eq!(
     item_texts(&mut tree, "status-auto-approving"),
-    ["Auto-approving · Run 142 · ORC-142"]
+    ["Auto-approving", "· Run 142 · ORC-142"]
   );
   assert_eq!(item_texts(&mut tree, "status-auto-approving-stop"), ["Stop"]);
   let item = bounds(&mut tree, "status-auto-approving");

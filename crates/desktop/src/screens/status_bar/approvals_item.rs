@@ -10,7 +10,7 @@ use lurq::{
   node::Element,
 };
 
-use super::item::{action, glyph, item, label, separator, truncated_label, value};
+use super::item::{GIVES_WAY_FIRST, GIVES_WAY_NEXT, action, glyph, item, label, separator, truncated_label, value};
 use crate::{
   display,
   screens::project::{approval_queue::ApprovalQueue, command_line},
@@ -49,7 +49,7 @@ pub fn approvals(
   };
   let row = item("status-approvals")
     .describe("state", if open.is_some() { "open" } else { "waiting" })
-    .flex_shrink(1.0)
+    .flex_shrink(GIVES_WAY_FIRST)
     .background(PaletteColor::SurfaceRaised)
     .child(glyph(Icon::Hand, PaletteColor::TextPrimary))
     .child(truncated_label(&text, PaletteColor::TextPrimary))
@@ -100,7 +100,7 @@ pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], stop: impl Fn() + Se
   let Some(first) = runs.first() else {
     return Vec::new();
   };
-  let text = match runs {
+  let detail = match runs {
     [_] => ctx.t_args(
       "statusBar.approvals.autoOne",
       [("run", first.number.get().to_string().as_str()), ("task", &*first.key)],
@@ -110,11 +110,13 @@ pub fn auto_approving(ctx: &Ctx, runs: &[AutoApprovingRun], stop: impl Fn() + Se
       [("count", runs.len().to_string().as_str())],
     ),
   };
-  // A safety indicator: it keeps its words, and the waiting approvals give way first.
+  // A safety indicator: *Auto-approving* and Stop keep their words. Which run it is gives way when the
+  // bar is narrow, after the waiting approvals and before the activity's words.
   let row = item("status-auto-approving")
-    .flex_shrink(0.0)
+    .flex_shrink(GIVES_WAY_NEXT)
     .child(glyph(Icon::Zap, PaletteColor::TextPrimary))
-    .child(label(&text, PaletteColor::TextPrimary));
+    .child(label(&ctx.t("statusBar.approvals.auto"), PaletteColor::TextPrimary))
+    .child(truncated_label(&detail, PaletteColor::TextPrimary));
   vec![
     separator(),
     row.into(),

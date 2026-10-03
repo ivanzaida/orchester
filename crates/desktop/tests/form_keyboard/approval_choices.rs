@@ -211,7 +211,8 @@ fn approval_choices_auto_approval_switch_indicator_and_stop() {
   desktop.wait_until("the run auto-approves", |desktop| chosen(desktop) == Some(true));
   desktop.wait_for("task-auto-approving");
   desktop.wait_for("status-auto-approving");
-  assert!(shows(&mut desktop, "status-auto-approving", "Auto-approving · Run 1"));
+  assert!(shows(&mut desktop, "status-auto-approving", "Auto-approving"));
+  assert!(shows(&mut desktop, "status-auto-approving", "· Run 1"));
   desktop.press("status-auto-approving-stop");
   desktop.wait_until("the run stops auto-approving", |desktop| chosen(desktop) == Some(false));
   desktop.wait_until("the indicators go away", |desktop| {

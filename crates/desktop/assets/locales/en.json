@@ -4921,9 +4921,10 @@
       "waitingOne": "1 approval waiting · {{asks}}",
       "waitingOther": "{{count}} approvals waiting · {{asks}}",
       "review": "Review",
-      "ended": "Request ended without an answer",
-      "autoOne": "Auto-approving · Run {{run}} · {{task}}",
-      "autoOther": "Auto-approving {{count}} runs",
+      "ended": "Request ended",
+      "auto": "Auto-approving",
+      "autoOne": "· Run {{run}} · {{task}}",
+      "autoOther": "· {{count}} runs",
       "stop": "Stop"
     }
   },

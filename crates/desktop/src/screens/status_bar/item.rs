@@ -23,6 +23,13 @@ const ITEM_HEIGHT: f32 = 22.0;
 const SEPARATOR_WIDTH: f32 = 1.0;
 const SEPARATOR_HEIGHT: f32 = 12.0;
 
+/// How readily an item of the left group gives way when the bar is narrow, as its flex shrink
+/// factor: the waiting approvals first, then which run auto-approves, then the activity (factor 1).
+/// lurq shares an overflow by these factors, so each step a thousandfold apart gives way entirely
+/// before the next starts to.
+pub const GIVES_WAY_FIRST: f32 = 1.0e12;
+pub const GIVES_WAY_NEXT: f32 = 1.0e9;
+
 /// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).
 pub fn item(id: &'static str) -> Button {
   surface()
@@ -78,6 +85,18 @@ pub fn value(text: &str, color: PaletteColor) -> Element {
     .variant(ExtraTypography::MonoValue.role())
     .color(color)
     .nowrap()
+    .into()
+}
+
+/// A [`value`] that gives way before the label beside it when the bar is narrow, e.g. the time of the
+/// latest event.
+pub fn yielding_value(text: &str, color: PaletteColor) -> Element {
+  Text::new(text)
+    .variant(ExtraTypography::MonoValue.role())
+    .color(color)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .flex_shrink(GIVES_WAY_NEXT)
     .into()
 }
 
