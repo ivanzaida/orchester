@@ -4,6 +4,8 @@ mod support;
 mod admin;
 #[path = "accounts/backup.rs"]
 mod backup;
+#[path = "accounts/concurrent_limits.rs"]
+mod concurrent_limits;
 #[path = "accounts/configuration.rs"]
 mod configuration;
 #[path = "accounts/hosting.rs"]

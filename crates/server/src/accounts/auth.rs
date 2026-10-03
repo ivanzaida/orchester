@@ -26,21 +26,20 @@ impl Server {
     if input.device.trim().is_empty() || input.device.chars().count() > 256 {
       return Err(ErrorCode::Invalid.into());
     }
-    if let Some(retry) = self.inner.limits.check(&username, address, self.now()) {
-      return Err(ServerError::RateLimited(retry));
-    }
+    let attempt = self.inner.limits.sign_in(username.clone(), address, self.now())?;
     let lookup = username.clone();
     let stored = self.inner.db.read(move |db| db::find_user(db, &lookup)).await?;
     let hash = stored
       .as_ref()
       .map_or_else(PasswordHash::dummy, |user| user.hash.clone());
-    let verified = self.inner.passwords.verify(input.password, hash.clone()).await?;
+    let (verified, attempt) = self
+      .inner
+      .passwords
+      .verify(input.password, hash.clone(), attempt, self.inner.clock.as_ref())
+      .await?;
     let now = self.now();
-    // Requests queued behind password hashing also observe a limit reached in the meantime.
-    if let Some(retry) = self.inner.limits.check(&username, address, now) {
-      return Err(ServerError::RateLimited(retry));
-    }
     if !verified || stored.as_ref().is_none_or(|user| user.user.disabled) {
+      attempt.failed(now);
       self.record_sign_in_failure(username, address, now).await?;
       return Err(ErrorCode::InvalidCredentials.into());
     }
@@ -64,10 +63,14 @@ impl Server {
     }).await;
     let (user, must_change, session) = match result {
       Err(ServerError::Api(ErrorCode::InvalidCredentials)) => {
+        attempt.failed(now);
         self.record_sign_in_failure(failure_name, address, now).await?;
         return Err(ErrorCode::InvalidCredentials.into());
       }
-      other => other?,
+      other => {
+        attempt.succeeded();
+        other?
+      }
     };
     Ok(SignedIn {
       token,
@@ -78,7 +81,6 @@ impl Server {
   }
 
   async fn record_sign_in_failure(&self, username: String, address: IpAddr, now: i64) -> Result<(), ServerError> {
-    self.inner.limits.failed(username.clone(), address, now);
     self
       .inner
       .db

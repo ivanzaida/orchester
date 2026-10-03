@@ -11,7 +11,7 @@ use orchester_api::{Credential, ErrorCode};
 use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 
-use crate::error::ServerError;
+use crate::{clock::Clock, error::ServerError, rate_limit::Attempt};
 
 // Fixed PHC value with the same work parameters as real passwords; never authenticates a user.
 const DUMMY_HASH: &str =
@@ -74,19 +74,26 @@ impl Passwords {
     .map_err(|_| ServerError::Worker)?
   }
 
-  pub async fn verify(&self, password: Credential, hash: PasswordHash) -> Result<bool, ServerError> {
+  pub async fn verify(
+    &self,
+    password: Credential,
+    hash: PasswordHash,
+    mut attempt: Attempt,
+    clock: &dyn Clock,
+  ) -> Result<(bool, Attempt), ServerError> {
     let permit = self
       .slots
       .clone()
       .acquire_owned()
       .await
       .map_err(|_| ServerError::Worker)?;
+    attempt.start(clock.now_ms())?;
     tokio::task::spawn_blocking(move || {
       let _permit = permit;
       let hash = ParsedHash::new(hash.expose()).map_err(|_| ServerError::StoredData)?;
       match hasher().verify_password(password.expose().as_bytes(), &hash) {
-        Ok(()) => Ok(true),
-        Err(argon2::password_hash::Error::Password) => Ok(false),
+        Ok(()) => Ok((true, attempt)),
+        Err(argon2::password_hash::Error::Password) => Ok((false, attempt)),
         Err(_) => Err(ServerError::PasswordHash),
       }
     })

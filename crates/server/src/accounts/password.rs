@@ -19,10 +19,7 @@ impl Server {
     address: IpAddr,
   ) -> Result<(), ServerError> {
     let user = auth.user.id;
-    // Check before any password hashing permit is acquired, including for initial-password sessions.
-    if let Some(retry) = self.inner.limits.check_password(user, self.now()) {
-      return Err(ServerError::RateLimited(retry));
-    }
+    let attempt = self.inner.limits.password(user, self.now())?;
     let snapshot = auth.clone();
     let now = self.now();
     let hash = self
@@ -37,16 +34,23 @@ impl Server {
         )
       })
       .await?;
-    if !self
+    let (verified, attempt) = self
       .inner
       .passwords
-      .verify(input.current_password, hash.clone())
-      .await?
-    {
+      .verify(input.current_password, hash.clone(), attempt, self.inner.clock.as_ref())
+      .await?;
+    if !verified {
+      attempt.failed(self.now());
       self.record_password_failure(user, address).await?;
       return Err(ErrorCode::InvalidCredentials.into());
     }
-    let new_hash = self.inner.passwords.hash(input.new_password).await?;
+    let new_hash = match self.inner.passwords.hash(input.new_password).await {
+      Ok(hash) => hash,
+      Err(error) => {
+        attempt.succeeded();
+        return Err(error);
+      }
+    };
     let now = self.now();
     let result = self
       .inner
@@ -54,14 +58,16 @@ impl Server {
       .write(move |tx| change(tx, &auth, &hash, &new_hash, address, now))
       .await;
     if matches!(result, Err(ServerError::Api(ErrorCode::InvalidCredentials))) {
+      attempt.failed(self.now());
       self.record_password_failure(user, address).await?;
+    } else {
+      attempt.succeeded();
     }
     result
   }
 
   async fn record_password_failure(&self, user: UserId, address: IpAddr) -> Result<(), ServerError> {
     let now = self.now();
-    self.inner.limits.failed_password(user, now);
     self
       .inner
       .db
