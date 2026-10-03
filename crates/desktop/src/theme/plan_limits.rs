@@ -19,10 +19,75 @@ pub struct StatusBarWidths {
   pub details: f32,
 }
 
-/// The window width below which the waiting approvals' count reads *2 waiting* instead of *2 approvals
-/// waiting*: at 960 the long form does not fit beside *Auto-approving* and Stop with the right group
-/// whole; the hand and *Review* still say what waits (built, not drawn).
-pub const APPROVALS_BRIEF_BELOW: f32 = 1120.0;
+/// The window widths from which the waiting approvals in the status bar show each of their parts whole
+/// (built, not drawn): *2 approvals waiting* rather than *2 waiting*, the time, which run auto-approves
+/// beside them, and what the oldest request asks (with room for at least 100px of it). Below a width a
+/// part does not show at all. Measured headlessly on 2026-10-03 for the worst case of each plan limits
+/// class (a reached or refused CLI widens the right group), a five-digit MCP port, Tokens today with an
+/// 11-character value and two-digit counts, run 1234 of ORC-1234, at every 10px from 500 to 2200;
+/// each width is the lowest from which the part fits at every wider width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ApprovalsWidths {
+  pub long_count: f32,
+  pub time: f32,
+  pub run: f32,
+  pub asks: f32,
+}
+
+/// Without a run that auto-approves, by how many CLIs are reached or refused (0, 1, 2 or more).
+const APPROVALS_WIDTHS: [ApprovalsWidths; 3] = [
+  ApprovalsWidths {
+    long_count: 0.0,
+    time: 1150.0,
+    run: 0.0,
+    asks: 1310.0,
+  },
+  ApprovalsWidths {
+    long_count: 0.0,
+    time: 1310.0,
+    run: 0.0,
+    asks: 1470.0,
+  },
+  ApprovalsWidths {
+    long_count: 0.0,
+    time: 1470.0,
+    run: 0.0,
+    asks: 1620.0,
+  },
+];
+
+/// Beside *Auto-approving* and Stop, by how many CLIs are reached or refused.
+const APPROVALS_WIDTHS_AUTO: [ApprovalsWidths; 3] = [
+  ApprovalsWidths {
+    long_count: 1310.0,
+    time: 1360.0,
+    run: 1490.0,
+    asks: 1590.0,
+  },
+  ApprovalsWidths {
+    long_count: 1470.0,
+    time: 1510.0,
+    run: 1640.0,
+    asks: 1740.0,
+  },
+  ApprovalsWidths {
+    long_count: 1620.0,
+    time: 1670.0,
+    run: 1800.0,
+    asks: 1900.0,
+  },
+];
+
+/// The widths of the waiting approvals' parts with `reached` CLIs reached or refused, beside a run
+/// that auto-approves or not.
+pub fn approvals_widths(reached: usize, auto_approving: bool) -> ApprovalsWidths {
+  let class = reached.min(2);
+  if auto_approving {
+    APPROVALS_WIDTHS_AUTO[class]
+  } else {
+    APPROVALS_WIDTHS[class]
+  }
+}
 
 /// With the plan limits item showing percentages (about 170px). The activity then keeps at
 /// least the room it has at 960 (`VTnmr`), which every other class keeps too.

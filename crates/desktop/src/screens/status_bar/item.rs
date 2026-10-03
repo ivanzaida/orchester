@@ -28,15 +28,15 @@ const SLACK_WIDTH: f32 = 1.0;
 const SLACK_GIVES_WAY: f32 = 4_194_304.0;
 
 /// How readily a part of the left group gives way when the bar is narrow, as its flex shrink factor:
-/// what the waiting approvals ask first, then which run auto-approves, then the times, and last the
-/// activity and how many approvals wait (factor 1). lurq shares an overflow by these factors, so a
-/// part behind in line gives way only by a fraction of a pixel, which its slack takes
+/// what the waiting approvals ask first, then which run auto-approves (while no approvals wait), and
+/// last the activity and how many approvals wait (factor 1). Beside waiting approvals, which parts
+/// show at all is decided by the window's width (`theme::ApprovalsWidths`). lurq shares an overflow by these factors,
+/// so a part behind in line gives way only by a fraction of a pixel, which its slack takes
 /// ([`truncated_label`]), until the one before it has gone. Powers of two whose sum stays exact in
 /// `f32`: lurq subtracts a part's factor once the part reaches its minimum, and a sum that lost the
 /// smaller factors would leave the rest of the overflow unshared.
 pub const GIVES_WAY_FIRST: f32 = 4_194_304.0;
 pub const GIVES_WAY_NEXT: f32 = 2_048.0;
-pub const GIVES_WAY_THEN: f32 = 32.0;
 
 /// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).
 pub fn item(id: &'static str) -> Button {

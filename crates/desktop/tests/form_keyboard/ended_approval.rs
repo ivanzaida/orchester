@@ -169,12 +169,27 @@ fn ended_approval_waiting_count_and_review_stay_beside_auto_approving_at_960() {
   desktop.wait_until("the status bar names the request", |desktop| {
     !has(desktop, DIALOG) && has(desktop, "status-auto-approving") && has(desktop, "status-approvals-review")
   });
-  // Below 1120 the count reads "1 waiting", which keeps its words at 960 and narrower, as a longer MCP
-  // address leaves less room.
-  for width in [960, 930] {
+  // Each part shows whole or not at all: below their widths (`theme::ApprovalsWidths`) the count reads
+  // "1 waiting", and what the request asks, its time and the run's name are left out, never cut.
+  for width in [960, 1130, 1200] {
     desktop.tree.resize(width, 700);
     desktop.pass();
     assert_whole(&mut desktop, &["1 waiting", "Review", "Auto-approving", "Stop"]);
+    assert_nothing_cut(&mut desktop);
+  }
+}
+
+/// No text of the status bar is cut to an ellipsis.
+fn assert_nothing_cut(desktop: &mut Desktop) {
+  let agents = desktop.bounds("status-agents");
+  let layout = desktop.tree.last_layout().expect("laid out").clone();
+  for quad in desktop.tree.resolve_quads(&layout) {
+    if let QuadContent::Text { text, .. } = &quad.content {
+      assert!(
+        quad.y < agents.y - 4.0 || !text.ends_with('…'),
+        "{text:?} is cut in the status bar"
+      );
+    }
   }
 }
 
