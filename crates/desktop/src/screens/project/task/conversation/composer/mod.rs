@@ -8,6 +8,7 @@
 //! Send and Enter send now while the agent the message is for works mid-turn, and press the state's
 //! action otherwise; the chevron beside Send, shown only then, offers *Send after this turn* for that
 //! message, as Ctrl+Enter (Cmd+Enter on macOS) does; nothing is remembered. Shift+Enter adds a line.
+//! While an input method composes, Enter only confirms the composition.
 //! When it first shows a question that waits, as the tab opens on it or once it arrives, the field
 //! takes the focus, unless the person is in the tab's search field. The draft stays until the message
 //! is stored, once per draft.
@@ -415,6 +416,11 @@ impl ComposerDock {
         }
         // Enter sends; it never also adds a newline, even when there is nothing to send.
         event.prevent_default();
+        // An Enter the input method passes on while it composes belongs to the composition:
+        // confirming what is being composed never sends.
+        if event.composing {
+          return;
+        }
         let press = if event.ctrl || event.meta {
           after_turn.clone().or_else(|| send.clone())
         } else {

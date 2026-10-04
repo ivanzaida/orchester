@@ -385,7 +385,6 @@ fn recipient(ctx: &Ctx, row: &RowProps<'_>) -> Element {
     // No fill of its own: the selector is quiet on the box's `$raised` (`opOGv`).
     .trigger(
       SelectPartStyle::new()
-        .background(PaletteColor::SurfaceRaised)
         .rounded(ExtraRadius::Round.role())
         .min_height(PILL_HEIGHT),
     )
