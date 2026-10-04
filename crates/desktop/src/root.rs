@@ -19,7 +19,7 @@ use crate::{
   screens::status_bar::{StatusBar, StatusBarProps},
   secrets::Vault,
   sharing::{
-    Servers,
+    self, Servers,
     feed::{ServerFeed, ServerFeedLoader},
   },
   tabs::{
@@ -68,6 +68,17 @@ impl lurq::app::component::DevtoolsInspectable for RootProps {}
 pub struct Root {
   /// What routes stand for, shared by every tab: present once the session started.
   places: Option<Places>,
+  /// The shared servers' connection monitor, a task of the application's runtime that wakes on its
+  /// own timers; it ends with the window.
+  monitor: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for Root {
+  fn drop(&mut self) {
+    if let Some(monitor) = &self.monitor {
+      monitor.abort();
+    }
+  }
 }
 
 impl Component for Root {
@@ -91,9 +102,14 @@ impl Component for Root {
       ..
     } = startup
     else {
-      return Self { places: None };
+      return Self {
+        places: None,
+        monitor: None,
+      };
     };
-    ctx.provide(ServerFeed::new(Servers::new(workspace, vault.clone())));
+    let servers = Servers::new(workspace, vault.clone());
+    let monitor = lifecycle.runtime().spawn(sharing::monitor(servers.clone()));
+    ctx.provide(ServerFeed::new(servers));
     ctx.provide(programs);
     ctx.provide(vault);
     ctx.provide(SessionZooms::default());
@@ -105,6 +121,7 @@ impl Component for Root {
     ctx.provide(lifecycle);
     Self {
       places: Some(Places::default()),
+      monitor: Some(monitor),
     }
   }
 

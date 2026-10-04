@@ -34,7 +34,7 @@ use tokio::sync::watch;
 
 pub use self::{
   account::{PendingPasswordChange, SignedIn},
-  connection::{CONNECTED_CHECK, Connection, LONGEST_DELAY, after_failure, backoff},
+  connection::{Connection, Schedule},
   error::{SharingError, client_message},
   monitor::run as monitor,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
@@ -70,6 +70,7 @@ pub struct Servers {
 struct Inner {
   workspace: Workspace,
   vault: Vault,
+  schedule: Schedule,
   watched: Mutex<HashMap<ServerId, Watched>>,
   /// Counts changes of the list and of connections, for the monitor and the screens.
   changes: watch::Sender<u64>,
@@ -96,10 +97,16 @@ impl lurq::app::component::DevtoolsInspectable for Servers {}
 
 impl Servers {
   pub fn new(workspace: Workspace, vault: Vault) -> Self {
+    Self::with_schedule(workspace, vault, Schedule::DEFAULT)
+  }
+
+  /// Servers asked on `schedule`, e.g. a short one in tests.
+  pub fn with_schedule(workspace: Workspace, vault: Vault, schedule: Schedule) -> Self {
     Self {
       inner: Arc::new(Inner {
         workspace,
         vault,
+        schedule,
         watched: Mutex::new(HashMap::new()),
         changes: watch::channel(0).0,
       }),
@@ -248,7 +255,7 @@ impl Servers {
   fn reached(&self, server: ServerId) {
     self.update(server, |_| Watched {
       connection: Connection::Connected,
-      due: Some(Instant::now() + CONNECTED_CHECK),
+      due: Some(Instant::now() + self.inner.schedule.connected_check),
       failures: 0,
       trouble_since: None,
       last_reached: Some(Timestamp::now()),
@@ -262,7 +269,10 @@ impl Servers {
       let trouble_since = watched
         .and_then(|watched| watched.trouble_since)
         .unwrap_or_else(Timestamp::now);
-      let connection = after_failure(failures, Instant::now(), trouble_since, connection::jitter());
+      let connection = self
+        .inner
+        .schedule
+        .after_failure(failures, Instant::now(), trouble_since, connection::jitter());
       let due = match connection {
         Connection::Reconnecting { next, .. } | Connection::Offline { next, .. } => Some(next),
         _ => None,

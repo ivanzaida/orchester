@@ -1,6 +1,6 @@
 //! The servers as every screen sees them: the list with each one's connection, read again whenever
-//! it changes, published by [`ServerFeedLoader`], which the root mounts once for the window and
-//! which also runs the connection [`monitor`](super::monitor).
+//! it changes, published by [`ServerFeedLoader`], which the root mounts once for the window. The
+//! connection [`monitor`](super::monitor) runs as a task of the application's runtime.
 
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use lurq::{
 };
 use orchester_core::id::ServerId;
 
-use super::{ServerEntry, Servers, monitor};
+use super::{ServerEntry, Servers};
 use crate::{background, messages::Message};
 
 /// The list as last read.
@@ -80,7 +80,7 @@ impl ServerFeed {
   }
 }
 
-/// Keeps the [`ServerFeed`] current and runs the monitor. Renders nothing.
+/// Keeps the [`ServerFeed`] current. Renders nothing.
 pub struct ServerFeedLoader;
 
 impl Component for ServerFeedLoader {
@@ -92,9 +92,6 @@ impl Component for ServerFeedLoader {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let feed = ServerFeed::of(ctx);
-    ctx.stream(feed.servers.clone(), |servers, _emitter: StreamEmitter<(), ()>| {
-      monitor(servers)
-    });
     let list = ctx.stream(
       feed.servers.clone(),
       |servers, emitter: StreamEmitter<ServerList, ()>| async move {

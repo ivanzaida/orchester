@@ -96,6 +96,7 @@ icons! {
   Folders => '\u{e33f}',
   FormInput => '\u{e21f}',
   Gauge => '\u{e1bf}',
+  Gear => '\u{e154}',
   GitCompareArrows => '\u{e553}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',

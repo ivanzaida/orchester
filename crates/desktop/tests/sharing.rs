@@ -5,6 +5,8 @@
 //!
 //! `cargo test -p orchester-desktop --test sharing sharing_`
 
+#[path = "sharing_support/forwarder.rs"]
+mod forwarder;
 #[path = "server_support/mod.rs"]
 mod server_support;
 
@@ -26,7 +28,7 @@ use orchester_core::{
 use orchester_desktop::{
   secrets::Vault,
   sharing::{
-    Connection, PasswordProblem, ServerEntry, Servers, SharingError, SignedIn, after_failure, backoff, device::Device,
+    Connection, PasswordProblem, Schedule, ServerEntry, Servers, SharingError, SignedIn, device::Device,
     password_problem,
   },
   workspace::Workspace,
@@ -103,12 +105,17 @@ struct Desktop {
 
 impl Desktop {
   fn new() -> Self {
+    Self::on(Schedule::DEFAULT)
+  }
+
+  /// The desktop's servers, asked on `schedule`.
+  fn on(schedule: Schedule) -> Self {
     logs();
     let dir = TempDir::new().expect("temporary directory");
     let workspace = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("database"));
     let vault = Arc::new(MemoryVault::default());
     Self {
-      servers: Servers::new(workspace, Vault::with(vault.clone())),
+      servers: Servers::with_schedule(workspace, Vault::with(vault.clone()), schedule),
       vault,
       _dir: dir,
     }
@@ -132,7 +139,12 @@ impl Desktop {
 
 /// Adds `server` and signs `username` in with the first password, choosing `own`.
 fn signed_in(desktop: &Desktop, server: &TestServer, (username, first, own): (&str, &Credential, &str)) {
-  let address = ServerAddress::parse(&server.url()).expect("address");
+  signed_in_at(desktop, server, &server.url(), (username, first, own));
+}
+
+/// [`signed_in`] through `url`, e.g. a forwarder in front of the server.
+fn signed_in_at(desktop: &Desktop, server: &TestServer, url: &str, (username, first, own): (&str, &Credential, &str)) {
+  let address = ServerAddress::parse(url).expect("address");
   server
     .block_on(desktop.servers.add(&address, SERVER_NAME.into(), PlainHttp::NotAllowed))
     .expect("add the server");
@@ -160,16 +172,20 @@ fn signed_in(desktop: &Desktop, server: &TestServer, (username, first, own): (&s
 
 #[test]
 fn sharing_backoff_doubles_from_a_second_to_a_minute_then_reads_offline() {
-  let waits: Vec<u64> = (1..=8).map(|attempt| backoff(attempt, 0.0).as_secs()).collect();
+  let waits: Vec<u64> = (1..=8)
+    .map(|attempt| Schedule::DEFAULT.backoff(attempt, 0.0).as_secs())
+    .collect();
   assert_eq!(waits, [1, 2, 4, 8, 16, 32, 60, 60]);
-  assert!(backoff(3, 1.0) < Duration::from_secs(4));
-  assert!(backoff(3, 1.0) >= Duration::from_millis(3200));
+  assert!(Schedule::DEFAULT.backoff(3, 1.0) < Duration::from_secs(4));
+  assert!(Schedule::DEFAULT.backoff(3, 1.0) >= Duration::from_millis(3200));
   let (now, since) = (Instant::now(), Timestamp::from_unix_millis(1));
   assert!(matches!(
-    after_failure(6, now, since, 0.0),
+    Schedule::DEFAULT.after_failure(6, now, since, 0.0),
     Connection::Reconnecting { attempt: 6, .. }
   ));
-  assert!(matches!(after_failure(7, now, since, 0.0), Connection::Offline { since: at, .. } if at == since));
+  assert!(
+    matches!(Schedule::DEFAULT.after_failure(7, now, since, 0.0), Connection::Offline { since: at, .. } if at == since)
+  );
   assert!(Connection::SignedOut.severity() > Connection::Offline { since, next: now }.severity());
 }
 
@@ -348,4 +364,38 @@ fn wait_for(done: impl Fn() -> bool) {
     assert!(start.elapsed() < Duration::from_secs(10), "timed out");
     std::thread::sleep(Duration::from_millis(20));
   }
+}
+
+#[test]
+fn sharing_the_monitor_retries_on_its_own_reads_offline_and_reconnects() {
+  let server = TestServer::start();
+  let forwarder = forwarder::Forwarder::start(server.address);
+  let first = server.create_user("alice", "Alice Moreau", true);
+  let desktop = Desktop::on(Schedule {
+    first_delay: Duration::from_millis(50),
+    longest_delay: Duration::from_millis(400),
+    connected_check: Duration::from_millis(100),
+  });
+  signed_in_at(
+    &desktop,
+    &server,
+    &forwarder.url(),
+    ("alice", &first, "alice's own long password"),
+  );
+  let runtime = tokio::runtime::Runtime::new().expect("the desktop's runtime");
+  let monitor = runtime.spawn(orchester_desktop::sharing::monitor(desktop.servers.clone()));
+  let connection = || desktop.entry().connection;
+  wait_for(|| connection() == Some(Connection::Connected));
+
+  forwarder.down();
+  wait_for(|| matches!(connection(), Some(Connection::Reconnecting { attempt: 1, .. })));
+  // Nothing asks the server but the monitor: the attempts go on by themselves.
+  wait_for(|| matches!(connection(), Some(Connection::Reconnecting { attempt, .. }) if attempt >= 2));
+  wait_for(|| matches!(connection(), Some(Connection::Offline { .. })));
+  assert!(desktop.entry().in_use(), "offline is not signed out");
+
+  forwarder.up();
+  wait_for(|| connection() == Some(Connection::Connected));
+  assert_eq!(desktop.tokens().len(), 1, "the token stayed in the keychain");
+  monitor.abort();
 }

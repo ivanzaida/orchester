@@ -31,7 +31,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::field_error,
+    field::{field_error, locked_input, styled_input},
     icon::{Icon, IconSize, icon},
     message_text,
     property::{ValueStyle, styled_property},
@@ -344,6 +344,23 @@ impl Component for ShownDialog {
 }
 
 impl ShownDialog {
+  /// The first password as a mask the person cannot edit: lurq draws a text either as it is,
+  /// which puts it in the MCP and DevTools trees, or masked, which keeps it out of them (rule 11:
+  /// no secret in the MCP tree). Copy hands it on. Its signal is made outside `ctx.signal`, so
+  /// DevTools record no history of it.
+  fn masked(&self, ctx: &Ctx, props: &ShownProps) -> Element {
+    let value = Signal::new(props.shown.password.expose().to_owned());
+    locked_input(
+      styled_input(ctx, value, ExtraTypography::FirstPassword.role())
+        .id("first-password-value")
+        .single_line()
+        .mask()
+        .flex(1.0),
+      true,
+    )
+    .into()
+  }
+
   /// The password in mono with Copy (`GMko2`), and that it is shown only now (`vZQ8Z`).
   fn password(&self, ctx: &Ctx, props: &ShownProps) -> Element {
     let outcome = self.copied.get();
@@ -376,13 +393,7 @@ impl ShownDialog {
       .background(PaletteColor::SurfaceBase)
       .border_inside(BorderSize::Sm, ExtraColor::Hairline.role())
       .rounded(RadiusSize::Md)
-      .child(
-        Text::new(props.shown.password.expose())
-          .id("first-password-value")
-          .variant(ExtraTypography::FirstPassword.role())
-          .flex(1.0)
-          .selectable(true),
-      )
+      .child(self.masked(ctx, props))
       .child(copy);
     let once = Row::new()
       .width(Dimension::Pct(100.0))

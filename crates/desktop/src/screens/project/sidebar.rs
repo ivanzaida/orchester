@@ -61,7 +61,7 @@ pub fn sidebar(ctx: &mut Ctx, open: &OpenProject, state: &SidebarState<'_>, nav:
         )
         .child(import_item(ctx, nav))
         .child(section_item(
-          NavItem::new("nav-app-settings", Icon::Settings, ctx.t("nav.settings")).secondary(),
+          NavItem::new("nav-app-settings", Icon::Gear, ctx.t("nav.settings")).secondary(),
           state.shown,
           Page::Servers(None, ServerTab::Account),
           nav,

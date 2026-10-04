@@ -98,15 +98,21 @@ fn device(ctx: &Ctx, session: &SessionRow) -> Element {
   let (title, platform) = match &session.device {
     Device::Orchester { computer, platform } => (
       ctx.t_args("servers.sessions.orchesterOn", [("computer", computer.as_str())]),
-      Some(platform.as_str()),
+      Arc::from(platform.as_str()),
     ),
-    Device::Other(text) => (Arc::from(text.as_str()), None),
+    // Another client names its device its own way: shown as sent, its system not named.
+    Device::Other(text) if !text.trim().is_empty() => {
+      (Arc::from(text.as_str()), ctx.t("servers.sessions.unknownPlatform"))
+    }
+    Device::Other(_) => (
+      ctx.t("servers.sessions.unknownDevice"),
+      ctx.t("servers.sessions.unknownPlatform"),
+    ),
   };
-  let platform = match (platform, session.current) {
-    (Some(platform), true) => Some(ctx.t_args("servers.sessions.platformHere", [("platform", platform)])),
-    (Some(platform), false) => Some(Arc::from(platform)),
-    (None, true) => Some(ctx.t("servers.sessions.thisComputerShort")),
-    (None, false) => None,
+  let platform: Arc<str> = if session.current {
+    ctx.t_args("servers.sessions.platformHere", [("platform", &*platform)])
+  } else {
+    platform
   };
   let (glyph, color) = if session.current {
     (Icon::MonitorCheck, PaletteColor::TextPrimary)
@@ -130,9 +136,7 @@ fn device(ctx: &Ctx, session: &SessionRow) -> Element {
             .nowrap()
             .text_overflow(TextOverflow::Elipsis),
         )
-        .with_children(
-          platform.map(|platform| Text::new(&platform).variant(ExtraTypography::Footnote.role()).nowrap()),
-        ),
+        .child(Text::new(&platform).variant(ExtraTypography::Footnote.role()).nowrap()),
     )
     .into()
 }

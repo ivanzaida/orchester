@@ -3716,10 +3716,11 @@
       "lastUsed": "Last used",
       "now": "now",
       "thisComputer": "This computer",
-      "thisComputerShort": "this computer",
       "orchesterOn": "Orchester on {{computer}}",
       "platformHere": "{{platform}} · this computer",
-      "revoke": "Revoke"
+      "revoke": "Revoke",
+      "unknownDevice": "Unknown device",
+      "unknownPlatform": "System not named"
     },
     "signedOut": {
       "heading": "You are signed out of {{server}}",
@@ -3747,6 +3748,7 @@
       "known": "{{name}} is already in your list as {{address}}.",
       "newerApi": "This server speaks API {{theirs}} and this version of Orchester speaks API {{ours}}. Update Orchester to use it.",
       "openKnown": "Open server",
+      "check": "Check address",
       "checkAgain": "Check again",
       "continue": "Continue to sign in"
     },

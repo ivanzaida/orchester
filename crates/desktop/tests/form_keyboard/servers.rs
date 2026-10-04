@@ -249,6 +249,13 @@ fn servers_admin_creates_resets_disables_and_enables_users() {
   desktop.enter();
   desktop.wait_for("first-password-value");
   assert!(shows(&mut desktop, "Maria Lind can sign in"));
+  let first = desktop
+    .tree
+    .get_element_by_id_mut("first-password-value")
+    .and_then(|element| element.as_text_input())
+    .expect("the first password");
+  assert!(first.is_masked(), "the MCP and DevTools trees see its mask only");
+  assert!(!first.value().is_empty(), "the server made a first password");
   desktop.click("first-password-done");
   desktop.wait_for("server-user-reset-maria");
 
@@ -293,4 +300,44 @@ fn servers_the_connection_is_checked_when_the_application_starts() {
   // removed from the keychain, and the check at start shows the server as signed out.
   let mut desktop = desktop.crash_and_restart(|| {});
   desktop.wait_for("status-server-sign-in");
+}
+
+/// 10.03 B: plain HTTP to a host that is not this computer by name. Windows resolves every
+/// `*.localhost` name to the loopback address, so `lab.localhost` reaches the test server while the
+/// desktop, which counts only `localhost` itself as this computer, treats it as another computer.
+#[cfg(windows)]
+#[test]
+fn servers_plain_http_to_another_computer_needs_the_opt_in_under_its_warning() {
+  let server = TestServer::start();
+  let first = server.create_user("alice", "Alice Moreau", true);
+  let mut desktop = Desktop::with_project();
+  servers_page(&mut desktop);
+  desktop.click("add-server");
+  type_into(
+    &mut desktop,
+    "add-server-address",
+    &format!("http://lab.localhost:{}", server.address.port()),
+  );
+  desktop.click("add-server-continue");
+  assert!(
+    desktop.tree.get_element_by_id("add-server-checking").is_none(),
+    "Continue does nothing before the server answered"
+  );
+  desktop.click("add-server-check");
+  desktop.wait_for("add-server-plain-http");
+  assert!(shows(&mut desktop, "Allow plain HTTP for lab.localhost:"));
+  desktop.click("add-server-continue");
+  assert!(
+    desktop.tree.get_element_by_id("sign-in-username").is_none(),
+    "Continue waits for the opt-in"
+  );
+
+  desktop.click("add-server-allow-http");
+  desktop.click("add-server-continue");
+  desktop.wait_for("sign-in-username");
+  sign_in_first_time(&mut desktop, "alice", first.expose(), OWN);
+  assert!(
+    server.accepts(&token(&desktop)),
+    "signed in over plain HTTP with the opt-in"
+  );
 }

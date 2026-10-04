@@ -81,9 +81,16 @@ enum Next {
   Open(ServerId),
 }
 
+/// The address a check was started for: its answer counts only while the field still holds it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Checking(Option<ServerAddress>);
+
+impl lurq::app::component::DevtoolsInspectable for Checking {}
+
 struct AddServerDialog {
   address: Signal<String>,
   opt_in: Signal<bool>,
+  checking: Signal<Checking>,
   copied: Signal<Copied>,
   frame: ElementRef,
 }
@@ -104,6 +111,7 @@ impl Component for AddServerDialog {
     let dialog = Self {
       address: ctx.signal(String::new()),
       opt_in: ctx.signal(false),
+      checking: ctx.signal(Checking::default()),
       copied: ctx.signal(Copied::default()),
       frame: ElementRef::new(),
     };
@@ -121,14 +129,17 @@ impl Component for AddServerDialog {
       .as_ref()
       .ok()
       .and_then(|address| props.entries.iter().find(|entry| entry.address == *address).cloned());
-    let checking = check.state().get().is_pending() || add.state().get().is_pending();
+    // A check of an address the person since changed is left behind: the dialog is idle again.
+    let checking = (check.state().get().is_pending() && parsed.as_ref().ok() == self.checking.get().0.as_ref())
+      || add.state().get().is_pending();
     let checked = check
       .state()
       .get()
       .data
       .filter(|checked| parsed.as_ref().is_ok_and(|address| *address == checked.address));
     let next = self.next(parsed.as_ref().ok(), known.as_ref(), checked.as_ref(), checking);
-    let run = run(&next, (&check, &add, &self.opt_in), &props.context);
+    let start = self.start_check(&check);
+    let run = run(&next, (&start, &add), &props.context);
     let mut notes = vec![hint(&ctx.t("servers.add.hint"))];
     let mut below = Vec::new();
     match (&known, &checked, &parsed) {
@@ -161,7 +172,15 @@ impl Component for AddServerDialog {
         notes,
       ))
       .with_children(below);
-    let actions = self.actions(ctx, &props.context, (&next, checked.is_some()), &check, run.clone());
+    let again = parsed
+      .as_ref()
+      .ok()
+      .filter(|_| !checking && known.is_none())
+      .map(|address| {
+        let (start, address) = (start.clone(), address.clone());
+        Arc::new(move || start(address.clone())) as Arc<dyn Fn() + Send + Sync>
+      });
+    let actions = self.actions(ctx, &props.context, (&next, checked.is_some()), again, run.clone());
     dialog(
       ctx,
       &self.frame,
@@ -247,12 +266,15 @@ impl AddServerDialog {
     }
   }
 
+  /// Cancel; *Check address* before an answer and *Check again* after one; *Continue to sign in*,
+  /// available only once the server answered and may be added. An address already listed has
+  /// *Open server* instead.
   fn actions(
     &self,
     ctx: &Ctx,
     context: &Context,
     (next, answered): (&Next, bool),
-    check: &CheckAction,
+    check: crate::ui::form::Submit,
     run: crate::ui::form::Submit,
   ) -> Vec<Element> {
     let mut actions = vec![cancel(ctx, "add-server-cancel", context.close())];
@@ -268,53 +290,50 @@ impl AddServerDialog {
       );
       return actions;
     }
-    if answered {
-      let again = (!check.state().get().is_pending())
-        .then(|| ServerAddress::parse(&self.address.get_untracked()).ok())
-        .flatten()
-        .map(|address| {
-          let check = check.clone();
-          Arc::new(move || check.run(address.clone())) as Arc<dyn Fn() + Send + Sync>
-        });
-      actions.push(
-        button(
-          "add-server-check-again",
-          ctx.t("servers.add.checkAgain"),
-          Some(Icon::RefreshCw),
-          again,
-        )
-        .render(ctx),
-      );
-    }
+    let (id, label) = if answered {
+      ("add-server-check-again", "servers.add.checkAgain")
+    } else {
+      ("add-server-check", "servers.add.check")
+    };
+    actions.push(button(id, ctx.t(label), Some(Icon::RefreshCw), check).render(ctx));
+    let continue_run = run.filter(|_| matches!(next, Next::Add(..)));
     actions.push(
       button(
         "add-server-continue",
         ctx.t("servers.add.continue"),
         Some(Icon::LogIn),
-        run,
+        continue_run,
       )
       .primary()
       .render(ctx),
     );
     actions
   }
+
+  /// Starts a check of an address, without the opt-in: that is given for the address whose warning
+  /// the person read.
+  fn start_check(&self, check: &CheckAction) -> Arc<dyn Fn(ServerAddress) + Send + Sync> {
+    let (check, opt_in, checking) = (check.clone(), self.opt_in.clone(), self.checking.clone());
+    Arc::new(move |address: ServerAddress| {
+      opt_in.set(false);
+      checking.set(Checking(Some(address.clone())));
+      check.run(address);
+    })
+  }
 }
 
-/// What *Continue* (or Enter) does now.
-/// A check starts without the opt-in: it is given for the address whose warning the person read.
+/// What Enter does now: checks an address not checked yet, adds a server that answered, or opens
+/// one already listed.
 fn run(
   next: &Next,
-  (check, add, opt_in): (&CheckAction, &AddAction, &Signal<bool>),
+  (start, add): (&Arc<dyn Fn(ServerAddress) + Send + Sync>, &AddAction),
   context: &Context,
 ) -> crate::ui::form::Submit {
   match next {
     Next::Wait => None,
     Next::Check(address) => {
-      let (check, address, opt_in) = (check.clone(), address.clone(), opt_in.clone());
-      Some(Arc::new(move || {
-        opt_in.set(false);
-        check.run(address.clone());
-      }))
+      let (start, address) = (start.clone(), address.clone());
+      Some(Arc::new(move || start(address.clone())))
     }
     Next::Add(address, name, plain_http) => {
       let (add, args) = (add.clone(), (address.clone(), name.clone(), *plain_http));

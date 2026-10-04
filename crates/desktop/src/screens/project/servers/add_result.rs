@@ -20,7 +20,7 @@ use crate::{
   messages::Message,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
-    command_row::{CommandPlace, Copied, command_row},
+    command_row::{Copied, command_box, copy_button, with_copy_failure},
     icon::{Icon, IconSize, icon},
     notice::Notice,
     pressable::{Ring, keyboard_stop, surface},
@@ -162,13 +162,34 @@ pub(super) fn bootstrap_notice(ctx: &Ctx, name: &str, copied: &Signal<Copied>) -
   )
   .emphasized()
   .id("add-server-no-admin")
-  .below(command_row(
-    ctx,
-    "add-server-command",
-    "add-server-copy-command",
-    BOOTSTRAP_COMMAND,
-    CommandPlace::Dialog,
-    copied,
-  ))
+  .below(command(ctx, copied))
   .into()
+}
+
+/// The host command with Copy (`vYJPw`): it wraps only between its words, so `--admin` and
+/// `<username>` stay whole.
+fn command(ctx: &Ctx, copied: &Signal<Copied>) -> Element {
+  let (copy, outcome) = copy_button(ctx, "add-server-copy-command".into(), BOOTSTRAP_COMMAND, copied);
+  let words = BOOTSTRAP_COMMAND.split(' ').map(|word| {
+    Text::new(word)
+      .variant(ExtraTypography::MonoValue.role())
+      .color(PaletteColor::TextPrimary)
+      .nowrap()
+  });
+  let row = command_box("add-server-command")
+    .align_items(Alignment::Center)
+    .padding_vertical(ExtraSpacing::Tight.role())
+    .padding_left(ExtraSpacing::Stack.role())
+    .padding_right(ExtraSpacing::Tight.role())
+    .child(
+      Row::new()
+        .id("add-server-command-text")
+        .wrap()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .with_children(words),
+    )
+    .child(copy.in_form().render(ctx));
+  with_copy_failure(ctx, row.into(), outcome)
 }

@@ -19,7 +19,7 @@ use super::{
   account::{AccountProps, AccountTab},
   frame::BUTTON_HEIGHT,
   labels::{connection_label, connection_name},
-  users::{UsersProps, UsersTab},
+  users::{People, UsersProps, UsersTab, load_people},
 };
 use crate::{
   messages::Message,
@@ -71,6 +71,8 @@ type SignOutAction = FutureAction<ServerEntry, SignedOut, Message>;
 
 pub(super) struct ServerDetails {
   nav: ProjectNav,
+  /// Bumped after a change on the Users tab, to read the users again.
+  users: Signal<u64>,
 }
 
 impl Component for ServerDetails {
@@ -82,6 +84,7 @@ impl Component for ServerDetails {
       nav: ctx
         .use_context::<ProjectNav>()
         .expect("the project shell provides ProjectNav"),
+      users: ctx.signal(0_u64),
     }
   }
 
@@ -91,6 +94,11 @@ impl Component for ServerDetails {
     let admin = props.entry.stored.account.as_ref().is_some_and(|account| account.admin)
       && props.entry.connection != Some(Connection::SignedOut);
     let tab = if admin { props.tab } else { ServerTab::Account };
+    let people = load_people(ctx, &props.entry, admin, (props.revision, self.users.get()));
+    let count = match &people {
+      Some(Ok(People(people))) => Some(people.len()),
+      _ => None,
+    };
     let content = match tab {
       ServerTab::Account => ctx.mount_keyed::<AccountTab>(
         "server-account",
@@ -105,7 +113,8 @@ impl Component for ServerDetails {
         UsersProps {
           entry: props.entry.clone(),
           dialog: props.dialog.clone(),
-          revision: props.revision,
+          people,
+          reload: self.users.clone(),
         },
       ),
     };
@@ -115,7 +124,7 @@ impl Component for ServerDetails {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(header(ctx, &props, &sign_out))
-      .child(self.tabs(ctx, &props.entry, tab, admin))
+      .child(self.tabs(ctx, &props.entry, tab, admin.then_some(count)))
       .child(
         ScrollVertical::new(content)
           .with_scroll_state(props.scroll.clone())
@@ -127,7 +136,8 @@ impl Component for ServerDetails {
 
 impl ServerDetails {
   /// Account and, for an admin, Users (`R3v7ow`); tabs are pointer-only.
-  fn tabs(&self, ctx: &Ctx, entry: &ServerEntry, selected: ServerTab, admin: bool) -> Element {
+  /// `users` is `Some` for an admin, with how many users there are once read.
+  fn tabs(&self, ctx: &Ctx, entry: &ServerEntry, selected: ServerTab, users: Option<Option<usize>>) -> Element {
     let height = Dimension::Pct(100.0);
     let server = Some(entry.stored.id);
     let mut tabs = vec![
@@ -135,9 +145,10 @@ impl ServerDetails {
         .selected(selected == ServerTab::Account)
         .link(self.nav.link(Page::Servers(server, ServerTab::Account))),
     ];
-    if admin {
+    if let Some(count) = users {
       tabs.push(
         Tab::new("server-tab-users", ctx.t("servers.tabs.users"), height)
+          .count(count)
           .selected(selected == ServerTab::Users)
           .link(self.nav.link(Page::Servers(server, ServerTab::Users))),
       );

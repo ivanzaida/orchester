@@ -48,7 +48,7 @@ pub(super) fn server_list(
     .padding_left(SpacingSize::Section)
     .padding_right(ExtraSpacing::Step.role())
     .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t("servers.list.overline")).variant(ExtraTypography::Overline.role()))
+    .child(Text::new(&ctx.t("servers.list.overline").to_uppercase()).variant(ExtraTypography::Overline.role()))
     .with_children(cards);
   Column::new()
     .id("server-list")

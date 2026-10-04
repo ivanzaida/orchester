@@ -71,19 +71,23 @@ impl From<User> for Person {
 pub(super) struct UsersProps {
   pub entry: ServerEntry,
   pub dialog: Signal<ServerDialog>,
-  pub revision: u64,
+  /// The users as the details read them; `None` while they are read for the first time.
+  pub people: Option<Result<People, Message>>,
+  /// Bumped after an Enable, for the details to read the users again.
+  pub reload: Signal<u64>,
 }
 
 impl PartialEq for UsersProps {
   fn eq(&self, other: &Self) -> bool {
-    self.entry == other.entry && self.revision == other.revision
+    self.entry == other.entry && self.people == other.people
   }
 }
 
 impl lurq::app::component::DevtoolsInspectable for UsersProps {}
 
+/// The server's users.
 #[derive(Clone, Debug, PartialEq)]
-struct People(Vec<Person>);
+pub(super) struct People(pub Vec<Person>);
 
 impl lurq::app::component::DevtoolsInspectable for People {}
 
@@ -94,30 +98,26 @@ impl lurq::app::component::DevtoolsInspectable for Enabled {}
 
 type EnableAction = FutureAction<(ServerEntry, UserId), Enabled, Message>;
 
-pub(super) struct UsersTab {
-  /// Bumped after an Enable, to read the users again.
-  enabled: Signal<u64>,
-}
+pub(super) struct UsersTab;
 
 impl Component for UsersTab {
   type Props = UsersProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     let enable = enable_action(ctx);
-    let enabled = ctx.signal(0_u64);
-    let reload = enabled.clone();
+    let reload = ctx.props::<UsersProps>().reload.clone();
     ctx.watch(&enable.state(), move |state| {
       if !state.is_pending() && state.data.is_some() {
         reload.update(|count| *count += 1);
       }
     });
-    Self { enabled }
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<UsersProps>().clone();
     let enable = enable_action(ctx);
-    let people = self.people(ctx, &props);
+    let people = props.people.clone();
     let problem = enable.state().get().error;
     let content: Element = match people {
       Some(Ok(People(people))) => users_table(ctx, &props, &people, &enable),
@@ -144,25 +144,33 @@ impl Component for UsersTab {
   }
 }
 
-impl UsersTab {
-  fn people(&self, ctx: &mut Ctx, props: &UsersProps) -> Option<Result<People, Message>> {
-    let servers = ServerFeed::of(ctx).servers;
-    let deps = (request_entry(&props.entry), props.revision, self.enabled.get());
-    let load = ctx.future(deps, move |(entry, ..)| {
-      let servers = servers.clone();
-      async move {
-        match servers.users(&entry).await {
-          Ok(users) => Ok(People(users.into_iter().map(Person::from).collect())),
-          Err(error) => Err(error.message(&entry.address)),
-        }
+/// The users of `entry`'s server for an admin, read again when `revision` changes; `None` while
+/// they are read for the first time, and for a person who is not an admin.
+pub(super) fn load_people(
+  ctx: &mut Ctx,
+  entry: &ServerEntry,
+  admin: bool,
+  revision: (u64, u64),
+) -> Option<Result<People, Message>> {
+  let servers = ServerFeed::of(ctx).servers;
+  let deps = (request_entry(entry), admin, revision);
+  let load = ctx.future(deps, move |(entry, admin, _)| {
+    let servers = servers.clone();
+    async move {
+      if !admin {
+        return Ok(None);
       }
-    });
-    let state = load.state().get();
-    match (state.data, state.error) {
-      (_, Some(error)) => Some(Err(error)),
-      (Some(people), None) => Some(Ok(people)),
-      (None, None) => None,
+      match servers.users(&entry).await {
+        Ok(users) => Ok(Some(People(users.into_iter().map(Person::from).collect()))),
+        Err(error) => Err(error.message(&entry.address)),
+      }
     }
+  });
+  let state = load.state().get();
+  match (state.data, state.error) {
+    (_, Some(error)) => Some(Err(error)),
+    (Some(people), None) => people.map(Ok),
+    (None, None) => None,
   }
 }
 
