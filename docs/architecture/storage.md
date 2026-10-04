@@ -71,7 +71,10 @@ keeps work running is a possible later improvement, not part of this version.)
     only continuing all of them or none. Runs not continued there stay interrupted and each can
     be continued on its own later from its task conversation (user decision, 2026-09-24). Work after the
     checkpoint is not claimed as done; uncommitted worktree changes are kept and shown, never
-    discarded silently.
+    discarded silently. A run that waited for a person's answer or plan decision, with no agent
+    or step at work, was not interrupted: its agent's session resumes with the answer, so it is
+    not listed and keeps waiting. One that waited on a tool or command approval was: the agent
+    process held the request.
 - **Runner drops while the application is open** → the desktop reconnects automatically with a
   bounded backoff and tells the user (reconnecting, reconnected, or could not restart). Runs
   interrupted by the drop continue automatically from their last checkpoint as soon as the runner
