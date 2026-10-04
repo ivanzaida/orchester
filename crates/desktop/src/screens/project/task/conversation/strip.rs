@@ -15,7 +15,7 @@ use lurq::{
 
 use super::{
   StepFilter,
-  rail::{HEAD_HEIGHT, RailToggle, glyph},
+  rail::{HEAD_HEIGHT, Picker, RailToggle, glyph},
 };
 use crate::{
   tasks::timeline::rail::{RailState, RailStep},
@@ -35,7 +35,7 @@ const BADGE_HEIGHT: f32 = 44.0;
 pub(super) fn strip(
   ctx: &Ctx,
   steps: &[RailStep],
-  (filter, toggle): (&Signal<StepFilter>, &RailToggle),
+  (filter, toggle, picker): (&Signal<StepFilter>, &RailToggle, &Picker),
   window: f32,
 ) -> Element {
   let picked = filter.get().0;
@@ -50,11 +50,11 @@ pub(super) fn strip(
     "conversation-strip-all".into(),
     (Icon::List, ctx.t("runs.conversation.rail.allShort").to_string()),
     (picked.is_none(), false),
-    Some(pick(filter, StepFilter(None))),
+    Some(pick(picker, StepFilter(None))),
   );
   let badges = steps.iter().map(|step| {
     let live = matches!(step.state, RailState::Working | RailState::Waits(_));
-    let press = step.started().then(|| pick(filter, StepFilter(Some(step.key.clone()))));
+    let press = step.started().then(|| pick(picker, StepFilter(Some(step.key.clone()))));
     badge(
       format!("conversation-strip-step-{}", step.number),
       (glyph(&step.state), format!("{:02}", step.number)),
@@ -82,9 +82,9 @@ pub(super) fn strip(
     .into()
 }
 
-fn pick(filter: &Signal<StepFilter>, key: StepFilter) -> Box<dyn Fn() + Send + Sync> {
-  let filter = filter.clone();
-  Box::new(move || filter.set(key.clone()))
+fn pick(picker: &Picker, key: StepFilter) -> Box<dyn Fn() + Send + Sync> {
+  let picker = picker.clone();
+  Box::new(move || picker(key.clone()))
 }
 
 /// A badge: its icon over its label; pressable unless its step has not started.

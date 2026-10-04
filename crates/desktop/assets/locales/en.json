@@ -1337,7 +1337,6 @@
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget.",
         "noteFirstEdit": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file.",
         "noteAtMost": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file; ≤ means the turn of that edit was reported whole, so its later part is counted too.",
-        "stepTitle": "{{step}} · {{agent}}",
         "ran": "Ran",
         "ranValue": "{{start}}–{{end}} · {{took}}",
         "codeIndex": "Code index",
@@ -1373,7 +1372,8 @@
         "toolCallsDenied": "{{count}} · {{denied}} denied",
         "noteNative": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
         "noteNativeFirstEdit": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
-        "noteNativeAtMost": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file; ≤ means the request of that edit was reported whole, so its later part is counted too. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent."
+        "noteNativeAtMost": "Token counts come from the usage the endpoint reports for each request: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the requests until the agent first changed a file; ≤ means the request of that edit was reported whole, so its later part is counted too. File tools are Orchester’s own and stay in the worktree; commands are shown as for a CLI agent.",
+        "stepAttempt": "{{number}} {{step}} · attempt {{attempt}}"
       },
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
@@ -2133,7 +2133,8 @@
         "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
         "deciding": "Waiting for your decision",
         "attachUnavailable": "Attaching files is not available yet.",
-        "closedReason": "No agent of this run reads messages any more · {{reason}}"
+        "closedReason": "No agent of this run reads messages any more · {{reason}}",
+        "continueContext": "Continue {{step}} with your instructions · attempt {{attempt}}"
       },
       "placeholder": {
         "agent": "Message {{agent}}…",
@@ -2143,7 +2144,7 @@
         "followUp": "Ask a question or request a follow-up…",
         "continue": "Tell {{agent}} how to continue the run…",
         "continueUnnamed": "Say how the run should continue…",
-        "firstAgent": "Write to the first agent of the run…"
+        "firstAgent": "Write to {{agent}} before it starts…"
       },
       "hint": {
         "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
@@ -2238,7 +2239,8 @@
             "one": "1 match",
             "other": "{{count}} matches"
           }
-        }
+        },
+        "workingNoTokens": "{{agent}} · working"
       },
       "recipient": {
         "orchestrator": "Orchestrator",

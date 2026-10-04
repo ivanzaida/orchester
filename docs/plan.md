@@ -203,9 +203,19 @@ where C·07 draws a shorter line; a chip names its summary as ORC-61 orders it (
 *Edited 3 files · ran …* or file names; the chat is not capped at 840; agent rows name their step only after a muted
 divider; *All steps* reads *N of M steps ran* whenever a step has not run; the question card's hint is pressable
 (focuses the composer); the plan card keeps what approving starts beside its button; problem rows keep the transcript
-entry look; the composer's context line has no ×, and Esc only closes the send menu (leaving a mode was not built);
-the recipient menu's options carry the state words, not *gets it at its next tool call*; quiet lines keep the ORC-61
-explanation texts; the tool step's divider no longer names its command and exit code (C·05).
+entry look; the recipient menu's options carry the state words, not *gets it at its next tool call*; quiet lines keep
+the ORC-61 explanation texts; the tool step's divider no longer names its command and exit code (C·05).
+
+Design-verification fixes (2026-10-04, on `7710f081`): the recipient selector has no fill of its own (lurq painted an
+unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree);
+a group of notes reads its lines without *0 calls*, a working step without tokens reads *Builder · working*; the
+permissions chip shows whenever the composer is open (else the run's first agent step); *Write to Explorer before it
+starts…*; a chip's lines start closed, failures too; picking a step opens the chat at its start, *All steps* goes back
+to the end; Details names the step and attempt (*03 Implement · attempt 1*); narrower than one line, the toolbar's state
+goes beside the search so *Details* stays whole; the send menu and tooltips sit 8 above the box; the context line has
+× and Esc closes the menu, then leaves the mode (a question not answered or a plan's changes not requested: the box
+writes an ordinary message, `ComposerMode::without_context`); a failed run's composer says *Continue 03 Implement with
+your instructions · attempt 3* (no ×: continuing is the only message a failed run takes).
 
 ### U10 · Pull requests screen jumps while it loads (UI)
 

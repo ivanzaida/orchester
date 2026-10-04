@@ -150,7 +150,11 @@ fn conversation_timeline_puts_tool_events_in_a_chip_of_the_message() {
   // Choosing the step's tokens opens Details on it.
   desktop.click("activity-step-tokens");
   desktop.wait_for("activity-invocation");
-  assert!(shows(&mut desktop, "activity-invocation-title", "Implement · Builder"));
+  assert!(shows(
+    &mut desktop,
+    "activity-invocation-title",
+    "01 Implement · attempt 1"
+  ));
   desktop.click("conversation-details");
   desktop.wait_until("Details closes", |desktop| !has(desktop, "activity-invocation"));
 }

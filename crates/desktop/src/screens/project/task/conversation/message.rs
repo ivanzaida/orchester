@@ -93,6 +93,7 @@ pub(super) fn tool_step_failure(ctx: &mut Ctx, item: &Item, entry: &TranscriptEn
       agent: "".into(),
       raw: false,
       time_column: false,
+      in_group: false,
       toggles: timeline.toggles.clone(),
     },
   );

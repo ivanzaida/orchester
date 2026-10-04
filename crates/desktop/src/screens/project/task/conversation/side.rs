@@ -2,6 +2,8 @@
 //! and the composer) and at the right the step rail, its strip (`I35q7D`) or Details in its place
 //! (`oryKr`), never two of them; a collapsed rail opened in a narrow window shows over the chat.
 
+use std::sync::Arc;
+
 use lurq::{
   app::ctx::Ctx,
   components::{Column, Row, Stack},
@@ -12,10 +14,10 @@ use orchester_core::id::StepExecutionId;
 
 use super::{
   super::activity::{DETAILS_WIDTH, LiveFooter, LiveFooterProps},
-  ConversationProps, ConversationTab, column,
+  ConversationProps, ConversationTab, StepFilter, column,
   composer::{ComposerDock, ComposerProps},
   details::details_pane,
-  rail::{RAIL_WIDTH, RailProps, rail},
+  rail::{Picker, RAIL_WIDTH, RailProps, rail},
   readback::{self, Controls, readback},
   strip::{STRIP_WIDTH, strip},
   toolbar::{ToolbarState, toolbar},
@@ -210,12 +212,14 @@ impl ConversationTab {
       };
     }
     let searching = !view.choice.query.trim().is_empty();
+    let picker = self.picker();
     let props = RailProps {
       steps: view.steps,
       summary: summary(view.run, view.steps),
       matches: searching.then(|| match_counts(view.steps, view.found())),
       filter: &self.step,
       toggle: &self.rail,
+      picker: &picker,
     };
     if let Beside::Rail = view.beside {
       return Side {
@@ -225,7 +229,7 @@ impl ConversationTab {
       };
     }
     Side {
-      panel: strip(ctx, view.steps, (&self.step, &self.rail), view.window),
+      panel: strip(ctx, view.steps, (&self.step, &self.rail, &picker), view.window),
       width,
       over: self.rail.over.get().then(|| {
         Column::new()
@@ -235,6 +239,24 @@ impl ConversationTab {
           .into()
       }),
     }
+  }
+
+  /// Picks a step in the rail or its strip: the chat narrows to it and opens at its start (`bdCsu`);
+  /// all steps again go to the end and follow it. Over the chat, the rail closes.
+  fn picker(&self) -> Picker {
+    let (filter, over) = (self.step.clone(), self.rail.over.clone());
+    let (scroll, following) = (self.scroll.clone(), self.following.clone());
+    Arc::new(move |pick: StepFilter| {
+      let all = pick.0.is_none();
+      filter.set(pick);
+      over.set(false);
+      if all {
+        scroll.scroll_to_bottom_pending();
+      } else {
+        scroll.scroll_to_top_pending();
+      }
+      following.set(all);
+    })
   }
 
   /// The tab: the chat above the composer, the panel beside it, and the rail over them while it

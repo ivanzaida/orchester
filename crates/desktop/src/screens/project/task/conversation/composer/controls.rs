@@ -45,16 +45,18 @@ const CHEVRON_WIDTH: f32 = 24.0;
 const MENU_WIDTH: f32 = 320.0;
 const SEND_TIP_WIDTH: f32 = 300.0;
 const ATTACH_TIP_WIDTH: f32 = 220.0;
-/// How far above the box the send menu and the tooltips sit.
-const POPUP_GAP: f32 = 6.0;
+/// How far above the box the send menu and the tooltips sit, and how far in from its right edge
+/// (`X7OQK` in `BRMpj`).
+const POPUP_GAP: f32 = 8.0;
+const POPUP_INSET: f32 = 8.0;
 
 /// The row's own state: the send menu and what the pointer is over.
 pub(super) struct Controls {
   pub(super) menu: Signal<bool>,
   send_hovered: Signal<bool>,
   attach_hovered: Signal<bool>,
-  send_anchor: ElementRef,
-  attach_anchor: ElementRef,
+  /// The composer's box, which the send menu and the tooltips sit above.
+  pub(super) box_anchor: ElementRef,
 }
 
 /// What the row shows and sends.
@@ -73,8 +75,7 @@ impl Controls {
       menu: ctx.signal(false),
       send_hovered: ctx.signal(false),
       attach_hovered: ctx.signal(false),
-      send_anchor: ElementRef::new(),
-      attach_anchor: ElementRef::new(),
+      box_anchor: ElementRef::new(),
     }
   }
 
@@ -101,7 +102,7 @@ impl Controls {
     let (enter, leave) = (self.attach_hovered.clone(), self.attach_hovered.clone());
     let tip = self.attach_hovered.get().then(|| {
       tooltip(
-        &self.attach_anchor,
+        &self.box_anchor,
         (
           "conversation-attach-tip",
           &ctx.t("runs.conversation.composer.attachUnavailable"),
@@ -117,7 +118,6 @@ impl Controls {
       .rounded(ExtraRadius::Round.role())
       .cursor(CursorIcon::NotAllowed)
       .describe("state", "disabled")
-      .ref_element(self.attach_anchor.clone())
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
       .child(
@@ -179,7 +179,7 @@ impl Controls {
     let (enter, leave) = (self.send_hovered.clone(), self.send_hovered.clone());
     let tip = (self.send_hovered.get() && !self.menu.get()).then(|| {
       tooltip(
-        &self.send_anchor,
+        &self.box_anchor,
         ("conversation-send-tip", &tip(ctx, row.mode, &row.props.conversation)),
         (SEND_TIP_WIDTH, Placement::TopEnd),
       )
@@ -187,7 +187,6 @@ impl Controls {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .ref_element(self.send_anchor.clone())
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
       .with_children(chevron)
@@ -243,10 +242,10 @@ impl Controls {
       .box_shadow(ExtraShadow::Popover.role())
       .with_children(options);
     Some(
-      Popup::new(self.send_anchor.clone(), panel)
+      Popup::new(self.box_anchor.clone(), panel)
         .open(self.menu.clone())
         .placement(Placement::TopEnd)
-        .offset(0.0, -POPUP_GAP)
+        .offset(-POPUP_INSET, -POPUP_GAP)
         .into(),
     )
   }
@@ -326,11 +325,15 @@ fn queues(mode: &ComposerMode) -> bool {
   }
 }
 
-/// The run's permissions chip, for the step its agent works or last worked on; `None` for a tool
-/// step, a task without a run, or once the profile version is gone.
+/// The run's permissions chip whenever the composer is open: for the step its agent works or last
+/// worked on, else the first agent step of the run (a queued run's, or after a tool step failed);
+/// `None` for a task without a run or a pipeline without an agent step whose profile is kept.
 fn permissions_chip(ctx: &mut Ctx, props: &ComposerProps, short: bool) -> Option<Element> {
   let run = props.detail.run.as_ref()?;
-  let step = run.current_step()?;
+  let step = run
+    .current_step()
+    .filter(|step| step.permissions.is_some())
+    .or_else(|| run.steps.iter().find(|step| step.permissions.is_some()))?;
   let chip = RunPermissionsProps {
     permissions: step.permissions.clone()?,
     step: step.clone(),
@@ -370,8 +373,10 @@ fn recipient(ctx: &Ctx, row: &RowProps<'_>) -> Element {
     (Icon::ChevronDown, PaletteColor::TextSecondary)
   };
   let style = select_style(ctx, PILL_HEIGHT)
+    // No fill of its own: the selector is quiet on the box's `$raised` (`opOGv`).
     .trigger(
       SelectPartStyle::new()
+        .background(PaletteColor::SurfaceRaised)
         .rounded(ExtraRadius::Round.role())
         .min_height(PILL_HEIGHT),
     )
@@ -432,10 +437,14 @@ fn tooltip(anchor: &ElementRef, (id, text): (&'static str, &str), (width, placem
         .variant(ExtraTypography::CellLabel.role())
         .color(PaletteColor::TextPrimary),
     );
+  let inset = match placement {
+    Placement::TopStart => POPUP_INSET,
+    _ => -POPUP_INSET,
+  };
   Popup::new(anchor.clone(), panel)
     .open_when(true)
     .placement(placement)
-    .offset(0.0, -POPUP_GAP)
+    .offset(inset, -POPUP_GAP)
     .hit_test(HitTestBehavior::None)
     .dismiss_on_outside_click(false)
     .dismiss_on_escape(false)

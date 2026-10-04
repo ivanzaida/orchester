@@ -66,8 +66,8 @@ struct Controls {
 }
 
 /// The toolbar across the chat, with its side padding. While the chat is too narrow for one line,
-/// the run's state and *Details* keep the first with *Show*, the search (as wide as the line leaves
-/// it) and *Show raw lines* go to a second.
+/// *Details* keeps the first with *Show*; the search (as wide as the line leaves it), *Show raw
+/// lines* and the run's state go to a second, so nothing runs past the chat's edge.
 pub(super) fn toolbar(ctx: &Ctx, state: &ToolbarState) -> Element {
   let tools = state.show.get().0 == Show::Tools;
   let window = ctx.window().logical_width();
@@ -104,7 +104,6 @@ pub(super) fn toolbar(ctx: &Ctx, state: &ToolbarState) -> Element {
       line()
         .child(Row::new().flex_shrink(0.0).child(controls.show))
         .child(Spacer::new().flex(1.0))
-        .child(Row::new().flex_shrink(0.0).child(controls.state))
         .child(Row::new().flex_shrink(0.0).child(controls.details)),
     )
     .child(
@@ -115,7 +114,8 @@ pub(super) fn toolbar(ctx: &Ctx, state: &ToolbarState) -> Element {
             .min_width(Dimension::Px(0.0))
             .child(controls.search),
         )
-        .with_children(controls.raw),
+        .with_children(controls.raw)
+        .child(Row::new().flex_shrink(0.0).child(controls.state)),
     )
     .into()
 }

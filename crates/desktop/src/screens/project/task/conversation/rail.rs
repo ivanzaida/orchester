@@ -86,16 +86,16 @@ pub(super) struct RailProps<'a> {
   pub(super) matches: Option<(usize, Vec<usize>)>,
   pub(super) filter: &'a Signal<StepFilter>,
   pub(super) toggle: &'a RailToggle,
+  pub(super) picker: &'a Picker,
 }
 
+/// Picks a step, or all steps (`None`), in the rail or its strip.
+pub(super) type Picker = Arc<dyn Fn(StepFilter) + Send + Sync>;
+
 impl RailProps<'_> {
-  /// Picks the step `key`, or all steps; over the chat, the rail closes with it.
   fn pick(&self, key: StepFilter) -> impl Fn() + Send + Sync + 'static {
-    let (filter, over) = (self.filter.clone(), self.toggle.over.clone());
-    move || {
-      filter.set(key.clone());
-      over.set(false);
-    }
+    let picker = self.picker.clone();
+    move || picker(key.clone())
   }
 }
 
@@ -362,11 +362,8 @@ fn who(ctx: &Ctx, step: &RailStep) -> Arc<str> {
 /// not started".
 fn step_meta(ctx: &Ctx, step: &RailStep) -> Arc<str> {
   let who = who(ctx, step);
-  let tokens = step
-    .latest
-    .as_ref()
-    .map(|head| compact_tokens(head.usage.counted()))
-    .unwrap_or_default();
+  let counted = step.latest.as_ref().map_or(0, |head| head.usage.counted());
+  let tokens = compact_tokens(counted);
   let took = took(ctx, step);
   let (key, extra): (&str, Vec<(&str, String)>) = match (&step.state, step.tool_step) {
     (RailState::NotStarted, _) => ("runs.conversation.rail.notStarted", Vec::new()),
@@ -381,6 +378,7 @@ fn step_meta(ctx: &Ctx, step: &RailStep) -> Arc<str> {
         vec![("attempt", attempt.to_string())],
       ),
       None if step.tool_step => ("runs.conversation.rail.workingTool", Vec::new()),
+      None if counted == 0 => ("runs.conversation.rail.workingNoTokens", Vec::new()),
       None => ("runs.conversation.rail.working", vec![("tokens", tokens)]),
     },
     (RailState::Waits(WaitReason::Message), _) => ("runs.conversation.rail.waitingAnswer", Vec::new()),

@@ -32,7 +32,7 @@ use lurq::{
 use orchester_core::{
   conversation::{Recipient, Timing},
   id::{IdempotencyKey, MessageId},
-  run::{PlanDecision, ReviewNote},
+  run::{PlanDecision, PlanVersion, ReviewNote},
 };
 use parking_lot::Mutex;
 
@@ -107,12 +107,38 @@ impl lurq::app::component::DevtoolsInspectable for DraftKey {}
 /// A press of Send, of a send menu option or of a key.
 type Press = Arc<dyn Fn() + Send + Sync>;
 
+/// What a mode answers or changes, which its context line names and the person can leave.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Context {
+  Question(MessageId),
+  Plan(PlanVersion),
+}
+
+impl Context {
+  fn of(mode: &ComposerMode) -> Option<Self> {
+    match mode {
+      ComposerMode::Answer { question, .. } => Some(Self::Question(*question)),
+      ComposerMode::PlanChanges { version, .. } => Some(Self::Plan(*version)),
+      _ => None,
+    }
+  }
+}
+
+/// The context the person left with its line's × or Esc: while it is the one the run's state
+/// offers, the composer writes an ordinary message instead.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Left(Option<Context>);
+
+impl lurq::app::component::DevtoolsInspectable for Left {}
+
 /// What sending does now; `None` where it cannot be pressed.
 struct Presses {
   /// Send and Enter: now while the agent works mid-turn, else the state's action.
   send: Option<Press>,
   /// *Send after this turn* and Ctrl/Cmd+Enter, while the agent works mid-turn.
   after_turn: Option<Press>,
+  /// Leaves the mode's context: its line's × and Esc.
+  leave: Option<Press>,
 }
 
 pub(super) struct ComposerDock {
@@ -125,6 +151,7 @@ pub(super) struct ComposerDock {
   /// The last question that waited, which the field took the focus for unless the person was
   /// searching: once per question.
   answering: Mutex<Option<MessageId>>,
+  left: Signal<Left>,
   controls: controls::Controls,
 }
 
@@ -152,6 +179,7 @@ impl Component for ComposerDock {
       focused: ctx.signal(false),
       input: ElementRef::new(),
       answering: Mutex::new(None),
+      left: ctx.signal(Left::default()),
       controls: controls::Controls::new(ctx),
     }
   }
@@ -168,16 +196,29 @@ impl Component for ComposerDock {
     let run = props.detail.run.as_ref();
     self.follow_default(conversation, run);
     let recipient = self.to.get().0;
-    let mode = ComposerMode::of(conversation, run, recipient);
+    let offered = ComposerMode::of(conversation, run, recipient);
+    let left = Context::of(&offered).is_some_and(|context| self.left.get().0 == Some(context));
+    let leave = Context::of(&offered).filter(|_| !left).map(|context| {
+      let chosen = self.left.clone();
+      Arc::new(move || chosen.set(Left(Some(context)))) as Press
+    });
+    let mode = if left {
+      offered.without_context(conversation, recipient)
+    } else {
+      offered
+    };
     self.focus_question(ctx, &props, &mode);
     let feedback = feedback(&action, &plan);
     let content = if mode == ComposerMode::Closed {
       vec![closed(ctx, &hint(ctx, &mode, conversation))]
     } else {
       let sending = action.state().get().is_pending() || plan.state().get().is_pending();
-      let presses = self.presses(&props, (&mode, recipient), (&action, &plan), sending);
+      let presses = Presses {
+        leave,
+        ..self.presses(&props, (&mode, recipient), (&action, &plan), sending)
+      };
       let composer = self.composer(ctx, &props, (&mode, recipient), &presses, sending);
-      context_line(ctx, &mode, props.detail.task.id())
+      context_line(ctx, (&mode, &props.detail), presses.leave.clone())
         .into_iter()
         .chain(std::iter::once(composer))
         .chain(feedback.map(|message| field_error(&message_text(ctx, &message))))
@@ -205,7 +246,9 @@ impl ComposerDock {
   fn follow_default(&self, conversation: &Conversation, run: Option<&crate::tasks::detail::RunView>) {
     let mode = ComposerMode::of(conversation, run, Recipient::Orchestrator);
     let default = mode.default_recipient(conversation);
-    let fixed = mode.fixed_recipient().is_some();
+    // A question the person left no longer holds the recipient to its asker.
+    let left = Context::of(&mode).is_some_and(|context| self.left.get_untracked().0 == Some(context));
+    let fixed = mode.fixed_recipient().is_some() && !left;
     let current = self.to.get_untracked();
     let offered = conversation
       .recipients
@@ -248,12 +291,14 @@ impl ComposerDock {
       return Presses {
         send: None,
         after_turn: None,
+        leave: None,
       };
     }
     if let ComposerMode::PlanChanges { .. } = mode {
       return Presses {
         send: request_changes(props, plan, &text),
         after_turn: None,
+        leave: None,
       };
     }
     let send = |timing: Timing| -> Press {
@@ -274,10 +319,12 @@ impl ComposerDock {
       ComposerMode::Steer(working) if working.mid_turn => Presses {
         send: Some(send(Timing::Now)),
         after_turn: Some(send(Timing::AfterTurn)),
+        leave: None,
       },
       _ => Presses {
         send: Some(send(Timing::AfterTurn)),
         after_turn: None,
+        leave: None,
       },
     }
   }
@@ -318,17 +365,19 @@ impl ComposerDock {
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, border))
       .rounded(ExtraRadius::Composer.role())
+      .ref_element(self.controls.box_anchor.clone())
       .child(field)
       .child(row)
       .into()
   }
 
   /// The message field: it grows with its lines up to [`MAX_LINES`]. Enter sends, Shift+Enter adds
-  /// a line, Ctrl/Cmd+Enter sends after this turn while the agent works mid-turn.
+  /// a line, Ctrl/Cmd+Enter sends after this turn while the agent works mid-turn; Esc closes the
+  /// send menu, then leaves the context line's mode.
   fn field(&self, ctx: &Ctx, props: &ComposerProps, mode: &ComposerMode, presses: &Presses) -> Element {
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let placeholder = placeholder(ctx, mode, &props.conversation);
-    let (send, after_turn) = (presses.send.clone(), presses.after_turn.clone());
+    let (send, after_turn, leave) = (presses.send.clone(), presses.after_turn.clone(), presses.leave.clone());
     let menu = self.controls.menu.clone();
     styled_input(ctx, props.draft.clone(), TypographyStyle::Body)
       .id("conversation-input")
@@ -340,9 +389,14 @@ impl ComposerDock {
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
       .on_key_down(move |event: KeyboardEvent| {
-        if event.key == "Escape" && menu.get_untracked() {
-          menu.set(false);
-          event.prevent_default();
+        if event.key == "Escape" {
+          if menu.get_untracked() {
+            menu.set(false);
+            event.prevent_default();
+          } else if let Some(leave) = &leave {
+            leave();
+            event.prevent_default();
+          }
           return;
         }
         if event.key != "Enter" || event.shift {

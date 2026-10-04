@@ -102,12 +102,13 @@ fn closed_chip(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
     Row::new()
       .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
-      .child(
+      // Reasoning, usage and unparsed lines alone are no calls: their summary counts them.
+      .with_children((summary.calls > 0).then(|| {
         Text::new(&calls(ctx, summary.calls))
           .variant(TypographyStyle::Mono)
           .color(PaletteColor::TextMuted)
-          .nowrap(),
-      )
+          .nowrap()
+      }))
       .child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted))
       .into()
   };
@@ -254,6 +255,7 @@ fn entries(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip, raw: bool) -> Vec<El
           agent: "".into(),
           raw,
           time_column: true,
+          in_group: true,
           toggles: timeline.toggles.clone(),
         },
       );

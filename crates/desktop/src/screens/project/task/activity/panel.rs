@@ -51,20 +51,19 @@ pub(in crate::screens::project::task) fn invocation_panel(
     Some(execution) => run.invocations_of(execution).last(),
     None => run.invocations.last(),
   };
-  let title = match (
-    filter,
-    invocation.and_then(|invocation| run.step_of(invocation.execution)),
-  ) {
+  let title = match invocation.and_then(|invocation| Some((invocation, run.step_of(invocation.execution)?))) {
     // An agent Orchester runs itself names its step (04.H10 `FRtSj`).
-    (_, Some(step)) if native::is_native(step) => native::title(ctx, step),
-    (Some(_), Some(step)) => ctx.t_args(
-      "runs.activity.panel.stepTitle",
+    Some((_, step)) if native::is_native(step) => native::title(ctx, step),
+    // *07 Docs & cleanup · attempt 1* (`MBRfl` in `oryKr`).
+    Some((invocation, step)) => ctx.t_args(
+      "runs.activity.panel.stepAttempt",
       [
+        ("number", format!("{:02}", step.number).as_str()),
         ("step", &*step.name),
-        ("agent", step.agent.as_deref().unwrap_or_default()),
+        ("attempt", attempt_of(run, invocation.execution).as_str()),
       ],
     ),
-    _ => ctx.t("runs.activity.panel.title"),
+    None => ctx.t("runs.activity.panel.title"),
   };
   let panel = Column::new()
     .id("activity-invocation-content")
@@ -74,7 +73,7 @@ pub(in crate::screens::project::task) fn invocation_panel(
     .spacing(ExtraSpacing::Group.role())
     .child(
       Text::new(&title)
-        .variant(ExtraTypography::SectionHeading.role())
+        .variant(ExtraTypography::NoticeHeading.role())
         .id("activity-invocation-title"),
     );
   let Some(invocation) = invocation else {
@@ -170,12 +169,7 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   let Some(step) = run.step_of(invocation.execution) else {
     return Vec::new();
   };
-  let attempt = run
-    .run
-    .attempts()
-    .iter()
-    .find(|attempt| attempt.execution(invocation.execution).is_some())
-    .map_or_else(String::new, |attempt| attempt.number().to_string());
+  let attempt = attempt_of(run, invocation.execution);
   let number = format!("{:02}", step.number);
   let step_value = ctx.t_args(
     "runs.activity.panel.stepValue",
@@ -235,6 +229,16 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   }
   rows.extend(first_edit::code_index_row(ctx, run, invocation));
   rows
+}
+
+/// The number of the attempt `execution` belongs to.
+fn attempt_of(run: &RunView, execution: StepExecutionId) -> String {
+  run
+    .run
+    .attempts()
+    .iter()
+    .find(|attempt| attempt.execution(execution).is_some())
+    .map_or_else(String::new, |attempt| attempt.number().to_string())
 }
 
 /// When `execution` started and ended, once all its launches ended.

@@ -12,24 +12,27 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Row, Spacer, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{conversation::Recipient, id::TaskId};
 
-use super::super::nav;
+use super::super::{divider::step_label, nav};
 use crate::{
   display,
   navigation::route::{Page, TaskPageTab},
-  tasks::conversation::{
-    Conversation, PanelState, RecipientChoice,
-    composer::{ComposerMode, Queued},
+  tasks::{
+    conversation::{
+      Conversation, PanelState, RecipientChoice,
+      composer::{ComposerMode, Queued},
+    },
+    detail::TaskDetail,
   },
   theme::ExtraSpacing,
   ui::{
     icon::{Icon, IconSize, icon},
-    pressable::surface,
+    pressable::{pressable, surface},
   },
 };
 
@@ -49,10 +52,11 @@ pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Convers
       Some(agent) => ctx.t_args("runs.conversation.placeholder.continue", [("agent", agent)]),
       None => ctx.t("runs.conversation.placeholder.continueUnnamed"),
     },
-    ComposerMode::NotStarted if conversation.first_agent.is_some() => ctx.t("runs.conversation.placeholder.firstAgent"),
-    ComposerMode::Queue(Queued::Checkpoint) | ComposerMode::NotStarted | ComposerMode::Closed => {
-      ctx.t("conversation.composer.placeholder")
-    }
+    ComposerMode::NotStarted => match conversation.first_agent.as_deref() {
+      Some(first) => ctx.t_args("runs.conversation.placeholder.firstAgent", [("agent", first)]),
+      None => ctx.t("conversation.composer.placeholder"),
+    },
+    ComposerMode::Queue(Queued::Checkpoint) | ComposerMode::Closed => ctx.t("conversation.composer.placeholder"),
   }
 }
 
@@ -186,11 +190,17 @@ fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
   }
 }
 
-/// Above the box (`po1Yr` in `K1oNwn`): *Answering Builder's question from 12:09*, *Changes to plan
-/// v1 · sent to Planner*; *Waiting for your decision* with the way to it, on the task's Summary.
-pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> Option<Element> {
+/// Above the box (`po1Yr` in `K1oNwn`, `l7cEtA`): *Answering Builder's question from 12:09*,
+/// *Changes to plan v1 · sent to Planner* with × to `leave` that mode, *Continue 03 Implement with
+/// your instructions · attempt 3*; *Waiting for your decision* with the way to it, on the task's
+/// Summary.
+pub(super) fn context_line(
+  ctx: &mut Ctx,
+  (mode, detail): (&ComposerMode, &TaskDetail),
+  leave: Option<Arc<dyn Fn() + Send + Sync>>,
+) -> Option<Element> {
   let (glyph, text) = match mode {
-    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, task)),
+    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, detail.task.id())),
     ComposerMode::Answer { agent, asked_at, .. } => (
       Icon::CornerDownRight,
       ctx.t_args(
@@ -205,8 +215,16 @@ pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> 
         [("version", version.to_string().as_str()), ("agent", &**agent)],
       ),
     ),
+    ComposerMode::Continue => (Icon::Play, continue_text(ctx, detail)?),
     _ => return None,
   };
+  let leave = leave.map(|leave| {
+    pressable(surface().id("conversation-composer-leave"), move || leave()).child(icon(
+      Icon::X,
+      IconSize::Small,
+      PaletteColor::TextMuted,
+    ))
+  });
   Some(
     Row::new()
       .width(Dimension::Pct(100.0))
@@ -219,8 +237,25 @@ pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> 
           .id("conversation-composer-context")
           .variant(TypographyStyle::Caption),
       )
+      .child(Spacer::new().flex(1.0))
+      .with_children(leave)
       .into(),
   )
+}
+
+/// *Continue 03 Implement with your instructions · attempt 3*: the step the failed run stopped at
+/// and the attempt the message starts.
+fn continue_text(ctx: &Ctx, detail: &TaskDetail) -> Option<Arc<str>> {
+  let run = detail.run.as_ref()?;
+  let step = run.current_step()?;
+  let attempt = run.run.attempts().len() + 1;
+  Some(ctx.t_args(
+    "runs.conversation.composer.continueContext",
+    [
+      ("step", &*step_label(ctx, step.number, &step.name)),
+      ("attempt", attempt.to_string().as_str()),
+    ],
+  ))
 }
 
 /// The run waits for the person's decision after its retries: what the composer's messages wait for,
