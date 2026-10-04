@@ -51,6 +51,10 @@ define_id!(
   SessionId
 );
 define_id!(
+  /// A shared server in the desktop's list, given by the desktop when the server is added.
+  ServerId
+);
+define_id!(
   /// A project, i.e. one repository managed by Orchester.
   ProjectId
 );

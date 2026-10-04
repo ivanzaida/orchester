@@ -1,6 +1,7 @@
 //! Windows Credential Manager: one generic credential per secret, whose target is
-//! `orchester:<project id>/<secret id>`. It is kept on this computer only (`Local` persistence):
-//! it does not roam with a domain profile. Values are stored as their UTF-8 bytes.
+//! `orchester:<project id>/<secret id>` (a shared server's token: `orchester-server:<server id>/token`). It is kept on
+//! this computer only (`Local` persistence): it does not roam with a domain profile. Values are stored as their UTF-8
+//! bytes.
 
 use std::collections::HashMap;
 
