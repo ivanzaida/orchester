@@ -25,13 +25,14 @@ use std::sync::Arc;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, Modal, ModalTarget, Row, Text},
-  core::Signal,
+  core::{Sensitive, Signal},
   layout::{
     Alignment,
     layout_kind::{Justify, ScrollState},
   },
   node::{Element, dimension::Dimension},
 };
+use orchester_api::Credential;
 use orchester_core::id::ServerId;
 
 use self::{
@@ -65,7 +66,23 @@ const TAB_ROW_HEIGHT: f32 = 42.0;
 #[derive(Clone)]
 pub struct FirstPassword {
   pub person: Person,
-  pub password: Arc<orchester_api::Credential>,
+  /// Shared by the dialog's text and its Copy. `Sensitive` keeps it out of DevTools' signal values
+  /// and history and the props inspector; `Credential` wipes it when its last holder drops it, as
+  /// the dialog closes.
+  password: Arc<Sensitive<Credential>>,
+}
+
+impl FirstPassword {
+  pub fn new(person: Person, password: Credential) -> Self {
+    Self {
+      person,
+      password: Arc::new(Sensitive::new(password)),
+    }
+  }
+
+  pub fn password(&self) -> &Arc<Sensitive<Credential>> {
+    &self.password
+  }
 }
 
 impl PartialEq for FirstPassword {
