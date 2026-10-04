@@ -15,6 +15,10 @@ use orchester_core::{
   id::ConnectionId,
   time::Timestamp,
 };
+use orchester_desktop::{
+  activity::{ActivityLog, OperationSpec},
+  messages::Message,
+};
 use parking_lot::Mutex;
 
 use crate::{
@@ -208,6 +212,16 @@ fn pull_requests_search_filters_by_number_title_and_branch() {
   assert_eq!(desktop.focused().as_deref(), Some("pull-requests-search"));
 }
 
+/// The activity log after a single operation that ended without an event; what it was called is
+/// not kept.
+fn one_operation_dropped() -> ActivityLog {
+  let mut log = ActivityLog::default();
+  let title = Message::new("statusBar.operations.pullRequestSync.running");
+  let id = log.start(OperationSpec::new(title.clone(), title.clone(), title), Instant::now());
+  log.cancel(id);
+  log
+}
+
 #[test]
 fn pull_requests_without_a_linked_repository_are_unavailable() {
   let gh = FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS)));
@@ -219,23 +233,15 @@ fn pull_requests_without_a_linked_repository_are_unavailable() {
     "pull-requests-unavailable",
     "Pull requests are unavailable"
   ));
-  desktop.click("pull-requests-refresh");
-  // The sync the screen started when it opened ends unseen; give it the time a sync takes.
-  for _ in 0..50 {
-    desktop.tree.tick_futures();
-    desktop.pass();
-    std::thread::sleep(Duration::from_millis(10));
-  }
-  assert!(gh.ran.lock().is_empty(), "nothing runs without a linked repository");
-  let activity = desktop.activity.snapshot();
-  assert!(
-    !activity
-      .recent()
-      .iter()
-      .any(|event| event.title().key.starts_with("statusBar.operations.pullRequestSync")),
-    "a sync that asked GitHub nothing is not listed"
-  );
+  // The sync the screen started when it opened ends without an event: the log holds one operation
+  // that was started and dropped, and nothing else.
+  let expected = one_operation_dropped();
+  desktop.wait_until("the sync to end unlisted", |desktop| {
+    desktop.activity.snapshot() == expected
+  });
   assert!(!shows(&mut desktop, "status-bar", "Pull requests synced"));
+  desktop.click("pull-requests-refresh");
+  assert!(gh.ran.lock().is_empty(), "nothing runs without a linked repository");
   desktop.click("pull-requests-open-connections");
   desktop.wait_for("add-connection");
 }
