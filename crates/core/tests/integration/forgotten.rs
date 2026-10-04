@@ -40,7 +40,7 @@ fn forgotten_folder_listing_stops_after_its_first_entries() {
   // The folder `target` is one of the entries read.
   assert_eq!(forgotten.uncommitted.len(), FOLDER_ENTRIES_READ - 1);
   assert_eq!(forgotten.uncommitted[0], "target/0000.o", "the first in name order");
-  assert!(left.loses_files() && left.listing_cut());
+  assert!(left.loses_files() && left.listing_cut() && !left.listing_unreadable());
   let again = leftovers(&Processes, &git_program(), &repo.root, &run).expect("read again");
   assert_eq!(again, left, "a folder that did not change reads the same");
 
@@ -86,6 +86,10 @@ fn forgotten_folder_with_an_unreadable_entry_is_listed_with_why() {
   assert!(!detail.is_empty());
   assert_eq!(forgotten.uncommitted, ["a.txt"], "the files read before it");
   assert!(forgotten.loses_files());
+  assert!(
+    left.listing_unreadable() && !left.listing_cut(),
+    "it is not said to hold more"
+  );
   assert_eq!(
     left.worktrees.iter().filter(|worktree| !worktree.forgotten).count(),
     1,

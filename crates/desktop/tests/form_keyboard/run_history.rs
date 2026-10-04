@@ -385,6 +385,12 @@ fn run_history_a_forgotten_folder_with_an_unreadable_entry_is_a_problem_of_its_r
   assert!(status.success());
   let locked = old.join("locked");
   fs::create_dir_all(&locked).expect("a folder left behind");
+  fs::write(
+    old.join("a.txt"),
+    "read
+",
+  )
+  .expect("a file read before it");
   fs::write(locked.join("held.bin"), "held\n").expect("write");
   let guard = Unlistable::new(&locked);
 
@@ -394,6 +400,16 @@ fn run_history_a_forgotten_folder_with_an_unreadable_entry_is_a_problem_of_its_r
   assert!(holds(&mut desktop, &row(&first), "Worktree folder left behind"));
   let second = latest_run(desktop.repo()).expect("run #2");
   assert!(holds(&mut desktop, &row(&second), "Worktree · no uncommitted changes"));
+  // The dialog counts the one file read and names the entry that was not; it does not claim more.
+  desktop.click("run-remove-worktree-1");
+  desktop.wait_for("remove-worktree-dialog");
+  assert!(shows(
+    &mut desktop,
+    "remove-worktree-dialog",
+    "Folder left behind with 1 file and an entry that couldn’t be read; all of it is deleted"
+  ));
+  assert!(!shows(&mut desktop, "remove-worktree-dialog", "more than"));
+  assert!(shows(&mut desktop, "remove-worktree-dialog", &problem));
   drop(guard);
 }
 

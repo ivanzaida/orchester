@@ -184,14 +184,7 @@ fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) 
   };
   let files = worktree.uncommitted.len();
   let (glyph, state) = match (worktree.missing, files) {
-    _ if worktree.forgotten && worktree.listing != FolderListing::Whole => (
-      Icon::FolderX,
-      ctx.t_args(
-        "runs.worktree.state.forgottenMore",
-        [("count", files.to_string().as_str())],
-      ),
-    ),
-    _ if worktree.forgotten => (Icon::FolderX, ctx.t("runs.worktree.state.forgotten")),
+    _ if worktree.forgotten => (Icon::FolderX, forgotten_state(ctx, worktree)),
     (true, _) => (Icon::FolderX, ctx.t("runs.worktree.state.missing")),
     (false, 0) => (Icon::Check, ctx.t("runs.worktree.state.clean")),
     (false, 1) => (Icon::FileDiff, ctx.t("runs.worktree.state.uncommitted.one")),
@@ -229,6 +222,21 @@ fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) 
     .with_children(listed)
     .with_children(unread)
     .into()
+}
+
+/// What happens to a folder git forgot: deleted as it is, with all of its files when it holds more
+/// than are listed, or with the entry that could not be read (the error line under it says which).
+fn forgotten_state(ctx: &Ctx, worktree: &LeftWorktree) -> Arc<str> {
+  let files = worktree.uncommitted.len();
+  let key = match (&worktree.listing, files) {
+    (FolderListing::Whole, _) => return ctx.t("runs.worktree.state.forgotten"),
+    (FolderListing::Cut, 1) => "runs.worktree.state.forgottenMore.one",
+    (FolderListing::Cut, _) => "runs.worktree.state.forgottenMore.other",
+    (FolderListing::Unreadable { .. }, 0) => "runs.worktree.state.forgottenUnreadable.none",
+    (FolderListing::Unreadable { .. }, 1) => "runs.worktree.state.forgottenUnreadable.one",
+    (FolderListing::Unreadable { .. }, _) => "runs.worktree.state.forgottenUnreadable.other",
+  };
+  ctx.t_args(key, [("count", files.to_string().as_str())])
 }
 
 /// A branch and what removing does to it: deleted (its commits are merged) or kept.

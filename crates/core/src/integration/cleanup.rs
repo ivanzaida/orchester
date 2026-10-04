@@ -86,12 +86,21 @@ impl Leftovers {
     self.worktrees.iter().any(LeftWorktree::loses_files)
   }
 
-  /// Whether a forgotten folder among them holds more files than are listed.
+  /// Whether a forgotten folder among them holds more files than are listed: reading it stopped
+  /// after its first entries.
   pub fn listing_cut(&self) -> bool {
     self
       .worktrees
       .iter()
-      .any(|worktree| worktree.listing != FolderListing::Whole)
+      .any(|worktree| worktree.listing == FolderListing::Cut)
+  }
+
+  /// Whether reading a forgotten folder among them stopped at an entry that could not be read.
+  pub fn listing_unreadable(&self) -> bool {
+    self
+      .worktrees
+      .iter()
+      .any(|worktree| matches!(worktree.listing, FolderListing::Unreadable { .. }))
   }
 
   /// Whether the run's own worktree is still there. Its agent works in it when it is asked again,
