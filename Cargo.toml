@@ -43,6 +43,7 @@ orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
 orchester-index = { path = "crates/index" }
 orchester-ipc = { path = "crates/ipc" }
+orchester-server = { path = "crates/server" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
 # The macOS keychain store of the keyring crates, for `orchester-vault` (generic passwords in the
@@ -74,11 +75,22 @@ lurq = { version = "0.39.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
+# The shared server's HTTP client, behind `orchester-api`'s `client` feature (`docs/architecture/server.md`,
+# "Dependencies"): rustls with the operating system's trust store (`rustls-platform-verifier`) on Windows
+# and macOS, no OpenSSL. A TLS-capable HTTP client is not a few lines of code; hyper is already built
+# through lurq. Without default features: no system proxy lookup, no HTTP/2, and the crypto provider is
+# chosen by the caller (ring, below).
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
+# The ring crypto provider for the client's rustls, the provider the server's own TLS already uses, and
+# rustls' certificate errors, to tell an untrusted certificate from a server that cannot be reached.
+# Already built through tokio-rustls.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Safe `kill(2)` for signalling processes and process groups on macOS (ending the runner and each
-# agent's process tree; std can only SIGKILL a single child). Already built for macOS through
+# agent's process tree; std can only SIGKILL a single child), and `uname(2)` for the computer's
+# name a shared server lists a session under (`system`). Already built for macOS through
 # tempfile, so it adds no crate; Windows uses Job Objects (`win32job`) for the same job.
-rustix = { version = "1", default-features = false, features = ["std", "process"] }
+rustix = { version = "1", default-features = false, features = ["std", "process", "system"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Content addresses of project blobs (`docs/architecture/storage.md`, "Blobs"); pure Rust.

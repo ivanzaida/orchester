@@ -203,6 +203,10 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::TabInitial.role()` | 9/600 | a project's initial in a title bar tab's avatar (`T0R2Hv` in `nAKyb`) |
 | `ExtraTypography::Criterion.role()` | 12, 1.5 | an acceptance criterion and its number (`TextMuted`) on a task's Summary (`j0Ye4t`, `a88TT` in `tqn5P`) |
 | `ExtraTypography::TimelineMessage.role()` | 13, 1.6 | what a message in the conversation timeline says, a person's or an agent's (`V17jfc`) |
+| `ExtraTypography::ResultHeading.role()` | 12, 1.5 | what answered at a server address in Add server (`q2uPd` in 10.02) |
+| `ExtraTypography::FirstPassword.role()` | mono 14, spaced 0.5 | a first password shown once (`pUTsa` in 10.08 B) |
+| `ExtraTypography::Caution.role()` | 11 `text`, 1.5 | a caution that wraps, e.g. that a first password is shown only once (`nSpO0` in 10.08 B) |
+| `ExtraTypography::HintHeading.role()` | 11/500 | a server's name in the status bar server item's hint (`e8ZUC` in 10.43 A) |
 
 Pick the role by *meaning* in the design, then check the size matches. If two roles fit,
 use the one the same element uses on other screens.

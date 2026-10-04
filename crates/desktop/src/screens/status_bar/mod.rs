@@ -1,6 +1,7 @@
 //! Window status bar (`pmOpt`, states `keJ9Z`): the 28px bar below every screen with the
-//! runner, the latest background activity, the project's counts and the embedded MCP server's
-//! address, and the operations popover (`E1msJS`) that opens upward from the activity item.
+//! runner, the connection to the shared servers in use (`qqtph`), the latest background activity, the project's counts
+//! and the embedded MCP server's address, and the operations popover (`E1msJS`) that opens upward from the activity
+//! item.
 
 mod activity_item;
 mod approvals_item;
@@ -12,6 +13,7 @@ mod open;
 mod plan_limits;
 mod popover;
 mod runner_item;
+mod server_item;
 mod timed;
 
 use std::{path::PathBuf, sync::Arc};
@@ -35,6 +37,7 @@ use self::{
   item::give_way,
   open::Opener,
   runner_item::runner_item,
+  server_item::server_item,
 };
 use crate::{
   activity::{Activity, ActivityLog, bar},
@@ -136,6 +139,7 @@ impl Component for StatusBar {
     let mut left = Vec::new();
     if let Some(project) = &props.project {
       left.push(runner_item(ctx, project, &opener, &hints));
+      left.extend(server_item(ctx, &hints));
     }
     let slot = bar::activity_slot(runner.as_ref(), &log);
     // The runs the task lists show as interrupted, once read; until then what the runner was

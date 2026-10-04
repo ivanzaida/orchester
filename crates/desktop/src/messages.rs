@@ -87,6 +87,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationNotFound(_)
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::ServerNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
     | StoreError::MemoryConflict(_)
@@ -132,7 +133,7 @@ pub fn secret_error(error: &SecretError<StoreError>) -> Message {
   }
 }
 
-fn vault_error(error: &VaultError) -> Message {
+pub fn vault_error(error: &VaultError) -> Message {
   match error {
     VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
     VaultError::AccessDenied(_) => Message::new("errors.keychainDenied"),

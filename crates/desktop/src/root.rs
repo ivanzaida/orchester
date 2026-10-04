@@ -18,6 +18,10 @@ use crate::{
   programs::Programs,
   screens::status_bar::{StatusBar, StatusBarProps},
   secrets::Vault,
+  sharing::{
+    self, Servers,
+    feed::{ServerFeed, ServerFeedLoader},
+  },
   tabs::{
     feed::{WindowFeed, WindowFeedLoader},
     restore::{self, Opening},
@@ -64,6 +68,17 @@ impl lurq::app::component::DevtoolsInspectable for RootProps {}
 pub struct Root {
   /// What routes stand for, shared by every tab: present once the session started.
   places: Option<Places>,
+  /// The shared servers' connection monitor, a task of the application's runtime that wakes on its
+  /// own timers; it ends with the window.
+  monitor: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for Root {
+  fn drop(&mut self) {
+    if let Some(monitor) = &self.monitor {
+      monitor.abort();
+    }
+  }
 }
 
 impl Component for Root {
@@ -80,14 +95,21 @@ impl Component for Root {
     ctx.provide(WindowFeed::new(&activity));
     ctx.provide(activity);
     let Startup::Ready {
+      workspace,
       lifecycle,
       programs,
       vault,
       ..
     } = startup
     else {
-      return Self { places: None };
+      return Self {
+        places: None,
+        monitor: None,
+      };
     };
+    let servers = Servers::new(workspace, vault.clone());
+    let monitor = lifecycle.runtime().spawn(sharing::monitor(servers.clone()));
+    ctx.provide(ServerFeed::new(servers));
     ctx.provide(programs);
     ctx.provide(vault);
     ctx.provide(SessionZooms::default());
@@ -99,11 +121,16 @@ impl Component for Root {
     ctx.provide(lifecycle);
     Self {
       places: Some(Places::default()),
+      monitor: Some(monitor),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let feed = ctx.mount_keyed::<WindowFeedLoader>("window-feed", ());
+    let servers = self
+      .places
+      .is_some()
+      .then(|| ctx.mount_keyed::<ServerFeedLoader>("server-feed", ()));
     let window = match ctx.props::<RootProps>().startup.clone() {
       Startup::Failed { message, path } => {
         let screen = with_status_bar(ctx, startup_failed(ctx, &message, path.as_deref()));
@@ -130,6 +157,7 @@ impl Component for Root {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(feed)
+      .with_children(servers)
       .child(window)
   }
 }

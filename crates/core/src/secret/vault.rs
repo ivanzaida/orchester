@@ -1,11 +1,12 @@
 use thiserror::Error;
 
 use super::SecretValue;
-use crate::id::{ProjectId, SecretId};
+use crate::id::{ProjectId, SecretId, ServerId};
 
 /// Where a secret's value is kept in the OS keychain: the service `orchester:<project id>` and the
 /// account `<secret id>`. Both ids are UUIDs that never change, so a project whose folder moves
-/// keeps its values; the project database (never committed) is what points at them.
+/// keeps its values; the project database (never committed) is what points at them. A shared
+/// server's token is kept the same way under its own service ([`VaultKey::server_token`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VaultKey {
   service: String,
@@ -14,11 +15,22 @@ pub struct VaultKey {
 
 impl VaultKey {
   const SERVICE_PREFIX: &str = "orchester:";
+  const SERVER_PREFIX: &str = "orchester-server:";
+  const TOKEN_ACCOUNT: &str = "token";
 
   pub fn new(project: ProjectId, secret: SecretId) -> Self {
     Self {
       service: format!("{}{project}", Self::SERVICE_PREFIX),
       account: secret.to_string(),
+    }
+  }
+
+  /// The token this computer signed in to `server` with: the service `orchester-server:<server
+  /// id>` and the account `token` (`docs/architecture/server.md`, "Accounts and tokens").
+  pub fn server_token(server: ServerId) -> Self {
+    Self {
+      service: format!("{}{server}", Self::SERVER_PREFIX),
+      account: Self::TOKEN_ACCOUNT.to_owned(),
     }
   }
 

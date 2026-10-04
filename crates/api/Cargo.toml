@@ -9,12 +9,39 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The HTTP client the desktop talks to a server with (`client` module).
+client = ["dep:reqwest", "dep:rustls", "dep:serde_json", "dep:thiserror"]
+
 [dependencies]
 orchester-core.workspace = true
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
 # Passwords permit whitespace-only values; core's project SecretValue rejects them.
 # Wipe this JSON-boundary credential's memory on drop using the existing workspace dependency.
 zeroize.workspace = true
 
 [dev-dependencies]
+# The client's tests start a real server on loopback with a temporary data directory.
+orchester-server.workspace = true
+parking_lot.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[[test]]
+name = "client"
+required-features = ["client"]
+
+[[test]]
+name = "client_redaction"
+required-features = ["client"]
+
+[[test]]
+name = "client_proxy"
+required-features = ["client"]

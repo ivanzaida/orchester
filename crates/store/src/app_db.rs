@@ -1,12 +1,15 @@
 //! The application database next to the executable: known projects, the session log used to
-//! detect that the previous run of Orchester ended abnormally, and the state of the window
-//! (`ui_state`) that outlives a session, such as its tabs.
+//! detect that the previous run of Orchester ended abnormally, the state of the window
+//! (`ui_state`) that outlives a session, such as its tabs, and the shared servers ([`servers`]).
+
+mod servers;
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{id::ProjectId, name::Name, project::Project, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 
+pub use self::servers::{ServerAccount, StoredServer};
 use crate::{
   StoreError, migrate,
   rows::{corrupt, parse, path_text},
@@ -36,6 +39,7 @@ CREATE TABLE ui_state (
   value TEXT NOT NULL
 ) STRICT;
 ",
+  servers::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

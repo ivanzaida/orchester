@@ -2,6 +2,7 @@
 //! Each tab's host owns a router and provides [`Navigation`] to the screens in it; the project
 //! shell adds its own navigation for the pages inside it.
 
+mod changed_file;
 pub(crate) mod entry;
 mod history;
 pub mod import;

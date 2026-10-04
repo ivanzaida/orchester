@@ -535,7 +535,8 @@ Drawn 2026-10-03 in Pencil section `yYqBE` ("10 / Shared server", column F at x 
 and shared organization included, also in S1b). Start S2a once S1b is merged. Frames per phase:
 
 - **S2a** (servers and sign-in): 10.01 `sXIz1`, 10.02 `e9DDI`, 10.03 `BWyKt`, 10.04 `X0cARN`, 10.05 `mcI7H`,
-  10.06 `YMwe5`, 10.07 `BWEZ9`, 10.08 `kT0ui`; the status bar item 10.43 `hYres`.
+  10.06 `YMwe5`, 10.07 `BWEZ9`, 10.08 `kT0ui`; the status bar item 10.43 `hYres`. Implemented on `claude/s2a`
+  (2026-10-04), waiting for design verification and review; see *Done*.
 - **S2b** (share, members, make local, offline, conflict): 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14
   `NaUDV` (with roles), 10.17 `g5r5VU` (discovery), 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.41 `RmDpQ` (the revision; its live use is S2d).
 - **S2c** (join): 10.15 `y8uP2`, 10.16 `AZwJE`, 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`, 10.24 `FAKNF`,
@@ -563,6 +564,41 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+S2a · Desktop: servers and sign-in · branch `claude/s2a` (implemented 2026-10-04; design verification and review pending)
+
+Implemented in `.tmp/worktrees/claude-s2a` from master `b96dbf27`, with master `bffeec30` (S1b) merged in.
+
+- `orchester-api`'s `client` feature: reqwest 0.13 with rustls (ring) and the OS trust store through
+  rustls-platform-verifier; `ServerAddress` normalizes an address and knows loopback hosts; plain HTTP to another
+  computer is refused without the opt-in; redirects are never followed but returned with their target; the token only
+  in a sensitive `Authorization` header.
+- `servers` table in the application database (`orchester-store`); the token in the OS keychain under
+  `orchester-server:<server id>` / `token` (`VaultKey::server_token`), tested against the real Windows Credential
+  Manager.
+- Desktop `sharing`: the servers service (add, sign in with the forced new password, sign out, sessions and revoke,
+  change password, admin users), the connection monitor (`GET /auth/me` at start and every minute; backoff 1 s
+  doubling to 60 s with jitter, then *offline*; `401` signs this computer out and removes the token) and the
+  window-wide server feed. A server is *in use* while an account is signed in to it from this computer, or was until
+  the server refused its token; until shared projects exist (S2b) those are the servers the status bar shows.
+- Settings › Servers (`Page::Servers`, sidebar *Settings*), the list and details with Account and Users, the dialogs
+  of 10.02–10.05 and 10.08, the signed-out state of 10.06, and the status bar server item of 10.43 in the bar's
+  give-way order (its words before the runner's; its attempt and times drop out with the times). Passwords are typed
+  into masked inputs (masked in the MCP tree too) kept out of DevTools' signal history and wiped when a dialog closes.
+
+Not in S2a because it depends on shared projects (S2b): the *Sign out?* confirmation of 10.05 F (signing out acts at
+once), the shared-project rows of 10.06 *While you are signed out*, *Shared projects here* (reads *None yet*), the
+status bar's *Not a member* state (10.43 E) and the project names in its hint. Not reachable in practice: 10.08 E
+(the last admin) needs the signed-in admin not to count as an admin; the server's `409 last_admin` shows it.
+
+Tests: `cargo test -p orchester-api --features client --test client client_` (11) and `--test client_redaction
+client_` (1); `cargo test -p orchester-store --test app_db servers` (2); `cargo test -p orchester-vault --test
+credential_manager credential_manager` (3, Windows); `cargo test -p orchester-desktop --test sharing sharing_` (9),
+`--test form_keyboard servers::servers_` (7), `--test navigation route_`, `--test theme roles`, `--test i18n`,
+`--test form_keyboard sidebar`, `--test status_bar status`; `tools/check.ps1` passed. The macOS check
+(`cargo check --target aarch64-apple-darwin`) passes for `orchester-core` and `orchester-vault`; the desktop and the
+api client cannot complete on this Windows host without the Apple SDK (ring, tree-sitter and bundled SQLite need a C
+compiler for the target), as for the rest of the workspace.
 
 Follow-ups of the 2026-10-04 reviews and verifications · branch `claude/followups` (from master `bffeec30`)
 

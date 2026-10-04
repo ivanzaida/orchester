@@ -24,6 +24,8 @@ perf_profile = ["lurq/perf_profile"]
 chrono.workspace = true
 image.workspace = true
 orchester-core.workspace = true
+# Shared servers: the HTTP client of the server's API (`sharing`).
+orchester-api = { workspace = true, features = ["client"] }
 lurq = { workspace = true, features = [
   "winit",
   "wgpu",
@@ -61,6 +63,10 @@ tracing-subscriber.workspace = true
 # Wipes a secret value typed but not saved.
 zeroize.workspace = true
 
+# The computer's name a shared server lists this computer's session under (`sharing::device`).
+[target.'cfg(target_os = "macos")'.dependencies]
+rustix.workspace = true
+
 # Only Windows programs embed their icon; see build.rs.
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true
@@ -69,3 +75,5 @@ embed-resource.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true
+# Shared-server tests talk to a real server on loopback with a temporary data directory.
+orchester-server.workspace = true

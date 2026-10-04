@@ -91,7 +91,7 @@ pub fn command_row(
 
 /// Copy, which puts `original` on the clipboard and records the outcome in `copied`, and the
 /// outcome of the last copy of `original`: it says *Copied* once the clipboard took it.
-pub(super) fn copy_button(
+pub(crate) fn copy_button(
   ctx: &Ctx,
   copy_id: Arc<str>,
   original: &str,
@@ -122,7 +122,7 @@ pub(super) fn copy_button(
 }
 
 /// `content`, followed by why the clipboard did not take the last copy when that is the `outcome`.
-pub(super) fn with_copy_failure(ctx: &Ctx, content: Element, outcome: Option<bool>) -> Element {
+pub(crate) fn with_copy_failure(ctx: &Ctx, content: Element, outcome: Option<bool>) -> Element {
   if outcome != Some(false) {
     return content;
   }
@@ -135,7 +135,7 @@ pub(super) fn with_copy_failure(ctx: &Ctx, content: Element, outcome: Option<boo
 }
 
 /// The box around the command and Copy, with Copy at its top right; callers set its padding.
-pub(super) fn command_box(id: &str) -> Row {
+pub(crate) fn command_box(id: &str) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))

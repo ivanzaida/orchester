@@ -130,5 +130,6 @@ const fn section_key(page: Page) -> &'static str {
     Page::Secrets(_) => "nav.secrets",
     Page::Connections(..) => "nav.connections",
     Page::Settings(_) => "nav.projectSettings",
+    Page::Servers(..) => "nav.settings",
   }
 }

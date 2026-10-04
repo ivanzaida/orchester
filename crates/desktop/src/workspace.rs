@@ -7,8 +7,15 @@ use std::{
   sync::Arc,
 };
 
-use orchester_core::{id::ProjectId, project::Project, run::TaskPhase, time::Timestamp};
-use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
+use orchester_core::{
+  id::{ProjectId, ServerId},
+  project::Project,
+  run::TaskPhase,
+  time::Timestamp,
+};
+use orchester_store::{
+  AppDb, PreviousSession, ProjectDb, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoreError, StoredServer,
+};
 use parking_lot::Mutex;
 
 use crate::{
@@ -219,6 +226,20 @@ impl Workspace {
   pub fn save_conversation_details(&self, open: bool) -> Result<(), StoreError> {
     let value = if open { DETAILS_OPEN } else { DETAILS_CLOSED };
     self.db.lock().set_ui_state(DETAILS_KEY, value)
+  }
+
+  /// The shared servers, in the order they were added.
+  pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
+    self.db.lock().servers()
+  }
+
+  pub fn add_server(&self, server: &StoredServer) -> Result<(), StoreError> {
+    self.db.lock().add_server(server)
+  }
+
+  /// Records who is signed in to `server` from this computer; `None` after signing out.
+  pub fn set_server_account(&self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
+    self.db.lock().set_server_account(server, account)
   }
 
   pub(crate) fn start_session(&self, now: Timestamp) -> Result<(SessionId, PreviousSession), StoreError> {

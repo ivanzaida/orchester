@@ -6,14 +6,15 @@
 //! on a file keeps the file in the `file` query, which the tab reads itself (see
 //! [`changes_path`]), so the typed routes stay plain values.
 
-use std::{fmt::Write as _, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId},
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId, TaskId},
   resource::VersionNumber,
 };
 
+pub use super::changed_file::{ChangedFile, changed_file, changes_path};
 use crate::tasks::{list::TaskTab, overview::OverviewTab};
 
 const WELCOME: &str = "welcome";
@@ -37,6 +38,8 @@ const TOOLS: &str = "tools";
 const SECRETS: &str = "secrets";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
+const SERVERS: &str = "servers";
+const USERS: &str = "users";
 const LIMITS: &str = "limits";
 const ENVIRONMENT: &str = "environment";
 const CODE_INDEX: &str = "code-index";
@@ -58,9 +61,6 @@ const FAILED: &str = "failed";
 const ACTIVITY: &str = "activity";
 const CHANGES: &str = "changes";
 const CONVERSATION: &str = "conversation";
-const FILE_QUERY: &str = "file";
-const FROM_QUERY: &str = "from";
-const WORKTREE: &str = "worktree";
 const VERSION_QUERY: &str = "version";
 const COMPARE_QUERY: &str = "compare";
 const DRAFT: &str = "draft";
@@ -120,6 +120,9 @@ pub enum Page {
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
   Settings(SettingsTab),
+  /// The application's Settings › Servers (10.01 `sXIz1`) with the server whose details are shown,
+  /// the first one without; it keeps the project's sidebar.
+  Servers(Option<ServerId>, ServerTab),
 }
 
 /// What the pipeline editor shows: the draft to edit, or a published version read-only beside
@@ -184,6 +187,13 @@ pub enum SettingsTab {
   CodeIndex,
 }
 
+/// The tabs of a server's details (`R3v7ow`): Users only for admins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerTab {
+  Account,
+  Users,
+}
+
 /// The sidebar item a page belongs to: Tasks stays selected on a task or the new task form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarItem {
@@ -198,6 +208,8 @@ pub enum SidebarItem {
   Secrets,
   Connections,
   Settings,
+  /// The application's Settings (`s9zzPC`).
+  AppSettings,
 }
 
 impl Route {
@@ -309,6 +321,8 @@ impl Page {
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
       [SETTINGS, CODE_INDEX] => Self::Settings(SettingsTab::CodeIndex),
+      [SERVERS] => Self::Servers(None, server_tab(tab)),
+      [SERVERS, server] => Self::Servers(Some(server.parse().ok()?), server_tab(tab)),
       _ => return None,
     })
   }
@@ -352,6 +366,14 @@ impl Page {
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
       Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
       Self::Settings(SettingsTab::CodeIndex) => format!("{root}/{SETTINGS}/{CODE_INDEX}"),
+      Self::Servers(server, tab) => {
+        let server = server.map_or_else(String::new, |server| format!("/{server}"));
+        let tab = match tab {
+          ServerTab::Account => None,
+          ServerTab::Users => Some(USERS),
+        };
+        with_tab(format!("{root}/{SERVERS}{server}"), tab)
+      }
     }
   }
 
@@ -370,6 +392,7 @@ impl Page {
       Self::Secrets(_) => SidebarItem::Secrets,
       Self::Connections(..) => SidebarItem::Connections,
       Self::Settings(_) => SidebarItem::Settings,
+      Self::Servers(..) => SidebarItem::AppSettings,
     }
   }
 }
@@ -440,6 +463,13 @@ const fn task_query(tab: TaskTab) -> Option<&'static str> {
   }
 }
 
+fn server_tab(tab: Option<&str>) -> ServerTab {
+  match tab {
+    Some(USERS) => ServerTab::Users,
+    _ => ServerTab::Account,
+  }
+}
+
 fn task_page_tab(tab: Option<&str>) -> TaskPageTab {
   match tab {
     Some(CONVERSATION | ACTIVITY) => TaskPageTab::Conversation,
@@ -505,70 +535,6 @@ impl InstructionsTab {
       Self::StepOverrides => Some(STEP_OVERRIDES),
     }
   }
-}
-
-/// A changed file a task's Changes tab shows: its repository path (`/`-separated), and whether it
-/// is the version in the run's worktree that is not checkpointed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ChangedFile {
-  pub path: String,
-  pub worktree: bool,
-}
-
-/// The path of `task`'s Changes tab in `project`, on `file`.
-pub fn changes_path(project: ProjectId, task: TaskId, file: &ChangedFile) -> String {
-  let tab = Page::Task(task, TaskPageTab::Changes).path(project);
-  let from = if file.worktree {
-    format!("&{FROM_QUERY}={WORKTREE}")
-  } else {
-    String::new()
-  };
-  format!("{tab}&{FILE_QUERY}={}{from}", encode(&file.path))
-}
-
-/// The changed file the queries of `path` name, if they name one.
-pub fn changed_file(path: &str) -> Option<ChangedFile> {
-  let (_, query) = path.split_once('?')?;
-  let value = |name: &str| {
-    query
-      .split('&')
-      .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
-  };
-  let path = decode(value(FILE_QUERY)?).filter(|file| !file.is_empty())?;
-  Some(ChangedFile {
-    path,
-    worktree: value(FROM_QUERY) == Some(WORKTREE),
-  })
-}
-
-/// `value` with every byte outside the unreserved characters and `/` percent-encoded, so a path
-/// with spaces, `&`, `?`, `#` or non-ASCII names stays one query value.
-fn encode(value: &str) -> String {
-  let mut encoded = String::with_capacity(value.len());
-  for byte in value.bytes() {
-    if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
-      encoded.push(char::from(byte));
-    } else {
-      write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
-    }
-  }
-  encoded
-}
-
-/// [`encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
-fn decode(value: &str) -> Option<String> {
-  let mut bytes = Vec::with_capacity(value.len());
-  let mut rest = value.bytes();
-  while let Some(byte) = rest.next() {
-    if byte != b'%' {
-      bytes.push(byte);
-      continue;
-    }
-    let digits = [rest.next()?, rest.next()?];
-    let hex = std::str::from_utf8(&digits).ok()?;
-    bytes.push(u8::from_str_radix(hex, 16).ok()?);
-  }
-  String::from_utf8(bytes).ok()
 }
 
 impl ConnectionTab {

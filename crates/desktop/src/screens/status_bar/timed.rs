@@ -15,7 +15,8 @@ use crate::{display, ui::message_text};
 
 const TICK: Duration = Duration::from_secs(1);
 
-fn ticking(ctx: &mut Ctx) -> Signal<u64> {
+/// A signal that changes every second while its component is mounted.
+pub(super) fn ticking(ctx: &mut Ctx) -> Signal<u64> {
   let tick = ctx.signal(0_u64);
   let next = tick.clone();
   ctx

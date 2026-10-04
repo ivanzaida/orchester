@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use keyring_core::{Entry, Error, api::CredentialStoreApi};
 use orchester_core::{
-  id::{ProjectId, SecretId},
+  id::{ProjectId, SecretId, ServerId},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
 };
 use orchester_vault::KeychainVault;
@@ -25,9 +25,11 @@ struct Throwaway {
 
 impl Throwaway {
   fn new() -> Self {
-    Self {
-      key: VaultKey::new(ProjectId::generate(), SecretId::generate()),
-    }
+    Self::at(VaultKey::new(ProjectId::generate(), SecretId::generate()))
+  }
+
+  fn at(key: VaultKey) -> Self {
+    Self { key }
   }
 
   /// The credential as the Credential Manager has it, read around the vault.
@@ -97,5 +99,25 @@ fn credential_manager_refuses_a_long_value_without_repeating_it() {
 
   assert_eq!(error, VaultError::TooLong { max: BLOB_LIMIT });
   assert!(!format!("{error} {error:?}").contains(marker));
+  assert!(matches!(credential.stored(), Err(Error::NoEntry)));
+}
+
+#[test]
+fn credential_manager_keeps_a_server_token_under_the_server_and_removes_it() {
+  let server = ServerId::generate();
+  let credential = Throwaway::at(VaultKey::server_token(server));
+  assert_eq!(credential.key.service(), format!("orchester-server:{server}"));
+  assert_eq!(credential.key.account(), "token");
+
+  KeychainVault
+    .store(&credential.key, &value("orc_fake-token-for-a-test"))
+    .expect("the token is stored");
+  assert_eq!(
+    credential.stored().expect("the credential exists"),
+    b"orc_fake-token-for-a-test"
+  );
+  let read = KeychainVault.read(&credential.key).expect("the token is read back");
+  assert_eq!(read.expose(), "orc_fake-token-for-a-test");
+  KeychainVault.delete(&credential.key).expect("signing out removes it");
   assert!(matches!(credential.stored(), Err(Error::NoEntry)));
 }

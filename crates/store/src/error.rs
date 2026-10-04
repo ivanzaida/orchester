@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{ConnectionId, InvocationId, MemoryId, ResourceId, RunId, SecretId, TaskId},
+  id::{ConnectionId, InvocationId, MemoryId, ResourceId, RunId, SecretId, ServerId, TaskId},
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError},
   task::EditError,
@@ -86,6 +86,9 @@ pub enum StoreError {
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]
   SecretNotFound(SecretId),
+  /// The application database has no shared server with this id.
+  #[error("server {0} is not in the list")]
+  ServerNotFound(ServerId),
   #[error("run {0} was merged already")]
   AlreadyMerged(RunId),
   #[error("run {0} does not exist")]

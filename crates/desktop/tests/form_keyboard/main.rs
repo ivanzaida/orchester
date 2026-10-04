@@ -62,6 +62,7 @@ mod run_permissions;
 mod secrets;
 mod select_fill;
 mod selection_focus;
+mod servers;
 mod sidebar;
 mod skills;
 mod tab_links;
