@@ -1774,7 +1774,7 @@
         },
         "missing": "Folder already gone",
         "forgotten": "Folder left behind; deleted as it is",
-        "forgottenMore": "Folder left behind with more than {{count}} files; deleted as it is"
+        "forgottenMore": "Folder left behind with more than {{count}} files; all of them are deleted, including those not listed"
       },
       "branch": {
         "deleted": "deleted · merged",
@@ -1840,7 +1840,7 @@
         "uncommitted": {
           "one": "1 file not committed would be discarded: {{files}}",
           "other": "{{count}} files not committed would be discarded: {{files}}",
-          "more": "More than {{count}} files not committed would be discarded: {{files}}"
+          "more": "More than {{count}} files not committed would be discarded, all of them, including those not listed: {{files}}"
         }
       },
       "start": "Start run #{{run}}",

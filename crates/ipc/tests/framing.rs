@@ -337,6 +337,40 @@ async fn frames_round_trip_a_forgotten_worktree() {
   assert_eq!(listed.listing, FolderListing::Whole);
 }
 
+/// A forgotten folder whose listing stopped at an entry that could not be read travels with which
+/// entry and why (protocol 16), so the runner removes it only as the person saw it.
+#[tokio::test]
+async fn frames_round_trip_an_unreadable_forgotten_worktree() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let worktree = LeftWorktree {
+    path: "C:/repo/.orchester/worktrees/01J".to_owned(),
+    owner: WorktreeOwner::Run,
+    branch: None,
+    uncommitted: vec!["a.txt".to_owned()],
+    missing: false,
+    forgotten: true,
+    listing: FolderListing::Unreadable {
+      path: "C:/repo/.orchester/worktrees/01J/locked".to_owned(),
+      detail: "Access is denied. (os error 5)".to_owned(),
+    },
+  };
+  let request = Request {
+    id: RequestId::new(1),
+    command: Command::RunAgain {
+      key: IdempotencyKey::generate(),
+      task: TaskId::generate(),
+      after: RunId::generate(),
+      remove_worktrees: Some(Leftovers {
+        worktrees: vec![worktree],
+        branches: Vec::new(),
+      }),
+    },
+  };
+  writer.write(&request).await.expect("write request");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
+}
+
 #[tokio::test]
 async fn frames_reject_oversized_and_truncated_input() {
   let (left, right) = tokio::io::duplex(64);
