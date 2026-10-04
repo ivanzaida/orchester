@@ -1,7 +1,8 @@
 //! The plan and the decision (`U2JBf`): the notice that the approval is needed (`z1V7b`), the plan's
 //! title (`J7irj`) and its text as its agent wrote it, then *Request changes* and *Approve plan &
-//! continue* (`XXsKR`) with what approving does (`L03Wv0`). The plan scrolls in a viewport with a
-//! scroll gutter; the decision stays at the bottom. An earlier version reads without a decision.
+//! continue* (`XXsKR`) with what approving does (`L03Wv0`). The plan, then *Runs of this task*,
+//! scroll in a viewport with a scroll gutter; the decision stays at the bottom. An earlier version reads without a
+//! decision.
 
 use std::sync::Arc;
 
@@ -40,7 +41,8 @@ pub(super) fn content(ctx: &mut Ctx, props: &PlanReviewProps, shown: &Plan, deci
         .id("plan-review-title")
         .variant(ExtraTypography::PlanTitle.role()),
     )
-    .child(plan_text(ctx, &shown.text));
+    .child(plan_text(ctx, &shown.text))
+    .with_children(props.runs.section(ctx));
   let decision = if shown.version == review.waiting().version {
     decision(ctx, review, decisions)
   } else {

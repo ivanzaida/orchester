@@ -2,10 +2,13 @@
 //! run's steps that lists every run of the task, newest first, the shown one tagged *this run*,
 //! each with where it stands, what happened, its worktree and when, and *Remove worktree* while it
 //! has a worktree and no live work (see [`row`]). It replaces the unreadable run page's *Other runs
-//! of this task* (02.R `SUuwV`).
+//! of this task* (02.R `SUuwV`). The pages that lay out their own Summary end with it too: Ready for
+//! review, the plan review (02.11) and the retry limit (02.B).
 
 mod line;
 mod row;
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -25,6 +28,21 @@ use crate::{
   workspace::OpenProject,
 };
 
+/// What the section is made of, for a page that is a component of its own and builds it as it
+/// renders (the plan review, 02.11).
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct RunsOfTask {
+  pub(super) open: OpenProject,
+  pub(super) detail: Arc<TaskDetail>,
+  pub(super) left: Option<TaskLeftovers>,
+}
+
+impl RunsOfTask {
+  pub(super) fn section(&self, ctx: &mut Ctx) -> Option<Element> {
+    section(ctx, &self.open, &self.detail, self.left.as_ref())
+  }
+}
+
 /// The section for `detail`, whose runs without live work left what `left` says; `None` for a task
 /// without runs.
 pub(super) fn section(
@@ -41,7 +59,7 @@ pub(super) fn section(
   let latest = detail.run.as_ref().map(|run| run.id());
   let shown = latest.or_else(|| detail.latest_unreadable.as_ref().map(|run| run.id));
   let working = working(detail);
-  let key: std::sync::Arc<str> = detail.task.key().to_string().into();
+  let key: Arc<str> = detail.task.key().to_string().into();
   let rows: Vec<Element> = detail
     .history
     .iter()
