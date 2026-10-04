@@ -198,7 +198,8 @@ entry look; the recipient menu's options carry the state words, not *gets it at 
 the ORC-61 explanation texts; the tool step's divider no longer names its command and exit code (C·05).
 
 Design-verification fixes (2026-10-04, on `7710f081`): the recipient selector has no fill of its own (lurq painted an
-unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree);
+unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree;
+since lurq 0.39 it paints no fill, and `form_keyboard select_fill` reads it from `Tree::painted_quads`);
 a group of notes reads its lines without *0 calls*, a working step without tokens reads *Builder · working*; the
 permissions chip shows whenever the composer is open (else the run's first agent step); *Write to Explorer before it
 starts…*; a chip's lines start closed, failures too; picking a step opens the chat at its start, *All steps* goes back

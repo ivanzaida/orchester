@@ -59,6 +59,7 @@ mod run_again;
 mod run_history;
 mod run_permissions;
 mod secrets;
+mod select_fill;
 mod selection_focus;
 mod sidebar;
 mod skills;
