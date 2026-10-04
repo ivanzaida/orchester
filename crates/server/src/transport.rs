@@ -16,6 +16,9 @@ use crate::{
   tls::{PeerAddr, TlsListener},
 };
 
+#[derive(Clone)]
+pub(crate) struct ConnectionStop(pub watch::Receiver<bool>);
+
 /// Serves a real bound listener with bounded connections and HTTP read deadlines, including direct TLS.
 pub async fn serve(
   server: Server,
@@ -49,7 +52,9 @@ async fn serve_listener<L: Listener<Addr = SocketAddr>>(
         // Reject excess connections immediately instead of queuing a different peer behind idle sockets.
         if connections.len() >= 256 { continue; }
         let Some(lease) = limits.acquire(address.ip()) else { continue; };
-        let service = TowerToHyperService::new(app.clone().layer(Extension(ConnectInfo(PeerAddr(address)))));
+        let service = TowerToHyperService::new(app.clone()
+          .layer(Extension(ConnectInfo(PeerAddr(address))))
+          .layer(Extension(ConnectionStop(stopped.clone()))));
         let stopped = stopped.clone();
         connections.spawn(async move {
           let _lease = lease;

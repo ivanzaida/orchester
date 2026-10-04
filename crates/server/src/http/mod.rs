@@ -1,6 +1,10 @@
 mod admin;
 mod auth;
+mod claims;
+mod events;
 mod extract;
+mod projects;
+mod tasks;
 
 use std::{future::poll_fn, pin::Pin, time::Duration};
 
@@ -30,6 +34,10 @@ pub(crate) fn router(server: Server) -> Router {
     .route("/admin/users/{id}", axum::routing::patch(admin::update))
     .route("/admin/users/{id}/password", post(admin::reset))
     .route("/admin/users/{id}/sessions", delete(admin::revoke))
+    .merge(projects::routes())
+    .merge(tasks::routes())
+    .merge(claims::routes())
+    .route("/projects/{project}/events", get(events::subscribe))
     .route_layer(middleware::from_fn_with_state(server.clone(), authenticated));
   let api = protected
     .route("/server", get(info))

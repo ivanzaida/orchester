@@ -32,12 +32,17 @@ impl WorkflowStatus {
 
   /// Cancellation cannot commit until the existing run cancellation path has finished.
   pub fn check_change(self, active: Option<RunId>) -> Result<(), OrganizationError> {
-    if self == Self::Canceled
+    if !self.can_change(active.is_some())
       && let Some(run) = active
     {
       return Err(OrganizationError::StopRunFirst(run));
     }
     Ok(())
+  }
+
+  /// Shared run reports carry a phase, while local runs carry their RunId.
+  pub fn can_change(self, run_not_ended: bool) -> bool {
+    self != Self::Canceled || !run_not_ended
   }
 }
 
@@ -132,7 +137,13 @@ impl TaskOrganization {
       status,
       priority,
       blocked_reason,
-      dependencies,
+      dependencies: dependencies
+        .into_iter()
+        .map(|link| (link.task, link.gate))
+        .collect::<std::collections::BTreeMap<_, _>>()
+        .into_iter()
+        .map(|(task, gate)| BlockingTask { task, gate })
+        .collect(),
       tags,
     })
   }
@@ -151,6 +162,13 @@ impl TaskOrganization {
   }
   pub fn tags(&self) -> &[TagId] {
     &self.tags
+  }
+
+  pub fn check_tags(&self, known: &std::collections::HashSet<TagId>) -> Result<(), OrganizationError> {
+    if let Some(id) = self.tags.iter().find(|id| !known.contains(id)) {
+      return Err(OrganizationError::TagNotFound(*id));
+    }
+    Ok(())
   }
 
   pub fn with_status(mut self, status: WorkflowStatus) -> Self {
@@ -296,6 +314,12 @@ impl Tag {
   }
   pub const fn name(&self) -> &Name {
     &self.name
+  }
+  pub fn check_merge(&self, into: TagId) -> Result<(), OrganizationError> {
+    if self.id == into {
+      return Err(OrganizationError::SameTag);
+    }
+    Ok(())
   }
 }
 

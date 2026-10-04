@@ -68,29 +68,63 @@ pub enum MissingDetail {
 
 impl TaskDetails {
   pub fn missing(&self) -> Vec<MissingDetail> {
-    let checks = [
-      (self.brief.trim().is_empty(), MissingDetail::Brief),
-      (
-        self
-          .acceptance_criteria
-          .iter()
-          .all(|criterion| criterion.trim().is_empty()),
-        MissingDetail::AcceptanceCriteria,
-      ),
-      (self.pipeline.is_none(), MissingDetail::Pipeline),
-      (self.limits.is_none(), MissingDetail::Limits),
-    ];
-    checks
-      .into_iter()
-      .filter_map(|(missing, detail)| missing.then_some(detail))
-      .collect()
+    missing_details(
+      &self.brief,
+      &self.acceptance_criteria,
+      self.pipeline.is_some(),
+      self.limits.is_some(),
+    )
   }
+}
+
+/// Completeness is identical for local resource IDs and shared pipeline slugs.
+pub fn missing_details(brief: &str, criteria: &[String], pipeline: bool, limits: bool) -> Vec<MissingDetail> {
+  let checks = [
+    (brief.trim().is_empty(), MissingDetail::Brief),
+    (
+      criteria.iter().all(|criterion| criterion.trim().is_empty()),
+      MissingDetail::AcceptanceCriteria,
+    ),
+    (!pipeline, MissingDetail::Pipeline),
+    (!limits, MissingDetail::Limits),
+  ];
+  checks
+    .into_iter()
+    .filter_map(|(missing, detail)| missing.then_some(detail))
+    .collect()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TaskStatus {
   Draft,
   Queued,
+}
+
+impl TaskStatus {
+  pub const fn check_editable(self, has_run: bool) -> Result<(), EditError> {
+    if matches!(self, Self::Queued) && !has_run {
+      return Err(EditError::QueuedWithoutRun);
+    }
+    Ok(())
+  }
+
+  pub fn check_edit(self, has_run: bool, missing: Vec<MissingDetail>) -> Result<(), EditError> {
+    self.check_editable(has_run)?;
+    if has_run && !missing.is_empty() {
+      return Err(EditError::Incomplete(missing));
+    }
+    Ok(())
+  }
+
+  pub fn check_queue(self, missing: Vec<MissingDetail>) -> Result<(), QueueError> {
+    if self != Self::Draft {
+      return Err(QueueError::NotDraft(self));
+    }
+    if !missing.is_empty() {
+      return Err(QueueError::Incomplete(missing));
+    }
+    Ok(())
+  }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -193,35 +227,20 @@ impl Task {
 
   /// A queued task is editable once its first run is recorded.
   pub const fn check_editable(&self, has_run: bool) -> Result<(), EditError> {
-    if matches!(self.status, TaskStatus::Queued) && !has_run {
-      return Err(EditError::QueuedWithoutRun);
-    }
-    Ok(())
+    self.status.check_editable(has_run)
   }
 
   /// Replaces the task's details, keeping its identity and status. A draft may be incomplete;
   /// a task that has started must remain complete for its next run.
   pub fn edit(&mut self, details: TaskDetails, has_run: bool) -> Result<(), EditError> {
-    self.check_editable(has_run)?;
-    if has_run {
-      let missing = details.missing();
-      if !missing.is_empty() {
-        return Err(EditError::Incomplete(missing));
-      }
-    }
+    self.status.check_edit(has_run, details.missing())?;
     self.details = details;
     Ok(())
   }
 
   /// Moves a complete draft to the queue; an incomplete one reports what is missing.
   pub fn queue(&mut self, pipeline_version: VersionNumber) -> Result<(), QueueError> {
-    if self.status != TaskStatus::Draft {
-      return Err(QueueError::NotDraft(self.status));
-    }
-    let missing = self.details.missing();
-    if !missing.is_empty() {
-      return Err(QueueError::Incomplete(missing));
-    }
+    self.status.check_queue(self.details.missing())?;
     self.status = TaskStatus::Queued;
     self.pipeline_version = Some(pipeline_version);
     Ok(())
