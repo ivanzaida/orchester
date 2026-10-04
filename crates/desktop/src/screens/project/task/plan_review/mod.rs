@@ -2,7 +2,8 @@
 //! on a gated step's plan. The plan, as its agent wrote it (Markdown), with *Approve plan &
 //! continue* and *Request changes*; beside it the task's acceptance criteria, the note that tells
 //! the agent what should change, the run's tokens and the plan's version — a choice of the step's
-//! versions once there are several, where earlier ones read without a decision. The note and the
+//! versions once there are several, where earlier ones read without a decision. *Runs of this task*
+//! (ORC-63) follows the plan, as it ends every Summary. The note and the
 //! decision buttons are a form (`xURvJ`: they take focus); a decision goes to the runner, which
 //! records it and continues the run or resumes the step's agent with the note.
 
@@ -27,6 +28,7 @@ use orchester_core::{
 use orchester_ipc::Command;
 
 pub(super) use self::aside::note_field;
+use super::history::RunsOfTask;
 use crate::{
   messages::Message,
   runner::Runners,
@@ -47,6 +49,8 @@ pub struct PlanReviewProps {
   pub criteria: Arc<[String]>,
   /// The run's tokens against its budget: "96.4k / 1.4M tokens".
   pub tokens: Arc<str>,
+  /// *Runs of this task*, after the plan.
+  pub(in crate::screens::project::task) runs: RunsOfTask,
 }
 
 impl lurq::app::component::DevtoolsInspectable for PlanReviewProps {}
@@ -180,16 +184,18 @@ impl PlanReviewPanel {
   }
 }
 
-/// The Summary while a plan waits for a decision (02.11 `x3lVC`); a new version mounts it anew,
-/// with an empty note.
-pub(super) fn screen(ctx: &mut Ctx, detail: &TaskDetail, run: &RunView, review: PlanReview) -> Element {
+/// The Summary while a plan waits for a decision (02.11 `x3lVC`), with `runs`, the task's runs; a
+/// new version mounts it anew, with an empty note.
+pub(super) fn screen(ctx: &mut Ctx, runs: RunsOfTask, run: &RunView, review: PlanReview) -> Element {
   let key = format!("plan-review-{}-{}", run.id(), review.waiting().version);
+  let detail: &TaskDetail = &runs.detail;
   let task = detail.run_task.as_ref().unwrap_or(&detail.task).details();
   let props = PlanReviewProps {
     review: Arc::new(review),
     task: task.title.as_str().into(),
     criteria: task.acceptance_criteria.clone().into(),
     tokens: super::summary::budget_value(ctx, run),
+    runs,
   };
   ctx.mount_keyed::<PlanReviewPanel>(&key, props)
 }

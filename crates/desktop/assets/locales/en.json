@@ -986,6 +986,15 @@
           "uncommitted": {
             "one": "{{worktrees}} worktrees · 1 file not committed · {{branch}}",
             "other": "{{worktrees}} worktrees · {{count}} files not committed · {{branch}}"
+          },
+          "uncommittedMore": {
+            "one": "{{worktrees}} worktrees · more than 1 file not committed · {{branch}}",
+            "other": "{{worktrees}} worktrees · more than {{count}} files not committed · {{branch}}"
+          },
+          "uncommittedUnreadable": {
+            "none": "{{worktrees}} worktrees · an entry that couldn’t be read · {{branch}}",
+            "one": "{{worktrees}} worktrees · 1 file, and an entry that couldn’t be read · {{branch}}",
+            "other": "{{worktrees}} worktrees · {{count}} files, and an entry that couldn’t be read · {{branch}}"
           }
         },
         "missing": "Worktree folder already gone · {{branch}}",
@@ -1772,7 +1781,16 @@
           "other": "{{count}} files not committed"
         },
         "missing": "Folder already gone",
-        "forgotten": "Folder left behind; deleted as it is"
+        "forgotten": "Folder left behind; deleted as it is",
+        "forgottenMore": {
+          "one": "Folder left behind with more than 1 file; all of them are deleted, including those not listed",
+          "other": "Folder left behind with more than {{count}} files; all of them are deleted, including those not listed"
+        },
+        "forgottenUnreadable": {
+          "none": "Folder left behind with an entry that couldn’t be read; all of it is deleted",
+          "one": "Folder left behind with 1 file and an entry that couldn’t be read; all of it is deleted",
+          "other": "Folder left behind with {{count}} files and an entry that couldn’t be read; all of it is deleted"
+        }
       },
       "branch": {
         "deleted": "deleted · merged",
@@ -1837,7 +1855,16 @@
         },
         "uncommitted": {
           "one": "1 file not committed would be discarded: {{files}}",
-          "other": "{{count}} files not committed would be discarded: {{files}}"
+          "other": "{{count}} files not committed would be discarded: {{files}}",
+          "more": {
+            "one": "More than 1 file not committed would be discarded, all of them, including those not listed: {{files}}",
+            "other": "More than {{count}} files not committed would be discarded, all of them, including those not listed: {{files}}"
+          },
+          "unreadable": {
+            "none": "A folder with an entry that couldn’t be read would be discarded with all of it.",
+            "one": "1 file not committed and an entry that couldn’t be read would be discarded: {{files}}",
+            "other": "{{count}} files not committed and an entry that couldn’t be read would be discarded: {{files}}"
+          }
         }
       },
       "start": "Start run #{{run}}",

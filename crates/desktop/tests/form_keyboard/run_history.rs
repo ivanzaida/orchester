@@ -369,3 +369,86 @@ fn run_history_keeps_a_worktree_git_refused_to_remove_and_offers_it_again() {
   });
   assert!(!worktree_of(&desktop, &first).exists());
 }
+
+/// A worktree folder git forgot with an entry that cannot be read: its run's row says which and
+/// why, and the section still lists every run with what it left.
+#[test]
+fn run_history_a_forgotten_folder_with_an_unreadable_entry_is_a_problem_of_its_row() {
+  let (mut desktop, first) = failed_twice(Programs::processes());
+  let old = worktree_of(&desktop, &first);
+  let status = std::process::Command::new("git")
+    .current_dir(desktop.repo())
+    .args(["worktree", "remove", "--force"])
+    .arg(&old)
+    .status()
+    .expect("git runs");
+  assert!(status.success());
+  let locked = old.join("locked");
+  fs::create_dir_all(&locked).expect("a folder left behind");
+  fs::write(
+    old.join("a.txt"),
+    "read
+",
+  )
+  .expect("a file read before it");
+  fs::write(locked.join("held.bin"), "held\n").expect("write");
+  let guard = Unlistable::new(&locked);
+
+  reopen_task(&mut desktop);
+  let problem = format!("Couldn’t read .orchester/worktrees/{}/locked", first.id());
+  desktop.wait_until("the row's problem", |desktop| holds(desktop, &row(&first), &problem));
+  assert!(holds(&mut desktop, &row(&first), "Worktree folder left behind"));
+  let second = latest_run(desktop.repo()).expect("run #2");
+  assert!(holds(&mut desktop, &row(&second), "Worktree · no uncommitted changes"));
+  // The dialog counts the one file read and names the entry that was not; it does not claim more.
+  desktop.click("run-remove-worktree-1");
+  desktop.wait_for("remove-worktree-dialog");
+  assert!(shows(
+    &mut desktop,
+    "remove-worktree-dialog",
+    "Folder left behind with 1 file and an entry that couldn’t be read; all of it is deleted"
+  ));
+  assert!(!shows(&mut desktop, "remove-worktree-dialog", "more than"));
+  assert!(shows(&mut desktop, "remove-worktree-dialog", &problem));
+  drop(guard);
+}
+
+/// A folder whose entries cannot be listed until this is dropped.
+struct Unlistable<'a>(&'a std::path::Path);
+
+impl<'a> Unlistable<'a> {
+  fn new(dir: &'a std::path::Path) -> Self {
+    deny_listing(dir, true);
+    Self(dir)
+  }
+}
+
+impl Drop for Unlistable<'_> {
+  fn drop(&mut self) {
+    deny_listing(self.0, false);
+  }
+}
+
+#[cfg(windows)]
+fn deny_listing(dir: &std::path::Path, deny: bool) {
+  // Everyone, by its well-known SID, may not list the folder.
+  let args: &[&str] = if deny {
+    &["/deny", "*S-1-1-0:(RD)"]
+  } else {
+    &["/remove:d", "*S-1-1-0"]
+  };
+  let status = std::process::Command::new("icacls")
+    .arg(dir)
+    .args(args)
+    .stdout(std::process::Stdio::null())
+    .status()
+    .expect("icacls runs");
+  assert!(status.success(), "icacls changed the folder's access");
+}
+
+#[cfg(unix)]
+fn deny_listing(dir: &std::path::Path, deny: bool) {
+  use std::os::unix::fs::PermissionsExt;
+  let mode = if deny { 0o000 } else { 0o755 };
+  fs::set_permissions(dir, fs::Permissions::from_mode(mode)).expect("the folder's mode changes");
+}

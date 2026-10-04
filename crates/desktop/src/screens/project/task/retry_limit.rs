@@ -3,8 +3,9 @@
 //! (`yYFkk`) names the step and shows the latest attempt's steps and what the failing step reported;
 //! the panel (`Lk43S`, [`RetryDecisionPanel`]) shows the budget used and the person's decisions.
 //! A run that failed after its retries (a person stopped it, or it failed before runs waited) shows
-//! the evidence alone. The verification report is not available in this version: its button is
-//! drawn unavailable.
+//! the evidence alone. *Runs of this task* (ORC-63) ends the evidence, which scrolls with the scroll
+//! gutter. The verification report is not available in this version: its button is drawn
+//! unavailable.
 
 use std::sync::Arc;
 
@@ -45,14 +46,14 @@ const REPORT_BUTTON_WIDTH: f32 = 216.0;
 
 /// The Summary tab of a run whose `step` used up its retries or broke again: with the person's
 /// decisions while the run waits for them (`waiting`, with whether unfinished blocking tasks keep it
-/// from going on); `reason` says why its task cannot run again,
-/// under the notice.
+/// from going on); `reason` says why its task cannot run again, under the notice, and `runs` is
+/// *Runs of this task*, after the evidence.
 pub(super) fn retry_limit(
   ctx: &mut Ctx,
   run: &RunView,
   step: &StepKey,
   waiting: Option<(&Stuck, bool)>,
-  reason: Option<Element>,
+  (reason, runs): (Option<Element>, Option<Element>),
 ) -> Element {
   let broke = matches!(waiting, Some((Stuck::BrokeAgain(_), _)));
   // Reading the window's width re-renders the page as the window resizes.
@@ -64,13 +65,22 @@ pub(super) fn retry_limit(
       props,
     )
   });
-  let evidence = evidence(ctx, run, (step, broke), reason);
+  let evidence = evidence(ctx, run, (step, broke), reason)
+    .with_children(runs)
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Section);
   if !stacked {
+    // The evidence scrolls beside the panel; its right padding gives the scroll gutter its room.
+    let evidence = ScrollVertical::new(evidence.padding_right(ExtraSpacing::BesideGutter.role()))
+      .id("task-retry-limit-evidence")
+      .flex(1.0)
+      .height(Dimension::Pct(100.0))
+      .scrollbar(gutter_scrollbar());
     return Row::new()
       .id("task-retry-limit")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .child(evidence.flex(1.0).height(Dimension::Pct(100.0)))
+      .child(evidence)
       .with_children(panel)
       .into();
   }
@@ -83,7 +93,7 @@ pub(super) fn retry_limit(
       ScrollVertical::new(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .child(evidence.width(Dimension::Pct(100.0)))
+          .child(evidence)
           .with_children(panel),
       )
       .id("task-retry-limit-page")
@@ -208,7 +218,6 @@ fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: O
     .filter(|row| executed.contains(&&*row.id))
     .collect();
   Column::new()
-    .padding(SpacingSize::Section)
     .spacing(ExtraSpacing::Form.role())
     .child(with_reason(notice.into(), reason))
     .child(Text::new(&latest).variant(ExtraTypography::Subheading.role()))

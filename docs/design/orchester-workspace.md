@@ -1322,7 +1322,13 @@ nor the top bar has a run switcher. So the run history is new:
   committed · <branch>* with file-diff and `$text`, *Worktree removed Oct 3, 16:40 · <branch> kept* with folder-x, *No
   worktree*), when (mono 10 `$subtle`), and at the right *Remove worktree* (`u1XBP`, folder-x, 32 high; *Remove
   worktrees* when the run has several). At 960 a row stacks: run, status and the button on one line, what happened,
-  the worktree line and when under it.
+  the worktree line and when under it. As built (not drawn): the pages that lay out their own Summary end with it too,
+  the plan review (02.11) after the plan in its scrolling viewport and the retry-limit page (02.B) after the evidence,
+  which scrolls beside the decision panel. A worktree folder git forgot is read to its first 200 entries; past them
+  its dialog row reads *Folder left behind with more than N files; all of them are deleted, including those not
+  listed* (Run again's note says the same), and an entry that cannot be read is an error line under its row
+  (*Couldn’t read <path>: <why>*), not a failure of the section; its dialog row counts only what was read (*Folder
+  left behind with 1 file and an entry that couldn’t be read; all of it is deleted*). Counts use one/other wording.
 - **Which runs offer it** (today's rules, extended to every run): a run with a worktree and no live work — failed,
   cancelled, ready for review (merged or not), merged with a worktree left, interrupted. No button while a run is
   running, waiting for you, pausing or paused; the worktree line says *Worktree in use · Remove worktree comes back when
