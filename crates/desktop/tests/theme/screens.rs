@@ -461,11 +461,28 @@ fn conversation_roles_follow_pencil() {
   let message = theme.typography_style(ExtraTypography::TimelineMessage.role());
   assert_eq!((message.font_size, message.line_height), (13.0, 1.6));
   assert_eq!(message.color, Color::from_hex("#EEEEEE"));
-  // A tool group and a card's body start where a message's text does (`uoK7y`).
+  // The working line starts where a chat message's text does: past the 28 avatar and its 12 gap
+  // (`VCcdr` in `kpnmP`).
   assert_eq!(
     theme.spacing_value(ExtraSpacing::TimelineIndent.role()),
-    Dimension::Px(36.0)
+    Dimension::Px(40.0)
   );
   // A segment of the Show control, in the usage period style.
   assert_eq!(theme.radius_value(ExtraRadius::Segment.role()), 5.0);
+  // Round ends up to 32 high (the 28 avatar `qU0XW`, the composer's pills and send button), a tool
+  // chip's padding over and under its line (`a7zbJ`) and the gap between the badges of the
+  // collapsed rail (`fFDrw`).
+  assert_eq!(theme.radius_value(ExtraRadius::Round.role()), 16.0);
+  assert_eq!(theme.spacing_value(ExtraSpacing::Chip.role()), Dimension::Px(5.0));
+  assert_eq!(theme.spacing_value(ExtraSpacing::Snug.role()), Dimension::Px(4.0));
+  // The composer (`n0wdPC` in `BRMpj`): its box's radius and its dock's room above and under it.
+  assert_eq!(theme.radius_value(ExtraRadius::Composer.role()), 18.0);
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::ComposerTop.role()),
+    Dimension::Px(4.0)
+  );
+  assert_eq!(
+    theme.spacing_value(ExtraSpacing::ComposerEdge.role()),
+    Dimension::Px(18.0)
+  );
 }

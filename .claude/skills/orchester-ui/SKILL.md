@@ -128,7 +128,11 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
 | switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
 | conversation *Show* segment radius 5, usage period style (toolbar of `RrScB`) | `ExtraRadius::Segment.role()` |
-| conversation tool group and card body, indented 36 to a message's text (`uoK7y`) | `ExtraSpacing::TimelineIndent.role()` |
+| conversation working line, indented 40 to a chat message's text past its 28 avatar (`VCcdr` in `kpnmP`) | `ExtraSpacing::TimelineIndent.role()` |
+| round ends up to 32 high: chat avatar 28, composer pills 28 and send button 32 (`qU0XW`, `zQwSy`, `U0cjVo`); the composer box radius 18 (`n0wdPC`) | `ExtraRadius::Round.role()` / `ExtraRadius::Composer.role()` |
+| a tool chip's padding over and under its line 5 (`a7zbJ`); 4 between the rail strip's badges and the composer's send chevron and button (`fFDrw`, `eI8en`) | `ExtraSpacing::Chip.role()` / `ExtraSpacing::Snug.role()` |
+| the composer dock's room above its box 4, under it and the closed box's side padding 18 (`CoGTj`, `W9LMuM`) | `ExtraSpacing::ComposerTop.role()` / `ExtraSpacing::ComposerEdge.role()` |
+| a rail step that has not started, at 70 % (`r27KI` in `K4AOD`) | `theme::NOT_STARTED_OPACITY` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |
