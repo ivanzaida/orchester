@@ -49,7 +49,10 @@ fn s1b_remote_identity_refuses_local_missing_and_secret_output() {
     "file:///repo",
     "owner/repo",
   ] {
-    assert!(RepositoryIdentity::from_remote_url(local).is_err());
+    assert_eq!(
+      RepositoryIdentity::from_remote_url(local),
+      Err(RepositoryIdentityError::LocalOrigin)
+    );
   }
   for invalid in [
     "https://user:secret@host/",

@@ -137,7 +137,13 @@ impl TaskOrganization {
       status,
       priority,
       blocked_reason,
-      dependencies,
+      dependencies: dependencies
+        .into_iter()
+        .map(|link| (link.task, link.gate))
+        .collect::<std::collections::BTreeMap<_, _>>()
+        .into_iter()
+        .map(|(task, gate)| BlockingTask { task, gate })
+        .collect(),
       tags,
     })
   }
