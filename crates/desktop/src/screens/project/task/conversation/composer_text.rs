@@ -1,16 +1,59 @@
-//! What the composer says in each state of the run: its primary button, each recipient (*To: Builder
-//! · working*, *To: Builder · resumes its session*, *To: Explorer · first step*) and the line under
+//! What the composer says in each state of the run: what it answers or changes, above it; its
+//! placeholder (*Message Builder…*, `CxrSA`); its primary button; each recipient (*To: Builder ·
+//! working*, *To: Builder · resumes its session*, *To: Explorer · first step*) and the line under
 //! it that says what sending does now (`docs/design/orchester-workspace.md`, "Composer").
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
-use orchester_core::conversation::Recipient;
-
-use crate::tasks::conversation::{
-  Conversation, PanelState, RecipientChoice,
-  composer::{ComposerMode, Queued},
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
+  components::{Row, Text},
+  layout::Alignment,
+  node::{Element, dimension::Dimension},
 };
+use orchester_core::{conversation::Recipient, id::TaskId};
+
+use super::nav;
+use crate::{
+  display,
+  navigation::route::{Page, TaskPageTab},
+  tasks::conversation::{
+    Conversation, PanelState, RecipientChoice,
+    composer::{ComposerMode, Queued},
+  },
+  theme::ExtraSpacing,
+  ui::{
+    icon::{Icon, IconSize, icon},
+    pressable::surface,
+  },
+};
+
+/// What the field says while it is empty: whom the message is for, or what it is (`CxrSA`,
+/// `OlLGD`, `haIEI`, `AzKYQ`, `zxIMy`).
+pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Arc<str> {
+  let to_agent = |agent: &str| ctx.t_args("runs.conversation.placeholder.agent", [("agent", agent)]);
+  match mode {
+    ComposerMode::Steer(working) => to_agent(&working.agent),
+    ComposerMode::Queue(Queued::NextTurn(Some(agent))) => to_agent(agent),
+    ComposerMode::Queue(Queued::ToolStep | Queued::NextTurn(None) | Queued::Suspended | Queued::Decision) => {
+      ctx.t("runs.conversation.placeholder.run")
+    }
+    ComposerMode::Answer { agent, .. } => ctx.t_args("runs.conversation.placeholder.answer", [("agent", &**agent)]),
+    ComposerMode::PlanChanges { .. } => ctx.t("runs.conversation.placeholder.planChanges"),
+    ComposerMode::FollowUp => ctx.t("runs.conversation.placeholder.followUp"),
+    ComposerMode::Continue => match conversation.next_agent.as_deref() {
+      Some(agent) => ctx.t_args("runs.conversation.placeholder.continue", [("agent", agent)]),
+      None => ctx.t("runs.conversation.placeholder.continueUnnamed"),
+    },
+    ComposerMode::NotStarted if conversation.first_agent.is_some() => ctx.t("runs.conversation.placeholder.firstAgent"),
+    ComposerMode::Queue(Queued::Checkpoint) | ComposerMode::NotStarted | ComposerMode::Closed => {
+      ctx.t("conversation.composer.placeholder")
+    }
+  }
+}
 
 /// The state's primary action.
 pub(super) fn primary_label(ctx: &Ctx, mode: &ComposerMode) -> Arc<str> {
@@ -91,4 +134,60 @@ fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
       _ => "conversation.explanation.queued",
     }),
   }
+}
+
+/// Above the composer (`k0NkK` in `ZxYGh`): *Answering Builder's question from 12:09*, *Changes to
+/// plan v1 · sent to Planner*; *Waiting for your decision* with the way to it, on the task's Summary.
+pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> Option<Element> {
+  let (glyph, text) = match mode {
+    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, task)),
+    ComposerMode::Answer { agent, asked_at, .. } => (
+      Icon::CornerDownRight,
+      ctx.t_args(
+        "runs.conversation.composer.answering",
+        [("agent", &**agent), ("time", display::clock(*asked_at).as_str())],
+      ),
+    ),
+    ComposerMode::PlanChanges { agent, version } => (
+      Icon::Pencil,
+      ctx.t_args(
+        "runs.conversation.composer.planChanges",
+        [("version", version.to_string().as_str()), ("agent", &**agent)],
+      ),
+    ),
+    _ => return None,
+  };
+  Some(
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .align_items(Alignment::Center)
+      .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
+      .child(
+        Text::new(&text)
+          .id("conversation-composer-context")
+          .variant(TypographyStyle::Caption),
+      )
+      .into(),
+  )
+}
+
+/// The run waits for the person's decision after its retries: what the composer's messages wait for,
+/// and *Open the decision →*, which opens the Summary with the decision panel.
+fn decision_line(ctx: &mut Ctx, task: TaskId) -> Element {
+  let link = nav(ctx)
+    .link(Page::Task(task, TaskPageTab::Summary))
+    .on(surface().id("conversation-open-decision"))
+    .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link));
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(&ctx.t("runs.conversation.composer.deciding"))
+        .id("conversation-status")
+        .variant(TypographyStyle::Caption),
+    )
+    .child(link)
+    .into()
 }

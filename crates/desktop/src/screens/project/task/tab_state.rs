@@ -27,7 +27,13 @@ const TEXT_WIDTH: f32 = 420.0;
 
 /// An icon, a title and an explanation centered in the tab, with optional actions.
 pub(super) fn state(id: &'static str, glyph: Icon, title: &str, text: &str, actions: Vec<Element>) -> Element {
-  let actions = (!actions.is_empty()).then(|| Row::new().spacing(SpacingSize::Sm).with_children(actions));
+  let actions = (!actions.is_empty()).then(|| {
+    Row::new()
+      .max_width(Dimension::Pct(100.0))
+      .justify(Justify::Center)
+      .spacing(SpacingSize::Sm)
+      .with_children(actions)
+  });
   Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -60,7 +66,8 @@ pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Eleme
 }
 
 /// The timeline has nothing yet, with why: the task has no run, its run is queued (with the steps it
-/// will run on one line, `zxIMy`), or its agents have reported nothing so far.
+/// will run on one line, `zxIMy`, which wraps where the tab is narrower), or its agents have
+/// reported nothing so far.
 pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
   let Some(run) = run else {
     return state(
@@ -88,11 +95,17 @@ pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
   let number = run.run.number().get().to_string();
   let mut steps = Row::new()
     .id("conversation-empty-steps")
+    .max_width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Section)
+    .wrap()
+    .justify(Justify::Center)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center);
   for (index, step) in run.steps.iter().enumerate() {
+    // A step and the chevron before it wrap together, so no line ends on a chevron.
+    let mut unit = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
     if index > 0 {
-      steps = steps.child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted));
+      unit = unit.child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted));
     }
     let number = format!("{:02}", step.number);
     let label = match step.agent.as_deref().filter(|_| !step.tool_step) {
@@ -106,10 +119,12 @@ pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
       ),
     };
     steps = steps.child(
-      Text::new(&label)
-        .variant(lurq::app::theme::TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
+      unit.child(
+        Text::new(&label)
+          .variant(lurq::app::theme::TypographyStyle::Caption)
+          .color(PaletteColor::TextMuted)
+          .nowrap(),
+      ),
     );
   }
   state(

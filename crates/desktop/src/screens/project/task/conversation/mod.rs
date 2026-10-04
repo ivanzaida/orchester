@@ -1,15 +1,17 @@
 //! The Conversation tab (`docs/design/orchester-workspace.md`, "Conversation (merged with
 //! Activity)", Pencil group `fTfl8`): one timeline per run of what its agents did and what was said,
 //! with its step filter, *Show* and search ([`toolbar`]), what a filter or search leaves out
-//! ([`readback`]), the timeline itself ([`row`]), *Jump to latest* while it does not follow, the
-//! working line, the composer ([`composer`]) and the Details pane ([`details`]). The transcript and
-//! the run's tool requests are read again whenever the runner reports a change.
+//! ([`readback`]), the timeline itself ([`row`]) with the working line as its last row, following
+//! it live and *Jump to latest* while it does not ([`follow`]), the composer ([`composer`]) and the
+//! Details pane ([`details`]). The transcript and the run's tool requests are read again whenever
+//! the runner reports a change.
 
 mod approval_card;
 mod cards;
 mod composer;
 mod composer_text;
 mod details;
+mod follow;
 mod group;
 mod live_state;
 mod message;
@@ -22,8 +24,8 @@ mod toolbar;
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, events::scroll_event::ScrollEvent, theme::SpacingSize},
-  components::{Column, Row, ScrollVertical, VirtualizedList},
+  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  components::{Column, Row, ScrollVertical},
   core::Signal,
   layout::{
     Alignment,
@@ -40,8 +42,8 @@ use parking_lot::Mutex;
 use self::{
   composer::{ComposerDock, ComposerProps},
   details::{DetailsPane, details_pane, remembered, save_action},
+  follow::Reveal,
   readback::readback,
-  row::{RowProps, TimelineRowView},
   toolbar::toolbar,
 };
 use super::{
@@ -60,7 +62,7 @@ use crate::{
     timeline::{
       self, Item, Sources,
       load::{Loaded, load_in},
-      view::{self, Choice, Show, Shown},
+      view::{self, Choice, Show},
     },
   },
   theme::gutter_scrollbar,
@@ -69,10 +71,6 @@ use crate::{
 
 /// The timeline's column: at most this wide, centred in the tab (`RrScB`).
 pub(super) const COLUMN_WIDTH: f32 = 840.0;
-/// *Jump to latest* (`iwe3p`) and how close to the end still counts as at the end.
-const JUMP_HEIGHT: f32 = 30.0;
-const FOLLOW_SLACK: f32 = 24.0;
-
 /// Puts the focus in the composer once it shows (Ask agent, Reply); provided by the task page.
 #[derive(Clone)]
 pub(super) struct ComposerFocus(pub(super) Signal<bool>);
@@ -156,13 +154,6 @@ struct Timeline {
   details: DetailsPane,
   /// Bumped to read the task again, once something was sent.
   reload: Signal<u64>,
-}
-
-/// The card the timeline reveals, and whether the person has scrolled since the tab opened.
-#[derive(Default)]
-struct Reveal {
-  key: Option<String>,
-  scrolled: bool,
 }
 
 /// The run's transcript and requests, as read.
@@ -314,21 +305,23 @@ impl ConversationTab {
     let shown = view::shown(items, &choice, &|key, default| toggles.is_open(key, default));
     let live = props.conversation.state == PanelState::Live;
     let reveal = self.follow(shown.rows.len(), items);
-    let body: Element = if shown.rows.is_empty() {
-      self.empty(ctx, run, (items, &choice))
+    let working = live.then(|| LiveFooterProps {
+      agent: run
+        .current_step()
+        .and_then(|step| step.agent.clone())
+        .unwrap_or_else(|| "".into()),
+      last: loaded.entries.last().map(|entry| entry.at),
+    });
+    // The working line is the timeline's last row; with nothing else to show, it follows what says
+    // why.
+    let (body, working): (Element, _) = if shown.rows.is_empty() {
+      let below = working.map(|working| column(ctx.mount_keyed::<LiveFooter>("conversation-working", working)));
+      (self.empty(ctx, run, (items, &choice)), below)
     } else {
-      self.list(ctx, &shown, reveal)
+      (self.list(ctx, &shown, reveal, working), None)
     };
     let readback = readback(ctx, run, (&choice, &shown), (&self.step, &self.query, &self.show));
     let jump = (!self.following.get() && !shown.rows.is_empty()).then(|| self.jump(ctx, shown.rows.len()));
-    let working = live.then(|| {
-      let last = loaded.entries.last().map(|entry| entry.at);
-      let agent = run
-        .current_step()
-        .and_then(|step| step.agent.clone())
-        .unwrap_or_else(|| "".into());
-      column(ctx.mount_keyed::<LiveFooter>("conversation-working", LiveFooterProps { agent, last }))
-    });
     let main = Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
@@ -392,100 +385,6 @@ impl ConversationTab {
           .child(composer),
       )
       .with_children(pane)
-      .into()
-  }
-
-  /// Once a message was sent, the timeline goes to its end and follows again.
-  fn sent_handler(&self) -> Arc<dyn Fn() + Send + Sync> {
-    let (scroll, following) = (self.scroll.clone(), self.following.clone());
-    Arc::new(move || {
-      scroll.scroll_to_bottom_pending();
-      following.set(true);
-    })
-  }
-
-  /// Keeps the newest row in view while following. The first time, the timeline starts at the end;
-  /// until the person scrolls, the first card that waits for them is the list's reveal, from the
-  /// render it appears in (the run's state may read before its question) until it no longer waits.
-  /// The key stays the same on every render: a reveal that changes to `None` is dropped before the
-  /// list has measured its way to the card.
-  fn follow(&self, rows: usize, items: &[Item]) -> Option<String> {
-    let mut shown = self.shown.lock();
-    let mut reveal = self.reveal.lock();
-    if !reveal.scrolled {
-      reveal.key = items
-        .iter()
-        .find(|item| timeline::waits_for_you(item))
-        .map(|item| item.key.to_string());
-    }
-    if (reveal.key.is_none() || shown.is_none()) && self.following.get_untracked() && rows > shown.unwrap_or(0) {
-      self.scroll.scroll_to_bottom_pending();
-    }
-    *shown = Some(rows);
-    reveal.key.clone()
-  }
-
-  fn list(&self, ctx: &mut Ctx, shown: &Shown, reveal: Option<String>) -> Element {
-    let raw = self.raw.get();
-    let rows: Arc<Vec<RowProps>> = Arc::new(
-      shown
-        .rows
-        .iter()
-        .map(|row| RowProps { row: row.clone(), raw })
-        .collect(),
-    );
-    let count = rows.len();
-    let (scroll, following, left_at) = (self.scroll.clone(), self.following.clone(), self.left_at.clone());
-    let revealed = self.reveal.clone();
-    VirtualizedList::new_shared(ctx, rows)
-      .list_key("conversation-timeline")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .with_scroll_state(self.scroll.clone())
-      .scrollbar(gutter_scrollbar())
-      .reveal_key(reveal)
-      .on_scroll(move |event: ScrollEvent| {
-        // The person scrolls: the card the tab opened at no longer holds the list.
-        *revealed.lock() = Reveal {
-          key: None,
-          scrolled: true,
-        };
-        // The handler runs before the wheel moves the list, which moves by the opposite of the delta.
-        let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);
-        let at_end = scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
-        if at_end != following.get_untracked() {
-          if !at_end {
-            left_at.set(count);
-          }
-          following.set(at_end);
-        }
-      })
-      .mount_keyed::<TimelineRowView, _, _, _>(|row| row.row.key().to_string(), Clone::clone)
-  }
-
-  /// "Jump to latest · N new" (`iwe3p`), centred above the composer.
-  fn jump(&self, ctx: &Ctx, rows: usize) -> Element {
-    let new = rows.saturating_sub(self.left_at.get());
-    let label = if new == 0 {
-      ctx.t("runs.activity.jump")
-    } else {
-      ctx.t_args("runs.activity.jumpNew", [("count", new.to_string().as_str())])
-    };
-    let (scroll, following) = (self.scroll.clone(), self.following.clone());
-    let button = ActionButton::new(label)
-      .icon(Icon::ArrowDown)
-      .id("conversation-jump")
-      .height(Dimension::Px(JUMP_HEIGHT))
-      .on_click(move || {
-        scroll.scroll_to_bottom_pending();
-        following.set(true);
-      })
-      .render(ctx);
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding_bottom(SpacingSize::Md)
-      .justify(Justify::Center)
-      .child(button)
       .into()
   }
 

@@ -88,7 +88,11 @@ fn tool_run_shows_the_command_step_and_its_output() {
   desktop.wait_until("the timeline", |desktop| {
     has(desktop, "activity-step-header") && shows(desktop, "conversation", "Checks · Print lines")
   });
-  assert!(shows(&mut desktop, "conversation", "Command tool · 1 run"));
+  // The tool step's header names its command and how it exited, and says it used no tokens.
+  assert!(shows(&mut desktop, "conversation", "orchester-test-command"));
+  assert!(shows(&mut desktop, "conversation", " · exit 0 · "));
+  assert!(shows(&mut desktop, "conversation", "no tokens"));
+  assert!(!shows(&mut desktop, "conversation", "Command tool"));
   // Narrowed to the tool step, the step opens on its command's group.
   let labels = desktop
     .tree

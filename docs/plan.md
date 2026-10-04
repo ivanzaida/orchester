@@ -453,6 +453,50 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-61 polish · Conversation tab design-verification minors · branch `claude/conv-polish` (from master `b96dbf27`)
+
+- **Implemented 2026-10-04, waiting for an independent design verification** against `fTfl8` (`RrScB`, `CxrSA`,
+  `ZxYGh`, `haIEI`, `AzKYQ`, `hep0l`, `OlLGD`, `zxIMy`) of the minors ORC-61 left open:
+  - Step headers: the state reads *Needs input* (message-circle) while the agent asks, *Waiting for approval* (hand)
+    while a plan or tool request waits, *Approved* once the person approved its plan, with *· approved by you* after
+    the meta; a folded finished step reads *Codex / Sol · 12:01–12:02* (no invocation count unless it had more than
+    one), an open one *· invocation N ·*, as the frames draw; one minute reads as one time; a tool step reads its
+    recorded command and exit code (*pnpm test · exit 0 · 12:22*, no exit code on a failed one, whose command row
+    shows it) and *no tokens*.
+  - Plan card: one text a plan line, 13/1.6, 6 apart (27 a line); *Approves plan v1 and starts Builder on Implement.
+    To change it, describe what it needs below.* beside *Approve plan & continue*, from the pipeline's next step; a
+    plan step's result card no longer repeats the plan; the waiting label's glyph is the hand.
+  - Question card: *Implement · 12:09* in its meta. The composer's *Answering …* / *Changes to plan …* line (with
+    corner-down-right / pencil) and *Waiting for your decision* stand above the box; the field takes the focus once
+    per question that waits, when the tab opens on it or when it arrives.
+  - Composer placeholders per state: *Message Builder…* (working, or queued for a named agent), *Message an agent of
+    this run…* (tool step, paused, deciding), *Describe the changes the plan needs…*, *Ask a question or request a
+    follow-up…*, *Write to the first agent of the run…*; not drawn: *Answer Builder…*, *Tell Builder how to continue
+    the run…*.
+  - The working line is the timeline's last row (indented to a message's text, no hairline), so it scrolls with the
+    timeline; with nothing else to show it stays under the empty state.
+  - A denied command is a titled problem row: *Command denied* (or *Outside write denied* by its category) with
+    *permission_denied* / *denied by you* and the time, and *… did not run: …* naming the command, with no command
+    box or Copy.
+  - Result cards: *Review passed* for a step that judges the work (one with a failure route), *… done* otherwise,
+    *… failed*; *Builder reported passed / failed* from the step's structured result; circle-check when it passed.
+  - At 960 Attach follows the recipient 10 apart (the select fills its wrapper); the queued run's step names wrap
+    inside the tab, each with the chevron before it.
+- **Scrollbar drag:** lurq (since 0.33.1) runs a container's `on_scroll` handlers for a scrollbar drag, which the
+  timeline already takes as the person scrolling; a headless probe of a `VirtualizedList` with the gutter scrollbar
+  confirms it. A headless drag of the Conversation timeline's thumb could not be made to hit the scrollbar, so no
+  end-to-end test covers it: check in the running app that dragging the thumb stops following.
+- `conversation/mod.rs` was split first (following and *Jump to latest* moved to `conversation/follow.rs`), the
+  composer's context line moved to `composer_text.rs`, and `tests/timeline.rs` became `tests/timeline/` (tool events
+  in `tool_events.rs`).
+- Not built (no data or out of scope): *started 12:04 · waiting since 12:09* and *1 message from you* in step headers
+  (data exists, not asked); the question card's answer hint; *Show the whole plan* chevron; the tool step result's
+  *exit 1 · attempt 1*; the Details pane wording (ORC-44's panel).
+- Tests: `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`, `--test i18n
+  locale` and `every_key`, `--test form_keyboard` with `conversation` (incl. the new `conversation_queued` and
+  `conversation_a_step_that_judges_the_work_…`), `composer_`, `activity_`, `task_graph`, `run_permissions`,
+  `tool_approval`, `tool_run`, `native_activity`.
+
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 
 Implemented for review on `codex/server-s1a` (2026-10-03), in `.tmp/worktrees/codex-server-s1a`.

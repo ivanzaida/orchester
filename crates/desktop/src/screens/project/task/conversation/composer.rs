@@ -1,10 +1,12 @@
 //! The composer (`C3nu0z`), docked under the timeline (hairline above, padding 12 / 32 / 14, in the
-//! timeline's column): the message, the recipient and *Attach* (unavailable: attachments are not
-//! built) in its action row, the state's buttons, and one line under it that says what sending does
-//! now (`docs/design/orchester-workspace.md`, "Composer"). While an agent works and the message is
-//! for it, *Send now* and *Send after this turn*; Ctrl+Enter (Cmd+Enter on macOS) sends after this
-//! turn then, the safer default, and presses the state's primary action otherwise. Enter adds a
-//! line. The draft stays until the message is stored, once per draft.
+//! timeline's column): what it answers or changes above it (`k0NkK` in `ZxYGh`), the message with
+//! the state's placeholder, the recipient and *Attach* (unavailable: attachments are not built) in
+//! its action row, the state's buttons, and one line under it that says what sending does now
+//! (`docs/design/orchester-workspace.md`, "Composer"). When it first shows a question that waits,
+//! as the tab opens on it or once it arrives, the field takes the focus. While an agent works and
+//! the message is for it, *Send now* and *Send after this turn*; Ctrl+Enter (Cmd+Enter on macOS)
+//! sends after this turn then, the safer default, and presses the state's primary action otherwise.
+//! Enter adds a line. The draft stays until the message is stored, once per draft.
 
 use std::sync::Arc;
 
@@ -22,9 +24,11 @@ use lurq::{
 };
 use orchester_core::{
   conversation::{Recipient, Timing},
-  id::{IdempotencyKey, TaskId},
+  id::IdempotencyKey,
   run::{PlanDecision, ReviewNote},
+  time::Timestamp,
 };
+use parking_lot::Mutex;
 
 use super::{
   super::{
@@ -32,18 +36,12 @@ use super::{
     plan_review::{Decision as PlanRequest, DecisionAction, decision_action as plan_decision},
   },
   column,
-  composer_text::{hint, primary_label, recipient_label},
-  nav,
+  composer_text::{context_line, hint, placeholder, primary_label, recipient_label},
   send::{Outgoing, SendAction, Sent, send_action},
 };
 use crate::{
-  display,
-  navigation::route::{Page, TaskPageTab},
   tasks::{
-    conversation::{
-      Conversation,
-      composer::{ComposerMode, Queued},
-    },
+    conversation::{Conversation, composer::ComposerMode},
     detail::TaskDetail,
     plan::PlanReview,
   },
@@ -55,7 +53,6 @@ use crate::{
     field::{field_error, select_style, styled_input},
     icon::Icon,
     message_text,
-    pressable::surface,
   },
 };
 
@@ -120,6 +117,8 @@ pub(super) struct ComposerDock {
   /// How the message on its way was sent, for the button that shows it under way.
   timing: Signal<SentAs>,
   input: ElementRef,
+  /// When the question the field last took the focus for was asked: once per question.
+  answering: Mutex<Option<Timestamp>>,
 }
 
 impl Component for ComposerDock {
@@ -146,6 +145,7 @@ impl Component for ComposerDock {
       focused: ctx.signal(false),
       timing: ctx.signal(SentAs(Timing::AfterTurn)),
       input: ElementRef::new(),
+      answering: Mutex::new(None),
     }
   }
 
@@ -162,6 +162,13 @@ impl Component for ComposerDock {
     self.follow_default(conversation, run);
     let recipient = self.to.get().0;
     let mode = ComposerMode::of(conversation, run, recipient);
+    if let ComposerMode::Answer { asked_at, .. } = mode {
+      let mut answering = self.answering.lock();
+      if *answering != Some(asked_at) {
+        *answering = Some(asked_at);
+        ctx.focus(&self.input);
+      }
+    }
     let sending = action.state().get().is_pending() || plan.state().get().is_pending();
     let presses = self.presses(&props, (&mode, recipient), (&action, &plan), sending);
     let feedback = feedback(&action, &plan);
@@ -186,7 +193,6 @@ impl Component for ComposerDock {
       .background(ExtraColor::Surface.role())
       .border(border)
       .rounded(ExtraRadius::Notice.role())
-      .with_children(context_line(ctx, &mode, props.detail.task.id()))
       .child(field)
       .child(row);
     let hint = Text::new(&hint(ctx, &mode, conversation))
@@ -203,6 +209,7 @@ impl Component for ComposerDock {
         Column::new()
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Sm)
+          .with_children(context_line(ctx, &mode, props.detail.task.id()))
           .child(composer)
           .with_children(feedback.map(|message| field_error(&message_text(ctx, &message))))
           .child(hint)
@@ -319,10 +326,7 @@ impl ComposerDock {
         .into();
     }
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
-    let placeholder = match mode {
-      ComposerMode::PlanChanges { .. } => ctx.t("runs.plan.notePlaceholder"),
-      _ => ctx.t("conversation.composer.placeholder"),
-    };
+    let placeholder = placeholder(ctx, mode, &props.conversation);
     // `UXzbp` is a 12px normal field line; ReviewNote's 1.6 leading inflated the empty composer.
     styled_input(ctx, props.draft.clone(), TypographyStyle::FieldLabel)
       .id("conversation-input")
@@ -478,13 +482,16 @@ impl ComposerDock {
     let select = Element::from(
       Select::new(self.to.clone())
         .options(options)
-        .width(width)
+        .width(Dimension::Pct(100.0))
         .height(Dimension::Px(BUTTON_HEIGHT))
         .style(select_style(ctx, BUTTON_HEIGHT))
         .focusable(usable),
     )
     .id("conversation-recipient");
+    // Every wrapper takes `width`, so the select fills the room it is given and Attach follows it
+    // right after, also when the line is narrower.
     let select: Element = Column::new()
+      .width(width)
       .describe("recipient", format!("{recipient:?}"))
       .child(select)
       .into();
@@ -493,10 +500,16 @@ impl ComposerDock {
     }
     // The select takes no pointer; the field around it says it cannot be used.
     Column::new()
+      .width(width)
       .opacity(DISABLED_OPACITY)
       .cursor(CursorIcon::NotAllowed)
       .describe("state", "disabled")
-      .child(Column::new().pointer_events_none().child(select))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .pointer_events_none()
+          .child(select),
+      )
       .into()
   }
 }
@@ -529,47 +542,4 @@ fn feedback(action: &SendAction, plan: &DecisionAction) -> Option<crate::message
     (None, Some(Sent::Queued(reason))) => Some(reason),
     _ => plan.error,
   }
-}
-
-/// *Answering Builder's question from 12:09*, *Changes to plan v1 · sent to Planner*; *Waiting for
-/// your decision* with the way to it, on the task's Summary.
-fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> Option<Element> {
-  let text = match mode {
-    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, task)),
-    ComposerMode::Answer { agent, asked_at, .. } => ctx.t_args(
-      "runs.conversation.composer.answering",
-      [("agent", &**agent), ("time", display::clock(*asked_at).as_str())],
-    ),
-    ComposerMode::PlanChanges { agent, version } => ctx.t_args(
-      "runs.conversation.composer.planChanges",
-      [("version", version.to_string().as_str()), ("agent", &**agent)],
-    ),
-    _ => return None,
-  };
-  Some(
-    Text::new(&text)
-      .id("conversation-composer-context")
-      .variant(TypographyStyle::Caption)
-      .into(),
-  )
-}
-
-/// The run waits for the person's decision after its retries: what the composer's messages wait for,
-/// and *Open the decision →*, which opens the Summary with the decision panel.
-fn decision_line(ctx: &mut Ctx, task: TaskId) -> Element {
-  let link = nav(ctx)
-    .link(Page::Task(task, TaskPageTab::Summary))
-    .on(surface().id("conversation-open-decision"))
-    .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link));
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t("runs.conversation.composer.deciding"))
-        .id("conversation-status")
-        .variant(TypographyStyle::Caption),
-    )
-    .child(link)
-    .into()
 }

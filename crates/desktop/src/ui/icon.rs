@@ -64,6 +64,7 @@ icons! {
   CodeXml => '\u{e206}',
   Copy => '\u{e09e}',
   CopyCheck => '\u{e3fb}',
+  CornerDownRight => '\u{e0a2}',
   Cpu => '\u{e0a9}',
   Crosshair => '\u{e0ac}',
   Database => '\u{e0ad}',

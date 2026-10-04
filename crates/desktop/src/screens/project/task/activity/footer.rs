@@ -1,5 +1,6 @@
-//! The live footer under the transcript (`P2Qc0`): who is working and how long ago the last
-//! entry arrived, a real time that its own interval keeps current, never progress of its own.
+//! The working line, the timeline's last row while an agent works (`RrScB`), indented to a
+//! message's text: who is working and how long ago the last entry arrived, a real time that its own
+//! interval keeps current, never progress of its own.
 
 use std::{sync::Arc, time::Duration};
 
@@ -7,25 +8,25 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
 
 use crate::{
   display,
-  theme::ExtraColor,
+  theme::ExtraSpacing,
   ui::{
     icon::{Icon, IconSize, icon},
     message_text,
   },
 };
 
-/// Footer height (`P2Qc0`) and how often the elapsed time is refreshed.
+/// The line's height and how often the elapsed time is refreshed.
 const FOOTER_HEIGHT: f32 = 40.0;
 const TICK: Duration = Duration::from_secs(1);
 
@@ -76,7 +77,7 @@ impl Component for LiveFooter {
       .height(Dimension::Px(FOOTER_HEIGHT))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+      .padding_left(ExtraSpacing::TimelineIndent.role())
       .child(icon(Icon::Loader, IconSize::Small, PaletteColor::TextSecondary))
       .child(Text::new(&text).variant(TypographyStyle::Caption))
   }

@@ -2,16 +2,27 @@
 //! real runner and `orchester-fake-codex`: a step's tool events fold into one group between its
 //! agent's messages, with what the group did; *Show* narrows the timeline to messages or tools; a
 //! search keeps what matches and opens a group on its matching entries, or says it found nothing;
-//! the step filter says what it hides; the Details pane opens on demand; and while an agent works the
-//! timeline follows it, stops following when scrolled up and *Jump to latest* counts what came since.
+//! the step filter says what it hides; the Details pane opens on demand; a step that judges the work
+//! reads *Review passed*; and while an agent works the timeline follows it with the working line as
+//! its last row, stops following when scrolled up, and *Jump to latest* counts what came since.
 
-use orchester_core::{connection::stream::AgentEvent, store::ActivityStore, time::Timestamp};
+use std::num::NonZeroU32;
+
+use orchester_core::{
+  connection::stream::AgentEvent,
+  resource::{FailureRoute, Step, StepKey},
+  store::ActivityStore,
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed, set_text},
+  task_run::{
+    agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed, seed_steps,
+    set_text,
+  },
 };
 
 fn desktop(review: bool) -> Desktop {
@@ -320,6 +331,8 @@ fn conversation_follows_live_and_jump_to_latest_counts_what_came_since() {
   desktop.wait_until("not following", |desktop| has(desktop, "conversation-jump"));
   assert!(shows(&mut desktop, "conversation-toolbar", "Not following"));
   assert!(shows(&mut desktop, "conversation-jump", "Jump to latest"));
+  // The working line is the timeline's last row: it scrolled away with the rest.
+  assert!(out_of_view(&mut desktop, "activity-live"));
 
   // The agent's command ends and it writes again, still at work.
   release(&desktop);
@@ -331,4 +344,48 @@ fn conversation_follows_live_and_jump_to_latest_counts_what_came_since() {
     !has(desktop, "conversation-jump") && holds(desktop, "conversation-toolbar", "Following live")
   });
   assert!(shows(&mut desktop, "conversation", "Released."));
+}
+
+/// Whether the element `id` is not in the timeline's view: not built, or under *Jump to latest*.
+fn out_of_view(desktop: &mut Desktop, id: &str) -> bool {
+  if !has(desktop, id) {
+    return true;
+  }
+  desktop.bounds(id).y >= desktop.bounds("conversation-jump").y - 0.5
+}
+
+#[test]
+fn conversation_a_step_that_judges_the_work_passes_and_finished_steps_say_when() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "implement", "Implement", "Append one line.", &[]),
+        Step {
+          on_failure: Some(FailureRoute {
+            return_to: StepKey::new("implement").expect("key"),
+            max_retries: NonZeroU32::MIN,
+          }),
+          ..agent_step(builder, "review", "Review", "Append one line.", &["implement"])
+        },
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  finished_on_page(&mut desktop);
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
+  assert!(shows(&mut desktop, "conversation", "Review passed"));
+  assert!(shows(&mut desktop, "conversation", "Builder reported passed"));
+  assert!(!shows(&mut desktop, "conversation", "Review done"));
+  // Implement folds: its engine and times, no invocation; Review, which the run ended on, is open
+  // on its invocation.
+  let metas = texts(&desktop, "activity-step-meta");
+  assert_eq!(metas.len(), 2, "{metas:?}");
+  assert!(!metas[0].contains("invocation"), "{metas:?}");
+  assert!(metas[1].contains("· invocation 1 ·"), "{metas:?}");
+  desktop.click("activity-step-header");
+  desktop.wait_until("Implement's result", |desktop| {
+    holds(desktop, "conversation", "Implement done")
+  });
 }

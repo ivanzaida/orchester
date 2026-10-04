@@ -1,7 +1,7 @@
 //! The parts of the agent transcript (02.I `SfXU1`) the Conversation tab shows: an entry (`N4SlQq`)
 //! with its time, glyph, header and output, a step execution's header (`mDnc3`), a return or
 //! restart before it (02.B7 `zyusO`), the invocation panel of its Details pane (`n0cEOG`) and the
-//! live footer (`P2Qc0`). The tab itself is `super::conversation`.
+//! working line (`RrScB`). The tab itself is `super::conversation`.
 
 mod entry;
 mod first_edit;
