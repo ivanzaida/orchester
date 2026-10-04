@@ -36,7 +36,7 @@ mod unreadable;
 mod usage;
 
 pub use self::{
-  again::{RunAgainBlock, RunAgainInput, run_again},
+  again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
     AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
     AutoVerdict, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer, allowing_command,

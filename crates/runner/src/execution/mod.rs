@@ -258,7 +258,7 @@ impl Scheduler {
     self.admit(&db)?;
     let checked = prepare::check_again(&db, root, task)?;
     if let Some(confirmed) = &remove_worktrees {
-      again::remove_worktrees(root, &previous, confirmed)?;
+      again::remove_worktrees(&mut db, root, &previous, confirmed)?;
     }
     let prepared = prepare::record(&mut db, root, key, checked)?;
     self.begin(db, prepared)

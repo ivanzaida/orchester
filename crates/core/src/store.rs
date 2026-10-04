@@ -135,6 +135,20 @@ pub trait MergeStore {
   fn run_merge(&self, run: RunId) -> Result<Option<RunMerge>, Self::Error>;
 }
 
+/// When runs' own worktrees were removed (ORC-63), by *Remove worktree*, a merge or Run again. An
+/// interrupted run whose worktree was removed never continues and no longer holds its task.
+pub trait WorktreeStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Records that the worktree of `run` was removed at `at`. A removal recorded before stays.
+  fn save_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
+
+  fn worktree_removal(&self, run: RunId) -> Result<Option<Timestamp>, Self::Error>;
+
+  /// The runs of `task` whose worktree was removed, with when, ordered by run number.
+  fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error>;
+}
+
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.
 pub trait ResourceStore {
   type Error: std::error::Error + Send + Sync + 'static;
@@ -353,7 +367,8 @@ pub trait RunStore {
 
   fn latest_checkpoint(&self, run: RunId) -> Result<Option<Checkpoint>, Self::Error>;
 
-  /// Interrupted runs of the project, ordered by number, for recovery.
+  /// Interrupted runs of the project that can continue, ordered by number, for recovery: a run
+  /// whose worktree was removed ([`WorktreeStore`]) never continues and is left out.
   fn interrupted_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the

@@ -87,7 +87,7 @@ impl IntegrationProblem {
   pub fn message(&self, separator: &str) -> Message {
     match self {
       Self::Merge(error) => merge_message(error, separator),
-      Self::Cleanup(CleanupError::NotFinished) => Message::new("runs.worktree.failure.notFinished"),
+      Self::Cleanup(CleanupError::LiveWork) => Message::new("runs.worktree.failure.notFinished"),
       Self::Cleanup(CleanupError::Git(error)) | Self::Read(error) => git_message(error),
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),

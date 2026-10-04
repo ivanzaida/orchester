@@ -1,4 +1,5 @@
-//! What integrating runs stores: the branch a run started on and a run's merge, once.
+//! What integrating runs stores: the branch a run started on, a run's merge, once, and when a run's
+//! worktree was removed.
 
 mod support;
 
@@ -6,8 +7,8 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::{BranchName, NewRun},
-  store::{MergeStore, RunStore},
+  run::{BranchName, InterruptCause, NewRun},
+  store::{MergeStore, RunStore, WorktreeStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -68,5 +69,31 @@ fn integration_merge_is_recorded_once_per_run() {
   assert!(
     db.save_run_merge(&unknown).is_err(),
     "a merge belongs to a recorded run"
+  );
+}
+
+#[test]
+fn integration_worktree_removal_is_recorded_once_and_ends_an_interrupted_run_for_good() {
+  let (repo, mut db, mut run, _) = started_run();
+  let events = run.interrupt(InterruptCause::QuitNow, at(20)).expect("interrupt");
+  db.append_events(&run, &events).expect("append");
+  assert_eq!(db.interrupted_runs().expect("listed").len(), 1);
+  assert_eq!(db.worktree_removal(run.id()).expect("read"), None);
+  db.save_worktree_removal(run.id(), at(30)).expect("save");
+  db.save_worktree_removal(run.id(), at(40))
+    .expect("a second removal changes nothing");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.worktree_removal(run.id()).expect("read"), Some(at(30)));
+  assert_eq!(
+    reopened.worktree_removals(run.task()).expect("read"),
+    vec![(run.id(), at(30))]
+  );
+  assert!(
+    reopened.interrupted_runs().expect("listed").is_empty(),
+    "it can never continue, so recovery leaves it out"
+  );
+  assert!(
+    db.save_worktree_removal(RunId::generate(), at(50)).is_err(),
+    "a removal belongs to a recorded run"
   );
 }

@@ -5,7 +5,7 @@
 use std::fs;
 
 use orchester_core::{
-  integration::{CleanupError, KeepReason, WorktreeOwner, clean_up, leftovers, merge_run},
+  integration::{CleanupError, KeepReason, WorktreeOwner, clean_up, leftovers, leftovers_of, merge_run},
   run::{BranchName, Run},
 };
 
@@ -149,7 +149,7 @@ fn clean_up_leaves_a_run_that_has_not_ended_alone() {
   let (repo, run) = repo_with_leftovers(Ending::Running);
   assert_eq!(
     clean_up(&Processes, &git_program(), &repo.root, &run, None),
-    Err(CleanupError::NotFinished)
+    Err(CleanupError::LiveWork)
   );
   assert!(
     repo
@@ -158,4 +158,33 @@ fn clean_up_leaves_a_run_that_has_not_ended_alone() {
       .join(run.id().to_string())
       .is_dir()
   );
+}
+
+#[test]
+fn clean_up_removes_the_worktrees_of_an_interrupted_run_and_says_its_own_went() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let cleanup = clean_up(&Processes, &git_program(), &repo.root, &run, None).expect("clean up");
+  assert_eq!(cleanup.removed.len(), 2);
+  assert!(cleanup.removed_run_worktree());
+  assert!(
+    !repo
+      .root
+      .join(".orchester/worktrees")
+      .join(run.id().to_string())
+      .exists()
+  );
+  assert!(repo.branch_exists(RUN_BRANCH), "its committed work stays on its branch");
+}
+
+#[test]
+fn leftovers_of_several_runs_read_each_run_on_its_own() {
+  let (repo, run) = repo_with_leftovers(Ending::Succeeded);
+  let other = crate::support::run(&repo.head(), Some("main"), Ending::Cancelled);
+  let left = leftovers_of(&Processes, &git_program(), &repo.root, &[&run, &other]).expect("read");
+  assert_eq!(left.len(), 2);
+  assert_eq!(
+    left[0],
+    leftovers(&Processes, &git_program(), &repo.root, &run).expect("read")
+  );
+  assert!(left[1].worktrees.is_empty(), "the other run has no worktree");
 }

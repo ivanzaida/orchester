@@ -16,7 +16,7 @@ use thiserror::Error;
 pub use self::{
   cleanup::{
     Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, WORKTREES_DIR, WorktreeOwner, clean_up,
-    leftovers,
+    leftovers, leftovers_of,
   },
   merge::{MergeError, MergeKind, RunMerge, merge_run},
 };

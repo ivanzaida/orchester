@@ -1,6 +1,7 @@
 //! Run again end to end against `orchester-fake-codex`: after a failed or cancelled run the task
 //! starts its next run from the first step in a new worktree on a new branch, once per request;
-//! what blocks it; and removing the worktree of the run before. Needs `git`. Run with
+//! what blocks it; removing the worktree of the run before; and an interrupted run whose worktree
+//! a person removed, which can no longer continue and no longer holds its task. Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test run_again`.
 
 mod support;
@@ -10,12 +11,12 @@ use std::{fs, path::Path, time::Duration};
 use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
-  integration::{Leftovers, leftovers},
+  integration::{Leftovers, clean_up, leftovers},
   limits::ProjectLimits,
   name::Name,
   resource::{Pipeline, Slug, StepKind},
   run::{InterruptCause, Run, RunAgainBlock, RunStatus},
-  store::{ResourceStore, RunStore, SettingsStore, TaskStore},
+  store::{ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -284,5 +285,57 @@ async fn run_again_removes_the_worktree_of_the_run_before_as_confirmed() {
     db.run(first).expect("read").is_some(),
     "the run before keeps its record"
   );
+  assert!(
+    db.worktree_removal(first).expect("read").is_some(),
+    "the removal is recorded"
+  );
   wait_for(root, &mut events, again, |run| run.status().is_terminal()).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_again_follows_an_interrupted_run_once_its_worktree_was_removed() {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  let (stopping, mut events) = scheduler(root);
+  let first = start(&stopping, project.task).await;
+  wait_for_turns(root, &mut events, first, 1).await;
+  stopping.stop_all(InterruptCause::QuitNow).await;
+  let interrupted = run(root, first);
+  assert_eq!(interrupted.status(), &RunStatus::Interrupted(InterruptCause::QuitNow));
+  let (scheduler, mut events) = scheduler(root);
+  assert_eq!(
+    scheduler
+      .run_again(IdempotencyKey::generate(), project.task, first, None)
+      .await,
+    Err(blocked(RunAgainBlock::RunActive {
+      number: interrupted.number()
+    })),
+    "with its worktree it can still continue"
+  );
+
+  // Remove worktree, as the task page does it: git removes it, the database records it.
+  let git = ProcessRunner::new(Duration::from_secs(60));
+  let seen = left_by(root, first);
+  let cleanup = clean_up(&git, Path::new("git"), root, &interrupted, Some(&seen)).expect("removed");
+  assert!(cleanup.removed_run_worktree());
+  let mut db = ProjectDb::open(root).expect("open");
+  db.save_worktree_removal(first, Timestamp::now()).expect("recorded");
+
+  let (continued, refused) = scheduler.continue_runs(&[first]).await;
+  assert!(continued.is_empty());
+  assert_eq!(refused[0].rejection, Rejection::WorktreeRemoved);
+  assert_eq!(run(root, first), interrupted, "it stays interrupted, unchanged");
+
+  let again = scheduler
+    .run_again(IdempotencyKey::generate(), project.task, first, None)
+    .await
+    .expect("the task runs again");
+  assert_eq!(run(root, again).number().get(), interrupted.number().get() + 1);
+  assert!(worktree(root, again).is_dir());
+  assert_eq!(
+    run(root, first).status(),
+    &RunStatus::Interrupted(InterruptCause::QuitNow)
+  );
+  wait_for_turns(root, &mut events, again, 1).await;
+  scheduler.stop_all(InterruptCause::QuitNow).await;
 }

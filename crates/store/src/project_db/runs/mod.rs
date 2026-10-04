@@ -138,7 +138,7 @@ impl RunStore for ProjectDb {
   fn interrupted_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
-      "WHERE status = ?1 ORDER BY number",
+      "WHERE status = ?1 AND id NOT IN (SELECT run_id FROM run_worktree_removals) ORDER BY number",
       [columns::INTERRUPTED],
     )?)
   }

@@ -16,7 +16,7 @@ use orchester_core::{
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunSnapshot, RunStatus, preflight,
   },
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
   task::{Task, TaskStatus},
   time::Timestamp,
 };
@@ -205,9 +205,18 @@ fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
 }
 
 impl Prepared {
-  /// A recorded run that continues in its existing worktree: resumed or with raised limits.
+  /// A recorded run that continues in its existing worktree: resumed or with raised limits. A run
+  /// whose worktree a person removed never continues, even should a folder of its name be back.
   pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
     check_readiness(db, run.task())?;
+    if db
+      .worktree_removal(run.id())
+      .map_err(|error| failed("cannot read whether the run's worktree was removed", &error))?
+      .is_some()
+    {
+      tracing::warn!(run = %run.id(), "a person removed the run's worktree; its agent cannot continue");
+      return Err(Rejection::WorktreeRemoved);
+    }
     let task = db
       .task_for_run(run.task(), run.id())
       .map_err(|error| failed("cannot read the run's task", &error))?
