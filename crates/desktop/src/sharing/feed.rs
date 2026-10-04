@@ -48,7 +48,16 @@ pub struct ServerFeed {
   pub list: Signal<ServerList>,
   /// Set by the status bar's *Sign in*; the servers screen opens the dialog and clears it.
   pub sign_in: Signal<SignInRequest>,
+  /// Set by a project's discovery offer (10.17) with the address its `orchester.toml` names; the
+  /// servers screen opens *Add server* with it filled in, and checks it only when the person asks.
+  pub add: Signal<AddRequest>,
 }
+
+/// The address a discovery offer asked Settings › Servers to add, until the dialog opened.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AddRequest(pub Option<String>);
+
+impl lurq::app::component::DevtoolsInspectable for AddRequest {}
 
 /// The server the status bar asked to sign in to, until the servers screen opened the dialog.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -70,6 +79,7 @@ impl ServerFeed {
       servers,
       list: Signal::new(ServerList::Loading),
       sign_in: Signal::new(SignInRequest::default()),
+      add: Signal::new(AddRequest::default()),
     }
   }
 

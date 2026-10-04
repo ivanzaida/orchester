@@ -892,6 +892,24 @@
     "conflict": {
       "changedMeanwhile": "The task was changed since you opened it, so nothing was saved. Open it again to see the newer version.",
       "notSaved": "Not saved · a newer version was saved"
+    },
+    "shared": {
+      "on": "Shared on {{server}} as {{key}}",
+      "offline": "Offline — read-only · last synced {{time}}",
+      "signedOut": "Signed out of {{server}} — read-only · last synced {{time}}",
+      "notMember": "No longer a member of {{key}} · read-only since {{time}}",
+      "offlineHeading": "Offline — read-only",
+      "offlineDetail": "{{server}} can't be reached since {{since}}. The list is this computer's copy from then. Editing, new tasks, status, priority and tags wait for the connection; nothing is queued. Your runs keep working, and your claims go stale at {{stale}} if this lasts.",
+      "tryNow": "Try now",
+      "nextTry": "Next try in {{seconds}} s",
+      "signedOutHeading": "Signed out of {{server}} — read-only",
+      "signedOutDetail": "{{server}} no longer accepts this computer's sign-in. The list is this computer's copy from {{time}}; nothing is sent until you sign in again. Your runs keep working.",
+      "notMemberHeading": "You are no longer a member of {{key}} on {{server}}",
+      "notMemberDetail": "An owner removed you at {{time}}, or your account there was disabled. This computer keeps the list as it was, read-only, and your claims on the server were released. Your runs keep working. Make local keeps working on these tasks here; or ask an owner of {{key}} to add {{username}} again, then check again.",
+      "checkAgain": "Check again",
+      "asSynced": "as last synced at {{time}}",
+      "footer": "{{count}} · {{synced}}",
+      "readOnlyHint": "Search, filters and opening tasks work while read-only."
     }
   },
   "runs": {
@@ -3500,7 +3518,8 @@
       "general": "General",
       "limits": "Limits",
       "environment": "Environment",
-      "codeIndex": "Code index"
+      "codeIndex": "Code index",
+      "sharing": "Sharing"
     },
     "codeIndex": {
       "description": "How agents find their way around {{project}}’s code.",
@@ -3684,6 +3703,9 @@
       "claudeOff": "CLAUDE.md and .claude/skills",
       "onNote": "Agents read these files as they are in the run’s worktree, so they are not versioned with the run. Claude Code is started without project settings, so it loads neither CLAUDE.md nor .claude/skills. To keep them in Orchester instead, import them as drafts and turn this off.",
       "offNote": "Neither CLI loads these files, so everything agents know comes from Orchester’s published instructions and skills. The files stay in the worktree like any other file, and nothing in the repository changes."
+    },
+    "sharing": {
+      "description": "Name, folder, limits, environment, and where the task list lives."
     }
   },
   "servers": {
@@ -5261,7 +5283,8 @@
         "reconnecting": "reconnecting",
         "offline": "offline",
         "signedOut": "signed out"
-      }
+      },
+      "notMember": "Not a member of {{key}}"
     },
     "activity": {
       "running": "{{title}}…",
@@ -5645,8 +5668,182 @@
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
       "alreadyMember": "This person is already a member. Change their role in their row.",
-      "lastOwner": "You are the last owner. Make another member an owner first; then you can become a member or leave."
-    }
+      "lastOwner": "You are the last owner. Make another member an owner first; then you can become a member or leave.",
+      "heading": "Members",
+      "detail": "Only members see {{key}}. Owners of {{key}} and admins of {{server}} add people by their exact username and change their roles; Orchester tells nobody, so tell them yourself.",
+      "memberNote": "Only owners of {{key}} and admins of {{server}} add or remove members and change roles.",
+      "username": "username",
+      "role": {
+        "owner": "Owner",
+        "member": "Member"
+      },
+      "add": "Add member",
+      "columns": {
+        "name": "Name",
+        "role": "Role",
+        "added": "Added"
+      },
+      "you": "you",
+      "makeMember": "Make member",
+      "makeOwner": "Make owner",
+      "remove": "Remove",
+      "leave": "Leave",
+      "loading": "Reading the members…",
+      "noSuchUserNamed": "{{server}} has no user {{username}}. Usernames are exact; an admin of {{server}} creates accounts.",
+      "alreadyMemberNamed": "{{username}} is already a member of {{key}}. Change their role in their row."
+    },
+    "heading": "Sharing",
+    "day": "{{month}} {{day}}",
+    "unknownDay": "an unknown day",
+    "taskList": {
+      "name": "Task list",
+      "local": "{{project}}'s tasks are only on this computer. Share them to work on one task list with others, on a server your team runs.",
+      "localKey": "{{project}}'s tasks are only on this computer, with the key {{key}}.",
+      "localLabel": "Local only",
+      "localReadback": "Default for every project",
+      "keyCount": {
+        "one": "{{key}} · {{count}} task",
+        "other": "{{key}} · {{count}} tasks"
+      },
+      "shared": "{{project}}'s tasks live on {{server}} and every member's computer keeps a copy to read offline. Runs stay on the computer that runs them.",
+      "sharedLabel": "Shared on {{server}}",
+      "sharedReadback": {
+        "owner": "{{key}} · since {{date}} · you are an owner · synced {{time}}",
+        "member": "{{key}} · since {{date}} · you are a member · synced {{time}}",
+        "admin": "{{key}} · since {{date}} · you manage it as an admin · synced {{time}}"
+      }
+    },
+    "repository": {
+      "name": "Repository",
+      "detail": "A server knows a project by its repository's origin remote, so HTTPS and SSH clones of it match.",
+      "checking": "origin · checking on {{server}}…",
+      "notShared": "origin · checked on {{server}}: not shared there yet",
+      "shared": "origin · shared on {{server}} as {{key}}; joining it comes in a later version",
+      "notMember": "origin · shared on {{server}}; you are not a member there",
+      "noServer": "origin · no server to ask yet",
+      "unreachable": "origin · {{server}} couldn't be asked",
+      "noOrigin": "This repository has no origin remote, so it can't be shared.",
+      "localOrigin": "origin is a folder on this computer, so the repository can't be shared.",
+      "unreadable": "git couldn't list this repository's remotes."
+    },
+    "shareOn": {
+      "name": "Share on",
+      "detail": "Creates the project on the server from this one, with its task numbers. You become its owner and add members by username.",
+      "detailNoServer": "Creates the project on a server from this one, with its task numbers.",
+      "readback": "Servers you are signed in to · Add one in Settings › Servers",
+      "option": "{{server}} · {{host}}",
+      "action": "Share on {{server}}…",
+      "noServer": "You haven't added a server yet.",
+      "notSignedIn": "You aren't signed in to a server yet.",
+      "addServer": "Add server…"
+    },
+    "sends": {
+      "title": "What sharing sends",
+      "shared": "Shared with members",
+      "sharedValue": "Tasks (title, brief, criteria, pipeline name, limits, status), who holds each, a short run status",
+      "local": "Stays on each computer",
+      "localValue": "Runs, worktrees, conversations, memory, secrets, profiles, pipelines",
+      "note": "The server never receives transcripts, prompts, diffs, file or branch names, or secrets."
+    },
+    "discovery": {
+      "heading": "orchester.toml names a server for this repository",
+      "detail": "The file at the repository root points to {{address}}. Orchester hasn't contacted it: anyone who can push to the repository can change the file, so each step asks you first.",
+      "step1": "Add {{host}} to your servers — you confirm its host, then Orchester checks it",
+      "step2": "Sign in with the username and password an admin of that server gave you",
+      "step3": {
+        "one": "Review your {{count}} local task and join the project, if it is shared there and you are a member",
+        "other": "Review your {{count}} local tasks and join the project, if it is shared there and you are a member"
+      },
+      "start": "Sign in and join…",
+      "notNow": "Not now"
+    },
+    "share": {
+      "title": "Share {{project}} on {{server}}?",
+      "explanation": "Creates the project {{key}} on {{server}} from this one and uploads its tasks in one step. You become its owner; nobody else sees it until you add them.",
+      "tasks": "Tasks uploaded",
+      "tasksValue": {
+        "one": "{{count}} · its number is kept, {{first}}",
+        "other": "{{count}} · their numbers are kept, {{first}} … {{last}}"
+      },
+      "tasksNone": "None yet",
+      "newTasks": "New tasks",
+      "newTasksValue": "Continue at {{key}}, numbered by the server",
+      "claimed": "Claimed for you",
+      "claimedValue": "{{keys}} · a run of each hasn't ended",
+      "claimedNone": "None · no run is under way",
+      "project": "Project",
+      "projectValue": "{{project}} · key {{key}} · {{identity}}",
+      "discovery": "Write orchester.toml into the repository",
+      "discoveryDetail": "Adds server = \"{{address}}\" at the repository root, so colleagues who open {{project}} are offered Sign in and join. Orchester doesn't commit it; you do.",
+      "confirm": "Share",
+      "taken": "{{server}} holds this repository as a project already, so nothing was uploaded. Joining it comes in a later version."
+    },
+    "discoveryFile": {
+      "name": "Discovery file",
+      "detail": "orchester.toml at the repository root names this server, so colleagues opening {{project}} are offered Sign in and join.",
+      "written": "orchester.toml · written {{date}}",
+      "present": "orchester.toml",
+      "notCommitted": "Not committed yet · commit it like any file",
+      "committed": "Committed",
+      "unknown": "git couldn't say whether it is committed",
+      "absent": "The repository has no orchester.toml",
+      "other": "orchester.toml names another server, so Orchester leaves it as it is",
+      "write": "Write orchester.toml",
+      "writeFailed": "orchester.toml couldn't be written into the repository."
+    },
+    "roles": {
+      "makeOwner": {
+        "title": "Make {{name}} an owner of {{key}}?",
+        "explanation": "Owners add and remove members and change roles. {{first}} can also make you a member; an admin of {{server}} can change roles too.",
+        "confirm": "Make owner"
+      },
+      "makeSelfMember": {
+        "title": "Make yourself a member of {{key}}?",
+        "explanation": "You stop adding and removing members and changing roles. {{owner}} stays an owner. Only an owner or an admin can make you an owner again.",
+        "lastOwner": "You are the last owner. Make another member an owner first; then you can become a member or leave.",
+        "confirm": "Make me a member",
+        "explanationAnyOwner": "You stop adding and removing members and changing roles. Only an owner or an admin can make you an owner again."
+      }
+    },
+    "leave": {
+      "title": "Leave {{key}}?",
+      "explanation": "You can no longer read or change {{key}}. This computer keeps its copy of the tasks, read-only, and offers Make local.",
+      "lastOwner": "You are the last owner of {{key}}. Make another member an owner first; then you can become a member or leave.",
+      "makeOwner": "Make {{name}} an owner…"
+    },
+    "remove": {
+      "title": "Remove {{name}} from {{key}}?",
+      "explanation": "{{first}} can no longer read or change {{key}}. Their computer keeps its copy of the tasks and offers them Make local.",
+      "claims": "Claims released",
+      "claimsValue": "{{keys}} · recorded in each task's history",
+      "claimsNone": "None",
+      "runs": "Their runs",
+      "runsValue": "Keep working on their computer · their status stops being shared"
+    },
+    "makeLocal": {
+      "name": "Make local",
+      "detail": "Stop using the server on this computer. Every task becomes a local task of {{project}} here; {{key}} stays the same for everyone else.",
+      "action": "Make local…",
+      "title": "Make {{project}} local on this computer?",
+      "explanation": "{{project}} stops using {{server}} here. Nothing changes for the other members of {{key}}; you can join again later.",
+      "explanationOffline": "{{server}} can't be reached, so your claims can't be released now. They go stale on their own 15 minutes after the last heartbeat ({{time}}), and others can then take them over.",
+      "tasks": "Tasks",
+      "tasksValue": "All {{count}} stay as local tasks with their numbers",
+      "tasksOffline": "All {{count}} stay as local tasks · as last synced at {{time}}",
+      "organization": "Status, priority, tags, links",
+      "organizationValue": "Kept as they were last synced · {{key}}'s tags become {{project}}'s local tags",
+      "claims": "Your claims",
+      "claimsReleased": "{{keys}} · released on {{server}} now",
+      "claimsStale": "{{keys}} · not released, they go stale",
+      "claimsNone": "None",
+      "others": "Others' claims and run status",
+      "othersValue": "Removed from this computer",
+      "membership": "Membership",
+      "membershipValue": "You stay a member of {{key}}",
+      "confirm": "Make local",
+      "confirmAnyway": "Make local anyway"
+    },
+    "loadFailed": "Sharing can't be read"
   },
   "claims": {
     "refused": {

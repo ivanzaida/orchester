@@ -7,10 +7,12 @@
 mod claims;
 pub mod convert;
 pub mod discovery;
+pub mod lookup;
 mod make_local;
 mod members;
 mod organization;
 mod share;
+pub mod state;
 pub mod store;
 mod sync;
 pub mod work;

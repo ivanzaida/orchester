@@ -43,6 +43,7 @@ const USERS: &str = "users";
 const LIMITS: &str = "limits";
 const ENVIRONMENT: &str = "environment";
 const CODE_INDEX: &str = "code-index";
+const SHARING: &str = "sharing";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
@@ -185,6 +186,8 @@ pub enum SettingsTab {
   Limits,
   Environment,
   CodeIndex,
+  /// Where the task list lives: local, or shared on a server (10.11–10.17).
+  Sharing,
 }
 
 /// The tabs of a server's details (`R3v7ow`): Users only for admins.
@@ -321,6 +324,7 @@ impl Page {
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
       [SETTINGS, CODE_INDEX] => Self::Settings(SettingsTab::CodeIndex),
+      [SETTINGS, SHARING] => Self::Settings(SettingsTab::Sharing),
       [SERVERS] => Self::Servers(None, server_tab(tab)),
       [SERVERS, server] => Self::Servers(Some(server.parse().ok()?), server_tab(tab)),
       _ => return None,
@@ -366,6 +370,7 @@ impl Page {
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
       Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
       Self::Settings(SettingsTab::CodeIndex) => format!("{root}/{SETTINGS}/{CODE_INDEX}"),
+      Self::Settings(SettingsTab::Sharing) => format!("{root}/{SETTINGS}/{SHARING}"),
       Self::Servers(server, tab) => {
         let server = server.map_or_else(String::new, |server| format!("/{server}"));
         let tab = match tab {

@@ -193,6 +193,14 @@ icons! {
   Wrench => '\u{e1b1}',
   X => '\u{e1b2}',
   Zap => '\u{e1b4}',
+  AtSign => '\u{e04e}',
+  UserMinus => '\u{e1a1}',
+  Crown => '\u{e1d6}',
+  HardDriveDownload => '\u{e4e5}',
+  CloudUpload => '\u{e091}',
+  HardDrive => '\u{e0ed}',
+  FileSymlink => '\u{e327}',
+  UserRoundX => '\u{e46d}',
 }
 
 /// Icon sizes used by the design, from the 11px lock of an unavailable option's reason to the

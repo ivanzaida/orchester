@@ -147,6 +147,18 @@ impl Servers {
     self.inner.sync.send_modify(|count| *count += 1);
   }
 
+  /// Asks `server` again now (*Try now*): the monitor checks it at once, then the caches are read.
+  pub fn retry_now(&self, server: ServerId) {
+    {
+      let mut watched = self.inner.watched.lock();
+      if let Some(watched) = watched.get_mut(&server).filter(|watched| watched.due.is_some()) {
+        watched.due = Some(Instant::now());
+      }
+    }
+    self.changed();
+    self.sync_now();
+  }
+
   /// The connection of `server` as last seen: checking until it answered this session.
   pub fn connection(&self, server: ServerId) -> Connection {
     self

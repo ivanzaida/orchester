@@ -1,11 +1,11 @@
-//! The server item (`qqtph`, states 10.43 `hYres`): the connection to the servers in use, after the
-//! runner. Until shared projects exist (S2b) a server is in use while an account is signed in to it
-//! from this computer, or was until the server stopped accepting it. One server: its name when
-//! connected (A), the reconnect attempt and the next try (B), offline since when (C), signed out
-//! with *Sign in* (D). Several: the worst state leads and the hint lists each (F). No server in use,
-//! no item (G). A press opens Settings › Servers at the server; *Sign in* opens its sign-in there.
+//! The server item (`qqtph`, states 10.43 `hYres`): the connection to the servers of the open shared
+//! projects, after the runner. One server: its name when connected (A), the reconnect attempt and the
+//! next try (B), offline since when (C), signed out with *Sign in* (D), and *Not a member of* a
+//! project the person was removed from (E), which leads. Several: the worst state leads and the
+//! hint lists each (F). No shared project open, no item (G). A press opens Settings › Servers at the
+//! server, or the project's Sharing for E; *Sign in* opens the server's sign-in there.
 
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
@@ -13,7 +13,7 @@ use lurq::{
   layout::layout_kind::ShrinkLimit,
   node::Element,
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{id::ServerId, time::Timestamp};
 
 use super::{
   hint::{HintAnchor, HintLine, Hints},
@@ -22,12 +22,14 @@ use super::{
 };
 use crate::{
   display,
-  navigation::route::{Page, ServerTab},
+  navigation::route::{Page, ServerTab, SettingsTab},
   screens::project::ProjectNav,
   sharing::{
     Connection, ServerEntry,
     feed::{ServerFeed, SignInRequest},
+    project::state::ProjectSharing,
   },
+  tabs::feed::ProjectFeeds,
   ui::{icon::Icon, link::Press},
 };
 
@@ -35,8 +37,20 @@ pub fn server_item(ctx: &mut Ctx, hints: &Hints) -> Vec<Element> {
   let (Some(feed), Some(nav)) = (ctx.use_context::<ServerFeed>(), ctx.use_context::<ProjectNav>()) else {
     return Vec::new();
   };
+  let shared = ctx
+    .use_context::<ProjectFeeds>()
+    .map(|feeds| feeds.sharing())
+    .unwrap_or_default();
+  if let Some(removed) = shared.iter().find(|sharing| sharing.link.removed_at.is_some()) {
+    return vec![not_member(ctx, removed, &nav)];
+  }
+  let servers: HashSet<ServerId> = shared.iter().map(|sharing| sharing.link.server).collect();
   let list = feed.list.get();
-  let in_use: Vec<&ServerEntry> = list.entries().iter().filter(|entry| entry.in_use()).collect();
+  let in_use: Vec<&ServerEntry> = list
+    .entries()
+    .iter()
+    .filter(|entry| entry.in_use() && servers.contains(&entry.stored.id))
+    .collect();
   let Some(worst) = in_use.iter().copied().max_by_key(|entry| severity(entry)) else {
     return Vec::new();
   };
@@ -81,6 +95,20 @@ pub fn server_item(ctx: &mut Ctx, hints: &Hints) -> Vec<Element> {
     ));
   }
   items
+}
+
+/// E: the person is no longer a member of an open shared project; a press opens its Sharing.
+fn not_member(ctx: &Ctx, sharing: &ProjectSharing, nav: &ProjectNav) -> Element {
+  let label = ctx.t_args("statusBar.server.notMember", [("key", sharing.link.key.as_str())]);
+  let row = item("status-server")
+    .describe("state", "not-member")
+    .flex_shrink(1.0)
+    .shrink_order(give_way::SERVER_WORDS)
+    .shrink_limit(ShrinkLimit::Content)
+    .child(glyph(Icon::UserRoundX, PaletteColor::TextPrimary))
+    .child(dropping_label(&label, PaletteColor::TextPrimary))
+    .child(drop_out(value(sharing.server_name(), PaletteColor::TextMuted)));
+  pressed(row, Press::Link(nav.link(Page::Settings(SettingsTab::Sharing)))).into()
 }
 
 fn severity(entry: &ServerEntry) -> u8 {

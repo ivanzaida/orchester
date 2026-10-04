@@ -64,6 +64,7 @@ mod secrets;
 mod select_fill;
 mod selection_focus;
 mod servers;
+mod sharing;
 mod sidebar;
 mod skills;
 mod tab_links;

@@ -54,6 +54,26 @@ pub fn screen_heading(title: &str, description: &str) -> Element {
     .into()
 }
 
+/// [`screen_heading`] with `trailing` beside the description, e.g. where a shared task list
+/// stands with its server (10.42).
+pub fn screen_heading_with(title: &str, description: &str, trailing: Option<Element>) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding_top(ExtraSpacing::HeadingTop.role())
+    .padding_horizontal(SpacingSize::Section)
+    .padding_bottom(ExtraSpacing::HeadingBottom.role())
+    .spacing(ExtraSpacing::Inline.role())
+    .child(Text::new(title).variant(ExtraTypography::ScreenTitle.role()))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Md)
+        .align_items(lurq::layout::Alignment::Center)
+        .child(Text::new(description).variant(TypographyStyle::Description))
+        .with_children(trailing),
+    )
+    .into()
+}
+
 /// Page title and its description.
 pub fn heading(title: &str, description: &str) -> Element {
   Column::new()
