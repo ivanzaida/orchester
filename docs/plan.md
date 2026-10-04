@@ -442,24 +442,10 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.39.0: a text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.40.0: a resize restores a minimized window first, `lurq_resize` answers with the size the window took (or fails saying why), `lurq_windows` reports `minimized`, `maximized` and `full_screen`, `on_size_changed` reports the size read back from the window, an `Enter` marked `composing` triggers no lurq default (form submit, activation, newline, blur), and `Text::sensitive` with `lurq::core::Sensitive<T>` shows a value on screen while the MCP and DevTools trees show `•••` (the first password of 10.08 B) (0.40.0). A text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
-
-### L1 · `lurq_resize` leaves a minimized window minimized (lurq, upstream)
-
-Found 2026-10-04: an app started minimized (for example `Start-Process -WindowStyle Minimized`) keeps its window at
-the minimized frame (237×39 physical pixels on this machine), and `lurq_resize` does not bring it back. Orchester does
-not save or restore its window's size or position (`crates/desktop/src/main.rs` asks for 1440×1020 on every launch),
-so nothing of it is persisted. The cause is in lurq 0.37.0: `resize_tool` (`src/mcp/tools/windows.rs`) queues
-`WindowCommand::Resize`, which the shell applies as winit `request_inner_size` (`src/app/winit_shell.rs`, the
-`Resize` arm) without restoring a minimized window first, and Windows does not resize a minimized window; the tool
-answers `"ok": true` and `notify_size_changed` reports the requested size, while `sync_window_state` reads the
-minimized client size back; `lurq_windows` does not report `is_minimized`, and no MCP tool restores the window
-(`WindowCommand::SetMinimized(false)` exists but is not reachable over MCP). Fix upstream: restore a minimized (or
-maximized, full-screen) window before `request_inner_size`, report the real size, and expose the minimized state in
-`lurq_windows`. Until then, drivers start the app not minimized.
 
 ## S · Shared server (self-hosted)
 
@@ -564,6 +550,25 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+lurq 0.40.0 · branch `claude/lurq-040` (2026-10-05)
+
+- L1 (`lurq_resize` left a minimized window minimized) is fixed upstream: lurq 0.40.0 restores a minimized window
+  before resizing it, `lurq_resize` reports the size the window took, and `lurq_windows` shows `minimized`,
+  `maximized` and `full_screen`. Orchester neither persists its window size nor uses `on_size_changed` or
+  `WindowHandle::resize` (`main.rs` asks for 1440×1020 on every launch), so nothing needed adapting; drivers may
+  start the app minimized again. Only `lurq` moved in `Cargo.lock` (`windows` 0.62.2 stays for wgpu-hal and
+  gpu-allocator).
+- The first password of 10.08 B (`kT0ui`, `pUTsa`) is shown in clear as the design draws it, as `Text::sensitive`:
+  the MCP and DevTools trees show `•••` with `sensitive=true`. S2a showed it as a masked, read-only input with Copy
+  because lurq could not keep visible text out of the MCP tree. `FirstPassword` holds it as
+  `Arc<Sensitive<Credential>>` (redacted in DevTools' signal values and history; `Credential` zeroizes when the last
+  holder drops it, as the dialog closes). No other secret is shown in clear: typed ones stay in masked inputs, stored
+  ones are shown only as a mask.
+- Tests: `form_keyboard servers_admin_creates_resets_disables_and_enables_users` reads the tree through the embedded
+  MCP server (`lurq_read_tree`, `lurq_find_by_id`, `lurq_inspect`: no password, `•••`, `sensitive=true`), finds the
+  password among the painted quads and signs in with it; `servers_first_password_copy_puts_the_shown_password_on_the_clipboard`
+  (ignored: it uses the system clipboard and restores it) checks Copy.
 
 S2a · Desktop: servers and sign-in · branch `claude/s2a` (implemented 2026-10-04; design verification and review pending)
 
