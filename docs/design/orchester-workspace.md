@@ -1542,7 +1542,7 @@ tool group and the approval card inside Builder's messages); and the pre-ORC-61 
 request card, raise-limit card, closed composer). Section 02.5 `yXEwR` (y 19424, 8756 high) holds only `A5H6ln` and
 the composer proposal `YJfPo`; 09 Usage `yqO5T` is at y 28580.
 
-**Composer options (not decided, 2026-10-04).** After the user's reference (one rounded box: input on top, a row inside
+**Composer (approved by the user 2026-10-04, as drawn in `YJfPo`: send now with a per-message *Send after this turn* menu; the permission chip uses the theme's existing colours — grey, `$danger` when the run allows more than its profile).** After the user's reference (one rounded box: input on top, a row inside
 it with attach and a permission chip at the left, a selector and a round send button at the right), one composer is
 drawn in group `YJfPo` (02.5, y 5876, 4896 × 2800): K·01 working with the send menu open `BRMpj`, K·02 answering
 `K1oNwn`, K·03 follow-up after review `cHDF1`, K·04 not delivered `TdT7X`, K·05 960 `vOF1a`, K·06 every state
