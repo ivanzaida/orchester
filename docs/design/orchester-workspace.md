@@ -1456,7 +1456,74 @@ Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`,
 - **Specified, not drawn.** The paused and interrupted composer states and the still-growing tool group are specified here only; that is enough.
 - **Search** (2026-10-02, after ORC-61's Design step drew Tools view and search, `q4fCXK`, `a5hF4`, `gLVQQ`): following live continues while a search is active, and matches are counted, not highlighted inside the text.
 
-**Options (2026-10-04), not decided.** The user asked whether the tab could look more like a chat with selectors at
+**Decided: C with the rail on the right (user, 2026-10-04).** Of the options below the user chose C, with the step
+rail moved to the right of the tab (chat on the left). The full set is drawn in group `A5H6ln` ("States ·
+Conversation as a chat · C, rail on the right", y 12817 in 02.5 `yXEwR`, 4896 × 4320; `yXEwR` grew to 17217 and 09
+Usage `yqO5T` moved down to y 35785; no frame moved). Not built yet; until it is, the timeline described above is
+what the app does. Fixture as above: Kontur, ORC-128 Run 128 with seven steps (01 Research … 07 Docs & cleanup),
+ORC-129 Run 129 queued; every message, path, time and count is illustrative.
+
+**Layout.** The tab body is two columns: the chat (toolbar, chat, composer) fills the left, and the **step rail**
+(248, `$sidebar`, hairline at its left) is on the right. The toolbar keeps *Show* (All / Messages / Tools), *Search
+this run…*, the run's state chip (*Following live*, *Waiting for you*, *Ready for review*, *Failed*, *Queued*) and
+*Details*. The step filter select is gone: the rail is the step filter.
+
+- **Rail.** Head *Steps* with the count and *panel-right-close* (collapses the rail to the 56 strip, *proposed*). *All
+  steps* first (executions and tokens), then one row per step execution: status icon (check, loader, hand / message-circle
+  when it waits for you, circle-x, circle-dashed for not started at 0.7, undo-2 for a step that returned the work), the
+  number (mono 10), the step's name (12), and one meta line (agent · tokens · time, or what it waits for). The selected
+  row is `$hover`. Picking a step shows its items only, with the read-back *Showing 03 Implement only · 01, 02 and
+  04–07 are hidden · Show all steps* under the toolbar; Details follows the picked step, as before. During a search each
+  row shows its match count at the right and *no match* in its meta.
+- **Chat.** Messages are rows: a 28 round avatar (bot, user, message-circle-question for a question, list-checks for a
+  plan, terminal for a tool step), the name (12/500) and meta (step on the first message after a divider, time), the
+  text at 13 / 1.6. A step starts with a thin **divider** (*07 Docs & cleanup · Builder · Codex / Sol · started 16:31 ·
+  38k tokens*, status icon, `$text` while live) and ends with one (*06 Fix notes done · 16:30 · Changes · 3 files ↗*);
+  steps that did not start read as one muted divider (*05 Review, 06 Fix notes and 07 Docs & cleanup did
+  not start*). **Returns and restarts are dividers of the same kind** (*Review returned the work to 03 Implement ·
+  attempt 2 · 15:12*, undo-2, `$text`). The run's end is a divider (*Run 128 is ready for your review · 16:52*).
+- **Tool activity is chips** under the agent's message, one chip per tool group with ORC-61's summary and *N calls*
+  (chevron-right); the group that is still growing reads *running pnpm docs:check* with a loader on `$raised`. **A chip
+  opens its group in place** (chevron-down) as a bordered list of Activity rows with their times, the 7-row cap and
+  *Show N more*; *Tools* still shows the flat transcript. A failed command in a group shows circle-alert; a tool step's
+  failing command is the tool step's own message with the command, exit code and output open (C·05).
+- **Cards are chat messages:** the question (C·02) and the plan (C·03, *Approve plan & continue* on the card, *Request
+  changes* from the composer) sit in the asking agent's message; the tool approval card likewise (not drawn again). The
+  result of a step is a bordered card (C·04).
+- **Composer** unchanged from ORC-61 in every state drawn: steer (*Send after this turn*, *Send now*), answer, plan
+  changes, *Send follow-up*, *Continue with instructions*, *Send when the run starts*.
+- **Details and the rail share the right side** (*proposed*): *Details* replaces the rail with the 320 invocation pane;
+  its head has *Steps*, which brings the rail back (and pressing *Details* again does too). They never show together, so
+  the chat keeps its width.
+- **960** (*proposed*): the rail collapses to a 56 strip of the step numbers with their status icons (*All* first, the
+  live step outlined); a number filters like a rail row, and *panel-right-open* opens the full rail over the chat. The
+  composer's buttons shorten to *After this turn* and *Send now*.
+
+| Frame | Node | Position |
+| --- | --- | --- |
+| C·01 · Agent working, rail right | `kpnmP` | 48 / 100 |
+| C·02 · Waiting for your answer (question as a message, composer answers) | `BRx5g` | 1568 / 100 |
+| C·03 · Plan waits for approval (steps after it not started) | `K4AOD` | 3088 / 100 |
+| C·04 · Ready for review (result card, end divider, Send follow-up) | `uDqzB` | 48 / 1148 |
+| C·05 · Run checks failed (failing command with output, Continue with instructions) | `FeiRG` | 1568 / 1148 |
+| C·06 · Queued, not started (empty chat, controls 0.4, Send when the run starts) | `FBwIV` | 3088 / 1148 |
+| C·07 · Review returned the work to Implement (return divider, attempt 2 in the rail) | `o0KDAq` | 48 / 2196 |
+| C·08 · Search “callback” (match counts in the rail, a chip open in place with its matches) | `Hn1xv` | 1568 / 2196 |
+| C·09 · Search finds nothing | `JPBHA` | 3088 / 2196 |
+| C·10 · Step picked in the rail: 03 Implement only, a chip open in place | `bdCsu` | 48 / 3244 |
+| C·11 · Details open in place of the rail | `oryKr` | 1568 / 3244 |
+| C·12 · 960: the rail collapsed to a strip | `I35q7D` | 3088 / 3244 |
+
+Reused: `zo9Py`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `tfGRt`; the segmented *Show* of ORC-61. No new components or
+variables; the chat row, chip, divider and rail row are frames in these screens (to become components when built).
+The user's defaults applied: return and restart marks are dividers; a chip opens its group in place.
+
+*Proposed* sub-decisions: Details replaces the rail (C·11); the rail can be collapsed by hand to the 56 strip at any
+width, and is collapsed by default below 1200 (C·12); a step that did not start shows in the rail at 0.7 and in the chat
+as one shared divider; the step that waits for you uses its waiting icon in the rail (hand for a plan, message-circle
+for a question).
+
+**Options (2026-10-04); C chosen, A and B not.** The user asked whether the tab could look more like a chat with selectors at
 the top. Group `yqkBy` ("States · Conversation as a chat · options", y 9461 in 02.5 `yXEwR`, which grew to 12841; 09
 Usage `yqO5T` moved down to y 31409). The fixture is a running Run 128 with seven steps, 07 *Docs & cleanup* (Builder)
 running a tool, and a waiting-for-you variant of each with the question as a chat message. Every option keeps one
@@ -1471,8 +1538,8 @@ five steps done · Show them*).
 | B · step and agent selects | B1 `wKPfw`, B2 `b113W` | *Step* and *Agent* selects beside Show in one toolbar; chat bubbles, yours on the right; steps as centred pills |
 | C · step rail | C1 `f3BZux`, C2 `V7B8Mw` | A 232 rail at the tab's left listing every step with status, agent and tokens; Slack-style rows (a rail, not strictly top) |
 
-Not yet decided: which option, the marks for returns and restarts in the new layout (they would be dividers like the
-step ones), and whether chips replace the expanded tool group in *All* or open it in place.
+Settled with the choice (user, 2026-10-04): option C with the rail on the right; marks for returns and restarts are dividers like the
+step ones; a chip opens its group in place.
 
 **Implemented (ORC-61, 2026-10-02).** The task page's tabs are *Summary · Conversation · Changes · Artifacts*: Activity is gone (an old `tab=activity` link opens the conversation) and *Memory* is not added, as its screens come with Memory 3/3. The timeline (`crates/desktop/src/tasks/timeline/`) is built as above, with these choices where the frames leave room: a step's items are its own (a person's message belongs to the step it reached or did not; one that waits for a step follows the steps, before the run's end), so steps that run beside each other are not interleaved; a failed step starts open as well, to show why (`hep0l`); what the agent CLI writes on standard error before its first event is a group of unparsed lines of its own; a step result the agent writes is its result card, not a message, and its *Reply* message is not repeated beside the agent's own; read and search kinds come from the tool's name (Claude Code's `Read`, `Grep`, `Glob`) or the program inside the CLI's shell (`pwsh -Command "…"`, `bash -lc '…'`: `cat`, `head`, `rg`, `grep`, `find`, `git grep`, …). Cards: a question with *Reply*; each plan version (the first six lines, *Show the whole plan · N lines*, *Approve plan & continue* on the waiting one; an earlier version reads *Earlier version*); each tool request of the run, pending with *Deny* and *Approve once*, decided as *Approved*, *Denied* or *Interrupted*. On that task's Conversation tab the approval dialog does not open, and *Needs you* opens the conversation for a request. A result card links *Changes ↗* and *Summary ↗* (no *Handoff in Memory ↗* until the Memory tab exists). Details (`gNa91`) is remembered in the application database (`ui_state` `conversation.details`); a step header's tokens open it on that step. Following live counts new timeline rows for *Jump to latest · N new*; opening the tab starts at the first card that waits for the person, else at the end. Search matches without highlighting the words, and following goes on during a search (the two open questions of the design step). Send now and its delivery states follow `docs/architecture/storage.md` ("Send now"), checked live with Codex 0.159.2 and Claude Code 2.1.286 (`docs/evidence/orc-61-send-now-2026-10-02.md`); *Send now* is unavailable, with its reason, only for a provider that takes no message mid-turn (a native agent, which does not run in this version). Claude Code cannot refuse a message: for it, *Could not deliver* means its input did not take the message within five seconds. A task without a run lists the messages that wait for its first step under the toolbar-less tab, and its composer reads *To: Orchestrator · this task* (no run's steps are known yet). Within a step execution, the person's messages and the cards come between the tool events in the order they happened, so one sent between two tool calls splits their group. A return or restart (02.B7 `zyusO`) is a row of its own before the header of the step its attempt starts from, also while that step is folded and in *Messages* and *Tools*. While the run waits for the person's decision after its retries (02.B3–02.B6), the toolbar's state reads *Waits for your decision* (hand) and the composer queues with *Waiting for your decision* · *Open the decision →* above its field, which opens Summary. Details holds the invocation's permission row (ORC-44): *Running with* with *change ↗* for the open invocation of a live run, *Ran with* otherwise. Narrower than the toolbar's line (1104, more with Details open, in the Tools view or while the run waits for a decision), *Show* and the search go to a second toolbar line; a step header keeps its step's name and lets its engine and times give way. The toolbar's state is the run's where no agent works: *Waiting for you*, *Queued*, *Ready for review*, *Failed* as drawn, and for the undrawn states the task status's words (*Paused*, *Stopped at limit*, *Interrupted*, *Merged*, *Cancelled*). A tool step's failing command is a row of its own with its output open, as `hep0l` draws it; an agent's failing command stays in its group. Before the run starts, the toolbar's controls are unavailable (0.4) beside *Queued*, and the empty state reads *Nothing in this conversation yet* with the steps on one line; the reason it waits is generic (*starts when an agent slot is free*), since the desktop does not know which limit holds it. Narrower than its line (980 less the Details pane), the composer puts its buttons on a line of their own and the recipient gives way.
 
