@@ -49,8 +49,7 @@ pub fn clean_up_recorded<S: WorktreeStore>(
     return Err(CleanupError::LiveWork.into());
   }
   let cleanup = clean_up(runner, git, repo, run, confirmed);
-  // Git failing to run ends the clean-up before it changes anything but for a program that
-  // vanishes between two of its commands, which is taken as having changed nothing.
+  // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.
   let untouched = cleanup.as_ref().map_or(true, |cleanup| {
     cleanup.removed.is_empty()
       && cleanup

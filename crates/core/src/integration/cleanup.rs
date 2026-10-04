@@ -43,7 +43,7 @@ pub struct LeftWorktree {
   /// Its folder is gone; git still lists it until it is pruned.
   pub missing: bool,
   /// Git no longer lists it, but its folder is there: a removal that failed part way left it
-  /// ([`super::forgotten`]). Removing it deletes the folder.
+  /// ([`super::forgotten`]). Its files are listed in `uncommitted`; removing it deletes the folder.
   #[serde(default)]
   pub forgotten: bool,
 }
@@ -146,7 +146,7 @@ pub fn leftovers_of(
       }
       worktrees.push(worktree);
     }
-    let forgotten = super::forgotten::forgotten(repo, run, &worktrees);
+    let forgotten = super::forgotten::forgotten(repo, run, &worktrees)?;
     worktrees.extend(forgotten);
     let targets = merge_targets(&git, run, checked_out.as_ref())?;
     let mut branches = Vec::new();
@@ -163,9 +163,10 @@ pub fn leftovers_of(
 }
 
 /// Removes the worktrees of `run`, which ended, and deletes its merged branches. A worktree with
-/// uncommitted changes is removed only if `confirmed`, what a person saw before confirming, lists
-/// it with the same changes; otherwise it and its branch are kept. Git refusing one worktree or
-/// branch keeps it with git's message and goes on with the others.
+/// uncommitted changes (or a forgotten folder with files) is removed only if `confirmed`, what a
+/// person saw before confirming, lists it with the same changes; otherwise it and its branch are
+/// kept. An error comes only before anything is removed; once removing started, git refusing or not
+/// finishing one worktree or branch keeps it with why and goes on with the others.
 pub fn clean_up(
   runner: &impl CommandRunner,
   git: &Path,
@@ -183,7 +184,7 @@ pub fn clean_up(
     git.stdout(&["worktree", "prune"])?;
   }
   for worktree in current.worktrees {
-    remove(&git, worktree, confirmed, &mut cleanup)?;
+    remove(&git, worktree, confirmed, &mut cleanup);
   }
   for branch in current.branches {
     let kept = cleanup
@@ -193,10 +194,10 @@ pub fn clean_up(
     let reason = match (branch.merged, kept) {
       (false, _) => Some(KeepReason::NotMerged),
       (true, true) => Some(KeepReason::InKeptWorktree),
-      (true, false) => {
-        let output = git.output(&["branch", "--quiet", "-D", branch.name.as_str()])?;
-        (!output.success()).then(|| KeepReason::Failed(super::git::message(&output)))
-      }
+      (true, false) => match git.output(&["branch", "--quiet", "-D", branch.name.as_str()]) {
+        Ok(output) => (!output.success()).then(|| KeepReason::Failed(super::git::message(&output))),
+        Err(error) => Some(KeepReason::Failed(error.to_string())),
+      },
     };
     match reason {
       Some(reason) => cleanup.kept_branches.push((branch.name, reason)),
@@ -211,17 +212,10 @@ fn remove<R: CommandRunner>(
   worktree: LeftWorktree,
   confirmed: Option<&Leftovers>,
   cleanup: &mut Cleanup,
-) -> Result<(), GitError> {
+) {
   if worktree.missing {
     cleanup.removed.push(worktree);
-    return Ok(());
-  }
-  if worktree.forgotten {
-    match super::forgotten::delete(&worktree) {
-      Ok(()) => cleanup.removed.push(worktree),
-      Err(detail) => cleanup.kept_worktrees.push((worktree, KeepReason::Failed(detail))),
-    }
-    return Ok(());
+    return;
   }
   let discard = !worktree.uncommitted.is_empty();
   let agreed = confirmed.is_some_and(|confirmed| {
@@ -233,21 +227,26 @@ fn remove<R: CommandRunner>(
   if discard && !agreed {
     let files = worktree.uncommitted.clone();
     cleanup.kept_worktrees.push((worktree, KeepReason::Uncommitted(files)));
-    return Ok(());
+    return;
   }
-  let mut args = vec!["worktree", "remove"];
-  if discard {
-    args.push("--force");
-  }
-  args.push(&worktree.path);
-  let output = git.output(&args)?;
-  if output.success() {
-    cleanup.removed.push(worktree);
+  let outcome = if worktree.forgotten {
+    super::forgotten::delete(&worktree)
   } else {
-    let reason = KeepReason::Failed(super::git::message(&output));
-    cleanup.kept_worktrees.push((worktree, reason));
+    let mut args = vec!["worktree", "remove"];
+    if discard {
+      args.push("--force");
+    }
+    args.push(&worktree.path);
+    match git.output(&args) {
+      Ok(output) if output.success() => Ok(()),
+      Ok(output) => Err(super::git::message(&output)),
+      Err(error) => Err(error.to_string()),
+    }
+  };
+  match outcome {
+    Ok(()) => cleanup.removed.push(worktree),
+    Err(detail) => cleanup.kept_worktrees.push((worktree, KeepReason::Failed(detail))),
   }
-  Ok(())
 }
 
 /// What a branch of the run must be reachable from to count as merged: the run's base branch and

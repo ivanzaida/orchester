@@ -37,6 +37,9 @@ pub enum GitError {
   Failed(String),
   #[error("git printed something that is not {expected}: {detail}")]
   Unrecognized { expected: &'static str, detail: String },
+  /// A worktree folder git forgot could not be read; why.
+  #[error("cannot read the worktree folder {path}: {detail}")]
+  Folder { path: String, detail: String },
 }
 
 /// The branch checked out in the repository at `repo`, read with the `git` program; `None` on a

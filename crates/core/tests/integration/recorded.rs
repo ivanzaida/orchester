@@ -7,7 +7,9 @@ use std::{fs, path::Path};
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::{RunId, TaskId},
-  integration::{CleanupError, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded, leftovers},
+  integration::{
+    CleanupError, KeepReason, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded, leftovers,
+  },
   store::WorktreeStore,
   time::Timestamp,
 };
@@ -178,7 +180,28 @@ fn recorded_clean_up_deletes_a_worktree_folder_git_forgot() {
   assert_eq!(forgotten[0].owner, WorktreeOwner::Run);
   assert!(!left.keeps_run_worktree(), "no agent can continue in it");
 
+  assert_eq!(forgotten[0].uncommitted, ["target/held.bin"], "its files are listed");
+
+  // A file that appeared after the person saw the folder keeps it.
+  fs::write(
+    folder.join("later.txt"),
+    "later
+",
+  )
+  .expect("write");
   let mut store = Removals::default();
+  let cleanup = clean_up_recorded(
+    &mut store,
+    (&Processes, &git_program(), &repo.root),
+    &run,
+    Some(&left),
+    now(),
+  )
+  .expect("cleared");
+  assert!(!cleanup.removed_run_worktree());
+  assert!(folder.join("later.txt").is_file());
+
+  let left = leftovers(&Processes, &git_program(), &repo.root, &run).expect("read");
   let cleanup = clean_up_recorded(
     &mut store,
     (&Processes, &git_program(), &repo.root),
@@ -194,4 +217,55 @@ fn recorded_clean_up_deletes_a_worktree_folder_git_forgot() {
     "only the run's folder goes"
   );
   assert!(store.recorded.is_some());
+}
+
+/// Git that does not finish `git worktree remove` in time.
+struct TimingOut;
+
+impl CommandRunner for TimingOut {
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    let args = command.args();
+    if args.len() > 1 && args[0] == "worktree" && args[1] == "remove" {
+      return Err(CommandError::TimedOut);
+    }
+    Processes.run(command)
+  }
+}
+
+#[test]
+fn recorded_clean_up_keeps_the_record_once_git_did_not_finish_a_removal() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let mut store = Removals::default();
+  let at = now();
+  let cleanup =
+    clean_up_recorded(&mut store, (&TimingOut, &git_program(), &repo.root), &run, None, at).expect("cleared");
+  assert!(cleanup.removed.is_empty());
+  assert!(
+    cleanup
+      .kept_worktrees
+      .iter()
+      .all(|(_, reason)| matches!(reason, KeepReason::Failed(why) if why.contains("did not finish in time")))
+  );
+  assert_eq!(
+    store.recorded,
+    Some(at),
+    "git may have removed part of it: the run no longer continues"
+  );
+}
+
+#[test]
+fn recorded_clean_up_takes_the_record_back_when_git_cannot_run() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let mut store = Removals::default();
+  let missing = repo.root.join("no-such-git");
+  let failed = clean_up_recorded(&mut store, (&Processes, &missing, &repo.root), &run, None, now());
+  assert!(matches!(
+    failed,
+    Err(RecordedCleanupError::Cleanup(CleanupError::Git(_)))
+  ));
+  assert!(own(&repo.root, run.id()).is_dir());
+  assert_eq!(
+    store.recorded, None,
+    "nothing was touched: the run can continue as before"
+  );
 }

@@ -92,10 +92,10 @@ impl IntegrationProblem {
       Self::Cleanup(CleanupError::Git(error)) | Self::Read(error) => git_message(error),
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
-      Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", path.clone()),
+      Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", short_path(path)),
       Self::NotRemoved { path, detail } => Message::new("runs.worktree.failure.notRemoved")
-        .with("path", path.clone())
-        .with("detail", detail.clone()),
+        .with("path", short_path(path))
+        .with("detail", short_reason(detail, path)),
     }
   }
 }
@@ -131,7 +131,50 @@ fn git_message(error: &GitError) -> Message {
     GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
     GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),
     GitError::Failed(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
+    GitError::Folder { path, detail } => Message::new("runs.worktree.failure.folderUnreadable")
+      .with("path", short_path(path))
+      .with("detail", short_reason(detail, path)),
   }
+}
+
+/// Characters of git's reason shown under a row or in a dialog; the log keeps all of it.
+const REASON_CHARS: usize = 160;
+
+/// A worktree's path as the app names it elsewhere, from `.orchester/worktrees/` on.
+fn short_path(path: &str) -> String {
+  let path = path.replace('\\', "/");
+  path
+    .find(".orchester/")
+    .map_or_else(|| path.clone(), |start| path[start..].to_owned())
+}
+
+/// Git's reason for not removing the worktree at `path`, on one line: its first line without
+/// git's `error:` or `fatal:`, the path shortened as [`short_path`] does, at most [`REASON_CHARS`].
+fn short_reason(detail: &str, path: &str) -> String {
+  let line = detail
+    .replace('\\', "/")
+    .replace(&path.replace('\\', "/"), &short_path(path))
+    .lines()
+    .map(str::trim)
+    .find(|line| !line.is_empty())
+    .unwrap_or_default()
+    .to_owned();
+  let line = ["error: ", "fatal: "]
+    .iter()
+    .find_map(|prefix| line.strip_prefix(prefix))
+    .unwrap_or(&line)
+    .to_owned();
+  // "failed to delete '<path>': Invalid argument": the message names the path already.
+  let line = match line.rsplit_once(": ") {
+    Some((before, reason)) if before.contains(&short_path(path)) => reason.to_owned(),
+    _ => line,
+  };
+  if line.chars().count() <= REASON_CHARS {
+    return line;
+  }
+  let mut short: String = line.chars().take(REASON_CHARS).collect();
+  short.push('…');
+  short
 }
 
 /// At most [`SHOWN_FILES`] of `files`, joined with `separator`.

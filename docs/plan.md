@@ -203,6 +203,10 @@ frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTn
   `.orchester/worktrees/<run or step execution id>`. An interrupted run whose folder is gone is recorded as removed
   when the task page or Run again finds it. The task's active run (Canceled) and a group's first-run statuses leave
   an interrupted run without its worktree out. Rows keep their lines while what was left is read again.
+  Second review round: a clean-up fails only before it removes anything (git not runnable, the listing); once
+  removing started, a git failure or timeout keeps that worktree or branch with why, so the record stays. A
+  forgotten folder lists its files like uncommitted changes and goes only as they were seen. Git's refusal names
+  the worktree once, as `.orchester/worktrees/<id>`, with its reason on one line.
 - Desktop: the removal is recorded by *Remove worktree* and by a merge's clean-up; *Runs of this task* on Summary
   (after the steps; on Ready for review after Verification; on the unreadable run's page in place of *Other runs of
   this task*), rows with columns from a 1340 window and stacked below, *Remove worktree* on every run with worktrees
