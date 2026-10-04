@@ -21,7 +21,7 @@ use orchester_core::{
     VersionNumber,
   },
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, Run, RunNumber, RunSnapshot},
+  run::{BranchName, InterruptCause, NewRun, PublishedVersions, Run, RunNumber, RunSnapshot},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -207,6 +207,8 @@ pub enum Ending {
   Cancelled,
   /// Still running.
   Running,
+  /// Interrupted when a person chose Quit now.
+  Interrupted,
 }
 
 /// Run #3 of ORC-12 on [`RUN_BRANCH`], started at `base` with the checkout on `base_branch`.
@@ -235,6 +237,11 @@ pub fn run(base: &str, base_branch: Option<&str>, ending: Ending) -> Run {
       run.cancel(now()).expect("the run is cancelled");
     }
     Ending::Running => {}
+    Ending::Interrupted => {
+      run
+        .interrupt(InterruptCause::QuitNow, now())
+        .expect("the run is interrupted");
+    }
   }
   run
 }

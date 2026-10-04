@@ -25,6 +25,8 @@ pub enum ProgressState {
   StoppedAtLimit,
   /// The run lost its agent (no runner) or was interrupted mid-step.
   Interrupted,
+  /// The run was interrupted mid-step and its worktree removed: it can never continue (ORC-63).
+  CantContinue,
   Complete,
   Failed(Option<StepFailure>),
   Skipped,
@@ -75,6 +77,9 @@ fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
     (_, None | Some(StepStatus::Pending)) => ProgressState::Waiting,
     (RunStatus::Paused(PauseReason::Requested), Some(StepStatus::Running)) => ProgressState::Paused,
     (RunStatus::Paused(PauseReason::LimitReached(_)), Some(StepStatus::Running)) => ProgressState::StoppedAtLimit,
+    (RunStatus::Interrupted(_), Some(StepStatus::Running)) if run.worktree_removed.is_some() => {
+      ProgressState::CantContinue
+    }
     (RunStatus::Interrupted(_), Some(StepStatus::Running)) => ProgressState::Interrupted,
     (RunStatus::Running, Some(StepStatus::Running)) if lost => ProgressState::Interrupted,
     (_, Some(StepStatus::Running)) => ProgressState::Working,

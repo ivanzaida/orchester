@@ -12,6 +12,7 @@ pub mod data;
 pub mod detail;
 pub mod form;
 pub mod group;
+pub mod history;
 pub mod index_use;
 pub mod integration;
 pub mod integration_jobs;

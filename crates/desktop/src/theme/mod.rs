@@ -37,6 +37,8 @@ pub const LIFECYCLE_DIALOG_WIDTH: f32 = tokens::LIFECYCLE_DIALOG_WIDTH;
 pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = tokens::APPROVAL_VALUE_MAX_HEIGHT;
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
+/// One digit of a count in the tab count's text style, for room kept for a count.
+pub const COUNT_DIGIT_WIDTH: f32 = tokens::COUNT_DIGIT_WIDTH;
 /// Width of the check slot every select option reserves, the size of the check (`ClxwV` in
 /// `L20XvS`).
 pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
@@ -68,6 +70,13 @@ pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = tokens::TASK_TABLE_PIPELINE_MIN_
 pub const TASK_TABLE_TAGS_MIN_WINDOW: f32 = tokens::TASK_TABLE_TAGS_MIN_WINDOW;
 pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = tokens::TASK_TABLE_PRIORITY_MIN_WINDOW;
 pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = tokens::OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW;
+pub const RUN_HISTORY_COLUMNS_MIN_WINDOW: f32 = tokens::RUN_HISTORY_COLUMNS_MIN_WINDOW;
+pub const PROJECT_SIDEBAR_WIDTH: f32 = tokens::PROJECT_SIDEBAR_WIDTH;
+pub const PULL_REQUEST_STATE_WIDTH: f32 = tokens::PULL_REQUEST_STATE_WIDTH;
+pub const PULL_REQUEST_CHECKS_WIDTH: f32 = tokens::PULL_REQUEST_CHECKS_WIDTH;
+pub const PULL_REQUEST_OPEN_WIDTH: f32 = tokens::PULL_REQUEST_OPEN_WIDTH;
+pub const PULL_REQUEST_CHEVRON_WIDTH: f32 = tokens::PULL_REQUEST_CHEVRON_WIDTH;
+pub const PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW: f32 = tokens::PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW;
 
 const FONTS: &[&[u8]] = &[
   include_bytes!("../../assets/fonts/Inter-Regular.ttf"),

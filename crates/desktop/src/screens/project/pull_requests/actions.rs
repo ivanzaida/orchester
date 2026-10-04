@@ -1,6 +1,7 @@
 //! Work the Pull requests screen starts off the UI thread: reading the stored list, syncing,
 //! *Use this account* followed by a sync, and opening a pull request in the browser. Syncs are
 //! quiet operations of the status bar activity: a sync that read the list is listed as "synced";
+//! one without a linked repository asked GitHub nothing and is not listed at all;
 //! one GitHub refused is listed as "not synced" (a finished event, not a failure to dismiss, since
 //! the minute timer would pin one every minute; the screen's notice says why); one that could not
 //! run at all (storage) is a failure.
@@ -108,6 +109,8 @@ fn inbox_action(ctx: &mut Ctx, open: &OpenProject, work: Work) -> InboxAction {
           })
         });
       match &done {
+        // Nothing was asked of GitHub, so nothing is listed; the screen says why (08.D).
+        Ok(Inbox::Unlinked) => drop(running),
         // Replaces an earlier "synced" event, so the status bar never keeps claiming a sync
         // that the latest attempt did not repeat; the screen's notice says why.
         Ok(Inbox::Linked(linked)) if linked.failure.is_some() => {

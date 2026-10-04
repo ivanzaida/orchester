@@ -42,6 +42,10 @@ pub struct LeftWorktree {
   pub uncommitted: Vec<String>,
   /// Its folder is gone; git still lists it until it is pruned.
   pub missing: bool,
+  /// Git no longer lists it, but its folder is there: a removal that failed part way left it
+  /// ([`super::forgotten`]). Its files are listed in `uncommitted`; removing it deletes the folder.
+  #[serde(default)]
+  pub forgotten: bool,
 }
 
 /// A branch of the run: its own or a step's (`<run-branch>--<step>-<attempt>`).
@@ -72,7 +76,7 @@ impl Leftovers {
     self
       .worktrees
       .iter()
-      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing)
+      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing && !worktree.forgotten)
   }
 }
 
@@ -91,9 +95,10 @@ pub enum KeepReason {
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum CleanupError {
-  /// Only a run that ended (succeeded, failed or cancelled) no longer works in its worktrees.
-  #[error("the run has not ended")]
-  NotFinished,
+  /// The run still works in its worktrees: only a run that ended (succeeded, failed or
+  /// cancelled) or was interrupted no longer does.
+  #[error("the run still works in its worktrees")]
+  LiveWork,
   #[error(transparent)]
   Git(#[from] GitError),
 }
@@ -107,36 +112,61 @@ pub struct Cleanup {
   pub kept_branches: Vec<(BranchName, KeepReason)>,
 }
 
+impl Cleanup {
+  /// Whether the run's own worktree went (or only its folder was gone and git forgot it): its agent
+  /// can never continue in it, which is worth recording.
+  pub fn removed_run_worktree(&self) -> bool {
+    self.removed.iter().any(|worktree| worktree.owner == WorktreeOwner::Run)
+  }
+}
+
 /// What `run` left in the repository at `repo`, read with the `git` program.
 pub fn leftovers(runner: &impl CommandRunner, git: &Path, repo: &Path, run: &Run) -> Result<Leftovers, GitError> {
+  let mut left = leftovers_of(runner, git, repo, &[run])?;
+  Ok(left.pop().expect("leftovers_of reads what each run left"))
+}
+
+/// What each of `runs` left in the repository at `repo`, in their order: git lists the worktrees
+/// and reads the checkout's branch once for all of them.
+pub fn leftovers_of(
+  runner: &impl CommandRunner,
+  git: &Path,
+  repo: &Path,
+  runs: &[&Run],
+) -> Result<Vec<Leftovers>, GitError> {
   let git = Git::new(runner, git, repo);
-  let listed = git.stdout(&["worktree", "list", "--porcelain", "-z"])?;
-  let mut worktrees = Vec::new();
-  for mut worktree in parse_worktrees(&listed)
-    .into_iter()
-    .filter_map(|listed| owned_by(run, listed))
-  {
-    if !worktree.missing {
-      worktree.uncommitted = git.at(Path::new(&worktree.path)).uncommitted()?;
+  let listed = parse_worktrees(&git.stdout(&["worktree", "list", "--porcelain", "-z"])?);
+  let checked_out = git.checked_out_branch()?;
+  let mut all = Vec::with_capacity(runs.len());
+  for run in runs {
+    let mut worktrees = Vec::new();
+    for mut worktree in listed.iter().filter_map(|listed| owned_by(run, listed)) {
+      if !worktree.missing {
+        worktree.uncommitted = git.at(Path::new(&worktree.path)).uncommitted()?;
+      }
+      worktrees.push(worktree);
     }
-    worktrees.push(worktree);
-  }
-  let targets = merge_targets(&git, run)?;
-  let mut branches = Vec::new();
-  for name in run_branches(&git, run)? {
-    let mut merged = false;
-    for target in &targets {
-      merged = merged || git.is_ancestor(&format!("refs/heads/{name}"), target)?;
+    let forgotten = super::forgotten::forgotten(repo, run, &worktrees)?;
+    worktrees.extend(forgotten);
+    let targets = merge_targets(&git, run, checked_out.as_ref())?;
+    let mut branches = Vec::new();
+    for name in run_branches(&git, run)? {
+      let mut merged = false;
+      for target in &targets {
+        merged = merged || git.is_ancestor(&format!("refs/heads/{name}"), target)?;
+      }
+      branches.push(LeftBranch { name, merged });
     }
-    branches.push(LeftBranch { name, merged });
+    all.push(Leftovers { worktrees, branches });
   }
-  Ok(Leftovers { worktrees, branches })
+  Ok(all)
 }
 
 /// Removes the worktrees of `run`, which ended, and deletes its merged branches. A worktree with
-/// uncommitted changes is removed only if `confirmed`, what a person saw before confirming, lists
-/// it with the same changes; otherwise it and its branch are kept. Git refusing one worktree or
-/// branch keeps it with git's message and goes on with the others.
+/// uncommitted changes (or a forgotten folder with files) is removed only if `confirmed`, what a
+/// person saw before confirming, lists it with the same changes; otherwise it and its branch are
+/// kept. An error comes only before anything is removed; once removing started, git refusing or not
+/// finishing one worktree or branch keeps it with why and goes on with the others.
 pub fn clean_up(
   runner: &impl CommandRunner,
   git: &Path,
@@ -144,8 +174,8 @@ pub fn clean_up(
   run: &Run,
   confirmed: Option<&Leftovers>,
 ) -> Result<Cleanup, CleanupError> {
-  if !run.status().is_terminal() {
-    return Err(CleanupError::NotFinished);
+  if run.status().has_live_work() {
+    return Err(CleanupError::LiveWork);
   }
   let current = leftovers(runner, git, repo, run)?;
   let git = Git::new(runner, git, repo);
@@ -154,7 +184,7 @@ pub fn clean_up(
     git.stdout(&["worktree", "prune"])?;
   }
   for worktree in current.worktrees {
-    remove(&git, worktree, confirmed, &mut cleanup)?;
+    remove(&git, worktree, confirmed, &mut cleanup);
   }
   for branch in current.branches {
     let kept = cleanup
@@ -164,10 +194,10 @@ pub fn clean_up(
     let reason = match (branch.merged, kept) {
       (false, _) => Some(KeepReason::NotMerged),
       (true, true) => Some(KeepReason::InKeptWorktree),
-      (true, false) => {
-        let output = git.output(&["branch", "--quiet", "-D", branch.name.as_str()])?;
-        (!output.success()).then(|| KeepReason::Failed(super::git::message(&output)))
-      }
+      (true, false) => match git.output(&["branch", "--quiet", "-D", branch.name.as_str()]) {
+        Ok(output) => (!output.success()).then(|| KeepReason::Failed(super::git::message(&output))),
+        Err(error) => Some(KeepReason::Failed(error.to_string())),
+      },
     };
     match reason {
       Some(reason) => cleanup.kept_branches.push((branch.name, reason)),
@@ -182,10 +212,10 @@ fn remove<R: CommandRunner>(
   worktree: LeftWorktree,
   confirmed: Option<&Leftovers>,
   cleanup: &mut Cleanup,
-) -> Result<(), GitError> {
+) {
   if worktree.missing {
     cleanup.removed.push(worktree);
-    return Ok(());
+    return;
   }
   let discard = !worktree.uncommitted.is_empty();
   let agreed = confirmed.is_some_and(|confirmed| {
@@ -197,30 +227,38 @@ fn remove<R: CommandRunner>(
   if discard && !agreed {
     let files = worktree.uncommitted.clone();
     cleanup.kept_worktrees.push((worktree, KeepReason::Uncommitted(files)));
-    return Ok(());
+    return;
   }
-  let mut args = vec!["worktree", "remove"];
-  if discard {
-    args.push("--force");
-  }
-  args.push(&worktree.path);
-  let output = git.output(&args)?;
-  if output.success() {
-    cleanup.removed.push(worktree);
+  let outcome = if worktree.forgotten {
+    super::forgotten::delete(&worktree)
   } else {
-    let reason = KeepReason::Failed(super::git::message(&output));
-    cleanup.kept_worktrees.push((worktree, reason));
+    let mut args = vec!["worktree", "remove"];
+    if discard {
+      args.push("--force");
+    }
+    args.push(&worktree.path);
+    match git.output(&args) {
+      Ok(output) if output.success() => Ok(()),
+      Ok(output) => Err(super::git::message(&output)),
+      Err(error) => Err(error.to_string()),
+    }
+  };
+  match outcome {
+    Ok(()) => cleanup.removed.push(worktree),
+    Err(detail) => cleanup.kept_worktrees.push((worktree, KeepReason::Failed(detail))),
   }
-  Ok(())
 }
 
 /// What a branch of the run must be reachable from to count as merged: the run's base branch and
 /// the branch the checkout has now, as far as they exist. A detached `HEAD` does not count: commits
 /// only it reaches are lost once it moves.
-fn merge_targets<R: CommandRunner>(git: &Git<'_, R>, run: &Run) -> Result<Vec<String>, GitError> {
-  let checked_out = git.checked_out_branch()?;
+fn merge_targets<R: CommandRunner>(
+  git: &Git<'_, R>,
+  run: &Run,
+  checked_out: Option<&BranchName>,
+) -> Result<Vec<String>, GitError> {
   let mut targets = Vec::new();
-  for branch in run.base_branch().into_iter().chain(checked_out.as_ref()) {
+  for branch in run.base_branch().into_iter().chain(checked_out) {
     if let Some(commit) = git.commit(&format!("refs/heads/{branch}"))? {
       targets.push(commit);
     }
@@ -254,7 +292,7 @@ struct Listed {
 
 /// `listed` as a worktree of `run`: its own, or one of its step executions', under
 /// [`WORKTREES_DIR`].
-fn owned_by(run: &Run, listed: Listed) -> Option<LeftWorktree> {
+fn owned_by(run: &Run, listed: &Listed) -> Option<LeftWorktree> {
   let path = Path::new(&listed.path);
   let parent = path.parent()?;
   let in_worktrees = parent.file_name()? == "worktrees" && parent.parent()?.file_name()? == ".orchester";
@@ -273,11 +311,12 @@ fn owned_by(run: &Run, listed: Listed) -> Option<LeftWorktree> {
     WorktreeOwner::Step(execution.id())
   };
   Some(LeftWorktree {
-    path: listed.path,
+    path: listed.path.clone(),
     owner,
-    branch: listed.branch,
+    branch: listed.branch.clone(),
     uncommitted: Vec::new(),
     missing: listed.prunable,
+    forgotten: false,
   })
 }
 

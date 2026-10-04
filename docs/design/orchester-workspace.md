@@ -1305,6 +1305,71 @@ Implemented (2026-09-27), **drawn 2026-09-27**: merging a run and clearing its w
 - **After Remove worktree (drawn 2026-09-29: 02.Q4 `PacyY`, 02.Q5 `Y8hyj`).** A run ready for review whose own worktree was removed (or whose folder was deleted) can still be merged, but its agent cannot be asked again: it would continue its session in that worktree, and recreating it would bring back what the person just cleared. *Ask agent* stays between the scope and *Merge*, unavailable (0.4, trailing lock), with the hint *Ask agent is unavailable: the run’s worktree was removed, so its agent cannot continue.* under the actions, in the style of the Merge hint. The Conversation tab keeps the status label *Ready for review*; as in 02.S2 the recipient select is disabled, the composer reads *No agent of this run reads messages any more.*, *Send* is disabled and the policy line is left out; the line under the composer reads *The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.*, and a message still queued reads *Not delivered · the run’s worktree was removed*. The runner refuses a follow-up for such a run with that reason and leaves the run as it was. As built (U5): the readiness card keeps *Ready for your review* with the folder-x glyph and the one-line detail *Every step passed. The worktree was removed; committed changes remain ready.*; the topbar has no *Remove worktree*; *Merge into main* stays available and *Ask agent* is unavailable with its hint under the Review PR hint (02.Q4). On the Conversation tab the notice is *The run’s worktree was removed* (folder-x) · *Its committed changes remain ready for review. No agent can continue this run.*; the Permissions row has no *change ↗*; the participants line reads *Explorer, Planner, Builder, Reviewer cannot continue*; a message still queued reads *Not delivered · the run’s worktree was removed* (02.Q5).
 - **Project settings › Environment** — 02.O `tXahd`, the third tab after General and Limits, laid out like Limits (content 760 wide, padding 24 / 32, gap 16): page description *Variables Kontur adds for its agents and command tools.*; *Environment variables* (15/500) and its explanation; the field label *Variables · NAME=value per line* (11 `$muted`); a mono 12 text area (`$sidebar`, `$border`, radius 7, padding 12, 4 to 12 lines, no placeholder); the hint *Stored and shown in plain text, so never put secrets here.*; the notice (history) *Changes apply to the next agent or command that starts* · *An agent or command already running keeps the environment it started with.*; the topbar says *All changes saved*. An invalid line strokes the area 1 `$subtle` (`BorderStrong`; 1.5 `$text` is the focus stroke) with the field error under it (circle-alert 12 and Inter 11, both `$text`, 4 apart), then the hint: the same state as the MCP server's variables in 04.E3 `Hpycl`.
 
+### ORC-63 · Remove worktree for every ended run
+
+Drawn 2026-10-04 at the user's request; built 2026-10-04 (branch `claude/orc63`, see `docs/plan.md`), design
+verification outstanding. **Problem:** *Remove worktree* exists only in the task page's top bar
+and only for the task's latest run, so the worktrees of older runs (and of interrupted runs) stay under
+`.orchester/worktrees` forever (the Orchester project had 13). The app has no list of a task's runs except *Other runs
+of this task* on the unreadable-run page (02.R `SUuwV`), and neither the Conversation (ORC-61, one timeline per run)
+nor the top bar has a run switcher. So the run history is new:
+
+- **Runs of this task** (approved by the user (2026-10-04)): a Summary section after the run's steps, on every task with a run. Heading
+  15/500 with the count, the line *Each run keeps its worktree in .orchester/worktrees until you remove it. Committed
+  work stays on the run's branch either way.* (11 `$muted`), then one row per run, newest first, hairlines between:
+  *Run #N* (12/500; the shown run tagged *this run*), its status label (`DeizF`), what happened (11 `$text`), the
+  worktree line (folder 12 + 11 `$muted`: *Worktree · no uncommitted changes · <branch>*, *Worktree · 2 files not
+  committed · <branch>* with file-diff and `$text`, *Worktree removed Oct 3, 16:40 · <branch> kept* with folder-x, *No
+  worktree*), when (mono 10 `$subtle`), and at the right *Remove worktree* (`u1XBP`, folder-x, 32 high; *Remove
+  worktrees* when the run has several). At 960 a row stacks: run, status and the button on one line, what happened,
+  the worktree line and when under it.
+- **Which runs offer it** (today's rules, extended to every run): a run with a worktree and no live work — failed,
+  cancelled, ready for review (merged or not), merged with a worktree left, interrupted. No button while a run is
+  running, waiting for you, pausing or paused; the worktree line says *Worktree in use · Remove worktree comes back when
+  the run ends*. A run that never started says *No worktree*; an unreadable run says *Remove worktree is unavailable
+  until run #N can be read* (lock). The latest run keeps its top-bar button as today.
+- **The dialog is 02.Q / 02.Q2's**, for the row's run: *Remove the worktree of run #N?*, the same explanation, a check
+  row per worktree (uncommitted files listed, indented), a row per branch (*kept · not merged* / *deleted · merged*), the
+  switch *Discard the uncommitted changes listed above* gating the primary when files would be lost, *Removing…*,
+  the error line. When another run of the task is at work it adds *Run #134 keeps working; its worktree is not
+  touched.* (info 12, 11 `$muted`).
+- **Interrupted runs** keep *Continue run* and gain *Remove worktree* (top bar and row). Their dialog leads with an
+  emphasized notice (`q5LzI`, circle-pause): *Run #141 can't be continued afterwards* · *Continue run picks the run up
+  from checkpoint 1b8e5c2 in this worktree. Without it the run stays interrupted for good; Run again starts a new run
+  instead.*
+- **After removal.** The row reads *Worktree removed <time> · <branch> kept* and has no action. An interrupted run whose
+  worktree was removed shows the notice *Run #141 can't continue* (folder-x) · *Its worktree was removed at 11:50, so its
+  agent has nothing to continue from. Its commits stay on <branch>. Run again starts run #142 in a new worktree, from
+  main as it is now.*; *Continue run* stays in the top bar unavailable (0.4, trailing lock) with the lock line *Continue
+  run is unavailable: run #141's worktree was removed.*; its step reads *Interrupted · can't continue*; Run details'
+  *Worktree* reads *Removed · 11:50*. Failed and cancelled runs follow 02.Q4 / 02.Q5 (agent cannot continue).
+- **Row states** (63.06): *Removing…* (loader, 0.4) on the row's button, and the other rows' buttons wait; a failure is
+  the error line under the row's worktree line with the button offered again; removed.
+
+| Frame | Node | Position |
+| --- | --- | --- |
+| 63.01 · Runs of this task / Remove worktree on ended runs (ORC-131: #134 running, #133 removed, #132 cancelled clean, #131 failed with 2 files) | `O0AMKY` | 48 / 100 |
+| 63.02 · Runs of this task at 960 | `H9Z7D4` | 3088 / 100 |
+| 63.03 · Remove worktree of an older run / Uncommitted files (#131, switch off) | `e4QBB` | 1568 / 100 |
+| 63.04 · Remove worktree of an interrupted run / Continue run ends (ORC-132, #141) | `rkAU3` | 48 / 1148 |
+| 63.05 · Interrupted run after Remove worktree / Can't continue | `LmTnc` | 1568 / 1148 |
+| 63.06 · Run row states (compact): removing, failed, removed, live work, other ended runs | `VBR27` | 3088 / 1148 |
+
+Canvas: group `j0VU3B` ("States · ORC-63 · Remove worktree for every ended run", 4896 × 2300) at y 10024 in 02.6
+`v3U9c6`, which grew from 9988 to 12384; the sections below it in column D moved down 2396: 08 `McWTM` to y 25032 and
+06 `V8h6d` to y 28608. Reused: `zo9Py`, `u1XBP`, `DeizF`, `tfGRt`, `q5LzI`, `K8ItM`, `SOW6S`; no new components or
+variables. Fixture tasks, runs, branches, paths and times are illustrative. Proposed copy namespace:
+`runs.history.*` (section, rows, worktree lines) and `runs.removeWorktree.*` for the new dialog lines.
+
+**Decisions — approved by the user (2026-10-04), for the user:**
+
+1. The run history is a *Runs of this task* section on Summary, not a run switcher or a menu (rows have no menus);
+   the unreadable page's *Other runs of this task* becomes this section.
+2. An interrupted run whose worktree was removed stays *Interrupted* in its record but no longer blocks a new run:
+   *Run again* is offered (today an interrupted run counts as active, so it would block Run again for good).
+3. *Stopped at limit* counts as live work (it can continue after the limit is raised), so it has no Remove worktree.
+4. One removal at a time per task: while one row removes, the other rows' buttons wait (0.4).
+
 ## Conversation (merged with Activity)
 
 Drawn 2026-10-01, built 2026-10-02 (ORC-61, see *Implemented* below). Group `fTfl8` ("States · Merged conversation", last in 02 / Tasks & runs at x 0 / y 51875, height 4749; the section is now 56624 high). The user asked for one view where the person follows what the agents do and can chat with the working agent. Fixture: Kontur, ORC-128 *Add GitHub authentication*, Run 128 on Feature delivery (Research · Explorer on Claude / Opus 5.5, Plan · Planner and Implement · Builder on Codex / Sol, Run checks, Review · Reviewer); ORC-129 *Add repository switcher*, Run 129 queued. Every message, command, path, time, hash and count is illustrative. Proposed copy namespace: `runs.conversation.*` (timeline, composer, delivery), reusing `runs.activity.*` for the entries and the invocation panel.

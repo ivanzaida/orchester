@@ -1,7 +1,8 @@
 //! Work the pull request screen starts off the UI thread: reading what is stored, refreshing the
 //! pull request and its diff, and opening the pull request in the browser.
 //! A refresh is a quiet operation of the status bar activity, listed like an inbox sync: "read",
-//! "not read" when GitHub refused (the screen's notice says why), or failed when it could not run.
+//! "not read" when GitHub refused (the screen's notice says why), failed when it could not run,
+//! and not at all without a linked repository.
 
 use lurq::{
   app::ctx::{Ctx, FutureAction, FutureHandle},
@@ -99,6 +100,8 @@ fn refresh_action(ctx: &mut Ctx, open: &OpenProject, number: u64) -> RefreshActi
           })
         });
       match &done {
+        // Nothing was asked of GitHub, so nothing is listed; the screen says why.
+        Ok(Detail::Unlinked) => drop(running),
         Ok(Detail::Linked(linked)) if linked.failure.is_some() => {
           running.finish_as(
             Message::new("statusBar.operations.pullRequestRefresh.notRead").with("name", number.to_string()),

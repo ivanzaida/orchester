@@ -1,4 +1,5 @@
-//! *Run again* (ORC-16): for a task whose latest run failed or was cancelled, the primary action at
+//! *Run again* (ORC-16): for a task whose latest run failed or was cancelled, or was interrupted and
+//! lost its worktree (ORC-63, 63.05 `LmTnc`), the primary action at
 //! the right of the topbar (rotate-ccw, `zM693`, `M1upHe`), which opens the confirmation
 //! ([`dialog`], `R5y5x`) and asks the runner to start the task's next run. While core's rule says
 //! the task cannot run again, it stays in its place unavailable (0.4, trailing lock) and the lock
@@ -22,6 +23,7 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
+  run::can_run_again_after,
 };
 
 use self::dialog::{Dialog, dialog};
@@ -58,7 +60,11 @@ pub(super) fn offer(
   revision: (u64, u64),
   leftovers: Option<&Result<Leftovers, Message>>,
 ) -> Offer {
-  let Some(run) = detail.run.as_ref().filter(|run| run.run.status().can_run_again()) else {
+  let Some(run) = detail
+    .run
+    .as_ref()
+    .filter(|run| can_run_again_after(&run.run, run.worktree_removed.is_some()))
+  else {
     return Offer::default();
   };
   let programs = ctx

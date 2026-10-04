@@ -33,6 +33,7 @@ mod tags;
 mod task_groups;
 mod tasks;
 mod tool_approvals;
+mod worktree_removals;
 
 use std::{
   fs,
