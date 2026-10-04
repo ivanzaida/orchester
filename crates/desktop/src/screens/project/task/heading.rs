@@ -177,6 +177,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
   let step_name = step.map_or("", |step| &step.name);
   let agent = step.and_then(|step| step.agent.as_deref()).unwrap_or_default();
   let time = run.paused_at.map(display::clock).unwrap_or_default();
+  let removed = run.worktree_removed.map(display::clock).unwrap_or_default();
   let version = run.version.to_string();
   let args = [
     ("run", number.as_str()),
@@ -187,6 +188,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     ("steps", parallel.as_str()),
     ("pipeline", &run.pipeline),
     ("version", version.as_str()),
+    ("removed", removed.as_str()),
   ];
   let awaiting_plan = run.run.waits_for_a_person() && !run.run.awaiting_plan().is_empty();
   let asking = run.run.waits_for_a_person() && !run.run.awaiting_answer().is_empty();
@@ -208,6 +210,7 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::Time)), _) => "runs.page.describe.timeLimit",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)), _) => "runs.page.describe.dailyBudget",
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { .. })), _) => "runs.page.describe.stepBudget",
+    (RunStatus::Interrupted(_), _) if run.worktree_removed.is_some() => "runs.page.describe.interruptedRemoved",
     (RunStatus::Interrupted(_), _) => "runs.page.describe.interrupted",
     (RunStatus::Succeeded, _) => "runs.page.describe.succeeded",
     (

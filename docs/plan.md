@@ -180,6 +180,32 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
+### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (UI; implemented, awaiting design verification)
+
+Design: `docs/design/orchester-workspace.md` › *ORC-63 · Remove worktree for every ended run* (group `j0VU3B`,
+frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTnc`, 63.06 `VBR27`; decisions approved
+2026-10-04). Implemented 2026-10-04:
+
+- Core: `RunStatus::has_live_work` (an interrupted run has none); `clean_up` removes the worktrees of an interrupted
+  run (`CleanupError::LiveWork` otherwise); `leftovers_of` reads several runs with one worktree listing; Run again
+  (`run_again`, `holds_task`, `can_run_again_after`) follows an interrupted run whose worktree was removed, which no
+  longer holds its task. `WorktreeStore` records removals.
+- Store: migration 40, `run_worktree_removals` (once per run); `interrupted_runs` leaves such runs out.
+- Runner: `Prepared::continuing` refuses a run whose removal is recorded (`Rejection::WorktreeRemoved`, the run
+  unchanged); Run again reads the removals and records the removal it does. No IPC type changed (protocol stays 14).
+- Desktop: the removal is recorded by *Remove worktree* and by a merge's clean-up; *Runs of this task* on Summary
+  (after the steps; on Ready for review after Verification; on the unreadable run's page in place of *Other runs of
+  this task*), rows with columns from a 1340 window and stacked below, *Remove worktree* on every run with worktrees
+  and no live work (the latest keeps its topbar button, which now also shows for an interrupted run, left of
+  Continue run), the 02.Q dialog for any run with the interrupted-run notice and the *keeps working* line, one
+  removal at a time per task, *Removing…* and git's refusal under the row. An interrupted run without its worktree:
+  notice *Run #N can’t continue*, Continue run unavailable with its lock line, step *Interrupted · can’t continue*,
+  heading *· worktree removed HH:MM*, *Worktree · Removed · HH:MM* in This run, *Run again* offered.
+
+Not done: *Runs of this task* is not on the plan review (02.11) or the retry-limit page (02.B), which lay out their
+own Summary; Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
+(separate agent) is outstanding.
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label

@@ -60,7 +60,7 @@ fn unreadable_latest_run_keeps_the_task_list_and_its_counts() {
 }
 
 #[test]
-fn unreadable_latest_run_shows_on_its_task_page_with_the_other_runs() {
+fn unreadable_latest_run_shows_on_its_task_page_with_the_task_runs() {
   let mut fixture = Fixture::new();
   let task = fixture.task("Add login", at(10));
   let mut cancelled = fixture.started_run(task, at(15));
@@ -76,9 +76,15 @@ fn unreadable_latest_run_shows_on_its_task_page_with_the_other_runs() {
   assert_eq!((unreadable.id, unreadable.number), (bad.id(), Some(bad.number())));
   assert_eq!(unreadable.actions().args, [("run", bad.number().get().to_string())]);
   assert!(detail.run.is_none(), "no other run takes the latest run's place");
-  let [succeeded, first] = detail.earlier.as_slice() else {
-    panic!("the other runs are listed, newest first: {:?}", detail.earlier);
+  let [latest, succeeded, first] = detail.history.as_slice() else {
+    panic!("the runs are listed, newest first: {:?}", detail.history);
   };
+  assert_eq!(
+    (latest.id, latest.number, latest.phase),
+    (bad.id(), Some(bad.number()), None)
+  );
+  assert_eq!(latest.detail.key, "runs.unreadable.title");
+  assert!(latest.run.is_none() && latest.without_live_work().is_none());
   assert_eq!(
     (succeeded.number, succeeded.phase, succeeded.at),
     (Some(earlier.number()), Some(TaskPhase::Succeeded), Some(at(30)))
@@ -88,8 +94,8 @@ fn unreadable_latest_run_shows_on_its_task_page_with_the_other_runs() {
     (first.number, first.phase),
     (Some(cancelled.number()), Some(TaskPhase::Cancelled))
   );
-  assert_eq!(first.detail.key, "runs.unreadable.otherRuns.cancelled");
-  assert_eq!(first.detail.args, [("branch", cancelled.branch().as_str().to_owned())]);
+  assert_eq!(first.detail.key, "runs.history.cancelled");
+  assert!(first.without_live_work().is_some(), "its worktree may be removed");
   assert!(detail.earlier_unreadable.is_empty());
 }
 

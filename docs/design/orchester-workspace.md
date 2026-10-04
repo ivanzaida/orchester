@@ -1307,7 +1307,8 @@ Implemented (2026-09-27), **drawn 2026-09-27**: merging a run and clearing its w
 
 ### ORC-63 · Remove worktree for every ended run
 
-Drawn 2026-10-04 at the user's request; not built. **Problem:** *Remove worktree* exists only in the task page's top bar
+Drawn 2026-10-04 at the user's request; built 2026-10-04 (branch `claude/orc63`, see `docs/plan.md`), design
+verification outstanding. **Problem:** *Remove worktree* exists only in the task page's top bar
 and only for the task's latest run, so the worktrees of older runs (and of interrupted runs) stay under
 `.orchester/worktrees` forever (the Orchester project had 13). The app has no list of a task's runs except *Other runs
 of this task* on the unreadable-run page (02.R `SUuwV`), and neither the Conversation (ORC-61, one timeline per run)

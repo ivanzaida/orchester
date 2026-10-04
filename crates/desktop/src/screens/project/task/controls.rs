@@ -179,6 +179,11 @@ impl ControlButtons<'_> {
           .on_click(self.press(RunControl::Resume))
           .enabled(self.pending.is_none() && !self.blocked),
       ),
+      // Its worktree was removed: it stays in its place, unavailable, and the lock line under the
+      // notice says why (63.05 `LmTnc`).
+      RunStatus::Interrupted(_) if self.run.worktree_removed.is_some() => {
+        Some(self.button("runs.page.continue", Icon::Play, "task-continue-run"))
+      }
       RunStatus::Interrupted(_) if self.pending == Some(RunControl::Continue) => Some(
         self
           .button("runs.page.continuing", Icon::Loader, "task-continue-run")

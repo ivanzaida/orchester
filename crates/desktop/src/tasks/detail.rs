@@ -16,7 +16,9 @@ use orchester_core::{
     RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, attempt_starts,
     execution_tokens,
   },
-  store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
+  store::{
+    ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
+  },
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -26,10 +28,11 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
+  history::{self, RunRecord},
   index_use::IndexUses,
   permissions::run_permissions,
   run_approvals::RunApprovals,
-  unreadable::{EarlierRun, Unreadable},
+  unreadable::Unreadable,
 };
 
 /// One step of the run's pipeline and its latest execution.
@@ -83,6 +86,9 @@ pub struct RunView {
   pub saved_at_pause: bool,
   /// When a finished run (succeeded, failed or cancelled) ended.
   pub finished_at: Option<Timestamp>,
+  /// When its own worktree was removed, if Orchester removed it: an interrupted run then can never
+  /// continue (ORC-63).
+  pub worktree_removed: Option<Timestamp>,
   /// What its step executions left for the steps after them.
   pub outputs: Vec<StepOutput>,
   /// The plans of its gated steps, by step and version.
@@ -201,11 +207,10 @@ pub struct TaskDetail {
   pub merge: Option<RunMerge>,
   /// The task's conversation, oldest first.
   pub messages: Vec<Message>,
-  /// The latest run, when it cannot be read (02.R `SUuwV`): `run` is `None`, and the page lists
-  /// the task's other runs instead.
+  /// The latest run, when it cannot be read (02.R `SUuwV`): `run` is `None`.
   pub latest_unreadable: Option<Unreadable>,
-  /// The task's other runs, newest first, while its latest run cannot be read.
-  pub earlier: Vec<EarlierRun>,
+  /// All the task's runs, newest first: *Runs of this task* (ORC-63).
+  pub history: Vec<RunRecord>,
   /// The task's earlier runs that cannot be read, oldest first, while its latest run can be.
   pub earlier_unreadable: Vec<Unreadable>,
   /// The keys of the linked blocking tasks that have not finished: while there are any, the
@@ -241,16 +246,12 @@ impl TaskDetail {
     let blocked_by = blocking_keys(&db, &task)?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     let messages = db.messages(task.id())?;
+    let history = history::read(&db, &task, &runs)?;
     let latest = runs.pop();
     if let Some(Err(latest)) = &latest {
-      let earlier = runs
-        .iter()
-        .rev()
-        .map(|run| EarlierRun::read(&db, &task, run))
-        .collect::<Result<_, _>>()?;
       return Ok(Self {
         latest_unreadable: Some(Unreadable::of(latest)),
-        earlier,
+        history,
         blocked_by,
         ..Self::without_runs(task, messages)
       });
@@ -274,6 +275,7 @@ impl TaskDetail {
       run: latest.map(|run| run_view(&db, run)).transpose()?,
       run_task,
       merge,
+      history,
       earlier_unreadable,
       blocked_by,
       ..Self::without_runs(task, messages)
@@ -288,7 +290,7 @@ impl TaskDetail {
       merge: None,
       messages,
       latest_unreadable: None,
-      earlier: Vec::new(),
+      history: Vec::new(),
       earlier_unreadable: Vec::new(),
       blocked_by: Vec::new(),
     }
@@ -356,19 +358,9 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       stage: stage_of(&step.key),
     });
   }
-  let (paused_at, saved_at_pause) = match run.status() {
-    RunStatus::Paused(_) => {
-      let events = db.events(run.id()).map_err(run_store_error)?;
-      let paused = events
-        .iter()
-        .rposition(|event| matches!(event.kind(), RunEventKind::Paused { .. }));
-      let saved = paused
-        .is_some_and(|index| index > 0 && matches!(events[index - 1].kind(), RunEventKind::CheckpointRecorded { .. }));
-      (paused.map(|index| events[index].at()), saved)
-    }
-    _ => (None, false),
-  };
+  let (paused_at, saved_at_pause) = paused_at(db, &run)?;
   let finished_at = finished_at(db, &run)?;
+  let worktree_removed = db.worktree_removal(run.id())?;
   let attempt_starts = starts_of(db, &run)?;
   Ok(RunView {
     attempt_starts,
@@ -382,11 +374,27 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     paused_at,
     saved_at_pause,
     finished_at,
+    worktree_removed,
     pipeline,
     version: pinned.number,
     steps,
     run,
   })
+}
+
+/// When a paused run paused or stopped at its limit, and whether its work was committed as a
+/// checkpoint right before.
+fn paused_at(db: &ProjectDb, run: &Run) -> Result<(Option<Timestamp>, bool), StoreError> {
+  if !matches!(run.status(), RunStatus::Paused(_)) {
+    return Ok((None, false));
+  }
+  let events = db.events(run.id()).map_err(run_store_error)?;
+  let paused = events
+    .iter()
+    .rposition(|event| matches!(event.kind(), RunEventKind::Paused { .. }));
+  let saved = paused
+    .is_some_and(|index| index > 0 && matches!(events[index - 1].kind(), RunEventKind::CheckpointRecorded { .. }));
+  Ok((paused.map(|index| events[index].at()), saved))
 }
 
 /// When each attempt of `run` started and who started it; nothing to read for a run of one attempt.

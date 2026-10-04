@@ -5,16 +5,16 @@
 //! The codebase indexes only removed worktrees used are removed with them (`orchester_index`).
 //! Blocks on SQLite and git; the UI calls it off the UI thread.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   command::CommandError,
   id::RunId,
   integration::{
-    Cleanup, CleanupError, GitError, KeepReason, Leftovers, MergeError, RunMerge, clean_up, leftovers, merge_run,
+    Cleanup, CleanupError, GitError, KeepReason, Leftovers, MergeError, RunMerge, clean_up, leftovers_of, merge_run,
   },
   run::Run,
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore, TaskStore, WorktreeStore},
   time::Timestamp,
 };
 use orchester_index::CodebaseIndexes;
@@ -178,31 +178,44 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
   db.save_run_merge(&merge)?;
   let cleanup = clean_up(&git, Path::new(GIT), repo_root, &run, None);
   match &cleanup {
-    Ok(_) => prune_indexes(repo_root),
+    Ok(cleared) => {
+      prune_indexes(repo_root);
+      // The merge and the removal stand either way; only the time the row names is lost.
+      if cleared.removed_run_worktree()
+        && let Err(error) = db.save_worktree_removal(run.id(), Timestamp::now())
+      {
+        tracing::warn!(%error, "cannot record that the merged run's worktree was removed");
+      }
+    }
     Err(error) => tracing::warn!(%error, "the run was merged, but what it left could not be cleared"),
   }
   Ok(Merged { merge, cleanup })
 }
 
-/// What a run left in the repository, as the task page holds it.
+/// What the task's runs left in the repository, by run, as the task page holds it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LeftBehind(pub Leftovers);
+pub struct LeftBehind(pub Vec<(RunId, Leftovers)>);
 
 impl lurq::app::component::DevtoolsInspectable for LeftBehind {}
 
-/// What `run` left in the repository at `repo_root`.
-pub fn leftovers_in(repo_root: &Path, programs: &Programs, run: &Run) -> Result<LeftBehind, IntegrationProblem> {
-  leftovers(&programs.runner(), Path::new(GIT), repo_root, run)
-    .map(LeftBehind)
+/// What each of `runs` left in the repository at `repo_root`, by run.
+pub fn leftovers_in(
+  repo_root: &Path,
+  programs: &Programs,
+  runs: &[Arc<Run>],
+) -> Result<LeftBehind, IntegrationProblem> {
+  let listed: Vec<&Run> = runs.iter().map(AsRef::as_ref).collect();
+  leftovers_of(&programs.runner(), Path::new(GIT), repo_root, &listed)
+    .map(|left| LeftBehind(runs.iter().map(|run| run.id()).zip(left).collect()))
     .map_err(|error| {
-      tracing::warn!(%error, "cannot read what the run left");
+      tracing::warn!(%error, "cannot read what the runs left");
       IntegrationProblem::Read(error)
     })
 }
 
 /// Removes what `run` left, discarding uncommitted changes only where `confirmed`, what the person
-/// saw, lists exactly those. A worktree that stays is a problem to show: it changed since, or git
-/// refused.
+/// saw, lists exactly those, and records when its own worktree went. A worktree that stays is a
+/// problem to show: it changed since, or git refused.
 pub fn remove_in(
   repo_root: &Path,
   programs: &Programs,
@@ -214,6 +227,9 @@ pub fn remove_in(
     IntegrationProblem::Cleanup(error)
   })?;
   prune_indexes(repo_root);
+  if cleanup.removed_run_worktree() {
+    ProjectDb::open(repo_root)?.save_worktree_removal(run.id(), Timestamp::now())?;
+  }
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {

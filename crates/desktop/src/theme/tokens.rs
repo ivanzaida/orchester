@@ -247,5 +247,10 @@ pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = 1116.0;
 /// tile, the longest workflow label, tag chips, time, chevron and their gaps, about 530) leave its
 /// title and meta 200. Narrower, the column goes under the list at full width (no frame draws it).
 pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = 1340.0;
+/// The narrowest window whose *Runs of this task* rows keep their columns (63.01 `O0AMKY`): the 216
+/// sidebar, the Summary's 64 padding, the 336 run panel, the run, status, when and action cells
+/// (76, 150, 96, 150) and their 16 gaps leave what happened 200. Narrower, a row stacks (63.02
+/// `H9Z7D4`).
+pub const RUN_HISTORY_COLUMNS_MIN_WINDOW: f32 = 1340.0;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

@@ -1,8 +1,10 @@
-//! The confirmation of *Remove worktree* (02.Q `LMrbK`, 02.Q2 `g1HS8`), in the frame of the app's
-//! confirmations (`jYL1V`, `M4vhEv`): a title and what removing does, then each worktree (`l3hyb`
-//! rows) with its uncommitted files named under its title, each branch with whether it is deleted
-//! (merged) or kept, the switch that agrees to discard the uncommitted changes when there are any
-//! (`K8ItM` in `tpwQD`), and Cancel and Remove.
+//! The confirmation of *Remove worktree* (02.Q `LMrbK`, 02.Q2 `g1HS8`, for any run of the task 63.03
+//! `e4QBB`), in the frame of the app's confirmations (`jYL1V`, `M4vhEv`): a title and what removing
+//! does, for an interrupted run first that it can't be continued afterwards (`q5LzI` in 63.04
+//! `rkAU3`), then each worktree (`l3hyb` rows) with its uncommitted files named under its title, each
+//! branch with whether it is deleted (merged) or kept, the switch that agrees to discard the
+//! uncommitted changes when there are any (`K8ItM` in `tpwQD`), that another run of the task at work
+//! keeps its worktree, and Cancel and Remove.
 
 use std::sync::Arc;
 
@@ -15,12 +17,16 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::integration::{LeftBranch, LeftWorktree, WorktreeOwner};
+use orchester_core::{
+  integration::{LeftBranch, LeftWorktree, WorktreeOwner},
+  run::{Run, RunStatus},
+};
 
 use super::RemoveWorktreeProps;
 use crate::{
+  display,
   messages::Message,
-  tasks::{detail::RunView, integration::file_list},
+  tasks::integration::file_list,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -28,8 +34,9 @@ use crate::{
     check_row::check_row,
     field::wrapping_field_error,
     form::{Submit, form},
-    icon::Icon,
+    icon::{Icon, IconSize, icon},
     message_text,
+    notice::Notice,
     switch::Switch,
   },
 };
@@ -51,14 +58,9 @@ pub(super) struct Dialog<'a> {
 }
 
 pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
-  let run = dialog
-    .props
-    .detail
-    .run
-    .as_ref()
-    .expect("worktrees are removed for the task's latest run");
+  let run = &*dialog.props.run;
   let leftovers = &dialog.props.leftovers;
-  let number = run.run.number().get().to_string();
+  let number = run.number().get().to_string();
   let (title_key, explanation_key) = if leftovers.worktrees.len() == 1 {
     ("runs.worktree.title.one", "runs.worktree.explanation.one")
   } else {
@@ -80,6 +82,7 @@ pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
     .padding_horizontal(ExtraSpacing::Rail.role())
     .padding_bottom(SpacingSize::Lg)
     .spacing(SpacingSize::Sm)
+    .with_children(interrupted_notice(ctx, run))
     .with_children(
       leftovers
         .worktrees
@@ -102,7 +105,8 @@ pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
             .padding_top(SpacingSize::Sm)
             .child(switch.emphasized().render(move || flip()))
         }),
-    );
+    )
+    .with_children(dialog.props.working.map(|working| other_working(ctx, working.get())));
   let content = Column::new()
     .id("remove-worktree-dialog")
     .width(Dimension::Px(DIALOG_WIDTH))
@@ -115,17 +119,65 @@ pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
   backdrop(ctx, form(dialog.confirm.clone(), content))
 }
 
+/// For an interrupted run: that Continue run picks it up from its checkpoint in this worktree, so
+/// without it the run stays interrupted for good (`KOaQZ` in 63.04 `rkAU3`).
+fn interrupted_notice(ctx: &Ctx, run: &Run) -> Option<Element> {
+  if !matches!(run.status(), RunStatus::Interrupted(_)) {
+    return None;
+  }
+  let number = run.number().get().to_string();
+  let detail = match run.last_checkpoint() {
+    Some(checkpoint) => ctx.t_args(
+      "runs.worktree.interrupted.detail",
+      [("checkpoint", display::short_revision(checkpoint.revision().as_str()))],
+    ),
+    None => ctx.t("runs.worktree.interrupted.detailNoCheckpoint"),
+  };
+  Some(
+    Notice::new(
+      Icon::CirclePause,
+      ctx.t_args("runs.worktree.interrupted.title", [("run", number.as_str())]),
+      detail,
+    )
+    .emphasized()
+    .id("remove-worktree-interrupted")
+    .into(),
+  )
+}
+
+/// "Run #134 keeps working; its worktree is not touched." (63.03 `e4QBB`).
+fn other_working(ctx: &Ctx, number: u32) -> Element {
+  Row::new()
+    .id("remove-worktree-other-working")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Info, IconSize::Small, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t_args("runs.worktree.otherWorking", [("run", number.to_string().as_str())]))
+        .variant(ExtraTypography::Detail.role())
+        .flex(1.0),
+    )
+    .into()
+}
+
+/// The name of the step `execution` of `run` executed, as its pipeline pinned it.
+fn step_name(run: &Run, execution: orchester_core::id::StepExecutionId) -> String {
+  run
+    .execution(execution)
+    .and_then(|execution| run.snapshot().body().step(execution.step()))
+    .map_or_else(String::new, |step| step.name.as_str().to_owned())
+}
+
 /// "Run #3" or the step's name, then its state; the uncommitted files under its title (`gzztk`).
-fn worktree_row(ctx: &Ctx, run: &RunView, worktree: &LeftWorktree, separator: &str) -> Element {
+fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) -> Element {
   let owner = match worktree.owner {
     WorktreeOwner::Run => ctx.t_args(
       "runs.worktree.runOwner",
-      [("run", run.run.number().get().to_string().as_str())],
+      [("run", run.number().get().to_string().as_str())],
     ),
     WorktreeOwner::Step(execution) => {
-      let step = run
-        .step_of(execution)
-        .map_or_else(String::new, |step| step.name.to_string());
+      let step = step_name(run, execution);
       ctx.t_args("runs.worktree.stepOwner", [("step", step.as_str())])
     }
   };
