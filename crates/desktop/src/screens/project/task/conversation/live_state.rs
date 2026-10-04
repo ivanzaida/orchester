@@ -23,7 +23,7 @@ pub(super) fn live_state(ctx: &Ctx, state: PanelState, asks: bool, following: bo
     PanelState::Paused => (Icon::Pause, "runs.conversation.state.paused"),
     PanelState::Stopped => (Icon::OctagonPause, "runs.conversation.state.stopped"),
     PanelState::Interrupted => (Icon::CirclePause, "runs.conversation.state.interrupted"),
-    PanelState::Ready | PanelState::WorktreeRemoved => (Icon::CircleCheck, "runs.conversation.state.ready"),
+    PanelState::Ready | PanelState::WorktreeRemoved => (Icon::GitPullRequest, "runs.conversation.state.ready"),
     PanelState::Merged => (Icon::GitMerge, "runs.conversation.state.merged"),
     PanelState::Failed | PanelState::FailedWorktreeRemoved | PanelState::FailedNoAgent => {
       (Icon::CircleX, "runs.conversation.state.failed")

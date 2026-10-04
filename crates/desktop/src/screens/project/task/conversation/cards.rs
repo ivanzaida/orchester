@@ -1,10 +1,10 @@
-//! Cards for decisions and results in the timeline (`ZxYGh`, `haIEI`, `OlLGD`, `AzKYQ`, `hep0l`): on
-//! `$raised` with `$border`, radius 8 and padding 14, a header (glyph on `$hover`, title, step and
-//! time, status label at the right), the body indented 36 and the actions under it. A question the
-//! composer answers; a plan with *Approve plan & continue*; a tool request with the approval dialog's
-//! answers ([`super::approval_card`]). After the decision a card loses the raised fill and reads
-//! *Answered*, *Approved* or *Denied*. A step's result card has a border only; the run's end is a
-//! centred hairline marker.
+//! Cards in the chat (`BRx5g`, `K4AOD`, `uDqzB`): a decision card sits in the asking agent's message
+//! — on `$raised` with `$border` while it waits, radius 8, padding 14: its glyph, title and status
+//! label, then its body. A question the composer answers (*Answer in the box below*); a plan with
+//! *Approve plan & continue*; a tool request with the approval dialog's answers
+//! ([`super::approval_card`]). After the decision a card loses the raised fill and reads *Answered*,
+//! *Approved* or *Denied*. The step the run ended on closes with its result card: border only, its
+//! title and time, what was reported, and the ways to the Changes and the Summary.
 
 use std::sync::Arc;
 
@@ -12,11 +12,11 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -26,16 +26,18 @@ use orchester_core::{
 
 use super::{
   super::plan_review::{Decision as PlanDecisionRequest, decision_action as plan_decision},
-  Timeline, nav,
+  Timeline,
+  chat::{Avatar, chat_row},
+  divider::{changes_link, link},
 };
 use crate::{
   display,
-  navigation::route::{Page, TaskPageTab},
+  navigation::route::TaskPageTab,
   tasks::{
     conversation::{Author, Entry, EntryState},
-    timeline::{NextStep, PlanCard, ResultCard, RunEnd},
+    timeline::{NextStep, PlanCard, ResultCard},
   },
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
     field::field_error,
@@ -46,9 +48,7 @@ use crate::{
   },
 };
 
-/// Glyph tile of a card's header (`ZxYGh`); lines of a plan shown before *Show the whole plan*
-/// (`haIEI`).
-const GLYPH_SIZE: f32 = 24.0;
+/// Lines of a plan shown before *Show the whole plan* (`K4AOD`).
 const PLAN_LINES: usize = 6;
 
 /// A card's frame: raised while it waits for the person, a border only once decided.
@@ -62,13 +62,7 @@ pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Elemen
     .rounded(ExtraRadius::Notice.role())
     .describe("waiting", waiting.to_string())
     .child(header)
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding_left(ExtraSpacing::TimelineIndent.role())
-        .spacing(ExtraSpacing::Inline.role())
-        .with_children(body),
-    );
+    .with_children(body);
   if waiting {
     card.background(PaletteColor::SurfaceRaised).into()
   } else {
@@ -76,37 +70,22 @@ pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Elemen
   }
 }
 
-/// Glyph on `$hover`, title (12/500), meta, and the status label at the right.
-pub(super) fn header(glyph: Icon, title: &str, meta: &str, (state_glyph, state): (Icon, Arc<str>)) -> Element {
+/// Glyph, title (12/500) and the status label at the right (`PZNJa`).
+pub(super) fn header(glyph: Icon, title: &str, (state_glyph, state): (Icon, Arc<str>)) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Stack.role())
+    .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(
-      Row::new()
-        .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
-        .flex_shrink(0.0)
-        .background(PaletteColor::AccentMuted)
-        .rounded(RadiusSize::Sm)
-        .align_items(Alignment::Center)
-        .justify(Justify::Center)
-        .child(icon(glyph, IconSize::Entry, PaletteColor::TextPrimary)),
-    )
+    .child(icon(glyph, IconSize::Event, PaletteColor::TextPrimary))
     .child(Text::new(title).variant(ExtraTypography::NoticeHeading.role()).nowrap())
-    .child(
-      Text::new(meta)
-        .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
     .child(Spacer::new().flex(1.0))
     .child(compact_status_label(state_glyph, &state))
     .into()
 }
 
-/// *Builder asks you* (`ZxYGh`) with its step and time: the question, and *Reply*, which puts the
-/// focus in the composer.
-pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
+/// *Builder asks you* (`YKutc` in `BRx5g`) in the agent's message: the question and, while it waits,
+/// that the composer answers it; pressing that line puts the focus there.
+pub(super) fn question(ctx: &Ctx, (entry, _step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
   let open = entry.state == EntryState::Question { open: true };
   let agent = match &entry.author {
     Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
@@ -118,22 +97,18 @@ pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, Option<&Arc<str>>), ti
     (Icon::Check, ctx.t("runs.conversation.card.answered"))
   };
   let title = ctx.t_args("runs.conversation.card.asks", [("agent", &*agent)]);
-  let time = display::clock(entry.at);
-  let meta = match step {
-    Some(step) => ctx.t_args(
-      "runs.conversation.agentMeta",
-      [("step", &**step), ("time", time.as_str())],
-    ),
-    None => time.as_str().into(),
-  };
-  let reply = open.then(|| {
+  let hint = open.then(|| {
     let focus = timeline.focus.clone();
     Element::from(
-      pressable(surface().id("conversation-reply"), move || focus.set(true)).child(
-        Text::new(&ctx.t("conversation.reply"))
-          .variant(TypographyStyle::Link)
-          .nowrap(),
-      ),
+      pressable(surface().id("conversation-reply"), move || focus.set(true))
+        .spacing(ExtraSpacing::Tight.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::ArrowDown, IconSize::Reason, PaletteColor::TextMuted))
+        .child(
+          Text::new(&ctx.t_args("runs.conversation.card.answerBelow", [("agent", &*agent)]))
+            .variant(ExtraTypography::Hint.role())
+            .flex_shrink(1.0),
+        ),
     )
   });
   let body = std::iter::once(
@@ -143,13 +118,23 @@ pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, Option<&Arc<str>>), ti
       .selectable(true)
       .into(),
   )
-  .chain(reply)
+  .chain(hint)
   .collect();
-  frame(
+  let card = frame(
     format!("conversation-question-{}", entry.id),
     open,
-    header(Icon::MessageCircle, &title, &meta, state),
+    header(Icon::MessageCircleQuestion, &title, state),
     body,
+  );
+  let meta = ctx.t_args(
+    "runs.conversation.asksMeta",
+    [("time", display::clock(entry.at).as_str())],
+  );
+  chat_row(
+    format!("conversation-asks-{}", entry.id),
+    Avatar::Question,
+    (&agent, &meta),
+    vec![card],
   )
 }
 
@@ -161,8 +146,9 @@ pub(super) struct PlanCardProps {
 
 impl lurq::app::component::DevtoolsInspectable for PlanCardProps {}
 
-/// *Plan v1 · <task>* (`haIEI`): the first lines of the plan, *Show the whole plan*, and *Approve
-/// plan & continue* while it waits; *Request changes* is the composer's.
+/// *Plan v1 · <task>* (`M4cGG` in `K4AOD`) in the planner's message: the first lines of the plan,
+/// *Show the whole plan*, and *Approve plan & continue* while it waits; *Request changes* is the
+/// composer's.
 pub(super) struct PlanCardView {
   whole: Signal<bool>,
 }
@@ -186,13 +172,6 @@ impl Component for PlanCardView {
       "runs.plan.title",
       [("version", version.as_str()), ("task", &*props.task_title)],
     );
-    let meta = ctx.t_args(
-      "runs.conversation.agentMeta",
-      [
-        ("step", &*props.card.step),
-        ("time", display::clock(plan.created_at).as_str()),
-      ],
-    );
     let state = match plan.decision() {
       None if props.card.waiting => (Icon::Hand, ctx.t("runs.conversation.card.waitingApproval")),
       None => (Icon::CircleMinus, ctx.t("runs.conversation.card.superseded")),
@@ -202,15 +181,15 @@ impl Component for PlanCardView {
     let lines: Vec<&str> = plan.text.lines().collect();
     let whole = self.whole.get() || lines.len() <= PLAN_LINES;
     let shown = if whole { &lines[..] } else { &lines[..PLAN_LINES] };
-    // One text a line, 6 apart (`KMmct` in `haIEI`).
+    // One text a line, 2 apart (`s0XDoI`).
     let mut body: Vec<Element> = vec![
       Column::new()
         .id("conversation-plan-lines")
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tight.role())
+        .spacing(ExtraSpacing::Hair.role())
         .with_children(shown.iter().map(|line| {
           Text::new(line)
-            .variant(ExtraTypography::TimelineMessage.role())
+            .variant(ExtraTypography::AgentText.role())
             .width(Dimension::Pct(100.0))
             .selectable(true)
         }))
@@ -226,6 +205,7 @@ impl Component for PlanCardView {
               [("count", lines.len().to_string().as_str())],
             ))
             .variant(TypographyStyle::Link)
+            .color(PaletteColor::TextPrimary)
             .nowrap(),
           )
           .into(),
@@ -234,11 +214,17 @@ impl Component for PlanCardView {
     if props.card.waiting {
       body.push(approve(ctx, &props.card, &action));
     }
-    frame(
+    let card = frame(
       format!("conversation-plan-{}", plan.version),
       props.card.waiting,
-      header(Icon::ListChecks, &title, &meta, state),
+      header(Icon::ListChecks, &title, state),
       body,
+    );
+    chat_row(
+      format!("conversation-plan-row-{}", plan.version),
+      Avatar::Plan,
+      (&props.card.agent, &display::clock(plan.created_at)),
+      vec![card],
     )
   }
 }
@@ -282,7 +268,7 @@ fn approve(ctx: &Ctx, card: &PlanCard, action: &super::super::plan_review::Decis
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Stack.role())
+        .spacing(ExtraSpacing::Inline.role())
         .align_items(Alignment::Center)
         .child(Row::new().flex_shrink(0.0).child(button.render(ctx)))
         .child(meaning),
@@ -362,107 +348,57 @@ fn result_meta(ctx: &Ctx, card: &ResultCard) -> Arc<str> {
   )
 }
 
-/// A step's result card (`AzKYQ`, `hep0l`, `LhLL8`): *Review passed*, *Research done* or *Run checks
-/// failed*, what the agent's result said, how long it took and its tokens, what was reported, and
-/// the ways to the Changes and the Summary.
+/// The result card of the step the run ended on (`AlHBn` in `uDqzB`): *Docs & cleanup done*, *Review
+/// passed* or *Run checks failed* with how long it took and its tokens, what was reported, and the
+/// ways to the Changes and the Summary.
 pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> Element {
-  let nav = nav(ctx);
   let (glyph, title) = result_title(ctx, card);
   let meta = result_meta(ctx, card);
-  let link = |id: &'static str, label: Arc<str>, page: Page| {
-    nav
-      .link(page)
-      .on(surface().id(id))
-      .child(Text::new(&label).variant(TypographyStyle::Link).nowrap())
-  };
-  let links = Row::new()
-    .spacing(ExtraSpacing::Stack.role())
-    .child(link(
-      "conversation-result-changes",
-      ctx.t("runs.conversation.result.changes"),
-      Page::Task(timeline.task, TaskPageTab::Changes),
-    ))
-    .child(link(
-      "conversation-result-summary",
-      ctx.t("runs.conversation.result.summary"),
-      Page::Task(timeline.task, TaskPageTab::Summary),
-    ));
-  // The title's meta follows it; what was reported and the links line up under the title (`AzKYQ`).
-  let body = Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
+  let changes = changes_link(ctx, timeline, card.edited);
+  let summary = link(
+    ctx,
+    timeline,
+    ("conversation-result-summary", ctx.t("runs.conversation.result.summary")),
+    TaskPageTab::Summary,
+  );
+  let head = Row::new()
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Event, PaletteColor::TextPrimary))
     .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(&title)
-            .variant(ExtraTypography::NoticeHeading.role())
-            .nowrap(),
-        )
-        .child(
-          Text::new(&meta)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
-            .nowrap(),
-        ),
+      Text::new(&title)
+        .variant(ExtraTypography::NoticeHeading.role())
+        .nowrap(),
     )
-    .with_children(card.reported.as_deref().map(|reported| {
-      Text::new(reported)
-        .variant(ExtraTypography::Explanation.role())
-        .width(Dimension::Pct(100.0))
-        .selectable(true)
-    }))
-    .child(links);
-  Row::new()
+    .child(Spacer::new().flex(1.0))
+    .child(
+      Text::new(&meta)
+        .variant(TypographyStyle::Mono)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  Column::new()
     .id(format!("conversation-result-{}", card.execution))
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Group.role())
-    .spacing(ExtraSpacing::Stack.role())
-    .align_items(Alignment::Start)
+    .spacing(SpacingSize::Sm)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Notice.role())
-    .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
-    .child(body)
-    .into()
-}
-
-/// The run's end (`AzKYQ`): a centred line between hairlines.
-pub(super) fn end_marker(ctx: &Ctx, end: &RunEnd, (run, at): (u64, orchester_core::time::Timestamp)) -> Element {
-  let (number, time) = (run.to_string(), display::clock(at));
-  let text = match end {
-    RunEnd::Ready => ctx.t_args(
-      "runs.conversation.end.ready",
-      [("run", number.as_str()), ("time", time.as_str())],
-    ),
-    RunEnd::Merged(branch) => ctx.t_args(
-      "runs.conversation.end.merged",
-      [("run", number.as_str()), ("branch", &**branch), ("time", time.as_str())],
-    ),
-    RunEnd::Failed(step) => ctx.t_args(
-      "runs.conversation.end.failed",
-      [("run", number.as_str()), ("step", &**step), ("time", time.as_str())],
-    ),
-    RunEnd::Cancelled => ctx.t_args(
-      "runs.conversation.end.cancelled",
-      [("run", number.as_str()), ("time", time.as_str())],
-    ),
-  };
-  let hairline = || {
-    Row::new()
-      .flex(1.0)
-      .height(Dimension::Px(1.0))
-      .background(ExtraColor::Hairline.role())
-  };
-  Row::new()
-    .id("conversation-end")
-    .width(Dimension::Pct(100.0))
-    .padding_vertical(SpacingSize::Md)
-    .spacing(ExtraSpacing::Stack.role())
-    .align_items(Alignment::Center)
-    .child(hairline())
-    .child(Text::new(&text).variant(TypographyStyle::Caption).nowrap())
-    .child(hairline())
+    .child(head)
+    .with_children(card.reported.as_deref().map(|reported| {
+      Text::new(reported)
+        .variant(ExtraTypography::AgentText.role())
+        .color(PaletteColor::TextSecondary)
+        .width(Dimension::Pct(100.0))
+        .selectable(true)
+    }))
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Md)
+        .align_items(Alignment::Center)
+        .child(changes)
+        .child(summary),
+    )
     .into()
 }

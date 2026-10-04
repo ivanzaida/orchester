@@ -13,7 +13,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, Stuck, TaskPhase};
+use orchester_core::run::{PauseReason, RunFailure, RunLimit, RunStatus, Stuck, TaskPhase};
 
 use super::{
   super::page,
@@ -223,18 +223,6 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     (RunStatus::Cancelled, _) => "runs.page.describe.cancelled",
   };
   ctx.t_args(key, args)
-}
-
-/// Icon and word of a step's state (`DeizF`); a step that has not started waits.
-pub(super) fn step_state(status: Option<StepStatus>) -> (Icon, &'static str) {
-  match status {
-    None | Some(StepStatus::Pending) => (Icon::Clock3, "runs.step.pending"),
-    Some(StepStatus::Running) => (Icon::Loader, "runs.step.running"),
-    Some(StepStatus::Waiting(_)) => (Icon::Clock3, "runs.step.waiting"),
-    Some(StepStatus::Passed) => (Icon::Check, "runs.step.passed"),
-    Some(StepStatus::Failed) => (Icon::AlertCircle, "runs.step.failed"),
-    Some(StepStatus::Skipped) => (Icon::CircleMinus, "runs.step.skipped"),
-  }
 }
 
 /// "Builder" or, for a step without an agent, nothing.

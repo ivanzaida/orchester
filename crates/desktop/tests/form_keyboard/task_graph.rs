@@ -130,8 +130,8 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   });
 }
 
-/// The conversation's timeline marks the automatic return and the person's decisions, each a row
-/// of its own before the step it starts, even while that step is folded (02.B7 `zyusO`).
+/// The conversation marks the automatic return and the person's decisions, each a divider before
+/// the step it starts, even while that step is folded (`j0qLQz`).
 fn shows_the_marks(desktop: &mut Desktop) {
   desktop.click("task-tab-conversation");
   // Messages hides the tool groups; the marks stay.
@@ -143,9 +143,10 @@ fn shows_the_marks(desktop: &mut Desktop) {
   assert!(shows(
     desktop,
     "activity-mark-4",
-    "Returned to Implement with your note"
+    "You returned the work to 01 Implement"
   ));
-  assert!(shows(desktop, "activity-mark-4", "Keep the greeting short."));
+  // The person's note is their message under the line.
+  assert!(shows(desktop, "activity-mark-detail-4", "Keep the greeting short."));
   // Earlier in the run: the automatic return.
   desktop.wait_until("the first mark", |desktop| {
     has(desktop, "activity-mark-2") || {
@@ -156,9 +157,14 @@ fn shows_the_marks(desktop: &mut Desktop) {
   assert!(shows(
     desktop,
     "activity-mark-2",
-    "Returned to Implement · Review failed (attempt 1)"
+    "Review failed in attempt 1 · the work goes back to 01 Implement"
   ));
   assert!(shows(desktop, "activity-mark-2", "automatic · retry 1 of 1"));
+  assert!(shows(
+    desktop,
+    "activity-mark-detail-2",
+    "receives what Review reported"
+  ));
   assert!(shows(desktop, "activity-mark-3", "by you"));
   desktop.click("task-tab-summary");
 }
@@ -183,30 +189,24 @@ fn waiting_page_states(desktop: &mut Desktop) {
   assert!(panel.width > 600.0, "{panel:?}");
   assert!((title.x - evidence.x).abs() < 1.0, "{title:?} starts with {evidence:?}");
   assert_eq!(desktop.focused().as_deref(), Some("task-return-note"));
-  // The conversation's toolbar takes two lines: the live state stays beside the step filter, left
-  // of Details, and both stay in the window.
+  // Beside the rail's strip the conversation's toolbar keeps one line: the search, the state and
+  // Details stay in the chat, left of the strip.
   desktop.click("task-tab-conversation");
   desktop.wait_until("the conversation", |desktop| {
-    has(desktop, "conversation-live-state") && has(desktop, "activity-step-title")
+    has(desktop, "conversation-live-state") && has(desktop, "conversation-strip")
   });
   let state = desktop.bounds("conversation-live-state");
   let details = desktop.bounds("conversation-details");
-  let filter = desktop.bounds("activity-step-filter");
   let search = desktop.bounds("conversation-search");
+  let strip = desktop.bounds("conversation-strip");
   assert!(state.x + state.width <= details.x, "{state:?} left of {details:?}");
-  assert!(details.x + details.width <= 960.0, "{details:?} in the window");
-  assert!((state.y - filter.y).abs() < 8.0, "{state:?} beside {filter:?}");
-  assert!(search.y > filter.y + filter.height, "{search:?} under {filter:?}");
-  // A step's name keeps its room; the engine and times beside it give way, within the window.
+  assert!(details.x + details.width <= strip.x, "{details:?} left of {strip:?}");
+  assert!((state.y - search.y).abs() < 8.0, "{state:?} beside {search:?}");
+  // A step's divider gives way within the chat.
   desktop.pass();
   desktop.pass();
-  let (title, meta) = (
-    desktop.bounds("activity-step-title"),
-    desktop.bounds("activity-step-meta"),
-  );
-  assert!((title.y - meta.y).abs() < 4.0, "{title:?} beside {meta:?}");
-  assert!(title.x + title.width <= meta.x, "{title:?} before {meta:?}");
-  assert!(meta.x + meta.width <= 960.0, "{meta:?} in the window");
+  let divider = desktop.bounds("conversation-divider-text");
+  assert!(divider.x + divider.width <= strip.x, "{divider:?} in the chat");
   desktop.click("task-tab-summary");
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
   desktop.tree.resize(1440, 960);

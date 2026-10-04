@@ -58,6 +58,9 @@ pub(in crate::screens::project::task) struct EntryProps {
   pub(in crate::screens::project::task) raw: bool,
   /// The time in a column of its own; without it, the time is in the meta (a problem row).
   pub(in crate::screens::project::task) time_column: bool,
+  /// A line of a chip's open group (`bdCsu`, `Hn1xv`): it starts closed, a failure too, so the
+  /// group reads as plain rows until one is opened.
+  pub(in crate::screens::project::task) in_group: bool,
   pub(in crate::screens::project::task) toggles: Toggles,
 }
 
@@ -69,6 +72,7 @@ impl PartialEq for EntryProps {
       && self.agent == other.agent
       && self.raw == other.raw
       && self.time_column == other.time_column
+      && self.in_group == other.in_group
   }
 }
 
@@ -92,7 +96,9 @@ impl Component for EntryView {
     let nav = ctx
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
-    let open = props.toggles.is_open(&props.key, entry_starts_open(&props.entry));
+    let open = props
+      .toggles
+      .is_open(&props.key, !props.in_group && entry_starts_open(&props.entry));
     entry_row(ctx, &props, open, &nav, &self.copied)
   }
 }

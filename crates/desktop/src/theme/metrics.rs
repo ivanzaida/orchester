@@ -4,13 +4,14 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CHIP, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL, RADIUS_PILL,
-  RADIUS_ROW_ACTION, RADIUS_SEGMENT, RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL, SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT,
-  SPACE_COLUMNS, SPACE_COMMAND_LINES, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM,
-  SPACE_GROUP, SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR,
-  SPACE_INLINE, SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL,
-  SPACE_REASON_INDENT, SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA,
-  SPACE_TIGHT, SPACE_TIMELINE_INDENT, TAB_INDICATOR_STROKE,
+  FOCUS_STROKE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL,
+  RADIUS_PILL, RADIUS_ROUND, RADIUS_ROW_ACTION, RADIUS_SEGMENT, RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL,
+  SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_CHIP, SPACE_COLUMNS, SPACE_COMMAND_LINES, SPACE_COMPOSER_EDGE,
+  SPACE_COMPOSER_TOP, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP,
+  SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE,
+  SPACE_LG, SPACE_MARGIN, SPACE_MARK, SPACE_MD, SPACE_PAGE, SPACE_PROPERTY, SPACE_RAIL, SPACE_REASON_INDENT,
+  SPACE_SECTION, SPACE_SELECT_MENU, SPACE_SM, SPACE_SNUG, SPACE_STACK, SPACE_STEP, SPACE_TEXT_AREA, SPACE_TIGHT,
+  SPACE_TIMELINE_INDENT, TAB_INDICATOR_STROKE,
 };
 
 /// Pencil gaps and paddings without a built-in lurq role, registered as `SpacingSize::Extra`.
@@ -85,12 +86,21 @@ pub enum ExtraSpacing {
   /// Why an option cannot be chosen starts past a compact radio and its gap (`J5RohL`, `L1B0m` in
   /// 04.B `W0Owo`).
   ReasonIndent,
-  /// A tool group and a card's body start where a timeline message's text does (`uoK7y`).
+  /// The working line starts where a chat message's text does (`VCcdr` in `kpnmP`).
   TimelineIndent,
+  /// Above and below a tool chip's line (`a7zbJ` in `kpnmP`).
+  Chip,
+  /// Between the badges of the collapsed step rail, and the composer's send chevron and button
+  /// (`fFDrw` in `I35q7D`, `eI8en` in `BRMpj`).
+  Snug,
+  /// Above the composer's box (`CoGTj` in `BRMpj`).
+  ComposerTop,
+  /// Under the composer's box, and the closed box's side padding (`CoGTj`, `W9LMuM`).
+  ComposerEdge,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 30] = [
+  const ALL: [Self; 34] = [
     Self::Hair,
     Self::PlanRows,
     Self::Mark,
@@ -121,6 +131,10 @@ impl ExtraSpacing {
     Self::CheckIndent,
     Self::ReasonIndent,
     Self::TimelineIndent,
+    Self::Chip,
+    Self::Snug,
+    Self::ComposerTop,
+    Self::ComposerEdge,
   ];
 
   fn name(self) -> &'static str {
@@ -155,6 +169,10 @@ impl ExtraSpacing {
       Self::CheckIndent => "check-indent",
       Self::ReasonIndent => "reason-indent",
       Self::TimelineIndent => "timeline-indent",
+      Self::Chip => "chip",
+      Self::Snug => "snug",
+      Self::ComposerTop => "composer-top",
+      Self::ComposerEdge => "composer-edge",
     }
   }
 
@@ -190,6 +208,10 @@ impl ExtraSpacing {
       Self::CheckIndent => SPACE_CHECK_INDENT,
       Self::ReasonIndent => SPACE_REASON_INDENT,
       Self::TimelineIndent => SPACE_TIMELINE_INDENT,
+      Self::Chip => SPACE_CHIP,
+      Self::Snug => SPACE_SNUG,
+      Self::ComposerTop => SPACE_COMPOSER_TOP,
+      Self::ComposerEdge => SPACE_COMPOSER_EDGE,
     }
   }
 
@@ -218,10 +240,15 @@ pub enum ExtraRadius {
   Chip,
   /// A segment of the conversation's *Show* control (toolbar of `RrScB`).
   Segment,
+  /// Round ends up to 32 high: a chat avatar, the composer's pills and send button (`qU0XW`,
+  /// `zQwSy`, `U0cjVo`).
+  Round,
+  /// The composer's box (`n0wdPC` in `BRMpj`).
+  Composer,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 8] = [
+  const ALL: [Self; 10] = [
     Self::Notice,
     Self::Mark,
     Self::SelectMenu,
@@ -230,6 +257,8 @@ impl ExtraRadius {
     Self::RowAction,
     Self::Chip,
     Self::Segment,
+    Self::Round,
+    Self::Composer,
   ];
 
   fn name(self) -> &'static str {
@@ -242,6 +271,8 @@ impl ExtraRadius {
       Self::RowAction => "row-action",
       Self::Chip => "chip",
       Self::Segment => "segment",
+      Self::Round => "round",
+      Self::Composer => "composer",
     }
   }
 
@@ -255,6 +286,8 @@ impl ExtraRadius {
       Self::RowAction => RADIUS_ROW_ACTION,
       Self::Chip => RADIUS_CHIP,
       Self::Segment => RADIUS_SEGMENT,
+      Self::Round => RADIUS_ROUND,
+      Self::Composer => RADIUS_COMPOSER,
     }
   }
 

@@ -29,6 +29,11 @@ const FOLLOW_SLACK: f32 = 24.0;
 /// How far from the end a following timeline may sit before it goes to the end again.
 const AT_END: f32 = 0.5;
 
+/// How many rows the timeline showed when it stopped following, for *N new*; `None` until the
+/// render after a step was picked, which shows other rows than before without any arriving.
+#[derive(Default)]
+pub(super) struct LeftAt(pub(super) Option<usize>);
+
 /// The card the timeline reveals, and whether the person has scrolled since the tab opened.
 #[derive(Default)]
 pub(super) struct Reveal {
@@ -122,7 +127,7 @@ impl ConversationTab {
         let at_end = scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
         if at_end != following.get_untracked() {
           if !at_end {
-            left_at.set(count);
+            *left_at.lock() = LeftAt(Some(count));
           }
           following.set(at_end);
         }
@@ -132,7 +137,13 @@ impl ConversationTab {
 
   /// "Jump to latest · N new" (`iwe3p`), centred above the composer.
   pub(super) fn jump(&self, ctx: &Ctx, rows: usize) -> Element {
-    let new = rows.saturating_sub(self.left_at.get());
+    // Only rows that arrived since it stopped following are new; after a step was picked, the
+    // rows it shows are where the count starts.
+    let new = {
+      let mut left_at = self.left_at.lock();
+      let since = *left_at.0.get_or_insert(rows);
+      rows.saturating_sub(since)
+    };
     let label = if new == 0 {
       ctx.t("runs.activity.jump")
     } else {

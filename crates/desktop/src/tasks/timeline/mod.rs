@@ -10,6 +10,7 @@
 pub mod group;
 pub mod load;
 pub mod mark;
+pub mod rail;
 pub mod step;
 pub mod view;
 
@@ -106,6 +107,8 @@ pub struct ApprovalCard {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResultCard {
   pub execution: StepExecutionId,
+  /// Its step's number in the pipeline.
+  pub number: usize,
   pub step: Arc<str>,
   /// The agent role, or the tool's name for a tool step; `None` once that profile or tool is gone.
   pub agent: Option<Arc<str>>,
@@ -121,6 +124,11 @@ pub struct ResultCard {
   pub reported: Option<Arc<str>>,
   pub took_millis: Option<i64>,
   pub tokens: u64,
+  /// The files the step edited, each once.
+  pub edited: usize,
+  /// The step the run ended on or stopped at: its result is a card, another step's a divider (`uDqzB`,
+  /// `kpnmP`).
+  pub ended_on: bool,
 }
 
 /// How the run ended (`AzKYQ`, `hep0l`).
@@ -191,14 +199,21 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
   items
 }
 
-/// Keeps the last step that ran open: the one the run ended on or stopped at.
+/// Marks the last step that ran, and its result: the step the run ended on or stopped at.
 fn mark_ended_on(items: &mut [Item]) {
-  let last = items.iter_mut().rev().find_map(|item| match &mut item.kind {
-    ItemKind::Step(head) if head.execution.is_some() => Some(head),
+  let last = items.iter().rev().find_map(|item| match &item.kind {
+    ItemKind::Step(head) => head.execution,
     _ => None,
   });
-  if let Some(head) = last {
-    head.ended_on = true;
+  let Some(last) = last else {
+    return;
+  };
+  for item in items.iter_mut().filter(|item| item.execution == Some(last)) {
+    match &mut item.kind {
+      ItemKind::Step(head) => head.ended_on = true,
+      ItemKind::Result(card) => card.ended_on = true,
+      _ => {}
+    }
   }
 }
 
@@ -245,7 +260,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
   );
   between.extend(approval_items(sources, execution, &name));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
-  items.extend(result_item(run, execution));
+  items.extend(result_item(run, sources.entries, execution));
   items
 }
 
@@ -384,8 +399,9 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .collect()
 }
 
-/// The result card of `execution` once it passed or failed.
-fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
+/// The result card of `execution` once it passed or failed, with what its transcript among `entries`
+/// edited.
+fn result_item(run: &RunView, entries: &[Entry], execution: StepExecutionId) -> Option<Item> {
   let status = run.run.execution(execution)?.status();
   let passed = match status {
     StepStatus::Passed => true,
@@ -414,6 +430,7 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
     at: ended.unwrap_or_else(|| run.run.created_at()),
     kind: ItemKind::Result(ResultCard {
       execution,
+      number: step.number,
       step: step.name.clone(),
       agent: step.agent.clone(),
       passed,
@@ -433,8 +450,23 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
         .map(|invocation| invocation.usage)
         .sum::<orchester_core::run::TokenUsage>()
         .counted(),
+      edited: edited(entries, execution),
+      ended_on: false,
     }),
   })
+}
+
+/// The files `execution` edited among `entries`, each once.
+fn edited(entries: &[Entry], execution: StepExecutionId) -> usize {
+  entries
+    .iter()
+    .filter(|entry| entry.execution == execution)
+    .filter_map(|entry| match &entry.kind {
+      EntryKind::FileChange(change) => Some(&change.path),
+      _ => None,
+    })
+    .collect::<std::collections::BTreeSet<_>>()
+    .len()
 }
 
 /// Whether the step `key` judges the work: its failure returns the run to an earlier step.

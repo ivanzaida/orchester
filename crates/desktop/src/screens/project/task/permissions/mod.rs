@@ -8,8 +8,10 @@
 //! run uses*, see `policy`). A change applies to this run only: from the next invocation, or now,
 //! restarting the agent at its next checkpoint; under the row its notices say where it stands
 //! (`notice`). A change also saved to the profile names the draft it went to, with a link to the
-//! profile.
+//! profile. In the Conversation tab's composer the same row is a chip (`zQwSy` in `BRMpj`, see
+//! `chip`) that opens the same popover.
 
+mod chip;
 mod notice;
 mod policy;
 mod popover;
@@ -71,9 +73,16 @@ pub struct RunPermissionsProps {
   pub live: bool,
   /// The project folder, where the profile's draft is saved.
   pub repo_root: PathBuf,
-  /// The link follows the value on its line, as in the Conversation tab's wide column (`Lr8Dg` in
-  /// 02.S `JOG1i`), instead of under it.
-  pub inline_link: bool,
+  /// How the row is drawn.
+  pub look: Look,
+}
+
+/// How the run's permissions are drawn: a row whose link follows its value on its line when it is
+/// `inline` (instead of under it), or the composer's chip, `short` to its icon in a narrow window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Look {
+  Row { inline: bool },
+  Chip { short: bool },
 }
 
 impl lurq::app::component::DevtoolsInspectable for RunPermissionsProps {}
@@ -151,11 +160,18 @@ impl Component for RunPermissionsRow {
       .child(Spacer::new().height(Dimension::Px(TITLE_BAR_HEIGHT)))
       .child(self.popover(ctx, &props, &apply, available))
       .child(Spacer::new().height(Dimension::Px(STATUS_BAR_HEIGHT)));
+    let placement = match props.look {
+      Look::Row { .. } => Placement::TopEnd,
+      Look::Chip { .. } => Placement::TopStart,
+    };
     let popover = Popup::new(self.anchor.clone(), content)
       .open(self.open.clone())
-      .placement(Placement::TopEnd)
+      .placement(placement)
       .collision(CollisionStrategy::Clamp)
       .offset(0.0, POPOVER_GAP - STATUS_BAR_HEIGHT);
+    if let Look::Chip { short } = props.look {
+      return Column::new().child(self.chip(ctx, &props, short)).child(popover);
+    }
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -184,7 +200,7 @@ impl RunPermissionsRow {
     } else {
       "runs.permissions.view"
     };
-    let stacked = text.full && !props.inline_link;
+    let stacked = text.full && props.look == (Look::Row { inline: false });
     let link_text = Text::new(&ctx.t(link_key)).variant(ExtraTypography::CellLabel.role());
     let link = pressable(surface().id("task-permissions-view"), move || {
       edit.open(&base);

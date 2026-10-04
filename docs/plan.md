@@ -159,6 +159,64 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
+### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
+
+Design: `docs/design/orchester-workspace.md` on `claude/conv-chat` › *Decided: C with the rail on the right* (group
+`A5H6ln`, C·01–C·14) and *Composer (approved …)* (group `YJfPo`, K·01–K·06), both approved by the user 2026-10-04.
+Implemented 2026-10-04 on master `566ca413`, **waiting for an independent design verification**:
+
+- Data (`tasks/timeline/view`, `tasks/timeline/rail`): an agent's message carries a chip per tool group after it
+  (tool activity with no message before it is the agent's row of its own); finished steps fold, the ones in a row
+  into one line (*01–02 · 2 steps done · Show them*); the step the run ended on, the running/waiting/failed step and
+  the one before the last that ran stay open; the steps a failure kept from starting share one muted divider; a
+  search counts its matches per step execution. The rail is one row per pipeline step, from its latest execution
+  that ran (*Explorer · 41k · 6 min*, *Planner · waiting for approval*, *Tool · exit 1 · 2 min*, *Reviewer ·
+  returned to Implement*, *Builder · not started* at 0.7); picking it shows every execution of the step.
+- Chat (`screens/project/task/conversation`): Slack-style rows (28 round avatar, name, meta), thin dividers for a
+  step's start (number, agent, engine, times, tokens — the tokens open Details on it) and end (*06 Fix notes done ·
+  16:30 · Changes · 3 files ↗*), returns and restarts as dividers with what follows under them (or the person's
+  note as their message, `j0qLQz`), the run's end; questions, plans and tool requests are cards in the asking agent's
+  message; the step the run ended on closes with its result card; a tool step's failing command is its own message.
+  A chip opens its group in place (bordered list, 7 rows, *Show N more*; while searching *2 of 12 calls match* and
+  *Show N without a match*). *Tools* keeps the flat transcript.
+- Right side: the 248 rail (head *Steps* + count + collapse), or its 56 strip (collapsed by hand at any width, by
+  default below 1200; badges pick a step; its head opens the rail in place in a wide window, over the chat in a
+  narrow one), or Details in its place (head *Details* + *Steps*), never two. The toolbar loses the step filter; the
+  read-back lines are rows under it (*Showing 03 Implement only · 01, 02 and 04–07 are hidden ·*, *No matches for
+  “…” · following live goes on ·*).
+- Composer (`composer/`): one rounded box (`$raised`, radius 18, `$muted` while focused) — *+* Attach unavailable
+  with its tooltip, the run's permissions chip (`$danger` once changed for the run; opens the ORC-44 popover; its
+  shield alone below 980 less the side panel), the recipient as a quiet selector (name + what it does, a lock when
+  fixed), the round send button (arrow-up now, clock-3 queues, loader while sending) with the help text as its
+  tooltip, and the chevron with *Send now · Enter* / *Send after this turn · Ctrl+Enter* while the agent works
+  mid-turn. Enter sends (now while mid-turn), Ctrl/Cmd+Enter after this turn, Shift+Enter adds a line. Context lines
+  above the box; one quiet line under it only for queued, follow-up, continue and not started; closed keeps only the
+  lock and the reason. Delivery semantics unchanged.
+
+Tests: `timeline` (chips, folds, search counts by step, picked step), `form_keyboard` `conversation_*`
+(`conversation_rail` new: picking, search counts, Details swap, collapse below 1200, strip at 960, fold line;
+`conversation_composer_box` new: send icon, attach tooltip, permissions chip popover, 960), `composer_*`,
+`task_graph`, `tool_run`, `first_edit`, `integration`, theme, i18n.
+
+Deviations to confirm with the design verifier/user: marks follow C·13 (`j0qLQz`, with *automatic · retry N of M*)
+where C·07 draws a shorter line; a chip names its summary as ORC-61 orders it (*Ran pnpm test · edited 3 files*), not
+*Edited 3 files · ran …* or file names; the chat is not capped at 840; agent rows name their step only after a muted
+divider; *All steps* reads *N of M steps ran* whenever a step has not run; the question card's hint is pressable
+(focuses the composer); the plan card keeps what approving starts beside its button; problem rows keep the transcript
+entry look; the recipient menu's options carry the state words, not *gets it at its next tool call*; quiet lines keep
+the ORC-61 explanation texts; the tool step's divider no longer names its command and exit code (C·05).
+
+Design-verification fixes (2026-10-04, on `7710f081`): the recipient selector has no fill of its own (lurq painted an
+unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree);
+a group of notes reads its lines without *0 calls*, a working step without tokens reads *Builder · working*; the
+permissions chip shows whenever the composer is open (else the run's first agent step); *Write to Explorer before it
+starts…*; a chip's lines start closed, failures too; picking a step opens the chat at its start, *All steps* goes back
+to the end; Details names the step and attempt (*03 Implement · attempt 1*); narrower than one line, the toolbar's state
+goes beside the search so *Details* stays whole; the send menu and tooltips sit 8 above the box; the context line has
+× and Esc closes the menu, then leaves the mode (a question not answered or a plan's changes not requested: the box
+writes an ordinary message, `ComposerMode::without_context`); a failed run's composer says *Continue 03 Implement with
+your instructions · attempt 3* (no ×: continuing is the only message a failed run takes).
+
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times

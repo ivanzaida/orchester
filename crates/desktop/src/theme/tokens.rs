@@ -86,6 +86,12 @@ pub const RADIUS_CHIP: f32 = 5.0;
 pub const RADIUS_SEGMENT: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
+/// Round ends for whatever is at most 32 high: a chat message's 28 avatar (`qU0XW` in `kpnmP`),
+/// the composer's 28 pills and its 32 send button (`zQwSy`, `U0cjVo` in `BRMpj`); lurq clamps a
+/// radius to half the box.
+pub const RADIUS_ROUND: f32 = 16.0;
+/// The composer's box (`n0wdPC` in `BRMpj`).
+pub const RADIUS_COMPOSER: f32 = 18.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
 /// the 10px knob is round with it too.
 pub const RADIUS_PILL: f32 = 8.0;
@@ -127,9 +133,18 @@ pub const SPACE_CHECK_INDENT: f32 = 28.0;
 /// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
 /// `L1B0m` in 04.B `W0Owo`).
 pub const SPACE_REASON_INDENT: f32 = 22.0;
-/// A tool group and a card's body in the conversation timeline start where a message's text does:
-/// past its 24px glyph and the 12px gap (`uoK7y`, the cards of `ZxYGh`, `haIEI`).
-pub const SPACE_TIMELINE_INDENT: f32 = 36.0;
+/// The working line of the conversation starts where a chat message's text does: past its 28px
+/// avatar and the 12px gap (`VCcdr` in `kpnmP`).
+pub const SPACE_TIMELINE_INDENT: f32 = 40.0;
+/// Above and below a tool chip's line in a chat message (`a7zbJ` in `kpnmP`).
+pub const SPACE_CHIP: f32 = 5.0;
+/// Snug: between the badges of the collapsed step rail and a badge's icon and number (`fFDrw`,
+/// `ZNWkf` in `I35q7D`), and between the composer's send chevron and button (`eI8en` in `BRMpj`).
+pub const SPACE_SNUG: f32 = 4.0;
+/// Above the composer's box in its dock (`CoGTj` in `BRMpj`).
+pub const SPACE_COMPOSER_TOP: f32 = 4.0;
+/// Under the composer's box in its dock, and the closed box's side padding (`CoGTj`, `W9LMuM`).
+pub const SPACE_COMPOSER_EDGE: f32 = 18.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -184,6 +199,8 @@ pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;
+/// A step of the conversation's rail that has not started (`r27KI` in `K4AOD`).
+pub const NOT_STARTED_OPACITY: f32 = 0.7;
 /// A permission option the connection cannot enforce, or one that is not available yet, at 50 %
 /// (`BNliD` in 04.04 `T1rjv`; the compact 04.B `W0Owo` shows 45 %).
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;
@@ -223,11 +240,13 @@ pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
 /// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
 /// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
 pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
-/// The narrowest window whose Conversation toolbar (`JKl4s` in `RrScB`) holds everything on one line
-/// with Details closed: the 216 sidebar, the toolbar's 64 padding, the 240 step filter, *Show* (164),
-/// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
-/// Narrower, *Show* and the search go to a second line (not drawn yet).
-pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
+/// The narrowest chat column (the tab less the rail, its strip or Details) whose Conversation toolbar
+/// (`Eef6u` in `kpnmP`, `GOOg3` in `I35q7D`) holds everything on one line: its 48 padding, *Show*
+/// (164), the 150 search, the run's state (*Following live*, 99), *Details* (81) and four 10 gaps.
+/// Narrower, *Show* and the search go to a second line (not drawn).
+pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_CHAT: f32 = 582.0;
+/// Below this window width the conversation's step rail starts collapsed to its strip (`I35q7D`).
+pub const CONVERSATION_RAIL_COLLAPSE_BELOW_WINDOW: f32 = 1200.0;
 /// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its
 /// recipient, *Attach* and both send buttons on one line: the 216 sidebar, the column's 64 padding,
 /// the composer's 24, the 260 recipient, *Attach* (104), *Send after this turn* (166), *Send now*

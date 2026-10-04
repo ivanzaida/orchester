@@ -1,12 +1,13 @@
-//! The Conversation tab's timeline (merged with Activity, ORC-61) end to end, headlessly, on the
-//! real runner and `orchester-fake-codex`: a step's tool events fold into one group between its
-//! agent's messages, with what the group did; *Show* narrows the timeline to messages or tools; a
-//! search keeps what matches and opens a group on its matching entries, or says it found nothing;
-//! the step filter says what it hides; the Details pane opens on demand; a step that judges the work
-//! reads *Review passed*; a question that arrives while the person searches leaves the focus in the
-//! search; and while an agent works the timeline follows it with the working line as its last row,
-//! also as steps fold and start right after the tab opens, stops following when scrolled up, and
-//! *Jump to latest* counts what came since.
+//! The Conversation tab as a chat (ORC-61, with the step rail on the right) end to end, headlessly,
+//! on the real runner and `orchester-fake-codex`: a step's tool events are one chip in its agent's
+//! message, named by what they did, and open in place; *Show* narrows the chat to messages or tools;
+//! a search keeps what matches and opens a chip on its matching entries, or says it found nothing;
+//! a step picked in the rail says what it hides; the Details pane opens on demand; a step that
+//! judges the work reads *Review passed*; a question that arrives while the person searches leaves
+//! the focus in the search; and while an agent works the chat follows it with the working line as
+//! its last row, also as steps fold and start right after the tab opens, stops following when
+//! scrolled up, and *Jump to latest* counts what came since. The rail itself is
+//! `conversation_rail`'s.
 
 use std::num::NonZeroU32;
 
@@ -33,7 +34,7 @@ fn desktop(review: bool) -> Desktop {
 }
 
 /// The finished run's Conversation tab, with its one step open.
-fn finished_conversation(review: bool) -> Desktop {
+pub(crate) fn finished_conversation(review: bool) -> Desktop {
   let mut desktop = desktop(review);
   create_and_run(&mut desktop, "Say hello.", "1400000");
   finished_on_page(&mut desktop);
@@ -42,7 +43,7 @@ fn finished_conversation(review: bool) -> Desktop {
   desktop
 }
 
-/// Presses the header of the Conversation tab's tool group whose summary says `text`: the fake CLIs'
+/// Presses the chip of the Conversation tab's tool group whose summary says `text`: the fake CLIs'
 /// standard error is a group of unparsed lines of its own.
 pub(crate) fn open_group(desktop: &mut Desktop, text: &str) {
   desktop.wait_until("the tool group", |desktop| {
@@ -66,12 +67,12 @@ pub(crate) fn open_group(desktop: &mut Desktop, text: &str) {
   desktop.pass();
 }
 
-fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+pub(crate) fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
   has(desktop, id) && shows(desktop, id, text)
 }
 
 /// The text of every element with `id`, in order.
-fn texts(desktop: &Desktop, id: &str) -> Vec<String> {
+pub(crate) fn texts(desktop: &Desktop, id: &str) -> Vec<String> {
   fn walk(element: lurq::node::element::ElementRef<'_>, id: &str, out: &mut Vec<String>) {
     if element.id() == Some(id) {
       out.push(text_of(element));
@@ -94,39 +95,41 @@ fn texts(desktop: &Desktop, id: &str) -> Vec<String> {
   out
 }
 
-fn search(desktop: &mut Desktop, query: &str) {
+pub(crate) fn search(desktop: &mut Desktop, query: &str) {
   set_text(desktop, "conversation-search", query);
 }
 
 #[test]
-fn conversation_timeline_folds_tool_events_into_a_group_between_messages() {
+fn conversation_timeline_puts_tool_events_in_a_chip_of_the_message() {
   let mut desktop = finished_conversation(false);
-  // The step the run ended on stays open; its tokens are in its header, and Details is closed.
-  assert!(shows(&mut desktop, "activity-step-header", "Implement · Builder"));
+  // The step the run ended on stays open; its tokens are in its divider, and Details is closed.
+  assert!(shows(&mut desktop, "activity-step-header", "01 Implement · Builder"));
   assert!(shows(&mut desktop, "activity-step-header", "tokens"));
   desktop.wait_until("the step's items", |desktop| has(desktop, "conversation-agent-message"));
   assert!(!has(&mut desktop, "activity-invocation"));
   assert!(shows(&mut desktop, "conversation-live-state", "Ready for review"));
-  // Pressing its header folds it.
+  // Pressing its divider folds it into a line of its own; *Show it* opens it again.
   desktop.click("activity-step-header");
   desktop.wait_until("the step folded", |desktop| !has(desktop, "conversation-agent-message"));
+  assert!(shows(&mut desktop, "conversation", "01 · 1 step done"));
   assert!(holds(
     &mut desktop,
     "conversation-end",
     "Run 1 is ready for your review"
   ));
-  desktop.click("activity-step-header");
+  desktop.click("conversation-fold-show");
   desktop.wait_until("the step's items", |desktop| has(desktop, "conversation-agent-message"));
   assert!(shows(&mut desktop, "conversation-agent-message", "Appending the line."));
-  // The command and the file change are one group, named by what they did, after the message; the
-  // fake CLI's standard error, unparsed lines, is a group before it. The step result the agent wrote
-  // is its result card, not a message.
+  // The command and the file change are one chip, named by what they did, in the agent's message;
+  // the fake CLI's standard error, unparsed lines, is the agent's row of its own before it. The step
+  // result the agent wrote is its result card, not a message.
+  assert!(has(&mut desktop, "conversation-agent-tools"));
   let summaries = texts(&desktop, "conversation-group-summary");
   assert_eq!(summaries.len(), 2, "{summaries:?}");
   assert!(summaries[0].ends_with("unparsed lines"), "{summaries:?}");
   assert_eq!(summaries[1], "Ran echo hello >> README.md · edited 1 file");
   let toggles = texts(&desktop, "conversation-group-toggle");
-  assert!(toggles[1].contains("2 tool calls"), "{toggles:?}");
+  assert!(toggles[1].contains("2 calls"), "{toggles:?}");
   assert!(!has(&mut desktop, "activity-entry"), "a group starts closed");
   assert!(!shows(&mut desktop, "conversation", "\"outcome\""));
   assert!(holds(&mut desktop, "conversation-main", "Implement done"));
@@ -136,10 +139,22 @@ fn conversation_timeline_folds_tool_events_into_a_group_between_messages() {
     has(desktop, "activity-open-file:README.md")
   });
   assert!(shows(&mut desktop, "conversation", "echo hello >> README.md"));
+  // The group opens in place, in the message, and its header closes it again.
+  let message = desktop.bounds("conversation-agent-message");
+  let file = desktop.bounds("activity-open-file:README.md");
+  assert!(file.y > message.y && file.y + file.height <= message.y + message.height + 0.5);
+  open_group(&mut desktop, "Ran echo");
+  desktop.wait_until("the group closed", |desktop| {
+    !has(desktop, "activity-open-file:README.md")
+  });
   // Choosing the step's tokens opens Details on it.
   desktop.click("activity-step-tokens");
   desktop.wait_for("activity-invocation");
-  assert!(shows(&mut desktop, "activity-invocation-title", "Implement · Builder"));
+  assert!(shows(
+    &mut desktop,
+    "activity-invocation-title",
+    "01 Implement · attempt 1"
+  ));
   desktop.click("conversation-details");
   desktop.wait_until("Details closes", |desktop| !has(desktop, "activity-invocation"));
 }
@@ -184,9 +199,14 @@ fn conversation_search_keeps_what_matches_and_says_when_nothing_does() {
   assert!(shows(
     &mut desktop,
     "conversation-search-readback",
-    "1 match for “echo” in 01 Implement · items without a match are hidden."
+    "1 match for “echo” in 01 Implement · items without a match are hidden ·"
   ));
-  // The step and the group with the match open on it; what does not match is left out.
+  // The step and the chip with the match open on it; what does not match is left out.
+  assert!(shows(
+    &mut desktop,
+    "activity-step-header",
+    "01 Implement · Builder · 1 match"
+  ));
   assert!(!has(&mut desktop, "conversation-agent-message"));
   assert!(shows(&mut desktop, "conversation", "echo hello >> README.md"));
   assert!(!has(&mut desktop, "activity-open-file:README.md"));
@@ -215,20 +235,14 @@ fn conversation_search_keeps_what_matches_and_says_when_nothing_does() {
 }
 
 #[test]
-fn conversation_step_filter_says_which_steps_it_hides() {
+fn conversation_step_picked_in_the_rail_says_which_steps_it_hides() {
   let mut desktop = finished_conversation(true);
-  desktop
-    .tree
-    .get_element_by_id_mut("activity-step-filter")
-    .and_then(|element| element.as_select())
-    .expect("the step filter")
-    .commit(1);
-  desktop.pass();
+  desktop.click("conversation-rail-step-1");
   desktop.wait_until("the read-back", |desktop| has(desktop, "conversation-step-readback"));
   assert!(shows(
     &mut desktop,
     "conversation-step-readback",
-    "Showing 01 Implement only · 02 Review is hidden."
+    "Showing 01 Implement only · 02 is hidden ·"
   ));
   // The step picked is open.
   assert!(has(&mut desktop, "conversation-agent-message"));
@@ -357,7 +371,7 @@ fn out_of_view(desktop: &mut Desktop, id: &str) -> bool {
 }
 
 #[test]
-fn conversation_a_step_that_judges_the_work_passes_and_finished_steps_say_when() {
+fn conversation_a_step_that_judges_the_work_passes_and_the_step_before_it_stays_open() {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
     seed_steps(repo, &fake, |builder| {
@@ -380,16 +394,22 @@ fn conversation_a_step_that_judges_the_work_passes_and_finished_steps_say_when()
   assert!(shows(&mut desktop, "conversation", "Review passed"));
   assert!(shows(&mut desktop, "conversation", "Builder reported passed"));
   assert!(!shows(&mut desktop, "conversation", "Review done"));
-  // Implement folds: its engine and times, no invocation; Review, which the run ended on, is open
-  // on its invocation.
-  let metas = texts(&desktop, "activity-step-meta");
-  assert_eq!(metas.len(), 2, "{metas:?}");
-  assert!(!metas[0].contains("invocation"), "{metas:?}");
-  assert!(metas[1].contains("· invocation 1 ·"), "{metas:?}");
-  desktop.click("activity-step-header");
-  desktop.wait_until("Implement's result", |desktop| {
-    holds(desktop, "conversation", "Implement done")
-  });
+  // Review, which the run ended on, closes with its result card; Implement, the step before it,
+  // stays open and ends with its divider, its time and the way to its changes.
+  let dividers = texts(&desktop, "conversation-divider-text");
+  assert!(
+    dividers.iter().any(|text| text.starts_with("01 Implement · Builder ·")),
+    "{dividers:?}"
+  );
+  assert!(
+    dividers.iter().any(|text| text.starts_with("01 Implement done ·")),
+    "{dividers:?}"
+  );
+  assert!(
+    dividers.iter().any(|text| text.starts_with("02 Review · Builder ·")),
+    "{dividers:?}"
+  );
+  assert!(shows(&mut desktop, "conversation-result-changes", "Changes · 1 file"));
 }
 
 #[test]
