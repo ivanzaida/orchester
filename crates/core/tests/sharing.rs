@@ -32,24 +32,25 @@ fn s1b_claim_transitions_and_explicit_stale_boundary() {
   assert_eq!(upgraded.id(), id);
   assert_eq!(upgraded.kind(), ClaimKind::Run);
   assert_eq!(upgraded.since(), at(100));
+  assert_eq!(upgraded.heartbeat_at(), at(200));
+  let refreshed = Claim::take(
+    Some(&upgraded),
+    ClaimId::generate(),
+    alice,
+    ClaimKind::Manual,
+    at(300),
+    false,
+  )
+  .expect("same holder refresh");
+  assert_eq!(refreshed.id(), upgraded.id());
+  assert_eq!(refreshed.kind(), ClaimKind::Run);
+  assert_eq!(refreshed.heartbeat_at(), at(300));
   assert_eq!(
-    Claim::take(
-      Some(&upgraded),
-      ClaimId::generate(),
-      alice,
-      ClaimKind::Manual,
-      at(300),
-      false
-    )
-    .expect("idempotent"),
-    upgraded
-  );
-  assert_eq!(
-    upgraded.take_over(id, ClaimId::generate(), bob, at(100 + CLAIM_STALE_MS - 1)),
+    upgraded.take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS - 1)),
     Err(ClaimError::NotStale)
   );
   let takeover = upgraded
-    .take_over(id, ClaimId::generate(), bob, at(100 + CLAIM_STALE_MS))
+    .take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS))
     .expect("stale takeover");
   assert_ne!(takeover.id(), id);
   assert_eq!(takeover.taken_over_from(), Some(alice));

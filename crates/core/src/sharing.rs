@@ -76,6 +76,7 @@ impl Claim {
         return Err(ClaimError::Held);
       }
       let mut claim = current.clone();
+      claim.heartbeat_at = now;
       if kind == ClaimKind::Run {
         claim.kind = ClaimKind::Run;
       }
