@@ -432,6 +432,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+U11 · Pull requests: no "synced" without a link, columns at 960 · branch `claude/pr-fixes` (done 2026-10-04, design
+verification pending)
+
+A sync or refresh of a project whose repository is not linked asks GitHub nothing, so it leaves no status bar event
+(the list's sync and the pull request screen's refresh both dropped their operation as "synced"); the screen's 08.D
+panel says why. No frame draws the list in a narrow window, so it follows the Tasks list (02.03E): below a 1076 window
+the rows and headings drop Open in GitHub (the pull request's own topbar has it), and the title keeps 228 at 960 (84
+before, cut to *Add GitH…*). Each heading sits at its own width in a cell as wide as its column, so a heading that does
+not fit is measurable. Tests: `cargo test -p orchester-desktop --test form_keyboard pull_request` (the unavailable
+test checks the status bar and the activity log; the new
+`pull_requests_layout_columns_fit_the_narrowest_and_the_design_window` checks at 960 and 1440 that headings do not run
+into each other and start their columns, that a title keeps 200, and where Open in GitHub shows), `--test theme
+pull_request`, `--test i18n locale` / `every_key`. Not changed: at 960 the controls row (search 360, repository,
+sort 164) is about 3px wider than the list. **Done when** an independent design verification of the list at 1440
+(08.01 `wGtxT`) and 960 (no frame; 02.03E's pattern) and of 08.D `dmib5` with the status bar reports no blocking or
+major mismatches.
+
 U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-04, design verification pending)
 
 Until the stored inbox is read the screen shows its topbar and heading only; the tab row (linked repositories only,
