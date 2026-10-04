@@ -43,9 +43,24 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
+  let props = ctx.props::<super::TaskProps>();
+  let (root, page_task) = (props.project.repo_root.clone(), props.task);
   ctx.future_action(move |(run, control): (RunId, RunControl)| {
-    let runners = runners.clone();
+    let (runners, servers, root) = (runners.clone(), servers.clone(), root.clone());
     async move {
+      // Work on a shared task goes on only under the person's claim; Pause and Cancel need none.
+      let works = match control {
+        RunControl::StartFirst(task) => Some(task),
+        RunControl::Resume | RunControl::Continue => Some(page_task),
+        RunControl::Pause | RunControl::Cancel => None,
+      };
+      if let Some(task) = works {
+        servers
+          .claim_for_work(&root, task)
+          .await
+          .map_err(|refusal| refusal.message())?;
+      }
       let result = match control {
         RunControl::StartFirst(task) => runners.start_run(task.first_run_key(), task).await.map(|_| ()),
         RunControl::Pause => runners.control_run(Command::PauseRun { run }).await,

@@ -68,15 +68,15 @@ impl lurq::app::component::DevtoolsInspectable for RootProps {}
 pub struct Root {
   /// What routes stand for, shared by every tab: present once the session started.
   places: Option<Places>,
-  /// The shared servers' connection monitor, a task of the application's runtime that wakes on its
-  /// own timers; it ends with the window.
-  monitor: Option<tokio::task::JoinHandle<()>>,
+  /// The shared servers' connection monitor and the shared projects' heartbeat and sync, tasks of
+  /// the application's runtime that wake on their own timers; they end with the window.
+  background: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Drop for Root {
   fn drop(&mut self) {
-    if let Some(monitor) = &self.monitor {
-      monitor.abort();
+    for task in &self.background {
+      task.abort();
     }
   }
 }
@@ -104,11 +104,14 @@ impl Component for Root {
     else {
       return Self {
         places: None,
-        monitor: None,
+        background: Vec::new(),
       };
     };
     let servers = Servers::new(workspace, vault.clone());
-    let monitor = lifecycle.runtime().spawn(sharing::monitor(servers.clone()));
+    let background = vec![
+      lifecycle.runtime().spawn(sharing::monitor(servers.clone())),
+      lifecycle.runtime().spawn(sharing::project::work::run(servers.clone())),
+    ];
     ctx.provide(ServerFeed::new(servers));
     ctx.provide(programs);
     ctx.provide(vault);
@@ -121,7 +124,7 @@ impl Component for Root {
     ctx.provide(lifecycle);
     Self {
       places: Some(Places::default()),
-      monitor: Some(monitor),
+      background,
     }
   }
 

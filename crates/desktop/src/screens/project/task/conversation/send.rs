@@ -4,7 +4,7 @@
 //! boundary. A message the agent's CLI did not take is queued again for when its turn ends. A
 //! message stored but not taken by the runner stays queued, and the composer says so.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
@@ -18,6 +18,7 @@ use crate::{
   background,
   messages::Message,
   runner::{RunRequestError, Runners},
+  sharing::{Servers, feed::ServerFeed},
   tasks::{
     conversation::{send_after_turn_in, send_in},
     run::control_message,
@@ -56,8 +57,13 @@ fn runners(ctx: &mut Ctx) -> Runners {
     .expect("the root provides Runners before mounting screens")
 }
 
-/// Tells the runner that `run` has a message; what it could not take stays queued.
-async fn tell(runners: &Runners, run: RunId) -> Sent {
+/// Tells the runner that `run` has a message; what it could not take stays queued. A message makes
+/// the agents of a shared task work, so the person's claim comes first (Send & continue, a
+/// follow-up); without it the message stays queued, with who holds the task.
+async fn tell(runners: &Runners, (servers, root, task): (&Servers, &Path, TaskId), run: RunId) -> Sent {
+  if let Err(refusal) = servers.claim_for_work(root, task).await {
+    return Sent::Queued(refusal.message());
+  }
   match runners.control_run(Command::DeliverMessages { run }).await {
     Ok(()) => Sent::Taken,
     // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
@@ -73,8 +79,9 @@ async fn tell(runners: &Runners, run: RunId) -> Sent {
 
 pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
   let runners = runners(ctx);
+  let servers = ServerFeed::of(ctx).servers;
   ctx.future_action(move |outgoing: Outgoing| {
-    let runners = runners.clone();
+    let (runners, servers) = (runners.clone(), servers.clone());
     async move {
       let Outgoing {
         repo_root,
@@ -86,6 +93,7 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         timing,
         text,
       } = outgoing;
+      let root = repo_root.clone();
       background::run(move || send_in(&repo_root, key, (task, run, recovery_after), (recipient, timing), &text))
         .await?
         .map_err(|error| {
@@ -96,7 +104,7 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
       let Some(run) = run else {
         return Ok(Sent::Taken);
       };
-      Ok(tell(&runners, run).await)
+      Ok(tell(&runners, (&servers, &root, task), run).await)
     }
   })
 }
@@ -116,8 +124,9 @@ pub(super) type AfterTurnAction = FutureAction<AfterTurn, Sent, Message>;
 
 pub(super) fn after_turn_action(ctx: &mut Ctx) -> AfterTurnAction {
   let runners = runners(ctx);
+  let servers = ServerFeed::of(ctx).servers;
   ctx.future_action(move |request: AfterTurn| {
-    let runners = runners.clone();
+    let (runners, servers) = (runners.clone(), servers.clone());
     async move {
       let AfterTurn {
         repo_root,
@@ -125,13 +134,14 @@ pub(super) fn after_turn_action(ctx: &mut Ctx) -> AfterTurnAction {
         run,
         message,
       } = request;
+      let root = repo_root.clone();
       background::run(move || send_after_turn_in(&repo_root, task, message))
         .await?
         .map_err(|error| {
           tracing::warn!(?error, "the message was not queued again");
           error.message()
         })?;
-      Ok(tell(&runners, run).await)
+      Ok(tell(&runners, (&servers, &root, task), run).await)
     }
   })
 }

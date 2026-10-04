@@ -164,9 +164,17 @@ fn continue_action(ctx: &mut Ctx) -> ContinueAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting the recovery");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   ctx.future_action(move |runs: Arc<[InterruptedRun]>| {
-    let runners = runners.clone();
+    let (runners, servers) = (runners.clone(), servers.clone());
     async move {
+      // A run of a shared task continues only under the person's claim.
+      for run in runs.iter() {
+        servers
+          .claim_for_work(&run.project_root, run.task)
+          .await
+          .map_err(|refusal| refusal.message())?;
+      }
       for (root, name, ids) in by_project(&runs) {
         let continued = runners
           .continue_runs(&root, &name, ids)

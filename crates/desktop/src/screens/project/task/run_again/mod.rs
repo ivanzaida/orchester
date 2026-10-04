@@ -102,6 +102,7 @@ pub(super) fn offer(
   let action = ctx.mount_keyed::<RunAgain>(
     &format!("task-run-again-{}-{}", run.id(), check.next.is_ok()),
     RunAgainProps {
+      root: open.repo_root.clone(),
       detail: detail.clone(),
       check,
       leftovers: leftovers.and_then(|left| left.as_ref().ok()).cloned(),
@@ -124,6 +125,7 @@ fn button(ctx: &Ctx) -> ActionButton {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct RunAgainProps {
+  root: std::path::PathBuf,
   /// The task, whose latest run failed or was cancelled.
   detail: Arc<TaskDetail>,
   check: RunAgainCheck,
@@ -216,9 +218,20 @@ impl RunAgain {
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
     let open = self.open.clone();
+    let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
+    let root = ctx.props::<RunAgainProps>().root.clone();
     ctx.future_action(move |request: Request| {
       let (runners, nav, open) = (runners.clone(), nav.clone(), open.clone());
+      let (servers, root) = (servers.clone(), root.clone());
       async move {
+        // A shared task runs again only under the person's claim.
+        servers
+          .claim_for_work(&root, request.task)
+          .await
+          .map_err(|refusal| Refused {
+            key: request.key,
+            messages: vec![refusal.message()],
+          })?;
         let started = runners
           .run_again(request.key, request.task, request.after, request.remove_worktrees)
           .await;

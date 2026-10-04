@@ -1,6 +1,8 @@
 //! A real `orchester-server` on loopback with a temporary data directory, on a runtime of its own so
 //! a test can drive the desktop (which has its own runtime) or call the service directly beside it.
 
+#![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
+
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{

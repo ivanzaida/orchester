@@ -15,10 +15,8 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, TagId, TaskId},
-  task::organization::{ChangeActor, Priority, TaskOrganization, WorkflowStatus},
-  time::Timestamp,
+  task::organization::{Priority, TaskOrganization, WorkflowStatus},
 };
-use orchester_store::ProjectDb;
 
 use super::super::{
   ProjectNav,
@@ -26,7 +24,7 @@ use super::super::{
 };
 use crate::{
   background,
-  messages::{self, Message},
+  messages::Message,
   runner::Runners,
   tasks::{
     browse::Selection,
@@ -446,21 +444,19 @@ async fn apply(
   task: TaskId,
   mutation: Mutation,
   stop: Stop,
-  runners: &Runners,
+  (runners, servers): (&Runners, &crate::sharing::Servers),
 ) -> Result<bool, Message> {
   if matches!(mutation, Mutation::Status(WorkflowStatus::Canceled)) {
     stop_named_run(root, task, stop, runners)
       .await
       .map_err(|refused| refused.message())?;
   }
-  let root = root.to_owned();
+  let (root, servers) = (root.to_owned(), servers.clone());
   background::run(move || {
-    ProjectDb::open(&root)?.update_task_organization(task, ChangeActor::Person, Timestamp::now(), |value| {
-      update(value, &mutation)
-    })
+    crate::tasks::writer::TaskWriter::open(&root, &servers)?.update_organization(task, |value| update(value, &mutation))
   })
   .await?
-  .map_err(|error| messages::store_error(&error))
+  .map_err(|error| error.message())
 }
 fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
   match mutation {
@@ -476,8 +472,9 @@ fn update(value: TaskOrganization, mutation: &Mutation) -> TaskOrganization {
 fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
   let root = props.root.clone();
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   ctx.future_action(move |(tasks, mutation, named): (Vec<TaskId>, Mutation, Named)| {
-    let (root, runners) = (root.clone(), runners.clone());
+    let (root, runners, servers) = (root.clone(), runners.clone(), servers.clone());
     async move {
       let mut results = Vec::new();
       for task in tasks {
@@ -485,7 +482,7 @@ fn action(ctx: &mut Ctx, props: &BulkProps) -> Action {
         let stop = named.as_ref().map_or(Stop::Unconfirmed, |named| {
           Stop::Confirmed(named.iter().find(|(shown, _)| *shown == task).map(|(_, run)| *run))
         });
-        let result = apply(&root, task, mutation.clone(), stop, &runners).await;
+        let result = apply(&root, task, mutation.clone(), stop, (&runners, &servers)).await;
         results.push((task, result));
       }
       Ok(Outcomes { mutation, results })

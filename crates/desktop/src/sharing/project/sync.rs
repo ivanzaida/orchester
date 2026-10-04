@@ -1,0 +1,75 @@
+//! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
+//! updates"): its project, tags and tasks are read and written to the cache, with when it last
+//! matched. Until the live event stream (S2d) this runs when the project is opened, every minute
+//! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
+//! no longer has the person as a member (10.44); the cache then says since when. The workflow
+//! statuses this computer's runs reached go to the server as Orchester's changes.
+
+use orchester_api::ErrorCode;
+use orchester_core::{task::organization::ChangeActor, time::Timestamp};
+use orchester_store::ProjectDb;
+
+use super::{ProjectServer, organization::tag, store::RemoteTaskStore};
+use crate::{background, sharing::SharingError};
+
+impl ProjectServer {
+  /// Reads the server project into the cache. A server that cannot be reached leaves the cache as
+  /// it is.
+  pub async fn sync(&self) -> Result<(), SharingError> {
+    super::reachable(self.servers.connection(self.link.server))?;
+    let project = match self
+      .call(|client, token, project| async move { client.project(&token, project).await })
+      .await
+    {
+      Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => {
+        return self.removed().await;
+      }
+      answer => answer?,
+    };
+    let tags = self
+      .call(|client, token, project| async move { client.tags(&token, project).await })
+      .await?;
+    let tasks = self
+      .call(|client, token, project| async move { client.tasks(&token, project).await })
+      .await?;
+    let server = self.clone();
+    background::run(move || -> Result<(), SharingError> {
+      let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
+      let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
+      store.db.cache_shared_tags(&tags)?;
+      store.cache(&tasks.tasks, None)?;
+      store
+        .db
+        .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
+      send_automatic(&mut store)
+    })
+    .await??;
+    self.servers.shared_changed();
+    Ok(())
+  }
+
+  /// The server no longer has the person as a member of the project.
+  async fn removed(&self) -> Result<(), SharingError> {
+    if self.link.removed_at.is_some() {
+      return Ok(());
+    }
+    let (root, role) = (self.repo_root.clone(), self.link.role);
+    background::run(move || ProjectDb::open(&root)?.record_sharing_state(role, None, Some(Timestamp::now()))).await??;
+    self.servers.shared_changed();
+    Ok(())
+  }
+}
+
+/// Sends each workflow status a run of this computer moved a shared task to, as Orchester's change,
+/// and forgets the ones the server took. One that cannot be sent waits for the next sync.
+fn send_automatic(store: &mut RemoteTaskStore) -> Result<(), SharingError> {
+  for (task, status, at) in store.db.automatic_statuses()? {
+    let base = store.cached(task)?.organization().clone();
+    let edited = base.clone().with_status(status);
+    match store.change_organization(task, (&base, &edited), ChangeActor::Orchester) {
+      Ok(_) => store.db.clear_automatic_status(task, at)?,
+      Err(error) => tracing::warn!(%error, %task, "the server did not take a run's workflow status yet"),
+    }
+  }
+  Ok(())
+}

@@ -8,6 +8,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::{ClaimId, TaskId, UserId},
   name::Name,
+  resource::VersionNumber,
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
   task::{Task, TaskDetails, TaskLimits, TaskStatus, organization::TaskOrganization},
@@ -146,6 +147,19 @@ impl ProjectDb {
     let transaction = self.connection.transaction()?;
     write_claim(&transaction, task, claim)?;
     transaction.commit()?;
+    Ok(())
+  }
+
+  /// Pins the pipeline version a queued shared task runs on this computer (`None` unpins it): the
+  /// server never has it, so it changes no revision.
+  pub fn pin_shared_task(&mut self, task: TaskId, version: Option<VersionNumber>) -> Result<(), StoreError> {
+    let updated = self.connection.execute(
+      "UPDATE tasks SET pipeline_version = ?2 WHERE id = ?1 AND sharing = 'shared'",
+      params![task.to_string(), version.map(VersionNumber::get)],
+    )?;
+    if updated == 0 {
+      return Err(StoreError::TaskNotFound(task));
+    }
     Ok(())
   }
 

@@ -409,6 +409,9 @@ pub fn save_to<S: TaskStore>(
 pub enum TaskDraftSaveError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  /// The shared project's server did not take the save.
+  #[error(transparent)]
+  Write(Box<super::writer::WriteError>),
   #[error("the task is no longer a draft: {0:?}")]
   NotDraft(TaskStatus),
   #[error("the persisted task differs from the requested details")]
@@ -416,6 +419,15 @@ pub enum TaskDraftSaveError {
   /// The task was changed since the form read it; nothing was saved.
   #[error("the task was changed since it was read")]
   Changed(Box<Task>),
+}
+
+impl From<super::writer::WriteError> for TaskDraftSaveError {
+  fn from(error: super::writer::WriteError) -> Self {
+    match error {
+      super::writer::WriteError::Store(error) => Self::Store(error),
+      error => Self::Write(Box::new(error)),
+    }
+  }
 }
 
 /// [`save_to`] in the project database of `repo_root`, confirmed as the requested details: the
@@ -433,23 +445,4 @@ pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
   Ok(saved)
-}
-
-/// Save organization and task content as a single transaction.
-pub fn save_organized_to(
-  db: &mut ProjectDb,
-  target: SaveTarget,
-  details: TaskDetails,
-  (base, organization): (
-    &orchester_core::task::organization::TaskOrganization,
-    &orchester_core::task::organization::TaskOrganization,
-  ),
-  now: Timestamp,
-) -> Result<TaskUpdate, StoreError> {
-  match target {
-    SaveTarget::New(batch) => db
-      .create_organized_task(batch, details, organization, now)
-      .map(TaskUpdate::Saved),
-    SaveTarget::Task(task, read) => db.update_organized_task(task, read, details, (base, organization), now),
-  }
 }

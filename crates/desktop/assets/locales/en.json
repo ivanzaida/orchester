@@ -888,6 +888,10 @@
       "attribution": "{{actor}} · {{date}}",
       "none": "None",
       "date": "{{month}} {{day}}, {{year}}, {{time}}"
+    },
+    "conflict": {
+      "changedMeanwhile": "The task was changed since you opened it, so nothing was saved. Open it again to see the newer version.",
+      "notSaved": "Not saved · a newer version was saved"
     }
   },
   "runs": {
@@ -5621,6 +5625,35 @@
       "notAboveUsed": "Enter more than the {{used}} tokens this run already used.",
       "stepNotAboveUsed": "Enter more than the {{used}} tokens {{step}} already used.",
       "stepAboveMax": "A step budget can be at most {{max}} tokens, the maximum run budget (project setting)."
+    }
+  },
+  "sharing": {
+    "errors": {
+      "serverOnly": "This change is made on the server for a shared project, and this screen cannot send it there yet.",
+      "notShared": "This project's task list is not shared.",
+      "alreadyShared": "This project's task list is shared already.",
+      "offline": "{{server}} can't be reached, so nothing was sent. The list is read-only until it answers.",
+      "notMember": "You are no longer a member of this project on the server, so nothing was sent.",
+      "serverMissing": "The server this project is shared on is no longer in Settings › Servers.",
+      "invalidAnswer": "The server answered with something Orchester can't use; nothing was changed here.",
+      "keptChanging": "The task kept changing on the server while Orchester merged your change. Open it again and save once more.",
+      "unavailable": "The server of this shared project can't be asked now.",
+      "notEditable": "The server didn't take the change: the task can't be edited in its state.",
+      "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
+      "remoteTaken": "This repository is shared on the server already."
+    },
+    "members": {
+      "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
+      "alreadyMember": "This person is already a member. Change their role in their row.",
+      "lastOwner": "You are the last owner. Make another member an owner first; then you can become a member or leave."
+    }
+  },
+  "claims": {
+    "refused": {
+      "held": "{{holder}} has taken this task, so nothing started. Ask them, or wait until they release it.",
+      "heldStale": "{{holder}} has taken this task and their claim has gone stale; nothing started. Take it over from the task page once that is possible.",
+      "heldUnknown": "Someone else has taken this task, so nothing started.",
+      "merged": "This task was merged; nobody takes it into work again."
     }
   }
 }

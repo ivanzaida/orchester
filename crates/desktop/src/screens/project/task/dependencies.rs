@@ -111,13 +111,16 @@ impl Component for TaskDependencies {
 /// action, pointed at the task as last shown.
 fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureAction<(), Started, Problems> {
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   let root = props.root.clone();
   let task = props.task.clone();
   ctx.future_action(move |()| {
     let root = root.clone();
     let runners = runners.clone();
     let task = task.clone();
+    let servers = servers.clone();
     async move {
+      let claims = (servers.clone(), root.clone());
       let queued = background::run(move || {
         let tasks =
           ProjectTasks::load(&root).map_err(|error| Problems(vec![crate::messages::store_error(&error)].into()))?;
@@ -129,6 +132,7 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
           .version;
         queue_organized_in(
           &root,
+          &servers,
           SaveTarget::Task(task.id(), task.revision()),
           task.details().clone(),
           // Nothing changed here: what is stored stays.
@@ -140,6 +144,12 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
       .await
       .map_err(|error| Problems(vec![error].into()))??;
       let task = queued.task.id();
+      // Work on a shared task starts only under the person's claim.
+      claims
+        .0
+        .claim_for_work(&claims.1, task)
+        .await
+        .map_err(|refusal| Problems(vec![refusal.message()].into()))?;
       runners
         .start_run(task.first_run_key(), task)
         .await
