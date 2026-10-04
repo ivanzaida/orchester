@@ -71,7 +71,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio", "
 # and macOS. Applications that pick their stores link it with the stores they need instead of
 # the `keyring` facade (keyring-rs wiki, "Keyring").
 keyring-core = "1"
-lurq = { version = "0.40.0", default-features = false }
+lurq = { version = "0.40.1", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
