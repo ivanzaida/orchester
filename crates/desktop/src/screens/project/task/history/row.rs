@@ -20,7 +20,7 @@ use lurq::{
 use orchester_core::{
   id::{RunId, TaskId},
   integration::Leftovers,
-  run::RunNumber,
+  run::{RunNumber, TaskPhase},
 };
 
 use super::{
@@ -36,8 +36,9 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::wrapping_field_error,
-    icon::{IconSize, icon},
+    icon::{Icon, IconSize, icon},
     message_text,
+    status_label::status_label,
   },
   workspace::OpenProject,
 };
@@ -91,7 +92,7 @@ impl Component for RunRow {
     };
     let parts = Parts {
       run: run_cell(ctx, &props),
-      status: row_status_label(ctx, props.record.phase),
+      status: status(ctx, props.record.phase),
       what: what(ctx, &props, error.as_deref()),
       when: when(ctx, &props.record),
       action: action(ctx, &props),
@@ -163,6 +164,15 @@ fn stacked(parts: Parts) -> Element {
     .with_children(parts.what)
     .child(parts.when)
     .into()
+}
+
+/// Where the run stands (`DeizF`); a run whose every step passed reads *Ready for review*, as its
+/// page's heading says, rather than the task list's *Completed* (63.06).
+fn status(ctx: &Ctx, phase: Option<TaskPhase>) -> Element {
+  match phase {
+    Some(TaskPhase::Succeeded) => status_label(Icon::GitPullRequest, &ctx.t("runs.ready.status")),
+    phase => row_status_label(ctx, phase),
+  }
 }
 
 /// "Run #134" and, for the run the page shows, the *this run* tag (`fLmx4`).

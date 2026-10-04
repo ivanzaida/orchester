@@ -51,7 +51,7 @@ pub(super) fn section(
         task: detail.task.id(),
         key: key.clone(),
         record: record.clone(),
-        left: left.and_then(|left| left.of(record.id)),
+        left: left.and_then(|left| left.as_read(record.id)),
         this_run: Some(record.id) == shown,
         // The topbar's Remove worktree confirms the latest run's removal.
         dialog: Some(record.id) != latest,

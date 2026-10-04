@@ -6,8 +6,10 @@
 //! uncommitted work a person did not confirm discarding.
 
 mod cleanup;
+mod forgotten;
 mod git;
 mod merge;
+mod recorded;
 
 use std::path::Path;
 
@@ -19,6 +21,7 @@ pub use self::{
     leftovers, leftovers_of,
   },
   merge::{MergeError, MergeKind, RunMerge, merge_run},
+  recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded},
 };
 use crate::{
   command::{CommandError, CommandRunner},

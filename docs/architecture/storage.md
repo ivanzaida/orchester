@@ -280,10 +280,14 @@ locks (`orchester_core::integration`).
   any run, ORC-63): a worktree with
   uncommitted changes goes only once the person saw the files named and agreed to discard them, and
   only if the changes are still exactly those. Run again can remove them the same way, in the
-  runner, before the task's next run starts. A folder already deleted by hand is pruned. Removing a
-  run's own worktree is recorded (`run_worktree_removals`): an interrupted run whose worktree went
-  stays interrupted in its record, but the runner never continues it and it no longer keeps its
-  task from running again. The
+  runner, before the task's next run starts. A folder already deleted by hand is pruned, and a folder
+  git forgot after a removal that failed part way is deleted as a folder. A removal is recorded
+  (`run_worktree_removals`) before git runs, in the write transaction that re-reads the run and
+  refuses it once the run has live work; recording a continuation of a run whose removal is recorded
+  is refused in its own write transaction, so the two never both go ahead. The record is taken back
+  when nothing was touched and stays once anything went or git refused. An interrupted run whose
+  removal is recorded (or whose folder is found gone) stays interrupted in its record, but it never
+  continues and no longer keeps its task from running again. The
   Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
   stay reachable through the base branch or its kept branch.
 

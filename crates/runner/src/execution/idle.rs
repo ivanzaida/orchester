@@ -11,7 +11,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::Rejection;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 use super::{failed, prepare::Prepared, read_failed};
 
@@ -161,9 +161,13 @@ pub(super) fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
     .ok_or(Rejection::RunNotFound)
 }
 
+/// Records `events` of `run`; a continuation of a run whose worktrees a person removed meanwhile is
+/// refused, the run unchanged.
 pub(super) fn store(db: &mut ProjectDb, run: &Run, events: &[RunEvent]) -> Result<(), Rejection> {
-  db.append_events(run, events)
-    .map_err(|error| failed("cannot record the run's change", &error))
+  db.append_events(run, events).map_err(|error| match error {
+    RunStoreError::WorktreeRemoved(_) => Rejection::WorktreeRemoved,
+    other => failed("cannot record the run's change", &other),
+  })
 }
 
 /// What the desktop reads for a transition the run's state does not allow.

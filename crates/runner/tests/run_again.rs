@@ -11,7 +11,7 @@ use std::{fs, path::Path, time::Duration};
 use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
-  integration::{Leftovers, clean_up, leftovers},
+  integration::{Leftovers, clean_up_recorded, leftovers},
   limits::ProjectLimits,
   name::Name,
   resource::{Pipeline, Slug, StepKind},
@@ -313,13 +313,20 @@ async fn run_again_follows_an_interrupted_run_once_its_worktree_was_removed() {
     "with its worktree it can still continue"
   );
 
-  // Remove worktree, as the task page does it: git removes it, the database records it.
+  // Remove worktree, as the task page does it: the database records it, then git removes it.
   let git = ProcessRunner::new(Duration::from_secs(60));
   let seen = left_by(root, first);
-  let cleanup = clean_up(&git, Path::new("git"), root, &interrupted, Some(&seen)).expect("removed");
-  assert!(cleanup.removed_run_worktree());
   let mut db = ProjectDb::open(root).expect("open");
-  db.save_worktree_removal(first, Timestamp::now()).expect("recorded");
+  let cleanup = clean_up_recorded(
+    &mut db,
+    (&git, Path::new("git"), root),
+    &interrupted,
+    Some(&seen),
+    Timestamp::now(),
+  )
+  .expect("removed");
+  assert!(cleanup.removed_run_worktree());
+  assert!(db.worktree_removal(first).expect("read").is_some());
 
   let (continued, refused) = scheduler.continue_runs(&[first]).await;
   assert!(continued.is_empty());
@@ -332,6 +339,34 @@ async fn run_again_follows_an_interrupted_run_once_its_worktree_was_removed() {
     .expect("the task runs again");
   assert_eq!(run(root, again).number().get(), interrupted.number().get() + 1);
   assert!(worktree(root, again).is_dir());
+  assert_eq!(
+    run(root, first).status(),
+    &RunStatus::Interrupted(InterruptCause::QuitNow)
+  );
+  wait_for_turns(root, &mut events, again, 1).await;
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_again_follows_an_interrupted_run_whose_worktree_was_deleted_by_hand() {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  let (stopping, mut events) = scheduler(root);
+  let first = start(&stopping, project.task).await;
+  wait_for_turns(root, &mut events, first, 1).await;
+  stopping.stop_all(InterruptCause::QuitNow).await;
+  fs::remove_dir_all(worktree(root, first)).expect("delete the worktree by hand");
+
+  let (scheduler, mut events) = scheduler(root);
+  let again = scheduler
+    .run_again(IdempotencyKey::generate(), project.task, first, None)
+    .await
+    .expect("a run without its worktree no longer holds the task");
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    db.worktree_removal(first).expect("read").is_some(),
+    "the removal is recorded once found"
+  );
   assert_eq!(
     run(root, first).status(),
     &RunStatus::Interrupted(InterruptCause::QuitNow)

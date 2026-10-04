@@ -963,10 +963,14 @@
       "runUnnumbered": "Run",
       "thisRun": "this run",
       "noTime": "—",
+      "when": "{{month}} {{day}}, {{time}}",
       "failedAt": "Failed at {{step}}",
       "cancelledAt": "Canceled at {{step}}",
       "cancelled": "Canceled",
       "cancelledBeforeStart": "Canceled before it started",
+      "atWork": "{{step}} · {{agent}} at work",
+      "stepAtWork": "{{step}} at work",
+      "notMerged": "Every step passed · not merged",
       "interruptedAt": "Interrupted at {{step}}",
       "interruptedAtCantContinue": "Interrupted at {{step}} · can’t continue",
       "interrupted": "Interrupted",
@@ -985,6 +989,7 @@
           }
         },
         "missing": "Worktree folder already gone · {{branch}}",
+        "forgotten": "Worktree folder left behind · {{branch}}",
         "removedAt": {
           "kept": "Worktree removed {{time}} · {{branch}} kept",
           "deleted": "Worktree removed {{time}} · {{branch}} deleted"
@@ -1795,7 +1800,7 @@
         "other": "Remove the worktrees of run #{{run}}?"
       },
       "explanation": {
-        "one": "Removes it from .orchester/worktrees with everything in it, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept.",
+        "one": "Removes it from .orchester/worktrees with everything in it, build output included. Committed work stays on the branch: a branch whose commits are merged is deleted, the others are kept.",
         "other": "Removes them from .orchester/worktrees with everything in them, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept."
       },
       "runOwner": "Run #{{run}}",
@@ -1806,7 +1811,8 @@
           "one": "1 file not committed",
           "other": "{{count}} files not committed"
         },
-        "missing": "Folder already gone"
+        "missing": "Folder already gone",
+        "forgotten": "Folder left behind; deleted as it is"
       },
       "branch": {
         "deleted": "deleted · merged",

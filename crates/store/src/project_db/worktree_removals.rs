@@ -2,12 +2,13 @@
 
 use orchester_core::{
   id::{RunId, TaskId},
+  integration::RemovalStart,
   store::WorktreeStore,
   time::Timestamp,
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, runs::stored_status};
 use crate::{StoreError, rows::parse};
 
 impl WorktreeStore for ProjectDb {
@@ -21,16 +22,36 @@ impl WorktreeStore for ProjectDb {
     Ok(())
   }
 
+  fn begin_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<RemovalStart, StoreError> {
+    // Immediate, as every transaction here: it holds the write lock from its first read.
+    let transaction = self.connection.transaction()?;
+    let status = stored_status(&transaction, run)?.ok_or(StoreError::RunNotFound(run))?;
+    if status.has_live_work() {
+      return Ok(RemovalStart::LiveWork);
+    }
+    let start = if removal(&transaction, run)?.is_some() {
+      RemovalStart::AlreadyRecorded
+    } else {
+      transaction.execute(
+        "INSERT INTO run_worktree_removals (run_id, removed_at) VALUES (?1, ?2)",
+        params![run.to_string(), at.unix_millis()],
+      )?;
+      RemovalStart::Recorded
+    };
+    transaction.commit()?;
+    Ok(start)
+  }
+
+  fn undo_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), StoreError> {
+    self.connection.execute(
+      "DELETE FROM run_worktree_removals WHERE run_id = ?1 AND removed_at = ?2",
+      params![run.to_string(), at.unix_millis()],
+    )?;
+    Ok(())
+  }
+
   fn worktree_removal(&self, run: RunId) -> Result<Option<Timestamp>, StoreError> {
-    let removed: Option<i64> = self
-      .connection
-      .query_row(
-        "SELECT removed_at FROM run_worktree_removals WHERE run_id = ?1",
-        [run.to_string()],
-        |row| row.get(0),
-      )
-      .optional()?;
-    Ok(removed.map(Timestamp::from_unix_millis))
+    removal(&self.connection, run)
   }
 
   fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, StoreError> {
@@ -48,4 +69,16 @@ impl WorktreeStore for ProjectDb {
       })
       .collect()
   }
+}
+
+/// When the worktree of `run` was removed, as `connection` reads it.
+pub(super) fn removal(connection: &Connection, run: RunId) -> Result<Option<Timestamp>, StoreError> {
+  let removed: Option<i64> = connection
+    .query_row(
+      "SELECT removed_at FROM run_worktree_removals WHERE run_id = ?1",
+      [run.to_string()],
+      |row| row.get(0),
+    )
+    .optional()?;
+  Ok(removed.map(Timestamp::from_unix_millis))
 }

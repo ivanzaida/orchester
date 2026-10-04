@@ -192,7 +192,17 @@ frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTn
   longer holds its task. `WorktreeStore` records removals.
 - Store: migration 40, `run_worktree_removals` (once per run); `interrupted_runs` leaves such runs out.
 - Runner: `Prepared::continuing` refuses a run whose removal is recorded (`Rejection::WorktreeRemoved`, the run
-  unchanged); Run again reads the removals and records the removal it does. No IPC type changed (protocol stays 14).
+  unchanged); Run again reads the removals and records the removal it does.
+- Review fixes (2026-10-04): a removal is recorded before git runs, in the write transaction that re-reads the run
+  and refuses it once it has live work (`WorktreeStore::begin_worktree_removal`, core `clean_up_recorded`); recording
+  a continuation of a run whose removal is recorded is refused in its own write transaction
+  (`RunStoreError::WorktreeRemoved`), so the two never both go ahead. The record is taken back when nothing was
+  touched (changes appeared since the dialog), and stays once anything was removed or git refused (a refusal can
+  come part way). A worktree folder git forgot after a failed removal is listed (`LeftWorktree::forgotten`, IPC
+  protocol **15**), shown as left behind with Remove worktree again, and deleted as a folder, only ever
+  `.orchester/worktrees/<run or step execution id>`. An interrupted run whose folder is gone is recorded as removed
+  when the task page or Run again finds it. The task's active run (Canceled) and a group's first-run statuses leave
+  an interrupted run without its worktree out. Rows keep their lines while what was left is read again.
 - Desktop: the removal is recorded by *Remove worktree* and by a merge's clean-up; *Runs of this task* on Summary
   (after the steps; on Ready for review after Verification; on the unreadable run's page in place of *Other runs of
   this task*), rows with columns from a 1340 window and stacked below, *Remove worktree* on every run with worktrees

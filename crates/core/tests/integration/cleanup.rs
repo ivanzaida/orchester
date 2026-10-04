@@ -20,7 +20,7 @@ fn branch(name: &str) -> BranchName {
 
 /// A succeeded run with its worktree and a kept worktree of its Review step whose commit was not
 /// merged anywhere.
-fn repo_with_leftovers(ending: Ending) -> (Repo, Run) {
+pub(crate) fn repo_with_leftovers(ending: Ending) -> (Repo, Run) {
   let repo = Repo::new();
   let base = repo.head();
   let run = run(&base, Some("main"), ending);

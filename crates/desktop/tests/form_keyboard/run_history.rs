@@ -5,13 +5,23 @@
 //! next run; a run at work offers no removal; one removal runs at a time per task; and the rows keep
 //! their columns at 1440 and stack at 960.
 
-use std::{fs, path::PathBuf, sync::atomic::Ordering};
+use std::{
+  fs,
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  time::Duration,
+};
 
 use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
   run::{InterruptCause, Run, RunStatus},
   store::{ActivityStore, RunStore, WorktreeStore},
 };
 use orchester_desktop::programs::Programs;
+use orchester_exec::ProcessRunner;
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -297,4 +307,65 @@ fn run_history_rows_keep_their_columns_at_1440_and_stack_at_960() {
   );
   assert!(button.x + button.width <= row_bounds.x + row_bounds.width + 0.5);
   assert!(button.x > row_bounds.x + row_bounds.width * 0.5);
+}
+
+/// Git that refuses `git worktree remove` while `refuse` holds, as when a file is held open.
+struct RefusingGit {
+  refuse: Arc<AtomicBool>,
+  process: ProcessRunner,
+}
+
+impl CommandRunner for RefusingGit {
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    let args = command.args();
+    if self.refuse.load(Ordering::SeqCst) && args.len() > 1 && args[0] == "worktree" && args[1] == "remove" {
+      return Ok(CommandOutput {
+        code: Some(255),
+        stdout: String::new(),
+        stderr: "error: failed to delete: Invalid argument".to_owned(),
+      });
+    }
+    self.process.run(command)
+  }
+}
+
+#[test]
+fn run_history_keeps_a_worktree_git_refused_to_remove_and_offers_it_again() {
+  let refuse = Arc::new(AtomicBool::new(true));
+  let program_set = Programs::with_runner(Arc::new(RefusingGit {
+    refuse: refuse.clone(),
+    process: ProcessRunner::new(Duration::from_secs(90)),
+  }));
+  let (mut desktop, first) = failed_twice(program_set);
+  let first_row = row(&first);
+  let error = format!("run-remove-error-{}", first.id());
+  desktop.click("run-remove-worktree-1");
+  desktop.wait_for("remove-worktree-dialog");
+  desktop.click("remove-worktree-confirm");
+  desktop.wait_until("git's refusal", |desktop| has(desktop, "remove-worktree-error"));
+  assert!(shows(&mut desktop, "remove-worktree-error", "Invalid argument"));
+  desktop.click("remove-worktree-cancel");
+  desktop.wait_until("the refusal under the row", |desktop| {
+    !has(desktop, "remove-worktree-dialog") && has(desktop, &error)
+  });
+  assert!(shows(&mut desktop, &error, "Invalid argument"));
+  assert!(
+    shows(&mut desktop, &first_row, "Worktree · no uncommitted changes"),
+    "a worktree that stays is not shown removed"
+  );
+  assert!(worktree_of(&desktop, &first).is_dir());
+
+  refuse.store(false, Ordering::SeqCst);
+  desktop.click("run-remove-worktree-1");
+  desktop.wait_for("remove-worktree-dialog");
+  assert!(
+    !has(&mut desktop, "remove-worktree-error"),
+    "the earlier refusal is cleared"
+  );
+  assert!(!has(&mut desktop, &error));
+  desktop.click("remove-worktree-confirm");
+  desktop.wait_until("the removal", |desktop| {
+    !has(desktop, "remove-worktree-dialog") && holds(desktop, &first_row, "Worktree removed")
+  });
+  assert!(!worktree_of(&desktop, &first).exists());
 }

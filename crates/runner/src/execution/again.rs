@@ -9,9 +9,9 @@ use std::path::Path;
 
 use orchester_core::{
   id::{RunId, TaskId},
-  integration::{KeepReason, Leftovers, clean_up},
+  integration::{KeepReason, Leftovers, clean_up_recorded},
   resource::Pipeline,
-  run::{Run, RunAgainInput, run_again},
+  run::{Run, RunAgainInput, RunStatus, run_again},
   store::{ActivityStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   time::Timestamp,
 };
@@ -21,9 +21,34 @@ use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use super::{failed, read_failed};
+use crate::worktree::Worktrees;
 
 /// Git removing a worktree full of build output gets as long as the desktop gives it.
 const REMOVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Records the removal of the worktree of each interrupted run of `task` whose folder is gone
+/// (deleted by hand): it can never continue, so it no longer holds its task. A run that continued
+/// meanwhile has live work and is left alone.
+pub(super) fn note_missing_worktrees(db: &mut ProjectDb, root: &Path, task: TaskId) -> Result<(), Rejection> {
+  let store = |error: &dyn std::error::Error| failed("cannot record a removed worktree", error);
+  let worktrees = Worktrees::new(root).map_err(|error| store(&error))?;
+  let listed = db
+    .runs_of_task(task)
+    .map_err(|error| read_failed("cannot read runs", error))?;
+  let interrupted = listed
+    .iter()
+    .flatten()
+    .filter(|run| matches!(run.status(), RunStatus::Interrupted(_)));
+  for run in interrupted {
+    let recorded = db.worktree_removal(run.id()).map_err(|error| store(&error))?;
+    if recorded.is_none() && !worktrees.path(run.id()).is_dir() {
+      tracing::warn!(run = %run.id(), "the interrupted run's worktree is gone; it can no longer continue");
+      db.begin_worktree_removal(run.id(), Timestamp::now())
+        .map_err(|error| store(&error))?;
+    }
+  }
+  Ok(())
+}
 
 /// The run `task` runs again after, `after`, once core's rule allows it.
 pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, Rejection> {
@@ -71,7 +96,7 @@ pub(super) fn check(db: &ProjectDb, task: TaskId, after: RunId) -> Result<Run, R
 }
 
 /// Removes what `previous` left in the repository at `root`, as the person confirmed it
-/// (`confirmed`), and records it in `db` when its own worktree went; refused when a worktree stays.
+/// (`confirmed`), with the removal recorded in `db` first; refused when a worktree stays.
 pub(super) fn remove_worktrees(
   db: &mut ProjectDb,
   root: &Path,
@@ -79,12 +104,14 @@ pub(super) fn remove_worktrees(
   confirmed: &Leftovers,
 ) -> Result<(), Rejection> {
   let git = ProcessRunner::new(REMOVE_TIMEOUT);
-  let cleanup = clean_up(&git, Path::new("git"), root, previous, Some(confirmed))
-    .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
-  if cleanup.removed_run_worktree() {
-    db.save_worktree_removal(previous.id(), Timestamp::now())
-      .map_err(|error| failed("cannot record that the run's worktree was removed", &error))?;
-  }
+  let cleanup = clean_up_recorded(
+    db,
+    (&git, Path::new("git"), root),
+    previous,
+    Some(confirmed),
+    Timestamp::now(),
+  )
+  .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
   // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
   // with the next removal.
   let indexes = CodebaseIndexes::new(root);

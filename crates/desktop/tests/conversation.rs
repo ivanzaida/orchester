@@ -474,6 +474,7 @@ fn conversation_a_ready_run_whose_worktree_was_removed_takes_no_messages() {
     branch: None,
     uncommitted: Vec::new(),
     missing,
+    forgotten: false,
   };
   let kept = Leftovers {
     worktrees: vec![run_worktree(false)],

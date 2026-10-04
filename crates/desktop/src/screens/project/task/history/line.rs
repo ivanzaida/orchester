@@ -54,6 +54,7 @@ pub(super) fn line(ctx: &Ctx, record: &RunRecord, left: Option<&Result<Leftovers
   if run.status().has_live_work() {
     let key = match run.status() {
       RunStatus::Paused(PauseReason::Requested) => "runs.history.worktree.keptForResume",
+      RunStatus::Running if run.pause_requested() => "runs.history.worktree.keptForResume",
       RunStatus::Paused(PauseReason::LimitReached(_)) => "runs.history.worktree.keptToContinue",
       _ => "runs.history.worktree.inUse",
     };
@@ -101,6 +102,7 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
   let several = left.worktrees.len() > 1;
   let key = match (several, files) {
     (false, _) if left.worktrees.iter().all(|worktree| worktree.missing) => "runs.history.worktree.missing",
+    (false, _) if left.worktrees.iter().all(|worktree| worktree.forgotten) => "runs.history.worktree.forgotten",
     (false, 0) => "runs.history.worktree.clean",
     (false, 1) => "runs.history.worktree.uncommitted.one",
     (false, _) => "runs.history.worktree.uncommitted.other",
@@ -119,15 +121,15 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
   }
 }
 
-/// Local date and time of `at`, e.g. "Sep 26 · 11:04"; `None` for an instant chrono cannot place,
-/// which no stored change has.
+/// Local date and time of `at`, e.g. "Oct 3, 16:08" (63.01); `None` for an instant chrono cannot
+/// place, which no stored change has.
 pub(super) fn day_and_clock(ctx: &Ctx, at: Timestamp) -> Option<Arc<str>> {
   let local = chrono::DateTime::from_timestamp_millis(at.unix_millis())?.with_timezone(&chrono::Local);
   let month = ctx.t(MONTH_KEYS[local.month0() as usize]);
   let day = local.day().to_string();
   let time = display::clock(at);
   Some(ctx.t_args(
-    "time.dayAndClock",
+    "runs.history.when",
     [("month", &*month), ("day", day.as_str()), ("time", time.as_str())],
   ))
 }

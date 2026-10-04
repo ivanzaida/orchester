@@ -2,19 +2,19 @@
 //! run's number, where it stands, what happened, when it last changed and when its own worktree
 //! was removed. A run that cannot be read is listed with its number alone; nothing can change it.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
-  resource::StepKey,
-  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, TaskPhase},
-  store::{ActivityStore, WorktreeStore},
+  resource::{AgentProfile, StepKey},
+  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, StepExecutor, StepStatus, TaskPhase},
+  store::{ActivityStore, ResourceStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::{data::latest_run, unreadable::Unreadable};
+use super::{changes::run_worktree, data::latest_run, unreadable::Unreadable};
 use crate::messages::Message;
 
 /// One run of the task, as its row shows it.
@@ -55,6 +55,27 @@ impl RunRecord {
   }
 }
 
+/// Records the removal of the worktree of each interrupted run of `listed` whose folder is gone
+/// (deleted by hand): it can never continue, so it no longer holds its task. The time is when it was
+/// found gone; a run that continued meanwhile has live work and is left alone.
+pub(super) fn note_missing_worktrees(
+  db: &mut ProjectDb,
+  repo_root: &Path,
+  listed: &[ListedRun<RunStoreError>],
+) -> Result<(), StoreError> {
+  let interrupted = listed
+    .iter()
+    .flatten()
+    .filter(|run| matches!(run.status(), RunStatus::Interrupted(_)));
+  for run in interrupted {
+    if db.worktree_removal(run.id())?.is_none() && !run_worktree(repo_root, run.id()).is_dir() {
+      tracing::warn!(run = %run.id(), "the interrupted run's worktree is gone; it can no longer continue");
+      db.begin_worktree_removal(run.id(), Timestamp::now())?;
+    }
+  }
+  Ok(())
+}
+
 /// The runs of `task`, `listed` oldest first as the store lists them, newest first.
 pub(super) fn read(
   db: &ProjectDb,
@@ -76,16 +97,18 @@ pub(super) fn read(
 fn record(db: &ProjectDb, task: &Task, run: &Run, removed_at: Option<Timestamp>) -> Result<RunRecord, StoreError> {
   let latest = latest_run(db, task, run)?;
   let step = || last_step(db, run);
-  let detail = match run.status() {
-    RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)) => {
+  let detail = match (run.status(), latest.phase) {
+    (RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)), _) => {
       Message::new("runs.history.failedAt").with("step", step_name(run, step))
     }
-    RunStatus::Cancelled if run.current_attempt().is_none() => Message::new("runs.history.cancelledBeforeStart"),
-    RunStatus::Cancelled => match step()? {
+    (RunStatus::Cancelled, _) if run.current_attempt().is_none() => Message::new("runs.history.cancelledBeforeStart"),
+    (RunStatus::Cancelled, _) => match step()? {
       Some(step) => Message::new("runs.history.cancelledAt").with("step", step),
       None => Message::new("runs.history.cancelled"),
     },
-    RunStatus::Interrupted(_) => interrupted(step()?, removed_at.is_some()),
+    (RunStatus::Interrupted(_), _) => interrupted(step()?, removed_at.is_some()),
+    (RunStatus::Running, TaskPhase::Running) if !run.pause_requested() => at_work(db, run)?,
+    (RunStatus::Succeeded, TaskPhase::Succeeded) => Message::new("runs.history.notMerged"),
     _ => latest.message(),
   };
   Ok(RunRecord {
@@ -118,12 +141,47 @@ fn step_name(run: &Run, step: &StepKey) -> String {
     .map_or_else(|| step.as_str().to_owned(), |step| step.name.as_str().to_owned())
 }
 
-/// The step of the run's last agent or command, if one ran.
+/// The step of the run's last agent or command, else the first step of its attempt that did not
+/// pass, if any.
 fn last_step(db: &ProjectDb, run: &Run) -> Result<Option<String>, StoreError> {
-  Ok(
-    db.invocations(run.id())?
-      .last()
-      .and_then(|invocation| run.execution(invocation.execution))
-      .map(|execution| step_name(run, execution.step())),
-  )
+  let invoked = db
+    .invocations(run.id())?
+    .last()
+    .and_then(|invocation| run.execution(invocation.execution))
+    .map(|execution| step_name(run, execution.step()));
+  Ok(invoked.or_else(|| {
+    run
+      .current_attempt()?
+      .executions()
+      .iter()
+      .find(|execution| execution.status() != StepStatus::Passed)
+      .map(|execution| step_name(run, execution.step()))
+  }))
+}
+
+/// "Implement · Builder at work": the first step an agent of the run works on, with the agent role
+/// of its profile version while that exists.
+fn at_work(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
+  let working = run.current_attempt().and_then(|attempt| {
+    attempt
+      .executions()
+      .iter()
+      .find(|execution| matches!(execution.status(), StepStatus::Running | StepStatus::Waiting(_)))
+  });
+  let Some(execution) = working else {
+    return Ok(Message::new("tasks.progress.running"));
+  };
+  let step = step_name(run, execution.step());
+  let role = match run.snapshot().step(execution.step()).map(|pinned| pinned.executor()) {
+    Some(StepExecutor::Agent { profile, .. }) => db
+      .version::<AgentProfile>(profile.resource, profile.number)?
+      .map(|version| version.body().role().as_str().to_owned()),
+    _ => None,
+  };
+  Ok(match role {
+    Some(agent) => Message::new("runs.history.atWork")
+      .with("step", step)
+      .with("agent", agent),
+    None => Message::new("runs.history.stepAtWork").with("step", step),
+  })
 }

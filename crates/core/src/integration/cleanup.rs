@@ -42,6 +42,10 @@ pub struct LeftWorktree {
   pub uncommitted: Vec<String>,
   /// Its folder is gone; git still lists it until it is pruned.
   pub missing: bool,
+  /// Git no longer lists it, but its folder is there: a removal that failed part way left it
+  /// ([`super::forgotten`]). Removing it deletes the folder.
+  #[serde(default)]
+  pub forgotten: bool,
 }
 
 /// A branch of the run: its own or a step's (`<run-branch>--<step>-<attempt>`).
@@ -72,7 +76,7 @@ impl Leftovers {
     self
       .worktrees
       .iter()
-      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing)
+      .any(|worktree| worktree.owner == WorktreeOwner::Run && !worktree.missing && !worktree.forgotten)
   }
 }
 
@@ -142,6 +146,8 @@ pub fn leftovers_of(
       }
       worktrees.push(worktree);
     }
+    let forgotten = super::forgotten::forgotten(repo, run, &worktrees);
+    worktrees.extend(forgotten);
     let targets = merge_targets(&git, run, checked_out.as_ref())?;
     let mut branches = Vec::new();
     for name in run_branches(&git, run)? {
@@ -208,6 +214,13 @@ fn remove<R: CommandRunner>(
 ) -> Result<(), GitError> {
   if worktree.missing {
     cleanup.removed.push(worktree);
+    return Ok(());
+  }
+  if worktree.forgotten {
+    match super::forgotten::delete(&worktree) {
+      Ok(()) => cleanup.removed.push(worktree),
+      Err(detail) => cleanup.kept_worktrees.push((worktree, KeepReason::Failed(detail))),
+    }
     return Ok(());
   }
   let discard = !worktree.uncommitted.is_empty();
@@ -304,6 +317,7 @@ fn owned_by(run: &Run, listed: &Listed) -> Option<LeftWorktree> {
     branch: listed.branch.clone(),
     uncommitted: Vec::new(),
     missing: listed.prunable,
+    forgotten: false,
   })
 }
 

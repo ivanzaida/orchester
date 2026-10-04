@@ -19,7 +19,7 @@ use crate::{
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
   import::ImportBatch,
-  integration::RunMerge,
+  integration::{RemovalStart, RunMerge},
   limits::ProjectLimits,
   name::Name,
   permission::LaunchPermissions,
@@ -135,13 +135,23 @@ pub trait MergeStore {
   fn run_merge(&self, run: RunId) -> Result<Option<RunMerge>, Self::Error>;
 }
 
-/// When runs' own worktrees were removed (ORC-63), by *Remove worktree*, a merge or Run again. An
-/// interrupted run whose worktree was removed never continues and no longer holds its task.
+/// When runs' worktrees were removed (ORC-63), by *Remove worktree*, a merge or Run again, or found
+/// gone. A run whose removal is recorded never continues: an interrupted one no longer holds its
+/// task, and recording a continuation of it ([`RunStore::append_events`]) is refused.
 pub trait WorktreeStore {
   type Error: std::error::Error + Send + Sync + 'static;
 
-  /// Records that the worktree of `run` was removed at `at`. A removal recorded before stays.
+  /// Records that the worktree of `run` was found removed at `at`. A removal recorded before stays.
   fn save_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
+
+  /// Records, before git removes anything, that the worktrees of `run` are removed at `at`, unless
+  /// the run has live work as stored now. It is read and written in one write transaction, as a
+  /// continuation of the run is, so a removal and a continuation never both go ahead.
+  fn begin_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<RemovalStart, Self::Error>;
+
+  /// Takes back the removal [`WorktreeStore::begin_worktree_removal`] recorded at `at`, once git
+  /// removed nothing: the run is as it was.
+  fn undo_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
 
   fn worktree_removal(&self, run: RunId) -> Result<Option<Timestamp>, Self::Error>;
 

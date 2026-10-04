@@ -241,10 +241,11 @@ impl TaskDetail {
   }
 
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+    let mut db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
     let blocked_by = blocking_keys(&db, &task)?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    history::note_missing_worktrees(&mut db, repo_root, &runs)?;
     let messages = db.messages(task.id())?;
     let history = history::read(&db, &task, &runs)?;
     let latest = runs.pop();

@@ -89,12 +89,15 @@ fn unreadable_latest_run_shows_on_its_task_page_with_the_task_runs() {
     (succeeded.number, succeeded.phase, succeeded.at),
     (Some(earlier.number()), Some(TaskPhase::Succeeded), Some(at(30)))
   );
-  assert_eq!(succeeded.detail.key, "tasks.progress.succeeded");
+  assert_eq!(succeeded.detail.key, "runs.history.notMerged");
   assert_eq!(
     (first.number, first.phase),
     (Some(cancelled.number()), Some(TaskPhase::Cancelled))
   );
-  assert_eq!(first.detail.key, "runs.history.cancelled");
+  assert_eq!(
+    first.detail.key, "runs.history.cancelledAt",
+    "at the step it had not passed"
+  );
   assert!(first.without_live_work().is_some(), "its worktree may be removed");
   assert!(detail.earlier_unreadable.is_empty());
 }

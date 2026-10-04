@@ -183,6 +183,7 @@ fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) 
   };
   let files = worktree.uncommitted.len();
   let (glyph, state) = match (worktree.missing, files) {
+    _ if worktree.forgotten => (Icon::FolderX, ctx.t("runs.worktree.state.forgotten")),
     (true, _) => (Icon::FolderX, ctx.t("runs.worktree.state.missing")),
     (false, 0) => (Icon::Check, ctx.t("runs.worktree.state.clean")),
     (false, 1) => (Icon::FileDiff, ctx.t("runs.worktree.state.uncommitted.one")),

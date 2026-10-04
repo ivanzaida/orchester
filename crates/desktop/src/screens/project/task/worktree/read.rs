@@ -19,16 +19,30 @@ use crate::{
   },
 };
 
-/// What the runs left, by run, or why it could not be read.
+/// What the runs left, by run, or why it could not be read; `stale` while it is read again after a
+/// merge or a removal.
 #[derive(Clone, Debug, PartialEq)]
-pub(in crate::screens::project::task) struct TaskLeftovers(Result<Arc<[(RunId, Leftovers)]>, Message>);
+pub(in crate::screens::project::task) struct TaskLeftovers {
+  left: Result<Arc<[(RunId, Leftovers)]>, Message>,
+  stale: bool,
+}
 
 impl lurq::app::component::DevtoolsInspectable for TaskLeftovers {}
 
 impl TaskLeftovers {
-  /// What `run` left; `None` when it was not read (the run has live work).
+  /// What `run` left, for its actions; `None` when it was not read (the run has live work) or
+  /// is being read again after a merge or a removal, which must not show beside the new merge or
+  /// offer a removal again.
   pub(in crate::screens::project::task) fn of(&self, run: RunId) -> Option<Result<Leftovers, Message>> {
-    match &self.0 {
+    if self.stale {
+      return None;
+    }
+    self.as_read(run)
+  }
+
+  /// What `run` left as last read, for its row, which keeps its lines while they are read again.
+  pub(in crate::screens::project::task) fn as_read(&self, run: RunId) -> Option<Result<Leftovers, Message>> {
+    match &self.left {
       Ok(left) => left
         .iter()
         .find(|(id, _)| *id == run)
@@ -89,17 +103,25 @@ pub(in crate::screens::project::task) fn task_leftovers(
     }
   });
   let state = load.state().get();
-  if state.is_pending() && state.data.as_ref().is_none_or(|read| read.read_at != changed_by_person) {
-    return None;
-  }
+  let stale = state.is_pending()
+    && state
+      .data
+      .as_ref()
+      .is_some_and(|read| read.read_at != changed_by_person);
   match (state.data, state.error) {
-    (_, Some(error)) => Some(TaskLeftovers(Err(error))),
+    (_, Some(error)) => Some(TaskLeftovers {
+      left: Err(error),
+      stale,
+    }),
     (
       Some(Read {
         left: LeftBehind(left), ..
       }),
       None,
-    ) => Some(TaskLeftovers(Ok(left.into()))),
+    ) => Some(TaskLeftovers {
+      left: Ok(left.into()),
+      stale,
+    }),
     (None, None) => None,
   }
 }
