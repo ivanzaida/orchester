@@ -283,6 +283,12 @@ fn pull_requests_layout_columns_fit_the_narrowest_and_the_design_window() {
         "at {width}, {text} is under its heading"
       );
     }
+    // The sort box ends where the headings do, at the list's right padding.
+    let (sort, row) = (desktop.bounds("pull-requests-sort"), desktop.bounds(HEADINGS));
+    assert!(
+      sort.x + sort.width <= row.x + row.width + 0.5,
+      "at {width}, the sort box {sort:?} ends past the list {row:?}"
+    );
     let identity = desktop.bounds("pull-request-identity");
     assert!(
       identity.width >= TITLE_MIN,
