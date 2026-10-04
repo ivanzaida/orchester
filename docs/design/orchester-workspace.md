@@ -1491,8 +1491,8 @@ this run…*, the run's state chip (*Following live*, *Waiting for you*, *Ready 
 - **Cards are chat messages:** the question (C·02) and the plan (C·03, *Approve plan & continue* on the card, *Request
   changes* from the composer) sit in the asking agent's message; the tool approval card likewise (not drawn again). The
   result of a step is a bordered card (C·04).
-- **Composer** unchanged from ORC-61 in every state drawn: steer (*Send after this turn*, *Send now*), answer, plan
-  changes, *Send follow-up*, *Continue with instructions*, *Send when the run starts*.
+- **Composer**: the one-box composer approved on 2026-10-04 (see *Composer* below), an instance of `q2XF4` in every
+  frame; closed runs use `Hhug2`.
 - **Details and the rail share the right side** (approved): *Details* replaces the rail with the 320 invocation pane;
   its head has *Steps*, which brings the rail back (and pressing *Details* again does too). They never show together, so
   the chat keeps its width.
@@ -1546,7 +1546,22 @@ the composer proposal `YJfPo`; 09 Usage `yqO5T` is at y 28580.
 it with attach and a permission chip at the left, a selector and a round send button at the right), one composer is
 drawn in group `YJfPo` (02.5, y 5876, 4896 × 2800): K·01 working with the send menu open `BRMpj`, K·02 answering
 `K1oNwn`, K·03 follow-up after review `cHDF1`, K·04 not delivered `TdT7X`, K·05 960 `vOF1a`, K·06 every state
-(compact) `l7cEtA`. Until it is decided, the composer above (ORC-61) stays the design.
+(compact) `l7cEtA`.
+
+It is the component **`q2XF4` *Conversation / Composer*** in Foundations `rIGE7` (x 2280, y 1900, 860 wide), with
+**`Hhug2` *Conversation / Composer · closed*** beside it (x 3200). States are overrides on the instance: *Context line*
+`rBfvv` (enabled, text `EQ2oT`, icon `t8RQb`), *Input* `I2c7e3` (text; `$subtle` placeholder or `$text` draft), *Box*
+`Z4Ytc` stroke `$muted` while focused, *Permissions text* `D3ZmA1` (hidden at 960), *Agent* `JG7DN` and *Agent state*
+`HcdTV`, *Recipient chevron* `Nq982` (lock when the recipient is fixed), *Send options* `NEHne` (hidden unless the
+agent is mid-turn), *Send icon* `jd9ia` (arrow-up or clock-3), *Send* `DPAlg` opacity 0.4 while empty, *Quiet line*
+`ONl6b` (hidden unless it changes the outcome); the closed one overrides *Reason* `wnnO7`. Every frame that shows the
+Conversation composer uses these instances: C·01–C·12 and C·14 (B, H) in `A5H6ln`; 02.A `Oqmog`, 02.J `q4K1G`, 02.K
+`H03XN`, 02.L `D6Nwxz`, 02.12 `jgqPe`, 02.Q5 `Y8hyj` (closed); `A9j8eD` and `INTTC` (waiting for your decision); the
+Tools-view frames `SfXU1`, `iBzOj`, `BQgqg`, `tWO8E`, `BbGhA`, `IFmpE`, `IcGvI` (working) and `HW9mB` (closed, merged);
+and the two composers on the pull request page in 08 (`McWTM`, *Send fix request* and *Ask Builder*), which used
+`C3nu0z`. The K frames in `YJfPo` are the drawn specification of the same values. The ORC-61 components `kjsmd` (with
+`C3nu0z`), `V17jfc`, `uoK7y` and `mDnc3` stay in Foundations without instances because the built app and its theme
+tests still name them; they go when the new design is built.
 
 - **Box.** Radius 18, `$raised`, `$border` (`$muted` while focused); the input (13) on top, then one row: *+* (Attach,
   0.4, tooltip *Attaching files is not available yet*), the run's permission chip, space, the recipient as a quiet
