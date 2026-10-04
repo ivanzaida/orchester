@@ -17,6 +17,7 @@ mod command_approvals;
 mod conversation;
 mod conversation_composer;
 mod conversation_composer_box;
+mod conversation_composer_ime;
 mod conversation_queued;
 mod conversation_rail;
 mod dialogs;
