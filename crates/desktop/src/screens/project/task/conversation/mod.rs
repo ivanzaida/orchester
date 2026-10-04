@@ -172,8 +172,8 @@ pub(super) struct ConversationTab {
   following: Signal<bool>,
   /// Rows when the list stopped following, for "N new".
   left_at: Signal<usize>,
-  /// Rows of the last render, to notice new ones; `None` before the first.
-  shown: Arc<Mutex<Option<usize>>>,
+  /// Whether the list has shown rows yet: the first time, it starts at the end.
+  started: Arc<Mutex<bool>>,
   /// The card that waits for the person, which the timeline shows until the person scrolls.
   reveal: Arc<Mutex<Reveal>>,
   toggles: Toggles,
@@ -202,7 +202,7 @@ impl Component for ConversationTab {
       raw: ctx.signal(false),
       following: ctx.signal(true),
       left_at: ctx.signal(0),
-      shown: Arc::new(Mutex::new(None)),
+      started: Arc::new(Mutex::new(false)),
       reveal: Arc::new(Mutex::new(Reveal::default())),
       toggles: Toggles(ctx.signal(OpenRows::default())),
       scroll: ScrollState::new(),
@@ -210,6 +210,10 @@ impl Component for ConversationTab {
       draft: ctx.signal(String::new()),
       details,
     }
+  }
+
+  fn after_layout(&self) {
+    self.keep_at_end();
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -307,9 +311,7 @@ impl ConversationTab {
     let toggles = self.toggles.clone();
     let shown = view::shown(items, &choice, &|key, default| toggles.is_open(key, default));
     let live = props.conversation.state == PanelState::Live;
-    // The working line counts as a row of the list: a list that follows scrolls to it when it shows.
-    let listed = shown.rows.len() + usize::from(live && !shown.rows.is_empty());
-    let reveal = self.follow(listed, items);
+    let reveal = self.follow(shown.rows.len(), items);
     let working = live.then(|| LiveFooterProps {
       agent: run
         .current_step()

@@ -517,6 +517,10 @@ ORC-61 polish · Conversation tab design-verification minors · branch `claude/c
     the run…*.
   - The working line is the timeline's last row (indented to a message's text, no hairline), so it scrolls with the
     timeline; with nothing else to show it stays under the empty state.
+  - Following live (design verification, 2026-10-04): a timeline that follows goes to its end on every render, not
+    only when it has more rows than before (a step folding as the next one starts can leave as many), and after each
+    layout it goes there again when it came short (rows measured taller than estimated), so *Following live* never
+    shows anything but the end; opened right after a fast run started, it no longer stays at the top.
   - A denied command is a titled problem row: *Command denied* (or *Outside write denied* by its category) with
     *permission_denied* / *denied by you* and the time, and *… did not run: …* naming the command, with no command
     box or Copy.
@@ -536,7 +540,8 @@ ORC-61 polish · Conversation tab design-verification minors · branch `claude/c
   *exit 1 · attempt 1*; the Details pane wording (ORC-44's panel).
 - Tests: `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`, `--test i18n
   locale` and `every_key`, `--test form_keyboard` with `conversation` (incl. the new `conversation_queued`,
-  `conversation_a_step_that_judges_the_work_…` and `conversation_a_question_that_arrives_while_searching_…`),
+  `conversation_a_step_that_judges_the_work_…` and `conversation_a_question_that_arrives_while_searching_…`,
+  `conversation_following_keeps_the_end_in_view_…`),
   `composer_`, `activity_`, `task_graph`, `run_permissions`, `tool_approval`, `tool_run`, `native_activity`.
 
 U11 · Pull requests: no "synced" without a link, columns at 960 · branch `claude/pr-fixes` (done 2026-10-04, design

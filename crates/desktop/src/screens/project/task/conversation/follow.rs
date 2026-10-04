@@ -26,6 +26,8 @@ use crate::{
 /// *Jump to latest* (`iwe3p`) and how close to the end still counts as at the end.
 const JUMP_HEIGHT: f32 = 30.0;
 const FOLLOW_SLACK: f32 = 24.0;
+/// How far from the end a following timeline may sit before it goes to the end again.
+const AT_END: f32 = 0.5;
 
 /// The card the timeline reveals, and whether the person has scrolled since the tab opened.
 #[derive(Default)]
@@ -44,13 +46,16 @@ impl ConversationTab {
     })
   }
 
-  /// Keeps the newest row in view while following. The first time, the timeline starts at the end;
-  /// until the person scrolls, the first card that waits for them is the list's reveal, from the
+  /// Keeps the end of the timeline in view while following: the tab renders again whenever what it
+  /// shows changes (a row added, a step folded as the next one starts, a group grown, the working
+  /// line shown), so every render with `rows` to show goes to the end; counting rows would miss a
+  /// fold that leaves as many rows as before. The first time, the timeline starts at the end; until
+  /// the person scrolls, the first card that waits for them is the list's reveal instead, from the
   /// render it appears in (the run's state may read before its question) until it no longer waits.
   /// The key stays the same on every render: a reveal that changes to `None` is dropped before the
   /// list has measured its way to the card.
   pub(super) fn follow(&self, rows: usize, items: &[Item]) -> Option<String> {
-    let mut shown = self.shown.lock();
+    let mut started = self.started.lock();
     let mut reveal = self.reveal.lock();
     if !reveal.scrolled {
       reveal.key = items
@@ -58,11 +63,24 @@ impl ConversationTab {
         .find(|item| timeline::waits_for_you(item))
         .map(|item| item.key.to_string());
     }
-    if (reveal.key.is_none() || shown.is_none()) && self.following.get_untracked() && rows > shown.unwrap_or(0) {
+    if (reveal.key.is_none() || !*started) && self.following.get_untracked() && rows > 0 {
       self.scroll.scroll_to_bottom_pending();
     }
-    *shown = Some(rows);
+    *started |= rows > 0;
     reveal.key.clone()
+  }
+
+  /// After each layout: a timeline that follows and has come short of its end (rows measured taller
+  /// than the list estimated them, a row that grew after the render went to the end) goes to it
+  /// again, so *Following live* never shows anything but the end.
+  pub(super) fn keep_at_end(&self) {
+    if !self.following.get_untracked() || !*self.started.lock() || self.reveal.lock().key.is_some() {
+      return;
+    }
+    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
+    if self.scroll.scroll_y() < end - AT_END {
+      self.scroll.scroll_to_bottom_pending();
+    }
   }
 
   /// The timeline's rows, then `working`, the working line while an agent works.

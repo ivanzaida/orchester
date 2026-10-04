@@ -5,7 +5,8 @@
 //! the step filter says what it hides; the Details pane opens on demand; a step that judges the work
 //! reads *Review passed*; a question that arrives while the person searches leaves the focus in the
 //! search; and while an agent works the timeline follows it with the working line as its last row,
-//! stops following when scrolled up, and *Jump to latest* counts what came since.
+//! also as steps fold and start right after the tab opens, stops following when scrolled up, and
+//! *Jump to latest* counts what came since.
 
 use std::num::NonZeroU32;
 
@@ -21,8 +22,8 @@ use crate::{
   github::shows,
   harness::Desktop,
   task_run::{
-    agent_started, agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed,
-    seed_steps, set_text,
+    agent_started, agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs,
+    run_finished, seed, seed_steps, set_text,
   },
 };
 
@@ -419,4 +420,61 @@ fn conversation_a_question_that_arrives_while_searching_leaves_the_focus_in_the_
   desktop.type_text("-in");
   assert_eq!(desktop.value("conversation-search"), "sign-in");
   assert_eq!(desktop.value("conversation-input"), "");
+}
+
+/// Whether the element `id` lies whole between the toolbar and the composer.
+fn in_view(desktop: &mut Desktop, id: &str) -> bool {
+  if !has(desktop, id) {
+    return false;
+  }
+  let (row, toolbar, dock) = (
+    desktop.bounds(id),
+    desktop.bounds("conversation-toolbar"),
+    desktop.bounds("conversation-dock"),
+  );
+  row.y >= toolbar.y + toolbar.height - 0.5 && row.y + row.height <= dock.y + 0.5
+}
+
+#[test]
+fn conversation_following_keeps_the_end_in_view_as_steps_fold_and_start() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      let keys = ["one", "two", "three", "four", "five", "six", "seven"];
+      keys
+        .iter()
+        .enumerate()
+        .map(|(index, key)| {
+          let after: Vec<&str> = keys[..index].last().into_iter().copied().collect();
+          agent_step(builder, key, key, "Work slowly.", &after)
+        })
+        .collect()
+    });
+  });
+  // A short window: the folded steps and the running one's rows fill the timeline.
+  desktop.tree.resize(1440, 700);
+  desktop.pass();
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  desktop.wait_until("the agent at work", |desktop| agent_started(desktop.repo()));
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the working line", |desktop| has(desktop, "activity-live"));
+  // Each frame while the run goes on, after the frame that lays out what arrived, the working line
+  // is in view; once it ends, the run's end is.
+  desktop.wait_until("the run's end in view", |desktop| {
+    desktop.pass();
+    if has(desktop, "activity-live") {
+      // New rows are measured in the frame that lays them out; the frame after it, the end shows.
+      if !in_view(desktop, "activity-live") {
+        desktop.pass();
+      }
+      assert!(
+        !has(desktop, "activity-live") || in_view(desktop, "activity-live"),
+        "the working line is out of view"
+      );
+      assert!(shows(desktop, "conversation-toolbar", "Following live"));
+      return false;
+    }
+    has(desktop, "conversation-end") && in_view(desktop, "conversation-end")
+  });
+  assert!(run_finished(desktop.repo()));
 }
