@@ -471,7 +471,10 @@ fn agent_cannot_be_asked_without_its_worktree(desktop: &mut Desktop) {
   assert!(!has(desktop, "conversation-composer"), "pressing it does nothing");
   desktop.click("task-tab-conversation");
   desktop.wait_for("conversation-composer");
-  assert!(shows(desktop, "conversation-end", "is ready for your review"));
+  // The timeline reads the run after the composer shows.
+  desktop.wait_until("the run's end", |desktop| {
+    has(desktop, "conversation-end") && shows(desktop, "conversation-end", "is ready for your review")
+  });
   assert!(has(desktop, "conversation-input-closed"));
   assert!(shows(
     desktop,
