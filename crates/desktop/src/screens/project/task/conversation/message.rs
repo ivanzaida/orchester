@@ -1,8 +1,8 @@
-//! Messages in the timeline (*Conversation / Timeline message* `V17jfc`): an agent's, with the bot
-//! glyph on `$raised`, and the person's on `$raised` with `$border` and the user glyph on `$hover`,
-//! with its delivery line (icon 11 `$subtle`, text 10 `$muted`): sending now, queued, delivered
-//! mid-turn or at the end of a turn, or not delivered, kept, with *Send after this turn* and *Edit in
-//! composer*. In *Tools* a message is one line (`q4fCXK`).
+//! Messages in the chat (`kpnmP`, [`super::chat`]): an agent's, with the chips of its tool activity
+//! ([`super::chips`]); the person's, with its delivery line (icon 11 `$subtle`, text 10 `$muted`):
+//! sending now, queued, delivered mid-turn or at the end of a turn, or not delivered, kept, with
+//! *Send after this turn* and *Edit in composer*; a tool step's failing command with its output
+//! (`FeiRG`). In *Tools* a message is one line (`q4fCXK`).
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -10,24 +10,30 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
   conversation::{Arrival, Undelivered},
   id::{RunId, TaskId},
-  time::Timestamp,
 };
 
-use super::{Timeline, send};
+use super::{
+  super::activity::{EntryProps, EntryView},
+  Timeline,
+  chat::{Avatar, chat_row, chat_text},
+  chips::chips,
+  send,
+};
 use crate::{
   display,
   tasks::{
     conversation::{Author, Entry, EntryState, Queue},
-    timeline::{Item, ItemKind},
+    timeline::{Item, ItemKind, view::AgentRow},
+    transcript::Entry as TranscriptEntry,
   },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -38,65 +44,72 @@ use crate::{
   },
 };
 
-/// The glyph tile of a message (`V17jfc`) and the time column of a one-line entry (`N4SlQq`).
-const GLYPH_SIZE: f32 = 24.0;
+/// The time column of a one-line entry (`N4SlQq`) and the glyph tile beside it.
 const TIME_WIDTH: f32 = 36.0;
+const GLYPH_SIZE: f32 = 24.0;
 
-/// What an agent wrote: its role, its step and the time, then the text.
-pub(super) fn agent_message(ctx: &Ctx, (agent, step): (&Arc<str>, &Arc<str>), at: Timestamp, text: &str) -> Element {
+/// An agent's row: its message, if it wrote one, and the chips of its tool groups after it.
+pub(super) fn agent_row(ctx: &mut Ctx, row: &AgentRow, timeline: &Timeline, raw: bool) -> Element {
+  let time = display::clock(row.at);
+  let meta = match (&row.step, row.tool_step) {
+    (_, true) => ctx.t_args("runs.conversation.toolMeta", [("time", time.as_str())]),
+    (Some(step), false) => ctx.t_args(
+      "runs.conversation.agentMeta",
+      [("step", &**step), ("time", time.as_str())],
+    ),
+    (None, false) => time.as_str().into(),
+  };
+  let avatar = if row.tool_step { Avatar::Tool } else { Avatar::Agent };
+  let body = row
+    .text
+    .as_deref()
+    .map(chat_text)
+    .into_iter()
+    .chain(chips(ctx, timeline, &row.chips, raw))
+    .collect();
+  // A row of tool activity alone is told apart from a message.
+  let id = if row.text.is_some() {
+    "conversation-agent-message"
+  } else {
+    "conversation-agent-tools"
+  };
+  chat_row(id.into(), avatar, (&row.agent, &meta), body)
+}
+
+/// A tool step's command that failed the step (`FeiRG`): the step's own message, the command with
+/// its exit code and output open in a bordered box.
+pub(super) fn tool_step_failure(ctx: &mut Ctx, item: &Item, entry: &TranscriptEntry, timeline: &Timeline) -> Element {
+  let step = timeline.step_name(entry.execution).unwrap_or_else(|| "".into());
   let meta = ctx.t_args(
-    "runs.conversation.agentMeta",
-    [("step", &**step), ("time", display::clock(at).as_str())],
+    "runs.conversation.toolMeta",
+    [("time", display::clock(item.at).as_str())],
   );
-  Row::new()
-    .id("conversation-agent-message")
+  let command = ctx.mount_keyed::<EntryView>(
+    &item.key,
+    EntryProps {
+      key: item.key.clone(),
+      task: timeline.task,
+      entry: entry.clone(),
+      agent: "".into(),
+      raw: false,
+      time_column: false,
+      in_group: false,
+      toggles: timeline.toggles.clone(),
+    },
+  );
+  let frame = Column::new()
+    .id("conversation-failed-command")
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Stack.role())
-    .child(glyph(Icon::Bot, PaletteColor::SurfaceRaised))
-    .child(body(agent, &meta, text))
-    .into()
-}
-
-fn glyph(glyph: Icon, background: PaletteColor) -> Element {
-  Row::new()
-    .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
-    .flex_shrink(0.0)
-    .background(background)
-    .rounded(RadiusSize::Sm)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .child(icon(glyph, IconSize::Entry, PaletteColor::TextSecondary))
-    .into()
-}
-
-/// Who wrote it and the meta beside them, then the text.
-fn body(author: &str, meta: &str, text: &str) -> Column {
-  Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Tight.role())
-    .child(
-      Row::new()
-        .spacing(lurq::app::theme::SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(
-          Text::new(author)
-            .variant(ExtraTypography::NoticeHeading.role())
-            .nowrap(),
-        )
-        .child(
-          Text::new(meta)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
-            .nowrap(),
-        ),
-    )
-    .child(
-      Text::new(text)
-        .variant(ExtraTypography::TimelineMessage.role())
-        .width(Dimension::Pct(100.0))
-        .selectable(true),
-    )
+    .padding(ExtraSpacing::Stack.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(ExtraRadius::Notice.role())
+    .child(command);
+  chat_row(
+    format!("conversation-tool-{}", item.key),
+    Avatar::Tool,
+    (&step, &meta),
+    vec![frame.into()],
+  )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,8 +161,8 @@ impl Component for PersonMessageView {
   }
 }
 
-/// A person's message on `$raised` with `$border` (`V17jfc`): *You*, whom it is to and when, what it
-/// says, its delivery line and `below` it.
+/// A person's message (`mjkqh` in `kpnmP`): *You*, whom it is to and when, what it says, its
+/// delivery line and `below` it.
 pub(super) fn person_message(ctx: &Ctx, entry: &Entry, below: Vec<Element>) -> Element {
   let time = display::clock(entry.at);
   let meta = match &entry.author {
@@ -159,21 +172,20 @@ pub(super) fn person_message(ctx: &Ctx, entry: &Entry, below: Vec<Element>) -> E
     ),
     Author::You | Author::Agent(_) => ctx.t_args("runs.conversation.toOrchestrator", [("time", time.as_str())]),
   };
-  let content = body(&ctx.t("runs.conversation.you"), &meta, &entry.body)
-    .child(delivery_line(ctx, &entry.state))
-    .with_children(below);
-  Row::new()
+  let body = vec![chat_text(&entry.body), delivery_line(ctx, &entry.state)]
+    .into_iter()
+    .chain(below)
+    .collect();
+  Column::new()
     .id(format!("conversation-message-{}", entry.id))
     .describe("state", format!("{:?}", entry.state))
     .width(Dimension::Pct(100.0))
-    .padding_vertical(ExtraSpacing::Inline.role())
-    .padding_horizontal(ExtraSpacing::Stack.role())
-    .spacing(ExtraSpacing::Stack.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Notice.role())
-    .child(glyph(Icon::User, PaletteColor::AccentMuted))
-    .child(content)
+    .child(chat_row(
+      "conversation-person".into(),
+      Avatar::Person,
+      (&ctx.t("runs.conversation.you"), &meta),
+      body,
+    ))
     .into()
 }
 
@@ -322,7 +334,7 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
       ),
       ctx.t("runs.conversation.line.message"),
     ),
-    ItemKind::Question(entry) => (
+    ItemKind::Question { entry, .. } => (
       Icon::MessageCircle,
       ctx.t_args(
         "runs.conversation.line.agent",
@@ -356,7 +368,16 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
           .nowrap(),
       ),
     )
-    .child(self::glyph(glyph, PaletteColor::SurfaceRaised))
+    .child(
+      Row::new()
+        .size(Dimension::Px(GLYPH_SIZE), Dimension::Px(GLYPH_SIZE))
+        .flex_shrink(0.0)
+        .background(PaletteColor::SurfaceRaised)
+        .rounded(lurq::app::theme::RadiusSize::Sm)
+        .align_items(Alignment::Center)
+        .justify(lurq::layout::layout_kind::Justify::Center)
+        .child(icon(glyph, IconSize::Entry, PaletteColor::TextSecondary)),
+    )
     .child(
       Text::new(&title)
         .variant(TypographyStyle::FieldLabel)

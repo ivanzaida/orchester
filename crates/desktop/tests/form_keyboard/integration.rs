@@ -70,9 +70,9 @@ fn finished_run_in(program_set: Programs, init: impl FnOnce(&Path)) -> Desktop {
 }
 
 #[derive(Default)]
-struct GitGate {
+pub(crate) struct GitGate {
   armed: AtomicBool,
-  entered: AtomicBool,
+  pub(crate) entered: AtomicBool,
   released: AtomicBool,
   calls: AtomicUsize,
 }
@@ -86,7 +86,7 @@ impl GitGate {
     }
   }
 
-  fn release(&self) {
+  pub(crate) fn release(&self) {
     self.released.store(true, Ordering::SeqCst);
   }
 }
@@ -114,7 +114,8 @@ impl CommandRunner for BlockingGit {
   }
 }
 
-fn blocked_git(args: &'static [&'static str]) -> (Programs, Arc<GitGate>) {
+/// Programs whose git holds a command that starts with `args` until the gate is released.
+pub(crate) fn blocked_git(args: &'static [&'static str]) -> (Programs, Arc<GitGate>) {
   let gate = Arc::new(GitGate::default());
   gate.armed.store(true, Ordering::SeqCst);
   let runner = BlockingGit {
@@ -190,8 +191,7 @@ fn merge_moves_main_to_the_run_and_clears_its_worktree_and_branch() {
 }
 
 /// The Conversation tab of the merged run: the timeline ends with the merge, no agent reads
-/// messages, so the composer takes none and its recipient cannot be chosen, and the line under it
-/// says why.
+/// messages, so the composer keeps no controls and says why.
 fn merged_conversation_takes_no_messages(desktop: &mut Desktop) {
   desktop.click("task-tab-conversation");
   desktop.wait_for("conversation-composer");
@@ -204,15 +204,9 @@ fn merged_conversation_takes_no_messages(desktop: &mut Desktop) {
     "conversation-explanation",
     "This run's work was merged."
   ));
-  assert!(!has(desktop, "conversation-send-now"), "no agent works");
-  desktop.press("conversation-recipient");
-  let open = desktop
-    .tree
-    .get_element_by_id_mut("conversation-recipient")
-    .and_then(|element| element.as_select())
-    .expect("the recipient select")
-    .is_open();
-  assert!(!open, "the recipient select is disabled");
+  // Closed, the composer keeps no controls: only the lock and the reason.
+  assert!(!has(desktop, "conversation-send"), "nothing to send");
+  assert!(!has(desktop, "conversation-recipient"), "no one to choose");
   desktop.click("task-tab-summary");
   desktop.wait_for("task-ready");
 }

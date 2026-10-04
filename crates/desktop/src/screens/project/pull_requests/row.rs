@@ -1,7 +1,10 @@
 //! Pull request list row (`QHBNZ`) and the column headings above the rows (`Qcgjy`). Rows are
 //! pointer-only and show GitHub's state of the pull request; agent work in Orchester comes with
 //! runs, so every row reads "No linked task". A row opens the pull request (`Rrmhf`); Open in
-//! GitHub opens it in the browser instead.
+//! GitHub opens it in the browser instead. No frame draws the list in a narrow window; like the
+//! Tasks list (02.03E) it drops a column so the title keeps its room
+//! (`theme::PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW`): Open in GitHub, which the pull request's own
+//! topbar also has.
 
 use std::sync::Arc;
 
@@ -23,7 +26,10 @@ use orchester_core::{
 use crate::{
   display,
   messages::Message,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{
+    ExtraColor, ExtraSpacing, ExtraTypography, PULL_REQUEST_CHECKS_WIDTH, PULL_REQUEST_CHEVRON_WIDTH,
+    PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW, PULL_REQUEST_OPEN_WIDTH, PULL_REQUEST_STATE_WIDTH,
+  },
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
@@ -34,14 +40,8 @@ use crate::{
   },
 };
 
-/// Row height and the state and checks columns (`QHBNZ`, `ruZbF`, `ZWzfm`, `tPwvi`).
+/// Row height (`QHBNZ`).
 pub const ROW_HEIGHT: f32 = 100.0;
-const STATE_WIDTH: f32 = 180.0;
-const CHECKS_WIDTH: f32 = 150.0;
-/// Open in GitHub, fixed so the column headings line up with the rows, and the chevron after it
-/// (`laxWE`).
-const OPEN_WIDTH: f32 = 128.0;
-const CHEVRON_WIDTH: f32 = 14.0;
 /// Characters of a revision shown in a row ("8f3a2c1").
 const SHORT_REVISION: usize = 7;
 /// Height of the Open in GitHub button, as the Copy button of a command row (`eFsWL`).
@@ -49,11 +49,20 @@ const OPEN_HEIGHT: f32 = 26.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
+/// Whether the window has room for Open in GitHub in every row. Reading the width re-renders the
+/// caller as the window resizes.
+fn open_in_row(ctx: &Ctx) -> bool {
+  ctx.window().logical_width() >= PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW
+}
+
+/// The column headings (`Qcgjy`), each at its own width in a cell as wide as its column.
 pub fn column_headings(ctx: &Ctx) -> Element {
-  let heading = |key: &str| {
-    Text::new(&ctx.t(key))
-      .variant(ExtraTypography::Footnote.role())
-      .nowrap()
+  let heading = |key: &str, width: Dimension| {
+    Row::new().width(width).child(
+      Text::new(&ctx.t(key))
+        .variant(ExtraTypography::Footnote.role())
+        .nowrap(),
+    )
   };
   Row::new()
     .id("pull-requests-headings")
@@ -61,11 +70,17 @@ pub fn column_headings(ctx: &Ctx) -> Element {
     .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(heading("pullRequests.columns.pullRequest").flex(1.0))
-    .child(heading("pullRequests.columns.state").width(Dimension::Px(STATE_WIDTH)))
-    .child(heading("pullRequests.columns.checks").width(Dimension::Px(CHECKS_WIDTH)))
-    .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
-    .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)))
+    .child(heading("pullRequests.columns.pullRequest", Dimension::Auto).flex(1.0))
+    .child(heading(
+      "pullRequests.columns.state",
+      Dimension::Px(PULL_REQUEST_STATE_WIDTH),
+    ))
+    .child(heading(
+      "pullRequests.columns.checks",
+      Dimension::Px(PULL_REQUEST_CHECKS_WIDTH),
+    ))
+    .with_children(open_in_row(ctx).then(|| Row::new().width(Dimension::Px(PULL_REQUEST_OPEN_WIDTH))))
+    .child(Row::new().width(Dimension::Px(PULL_REQUEST_CHEVRON_WIDTH)))
     .into()
 }
 
@@ -102,6 +117,15 @@ impl Component for PullRequestRow {
       open,
       show,
     } = ctx.props::<RowProps>().clone();
+    let open = open_in_row(ctx).then(|| {
+      ActionButton::new(ctx.t("pullRequests.row.openInGitHub"))
+        .icon(Icon::ExternalLink)
+        .compact()
+        .id("pull-request-open")
+        .size(Dimension::Px(PULL_REQUEST_OPEN_WIDTH), Dimension::Px(OPEN_HEIGHT))
+        .on_click(move || open())
+        .render(ctx)
+    });
     let row = surface()
       .id("pull-request-row")
       .describe("number", pull_request.number().to_string())
@@ -117,16 +141,8 @@ impl Component for PullRequestRow {
       .child(identity(ctx, &pull_request, Timestamp::now()))
       .child(review(ctx, &pull_request))
       .child(checks(ctx, pull_request.checks()))
-      .child(
-        ActionButton::new(ctx.t("pullRequests.row.openInGitHub"))
-          .icon(Icon::ExternalLink)
-          .compact()
-          .id("pull-request-open")
-          .size(Dimension::Px(OPEN_WIDTH), Dimension::Px(OPEN_HEIGHT))
-          .on_click(move || open())
-          .render(ctx),
-      )
-      .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)).child(icon(
+      .with_children(open)
+      .child(Row::new().width(Dimension::Px(PULL_REQUEST_CHEVRON_WIDTH)).child(icon(
         Icon::ChevronRight,
         IconSize::Dismiss,
         PaletteColor::TextSecondary,
@@ -167,6 +183,7 @@ fn identity(ctx: &Ctx, pull_request: &PullRequest, now: Timestamp) -> Element {
       .text_overflow(TextOverflow::Elipsis)
   };
   Column::new()
+    .id("pull-request-identity")
     .flex(1.0)
     .spacing(SpacingSize::Sm)
     .child(line(pull_request.title(), ExtraTypography::RowTitle.role()))
@@ -185,7 +202,7 @@ fn review(ctx: &Ctx, pull_request: &PullRequest) -> Element {
   };
   let state = pull_request.state();
   Column::new()
-    .width(Dimension::Px(STATE_WIDTH))
+    .width(Dimension::Px(PULL_REQUEST_STATE_WIDTH))
     .spacing(SpacingSize::Sm)
     .child(Row::new().child(status_label(state_icon(state), &ctx.t(state_key(state)))))
     .child(Text::new(&ctx.t(decision)).variant(TypographyStyle::Caption))
@@ -223,7 +240,7 @@ fn checks(ctx: &Ctx, checks: &CheckRollup) -> Element {
   };
   let revision = &checks.on.as_str()[..SHORT_REVISION];
   Column::new()
-    .width(Dimension::Px(CHECKS_WIDTH))
+    .width(Dimension::Px(PULL_REQUEST_CHECKS_WIDTH))
     .spacing(SpacingSize::Sm)
     .child(
       Text::new(&summary)

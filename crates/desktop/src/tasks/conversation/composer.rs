@@ -6,7 +6,12 @@
 
 use std::sync::Arc;
 
-use orchester_core::{conversation::Recipient, id::ResourceId, run::PlanVersion, time::Timestamp};
+use orchester_core::{
+  conversation::Recipient,
+  id::{MessageId, ResourceId},
+  run::PlanVersion,
+  time::Timestamp,
+};
 
 use super::{Author, Conversation, PanelState, WorkingAgent};
 use crate::tasks::{detail::RunView, plan::PlanReview};
@@ -24,6 +29,8 @@ pub enum ComposerMode {
   Answer {
     agent: Arc<str>,
     profile: Option<ResourceId>,
+    /// The question's message.
+    question: MessageId,
     asked_at: Timestamp,
   },
   /// Plan `version` of `agent` waits for a decision: the message is the changes it needs.
@@ -100,6 +107,25 @@ impl ComposerMode {
       .unwrap_or(Recipient::Orchestrator)
   }
 
+  /// What leaving this mode's context (its line's ×, or Esc) leaves: a question not answered or a
+  /// plan's changes not requested, so the message is an ordinary one to `recipient`, which reads it
+  /// at its next turn (`YJfPo`). Other modes have nothing to leave.
+  pub fn without_context(self, conversation: &Conversation, recipient: Recipient) -> Self {
+    if !matches!(self, Self::Answer { .. } | Self::PlanChanges { .. }) {
+      return self;
+    }
+    match recipient {
+      Recipient::Agent(profile) => Self::Queue(Queued::NextTurn(
+        conversation
+          .recipients
+          .iter()
+          .find(|choice| choice.recipient == Recipient::Agent(profile))
+          .and_then(|choice| choice.agent.clone()),
+      )),
+      Recipient::Orchestrator => Self::Queue(Queued::Checkpoint),
+    }
+  }
+
   /// The recipient the composer is fixed to, if it is: the agent whose question it answers.
   pub const fn fixed_recipient(&self) -> Option<Recipient> {
     match self {
@@ -149,6 +175,7 @@ fn waiting(conversation: &Conversation, run: Option<&RunView>) -> ComposerMode {
     return ComposerMode::Answer {
       agent,
       profile,
+      question: question.id,
       asked_at: question.at,
     };
   }

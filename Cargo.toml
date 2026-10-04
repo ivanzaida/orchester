@@ -50,7 +50,7 @@ orchester-vault = { path = "crates/vault" }
 # login keychain).
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 # HTTP routing, JSON extraction and SSE on tokio for the shared server.
-axum = { version = "0.8", default-features = false, features = ["http1", "json", "matched-path", "tokio"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "matched-path", "query", "tokio"] }
 # Argon2id password hashing; its OS random source also supplies salts, initial passwords and tokens.
 argon2 = { version = "0.5", features = ["std"] }
 # Local wall-clock time of status bar events and the local day of the daily project budget (the OS

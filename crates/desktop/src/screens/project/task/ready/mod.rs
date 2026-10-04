@@ -36,7 +36,10 @@ use lurq::{
 use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
 
 use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
-use super::{super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, progress::progress_list};
+use super::{
+  super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, history, progress::progress_list,
+  worktree::TaskLeftovers,
+};
 use crate::{
   display,
   messages::Message,
@@ -75,6 +78,8 @@ pub(super) struct ReadyProps {
   pub(super) open: OpenProject,
   /// What the run left in the repository, once read.
   pub(super) leftovers: Option<Result<Leftovers, Message>>,
+  /// What the task's runs left, for *Runs of this task*.
+  pub(super) left: Option<TaskLeftovers>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ReadyProps {}
@@ -116,6 +121,7 @@ impl Component for ReadyForReview {
     let nav = ctx
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
+    let runs = history::section(ctx, &props.open, detail, props.left.as_ref());
     let content = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
@@ -123,7 +129,8 @@ impl Component for ReadyForReview {
       .with_children(not_enforced::not_enforced(ctx, &nav, run))
       .child(stages(run))
       .with_children(what_changed(ctx, run))
-      .child(verification(ctx, run));
+      .child(verification(ctx, run))
+      .with_children(runs);
     let summary = Column::new()
       .id("task-ready")
       .flex(1.0)

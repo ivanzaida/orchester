@@ -1,6 +1,8 @@
-//! The Conversation tab's timeline as data (ORC-61): which transcript entries are tool events and
-//! which kind, the command a CLI wrapped in its shell, what a tool group's summary counts, and what
-//! *Show*, the step filter, a search and the folds leave of the timeline.
+//! The Conversation tab's timeline as data (ORC-61, as a chat since the rail on the right): its tool
+//! events ([`tool_events`]), and what *Show*, the step picked in the rail, a search and the folds
+//! leave of the timeline.
+
+mod tool_events;
 
 use std::sync::Arc;
 
@@ -15,10 +17,10 @@ use orchester_desktop::tasks::{
   conversation::{Author, Entry as MessageEntry, EntryState},
   timeline::{
     ApprovalCard, Item, ItemKind, StepHead, ToolGroup,
-    group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+    group::tool_kind,
     interleaved,
     mark::{Mark, MarkKind},
-    view::{Choice, Row, Show, shown},
+    view::{AgentRow, Chip, Choice, Row, Show, shown},
   },
   transcript::{Entry, entries},
 };
@@ -74,99 +76,6 @@ fn edit(item: &str, path: &str) -> AgentEvent {
   }
 }
 
-#[test]
-fn timeline_finds_the_command_a_cli_wrapped_in_its_shell() {
-  // Codex 0.159.2 on Windows (probe 2026-10-02).
-  let codex = r#""C:\Program Files\PowerShell\7\pwsh.exe" -Command "python -c 1""#;
-  assert_eq!(unwrapped(codex), "python -c 1");
-  assert_eq!(unwrapped("/bin/zsh -lc 'cargo test -p core'"), "cargo test -p core");
-  assert_eq!(unwrapped("bash -c rg cancel"), "rg cancel");
-  assert_eq!(unwrapped("pnpm test src/auth"), "pnpm test src/auth");
-  assert_eq!(unwrapped("pwsh"), "pwsh");
-}
-
-#[test]
-fn timeline_tool_events_are_commands_reads_searches_edits_and_notes() {
-  let execution = StepExecutionId::generate();
-  let mut events = Vec::new();
-  for (item, text) in [
-    ("1", "Read src/auth.ts"),
-    ("2", "Grep cancel"),
-    ("3", r#""pwsh.exe" -Command "rg --files src""#),
-    ("4", "cat README.md"),
-    ("5", "git grep cancel"),
-    ("6", "pnpm test"),
-  ] {
-    events.extend(command(item, text, 0));
-  }
-  events.push(edit("7", "src/auth.ts"));
-  events.push(AgentEvent::Reasoning { text: "Think.".into() });
-  events.push(AgentEvent::TurnCompleted {
-    usage: TokenUsage::default(),
-  });
-  events.push(AgentEvent::Message { text: "Done.".into() });
-  events.push(AgentEvent::Error {
-    message: "Broke.".into(),
-  });
-  events.push(AgentEvent::PermissionDenied {
-    item: "8".into(),
-    command: "curl https://example.com".into(),
-  });
-  let kinds: Vec<Option<ToolKind>> = transcript(execution, events).iter().map(tool_kind).collect();
-  assert_eq!(
-    kinds,
-    [
-      Some(ToolKind::Read),
-      Some(ToolKind::Search),
-      Some(ToolKind::Search),
-      Some(ToolKind::Read),
-      Some(ToolKind::Search),
-      Some(ToolKind::Command),
-      Some(ToolKind::Edit),
-      Some(ToolKind::Note),
-      Some(ToolKind::Note),
-      None,
-      None,
-      // A denied command is a problem row, never grouped.
-      None,
-    ]
-  );
-}
-
-#[test]
-fn timeline_a_group_counts_by_kind_and_names_a_failed_command() {
-  let execution = StepExecutionId::generate();
-  let mut events = Vec::new();
-  events.extend(command("1", "Read a.rs", 0));
-  events.extend(command("2", "Read b.rs", 0));
-  events.extend(command("3", "Grep cancel", 0));
-  events.extend(command("4", r#"bash -lc "pnpm test src/auth""#, 1));
-  events.push(edit("5", "a.rs"));
-  events.push(edit("6", "a.rs"));
-  events.push(edit("7", "b.rs"));
-  events.push(AgentEvent::TurnCompleted {
-    usage: TokenUsage::default(),
-  });
-  let summary = GroupSummary::of(&transcript(execution, events));
-  assert_eq!((summary.reads, summary.searches, summary.commands), (2, 1, 1));
-  assert_eq!(summary.named, [Arc::<str>::from("pnpm test src/auth")]);
-  assert_eq!(summary.failed, Some(("pnpm test src/auth".into(), Some(1))));
-  assert_eq!(summary.edits, 2, "files edited, each once");
-  assert_eq!(summary.calls, 7, "usage is no tool call");
-  assert_eq!(summary.running, None);
-  assert_eq!((summary.first, summary.last), (Some(at(1)), Some(at(12))));
-
-  // A group whose command still runs ends with it.
-  let growing = transcript(
-    execution,
-    vec![AgentEvent::CommandStarted {
-      item: "9".into(),
-      command: "pnpm test".into(),
-    }],
-  );
-  assert_eq!(GroupSummary::of(&growing).running, Some("pnpm test".into()));
-}
-
 /// A step's header that ran and ended.
 fn head(execution: StepExecutionId, number: usize, step: &str) -> StepHead {
   StepHead {
@@ -186,6 +95,8 @@ fn head(execution: StepExecutionId, number: usize, step: &str) -> StepHead {
     status: Some(StepStatus::Passed),
     attempt: None,
     ended_on: false,
+    approved: false,
+    tool_run: None,
   }
 }
 
@@ -242,23 +153,63 @@ fn kinds(rows: &[Row]) -> Vec<&str> {
     .iter()
     .map(|row| match row {
       Row::Step { .. } => "step",
+      Row::Folded { .. } => "folded",
+      Row::NotStarted { .. } => "not-started",
+      Row::Agent(AgentRow { text: Some(_), .. }) => "agent",
+      Row::Agent(AgentRow { text: None, .. }) => "tools",
       Row::Item(_) => "item",
-      Row::Group { .. } => "group",
       Row::Entry { .. } => "entry",
       Row::Line(_) => "line",
     })
     .collect()
 }
 
+/// The chips of the agent's row at `index`.
+fn chips(rows: &[Row], index: usize) -> &[Chip] {
+  match &rows[index] {
+    Row::Agent(row) => &row.chips,
+    row => panic!("an agent's row, not {row:?}"),
+  }
+}
+
 #[test]
-fn timeline_finished_steps_fold_unless_opened() {
+fn timeline_a_message_carries_the_chips_of_its_tool_groups() {
   let (items, ..) = two_steps();
+  let opened = shown(&items, &Choice::default(), &|_, _| true);
+  assert_eq!(kinds(&opened.rows), ["step", "agent", "step", "agent"]);
+  let research = chips(&opened.rows, 1);
+  assert_eq!(research.len(), 1, "one chip per group");
+  assert!(research[0].open, "a person opened it");
+  let closed = shown(&items, &Choice::default(), &|key, _| key.starts_with("step"));
+  assert!(!chips(&closed.rows, 1)[0].open, "a chip starts closed");
+  // Tool activity with no message before it is the agent's row of its own.
+  let without: Vec<Item> = items
+    .iter()
+    .filter(|item| !matches!(item.kind, ItemKind::AgentMessage { .. }))
+    .cloned()
+    .collect();
+  let rows = shown(&without, &Choice::default(), &|_, _| true).rows;
+  assert_eq!(kinds(&rows), ["step", "tools", "step", "tools"]);
+  let Row::Agent(row) = &rows[1] else {
+    panic!("the agent's row");
+  };
+  assert_eq!(&*row.agent, "Builder");
+}
+
+#[test]
+fn timeline_finished_steps_fold_into_one_line_unless_opened() {
+  let (items, ..) = two_steps();
+  // The step before the last that ran stays open; the last, finished, folds.
   let folded = shown(&items, &Choice::default(), &|_, default| default);
-  assert_eq!(kinds(&folded.rows), ["step", "step"]);
-  let opened = shown(&items, &Choice::default(), &|key, default| {
-    key == "step-research" || default
-  });
-  assert_eq!(kinds(&opened.rows), ["step", "item", "group", "step"]);
+  assert_eq!(kinds(&folded.rows), ["step", "agent", "folded"]);
+  // Finished steps in a row share one line, with their keys to open them.
+  let all = shown(&items, &Choice::default(), &|_, _| false);
+  assert_eq!(kinds(&all.rows), ["folded"]);
+  let Row::Folded { steps, .. } = &all.rows[0] else {
+    panic!("the fold");
+  };
+  let keys: Vec<&str> = steps.iter().map(|(key, _)| &**key).collect();
+  assert_eq!(keys, ["step-research", "step-implement"]);
 }
 
 #[test]
@@ -273,7 +224,8 @@ fn timeline_show_hides_groups_or_flattens_them() {
     },
     &open,
   );
-  assert_eq!(kinds(&messages.rows), ["step", "item", "step", "item"]);
+  assert_eq!(kinds(&messages.rows), ["step", "agent", "step", "agent"]);
+  assert!(chips(&messages.rows, 1).is_empty(), "Messages hides the groups");
   assert_eq!(messages.hidden_tools, (3, 2), "3 tool calls in 2 groups");
   let tools = shown(
     &items,
@@ -290,8 +242,8 @@ fn timeline_show_hides_groups_or_flattens_them() {
 }
 
 #[test]
-fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
-  let (items, ..) = two_steps();
+fn timeline_search_keeps_matches_opens_their_chip_on_them_and_counts_them_by_step() {
+  let (items, research, _) = two_steps();
   let search = |query: &str| {
     shown(
       &items,
@@ -305,15 +257,15 @@ fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
   let cancel = search("CANCEL");
   // The message and the read match; the step without a match hides.
   assert_eq!(cancel.matches, 2);
-  assert_eq!(kinds(&cancel.rows), ["step", "item", "group"]);
-  let Row::Group {
-    open, shown, left_out, ..
-  } = &cancel.rows[2]
-  else {
-    panic!("the group with the match");
+  assert_eq!(kinds(&cancel.rows), ["step", "agent"]);
+  let Row::Step { matches, .. } = &cancel.rows[0] else {
+    panic!("the step's divider");
   };
-  assert!(open, "a match opens its group");
-  assert_eq!((shown.len(), left_out.len()), (1, 1));
+  assert_eq!(*matches, Some(2), "its divider counts its matches");
+  assert_eq!(cancel.step_matches, [(research, 2)]);
+  let chip = &chips(&cancel.rows, 1)[0];
+  assert!(chip.open, "a match opens its chip");
+  assert_eq!((chip.shown.len(), chip.left_out.len()), (1, 1));
   assert_eq!(cancel.matched_steps.len(), 1);
   assert_eq!(&*cancel.matched_steps[0].step, "Research");
 
@@ -323,19 +275,21 @@ fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
 }
 
 #[test]
-fn timeline_step_filter_shows_one_step_open_and_names_the_others() {
+fn timeline_step_filter_shows_the_step_picked_open() {
   let (items, research, _) = two_steps();
   let only = shown(
     &items,
     &Choice {
-      step: Some(research),
+      step: Some(vec![research]),
       ..Choice::default()
     },
-    &|_, default| default,
+    &|_, _| false,
   );
-  assert_eq!(kinds(&only.rows), ["step", "item", "group"], "the step picked is open");
-  assert_eq!(only.hidden_steps.len(), 1);
-  assert_eq!(&*only.hidden_steps[0].step, "Implement");
+  assert_eq!(kinds(&only.rows), ["step", "agent"], "the step picked is open");
+  let Row::Step { emphasized, .. } = &only.rows[0] else {
+    panic!("the step's divider");
+  };
+  assert!(emphasized, "the step picked is in $text");
 }
 
 /// Two commands of one execution, A at 1 s and B at 3 s, and something else at `between`.
@@ -496,23 +450,21 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     },
   };
   items.insert(3, item("mark-2", implement, ItemKind::Mark(mark)));
-  let folded = shown(&items, &Choice::default(), &|_, default| default);
-  assert_eq!(kinds(&folded.rows), ["step", "item", "step"]);
-  for show in [Show::Messages, Show::Tools] {
+  for show in [Show::All, Show::Messages, Show::Tools] {
     let rows = shown(
       &items,
       &Choice {
         show,
         ..Choice::default()
       },
-      &|_, default| default,
+      &|_, _| false,
     );
-    assert_eq!(kinds(&rows.rows), ["step", "item", "step"], "{show:?}");
+    assert_eq!(kinds(&rows.rows), ["folded", "item", "folded"], "{show:?}");
   }
   let other = shown(
     &items,
     &Choice {
-      step: Some(items[0].execution.expect("research")),
+      step: Some(vec![items[0].execution.expect("research")]),
       ..Choice::default()
     },
     &|_, default| default,
@@ -524,32 +476,39 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
 }
 
 #[test]
-fn timeline_a_tool_step_s_failing_command_is_a_row_of_its_own() {
-  use orchester_core::connection::stream::ToolCommandResult;
+fn timeline_search_finds_a_question_with_its_step() {
   let execution = StepExecutionId::generate();
-  let ran = |item: &str, result: ToolCommandResult, exit: i64| {
-    [
-      AgentEvent::ToolCommandStarted {
-        tool: "Run checks".into(),
-        command: format!("pnpm test {item}"),
+  let asked = at(2);
+  let question = item(
+    "question",
+    execution,
+    ItemKind::Question {
+      entry: MessageEntry {
+        id: MessageId::generate(),
+        author: Author::Agent("Builder".into()),
+        at: asked,
+        body: "Keep email sign-in?".into(),
+        state: EntryState::Question { open: true },
+        execution: Some(execution),
+        sent_now: false,
       },
-      AgentEvent::ToolCommandFinished {
-        tool: "Run checks".into(),
-        command: format!("pnpm test {item}"),
-        result,
-        exit_code: Some(exit),
-        output: "1 failed".into(),
-        omitted_bytes: 0,
-      },
-    ]
-  };
-  let mut events = Vec::new();
-  events.extend(ran("a", ToolCommandResult::Passed, 0));
-  events.extend(ran("b", ToolCommandResult::Failed, 1));
-  let kinds: Vec<Option<ToolKind>> = transcript(execution, events).iter().map(tool_kind).collect();
-  assert_eq!(
-    kinds,
-    [Some(ToolKind::Command), None],
-    "what failed the step is never grouped"
+      step: Some("Implement".into()),
+    },
+  );
+  let items = vec![
+    item("step", execution, ItemKind::Step(head(execution, 1, "Implement"))),
+    question,
+  ];
+  let found = shown(
+    &items,
+    &Choice {
+      query: "sign-in".into(),
+      ..Choice::default()
+    },
+    &|_, default| default,
+  );
+  assert_eq!(found.matches, 1);
+  assert!(
+    matches!(&found.rows[1], Row::Item(Item { kind: ItemKind::Question { step, .. }, .. }) if step.as_deref() == Some("Implement"))
   );
 }

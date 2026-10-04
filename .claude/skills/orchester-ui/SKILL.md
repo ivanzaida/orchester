@@ -111,6 +111,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | switch on: `accent` track and stroke, `inverse-text` knob at the right (`E1Y9KK`) | `Accent` / `TextInverse`, in `ui::switch` |
 | switch state label 12 `text`, 10 from the track (`q43RMP` in `lW7Sp`, `q4Nelz`); with a detail after it, track, label and detail 12 apart (`k1QWD`) | `ui::switch::Switch::emphasized` (`ExtraSpacing::Inline`), `Switch::detail` (`ExtraSpacing::Stack`) |
 | why an option cannot be chosen: indented 22 past a compact radio and its gap, an 11px lock (`J5RohL`, `L1B0m`, `OoLYh` in 04.B `W0Owo`) | `ExtraSpacing::ReasonIndent.role()` / `IconSize::Reason` (`ExtraTypography::IconReason`), in `ui::option_card::unavailable_reason` |
+| a digit of a tab count in Geist Mono 10 (0.6 em), the room the Open tab keeps for its count (`tidLB` in `DF8II`) | `theme::COUNT_DIGIT_WIDTH`, through `ui::tab::Tab::count_room` |
 | button that cannot be pressed, primary or secondary: its own colors at 40 % (`kLJJb`, `HN7cO`) | `theme::DISABLED_OPACITY`, applied by `ui::button::ActionButton` |
 | select menu overlay scrollbar: 4px `border` thumb, radius 2, inset 1 (`g3poI`) | `theme::select_menu_scrollbar()` |
 | scroll gutter: a reserved 12px gutter, 4px `border` thumb, radius 2, 4 from each side and from the viewport's top and bottom (`nf9DG` in `JuVaA`) | `theme::gutter_scrollbar()` |
@@ -127,7 +128,11 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
 | switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
 | conversation *Show* segment radius 5, usage period style (toolbar of `RrScB`) | `ExtraRadius::Segment.role()` |
-| conversation tool group and card body, indented 36 to a message's text (`uoK7y`) | `ExtraSpacing::TimelineIndent.role()` |
+| conversation working line, indented 40 to a chat message's text past its 28 avatar (`VCcdr` in `kpnmP`) | `ExtraSpacing::TimelineIndent.role()` |
+| round ends up to 32 high: chat avatar 28, composer pills 28 and send button 32 (`qU0XW`, `zQwSy`, `U0cjVo`); the composer box radius 18 (`n0wdPC`) | `ExtraRadius::Round.role()` / `ExtraRadius::Composer.role()` |
+| a tool chip's padding over and under its line 5 (`a7zbJ`); 4 between the rail strip's badges and the composer's send chevron and button (`fFDrw`, `eI8en`) | `ExtraSpacing::Chip.role()` / `ExtraSpacing::Snug.role()` |
+| the composer dock's room above its box 4, under it and the closed box's side padding 18 (`CoGTj`, `W9LMuM`) | `ExtraSpacing::ComposerTop.role()` / `ExtraSpacing::ComposerEdge.role()` |
+| a rail step that has not started, at 70 % (`r27KI` in `K4AOD`) | `theme::NOT_STARTED_OPACITY` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |

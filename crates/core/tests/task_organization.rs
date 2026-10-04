@@ -26,6 +26,38 @@ fn organization_manual_statuses_and_informational_blocking() {
 }
 
 #[test]
+fn organization_duplicate_links_keep_one_gate_per_task() {
+  let task = TaskId::generate();
+  let value = TaskOrganization::new(
+    WorkflowStatus::Todo,
+    Priority::None,
+    None,
+    vec![
+      BlockingTask {
+        task,
+        gate: DependencyGate::Review,
+      },
+      BlockingTask {
+        task,
+        gate: DependencyGate::Merge,
+      },
+    ],
+    vec![],
+  )
+  .expect("organization");
+  assert_eq!(
+    value.dependencies(),
+    &[BlockingTask {
+      task,
+      gate: DependencyGate::Merge
+    }]
+  );
+  let restored: TaskOrganization =
+    serde_json::from_value(serde_json::to_value(&value).expect("encode")).expect("decode");
+  assert_eq!(value, restored);
+}
+
+#[test]
 fn organization_filters_combine_facets_and_bulk_tags_deduplicate() {
   let first = TagId::generate();
   let second = TagId::generate();

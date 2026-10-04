@@ -86,27 +86,20 @@ fn tool_run_shows_the_command_step_and_its_output() {
   assert!(!shows(&mut desktop, "task-progress-steps", "0 tokens"));
   desktop.click("task-tab-conversation");
   desktop.wait_until("the timeline", |desktop| {
-    has(desktop, "activity-step-header") && shows(desktop, "conversation", "Checks · Print lines")
+    has(desktop, "activity-step-header") && shows(desktop, "conversation", "02 Checks · tool · ")
   });
-  assert!(shows(&mut desktop, "conversation", "Command tool · 1 run"));
-  // Narrowed to the tool step, the step opens on its command's group.
-  let labels = desktop
-    .tree
-    .get_element_by_id_mut("activity-step-filter")
-    .and_then(|element| element.as_select())
-    .expect("the step filter")
-    .labels();
-  let checks = labels
-    .iter()
-    .position(|label| label.contains("Checks"))
-    .expect("the tool step is listed");
-  desktop
-    .tree
-    .get_element_by_id_mut("activity-step-filter")
-    .and_then(|element| element.as_select())
-    .expect("the step filter")
-    .commit(checks);
-  desktop.pass();
+  // The tool step's divider says a tool ran it, with no model and no tokens; its command is the
+  // tool's own row, under the tool's name; the rail says it passed.
+  let rows = crate::conversation::texts(&desktop, "conversation-agent-tools");
+  assert!(
+    rows
+      .iter()
+      .any(|row| row.contains("Print lines") && row.contains("tool · ")),
+    "{rows:?}"
+  );
+  assert!(shows(&mut desktop, "conversation-rail-step-2", "Tool · passed"));
+  // Picked in the rail, the tool step opens on its command's group.
+  desktop.click("conversation-rail-step-2");
   open_group(&mut desktop, "Ran ");
   desktop.wait_until("the command entry", |desktop| has(desktop, "activity-entry"));
   assert!(shows(&mut desktop, "conversation", "exit 0"));

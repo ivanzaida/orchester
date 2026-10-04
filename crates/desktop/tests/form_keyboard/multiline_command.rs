@@ -90,10 +90,8 @@ fn check_at_width(
   desktop.wait_for(&header);
   assert!(shows(desktop, &header, preview));
   assert!(shows(desktop, &header, meta));
-  if failed {
-    assert!(has(desktop, &detail_id), "failed commands start expanded");
-    desktop.click(&toggle);
-  }
+  // In a chip's open group every line starts closed, a failed command's too (`bdCsu`).
+  assert!(!has(desktop, &detail_id), "starts closed (failed: {failed})");
   desktop.wait_until("the collapsed header layout", |desktop| {
     desktop
       .tree
@@ -172,7 +170,7 @@ fn multiline_command_preview_and_details_keep_states_and_output() {
   }
 }
 
-/// Two failed commands, both open, in the Conversation tab's tool group at the supported minimum
+/// Two failed commands, both opened, in the Conversation tab's tool group at the supported minimum
 /// width; returns the app and the first entry's sequence.
 fn two_open_commands() -> (Desktop, u64) {
   let command = format!("pwsh -Command \"\n  # {}\n\"", "long ".repeat(60));
@@ -199,7 +197,12 @@ fn two_open_commands() -> (Desktop, u64) {
   desktop.click("task-tab-conversation");
   desktop.wait_for("activity-step-header");
   open_group(&mut desktop, "Ran ");
-  desktop.wait_for(&format!("activity-entry-details-{first}"));
+  // A chip's lines start closed; both are opened.
+  for sequence in [first, first + 2] {
+    desktop.wait_for(&format!("activity-entry-toggle-{sequence}"));
+    desktop.click(&format!("activity-entry-toggle-{sequence}"));
+    desktop.wait_for(&format!("activity-entry-details-{sequence}"));
+  }
   (desktop, first)
 }
 

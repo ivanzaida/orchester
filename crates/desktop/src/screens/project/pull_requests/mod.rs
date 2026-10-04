@@ -22,7 +22,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{pull_request::SYNC_LIMIT, time::Timestamp};
 
 pub use self::detail::{PullRequestProps, PullRequestScreen};
 use self::{
@@ -97,33 +97,36 @@ impl Component for PullRequestsScreen {
     let loaded = stored.state().get();
     let inbox = self.latest.get().or(loaded.data);
     let line = SyncLine::of(inbox.as_ref(), actions.running());
-    let body = match &inbox {
-      None => match loaded.error {
-        Some(error) => centered(
-          RecoveryPanel::new(
-            Icon::AlertCircle,
-            &ctx.t("pullRequests.loadFailed"),
-            &message_text(ctx, &error),
+    // Until the stored inbox is known nothing shows below the heading, so nothing appears there
+    // that moves or vanishes once it is. Only a linked repository has pull requests to filter:
+    // 08.D has no tab row.
+    let (tabs, body) = match &inbox {
+      None => (
+        None,
+        loaded.error.map(|error| {
+          centered(
+            RecoveryPanel::new(
+              Icon::AlertCircle,
+              &ctx.t("pullRequests.loadFailed"),
+              &message_text(ctx, &error),
+            )
+            .into(),
           )
-          .into(),
-        ),
-        None => Column::new().flex(1.0).into(),
-      },
-      Some(Inbox::Unlinked) => self.unavailable(ctx, &open),
+        }),
+      ),
+      Some(Inbox::Unlinked) => (None, Some(self.unavailable(ctx, &open))),
       Some(Inbox::Linked(linked)) => {
+        let count = linked.synced.as_ref().map(|synced| synced.pull_requests.len());
         let props = self.list_props(&open, linked, &actions);
-        ctx.mount_keyed::<list::PullRequestList>("pull-request-list", props)
+        (
+          Some(tabs(ctx, count)),
+          Some(ctx.mount_keyed::<list::PullRequestList>("pull-request-list", props)),
+        )
       }
-    };
-    let count = match &inbox {
-      Some(Inbox::Linked(linked)) => linked.synced.as_ref().map(|synced| synced.pull_requests.len()),
-      _ => None,
     };
     let breadcrumb = ctx.t_args("pullRequests.breadcrumb", [("project", open.project.name().as_str())]);
     let refresh = self.refresh(ctx, &actions, inbox.as_ref(), &open);
     let status = ctx.mount_keyed::<SyncStatus>("sync-status", SyncStatusProps { line });
-    // Without a linked repository there is nothing to filter: 08.D has no tab row.
-    let tabs = (!matches!(inbox, Some(Inbox::Unlinked))).then(|| tabs(ctx, count));
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
@@ -133,7 +136,7 @@ impl Component for PullRequestsScreen {
         &ctx.t("pullRequests.description"),
       ))
       .with_children(tabs)
-      .child(body)
+      .with_children(body)
   }
 }
 
@@ -195,7 +198,8 @@ impl PullRequestsScreen {
 }
 
 /// Open, and the tabs that need agent runs or closed pull requests, which are not read yet
-/// (`DF8II`).
+/// (`DF8II`). Open keeps room for as many pull requests as a sync reads, so its count arriving or
+/// changing moves no other tab.
 fn tabs(ctx: &Ctx, open_count: Option<usize>) -> Element {
   let height = Dimension::Px(TAB_ROW_HEIGHT);
   let tab = |id, key| Tab::new(id, ctx.t(key), height);
@@ -206,6 +210,7 @@ fn tabs(ctx: &Ctx, open_count: Option<usize>) -> Element {
     [
       tab("pull-requests-tab-open", "pullRequests.tabs.open")
         .count(open_count)
+        .count_room(SYNC_LIMIT as usize)
         .selected(true),
       tab("pull-requests-tab-needs-review", "pullRequests.tabs.needsReview"),
       tab("pull-requests-tab-agent-working", "pullRequests.tabs.agentWorking"),

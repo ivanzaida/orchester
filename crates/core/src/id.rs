@@ -69,6 +69,10 @@ define_id!(
 define_id!(TaskId);
 define_id!(TagId);
 define_id!(
+  /// One tenure of a shared task's holder.
+  ClaimId
+);
+define_id!(
   /// One execution of a task; names its branch and worktree.
   RunId
 );

@@ -163,7 +163,9 @@ impl PullRequestList {
       .into()
   }
 
-  /// The search field (`UvDn5`): the one control of the screen that takes focus.
+  /// The search field (`UvDn5`): the one control of the screen that takes focus. It gives way
+  /// when the row is wider than the list (by a few pixels at the 960 minimum window), so the sort
+  /// box keeps the list's right edge.
   fn search(&self, ctx: &Ctx) -> Element {
     let input = ctx.theme().form().input.clone();
     let border = if self.search_focused.get() {
@@ -181,6 +183,7 @@ impl PullRequestList {
       .on_blur(move || blur.set(false));
     Row::new()
       .width(Dimension::Px(SEARCH_WIDTH))
+      .flex_shrink(1.0)
       .height(Dimension::Px(CONTROL_HEIGHT))
       .padding_custom(input.padding)
       .spacing(SpacingSize::Sm)

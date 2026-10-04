@@ -91,6 +91,8 @@ pub enum StoreError {
   ServerNotFound(ServerId),
   #[error("run {0} was merged already")]
   AlreadyMerged(RunId),
+  #[error("run {0} does not exist")]
+  RunNotFound(RunId),
   #[error("memory {0} does not exist")]
   MemoryNotFound(MemoryId),
   /// The stored record changed since this copy of it was read; read it again. Nothing was changed.
@@ -136,6 +138,10 @@ pub enum RunStoreError {
   /// The events handed to the store do not lead to the state being stored.
   #[error("events do not match the run being stored: {0}")]
   EventsMismatch(&'static str),
+  /// The events would continue run `0`, whose worktrees a person removed: it never continues.
+  /// Nothing was recorded.
+  #[error("run {0} cannot continue: its worktree was removed")]
+  WorktreeRemoved(RunId),
 }
 
 impl From<rusqlite::Error> for RunStoreError {

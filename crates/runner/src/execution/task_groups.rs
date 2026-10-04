@@ -7,7 +7,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   run::{Run, RunStatus},
-  store::RunStore,
+  store::{RunStore, WorktreeStore},
   task::organization::WorkflowStatus,
   task_group::{GroupHold, TaskGroup},
   tokens::TokensUsed,
@@ -126,10 +126,26 @@ fn scheduled(db: &ProjectDb, group: &TaskGroup) -> Result<Option<Scheduled>, Rej
   Ok(Some((view, runs)))
 }
 
-fn statuses(runs: &[Option<Run>]) -> Vec<Option<RunStatus>> {
+/// Where the group's first runs stand. An interrupted run whose worktree was removed never
+/// continues (ORC-63): for the group it ended as a cancelled run does, so it holds no slot.
+fn statuses(db: &ProjectDb, runs: &[Option<Run>]) -> Result<Vec<Option<RunStatus>>, Rejection> {
   runs
     .iter()
-    .map(|run| run.as_ref().map(|run| run.status().clone()))
+    .map(|run| {
+      let Some(run) = run else {
+        return Ok(None);
+      };
+      let ended = matches!(run.status(), RunStatus::Interrupted(_))
+        && db
+          .worktree_removal(run.id())
+          .map_err(|e| super::failed("cannot read whether a run's worktree was removed", &e))?
+          .is_some();
+      Ok(Some(if ended {
+        RunStatus::Cancelled
+      } else {
+        run.status().clone()
+      }))
+    })
     .collect()
 }
 
@@ -228,7 +244,7 @@ impl Scheduler {
     let statuses: Vec<_> = group
       .tasks()
       .iter()
-      .zip(statuses(&runs))
+      .zip(statuses(db, &runs)?)
       .map(|(id, status)| status.filter(|status| !(*id == task && status == &RunStatus::Pending)))
       .collect();
     let used = usage(&runs);
@@ -257,7 +273,7 @@ impl Scheduler {
       let Some((group, runs)) = scheduled(&db, &group)? else {
         continue;
       };
-      let statuses = statuses(&runs);
+      let statuses = statuses(&db, &runs)?;
       let (used, blockers) = (usage(&runs), blockers(&db, &group, &statuses)?);
       // The free slot or the day's budget the runner waits for comes without a person.
       let waits_for_capacity = matches!(stored, Some(GroupHold::AgentCapacity | GroupHold::DailyBudget))
@@ -310,7 +326,7 @@ impl Scheduler {
         .map_err(|e| super::failed("cannot record a finished group", &e));
     };
     let group = &view;
-    let statuses = statuses(&runs);
+    let statuses = statuses(db, &runs)?;
     if TaskGroup::finished(&statuses) {
       self.inner.group_retries.clear(group.key());
       return db
@@ -406,7 +422,7 @@ impl Scheduler {
       if !unstarted {
         continue;
       }
-      let statuses = statuses(&runs);
+      let statuses = statuses(db, &runs)?;
       let blockers = blockers(db, &group, &statuses)?;
       let lasting = group
         .hold(&statuses, usage(&runs), &blockers)

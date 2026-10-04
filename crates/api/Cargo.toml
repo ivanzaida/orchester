@@ -28,6 +28,7 @@ zeroize.workspace = true
 # The client's tests start a real server on loopback with a temporary data directory.
 orchester-server.workspace = true
 parking_lot.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 tracing.workspace = true

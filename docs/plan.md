@@ -159,6 +159,64 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
+### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
+
+Design: `docs/design/orchester-workspace.md` on `claude/conv-chat` › *Decided: C with the rail on the right* (group
+`A5H6ln`, C·01–C·14) and *Composer (approved …)* (group `YJfPo`, K·01–K·06), both approved by the user 2026-10-04.
+Implemented 2026-10-04 on master `566ca413`, **waiting for an independent design verification**:
+
+- Data (`tasks/timeline/view`, `tasks/timeline/rail`): an agent's message carries a chip per tool group after it
+  (tool activity with no message before it is the agent's row of its own); finished steps fold, the ones in a row
+  into one line (*01–02 · 2 steps done · Show them*); the step the run ended on, the running/waiting/failed step and
+  the one before the last that ran stay open; the steps a failure kept from starting share one muted divider; a
+  search counts its matches per step execution. The rail is one row per pipeline step, from its latest execution
+  that ran (*Explorer · 41k · 6 min*, *Planner · waiting for approval*, *Tool · exit 1 · 2 min*, *Reviewer ·
+  returned to Implement*, *Builder · not started* at 0.7); picking it shows every execution of the step.
+- Chat (`screens/project/task/conversation`): Slack-style rows (28 round avatar, name, meta), thin dividers for a
+  step's start (number, agent, engine, times, tokens — the tokens open Details on it) and end (*06 Fix notes done ·
+  16:30 · Changes · 3 files ↗*), returns and restarts as dividers with what follows under them (or the person's
+  note as their message, `j0qLQz`), the run's end; questions, plans and tool requests are cards in the asking agent's
+  message; the step the run ended on closes with its result card; a tool step's failing command is its own message.
+  A chip opens its group in place (bordered list, 7 rows, *Show N more*; while searching *2 of 12 calls match* and
+  *Show N without a match*). *Tools* keeps the flat transcript.
+- Right side: the 248 rail (head *Steps* + count + collapse), or its 56 strip (collapsed by hand at any width, by
+  default below 1200; badges pick a step; its head opens the rail in place in a wide window, over the chat in a
+  narrow one), or Details in its place (head *Details* + *Steps*), never two. The toolbar loses the step filter; the
+  read-back lines are rows under it (*Showing 03 Implement only · 01, 02 and 04–07 are hidden ·*, *No matches for
+  “…” · following live goes on ·*).
+- Composer (`composer/`): one rounded box (`$raised`, radius 18, `$muted` while focused) — *+* Attach unavailable
+  with its tooltip, the run's permissions chip (`$danger` once changed for the run; opens the ORC-44 popover; its
+  shield alone below 980 less the side panel), the recipient as a quiet selector (name + what it does, a lock when
+  fixed), the round send button (arrow-up now, clock-3 queues, loader while sending) with the help text as its
+  tooltip, and the chevron with *Send now · Enter* / *Send after this turn · Ctrl+Enter* while the agent works
+  mid-turn. Enter sends (now while mid-turn), Ctrl/Cmd+Enter after this turn, Shift+Enter adds a line. Context lines
+  above the box; one quiet line under it only for queued, follow-up, continue and not started; closed keeps only the
+  lock and the reason. Delivery semantics unchanged.
+
+Tests: `timeline` (chips, folds, search counts by step, picked step), `form_keyboard` `conversation_*`
+(`conversation_rail` new: picking, search counts, Details swap, collapse below 1200, strip at 960, fold line;
+`conversation_composer_box` new: send icon, attach tooltip, permissions chip popover, 960), `composer_*`,
+`task_graph`, `tool_run`, `first_edit`, `integration`, theme, i18n.
+
+Deviations to confirm with the design verifier/user: marks follow C·13 (`j0qLQz`, with *automatic · retry N of M*)
+where C·07 draws a shorter line; a chip names its summary as ORC-61 orders it (*Ran pnpm test · edited 3 files*), not
+*Edited 3 files · ran …* or file names; the chat is not capped at 840; agent rows name their step only after a muted
+divider; *All steps* reads *N of M steps ran* whenever a step has not run; the question card's hint is pressable
+(focuses the composer); the plan card keeps what approving starts beside its button; problem rows keep the transcript
+entry look; the recipient menu's options carry the state words, not *gets it at its next tool call*; quiet lines keep
+the ORC-61 explanation texts; the tool step's divider no longer names its command and exit code (C·05).
+
+Design-verification fixes (2026-10-04, on `7710f081`): the recipient selector has no fill of its own (lurq painted an
+unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree);
+a group of notes reads its lines without *0 calls*, a working step without tokens reads *Builder · working*; the
+permissions chip shows whenever the composer is open (else the run's first agent step); *Write to Explorer before it
+starts…*; a chip's lines start closed, failures too; picking a step opens the chat at its start, *All steps* goes back
+to the end; Details names the step and attempt (*03 Implement · attempt 1*); narrower than one line, the toolbar's state
+goes beside the search so *Details* stays whole; the send menu and tooltips sit 8 above the box; the context line has
+× and Esc closes the menu, then leaves the mode (a question not answered or a plan's changes not requested: the box
+writes an ordinary message, `ComposerMode::without_context`); a failed run's composer says *Continue 03 Implement with
+your instructions · attempt 3* (no ×: continuing is the only message a failed run takes).
+
 ### U10 · Pull requests screen jumps while it loads (UI)
 
 Opening the Pull requests tab shifts its content two or three times
@@ -179,6 +237,47 @@ does not shift the Refresh button when its text changes. A sync that changes the
 Tests: a headless `form_keyboard` test that records the tab and body bounds before and after the stored inbox and a
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
+
+### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (done 2026-10-04: three code reviews and three design verifications passed)
+
+Design: `docs/design/orchester-workspace.md` › *ORC-63 · Remove worktree for every ended run* (group `j0VU3B`,
+frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTnc`, 63.06 `VBR27`; decisions approved
+2026-10-04). Implemented 2026-10-04:
+
+- Core: `RunStatus::has_live_work` (an interrupted run has none); `clean_up` removes the worktrees of an interrupted
+  run (`CleanupError::LiveWork` otherwise); `leftovers_of` reads several runs with one worktree listing; Run again
+  (`run_again`, `holds_task`, `can_run_again_after`) follows an interrupted run whose worktree was removed, which no
+  longer holds its task. `WorktreeStore` records removals.
+- Store: migration 40, `run_worktree_removals` (once per run); `interrupted_runs` leaves such runs out.
+- Runner: `Prepared::continuing` refuses a run whose removal is recorded (`Rejection::WorktreeRemoved`, the run
+  unchanged); Run again reads the removals and records the removal it does.
+- Review fixes (2026-10-04): a removal is recorded before git runs, in the write transaction that re-reads the run
+  and refuses it once it has live work (`WorktreeStore::begin_worktree_removal`, core `clean_up_recorded`); recording
+  a continuation of a run whose removal is recorded is refused in its own write transaction
+  (`RunStoreError::WorktreeRemoved`), so the two never both go ahead. The record is taken back when nothing was
+  touched (changes appeared since the dialog), and stays once anything was removed or git refused (a refusal can
+  come part way). A worktree folder git forgot after a failed removal is listed (`LeftWorktree::forgotten`, IPC
+  protocol **15**), shown as left behind with Remove worktree again, and deleted as a folder, only ever
+  `.orchester/worktrees/<run or step execution id>`. An interrupted run whose folder is gone is recorded as removed
+  when the task page or Run again finds it. The task's active run (Canceled) and a group's first-run statuses leave
+  an interrupted run without its worktree out. Rows keep their lines while what was left is read again.
+  Second review round: a clean-up fails only before it removes anything (git not runnable, the listing); once
+  removing started, a git failure or timeout keeps that worktree or branch with why, so the record stays. A
+  forgotten folder lists its files like uncommitted changes and goes only as they were seen. Git's refusal names
+  the worktree once, as `.orchester/worktrees/<id>`, with its reason on one line.
+- Desktop: the removal is recorded by *Remove worktree* and by a merge's clean-up; *Runs of this task* on Summary
+  (after the steps; on Ready for review after Verification; on the unreadable run's page in place of *Other runs of
+  this task*), rows with columns from a 1340 window and stacked below, *Remove worktree* on every run with worktrees
+  and no live work (the latest keeps its topbar button, which now also shows for an interrupted run, left of
+  Continue run), the 02.Q dialog for any run with the interrupted-run notice and the *keeps working* line, one
+  removal at a time per task, *Removing…* and git's refusal under the row. An interrupted run without its worktree:
+  notice *Run #N can’t continue*, Continue run unavailable with its lock line, step *Interrupted · can’t continue*,
+  heading *· worktree removed HH:MM*, *Worktree · Removed · HH:MM* in This run, *Run again* offered.
+
+Not done: *Runs of this task* is not on the plan review (02.11) or the retry-limit page (02.B), which lay out their
+own Summary; Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
+(separate agent) is outstanding.
+
 
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
@@ -385,9 +484,15 @@ Rules for both phases, on top of `AGENTS.md`:
   *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
   independent review by another agent comes first.
 
-### S1b · Projects, tasks, claims and events on the server (non-UI)
+### S1b · Projects, tasks, claims and events on the server (non-UI) · done 2026-10-04
 
-Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
+Branch `codex/server-s1b`, worktree `.tmp/worktrees/codex-server-s1b`, from master `4ed11813`.
+**Done 2026-10-04:** merged into master after two independent reviews (security/concurrency and spec/domain)
+and a re-review of the fixes (PASS, "ready to merge"). Open minor for S2d: heartbeats emit no events, so a watching
+desktop must re-read a task (or the server send a claim-only event) before showing a held claim as stale. The macOS cross-check remains blocked by missing Apple SDK headers.
+Evidence: [server-s1b-2026-10-04.md](evidence/server-s1b-2026-10-04.md).
+
+Done when these criteria, the required validation and independent review pass, and the phase is merged:
 
 - Core: `sharing` (claim take, release, take-over, heartbeat, staleness at 15 minutes, the run phases that end a
   claim; tests over explicit times) and `RepositoryIdentity::from_remote_url` (HTTPS, SSH and scp-like forms of one
@@ -397,19 +502,20 @@ Starts after S1a is merged. Done when every S1b box in § *Phasing* holds:
   one repository exactly one succeeds and the other gets `409 remote_taken` and changes nothing.
 - Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate; a repeated idempotency key
   returns the first result; a stale revision gets `409 revision_conflict` with the current task; the edit lock and
-  queueing follow core's rules; import gives new numbers and keeps ids and former keys.
+  queueing follow core's rules; import gives new numbers and keeps ids and former keys. Upload keeps `has_run` for
+  finished runs.
 - Claims: of two simultaneous claims exactly one wins; a heartbeat refreshes and reports lost claims; stale after 15
   minutes of test clock; take-over refused while fresh or changed and recorded when done; removing a member or
   disabling a user releases their claims.
 - Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
   30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
+  Heartbeats and SSE capacity are bounded; retention and replay use bounded periodic work.
 - Organization (user, 2026-10-03; `docs/architecture/server.md` decisions 23–24, *Task organization*): workflow,
   priority, tags, blocking links and the Blocked reason are fields of `Task` and `Changes` under the revision; core's
   ORC-39 rules refuse an empty reason, a cycle, an unknown tag and Canceled while the reported run has not ended
   (`422 organization`); every change writes a history row (person, actor, before and after, tag names) served by
   `GET …/tasks/{task}/history`; upload and import take tags by name and drop (and list) links outside the upload.
-  **Needs ORC-39's `task::organization` on master** (`claude/orc39` is not merged yet); S1b waits for it or merges it
-  first.
+  Reuses ORC-39's `task::organization`, already merged into master before S1b began.
 - Tags (decision 24): create, rename, merge and delete by members; names unique without regard to case (`409
   tag_exists`, `409 same_tag`); merge and delete rewrite every affected task in one transaction with a new revision,
   a history row and a `task` event, then a `tags` event.
@@ -452,6 +558,85 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-61 polish · Conversation tab design-verification minors · branch `claude/conv-polish` (from master `b96dbf27`)
+
+- **Implemented 2026-10-04, waiting for an independent design verification** against `fTfl8` (`RrScB`, `CxrSA`,
+  `ZxYGh`, `haIEI`, `AzKYQ`, `hep0l`, `OlLGD`, `zxIMy`) of the minors ORC-61 left open:
+  - Step headers: the state reads *Needs input* (message-circle) while the agent asks, *Waiting for approval* (hand)
+    while a plan or tool request waits, *Approved* once the person approved its plan, with *· approved by you* after
+    the meta; a folded finished step reads *Codex / Sol · 12:01–12:02* (no invocation count unless it had more than
+    one), an open one *· invocation N ·*, as the frames draw; one minute reads as one time; a tool step reads its
+    recorded command and exit code (*pnpm test · exit 0 · 12:22*, no exit code on a failed one, whose command row
+    shows it) and *no tokens*.
+  - Plan card: one text a plan line, 13/1.6, 6 apart (27 a line); *Approves plan v1 and starts Builder on Implement.
+    To change it, describe what it needs below.* beside *Approve plan & continue*, from the pipeline's next step; a
+    plan step's result card no longer repeats the plan; the waiting label's glyph is the hand.
+  - Question card: *Implement · 12:09* in its meta. The composer's *Answering …* / *Changes to plan …* line (with
+    corner-down-right / pencil) and *Waiting for your decision* stand above the box; the field takes the focus once
+    per question that waits (by its message), when the tab opens on it or when it arrives, but never while the tab's
+    search field, its only other field, holds the focus (code review).
+  - Composer placeholders per state: *Message Builder…* (working, or queued for a named agent), *Message an agent of
+    this run…* (tool step, paused, deciding), *Describe the changes the plan needs…*, *Ask a question or request a
+    follow-up…*, *Write to the first agent of the run…*; not drawn: *Answer Builder…*, *Tell Builder how to continue
+    the run…*.
+  - The working line is the timeline's last row (indented to a message's text, no hairline), so it scrolls with the
+    timeline; with nothing else to show it stays under the empty state.
+  - Following live (design verification, 2026-10-04): a timeline that follows goes to its end on every render, not
+    only when it has more rows than before (a step folding as the next one starts can leave as many), and after each
+    layout it goes there again when it came short (rows measured taller than estimated), so *Following live* never
+    shows anything but the end; opened right after a fast run started, it no longer stays at the top.
+  - A denied command is a titled problem row: *Command denied* (or *Outside write denied* by its category) with
+    *permission_denied* / *denied by you* and the time, and *… did not run: …* naming the command, with no command
+    box or Copy.
+  - Result cards: *Review passed* for a step that judges the work (one with a failure route), *… done* otherwise,
+    *… failed*; *Builder reported passed / failed* from the step's structured result; circle-check when it passed.
+  - At 960 Attach follows the recipient 10 apart (the select fills its wrapper); the queued run's step names wrap
+    inside the tab, each with the chevron before it.
+- **Scrollbar drag:** lurq (since 0.33.1) runs a container's `on_scroll` handlers for a scrollbar drag, which the
+  timeline already takes as the person scrolling; a headless probe of a `VirtualizedList` with the gutter scrollbar
+  confirms it. A headless drag of the Conversation timeline's thumb could not be made to hit the scrollbar, so no
+  end-to-end test covers it: check in the running app that dragging the thumb stops following.
+- `conversation/mod.rs` was split first (following and *Jump to latest* moved to `conversation/follow.rs`), the
+  composer's context line moved to `composer_text.rs`, and `tests/timeline.rs` became `tests/timeline/` (tool events
+  in `tool_events.rs`).
+- Not built (no data or out of scope): *started 12:04 · waiting since 12:09* and *1 message from you* in step headers
+  (data exists, not asked); the question card's answer hint; *Show the whole plan* chevron; the tool step result's
+  *exit 1 · attempt 1*; the Details pane wording (ORC-44's panel).
+- Tests: `cargo test -p orchester-desktop --test timeline timeline_`, `--test conversation conversation`, `--test i18n
+  locale` and `every_key`, `--test form_keyboard` with `conversation` (incl. the new `conversation_queued`,
+  `conversation_a_step_that_judges_the_work_…` and `conversation_a_question_that_arrives_while_searching_…`,
+  `conversation_following_keeps_the_end_in_view_…`),
+  `composer_`, `activity_`, `task_graph`, `run_permissions`, `tool_approval`, `tool_run`, `native_activity`.
+
+U11 · Pull requests: no "synced" without a link, columns at 960 · branch `claude/pr-fixes` (done 2026-10-04, design
+verified)
+
+A sync or refresh of a project whose repository is not linked asks GitHub nothing, so it leaves no status bar event
+(the list's sync and the pull request screen's refresh both dropped their operation as "synced"); the screen's 08.D
+panel says why. No frame draws the list in a narrow window, so it follows the Tasks list (02.03E): below
+`theme::PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW` (1076, derived from the column tokens so a title keeps 200) the rows and
+headings drop Open in GitHub (the pull request's own topbar has it); a title keeps 228 at 960 (84 before, cut to
+*Add GitH…*). Each heading sits at its own width in a cell as wide as its column, so a heading that does not fit is
+measurable. The search field gives way by the few pixels the controls row is too wide at 960, so the sort box keeps the
+list's right edge. Tests: `cargo test -p orchester-desktop --test form_keyboard pull_request` (the unavailable test
+waits until the activity log holds exactly one operation that ended without an event, then checks the status bar;
+`pull_requests_layout_columns_fit_the_narrowest_and_the_design_window` checks at 960 and 1440 that headings do not run
+into each other and start their columns, that the sort box ends at the list's edge, that a title keeps 200, and where
+Open in GitHub shows), `--test theme pull_request`, `--test i18n locale` / `every_key`.
+
+U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-04, design verification pending)
+
+Until the stored inbox is read the screen shows its topbar and heading only; the tab row (linked repositories only,
+08.D has none) and the list or unavailable panel then appear together in their final place, so nothing shows that
+later moves or vanishes. The Open tab keeps room for a count of up to `SYNC_LIMIT` (two Geist Mono digits,
+`Tab::count_room`, `theme::COUNT_DIGIT_WIDTH`), so a first count or one that grows to 50 moves no tab; a single-digit
+count leaves the Open tab 6px wider than in `DF8II`. The topbar's spacer already kept Refresh in place while the sync
+status changed (measured at 1440 and at the 960 minimum width). Tests: `cargo test -p orchester-desktop --test
+form_keyboard pull_request` (the new `pull_requests_layout` tests hold the sync's fake `gh` behind a gate and record the
+heading, tab, list and Refresh bounds before and after the stored inbox and the sync arrive), `cargo test -p
+orchester-desktop --test theme pull_request`. **Done when** an independent design verification against `DF8II`
+(08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 

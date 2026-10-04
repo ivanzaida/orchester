@@ -5,8 +5,9 @@
 //! from the project database and read again whenever the runner reports a change or a message is
 //! sent; its changes up to its latest checkpoint are read again when it records a new one, and what
 //! its worktree holds beyond that while an agent works, for the Changes tab and its count. Once the
-//! run ended, what it left in the repository is read too: Ready for review merges it, and *Remove
-//! worktree* clears it. Artifacts come in a later milestone and are shown unavailable.
+//! run ended or was interrupted, what it left in the repository is read too: Ready for review merges
+//! it, and *Remove worktree* clears it; the Summary lists every run of the task (*Runs of this
+//! task*, ORC-63) with what each left. Artifacts come in a later milestone and are shown unavailable.
 
 mod activity;
 mod approval_arguments;
@@ -18,6 +19,8 @@ mod controls;
 mod conversation;
 mod dependencies;
 mod heading;
+mod history;
+mod interrupted;
 mod limit_panel;
 mod native_approval;
 mod notice;
@@ -72,22 +75,15 @@ use self::{
   controls::{ControlAction, RunControl, control_action, control_buttons},
   notice::Lost,
   ready::{ReadyForReview, ReadyProps},
-  worktree::{RemoveWorktree, RemoveWorktreeProps},
+  worktree::{RemoveWorktree, RemoveWorktreeProps, TaskLeftovers},
 };
 use super::{ProjectNav, page, runner::connection_notice};
 use crate::{
   background,
   messages::{self, Message},
   navigation::route::{ChangedFile, Page, TaskPageTab},
-  programs::Programs,
   runner::{Runners, state::RunnerState},
-  tasks::{
-    changes::Refresh,
-    data::PipelineChoice,
-    detail::TaskDetail,
-    integration::{LeftBehind, leftovers_in},
-    plan::PlanReview,
-  },
+  tasks::{changes::Refresh, data::PipelineChoice, detail::TaskDetail, plan::PlanReview},
   theme::ExtraSpacing,
   ui::{
     field::field_error,
@@ -102,15 +98,6 @@ use crate::{
 
 /// Section tab row (`X7jYe`).
 const TAB_ROW_HEIGHT: f32 = 42.0;
-
-/// What a run left, with the tasks revision and merge it was read at.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct LeftoversRead {
-  read_at: (u64, bool),
-  left: LeftBehind,
-}
-
-impl lurq::app::component::DevtoolsInspectable for LeftoversRead {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskProps {
@@ -214,7 +201,7 @@ impl Component for TaskScreen {
       .height(Dimension::Pct(100.0));
     let Some(LoadedTask(detail)) = state.data else {
       return column
-        .child(self.topbar(ctx, &props, (None, Vec::new()), &control))
+        .child(self.topbar(ctx, &props, (None, (None, None)), &control))
         .child(centered(load_panel(ctx, state.error.as_ref())));
     };
     if self.redirect_queued_retry(&detail) {
@@ -227,13 +214,20 @@ impl Component for TaskScreen {
     let lost = detail.lost_its_runner(online).then(|| Lost::of(&props.runner));
     let changes = self.changes(ctx, &props, &detail, lost.is_some());
     let files = changes.as_ref().and_then(RunChanges::listed_files);
-    let leftovers = self.leftovers(ctx, &props, &detail);
+    let left = worktree::task_leftovers(ctx, &props, &detail);
+    let leftovers = detail.run.as_ref().and_then(|run| left.as_ref()?.of(run.id()));
     let again = run_again::offer(ctx, &props.project, &detail, props.revision, leftovers.as_ref());
-    let body = self.body(ctx, &props, &detail, (lost, again.reason), (changes, leftovers.clone()));
+    let reason = interrupted::reasons(
+      interrupted::continue_unavailable(ctx, &detail)
+        .into_iter()
+        .chain(again.reason),
+    );
+    let body = self.body(ctx, &props, &detail, (lost, reason), (changes, leftovers, left.clone()));
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
     let control_error = self.error_rows(ctx, &control);
-    let removal = self.removal(ctx, &props, &detail, leftovers.as_ref());
-    let ended = removal.into_iter().chain(again.action).collect();
+    let removal = RemoveWorktreeProps::topbar(&props.project, &detail, left.as_ref())
+      .map(|removal| ctx.mount_keyed::<RemoveWorktree>(&format!("task-remove-worktree-{}", removal.run.id()), removal));
+    let ended = (removal, again.action);
     let mut heading = heading::with_notices(ctx, &detail, lost.is_some(), &props.project.repo_root);
     let earlier_unreadable = heading.split_off(1);
     column
@@ -271,11 +265,18 @@ impl TaskScreen {
     props: &TaskProps,
     detail: &Arc<TaskDetail>,
     (lost, reason): (Option<Lost>, Option<Element>),
-    (changes, leftovers): (Option<RunChanges>, Option<Result<Leftovers, Message>>),
+    (changes, leftovers, left): (
+      Option<RunChanges>,
+      Option<Result<Leftovers, Message>>,
+      Option<TaskLeftovers>,
+    ),
   ) -> Element {
     if let Some(run) = &detail.latest_unreadable {
       return match props.tab {
-        TaskPageTab::Summary => unreadable::summary(ctx, (run, &self.scrolls.unreadable), &detail.earlier),
+        TaskPageTab::Summary => {
+          let runs = history::section(ctx, &props.project, detail, left.as_ref());
+          unreadable::summary(ctx, (run, &self.scrolls.unreadable), runs)
+        }
         TaskPageTab::Conversation => tab_state::unreadable(ctx, "conversation-unreadable", run),
         TaskPageTab::Changes => tab_state::unreadable(ctx, "changes-unreadable", run),
       };
@@ -295,6 +296,7 @@ impl TaskScreen {
             checkpointed: changes.map(|changes| changes.checkpointed),
             open: props.project.clone(),
             leftovers,
+            left,
           },
         ),
       (TaskPageTab::Conversation, _) => conversation::conversation_tab(
@@ -309,13 +311,16 @@ impl TaskScreen {
           revision: props.revision,
         },
       ),
-      (TaskPageTab::Summary, _) => summary::summary(
-        ctx,
-        detail,
-        (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
-        (&props.project.repo_root, &self.scrolls, props.revision),
-        reason,
-      ),
+      (TaskPageTab::Summary, _) => {
+        let runs = history::section(ctx, &props.project, detail, left.as_ref());
+        summary::summary(
+          ctx,
+          detail,
+          (props.limits, lost, props.pipelines.as_deref().map(Vec::as_slice)),
+          (&props.project.repo_root, &self.scrolls, props.revision),
+          (reason, runs),
+        )
+      }
       (TaskPageTab::Changes, _) => ctx.mount_keyed::<ChangesTab>(
         "task-changes",
         ChangesProps {
@@ -329,50 +334,6 @@ impl TaskScreen {
     }
   }
 
-  /// What the latest run left in the repository once it ended: its worktrees and branches, read
-  /// again whenever the task is; `None` while it has not ended.
-  fn leftovers(&self, ctx: &mut Ctx, props: &TaskProps, detail: &TaskDetail) -> Option<Result<Leftovers, Message>> {
-    let run = detail.run.as_ref().filter(|run| run.run.status().is_terminal())?;
-    let programs = ctx
-      .use_context::<Programs>()
-      .expect("the root provides Programs before mounting screens");
-    let separator = ctx.t("common.listSeparator");
-    // A merge or a removal changes what is left: until it is read again, what was read before
-    // must not show beside the new merge or reappear after the removal. Runner events for other
-    // runs change nothing here, so what was read stays while they are read again.
-    let changed_by_person = (props.revision.0, detail.merge.is_some());
-    let deps = (
-      props.project.repo_root.clone(),
-      run.run.clone(),
-      props.revision,
-      changed_by_person,
-    );
-    let load = ctx.future(deps, move |(repo_root, run, _, read_at)| {
-      let (programs, separator) = (programs.clone(), separator.clone());
-      async move {
-        background::run(move || leftovers_in(&repo_root, &programs, &run))
-          .await?
-          .map(|left| LeftoversRead { read_at, left })
-          .map_err(|problem| problem.message(&separator))
-      }
-    });
-    let state = load.state().get();
-    if state.is_pending() && state.data.as_ref().is_none_or(|read| read.read_at != changed_by_person) {
-      return None;
-    }
-    match (state.data, state.error) {
-      (_, Some(error)) => Some(Err(error)),
-      (
-        Some(LeftoversRead {
-          left: LeftBehind(leftovers),
-          ..
-        }),
-        None,
-      ) => Some(Ok(leftovers)),
-      (None, None) => None,
-    }
-  }
-
   /// The latest run's changes, read once for the Changes tab and the count on its label; `None`
   /// without a run.
   fn changes(&self, ctx: &mut Ctx, props: &TaskProps, detail: &TaskDetail, lost: bool) -> Option<RunChanges> {
@@ -383,29 +344,6 @@ impl TaskScreen {
       checkpointed: changes::checkpointed(ctx, repo_root, run, self.retry.get()),
       worktree: changes::not_checkpointed(ctx, repo_root, run, &self.refresh, at_work),
     })
-  }
-
-  /// *Remove worktree* in the topbar, while a run that ended still has worktrees.
-  fn removal(
-    &self,
-    ctx: &mut Ctx,
-    props: &TaskProps,
-    detail: &Arc<TaskDetail>,
-    leftovers: Option<&Result<Leftovers, Message>>,
-  ) -> Option<Element> {
-    let run = detail.run.as_ref()?;
-    let leftovers = leftovers?
-      .as_ref()
-      .ok()
-      .filter(|leftovers| !leftovers.worktrees.is_empty())?;
-    Some(ctx.mount_keyed::<RemoveWorktree>(
-      &format!("task-remove-worktree-{}", run.id()),
-      RemoveWorktreeProps {
-        open: props.project.clone(),
-        detail: detail.clone(),
-        leftovers: leftovers.clone(),
-      },
-    ))
   }
 }
 
@@ -422,15 +360,15 @@ impl TaskScreen {
       .collect()
   }
 
-  /// The breadcrumb back to the task list, then the run controls (`ctwcG`) and `ended`, the actions
-  /// of a run that ended: *Remove worktree* and *Run again*. A run that lost its runner has no
+  /// The breadcrumb back to the task list, then *Remove worktree* of a run with no live work, the
+  /// run controls (`ctwcG`) and *Run again* (63.04 `rkAU3`, 63.05 `LmTnc`). A run that lost its runner has no
   /// controls: nothing can pause, cancel or continue it until a runner is back, and the runner
   /// notice offers Restart runner. A run that cannot be read shows Cancel run unavailable (`asPAJ`).
   fn topbar(
     &self,
     ctx: &Ctx,
     props: &TaskProps,
-    (detail, ended): (Option<&TaskDetail>, Vec<Element>),
+    (detail, (removal, again)): (Option<&TaskDetail>, (Option<Element>, Option<Element>)),
     control: &ControlAction,
   ) -> Element {
     let key = detail.map_or_else(String::new, |detail| detail.task.key().to_string());
@@ -462,7 +400,7 @@ impl TaskScreen {
     let open = open.filter(|_| props.tab != TaskPageTab::Conversation);
     page::topbar_with(
       breadcrumb.into(),
-      open.into_iter().chain(buttons).chain(ended).chain(edit),
+      open.into_iter().chain(removal).chain(buttons).chain(again).chain(edit),
     )
   }
 

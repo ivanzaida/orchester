@@ -84,7 +84,10 @@ fn removing_worktree_stays_pending_after_its_control_unmounts() {
     project: db.project().clone(),
     repo_root: desktop.repo().to_path_buf(),
   };
-  let confirmed = leftovers_in(desktop.repo(), &programs, &run).expect("leftovers").0;
+  let mut left = leftovers_in(desktop.repo(), &programs, &[Arc::new(run.clone())])
+    .expect("leftovers")
+    .0;
+  let (_, confirmed) = left.pop().expect("what the run left");
   let jobs = ProjectFeeds::default().of(open.project.id()).integration;
   let job = jobs.of(run.id());
   let args = RemoveArgs {

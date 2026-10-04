@@ -76,6 +76,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
     | StoreError::TaskNotFound(_)
+    | StoreError::RunNotFound(_)
     | StoreError::EmptyBatch
     | StoreError::ResourceNotFound(_)
     | StoreError::ResourceKindMismatch { .. }
@@ -86,6 +87,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationNotFound(_)
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::ServerNotFound(_)
     | StoreError::MemoryNotFound(_)
     | StoreError::MemoryExists(_)
     | StoreError::MemoryConflict(_)

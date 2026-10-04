@@ -2,7 +2,7 @@ mod admin;
 mod auth;
 mod password;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicI64};
 
 use orchester_api::{CreateUser, Credential, ErrorCode, UserCreated};
 
@@ -26,6 +26,8 @@ pub(crate) struct State {
   pub db: Arc<Database>,
   pub passwords: Passwords,
   pub limits: RateLimit,
+  pub sharing_limits: crate::sharing::limits::SharingLimits,
+  pub event_prune_at: AtomicI64,
 }
 
 impl Server {
@@ -42,6 +44,8 @@ impl Server {
         db: Arc::new(db),
         passwords: Passwords::new(),
         limits: RateLimit::default(),
+        sharing_limits: crate::sharing::limits::SharingLimits::default(),
+        event_prune_at: AtomicI64::new(i64::MIN),
       }),
     })
   }

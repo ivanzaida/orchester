@@ -37,6 +37,7 @@ use super::{
     },
   },
   cards::{frame, header},
+  chat::{Avatar, chat_row},
 };
 use crate::{
   display,
@@ -149,11 +150,17 @@ impl Component for ApprovalCardView {
       let queue = ctx.use_context::<ApprovalQueue>();
       body.push(self.answers(ctx, (&props.card, shown.as_ref()), &action, queue));
     }
-    frame(
+    let card = frame(
       format!("conversation-approval-{}", request.id),
       waiting,
-      header(Icon::Hand, &title, &meta, state),
+      header(Icon::Hand, &title, state),
       body,
+    );
+    chat_row(
+      format!("conversation-request-{}", request.id),
+      Avatar::Request,
+      (request.agent.as_str(), &meta),
+      vec![card],
     )
   }
 }

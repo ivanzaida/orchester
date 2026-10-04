@@ -145,7 +145,7 @@ local implementation that does nothing, a silent no-op (rule 6). A trait of thei
 `take_over`, `heartbeat`, `is_stale`, the run phases that end a claim) live in `orchester_core::sharing`, so the
 server enforces and the desktop displays the same rules.
 
-**Organization writes.** ORC-39 (branch `claude/orc39`, not merged yet) writes organization through `ProjectDb`
+**Organization writes.** ORC-39 (merged into master on 2026-10-03) writes organization through `ProjectDb`
 (`set_task_organization`, `update_task_organization`, the project tag methods), not through `TaskStore`. For a shared
 project these writes go to the server like the content writes: the organization fields travel in the same `PATCH
 …/tasks/{id}` with the revision, tags through the tag endpoints, and what the server confirms is written to the cache
@@ -271,7 +271,8 @@ status above is all it gets.
   carries no data, as with the IPC notifications. Event `id` is the event's sequence number.
 - **Kinds.** `task` (the full task snapshot, with organization, claim and run status), `members` (the project's
   members or their roles changed), `tags` (the project's tags after a create, rename, merge or delete; a merge or
-  delete also sends a `task` event for every task it rewrote), `project` (name or key changed), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
+  delete also sends a `task` event for every task it rewrote), `project` (name or key changed; payload `{ id, key, name }`
+  contains no recipient-specific role), `reset` (the cursor is older than the retention, 30 days: the desktop reloads the
   list and continues from the cursor the list returns), and `revoked` (the session or membership ended; the stream
   closes).
 - **Keep-alive.** A comment line every 20 s, so proxies do not close an idle stream; also `X-Accel-Buffering: no`
@@ -298,7 +299,7 @@ only client is the desktop.
 User        { id, username, display_name, admin: bool, disabled: bool }
 UserRef     { id, display_name }
 Session     { id, device, created_at, last_used_at, current: bool }
-Project     { id, key, name, remote, role: "owner"|"member", next_number }
+Project     { id, key, name, remote, role: "owner"|"member"|null, next_number }
 Member      { user: UserRef, role, added_at }
 TaskContent { title, brief, criteria: [string], pipeline: slug|null,
               limits: { budget_tokens, max_duration_ms }|null,
@@ -320,9 +321,17 @@ RunStatus   { holder: UserRef, number, phase, step|null, started_at, phase_since
 Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued",
               workflow?, priority?, tags?, blocking?, blocked_reason?, actor?: "person"|"orchester" }
 Error       { error: code, message, ...details }   // message is English for logs; the desktop shows its own i18n text by code
+UploadTask  { id, number?, former_key?, ...TaskContent, tag_names: [string] instead of tags,
+              status, created_at, has_run: bool, claim: bool }
 ```
 
 Every response carries `Orchester-Server-Time` (the server's clock, for staleness).
+
+`Project.role` is the caller's membership role. An admin who is not a member can manage the project but receives
+`role: null` in the PATCH response; admin authority does not grant membership or task visibility.
+
+`not_queueable` always includes `missing`. When the task is already queued, it is an empty array and
+`reason: "not_draft"` explains the status refusal; incomplete drafts name their missing details.
 
 ### Endpoints
 
@@ -339,7 +348,7 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` |
 | `POST /auth/password` | user | `{ current_password, new_password }` | `204`; the user's other sessions are revoked | `401 invalid_credentials`, `422 invalid` |
 | `GET /projects?remote=<identity>` | user | | `{ projects: [Project] }` the user is a member of | `403 not_member { owners: [UserRef] }` when a project for that remote exists |
-| `POST /projects` | user | `{ idempotency_key, name, key, remote, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is owner | `409 remote_taken { project: id, member: bool, owners: [UserRef] }` (the desktop goes on with Join), `422 invalid` |
+| `POST /projects` | user | `{ idempotency_key, name, key, remote, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is owner | `409 remote_taken { project: id, member: bool, owners: [UserRef] }` (the desktop goes on with Join), `409 conflict`, `422 invalid` |
 | `GET /projects/{id}` | member | | `{ project }` | `404` |
 | `PATCH /projects/{id}` | owner | `{ name?, key? }` | `{ project }` | `422 invalid` |
 | `GET /projects/{id}/members` | member | | `{ members: [Member] }` | |
@@ -349,31 +358,34 @@ or admin); **admin**; **holder** (member holding the task's claim).
 | `GET /projects/{id}/tasks` | member | | `{ tasks: [Task], cursor }` | |
 | `GET /projects/{id}/tasks/{task}` | member | | `{ task }` | `404` |
 | `POST /projects/{id}/tasks` | member | `{ idempotency_key, tasks: [TaskContent] }` | `201 { tasks: [Task] }`, consecutive numbers; a repeated key returns the first result | `422 invalid` |
-| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task] }`, new numbers, ids and former keys kept | `409 id_taken`, `422 invalid` |
+| `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask] }` | `201 { tasks: [Task] }`, new numbers, ids and former keys kept | `409 id_taken` (inside this project or repeated in the batch), generic `409 conflict` for a collision outside it, `422 invalid` |
 | `PATCH /projects/{id}/tasks/{task}` | member | `{ revision, changes: Changes }` | `{ task }`; an organization change is recorded in the task's history with `actor` (default `person`) | `409 revision_conflict { current: Task }`, `422 not_editable { reason }`, `422 not_queueable { missing }`, `422 organization { reason }` (`missing_reason`, `dependency_cycle`, `stop_run_first`, `tag_not_found`), `422 invalid` |
 | `GET /projects/{id}/tasks/{task}/history` | member | | `{ changes: [OrganizationChange] }`, oldest first | `404` |
 | `POST /projects/{id}/tasks/{task}/claim` | member | `{ kind }` | `{ task }`; also when the caller holds it already | `409 claim_held { claim }`, `409 task_merged` |
-| `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }` |
+| `DELETE /projects/{id}/tasks/{task}/claim` | holder | | `{ task }` | `409 not_holder { claim }`, `422 not_editable { reason: "stop_run_first" }` while an agent works |
 | `POST /projects/{id}/tasks/{task}/claim/take-over` | member | `{ claim: id }` | `{ task }` | `409 claim_not_stale { claim }`, `409 claim_changed { claim }` |
 | `PUT /projects/{id}/tasks/{task}/run` | holder | `RunStatus` without `holder`, `updated_at` | `{ task }`; `merged` completes the claim, `cancelled` releases it | `409 not_holder { claim }`, `422 invalid` |
-| `POST /heartbeat` | user | `{ tasks: [id] }` | `{ lost: [{ task, claim: Claim\|null }] }` | |
+| `POST /heartbeat` | user | `{ tasks: [id] }` (at most 256 ids) | `{ lost: [{ task, claim: Claim\|null }] }` | `422 invalid` (too many ids), `429 rate_limited` |
 | `GET /projects/{id}/tags` | member | | `{ tags: [Tag] }`, by name | |
 | `POST /projects/{id}/tags` | member | `{ name }` | `201 { tag }` | `409 tag_exists`, `422 invalid` |
 | `PATCH /projects/{id}/tags/{tag}` | member | `{ name }` | `{ tag }` | `404`, `409 tag_exists`, `422 invalid` |
 | `POST /projects/{id}/tags/{tag}/merge` | member | `{ into: tag id }` | `{ tags: [Tag], tasks: [Task] }`: the rewritten tasks, each with a new revision and a history row | `404`, `409 same_tag` |
 | `DELETE /projects/{id}/tags/{tag}` | member | | `{ tags: [Tag], tasks: [Task] }`, as merge | `404` |
-| `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403` |
+| `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403`, `429 rate_limited` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | |
 | `POST /admin/users` | admin | `{ username, display_name, admin }` | `201 { user, initial_password }` | `409 username_taken`, `422 invalid` |
 | `PATCH /admin/users/{id}` | admin | `{ display_name?, admin?, disabled? }` | `{ user }`; disabling revokes sessions and releases claims | `409 last_admin` |
 | `POST /admin/users/{id}/password` | admin | | `{ initial_password }`; revokes the user's sessions | |
 | `DELETE /admin/users/{id}/sessions` | admin | | `204` | |
 
-`UploadTask` is `{ id, number?, former_key?, ...TaskContent, status, created_at, claim: bool }`. `number` is only
+`UploadTask` is `{ id, number?, former_key?, ...TaskContent, status, created_at, has_run: bool, claim: bool }`. `number` is only
 used when a project is created: Share keeps numbers. Import ignores numbers and assigns new ones, and keeps
 `former_key`, the key the task had on the uploader's computer (`KON-12`), for everyone to see. `claim: true` claims the
 task for the uploader in the same transaction; the desktop sets it for tasks with a run that has not ended on its
-computer. An upload carries each task's organization with tags **by name** (`tag_names: [string]` instead of `tags`):
+computer. **Coordinator decision, 2026-10-04 (S1b review C3):** `has_run` is true when the task has any run on the
+uploader's computer, including a run that has ended. The server keeps it, so a queued task with a finished run is
+editable after Share or Import; `claim: true` also implies `has_run: true` regardless of the uploaded flag.
+An upload carries each task's organization with tags **by name** (`tag_names: [string]` instead of `tags`):
 the server matches them to the project's tags without regard to case and creates the missing ones in the same
 transaction. A blocking link to a task that is neither uploaded with it nor on the server is dropped, and the response
 lists the dropped links (`dropped_links: [{ task, blocking }]`) so the desktop can say so. History before the upload
@@ -387,8 +399,29 @@ locally. Whether a link is finished is `DependencyGate::is_completed` of the blo
 status, or `merged` once its claim is completed).
 
 `not_editable` reasons come from core's `EditError`. A queued task with no run is locked; a task with a run must stay
-complete. "Has a run" is `has_run` on the server: someone took a `run` claim on the task, which starting work always
-does. Claiming a task one holds already as `run` turns a manual claim into a run claim.
+complete. "Has a run" is `has_run` on the server: it was uploaded with a run or someone took a `run` claim on the
+task, which starting work always does. Claiming a task one holds already as `run` turns a manual claim into a run
+claim; taking any claim one holds already refreshes its heartbeat. Claims, heartbeats and run status do not bump
+the task's content revision. Content and organization changes, including tag rewrites, do bump it.
+
+Organization normalizes blocking links to one gate per task (the last supplied gate wins), as it does for tags,
+so task snapshots and history describe the same organization. Unknown tag ids return `422 organization` with
+`reason: "tag_not_found"`; unknown or foreign task links return `422 invalid` before foreign-key writes.
+
+**Sharing resource limits.** Heartbeats accept at most 256 ids and 12 requests per 60-second window per session.
+Excess requests receive `429 rate_limited` with `Retry-After`; a heartbeat that only refreshes freshness emits no
+event or full task snapshot. Freshness is authoritative on subsequent task reads and takeover checks. SSE admits
+at most 8 simultaneous streams per session and 16 per user, including connections through trusted proxies, with
+`429 rate_limited` and `Retry-After: 1` when full. Disconnects and revocations release that capacity.
+
+Event retention is pruned on successful sharing writes at most once per minute, with an index on `(project, at)`;
+replay excludes expired rows between prunes. Replay batches up to 64 events and 1 MiB of payload (a single larger
+snapshot is sent alone), preserving order while bounding memory and database round trips.
+
+Event sequence numbers remain globally monotonic in S1b. Gaps can reveal that another project changed, but never
+its identity or event data; this metadata tradeoff is accepted for S1b. A task-id collision outside the caller's
+project returns only a generic conflict without naming the task or project. The conflict status can still imply
+a collision; UUIDv7 identifiers are not treated as authorization, and every data read remains membership checked.
 
 Common errors on every endpoint: `400 bad_request` (malformed body, including unknown request fields),
 `413 payload_too_large` (body over 1 MiB), `405 method_not_allowed` (unsupported method),
@@ -475,10 +508,11 @@ UUIDv7 ids, UTC milliseconds.
 | `meta` | schema version |
 | `users` | id, username (unique, case-insensitive), display name, password hash, admin, disabled at, must change password, created / password changed |
 | `sessions` | id, user, token hash (unique), device, created / last used / revoked, from an initial password |
-| `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at |
-| `memberships` | project, user, role (owner, member), added by / at; unique (project, user) |
+| `projects` | id, key, name, remote identity (unique: one server project per repository), next task number, created by / at, expired event cursor floor |
+| `project_batches` | user, idempotency key, first response (JSON); unique (user, key) |
+| `memberships` | project, user, role (owner, member), added by / at, membership lifetime id; unique (project, user) |
 | `tasks` | id (the desktop's `TaskId`, kept on upload), project, number (unique per project), former key, title, brief, criteria (JSON array), pipeline slug, budget tokens, time limit, status, workflow status, priority, blocked reason, revision, has run, created by / at, updated by / at |
-| `task_batches` | project, idempotency key, user, task ids; unique (project, key): a repeated create or upload returns the first result |
+| `task_batches` | project, idempotency key, user, first response (JSON); unique (project, key): a repeated create or upload returns the first result even after those tasks are edited |
 | `tags` | id, project, name, normalized name; unique (project, normalized) |
 | `task_tags` | task, tag; unique (task, tag) |
 | `task_links` | task, blocking task (same project), gate (review, merge); unique (task, blocking task) |
@@ -491,6 +525,8 @@ UUIDv7 ids, UTC milliseconds.
 
 **Task numbers** come from `projects.next_task_number`, read and raised in the transaction that inserts the tasks, so
 concurrent creates never share or skip a number. As in `storage.md`, numbers are for people; every reference is an id.
+The counter can reach `u32::MAX + 1` to represent exhaustion; allocating beyond that returns `422 invalid`.
+Token and duration limits retain core's full unsigned 64-bit range, stored as decimal text rather than SQLite REAL.
 
 **Project identity.** `RepositoryIdentity::from_remote_url` in core normalizes the `origin` fetch URL. Credentials
 (already dropped by `strip_userinfo`), scheme and port are dropped. scp-like `git@host:owner/name` becomes
@@ -646,6 +682,11 @@ directory.
   the token nor the password.
 
 **S1b · Projects, tasks, claims and events on the server.**
+Implemented on `codex/server-s1b`, awaiting independent re-review; no merge. Boxes remain pending until merge.
+Functional tests run on
+Windows. The macOS cross-check is blocked by missing Apple SDK headers; Linux and Docker were not rerun for S1b.
+Validation: [S1b evidence](../evidence/server-s1b-2026-10-04.md).
+
 - [ ] Core: `sharing` (claim rules and staleness with tests over explicit times), `RepositoryIdentity` (HTTPS, SSH
   and scp-like forms of one repository match; local paths refused).
 - [ ] Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`not_member` with
@@ -657,7 +698,7 @@ directory.
 - [ ] Claims: of two simultaneous claims exactly one wins. A heartbeat refreshes and reports lost claims. A claim is
   stale after 15 minutes of test clock. Take-over is refused while fresh or changed, and recorded when done.
   Removing a member or disabling a user releases their claims.
-- [ ] Organization (decisions 23–24; needs ORC-39's `task::organization` on master): workflow, priority, tags,
+- [ ] Organization (decisions 23–24; reuses ORC-39's `task::organization` on master): workflow, priority, tags,
   blocking links and the Blocked reason in `Task` and `Changes`, under the revision; core's rules refuse an empty
   reason, a cycle, an unknown tag and Canceled while the reported run has not ended. Every change writes a history
   row with its person and actor, and `GET …/history` returns them. Upload and import take tags by name (created when

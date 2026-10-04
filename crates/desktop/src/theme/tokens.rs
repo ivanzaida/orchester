@@ -62,6 +62,9 @@ pub const CONTROL_PADDING_X: f32 = 12.0;
 pub const FOCUS_STROKE: f32 = 1.5;
 /// Underline of the selected tab (`Iefue`, `Okyxt`).
 pub const TAB_INDICATOR_STROKE: f32 = 2.0;
+/// One digit of a count in `TypographyStyle::Mono` (Geist Mono 10, whose digits all advance
+/// 0.6 em), e.g. the room the Open tab keeps for its count (`tidLB` in `i59Wy`, `DF8II`).
+pub const COUNT_DIGIT_WIDTH: f32 = 6.0;
 /// Chevron of a select field and check of its selected option (`eASPF` in `ZGwlv`, `ClxwV` in
 /// `L20XvS`); also the width of the check slot every option reserves.
 pub const SELECT_ICON_SIZE: f32 = 14.0;
@@ -83,6 +86,12 @@ pub const RADIUS_CHIP: f32 = 5.0;
 pub const RADIUS_SEGMENT: f32 = 5.0;
 /// Corner radius of an open select menu: option radius 7 plus its padding 4 (`u0ByM`).
 pub const RADIUS_SELECT_MENU: f32 = 11.0;
+/// Round ends for whatever is at most 32 high: a chat message's 28 avatar (`qU0XW` in `kpnmP`),
+/// the composer's 28 pills and its 32 send button (`zQwSy`, `U0cjVo` in `BRMpj`); lurq clamps a
+/// radius to half the box.
+pub const RADIUS_ROUND: f32 = 16.0;
+/// The composer's box (`n0wdPC` in `BRMpj`).
+pub const RADIUS_COMPOSER: f32 = 18.0;
 /// Switch track (`K8ItM`, radius 8 on a 16px track). lurq clamps a radius to half the box, so
 /// the 10px knob is round with it too.
 pub const RADIUS_PILL: f32 = 8.0;
@@ -124,9 +133,18 @@ pub const SPACE_CHECK_INDENT: f32 = 28.0;
 /// Why an option cannot be chosen, under it: indented past a compact radio and its gap (`J5RohL`,
 /// `L1B0m` in 04.B `W0Owo`).
 pub const SPACE_REASON_INDENT: f32 = 22.0;
-/// A tool group and a card's body in the conversation timeline start where a message's text does:
-/// past its 24px glyph and the 12px gap (`uoK7y`, the cards of `ZxYGh`, `haIEI`).
-pub const SPACE_TIMELINE_INDENT: f32 = 36.0;
+/// The working line of the conversation starts where a chat message's text does: past its 28px
+/// avatar and the 12px gap (`VCcdr` in `kpnmP`).
+pub const SPACE_TIMELINE_INDENT: f32 = 40.0;
+/// Above and below a tool chip's line in a chat message (`a7zbJ` in `kpnmP`).
+pub const SPACE_CHIP: f32 = 5.0;
+/// Snug: between the badges of the collapsed step rail and a badge's icon and number (`fFDrw`,
+/// `ZNWkf` in `I35q7D`), and between the composer's send chevron and button (`eI8en` in `BRMpj`).
+pub const SPACE_SNUG: f32 = 4.0;
+/// Above the composer's box in its dock (`CoGTj` in `BRMpj`).
+pub const SPACE_COMPOSER_TOP: f32 = 4.0;
+/// Under the composer's box in its dock, and the closed box's side padding (`CoGTj`, `W9LMuM`).
+pub const SPACE_COMPOSER_EDGE: f32 = 18.0;
 
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = 1.25;
@@ -181,6 +199,8 @@ pub const VALUE_BOX_SCROLLBAR_END_INSET: f32 = 0.0;
 
 /// Unparsed CLI lines in the agent transcript are muted to 60 % (`Ane9j` in `SfXU1`).
 pub const UNPARSED_OPACITY: f32 = 0.6;
+/// A step of the conversation's rail that has not started (`r27KI` in `K4AOD`).
+pub const NOT_STARTED_OPACITY: f32 = 0.7;
 /// A permission option the connection cannot enforce, or one that is not available yet, at 50 %
 /// (`BNliD` in 04.04 `T1rjv`; the compact 04.B `W0Owo` shows 45 %).
 pub const UNAVAILABLE_OPTION_OPACITY: f32 = 0.5;
@@ -220,11 +240,13 @@ pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
 /// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
 /// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
 pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
-/// The narrowest window whose Conversation toolbar (`JKl4s` in `RrScB`) holds everything on one line
-/// with Details closed: the 216 sidebar, the toolbar's 64 padding, the 240 step filter, *Show* (164),
-/// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
-/// Narrower, *Show* and the search go to a second line (not drawn yet).
-pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
+/// The narrowest chat column (the tab less the rail, its strip or Details) whose Conversation toolbar
+/// (`Eef6u` in `kpnmP`, `GOOg3` in `I35q7D`) holds everything on one line: its 48 padding, *Show*
+/// (164), the 150 search, the run's state (*Following live*, 99), *Details* (81) and four 10 gaps.
+/// Narrower, *Show* and the search go to a second line (not drawn).
+pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_CHAT: f32 = 582.0;
+/// Below this window width the conversation's step rail starts collapsed to its strip (`I35q7D`).
+pub const CONVERSATION_RAIL_COLLAPSE_BELOW_WINDOW: f32 = 1200.0;
 /// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its
 /// recipient, *Attach* and both send buttons on one line: the 216 sidebar, the column's 64 padding,
 /// the composer's 24, the 260 recipient, *Attach* (104), *Send after this turn* (166), *Send now*
@@ -247,5 +269,36 @@ pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = 1116.0;
 /// tile, the longest workflow label, tag chips, time, chevron and their gaps, about 530) leave its
 /// title and meta 200. Narrower, the column goes under the list at full width (no frame draws it).
 pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = 1340.0;
+/// The narrowest window whose *Runs of this task* rows keep their columns (63.01 `O0AMKY`): the 216
+/// sidebar, the Summary's 64 padding, the 336 run panel, the run, status, when and action cells
+/// (76, 150, 96, 150) and their 16 gaps leave what happened 200. Narrower, a row stacks (63.02
+/// `H9Z7D4`).
+pub const RUN_HISTORY_COLUMNS_MIN_WINDOW: f32 = 1340.0;
+/// Project sidebar width (`zo9Py`).
+pub const PROJECT_SIDEBAR_WIDTH: f32 = 216.0;
+/// The pull request list's fixed columns (`QHBNZ`, `Qcgjy`): the row's icon (`r0ZlXX`), State &
+/// review (`ruZbF`), Checks (`ZWzfm`), Open in GitHub (not in the design's row) and the chevron
+/// (`laxWE`).
+const PULL_REQUEST_ICON_WIDTH: f32 = 20.0;
+pub const PULL_REQUEST_STATE_WIDTH: f32 = 180.0;
+pub const PULL_REQUEST_CHECKS_WIDTH: f32 = 150.0;
+pub const PULL_REQUEST_OPEN_WIDTH: f32 = 128.0;
+pub const PULL_REQUEST_CHEVRON_WIDTH: f32 = 14.0;
+/// The least a pull request's title keeps beside every column, as the task table's (above).
+const PULL_REQUEST_TITLE_MIN: f32 = 200.0;
+/// The narrowest window whose pull request rows keep Open in GitHub while the title keeps its
+/// minimum: the sidebar, the list's padding (`SPACE_SECTION` each side), the row's (`SPACE_STACK`
+/// each side), the fixed columns and the five `SPACE_MD` gaps between six cells (1076). Narrower,
+/// Open in GitHub goes, as the Tasks list drops columns (02.03E).
+pub const PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW: f32 = PROJECT_SIDEBAR_WIDTH
+  + 2.0 * SPACE_SECTION
+  + 2.0 * SPACE_STACK
+  + PULL_REQUEST_ICON_WIDTH
+  + PULL_REQUEST_STATE_WIDTH
+  + PULL_REQUEST_CHECKS_WIDTH
+  + PULL_REQUEST_OPEN_WIDTH
+  + PULL_REQUEST_CHEVRON_WIDTH
+  + 5.0 * SPACE_MD
+  + PULL_REQUEST_TITLE_MIN;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

@@ -241,7 +241,7 @@ async fn s1a_password_character_limits_and_persistence() {
   let version: i64 = database
     .query_row("SELECT schema_version FROM meta", [], |row| row.get(0))
     .expect("schema");
-  assert_eq!(version, 1);
+  assert_eq!(version, 2);
   let mode: String = database
     .query_row("PRAGMA journal_mode", [], |row| row.get(0))
     .expect("WAL mode");

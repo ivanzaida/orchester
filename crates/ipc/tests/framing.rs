@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  integration::{LeftWorktree, Leftovers, WorktreeOwner},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     capability::{PermissionOption, PermissionProblem, Unavailable},
@@ -294,6 +295,41 @@ async fn frames_round_trip_every_message() {
     assert_eq!(reader.read::<Event>().await.expect("read event"), Some(event));
   }
   assert_eq!(reader.read::<Event>().await.expect("clean end"), None);
+}
+
+/// Run again with what a person saw the run before leave, a worktree folder git forgot among it
+/// (protocol 15); a peer that sends no `forgotten` sends a worktree git lists.
+#[tokio::test]
+async fn frames_round_trip_a_forgotten_worktree() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let worktree = LeftWorktree {
+    path: "C:/repo/.orchester/worktrees/01J".to_owned(),
+    owner: WorktreeOwner::Run,
+    branch: None,
+    uncommitted: vec!["target/held.bin".to_owned()],
+    missing: false,
+    forgotten: true,
+  };
+  let request = Request {
+    id: RequestId::new(1),
+    command: Command::RunAgain {
+      key: IdempotencyKey::generate(),
+      task: TaskId::generate(),
+      after: RunId::generate(),
+      remove_worktrees: Some(Leftovers {
+        worktrees: vec![worktree.clone()],
+        branches: Vec::new(),
+      }),
+    },
+  };
+  writer.write(&request).await.expect("write request");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
+
+  let mut older = serde_json::to_value(&worktree).expect("to JSON");
+  older.as_object_mut().expect("an object").remove("forgotten");
+  let listed: LeftWorktree = serde_json::from_value(older).expect("from JSON");
+  assert!(!listed.forgotten);
 }
 
 #[tokio::test]

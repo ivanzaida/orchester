@@ -28,6 +28,8 @@ pub enum ServerError {
   Tls,
   #[error("{0:?}")]
   Api(ErrorCode),
+  #[error("shared project operation refused")]
+  Sharing(Box<orchester_api::SharingError>),
   #[error("sign-in is rate limited")]
   RateLimited(u64),
 }
@@ -58,6 +60,7 @@ impl ServerError {
       Self::BackupIncomplete => "BackupIncomplete",
       Self::Tls => "Tls",
       Self::Api(_) => "Api",
+      Self::Sharing(_) => "Sharing",
       Self::RateLimited(_) => "RateLimited",
     }
   }
@@ -123,6 +126,9 @@ fn database_variant(error: &rusqlite::Error) -> &'static str {
 
 impl IntoResponse for ServerError {
   fn into_response(self) -> Response {
+    if let Self::Sharing(error) = self {
+      return (status_message(error.error.error).0, Json(error)).into_response();
+    }
     let (code, retry) = match self {
       Self::Api(code) => (code, None),
       Self::RateLimited(seconds) => (ErrorCode::RateLimited, Some(seconds)),
@@ -131,22 +137,7 @@ impl IntoResponse for ServerError {
         (ErrorCode::Internal, None)
       }
     };
-    let (status, message) = match code {
-      ErrorCode::BadRequest => (StatusCode::BAD_REQUEST, "Malformed request"),
-      ErrorCode::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Request body too large"),
-      ErrorCode::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
-      ErrorCode::RequestTimeout => (StatusCode::REQUEST_TIMEOUT, "Request body timed out"),
-      ErrorCode::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
-      ErrorCode::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
-      ErrorCode::PasswordChangeRequired => (StatusCode::FORBIDDEN, "Password change required"),
-      ErrorCode::Forbidden => (StatusCode::FORBIDDEN, "Forbidden"),
-      ErrorCode::NotFound => (StatusCode::NOT_FOUND, "Not found"),
-      ErrorCode::Invalid => (StatusCode::UNPROCESSABLE_ENTITY, "Invalid input"),
-      ErrorCode::UsernameTaken => (StatusCode::CONFLICT, "Username already exists"),
-      ErrorCode::LastAdmin => (StatusCode::CONFLICT, "The last active admin must remain"),
-      ErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
-      ErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Server operation failed"),
-    };
+    let (status, message) = status_message(code);
     let mut response = (
       status,
       Json(ApiError {
@@ -161,5 +152,42 @@ impl IntoResponse for ServerError {
         .insert("Retry-After", seconds.to_string().parse().expect("integer header"));
     }
     response
+  }
+}
+
+pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
+  match code {
+    ErrorCode::BadRequest => (StatusCode::BAD_REQUEST, "Malformed request"),
+    ErrorCode::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Request body too large"),
+    ErrorCode::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+    ErrorCode::RequestTimeout => (StatusCode::REQUEST_TIMEOUT, "Request body timed out"),
+    ErrorCode::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
+    ErrorCode::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+    ErrorCode::PasswordChangeRequired => (StatusCode::FORBIDDEN, "Password change required"),
+    ErrorCode::Forbidden => (StatusCode::FORBIDDEN, "Forbidden"),
+    ErrorCode::NotFound => (StatusCode::NOT_FOUND, "Not found"),
+    ErrorCode::Invalid => (StatusCode::UNPROCESSABLE_ENTITY, "Invalid input"),
+    ErrorCode::UsernameTaken => (StatusCode::CONFLICT, "Username already exists"),
+    ErrorCode::LastAdmin => (StatusCode::CONFLICT, "The last active admin must remain"),
+    ErrorCode::NotMember => (StatusCode::FORBIDDEN, "Project membership required"),
+    ErrorCode::NoSuchUser => (StatusCode::NOT_FOUND, "User not found"),
+    ErrorCode::Conflict
+    | ErrorCode::RemoteTaken
+    | ErrorCode::AlreadyMember
+    | ErrorCode::LastOwner
+    | ErrorCode::IdTaken
+    | ErrorCode::RevisionConflict
+    | ErrorCode::ClaimHeld
+    | ErrorCode::TaskMerged
+    | ErrorCode::NotHolder
+    | ErrorCode::ClaimNotStale
+    | ErrorCode::ClaimChanged
+    | ErrorCode::TagExists
+    | ErrorCode::SameTag => (StatusCode::CONFLICT, "Conflicting project state"),
+    ErrorCode::NotEditable | ErrorCode::NotQueueable | ErrorCode::Organization => {
+      (StatusCode::UNPROCESSABLE_ENTITY, "Task change refused")
+    }
+    ErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
+    ErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Server operation failed"),
   }
 }

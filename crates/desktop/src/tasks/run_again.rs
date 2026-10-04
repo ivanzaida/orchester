@@ -1,5 +1,5 @@
 //! Run again (ORC-16 `zM693`, `R5y5x`, `iE8eQ`) as the task page shows it: whether the task whose
-//! latest run failed or was cancelled can run again now, by core's rule
+//! latest run failed, was cancelled or was interrupted and lost its worktree (ORC-63) can run again now, by core's rule
 //! ([`orchester_core::run::run_again`]), and what its next run would use, for the confirmation.
 //! The runner checks the rule again when it is asked. Blocks on SQLite and git; the UI calls it
 //! off the UI thread.
@@ -14,7 +14,7 @@ use orchester_core::{
   resource::{Pipeline, VersionNumber},
   revision::Revision,
   run::{BranchName, Run, RunAgainBlock, RunAgainInput, RunNumber, run_again},
-  store::{ActivityStore, ResourceStore, RunStore, SettingsStore, TaskStore},
+  store::{ActivityStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
   task::TaskLimits,
   time::Timestamp,
   tokens::compact_tokens,
@@ -73,9 +73,15 @@ impl RunAgainCheck {
       ),
       None => (Arc::from(""), None),
     };
+    let worktree_removed: Vec<RunId> = db
+      .worktree_removals(task.id())?
+      .into_iter()
+      .map(|(run, _)| run)
+      .collect();
     let input = RunAgainInput {
       runs: &runs,
       after,
+      worktree_removed: &worktree_removed,
       pipeline_published: latest.is_some(),
       limits: db.project_limits()?,
       used_today: db.tokens_used_since(Timestamp::now().local_day_start())?,

@@ -15,6 +15,10 @@ use orchester_core::{
   id::ConnectionId,
   time::Timestamp,
 };
+use orchester_desktop::{
+  activity::{ActivityLog, OperationSpec},
+  messages::Message,
+};
 use parking_lot::Mutex;
 
 use crate::{
@@ -51,8 +55,8 @@ const GATEWAY_TIMEOUT: &str =
 const RATE_LIMITED: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_rate_limited.stderr");
 /// Signed in as ivanzaida without the `repo` scope; shaped like the captured output.
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","tokenSource":"keyring","scopes":"read:org","gitProtocol":"https"}]}}"#;
-const LIST_ID: &str = "pull-requests-list";
-const STATUS: &str = "pull-requests-sync-status";
+pub(crate) const LIST_ID: &str = "pull-requests-list";
+pub(crate) const STATUS: &str = "pull-requests-sync-status";
 
 /// `gh` answering read-only commands from a table that tests change between syncs, and check
 /// counts from the checks of the heads it knows (none for the others).
@@ -208,6 +212,16 @@ fn pull_requests_search_filters_by_number_title_and_branch() {
   assert_eq!(desktop.focused().as_deref(), Some("pull-requests-search"));
 }
 
+/// The activity log after a single operation that ended without an event; what it was called is
+/// not kept.
+fn one_operation_dropped() -> ActivityLog {
+  let mut log = ActivityLog::default();
+  let title = Message::new("statusBar.operations.pullRequestSync.running");
+  let id = log.start(OperationSpec::new(title.clone(), title.clone(), title), Instant::now());
+  log.cancel(id);
+  log
+}
+
 #[test]
 fn pull_requests_without_a_linked_repository_are_unavailable() {
   let gh = FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS)));
@@ -219,6 +233,13 @@ fn pull_requests_without_a_linked_repository_are_unavailable() {
     "pull-requests-unavailable",
     "Pull requests are unavailable"
   ));
+  // The sync the screen started when it opened ends without an event: the log holds one operation
+  // that was started and dropped, and nothing else.
+  let expected = one_operation_dropped();
+  desktop.wait_until("the sync to end unlisted", |desktop| {
+    desktop.activity.snapshot() == expected
+  });
+  assert!(!shows(&mut desktop, "status-bar", "Pull requests synced"));
   desktop.click("pull-requests-refresh");
   assert!(gh.ran.lock().is_empty(), "nothing runs without a linked repository");
   desktop.click("pull-requests-open-connections");
@@ -361,7 +382,7 @@ fn pull_requests_sync_every_minute_only_while_shown() {
 }
 
 /// `count` open pull requests shaped like the synthetic ones, numbered from 1.
-fn many_pull_requests(count: u64) -> String {
+pub(crate) fn many_pull_requests(count: u64) -> String {
   let items: Vec<String> = (1..=count)
     .map(|number| {
       format!(

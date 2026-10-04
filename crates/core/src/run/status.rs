@@ -121,6 +121,16 @@ impl RunStatus {
     matches!(self, Self::Succeeded | Self::Failed(_) | Self::Cancelled)
   }
 
+  /// Whether an agent of the run works, waits for a person, or goes on once it resumes or a raised
+  /// limit lets it: its worktrees are in use and cannot be removed. A run that ended has no live
+  /// work, nor has an interrupted one, which only continues when a person asks for it (ORC-63).
+  pub const fn has_live_work(&self) -> bool {
+    !matches!(
+      self,
+      Self::Succeeded | Self::Failed(_) | Self::Cancelled | Self::Interrupted(_)
+    )
+  }
+
   /// A failed or cancelled run also permits starting a separate run ([`super::run_again`]).
   pub const fn can_run_again(&self) -> bool {
     matches!(self, Self::Failed(_) | Self::Cancelled)

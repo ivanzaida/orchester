@@ -1,19 +1,14 @@
 //! Runs whose stored record cannot be read back, as the task list and the task page show them: the
 //! run's number and, in short, why. The record stays as it is in the project database; nothing can
 //! change the run, so its actions are unavailable. The page of a task whose latest run cannot be
-//! read lists the task's other runs instead (02.R `SUuwV`).
+//! read lists the task's runs under its notice (02.R `SUuwV`, *Runs of this task* since ORC-63).
 
 use orchester_core::{
   id::RunId,
-  resource::StepKey,
-  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, TaskPhase, UnreadableRun},
-  store::ActivityStore,
-  task::Task,
-  time::Timestamp,
+  run::{RunNumber, UnreadableRun},
 };
-use orchester_store::{ProjectDb, RunStoreError, StoreError};
+use orchester_store::{RunStoreError, StoreError};
 
-use super::data::latest_run;
 use crate::messages::Message;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,79 +46,6 @@ impl Unreadable {
       None => Message::new("runs.unreadable.actionsUnnumbered"),
     }
   }
-}
-
-/// A run of a task whose latest run cannot be read, as the list of its other runs shows it (`GHwIe`
-/// in 02.R): its number, where it stands, what happened and when.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EarlierRun {
-  pub number: Option<RunNumber>,
-  /// `None` when it cannot be read either.
-  pub phase: Option<TaskPhase>,
-  pub detail: Message,
-  /// When it last changed; `None` when it cannot be read.
-  pub at: Option<Timestamp>,
-}
-
-impl EarlierRun {
-  /// `run`, a run of `task`, as the list shows it.
-  pub(super) fn read(db: &ProjectDb, task: &Task, run: &ListedRun<RunStoreError>) -> Result<Self, StoreError> {
-    let run = match run {
-      Ok(run) => run,
-      Err(unreadable) => {
-        let unreadable = Unreadable::of(unreadable);
-        return Ok(Self {
-          number: unreadable.number,
-          phase: None,
-          detail: unreadable.title(),
-          at: None,
-        });
-      }
-    };
-    let latest = latest_run(db, task, run)?;
-    let detail = match run.status() {
-      RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)) => {
-        Message::new("runs.unreadable.otherRuns.failedAt").with("step", step_name(run, step))
-      }
-      RunStatus::Cancelled => cancelled(db, run)?,
-      _ => latest.message(),
-    };
-    Ok(Self {
-      number: Some(run.number()),
-      phase: Some(latest.phase),
-      detail,
-      at: Some(latest.updated_at),
-    })
-  }
-}
-
-/// The name of `step` in the pipeline `run` pinned.
-fn step_name(run: &Run, step: &StepKey) -> String {
-  run
-    .snapshot()
-    .body()
-    .step(step)
-    .map_or_else(|| step.as_str().to_owned(), |step| step.name.as_str().to_owned())
-}
-
-/// "Canceled at Implement · work kept on orc/repo-switcher", at the step of the run's last agent or
-/// command, if one ran.
-fn cancelled(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
-  if run.current_attempt().is_none() {
-    return Ok(Message::new("runs.unreadable.otherRuns.cancelledBeforeStart"));
-  }
-  let branch = run.branch().as_str().to_owned();
-  let step = db
-    .invocations(run.id())?
-    .last()
-    .and_then(|invocation| run.execution(invocation.execution))
-    .map(|execution| step_name(run, execution.step()));
-  Ok(match step {
-    Some(step) => Message::new("runs.unreadable.otherRuns.cancelledAt")
-      .with("step", step)
-      .with("branch", branch),
-    None => Message::new("runs.unreadable.otherRuns.cancelled").with("branch", branch),
-  })
 }
 
 /// `error` in short: a stored value is invalid or unknown to this version, or the database could

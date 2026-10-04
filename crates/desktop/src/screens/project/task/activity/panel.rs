@@ -20,7 +20,7 @@ use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, toke
 use super::{
   super::{
     super::ProjectNav,
-    permissions::{RunPermissionsProps, RunPermissionsRow, invocation_property},
+    permissions::{Look, RunPermissionsProps, RunPermissionsRow, invocation_property},
   },
   engine, first_edit, native,
 };
@@ -39,31 +39,31 @@ use crate::{
 pub(in crate::screens::project::task) const PANEL_WIDTH: f32 = 320.0;
 const DIVIDER_HEIGHT: f32 = 1.0;
 
+/// The panel under `head`.
 pub(in crate::screens::project::task) fn invocation_panel(
   ctx: &mut Ctx,
   (nav, repo_root): (&ProjectNav, &Path),
-  run: &RunView,
-  entries: &[Entry],
+  (run, entries): (&RunView, &[Entry]),
   filter: Option<StepExecutionId>,
+  head: Element,
 ) -> Element {
   let invocation = match filter {
     Some(execution) => run.invocations_of(execution).last(),
     None => run.invocations.last(),
   };
-  let title = match (
-    filter,
-    invocation.and_then(|invocation| run.step_of(invocation.execution)),
-  ) {
+  let title = match invocation.and_then(|invocation| Some((invocation, run.step_of(invocation.execution)?))) {
     // An agent Orchester runs itself names its step (04.H10 `FRtSj`).
-    (_, Some(step)) if native::is_native(step) => native::title(ctx, step),
-    (Some(_), Some(step)) => ctx.t_args(
-      "runs.activity.panel.stepTitle",
+    Some((_, step)) if native::is_native(step) => native::title(ctx, step),
+    // *07 Docs & cleanup · attempt 1* (`MBRfl` in `oryKr`).
+    Some((invocation, step)) => ctx.t_args(
+      "runs.activity.panel.stepAttempt",
       [
+        ("number", format!("{:02}", step.number).as_str()),
         ("step", &*step.name),
-        ("agent", step.agent.as_deref().unwrap_or_default()),
+        ("attempt", attempt_of(run, invocation.execution).as_str()),
       ],
     ),
-    _ => ctx.t("runs.activity.panel.title"),
+    None => ctx.t("runs.activity.panel.title"),
   };
   let panel = Column::new()
     .id("activity-invocation-content")
@@ -73,11 +73,14 @@ pub(in crate::screens::project::task) fn invocation_panel(
     .spacing(ExtraSpacing::Group.role())
     .child(
       Text::new(&title)
-        .variant(ExtraTypography::SectionHeading.role())
+        .variant(ExtraTypography::NoticeHeading.role())
         .id("activity-invocation-title"),
     );
   let Some(invocation) = invocation else {
-    return frame(panel.child(Text::new(&ctx.t("runs.activity.panel.none")).variant(ExtraTypography::Detail.role())));
+    return frame(
+      head,
+      panel.child(Text::new(&ctx.t("runs.activity.panel.none")).variant(ExtraTypography::Detail.role())),
+    );
   };
   // A tool step's command runs no model and changes no file an agent reports.
   let before = invocation
@@ -118,7 +121,7 @@ pub(in crate::screens::project::task) fn invocation_panel(
         .variant(ExtraTypography::Hint.role())
         .id("activity-invocation-note"),
     );
-  frame(panel)
+  frame(head, panel)
 }
 
 /// What the panel's own invocation runs or ran with (`iPHGE`), not the step's latest launch: while
@@ -141,20 +144,21 @@ fn permissions(
     run_number: run.run.number().get(),
     live,
     repo_root: repo_root.to_path_buf(),
-    inline_link: false,
+    look: Look::Row { inline: false },
   };
   Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("activity-permissions-{}", step.key), props))
 }
 
-/// The panel's fill and edge around `content`, which scrolls when it is taller than the panel, so
-/// the note keeps the padding under it.
-fn frame(content: Column) -> Element {
+/// The panel's fill and edge around `head` and `content`, which scrolls when it is taller than the
+/// panel, so the note keeps the padding under it.
+fn frame(head: Element, content: Column) -> Element {
   Column::new()
     .id("activity-invocation")
     .width(Dimension::Px(PANEL_WIDTH))
     .height(Dimension::Pct(100.0))
     .background(PaletteColor::SurfacePanel)
     .border_left(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(head)
     .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
     .into()
 }
@@ -165,12 +169,7 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   let Some(step) = run.step_of(invocation.execution) else {
     return Vec::new();
   };
-  let attempt = run
-    .run
-    .attempts()
-    .iter()
-    .find(|attempt| attempt.execution(invocation.execution).is_some())
-    .map_or_else(String::new, |attempt| attempt.number().to_string());
+  let attempt = attempt_of(run, invocation.execution);
   let number = format!("{:02}", step.number);
   let step_value = ctx.t_args(
     "runs.activity.panel.stepValue",
@@ -230,6 +229,16 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
   }
   rows.extend(first_edit::code_index_row(ctx, run, invocation));
   rows
+}
+
+/// The number of the attempt `execution` belongs to.
+fn attempt_of(run: &RunView, execution: StepExecutionId) -> String {
+  run
+    .run
+    .attempts()
+    .iter()
+    .find(|attempt| attempt.execution(execution).is_some())
+    .map_or_else(String::new, |attempt| attempt.number().to_string())
 }
 
 /// When `execution` started and ended, once all its launches ended.

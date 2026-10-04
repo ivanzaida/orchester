@@ -11,7 +11,7 @@ use orchester_core::{
   store::RunStore,
   time::Timestamp,
 };
-use rusqlite::{OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
@@ -138,7 +138,7 @@ impl RunStore for ProjectDb {
   fn interrupted_runs(&self) -> Result<Vec<ListedRun<RunStoreError>>, RunStoreError> {
     Ok(load_runs(
       &self.connection,
-      "WHERE status = ?1 ORDER BY number",
+      "WHERE status = ?1 AND id NOT IN (SELECT run_id FROM run_worktree_removals) ORDER BY number",
       [columns::INTERRUPTED],
     )?)
   }
@@ -177,7 +177,13 @@ impl ProjectDb {
   /// Appends `events` and stores `run`, and `plan` if given, in one transaction.
   fn append(&mut self, run: &Run, events: &[RunEvent], plan: Option<&Plan>) -> Result<(), RunStoreError> {
     check_events(run, events)?;
+    let continues = events.iter().any(|event| event.kind().starts_execution());
+    // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
+    // of the run's worktrees (`WorktreeStore::begin_worktree_removal`) each see the other.
     let transaction = self.connection.transaction()?;
+    if continues && super::worktree_removals::removal(&transaction, run.id())?.is_some() {
+      return Err(RunStoreError::WorktreeRemoved(run.id()));
+    }
     let stored: Option<i64> = transaction
       .query_row(
         "SELECT last_sequence FROM runs WHERE id = ?1",
@@ -195,7 +201,7 @@ impl ProjectDb {
         found,
       });
     }
-    if events.iter().any(|event| event.kind().starts_execution()) {
+    if continues {
       super::organization::check_readiness(&transaction, run.task())?;
     }
     update_run(&transaction, run)?;
@@ -411,4 +417,26 @@ fn run_number(number: i64) -> Result<RunNumber, StoreError> {
     .and_then(NonZeroU32::new)
     .map(RunNumber::new)
     .ok_or_else(|| corrupt("run number", number))
+}
+
+/// `status`, `status_reason`, `failed_step` and `limit_execution` as stored.
+type StatusRow = (String, Option<String>, Option<String>, Option<String>);
+
+/// The status of run `run` as `connection` reads it; `None` when there is no such run.
+pub(super) fn stored_status(
+  connection: &Connection,
+  run: RunId,
+) -> Result<Option<orchester_core::run::RunStatus>, StoreError> {
+  let columns: Option<StatusRow> = connection
+    .query_row(
+      "SELECT status, status_reason, failed_step, limit_execution FROM runs WHERE id = ?1",
+      [run.to_string()],
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )
+    .optional()?;
+  columns
+    .map(|(status, reason, failed_step, limit)| {
+      columns::parse_run_status(&status, reason.as_deref(), failed_step.as_deref(), limit.as_deref())
+    })
+    .transpose()
 }

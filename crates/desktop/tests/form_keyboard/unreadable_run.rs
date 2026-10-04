@@ -1,6 +1,6 @@
 //! A task whose latest run cannot be read (edited or damaged outside Orchester): the task list
 //! loads and names the run *Unreadable* (`mGbYs`), and the task page (02.R `SUuwV`) says why,
-//! shows its actions unavailable and lists the task's other runs.
+//! shows its actions unavailable and lists the task's runs.
 
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -170,8 +170,13 @@ fn unreadable_run_shows_in_the_task_list_and_on_its_task_page() {
     "task-unreadable-actions",
     "are unavailable for run #2 until it can be read"
   ));
-  assert!(shows(&mut desktop, "task-other-runs", "Run #1"));
-  assert!(shows(&mut desktop, "task-other-runs", "Canceled"));
+  assert!(shows(&mut desktop, "task-runs", "Run #1"));
+  assert!(shows(&mut desktop, "task-runs", "Canceled"));
+  assert!(shows(
+    &mut desktop,
+    "task-runs",
+    "Remove worktree is unavailable until run #2 can be read"
+  ));
   // Cancel run is shown, unavailable: pressing it asks the runner nothing.
   assert!(shows(&mut desktop, "task-cancel-run", "Cancel run"));
   desktop.click("task-cancel-run");
