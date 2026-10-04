@@ -88,7 +88,7 @@ pub struct Projects {
 pub struct ProjectResponse {
   pub project: SharedProject,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectCreated {
   pub project: SharedProject,
   pub tasks: Vec<SharedTask>,

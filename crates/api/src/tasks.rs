@@ -119,12 +119,12 @@ impl TaskContent {
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attribution {
   pub by: UserRef,
   pub at: i64,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharedClaim {
   pub id: ClaimId,
   pub holder: UserRef,
@@ -134,7 +134,7 @@ pub struct SharedClaim {
   pub stale: bool,
   pub taken_over_from: Option<UserRef>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunStatus {
   pub holder: UserRef,
   pub number: u32,
@@ -146,7 +146,7 @@ pub struct RunStatus {
   pub updated_at: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharedTask {
   pub id: TaskId,
   pub number: u32,

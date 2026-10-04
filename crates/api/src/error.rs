@@ -52,7 +52,7 @@ pub struct SharingError {
   pub details: SharingErrorDetails,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum SharingErrorDetails {
   Remote {
