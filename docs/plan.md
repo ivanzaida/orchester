@@ -484,11 +484,12 @@ Rules for both phases, on top of `AGENTS.md`:
   *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
   independent review by another agent comes first.
 
-### S1b · Projects, tasks, claims and events on the server (non-UI)
+### S1b · Projects, tasks, claims and events on the server (non-UI) · done 2026-10-04
 
 Branch `codex/server-s1b`, worktree `.tmp/worktrees/codex-server-s1b`, from master `4ed11813`.
-Implementation and review fixes are awaiting independent re-review. S1b stays under S until it is merged;
-S2a starts only after that merge. The macOS cross-check remains blocked by missing Apple SDK headers.
+**Done 2026-10-04:** merged into master after two independent reviews (security/concurrency and spec/domain)
+and a re-review of the fixes (PASS, "ready to merge"). Open minor for S2d: heartbeats emit no events, so a watching
+desktop must re-read a task (or the server send a claim-only event) before showing a held claim as stale. The macOS cross-check remains blocked by missing Apple SDK headers.
 Evidence: [server-s1b-2026-10-04.md](evidence/server-s1b-2026-10-04.md).
 
 Done when these criteria, the required validation and independent review pass, and the phase is merged:
