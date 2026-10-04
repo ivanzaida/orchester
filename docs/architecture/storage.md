@@ -360,6 +360,7 @@ when a Windows installer exists.
 | `settings` | application settings (locale, runner limits, agent slots) as key → JSON |
 | `sessions` | id, pid, started / ended, `end_kind`: clean, runs_paused, quit_now; still open means crash |
 | `ui_state` | key → text: the window's tabs (`tabs`: their locations in order and the active one, without history); later window placement and drafts not tied to a project |
+| `servers` | the shared servers (`server.md`, "Desktop data"): id, normalized address (unique), the server's name, plain HTTP allowed, added at, and the account signed in from this computer (user id, username, display name, admin, signed in at). The token is in the OS keychain under `orchester-server:<server id>` / `token` |
 
 A session row is written at start with `ended_at = NULL`. A clean exit fills it; a row still
 open at the next start means the previous session crashed.
