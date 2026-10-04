@@ -67,6 +67,12 @@ fn plan_review_shows_the_plan_and_approving_continues_the_run() {
     "task-page",
     "Run 1 · Attempt 1 · Delivery v1 · Builder finished"
   ));
+  // Runs of this task ends this Summary too (ORC-63), after the plan; the waiting run has no
+  // Remove worktree.
+  assert!(shows(&mut desktop, "plan-review-plan", "Runs of this task"));
+  let run = latest_run(desktop.repo()).expect("the run");
+  assert!(has(&mut desktop, &format!("run-row-{}", run.id())));
+  assert!(!has(&mut desktop, "run-remove-worktree-1"));
   // Nothing works while the run waits: Cancel stays, Pause does not.
   assert!(has(&mut desktop, "task-cancel-run"));
   assert!(!has(&mut desktop, "task-pause-run"));

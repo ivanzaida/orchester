@@ -210,24 +210,31 @@ fn option(ctx: &Ctx, dialog: &Dialog) -> Option<Element> {
     .branches
     .iter()
     .any(|branch| branch.name == *run.branch() && !branch.merged);
+  // A folder git forgot that was read only in part loses files even when none are listed.
+  let (unreadable, cut) = (leftovers.listing_unreadable(), leftovers.listing_cut());
+  let partial = unreadable || cut;
   let note = match files.len() {
-    0 if kept => ctx.t_args(
+    0 if !partial && kept => ctx.t_args(
       pick(
         "runs.runAgain.remove.cleanKept.one",
         "runs.runAgain.remove.cleanKept.other",
       ),
       [("branch", run.branch().as_str())],
     ),
-    0 => ctx.t(pick(
+    0 if !partial => ctx.t(pick(
       "runs.runAgain.remove.clean.one",
       "runs.runAgain.remove.clean.other",
     )),
     count => {
       let listed = file_list(&files, &ctx.t("common.listSeparator"));
-      let key = if count == 1 {
-        "runs.runAgain.remove.uncommitted.one"
-      } else {
-        "runs.runAgain.remove.uncommitted.other"
+      let key = match count {
+        0 if unreadable => "runs.runAgain.remove.uncommitted.unreadable.none",
+        1 if unreadable => "runs.runAgain.remove.uncommitted.unreadable.one",
+        _ if unreadable => "runs.runAgain.remove.uncommitted.unreadable.other",
+        1 if cut => "runs.runAgain.remove.uncommitted.more.one",
+        _ if cut => "runs.runAgain.remove.uncommitted.more.other",
+        1 => "runs.runAgain.remove.uncommitted.one",
+        _ => "runs.runAgain.remove.uncommitted.other",
       };
       ctx.t_args(key, [("count", count.to_string().as_str()), ("files", listed.as_str())])
     }

@@ -211,12 +211,19 @@ pub fn agent_worktree(repo_root: &Path, run: Option<&Run>, approval: &PendingToo
   }
 }
 
-/// `target` as the repository names it, when it lies in `repo_root`.
+/// `target` as the repository names it, with `/` between its parts on every platform
+/// (`.orchester/worktrees/…`), when it lies in `repo_root`.
 fn relative_cwd(repo_root: &Path, target: Option<&str>) -> Option<String> {
   let target = Path::new(target?);
   Some(target.strip_prefix(repo_root).map_or_else(
     |_| target.display().to_string(),
-    |relative| relative.display().to_string(),
+    |relative| {
+      relative
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+    },
   ))
 }
 

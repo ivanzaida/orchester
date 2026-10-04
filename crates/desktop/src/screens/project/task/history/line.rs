@@ -100,12 +100,20 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
     ("count", count.as_str()),
   ];
   let several = left.worktrees.len() > 1;
+  // A forgotten folder read only in part: the entry that could not be read is named under the row,
+  // so the line counts what was read; one read only to its first entries holds more.
+  let unreadable = left.listing_unreadable();
   let key = match (several, files) {
     (false, _) if left.worktrees.iter().all(|worktree| worktree.missing) => "runs.history.worktree.missing",
     (false, _) if left.worktrees.iter().all(|worktree| worktree.forgotten) => "runs.history.worktree.forgotten",
     (false, 0) => "runs.history.worktree.clean",
     (false, 1) => "runs.history.worktree.uncommitted.one",
     (false, _) => "runs.history.worktree.uncommitted.other",
+    (true, 0) if unreadable => "runs.history.worktree.several.uncommittedUnreadable.none",
+    (true, 1) if unreadable => "runs.history.worktree.several.uncommittedUnreadable.one",
+    (true, _) if unreadable => "runs.history.worktree.several.uncommittedUnreadable.other",
+    (true, 1) if left.listing_cut() => "runs.history.worktree.several.uncommittedMore.one",
+    (true, _) if left.listing_cut() => "runs.history.worktree.several.uncommittedMore.other",
     (true, 0) => "runs.history.worktree.several.clean",
     (true, 1) => "runs.history.worktree.several.uncommitted.one",
     (true, _) => "runs.history.worktree.several.uncommitted.other",

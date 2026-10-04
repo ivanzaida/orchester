@@ -8,7 +8,8 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::{RunId, TaskId},
   integration::{
-    CleanupError, KeepReason, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded, leftovers,
+    CleanupError, FolderListing, KeepReason, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded,
+    leftovers,
   },
   store::WorktreeStore,
   time::Timestamp,
@@ -181,6 +182,7 @@ fn recorded_clean_up_deletes_a_worktree_folder_git_forgot() {
   assert!(!left.keeps_run_worktree(), "no agent can continue in it");
 
   assert_eq!(forgotten[0].uncommitted, ["target/held.bin"], "its files are listed");
+  assert_eq!(forgotten[0].listing, FolderListing::Whole, "all of them");
 
   // A file that appeared after the person saw the folder keeps it.
   fs::write(

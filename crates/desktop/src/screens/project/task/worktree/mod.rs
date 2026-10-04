@@ -190,8 +190,8 @@ fn modal(ctx: &mut Ctx, props: &RemoveWorktreeProps, job: &RunIntegration) -> El
   let state = job.remove().get();
   let pending = matches!(state, JobState::Running);
   let busy = job.busy() || matches!(job.merge().get(), JobState::Running);
-  let uncommitted = props.leftovers.uncommitted() > 0;
-  let confirm = (!busy && !pending && (!uncommitted || job.discard().get())).then(|| {
+  let loses_files = props.leftovers.loses_files();
+  let confirm = (!busy && !pending && (!loses_files || job.discard().get())).then(|| {
     let args = remove_args(ctx, props);
     let job = job.clone();
     Arc::new(move || job.start_remove(args.clone())) as Arc<dyn Fn() + Send + Sync>

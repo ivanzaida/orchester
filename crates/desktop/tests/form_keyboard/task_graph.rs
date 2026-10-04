@@ -86,6 +86,8 @@ fn task_graph_retry_limit_waits_for_a_person_and_offers_the_decisions() {
   assert!(shows(&mut desktop, "task-retry-limit", "Review · Builder"));
   assert!(shows(&mut desktop, "task-retry-limit", "Reported failed · attempt 2"));
   assert!(shows(&mut desktop, "task-failure-excerpt", "Finished Review"));
+  // Runs of this task ends the evidence (ORC-63), which scrolls beside the decisions.
+  assert!(shows(&mut desktop, "task-retry-limit-evidence", "Runs of this task"));
   assert!(shows(
     &mut desktop,
     "task-retry-resume",

@@ -285,7 +285,12 @@ impl TaskScreen {
       && let Some(run) = detail.run.as_ref()
       && let Some(review) = PlanReview::of(run)
     {
-      return plan_review::screen(ctx, detail, run, review);
+      let runs = history::RunsOfTask {
+        open: props.project.clone(),
+        detail: detail.clone(),
+        left,
+      };
+      return plan_review::screen(ctx, runs, run, review);
     }
     match (props.tab, detail.run.as_ref()) {
       (TaskPageTab::Summary, Some(run)) if *run.run.status() == RunStatus::Succeeded => ctx

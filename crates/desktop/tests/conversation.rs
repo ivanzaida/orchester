@@ -11,7 +11,7 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   conversation::{AgentMessage, Arrival, Message, MessageBody, Recipient, Timing, Undelivered},
   id::{IdempotencyKey, InvocationId, ResourceId, StepExecutionId, TaskId},
-  integration::{LeftWorktree, Leftovers, WorktreeOwner},
+  integration::{FolderListing, LeftWorktree, Leftovers, WorktreeOwner},
   resource::ModelId,
   run::{InterruptCause, Run, RunLimit, WaitReason},
   store::{ActivityStore, ConversationStore},
@@ -475,6 +475,7 @@ fn conversation_a_ready_run_whose_worktree_was_removed_takes_no_messages() {
     uncommitted: Vec::new(),
     missing,
     forgotten: false,
+    listing: FolderListing::Whole,
   };
   let kept = Leftovers {
     worktrees: vec![run_worktree(false)],

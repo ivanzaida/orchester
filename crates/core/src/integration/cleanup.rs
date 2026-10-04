@@ -11,7 +11,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{GitError, git::Git};
+use super::{FolderListing, GitError, git::Git};
 use crate::{
   command::CommandRunner,
   id::StepExecutionId,
@@ -46,6 +46,17 @@ pub struct LeftWorktree {
   /// ([`super::forgotten`]). Its files are listed in `uncommitted`; removing it deletes the folder.
   #[serde(default)]
   pub forgotten: bool,
+  /// How much of a forgotten folder's files `uncommitted` lists.
+  #[serde(default)]
+  pub listing: FolderListing,
+}
+
+impl LeftWorktree {
+  /// Whether removing it loses files, which a person must have agreed to: uncommitted changes, or
+  /// a forgotten folder that holds more than it lists.
+  pub fn loses_files(&self) -> bool {
+    !self.uncommitted.is_empty() || self.listing != FolderListing::Whole
+  }
 }
 
 /// A branch of the run: its own or a step's (`<run-branch>--<step>-<attempt>`).
@@ -65,9 +76,31 @@ pub struct Leftovers {
 }
 
 impl Leftovers {
-  /// Files not committed in any of the worktrees.
+  /// Files not committed in any of the worktrees, as far as they were listed.
   pub fn uncommitted(&self) -> usize {
     self.worktrees.iter().map(|worktree| worktree.uncommitted.len()).sum()
+  }
+
+  /// Whether removing them loses files ([`LeftWorktree::loses_files`]).
+  pub fn loses_files(&self) -> bool {
+    self.worktrees.iter().any(LeftWorktree::loses_files)
+  }
+
+  /// Whether a forgotten folder among them holds more files than are listed: reading it stopped
+  /// after its first entries.
+  pub fn listing_cut(&self) -> bool {
+    self
+      .worktrees
+      .iter()
+      .any(|worktree| worktree.listing == FolderListing::Cut)
+  }
+
+  /// Whether reading a forgotten folder among them stopped at an entry that could not be read.
+  pub fn listing_unreadable(&self) -> bool {
+    self
+      .worktrees
+      .iter()
+      .any(|worktree| matches!(worktree.listing, FolderListing::Unreadable { .. }))
   }
 
   /// Whether the run's own worktree is still there. Its agent works in it when it is asked again,
@@ -146,7 +179,7 @@ pub fn leftovers_of(
       }
       worktrees.push(worktree);
     }
-    let forgotten = super::forgotten::forgotten(repo, run, &worktrees)?;
+    let forgotten = super::forgotten::forgotten(repo, run, &worktrees);
     worktrees.extend(forgotten);
     let targets = merge_targets(&git, run, checked_out.as_ref())?;
     let mut branches = Vec::new();
@@ -164,7 +197,7 @@ pub fn leftovers_of(
 
 /// Removes the worktrees of `run`, which ended, and deletes its merged branches. A worktree with
 /// uncommitted changes (or a forgotten folder with files) is removed only if `confirmed`, what a
-/// person saw before confirming, lists it with the same changes; otherwise it and its branch are
+/// person saw before confirming, lists it with the same changes, read as far; otherwise it and its branch are
 /// kept. An error comes only before anything is removed; once removing started, git refusing or not
 /// finishing one worktree or branch keeps it with why and goes on with the others.
 pub fn clean_up(
@@ -217,12 +250,11 @@ fn remove<R: CommandRunner>(
     cleanup.removed.push(worktree);
     return;
   }
-  let discard = !worktree.uncommitted.is_empty();
+  let discard = worktree.loses_files();
   let agreed = confirmed.is_some_and(|confirmed| {
-    confirmed
-      .worktrees
-      .iter()
-      .any(|seen| seen.path == worktree.path && seen.uncommitted == worktree.uncommitted)
+    confirmed.worktrees.iter().any(|seen| {
+      seen.path == worktree.path && seen.uncommitted == worktree.uncommitted && seen.listing == worktree.listing
+    })
   });
   if discard && !agreed {
     let files = worktree.uncommitted.clone();
@@ -317,6 +349,7 @@ fn owned_by(run: &Run, listed: &Listed) -> Option<LeftWorktree> {
     uncommitted: Vec::new(),
     missing: listed.prunable,
     forgotten: false,
+    listing: FolderListing::Whole,
   })
 }
 

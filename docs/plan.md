@@ -148,15 +148,6 @@ label) and five minor ones; all are fixed and wait for a re-check.
   person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
   requirement with a targeted update, or merge it on save.
 
-### C6 · Tool approval layout issues found during C2 (UI)
-
-Seen by C2's verifier, older than the Claude Code work and left alone there:
-
-- The run permission popover opens at the top right of the task screen instead of at its design anchor (`W29Od2`).
-- The command approval modal (`GbNSA`) explains the request with the worktree's absolute path embedded in the
-  sentence, and cuts the working directory row short. Name the worktree the way the design does and let the row show
-  the path's end.
-
 ## U · Screens
 
 ### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
@@ -207,7 +198,8 @@ entry look; the recipient menu's options carry the state words, not *gets it at 
 the ORC-61 explanation texts; the tool step's divider no longer names its command and exit code (C·05).
 
 Design-verification fixes (2026-10-04, on `7710f081`): the recipient selector has no fill of its own (lurq painted an
-unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree);
+unfilled select trigger white; the fill can't be asserted headlessly, as lurq 0.37 paints it outside the element tree;
+since lurq 0.39 it paints no fill, and `form_keyboard select_fill` reads it from `Tree::painted_quads`);
 a group of notes reads its lines without *0 calls*, a working step without tokens reads *Builder · working*; the
 permissions chip shows whenever the composer is open (else the run's first agent step); *Write to Explorer before it
 starts…*; a chip's lines start closed, failures too; picking a step opens the chat at its start, *All steps* goes back
@@ -274,8 +266,7 @@ frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTn
   notice *Run #N can’t continue*, Continue run unavailable with its lock line, step *Interrupted · can’t continue*,
   heading *· worktree removed HH:MM*, *Worktree · Removed · HH:MM* in This run, *Run again* offered.
 
-Not done: *Runs of this task* is not on the plan review (02.11) or the retry-limit page (02.B), which lay out their
-own Summary; Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
+Not done: Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
 (separate agent) is outstanding.
 
 
@@ -451,10 +442,24 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*)
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.37.0: a shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.39.0: a text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
+
+### L1 · `lurq_resize` leaves a minimized window minimized (lurq, upstream)
+
+Found 2026-10-04: an app started minimized (for example `Start-Process -WindowStyle Minimized`) keeps its window at
+the minimized frame (237×39 physical pixels on this machine), and `lurq_resize` does not bring it back. Orchester does
+not save or restore its window's size or position (`crates/desktop/src/main.rs` asks for 1440×1020 on every launch),
+so nothing of it is persisted. The cause is in lurq 0.37.0: `resize_tool` (`src/mcp/tools/windows.rs`) queues
+`WindowCommand::Resize`, which the shell applies as winit `request_inner_size` (`src/app/winit_shell.rs`, the
+`Resize` arm) without restoring a minimized window first, and Windows does not resize a minimized window; the tool
+answers `"ok": true` and `notify_size_changed` reports the requested size, while `sync_window_state` reads the
+minimized client size back; `lurq_windows` does not report `is_minimized`, and no MCP tool restores the window
+(`WindowCommand::SetMinimized(false)` exists but is not reachable over MCP). Fix upstream: restore a minimized (or
+maximized, full-screen) window before `request_inner_size`, report the real size, and expose the minimized state in
+`lurq_windows`. Until then, drivers start the app not minimized.
 
 ## S · Shared server (self-hosted)
 
@@ -594,6 +599,27 @@ credential_manager credential_manager` (3, Windows); `cargo test -p orchester-de
 (`cargo check --target aarch64-apple-darwin`) passes for `orchester-core` and `orchester-vault`; the desktop and the
 api client cannot complete on this Windows host without the Apple SDK (ring, tree-sitter and bundled SQLite need a C
 compiler for the target), as for the rest of the workspace.
+
+Follow-ups of the 2026-10-04 reviews and verifications · branch `claude/followups` (from master `bffeec30`)
+
+- **Implemented 2026-10-04.** *Runs of this task* (ORC-63) ends the plan review (02.11, after the plan in its
+  scrolling viewport) and the retry-limit page (02.B, after the evidence, which now scrolls with the scroll gutter
+  beside the decision panel). A worktree folder git forgot is read only to its first 200 entries in name order
+  (`FolderListing::Cut`: *more than N files*), and an entry that cannot be read ends its listing with why
+  (`FolderListing::Unreadable`), shown under its run's row and in the removal dialog instead of failing the whole
+  section; removing such a folder needs the person's agreement to the listing as read (IPC protocol **16**). The
+  start-up recovery no longer lists a run that waits for a person's answer or plan decision as interrupted (the runner
+  leaves it waiting and its agent's session resumes with the answer); one held at a tool approval is still listed. C6:
+  the run permission popover's anchor in `W29Od2` is the superseded 02.12 Working context row; today it opens above
+  the This run panel's row (ORC-44, verified) or above the composer's chip (ORC-61C), so nothing changed there; the
+  approval dialog's explanation names no path since approval choices (2026-10-02) and long values show whole, and its
+  working directory now reads `.orchester/worktrees/<id>` with `/` on Windows too. The minimized-window size is lurq's
+  (L1). Tests: `cargo test -p orchester-desktop --test form_keyboard plan_review_shows_the_plan`, `... task_graph_retry_limit`,
+  `... run_history`, `... command_approvals`, `cargo test -p orchester-core --test integration forgotten` (also
+  `recorded`, `cleanup`), `cargo test -p orchester-ipc --test framing frames`, `cargo test -p orchester-desktop --test
+  recovery recovery_lists`. **Design verification outstanding** for the plan review and retry-limit pages with the
+  section (no frame draws it there; it follows 63.01's rows) and the *more than N files* / unreadable-entry lines
+  (not drawn).
 
 ORC-61 polish · Conversation tab design-verification minors · branch `claude/conv-polish` (from master `b96dbf27`)
 

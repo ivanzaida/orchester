@@ -3,6 +3,7 @@
 //! branches.
 
 mod cleanup;
+mod forgotten;
 mod merge;
 mod recorded;
 mod support;

@@ -2,7 +2,8 @@
 //! stopped at a limit the panel that raises it (02.L `ZUYM0`), the run's progress per step
 //! (`qB7mj` in 02.12, `l3hyb` rows), the latest agent launch, and the run's pinned configuration,
 //! limits and usage in the "This run" panel (`F5Lsi`). A run whose step used up its retries or broke
-//! again shows 02.B (`J3JZaT`) instead, with the person's decisions while it waits for them.
+//! again shows 02.B (`J3JZaT`) instead, with the person's decisions while it waits for them. Each ends
+//! with *Runs of this task* (ORC-63).
 
 use std::{path::Path, sync::Arc};
 
@@ -67,14 +68,14 @@ pub(super) fn summary(
     match run.run.status() {
       RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
         let reason = with_blocked(reason, blocked_notice(ctx, detail));
-        return retry_limit(ctx, run, step, None, reason);
+        return retry_limit(ctx, run, step, None, (reason, runs));
       }
       RunStatus::WaitingForPerson(stuck) => {
         // The decisions that let the run go on are unavailable while it is blocked: the notice
         // says why, naming the blocking tasks.
         let waiting = (stuck, !detail.blocked_by.is_empty());
         let reason = with_blocked(reason, blocked_notice(ctx, detail));
-        return retry_limit(ctx, run, stuck.step(), Some(waiting), reason);
+        return retry_limit(ctx, run, stuck.step(), Some(waiting), (reason, runs));
       }
       _ => {}
     }

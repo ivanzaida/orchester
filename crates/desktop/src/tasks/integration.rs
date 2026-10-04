@@ -11,8 +11,8 @@ use orchester_core::{
   command::CommandError,
   id::RunId,
   integration::{
-    Cleanup, CleanupError, GitError, KeepReason, Leftovers, MergeError, RecordedCleanupError, RunMerge,
-    clean_up_recorded, leftovers_of, merge_run,
+    Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
+    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run,
   },
   run::Run,
   store::{MergeStore, RunStore, TaskStore},
@@ -131,10 +131,20 @@ fn git_message(error: &GitError) -> Message {
     GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
     GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),
     GitError::Failed(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
-    GitError::Folder { path, detail } => Message::new("runs.worktree.failure.folderUnreadable")
+  }
+}
+
+/// Why the listing of a worktree folder git forgot stopped at an entry that could not be read, for
+/// its run's row and the removal's dialog; `None` when it was read.
+pub fn unread_entry(worktree: &LeftWorktree) -> Option<Message> {
+  let FolderListing::Unreadable { path, detail } = &worktree.listing else {
+    return None;
+  };
+  Some(
+    Message::new("runs.worktree.failure.folderUnreadable")
       .with("path", short_path(path))
       .with("detail", short_reason(detail, path)),
-  }
+  )
 }
 
 /// Characters of git's reason shown under a row or in a dialog; the log keeps all of it.

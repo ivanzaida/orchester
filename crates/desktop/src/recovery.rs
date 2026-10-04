@@ -1,7 +1,9 @@
 //! The runs the previous session left at work, for the start-up recovery (02.E `o8DCd`,
 //! `docs/architecture/storage.md`, "Lifecycle"): after Quit now or a crash, every run of the
 //! registered projects still recorded as running because no runner was left to record its end,
-//! or recorded as interrupted by a runner of this session when it attached. Runs interrupted
+//! or recorded as interrupted by a runner of this session when it attached. A run that waits for a
+//! person (a question or a plan, with no agent at work) is not interrupted: its runner leaves it
+//! waiting, and the answer or the decision resumes its agent's session. Runs interrupted
 //! earlier, e.g. ones not continued at an earlier start, are not this end's and are not listed.
 //! Nothing continues on its own; the user continues all of them or none.
 //! Blocks on SQLite and git; the UI calls it off the UI thread.
@@ -104,11 +106,15 @@ pub fn interrupted_runs(
   Ok(found)
 }
 
-/// Runs still recorded as running, and runs recorded as interrupted since `since` (by this
-/// session's runner when it attached), ordered by number. A run that cannot be read cannot be
-/// continued: it is logged and left out, and its task shows it as unreadable.
+/// Runs still recorded as running with an agent or a step at work, as the runner interrupts them
+/// when it attaches, and runs recorded as interrupted since `since` (by this session's runner when
+/// it attached), ordered by number. A run that cannot be read cannot be continued: it is logged and
+/// left out, and its task shows it as unreadable.
 fn left_at_work(db: &ProjectDb, since: Timestamp) -> Result<Vec<Run>, StoreError> {
-  let mut runs = readable(db.running_runs().map_err(detail::run_store_error)?);
+  let mut runs: Vec<Run> = readable(db.running_runs().map_err(detail::run_store_error)?)
+    .into_iter()
+    .filter(|run| !run.waits_for_a_person())
+    .collect();
   for run in readable(db.interrupted_runs().map_err(detail::run_store_error)?) {
     let interrupted_at = db
       .events(run.id())
