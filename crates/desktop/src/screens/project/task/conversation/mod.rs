@@ -45,7 +45,7 @@ use parking_lot::Mutex;
 use self::{
   details::{DetailsOn, DetailsPane, remembered, save_action},
   divider::step_label,
-  follow::Reveal,
+  follow::{LeftAt, Reveal},
   rail::RailToggle,
 };
 use super::{
@@ -191,7 +191,7 @@ pub(super) struct ConversationTab {
   raw: Signal<bool>,
   following: Signal<bool>,
   /// Rows when the list stopped following, for "N new".
-  left_at: Signal<usize>,
+  left_at: Arc<Mutex<LeftAt>>,
   /// Whether the list has shown rows yet: the first time, it starts at the end.
   started: Arc<Mutex<bool>>,
   /// The card that waits for the person, which the chat shows until the person scrolls.
@@ -222,7 +222,7 @@ impl Component for ConversationTab {
       searching: ctx.signal(false),
       raw: ctx.signal(false),
       following: ctx.signal(true),
-      left_at: ctx.signal(0),
+      left_at: Arc::new(Mutex::new(LeftAt::default())),
       started: Arc::new(Mutex::new(false)),
       reveal: Arc::new(Mutex::new(Reveal::default())),
       toggles: Toggles(ctx.signal(OpenRows::default())),

@@ -34,6 +34,11 @@ fn conversation_rail_picks_a_step_and_all_steps_again() {
     !has(&mut desktop, "conversation-end"),
     "the run's end is not of the step"
   );
+  // Opened at the step's start, the chat no longer follows; nothing arrived since, so nothing is
+  // new.
+  desktop.wait_for("conversation-jump");
+  assert!(shows(&mut desktop, "conversation-jump", "Jump to latest"));
+  assert!(!shows(&mut desktop, "conversation-jump", "new"));
   desktop.click("conversation-rail-all");
   desktop.wait_until("every step", |desktop| {
     !has(desktop, "conversation-step-readback") && has(desktop, "conversation-end")

@@ -17,6 +17,7 @@ use super::{
   ConversationProps, ConversationTab, StepFilter, column,
   composer::{ComposerDock, ComposerProps},
   details::details_pane,
+  follow::LeftAt,
   rail::{Picker, RAIL_WIDTH, RailProps, rail},
   readback::{self, Controls, readback},
   strip::{STRIP_WIDTH, strip},
@@ -244,12 +245,13 @@ impl ConversationTab {
   /// Picks a step in the rail or its strip: the chat narrows to it and opens at its start (`bdCsu`);
   /// all steps again go to the end and follow it. Over the chat, the rail closes.
   fn picker(&self) -> Picker {
-    let (filter, over) = (self.step.clone(), self.rail.over.clone());
+    let (filter, over, left_at) = (self.step.clone(), self.rail.over.clone(), self.left_at.clone());
     let (scroll, following) = (self.scroll.clone(), self.following.clone());
     Arc::new(move |pick: StepFilter| {
       let all = pick.0.is_none();
       filter.set(pick);
       over.set(false);
+      *left_at.lock() = LeftAt(None);
       if all {
         scroll.scroll_to_bottom_pending();
       } else {
