@@ -38,7 +38,7 @@ use crate::{
 
 /// Column width, pipeline selector, step row, limit input and Create & run sizes (`AoFj6`,
 /// `uhQv7`, `XVkaB`, `BVuOd`, `Hc1Cp`).
-const PLAN_WIDTH: f32 = 336.0;
+pub(super) const PLAN_WIDTH: f32 = 336.0;
 const SELECTOR_HEIGHT: f32 = 42.0;
 const STEP_HEIGHT: f32 = 34.0;
 const LIMIT_INPUT_WIDTH: f32 = 150.0;
@@ -117,7 +117,7 @@ pub fn execution_plan(
     .into()
 }
 
-fn plan_heading(ctx: &Ctx) -> Element {
+pub(super) fn plan_heading(ctx: &Ctx) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)

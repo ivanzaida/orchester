@@ -11,7 +11,7 @@ use orchester_core::{
   name::Name,
   task::{
     TaskDetails, TaskLimits,
-    content::{Choice, ContentField, ContentMerge},
+    content::{Choice, ContentField, ContentMerge, FieldChange},
   },
   tokens::TokenBudget,
 };
@@ -42,6 +42,9 @@ fn content_fields_only_one_side_changed_merge_without_asking() {
   let merge = ContentMerge::new(base, mine.clone(), theirs.clone());
   assert!(merge.is_clean());
   assert_eq!(merge.kept(), vec![ContentField::Criteria]);
+  assert_eq!(merge.change(ContentField::Title), FieldChange::Mine);
+  assert_eq!(merge.change(ContentField::Criteria), FieldChange::Theirs);
+  assert_eq!(merge.change(ContentField::Brief), FieldChange::Unchanged);
   let merged = merge.merged(|_| Choice::Theirs);
   assert_eq!(merged.title, mine.title);
   assert_eq!(merged.acceptance_criteria, theirs.acceptance_criteria);

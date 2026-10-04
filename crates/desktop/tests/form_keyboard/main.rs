@@ -22,6 +22,7 @@ mod conversation_queued;
 mod conversation_rail;
 mod dialogs;
 mod draft_autosave;
+mod edit_conflict;
 mod edit_task;
 mod ended_approval;
 mod first_edit;

@@ -115,7 +115,11 @@ pub(crate) fn share(desktop: &mut Desktop) {
 }
 
 /// Another computer's client of `server`, signed in as `username` with their own password.
-fn elsewhere(server: &TestServer, username: &str, name: &str) -> (Client, orchester_core::secret::SecretValue) {
+pub(crate) fn elsewhere(
+  server: &TestServer,
+  username: &str,
+  name: &str,
+) -> (Client, orchester_core::secret::SecretValue) {
   let first = server.create_user(username, name, false);
   let token = server.sign_in_elsewhere(username, first.expose(), &format!("{username}'s own long password"));
   let client = Client::new(
@@ -126,7 +130,7 @@ fn elsewhere(server: &TestServer, username: &str, name: &str) -> (Client, orches
   (client, token)
 }
 
-fn add_member(desktop: &mut Desktop, username: &str) {
+pub(crate) fn add_member(desktop: &mut Desktop, username: &str) {
   type_into(desktop, "sharing-member-username", username);
   desktop.click("sharing-member-add");
 }

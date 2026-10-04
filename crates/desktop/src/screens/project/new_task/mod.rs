@@ -10,6 +10,7 @@
 
 mod brief;
 mod cancellation;
+mod conflict;
 mod edit;
 mod header;
 mod persistence;
@@ -107,6 +108,17 @@ pub struct SavedDraft {
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
 
+/// What the fields show after a save stored something other than they hold: the person's change
+/// merged with someone else's, or the versions the person chose in a conflict. `organization` is
+/// `None` when the organization fields already hold it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Reseed {
+  details: TaskDetails,
+  organization: Option<TaskOrganization>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Reseed {}
+
 /// Where to save, what: the details as the form read them and as they are now, the organization
 /// as the form loaded it and as it is now (only what the person changed is saved), and the run the
 /// person confirmed stopping for Canceled.
@@ -192,6 +204,8 @@ struct FormState {
   starting_pipeline: Option<Arc<PipelineChoice>>,
   queued_task: Option<QueuedTask>,
   run_problems: Option<RunProblems>,
+  /// The last save met a newer version, saved by the person named, if the server names them.
+  newer_version: Option<Option<Arc<str>>>,
 }
 
 impl FormState {
@@ -242,8 +256,11 @@ pub struct NewTaskForm {
   unsaved: Option<EditMark>,
   /// The last save met a newer version of the task, with fields both changed: the person chooses.
   conflict: Signal<Option<EditConflict>>,
-  /// A save stored the person's change merged with someone else's: the fields show what is stored.
-  reseed: Signal<Option<SavedDraft>>,
+  /// What the fields show next: a save merged the person's change with someone else's, or the
+  /// person chose the versions to save in a conflict.
+  reseed: Signal<Option<Reseed>>,
+  /// The versions the person chose in a conflict.
+  choices: Signal<conflict::Choices>,
 }
 
 impl Component for NewTaskForm {
@@ -281,7 +298,10 @@ impl Component for NewTaskForm {
       ));
       saved.tasks_changed();
       if draft.merged {
-        merged.set(Some(draft.clone()));
+        merged.set(Some(Reseed {
+          details: draft.details.clone(),
+          organization: Some(draft.organization.clone()),
+        }));
       }
       if let Some(task) = draft.created {
         saved.show_created(task);
@@ -325,6 +345,7 @@ impl Component for NewTaskForm {
       unsaved: EditMark::of(ctx),
       conflict,
       reseed,
+      choices: ctx.signal(conflict::Choices::default()),
     }
   }
 
@@ -343,12 +364,13 @@ impl Component for NewTaskForm {
     let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
     self.mark_unsaved(&state, editing);
     let (target, base) = self.target(editing.or(recovered), &save);
+    let conflict = self.conflict.get();
     let submit = self
       .save_request(&save, &props.project, (target, base.clone()), state.ready.clone())
       .map(|request| -> Arc<dyn Fn() + Send + Sync> {
         Arc::new(move || request(crate::tasks::cancel_run::Stop::Unconfirmed))
       })
-      .filter(|_| state.can_save());
+      .filter(|_| state.can_save() && conflict.is_none());
     let start = (!state.started)
       .then(|| {
         self.run_handler(
@@ -360,34 +382,29 @@ impl Component for NewTaskForm {
       })
       .flatten()
       .filter(|_| {
-        self.organization.ready.get()
+        conflict.is_none()
+          && self.organization.ready.get()
           && !state.saving
           && !state.starting
           && (state.queued_task.is_some() || state.missing.is_empty())
       });
-    // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
-    // same amount, so the content stays at the designed inset and keeps room for focus rings.
-    let indent = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0);
-    let brief_left = indent - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
-    let content = Row::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .padding_top(ExtraSpacing::Inline.role())
-      .padding_left(Dimension::Px(brief_left))
-      // The plan's scroll gutter sits in the right padding, so its content ends at the designed
-      // inset (`HVSv5`).
-      .padding_right(Dimension::Px(indent - gutter_width()))
-      .padding_bottom(SpacingSize::Section)
-      .spacing(ExtraSpacing::Indent.role())
-      .child(brief::brief_form(ctx, self, &props.project, link.as_deref(), &state))
-      .child(plan::execution_plan(
-        ctx,
-        self,
-        (props.pipelines.as_deref(), limits),
-        &state,
-        submit.clone(),
-        start,
-      ));
+    let content = content_row(ctx);
+    let pipelines = props.pipelines.as_deref().map(Vec::as_slice);
+    let content = match conflict.as_ref() {
+      Some(conflict) => content
+        .child(self.conflict_view(ctx, conflict, pipelines))
+        .child(self.conflict_panel(ctx, conflict, (&save, &props.project, pipelines))),
+      None => content
+        .child(brief::brief_form(ctx, self, &props.project, link.as_deref(), &state))
+        .child(plan::execution_plan(
+          ctx,
+          self,
+          (props.pipelines.as_deref(), limits),
+          &state,
+          submit.clone(),
+          start,
+        )),
+    };
     // A draft this form queued reads as the queued task of D5 (`WOdDe`, `T6bVyU`) until its run
     // starts, whether the form was opened on the draft or reopened on the queued task.
     let (still_editing, retried) = match editing {
@@ -467,11 +484,15 @@ impl NewTaskForm {
     (target, base)
   }
 
-  /// After a save merged the person's change with someone else's, the fields show what is stored.
+  /// After a save merged the person's change with someone else's, or the person chose the versions
+  /// to save in a conflict, the fields show them.
   fn show_merged(&self, ctx: &Ctx) {
     if let Some(stored) = self.reseed.get() {
       self.reseed.set(None);
-      edit::fill(ctx, self, &stored.details, &stored.organization);
+      match &stored.organization {
+        Some(organization) => edit::fill(ctx, self, &stored.details, organization),
+        None => edit::fill_details(ctx, self, &stored.details),
+      }
     }
   }
 
@@ -509,6 +530,24 @@ impl NewTaskForm {
       save.run(SaveArgs { stop, ..args.clone() });
     }))
   }
+}
+
+/// The row of the brief and the plan, or of the conflict and its panel.
+fn content_row(ctx: &Ctx) -> Row {
+  // The brief's scroll viewport starts `FOCUS_ROOM` early and its content is padded by the
+  // same amount, so the content stays at the designed inset and keeps room for focus rings.
+  let indent = ctx.theme().spacing_value(ExtraSpacing::Indent.role()).resolve(0.0);
+  let brief_left = indent - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .padding_top(ExtraSpacing::Inline.role())
+    .padding_left(Dimension::Px(brief_left))
+    // The plan's scroll gutter sits in the right padding, so its content ends at the designed
+    // inset (`HVSv5`).
+    .padding_right(Dimension::Px(indent - gutter_width()))
+    .padding_bottom(SpacingSize::Section)
+    .spacing(ExtraSpacing::Indent.role())
 }
 
 /// The detail is needed before the task can run; a draft may still be saved without it.

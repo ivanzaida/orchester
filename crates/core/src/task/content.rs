@@ -51,6 +51,18 @@ pub enum Choice {
   Theirs,
 }
 
+/// Who changed a field since the person read the task.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldChange {
+  Unchanged,
+  /// Only the person: their value is saved.
+  Mine,
+  /// Only the other side: their value is kept whatever the person chooses.
+  Theirs,
+  /// Both; to different values, a conflict the person decides.
+  Both,
+}
+
 /// The person's change of a task put on top of the stored one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContentMerge {
@@ -89,6 +101,24 @@ impl ContentMerge {
   /// Whether nothing conflicts, so the change is sent again on the new revision without asking.
   pub fn is_clean(&self) -> bool {
     self.conflicts().is_empty()
+  }
+
+  /// Who changed `field`.
+  pub fn change(&self, field: ContentField) -> FieldChange {
+    match (
+      field.changed(&self.base, &self.mine),
+      field.changed(&self.base, &self.theirs),
+    ) {
+      (false, false) => FieldChange::Unchanged,
+      (true, false) => FieldChange::Mine,
+      (false, true) => FieldChange::Theirs,
+      (true, true) => FieldChange::Both,
+    }
+  }
+
+  /// The task as the person read it.
+  pub const fn base(&self) -> &TaskDetails {
+    &self.base
   }
 
   pub const fn mine(&self) -> &TaskDetails {

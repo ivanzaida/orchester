@@ -87,6 +87,7 @@ impl NewTaskForm {
         .flatten(),
       queued_task,
       run_problems: starting.error.clone().filter(|_| !starting.is_pending()),
+      newer_version: self.conflict.get().map(|conflict| conflict.by),
     }
   }
 }

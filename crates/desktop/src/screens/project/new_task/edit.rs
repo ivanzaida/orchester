@@ -52,6 +52,11 @@ pub(super) fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
 /// person's change with someone else's.
 pub(super) fn fill(ctx: &Ctx, form: &NewTaskForm, details: &TaskDetails, organization: &TaskOrganization) {
   form.organization.seed(organization);
+  fill_details(ctx, form, details);
+}
+
+/// Fills the content fields with `details`, e.g. the versions the person chose in a conflict.
+pub(super) fn fill_details(ctx: &Ctx, form: &NewTaskForm, details: &TaskDetails) {
   form.title.set(details.title.as_str().to_owned());
   form.brief.set(details.brief.clone());
   let mut criteria: Vec<Criterion> = (0..)
