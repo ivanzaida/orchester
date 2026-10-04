@@ -21,6 +21,7 @@ pub enum ErrorCode {
   AlreadyMember,
   LastOwner,
   IdTaken,
+  Conflict,
   RevisionConflict,
   NotEditable,
   NotQueueable,
@@ -52,7 +53,7 @@ pub struct SharingError {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 pub enum SharingErrorDetails {
   Remote {
     project: orchester_core::id::ProjectId,
@@ -66,6 +67,7 @@ pub enum SharingErrorDetails {
     current: Box<crate::SharedTask>,
   },
   Claim {
+    #[serde(deserialize_with = "required_claim")]
     claim: Option<crate::SharedClaim>,
   },
   Queue {
@@ -78,4 +80,9 @@ pub enum SharingErrorDetails {
   Missing {
     missing: Vec<String>,
   },
+}
+
+// Option fields normally accept absence; a claim detail must explicitly contain claim, even when null.
+fn required_claim<'de, D: serde::Deserializer<'de>>(de: D) -> Result<Option<crate::SharedClaim>, D::Error> {
+  Option::deserialize(de)
 }

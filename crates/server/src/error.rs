@@ -171,7 +171,8 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
     ErrorCode::LastAdmin => (StatusCode::CONFLICT, "The last active admin must remain"),
     ErrorCode::NotMember => (StatusCode::FORBIDDEN, "Project membership required"),
     ErrorCode::NoSuchUser => (StatusCode::NOT_FOUND, "User not found"),
-    ErrorCode::RemoteTaken
+    ErrorCode::Conflict
+    | ErrorCode::RemoteTaken
     | ErrorCode::AlreadyMember
     | ErrorCode::LastOwner
     | ErrorCode::IdTaken

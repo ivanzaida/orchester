@@ -2675,6 +2675,7 @@ version = "0.1.0"
 dependencies = [
  "orchester-core",
  "serde",
+ "serde_json",
  "zeroize",
 ]
 
