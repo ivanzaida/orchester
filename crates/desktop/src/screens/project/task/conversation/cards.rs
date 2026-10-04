@@ -106,7 +106,7 @@ pub(super) fn header(glyph: Icon, title: &str, meta: &str, (state_glyph, state):
 
 /// *Builder asks you* (`ZxYGh`) with its step and time: the question, and *Reply*, which puts the
 /// focus in the composer.
-pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, &Arc<str>), timeline: &Timeline) -> Element {
+pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
   let open = entry.state == EntryState::Question { open: true };
   let agent = match &entry.author {
     Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
@@ -119,13 +119,12 @@ pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, &Arc<str>), timeline: 
   };
   let title = ctx.t_args("runs.conversation.card.asks", [("agent", &*agent)]);
   let time = display::clock(entry.at);
-  let meta = if step.is_empty() {
-    time.as_str().into()
-  } else {
-    ctx.t_args(
+  let meta = match step {
+    Some(step) => ctx.t_args(
       "runs.conversation.agentMeta",
       [("step", &**step), ("time", time.as_str())],
-    )
+    ),
+    None => time.as_str().into(),
   };
   let reply = open.then(|| {
     let focus = timeline.focus.clone();
@@ -344,12 +343,16 @@ fn result_meta(ctx: &Ctx, card: &ResultCard) -> Arc<str> {
     (Some(took), true) => took,
     (None, _) => "".into(),
   };
-  let reported = match card.outcome.filter(|_| !card.tool_step) {
+  // What the agent said needs the agent's name: a step whose profile is gone says nothing of it.
+  let (Some(agent), false) = (&card.agent, card.tool_step) else {
+    return meta;
+  };
+  let reported = match card.outcome {
     Some(StepOutcome::Done) => "runs.conversation.result.reportedPassed",
     Some(StepOutcome::Failed) => "runs.conversation.result.reportedFailed",
     Some(StepOutcome::Question) | None => return meta,
   };
-  let reported = ctx.t_args(reported, [("agent", &*card.agent)]);
+  let reported = ctx.t_args(reported, [("agent", &**agent)]);
   if meta.is_empty() {
     return reported;
   }

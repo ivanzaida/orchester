@@ -450,7 +450,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         execution: Some(execution),
         sent_now: false,
       },
-      step: "Implement".into(),
+      step: Some("Implement".into()),
     },
   );
   let items = vec![
@@ -467,6 +467,6 @@ fn timeline_search_finds_a_question_with_its_step() {
   );
   assert_eq!(found.matches, 1);
   assert!(
-    matches!(&found.rows[1], Row::Item(Item { kind: ItemKind::Question { step, .. }, .. }) if &**step == "Implement")
+    matches!(&found.rows[1], Row::Item(Item { kind: ItemKind::Question { step, .. }, .. }) if step.as_deref() == Some("Implement"))
   );
 }

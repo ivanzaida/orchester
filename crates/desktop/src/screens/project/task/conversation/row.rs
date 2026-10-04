@@ -119,7 +119,7 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
         run: timeline.run,
       },
     ),
-    ItemKind::Question { entry, step } => cards::question(ctx, (entry, step), timeline),
+    ItemKind::Question { entry, step } => cards::question(ctx, (entry, step.as_ref()), timeline),
     ItemKind::Plan(card) => ctx.mount_keyed::<PlanCardView>(
       &item.key,
       PlanCardProps {

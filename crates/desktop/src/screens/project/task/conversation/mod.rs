@@ -166,6 +166,8 @@ pub(super) struct ConversationTab {
   show: Signal<ShowChoice>,
   step: Signal<StepFilter>,
   query: Signal<String>,
+  /// The search field holds the focus: the composer does not take it then.
+  searching: Signal<bool>,
   raw: Signal<bool>,
   following: Signal<bool>,
   /// Rows when the list stopped following, for "N new".
@@ -196,6 +198,7 @@ impl Component for ConversationTab {
       show: ctx.signal(ShowChoice::default()),
       step: ctx.signal(StepFilter::default()),
       query: ctx.signal(String::new()),
+      searching: ctx.signal(false),
       raw: ctx.signal(false),
       following: ctx.signal(true),
       left_at: ctx.signal(0),
@@ -304,7 +307,9 @@ impl ConversationTab {
     let toggles = self.toggles.clone();
     let shown = view::shown(items, &choice, &|key, default| toggles.is_open(key, default));
     let live = props.conversation.state == PanelState::Live;
-    let reveal = self.follow(shown.rows.len(), items);
+    // The working line counts as a row of the list: a list that follows scrolls to it when it shows.
+    let listed = shown.rows.len() + usize::from(live && !shown.rows.is_empty());
+    let reveal = self.follow(listed, items);
     let working = live.then(|| LiveFooterProps {
       agent: run
         .current_step()
@@ -348,6 +353,7 @@ impl ConversationTab {
       step: self.step.clone(),
       show: self.show.clone(),
       query: self.query.clone(),
+      searching: self.searching.clone(),
       raw: self.raw.clone(),
       details: self.details.clone(),
       details_open,
@@ -367,6 +373,7 @@ impl ConversationTab {
         conversation: props.conversation.clone(),
         draft: self.draft.clone(),
         focus: props.focus.clone(),
+        searching: self.searching.clone(),
         reload: props.reload.clone(),
         sent: self.sent_handler(),
         details_open: pane.is_some(),

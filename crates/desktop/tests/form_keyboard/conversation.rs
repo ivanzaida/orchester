@@ -3,8 +3,9 @@
 //! agent's messages, with what the group did; *Show* narrows the timeline to messages or tools; a
 //! search keeps what matches and opens a group on its matching entries, or says it found nothing;
 //! the step filter says what it hides; the Details pane opens on demand; a step that judges the work
-//! reads *Review passed*; and while an agent works the timeline follows it with the working line as
-//! its last row, stops following when scrolled up, and *Jump to latest* counts what came since.
+//! reads *Review passed*; a question that arrives while the person searches leaves the focus in the
+//! search; and while an agent works the timeline follows it with the working line as its last row,
+//! stops following when scrolled up, and *Jump to latest* counts what came since.
 
 use std::num::NonZeroU32;
 
@@ -20,8 +21,8 @@ use crate::{
   github::shows,
   harness::Desktop,
   task_run::{
-    agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed, seed_steps,
-    set_text,
+    agent_started, agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed,
+    seed_steps, set_text,
   },
 };
 
@@ -388,4 +389,34 @@ fn conversation_a_step_that_judges_the_work_passes_and_finished_steps_say_when()
   desktop.wait_until("Implement's result", |desktop| {
     holds(desktop, "conversation", "Implement done")
   });
+}
+
+#[test]
+fn conversation_a_question_that_arrives_while_searching_leaves_the_focus_in_the_search() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "implement", "Implement", "Wait for release.", &[]),
+        agent_step(builder, "ask", "Ask", "Ask first.", &["implement"]),
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  desktop.wait_until("the agent at work", |desktop| agent_started(desktop.repo()));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-search");
+  desktop.click("conversation-search");
+  desktop.type_text("sign");
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-search"));
+
+  release(&desktop);
+  desktop.wait_until("the composer answering the question", |desktop| {
+    holds(desktop, "conversation-composer-context", "Answering Builder’s question")
+  });
+  desktop.pass();
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-search"));
+  desktop.type_text("-in");
+  assert_eq!(desktop.value("conversation-search"), "sign-in");
+  assert_eq!(desktop.value("conversation-input"), "");
 }

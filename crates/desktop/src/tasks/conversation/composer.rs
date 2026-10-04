@@ -6,7 +6,12 @@
 
 use std::sync::Arc;
 
-use orchester_core::{conversation::Recipient, id::ResourceId, run::PlanVersion, time::Timestamp};
+use orchester_core::{
+  conversation::Recipient,
+  id::{MessageId, ResourceId},
+  run::PlanVersion,
+  time::Timestamp,
+};
 
 use super::{Author, Conversation, PanelState, WorkingAgent};
 use crate::tasks::{detail::RunView, plan::PlanReview};
@@ -24,6 +29,8 @@ pub enum ComposerMode {
   Answer {
     agent: Arc<str>,
     profile: Option<ResourceId>,
+    /// The question's message.
+    question: MessageId,
     asked_at: Timestamp,
   },
   /// Plan `version` of `agent` waits for a decision: the message is the changes it needs.
@@ -149,6 +156,7 @@ fn waiting(conversation: &Conversation, run: Option<&RunView>) -> ComposerMode {
     return ComposerMode::Answer {
       agent,
       profile,
+      question: question.id,
       asked_at: question.at,
     };
   }

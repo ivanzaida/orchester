@@ -46,6 +46,8 @@ pub(super) struct ToolbarState {
   pub(super) step: Signal<StepFilter>,
   pub(super) show: Signal<ShowChoice>,
   pub(super) query: Signal<String>,
+  /// The search field holds the focus.
+  pub(super) searching: Signal<bool>,
   pub(super) raw: Signal<bool>,
   pub(super) details: DetailsPane,
   pub(super) details_open: bool,
@@ -156,7 +158,7 @@ fn controls(ctx: &Ctx, run: &RunView, state: &ToolbarState, (tools, one_line): (
   Controls {
     filter: usable(step_filter(ctx, run, &state.step, filter_width)),
     show: usable(segments("conversation-show", &state.show, show_options)),
-    search: usable(search(ctx, &state.query, search_width)),
+    search: usable(search(ctx, (&state.query, &state.searching), search_width)),
     raw,
     state: live_state(ctx, state.state, state.asks, state.following),
     details: usable(details_button(ctx, &state.details, state.details_open)),
@@ -252,10 +254,13 @@ fn step_option(ctx: &Ctx, run: &RunView, execution: StepExecutionId) -> Option<A
 
 /// *Search this run…* after its search glyph, `width` wide; with a query, × at its end clears it
 /// (`a5hF4`).
-fn search(ctx: &Ctx, query: &Signal<String>, width: Dimension) -> Element {
+fn search(ctx: &Ctx, (query, searching): (&Signal<String>, &Signal<bool>), width: Dimension) -> Element {
   let input = ctx.theme().form().input.clone();
+  let (gained, lost) = (searching.clone(), searching.clone());
   let field = styled_input(ctx, query.clone(), TypographyStyle::FieldLabel)
     .id("conversation-search")
+    .on_focus(move || gained.set(true))
+    .on_blur(move || lost.set(false))
     .single_line()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))

@@ -57,10 +57,11 @@ pub enum ItemKind {
   },
   /// A person's message, with its delivery.
   Message(MessageEntry),
-  /// An agent's question, open while its step waits for the answer; `step` is its step's name.
+  /// An agent's question, open while its step waits for the answer; `step` is its step's name, while
+  /// the run's pipeline still has it.
   Question {
     entry: MessageEntry,
-    step: Arc<str>,
+    step: Option<Arc<str>>,
   },
   Plan(PlanCard),
   Approval(ApprovalCard),
@@ -106,8 +107,8 @@ pub struct ApprovalCard {
 pub struct ResultCard {
   pub execution: StepExecutionId,
   pub step: Arc<str>,
-  /// The agent role, or the tool's name for a tool step.
-  pub agent: Arc<str>,
+  /// The agent role, or the tool's name for a tool step; `None` once that profile or tool is gone.
+  pub agent: Option<Arc<str>>,
   pub passed: bool,
   pub tool_step: bool,
   /// The step judges the work: a failure returns the run to an earlier step (`AzKYQ`: *Review
@@ -182,7 +183,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     .entries
     .iter()
     .filter(|entry| entry.execution.is_none())
-    .map(|entry| message_item(entry, &Arc::from("")))
+    .map(|entry| message_item(entry, None))
     .collect();
   waiting.sort_by_key(|item| item.at);
   items.extend(waiting);
@@ -233,7 +234,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
     .iter()
     .filter(|entry| entry.execution == Some(execution))
     .filter(|entry| !matches!(entry.state, EntryState::Reply { .. }))
-    .map(|entry| message_item(entry, &name))
+    .map(|entry| message_item(entry, step.map(|step| step.name.clone())))
     .collect();
   between.extend(
     run
@@ -305,11 +306,11 @@ pub fn interleaved(
 }
 
 /// A message of the step named `step`.
-fn message_item(entry: &MessageEntry, step: &Arc<str>) -> Item {
+fn message_item(entry: &MessageEntry, step: Option<Arc<str>>) -> Item {
   let kind = match entry.state {
     EntryState::Question { .. } => ItemKind::Question {
       entry: entry.clone(),
-      step: step.clone(),
+      step,
     },
     _ => ItemKind::Message(entry.clone()),
   };
@@ -414,7 +415,7 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
     kind: ItemKind::Result(ResultCard {
       execution,
       step: step.name.clone(),
-      agent: step.agent.clone().unwrap_or_else(|| "".into()),
+      agent: step.agent.clone(),
       passed,
       tool_step: step.tool_step,
       verdict: judges(run, &step.key),

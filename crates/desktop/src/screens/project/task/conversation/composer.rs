@@ -3,7 +3,8 @@
 //! the state's placeholder, the recipient and *Attach* (unavailable: attachments are not built) in
 //! its action row, the state's buttons, and one line under it that says what sending does now
 //! (`docs/design/orchester-workspace.md`, "Composer"). When it first shows a question that waits,
-//! as the tab opens on it or once it arrives, the field takes the focus. While an agent works and
+//! as the tab opens on it or once it arrives, the field takes the focus, unless the person is in
+//! the tab's search field. While an agent works and
 //! the message is for it, *Send now* and *Send after this turn*; Ctrl+Enter (Cmd+Enter on macOS)
 //! sends after this turn then, the safer default, and presses the state's primary action otherwise.
 //! Enter adds a line. The draft stays until the message is stored, once per draft.
@@ -24,9 +25,8 @@ use lurq::{
 };
 use orchester_core::{
   conversation::{Recipient, Timing},
-  id::IdempotencyKey,
+  id::{IdempotencyKey, MessageId},
   run::{PlanDecision, ReviewNote},
-  time::Timestamp,
 };
 use parking_lot::Mutex;
 
@@ -71,6 +71,9 @@ pub(super) struct ComposerProps {
   pub(super) draft: Signal<String>,
   /// Set to put the focus in the field (Ask agent, Reply).
   pub(super) focus: Signal<bool>,
+  /// The tab's search field holds the focus, the only other field on the tab: a question that
+  /// arrives then leaves it there.
+  pub(super) searching: Signal<bool>,
   /// Bumped once a message is stored, so the task is read again.
   pub(super) reload: Signal<u64>,
   /// Called once a message was sent: the timeline goes to its end.
@@ -117,8 +120,9 @@ pub(super) struct ComposerDock {
   /// How the message on its way was sent, for the button that shows it under way.
   timing: Signal<SentAs>,
   input: ElementRef,
-  /// When the question the field last took the focus for was asked: once per question.
-  answering: Mutex<Option<Timestamp>>,
+  /// The last question that waited, which the field took the focus for unless the person was
+  /// searching: once per question.
+  answering: Mutex<Option<MessageId>>,
 }
 
 impl Component for ComposerDock {
@@ -162,11 +166,13 @@ impl Component for ComposerDock {
     self.follow_default(conversation, run);
     let recipient = self.to.get().0;
     let mode = ComposerMode::of(conversation, run, recipient);
-    if let ComposerMode::Answer { asked_at, .. } = mode {
+    if let ComposerMode::Answer { question, .. } = mode {
       let mut answering = self.answering.lock();
-      if *answering != Some(asked_at) {
-        *answering = Some(asked_at);
-        ctx.focus(&self.input);
+      if *answering != Some(question) {
+        *answering = Some(question);
+        if !props.searching.get_untracked() {
+          ctx.focus(&self.input);
+        }
       }
     }
     let sending = action.state().get().is_pending() || plan.state().get().is_pending();
