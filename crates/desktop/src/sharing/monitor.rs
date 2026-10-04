@@ -11,7 +11,7 @@ use tokio::time::sleep_until;
 use super::{IDLE, ServerEntry, Servers, SharingError};
 use crate::background;
 
-/// Runs until the window closes; meant for a lurq stream of the root.
+/// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
 pub async fn run(servers: Servers) {
   let mut changes = servers.subscribe();
   loop {
