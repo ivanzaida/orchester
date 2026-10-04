@@ -331,6 +331,25 @@ fn servers_admin_creates_resets_disables_and_enables_users() {
   desktop.wait_for("server-user-disable-maria");
 }
 
+/// At 960 the details' header gives way from its name, then its label: *Sign out* stays whole.
+#[test]
+fn servers_sign_out_stays_whole_in_a_960_window() {
+  let (mut desktop, _server) = signed_in_as_admin();
+  desktop.tree.resize(960, 960);
+  desktop.pass();
+  desktop.pass();
+  let (button, header) = (
+    desktop.bounds("server-sign-out"),
+    desktop.bounds("server-details-header"),
+  );
+  assert!(button.width > 0.0, "Sign out is shown");
+  assert!(
+    button.x + button.width <= header.x + header.width + 0.5,
+    "{button:?} inside {header:?}"
+  );
+  assert!(shows(&mut desktop, "Sign out"));
+}
+
 #[test]
 #[ignore = "requires an available text clipboard; run separately so the user's clipboard can be restored"]
 fn servers_first_password_copy_puts_the_shown_password_on_the_clipboard() {
