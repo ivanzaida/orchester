@@ -62,6 +62,9 @@ pub const CONTROL_PADDING_X: f32 = 12.0;
 pub const FOCUS_STROKE: f32 = 1.5;
 /// Underline of the selected tab (`Iefue`, `Okyxt`).
 pub const TAB_INDICATOR_STROKE: f32 = 2.0;
+/// One digit of a count in `TypographyStyle::Mono` (Geist Mono 10, whose digits all advance
+/// 0.6 em), e.g. the room the Open tab keeps for its count (`tidLB` in `i59Wy`, `DF8II`).
+pub const COUNT_DIGIT_WIDTH: f32 = 6.0;
 /// Chevron of a select field and check of its selected option (`eASPF` in `ZGwlv`, `ClxwV` in
 /// `L20XvS`); also the width of the check slot every option reserves.
 pub const SELECT_ICON_SIZE: f32 = 14.0;
@@ -252,5 +255,31 @@ pub const OVERVIEW_ATTENTION_BESIDE_MIN_WINDOW: f32 = 1340.0;
 /// (76, 150, 96, 150) and their 16 gaps leave what happened 200. Narrower, a row stacks (63.02
 /// `H9Z7D4`).
 pub const RUN_HISTORY_COLUMNS_MIN_WINDOW: f32 = 1340.0;
+/// Project sidebar width (`zo9Py`).
+pub const PROJECT_SIDEBAR_WIDTH: f32 = 216.0;
+/// The pull request list's fixed columns (`QHBNZ`, `Qcgjy`): the row's icon (`r0ZlXX`), State &
+/// review (`ruZbF`), Checks (`ZWzfm`), Open in GitHub (not in the design's row) and the chevron
+/// (`laxWE`).
+const PULL_REQUEST_ICON_WIDTH: f32 = 20.0;
+pub const PULL_REQUEST_STATE_WIDTH: f32 = 180.0;
+pub const PULL_REQUEST_CHECKS_WIDTH: f32 = 150.0;
+pub const PULL_REQUEST_OPEN_WIDTH: f32 = 128.0;
+pub const PULL_REQUEST_CHEVRON_WIDTH: f32 = 14.0;
+/// The least a pull request's title keeps beside every column, as the task table's (above).
+const PULL_REQUEST_TITLE_MIN: f32 = 200.0;
+/// The narrowest window whose pull request rows keep Open in GitHub while the title keeps its
+/// minimum: the sidebar, the list's padding (`SPACE_SECTION` each side), the row's (`SPACE_STACK`
+/// each side), the fixed columns and the five `SPACE_MD` gaps between six cells (1076). Narrower,
+/// Open in GitHub goes, as the Tasks list drops columns (02.03E).
+pub const PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW: f32 = PROJECT_SIDEBAR_WIDTH
+  + 2.0 * SPACE_SECTION
+  + 2.0 * SPACE_STACK
+  + PULL_REQUEST_ICON_WIDTH
+  + PULL_REQUEST_STATE_WIDTH
+  + PULL_REQUEST_CHECKS_WIDTH
+  + PULL_REQUEST_OPEN_WIDTH
+  + PULL_REQUEST_CHEVRON_WIDTH
+  + 5.0 * SPACE_MD
+  + PULL_REQUEST_TITLE_MIN;
 /// Provider section row gap in plan-limit hints (`mFTm5`, `pNIEg`).
 pub const PLAN_LIMIT_ROWS_GAP: f32 = 6.0;

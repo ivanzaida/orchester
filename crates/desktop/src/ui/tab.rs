@@ -1,5 +1,6 @@
 //! Tab (`SOW6S`): a label with an optional count; the selected tab is underlined (`Iefue`).
-//! A tab without a data source yet is unavailable: muted, locked and without a count.
+//! A tab without a data source yet is unavailable: muted, locked and without a count. A tab whose
+//! count arrives later can keep room for it ([`Tab::count_room`]).
 //! [`tab_row`] lays tabs out over the hairline that ends their row. Tabs outside a form never take
 //! focus: they are pointer-only (see `ui::pressable`). Tabs in a dialog are form controls
 //! ([`Tab::in_form`]): Tab reaches the selected and the available ones, with the focus ring.
@@ -18,7 +19,7 @@ use super::{
   link::{Link, Press},
   pressable::{Ring, keyboard_stop, surface},
 };
-use crate::theme::{ExtraColor, ExtraSpacing};
+use crate::theme::{COUNT_DIGIT_WIDTH, ExtraColor, ExtraSpacing};
 
 enum State {
   Selected,
@@ -30,6 +31,7 @@ pub struct Tab {
   id: &'static str,
   label: Arc<str>,
   count: Option<usize>,
+  count_room: Option<usize>,
   state: State,
   height: Dimension,
   min_width: Option<Dimension>,
@@ -43,6 +45,7 @@ impl Tab {
       id,
       label,
       count: None,
+      count_room: None,
       state: State::Unavailable,
       height,
       min_width: None,
@@ -65,6 +68,13 @@ impl Tab {
 
   pub fn count(mut self, count: Option<usize>) -> Self {
     self.count = count;
+    self
+  }
+
+  /// Keeps room for any count up to `largest`, shown or not known yet, so a count that arrives or
+  /// changes within it moves no tab after this one.
+  pub fn count_room(mut self, largest: usize) -> Self {
+    self.count_room = Some(largest);
     self
   }
 
@@ -114,11 +124,7 @@ impl From<Tab> for Element {
           .color(color)
           .nowrap(),
       )
-      .with_children(
-        tab
-          .count
-          .map(|count| Text::new(&count.to_string()).variant(TypographyStyle::Mono)),
-      );
+      .with_children(count(tab.count, tab.count_room));
     if tab.in_form && !matches!(tab.state, State::Unavailable) {
       return form_tab(tab.id, tab.height, row, tab.state);
     }
@@ -148,6 +154,16 @@ impl From<Tab> for Element {
         .into(),
     }
   }
+}
+
+/// The count beside a tab's label, in the room kept for it if any.
+fn count(count: Option<usize>, room: Option<usize>) -> Option<Element> {
+  let text = count.map(|count| Text::new(&count.to_string()).variant(TypographyStyle::Mono));
+  let Some(largest) = room else {
+    return text.map(Into::into);
+  };
+  let width = largest.to_string().len() as f32 * COUNT_DIGIT_WIDTH;
+  Some(Row::new().min_width(Dimension::Px(width)).with_children(text).into())
 }
 
 /// A tab of a dialog (see [`Tab::in_form`]): the same button whether selected or not, so the focus

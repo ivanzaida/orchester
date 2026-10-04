@@ -26,9 +26,6 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// Sidebar width (`zo9Py`).
-const SIDEBAR_WIDTH: f32 = 216.0;
-
 /// What the sidebar shows besides the navigation: the page shown (`None` while the path names no
 /// page), the project's tasks and its runner.
 pub struct SidebarState<'a> {
@@ -43,7 +40,7 @@ pub fn sidebar(ctx: &mut Ctx, open: &OpenProject, state: &SidebarState<'_>, nav:
     .expect("the root provides Navigation before mounting screens");
   let switcher = ctx.mount_keyed::<ProjectSwitcher>("project-switcher", open.clone());
   Column::new()
-    .width(Dimension::Px(SIDEBAR_WIDTH))
+    .width(Dimension::Px(crate::theme::PROJECT_SIDEBAR_WIDTH))
     .height(Dimension::Pct(100.0))
     .background(PaletteColor::SurfacePanel)
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))

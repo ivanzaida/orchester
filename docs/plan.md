@@ -180,7 +180,7 @@ Tests: a headless `form_keyboard` test that records the tab and body bounds befo
 sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
 Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
 
-### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (UI; implemented, awaiting design verification)
+### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (done 2026-10-04: three code reviews and three design verifications passed)
 
 Design: `docs/design/orchester-workspace.md` › *ORC-63 · Remove worktree for every ended run* (group `j0VU3B`,
 frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTnc`, 63.06 `VBR27`; decisions approved
@@ -219,6 +219,7 @@ frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTn
 Not done: *Runs of this task* is not on the plan review (02.11) or the retry-limit page (02.B), which lay out their
 own Summary; Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
 (separate agent) is outstanding.
+
 
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
@@ -492,6 +493,35 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+U11 · Pull requests: no "synced" without a link, columns at 960 · branch `claude/pr-fixes` (done 2026-10-04, design
+verified)
+
+A sync or refresh of a project whose repository is not linked asks GitHub nothing, so it leaves no status bar event
+(the list's sync and the pull request screen's refresh both dropped their operation as "synced"); the screen's 08.D
+panel says why. No frame draws the list in a narrow window, so it follows the Tasks list (02.03E): below
+`theme::PULL_REQUEST_OPEN_IN_ROW_MIN_WINDOW` (1076, derived from the column tokens so a title keeps 200) the rows and
+headings drop Open in GitHub (the pull request's own topbar has it); a title keeps 228 at 960 (84 before, cut to
+*Add GitH…*). Each heading sits at its own width in a cell as wide as its column, so a heading that does not fit is
+measurable. The search field gives way by the few pixels the controls row is too wide at 960, so the sort box keeps the
+list's right edge. Tests: `cargo test -p orchester-desktop --test form_keyboard pull_request` (the unavailable test
+waits until the activity log holds exactly one operation that ended without an event, then checks the status bar;
+`pull_requests_layout_columns_fit_the_narrowest_and_the_design_window` checks at 960 and 1440 that headings do not run
+into each other and start their columns, that the sort box ends at the list's edge, that a title keeps 200, and where
+Open in GitHub shows), `--test theme pull_request`, `--test i18n locale` / `every_key`.
+
+U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-04, design verification pending)
+
+Until the stored inbox is read the screen shows its topbar and heading only; the tab row (linked repositories only,
+08.D has none) and the list or unavailable panel then appear together in their final place, so nothing shows that
+later moves or vanishes. The Open tab keeps room for a count of up to `SYNC_LIMIT` (two Geist Mono digits,
+`Tab::count_room`, `theme::COUNT_DIGIT_WIDTH`), so a first count or one that grows to 50 moves no tab; a single-digit
+count leaves the Open tab 6px wider than in `DF8II`. The topbar's spacer already kept Refresh in place while the sync
+status changed (measured at 1440 and at the 960 minimum width). Tests: `cargo test -p orchester-desktop --test
+form_keyboard pull_request` (the new `pull_requests_layout` tests hold the sync's fake `gh` behind a gate and record the
+heading, tab, list and Refresh bounds before and after the stored inbox and the sync arrive), `cargo test -p
+orchester-desktop --test theme pull_request`. **Done when** an independent design verification against `DF8II`
+(08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 
