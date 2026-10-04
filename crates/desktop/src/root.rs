@@ -18,6 +18,10 @@ use crate::{
   programs::Programs,
   screens::status_bar::{StatusBar, StatusBarProps},
   secrets::Vault,
+  sharing::{
+    Servers,
+    feed::{ServerFeed, ServerFeedLoader},
+  },
   tabs::{
     feed::{WindowFeed, WindowFeedLoader},
     restore::{self, Opening},
@@ -80,6 +84,7 @@ impl Component for Root {
     ctx.provide(WindowFeed::new(&activity));
     ctx.provide(activity);
     let Startup::Ready {
+      workspace,
       lifecycle,
       programs,
       vault,
@@ -88,6 +93,7 @@ impl Component for Root {
     else {
       return Self { places: None };
     };
+    ctx.provide(ServerFeed::new(Servers::new(workspace, vault.clone())));
     ctx.provide(programs);
     ctx.provide(vault);
     ctx.provide(SessionZooms::default());
@@ -104,6 +110,10 @@ impl Component for Root {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let feed = ctx.mount_keyed::<WindowFeedLoader>("window-feed", ());
+    let servers = self
+      .places
+      .is_some()
+      .then(|| ctx.mount_keyed::<ServerFeedLoader>("server-feed", ()));
     let window = match ctx.props::<RootProps>().startup.clone() {
       Startup::Failed { message, path } => {
         let screen = with_status_bar(ctx, startup_failed(ctx, &message, path.as_deref()));
@@ -130,6 +140,7 @@ impl Component for Root {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(feed)
+      .with_children(servers)
       .child(window)
   }
 }

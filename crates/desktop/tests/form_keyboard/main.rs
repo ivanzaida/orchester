@@ -60,6 +60,7 @@ mod run_history;
 mod run_permissions;
 mod secrets;
 mod selection_focus;
+mod servers;
 mod sidebar;
 mod skills;
 mod tab_links;

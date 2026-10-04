@@ -36,6 +36,7 @@ pub mod secrets;
 pub mod tabs;
 pub use screens::{close_dialog, recovery_dialog, status_bar};
 pub mod session;
+pub mod sharing;
 pub mod skills;
 pub mod tasks;
 pub mod theme;

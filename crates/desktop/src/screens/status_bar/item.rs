@@ -29,9 +29,9 @@ const SEPARATOR_HEIGHT: f32 = 12.0;
 /// waiting approvals ask trims its end down to 100px, then drops out; which run auto-approves and the
 /// times drop out whole; the
 /// version and Tokens today drop out; the counts' labels; the plan limits' resets and reasons; then the
-/// activity drops its time and trims its words; the words beside how many approvals wait; last the
-/// runner's words. The hand, the count, *Review*, *Auto-approving*, Stop, the counts, the plan limits
-/// and MCP never give way.
+/// activity drops its time and trims its words; the words beside how many approvals wait; the server
+/// item's words (its attempt and times drop out with the times); last the runner's words. The hand, the count,
+/// *Review*, *Auto-approving*, Stop, the counts, the plan limits and MCP never give way.
 pub mod give_way {
   /// The room between the groups, which goes first.
   pub const ROOM: i32 = -1;
@@ -44,7 +44,9 @@ pub mod give_way {
   pub const PLAN_DETAILS: i32 = 6;
   pub const ACTIVITY: i32 = 7;
   pub const COUNT_WORDS: i32 = 8;
-  pub const RUNNER_WORDS: i32 = 9;
+  /// The server item's words after its icon (10.43); *Sign in* never gives way.
+  pub const SERVER_WORDS: i32 = 9;
+  pub const RUNNER_WORDS: i32 = 10;
 }
 
 /// An empty item that opens nothing; `id` is for tooling (`lurq_read_tree`, `lurq_interact`).

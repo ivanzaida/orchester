@@ -27,6 +27,7 @@ use super::{
   pipelines::{PipelinesProps, PipelinesScreen},
   pull_requests::{PullRequestProps, PullRequestScreen, PullRequestsScreen},
   secrets::SecretsScreen,
+  servers::ServersScreen,
   settings::SettingsScreen,
   skills::SkillsScreen,
   task::{TaskProps, TaskScreen},
@@ -140,6 +141,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Secrets(_) => ctx.mount_keyed::<SecretsScreen>("secrets", open),
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
+    Page::Servers(..) => ctx.mount_keyed::<ServersScreen>("servers", ()),
   }
 }
 

@@ -133,7 +133,7 @@ pub fn secret_error(error: &SecretError<StoreError>) -> Message {
   }
 }
 
-fn vault_error(error: &VaultError) -> Message {
+pub fn vault_error(error: &VaultError) -> Message {
   match error {
     VaultError::Unsupported => Message::new("errors.keychainUnsupported"),
     VaultError::AccessDenied(_) => Message::new("errors.keychainDenied"),

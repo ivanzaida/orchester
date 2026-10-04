@@ -10,7 +10,7 @@ use std::num::NonZeroU32;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId},
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId, TaskId},
   resource::VersionNumber,
 };
 
@@ -38,6 +38,8 @@ const TOOLS: &str = "tools";
 const SECRETS: &str = "secrets";
 const CONNECTIONS: &str = "connections";
 const SETTINGS: &str = "settings";
+const SERVERS: &str = "servers";
+const USERS: &str = "users";
 const LIMITS: &str = "limits";
 const ENVIRONMENT: &str = "environment";
 const CODE_INDEX: &str = "code-index";
@@ -118,6 +120,9 @@ pub enum Page {
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
   Settings(SettingsTab),
+  /// The application's Settings › Servers (10.01 `sXIz1`) with the server whose details are shown,
+  /// the first one without; it keeps the project's sidebar.
+  Servers(Option<ServerId>, ServerTab),
 }
 
 /// What the pipeline editor shows: the draft to edit, or a published version read-only beside
@@ -182,6 +187,13 @@ pub enum SettingsTab {
   CodeIndex,
 }
 
+/// The tabs of a server's details (`R3v7ow`): Users only for admins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerTab {
+  Account,
+  Users,
+}
+
 /// The sidebar item a page belongs to: Tasks stays selected on a task or the new task form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarItem {
@@ -196,6 +208,8 @@ pub enum SidebarItem {
   Secrets,
   Connections,
   Settings,
+  /// The application's Settings (`s9zzPC`).
+  AppSettings,
 }
 
 impl Route {
@@ -307,6 +321,8 @@ impl Page {
       [SETTINGS, LIMITS] => Self::Settings(SettingsTab::Limits),
       [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
       [SETTINGS, CODE_INDEX] => Self::Settings(SettingsTab::CodeIndex),
+      [SERVERS] => Self::Servers(None, server_tab(tab)),
+      [SERVERS, server] => Self::Servers(Some(server.parse().ok()?), server_tab(tab)),
       _ => return None,
     })
   }
@@ -350,6 +366,14 @@ impl Page {
       Self::Settings(SettingsTab::Limits) => format!("{root}/{SETTINGS}/{LIMITS}"),
       Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
       Self::Settings(SettingsTab::CodeIndex) => format!("{root}/{SETTINGS}/{CODE_INDEX}"),
+      Self::Servers(server, tab) => {
+        let server = server.map_or_else(String::new, |server| format!("/{server}"));
+        let tab = match tab {
+          ServerTab::Account => None,
+          ServerTab::Users => Some(USERS),
+        };
+        with_tab(format!("{root}/{SERVERS}{server}"), tab)
+      }
     }
   }
 
@@ -368,6 +392,7 @@ impl Page {
       Self::Secrets(_) => SidebarItem::Secrets,
       Self::Connections(..) => SidebarItem::Connections,
       Self::Settings(_) => SidebarItem::Settings,
+      Self::Servers(..) => SidebarItem::AppSettings,
     }
   }
 }
@@ -435,6 +460,13 @@ const fn task_query(tab: TaskTab) -> Option<&'static str> {
     TaskTab::Done => Some(DONE),
     TaskTab::NeedsYou => Some(NEEDS_YOU),
     TaskTab::All => None,
+  }
+}
+
+fn server_tab(tab: Option<&str>) -> ServerTab {
+  match tab {
+    Some(USERS) => ServerTab::Users,
+    _ => ServerTab::Account,
   }
 }
 

@@ -10,12 +10,17 @@ use lurq::{
     ctx::Placement,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Popup, Text},
+  components::{Button, Column, Popup, Row, Text},
   core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, HitTestBehavior, border::Border, dimension::Dimension},
 };
 
 use super::POPOVER_GAP;
+use crate::{
+  theme::{ExtraSpacing, ExtraTypography},
+  ui::icon::{Icon, IconSize, icon},
+};
 
 /// Items that have a hint, each with its own anchor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,12 +31,25 @@ pub enum HintAnchor {
   Tokens,
   Mcp,
   Version,
+  Server,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hint {
   anchor: HintAnchor,
+  /// One line per server over the text, for the server item (10.43 A, F).
+  lines: Arc<[HintLine]>,
   text: Arc<str>,
+}
+
+/// A server in the server item's hint (`DfYNE`): its connection's icon, name and state, and a mono
+/// detail under them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HintLine {
+  pub icon: Icon,
+  pub name: Arc<str>,
+  pub state: Arc<str>,
+  pub detail: Arc<str>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Hint {}
@@ -45,6 +63,7 @@ pub struct Anchors {
   tokens: ElementRef,
   mcp: ElementRef,
   version: ElementRef,
+  server: ElementRef,
 }
 
 impl Anchors {
@@ -56,6 +75,7 @@ impl Anchors {
       HintAnchor::Tokens => &self.tokens,
       HintAnchor::Mcp => &self.mcp,
       HintAnchor::Version => &self.version,
+      HintAnchor::Server => &self.server,
     }
   }
 }
@@ -76,8 +96,13 @@ impl Hints {
 
   /// `item` shows `text` while the pointer is over it.
   pub fn attach(&self, item: Button, anchor: HintAnchor, text: Arc<str>) -> Button {
+    self.attach_lines(item, anchor, Arc::new([]), text)
+  }
+
+  /// `item` shows `lines`, then `text`, while the pointer is over it.
+  pub fn attach_lines(&self, item: Button, anchor: HintAnchor, lines: Arc<[HintLine]>, text: Arc<str>) -> Button {
     let (enter, leave) = (self.shown.clone(), self.shown.clone());
-    let hint = Hint { anchor, text };
+    let hint = Hint { anchor, lines, text };
     item
       .ref_element(self.anchors.get(anchor).clone())
       .on_mouse_enter(move || enter.set(Some(hint.clone())))
@@ -90,11 +115,26 @@ impl Hints {
 
   pub fn popup(&self) -> Option<Element> {
     let hint = self.shown.get()?;
-    let panel = Column::new()
+    // Under server lines the text is a muted note (`L7VPr`).
+    let color = if hint.lines.is_empty() {
+      PaletteColor::TextPrimary
+    } else {
+      PaletteColor::TextSecondary
+    };
+    let panel = if hint.lines.is_empty() {
+      Column::new()
+        .padding_horizontal(SpacingSize::Sm)
+        .padding_vertical(SpacingSize::Xs)
+    } else {
+      // The server item's hint (`FoEjc`): 8 all round, 8 between its lines.
+      Column::new()
+        .padding(SpacingSize::Sm)
+        .spacing(SpacingSize::Sm)
+        .with_children(hint.lines.iter().map(line))
+    };
+    let panel = panel
       .id("status-bar-hint")
       .max_width(Dimension::Px(super::popover::WIDTH))
-      .padding_horizontal(SpacingSize::Sm)
-      .padding_vertical(SpacingSize::Xs)
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
@@ -102,7 +142,7 @@ impl Hints {
         Text::new(&hint.text)
           .id("status-bar-hint-text")
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextPrimary),
+          .color(color),
       );
     Some(
       Popup::new(self.anchors.get(hint.anchor).clone(), panel)
@@ -115,4 +155,29 @@ impl Hints {
         .into(),
     )
   }
+}
+
+/// A server's line in the hint: icon, name and state, and the detail under them (`DfYNE`).
+fn line(line: &HintLine) -> Element {
+  Column::new()
+    .spacing(SpacingSize::Xs)
+    .child(
+      Row::new()
+        .spacing(ExtraSpacing::Tight.role())
+        .align_items(Alignment::Center)
+        .child(icon(line.icon, IconSize::Small, PaletteColor::TextPrimary))
+        .child(
+          Text::new(&line.name)
+            .variant(ExtraTypography::HintHeading.role())
+            .nowrap(),
+        )
+        .child(Text::new(&line.state).variant(TypographyStyle::Caption).nowrap()),
+    )
+    .child(
+      Text::new(&line.detail)
+        .variant(TypographyStyle::Mono)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    )
+    .into()
 }

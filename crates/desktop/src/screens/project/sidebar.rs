@@ -1,7 +1,8 @@
 //! Shell sidebar (`zo9Py`). The project selector opens the project switcher (see `switcher`).
-//! Overview, Tasks, Pull requests, Pipelines, Instructions, Skills, Agents, Tools, Secrets, Connections and
-//! Project settings open their screens, All projects opens the projects of the workspace and
-//! Import resources opens over the screen shown; every other entry is shown but unavailable. The runner card
+//! Overview, Tasks, Pull requests, Pipelines, Instructions, Skills, Agents, Tools, Secrets,
+//! Connections and Project settings open their screens, All projects opens the projects of the
+//! workspace, Import resources opens over the screen shown and Settings (`s9zzPC`) the
+//! application's settings; every other entry is shown but unavailable. The runner card
 //! (`O2Jjjf`) above Project settings shows the project's runner.
 
 use lurq::{
@@ -18,7 +19,7 @@ use crate::{
   navigation::{
     Navigation,
     import::ImportTab,
-    route::{AgentSelection, InstructionsTab, Page, Route, SettingsTab, ToolSelection},
+    route::{AgentSelection, InstructionsTab, Page, Route, ServerTab, SettingsTab, ToolSelection},
   },
   runner::RunnerStatus,
   theme::{ExtraColor, ExtraSpacing},
@@ -58,7 +59,13 @@ pub fn sidebar(ctx: &mut Ctx, open: &OpenProject, state: &SidebarState<'_>, nav:
             .secondary()
             .link(navigation.link(Route::AllProjects)),
         )
-        .child(import_item(ctx, nav)),
+        .child(import_item(ctx, nav))
+        .child(section_item(
+          NavItem::new("nav-app-settings", Icon::Settings, ctx.t("nav.settings")).secondary(),
+          state.shown,
+          Page::Servers(None, ServerTab::Account),
+          nav,
+        )),
     )
     .child(Spacer::new().flex(1.0))
     .child(footer(ctx, open, state, nav))

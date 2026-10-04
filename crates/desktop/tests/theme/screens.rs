@@ -486,3 +486,24 @@ fn conversation_roles_follow_pencil() {
     Dimension::Px(18.0)
   );
 }
+
+#[test]
+fn server_roles_follow_pencil() {
+  let app = themed_app();
+  let theme = app.theme();
+  // What answered at an address in Add server (`q2uPd` in 10.02): 12 at 1.5 in `$text`.
+  let heading = theme.typography_style(ExtraTypography::ResultHeading.role());
+  assert_eq!((heading.font_size, heading.line_height), (12.0, 1.5));
+  assert_eq!(heading.color, Color::from_hex("#EEEEEE"));
+  // A first password shown once (`pUTsa` in 10.08 B): mono 14, spaced 0.5.
+  let password = theme.typography_style(ExtraTypography::FirstPassword.role());
+  assert_eq!((password.font_size, password.letter_spacing), (14.0, 0.5));
+  // That it is shown only once (`nSpO0`): 11 at 1.5 in `$text`.
+  let caution = theme.typography_style(ExtraTypography::Caution.role());
+  assert_eq!((caution.font_size, caution.line_height), (11.0, 1.5));
+  assert_eq!(caution.color, Color::from_hex("#EEEEEE"));
+  // A server's name in the status bar's hint (`e8ZUC` in 10.43 A): 11/500.
+  let name = theme.typography_style(ExtraTypography::HintHeading.role());
+  assert_eq!(name.font_size, 11.0);
+  assert_eq!(name.weight, FontWeight::Medium);
+}

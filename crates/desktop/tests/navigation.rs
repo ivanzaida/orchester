@@ -11,7 +11,7 @@ use lurq::{
   router::RouterHandle,
 };
 use orchester_core::{
-  id::{ConnectionId, ProjectId, ResourceId, SecretId, TaskId},
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId, TaskId},
   resource::VersionNumber,
 };
 use orchester_desktop::{
@@ -20,8 +20,8 @@ use orchester_desktop::{
     import::{self, ImportTab},
     repository_import,
     route::{
-      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, PipelineView, Route, SettingsTab, TaskPageTab,
-      ToolSelection, changed_file, changes_path,
+      AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, PipelineView, Route, ServerTab, SettingsTab,
+      TaskPageTab, ToolSelection, changed_file, changes_path,
     },
     routes,
   },
@@ -189,6 +189,9 @@ fn pages() -> Vec<Page> {
     Page::Settings(SettingsTab::Limits),
     Page::Settings(SettingsTab::Environment),
     Page::Settings(SettingsTab::CodeIndex),
+    Page::Servers(None, ServerTab::Account),
+    Page::Servers(Some(ServerId::generate()), ServerTab::Account),
+    Page::Servers(Some(ServerId::generate()), ServerTab::Users),
   ]
 }
 

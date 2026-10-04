@@ -15,7 +15,8 @@
     "copied": "Copied",
     "copyFailed": "The command could not be copied. Select it and copy it by hand.",
     "confirm": "Confirm",
-    "retry": "Retry"
+    "retry": "Retry",
+    "done": "Done"
   },
   "workspace": {
     "personal": "Personal workspace"
@@ -136,7 +137,8 @@
     "connections": "Connections",
     "allProjects": "All projects",
     "importResources": "Import resources",
-    "projectSettings": "Project settings"
+    "projectSettings": "Project settings",
+    "settings": "Settings"
   },
   "tabs": {
     "label": "{{project}} · {{page}}",
@@ -3653,6 +3655,200 @@
       "offNote": "Neither CLI loads these files, so everything agents know comes from Orchester’s published instructions and skills. The files stay in the worktree like any other file, and nothing in the repository changes."
     }
   },
+  "servers": {
+    "breadcrumb": "Settings / Servers",
+    "title": "Settings",
+    "description": "Orchester on this computer, in every project. Servers hold the task lists of shared projects.",
+    "tab": "Servers",
+    "empty": "No servers yet. Add the address of the Orchester server your team runs to sign in there.",
+    "loadFailed": "The servers cannot be read",
+    "unknownTime": "Unknown time",
+    "dayAndTime": "{{month}} {{day}}, {{time}}",
+    "keychain": {
+      "windows": "Windows Credential Manager",
+      "macos": "the macOS login keychain"
+    },
+    "state": {
+      "notSignedIn": "Not signed in",
+      "checking": "Connecting",
+      "connected": "Connected",
+      "reconnecting": "Reconnecting",
+      "offline": "Offline",
+      "signedOut": "Signed out"
+    },
+    "list": {
+      "overline": "Servers",
+      "notSignedIn": "Not signed in · sign in to use it",
+      "expired": "Session expired · sign in again",
+      "signedInAs": "Signed in as {{username}}",
+      "signedInAdmin": "Signed in as {{name}} ({{username}}) · admin",
+      "signedInMember": "Signed in as {{name}} ({{username}})",
+      "lastReached": "Signed in as {{username}} · last reached {{time}}"
+    },
+    "tabs": {
+      "account": "Account",
+      "users": "Users"
+    },
+    "details": {
+      "facts": "{{address}}  ·  Orchester server, API {{api}}  ·  {{transport}}",
+      "https": "HTTPS",
+      "http": "Plain HTTP"
+    },
+    "account": {
+      "heading": "Account",
+      "signedInAs": "Signed in as",
+      "who": "{{name}} · {{username}}",
+      "role": "Role",
+      "admin": "Admin",
+      "member": "Member",
+      "since": "Signed in",
+      "signedInAt": "{{time}} on this computer",
+      "sharedProjects": "Shared projects here",
+      "noSharedProjects": "None yet",
+      "tokenNote": "This computer's token for {{server}} is kept in {{keychain}}. Nobody is shown it; Sign out deletes it.",
+      "afterSignIn": "Your sessions and the server's users appear here after you sign in."
+    },
+    "sessions": {
+      "heading": "Your sessions",
+      "description": "Every computer signed in as {{username}}. Revoke signs that computer out at once; it can sign in again with the password.",
+      "device": "Device",
+      "signedIn": "Signed in",
+      "lastUsed": "Last used",
+      "now": "now",
+      "thisComputer": "This computer",
+      "thisComputerShort": "this computer",
+      "orchesterOn": "Orchester on {{computer}}",
+      "platformHere": "{{platform}} · this computer",
+      "revoke": "Revoke"
+    },
+    "signedOut": {
+      "heading": "You are signed out of {{server}}",
+      "detail": "The server no longer accepts this computer's session: it went unused for 30 days, or it was revoked from another computer, by a password change or by an admin. Sign in again with your password; nothing else is needed."
+    },
+    "add": {
+      "open": "Add server",
+      "title": "Add server",
+      "explanation": "Orchester asks the address what it is before you sign in. It sends nothing about your projects until you share or join one.",
+      "address": "Server address",
+      "hint": "The address your team gave you, with a path prefix if the server has one (https://tools.example.lan/orchester).",
+      "addressInvalid": "This is not a server address. Use an http:// or https:// address without a user name, query or fragment.",
+      "checking": "Checking {{host}}…",
+      "found": "Orchester server · {{name}} · API {{api}}",
+      "trusted": {
+        "windows": "HTTPS · its certificate is trusted by Windows. Next, sign in with the username and password an admin of {{name}} gave you.",
+        "macos": "HTTPS · its certificate is trusted by macOS. Next, sign in with the username and password an admin of {{name}} gave you."
+      },
+      "loopback": "Plain HTTP to this computer ({{host}}) is allowed: nothing leaves it.",
+      "plainHttpHeading": "This server uses plain HTTP",
+      "plainHttpDetail": "Your password and this server's token would cross the network unencrypted, so anyone on the network between this computer and {{host}} can read them. Use an https:// address unless you trust that network.",
+      "allowPlainHttp": "Allow plain HTTP for {{host}}",
+      "noAdminHeading": "{{name}} has no admin yet",
+      "noAdminDetail": "Nobody can sign in until the first admin is created on the server's host. Whoever runs the server does it there; the command prints the admin's first password once.",
+      "known": "{{name}} is already in your list as {{address}}.",
+      "newerApi": "This server speaks API {{theirs}} and this version of Orchester speaks API {{ours}}. Update Orchester to use it.",
+      "openKnown": "Open server",
+      "checkAgain": "Check again",
+      "continue": "Continue to sign in"
+    },
+    "check": {
+      "redirect": "The address answered with a redirect to {{target}}. Orchester doesn't follow redirects: add the address of the Orchester server itself.",
+      "timedOut": "Couldn't reach {{host}}: the connection timed out after 10 s.",
+      "unreachable": "Couldn't reach {{host}}. Check the address and that the server is running.",
+      "notOrchester": "No Orchester server answered at {{address}} ({{status}} for /api/v1/server). Check the address and its path prefix.",
+      "certificate": {
+        "windows": "Windows doesn't trust the certificate of {{host}}. Add your team's certificate authority to Windows, then check again. Orchester has no switch to skip this check.",
+        "macos": "macOS doesn't trust the certificate of {{host}}. Add your team's certificate authority to the macOS keychain, then check again. Orchester has no switch to skip this check."
+      }
+    },
+    "signIn": {
+      "action": "Sign in",
+      "title": "Sign in to {{name}}",
+      "explanation": "Your password goes only to {{address}}. Orchester keeps the token the server returns in {{keychain}} and never stores the password.",
+      "username": "Username",
+      "password": "Password",
+      "forgot": "Forgot it? An admin of {{name}} can reset it and give you a new first password.",
+      "wrong": "The username or password is not right. Check both, or ask an admin of {{name}} to reset your password.",
+      "rateLimited": "Too many sign-in attempts for this username or this computer. Try again in {{minutes}} min (at {{time}})."
+    },
+    "signOut": {
+      "action": "Sign out"
+    },
+    "password": {
+      "change": "Change password",
+      "changeTitle": "Change your password",
+      "chooseTitle": "Choose your password",
+      "chooseExplanation": "You signed in to {{name}} with a first password from an admin. Choose your own to continue; the first one stops working.",
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "Repeat new password",
+      "rule": "12 to 256 characters. A long phrase is fine; there are no rules about symbols.",
+      "tooShort": "Use at least {{min}} characters; this one has {{count}}.",
+      "tooLong": "Use at most {{max}} characters.",
+      "different": "The two passwords are different.",
+      "save": "Save password",
+      "wrongCurrent": "The current password is not right.",
+      "refused": "The server did not accept this password. Use 12 to 256 characters.",
+      "rateLimited": "Too many wrong current passwords. Try again in 15 minutes.",
+      "noOthers": "No other computer is signed in as you. This computer stays signed in.",
+      "othersOne": "Your other session ({{names}}) is signed out when it changes. This computer stays signed in.",
+      "othersMany": "Your {{count}} other sessions ({{names}}) are signed out when it changes. This computer stays signed in."
+    },
+    "users": {
+      "heading": "Users of {{server}}",
+      "description": "Admins create accounts and give each person a first password. Nobody, an admin included, sees a person's own password or token.",
+      "create": "Create user",
+      "name": "Name",
+      "role": "Role",
+      "state": "State",
+      "admin": "Admin",
+      "member": "Member",
+      "active": "Active",
+      "disabled": "Disabled",
+      "you": "you",
+      "ownPassword": "Change your own password in Account",
+      "reset": "Reset password",
+      "disable": "Disable",
+      "enable": "Enable",
+      "note": "Disabling signs the person out everywhere and releases their claims; their tasks stay. Project members are managed in each project's Sharing settings.",
+      "createTitle": "Create user",
+      "createExplanation": "Orchester makes a first password and shows it once. Give it to the person yourself; they choose their own when they first sign in.",
+      "username": "Username",
+      "usernameHint": "Used to sign in and to add the person to projects. Letters, digits, dots, dashes; not case-sensitive.",
+      "usernameInvalid": "Use letters, digits, dots, dashes and underscores, 64 at most.",
+      "displayName": "Display name",
+      "displayNameHint": "What others see on claims and run status.",
+      "adminOption": "Admin",
+      "adminNote": "Admins manage users and the members of every project.",
+      "taken": "{{username}} is already a user of {{server}}. Usernames don't depend on case.",
+      "invalid": "The server did not accept this username or display name.",
+      "canSignIn": "{{name}} can sign in",
+      "giveExplanation": "Give them the server address and this first password. At their first sign-in Orchester asks them to choose their own.",
+      "server": "Server",
+      "firstPassword": "First password",
+      "shownOnce": "Shown only now. Once this closes it can't be shown again; Reset password makes a new one.",
+      "resetTitle": "Reset {{name}}'s password?",
+      "resetExplanation": "{{name}}'s sessions are signed out now. They sign in with the new first password and then choose their own. Their claims stay; they go stale if they don't sign in within 15 minutes.",
+      "disableTitle": "Disable {{name}}?",
+      "disableExplanation": "{{name}} can't sign in until an admin enables them again. Nothing they made is removed.",
+      "sessions": "Sessions",
+      "sessionsEnd": "Signed out now",
+      "claims": "Claims",
+      "claimsReleased": "Released · recorded in each task's history",
+      "projects": "Projects",
+      "projectsStay": "Stays a member; owners can remove them in Sharing",
+      "lastAdmin": "{{name}} is the last admin of {{server}} who can sign in. Make another user an admin first."
+    },
+    "errors": {
+      "signedOut": "This computer is signed out of the server. Sign in again with your password.",
+      "plainHttp": "Plain HTTP to {{host}} is not allowed for this server.",
+      "passwordChangeRequired": "Choose your own password first.",
+      "forbidden": "Only an admin of the server can do this.",
+      "notFound": "The server no longer knows this.",
+      "rateLimited": "The server asks to wait before trying again.",
+      "refused": "The server refused this.",
+      "setup": "Orchester cannot set up its connection to servers on this computer."
+    }
+  },
   "time": {
     "justNow": "Just now",
     "minutesAgo": "{{count}}m ago",
@@ -5010,6 +5206,29 @@
         "other": "{{attempts}} attempts"
       },
       "notStarted": "did not start"
+    },
+    "server": {
+      "many": "{{count}} servers",
+      "manyReconnecting": "{{count}} reconnecting",
+      "manyOffline": "{{count}} offline",
+      "manySignedOut": "{{count}} signed out",
+      "reconnecting": "Reconnecting to {{name}}",
+      "offline": "{{name}} offline",
+      "signedOut": "Signed out of {{name}}",
+      "signIn": "Sign in",
+      "attempt": "attempt {{attempt}} · next in {{seconds}} s",
+      "since": "since {{time}} · next try in {{seconds}} s",
+      "hint": "Click to open Settings › Servers.",
+      "detail": "{{host}} · {{username}}",
+      "detailReached": "{{host}} · {{username}} · reached {{time}}",
+      "detailSince": "{{host}} · since {{time}}",
+      "state": {
+        "checking": "connecting",
+        "connected": "connected",
+        "reconnecting": "reconnecting",
+        "offline": "offline",
+        "signedOut": "signed out"
+      }
     },
     "activity": {
       "running": "{{title}}…",

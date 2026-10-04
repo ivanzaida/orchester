@@ -23,6 +23,8 @@ pub struct Notice {
   id: Option<&'static str>,
   /// Drawn instead of `icon`, for a mark that is not a font glyph (the GitHub mark).
   mark: Option<Element>,
+  /// Under the detail, in the copy's column: an opt-in, a command to copy.
+  below: Vec<Element>,
 }
 
 impl Notice {
@@ -35,6 +37,7 @@ impl Notice {
       actions: Vec::new(),
       id: None,
       mark: None,
+      below: Vec::new(),
     }
   }
 
@@ -46,6 +49,12 @@ impl Notice {
   /// Content on the right of the copy: buttons, a countdown, a dismiss control.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
+    self
+  }
+
+  /// Content under the detail, e.g. the plain HTTP opt-in (`T5jSE` in 10.03 B).
+  pub fn below(mut self, content: impl Into<Element>) -> Self {
+    self.below.push(content.into());
     self
   }
 
@@ -77,7 +86,8 @@ impl From<Notice> for Element {
           .variant(heading)
           .color(PaletteColor::TextPrimary),
       )
-      .child(Text::new(&notice.detail).variant(ExtraTypography::Detail.role()));
+      .child(Text::new(&notice.detail).variant(ExtraTypography::Detail.role()))
+      .with_children(notice.below);
     let mut content = Row::new()
       .flex(1.0)
       .spacing(SpacingSize::Md)
