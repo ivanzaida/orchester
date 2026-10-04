@@ -385,10 +385,43 @@ Rules for both phases, on top of `AGENTS.md`:
   *Done* with its branch, and report what was not run. Do not merge into master yourself unless the user asks; an
   independent review by another agent comes first.
 
-### S1b · Implementation ready for independent review
+### S1b · Projects, tasks, claims and events on the server (non-UI)
 
-The server implementation is on `codex/server-s1b`; acceptance and evidence are in *Done* below.
-Review and merge must finish before S2a starts. The macOS check remains blocked by missing Apple SDK headers.
+Branch `codex/server-s1b`, worktree `.tmp/worktrees/codex-server-s1b`, from master `4ed11813`.
+Implementation and review fixes are awaiting independent re-review. S1b stays under S until it is merged;
+S2a starts only after that merge. The macOS cross-check remains blocked by missing Apple SDK headers.
+Evidence: [server-s1b-2026-10-04.md](evidence/server-s1b-2026-10-04.md).
+
+Done when these criteria, the required validation and independent review pass, and the phase is merged:
+
+- Core: `sharing` (claim take, release, take-over, heartbeat, staleness at 15 minutes, the run phases that end a
+  claim; tests over explicit times) and `RepositoryIdentity::from_remote_url` (HTTPS, SSH and scp-like forms of one
+  repository match; local paths and no `origin` refused).
+- Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`403 not_member` with the
+  owners), members added and removed by owners and admins only, `404` for non-members; of two simultaneous creates for
+  one repository exactly one succeeds and the other gets `409 remote_taken` and changes nothing.
+- Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate; a repeated idempotency key
+  returns the first result; a stale revision gets `409 revision_conflict` with the current task; the edit lock and
+  queueing follow core's rules; import gives new numbers and keeps ids and former keys. Upload keeps `has_run` for
+  finished runs.
+- Claims: of two simultaneous claims exactly one wins; a heartbeat refreshes and reports lost claims; stale after 15
+  minutes of test clock; take-over refused while fresh or changed and recorded when done; removing a member or
+  disabling a user releases their claims.
+- Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
+  30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
+  Heartbeats and SSE capacity are bounded; retention and replay use bounded periodic work.
+- Organization (user, 2026-10-03; `docs/architecture/server.md` decisions 23–24, *Task organization*): workflow,
+  priority, tags, blocking links and the Blocked reason are fields of `Task` and `Changes` under the revision; core's
+  ORC-39 rules refuse an empty reason, a cycle, an unknown tag and Canceled while the reported run has not ended
+  (`422 organization`); every change writes a history row (person, actor, before and after, tag names) served by
+  `GET …/tasks/{task}/history`; upload and import take tags by name and drop (and list) links outside the upload.
+  Reuses ORC-39's `task::organization`, already merged into master before S1b began.
+- Tags (decision 24): create, rename, merge and delete by members; names unique without regard to case (`409
+  tag_exists`, `409 same_tag`); merge and delete rewrite every affected task in one transaction with a new revision,
+  a history row and a `task` event, then a `tags` event.
+- Member roles (decision 25): `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted
+  nor removed (`409 last_owner`); audited; a `members` event.
+- `PUT …/run` (live run status, S3's server half) is not part of S1b.
 
 ### S2a–S3 · Desktop: servers, sharing, join, live list, run status (UI, design approved; after S1b)
 
@@ -434,42 +467,6 @@ content minimum, and the status bar uses it instead of the workaround.
 - **Project settings:** disk use of run worktrees.
 
 ## Done
-
-S1b · Projects, tasks, claims and events on the server (non-UI) · branch `codex/server-s1b` (implemented 2026-10-04; review pending)
-
-Implemented from master `4ed11813` in `.tmp/worktrees/codex-server-s1b`. Independent review is pending; the branch
-is not merged. Windows workspace checks, 28 S1b loopback tests, 43 S1a regressions and 26 affected core tests pass.
-The macOS cross-check is blocked by missing Apple SDK headers for ring and bundled SQLite; Linux and Docker were
-not rerun for S1b. Evidence: [server-s1b-2026-10-04.md](evidence/server-s1b-2026-10-04.md).
-
-Acceptance criteria verified on Windows:
-
-- Core: `sharing` (claim take, release, take-over, heartbeat, staleness at 15 minutes, the run phases that end a
-  claim; tests over explicit times) and `RepositoryIdentity::from_remote_url` (HTTPS, SSH and scp-like forms of one
-  repository match; local paths and no `origin` refused).
-- Projects: create with upload (numbers kept, counter after the highest), lookup by remote (`403 not_member` with the
-  owners), members added and removed by owners and admins only, `404` for non-members; of two simultaneous creates for
-  one repository exactly one succeeds and the other gets `409 remote_taken` and changes nothing.
-- Tasks: 5 clients creating 50 tasks each get numbers 1–250 with no gap or duplicate; a repeated idempotency key
-  returns the first result; a stale revision gets `409 revision_conflict` with the current task; the edit lock and
-  queueing follow core's rules; import gives new numbers and keeps ids and former keys.
-- Claims: of two simultaneous claims exactly one wins; a heartbeat refreshes and reports lost claims; stale after 15
-  minutes of test clock; take-over refused while fresh or changed and recorded when done; removing a member or
-  disabling a user releases their claims.
-- Events (SSE): a stream resumed with `Last-Event-ID` receives exactly the missed events; a cursor older than the
-  30-day retention gets `reset`; a revoked session or membership closes the stream; keep-alive every 20 s.
-- Organization (user, 2026-10-03; `docs/architecture/server.md` decisions 23–24, *Task organization*): workflow,
-  priority, tags, blocking links and the Blocked reason are fields of `Task` and `Changes` under the revision; core's
-  ORC-39 rules refuse an empty reason, a cycle, an unknown tag and Canceled while the reported run has not ended
-  (`422 organization`); every change writes a history row (person, actor, before and after, tag names) served by
-  `GET …/tasks/{task}/history`; upload and import take tags by name and drop (and list) links outside the upload.
-  Reuses ORC-39's `task::organization`, already merged into master before S1b began.
-- Tags (decision 24): create, rename, merge and delete by members; names unique without regard to case (`409
-  tag_exists`, `409 same_tag`); merge and delete rewrite every affected task in one transaction with a new revision,
-  a history row and a `task` event, then a `tags` event.
-- Member roles (decision 25): `PATCH …/members/{user}` by owners and admins; the last owner can be neither demoted
-  nor removed (`409 last_owner`); audited; a `members` event.
-- `PUT …/run` (live run status, S3's server half) is not part of S1b.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 
