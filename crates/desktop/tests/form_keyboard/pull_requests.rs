@@ -220,7 +220,22 @@ fn pull_requests_without_a_linked_repository_are_unavailable() {
     "Pull requests are unavailable"
   ));
   desktop.click("pull-requests-refresh");
+  // The sync the screen started when it opened ends unseen; give it the time a sync takes.
+  for _ in 0..50 {
+    desktop.tree.tick_futures();
+    desktop.pass();
+    std::thread::sleep(Duration::from_millis(10));
+  }
   assert!(gh.ran.lock().is_empty(), "nothing runs without a linked repository");
+  let activity = desktop.activity.snapshot();
+  assert!(
+    !activity
+      .recent()
+      .iter()
+      .any(|event| event.title().key.starts_with("statusBar.operations.pullRequestSync")),
+    "a sync that asked GitHub nothing is not listed"
+  );
+  assert!(!shows(&mut desktop, "status-bar", "Pull requests synced"));
   desktop.click("pull-requests-open-connections");
   desktop.wait_for("add-connection");
 }
