@@ -1,7 +1,9 @@
 //! Pull request list row (`QHBNZ`) and the column headings above the rows (`Qcgjy`). Rows are
 //! pointer-only and show GitHub's state of the pull request; agent work in Orchester comes with
 //! runs, so every row reads "No linked task". A row opens the pull request (`Rrmhf`); Open in
-//! GitHub opens it in the browser instead.
+//! GitHub opens it in the browser instead. No frame draws the list in a narrow window; like the
+//! Tasks list (02.03E) it drops a column so the title keeps its room: Open in GitHub, which the
+//! pull request's own topbar also has.
 
 use std::sync::Arc;
 
@@ -46,14 +48,28 @@ const CHEVRON_WIDTH: f32 = 14.0;
 const SHORT_REVISION: usize = 7;
 /// Height of the Open in GitHub button, as the Copy button of a command row (`eFsWL`).
 const OPEN_HEIGHT: f32 = 26.0;
+/// The narrowest window whose rows keep Open in GitHub while the title keeps 200: the 216 sidebar,
+/// the list's 64 padding, the row's 24 padding, the 20 icon, State (180), Checks (150), Open in
+/// GitHub (128), the 14 chevron and five 16 gaps take 876. Narrower, Open in GitHub goes and the
+/// title gains its 144; at the 960 minimum it keeps 228.
+const OPEN_IN_ROW_MIN_WINDOW: f32 = 1076.0;
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
+/// Whether the window has room for Open in GitHub in every row (`OPEN_IN_ROW_MIN_WINDOW`).
+/// Reading the width re-renders the caller as the window resizes.
+fn open_in_row(ctx: &Ctx) -> bool {
+  ctx.window().logical_width() >= OPEN_IN_ROW_MIN_WINDOW
+}
+
+/// The column headings (`Qcgjy`), each at its own width in a cell as wide as its column.
 pub fn column_headings(ctx: &Ctx) -> Element {
-  let heading = |key: &str| {
-    Text::new(&ctx.t(key))
-      .variant(ExtraTypography::Footnote.role())
-      .nowrap()
+  let heading = |key: &str, width: Dimension| {
+    Row::new().width(width).child(
+      Text::new(&ctx.t(key))
+        .variant(ExtraTypography::Footnote.role())
+        .nowrap(),
+    )
   };
   Row::new()
     .id("pull-requests-headings")
@@ -61,10 +77,10 @@ pub fn column_headings(ctx: &Ctx) -> Element {
     .padding_horizontal(ExtraSpacing::Stack.role())
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(heading("pullRequests.columns.pullRequest").flex(1.0))
-    .child(heading("pullRequests.columns.state").width(Dimension::Px(STATE_WIDTH)))
-    .child(heading("pullRequests.columns.checks").width(Dimension::Px(CHECKS_WIDTH)))
-    .child(Row::new().width(Dimension::Px(OPEN_WIDTH)))
+    .child(heading("pullRequests.columns.pullRequest", Dimension::Auto).flex(1.0))
+    .child(heading("pullRequests.columns.state", Dimension::Px(STATE_WIDTH)))
+    .child(heading("pullRequests.columns.checks", Dimension::Px(CHECKS_WIDTH)))
+    .with_children(open_in_row(ctx).then(|| Row::new().width(Dimension::Px(OPEN_WIDTH))))
     .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)))
     .into()
 }
@@ -102,6 +118,15 @@ impl Component for PullRequestRow {
       open,
       show,
     } = ctx.props::<RowProps>().clone();
+    let open = open_in_row(ctx).then(|| {
+      ActionButton::new(ctx.t("pullRequests.row.openInGitHub"))
+        .icon(Icon::ExternalLink)
+        .compact()
+        .id("pull-request-open")
+        .size(Dimension::Px(OPEN_WIDTH), Dimension::Px(OPEN_HEIGHT))
+        .on_click(move || open())
+        .render(ctx)
+    });
     let row = surface()
       .id("pull-request-row")
       .describe("number", pull_request.number().to_string())
@@ -117,15 +142,7 @@ impl Component for PullRequestRow {
       .child(identity(ctx, &pull_request, Timestamp::now()))
       .child(review(ctx, &pull_request))
       .child(checks(ctx, pull_request.checks()))
-      .child(
-        ActionButton::new(ctx.t("pullRequests.row.openInGitHub"))
-          .icon(Icon::ExternalLink)
-          .compact()
-          .id("pull-request-open")
-          .size(Dimension::Px(OPEN_WIDTH), Dimension::Px(OPEN_HEIGHT))
-          .on_click(move || open())
-          .render(ctx),
-      )
+      .with_children(open)
       .child(Row::new().width(Dimension::Px(CHEVRON_WIDTH)).child(icon(
         Icon::ChevronRight,
         IconSize::Dismiss,
@@ -167,6 +184,7 @@ fn identity(ctx: &Ctx, pull_request: &PullRequest, now: Timestamp) -> Element {
       .text_overflow(TextOverflow::Elipsis)
   };
   Column::new()
+    .id("pull-request-identity")
     .flex(1.0)
     .spacing(SpacingSize::Sm)
     .child(line(pull_request.title(), ExtraTypography::RowTitle.role()))

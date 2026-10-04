@@ -235,3 +235,64 @@ fn pull_requests_layout_keeps_refresh_in_place_in_the_narrowest_window() {
   settle_on(&mut desktop, STATUS, "Last synced just now · GitHub unreachable");
   assert_stays(&mut desktop, REFRESH, refresh_at, "Refresh after a failed sync");
 }
+
+/// The column headings, in order (`Qcgjy`).
+const HEADING_TEXTS: [&str; 3] = ["PULL REQUEST / LINKED TASK", "STATE & REVIEW", "GITHUB CHECKS"];
+/// What the first row (#42) shows under the State & review and the Checks headings.
+const COLUMN_TEXTS: [&str; 2] = ["Review required", "3 checks passed"];
+/// The least a row's title and meta keep, as the Tasks list keeps its titles' room (02.03E).
+const TITLE_MIN: f32 = 200.0;
+
+fn text_bounds(desktop: &mut Desktop, text: &str) -> ElementRect {
+  desktop
+    .tree
+    .find_element(|element| element.text_content() == Some(text))
+    .unwrap_or_else(|| panic!("{text} is shown"))
+    .bounds()
+}
+
+#[test]
+fn pull_requests_layout_columns_fit_the_narrowest_and_the_design_window() {
+  for (width, open_in_rows) in [(960, false), (1440, true)] {
+    let gh = GatedGh::new(FakeGh::signed_in(SIGNED_IN, Ok(ok(OPEN_PULL_REQUESTS))), true);
+    let mut desktop = linked(&gh);
+    let _open_at_end = OpenAtEnd(gh.clone());
+    desktop.tree.resize(width, 960);
+    open_pull_requests(&mut desktop);
+    settle_on(&mut desktop, LIST_ID, "3 open pull requests");
+
+    let headings: Vec<ElementRect> = HEADING_TEXTS
+      .iter()
+      .map(|text| text_bounds(&mut desktop, text))
+      .collect();
+    for (pair, texts) in headings.windows(2).zip(HEADING_TEXTS.windows(2)) {
+      assert!(
+        pair[0].x + pair[0].width <= pair[1].x,
+        "at {width}, {} runs into {}: {:?} and {:?}",
+        texts[0],
+        texts[1],
+        pair[0],
+        pair[1]
+      );
+    }
+    // Each heading starts its column.
+    for (heading, text) in headings[1..].iter().zip(COLUMN_TEXTS) {
+      let column = text_bounds(&mut desktop, text);
+      assert!(
+        (heading.x - column.x).abs() < 0.5,
+        "at {width}, {text} is under its heading"
+      );
+    }
+    let identity = desktop.bounds("pull-request-identity");
+    assert!(
+      identity.width >= TITLE_MIN,
+      "at {width}, a title keeps {} of {TITLE_MIN}",
+      identity.width
+    );
+    assert_eq!(
+      desktop.tree.get_element_by_id("pull-request-open").is_some(),
+      open_in_rows,
+      "at {width}, Open in GitHub in the rows"
+    );
+  }
+}
