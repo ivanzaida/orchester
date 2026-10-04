@@ -1,8 +1,9 @@
 //! The HTTP client the desktop talks to a server with (`docs/architecture/server.md`, "API",
 //! "Security"): rustls with the operating system's trust store and no way to skip it, plain HTTP
 //! only for this computer or with the person's opt-in, and redirects never followed but returned
-//! as an error naming their target. The token travels only in the `Authorization` header, marked
-//! sensitive; it never appears in a URL, an error or `Debug` output.
+//! as an error naming their target. No proxy is used, whatever the environment says. The token
+//! travels only in the `Authorization` header, marked sensitive; it never appears in a URL, an
+//! error or `Debug` output.
 
 mod address;
 mod error;
@@ -58,7 +59,11 @@ impl Client {
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
     // Installing fails only when a provider is installed already, which then serves as well.
     let _ = rustls::crypto::ring::default_provider().install_default();
+    // No proxy, from the environment (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) or the system: a
+    // plain HTTP proxy would see the token, and a server on this computer would be reached through
+    // another one.
     let http = reqwest::Client::builder()
+      .no_proxy()
       .redirect(Policy::none())
       .connect_timeout(CONNECT_TIMEOUT)
       .timeout(REQUEST_TIMEOUT)

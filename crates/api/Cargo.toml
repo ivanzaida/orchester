@@ -41,3 +41,7 @@ required-features = ["client"]
 [[test]]
 name = "client_redaction"
 required-features = ["client"]
+
+[[test]]
+name = "client_proxy"
+required-features = ["client"]
