@@ -32,6 +32,7 @@ mod import;
 mod instructions;
 mod integration;
 mod lifecycle;
+mod mcp_agent;
 mod mcp_exempt_tools;
 mod mcp_servers;
 mod modal_layer;

@@ -3,8 +3,9 @@
 //! goes to the keychain (the harness's one in memory) and passwords are masked; a redirect is an
 //! error naming its target; a token the server refuses shows the server as signed out with *Sign
 //! in* in the status bar; sessions are revoked and a password change signs the others out; an admin
-//! creates users, sees the first password once, resets, disables and enables them; Sign out forgets
-//! the token, and the connection is checked when the application starts.
+//! creates users, sees the first password once (painted in clear, `•••` in the MCP tree), resets,
+//! disables and enables them; Sign out forgets the token, and the connection is checked when the
+//! application starts.
 
 #[path = "../server_support/mod.rs"]
 mod server_support;
@@ -16,7 +17,13 @@ use std::{
   thread,
 };
 
+use lurq::{
+  clipboard::{copy_to_clipboard, read_from_clipboard},
+  core::REDACTED,
+  layout::quad::QuadContent,
+};
 use orchester_core::secret::SecretValue;
+use serde_json::json;
 use server_support::{SERVER_NAME, TestServer};
 
 use crate::{agent_permissions::shows, harness::Desktop};
@@ -99,6 +106,61 @@ fn revoke_button(desktop: &mut Desktop) -> Option<String> {
     false
   });
   found.into_inner()
+}
+
+/// Creates the user `maria` in Users and waits for her first password (10.08 B).
+fn create_maria(desktop: &mut Desktop) {
+  desktop.click("server-tab-users");
+  desktop.wait_for("server-create-user");
+  desktop.click("server-create-user");
+  type_into(desktop, "create-user-username", "maria");
+  type_into(desktop, "create-user-display-name", "Maria Lind");
+  desktop.enter();
+  desktop.wait_for("first-password-value");
+}
+
+/// The first password the dialog shows, as the app holds it.
+fn first_password(desktop: &mut Desktop) -> String {
+  desktop
+    .tree
+    .get_element_by_id_mut("first-password-value")
+    .and_then(|element| element.text_content().map(str::to_owned))
+    .expect("the first password's text")
+}
+
+/// The first password is painted in clear, as the design draws it, while the MCP tree shows only
+/// `•••` in its place. Returns the password.
+fn first_password_shown_only_on_screen(desktop: &mut Desktop) -> String {
+  let password = first_password(desktop);
+  assert!(
+    !password.is_empty() && password != REDACTED,
+    "the server made a first password"
+  );
+  let painted = desktop
+    .tree
+    .painted_quads()
+    .into_iter()
+    .any(|quad| matches!(quad.content, QuadContent::Text { text, .. } if text == password));
+  assert!(painted, "the first password is painted in clear");
+  let outputs = desktop.with_mcp_agent(|mut agent| {
+    [
+      agent.tool("lurq_read_tree", &json!({})),
+      agent.tool("lurq_find_by_id", &json!({"id": "first-password-value"})),
+      agent.tool("lurq_inspect", &json!({"query": "first-password"})),
+    ]
+  });
+  for output in &outputs {
+    assert!(!output.contains(&password), "the MCP tree holds the password");
+    assert!(output.contains(REDACTED), "{output}");
+  }
+  assert!(
+    outputs[0]
+      .lines()
+      .any(|line| line.contains("#first-password-value") && line.contains("sensitive=true")),
+    "{}",
+    outputs[0]
+  );
+  password
 }
 
 /// Leaves the page and comes back, so it reads the server again.
@@ -240,24 +302,13 @@ fn servers_revoke_and_a_password_change_sign_the_other_computers_out() {
 
 #[test]
 fn servers_admin_creates_resets_disables_and_enables_users() {
-  let (mut desktop, _server) = signed_in_as_admin();
-  desktop.click("server-tab-users");
-  desktop.wait_for("server-create-user");
-  desktop.click("server-create-user");
-  type_into(&mut desktop, "create-user-username", "maria");
-  type_into(&mut desktop, "create-user-display-name", "Maria Lind");
-  desktop.enter();
-  desktop.wait_for("first-password-value");
+  let (mut desktop, server) = signed_in_as_admin();
+  create_maria(&mut desktop);
   assert!(shows(&mut desktop, "Maria Lind can sign in"));
-  let first = desktop
-    .tree
-    .get_element_by_id_mut("first-password-value")
-    .and_then(|element| element.as_text_input())
-    .expect("the first password");
-  assert!(first.is_masked(), "the MCP and DevTools trees see its mask only");
-  assert!(!first.value().is_empty(), "the server made a first password");
+  let first = first_password_shown_only_on_screen(&mut desktop);
   desktop.click("first-password-done");
   desktop.wait_for("server-user-reset-maria");
+  server.sign_in_elsewhere("maria", &first, "maria's own long password");
 
   desktop.click("server-create-user");
   type_into(&mut desktop, "create-user-username", "MARIA");
@@ -278,6 +329,23 @@ fn servers_admin_creates_resets_disables_and_enables_users() {
   desktop.wait_for("server-user-enable-maria");
   desktop.click("server-user-enable-maria");
   desktop.wait_for("server-user-disable-maria");
+}
+
+#[test]
+#[ignore = "requires an available text clipboard; run separately so the user's clipboard can be restored"]
+fn servers_first_password_copy_puts_the_shown_password_on_the_clipboard() {
+  let previous = read_from_clipboard().expect("a text clipboard whose previous contents can be restored");
+  let (mut desktop, _server) = signed_in_as_admin();
+  create_maria(&mut desktop);
+  let shown = first_password(&mut desktop);
+  desktop.click("first-password-copy");
+  let copied = read_from_clipboard();
+  assert!(copy_to_clipboard(&previous), "restore the previous clipboard text");
+  assert!(
+    copied.as_deref() == Some(shown.as_str()),
+    "Copy puts the shown password on the clipboard"
+  );
+  assert!(shows(&mut desktop, "Copied"));
 }
 
 #[test]

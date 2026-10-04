@@ -31,7 +31,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
-    field::{field_error, locked_input, styled_input},
+    field::field_error,
     icon::{Icon, IconSize, icon},
     message_text,
     property::{ValueStyle, styled_property},
@@ -229,10 +229,7 @@ fn create_action(ctx: &mut Ctx) -> CreateAction {
     async move {
       let username = user.username.clone();
       match servers.create_user(&entry, user).await {
-        Ok(created) => Ok(FirstPassword {
-          person: Person::from(created.user),
-          password: Arc::new(created.initial_password),
-        }),
+        Ok(created) => Ok(FirstPassword::new(Person::from(created.user), created.initial_password)),
         Err(error) if error.code() == Some(ErrorCode::UsernameTaken) => Err(Refused {
           message: None,
           taken: Some(username),
@@ -280,8 +277,8 @@ impl PartialEq for ShownProps {
 impl lurq::app::component::DevtoolsInspectable for ShownProps {}
 
 struct ShownDialog {
-  /// Whether the clipboard took the password, once Copy was pressed. The password itself is not
-  /// kept anywhere else.
+  /// Whether the clipboard took the password, once Copy was pressed. The password itself stays in
+  /// the props only.
   copied: Signal<Option<bool>>,
   frame: ElementRef,
 }
@@ -344,27 +341,21 @@ impl Component for ShownDialog {
 }
 
 impl ShownDialog {
-  /// The first password as a mask the person cannot edit: lurq draws a text either as it is,
-  /// which puts it in the MCP and DevTools trees, or masked, which keeps it out of them (rule 11:
-  /// no secret in the MCP tree). Copy hands it on. Its signal is made outside `ctx.signal`, so
-  /// DevTools record no history of it.
-  fn masked(&self, ctx: &Ctx, props: &ShownProps) -> Element {
-    let value = Signal::new(props.shown.password.expose().to_owned());
-    locked_input(
-      styled_input(ctx, value, ExtraTypography::FirstPassword.role())
-        .id("first-password-value")
-        .single_line()
-        .mask()
-        .flex(1.0),
-      true,
-    )
-    .into()
+  /// The first password as the design draws it (`pUTsa`). It is sensitive text: the MCP and
+  /// DevTools trees show `•••` in its place (rule 11: no secret in the MCP tree).
+  fn value(props: &ShownProps) -> Element {
+    Text::new(props.shown.password().expose().expose())
+      .id("first-password-value")
+      .variant(ExtraTypography::FirstPassword.role())
+      .sensitive()
+      .flex(1.0)
+      .into()
   }
 
   /// The password in mono with Copy (`GMko2`), and that it is shown only now (`vZQ8Z`).
   fn password(&self, ctx: &Ctx, props: &ShownProps) -> Element {
     let outcome = self.copied.get();
-    let (copied, password) = (self.copied.clone(), props.shown.password.clone());
+    let (copied, password) = (self.copied.clone(), props.shown.password().clone());
     let copy = ActionButton::new(ctx.t(if outcome == Some(true) {
       "common.copied"
     } else {
@@ -375,7 +366,7 @@ impl ShownDialog {
     .in_form()
     .height(Dimension::Px(COPY_HEIGHT))
     .on_click(move || {
-      let success = copy_to_clipboard(password.expose());
+      let success = copy_to_clipboard(password.expose().expose());
       if !success {
         tracing::warn!("the clipboard did not take the first password");
       }
@@ -393,7 +384,7 @@ impl ShownDialog {
       .background(PaletteColor::SurfaceBase)
       .border_inside(BorderSize::Sm, ExtraColor::Hairline.role())
       .rounded(RadiusSize::Md)
-      .child(self.masked(ctx, props))
+      .child(Self::value(props))
       .child(copy);
     let once = Row::new()
       .width(Dimension::Pct(100.0))
