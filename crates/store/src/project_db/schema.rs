@@ -18,6 +18,7 @@ mod stuck_runs;
 mod task_edits;
 mod task_groups;
 mod tool_approvals;
+mod worktree_removals;
 
 pub(super) const MIGRATIONS: &[&str] = &[
   r"
@@ -593,4 +594,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   steering::MIGRATION,
   approval_choices::MIGRATION,
   organization::MIGRATION,
+  worktree_removals::MIGRATION,
 ];

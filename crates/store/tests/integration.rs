@@ -1,17 +1,18 @@
-//! What integrating runs stores: the branch a run started on and a run's merge, once.
+//! What integrating runs stores: the branch a run started on, a run's merge, once, and when a run's
+//! worktree was removed.
 
 mod support;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId},
-  integration::{MergeKind, RunMerge},
+  integration::{MergeKind, RemovalStart, RunMerge},
   revision::Revision,
-  run::{BranchName, NewRun},
-  store::{MergeStore, RunStore},
+  run::{BranchName, InterruptCause, NewRun},
+  store::{MergeStore, RunStore, WorktreeStore},
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use self::support::{at, budget, started_run};
+use self::support::{at, budget, copied_at_version, started_run};
 
 fn branch(name: &str) -> BranchName {
   BranchName::new(name).expect("valid branch")
@@ -69,4 +70,105 @@ fn integration_merge_is_recorded_once_per_run() {
     db.save_run_merge(&unknown).is_err(),
     "a merge belongs to a recorded run"
   );
+}
+
+#[test]
+fn integration_worktree_removal_is_recorded_once_and_ends_an_interrupted_run_for_good() {
+  let (repo, mut db, mut run, _) = started_run();
+  let events = run.interrupt(InterruptCause::QuitNow, at(20)).expect("interrupt");
+  db.append_events(&run, &events).expect("append");
+  assert_eq!(db.interrupted_runs().expect("listed").len(), 1);
+  assert_eq!(db.worktree_removal(run.id()).expect("read"), None);
+  db.save_worktree_removal(run.id(), at(30)).expect("save");
+  db.save_worktree_removal(run.id(), at(40))
+    .expect("a second removal changes nothing");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.worktree_removal(run.id()).expect("read"), Some(at(30)));
+  assert_eq!(
+    reopened.worktree_removals(run.task()).expect("read"),
+    vec![(run.id(), at(30))]
+  );
+  assert!(
+    reopened.interrupted_runs().expect("listed").is_empty(),
+    "it can never continue, so recovery leaves it out"
+  );
+  assert!(
+    db.save_worktree_removal(RunId::generate(), at(50)).is_err(),
+    "a removal belongs to a recorded run"
+  );
+}
+
+#[test]
+fn integration_worktree_removal_and_continuation_never_both_go_ahead() {
+  let (_repo, mut db, mut run, _) = started_run();
+  // Running: a removal is refused and records nothing.
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(20)).expect("read"),
+    RemovalStart::LiveWork
+  );
+  assert_eq!(db.worktree_removal(run.id()).expect("read"), None);
+  let events = run.interrupt(InterruptCause::QuitNow, at(21)).expect("interrupt");
+  db.append_events(&run, &events).expect("append");
+  assert_eq!(db.active_task_run(run.task()).expect("read"), Some(run.id()));
+
+  // Interrupted: the removal is recorded first; a continuation made from the run as read before
+  // is then refused and changes nothing.
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(30)).expect("record"),
+    RemovalStart::Recorded
+  );
+  let before = db.run(run.id()).expect("read").expect("run");
+  let mut continued = run.clone();
+  let events = continued.continue_run(at(31)).expect("continue");
+  assert!(matches!(
+    db.append_events(&continued, &events),
+    Err(RunStoreError::WorktreeRemoved(id)) if id == run.id()
+  ));
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), before);
+  assert_eq!(
+    db.active_task_run(run.task()).expect("read"),
+    None,
+    "it never continues, so Canceled stops nothing"
+  );
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(40)).expect("read"),
+    RemovalStart::AlreadyRecorded
+  );
+
+  // Git removed nothing: the record is taken back and the run continues as before.
+  db.undo_worktree_removal(run.id(), at(30)).expect("undo");
+  assert_eq!(db.worktree_removal(run.id()).expect("read"), None);
+  db.append_events(&continued, &events)
+    .expect("the continuation is recorded");
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(50)).expect("read"),
+    RemovalStart::LiveWork
+  );
+}
+
+/// The schema version before removals were recorded: task organization (39).
+const BEFORE_REMOVALS: u32 = 39;
+
+#[test]
+fn integration_worktree_removals_migration_keeps_runs_of_schema_39() {
+  let (repo, mut db, mut run, _) = started_run();
+  let events = run.interrupt(InterruptCause::QuitNow, at(20)).expect("interrupt");
+  db.append_events(&run, &events).expect("append");
+  drop(db);
+  let current = repo.path().join(".orchester").join("orchester.db");
+  let old = copied_at_version(&current, BEFORE_REMOVALS);
+  let mut db = ProjectDb::open(old.path()).expect("migrate existing project");
+  assert_eq!(db.run(run.id()).expect("read").expect("run"), run);
+  assert_eq!(
+    db.worktree_removal(run.id()).expect("read"),
+    None,
+    "no removal was recorded before"
+  );
+  assert_eq!(db.interrupted_runs().expect("listed").len(), 1);
+  assert_eq!(db.active_task_run(run.task()).expect("read"), Some(run.id()));
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(30)).expect("record"),
+    RemovalStart::Recorded
+  );
+  assert!(db.interrupted_runs().expect("listed").is_empty());
 }

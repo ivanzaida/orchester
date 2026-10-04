@@ -53,14 +53,15 @@ use crate::{
 const PANEL_WIDTH: f32 = 336.0;
 
 /// `lost`: the run is recorded as running but has no runner, and why. `pipelines`: the project's
-/// published pipelines, for the one a task without a run would start with. `reason`: why the task
-/// cannot run again, under the notice.
+/// published pipelines, for the one a task without a run would start with. `reason`: why the run
+/// cannot continue or the task cannot run again, under the notice. `runs`: *Runs of this task*,
+/// after the run's steps (ORC-63).
 pub(super) fn summary(
   ctx: &mut Ctx,
   detail: &TaskDetail,
   (limits, lost, pipelines): (Option<ProjectLimits>, Option<Lost>, Option<&[PipelineChoice]>),
   (repo_root, scrolls, revision): (&Path, &TaskScrolls, (u64, u64)),
-  reason: Option<Element>,
+  (reason, runs): (Option<Element>, Option<Element>),
 ) -> Element {
   if let Some(run) = &detail.run {
     match run.run.status() {
@@ -101,6 +102,7 @@ pub(super) fn summary(
       let waiting = waiting_requests(ctx, run);
       progress_list(ctx, run, lost.is_some(), &waiting)
     }))
+    .with_children(runs)
     .with_children(blocked_notice(ctx, detail))
     .with_children(brief_section(ctx, details))
     .child(super::organization_history::history(ctx, repo_root, detail.task.id(), revision));
@@ -248,6 +250,13 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
       ValueStyle::Mono,
     ))
     .with_children(checkpoint.map(|value| property(&ctx.t("runs.summary.checkpoint"), &value)))
+    .with_children(run.worktree_removed.map(|removed| {
+      let value = ctx.t_args(
+        "runs.summary.worktreeRemoved",
+        [("time", display::clock(removed).as_str())],
+      );
+      property(&ctx.t("runs.summary.worktree"), &value)
+    }))
     .child(styled_property(&ctx.t("runs.summary.model"), model, ValueStyle::Mono))
     .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)))
     .child(property(&ctx.t("runs.cached"), &cached))

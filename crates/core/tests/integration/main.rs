@@ -4,4 +4,5 @@
 
 mod cleanup;
 mod merge;
+mod recorded;
 mod support;

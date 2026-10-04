@@ -159,6 +159,68 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
+### U10 · Pull requests screen jumps while it loads (UI)
+
+Opening the Pull requests tab shifts its content two or three times
+(`crates/desktop/src/screens/project/pull_requests/mod.rs`):
+
+1. The stored inbox is read from the project database asynchronously (`actions::load` → `ctx.future`,
+   `actions.rs`). Until it arrives, `inbox` is `None`: the body is an empty column and the Open tab has no count.
+2. When the stored inbox arrives, the Open tab gains its count (`synced.pull_requests.len()`), so it widens and pushes
+   the other tabs right, and the list appears below. For an unlinked repository the whole tab row disappears
+   (`tabs` is skipped for `Inbox::Unlinked`), which moves the body up.
+3. `create` also starts a GitHub sync through `gh` at once. While it runs the topbar sync status text changes width,
+   and afterwards the list and count may change again.
+
+**Done when** the screen keeps a stable layout from the first frame: the heading, tab row and body keep their place
+until the stored inbox is known (no empty-body frame followed by a list; no tab row that appears and then vanishes),
+the Open tab reserves room for its count so a count arriving does not move the other tabs, and the topbar sync status
+does not shift the Refresh button when its text changes. A sync that changes the list may still add or remove rows.
+Tests: a headless `form_keyboard` test that records the tab and body bounds before and after the stored inbox and a
+sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
+Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
+
+### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (done 2026-10-04: three code reviews and three design verifications passed)
+
+Design: `docs/design/orchester-workspace.md` › *ORC-63 · Remove worktree for every ended run* (group `j0VU3B`,
+frames 63.01 `O0AMKY`, 63.02 `H9Z7D4`, 63.03 `e4QBB`, 63.04 `rkAU3`, 63.05 `LmTnc`, 63.06 `VBR27`; decisions approved
+2026-10-04). Implemented 2026-10-04:
+
+- Core: `RunStatus::has_live_work` (an interrupted run has none); `clean_up` removes the worktrees of an interrupted
+  run (`CleanupError::LiveWork` otherwise); `leftovers_of` reads several runs with one worktree listing; Run again
+  (`run_again`, `holds_task`, `can_run_again_after`) follows an interrupted run whose worktree was removed, which no
+  longer holds its task. `WorktreeStore` records removals.
+- Store: migration 40, `run_worktree_removals` (once per run); `interrupted_runs` leaves such runs out.
+- Runner: `Prepared::continuing` refuses a run whose removal is recorded (`Rejection::WorktreeRemoved`, the run
+  unchanged); Run again reads the removals and records the removal it does.
+- Review fixes (2026-10-04): a removal is recorded before git runs, in the write transaction that re-reads the run
+  and refuses it once it has live work (`WorktreeStore::begin_worktree_removal`, core `clean_up_recorded`); recording
+  a continuation of a run whose removal is recorded is refused in its own write transaction
+  (`RunStoreError::WorktreeRemoved`), so the two never both go ahead. The record is taken back when nothing was
+  touched (changes appeared since the dialog), and stays once anything was removed or git refused (a refusal can
+  come part way). A worktree folder git forgot after a failed removal is listed (`LeftWorktree::forgotten`, IPC
+  protocol **15**), shown as left behind with Remove worktree again, and deleted as a folder, only ever
+  `.orchester/worktrees/<run or step execution id>`. An interrupted run whose folder is gone is recorded as removed
+  when the task page or Run again finds it. The task's active run (Canceled) and a group's first-run statuses leave
+  an interrupted run without its worktree out. Rows keep their lines while what was left is read again.
+  Second review round: a clean-up fails only before it removes anything (git not runnable, the listing); once
+  removing started, a git failure or timeout keeps that worktree or branch with why, so the record stays. A
+  forgotten folder lists its files like uncommitted changes and goes only as they were seen. Git's refusal names
+  the worktree once, as `.orchester/worktrees/<id>`, with its reason on one line.
+- Desktop: the removal is recorded by *Remove worktree* and by a merge's clean-up; *Runs of this task* on Summary
+  (after the steps; on Ready for review after Verification; on the unreadable run's page in place of *Other runs of
+  this task*), rows with columns from a 1340 window and stacked below, *Remove worktree* on every run with worktrees
+  and no live work (the latest keeps its topbar button, which now also shows for an interrupted run, left of
+  Continue run), the 02.Q dialog for any run with the interrupted-run notice and the *keeps working* line, one
+  removal at a time per task, *Removing…* and git's refusal under the row. An interrupted run without its worktree:
+  notice *Run #N can’t continue*, Continue run unavailable with its lock line, step *Interrupted · can’t continue*,
+  heading *· worktree removed HH:MM*, *Worktree · Removed · HH:MM* in This run, *Run again* offered.
+
+Not done: *Runs of this task* is not on the plan review (02.11) or the retry-limit page (02.B), which lay out their
+own Summary; Cancel run stays beside Continue run for an interrupted run (63.04/63.05 draw none). Design verification
+(separate agent) is outstanding.
+
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label

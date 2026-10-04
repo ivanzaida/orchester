@@ -274,11 +274,20 @@ locks (`orchester_core::integration`).
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped
   steps that ran beside others) are removed with `git worktree remove`, build output included, and
   its branches whose commits are on the base branch or the checkout's current branch are deleted;
-  other branches are kept, and so is a worktree with uncommitted changes. For a run that ended
-  (succeeded, failed or cancelled) a person can remove them too (*Remove worktree*): a worktree with
+  other branches are kept, and so is a worktree with uncommitted changes. For a run with no live
+  work — one that ended (succeeded, failed or cancelled) or was interrupted — a person can remove
+  them too (*Remove worktree*, from the top bar for the latest run and from *Runs of this task* for
+  any run, ORC-63): a worktree with
   uncommitted changes goes only once the person saw the files named and agreed to discard them, and
   only if the changes are still exactly those. Run again can remove them the same way, in the
-  runner, before the task's next run starts. A folder already deleted by hand is pruned. The
+  runner, before the task's next run starts. A folder already deleted by hand is pruned, and a folder
+  git forgot after a removal that failed part way is deleted as a folder. A removal is recorded
+  (`run_worktree_removals`) before git runs, in the write transaction that re-reads the run and
+  refuses it once the run has live work; recording a continuation of a run whose removal is recorded
+  is refused in its own write transaction, so the two never both go ahead. The record is taken back
+  when nothing was touched and stays once anything went or git refused. An interrupted run whose
+  removal is recorded (or whose folder is found gone) stays interrupted in its record, but it never
+  continues and no longer keeps its task from running again. The
   Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
   stay reachable through the base branch or its kept branch.
 
@@ -425,6 +434,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | --- | --- |
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force, tokens used, pause requested |
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
+| `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |

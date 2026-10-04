@@ -126,6 +126,7 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
       stopped_at_step_budget(ctx, run, *execution)
     }
     RunStatus::Paused(PauseReason::LimitReached(limit)) => stopped_at_limit(ctx, run, *limit),
+    RunStatus::Interrupted(_) if let Some(notice) = super::interrupted::notice(ctx, run) => notice,
     RunStatus::Interrupted(_) => plain(
       Icon::CirclePause,
       "runs.summary.notice.interruptedTitle",

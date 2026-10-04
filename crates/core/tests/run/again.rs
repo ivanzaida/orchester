@@ -3,7 +3,10 @@ use std::{num::NonZeroU32, time::Duration};
 use orchester_core::{
   id::RunId,
   limits::ProjectLimits,
-  run::{BranchName, Run, RunAgainBlock, RunAgainInput, RunNumber, StepFailure, run_again},
+  run::{
+    BranchName, InterruptCause, Run, RunAgainBlock, RunAgainInput, RunNumber, StepFailure, can_run_again_after,
+    holds_task, run_again,
+  },
   tokens::TokensUsed,
 };
 
@@ -43,6 +46,7 @@ fn input<'a>(runs: &'a [Option<&'a Run>], after: RunId) -> RunAgainInput<'a> {
   RunAgainInput {
     runs,
     after,
+    worktree_removed: &[],
     pipeline_published: true,
     limits: ProjectLimits::DEFAULT,
     used_today: TokensUsed::ZERO,
@@ -95,6 +99,60 @@ fn run_again_waits_for_another_active_run_of_the_task() {
       number: paused.run.number()
     })
   );
+}
+
+fn interrupted(number: u32) -> Run {
+  let mut logged = run(number);
+  logged.apply(|run| run.interrupt(InterruptCause::QuitNow, at(12)));
+  logged.run
+}
+
+#[test]
+fn run_again_follows_an_interrupted_run_only_once_its_worktree_was_removed() {
+  let interrupted = interrupted(141);
+  let runs = [Some(&interrupted)];
+  assert_eq!(
+    run_again(&input(&runs, interrupted.id())),
+    Err(RunAgainBlock::RunActive {
+      number: interrupted.number()
+    }),
+    "an interrupted run can still continue in its worktree"
+  );
+  assert!(holds_task(&interrupted, false));
+  assert!(!can_run_again_after(&interrupted, false));
+
+  let removed = [interrupted.id()];
+  let without_worktree = RunAgainInput {
+    worktree_removed: &removed,
+    ..input(&runs, interrupted.id())
+  };
+  assert_eq!(run_again(&without_worktree), Ok(interrupted.id()));
+  assert!(!holds_task(&interrupted, true));
+  assert!(can_run_again_after(&interrupted, true));
+}
+
+#[test]
+fn an_interrupted_run_without_its_worktree_no_longer_holds_its_task() {
+  let interrupted = interrupted(140);
+  let failed = failed(141);
+  let runs = [Some(&interrupted), Some(&failed)];
+  let removed = [interrupted.id()];
+  assert_eq!(
+    run_again(&input(&runs, failed.id())),
+    Err(RunAgainBlock::RunActive {
+      number: interrupted.number()
+    })
+  );
+  let without_worktree = RunAgainInput {
+    worktree_removed: &removed,
+    ..input(&runs, failed.id())
+  };
+  assert_eq!(run_again(&without_worktree), Ok(failed.id()));
+  // A removed worktree changes nothing for a run that is at work or ended.
+  let running = run(142).run;
+  assert!(holds_task(&running, true));
+  assert!(!can_run_again_after(&running, true));
+  assert!(can_run_again_after(&failed, true));
 }
 
 #[test]

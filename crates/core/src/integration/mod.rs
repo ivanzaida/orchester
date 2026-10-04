@@ -6,8 +6,10 @@
 //! uncommitted work a person did not confirm discarding.
 
 mod cleanup;
+mod forgotten;
 mod git;
 mod merge;
+mod recorded;
 
 use std::path::Path;
 
@@ -16,9 +18,10 @@ use thiserror::Error;
 pub use self::{
   cleanup::{
     Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, WORKTREES_DIR, WorktreeOwner, clean_up,
-    leftovers,
+    leftovers, leftovers_of,
   },
   merge::{MergeError, MergeKind, RunMerge, merge_run},
+  recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded},
 };
 use crate::{
   command::{CommandError, CommandRunner},
@@ -34,6 +37,9 @@ pub enum GitError {
   Failed(String),
   #[error("git printed something that is not {expected}: {detail}")]
   Unrecognized { expected: &'static str, detail: String },
+  /// A worktree folder git forgot could not be read; why.
+  #[error("cannot read the worktree folder {path}: {detail}")]
+  Folder { path: String, detail: String },
 }
 
 /// The branch checked out in the repository at `repo`, read with the `git` program; `None` on a

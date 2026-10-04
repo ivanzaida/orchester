@@ -70,9 +70,9 @@ fn finished_run_in(program_set: Programs, init: impl FnOnce(&Path)) -> Desktop {
 }
 
 #[derive(Default)]
-struct GitGate {
+pub(crate) struct GitGate {
   armed: AtomicBool,
-  entered: AtomicBool,
+  pub(crate) entered: AtomicBool,
   released: AtomicBool,
   calls: AtomicUsize,
 }
@@ -86,7 +86,7 @@ impl GitGate {
     }
   }
 
-  fn release(&self) {
+  pub(crate) fn release(&self) {
     self.released.store(true, Ordering::SeqCst);
   }
 }
@@ -114,7 +114,8 @@ impl CommandRunner for BlockingGit {
   }
 }
 
-fn blocked_git(args: &'static [&'static str]) -> (Programs, Arc<GitGate>) {
+/// Programs whose git holds a command that starts with `args` until the gate is released.
+pub(crate) fn blocked_git(args: &'static [&'static str]) -> (Programs, Arc<GitGate>) {
   let gate = Arc::new(GitGate::default());
   gate.armed.store(true, Ordering::SeqCst);
   let runner = BlockingGit {

@@ -375,7 +375,7 @@
         "failure": "Held after a task failed or was canceled. Select the waiting tasks and choose Return to drafts to schedule them again.",
         "startFailed": "Start failed. Check the runner log and retry after resolving the problem.",
         "blocked": "Waiting for blocking tasks to finish. The group goes on with its other tasks.",
-      "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
+        "canceled": "This task is Canceled, so its group does not start it. The group goes on with its other tasks."
       },
       "heldLine": {
         "sessionEnded": {
@@ -901,6 +901,7 @@
       "start": "Start run",
       "starting": "Starting…",
       "continue": "Continue run",
+      "continueUnavailable": "Continue run is unavailable: run #{{run}}’s worktree was removed.",
       "continuing": "Continuing…",
       "cancel": "Cancel run",
       "cancelling": "Cancelling…",
@@ -923,6 +924,7 @@
         "dailyBudget": "Run {{run}} · Attempt {{attempt}} · Stopped at the daily project budget at {{time}}",
         "stepBudget": "Run {{run}} · Attempt {{attempt}} · Stopped at the step budget of {{step}} at {{time}}",
         "interrupted": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}}",
+        "interruptedRemoved": "Run {{run}} · Attempt {{attempt}} · interrupted at {{step}} · worktree removed {{removed}}",
         "succeeded": "Run {{run}} · Attempt {{attempt}} · every step passed",
         "failed": "Run {{run}} · Attempt {{attempt}} · failed at {{step}}",
         "cancelled": "Run {{run}} · Attempt {{attempt}} · canceled",
@@ -951,19 +953,58 @@
       },
       "actions": "Cancel, pause, continue, merge and Remove worktree are unavailable for run #{{run}} until it can be read.",
       "actionsUnnumbered": "Cancel, pause, continue, merge and Remove worktree are unavailable for this run until it can be read.",
-      "otherRuns": {
-        "title": "Other runs of this task",
-        "detail": "They were read as usual. Their changes stay on their branches.",
-        "none": "This task has no other runs.",
-        "run": "Run #{{run}}",
-        "runUnnumbered": "Run",
-        "failedAt": "Failed at {{step}}",
-        "cancelledAt": "Canceled at {{step}} · work kept on {{branch}}",
-        "cancelled": "Canceled · work kept on {{branch}}",
-        "cancelledBeforeStart": "Canceled before it started"
-      },
-      "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s other runs.",
+      "tabDetail": "Nothing this run did can be shown until its record can be read. Summary lists the task’s runs.",
       "rejected": "This run could not be read, so it cannot change. The database file is kept unchanged."
+    },
+    "history": {
+      "title": "Runs of this task",
+      "explanation": "Each run keeps its worktree in .orchester/worktrees until you remove it. Committed work stays on the run’s branch either way.",
+      "run": "Run #{{run}}",
+      "runUnnumbered": "Run",
+      "thisRun": "this run",
+      "noTime": "—",
+      "when": "{{month}} {{day}}, {{time}}",
+      "failedAt": "Failed at {{step}}",
+      "cancelledAt": "Canceled at {{step}}",
+      "cancelled": "Canceled",
+      "cancelledBeforeStart": "Canceled before it started",
+      "atWork": "{{step}} · {{agent}} at work",
+      "stepAtWork": "{{step}} at work",
+      "notMerged": "Every step passed · not merged",
+      "interruptedAt": "Interrupted at {{step}}",
+      "interruptedAtCantContinue": "Interrupted at {{step}} · can’t continue",
+      "interrupted": "Interrupted",
+      "interruptedCantContinue": "Interrupted · can’t continue",
+      "worktree": {
+        "clean": "Worktree · no uncommitted changes · {{branch}}",
+        "uncommitted": {
+          "one": "Worktree · 1 file not committed · {{branch}}",
+          "other": "Worktree · {{count}} files not committed · {{branch}}"
+        },
+        "several": {
+          "clean": "{{worktrees}} worktrees · no uncommitted changes · {{branch}}",
+          "uncommitted": {
+            "one": "{{worktrees}} worktrees · 1 file not committed · {{branch}}",
+            "other": "{{worktrees}} worktrees · {{count}} files not committed · {{branch}}"
+          }
+        },
+        "missing": "Worktree folder already gone · {{branch}}",
+        "forgotten": "Worktree folder left behind · {{branch}}",
+        "removedAt": {
+          "kept": "Worktree removed {{time}} · {{branch}} kept",
+          "deleted": "Worktree removed {{time}} · {{branch}} deleted"
+        },
+        "removed": {
+          "kept": "Worktree removed · {{branch}} kept",
+          "deleted": "Worktree removed · {{branch}} deleted"
+        },
+        "none": "No worktree",
+        "inUse": "Worktree in use · Remove worktree comes back when the run ends",
+        "keptForResume": "Worktree kept for Resume · Remove worktree comes back when the run ends",
+        "keptToContinue": "Worktree kept to continue · Remove worktree comes back when the run ends",
+        "unreadable": "Remove worktree is unavailable until run #{{run}} can be read",
+        "unreadableUnnumbered": "Remove worktree is unavailable until this run can be read"
+      }
     },
     "step": {
       "pending": "Waiting",
@@ -1055,6 +1096,8 @@
       "base": "Base",
       "checkpoint": "Last checkpoint",
       "checkpointValue": "{{revision}} · {{time}}",
+      "worktree": "Worktree",
+      "worktreeRemoved": "Removed · {{time}}",
       "model": "Model",
       "budget": "Budget",
       "time": "Active agent time",
@@ -1089,6 +1132,8 @@
         "pausedDetail": "Work is preserved. No new steps or tool calls start until you resume this run.",
         "interruptedTitle": "The run was interrupted at {{step}}",
         "interruptedDetail": "Its agent was stopped when the runner or Orchester stopped. The run keeps its last checkpoint; Continue run starts it again from there and repeats the unfinished part of the step. Work after the checkpoint is not counted as done.",
+        "cantContinueTitle": "Run #{{run}} can’t continue",
+        "cantContinueDetail": "Its worktree was removed at {{time}}, so its agent has nothing to continue from. Its commits stay on {{branch}}. Run again starts a new run in a new worktree, from your checkout as it is now.",
         "reconnectingDetail": "The runner stopped unexpectedly and Orchester is reconnecting to it. The run keeps its last checkpoint and continues from it automatically once the runner is back; work after the checkpoint is not counted as done.",
         "offlineDetail": "Orchester could not restart the runner, so nothing runs. The run keeps its last checkpoint and continues from it once the runner is restarted; work after the checkpoint is not counted as done.",
         "notConnectedDetail": "The runner is not connected, so its agent is not working. The run keeps its last checkpoint; work after the checkpoint is not counted as done.",
@@ -1150,6 +1195,7 @@
         "paused": "Paused",
         "stoppedAtLimit": "Stopped at limit",
         "interrupted": "Interrupted",
+        "cantContinue": "Interrupted · can’t continue",
         "complete": "Complete",
         "failed": "Failed",
         "skipped": "Skipped",
@@ -1754,7 +1800,7 @@
         "other": "Remove the worktrees of run #{{run}}?"
       },
       "explanation": {
-        "one": "Removes it from .orchester/worktrees with everything in it, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept.",
+        "one": "Removes it from .orchester/worktrees with everything in it, build output included. Committed work stays on the branch: a branch whose commits are merged is deleted, the others are kept.",
         "other": "Removes them from .orchester/worktrees with everything in them, build output included. Committed work stays on the branches: a branch whose commits are merged is deleted, the others are kept."
       },
       "runOwner": "Run #{{run}}",
@@ -1765,17 +1811,25 @@
           "one": "1 file not committed",
           "other": "{{count}} files not committed"
         },
-        "missing": "Folder already gone"
+        "missing": "Folder already gone",
+        "forgotten": "Folder left behind; deleted as it is"
       },
       "branch": {
         "deleted": "deleted · merged",
         "kept": "kept · not merged"
       },
       "discard": "Discard the uncommitted changes listed above",
+      "interrupted": {
+        "title": "Run #{{run}} can’t be continued afterwards",
+        "detail": "Continue run picks the run up from checkpoint {{checkpoint}} in this worktree. Without it the run stays interrupted for good; Run again starts a new run instead.",
+        "detailNoCheckpoint": "Continue run picks the run up in this worktree. Without it the run stays interrupted for good; Run again starts a new run instead."
+      },
+      "otherWorking": "Run #{{run}} keeps working; its worktree is not touched.",
       "failure": {
-        "notFinished": "Only a run that ended can have its worktrees removed.",
+        "notFinished": "Only a run that ended or was interrupted can have its worktrees removed.",
         "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
-        "notRemoved": "Git didn’t remove {{path}}: {{detail}}"
+        "notRemoved": "Git didn’t remove {{path}}: {{detail}}",
+        "folderUnreadable": "Couldn’t read {{path}}: {{detail}}"
       }
     },
     "runAgain": {

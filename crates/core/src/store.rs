@@ -19,7 +19,7 @@ use crate::{
   diff::RevisionDiff,
   id::{ConnectionId, IdempotencyKey, InvocationId, ResourceId, RunId, SecretId, StepExecutionId, TaskId},
   import::ImportBatch,
-  integration::RunMerge,
+  integration::{RemovalStart, RunMerge},
   limits::ProjectLimits,
   name::Name,
   permission::LaunchPermissions,
@@ -133,6 +133,30 @@ pub trait MergeStore {
   fn save_run_merge(&mut self, merge: &RunMerge) -> Result<(), Self::Error>;
 
   fn run_merge(&self, run: RunId) -> Result<Option<RunMerge>, Self::Error>;
+}
+
+/// When runs' worktrees were removed (ORC-63), by *Remove worktree*, a merge or Run again, or found
+/// gone. A run whose removal is recorded never continues: an interrupted one no longer holds its
+/// task, and recording a continuation of it ([`RunStore::append_events`]) is refused.
+pub trait WorktreeStore {
+  type Error: std::error::Error + Send + Sync + 'static;
+
+  /// Records that the worktree of `run` was found removed at `at`. A removal recorded before stays.
+  fn save_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
+
+  /// Records, before git removes anything, that the worktrees of `run` are removed at `at`, unless
+  /// the run has live work as stored now. It is read and written in one write transaction, as a
+  /// continuation of the run is, so a removal and a continuation never both go ahead.
+  fn begin_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<RemovalStart, Self::Error>;
+
+  /// Takes back the removal [`WorktreeStore::begin_worktree_removal`] recorded at `at`, once git
+  /// removed nothing: the run is as it was.
+  fn undo_worktree_removal(&mut self, run: RunId, at: Timestamp) -> Result<(), Self::Error>;
+
+  fn worktree_removal(&self, run: RunId) -> Result<Option<Timestamp>, Self::Error>;
+
+  /// The runs of `task` whose worktree was removed, with when, ordered by run number.
+  fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error>;
 }
 
 /// Versioned configuration resources. Reading a body of the wrong kind is an error, not `None`.
@@ -353,7 +377,8 @@ pub trait RunStore {
 
   fn latest_checkpoint(&self, run: RunId) -> Result<Option<Checkpoint>, Self::Error>;
 
-  /// Interrupted runs of the project, ordered by number, for recovery.
+  /// Interrupted runs of the project that can continue, ordered by number, for recovery: a run
+  /// whose worktree was removed ([`WorktreeStore`]) never continues and is left out.
   fn interrupted_runs(&self) -> Result<Vec<ListedRun<Self::Error>>, Self::Error>;
 
   /// Runs recorded as running, ordered by number: a runner executes them, or the runner or the
