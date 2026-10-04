@@ -1313,7 +1313,7 @@ and only for the task's latest run, so the worktrees of older runs (and of inter
 of this task* on the unreadable-run page (02.R `SUuwV`), and neither the Conversation (ORC-61, one timeline per run)
 nor the top bar has a run switcher. So the run history is new:
 
-- **Runs of this task** (*proposed*): a Summary section after the run's steps, on every task with a run. Heading
+- **Runs of this task** (approved by the user (2026-10-04)): a Summary section after the run's steps, on every task with a run. Heading
   15/500 with the count, the line *Each run keeps its worktree in .orchester/worktrees until you remove it. Committed
   work stays on the run's branch either way.* (11 `$muted`), then one row per run, newest first, hairlines between:
   *Run #N* (12/500; the shown run tagged *this run*), its status label (`DeizF`), what happened (11 `$text`), the
@@ -1360,7 +1360,7 @@ Canvas: group `j0VU3B` ("States · ORC-63 · Remove worktree for every ended run
 variables. Fixture tasks, runs, branches, paths and times are illustrative. Proposed copy namespace:
 `runs.history.*` (section, rows, worktree lines) and `runs.removeWorktree.*` for the new dialog lines.
 
-**Decisions — *proposed*, for the user:**
+**Decisions — approved by the user (2026-10-04), for the user:**
 
 1. The run history is a *Runs of this task* section on Summary, not a run switcher or a menu (rows have no menus);
    the unreadable page's *Other runs of this task* becomes this section.
