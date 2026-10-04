@@ -15,6 +15,7 @@ use lurq::{
   app::{App, Tree, events::MouseButton, theme::PaletteColor},
   core::ElementRect,
   layout::quad::{Quad, QuadContent},
+  mcp::McpConfig,
   node::color::Color,
 };
 use orchester_core::{
@@ -37,6 +38,8 @@ use orchester_desktop::{
 use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
+
+use crate::mcp_agent::McpAgent;
 
 /// How long a wait may take before the test fails. A wait ends as soon as what it waits for is
 /// shown, so this only bounds a broken test. It is generous because the tests run side by side,
@@ -335,6 +338,25 @@ impl Desktop {
       );
       thread::sleep(POLL_PAUSE);
     }
+  }
+
+  /// Starts the embedded MCP server on the window's tree, as `main` does, and answers `agent`'s
+  /// calls between passes until it is done. Once per desktop: a tree has one server.
+  pub fn with_mcp_agent<T: Send + 'static>(&mut self, agent: impl FnOnce(McpAgent) -> T + Send + 'static) -> T {
+    let mcp = self.tree.enable_mcp(McpConfig::new().app_name("orchester-test"));
+    let (port, token) = (mcp.port(), mcp.token().to_owned());
+    assert_ne!(port, 0, "the MCP server listens");
+    let agent = thread::spawn(move || agent(McpAgent::connect(port, token)));
+    let start = Instant::now();
+    while !agent.is_finished() {
+      assert!(start.elapsed() < PATIENCE, "the MCP agent did not finish");
+      if self.tree.drain_mcp_requests(&mut self.app) {
+        self.pass();
+      }
+      thread::sleep(POLL_PAUSE);
+    }
+    self.tree.shutdown_mcp();
+    agent.join().expect("the MCP agent ends without a panic")
   }
 
   /// [`Desktop::wait_until`] what the tree shows.

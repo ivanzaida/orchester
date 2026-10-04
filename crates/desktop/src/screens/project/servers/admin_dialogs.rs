@@ -238,12 +238,10 @@ fn confirm_action(ctx: &mut Ctx) -> ConfirmAction {
     let servers = servers.clone();
     async move {
       let done = match purpose {
-        Purpose::Reset => servers.reset_password(&entry, person.id).await.map(|reset| {
-          Confirmed::Reset(FirstPassword {
-            person: person.clone(),
-            password: Arc::new(reset.initial_password),
-          })
-        }),
+        Purpose::Reset => servers
+          .reset_password(&entry, person.id)
+          .await
+          .map(|reset| Confirmed::Reset(FirstPassword::new(person.clone(), reset.initial_password))),
         Purpose::Disable { .. } => servers
           .set_disabled(&entry, person.id, true)
           .await
