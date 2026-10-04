@@ -159,27 +159,6 @@ Seen by C2's verifier, older than the Claude Code work and left alone there:
 
 ## U · Screens
 
-### U10 · Pull requests screen jumps while it loads (UI)
-
-Opening the Pull requests tab shifts its content two or three times
-(`crates/desktop/src/screens/project/pull_requests/mod.rs`):
-
-1. The stored inbox is read from the project database asynchronously (`actions::load` → `ctx.future`,
-   `actions.rs`). Until it arrives, `inbox` is `None`: the body is an empty column and the Open tab has no count.
-2. When the stored inbox arrives, the Open tab gains its count (`synced.pull_requests.len()`), so it widens and pushes
-   the other tabs right, and the list appears below. For an unlinked repository the whole tab row disappears
-   (`tabs` is skipped for `Inbox::Unlinked`), which moves the body up.
-3. `create` also starts a GitHub sync through `gh` at once. While it runs the topbar sync status text changes width,
-   and afterwards the list and count may change again.
-
-**Done when** the screen keeps a stable layout from the first frame: the heading, tab row and body keep their place
-until the stored inbox is known (no empty-body frame followed by a list; no tab row that appears and then vanishes),
-the Open tab reserves room for its count so a count arriving does not move the other tabs, and the topbar sync status
-does not shift the Refresh button when its text changes. A sync that changes the list may still add or remove rows.
-Tests: a headless `form_keyboard` test that records the tab and body bounds before and after the stored inbox and a
-sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
-Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
-
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
@@ -452,6 +431,19 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-04, design verification pending)
+
+Until the stored inbox is read the screen shows its topbar and heading only; the tab row (linked repositories only,
+08.D has none) and the list or unavailable panel then appear together in their final place, so nothing shows that
+later moves or vanishes. The Open tab keeps room for a count of up to `SYNC_LIMIT` (two Geist Mono digits,
+`Tab::count_room`, `theme::COUNT_DIGIT_WIDTH`), so a first count or one that grows to 50 moves no tab; a single-digit
+count leaves the Open tab 6px wider than in `DF8II`. The topbar's spacer already kept Refresh in place while the sync
+status changed (measured at 1440 and at the 960 minimum width). Tests: `cargo test -p orchester-desktop --test
+form_keyboard pull_request` (the new `pull_requests_layout` tests hold the sync's fake `gh` behind a gate and record the
+heading, tab, list and Refresh bounds before and after the stored inbox and the sync arrive), `cargo test -p
+orchester-desktop --test theme pull_request`. **Done when** an independent design verification against `DF8II`
+(08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 

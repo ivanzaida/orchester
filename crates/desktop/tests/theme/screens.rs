@@ -3,7 +3,7 @@
 //! ring, select menus and the scroll gutter.
 
 use lurq::{
-  app::theme::BorderSize,
+  app::theme::{BorderSize, TypographyStyle},
   layout::{
     scrollbar::{ScrollBarPlacement, compute_vertical_scrollbar},
     text_style::FontWeight,
@@ -142,6 +142,11 @@ fn pull_request_roles_follow_pencil() {
   // `r0ZlXX`: the row's lucide icon at 20px.
   let icon = app.theme().typography_style(ExtraTypography::IconRow.role());
   assert_eq!(icon.font_size, 20.0);
+  // The room the Open tab keeps for its count (`tidLB` in `DF8II`) counts digits of Geist Mono 10,
+  // which all advance 0.6 em.
+  let count = app.theme().typography_style(TypographyStyle::Mono);
+  assert_eq!((&*count.font_family, count.font_size), ("Geist Mono", 10.0));
+  assert_eq!(theme::COUNT_DIGIT_WIDTH, 0.6 * count.font_size);
 }
 
 #[test]

@@ -62,6 +62,9 @@ pub const CONTROL_PADDING_X: f32 = 12.0;
 pub const FOCUS_STROKE: f32 = 1.5;
 /// Underline of the selected tab (`Iefue`, `Okyxt`).
 pub const TAB_INDICATOR_STROKE: f32 = 2.0;
+/// One digit of a count in `TypographyStyle::Mono` (Geist Mono 10, whose digits all advance
+/// 0.6 em), e.g. the room the Open tab keeps for its count (`tidLB` in `i59Wy`, `DF8II`).
+pub const COUNT_DIGIT_WIDTH: f32 = 6.0;
 /// Chevron of a select field and check of its selected option (`eASPF` in `ZGwlv`, `ClxwV` in
 /// `L20XvS`); also the width of the check slot every option reserves.
 pub const SELECT_ICON_SIZE: f32 = 14.0;
