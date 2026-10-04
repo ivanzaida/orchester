@@ -18,7 +18,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  integration::{LeftBranch, LeftWorktree, WorktreeOwner},
+  integration::{FolderListing, LeftBranch, LeftWorktree, WorktreeOwner},
   run::{Run, RunStatus},
 };
 
@@ -26,7 +26,7 @@ use super::RemoveWorktreeProps;
 use crate::{
   display,
   messages::Message,
-  tasks::integration::file_list,
+  tasks::integration::{file_list, unread_entry},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -91,7 +91,8 @@ pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
     )
     .with_children(leftovers.branches.iter().map(|branch| branch_row(ctx, branch)))
     .with_children(
-      (leftovers.uncommitted() > 0)
+      leftovers
+        .loses_files()
         .then(|| {
           Switch::new(
             "remove-worktree-discard",
@@ -183,6 +184,13 @@ fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) 
   };
   let files = worktree.uncommitted.len();
   let (glyph, state) = match (worktree.missing, files) {
+    _ if worktree.forgotten && worktree.listing != FolderListing::Whole => (
+      Icon::FolderX,
+      ctx.t_args(
+        "runs.worktree.state.forgottenMore",
+        [("count", files.to_string().as_str())],
+      ),
+    ),
     _ if worktree.forgotten => (Icon::FolderX, ctx.t("runs.worktree.state.forgotten")),
     (true, _) => (Icon::FolderX, ctx.t("runs.worktree.state.missing")),
     (false, 0) => (Icon::Check, ctx.t("runs.worktree.state.clean")),
@@ -207,11 +215,19 @@ fn worktree_row(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) 
           .width(Dimension::Pct(100.0)),
       )
   });
+  // Why the folder was not read to its end, under the files read before (`gzztk`'s indent).
+  let unread = unread_entry(worktree).map(|problem| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_left(ExtraSpacing::CheckIndent.role())
+      .child(wrapping_field_error(&message_text(ctx, &problem)))
+  });
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .child(check_row(glyph, &owner, &state))
     .with_children(listed)
+    .with_children(unread)
     .into()
 }
 

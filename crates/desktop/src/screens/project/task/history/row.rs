@@ -32,7 +32,7 @@ use super::{
 };
 use crate::{
   messages::Message,
-  tasks::{history::RunRecord, integration_jobs::JobState},
+  tasks::{history::RunRecord, integration::unread_entry, integration_jobs::JobState},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     field::wrapping_field_error,
@@ -204,15 +204,26 @@ fn run_cell(ctx: &Ctx, props: &RunRowProps) -> Vec<Element> {
   .collect()
 }
 
-/// What happened, the worktree line and git's refusal, if any.
+/// What happened, the worktree line, why a folder git forgot was not read to its end, and git's
+/// refusal, if any.
 fn what(ctx: &Ctx, props: &RunRowProps, error: Option<&str>) -> Vec<Element> {
   let happened = Text::new(&message_text(ctx, &props.record.detail))
     .variant(ExtraTypography::CellLabel.role())
     .color(PaletteColor::TextPrimary)
     .width(Dimension::Pct(100.0));
   let worktree = line(ctx, &props.record, props.left.as_ref()).map(|line| worktree_line(&line));
+  let unread: Vec<Element> = match &props.left {
+    Some(Ok(left)) => left
+      .worktrees
+      .iter()
+      .filter_map(unread_entry)
+      .map(|problem| wrapping_field_error(&message_text(ctx, &problem)))
+      .collect(),
+    _ => Vec::new(),
+  };
   std::iter::once(happened.into())
     .chain(worktree)
+    .chain(unread)
     .chain(error.map(|error| {
       Column::new()
         .id(format!("run-remove-error-{}", props.record.id))

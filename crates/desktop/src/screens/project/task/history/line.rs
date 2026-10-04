@@ -107,6 +107,7 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
     (false, 1) => "runs.history.worktree.uncommitted.one",
     (false, _) => "runs.history.worktree.uncommitted.other",
     (true, 0) => "runs.history.worktree.several.clean",
+    (true, _) if left.listing_cut() => "runs.history.worktree.several.uncommittedMore",
     (true, 1) => "runs.history.worktree.several.uncommitted.one",
     (true, _) => "runs.history.worktree.several.uncommitted.other",
   };
