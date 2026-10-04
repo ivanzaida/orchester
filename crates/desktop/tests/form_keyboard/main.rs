@@ -16,6 +16,7 @@ mod code_index;
 mod command_approvals;
 mod conversation;
 mod conversation_composer;
+mod conversation_queued;
 mod dialogs;
 mod draft_autosave;
 mod edit_task;

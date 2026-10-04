@@ -21,7 +21,13 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 
-use super::{super::super::ProjectNav, mcp::mcp_server_text, mcp_call, problem::problem_text, toggles::Toggles};
+use super::{
+  super::super::ProjectNav,
+  mcp::mcp_server_text,
+  mcp_call,
+  problem::{self, problem_text},
+  toggles::Toggles,
+};
 use crate::{
   display,
   navigation::route::ChangedFile,
@@ -135,7 +141,14 @@ impl Shown {
 
 fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: &Signal<Copied>) -> Element {
   let entry = &row.entry;
-  let mut shown = shown(ctx, entry, &row.agent, row.raw);
+  // A problem row a title says better than its transcript entry; it has no command box of its own.
+  let titled = if row.time_column {
+    None
+  } else {
+    problem::titled(ctx, entry)
+  };
+  let command_box = titled.is_none();
+  let mut shown = titled.unwrap_or_else(|| shown(ctx, entry, &row.agent, row.raw));
   if !row.time_column {
     let time = display::clock(entry.at);
     shown.meta = if shown.meta.is_empty() {
@@ -154,7 +167,11 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
     .child(entry_header(&shown, open, entry.sequence))
-    .with_children(open.then(|| entry_details(ctx, entry, &shown, copied)).flatten());
+    .with_children(
+      open
+        .then(|| entry_details(ctx, (entry, command_box), &shown, copied))
+        .flatten(),
+    );
   let line = Row::new()
     .id("activity-entry")
     .width(Dimension::Pct(100.0))
@@ -191,8 +208,16 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .into()
 }
 
-fn entry_details(ctx: &Ctx, entry: &Entry, shown: &Shown, copied: &Signal<Copied>) -> Option<Column> {
+/// What an open entry shows under its header; `command_box`: its command in a box of its own when
+/// the title does not hold it whole.
+fn entry_details(
+  ctx: &Ctx,
+  (entry, command_box): (&Entry, bool),
+  shown: &Shown,
+  copied: &Signal<Copied>,
+) -> Option<Column> {
   let command = match &entry.kind {
+    _ if !command_box => None,
     EntryKind::Command(command) => Some(&*command.command),
     // A tool step's one-line command is whole in the row's title: its output follows (`hep0l`).
     EntryKind::ToolCommand(command) if matches!(command_preview(&command.command), Cow::Borrowed(_)) => None,

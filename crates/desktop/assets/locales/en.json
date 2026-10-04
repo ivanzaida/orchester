@@ -1268,15 +1268,22 @@
       "engine": "{{provider}} / {{model}}",
       "engineNative": "{{engine}} · native",
       "headerRunning": "{{engine}} · invocation {{count}} · started {{start}}",
-      "headerFinished": {
-        "one": "{{engine}} · {{count}} invocation · {{start}}–{{end}}",
-        "other": "{{engine}} · {{count}} invocations · {{start}}–{{end}}"
+      "headerOpen": "{{engine}} · invocation {{count}} · {{time}}",
+      "headerFolded": {
+        "one": "{{engine}} · {{time}}",
+        "other": "{{engine}} · {{count}} invocations · {{time}}"
       },
+      "timeSpan": "{{start}}–{{end}}",
+      "approvedByYou": "{{meta}} · approved by you",
       "commandTool": "Command tool",
-      "commandHeaderRunning": "{{engine}} · run {{count}} · started {{start}}",
-      "commandHeaderFinished": {
-        "one": "{{engine}} · {{count}} run · {{start}}–{{end}}",
-        "other": "{{engine}} · {{count}} runs · {{start}}–{{end}}"
+      "commandHeaderRunning": "{{command}} · started {{start}}",
+      "commandHeaderFinished": "{{command}} · {{time}}",
+      "commandHeaderExit": "{{command}} · exit {{code}} · {{time}}",
+      "noTokens": "no tokens",
+      "state": {
+        "needsInput": "Needs input",
+        "waitingApproval": "Waiting for approval",
+        "approved": "Approved"
       },
       "agentMessage": "agent message",
       "reasoning": "Reasoning summary",
@@ -2039,6 +2046,17 @@
       "toAgent": "to {{agent}} · {{time}}",
       "toOrchestrator": "to Orchestrator · {{time}}",
       "problemMeta": "{{meta}} · {{time}}",
+      "problem": {
+        "categoryDenied": "{{subject}} denied",
+        "commandDenied": "Command denied",
+        "kind": {
+          "permissionDenied": "permission_denied",
+          "deniedByYou": "denied by you"
+        },
+        "notAllowed": "{{command}} did not run: this run’s permissions do not allow it. The agent was told and continued without it.",
+        "deniedByYou": "{{command}} did not run: you denied it. The agent was told and continued.",
+        "deniedByYouTold": "{{command}} did not run: you denied it and told the agent: {{message}}"
+      },
       "editInComposer": "Edit in composer",
       "line": {
         "message": "message",
@@ -2132,12 +2150,19 @@
         "superseded": "Earlier version",
         "denied": "Denied",
         "ended": "Ended without an answer",
-        "wholePlan": "Show the whole plan · {{count}} lines"
+        "wholePlan": "Show the whole plan · {{count}} lines",
+        "approveStarts": "Approves plan v{{version}} and starts {{agent}} on {{step}}. To change it, describe what it needs below.",
+        "approveStartsTool": "Approves plan v{{version}} and starts {{step}}. To change it, describe what it needs below.",
+        "approveLast": "Approves plan v{{version}}; no step follows it. To change it, describe what it needs below."
       },
       "result": {
+        "passed": "{{step}} passed",
         "done": "{{step}} done",
         "failed": "{{step}} failed",
         "meta": "{{took}} · {{tokens}} tokens",
+        "reportedPassed": "{{agent}} reported passed",
+        "reportedFailed": "{{agent}} reported failed",
+        "withReport": "{{reported}} · {{meta}}",
         "changes": "Changes ↗",
         "summary": "Summary ↗"
       },
@@ -2157,6 +2182,16 @@
         "answering": "Answering {{agent}}’s question from {{time}}",
         "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
         "deciding": "Waiting for your decision"
+      },
+      "placeholder": {
+        "agent": "Message {{agent}}…",
+        "run": "Message an agent of this run…",
+        "answer": "Answer {{agent}}…",
+        "planChanges": "Describe the changes the plan needs…",
+        "followUp": "Ask a question or request a follow-up…",
+        "continue": "Tell {{agent}} how to continue the run…",
+        "continueUnnamed": "Say how the run should continue…",
+        "firstAgent": "Write to the first agent of the run…"
       },
       "to": {
         "working": "To: {{agent}} · working",

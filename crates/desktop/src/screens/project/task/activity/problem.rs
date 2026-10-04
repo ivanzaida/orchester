@@ -1,14 +1,69 @@
 //! The title and detail of a runner problem entry in the Activity tab: what went wrong and, where
-//! it helps, what the agent did instead or how to fix it.
+//! it helps, what the agent did instead or how to fix it; and a denied command as a problem row of
+//! the timeline (`OlLGD`): what was denied as its title, the command and what the agent was told in
+//! the explanation under it.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
-  connection::stream::{MemoryNotSavedReason, RunnerProblem},
+  connection::stream::{CommandStatus, MemoryNotSavedReason, RunnerProblem},
   tokens::compact_tokens,
 };
+
+use super::{entry::Shown, mcp_call::subject_key};
+use crate::{
+  tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind},
+  ui::{command_row::command_preview, icon::Icon},
+};
+
+/// A problem row that reads as a titled row with an explanation rather than as its transcript entry:
+/// a command that did not run because it was denied.
+pub(super) fn titled(ctx: &Ctx, entry: &Entry) -> Option<Shown> {
+  match &entry.kind {
+    EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => {
+      Some(denied_command(ctx, command))
+    }
+    _ => None,
+  }
+}
+
+/// *Outside write denied* · *permission_denied*: `apply_patch ../shared/auth.ts did not run: …`.
+fn denied_command(ctx: &Ctx, command: &CommandEntry) -> Shown {
+  let decided = match &command.mark {
+    Some(CommandMark::Decided(mark)) => Some(mark),
+    _ => None,
+  };
+  let title = match decided.and_then(|mark| mark.decision.category.map(|category| (category, mark.decision.secrets))) {
+    Some((category, secrets)) => ctx.t_args(
+      "runs.conversation.problem.categoryDenied",
+      [("subject", &*ctx.t(subject_key(category, secrets)))],
+    ),
+    None => ctx.t("runs.conversation.problem.commandDenied"),
+  };
+  let line = command_preview(&command.command);
+  let by_you = command.mark.as_ref().is_some_and(CommandMark::is_denial);
+  let told = decided.and_then(|mark| mark.decision.told.as_deref());
+  let (kind, body) = match (by_you, told) {
+    (true, Some(told)) => (
+      "runs.conversation.problem.kind.deniedByYou",
+      ctx.t_args(
+        "runs.conversation.problem.deniedByYouTold",
+        [("command", &*line), ("message", told)],
+      ),
+    ),
+    (true, None) => (
+      "runs.conversation.problem.kind.deniedByYou",
+      ctx.t_args("runs.conversation.problem.deniedByYou", [("command", &*line)]),
+    ),
+    (false, _) => (
+      "runs.conversation.problem.kind.permissionDenied",
+      ctx.t_args("runs.conversation.problem.notAllowed", [("command", &*line)]),
+    ),
+  };
+  Shown::plain(Icon::ShieldAlert, title, ctx.t(kind), Some(body))
+}
 
 /// The entry's title and, if it has one, its detail for `problem`.
 pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {

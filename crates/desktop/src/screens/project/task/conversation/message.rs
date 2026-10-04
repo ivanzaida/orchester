@@ -322,7 +322,7 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
       ),
       ctx.t("runs.conversation.line.message"),
     ),
-    ItemKind::Question(entry) => (
+    ItemKind::Question { entry, .. } => (
       Icon::MessageCircle,
       ctx.t_args(
         "runs.conversation.line.agent",

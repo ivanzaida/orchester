@@ -166,7 +166,7 @@ fn row(shown: &mut Shown, item: &Item, (show, needle): (Show, Option<&str>), ope
     shown.matches += 1;
   }
   match (show, &item.kind) {
-    (Show::Tools, ItemKind::AgentMessage { .. } | ItemKind::Message(_) | ItemKind::Question(_)) => {
+    (Show::Tools, ItemKind::AgentMessage { .. } | ItemKind::Message(_) | ItemKind::Question { .. }) => {
       shown.rows.push(Row::Line(item.clone()));
     }
     (Show::Tools, ItemKind::Problem(entry)) => shown.rows.push(Row::Entry {
@@ -226,7 +226,7 @@ fn matches(item: &Item, needle: &str) -> bool {
   let found = |text: &str| text.to_lowercase().contains(needle);
   match &item.kind {
     ItemKind::AgentMessage { text, .. } => found(text),
-    ItemKind::Message(entry) | ItemKind::Question(entry) => found(&entry.body),
+    ItemKind::Message(entry) | ItemKind::Question { entry, .. } => found(&entry.body),
     ItemKind::Plan(card) => found(&card.plan.text),
     ItemKind::Approval(card) => [
       Some(card.request.action.as_str()),

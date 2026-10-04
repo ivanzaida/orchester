@@ -1,17 +1,20 @@
 //! A step's header in the timeline (`mDnc3`): its number, step and agent, the engine and invocations
-//! with their times, the tokens it used and its state; or, after a failure, a step of the attempt
-//! that never ran.
+//! with their times (a tool step: its command and how it exited), the tokens it used, whether its
+//! plan was approved, and its state; or, after a failure, a step of the attempt that never ran.
 
 use std::sync::Arc;
 
 use orchester_core::{
   connection::{AgentProvider, EngineVendor},
   id::StepExecutionId,
-  run::{EditProgress, RunStatus, StepStatus, TokenUsage},
+  run::{EditProgress, Plan, PlanDecision, RunStatus, StepStatus, TokenUsage},
   time::Timestamp,
 };
 
-use crate::tasks::detail::RunView;
+use crate::tasks::{
+  detail::RunView,
+  transcript::{Entry, EntryKind},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StepHead {
@@ -39,11 +42,41 @@ pub struct StepHead {
   pub attempt: Option<u32>,
   /// The step the run ended on or stopped at while no agent works: it stays open.
   pub ended_on: bool,
+  /// Its latest plan was approved by the person (`AzKYQ`: *Approved*, *approved by you*).
+  pub approved: bool,
+  /// A tool step's latest command, as its transcript recorded it.
+  pub tool_run: Option<ToolRun>,
+}
+
+/// The command a tool step ran and how it exited (`AzKYQ`: *pnpm test · exit 0*).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolRun {
+  pub command: Arc<str>,
+  /// `None` while it runs, or when it ended without one.
+  pub exit_code: Option<i64>,
+}
+
+impl ToolRun {
+  /// The last command of `execution` among `entries`.
+  pub fn of(entries: &[Entry], execution: StepExecutionId) -> Option<Self> {
+    entries
+      .iter()
+      .rev()
+      .filter(|entry| entry.execution == execution)
+      .find_map(|entry| match &entry.kind {
+        EntryKind::ToolCommand(command) => Some(Self {
+          command: command.command.clone(),
+          exit_code: command.exit_code,
+        }),
+        _ => None,
+      })
+  }
 }
 
 impl StepHead {
-  /// The header of `execution`, which ran; `None` when its step is not in the run's pipeline.
-  pub fn of(run: &RunView, execution: StepExecutionId) -> Option<Self> {
+  /// The header of `execution`, which ran, with its transcript among `entries`; `None` when its step
+  /// is not in the run's pipeline.
+  pub fn of(run: &RunView, entries: &[Entry], execution: StepExecutionId) -> Option<Self> {
     let step = run.step_of(execution)?;
     let status = run.run.execution(execution)?.status();
     let invocations: Vec<_> = run.invocations_of(execution).collect();
@@ -79,6 +112,8 @@ impl StepHead {
       status: Some(status),
       attempt,
       ended_on: false,
+      approved: Plan::latest_of(&run.plans, execution).and_then(Plan::decision) == Some(&PlanDecision::Approved),
+      tool_run: step.tool_step.then(|| ToolRun::of(entries, execution)).flatten(),
     })
   }
 
@@ -113,6 +148,8 @@ impl StepHead {
         status: None,
         attempt: None,
         ended_on: false,
+        approved: false,
+        tool_run: None,
       })
       .collect()
   }

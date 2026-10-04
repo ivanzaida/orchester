@@ -19,7 +19,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{run::PlanDecision, tokens::compact_tokens};
+use orchester_core::{
+  run::{PlanDecision, StepOutcome},
+  tokens::compact_tokens,
+};
 
 use super::{
   super::plan_review::{Decision as PlanDecisionRequest, decision_action as plan_decision},
@@ -30,7 +33,7 @@ use crate::{
   navigation::route::{Page, TaskPageTab},
   tasks::{
     conversation::{Author, Entry, EntryState},
-    timeline::{PlanCard, ResultCard, RunEnd},
+    timeline::{NextStep, PlanCard, ResultCard, RunEnd},
   },
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
@@ -101,8 +104,9 @@ pub(super) fn header(glyph: Icon, title: &str, meta: &str, (state_glyph, state):
     .into()
 }
 
-/// *Builder asks you* (`ZxYGh`): the question, and *Reply*, which puts the focus in the composer.
-pub(super) fn question(ctx: &Ctx, entry: &Entry, timeline: &Timeline) -> Element {
+/// *Builder asks you* (`ZxYGh`) with its step and time: the question, and *Reply*, which puts the
+/// focus in the composer.
+pub(super) fn question(ctx: &Ctx, (entry, step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
   let open = entry.state == EntryState::Question { open: true };
   let agent = match &entry.author {
     Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
@@ -114,7 +118,14 @@ pub(super) fn question(ctx: &Ctx, entry: &Entry, timeline: &Timeline) -> Element
     (Icon::Check, ctx.t("runs.conversation.card.answered"))
   };
   let title = ctx.t_args("runs.conversation.card.asks", [("agent", &*agent)]);
-  let meta = display::clock(entry.at);
+  let time = display::clock(entry.at);
+  let meta = match step {
+    Some(step) => ctx.t_args(
+      "runs.conversation.agentMeta",
+      [("step", &**step), ("time", time.as_str())],
+    ),
+    None => time.as_str().into(),
+  };
   let reply = open.then(|| {
     let focus = timeline.focus.clone();
     Element::from(
@@ -183,23 +194,26 @@ impl Component for PlanCardView {
       ],
     );
     let state = match plan.decision() {
-      None if props.card.waiting => (Icon::Clock3, ctx.t("runs.conversation.card.waitingApproval")),
+      None if props.card.waiting => (Icon::Hand, ctx.t("runs.conversation.card.waitingApproval")),
       None => (Icon::CircleMinus, ctx.t("runs.conversation.card.superseded")),
       Some(PlanDecision::Approved) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
       Some(PlanDecision::ChangesRequested { .. }) => (Icon::Undo2, ctx.t("runs.conversation.card.changesRequested")),
     };
     let lines: Vec<&str> = plan.text.lines().collect();
     let whole = self.whole.get() || lines.len() <= PLAN_LINES;
-    let shown = if whole {
-      plan.text.clone()
-    } else {
-      lines[..PLAN_LINES].join("\n")
-    };
+    let shown = if whole { &lines[..] } else { &lines[..PLAN_LINES] };
+    // One text a line, 6 apart (`KMmct` in `haIEI`).
     let mut body: Vec<Element> = vec![
-      Text::new(&shown)
-        .variant(ExtraTypography::AgentText.role())
+      Column::new()
+        .id("conversation-plan-lines")
         .width(Dimension::Pct(100.0))
-        .selectable(true)
+        .spacing(ExtraSpacing::Tight.role())
+        .with_children(shown.iter().map(|line| {
+          Text::new(line)
+            .variant(ExtraTypography::TimelineMessage.role())
+            .width(Dimension::Pct(100.0))
+            .selectable(true)
+        }))
         .into(),
     ];
     if !whole {
@@ -229,7 +243,8 @@ impl Component for PlanCardView {
   }
 }
 
-/// *Approve plan & continue*, and why it was not carried out.
+/// *Approve plan & continue* with what approving does beside it (`qjMHX`), and why it was not
+/// carried out.
 fn approve(ctx: &Ctx, card: &PlanCard, action: &super::super::plan_review::DecisionAction) -> Element {
   let state = action.state().get();
   let pending = state.is_pending();
@@ -256,9 +271,22 @@ fn approve(ctx: &Ctx, card: &PlanCard, action: &super::super::plan_review::Decis
     );
     button.on_click(move || action.run(request.clone()))
   };
+  let meaning = Text::new(&approve_meaning(ctx, card))
+    .id("conversation-approve-meaning")
+    .variant(TypographyStyle::Caption)
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0));
   Column::new()
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(Row::new().child(button.render(ctx)))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Stack.role())
+        .align_items(Alignment::Center)
+        .child(Row::new().flex_shrink(0.0).child(button.render(ctx)))
+        .child(meaning),
+    )
     .with_children(
       state
         .error
@@ -268,15 +296,40 @@ fn approve(ctx: &Ctx, card: &PlanCard, action: &super::super::plan_review::Decis
     .into()
 }
 
-/// A step's result card (`AzKYQ`, `hep0l`): *Review done* or *Run checks failed*, what the agent or
-/// tool reported, how long it took and its tokens, and the ways to the Changes and the Summary.
-pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> Element {
-  let nav = nav(ctx);
-  let (glyph, key) = if card.passed {
-    (Icon::Check, "runs.conversation.result.done")
-  } else {
-    (Icon::CircleX, "runs.conversation.result.failed")
+/// What approving `card` starts: the step after it and its agent.
+fn approve_meaning(ctx: &Ctx, card: &PlanCard) -> Arc<str> {
+  let version = card.plan.version.to_string();
+  match &card.next {
+    Some(NextStep {
+      step,
+      agent: Some(agent),
+    }) => ctx.t_args(
+      "runs.conversation.card.approveStarts",
+      [("version", version.as_str()), ("agent", &**agent), ("step", &**step)],
+    ),
+    Some(NextStep { step, agent: None }) => ctx.t_args(
+      "runs.conversation.card.approveStartsTool",
+      [("version", version.as_str()), ("step", &**step)],
+    ),
+    None => ctx.t_args("runs.conversation.card.approveLast", [("version", version.as_str())]),
+  }
+}
+
+/// *Review passed* for a step that judges the work, *Research done* for another, *Run checks
+/// failed*; and its glyph.
+fn result_title(ctx: &Ctx, card: &ResultCard) -> (Icon, Arc<str>) {
+  let key = match (card.passed, card.verdict) {
+    (true, true) => "runs.conversation.result.passed",
+    (true, false) => "runs.conversation.result.done",
+    (false, _) => "runs.conversation.result.failed",
   };
+  let glyph = if card.passed { Icon::CircleCheck } else { Icon::CircleX };
+  (glyph, ctx.t_args(key, [("step", &*card.step)]))
+}
+
+/// *Reviewer reported passed · 4 min · 96k tokens*: what the agent's result said, how long the step
+/// took and its tokens; a tool step's time alone.
+fn result_meta(ctx: &Ctx, card: &ResultCard) -> Arc<str> {
   let took = card.took_millis.map(|millis| {
     // A clock set back while the step ran reads as no time, never as a negative one.
     let millis = u64::try_from(millis).unwrap_or_default();
@@ -290,6 +343,32 @@ pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> E
     (Some(took), true) => took,
     (None, _) => "".into(),
   };
+  // What the agent said needs the agent's name: a step whose profile is gone says nothing of it.
+  let (Some(agent), false) = (&card.agent, card.tool_step) else {
+    return meta;
+  };
+  let reported = match card.outcome {
+    Some(StepOutcome::Done) => "runs.conversation.result.reportedPassed",
+    Some(StepOutcome::Failed) => "runs.conversation.result.reportedFailed",
+    Some(StepOutcome::Question) | None => return meta,
+  };
+  let reported = ctx.t_args(reported, [("agent", &**agent)]);
+  if meta.is_empty() {
+    return reported;
+  }
+  ctx.t_args(
+    "runs.conversation.result.withReport",
+    [("reported", &*reported), ("meta", &*meta)],
+  )
+}
+
+/// A step's result card (`AzKYQ`, `hep0l`, `LhLL8`): *Review passed*, *Research done* or *Run checks
+/// failed*, what the agent's result said, how long it took and its tokens, what was reported, and
+/// the ways to the Changes and the Summary.
+pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> Element {
+  let nav = nav(ctx);
+  let (glyph, title) = result_title(ctx, card);
+  let meta = result_meta(ctx, card);
   let link = |id: &'static str, label: Arc<str>, page: Page| {
     nav
       .link(page)
@@ -318,7 +397,7 @@ pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> E
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .child(
-          Text::new(&ctx.t_args(key, [("step", &*card.step)]))
+          Text::new(&title)
             .variant(ExtraTypography::NoticeHeading.role())
             .nowrap(),
         )

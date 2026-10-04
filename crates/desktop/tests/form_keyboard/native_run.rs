@@ -357,6 +357,25 @@ fn native_activity_panel_names_the_endpoint_network_and_tool_calls() {
   assert!(shows(&mut desktop, panel, "Stays on · off not enforceable"));
   assert!(shows(&mut desktop, panel, "3 · 1 denied"));
   assert!(shows(&mut desktop, panel, "the usage the endpoint reports"));
+  denied_command_is_a_titled_row(&mut desktop);
+}
+
+/// The denied command is a titled problem row that explains itself, without a command box.
+fn denied_command_is_a_titled_row(desktop: &mut Desktop) {
+  assert!(shows(desktop, "conversation", "Command denied"));
+  assert!(shows(desktop, "conversation", "permission_denied"));
+  assert!(shows(
+    desktop,
+    "conversation",
+    "did not run: this run’s permissions do not allow it."
+  ));
+  assert!(
+    desktop
+      .tree
+      .find_element(|element| element.id().is_some_and(|id| id.starts_with("activity-command-copy-")))
+      .is_none(),
+    "no Copy beside the denied command"
+  );
 }
 
 /// Git as the Summary of a finished run asks it what the run left behind: no worktree, no branch.

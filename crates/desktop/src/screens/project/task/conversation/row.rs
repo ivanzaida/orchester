@@ -1,6 +1,6 @@
 //! One row of the timeline, in its column: a step header, a return or restart before it, a message,
-//! a card, a tool group, a problem row, a step's result or the run's end; in *Tools*, an entry or a message on one
-//! line.
+//! a card, a tool group, a problem row, a step's result or the run's end; in *Tools*, an entry or a
+//! message on one line; and last, while an agent works, the working line (`RrScB`).
 
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ use lurq::{
 };
 
 use super::{
-  super::activity::{EntryProps, EntryView, mark_row, step_header},
+  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps, mark_row, step_header},
   Timeline,
   approval_card::{ApprovalCardProps, ApprovalCardView},
   cards::{self, PlanCardProps, PlanCardView},
@@ -22,9 +22,27 @@ use crate::tasks::timeline::{Item, ItemKind, view::Row};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct RowProps {
-  pub(super) row: Row,
+  pub(super) line: Line,
   /// Whether unparsed lines are shown line by line.
   pub(super) raw: bool,
+}
+
+/// What a row of the list shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Line {
+  Row(Box<Row>),
+  /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
+  Working(LiveFooterProps),
+}
+
+impl RowProps {
+  /// The row's key in the list.
+  pub(super) fn key(&self) -> &str {
+    match &self.line {
+      Line::Row(row) => row.key(),
+      Line::Working(_) => "conversation-working",
+    }
+  }
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
@@ -43,7 +61,13 @@ impl Component for TimelineRowView {
     let timeline = ctx
       .use_context::<Timeline>()
       .expect("the tab provides its timeline before its rows");
-    let content = match &props.row {
+    let row = match &props.line {
+      Line::Row(row) => &**row,
+      Line::Working(working) => {
+        return column(ctx.mount_keyed::<LiveFooter>("conversation-working", working.clone()));
+      }
+    };
+    let content = match row {
       Row::Step { head, key, open } => {
         let tokens = head
           .execution
@@ -95,7 +119,7 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
         run: timeline.run,
       },
     ),
-    ItemKind::Question(entry) => cards::question(ctx, entry, timeline),
+    ItemKind::Question { entry, step } => cards::question(ctx, (entry, step.as_ref()), timeline),
     ItemKind::Plan(card) => ctx.mount_keyed::<PlanCardView>(
       &item.key,
       PlanCardProps {

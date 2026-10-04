@@ -18,11 +18,15 @@ use std::sync::Arc;
 use orchester_core::{
   id::StepExecutionId,
   integration::RunMerge,
-  run::{DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepResult, StepStatus},
+  run::{DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
   time::Timestamp,
 };
 
-pub use self::{group::ToolGroup, mark::Mark, step::StepHead};
+pub use self::{
+  group::ToolGroup,
+  mark::Mark,
+  step::{StepHead, ToolRun},
+};
 use super::{
   conversation::{Conversation, Entry as MessageEntry, EntryState},
   detail::RunView,
@@ -53,8 +57,12 @@ pub enum ItemKind {
   },
   /// A person's message, with its delivery.
   Message(MessageEntry),
-  /// An agent's question, open while its step waits for the answer.
-  Question(MessageEntry),
+  /// An agent's question, open while its step waits for the answer; `step` is its step's name, while
+  /// the run's pipeline still has it.
+  Question {
+    entry: MessageEntry,
+    step: Option<Arc<str>>,
+  },
   Plan(PlanCard),
   Approval(ApprovalCard),
   Tools(ToolGroup),
@@ -73,6 +81,15 @@ pub struct PlanCard {
   pub step: Arc<str>,
   /// The plan the run waits for a decision on.
   pub waiting: bool,
+  /// What approving it starts, while it waits: the first step after it, if any.
+  pub next: Option<NextStep>,
+}
+
+/// A step that starts once another passes: its name, and its agent unless a tool runs it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NextStep {
+  pub step: Arc<str>,
+  pub agent: Option<Arc<str>>,
 }
 
 /// A tool request a person decides (ORC-41): pending, decided or interrupted.
@@ -90,9 +107,17 @@ pub struct ApprovalCard {
 pub struct ResultCard {
   pub execution: StepExecutionId,
   pub step: Arc<str>,
+  /// The agent role, or the tool's name for a tool step; `None` once that profile or tool is gone.
+  pub agent: Option<Arc<str>>,
   pub passed: bool,
   pub tool_step: bool,
-  /// What the agent or the tool reported.
+  /// The step judges the work: a failure returns the run to an earlier step (`AzKYQ`: *Review
+  /// passed*).
+  pub verdict: bool,
+  /// What the agent's structured result said, when it wrote one.
+  pub outcome: Option<StepOutcome>,
+  /// What the agent or the tool reported; a plan's step reports nothing more, as its plan card
+  /// holds the plan.
   pub reported: Option<Arc<str>>,
   pub took_millis: Option<i64>,
   pub tokens: u64,
@@ -124,7 +149,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
   let run = sources.run;
   let mut items = Vec::new();
   for (attempt, first, execution) in executions(run) {
-    let Some(head) = StepHead::of(run, execution) else {
+    let Some(head) = StepHead::of(run, sources.entries, execution) else {
       continue;
     };
     let at = head.started.unwrap_or_else(|| run.run.created_at());
@@ -158,7 +183,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     .entries
     .iter()
     .filter(|entry| entry.execution.is_none())
-    .map(message_item)
+    .map(|entry| message_item(entry, None))
     .collect();
   waiting.sort_by_key(|item| item.at);
   items.extend(waiting);
@@ -209,7 +234,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
     .iter()
     .filter(|entry| entry.execution == Some(execution))
     .filter(|entry| !matches!(entry.state, EntryState::Reply { .. }))
-    .map(message_item)
+    .map(|entry| message_item(entry, step.map(|step| step.name.clone())))
     .collect();
   between.extend(
     run
@@ -280,9 +305,13 @@ pub fn interleaved(
   items
 }
 
-fn message_item(entry: &MessageEntry) -> Item {
+/// A message of the step named `step`.
+fn message_item(entry: &MessageEntry, step: Option<Arc<str>>) -> Item {
   let kind = match entry.state {
-    EntryState::Question { .. } => ItemKind::Question(entry.clone()),
+    EntryState::Question { .. } => ItemKind::Question {
+      entry: entry.clone(),
+      step,
+    },
     _ => ItemKind::Message(entry.clone()),
   };
   Item {
@@ -307,8 +336,26 @@ fn plan_item(run: &RunView, plan: &Plan, (agent, step): (&Arc<str>, &Arc<str>)) 
       agent: agent.clone(),
       step: step.clone(),
       waiting,
+      next: waiting.then(|| next_step(run, plan)).flatten(),
     }),
   }
+}
+
+/// The first step of the run's pipeline that waits for the step of `plan`.
+fn next_step(run: &RunView, plan: &Plan) -> Option<NextStep> {
+  let key = &run
+    .run
+    .snapshot()
+    .body()
+    .steps()
+    .iter()
+    .find(|step| step.depends_on.contains(&plan.step))?
+    .key;
+  let step = run.steps.iter().find(|step| step.key == *key)?;
+  Some(NextStep {
+    step: step.name.clone(),
+    agent: step.agent.clone().filter(|_| !step.tool_step),
+  })
 }
 
 fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<str>) -> Vec<Item> {
@@ -349,7 +396,8 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
   let invocations: Vec<_> = run.invocations_of(execution).collect();
   let started = invocations.first().map(|invocation| invocation.started_at);
   let ended = invocations.iter().filter_map(|invocation| invocation.ended_at).max();
-  let reported = run.reported(execution).map(|text| {
+  let planned = run.plans.iter().any(|plan| plan.execution == execution);
+  let reported = run.reported(execution).filter(|_| !planned).map(|text| {
     let summary = StepResult::parse(text).map_or_else(|| text.to_owned(), |result| result.summary);
     // A tool step reports its command's end, then the output's last lines, which its command's row
     // already shows: the card keeps the first line (`hep0l`).
@@ -367,8 +415,15 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
     kind: ItemKind::Result(ResultCard {
       execution,
       step: step.name.clone(),
+      agent: step.agent.clone(),
       passed,
       tool_step: step.tool_step,
+      verdict: judges(run, &step.key),
+      outcome: run
+        .outputs
+        .iter()
+        .find(|output| output.execution == execution)
+        .and_then(|output| output.outcome),
       reported: reported.filter(|text| !text.trim().is_empty()),
       took_millis: started
         .zip(ended)
@@ -380,6 +435,17 @@ fn result_item(run: &RunView, execution: StepExecutionId) -> Option<Item> {
         .counted(),
     }),
   })
+}
+
+/// Whether the step `key` judges the work: its failure returns the run to an earlier step.
+fn judges(run: &RunView, key: &orchester_core::resource::StepKey) -> bool {
+  run
+    .run
+    .snapshot()
+    .body()
+    .steps()
+    .iter()
+    .any(|step| step.key == *key && step.on_failure.is_some())
 }
 
 fn run_end(run: &RunView, merge: Option<&RunMerge>) -> Option<Item> {
@@ -407,7 +473,7 @@ fn run_end(run: &RunView, merge: Option<&RunMerge>) -> Option<Item> {
 /// Whether `item` waits for the person: an open question, a plan that waits, a pending request.
 pub fn waits_for_you(item: &Item) -> bool {
   match &item.kind {
-    ItemKind::Question(entry) => entry.state == EntryState::Question { open: true },
+    ItemKind::Question { entry, .. } => entry.state == EntryState::Question { open: true },
     ItemKind::Plan(card) => card.waiting,
     ItemKind::Approval(card) => card.decided.is_none(),
     _ => false,

@@ -4,13 +4,14 @@
 //! message until its turn ends; a message its CLI refuses is kept with *Send after this turn* and
 //! *Edit in composer*; a question is answered, a plan's changes requested, a run ready for review
 //! followed up, a failed run continued with instructions, a paused run's message queued and a draft
-//! task's message kept for its run's start. Enter adds a line.
+//! task's message kept for its run's start. Enter adds a line. The field's placeholder says whom it
+//! writes to in each state, and what it answers or changes stands above it.
 
 use orchester_core::{
   conversation::{Arrival, Delivery},
   resource::Step,
   run::RunStatus,
-  store::{ConversationStore, TaskStore},
+  store::{ConversationStore, RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
 
@@ -43,6 +44,32 @@ fn deliveries(desktop: &Desktop) -> Vec<Option<Delivery>> {
     .filter_map(orchester_core::conversation::Message::delivery)
     .map(Some)
     .collect()
+}
+
+/// What the empty composer field says.
+fn placeholder(desktop: &mut Desktop) -> String {
+  desktop
+    .tree
+    .get_element_by_id_mut("conversation-input")
+    .and_then(|element| element.as_text_input())
+    .and_then(|input| input.placeholder())
+    .expect("the composer's placeholder")
+}
+
+/// Whether `upper` ends above where `lower` starts.
+fn above(desktop: &mut Desktop, upper: &str, lower: &str) -> bool {
+  let (upper, lower) = (desktop.bounds(upper), desktop.bounds(lower));
+  upper.height > 0.0 && upper.y + upper.height <= lower.y + 0.5
+}
+
+/// An element whose id starts with `prefix` says `text`.
+fn says(desktop: &mut Desktop, prefix: &str, text: &str) -> bool {
+  desktop
+    .tree
+    .find_element(|element| {
+      element.id().is_some_and(|id| id.starts_with(prefix)) && crate::github::contains_text(element, text)
+    })
+    .is_some()
 }
 
 /// Writes `text` into the composer: the focus in its field, then the keys.
@@ -79,6 +106,7 @@ fn working_conversation(brief: &str) -> Desktop {
 fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
   let mut desktop = working_conversation("Wait for a message.");
   assert!(shows(&mut desktop, "conversation-recipient", "To: Builder · working"));
+  assert_eq!(placeholder(&mut desktop), "Message Builder…");
   assert!(shows(
     &mut desktop,
     "conversation-explanation",
@@ -196,14 +224,24 @@ fn composer_answers_a_question_and_the_agent_goes_on() {
   });
   desktop.click("task-tab-conversation");
   desktop.wait_until("the question's card", |desktop| has(desktop, "conversation-reply"));
+  // Opened on the question, the composer takes the focus to answer it.
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
   assert!(shows(&mut desktop, "conversation", "Builder asks you"));
+  assert!(says(&mut desktop, "conversation-question-", "Implement · "));
   assert!(shows(&mut desktop, "conversation", "Keep email sign-in?"));
   assert!(shows(&mut desktop, "conversation", "Waiting for your answer"));
+  assert!(holds(&mut desktop, "activity-step-state", "Needs input"));
   assert!(holds(
     &mut desktop,
     "conversation-composer-context",
     "Answering Builder’s question from"
   ));
+  assert!(above(
+    &mut desktop,
+    "conversation-composer-context",
+    "conversation-composer"
+  ));
+  assert_eq!(placeholder(&mut desktop), "Answer Builder…");
   assert!(shows(&mut desktop, "conversation-send", "Send answer"));
   assert!(shows(
     &mut desktop,
@@ -244,13 +282,24 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.click("task-tab-conversation");
   desktop.wait_until("the plan's card", |desktop| has(desktop, "conversation-approve-plan"));
   assert!(shows(&mut desktop, "conversation", "Plan v1 · Say hello"));
-  assert!(shows(&mut desktop, "conversation", "Waiting for approval"));
+  assert!(holds(&mut desktop, "activity-step-state", "Waiting for approval"));
   assert!(shows(&mut desktop, "conversation-live-state", "Waiting for you"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-approve-meaning",
+    "Approves plan v1 and starts Builder on Implement."
+  ));
   assert!(holds(
     &mut desktop,
     "conversation-composer-context",
     "Changes to plan v1 · sent to Builder"
   ));
+  assert!(above(
+    &mut desktop,
+    "conversation-composer-context",
+    "conversation-composer"
+  ));
+  assert_eq!(placeholder(&mut desktop), "Describe the changes the plan needs…");
   assert!(shows(&mut desktop, "conversation-send", "Request changes"));
   // Unavailable while empty.
   desktop.click("conversation-send");
@@ -272,10 +321,28 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   open_finished_step(&mut desktop);
   // Plan, the first step, is folded; Implement, which the run ended on, is open.
+  assert!(holds(&mut desktop, "activity-step-state", "Approved"));
+  assert!(holds(&mut desktop, "activity-step-meta", "approved by you"));
   desktop.click("activity-step-header");
   desktop.wait_until("the approved plan", |desktop| {
-    holds(desktop, "conversation", "Approved")
+    holds(desktop, "conversation", "Plan done")
   });
+  // Its result card leaves the plan to the plan's cards.
+  let plan = plan_text(&desktop);
+  assert!(says(&mut desktop, "conversation-result-", "Plan done"));
+  assert!(!says(&mut desktop, "conversation-result-", &plan), "{plan}");
+}
+
+/// What the latest plan of the run says, as stored.
+fn plan_text(desktop: &Desktop) -> String {
+  let run = latest_run(desktop.repo()).expect("the run");
+  ProjectDb::open(desktop.repo())
+    .expect("open the project")
+    .plans(run.id())
+    .expect("plans")
+    .pop()
+    .expect("a plan")
+    .text
 }
 
 #[test]
@@ -287,6 +354,7 @@ fn composer_follows_up_a_run_ready_for_review() {
   desktop.wait_for("conversation-composer");
   assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
   assert!(shows(&mut desktop, "conversation-send", "Send follow-up"));
+  assert_eq!(placeholder(&mut desktop), "Ask a question or request a follow-up…");
   assert!(shows(
     &mut desktop,
     "conversation-explanation",
@@ -333,7 +401,9 @@ fn composer_continues_a_failed_run_with_instructions() {
   desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
   assert!(holds(&mut desktop, "conversation-end", "Run 1 failed at Implement"));
   assert!(shows(&mut desktop, "conversation", "Implement failed"));
+  assert!(shows(&mut desktop, "conversation", "Builder reported failed"));
   assert!(shows(&mut desktop, "conversation-live-state", "Failed"));
+  assert_eq!(placeholder(&mut desktop), "Tell Builder how to continue the run…");
   write(&mut desktop, "Continue with the corrected instruction.");
   send_with_keyboard(&mut desktop);
   desktop.wait_until("the recovered run", |desktop| {
@@ -419,6 +489,13 @@ fn composer_keeps_its_buttons_and_the_search_usable_at_960() {
   ] {
     assert!(fits(&mut desktop, id, 928.0), "{id} at 960");
   }
+  // Attach follows the recipient, 10 apart, as on one line.
+  let (recipient, attach) = (
+    desktop.bounds("conversation-recipient"),
+    desktop.bounds("conversation-attach"),
+  );
+  let gap = attach.x - (recipient.x + recipient.width);
+  assert!((9.5..=10.5).contains(&gap), "Attach {gap} after the recipient");
   // Details takes 320 at the right: the composer and the toolbar's search fit what is left.
   desktop.click("conversation-details");
   desktop.wait_for("activity-invocation");
@@ -464,6 +541,7 @@ fn composer_tab_opens_at_the_question_that_waits() {
     for _ in 0..4 {
       desktop.pass();
     }
+    assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
     let (toolbar, dock) = (
       desktop.bounds("conversation-toolbar"),
       desktop.bounds("conversation-dock"),

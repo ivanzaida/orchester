@@ -2,16 +2,29 @@
 //! real runner and `orchester-fake-codex`: a step's tool events fold into one group between its
 //! agent's messages, with what the group did; *Show* narrows the timeline to messages or tools; a
 //! search keeps what matches and opens a group on its matching entries, or says it found nothing;
-//! the step filter says what it hides; the Details pane opens on demand; and while an agent works the
-//! timeline follows it, stops following when scrolled up and *Jump to latest* counts what came since.
+//! the step filter says what it hides; the Details pane opens on demand; a step that judges the work
+//! reads *Review passed*; a question that arrives while the person searches leaves the focus in the
+//! search; and while an agent works the timeline follows it with the working line as its last row,
+//! also as steps fold and start right after the tab opens, stops following when scrolled up, and
+//! *Jump to latest* counts what came since.
 
-use orchester_core::{connection::stream::AgentEvent, store::ActivityStore, time::Timestamp};
+use std::num::NonZeroU32;
+
+use orchester_core::{
+  connection::stream::AgentEvent,
+  resource::{FailureRoute, Step, StepKey},
+  store::ActivityStore,
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed, set_text},
+  task_run::{
+    agent_started, agent_step, create_and_run, finished_on_page, has, init_repository, latest_run, programs,
+    run_finished, seed, seed_steps, set_text,
+  },
 };
 
 fn desktop(review: bool) -> Desktop {
@@ -320,6 +333,8 @@ fn conversation_follows_live_and_jump_to_latest_counts_what_came_since() {
   desktop.wait_until("not following", |desktop| has(desktop, "conversation-jump"));
   assert!(shows(&mut desktop, "conversation-toolbar", "Not following"));
   assert!(shows(&mut desktop, "conversation-jump", "Jump to latest"));
+  // The working line is the timeline's last row: it scrolled away with the rest.
+  assert!(out_of_view(&mut desktop, "activity-live"));
 
   // The agent's command ends and it writes again, still at work.
   release(&desktop);
@@ -331,4 +346,135 @@ fn conversation_follows_live_and_jump_to_latest_counts_what_came_since() {
     !has(desktop, "conversation-jump") && holds(desktop, "conversation-toolbar", "Following live")
   });
   assert!(shows(&mut desktop, "conversation", "Released."));
+}
+
+/// Whether the element `id` is not in the timeline's view: not built, or under *Jump to latest*.
+fn out_of_view(desktop: &mut Desktop, id: &str) -> bool {
+  if !has(desktop, id) {
+    return true;
+  }
+  desktop.bounds(id).y >= desktop.bounds("conversation-jump").y - 0.5
+}
+
+#[test]
+fn conversation_a_step_that_judges_the_work_passes_and_finished_steps_say_when() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "implement", "Implement", "Append one line.", &[]),
+        Step {
+          on_failure: Some(FailureRoute {
+            return_to: StepKey::new("implement").expect("key"),
+            max_retries: NonZeroU32::MIN,
+          }),
+          ..agent_step(builder, "review", "Review", "Append one line.", &["implement"])
+        },
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  finished_on_page(&mut desktop);
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
+  assert!(shows(&mut desktop, "conversation", "Review passed"));
+  assert!(shows(&mut desktop, "conversation", "Builder reported passed"));
+  assert!(!shows(&mut desktop, "conversation", "Review done"));
+  // Implement folds: its engine and times, no invocation; Review, which the run ended on, is open
+  // on its invocation.
+  let metas = texts(&desktop, "activity-step-meta");
+  assert_eq!(metas.len(), 2, "{metas:?}");
+  assert!(!metas[0].contains("invocation"), "{metas:?}");
+  assert!(metas[1].contains("· invocation 1 ·"), "{metas:?}");
+  desktop.click("activity-step-header");
+  desktop.wait_until("Implement's result", |desktop| {
+    holds(desktop, "conversation", "Implement done")
+  });
+}
+
+#[test]
+fn conversation_a_question_that_arrives_while_searching_leaves_the_focus_in_the_search() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      vec![
+        agent_step(builder, "implement", "Implement", "Wait for release.", &[]),
+        agent_step(builder, "ask", "Ask", "Ask first.", &["implement"]),
+      ]
+    });
+  });
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  desktop.wait_until("the agent at work", |desktop| agent_started(desktop.repo()));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-search");
+  desktop.click("conversation-search");
+  desktop.type_text("sign");
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-search"));
+
+  release(&desktop);
+  desktop.wait_until("the composer answering the question", |desktop| {
+    holds(desktop, "conversation-composer-context", "Answering Builder’s question")
+  });
+  desktop.pass();
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-search"));
+  desktop.type_text("-in");
+  assert_eq!(desktop.value("conversation-search"), "sign-in");
+  assert_eq!(desktop.value("conversation-input"), "");
+}
+
+/// Whether the element `id` lies whole between the toolbar and the composer.
+fn in_view(desktop: &mut Desktop, id: &str) -> bool {
+  if !has(desktop, id) {
+    return false;
+  }
+  let (row, toolbar, dock) = (
+    desktop.bounds(id),
+    desktop.bounds("conversation-toolbar"),
+    desktop.bounds("conversation-dock"),
+  );
+  row.y >= toolbar.y + toolbar.height - 0.5 && row.y + row.height <= dock.y + 0.5
+}
+
+#[test]
+fn conversation_following_keeps_the_end_in_view_as_steps_fold_and_start() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_steps(repo, &fake, |builder| {
+      let keys = ["one", "two", "three", "four", "five", "six", "seven"];
+      keys
+        .iter()
+        .enumerate()
+        .map(|(index, key)| {
+          let after: Vec<&str> = keys[..index].last().into_iter().copied().collect();
+          agent_step(builder, key, key, "Work slowly.", &after)
+        })
+        .collect()
+    });
+  });
+  // A short window: the folded steps and the running one's rows fill the timeline.
+  desktop.tree.resize(1440, 700);
+  desktop.pass();
+  create_and_run(&mut desktop, "Say hello.", "1400000");
+  desktop.wait_until("the agent at work", |desktop| agent_started(desktop.repo()));
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the working line", |desktop| has(desktop, "activity-live"));
+  // Each frame while the run goes on, after the frame that lays out what arrived, the working line
+  // is in view; once it ends, the run's end is.
+  desktop.wait_until("the run's end in view", |desktop| {
+    desktop.pass();
+    if has(desktop, "activity-live") {
+      // New rows are measured in the frame that lays them out; the frame after it, the end shows.
+      if !in_view(desktop, "activity-live") {
+        desktop.pass();
+      }
+      assert!(
+        !has(desktop, "activity-live") || in_view(desktop, "activity-live"),
+        "the working line is out of view"
+      );
+      assert!(shows(desktop, "conversation-toolbar", "Following live"));
+      return false;
+    }
+    has(desktop, "conversation-end") && in_view(desktop, "conversation-end")
+  });
+  assert!(run_finished(desktop.repo()));
 }
