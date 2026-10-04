@@ -245,7 +245,7 @@ fn seed_queued(repo: &Path) {
     .expect("organized");
   let mut task = db.task(id).expect("read").expect("task");
   task.queue(VersionNumber::FIRST).expect("a complete task");
-  db.save_task(&task).expect("queued");
+  db.save_task(&task).expect("queued").saved().expect("saved as read");
 }
 
 /// R3: Retry run starts the task as stored, so the locked form offers no organization change.

@@ -129,7 +129,7 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
           .version;
         queue_organized_in(
           &root,
-          SaveTarget::Task(task.id()),
+          SaveTarget::Task(task.id(), task.revision()),
           task.details().clone(),
           // Nothing changed here: what is stored stays.
           (task.organization(), task.organization()),

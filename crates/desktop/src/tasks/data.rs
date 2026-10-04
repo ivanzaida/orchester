@@ -8,8 +8,9 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
+  sharing::TaskRevision,
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
-  task::{Task, TaskDetails, TaskStatus},
+  task::{Task, TaskDetails, TaskStatus, TaskUpdate},
   task_group::GroupHold,
   time::Timestamp,
 };
@@ -360,14 +361,14 @@ pub fn save_draft<S: TaskStore>(
   batch: IdempotencyKey,
   details: TaskDetails,
   now: Timestamp,
-) -> Result<Task, S::Error> {
+) -> Result<TaskUpdate, S::Error> {
   let task = store
     .create_tasks(batch, vec![details.clone()], now)?
     .into_iter()
     .next()
     .expect("create_tasks returns one task for each of the one details given");
   if task.details() == &details || task.status() != TaskStatus::Draft {
-    return Ok(task);
+    return Ok(TaskUpdate::Saved(task));
   }
   let edited = Task::from_stored(
     task.id(),
@@ -376,16 +377,18 @@ pub fn save_draft<S: TaskStore>(
     task.status(),
     task.pipeline_version(),
     task.created_at(),
-  );
-  store.save_task(&edited)?;
-  Ok(edited)
+  )
+  .with_organization(task.organization().clone())
+  .with_revision(task.revision());
+  store.save_task(&edited)
 }
 
-/// Where the task form saves: a new draft under `New`, or an existing task in place.
+/// Where the task form saves: a new draft under `New`, or an existing task in place, as it was
+/// read at the revision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveTarget {
   New(IdempotencyKey),
-  Task(TaskId),
+  Task(TaskId, TaskRevision),
 }
 
 /// Saves `details` as a new draft or over an existing task in place.
@@ -394,10 +397,10 @@ pub fn save_to<S: TaskStore>(
   target: SaveTarget,
   details: TaskDetails,
   now: Timestamp,
-) -> Result<Task, S::Error> {
+) -> Result<TaskUpdate, S::Error> {
   match target {
     SaveTarget::New(batch) => save_draft(store, batch, details, now),
-    SaveTarget::Task(task) => store.update_task(task, details),
+    SaveTarget::Task(task, read) => store.update_task(task, read, details),
   }
 }
 
@@ -410,13 +413,19 @@ pub enum TaskDraftSaveError {
   NotDraft(TaskStatus),
   #[error("the persisted task differs from the requested details")]
   DetailsMismatch,
+  /// The task was changed since the form read it; nothing was saved.
+  #[error("the task was changed since it was read")]
+  Changed(Box<Task>),
 }
 
 /// [`save_to`] in the project database of `repo_root`, confirmed as the requested details: the
 /// saved task.
 pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails) -> Result<Task, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
+  let saved = match save_to(&mut db, target, details.clone(), Timestamp::now())? {
+    TaskUpdate::Saved(task) => task,
+    TaskUpdate::Conflict { current } => return Err(TaskDraftSaveError::Changed(Box::new(current))),
+  };
   if matches!(target, SaveTarget::New(_)) && saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }
@@ -436,9 +445,11 @@ pub fn save_organized_to(
     &orchester_core::task::organization::TaskOrganization,
   ),
   now: Timestamp,
-) -> Result<Task, StoreError> {
+) -> Result<TaskUpdate, StoreError> {
   match target {
-    SaveTarget::New(batch) => db.create_organized_task(batch, details, organization, now),
-    SaveTarget::Task(task) => db.update_organized_task(task, details, (base, organization), now),
+    SaveTarget::New(batch) => db
+      .create_organized_task(batch, details, organization, now)
+      .map(TaskUpdate::Saved),
+    SaveTarget::Task(task, read) => db.update_organized_task(task, read, details, (base, organization), now),
   }
 }

@@ -135,7 +135,7 @@ fn saving_a_queued_task_persists_details_and_status() {
   task
     .queue(orchester_core::resource::VersionNumber::FIRST)
     .expect("complete task queues");
-  db.save_task(&task).expect("save");
+  let task = db.save_task(&task).expect("save").saved().expect("saved as read");
   let stored = db.task(task.id()).expect("read").expect("exists");
   assert_eq!(stored, task);
   assert_eq!(stored.status(), TaskStatus::Queued);
@@ -156,7 +156,7 @@ fn old_queued_task_without_a_version_remains_unpinned_after_reopen() {
   task
     .queue(orchester_core::resource::VersionNumber::FIRST)
     .expect("queue");
-  db.save_task(&task).expect("save");
+  db.save_task(&task).expect("save").saved().expect("saved as read");
   drop(db);
   let database = repo.path().join(".orchester/orchester.db");
   rusqlite::Connection::open(database)

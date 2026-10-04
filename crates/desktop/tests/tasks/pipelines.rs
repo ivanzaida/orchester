@@ -156,7 +156,10 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
     .expect("create task")
     .remove(0);
   queued.queue(v1.number()).expect("queue v1");
-  db.save_task(&queued).expect("save task");
+  db.save_task(&queued)
+    .expect("save task")
+    .saved()
+    .expect("saved as read");
   let mut changed = pipeline.steps().to_vec();
   changed[0].name = Name::new("Research updated").expect("name");
   let mut draft = v1.to_draft(now());

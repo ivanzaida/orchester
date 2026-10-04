@@ -33,6 +33,7 @@ impl ProjectDb {
 
   pub fn create_project_tag(&mut self, name: Name) -> Result<Tag, StoreError> {
     let transaction = self.connection.transaction()?;
+    super::sharing::ensure_local_project(&transaction)?;
     unique_name(&transaction, &name, None)?;
     let tag = Tag::new(TagId::generate(), name);
     transaction.execute(
@@ -49,6 +50,7 @@ impl ProjectDb {
 
   pub fn rename_project_tag(&mut self, id: TagId, name: &Name) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
+    super::sharing::ensure_local_project(&transaction)?;
     ensure_tag(&transaction, id)?;
     unique_name(&transaction, name, Some(id))?;
     transaction.execute(
@@ -94,6 +96,7 @@ impl ProjectDb {
 
   fn replace_project_tag(&mut self, source: TagId, target: Option<TagId>, at: Timestamp) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
+    super::sharing::ensure_local_project(&transaction)?;
     ensure_tag(&transaction, source)?;
     if let Some(target) = target {
       ensure_tag(&transaction, target)?;

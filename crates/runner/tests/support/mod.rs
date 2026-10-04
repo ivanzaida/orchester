@@ -350,7 +350,7 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   task
     .queue(orchester_core::resource::VersionNumber::FIRST)
     .expect("complete task");
-  db.save_task(&task).expect("save task");
+  db.save_task(&task).expect("save task").saved().expect("saved as read");
   task.id()
 }
 
@@ -379,7 +379,7 @@ pub fn queue_another_task(root: &Path) -> TaskId {
   task
     .queue(first.pipeline_version().expect("first task is pinned"))
     .expect("complete task");
-  db.save_task(&task).expect("save task");
+  db.save_task(&task).expect("save task").saved().expect("saved as read");
   task.id()
 }
 

@@ -135,6 +135,7 @@ pub(super) fn write(
   if before == *value {
     return Ok(());
   }
+  super::sharing::ensure_local_task(connection, task)?;
   let body = encode_json("task organization", 1, value)?;
   connection.execute("INSERT INTO task_organization(task_id, body, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(task_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at", params![task.to_string(), body, at.unix_millis()])?;
   connection.execute(
@@ -149,6 +150,26 @@ pub(super) fn write(
       tag_names(connection, value)?
     ],
   )?;
+  connection.execute(
+    "UPDATE tasks SET revision = revision + 1 WHERE id = ?1",
+    [task.to_string()],
+  )?;
+  Ok(())
+}
+
+/// Stores the organization of a shared task as the server confirmed it, changed at `at`. The
+/// server keeps its history; nothing is recorded here.
+pub(super) fn store_cached(
+  connection: &Connection,
+  task: TaskId,
+  value: &TaskOrganization,
+  at: Timestamp,
+) -> Result<(), StoreError> {
+  let body = encode_json("task organization", 1, value)?;
+  connection.execute(
+    "INSERT INTO task_organization(task_id, body, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(task_id) DO UPDATE      SET body = excluded.body, updated_at = excluded.updated_at",
+    params![task.to_string(), body, at.unix_millis()],
+  )?;
   Ok(())
 }
 
@@ -158,6 +179,10 @@ pub(super) fn automatic(
   status: WorkflowStatus,
   at: Timestamp,
 ) -> Result<(), StoreError> {
+  // The server has a shared task's organization: its holder's desktop sends the change.
+  if super::shared_tasks::is_shared(connection, task)? {
+    return super::shared_tasks::record_automatic(connection, task, status, at);
+  }
   let value = load(connection, task)?.with_status(status);
   write(connection, task, &value, ChangeActor::Orchester, at)
 }

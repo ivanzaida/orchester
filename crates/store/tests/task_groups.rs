@@ -125,13 +125,21 @@ fn task_group_queue_is_atomic_pins_versions_and_is_idempotent_after_reopening() 
   assert_eq!(db.task_groups().expect("groups").len(), 1);
 }
 
+/// Saves `details` over `task` as it was read.
+fn edit(db: &mut ProjectDb, task: &orchester_core::task::Task, details: orchester_core::task::TaskDetails) {
+  db.update_task(task.id(), task.revision(), details)
+    .expect("edit")
+    .saved()
+    .expect("edited as read");
+}
+
 #[test]
 fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs_and_queue() {
   let (_, mut db, run, _) = started_run();
   let (pipeline, drafts) = drafts(&mut db);
   let mut incomplete = drafts[1].details().clone();
   incomplete.brief.clear();
-  db.update_task(drafts[1].id(), incomplete).expect("edit");
+  edit(&mut db, &drafts[1], incomplete);
   let group = TaskGroup::new(
     IdempotencyKey::generate(),
     drafts.iter().map(|t| t.id()).collect(),
@@ -153,7 +161,7 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
   assert!(db.task_groups().expect("groups").is_empty());
   let mut unassigned = drafts[0].details().clone();
   unassigned.pipeline = None;
-  db.update_task(drafts[0].id(), unassigned).expect("clear pipeline");
+  edit(&mut db, &drafts[0], unassigned);
   let skipped = db
     .set_tasks_pipeline(&[run.task(), drafts[0].id()], pipeline)
     .expect("assign");
@@ -166,7 +174,7 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
       .pipeline,
     Some(pipeline)
   );
-  let mut queued = drafts[0].clone();
+  let mut queued = db.task(drafts[0].id()).expect("read").expect("draft");
   queued
     .queue(
       db.latest_version::<Pipeline>(pipeline)
@@ -175,7 +183,7 @@ fn task_group_incomplete_selection_rolls_back_and_pipeline_assignment_skips_runs
         .number(),
     )
     .expect("queue");
-  db.save_task(&queued).expect("save");
+  db.save_task(&queued).expect("save").saved().expect("saved as read");
   assert_eq!(
     db.set_tasks_pipeline(&[queued.id()], pipeline).expect("assign"),
     vec![(queued.id(), SelectionProblem::NotDraft)]

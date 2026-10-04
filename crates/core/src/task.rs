@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+pub mod content;
 pub mod organization;
 
 use thiserror::Error;
@@ -12,6 +13,7 @@ use crate::{
   name::Name,
   project::TaskKey,
   resource::VersionNumber,
+  sharing::TaskRevision,
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -163,6 +165,27 @@ pub struct Task {
   pipeline_version: Option<VersionNumber>,
   created_at: Timestamp,
   organization: organization::TaskOrganization,
+  revision: TaskRevision,
+}
+
+/// How a change of a stored task ended (`docs/architecture/server.md`, "The desktop's trait
+/// boundary"). A change names the revision it was made on; when the task was changed meanwhile,
+/// nothing is stored and the current task comes back for the person to compare with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
+pub enum TaskUpdate {
+  Saved(Task),
+  Conflict { current: Task },
+}
+
+impl TaskUpdate {
+  /// The saved task; `None` for a conflict.
+  pub fn saved(self) -> Option<Task> {
+    match self {
+      Self::Saved(task) => Some(task),
+      Self::Conflict { .. } => None,
+    }
+  }
 }
 
 impl Task {
@@ -188,7 +211,20 @@ impl Task {
       pipeline_version,
       created_at,
       organization: organization::TaskOrganization::default(),
+      revision: TaskRevision::FIRST,
     }
+  }
+
+  /// The revision the task was read at; every stored change raises it.
+  pub const fn revision(&self) -> TaskRevision {
+    self.revision
+  }
+
+  /// Attaches the revision the task was stored with.
+  #[must_use]
+  pub const fn with_revision(mut self, revision: TaskRevision) -> Self {
+    self.revision = revision;
+    self
   }
 
   pub const fn id(&self) -> TaskId {

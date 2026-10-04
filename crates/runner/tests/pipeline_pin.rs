@@ -61,8 +61,12 @@ async fn legacy_queued_task_without_a_pin_is_rejected_before_creating_a_run() {
     task.status(),
     None,
     task.created_at(),
-  );
-  db.save_task(&legacy).expect("simulate a pre-migration queued row");
+  )
+  .with_revision(task.revision());
+  db.save_task(&legacy)
+    .expect("simulate a pre-migration queued row")
+    .saved()
+    .expect("saved as read");
   let (scheduler, _events) = scheduler(root);
   assert_eq!(
     scheduler.start_run(IdempotencyKey::generate(), fixture.task).await,

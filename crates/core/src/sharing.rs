@@ -11,6 +11,14 @@ use crate::{
 
 pub const CLAIM_STALE_MS: i64 = 15 * 60 * 1000;
 
+/// A member's role in a server project: owners (and the server's admins) manage its members.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemberRole {
+  Owner,
+  Member,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClaimKind {

@@ -10,7 +10,7 @@ use orchester_core::{
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
-  task::{QueueError, Task, TaskDetails, TaskStatus},
+  task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -30,6 +30,8 @@ pub enum QueueFailure {
   /// The run could not start with the task's configuration; nothing was saved.
   Preflight(Vec<PreflightProblem>),
   Queue(QueueError),
+  /// The task was changed since the form read it: nothing was saved or queued.
+  Changed,
 }
 
 impl From<StoreError> for QueueFailure {
@@ -44,6 +46,7 @@ impl QueueFailure {
       Self::Store(error) => vec![messages::store_error(error)],
       Self::Preflight(problems) => problems.iter().map(preflight_message).collect(),
       Self::Queue(_) => vec![Message::new("runs.start.incomplete")],
+      Self::Changed => vec![Message::new("tasks.conflict.changedMeanwhile")],
     }
   }
 }
@@ -66,7 +69,7 @@ pub fn queue_organized_in(
 ) -> Result<QueuedStart, QueueFailure> {
   let mut db = ProjectDb::open(repo_root)?;
   let existing = match target {
-    SaveTarget::Task(task) => db.task(task)?,
+    SaveTarget::Task(task, _) => db.task(task)?,
     SaveTarget::New(batch) => db.task_by_batch(batch)?,
   };
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
@@ -77,9 +80,20 @@ pub fn queue_organized_in(
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
   }
-  let task = save_organized_to(&mut db, target, details.clone(), organization, Timestamp::now())?;
+  let task = saved(save_organized_to(
+    &mut db,
+    target,
+    details.clone(),
+    organization,
+    Timestamp::now(),
+  )?)?;
   db.check_task_readiness(task.id())?;
-  queue_in(repo_root, SaveTarget::Task(task.id()), details, version)
+  queue_in(
+    repo_root,
+    SaveTarget::Task(task.id(), task.revision()),
+    details,
+    version,
+  )
 }
 
 /// Checks the selected configuration, then saves and queues the task. A queued task reached by
@@ -93,7 +107,7 @@ pub fn queue_in(
   let mut db = ProjectDb::open(repo_root)?;
   let existing = match target {
     SaveTarget::New(batch) => db.task_by_batch(batch)?,
-    SaveTarget::Task(id) => db.task(id)?,
+    SaveTarget::Task(id, _) => db.task(id)?,
   };
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
     db.check_task_readiness(task.id())?;
@@ -106,11 +120,11 @@ pub fn queue_in(
   // No fallible pipeline read may follow a successful transition to Queued: the form must
   // receive that state even if the database becomes unreadable immediately afterwards.
   let selected_pipeline = load_pipeline(&db, details.pipeline, selected_version)?;
-  let mut task = save_to(&mut db, target, details, Timestamp::now())?;
+  let mut task = saved(save_to(&mut db, target, details, Timestamp::now())?)?;
   db.check_task_readiness(task.id())?;
   if task.status() == TaskStatus::Draft {
     task.queue(selected_version).map_err(QueueFailure::Queue)?;
-    db.save_task(&task)?;
+    let task = saved(db.save_task(&task)?)?;
     return Ok(QueuedStart {
       task,
       pipeline: selected_pipeline,
@@ -118,6 +132,11 @@ pub fn queue_in(
   }
   // An idempotent save may return a task queued by another attempt; reload its persisted pin.
   queued_start(&db, task)
+}
+
+/// The saved task; a task changed since it was read is not saved, and nothing goes on.
+fn saved(update: TaskUpdate) -> Result<Task, QueueFailure> {
+  update.saved().ok_or(QueueFailure::Changed)
 }
 
 fn queued_start(db: &ProjectDb, task: Task) -> Result<QueuedStart, QueueFailure> {

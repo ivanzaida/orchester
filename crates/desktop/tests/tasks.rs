@@ -141,8 +141,14 @@ fn form_rejects_invalid_and_half_entered_limits() {
 fn retrying_a_save_with_the_same_key_creates_one_task() {
   let (_repo, mut db) = project_db();
   let batch = IdempotencyKey::generate();
-  let first = save_draft(&mut db, batch, details("Add task search"), now()).expect("first attempt");
-  let retry = save_draft(&mut db, batch, details("Add task search"), now()).expect("retry");
+  let first = save_draft(&mut db, batch, details("Add task search"), now())
+    .expect("first attempt")
+    .saved()
+    .expect("a new draft");
+  let retry = save_draft(&mut db, batch, details("Add task search"), now())
+    .expect("retry")
+    .saved()
+    .expect("the same draft");
   assert_eq!(retry.id(), first.id());
   assert_eq!(db.tasks().expect("read tasks").len(), 1);
 }
@@ -152,12 +158,18 @@ fn a_retry_after_editing_keeps_the_task_and_the_edits() {
   let (_repo, mut db) = project_db();
   let batch = IdempotencyKey::generate();
   // The first attempt was stored although the form saw it fail, e.g. the response was lost.
-  let stored = save_draft(&mut db, batch, details("Add task serch"), now()).expect("first attempt");
+  let stored = save_draft(&mut db, batch, details("Add task serch"), now())
+    .expect("first attempt")
+    .saved()
+    .expect("a new draft");
   let edited = TaskDetails {
     brief: "Let people find a task.".into(),
     ..details("Add task search")
   };
-  let retried = save_draft(&mut db, batch, edited.clone(), now()).expect("retry");
+  let retried = save_draft(&mut db, batch, edited.clone(), now())
+    .expect("retry")
+    .saved()
+    .expect("the same draft, edited");
   assert_eq!(retried.id(), stored.id());
   let tasks = db.tasks().expect("read tasks");
   assert_eq!(tasks.len(), 1);
@@ -168,14 +180,23 @@ fn a_retry_after_editing_keeps_the_task_and_the_edits() {
 #[test]
 fn a_new_key_creates_the_next_task() {
   let (_repo, mut db) = project_db();
-  save_draft(&mut db, IdempotencyKey::generate(), details("First"), now()).expect("first task");
-  let second = save_draft(&mut db, IdempotencyKey::generate(), details("Second"), now()).expect("second task");
+  save_draft(&mut db, IdempotencyKey::generate(), details("First"), now())
+    .expect("first task")
+    .saved()
+    .expect("a new draft");
+  let second = save_draft(&mut db, IdempotencyKey::generate(), details("Second"), now())
+    .expect("second task")
+    .saved()
+    .expect("a new draft");
   assert_eq!(second.key().to_string(), "ORC-2");
 }
 
 fn stored_tasks() -> Vec<Task> {
   let (_repo, mut db) = project_db();
-  save_draft(&mut db, IdempotencyKey::generate(), details("Incomplete"), now()).expect("draft");
+  save_draft(&mut db, IdempotencyKey::generate(), details("Incomplete"), now())
+    .expect("draft")
+    .saved()
+    .expect("a new draft");
   let mut queued = db
     .create_tasks(IdempotencyKey::generate(), vec![details("To queue")], now())
     .expect("create")
@@ -198,11 +219,15 @@ fn stored_tasks() -> Vec<Task> {
     queued.status(),
     queued.pipeline_version(),
     queued.created_at(),
-  );
+  )
+  .with_revision(queued.revision());
   queued
     .queue(orchester_core::resource::VersionNumber::FIRST)
     .expect("complete draft can be queued");
-  db.save_task(&queued).expect("save queued task");
+  db.save_task(&queued)
+    .expect("save queued task")
+    .saved()
+    .expect("saved as read");
   db.tasks().expect("read tasks")
 }
 

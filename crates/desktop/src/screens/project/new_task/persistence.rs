@@ -47,7 +47,7 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
         use orchester_core::task::organization::WorkflowStatus;
         // Only a person's change to Canceled stops a run, and only the run the person confirmed.
         let canceling = match target {
-          crate::tasks::data::SaveTarget::Task(task)
+          crate::tasks::data::SaveTarget::Task(task, _)
             if organization.status() == WorkflowStatus::Canceled && base.status() != WorkflowStatus::Canceled =>
           {
             Some(task)
@@ -69,13 +69,18 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
           }
           let saved = background::run(move || {
             let mut db = ProjectDb::open(&repo_root).map_err(TaskDraftSaveError::Store)?;
-            let task = save_organized_to(
+            let task = match save_organized_to(
               &mut db,
               target,
               details.clone(),
               (&base, &organization),
               orchester_core::time::Timestamp::now(),
-            )?;
+            )? {
+              orchester_core::task::TaskUpdate::Saved(task) => task,
+              orchester_core::task::TaskUpdate::Conflict { current } => {
+                return Err(TaskDraftSaveError::Changed(Box::new(current)));
+              }
+            };
             if task.details() != &details {
               return Err(TaskDraftSaveError::DetailsMismatch);
             }
@@ -87,6 +92,7 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
               details,
               organization,
               created: created.then(|| task.id()),
+              revision: task.revision(),
             })
           })
           .await?;
@@ -96,6 +102,7 @@ pub(super) fn save_action(ctx: &mut Ctx) -> SaveAction {
               TaskDraftSaveError::Store(error) => messages::store_error(&error),
               TaskDraftSaveError::NotDraft(_) => Message::new("tasks.new.noLongerDraft"),
               TaskDraftSaveError::DetailsMismatch => Message::new("tasks.new.savedDetailsDiffer"),
+              TaskDraftSaveError::Changed(_) => Message::new("tasks.conflict.changedMeanwhile"),
             }
           })
         };

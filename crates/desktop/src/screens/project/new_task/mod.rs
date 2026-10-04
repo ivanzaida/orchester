@@ -37,6 +37,7 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, TaskId},
   limits::ProjectLimits,
+  sharing::TaskRevision,
   task::{MissingDetail, Task, TaskDetails, organization::TaskOrganization},
   tokens::grouped,
 };
@@ -96,6 +97,8 @@ pub struct SavedDraft {
   organization: TaskOrganization,
   /// The task Create made; `None` when the form saved over a task it edits.
   created: Option<TaskId>,
+  /// The revision the save stored, which the next save is made on.
+  revision: TaskRevision,
 }
 
 impl lurq::app::component::DevtoolsInspectable for SavedDraft {}
@@ -320,7 +323,10 @@ impl Component for NewTaskForm {
     let separator = ctx.t("number.groupSeparator");
     let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
     self.mark_unsaved(&state, editing);
-    let target = self.target(editing.or(recovered));
+    let target = self.target(
+      editing.or(recovered),
+      save.state().get().data.map(|saved| saved.revision),
+    );
     let submit = self
       .save_request(&save, &props.project, target, state.ready.clone())
       .map(|request| -> Arc<dyn Fn() + Send + Sync> {
@@ -429,9 +435,12 @@ impl NewTaskForm {
     }
   }
 
-  /// Where the form saves: over the draft it edits, or as a new draft under the form's key.
-  fn target(&self, editing: Option<&Task>) -> SaveTarget {
-    editing.map_or(SaveTarget::New(self.batch), |task| SaveTarget::Task(task.id()))
+  /// Where the form saves: over the draft it edits, as read when the form opened or as its last
+  /// save stored it, or as a new draft under the form's key.
+  fn target(&self, editing: Option<&Task>, saved: Option<TaskRevision>) -> SaveTarget {
+    editing.map_or(SaveTarget::New(self.batch), |task| {
+      SaveTarget::Task(task.id(), saved.unwrap_or(task.revision()))
+    })
   }
 
   /// Records whether a draft being edited holds changes that are not saved, so leaving the form

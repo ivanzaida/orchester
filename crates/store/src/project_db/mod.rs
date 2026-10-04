@@ -28,6 +28,8 @@ mod revision_diffs;
 mod runs;
 mod schema;
 mod secrets;
+mod shared_tasks;
+mod sharing;
 mod step_outputs;
 mod tags;
 mod task_groups;
@@ -46,7 +48,12 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-pub use self::{approval_rules::DecisionCounts, read_only::ReadOnlyProjectDb};
+pub use self::{
+  approval_rules::DecisionCounts,
+  read_only::ReadOnlyProjectDb,
+  shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
+  sharing::SharingLink,
+};
 use crate::{
   StoreError, git_exclude, migrate,
   rows::{corrupt, parse},

@@ -52,7 +52,10 @@ fn drafts(repo: &Path) {
     .expect("drafts");
   let mut incomplete = created[2].details().clone();
   incomplete.pipeline = None;
-  db.update_task(created[2].id(), incomplete).expect("remove pipeline");
+  db.update_task(created[2].id(), created[2].revision(), incomplete)
+    .expect("remove pipeline")
+    .saved()
+    .expect("edited as read");
 }
 
 #[test]
@@ -203,7 +206,10 @@ fn task_bulk_review_lists_mixed_published_pipeline_versions() {
       .expect("publish");
     let mut details = tasks[1].details().clone();
     details.pipeline = Some(second.id());
-    db.update_task(tasks[1].id(), details).expect("assign");
+    db.update_task(tasks[1].id(), tasks[1].revision(), details)
+      .expect("assign")
+      .saved()
+      .expect("edited as read");
   });
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");

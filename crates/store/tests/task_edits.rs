@@ -54,8 +54,10 @@ fn task_edits_update_a_draft_in_place() {
 
   let details = edited();
   let updated = db
-    .update_task(created[0].id(), details.clone())
-    .expect("the draft is edited");
+    .update_task(created[0].id(), created[0].revision(), details.clone())
+    .expect("the draft is edited")
+    .saved()
+    .expect("nothing changed it meanwhile");
   assert_eq!(updated.details(), &details);
   assert_eq!((updated.id(), updated.key()), (created[0].id(), created[0].key()));
   assert_eq!(updated.status(), TaskStatus::Draft);
@@ -73,27 +75,38 @@ fn task_with_a_run_can_be_edited_without_changing_its_run_snapshot() {
   let (repo, mut db, run, _) = started_run();
   let before = db.task(run.task()).expect("read").expect("the task exists");
   let changed = edited();
-  let updated = db.update_task(run.task(), changed.clone()).expect("edit started task");
+  let updated = db
+    .update_task(run.task(), before.revision(), changed.clone())
+    .expect("edit started task")
+    .saved()
+    .expect("nothing changed it meanwhile");
   assert_eq!(updated.details(), &changed);
   assert_eq!(
     (updated.id(), updated.key(), updated.status()),
     (before.id(), before.key(), before.status())
   );
   assert_eq!(
-    db.task_for_run(run.task(), run.id()).expect("run task"),
-    Some(before.clone())
+    db.task_for_run(run.task(), run.id())
+      .expect("run task")
+      .map(|task| task.details().clone()),
+    Some(before.details().clone())
   );
   db.update_task(
     run.task(),
+    updated.revision(),
     TaskDetails {
       title: name("Again"),
       ..changed
     },
   )
-  .expect("edit the task again");
+  .expect("edit the task again")
+  .saved()
+  .expect("nothing changed it meanwhile");
   assert_eq!(
-    db.task_for_run(run.task(), run.id()).expect("run task"),
-    Some(before.clone())
+    db.task_for_run(run.task(), run.id())
+      .expect("run task")
+      .map(|task| task.details().clone()),
+    Some(before.details().clone())
   );
   drop(db);
 
@@ -107,7 +120,12 @@ fn task_with_a_run_can_be_edited_without_changing_its_run_snapshot() {
       .as_str(),
     "Again"
   );
-  assert_eq!(db.task_for_run(run.task(), run.id()).expect("run task"), Some(before));
+  assert_eq!(
+    db.task_for_run(run.task(), run.id())
+      .expect("run task")
+      .map(|task| task.details().clone()),
+    Some(before.details().clone())
+  );
 }
 
 #[test]
@@ -123,8 +141,16 @@ fn legacy_run_gets_its_task_snapshot_before_the_first_edit() {
   drop(connection);
 
   let mut db = ProjectDb::open(repo.path()).expect("reopen");
-  db.update_task(run.task(), edited()).expect("edit migrated task");
-  assert_eq!(db.task_for_run(run.task(), run.id()).expect("run task"), Some(before));
+  db.update_task(run.task(), before.revision(), edited())
+    .expect("edit migrated task")
+    .saved()
+    .expect("nothing changed it meanwhile");
+  assert_eq!(
+    db.task_for_run(run.task(), run.id())
+      .expect("run task")
+      .map(|task| task.details().clone()),
+    Some(before.details().clone())
+  );
 }
 
 #[test]
@@ -153,9 +179,9 @@ fn task_edits_are_refused_for_a_queued_task() {
     .expect("draft")
     .remove(0);
   task.queue(VersionNumber::FIRST).expect("a complete draft queues");
-  db.save_task(&task).expect("queued");
+  let task = db.save_task(&task).expect("queued").saved().expect("queued as read");
   assert!(matches!(
-    db.update_task(task.id(), draft("Other")),
+    db.update_task(task.id(), task.revision(), draft("Other")),
     Err(StoreError::TaskNotEditable {
       source: EditError::QueuedWithoutRun,
       ..

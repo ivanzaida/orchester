@@ -12,12 +12,7 @@ pub struct UserRef {
   pub display_name: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MemberRole {
-  Owner,
-  Member,
-}
+pub use orchester_core::sharing::MemberRole;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SharedProject {

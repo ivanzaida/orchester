@@ -1,8 +1,9 @@
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   project::TaskKey,
+  sharing::TaskRevision,
   task::{
-    Task, TaskDetails, TaskStatus,
+    Task, TaskDetails, TaskStatus, TaskUpdate,
     organization::{ChangeActor, TaskOrganization},
   },
   time::Timestamp,
@@ -34,6 +35,7 @@ impl ProjectDb {
       }
       tasks::edit_task(&transaction, task, details)?
     } else {
+      super::sharing::ensure_local_project(&transaction)?;
       let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'task'", [], |row| row.get(0))?;
       let key = TaskKey::new(self.project.key().clone(), tasks::task_number(number)?);
       let task = Task::draft(TaskId::generate(), key, details, at);
@@ -43,29 +45,34 @@ impl ProjectDb {
     };
     organization::validate(&transaction, task.id(), value)?;
     organization::write(&transaction, task.id(), value, ChangeActor::Person, at)?;
+    let task = tasks::load_task(&transaction, self.project.key(), task.id())?;
     transaction.commit()?;
-    Ok(task.with_organization(value.clone()))
+    Ok(task)
   }
 
-  /// Saves an edited task: its details, and the organization changes the person made from `base`
-  /// (what the form loaded) to `edited`, over what is stored now ([`TaskOrganization::rebase`]),
-  /// so a status Orchester or a bulk change set meanwhile is not overwritten.
+  /// Saves an edited task, read at revision `read`: its details, and the organization changes the
+  /// person made from `base` (what the form loaded) to `edited`, over what is stored now
+  /// ([`TaskOrganization::rebase`]), so a status Orchester or a bulk change set meanwhile is not
+  /// overwritten. A task changed since it was read is a conflict, and nothing is stored.
   pub fn update_organized_task(
     &mut self,
     id: TaskId,
+    read: TaskRevision,
     details: TaskDetails,
     (base, edited): (&TaskOrganization, &TaskOrganization),
     at: Timestamp,
-  ) -> Result<Task, StoreError> {
+  ) -> Result<TaskUpdate, StoreError> {
     let transaction = self.connection.transaction()?;
-    let task = tasks::load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
-      .pop()
-      .ok_or(StoreError::TaskNotFound(id))?;
+    let task = tasks::load_task(&transaction, self.project.key(), id)?;
+    if task.revision() != read {
+      return Ok(TaskUpdate::Conflict { current: task });
+    }
     let value = edited.rebase(base, &organization::load(&transaction, id)?);
     organization::validate(&transaction, id, &value)?;
-    let task = tasks::edit_task(&transaction, task, details)?;
+    tasks::edit_task(&transaction, task, details)?;
     organization::write(&transaction, id, &value, ChangeActor::Person, at)?;
+    let task = tasks::load_task(&transaction, self.project.key(), id)?;
     transaction.commit()?;
-    Ok(task.with_organization(value))
+    Ok(TaskUpdate::Saved(task))
   }
 }
