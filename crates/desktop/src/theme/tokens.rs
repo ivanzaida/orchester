@@ -240,11 +240,6 @@ pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = 1260.0;
 /// step and agent, and "Reported failed · attempt 3 · 22k tokens · 3 min") and the panel.
 /// Narrower, the panel goes under the evidence and the page scrolls (not drawn yet).
 pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
-/// The narrowest window whose Conversation toolbar (`JKl4s` in `RrScB`) holds everything on one line
-/// with Details closed: the 216 sidebar, the toolbar's 64 padding, the 240 step filter, *Show* (164),
-/// the 180 search, the live state (*Following live*, 99), *Details* (81) and five 12 gaps.
-/// Narrower, *Show* and the search go to a second line (not drawn yet).
-pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_WINDOW: f32 = 1104.0;
 /// The narrowest chat column (the tab less the rail, its strip or Details) whose Conversation toolbar
 /// (`Eef6u` in `kpnmP`, `GOOg3` in `I35q7D`) holds everything on one line: its 48 padding, *Show*
 /// (164), the 150 search, the run's state (*Following live*, 99), *Details* (81) and four 10 gaps.

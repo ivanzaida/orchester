@@ -1,37 +1,55 @@
-//! The Details pane (`gNa91`): the invocation panel of the step the timeline is narrowed to, else of
-//! the latest launch, or of the step whose tokens were chosen in its header. Closed by default and
+//! The Details pane (`MaWhI` in `oryKr`): in the rail's place, under its head (*Details* and
+//! *Steps*, which brings the rail back), the invocation panel of the step picked in the rail, else of
+//! the latest launch, or of the step whose tokens were chosen in its divider. Closed by default and
 //! remembered for every task (the application database's `ui_state`): the tab's job is to follow and
 //! to talk, and the figures are looked up now and then.
 
 use std::path::Path;
 
 use lurq::{
-  app::ctx::{Ctx, FutureAction},
+  app::{
+    ctx::{Ctx, FutureAction},
+    theme::{BorderSize, SpacingSize, TypographyStyle},
+  },
+  components::{Row, Spacer, Text},
   core::Signal,
-  node::Element,
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::id::StepExecutionId;
 
-use super::{super::activity::invocation_panel, StepFilter, nav};
+use super::{super::activity::invocation_panel, nav};
 use crate::{
   background,
   messages::{self, Message},
   navigation::Navigation,
   tasks::{detail::RunView, transcript::Entry},
+  theme::ExtraColor,
+  ui::{button::ActionButton, icon::Icon},
   workspace::Workspace,
 };
+
+/// The head's height and its *Steps* button's (`Qwrbk`, `z9JnYJ`).
+const HEAD_HEIGHT: f32 = 52.0;
+const STEPS_HEIGHT: f32 = 28.0;
 
 /// Whether the pane is open and which step it is about.
 #[derive(Clone)]
 pub(super) struct DetailsPane {
   /// What the person chose in this tab; `None` until they choose, when the remembered state holds.
   pub(super) open: Signal<Option<bool>>,
-  /// The step whose tokens were chosen in its header; `None` follows the step filter.
-  pub(super) on: Signal<StepFilter>,
+  /// The step execution whose tokens were chosen in its divider; `None` follows the rail.
+  pub(super) on: Signal<DetailsOn>,
   pub(super) save: SaveAction,
 }
 
 pub(super) type SaveAction = FutureAction<bool, (), Message>;
+
+/// The step execution Details is about once its tokens were chosen in its divider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct DetailsOn(pub(super) Option<StepExecutionId>);
+
+impl lurq::app::component::DevtoolsInspectable for DetailsOn {}
 
 fn workspace(ctx: &mut Ctx) -> Workspace {
   ctx
@@ -89,34 +107,59 @@ impl DetailsPane {
       let open = !open;
       chosen.set(Some(open));
       if !open {
-        on.set(StepFilter(None));
+        on.set(DetailsOn(None));
       }
       save.run(open);
     }
   }
 
-  /// Opens the pane on `execution`, as choosing its tokens in its header does.
+  /// Opens the pane on `execution`, as choosing its tokens in its divider does.
   pub(super) fn open_on(&self, execution: StepExecutionId) -> impl Fn() + Send + Sync + 'static {
     let (chosen, on, save) = (self.open.clone(), self.on.clone(), self.save.clone());
     move || {
       chosen.set(Some(true));
-      on.set(StepFilter(Some(execution)));
+      on.set(DetailsOn(Some(execution)));
       save.run(true);
     }
   }
 }
 
-/// The pane while it is open: about the step its tokens opened it on, else `filter`'s.
+/// The pane: about the step its tokens opened it on, else the latest execution of the step picked
+/// in the rail, `picked`.
 pub(super) fn details_pane(
   ctx: &mut Ctx,
   (run, repo_root): (&RunView, &Path),
   entries: &[Entry],
-  (details, open, filter): (&DetailsPane, bool, Option<StepExecutionId>),
-) -> Option<Element> {
-  if !open {
-    return None;
-  }
-  let on = details.on.get().0.or(filter);
+  (details, picked): (&DetailsPane, Option<StepExecutionId>),
+) -> Element {
+  let on = details.on.get().0.or(picked);
   let nav = nav(ctx);
-  Some(invocation_panel(ctx, (&nav, repo_root), run, entries, on))
+  let head = head(ctx, details);
+  invocation_panel(ctx, (&nav, repo_root), (run, entries), on, head)
+}
+
+/// *Details* and *Steps*, which closes the pane and brings the rail back.
+fn head(ctx: &Ctx, details: &DetailsPane) -> Element {
+  let steps = ActionButton::new(ctx.t("runs.conversation.rail.steps"))
+    .icon(Icon::List)
+    .id("conversation-details-steps")
+    .height(Dimension::Px(STEPS_HEIGHT))
+    .on_click(details.toggle(true))
+    .render(ctx);
+  Row::new()
+    .id("conversation-details-head")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(HEAD_HEIGHT))
+    .padding_horizontal(SpacingSize::Md)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+    .child(
+      Text::new(&ctx.t("runs.conversation.details"))
+        .variant(TypographyStyle::Label)
+        .nowrap(),
+    )
+    .child(Spacer::new().flex(1.0))
+    .child(steps)
+    .into()
 }

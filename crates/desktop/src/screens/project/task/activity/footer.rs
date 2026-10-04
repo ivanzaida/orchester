@@ -1,4 +1,4 @@
-//! The working line, the timeline's last row while an agent works (`RrScB`), indented to a
+//! The working line, the chat's last row while an agent works (`VCcdr` in `kpnmP`), indented to a
 //! message's text: who is working and how long ago the last entry arrived, a real time that its own
 //! interval keeps current, never progress of its own.
 

@@ -30,7 +30,7 @@ use super::{
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
   notice::{Lost, notice},
-  permissions::{RunPermissionsProps, RunPermissionsRow},
+  permissions::{Look, RunPermissionsProps, RunPermissionsRow},
   progress::progress_list,
   retry_limit::retry_limit,
   run_approvals::{RunApprovalsPanel, RunApprovalsProps},
@@ -288,7 +288,7 @@ pub(super) fn permissions_row(ctx: &mut Ctx, run: &RunView, repo_root: &Path, in
     run_number: run.run.number().get(),
     live: !run.run.status().is_terminal(),
     repo_root: repo_root.to_path_buf(),
-    inline_link,
+    look: Look::Row { inline: inline_link },
   };
   Some(ctx.mount_keyed::<RunPermissionsRow>(&format!("task-permissions-{}", step.key), props))
 }

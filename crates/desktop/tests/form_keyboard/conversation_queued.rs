@@ -1,6 +1,6 @@
-//! The Conversation tab of a run that has not started (`zxIMy`): *Nothing in this conversation yet*
-//! with the steps the run will take on one line, which wraps where the window is narrower than that
-//! line instead of running out of the tab.
+//! The Conversation tab of a run that has not started (`FBwIV`): *Nothing in this conversation yet*,
+//! and the steps the run will take in the rail, which a narrow window collapses to its strip
+//! (`I35q7D`).
 
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -107,7 +107,7 @@ fn seed(repo: &Path) {
 }
 
 #[test]
-fn conversation_queued_run_wraps_its_steps_inside_the_tab_at_960() {
+fn conversation_queued_run_lists_its_steps_in_the_rail_strip_at_960() {
   let mut desktop = Desktop::with_seeded_project(seed);
   desktop.tree.resize(960, 960);
   desktop.pass();
@@ -117,8 +117,8 @@ fn conversation_queued_run_wraps_its_steps_inside_the_tab_at_960() {
   desktop.click("task-row-KON-1");
   desktop.wait_for("task-tab-conversation");
   desktop.click("task-tab-conversation");
-  desktop.wait_until("the queued run's empty timeline", |desktop| {
-    has(desktop, "conversation-empty-steps")
+  desktop.wait_until("the queued run's empty chat", |desktop| {
+    has(desktop, "conversation-empty")
   });
   assert!(shows(
     &mut desktop,
@@ -127,17 +127,22 @@ fn conversation_queued_run_wraps_its_steps_inside_the_tab_at_960() {
   ));
   assert!(shows(
     &mut desktop,
-    "conversation-empty-steps",
-    "05 Review the change · Builder"
+    "conversation-empty",
+    "Its steps are listed on the right"
   ));
-  let (steps, main) = (
-    desktop.bounds("conversation-empty-steps"),
+  // At 960 the rail starts as its strip: a badge per step, none of them started yet.
+  assert!(has(&mut desktop, "conversation-strip"));
+  assert!(!has(&mut desktop, "conversation-rail"));
+  assert!(shows(&mut desktop, "conversation-strip-step-5", "05"));
+  // Opened from the strip, the rail shows over the chat and names the steps.
+  desktop.click("conversation-rail-expand");
+  desktop.wait_for("conversation-rail-over");
+  assert!(shows(&mut desktop, "conversation-rail-step-5", "Review the change"));
+  assert!(shows(&mut desktop, "conversation-rail-step-5", "Builder · not started"));
+  assert!(shows(&mut desktop, "conversation-rail-all", "Queued · 5 steps"));
+  let (strip, main) = (
+    desktop.bounds("conversation-strip"),
     desktop.bounds("conversation-main"),
   );
-  assert!(
-    steps.x >= main.x - 0.5 && steps.x + steps.width <= main.x + main.width + 0.5,
-    "{steps:?} inside {main:?}"
-  );
-  // More than one line: the steps wrap.
-  assert!(steps.height > 30.0, "{steps:?}");
+  assert!(strip.x >= main.x + main.width - 0.5, "{strip:?} beside {main:?}");
 }

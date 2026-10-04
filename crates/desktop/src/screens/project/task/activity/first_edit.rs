@@ -113,7 +113,12 @@ pub(super) fn before_first_edit(ctx: &Ctx, run: &RunView, execution: StepExecuti
 
 /// The step header's tokens (`T7P4Wo`): with what they were before the first edit, or `no edit`
 /// once the step ended without one.
-pub(super) fn header_tokens(ctx: &Ctx, tokens: Arc<str>, edit: Option<&EditProgress>, ended: bool) -> Arc<str> {
+pub(in crate::screens::project::task) fn header_tokens(
+  ctx: &Ctx,
+  tokens: Arc<str>,
+  edit: Option<&EditProgress>,
+  ended: bool,
+) -> Arc<str> {
   let Some(edit) = edit else {
     return tokens;
   };

@@ -1,5 +1,6 @@
-//! The Conversation tab's timeline as data (ORC-61): its tool events ([`tool_events`]), and what
-//! *Show*, the step filter, a search and the folds leave of the timeline.
+//! The Conversation tab's timeline as data (ORC-61, as a chat since the rail on the right): its tool
+//! events ([`tool_events`]), and what *Show*, the step picked in the rail, a search and the folds
+//! leave of the timeline.
 
 mod tool_events;
 
@@ -19,7 +20,7 @@ use orchester_desktop::tasks::{
     group::tool_kind,
     interleaved,
     mark::{Mark, MarkKind},
-    view::{Choice, Row, Show, shown},
+    view::{AgentRow, Chip, Choice, Row, Show, shown},
   },
   transcript::{Entry, entries},
 };
@@ -152,23 +153,63 @@ fn kinds(rows: &[Row]) -> Vec<&str> {
     .iter()
     .map(|row| match row {
       Row::Step { .. } => "step",
+      Row::Folded { .. } => "folded",
+      Row::NotStarted { .. } => "not-started",
+      Row::Agent(AgentRow { text: Some(_), .. }) => "agent",
+      Row::Agent(AgentRow { text: None, .. }) => "tools",
       Row::Item(_) => "item",
-      Row::Group { .. } => "group",
       Row::Entry { .. } => "entry",
       Row::Line(_) => "line",
     })
     .collect()
 }
 
+/// The chips of the agent's row at `index`.
+fn chips(rows: &[Row], index: usize) -> &[Chip] {
+  match &rows[index] {
+    Row::Agent(row) => &row.chips,
+    row => panic!("an agent's row, not {row:?}"),
+  }
+}
+
 #[test]
-fn timeline_finished_steps_fold_unless_opened() {
+fn timeline_a_message_carries_the_chips_of_its_tool_groups() {
   let (items, ..) = two_steps();
+  let opened = shown(&items, &Choice::default(), &|_, _| true);
+  assert_eq!(kinds(&opened.rows), ["step", "agent", "step", "agent"]);
+  let research = chips(&opened.rows, 1);
+  assert_eq!(research.len(), 1, "one chip per group");
+  assert!(research[0].open, "a person opened it");
+  let closed = shown(&items, &Choice::default(), &|key, _| key.starts_with("step"));
+  assert!(!chips(&closed.rows, 1)[0].open, "a chip starts closed");
+  // Tool activity with no message before it is the agent's row of its own.
+  let without: Vec<Item> = items
+    .iter()
+    .filter(|item| !matches!(item.kind, ItemKind::AgentMessage { .. }))
+    .cloned()
+    .collect();
+  let rows = shown(&without, &Choice::default(), &|_, _| true).rows;
+  assert_eq!(kinds(&rows), ["step", "tools", "step", "tools"]);
+  let Row::Agent(row) = &rows[1] else {
+    panic!("the agent's row");
+  };
+  assert_eq!(&*row.agent, "Builder");
+}
+
+#[test]
+fn timeline_finished_steps_fold_into_one_line_unless_opened() {
+  let (items, ..) = two_steps();
+  // The step before the last that ran stays open; the last, finished, folds.
   let folded = shown(&items, &Choice::default(), &|_, default| default);
-  assert_eq!(kinds(&folded.rows), ["step", "step"]);
-  let opened = shown(&items, &Choice::default(), &|key, default| {
-    key == "step-research" || default
-  });
-  assert_eq!(kinds(&opened.rows), ["step", "item", "group", "step"]);
+  assert_eq!(kinds(&folded.rows), ["step", "agent", "folded"]);
+  // Finished steps in a row share one line, with their keys to open them.
+  let all = shown(&items, &Choice::default(), &|_, _| false);
+  assert_eq!(kinds(&all.rows), ["folded"]);
+  let Row::Folded { steps, .. } = &all.rows[0] else {
+    panic!("the fold");
+  };
+  let keys: Vec<&str> = steps.iter().map(|(key, _)| &**key).collect();
+  assert_eq!(keys, ["step-research", "step-implement"]);
 }
 
 #[test]
@@ -183,7 +224,8 @@ fn timeline_show_hides_groups_or_flattens_them() {
     },
     &open,
   );
-  assert_eq!(kinds(&messages.rows), ["step", "item", "step", "item"]);
+  assert_eq!(kinds(&messages.rows), ["step", "agent", "step", "agent"]);
+  assert!(chips(&messages.rows, 1).is_empty(), "Messages hides the groups");
   assert_eq!(messages.hidden_tools, (3, 2), "3 tool calls in 2 groups");
   let tools = shown(
     &items,
@@ -200,8 +242,8 @@ fn timeline_show_hides_groups_or_flattens_them() {
 }
 
 #[test]
-fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
-  let (items, ..) = two_steps();
+fn timeline_search_keeps_matches_opens_their_chip_on_them_and_counts_them_by_step() {
+  let (items, research, _) = two_steps();
   let search = |query: &str| {
     shown(
       &items,
@@ -215,15 +257,15 @@ fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
   let cancel = search("CANCEL");
   // The message and the read match; the step without a match hides.
   assert_eq!(cancel.matches, 2);
-  assert_eq!(kinds(&cancel.rows), ["step", "item", "group"]);
-  let Row::Group {
-    open, shown, left_out, ..
-  } = &cancel.rows[2]
-  else {
-    panic!("the group with the match");
+  assert_eq!(kinds(&cancel.rows), ["step", "agent"]);
+  let Row::Step { matches, .. } = &cancel.rows[0] else {
+    panic!("the step's divider");
   };
-  assert!(open, "a match opens its group");
-  assert_eq!((shown.len(), left_out.len()), (1, 1));
+  assert_eq!(*matches, Some(2), "its divider counts its matches");
+  assert_eq!(cancel.step_matches, [(research, 2)]);
+  let chip = &chips(&cancel.rows, 1)[0];
+  assert!(chip.open, "a match opens its chip");
+  assert_eq!((chip.shown.len(), chip.left_out.len()), (1, 1));
   assert_eq!(cancel.matched_steps.len(), 1);
   assert_eq!(&*cancel.matched_steps[0].step, "Research");
 
@@ -233,19 +275,21 @@ fn timeline_search_keeps_matches_and_opens_their_group_on_them() {
 }
 
 #[test]
-fn timeline_step_filter_shows_one_step_open_and_names_the_others() {
+fn timeline_step_filter_shows_the_step_picked_open() {
   let (items, research, _) = two_steps();
   let only = shown(
     &items,
     &Choice {
-      step: Some(research),
+      step: Some(vec![research]),
       ..Choice::default()
     },
-    &|_, default| default,
+    &|_, _| false,
   );
-  assert_eq!(kinds(&only.rows), ["step", "item", "group"], "the step picked is open");
-  assert_eq!(only.hidden_steps.len(), 1);
-  assert_eq!(&*only.hidden_steps[0].step, "Implement");
+  assert_eq!(kinds(&only.rows), ["step", "agent"], "the step picked is open");
+  let Row::Step { emphasized, .. } = &only.rows[0] else {
+    panic!("the step's divider");
+  };
+  assert!(emphasized, "the step picked is in $text");
 }
 
 /// Two commands of one execution, A at 1 s and B at 3 s, and something else at `between`.
@@ -406,23 +450,21 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     },
   };
   items.insert(3, item("mark-2", implement, ItemKind::Mark(mark)));
-  let folded = shown(&items, &Choice::default(), &|_, default| default);
-  assert_eq!(kinds(&folded.rows), ["step", "item", "step"]);
-  for show in [Show::Messages, Show::Tools] {
+  for show in [Show::All, Show::Messages, Show::Tools] {
     let rows = shown(
       &items,
       &Choice {
         show,
         ..Choice::default()
       },
-      &|_, default| default,
+      &|_, _| false,
     );
-    assert_eq!(kinds(&rows.rows), ["step", "item", "step"], "{show:?}");
+    assert_eq!(kinds(&rows.rows), ["folded", "item", "folded"], "{show:?}");
   }
   let other = shown(
     &items,
     &Choice {
-      step: Some(items[0].execution.expect("research")),
+      step: Some(vec![items[0].execution.expect("research")]),
       ..Choice::default()
     },
     &|_, default| default,

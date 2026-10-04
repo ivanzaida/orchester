@@ -1006,18 +1006,6 @@
         "unreadableUnnumbered": "Remove worktree is unavailable until this run can be read"
       }
     },
-    "step": {
-      "pending": "Waiting",
-      "running": "Running",
-      "waiting": "Needs you",
-      "paused": "Paused",
-      "interrupted": "Interrupted",
-      "passed": "Done",
-      "failed": "Failed",
-      "skipped": "Skipped",
-      "cancelled": "Canceled",
-      "notStarted": "Not started"
-    },
     "permissions": {
       "label": {
         "runningWith": "Running with",
@@ -1080,7 +1068,8 @@
         "none": "None",
         "servers": "{{servers}}",
         "fromProfile": "From the profile version; they are not changed for a run."
-      }
+      },
+      "chip": "{{repository}} · {{commands}}"
     },
     "summary": {
       "stepDetail": "{{agent}} · {{state}}",
@@ -1241,50 +1230,15 @@
       "stop": "Stop and fail the run"
     },
     "activity": {
-      "mark": {
-        "returnedTitle": "Returned to {{step}} · {{failed}} failed (attempt {{attempt}})",
-        "returnedDetail": "{{agent}} receives what {{failed}} reported. {{steps}} run again on the new work.",
-        "returnedDetailAlone": "{{agent}} receives what {{failed}} reported.",
-        "and": " and ",
-        "restartedTitle": "Restarted {{step}} · it stopped without a result",
-        "restartedDetail": "A fresh session from the latest checkpoint. If it stops again without a result, the run waits for you.",
-        "returnedWithNoteTitle": "Returned to {{step}} with your note",
-        "note": "“{{note}}”",
-        "automaticRetry": "automatic · retry {{retry}} of {{max}} · {{time}}",
-        "automaticAttempt": "automatic · attempt {{attempt}} · {{time}}",
-        "byYou": "by you · {{time}}"
-      },
-      "allSteps": {
-        "one": "All steps · {{count}} execution",
-        "other": "All steps · {{count}} executions"
-      },
-      "stepOption": "{{number}} · {{step}} · {{agent}}",
       "showRaw": "Show raw lines",
       "following": "Following live",
       "notFollowing": "Not following",
       "ended": "Run ended",
       "waitingDecision": "Waits for your decision",
-      "stepTitle": "{{step}} · {{agent}}",
       "engine": "{{provider}} / {{model}}",
       "engineNative": "{{engine}} · native",
-      "headerRunning": "{{engine}} · invocation {{count}} · started {{start}}",
-      "headerOpen": "{{engine}} · invocation {{count}} · {{time}}",
-      "headerFolded": {
-        "one": "{{engine}} · {{time}}",
-        "other": "{{engine}} · {{count}} invocations · {{time}}"
-      },
       "timeSpan": "{{start}}–{{end}}",
-      "approvedByYou": "{{meta}} · approved by you",
       "commandTool": "Command tool",
-      "commandHeaderRunning": "{{command}} · started {{start}}",
-      "commandHeaderFinished": "{{command}} · {{time}}",
-      "commandHeaderExit": "{{command}} · exit {{code}} · {{time}}",
-      "noTokens": "no tokens",
-      "state": {
-        "needsInput": "Needs input",
-        "waitingApproval": "Waiting for approval",
-        "approved": "Approved"
-      },
       "agentMessage": "agent message",
       "reasoning": "Reasoning summary",
       "commandRunning": "running",
@@ -1361,10 +1315,10 @@
       "emptyNoRun": "Entries appear here once the task’s run starts its first agent.",
       "emptyStarting": "Entries appear here as soon as the first agent reports.",
       "emptyNone": "The run’s agents reported nothing.",
-      "loadingTitle": "Loading activity for Run {{run}}",
-      "loadingDetail": "Reading the saved transcript. Live entries continue after it loads.",
-      "failedTitle": "Couldn’t load activity",
-      "failedDetail": "The transcript could not be read. The run itself is unaffected and keeps working.",
+      "loadingTitle": "Loading the conversation of Run {{run}}",
+      "loadingDetail": "Reading the saved transcript. Live messages continue after it loads.",
+      "failedTitle": "Couldn’t load the conversation",
+      "failedDetail": "The runner did not return the transcript. The run itself is unaffected and keeps working.",
       "tryAgain": "Try again",
       "panel": {
         "title": "Current invocation",
@@ -1423,7 +1377,6 @@
       },
       "beforeEditMeta": "{{tokens}} · {{before}} before first edit",
       "noEditMeta": "{{tokens}} · no edit",
-      "stepOptionAttempt": "{{number}} · {{step}} · {{agent}} · attempt {{attempt}}",
       "mcpCall": "{{server}} MCP tool",
       "mcpCallFailed": "failed",
       "decision": {
@@ -1999,7 +1952,6 @@
         "failed": "Failed",
         "cancelled": "Canceled"
       },
-      "allStepsNone": "All steps · none yet",
       "show": {
         "all": "All",
         "messages": "Messages",
@@ -2009,16 +1961,16 @@
       "details": "Details",
       "stepLabel": "{{number}} {{step}}",
       "showingOnly": {
-        "one": "Showing {{step}} only · {{hidden}} is hidden.",
-        "other": "Showing {{step}} only · {{hidden}} are hidden."
+        "one": "Showing {{step}} only · {{hidden}} is hidden ·",
+        "other": "Showing {{step}} only · {{hidden}} are hidden ·"
       },
-      "showingOnlyAlone": "Showing {{step}} only.",
+      "showingOnlyAlone": "Showing {{step}} only ·",
       "showAllSteps": "Show all steps",
       "clearSearch": "Clear search",
       "showAll": "Show all",
       "matches": {
-        "one": "1 match for “{{query}}” in {{steps}} · items without a match are hidden.",
-        "other": "{{count}} matches for “{{query}}” in {{steps}} · items without a match are hidden."
+        "one": "1 match for “{{query}}” in {{steps}} · items without a match are hidden ·",
+        "other": "{{count}} matches for “{{query}}” in {{steps}} · items without a match are hidden ·"
       },
       "matchesElsewhere": {
         "one": "1 match in {{steps}}.",
@@ -2037,9 +1989,7 @@
       "empty": {
         "noRun": "This task has not run yet",
         "nothingYet": "Nothing in this conversation yet",
-        "queued": "Run {{run}} is queued and starts when an agent slot is free. The agents’ messages, their tool activity and your messages will appear here.",
-        "step": "{{number}} {{step}} · {{agent}}",
-        "toolStep": "{{number}} {{step}}"
+        "queued": "Run {{run}} starts when an agent slot is free. Its steps are listed on the right; a message you send now waits for the first step."
       },
       "agentMeta": "{{step}} · {{time}}",
       "you": "You",
@@ -2100,11 +2050,6 @@
         },
         "running": "running {{command}}",
         "separator": " · ",
-        "span": "{{first}}–{{last}}",
-        "calls": {
-          "one": "1 tool call · {{times}}",
-          "other": "{{count}} tool calls · {{times}}"
-        },
         "more": "Show {{count}} more · {{kinds}}",
         "withoutMatch": "Show {{count}} without a match · {{kinds}}",
         "kinds": {
@@ -2153,7 +2098,8 @@
         "wholePlan": "Show the whole plan · {{count}} lines",
         "approveStarts": "Approves plan v{{version}} and starts {{agent}} on {{step}}. To change it, describe what it needs below.",
         "approveStartsTool": "Approves plan v{{version}} and starts {{step}}. To change it, describe what it needs below.",
-        "approveLast": "Approves plan v{{version}}; no step follows it. To change it, describe what it needs below."
+        "approveLast": "Approves plan v{{version}}; no step follows it. To change it, describe what it needs below.",
+        "answerBelow": "Answer in the box below. {{agent}} waits for you; waiting does not count toward the run’s time limit."
       },
       "result": {
         "passed": "{{step}} passed",
@@ -2164,7 +2110,11 @@
         "reportedFailed": "{{agent}} reported failed",
         "withReport": "{{reported}} · {{meta}}",
         "changes": "Changes ↗",
-        "summary": "Summary ↗"
+        "summary": "Summary ↗",
+        "changesFiles": {
+          "one": "Changes · 1 file ↗",
+          "other": "Changes · {{count}} files ↗"
+        }
       },
       "end": {
         "ready": "Run {{run}} is ready for your review · {{time}}",
@@ -2181,7 +2131,9 @@
         "sendWhenStarts": "Send when the run starts",
         "answering": "Answering {{agent}}’s question from {{time}}",
         "planChanges": "Changes to plan v{{version}} · sent to {{agent}}",
-        "deciding": "Waiting for your decision"
+        "deciding": "Waiting for your decision",
+        "attachUnavailable": "Attaching files is not available yet.",
+        "closedReason": "No agent of this run reads messages any more · {{reason}}"
       },
       "placeholder": {
         "agent": "Message {{agent}}…",
@@ -2193,12 +2145,6 @@
         "continueUnnamed": "Say how the run should continue…",
         "firstAgent": "Write to the first agent of the run…"
       },
-      "to": {
-        "working": "To: {{agent}} · working",
-        "resumes": "To: {{agent}} · resumes its session",
-        "continues": "To: {{agent}} · continues the run",
-        "firstStep": "To: {{agent}} · first step"
-      },
       "hint": {
         "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
         "steerMac": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Cmd+Enter sends after this turn.",
@@ -2207,14 +2153,123 @@
         "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
         "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
         "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan."
+      },
+      "toolMeta": "tool · {{time}}",
+      "asksMeta": "asks you · {{time}}",
+      "chip": {
+        "calls": {
+          "one": "1 call",
+          "other": "{{count}} calls"
+        },
+        "matching": {
+          "one": "{{matching}} of {{count}} call matches",
+          "other": "{{matching}} of {{count}} calls match"
+        }
+      },
+      "divider": {
+        "agent": "{{step}} · {{agent}} · {{engine}} · {{time}}",
+        "tool": "{{step}} · tool · {{time}}",
+        "started": "started {{start}}",
+        "engineAttempt": "{{engine}} · attempt {{attempt}}",
+        "tokens": "· {{tokens}}",
+        "matches": {
+          "one": "{{step}} · {{agent}} · 1 match",
+          "other": "{{step}} · {{agent}} · {{count}} matches"
+        },
+        "done": "{{title}} · {{time}} ·",
+        "failed": "{{title}} · {{time}} · {{reported}}",
+        "ended": "{{title}} · {{time}}"
+      },
+      "range": "{{first}}–{{last}}",
+      "fold": {
+        "one": "{{steps}} · 1 step done",
+        "other": "{{steps}} · {{count}} steps done",
+        "showIt": "Show it",
+        "showThem": "Show them"
+      },
+      "notStarted": {
+        "one": "{{steps}} did not start",
+        "other": "{{steps}} did not start"
+      },
+      "mark": {
+        "returned": "{{failed}} failed in attempt {{failedAttempt}} · the work goes back to {{step}} · automatic · retry {{retry}} of {{max}} · {{time}}",
+        "returnedByYou": "{{failed}} failed in attempt {{failedAttempt}} · the work goes back to {{step}} · by you · {{time}}",
+        "returnedDetail": "{{agent}} receives what {{failed}} reported; {{steps}} run again on the new work.",
+        "returnedDetailAlone": "{{agent}} receives what {{failed}} reported.",
+        "and": " and ",
+        "restarted": "Restarted {{step}} · it stopped without a result · automatic · attempt {{attempt}} · {{time}}",
+        "restartedByYou": "Restarted {{step}} · it stopped without a result · by you · {{time}}",
+        "restartedDetail": "A fresh session from the latest checkpoint. If it stops again without a result, the run waits for you.",
+        "returnedWithNote": "You returned the work to {{step}} · {{time}}"
+      },
+      "noMatches": "No matches for “{{query}}” ·",
+      "noMatchesLive": "No matches for “{{query}}” · following live goes on ·",
+      "rail": {
+        "steps": "Steps",
+        "allSteps": "All steps",
+        "allShort": "All",
+        "tool": "Tool",
+        "noMatch": "no match",
+        "matches": {
+          "one": "{{agent}} · 1 match",
+          "other": "{{agent}} · {{count}} matches"
+        },
+        "notStarted": "{{agent}} · not started",
+        "working": "{{agent}} · working · {{tokens}}",
+        "workingAttempt": "{{agent}} · attempt {{attempt}} · working",
+        "workingTool": "{{agent}} · running",
+        "waitingAnswer": "{{agent}} · waiting for your answer",
+        "waitingApproval": "{{agent}} · waiting for approval",
+        "approved": "{{agent}} · {{tokens}} · approved",
+        "toolPassed": "{{agent}} · passed · {{took}}",
+        "done": "{{agent}} · {{tokens}} · {{took}}",
+        "toolExit": "{{agent}} · exit {{code}} · {{took}}",
+        "failed": "{{agent}} · failed · {{took}}",
+        "returned": "{{agent}} · returned to {{step}}",
+        "stopped": "{{agent}} · stopped",
+        "all": {
+          "queued": "Queued · {{count}} steps",
+          "partial": "{{ran}} of {{count}} steps ran · {{tokens}} tokens",
+          "ran": {
+            "one": "1 execution · {{tokens}} tokens",
+            "other": "{{count}} executions · {{tokens}} tokens"
+          },
+          "matches": {
+            "one": "1 match",
+            "other": "{{count}} matches"
+          }
+        }
+      },
+      "recipient": {
+        "orchestrator": "Orchestrator",
+        "thisTask": "this task",
+        "startsFirst": "starts first",
+        "working": "working",
+        "asking": "asking you",
+        "planWaits": "plan waits",
+        "resumes": "resumes its session",
+        "continues": "continues the run",
+        "paused": "paused",
+        "stopped": "stopped at limit",
+        "interrupted": "interrupted",
+        "deciding": "waiting for your decision",
+        "notRunning": "not running"
+      },
+      "tip": {
+        "steer": "Send now · Enter. {{agent}} gets it at its next tool call. Ctrl+Enter sends after this turn.",
+        "steerMac": "Send now · Enter. {{agent}} gets it at its next tool call. Cmd+Enter sends after this turn.",
+        "send": "{{action}} · Enter. {{hint}}"
+      },
+      "menu": {
+        "enter": "Enter",
+        "ctrlEnter": "Ctrl+Enter",
+        "cmdEnter": "Cmd+Enter",
+        "nowMeta": "{{agent}} gets it at its next tool call",
+        "afterTurnMeta": "Waits until {{agent}} finishes its turn"
       }
     }
   },
   "conversation": {
-    "to": {
-      "orchestrator": "To: Orchestrator · this task",
-      "agent": "To: {{agent}}"
-    },
     "delivery": {
       "queued": "Queued · waiting for the next checkpoint",
       "queuedRunStart": "Queued · waiting for the run to start",
@@ -2231,10 +2286,8 @@
     "openDecision": "Open the decision  →",
     "composer": {
       "placeholder": "Ask, clarify or redirect this task…",
-      "attach": "Attach",
       "send": "Send",
-      "sending": "Sending…",
-      "closed": "No agent of this run reads messages any more."
+      "sending": "Sending…"
     },
     "explanation": {
       "notStarted": "Messages reach the first step when the run starts.",

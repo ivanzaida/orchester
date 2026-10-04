@@ -1,11 +1,13 @@
-//! The Conversation tab's composer in each state of the run (ORC-61), end to end, headlessly, on the
-//! real runner and `orchester-fake-codex`: while an agent works, *Send now* reaches it after the tool
-//! call it runs (delivered mid-turn) and *Send after this turn* — also Ctrl+Enter — queues the
-//! message until its turn ends; a message its CLI refuses is kept with *Send after this turn* and
-//! *Edit in composer*; a question is answered, a plan's changes requested, a run ready for review
-//! followed up, a failed run continued with instructions, a paused run's message queued and a draft
-//! task's message kept for its run's start. Enter adds a line. The field's placeholder says whom it
-//! writes to in each state, and what it answers or changes stands above it.
+//! The Conversation tab's composer in each state of the run (ORC-61, one rounded box since `YJfPo`),
+//! end to end, headlessly, on the real runner and `orchester-fake-codex`: while an agent works, Send
+//! and Enter reach it after the tool call it runs (delivered mid-turn), and *Send after this turn*
+//! — the send menu's, or Ctrl+Enter — queues the message until its turn ends; a message its CLI
+//! refuses is kept with *Send after this turn* and *Edit in composer*; a question is answered, a
+//! plan's changes requested, a run ready for review followed up, a failed run continued with
+//! instructions, a paused run's message queued and a draft task's message kept for its run's start.
+//! Shift+Enter adds a line. The field's placeholder says whom it writes to in each state, what it
+//! answers or changes stands above it, the send button's tooltip says what sending does and its icon
+//! whether the message queues, and the run's permissions chip opens their popover.
 
 use orchester_core::{
   conversation::{Arrival, Delivery},
@@ -29,7 +31,7 @@ fn desktop() -> Desktop {
   Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false))
 }
 
-fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
+pub(crate) fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
   has(desktop, id) && shows(desktop, id, text)
 }
 
@@ -78,6 +80,20 @@ fn write(desktop: &mut Desktop, text: &str) {
   desktop.type_text(text);
 }
 
+/// Whether the send button's tooltip, shown while the pointer is over it, says `text`.
+pub(crate) fn tip_says(desktop: &mut Desktop, text: &str) -> bool {
+  desktop.hover("conversation-send");
+  holds(desktop, "conversation-send-tip", text)
+}
+
+/// Shift+Enter in the focused field.
+fn new_line(desktop: &mut Desktop) {
+  desktop
+    .tree
+    .key_down("Enter".into(), "Enter".into(), true, false, false);
+  desktop.pass();
+}
+
 /// Ctrl+Enter in the focused field.
 fn send_with_keyboard(desktop: &mut Desktop) {
   desktop
@@ -86,18 +102,18 @@ fn send_with_keyboard(desktop: &mut Desktop) {
   desktop.pass();
 }
 
-fn release(desktop: &Desktop) {
+pub(crate) fn release(desktop: &Desktop) {
   std::fs::write(desktop.repo().join(".orchester").join("fake-release"), "go").expect("release");
 }
 
 /// The run's Conversation tab once its agent works.
-fn working_conversation(brief: &str) -> Desktop {
+pub(crate) fn working_conversation(brief: &str) -> Desktop {
   let mut desktop = desktop();
   create_and_run(&mut desktop, brief, "1400000");
   desktop.wait_until("the agent at work", |desktop| agent_started(desktop.repo()));
   desktop.click("task-tab-conversation");
   desktop.wait_until("the composer for the agent at work", |desktop| {
-    holds(desktop, "conversation-send-now", "Send now")
+    has(desktop, "conversation-send-options")
   });
   desktop
 }
@@ -105,25 +121,21 @@ fn working_conversation(brief: &str) -> Desktop {
 #[test]
 fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
   let mut desktop = working_conversation("Wait for a message.");
-  assert!(shows(&mut desktop, "conversation-recipient", "To: Builder · working"));
+  assert!(shows(&mut desktop, "conversation-recipient", "Builder"));
+  assert!(shows(&mut desktop, "conversation-recipient", "working"));
   assert_eq!(placeholder(&mut desktop), "Message Builder…");
-  assert!(shows(
+  // What sending does is the send button's tooltip; no line under the box says it.
+  assert!(tip_says(
     &mut desktop,
-    "conversation-explanation",
-    "Send now reaches Builder at its next tool call, while it works."
+    "Send now · Enter. Builder gets it at its next tool call. Ctrl+Enter sends after this turn."
   ));
-  assert!(shows(
-    &mut desktop,
-    "conversation-explanation",
-    "Ctrl+Enter sends after this turn."
-  ));
-  assert!(shows(&mut desktop, "conversation-send", "Send after this turn"));
+  assert!(!has(&mut desktop, "conversation-explanation"));
   // Nothing to send yet.
-  desktop.click("conversation-send-now");
+  desktop.click("conversation-send");
   assert!(deliveries(&desktop).is_empty());
 
   write(&mut desktop, "Also cover the cancelled dialog.");
-  desktop.click("conversation-send-now");
+  desktop.click("conversation-send");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   assert_eq!(desktop.value("conversation-input"), "", "the draft is stored");
   let stored = deliveries(&desktop);
@@ -160,8 +172,8 @@ fn open_finished_step(desktop: &mut Desktop) {
 fn composer_sends_after_this_turn_with_ctrl_enter_and_it_waits_for_the_turn() {
   let mut desktop = working_conversation("Wait for release.");
   write(&mut desktop, "Rename the test.");
-  // Enter adds a line; Ctrl+Enter sends after this turn while the agent works.
-  desktop.enter();
+  // Shift+Enter adds a line; Ctrl+Enter sends after this turn while the agent works.
+  new_line(&mut desktop);
   desktop.type_text("Then run it.");
   assert_eq!(desktop.value("conversation-input"), "Rename the test.\nThen run it.");
   send_with_keyboard(&mut desktop);
@@ -178,10 +190,40 @@ fn composer_sends_after_this_turn_with_ctrl_enter_and_it_waits_for_the_turn() {
 }
 
 #[test]
+fn composer_send_menu_sends_this_message_after_the_turn_and_is_not_remembered() {
+  let mut desktop = working_conversation("Wait for release.");
+  write(&mut desktop, "Rename the test.");
+  desktop.click("conversation-send-options");
+  desktop.wait_for("conversation-send-menu");
+  assert!(holds(
+    &mut desktop,
+    "conversation-send-now",
+    "Builder gets it at its next tool call"
+  ));
+  assert!(shows(&mut desktop, "conversation-send-now", "Enter"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-send-after-turn",
+    "Waits until Builder finishes its turn"
+  ));
+  assert!(shows(&mut desktop, "conversation-send-after-turn", "Ctrl+Enter"));
+  desktop.click("conversation-send-after-turn");
+  desktop.wait_until("queued for the turn's end", |desktop| {
+    holds(desktop, "conversation", "Queued · Builder reads it when its turn ends")
+  });
+  assert!(!has(&mut desktop, "conversation-send-menu"), "choosing closes the menu");
+  assert_eq!(deliveries(&desktop), [Some(Delivery::Queued)]);
+  // The next message goes now again: the choice was for that message only.
+  assert!(tip_says(&mut desktop, "Send now · Enter."));
+  release(&desktop);
+  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+#[test]
 fn composer_keeps_a_message_the_cli_did_not_take_and_offers_it_back() {
   let mut desktop = working_conversation("Refuse a message.");
   write(&mut desktop, "Use the new API.");
-  desktop.click("conversation-send-now");
+  desktop.click("conversation-send");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   open_finished_step(&mut desktop);
   desktop.wait_until("not delivered", |desktop| {
@@ -227,10 +269,14 @@ fn composer_answers_a_question_and_the_agent_goes_on() {
   // Opened on the question, the composer takes the focus to answer it.
   assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
   assert!(shows(&mut desktop, "conversation", "Builder asks you"));
-  assert!(says(&mut desktop, "conversation-question-", "Implement · "));
+  assert!(says(&mut desktop, "conversation-asks-", "asks you · "));
   assert!(shows(&mut desktop, "conversation", "Keep email sign-in?"));
   assert!(shows(&mut desktop, "conversation", "Waiting for your answer"));
-  assert!(holds(&mut desktop, "activity-step-state", "Needs input"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-rail-step-1",
+    "Builder · waiting for your answer"
+  ));
   assert!(holds(
     &mut desktop,
     "conversation-composer-context",
@@ -242,11 +288,11 @@ fn composer_answers_a_question_and_the_agent_goes_on() {
     "conversation-composer"
   ));
   assert_eq!(placeholder(&mut desktop), "Answer Builder…");
-  assert!(shows(&mut desktop, "conversation-send", "Send answer"));
-  assert!(shows(
+  // The recipient is fixed to the agent that asked, with a lock.
+  assert!(shows(&mut desktop, "conversation-recipient", "asking you"));
+  assert!(tip_says(
     &mut desktop,
-    "conversation-explanation",
-    "Your reply resumes Builder's session."
+    "Send answer · Enter. Your reply resumes Builder's session."
   ));
   // Reply puts the focus in the composer.
   desktop.click("conversation-reply");
@@ -282,7 +328,12 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.click("task-tab-conversation");
   desktop.wait_until("the plan's card", |desktop| has(desktop, "conversation-approve-plan"));
   assert!(shows(&mut desktop, "conversation", "Plan v1 · Say hello"));
-  assert!(holds(&mut desktop, "activity-step-state", "Waiting for approval"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-rail-step-1",
+    "Builder · waiting for approval"
+  ));
+  assert!(holds(&mut desktop, "conversation-rail-step-2", "Builder · not started"));
   assert!(shows(&mut desktop, "conversation-live-state", "Waiting for you"));
   assert!(holds(
     &mut desktop,
@@ -300,7 +351,7 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
     "conversation-composer"
   ));
   assert_eq!(placeholder(&mut desktop), "Describe the changes the plan needs…");
-  assert!(shows(&mut desktop, "conversation-send", "Request changes"));
+  assert!(tip_says(&mut desktop, "Request changes · Enter."));
   // Unavailable while empty.
   desktop.click("conversation-send");
   assert!(
@@ -320,10 +371,8 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.click("conversation-approve-plan");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
   open_finished_step(&mut desktop);
-  // Plan, the first step, is folded; Implement, which the run ended on, is open.
-  assert!(holds(&mut desktop, "activity-step-state", "Approved"));
-  assert!(holds(&mut desktop, "activity-step-meta", "approved by you"));
-  desktop.click("activity-step-header");
+  // Plan, the step before the one the run ended on, stays open; the rail says it was approved.
+  assert!(shows(&mut desktop, "conversation-rail-step-1", "approved"));
   desktop.wait_until("the approved plan", |desktop| {
     holds(desktop, "conversation", "Plan done")
   });
@@ -353,7 +402,7 @@ fn composer_follows_up_a_run_ready_for_review() {
   desktop.click("task-ask-agent");
   desktop.wait_for("conversation-composer");
   assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
-  assert!(shows(&mut desktop, "conversation-send", "Send follow-up"));
+  assert!(tip_says(&mut desktop, "Send follow-up · Enter."));
   assert_eq!(placeholder(&mut desktop), "Ask a question or request a follow-up…");
   assert!(shows(
     &mut desktop,
@@ -383,7 +432,7 @@ fn composer_follows_up_a_run_ready_for_review() {
     "{stored:?}"
   );
   desktop.wait_until("ready to follow up again", |desktop| {
-    holds(desktop, "conversation-send", "Send follow-up")
+    tip_says(desktop, "Send follow-up")
   });
 }
 
@@ -396,7 +445,7 @@ fn composer_continues_a_failed_run_with_instructions() {
   });
   desktop.click("task-tab-conversation");
   desktop.wait_until("the composer of the failed run", |desktop| {
-    holds(desktop, "conversation-send", "Continue with instructions")
+    tip_says(desktop, "Continue with instructions · Enter.")
   });
   desktop.wait_until("the run's end", |desktop| has(desktop, "conversation-end"));
   assert!(holds(&mut desktop, "conversation-end", "Run 1 failed at Implement"));
@@ -426,8 +475,8 @@ fn composer_queues_a_message_while_the_run_is_paused() {
   desktop.wait_until("the composer of the paused run", |desktop| {
     holds(desktop, "conversation-explanation", "You can write while paused.")
   });
-  assert!(!has(&mut desktop, "conversation-send-now"), "no agent works");
-  assert!(shows(&mut desktop, "conversation-send", "Send"));
+  assert!(!has(&mut desktop, "conversation-send-options"), "no agent works");
+  assert!(tip_says(&mut desktop, "Send · Enter."));
   write(&mut desktop, "Check the OAuth dialog.");
   desktop.click("conversation-send");
   desktop.wait_until("queued for the resume", |desktop| {
@@ -449,7 +498,7 @@ fn composer_keeps_a_draft_task_s_message_for_its_run_s_start() {
   desktop.wait_for("task-tab-conversation");
   desktop.click("task-tab-conversation");
   desktop.wait_until("the composer of the draft", |desktop| {
-    holds(desktop, "conversation-send", "Send when the run starts")
+    tip_says(desktop, "Send when the run starts · Enter.")
   });
   assert!(holds(&mut desktop, "conversation-empty", "This task has not run yet"));
   assert!(shows(
@@ -462,56 +511,6 @@ fn composer_keeps_a_draft_task_s_message_for_its_run_s_start() {
   desktop.wait_until("queued for the start", |desktop| {
     holds(desktop, "conversation", "Queued · waiting for the run to start")
   });
-}
-
-/// Whether `id` lies within `right`, the main column's right edge less its 32 padding, from side to
-/// side.
-fn fits(desktop: &mut Desktop, id: &str, right: f32) -> bool {
-  let bounds = desktop.bounds(id);
-  bounds.width > 0.0 && bounds.x >= 0.0 && bounds.x + bounds.width <= right + 0.5
-}
-
-#[test]
-fn composer_keeps_its_buttons_and_the_search_usable_at_960() {
-  let mut desktop = working_conversation("Wait for release.");
-  desktop.wait_until("the timeline's toolbar", |desktop| {
-    has(desktop, "conversation-live-state")
-  });
-  assert!(shows(&mut desktop, "conversation-live-state", "Following live"));
-  desktop.tree.resize(960, 960);
-  desktop.pass();
-  desktop.pass();
-  for id in [
-    "conversation-recipient",
-    "conversation-attach",
-    "conversation-send",
-    "conversation-send-now",
-  ] {
-    assert!(fits(&mut desktop, id, 928.0), "{id} at 960");
-  }
-  // Attach follows the recipient, 10 apart, as on one line.
-  let (recipient, attach) = (
-    desktop.bounds("conversation-recipient"),
-    desktop.bounds("conversation-attach"),
-  );
-  let gap = attach.x - (recipient.x + recipient.width);
-  assert!((9.5..=10.5).contains(&gap), "Attach {gap} after the recipient");
-  // Details takes 320 at the right: the composer and the toolbar's search fit what is left.
-  desktop.click("conversation-details");
-  desktop.wait_for("activity-invocation");
-  desktop.pass();
-  for id in [
-    "conversation-recipient",
-    "conversation-attach",
-    "conversation-send",
-    "conversation-send-now",
-    "conversation-search",
-    "conversation-live-state",
-  ] {
-    assert!(fits(&mut desktop, id, 608.0), "{id} beside Details at 960");
-  }
-  release(&desktop);
-  desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }
 
 #[test]

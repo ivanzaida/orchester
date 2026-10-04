@@ -60,14 +60,12 @@ fn activity_shows_the_code_index_and_the_tokens_before_the_first_edit() {
   assert!((19.0..=21.0).contains(&under), "{under} px under the note");
   assert!(content.y + content.height >= panel.y + panel.height - 0.5);
 
-  // Narrowed to the step, the panel is named after it and says when it ran.
-  desktop
-    .tree
-    .get_element_by_id_mut("activity-step-filter")
-    .and_then(|element| element.as_select())
-    .expect("the step filter")
-    .commit(1);
-  desktop.pass();
+  // With the step picked in the rail, the panel is named after it and says when it ran: Steps
+  // brings the rail back in the pane's place, and Details opens on the step picked.
+  desktop.click("conversation-details-steps");
+  desktop.wait_for("conversation-rail-step-1");
+  desktop.click("conversation-rail-step-1");
+  desktop.click("conversation-details");
   desktop.wait_until("the panel follows the step", |desktop| {
     shows(desktop, "activity-invocation-title", "Implement · Builder")
   });

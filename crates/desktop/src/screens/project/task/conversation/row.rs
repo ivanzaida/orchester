@@ -1,24 +1,29 @@
-//! One row of the timeline, in its column: a step header, a return or restart before it, a message,
-//! a card, a tool group, a problem row, a step's result or the run's end; in *Tools*, an entry or a
-//! message on one line; and last, while an agent works, the working line (`RrScB`).
-
-use std::sync::Arc;
+//! One row of the chat, in its column: a step's divider, a fold of finished steps, the steps that
+//! did not start, an agent's message with its chips, a person's message, a card, a problem row, a
+//! return or restart, a step's end or result card, or the run's end; in *Tools*, an entry or a
+//! message on one line; and last, while an agent works, the working line (`kpnmP`).
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx},
   components::Column,
   node::{Element, dimension::Dimension},
 };
 
 use super::{
-  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps, mark_row, step_header},
+  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps},
   Timeline,
   approval_card::{ApprovalCardProps, ApprovalCardView},
   cards::{self, PlanCardProps, PlanCardView},
-  column, group,
+  column, divider,
   message::{self, PersonMessageProps, PersonMessageView},
 };
-use crate::tasks::timeline::{Item, ItemKind, view::Row};
+use crate::{
+  tasks::{
+    timeline::{Item, ItemKind, view::Row},
+    transcript::EntryKind,
+  },
+  theme::ExtraSpacing,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct RowProps {
@@ -68,26 +73,22 @@ impl Component for TimelineRowView {
       }
     };
     let content = match row {
-      Row::Step { head, key, open } => {
-        let tokens = head
-          .execution
-          .map(|execution| Arc::new(timeline.details.open_on(execution)) as Arc<dyn Fn() + Send + Sync>);
-        step_header(ctx, (head, key, *open), &timeline.toggles, tokens.as_ref())
-      }
-      Row::Item(item) => spaced(item_row(ctx, item, &timeline)),
-      Row::Group {
+      Row::Step {
+        head,
         key,
-        group,
-        open,
-        shown,
-        left_out,
-      } => spaced(group::tool_group(
+        emphasized,
+        foldable,
+        matches,
+      } => spaced(divider::step_divider(
         ctx,
         &timeline,
-        (key, group, *open),
-        (shown, left_out),
-        props.raw,
+        (head, key),
+        (*emphasized, *foldable, *matches),
       )),
+      Row::Folded { key, steps } => spaced(divider::folded(ctx, &timeline, key, steps)),
+      Row::NotStarted { steps, .. } => spaced(divider::not_started(ctx, steps)),
+      Row::Agent(agent) => spaced(message::agent_row(ctx, agent, &timeline, props.raw)),
+      Row::Item(item) => spaced(item_row(ctx, item, &timeline)),
       Row::Entry { key, entry } => ctx.mount_keyed::<EntryView>(
         key,
         EntryProps {
@@ -106,10 +107,9 @@ impl Component for TimelineRowView {
   }
 }
 
-/// A message, a card, a problem, a return or restart, a result or the run's end.
+/// A person's message, a card, a problem, a return or restart, a step's end or the run's.
 fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
   match &item.kind {
-    ItemKind::AgentMessage { agent, step, text } => message::agent_message(ctx, (agent, step), item.at, text),
     ItemKind::Message(entry) => ctx.mount_keyed::<PersonMessageView>(
       &format!("person-{}", entry.id),
       PersonMessageProps {
@@ -130,6 +130,10 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
     ItemKind::Approval(card) => {
       ctx.mount_keyed::<ApprovalCardView>(&item.key, ApprovalCardProps { card: card.clone() })
     }
+    // A tool step's failing command is the tool step's own message (`FeiRG`).
+    ItemKind::Problem(entry) if matches!(entry.kind, EntryKind::ToolCommand(_)) => {
+      message::tool_step_failure(ctx, item, entry, timeline)
+    }
     ItemKind::Problem(entry) => ctx.mount_keyed::<EntryView>(
       &item.key,
       EntryProps {
@@ -142,23 +146,24 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
         toggles: timeline.toggles.clone(),
       },
     ),
-    ItemKind::Mark(mark) => mark_row(ctx, mark),
-    ItemKind::Result(card) => cards::result(ctx, card, timeline),
-    ItemKind::End(end) => cards::end_marker(ctx, end, (timeline.run_number, item.at)),
-    ItemKind::Step(_) | ItemKind::Tools(_) => unreachable_row(),
+    ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
+    ItemKind::Result(card) if card.ended_on => cards::result(ctx, card, timeline),
+    ItemKind::Result(card) => divider::result(ctx, timeline, card, item.at),
+    ItemKind::End(end) => divider::end(ctx, end, (timeline.run_number, item.at)),
+    ItemKind::AgentMessage { .. } | ItemKind::Step(_) | ItemKind::Tools(_) => unreachable_row(),
   }
 }
 
-/// Steps and tool groups have rows of their own ([`Row::Step`], [`Row::Group`]).
+/// Agent messages, steps and tool groups have rows of their own ([`Row::Agent`], [`Row::Step`]).
 fn unreachable_row() -> Element {
   Column::new().into()
 }
 
-/// A row's room above and below it.
+/// A row's room above and below it: the chat's 20 between rows (`jl9lq`).
 fn spaced(content: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
-    .padding_vertical(SpacingSize::Sm)
+    .padding_vertical(ExtraSpacing::Inline.role())
     .child(content)
     .into()
 }

@@ -65,9 +65,8 @@ pub(super) fn unreadable(ctx: &Ctx, id: &'static str, run: &Unreadable) -> Eleme
   )
 }
 
-/// The timeline has nothing yet, with why: the task has no run, its run is queued (with the steps it
-/// will run on one line, `zxIMy`, which wraps where the tab is narrower), or its agents have
-/// reported nothing so far.
+/// The chat has nothing yet, with why: the task has no run, its run is queued (`N4FEE` in `FBwIV`;
+/// the rail beside it lists the steps), or its agents have reported nothing so far.
 pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
   let Some(run) = run else {
     return state(
@@ -93,45 +92,11 @@ pub(super) fn not_started(ctx: &Ctx, run: Option<&RunView>) -> Element {
     );
   }
   let number = run.run.number().get().to_string();
-  let mut steps = Row::new()
-    .id("conversation-empty-steps")
-    .max_width(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Section)
-    .wrap()
-    .justify(Justify::Center)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center);
-  for (index, step) in run.steps.iter().enumerate() {
-    // A step and the chevron before it wrap together, so no line ends on a chevron.
-    let mut unit = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
-    if index > 0 {
-      unit = unit.child(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted));
-    }
-    let number = format!("{:02}", step.number);
-    let label = match step.agent.as_deref().filter(|_| !step.tool_step) {
-      Some(agent) => ctx.t_args(
-        "runs.conversation.empty.step",
-        [("number", number.as_str()), ("step", &*step.name), ("agent", agent)],
-      ),
-      None => ctx.t_args(
-        "runs.conversation.empty.toolStep",
-        [("number", number.as_str()), ("step", &*step.name)],
-      ),
-    };
-    steps = steps.child(
-      unit.child(
-        Text::new(&label)
-          .variant(lurq::app::theme::TypographyStyle::Caption)
-          .color(PaletteColor::TextMuted)
-          .nowrap(),
-      ),
-    );
-  }
   state(
     "conversation-empty",
-    Icon::MessagesSquare,
+    Icon::MessageSquareDashed,
     &ctx.t("runs.conversation.empty.nothingYet"),
     &ctx.t_args("runs.conversation.empty.queued", [("run", number.as_str())]),
-    vec![steps.into()],
+    Vec::new(),
   )
 }

@@ -1,7 +1,9 @@
-//! What the composer says in each state of the run: what it answers or changes, above it; its
-//! placeholder (*Message Builder…*, `CxrSA`); its primary button; each recipient (*To: Builder ·
-//! working*, *To: Builder · resumes its session*, *To: Explorer · first step*) and the line under
-//! it that says what sending does now (`docs/design/orchester-workspace.md`, "Composer").
+//! What the composer says in each state of the run (`docs/design/orchester-workspace.md`, "Composer
+//! (approved …)", `YJfPo`): what it answers or changes, above the box; its placeholder (*Message
+//! Builder…*); each recipient as its name and what it does with a message (*Builder · working*,
+//! *Planner · resumes its session*); the send button's tooltip, which carries what sending does; and
+//! the quiet line under the box, only while it changes the outcome (the message queues, a follow-up
+//! resumes the session, a failed run continues, the run has not started).
 
 use std::sync::Arc;
 
@@ -16,7 +18,7 @@ use lurq::{
 };
 use orchester_core::{conversation::Recipient, id::TaskId};
 
-use super::nav;
+use super::super::nav;
 use crate::{
   display,
   navigation::route::{Page, TaskPageTab},
@@ -31,8 +33,7 @@ use crate::{
   },
 };
 
-/// What the field says while it is empty: whom the message is for, or what it is (`CxrSA`,
-/// `OlLGD`, `haIEI`, `AzKYQ`, `zxIMy`).
+/// What the field says while it is empty: whom the message is for, or what it is.
 pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Arc<str> {
   let to_agent = |agent: &str| ctx.t_args("runs.conversation.placeholder.agent", [("agent", agent)]);
   match mode {
@@ -55,9 +56,10 @@ pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Convers
   }
 }
 
-/// The state's primary action.
+/// The state's primary action, as the send button's tooltip names it.
 pub(super) fn primary_label(ctx: &Ctx, mode: &ComposerMode) -> Arc<str> {
   ctx.t(match mode {
+    ComposerMode::Steer(working) if working.mid_turn => "runs.conversation.composer.sendNow",
     ComposerMode::Steer(_) => "runs.conversation.composer.sendAfterTurn",
     ComposerMode::Queue(_) | ComposerMode::Closed => "conversation.composer.send",
     ComposerMode::Answer { .. } => "runs.conversation.composer.sendAnswer",
@@ -68,31 +70,79 @@ pub(super) fn primary_label(ctx: &Ctx, mode: &ComposerMode) -> Arc<str> {
   })
 }
 
-/// One recipient as the select offers it in `mode`.
-pub(super) fn recipient_label(
+/// One recipient as the selector shows it in `mode`: its name, and what it does with a message
+/// (`opOGv`, the recipient menu of `l7cEtA`).
+pub(super) fn recipient_words(
   ctx: &Ctx,
   conversation: &Conversation,
   mode: &ComposerMode,
   choice: &RecipientChoice,
-) -> Arc<str> {
-  let Some(agent) = choice.agent.as_deref() else {
-    return match (mode, conversation.first_agent.as_deref()) {
-      (ComposerMode::NotStarted, Some(first)) => ctx.t_args("runs.conversation.to.firstStep", [("agent", first)]),
-      _ => ctx.t("conversation.to.orchestrator"),
+) -> (Arc<str>, Arc<str>) {
+  let Some(agent) = choice.agent.clone() else {
+    return match (mode, conversation.first_agent.clone()) {
+      (ComposerMode::NotStarted, Some(first)) => (first, ctx.t("runs.conversation.recipient.startsFirst")),
+      _ => (
+        ctx.t("runs.conversation.recipient.orchestrator"),
+        ctx.t("runs.conversation.recipient.thisTask"),
+      ),
     };
   };
   let working = matches!(choice.recipient, Recipient::Agent(profile)
     if conversation.working.iter().any(|working| working.profile == profile));
   let key = match mode {
-    _ if working => "runs.conversation.to.working",
-    ComposerMode::FollowUp => "runs.conversation.to.resumes",
-    ComposerMode::Continue => "runs.conversation.to.continues",
-    _ => "conversation.to.agent",
+    _ if working => "runs.conversation.recipient.working",
+    ComposerMode::Answer { .. } => "runs.conversation.recipient.asking",
+    ComposerMode::PlanChanges { .. } => "runs.conversation.recipient.planWaits",
+    ComposerMode::FollowUp => "runs.conversation.recipient.resumes",
+    ComposerMode::Continue => "runs.conversation.recipient.continues",
+    ComposerMode::Queue(Queued::Suspended) => match conversation.state {
+      PanelState::Stopped => "runs.conversation.recipient.stopped",
+      PanelState::Interrupted => "runs.conversation.recipient.interrupted",
+      _ => "runs.conversation.recipient.paused",
+    },
+    ComposerMode::Queue(Queued::Decision) => "runs.conversation.recipient.deciding",
+    _ => "runs.conversation.recipient.notRunning",
   };
-  ctx.t_args(key, [("agent", agent)])
+  (agent, ctx.t(key))
 }
 
-/// What sending does now (`pDLcP`).
+/// What sending does now, said by the send button's tooltip (`k565Es` in `l7cEtA`): *Send now ·
+/// Enter. Builder gets it at its next tool call. Ctrl+Enter sends after this turn.*
+pub(super) fn tip(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Arc<str> {
+  if let ComposerMode::Steer(working) = mode
+    && working.mid_turn
+  {
+    let key = if cfg!(target_os = "macos") {
+      "runs.conversation.tip.steerMac"
+    } else {
+      "runs.conversation.tip.steer"
+    };
+    return ctx.t_args(key, [("agent", &*working.agent)]);
+  }
+  ctx.t_args(
+    "runs.conversation.tip.send",
+    [
+      ("action", &*primary_label(ctx, mode)),
+      ("hint", &*hint(ctx, mode, conversation)),
+    ],
+  )
+}
+
+/// The quiet line under the box, while what it says changes the outcome (`okcPt` in `l7cEtA`,
+/// `Alok8` in `cHDF1`): the message queues, a follow-up resumes the session, a failed run
+/// continues, the run has not started.
+pub(super) fn quiet(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Option<Arc<str>> {
+  match mode {
+    ComposerMode::Queue(_) | ComposerMode::FollowUp | ComposerMode::Continue | ComposerMode::NotStarted => {
+      Some(hint(ctx, mode, conversation))
+    }
+    ComposerMode::Steer(_) | ComposerMode::Answer { .. } | ComposerMode::PlanChanges { .. } | ComposerMode::Closed => {
+      None
+    }
+  }
+}
+
+/// What sending does now.
 pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Arc<str> {
   match mode {
     ComposerMode::Steer(working) => {
@@ -136,8 +186,8 @@ fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
   }
 }
 
-/// Above the composer (`k0NkK` in `ZxYGh`): *Answering Builder's question from 12:09*, *Changes to
-/// plan v1 · sent to Planner*; *Waiting for your decision* with the way to it, on the task's Summary.
+/// Above the box (`po1Yr` in `K1oNwn`): *Answering Builder's question from 12:09*, *Changes to plan
+/// v1 · sent to Planner*; *Waiting for your decision* with the way to it, on the task's Summary.
 pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> Option<Element> {
   let (glyph, text) = match mode {
     ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, task)),
@@ -160,6 +210,7 @@ pub(super) fn context_line(ctx: &mut Ctx, mode: &ComposerMode, task: TaskId) -> 
   Some(
     Row::new()
       .width(Dimension::Pct(100.0))
+      .padding_horizontal(SpacingSize::Md)
       .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
       .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
@@ -181,6 +232,7 @@ fn decision_line(ctx: &mut Ctx, task: TaskId) -> Element {
     .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link));
   Row::new()
     .width(Dimension::Pct(100.0))
+    .padding_horizontal(SpacingSize::Md)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
