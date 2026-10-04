@@ -51,6 +51,7 @@ mod project_settings;
 mod project_setup;
 mod pull_request_detail;
 mod pull_requests;
+mod pull_requests_layout;
 mod run_again;
 mod run_permissions;
 mod secrets;

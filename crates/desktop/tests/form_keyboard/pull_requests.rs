@@ -51,8 +51,8 @@ const GATEWAY_TIMEOUT: &str =
 const RATE_LIMITED: &str = include_str!("../../../core/tests/fixtures/github/gh_repo_view_rate_limited.stderr");
 /// Signed in as ivanzaida without the `repo` scope; shaped like the captured output.
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","tokenSource":"keyring","scopes":"read:org","gitProtocol":"https"}]}}"#;
-const LIST_ID: &str = "pull-requests-list";
-const STATUS: &str = "pull-requests-sync-status";
+pub(crate) const LIST_ID: &str = "pull-requests-list";
+pub(crate) const STATUS: &str = "pull-requests-sync-status";
 
 /// `gh` answering read-only commands from a table that tests change between syncs, and check
 /// counts from the checks of the heads it knows (none for the others).
@@ -361,7 +361,7 @@ fn pull_requests_sync_every_minute_only_while_shown() {
 }
 
 /// `count` open pull requests shaped like the synthetic ones, numbered from 1.
-fn many_pull_requests(count: u64) -> String {
+pub(crate) fn many_pull_requests(count: u64) -> String {
   let items: Vec<String> = (1..=count)
     .map(|number| {
       format!(

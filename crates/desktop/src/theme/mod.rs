@@ -37,6 +37,8 @@ pub const LIFECYCLE_DIALOG_WIDTH: f32 = tokens::LIFECYCLE_DIALOG_WIDTH;
 pub const APPROVAL_VALUE_MAX_HEIGHT: f32 = tokens::APPROVAL_VALUE_MAX_HEIGHT;
 /// Stroke of the pipeline canvas connectors (`zpizf`, `gXNw9`).
 pub const CONNECTOR_STROKE: f32 = tokens::CONNECTOR_STROKE;
+/// One digit of a count in the tab count's text style, for room kept for a count.
+pub const COUNT_DIGIT_WIDTH: f32 = tokens::COUNT_DIGIT_WIDTH;
 /// Width of the check slot every select option reserves, the size of the check (`ClxwV` in
 /// `L20XvS`).
 pub const SELECT_CHECK_SLOT: f32 = tokens::SELECT_ICON_SIZE;
