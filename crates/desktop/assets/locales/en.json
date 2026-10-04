@@ -2153,7 +2153,8 @@
         "toolStep": "A command tool runs this step, not an agent. Your message waits for the next agent’s turn.",
         "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
         "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
-        "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan."
+        "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan.",
+        "takenAsAnswer": "{{agent}} waits for an answer and takes this message as it."
       },
       "toolMeta": "tool · {{time}}",
       "asksMeta": "asks you · {{time}}",

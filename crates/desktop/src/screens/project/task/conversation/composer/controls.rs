@@ -17,7 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, HitTestBehavior, SelectPartStyle, Style, border::Border, dimension::Dimension},
 };
-use orchester_core::conversation::Recipient;
+use orchester_core::{conversation::Recipient, run::StepStatus};
 
 use super::{
   super::super::permissions::{Look, RunPermissionsProps, RunPermissionsRow},
@@ -325,15 +325,24 @@ fn queues(mode: &ComposerMode) -> bool {
   }
 }
 
-/// The run's permissions chip whenever the composer is open: for the step its agent works or last
-/// worked on, else the first agent step of the run (a queued run's, or after a tool step failed);
-/// `None` for a task without a run or a pipeline without an agent step whose profile is kept.
+/// The run's permissions chip whenever the composer is open, for the step a message reaches: the
+/// one its agent works or last worked on, else the agent that continues the run, else the next
+/// agent step that will run (a queued run's first), else the run's first agent step; `None` for a
+/// task without a run or a pipeline without an agent step whose profile is kept.
 fn permissions_chip(ctx: &mut Ctx, props: &ComposerProps, short: bool) -> Option<Element> {
   let run = props.detail.run.as_ref()?;
+  let agent_steps = || run.steps.iter().filter(|step| step.permissions.is_some());
+  let next_agent = props.conversation.next_agent.as_deref();
   let step = run
     .current_step()
     .filter(|step| step.permissions.is_some())
-    .or_else(|| run.steps.iter().find(|step| step.permissions.is_some()))?;
+    .or_else(|| {
+      agent_steps()
+        .rev()
+        .find(|step| next_agent.is_some() && step.agent.as_deref() == next_agent)
+    })
+    .or_else(|| agent_steps().find(|step| matches!(step.status, None | Some(StepStatus::Pending))))
+    .or_else(|| agent_steps().next())?;
   let chip = RunPermissionsProps {
     permissions: step.permissions.clone()?,
     step: step.clone(),

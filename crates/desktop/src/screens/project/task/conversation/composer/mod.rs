@@ -189,6 +189,11 @@ impl Component for ComposerDock {
     let action = send_action(ctx);
     let plan = plan_decision(ctx);
     if props.focus.get() {
+      // Reply, a question's hint and Ask agent ask for the box as the run's state offers it: a
+      // question the person left is answered again.
+      if self.left.get_untracked().0.is_some() {
+        self.left.set(Left::default());
+      }
       ctx.focus(&self.input);
       props.focus.set(false);
     }
@@ -197,6 +202,12 @@ impl Component for ComposerDock {
     self.follow_default(conversation, run);
     let recipient = self.to.get().0;
     let offered = ComposerMode::of(conversation, run, recipient);
+    // The question was answered or ended, the plan decided: what was left is gone with it.
+    if let Some(context) = self.left.get_untracked().0
+      && Context::of(&offered) != Some(context)
+    {
+      self.left.set(Left::default());
+    }
     let left = Context::of(&offered).is_some_and(|context| self.left.get().0 == Some(context));
     let leave = Context::of(&offered).filter(|_| !left).map(|context| {
       let chosen = self.left.clone();

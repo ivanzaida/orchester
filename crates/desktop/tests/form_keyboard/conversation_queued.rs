@@ -134,6 +134,8 @@ fn conversation_queued_run_lists_its_steps_in_the_rail_strip_at_960() {
   assert!(has(&mut desktop, "conversation-strip"));
   assert!(!has(&mut desktop, "conversation-rail"));
   assert!(shows(&mut desktop, "conversation-strip-step-5", "05"));
+  // The composer shows the permissions of the step a message reaches: the run's first.
+  assert!(has(&mut desktop, "conversation-permissions"));
   // Opened from the strip, the rail shows over the chat and names the steps.
   desktop.click("conversation-rail-expand");
   desktop.wait_for("conversation-rail-over");

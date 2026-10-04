@@ -168,3 +168,36 @@ fn composer_leaves_the_plan_s_changes_with_esc_and_writes_an_ordinary_message() 
   desktop.wait_for("conversation-send-tip");
   assert!(shows(&mut desktop, "conversation-send-tip", "Send · Enter."));
 }
+
+#[test]
+fn composer_answers_a_left_question_again_from_its_reply() {
+  let mut desktop = desktop();
+  create_and_run(&mut desktop, "Ask first.", "1400000");
+  desktop.wait_until("the question", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.waits_for_a_person())
+  });
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-composer-context");
+  desktop.click("conversation-composer-leave");
+  desktop.wait_until("the answer left", |desktop| {
+    !has(desktop, "conversation-composer-context")
+  });
+  // A message to the agent that asked still answers it, and the line under the box says so.
+  assert!(shows(
+    &mut desktop,
+    "conversation-explanation",
+    "Builder waits for an answer and takes this message as it."
+  ));
+  // Reply on the question's card answers it again.
+  desktop.click("conversation-reply");
+  desktop.wait_until("answering again", |desktop| {
+    has(desktop, "conversation-composer-context")
+  });
+  assert!(shows(
+    &mut desktop,
+    "conversation-composer-context",
+    "Answering Builder"
+  ));
+  assert!(shows(&mut desktop, "conversation-recipient", "asking you"));
+  assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
+}

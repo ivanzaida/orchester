@@ -24,7 +24,7 @@ use crate::{
   navigation::route::{Page, TaskPageTab},
   tasks::{
     conversation::{
-      Conversation, PanelState, RecipientChoice,
+      Author, Conversation, PanelState, RecipientChoice,
       composer::{ComposerMode, Queued},
     },
     detail::TaskDetail,
@@ -157,7 +157,9 @@ pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) 
       };
       ctx.t_args(key, [("agent", &*working.agent)])
     }
-    ComposerMode::Queue(queued) => queue_hint(ctx, queued, conversation.state),
+    ComposerMode::Queue(queued) => {
+      taken_as_answer(ctx, queued, conversation).unwrap_or_else(|| queue_hint(ctx, queued, conversation.state))
+    }
     ComposerMode::Answer { agent, .. } => ctx.t_args("conversation.explanation.answer", [("agent", &**agent)]),
     ComposerMode::PlanChanges { agent, .. } => ctx.t_args("runs.conversation.hint.planChanges", [("agent", &**agent)]),
     ComposerMode::FollowUp => match conversation.next_agent.as_deref() {
@@ -173,6 +175,22 @@ pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) 
       _ => "conversation.explanation.ended",
     }),
   }
+}
+
+/// A message written while a question waits, its answer mode left, still answers it when it reaches
+/// the agent that asked: written to that agent or to Orchestrator (the runner resumes the asking step
+/// with any message that reaches its agent).
+fn taken_as_answer(ctx: &Ctx, queued: &Queued, conversation: &Conversation) -> Option<Arc<str>> {
+  let question = conversation.open_question()?;
+  let Author::Agent(asker) = &question.author else {
+    return None;
+  };
+  let reaches = match queued {
+    Queued::NextTurn(Some(agent)) => agent == asker,
+    Queued::Checkpoint => true,
+    Queued::NextTurn(None) | Queued::ToolStep | Queued::Suspended | Queued::Decision => false,
+  };
+  reaches.then(|| ctx.t_args("runs.conversation.hint.takenAsAnswer", [("agent", &**asker)]))
 }
 
 fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
