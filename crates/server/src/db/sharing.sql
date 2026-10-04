@@ -62,5 +62,6 @@ CREATE TABLE events (
 );
 CREATE INDEX events_project ON events(project,sequence);
 CREATE INDEX events_retention ON events(at);
+CREATE INDEX events_project_retention ON events(project,at);
 CREATE TRIGGER events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT,'events are append-only'); END;
 UPDATE meta SET schema_version=2;

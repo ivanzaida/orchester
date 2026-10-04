@@ -25,7 +25,7 @@ pub struct SharedProject {
   pub key: String,
   pub name: String,
   pub remote: RepositoryIdentity,
-  pub role: MemberRole,
+  pub role: Option<MemberRole>,
   pub next_number: u64,
 }
 

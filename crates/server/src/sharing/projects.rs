@@ -1,6 +1,4 @@
-use orchester_api::{
-  ErrorCode, MemberRole, ProjectChanges, ProjectCreate, ProjectCreated, SharedProject, SharingErrorDetails,
-};
+use orchester_api::{ErrorCode, ProjectChanges, ProjectCreate, ProjectCreated, SharedProject, SharingErrorDetails};
 use orchester_core::{
   id::{ProjectId, UserId},
   name::Name,
@@ -13,7 +11,7 @@ use super::{access, batches, conflict, decode, encode, events, members};
 use crate::{db, error::ServerError};
 
 pub fn load(db: &Connection, project: ProjectId, user: UserId) -> Result<SharedProject, ServerError> {
-  let role = access::role(db, project, user)?.unwrap_or(MemberRole::Owner);
+  let role = access::role(db, project, user)?;
   Ok(
     db.query_row(
       "SELECT key,name,remote,next_task_number FROM projects WHERE id=?1",

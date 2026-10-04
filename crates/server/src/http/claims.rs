@@ -65,6 +65,10 @@ async fn heartbeat(
   Auth(auth): Auth,
   SafeJson(input): SafeJson<Heartbeat>,
 ) -> Result<Json<HeartbeatResponse>, ServerError> {
+  if input.tasks.len() > crate::sharing::limits::HEARTBEAT_TASK_LIMIT {
+    return Err(ErrorCode::Invalid.into());
+  }
+  server.inner.sharing_limits.heartbeat(auth.session, server.now())?;
   let lost = server
     .write(move |db, now| {
       let current = db::checked(db, &auth, now, false, false)?;

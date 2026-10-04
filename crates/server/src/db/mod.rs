@@ -128,6 +128,8 @@ fn migrate(connection: &mut Connection) -> Result<(), ServerError> {
     transaction.execute_batch(include_str!("schema.sql"))?;
     transaction.execute_batch(include_str!("sharing.sql"))?;
   }
+  // Review builds of schema 2 predate this retention index; opening them must also install it.
+  transaction.execute_batch("CREATE INDEX IF NOT EXISTS events_project_retention ON events(project,at)")?;
   transaction.commit()?;
   Ok(())
 }

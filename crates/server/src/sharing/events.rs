@@ -15,7 +15,6 @@ pub fn append(
   payload: &impl Serialize,
   now: i64,
 ) -> Result<(), ServerError> {
-  prune(db, now)?;
   db.execute(
     "INSERT INTO events(project,kind,payload,at) VALUES (?1,?2,?3,?4)",
     params![project.to_string(), kind.as_str(), encode(payload)?, now],
@@ -40,7 +39,7 @@ pub fn task(
 
 pub fn prune(db: &Connection, now: i64) -> Result<(), ServerError> {
   let cutoff = now.saturating_sub(RETENTION_MS);
-  db.execute("UPDATE projects SET event_floor=MAX(event_floor,COALESCE((SELECT MAX(sequence) FROM events WHERE project=projects.id AND at<?1),0))",[cutoff])?;
+  db.execute("UPDATE projects SET event_floor=MAX(event_floor,COALESCE((SELECT MAX(sequence) FROM events INDEXED BY events_project_retention WHERE project=projects.id AND at<?1),0))",[cutoff])?;
   db.execute("DELETE FROM events WHERE at<?1", [cutoff])?;
   Ok(())
 }
@@ -66,35 +65,32 @@ pub struct Replay {
 
 pub fn replay(db: &Connection, project: ProjectId, after: u64, now: i64) -> Result<Replay, ServerError> {
   let cutoff = now.saturating_sub(RETENTION_MS);
-  let floor = unsigned(db.query_row("SELECT MAX(event_floor,COALESCE((SELECT MAX(sequence) FROM events WHERE project=?1 AND at<?2),0)) FROM projects WHERE id=?1",params![project.to_string(),cutoff],|row|row.get(0))?)?;
+  let floor = unsigned(db.query_row("SELECT MAX(event_floor,COALESCE((SELECT MAX(sequence) FROM events INDEXED BY events_project_retention WHERE project=?1 AND at<?2),0)) FROM projects WHERE id=?1",params![project.to_string(),cutoff],|row|row.get(0))?)?;
   if after < floor {
     return Ok(Replay {
       reset: true,
       events: Vec::new(),
     });
   }
-  // Each snapshot may approach 1 MiB. Replay memory stays bounded even for a slow client.
+  // Batch small snapshots while bounding both event count and payload memory for slow clients.
   let mut query = db.prepare(
-    "SELECT sequence,kind,payload FROM events WHERE project=?1 AND sequence>?2 AND at>=?3 ORDER BY sequence LIMIT 1",
+    "SELECT sequence,kind,payload FROM events WHERE project=?1 AND sequence>?2 AND at>=?3 ORDER BY sequence LIMIT 64",
   )?;
-  let rows = query
-    .query_map(params![project.to_string(), sql_integer(after)?, cutoff], |row| {
-      Ok((
-        row.get::<_, i64>(0)?,
-        row.get::<_, String>(1)?,
-        row.get::<_, String>(2)?,
-      ))
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
-  let events = rows
-    .into_iter()
-    .map(|(id, kind, payload)| {
-      Ok(Event {
-        id: unsigned(id)?,
-        kind: EventKind::try_from(kind.as_str()).map_err(|_| ServerError::StoredData)?,
-        payload,
-      })
-    })
-    .collect::<Result<_, ServerError>>()?;
+  let mut rows = query.query(params![project.to_string(), sql_integer(after)?, cutoff])?;
+  let mut events = Vec::new();
+  let mut bytes = 0;
+  while let Some(row) = rows.next()? {
+    let payload: String = row.get(2)?;
+    if !events.is_empty() && bytes + payload.len() > 1024 * 1024 {
+      break;
+    }
+    bytes += payload.len();
+    let kind: String = row.get(1)?;
+    events.push(Event {
+      id: unsigned(row.get(0)?)?,
+      kind: EventKind::try_from(kind.as_str()).map_err(|_| ServerError::StoredData)?,
+      payload,
+    });
+  }
   Ok(Replay { reset: false, events })
 }

@@ -33,6 +33,7 @@ use crate::{
 struct EventBody {
   receiver: mpsc::Receiver<Bytes>,
   worker: JoinHandle<()>,
+  _permit: crate::sharing::limits::StreamPermit,
 }
 impl HttpBody for EventBody {
   type Data = Bytes;
@@ -84,6 +85,7 @@ pub async fn subscribe(
       members::generation(db, project, initial.user.id)?.ok_or_else(|| ErrorCode::Forbidden.into())
     })
     .await?;
+  let permit = server.inner.sharing_limits.stream(auth.session, auth.user.id)?;
   let (sender, receiver) = mpsc::channel(1);
   let worker = tokio::spawn(async move {
     let stream = EventStream {
@@ -103,7 +105,12 @@ pub async fn subscribe(
       error.log();
     }
   });
-  let mut response = Body::new(EventBody { receiver, worker }).into_response();
+  let mut response = Body::new(EventBody {
+    receiver,
+    worker,
+    _permit: permit,
+  })
+  .into_response();
   response
     .headers_mut()
     .insert("Content-Type", HeaderValue::from_static("text/event-stream"));
@@ -215,20 +222,24 @@ impl EventStream {
         self.deliver(Bytes::from_static(b"event: reset\ndata: {}\n\n")).await?;
         return Ok(());
       }
-      let had_events = !replay.events.is_empty();
-      for event in replay.events {
-        let data = Bytes::from(format!(
-          "id: {}\nevent: {}\ndata: {}\n\n",
-          event.id,
-          event.kind.as_str(),
-          event.payload
-        ));
-        if !self.deliver(data).await? {
+      if let Some(last) = replay.events.last() {
+        let next = last.id;
+        let data: String = replay
+          .events
+          .into_iter()
+          .map(|event| {
+            format!(
+              "id: {}\nevent: {}\ndata: {}\n\n",
+              event.id,
+              event.kind.as_str(),
+              event.payload
+            )
+          })
+          .collect();
+        if !self.deliver(Bytes::from(data)).await? {
           return Ok(());
         }
-        after = event.id;
-      }
-      if had_events {
+        after = next;
         continue;
       }
       tokio::select! {

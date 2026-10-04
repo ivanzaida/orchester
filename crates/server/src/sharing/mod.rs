@@ -2,6 +2,7 @@ pub(crate) mod access;
 pub(crate) mod batches;
 pub(crate) mod claims;
 pub(crate) mod events;
+pub(crate) mod limits;
 pub(crate) mod members;
 pub(crate) mod organization;
 pub(crate) mod projects;
@@ -33,7 +34,23 @@ impl Server {
     operation: impl FnOnce(&rusqlite::Connection, i64) -> Result<T, ServerError> + Send + 'static,
   ) -> Result<T, ServerError> {
     let clock = self.inner.clock.clone();
-    self.inner.db.write(move |db| operation(db, clock.now_ms())).await
+    let state = self.inner.clone();
+    self
+      .inner
+      .db
+      .write(move |db| {
+        let now = clock.now_ms();
+        let result = operation(db, now)?;
+        if now >= state.event_prune_at.load(std::sync::atomic::Ordering::Relaxed) {
+          events::prune(db, now)?;
+          // Writes are serialized by the database; replay excludes expired rows even if a commit fails.
+          state
+            .event_prune_at
+            .store(now.saturating_add(60_000), std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(result)
+      })
+      .await
   }
 }
 

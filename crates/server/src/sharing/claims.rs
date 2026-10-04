@@ -7,7 +7,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
-use super::{access, conflict, events, reason, task_rows, task_write};
+use super::{access, conflict, events, reason, task_rows};
 use crate::{db, error::ServerError};
 
 pub fn snapshot(db: &Connection, claim: &Claim, now: i64) -> Result<SharedClaim, ServerError> {
@@ -43,7 +43,10 @@ pub fn save(db: &Connection, task: TaskId, claim: &Claim) -> Result<(), ServerEr
   db.execute("INSERT INTO claims(id,task,holder,kind,since,heartbeat_at,taken_over_from) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(task) DO UPDATE SET id=excluded.id,holder=excluded.holder,kind=excluded.kind,since=excluded.since,heartbeat_at=excluded.heartbeat_at,taken_over_from=excluded.taken_over_from",
     params![claim.id().to_string(),task.to_string(),claim.holder().to_string(),match claim.kind() {ClaimKind::Manual=>"manual",ClaimKind::Run=>"run"},claim.since().unix_millis(),claim.heartbeat_at().unix_millis(),claim.taken_over_from().map(|id|id.to_string())])?;
   if claim.kind() == ClaimKind::Run {
-    db.execute("UPDATE tasks SET has_run=1 WHERE id=?1", [task.to_string()])?;
+    db.execute(
+      "UPDATE tasks SET has_run=1 WHERE id=?1 AND has_run=0",
+      [task.to_string()],
+    )?;
   }
   Ok(())
 }
@@ -107,8 +110,10 @@ pub fn take(
     return Ok(old);
   }
   save(db, task, &next)?;
+  if current.as_ref().is_some_and(|claim| claim.kind() == next.kind()) {
+    return task_rows::load(db, project, task, now);
+  }
   record(db, task, &next, ClaimAction::Taken, user, now)?;
-  task_write::bump(db, task, user, now)?;
   events::task(db, project, task, now)?;
   task_rows::load(db, project, task, now)
 }
@@ -165,7 +170,6 @@ fn forced_release(
   db.execute("DELETE FROM claims WHERE task=?1", [task.to_string()])?;
   db.execute("DELETE FROM run_status WHERE task=?1", [task.to_string()])?;
   record(db, task, claim, ClaimAction::Released, actor, now)?;
-  task_write::bump(db, task, actor, now)?;
   events::task(db, project, task, now)
 }
 
@@ -211,7 +215,6 @@ pub fn takeover(
   save(db, task, &next)?;
   record(db, task, &next, ClaimAction::TakenOver, user, now)?;
   db::audit(db, Some(user), "claim_taken_over", &task.to_string(), None, now)?;
-  task_write::bump(db, task, user, now)?;
   events::task(db, project, task, now)?;
   task_rows::load(db, project, task, now)
 }
@@ -240,7 +243,6 @@ pub fn heartbeat(db: &Connection, user: UserId, tasks: Vec<TaskId>, now: i64) ->
       continue;
     }
     save(db, task, &claim)?;
-    events::task(db, project, task, now)?;
   }
   Ok(lost)
 }

@@ -19,7 +19,8 @@ pub fn failure(error: &OrganizationError) -> ServerError {
     OrganizationError::TagNotFound(_) => reason(ErrorCode::Organization, "tag_not_found"),
     OrganizationError::DuplicateTag => ErrorCode::TagExists.into(),
     OrganizationError::SameTag => ErrorCode::SameTag.into(),
-    OrganizationError::Blocked(_) => reason(ErrorCode::Organization, "blocked"),
+    // Run preflight belongs to the runner; no S1b organization write can produce this error.
+    OrganizationError::Blocked(_) => ServerError::StoredData,
   }
 }
 
@@ -62,6 +63,17 @@ pub fn validate(
   old: &TaskOrganization,
   value: &TaskOrganization,
 ) -> Result<(), ServerError> {
+  validate_planned(db, project, task, old, value, &HashMap::new())
+}
+
+pub fn validate_planned(
+  db: &Connection,
+  project: ProjectId,
+  task: TaskId,
+  old: &TaskOrganization,
+  value: &TaskOrganization,
+  planned: &HashMap<TaskId, TaskOrganization>,
+) -> Result<(), ServerError> {
   let known: HashSet<_> = super::tags::list(db, project)?.into_iter().map(|tag| tag.id).collect();
   value.check_tags(&known).map_err(|error| failure(&error))?;
   if old.status() != value.status()
@@ -80,7 +92,10 @@ pub fn validate(
     if task_rows::project_of(db, id)? != Some(project) {
       return Err(ErrorCode::Invalid.into());
     }
-    let other = load(db, id)?;
+    let other = match planned.get(&id) {
+      Some(other) => other.clone(),
+      None => load(db, id)?,
+    };
     pending.extend(other.dependencies().iter().map(|link| link.task));
     graph.insert(id, other);
   }
@@ -106,10 +121,9 @@ pub fn save(db: &Connection, task: TaskId, value: &TaskOrganization) -> Result<(
     )?;
   }
   db.execute("DELETE FROM task_links WHERE task=?1", [task.to_string()])?;
-  // Core preserves links as entered; the storage identity is one link per blocking task.
   for link in value.dependencies() {
     db.execute(
-      "INSERT INTO task_links VALUES (?1,?2,?3) ON CONFLICT(task,blocking) DO UPDATE SET gate=excluded.gate",
+      "INSERT INTO task_links VALUES (?1,?2,?3)",
       params![task.to_string(), link.task.to_string(), encode(&link.gate)?],
     )?;
   }

@@ -20,6 +20,7 @@ pub fn upload(number: u32) -> Value {
   value["status"] = json!("draft");
   value["created_at"] = json!(123);
   value["claim"] = json!(false);
+  value["has_run"] = json!(false);
   value
 }
 

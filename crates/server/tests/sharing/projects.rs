@@ -133,7 +133,7 @@ async fn s1b_membership_privacy_roles_self_leave_and_admin_management() {
       .json::<ProjectResponse>()
       .project
       .role,
-    orchester_api::MemberRole::Member
+    Some(orchester_api::MemberRole::Member)
   );
   assert_eq!(
     server

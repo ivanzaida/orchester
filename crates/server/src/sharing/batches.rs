@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use orchester_api::{DroppedLink, ErrorCode, TaskContent, TasksCreated, UploadTask};
 use orchester_core::{
@@ -77,6 +77,7 @@ pub fn create(
       status: TaskStatus::Draft,
       created_at: now,
       claim: false,
+      has_run: false,
     });
     next = next.checked_add(1).ok_or(ErrorCode::Invalid)?;
   }
@@ -123,12 +124,17 @@ pub fn upload(
   let mut known: HashSet<_> = task_rows::ids(db, project)?.into_iter().collect();
   let mut incoming = HashSet::new();
   for task in &input {
-    let exists: bool = db.query_row(
-      "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?1)",
-      [task.id.to_string()],
-      |row| row.get(0),
-    )?;
-    if exists || !incoming.insert(task.id) {
+    if let Some(existing_project) = task_rows::project_of(db, task.id)? {
+      return Err(
+        if existing_project == project {
+          ErrorCode::IdTaken
+        } else {
+          ErrorCode::Conflict
+        }
+        .into(),
+      );
+    }
+    if !incoming.insert(task.id) {
       return Err(ErrorCode::IdTaken.into());
     }
   }
@@ -210,7 +216,7 @@ fn upload_content(
     blocked_reason: task.blocked_reason,
   };
   task_write::validate(&mut content)?;
-  if task.status == TaskStatus::Queued || task.claim {
+  if task.status == TaskStatus::Queued || task.claim || task.has_run {
     TaskStatus::Draft
       .check_queue(task_write::missing(&content))
       .map_err(task_write::queue_error)?;
@@ -228,6 +234,7 @@ fn upload_content(
     status: task.status,
     created_at: task.created_at,
     claim: task.claim,
+    has_run: task.has_run,
   })
 }
 
@@ -254,22 +261,31 @@ fn insert(
   for task in &tasks {
     task_write::insert(db, project, user, task, now)?;
   }
-  for task in &tasks {
-    let value = task
-      .content
-      .organization()
-      .core()
-      .map_err(|error| organization::failure(&error))?;
-    organization::save(db, task.id, &value)?;
+  let organizations: HashMap<_, _> = tasks
+    .iter()
+    .map(|task| {
+      Ok((
+        task.id,
+        task
+          .content
+          .organization()
+          .core()
+          .map_err(|error| organization::failure(&error))?,
+      ))
+    })
+    .collect::<Result<_, ServerError>>()?;
+  for (id, value) in &organizations {
+    organization::validate_planned(db, project, *id, &TaskOrganization::default(), value, &organizations)?;
+  }
+  for (id, value) in &organizations {
+    organization::save(db, *id, value)?;
   }
   let mut snapshots = Vec::new();
   for task in tasks {
-    let value = task
-      .content
-      .organization()
-      .core()
-      .map_err(|error| organization::failure(&error))?;
-    organization::validate(db, project, task.id, &TaskOrganization::default(), &value)?;
+    let value = organizations
+      .get(&task.id)
+      .expect("every new task has a validated organization")
+      .clone();
     if uploaded || value != TaskOrganization::default() {
       organization::record(
         db,

@@ -190,6 +190,7 @@ pub struct UploadTask {
   pub status: TaskStatus,
   pub created_at: i64,
   pub claim: bool,
+  pub has_run: bool,
 }
 
 #[derive(Default, Serialize, Deserialize)]

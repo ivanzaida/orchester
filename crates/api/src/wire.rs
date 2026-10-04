@@ -54,17 +54,6 @@ pub enum Gate {
   Review,
   Merge,
 }
-pub mod optional_gate {
-  use super::*;
-  #[derive(Serialize, Deserialize)]
-  struct Value(#[serde(with = "Gate")] DependencyGate);
-  pub fn serialize<S: serde::Serializer>(value: &Option<DependencyGate>, serializer: S) -> Result<S::Ok, S::Error> {
-    value.map(Value).serialize(serializer)
-  }
-  pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<DependencyGate>, D::Error> {
-    Ok(Option::<Value>::deserialize(deserializer)?.map(|value| value.0))
-  }
-}
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "ChangeActor", rename_all = "snake_case")]
 pub enum Actor {
@@ -114,15 +103,4 @@ pub enum Phase {
   Merged,
   Failed,
   Cancelled,
-}
-pub mod optional_phase {
-  use super::*;
-  #[derive(Serialize, Deserialize)]
-  struct Value(#[serde(with = "Phase")] TaskPhase);
-  pub fn serialize<S: serde::Serializer>(value: &Option<TaskPhase>, serializer: S) -> Result<S::Ok, S::Error> {
-    value.map(Value).serialize(serializer)
-  }
-  pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<TaskPhase>, D::Error> {
-    Ok(Option::<Value>::deserialize(deserializer)?.map(|value| value.0))
-  }
 }

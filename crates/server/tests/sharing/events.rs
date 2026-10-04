@@ -10,24 +10,47 @@ use tokio::{
 
 use crate::{fixture::*, support::TestServer};
 
-struct Stream {
+pub(super) struct Stream {
   socket: BufReader<TcpStream>,
   pending: String,
 }
-struct Frame {
-  id: Option<u64>,
-  kind: Option<String>,
-  data: String,
+pub(super) struct Frame {
+  pub id: Option<u64>,
+  pub kind: Option<String>,
+  pub data: String,
   comment: bool,
 }
 impl Stream {
-  async fn open(server: &TestServer, token: &Credential, project: orchester_core::id::ProjectId, after: u64) -> Self {
+  pub(super) async fn open(
+    server: &TestServer,
+    token: &Credential,
+    project: orchester_core::id::ProjectId,
+    after: u64,
+  ) -> Self {
+    Self::try_open(server, token, project, after)
+      .await
+      .unwrap_or_else(|status| panic!("expected SSE success, got {status}"))
+  }
+  pub(super) async fn try_open(
+    server: &TestServer,
+    token: &Credential,
+    project: orchester_core::id::ProjectId,
+    after: u64,
+  ) -> Result<Self, u16> {
     let mut socket = server.connect().await;
     socket.write_all(format!("GET /api/v1/projects/{project}/events HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {}\r\nLast-Event-ID: {after}\r\n\r\n",token.expose()).as_bytes()).await.expect("subscribe");
     let mut socket = BufReader::new(socket);
     let mut line = String::new();
     socket.read_line(&mut line).await.expect("status");
-    assert!(line.starts_with("HTTP/1.1 200"));
+    let status = line
+      .split_whitespace()
+      .nth(1)
+      .expect("status code")
+      .parse()
+      .expect("numeric status");
+    if status != 200 {
+      return Err(status);
+    }
     let mut buffering = false;
     loop {
       line.clear();
@@ -40,10 +63,10 @@ impl Stream {
       }
     }
     assert!(buffering);
-    Self {
+    Ok(Self {
       socket,
       pending: String::new(),
-    }
+    })
   }
   async fn frame(&mut self) -> Option<Frame> {
     loop {
@@ -85,7 +108,7 @@ impl Stream {
       self.pending.push_str(std::str::from_utf8(&bytes).expect("UTF8 events"));
     }
   }
-  async fn next(&mut self) -> Frame {
+  pub(super) async fn next(&mut self) -> Frame {
     tokio::time::timeout(Duration::from_secs(5), async {
       loop {
         let frame = self.frame().await.expect("open stream");
@@ -97,7 +120,7 @@ impl Stream {
     .await
     .expect("event deadline")
   }
-  async fn closed(&mut self) {
+  pub(super) async fn closed(&mut self) {
     assert!(
       tokio::time::timeout(Duration::from_secs(5), self.frame())
         .await
