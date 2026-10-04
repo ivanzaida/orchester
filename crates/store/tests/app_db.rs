@@ -1,12 +1,12 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ServerId, UserId},
   name::Name,
   project::{Project, ProjectKey},
   time::Timestamp,
 };
-use orchester_store::{AppDb, PreviousSession, ProjectDb, SessionEnd};
+use orchester_store::{AppDb, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredServer};
 
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -163,4 +163,65 @@ fn ui_state_is_added_to_a_database_of_the_previous_version() {
   let mut db = AppDb::open(&path).expect("migrate");
   db.set_ui_state("tabs", "saved").expect("store");
   assert_eq!(db.projects().expect("list").len(), 1, "the projects are kept");
+}
+
+fn server(url: &str, added_at: i64) -> StoredServer {
+  StoredServer {
+    id: ServerId::generate(),
+    url: url.to_owned(),
+    name: "Kontur team".to_owned(),
+    plain_http_allowed: false,
+    added_at: at(added_at),
+    account: None,
+  }
+}
+
+#[test]
+fn servers_keep_their_address_name_opt_in_and_account() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  let kontur = server("https://orchester.kontur.lan", 1);
+  let lab = StoredServer {
+    plain_http_allowed: true,
+    ..server("http://10.0.4.20:8740", 2)
+  };
+  db.add_server(&kontur).expect("add Kontur team");
+  db.add_server(&lab).expect("add the lab");
+  let account = ServerAccount {
+    user: UserId::generate(),
+    username: "bohdan".to_owned(),
+    display_name: "Bohdan Koval".to_owned(),
+    admin: true,
+    signed_in_at: at(3),
+  };
+  db.set_server_account(kontur.id, Some(&account)).expect("sign in");
+  db.set_server_name(kontur.id, "Kontur").expect("rename");
+  drop(db);
+
+  let mut db = AppDb::open(&path).expect("reopen");
+  let servers = db.servers().expect("list");
+  assert_eq!(servers.len(), 2);
+  assert_eq!(servers[0].url, "https://orchester.kontur.lan");
+  assert_eq!(servers[0].name, "Kontur");
+  assert_eq!(servers[0].account.as_ref(), Some(&account));
+  assert!(servers[1].plain_http_allowed);
+  assert_eq!(servers[1].account, None);
+
+  db.set_server_account(kontur.id, None).expect("sign out");
+  assert_eq!(db.servers().expect("list")[0].account, None);
+}
+
+#[test]
+fn servers_refuse_an_address_twice_and_an_unknown_server() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  db.add_server(&server("https://orchester.kontur.lan", 1)).expect("add");
+  assert!(db.add_server(&server("https://orchester.kontur.lan", 2)).is_err());
+  let unknown = ServerId::generate();
+  assert!(matches!(
+    db.set_server_name(unknown, "Lab"),
+    Err(StoreError::ServerNotFound(id)) if id == unknown
+  ));
+  assert_eq!(db.servers().expect("list").len(), 1);
 }
