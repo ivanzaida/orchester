@@ -11,7 +11,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{agent_step, create_and_run, fake_claude, has, init_repository, programs, seed_agent},
+  task_run::{agent_step, create_and_run, fake_claude, has, init_repository, latest_run, programs, seed_agent},
 };
 
 /// A step that only reads, doing what `instructions` tell the fake CLI.
@@ -63,6 +63,15 @@ fn command_approvals_claude_unlisted_command_in_a_writing_step_asks_without_the_
     "policy asks you about commands that change the worktree"
   ));
   assert!(!shows(&mut desktop, "tool-approval-dialog", "This step only reads"));
+  // The working directory is named from the repository on, as the design does (C6), and no
+  // sentence carries the worktree's absolute path.
+  let run = latest_run(desktop.repo()).expect("the run");
+  let folder = format!(".orchester/worktrees/{}", run.id());
+  assert!(shows(&mut desktop, "tool-approval-dialog", &folder));
+  let root = desktop.repo().to_string_lossy().into_owned();
+  for root in [root.clone(), root.replace('\\', "/")] {
+    assert!(!shows(&mut desktop, "tool-approval-dialog", &root), "{root}");
+  }
 }
 
 #[test]
