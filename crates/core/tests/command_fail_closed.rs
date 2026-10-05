@@ -403,8 +403,11 @@ fn command_fail_closed_always_offers_no_wide_prefix() {
 fn command_fail_closed_classify_in_the_reported_folder() {
   let fixture = Fixture::new();
   let deep = fixture.worktree.join("src");
-  let from_src = ClassifiedCommand::classify_in("rm -rf ..", &deep, &fixture.scope);
+  let from_src = ClassifiedCommand::classify_in("rm -rf ../docs", &deep, &fixture.scope);
   assert_eq!(from_src.category(), CommandCategory::Worktree);
+  // Removing the worktree itself is no edit: a person answers it.
+  let worktree = ClassifiedCommand::classify_in("rm -rf ..", &deep, &fixture.scope);
+  assert_eq!(worktree.category(), CommandCategory::Unknown);
   let from_root = ClassifiedCommand::classify_in("rm -rf ..", &fixture.worktree, &fixture.scope);
   assert_eq!(from_root.category(), CommandCategory::HistoryDestructive);
   let outside = fixture.worktree.parent().expect("projects").to_path_buf();

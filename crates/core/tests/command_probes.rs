@@ -9,7 +9,7 @@ use std::path::Path;
 
 use orchester_core::{
   permission::{
-    AllowedCommands, CommandPermission, CommandPrefix,
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandCategory, CommandScope},
   },
   run::{ApprovalSubject, permitted},
@@ -55,13 +55,19 @@ impl Fixture {
     ClassifiedCommand::classify(&line, &self.scope)
   }
 
-  fn runs(&self, line: &str) -> bool {
+  /// Whether `line` runs unasked in a step with `repository` access.
+  fn runs_in(&self, line: &str, repository: RepositoryAccess) -> bool {
     let commands = ["cargo test", "cargo check"]
       .iter()
       .map(|entry| CommandPrefix::new(entry).expect("prefix"))
       .collect();
     let list = CommandPermission::Allowed(AllowedCommands::new(commands).expect("list"));
-    permitted(&ApprovalSubject::Command(self.command(line)), &list).is_some()
+    let permissions = AgentPermissions::new(repository, list, NetworkAccess::Off);
+    permitted(&ApprovalSubject::Command(self.command(line)), &permissions).is_some()
+  }
+
+  fn runs(&self, line: &str) -> bool {
+    self.runs_in(line, RepositoryAccess::ReadOnly)
   }
 }
 
@@ -161,11 +167,28 @@ const ASKS: &[&str] = &[
   "ls\r src",
 ];
 
+/// Probes of [`ASKS`] that only write files in the worktree: a step that edits files runs them, as its
+/// edit tools would write there.
+const WORKTREE_WRITES: &[&str] = &[
+  "echo hi >&out.txt",
+  "cat src/lib.rs >& src/lib.rs",
+  "git status; ls >&src/lib.rs",
+  "cat src/lib.rs 2>&out",
+  "cat src/lib.rs >&2out",
+  "cat src/lib.rs &> out.txt",
+];
+
 #[test]
 fn command_probes_ask() {
   let fixture = Fixture::new();
   for line in ASKS {
     assert!(!fixture.runs(line), "`{line}` must ask");
+    let edits = fixture.runs_in(line, RepositoryAccess::Write);
+    assert_eq!(
+      edits,
+      WORKTREE_WRITES.contains(line),
+      "`{line}` in a step that edits files"
+    );
   }
 }
 

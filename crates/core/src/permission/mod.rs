@@ -88,9 +88,19 @@ impl CommandPrefix {
   /// Whether this prefix allows the program and arguments `argv`: its words are the first elements of
   /// `argv`, each whole. An argument with spaces matches no word, so `git "status --short"` is not
   /// `git status`, while arguments after the prefix may hold anything (`git commit -m "a message"`).
+  /// Cargo's toolchain selector right after the program (`cargo +nightly fmt`) chooses which Cargo runs,
+  /// not what it does, so `cargo fmt` allows it too, unless the prefix names a toolchain itself.
   pub fn covers_argv(&self, argv: &[String]) -> bool {
     let words: Vec<&str> = self.0.split(' ').collect();
-    argv.len() >= words.len() && words.iter().zip(argv).all(|(word, arg)| *word == arg)
+    let argv = match (argv, words.get(1)) {
+      ([program, toolchain, rest @ ..], Some(second))
+        if program == "cargo" && toolchain.starts_with('+') && !second.starts_with('+') && !rest.is_empty() =>
+      {
+        std::iter::once(program).chain(rest).cloned().collect()
+      }
+      _ => argv.to_vec(),
+    };
+    argv.len() >= words.len() && words.iter().zip(&argv).all(|(word, arg)| *word == arg)
   }
 
   /// Whether this prefix allows `other`: the same words, or `other` continues them.

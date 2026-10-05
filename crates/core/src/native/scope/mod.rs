@@ -271,8 +271,8 @@ fn within(path: &Path, root: &Path) -> bool {
 }
 
 /// Whether `path` inside `root` is a `.git` entry or lies in one, or, in the worktree, lies in
-/// `.orchester/`.
-fn protected(path: &Path, root: &Path, in_worktree: bool) -> bool {
+/// `.orchester/`. The command classifier refuses a shell write there by this same rule.
+pub(crate) fn protected(path: &Path, root: &Path, in_worktree: bool) -> bool {
   let below = path.components().skip(root.components().count());
   for (depth, component) in below.enumerate() {
     let Component::Normal(name) = component else {

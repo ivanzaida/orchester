@@ -217,7 +217,16 @@ fn approval_answers_auto_approval_never_approves_what_is_dangerous() {
     );
   }
   for (command, ask) in [
-    ("cp src/a.rs /etc/a.rs", AutoAsk::OutsideWrite),
+    ("cp src/a.rs ../../a.rs", AutoAsk::OutsideWrite),
+    // Git Bash places a path rooted without a drive under its own installation: not placed.
+    (
+      "cp src/a.rs /etc/a.rs",
+      if cfg!(windows) {
+        AutoAsk::Unknown
+      } else {
+        AutoAsk::OutsideWrite
+      },
+    ),
     ("echo x > ../outside.txt", AutoAsk::OutsideWrite),
     ("cat ~/.ssh/id_rsa", AutoAsk::Secrets),
     ("cat ~/.claude.json", AutoAsk::Secrets),

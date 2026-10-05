@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::{
   permission::{
-    AllowedCommands, CommandPermission, CommandPrefix,
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandCategory, CommandScope},
   },
   run::{ApprovalSubject, RuleScope, SimilarUnavailable, permitted},
@@ -57,7 +57,7 @@ impl Fixture {
   }
 
   fn permitted(&self, line: &str) -> Option<CommandCategory> {
-    permitted(&ApprovalSubject::Command(self.command(line)), &builder())
+    permitted(&ApprovalSubject::Command(self.command(line)), &reading(builder()))
   }
 }
 
@@ -88,6 +88,11 @@ fn allowed(entries: &[&str]) -> CommandPermission {
     .map(|entry| CommandPrefix::new(entry).expect("prefix"))
     .collect();
   CommandPermission::Allowed(AllowedCommands::new(entries).expect("allowed commands"))
+}
+
+/// The permissions of a read-only step with `commands`: every write asks.
+fn reading(commands: CommandPermission) -> AgentPermissions {
+  AgentPermissions::new(RepositoryAccess::ReadOnly, commands, NetworkAccess::Off)
 }
 
 /// A builder's list: the checks it runs.
@@ -190,9 +195,9 @@ fn command_sequences_with_a_part_that_would_ask_alone_ask() {
   }
   // With every command asking, or no listed command, nothing runs by itself.
   let subject = ApprovalSubject::Command(fixture.command("git status && git diff"));
-  assert_eq!(permitted(&subject, &CommandPermission::AskBefore), None);
-  assert_eq!(permitted(&subject, &allowed(&[])), None);
-  assert_eq!(permitted(&subject, &CommandPermission::AnyInWorktree), None);
+  assert_eq!(permitted(&subject, &reading(CommandPermission::AskBefore)), None);
+  assert_eq!(permitted(&subject, &reading(allowed(&[]))), None);
+  assert_eq!(permitted(&subject, &reading(CommandPermission::AnyInWorktree)), None);
 }
 
 #[test]

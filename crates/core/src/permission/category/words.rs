@@ -6,7 +6,10 @@
 //! quote leaves the part unread, and it is then classified as Unknown. The one variable read is one the
 //! line set to a plain literal before ([`Variables`]): its uses are its value.
 
-use super::variables::{Variables, is_assignment, name_char};
+use super::{
+  heredoc::Heredoc,
+  variables::{Variables, is_assignment, name_char},
+};
 
 /// Whether a redirection's word names a file descriptor (`2`, `-`, `2-`) rather than a file.
 fn is_descriptor(word: &str) -> bool {
@@ -37,13 +40,15 @@ pub(super) struct RawPart {
   pub(super) background: bool,
   /// It only sets a variable to a literal, whose later uses were read as its value.
   pub(super) assigns: bool,
+  /// It reads a here-document, data that follows the line.
+  heredoc: bool,
   /// Its first word has a quote or an escape before its first `=`: no assignment, whatever it reads.
   quoted_name: bool,
 }
 
 impl RawPart {
   fn is_empty(&self) -> bool {
-    self.words.is_empty() && self.writes.is_empty() && self.reads.is_empty() && !self.unread
+    self.words.is_empty() && self.writes.is_empty() && self.reads.is_empty() && !self.unread && !self.heredoc
   }
 }
 
@@ -85,6 +90,8 @@ struct Splitter {
   opened_by: Joiner,
   /// The word being collected has a quote or an escape before its first `=`.
   name_quoted: bool,
+  /// Here-documents whose bodies follow the current line, with the number of the part that reads each.
+  heredocs: Vec<(usize, Heredoc)>,
 }
 
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
@@ -100,12 +107,17 @@ pub(super) fn split(command: &str, quoting: Quoting) -> Vec<RawPart> {
     variables: Variables::default(),
     opened_by: Joiner::Edge,
     name_quoted: false,
+    heredocs: Vec::new(),
   };
   let mut chars = command.chars().peekable();
   while let Some(c) = chars.next() {
     splitter.take(c, &mut chars);
   }
   splitter.end_part(Joiner::Edge);
+  // A body that never came is not read.
+  for (at, _) in std::mem::take(&mut splitter.heredocs) {
+    splitter.parts[at].unread = true;
+  }
   splitter.parts
 }
 
@@ -114,7 +126,11 @@ impl Splitter {
     match c {
       // Bash keeps a carriage return in the word.
       ' ' | '\t' => self.end_word(),
-      '\n' | ';' => self.end_part(Joiner::Sequence),
+      '\n' => {
+        self.end_part(Joiner::Sequence);
+        self.bodies(chars);
+      }
+      ';' => self.end_part(Joiner::Sequence),
       '&' => self.ampersand(chars),
       '|' => {
         let joiner = match chars.next_if(|next| matches!(next, '|' | '&')) {
@@ -235,7 +251,11 @@ impl Splitter {
   fn input(&mut self, chars: &mut Chars<'_>) {
     self.descriptor_number();
     self.end_word();
-    if chars.next_if(|next| matches!(next, '<' | '(')).is_some() {
+    if chars.next_if_eq(&'<').is_some() {
+      self.here_document(chars);
+      return;
+    }
+    if chars.next_if_eq(&'(').is_some() {
       self.part.unread = true;
       return;
     }
@@ -244,6 +264,32 @@ impl Splitter {
     } else {
       Redirect::Read
     });
+  }
+
+  /// `<<word` or `<<-word`: the part reads the body that follows the line; a here-string (`<<<`) is not
+  /// read.
+  fn here_document(&mut self, chars: &mut Chars<'_>) {
+    if chars.next_if_eq(&'<').is_some() {
+      self.part.unread = true;
+      return;
+    }
+    match Heredoc::after_operator(chars) {
+      Some(heredoc) => {
+        self.part.heredoc = true;
+        // The part is pushed when it ends: it is the next one, and holds the here-document at least.
+        self.heredocs.push((self.parts.len(), heredoc));
+      }
+      None => self.part.unread = true,
+    }
+  }
+
+  /// Takes the bodies of the line's here-documents, which follow it in order.
+  fn bodies(&mut self, chars: &mut Chars<'_>) {
+    for (at, heredoc) in std::mem::take(&mut self.heredocs) {
+      if !heredoc.take_body(chars) {
+        self.parts[at].unread = true;
+      }
+    }
   }
 
   /// Drops the word just before a redirection when it is the descriptor it redirects (`2>`).
