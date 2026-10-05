@@ -961,6 +961,56 @@
       "notHolder": "The run moved this task to {{status}} at {{time}}, but you no longer hold the task, so nothing was sent to the server.",
       "dismiss": "Dismiss",
       "refused": "The run moved this task to {{status}} at {{time}}, but the server didn't take that change, so the task keeps the server's status."
+    },
+    "formerKey": "was {{key}}",
+    "notShared": {
+      "readiness": "Read-only · open it to share",
+      "filter": "Not shared · {{count}}",
+      "heading": {
+        "one": "1 task is Not shared",
+        "other": "{{count}} tasks are Not shared"
+      },
+      "detail": "You kept them on this computer when you joined {{key}}. They stay readable with their runs, conversation and memory, but can't be edited, run or claimed; their tags are kept by name. Share task on a task's page uploads it with a new {{key}} number.",
+      "footer": {
+        "one": "1 Not shared task · kept from before you joined {{key}}",
+        "other": "{{count}} Not shared tasks · kept from before you joined {{key}}"
+      },
+      "footerHint": "Not shared tasks never go to {{server}} unless you share them.",
+      "meta": "{{key}} · kept on this computer when you joined {{project}}, {{date}} · read-only",
+      "tagsKept": "Tags are kept by name until the task is shared.",
+      "pageHeading": "This task is Not shared",
+      "pageDetail": "You kept it here when you joined {{key}}. It can't be edited, run or claimed. Share task uploads it to {{key}} with the next number; its runs, conversation and memory stay attached.",
+      "locked": "Edit, Run again and Take are unavailable while the task is Not shared.",
+      "share": "Share task",
+      "becomes": "Becomes",
+      "becomesValue": "The next {{project}} number · was {{key}}",
+      "attached": "Stays attached",
+      "attachedValue": "Its runs, conversation and memory",
+      "shareTitle": "Share {{key}} on {{project}}?",
+      "shareExplanation": "It is uploaded to {{project}} on {{server}} through the same import as joining, gets the next number and can be edited, run and claimed again."
+    },
+    "sharedPanel": {
+      "sharing": "Sharing",
+      "on": "On {{server}}",
+      "state": "State",
+      "notShared": "Not shared · this computer only",
+      "similar": "Similar on {{key}}",
+      "shareAs": "Share as",
+      "shareAsValue": "The next {{key}} number",
+      "none": "—",
+      "notTaken": "Not taken",
+      "runClaim": "{{holder}} · run claim",
+      "manualClaim": "{{holder}} · manual claim",
+      "you": "You",
+      "holder": "Holder",
+      "since": "Since",
+      "heartbeat": "Heartbeat",
+      "status": "Shared status",
+      "statusStep": "{{phase}} · {{step}}",
+      "created": "Created",
+      "createdAs": "{{by}} · as {{key}}",
+      "edited": "Last edit",
+      "editedValue": "{{by}} · {{time}}"
     }
   },
   "runs": {
@@ -1017,7 +1067,8 @@
         "changes": "Changes",
         "artifacts": "Artifacts"
       },
-      "needsYou": "Needs you"
+      "needsYou": "Needs you",
+      "withFormerKey": "{{meta}} · was {{key}}"
     },
     "unreadable": {
       "title": "Run #{{run}} could not be read",
@@ -5764,14 +5815,16 @@
         "owner": "{{key}} · since {{date}} · you are an owner · synced {{time}}",
         "member": "{{key}} · since {{date}} · you are a member · synced {{time}}",
         "admin": "{{key}} · since {{date}} · you manage it as an admin · synced {{time}}"
-      }
+      },
+      "joinReadback": "{{key}} · {{count}} tasks",
+      "joinReadbackRuns": "{{key}} · {{count}} tasks · runs of {{tasks}} haven't ended"
     },
     "repository": {
       "name": "Repository",
       "detail": "A server knows a project by its repository's origin remote, so HTTPS and SSH clones of it match.",
       "checking": "origin · checking on {{server}}…",
       "notShared": "origin · checked on {{server}}: not shared there yet",
-      "shared": "origin · shared on {{server}} as {{key}}; joining it comes in a later version",
+      "shared": "origin · {{server}} has it as {{key}} · checked {{time}}",
       "notMember": "origin · shared on {{server}}; you are not a member there",
       "noServer": "origin · no server to ask yet",
       "unreachable": "origin · {{server}} couldn't be asked",
@@ -5788,7 +5841,9 @@
       "action": "Share on {{server}}…",
       "noServer": "You haven't added a server yet.",
       "notSignedIn": "You aren't signed in to a server yet.",
-      "addServer": "Add server…"
+      "addServer": "Add server…",
+      "detailJoin": "Joining replaces sharing: a server holds one project per repository.",
+      "readbackJoin": "Share is not offered while the repository's project exists there"
     },
     "sends": {
       "title": "What sharing sends",
@@ -5796,7 +5851,10 @@
       "sharedValue": "Tasks (title, brief, criteria, pipeline name, limits, status), who holds each, a short run status",
       "local": "Stays on each computer",
       "localValue": "Runs, worktrees, conversations, memory, secrets, profiles, pipelines",
-      "note": "The server never receives transcripts, prompts, diffs, file or branch names, or secrets."
+      "note": "The server never receives transcripts, prompts, diffs, file or branch names, or secrets.",
+      "titleJoin": "What joining sends",
+      "sharedValueJoin": "The tasks you keep ticked: title, brief, criteria, pipeline name, limits, status",
+      "localJoin": "Stays on this computer"
     },
     "discovery": {
       "heading": "orchester.toml names a server for this repository",
@@ -5828,8 +5886,7 @@
       "projectValue": "{{project}} · key {{key}} · {{identity}}",
       "discovery": "Write orchester.toml into the repository",
       "discoveryDetail": "Adds server = \"{{address}}\" at the repository root, so colleagues who open {{project}} are offered Sign in and join. Orchester doesn't commit it; you do.",
-      "confirm": "Share",
-      "taken": "{{server}} holds this repository as a project already, so nothing was uploaded. Joining it comes in a later version."
+      "confirm": "Share"
     },
     "discoveryFile": {
       "name": "Discovery file",
@@ -5897,7 +5954,114 @@
       "confirm": "Make local",
       "confirmAnyway": "Make local anyway"
     },
-    "loadFailed": "Sharing can't be read"
+    "loadFailed": "Sharing can't be read",
+    "cantShare": {
+      "localOrigin": "{{project}} can't be shared: its origin remote is a folder on this computer",
+      "localOriginDetail": "Nobody else can reach that folder. A server knows a project by a remote others can clone too (HTTPS or SSH).",
+      "noOrigin": "{{project}} can't be shared: the repository has no origin remote",
+      "noOriginDetail": "Add the remote your team clones from as origin, then open Sharing again.",
+      "unreadable": "{{project}} can't be shared: git couldn't list the repository's remotes",
+      "unreadableDetail": "Check that git works in this repository, then open Sharing again."
+    },
+    "notShared": {
+      "label": "Not shared",
+      "readOnly": "This task is Not shared, so it is read-only. Share task on its page uploads it first."
+    },
+    "join": {
+      "offerHeading": "This repository is shared on {{server}} as {{key}}",
+      "offerDetailNone": "You are a member, so you can join. This project has no local tasks to review, so nothing is uploaded.",
+      "offerDetail": {
+        "one": "You are a member, so you can join. First you review your local task: kept ticked, it is uploaded with a new {{key}} number; unticked, it stays here as Not shared.",
+        "other": "You are a member, so you can join. First you review your {{count}} local tasks: the ones you keep ticked are uploaded with new {{key}} numbers, the others stay here as Not shared."
+      },
+      "review": "Review and join…",
+      "takenHeading": "{{server}} already has this repository as {{key}}",
+      "takenDetail": "{{owners}} shared it a moment before you did. Nothing of yours was uploaded. As a member you can join it instead; your tasks are reviewed first.",
+      "someone": "Someone",
+      "notMemberHeading": "{{server}} has this repository, but you are not a member",
+      "notMemberDetail": "Ask an owner to add your username in its Sharing settings, then check again. Nothing was uploaded; Orchester only asked whether the repository is shared there.",
+      "owners": "Owners",
+      "yourUsername": "Your username",
+      "checkAgain": "Check again",
+      "checked": "Checked {{time}} · still not a member",
+      "breadcrumb": "{{project}} / Project settings / Sharing / Join {{key}}",
+      "title": "Join {{key}} on {{server}}",
+      "description": {
+        "one": "Your local task, ticked to start. Ticked, it is uploaded with a new {{key}} number and keeps its runs here. Untick it if {{key}} already has it: it stays on this computer as Not shared.",
+        "other": "Your {{count}} local tasks, all ticked to start. Ticked tasks are uploaded with new {{key}} numbers and keep their runs here. Untick the ones {{key}} already has: they stay on this computer as Not shared."
+      },
+      "loading": "Reading your tasks and the server's…",
+      "loadFailed": "The join can't be prepared",
+      "noIdentity": "The repository's origin remote can't be read, so Orchester can't tell which project to join.",
+      "confirmNone": "Join without uploading",
+      "confirm": {
+        "one": "Join and upload 1",
+        "other": "Join and upload {{count}}"
+      },
+      "ticked": "{{ticked}} of {{total}} ticked",
+      "summary": {
+        "uploadedNone": "Nothing is uploaded",
+        "uploaded": {
+          "one": "1 is uploaded as {{key}}",
+          "other": "{{count}} are uploaded as {{first}} … {{last}}"
+        },
+        "kept": {
+          "one": "1 stays Not shared",
+          "other": "{{count}} stay Not shared"
+        },
+        "claimed": {
+          "one": "1 uploaded claimed for you",
+          "other": "{{count}} uploaded claimed for you"
+        }
+      },
+      "columns": {
+        "key": "LOCAL KEY",
+        "task": "TASK",
+        "workflow": "WORKFLOW / RUN",
+        "becomes": "BECOMES"
+      },
+      "similar": "Similar on {{project}}: {{key}} {{title}} · {{by}}",
+      "locked": "Can't be unticked: run #{{number}} hasn't ended. Work on a shared task needs a claim, so it is uploaded claimed for you.",
+      "lockedPaused": "Can't be unticked: run #{{number}} is paused, not ended. It is uploaded claimed for you.",
+      "run": {
+        "none": "No active run",
+        "active": "{{phase}} · run #{{number}}",
+        "ended": "Run #{{number}} · {{phase}}"
+      },
+      "note": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached, and run branches keep their names.",
+      "noteBranch": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached. Branches keep their names ({{branch}}); the next run of {{task}} is {{next}}.",
+      "failed": "Couldn't join {{key}}",
+      "failedNothing": "Nothing was uploaded and {{project}} is still local with its {{key}} tasks. Your ticks are kept; try again when {{server}} can be reached.",
+      "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again finishes without uploading them twice.",
+      "tryAgain": "Try again",
+      "backToReview": "Back to the review"
+    },
+    "joined": {
+      "heading": "You joined {{key}} on {{server}}",
+      "detail": "{{uploaded}} tasks were uploaded with new numbers and {{claimed}} claimed for you; {{kept}} stay on this computer as Not shared. The project's key is now {{key}}. Searching the task list for a former key still finds the task.",
+      "link": "{{task}} → {{blocking}}",
+      "dropped": "Links to tasks that stay here were dropped: {{links}}.",
+      "openTasks": "Open Tasks",
+      "dismiss": "Dismiss"
+    },
+    "mapping": {
+      "heading": "Keys before joining",
+      "detail": "Your local tasks got {{key}} numbers when you joined. Orchester doesn't rewrite text, so a brief or message that says {{before}} means {{now}}; each task's page shows was {{before}}.",
+      "before": "BEFORE",
+      "now": "NOW",
+      "task": "TASK",
+      "claimed": "claimed for you · run #{{number}}",
+      "notSharedNote": "read-only · Share task on its page",
+      "branches": "Run branches keep the names they started with. The next run of a task is named by its new key."
+    },
+    "madeLocal": {
+      "heading": "{{project}} is local again",
+      "detailNone": "All {{count}} tasks of {{key}} are now local tasks here, with their numbers.",
+      "detail": {
+        "one": "All {{count}} tasks of {{key}} are now local tasks here, with their numbers. Your Not shared task returned to the list after the highest number.",
+        "other": "All {{count}} tasks of {{key}} are now local tasks here, with their numbers. Your {{kept}} Not shared tasks returned to the list after the highest number."
+      }
+    }
   },
   "claims": {
     "refused": {

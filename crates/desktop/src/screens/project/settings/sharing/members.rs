@@ -372,7 +372,7 @@ fn member_row(ctx: &Ctx, sharing: &ProjectSharing, member: &Member, buttons: Vec
     )
     .child(
       Row::new().width(Dimension::Px(ADDED_WIDTH)).child(
-        Text::new(&labels::day(ctx, Timestamp::from_unix_millis(member.added_at)))
+        Text::new(&crate::ui::day(ctx, Timestamp::from_unix_millis(member.added_at)))
           .variant(ExtraTypography::MonoValue.role())
           .color(PaletteColor::TextSecondary),
       ),

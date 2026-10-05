@@ -189,6 +189,8 @@ fn pages() -> Vec<Page> {
     Page::Settings(SettingsTab::Limits),
     Page::Settings(SettingsTab::Environment),
     Page::Settings(SettingsTab::CodeIndex),
+    Page::Settings(SettingsTab::Sharing),
+    Page::Join(ServerId::generate()),
     Page::Servers(None, ServerTab::Account),
     Page::Servers(Some(ServerId::generate()), ServerTab::Account),
     Page::Servers(Some(ServerId::generate()), ServerTab::Users),

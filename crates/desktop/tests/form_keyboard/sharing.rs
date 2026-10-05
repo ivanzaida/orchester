@@ -94,7 +94,7 @@ fn draft(title: &str) -> TaskDetails {
   }
 }
 
-fn sharing_tab(desktop: &mut Desktop) {
+pub(crate) fn sharing_tab(desktop: &mut Desktop) {
   desktop.wait_for("nav-settings");
   desktop.click("nav-settings");
   desktop.wait_for("settings-tab-sharing");

@@ -262,6 +262,7 @@ impl Component for QueueRow {
               .text_overflow(TextOverflow::Elipsis)
               .width(Dimension::Pct(100.0)),
           )
+          .with_children(row.former_key.as_deref().map(|key| former_key(ctx, key)))
           .with_children(columns.tags.then(|| row_tag_chips(ctx, row.id, &row.tags))),
       )
       .with_children(columns.pipeline.then(|| {
@@ -364,6 +365,21 @@ pub fn list_row(ctx: &mut Ctx, nav: &ProjectNav, row: &TaskRow, now: Timestamp) 
 /// Queued (a held group member too), a task with a run reads that run's label. The Blocked flag
 /// goes under them, or beside the run label in the lower rows without tag chips, so the three
 /// lines never touch the row's hairlines.
+/// *was KON-12* under a task's title: its key before it was uploaded (10.26 B).
+fn former_key(ctx: &Ctx, key: &str) -> Element {
+  Row::new()
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::History, IconSize::Small, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t_args("tasks.formerKey", [("key", key)]))
+        .variant(ExtraTypography::Footnote.role())
+        .color(PaletteColor::TextPrimary)
+        .nowrap(),
+    )
+    .into()
+}
+
 fn workflow_run(ctx: &Ctx, row: &TaskRow, compact: bool) -> Element {
   let run_key = match row.phase {
     Some(TaskPhase::Draft) => "tasks.workflow.noActiveRun",
@@ -384,9 +400,12 @@ fn workflow_run(ctx: &Ctx, row: &TaskRow, compact: bool) -> Element {
           .nowrap(),
       )
   });
-  let column = Column::new()
-    .spacing(SpacingSize::Xs)
-    .child(workflow_label(ctx, row.organization.status()));
+  let label = if row.not_shared {
+    status_label(Icon::Archive, &ctx.t("sharing.notShared.label"))
+  } else {
+    workflow_label(ctx, row.organization.status())
+  };
+  let column = Column::new().spacing(SpacingSize::Xs).child(label);
   if compact {
     column
       .child(

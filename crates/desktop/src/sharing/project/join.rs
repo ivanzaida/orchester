@@ -15,7 +15,7 @@ use orchester_core::{
   id::{IdempotencyKey, TaskId},
   project::ProjectKey,
   repository::RepositoryIdentity,
-  run::{RunNumber, TaskPhase},
+  run::{BranchName, RunNumber, TaskPhase},
   sharing::similar_titles,
   store::{MergeStore, RunStore, TaskStore},
   task::Task,
@@ -50,6 +50,9 @@ pub struct ReviewTask {
   pub task: Task,
   /// Its latest run and where the task stands with it; `None` without a run.
   pub run: Option<(RunNumber, TaskPhase)>,
+  /// How many runs it has, and the branch of the latest, which keeps its name.
+  pub runs: usize,
+  pub branch: Option<BranchName>,
   /// The server's task with the most similar title, as a hint only.
   pub similar: Option<SimilarTask>,
 }
@@ -79,6 +82,17 @@ pub struct Joined {
 }
 
 impl lurq::app::component::DevtoolsInspectable for Joined {}
+
+/// Why the project did not join, and whether its tasks reached the server first: an answer lost
+/// after the import leaves them there, and joining again under the same key finishes without
+/// uploading them twice.
+#[derive(Debug, thiserror::Error)]
+#[error("{error}")]
+pub struct JoinFailed {
+  pub uploaded: bool,
+  #[source]
+  pub error: SharingError,
+}
 
 impl Servers {
   /// What joining the project `identity` is shared as on `entry` would do for the project at
@@ -121,26 +135,51 @@ impl Servers {
     repo_root: &Path,
     review: &JoinReview,
     (ticked, key): (Vec<TaskId>, IdempotencyKey),
-  ) -> Result<Joined, SharingError> {
+  ) -> Result<Joined, JoinFailed> {
     let _in_progress = share::InProgress::start(self, repo_root);
+    let failed = |uploaded: bool| move |error: SharingError| JoinFailed { uploaded, error };
     let root = repo_root.to_owned();
-    let (import, claimed) = background::run(move || upload(&root, &ticked, key)).await??;
-    let project = review.project;
-    let dropped = if import.tasks.is_empty() {
-      Vec::new()
-    } else {
+    let (import, claimed) = background::run(move || upload(&root, &ticked, key))
+      .await
+      .map_err(SharingError::from)
+      .and_then(|read| read.map_err(SharingError::from))
+      .map_err(failed(false))?;
+    let uploaded = !import.tasks.is_empty();
+    let dropped = if uploaded {
       let names: HashMap<TaskId, String> = import
         .tasks
         .iter()
         .filter_map(|task| Some((task.id, task.former_key.clone()?)))
         .collect();
+      let project = review.project;
       let created = self
         .with_token(entry, |client, token| async move {
           client.import_tasks(&token, project, &import).await
         })
-        .await?;
-      dropped_keys(&created.dropped_links, &names, repo_root).await?
+        .await
+        .map_err(failed(false))?;
+      dropped_keys(&created.dropped_links, &names, repo_root)
+        .await
+        .map_err(failed(true))?
+    } else {
+      Vec::new()
     };
+    let open = self
+      .link_joined(entry, repo_root, review, &claimed)
+      .await
+      .map_err(failed(uploaded))?;
+    Ok(Joined { open, dropped })
+  }
+
+  /// Caches `review`'s server project as it is now and links the project at `repo_root` to it.
+  async fn link_joined(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    review: &JoinReview,
+    claimed: &HashMap<TaskId, NonZeroU32>,
+  ) -> Result<OpenProject, SharingError> {
+    let project = review.project;
     let shared = self
       .with_token(
         entry,
@@ -166,7 +205,7 @@ impl Servers {
       last_synced_at: Timestamp::now(),
       removed_at: None,
     };
-    let (root, workspace) = (repo_root.to_owned(), self.inner.workspace.clone());
+    let (root, workspace, claimed) = (repo_root.to_owned(), self.inner.workspace.clone(), claimed.clone());
     let open = background::run(move || -> Result<OpenProject, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let cached = tasks.tasks.iter().map(convert::cached).collect::<Result<Vec<_>, _>>()?;
@@ -176,7 +215,7 @@ impl Servers {
     })
     .await??;
     self.shared_changed();
-    Ok(Joined { open, dropped })
+    Ok(open)
   }
 
   /// The project `identity` is shared as on `entry`.
@@ -202,7 +241,9 @@ fn review_tasks(root: &Path, hints: &[SimilarTask]) -> Result<Vec<ReviewTask>, S
     .into_iter()
     .map(|task| {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
+      let count = runs.len();
       let latest = runs.into_iter().filter_map(Result::ok).next_back();
+      let branch = latest.as_ref().map(|run| run.branch().clone());
       let run = match latest {
         Some(run) => {
           let merge = db.run_merge(run.id())?;
@@ -214,7 +255,13 @@ fn review_tasks(root: &Path, hints: &[SimilarTask]) -> Result<Vec<ReviewTask>, S
       let similar = similar_titles(title, hints.iter().map(|hint| hint.title.as_str()))
         .first()
         .map(|index| hints[*index].clone());
-      Ok(ReviewTask { task, run, similar })
+      Ok(ReviewTask {
+        task,
+        run,
+        runs: count,
+        branch,
+        similar,
+      })
     })
     .collect()
 }

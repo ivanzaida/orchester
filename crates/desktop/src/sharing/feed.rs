@@ -54,7 +54,16 @@ pub struct ServerFeed {
   /// Where a sign-in started elsewhere returns once it is done (the Sharing tab of the project
   /// whose discovery offer led to Settings › Servers); cleared when the dialog closes.
   pub return_to: Signal<ReturnTo>,
+  /// The project a Join just linked, until its Sharing tab's notice is dismissed (10.22).
+  pub joined: Signal<JustJoined>,
 }
+
+/// The project at a repository root a Join just linked, with the blocking links the server dropped
+/// (each by the keys before joining of its task and of the task it named).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct JustJoined(pub Option<(std::path::PathBuf, Vec<(String, String)>)>);
+
+impl lurq::app::component::DevtoolsInspectable for JustJoined {}
 
 /// The page a sign-in returns to once it is done.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -90,6 +99,7 @@ impl ServerFeed {
       sign_in: Signal::new(SignInRequest::default()),
       add: Signal::new(AddRequest::default()),
       return_to: Signal::new(ReturnTo::default()),
+      joined: Signal::new(JustJoined::default()),
     }
   }
 

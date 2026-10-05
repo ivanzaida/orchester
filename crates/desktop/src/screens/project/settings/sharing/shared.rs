@@ -1,5 +1,5 @@
-//! A shared project's Sharing (10.13): the server project its task list lives in, the discovery
-//! file, the members and *Make local*.
+//! A shared project's Sharing (10.13, 10.22): the server project its task list lives in, after a
+//! join what happened and the keys before it, the discovery file, the members and *Make local*.
 
 use std::sync::Arc;
 
@@ -31,12 +31,13 @@ impl SharingTab {
     facts: &Facts,
     actions: &Actions,
   ) -> Vec<Element> {
-    vec![
-      task_list_row(ctx, open, sharing),
-      self.discovery_row(ctx, open, sharing, facts, actions),
-      self.members(ctx, sharing, actions),
-      self.make_local_row(ctx, open, sharing, actions),
-    ]
+    let mut rows: Vec<Element> = self.joined_notice(ctx, sharing, facts).into_iter().collect();
+    rows.push(task_list_row(ctx, open, sharing));
+    rows.extend(self.mapping(ctx, facts));
+    rows.push(self.discovery_row(ctx, open, sharing, facts, actions));
+    rows.push(self.members(ctx, sharing, actions));
+    rows.push(self.make_local_row(ctx, open, sharing, actions));
+    rows
   }
 
   /// *Discovery file* (`O7C7DV`): `orchester.toml` as the repository has it, and *Write
@@ -57,7 +58,7 @@ impl SharingTab {
       (Discovery::Server(_), true) => {
         let written = file.written_at.map_or_else(
           || ctx.t("sharing.discoveryFile.present"),
-          |at| ctx.t_args("sharing.discoveryFile.written", [("date", &*labels::day(ctx, at))]),
+          |at| ctx.t_args("sharing.discoveryFile.written", [("date", &*crate::ui::day(ctx, at))]),
         );
         let committed = match file.committed {
           Some(false) => ctx.t("sharing.discoveryFile.notCommitted"),
@@ -143,7 +144,7 @@ fn task_list_row(ctx: &Ctx, open: &OpenProject, sharing: &ProjectSharing) -> Ele
     (Some(MemberRole::Member), _) => "sharing.taskList.sharedReadback.member",
     (None, _) => "sharing.taskList.sharedReadback.admin",
   };
-  let since = labels::day(ctx, sharing.link.joined_at);
+  let since = crate::ui::day(ctx, sharing.link.joined_at);
   let synced = labels::time(sharing.link.last_synced_at);
   let back: Arc<str> = ctx.t_args(
     role,

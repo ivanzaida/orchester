@@ -220,6 +220,8 @@ pub struct TaskDetail {
   pub missing_pipeline: Option<String>,
   /// A run's workflow status of this shared task that was not sent to its server, and why.
   pub unsent_status: Option<orchester_store::UnsentStatus>,
+  /// How the task stands on its server, for a task of a shared project or one kept *Not shared*.
+  pub shared: Option<orchester_store::SharedTaskInfo>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
@@ -231,10 +233,12 @@ impl TaskDetail {
     TaskPhase::of(&self.task, self.run.as_ref().map(|run| &run.run), self.merge.as_ref())
   }
 
-  /// Whether the task can be edited: a draft or a task with a recorded run.
+  /// Whether the task can be edited: a draft or a task with a recorded run, unless it was kept
+  /// *Not shared*, which is read-only.
   pub fn editable(&self) -> bool {
     let has_run = self.run.is_some() || self.latest_unreadable.is_some();
-    self.task.check_editable(has_run).is_ok()
+    let kept = self.shared.as_ref().is_some_and(|info| info.kept_tags.is_some());
+    !kept && self.task.check_editable(has_run).is_ok()
   }
 
   /// Whether the run is recorded as running while no runner is `online`: its agent is gone and
@@ -250,6 +254,7 @@ impl TaskDetail {
     let blocked_by = blocking_keys(&db, &task)?;
     let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
     let unsent_status = db.unsent_status(task.id())?;
+    let shared = db.shared_task_info(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     history::note_missing_worktrees(&mut db, repo_root, &runs)?;
     let messages = db.messages(task.id())?;
@@ -262,6 +267,7 @@ impl TaskDetail {
         blocked_by,
         missing_pipeline,
         unsent_status,
+        shared,
         ..Self::without_runs(task, messages)
       });
     }
@@ -289,6 +295,7 @@ impl TaskDetail {
       blocked_by,
       missing_pipeline,
       unsent_status,
+      shared,
       ..Self::without_runs(task, messages)
     })
   }
@@ -306,6 +313,7 @@ impl TaskDetail {
       blocked_by: Vec::new(),
       missing_pipeline: None,
       unsent_status: None,
+      shared: None,
     }
   }
 }

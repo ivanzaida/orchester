@@ -31,7 +31,7 @@ use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
   claims::{WorkClaim, WorkRefusal},
-  join::{JoinReview, Joined, ReviewTask, SimilarTask},
+  join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   members::MemberChange,
   share::{IdentityProblem, ShareError, SharePlan, Shared, plan, repository_identity},
 };

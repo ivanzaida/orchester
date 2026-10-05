@@ -106,6 +106,7 @@ pub(super) fn this_task(
   detail: &TaskDetail,
   pipelines: Option<&[PipelineChoice]>,
   scroll: &ScrollState,
+  shared: Option<Element>,
 ) -> Element {
   let details = detail.task.details();
   let pipeline = match details.pipeline {
@@ -153,7 +154,8 @@ pub(super) fn this_task(
     .child(Text::new(&ctx.t("runs.summary.thisTask")).variant(ExtraTypography::CardTitle.role()))
     .child(pipeline)
     .with_children(limit_rows(ctx, details.limits))
-    .child(dependencies);
+    .child(dependencies)
+    .with_children(shared);
   this_run_panel(rows, scroll, &ctx.t("runs.summary.taskNote"))
 }
 

@@ -379,6 +379,10 @@ pub struct TaskRow {
   /// The decision its run waits for after its retries, if it does.
   pub decision: Option<AwaitedDecision>,
   pub created_at: Timestamp,
+  /// The key the task had before it was uploaded to a server project (*was KON-12*).
+  pub former_key: Option<Arc<str>>,
+  /// Kept *Not shared* when the project joined: read-only, shown behind the filter only.
+  pub not_shared: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskRow {}
@@ -415,6 +419,8 @@ impl TaskRow {
       question: latest.and_then(|latest| latest.question.clone()),
       decision: latest.and_then(|latest| latest.decision.clone()),
       created_at: task.created_at(),
+      former_key: None,
+      not_shared: false,
     }
   }
 }

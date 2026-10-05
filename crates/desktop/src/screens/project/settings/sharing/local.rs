@@ -14,9 +14,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::IdempotencyKey, repository::RepositoryIdentity};
+use orchester_core::{id::IdempotencyKey, time::Timestamp};
 
-use super::{Actions, Facts, ServerChoice, SharingDialog, SharingTab};
+use super::{
+  Actions, Facts, ServerChoice, SharingDialog, SharingTab,
+  join_offer::{self, Lookups},
+};
 use crate::{
   navigation::route::{Page, ServerTab},
   screens::project::settings::general::{readback, sized_setting_row},
@@ -56,49 +59,43 @@ impl SharingTab {
       .or_else(|| signed_in.first())
       .cloned();
     let offer = self.discovery_offer(ctx, facts, list.entries());
-    let lookup = chosen.as_ref().and_then(|entry| self.lookup(ctx, entry, facts));
+    let lookups = self.lookups(ctx, &signed_in, facts);
+    let existing = lookups
+      .as_ref()
+      .and_then(Lookups::existing)
+      .and_then(|(server, lookup)| {
+        signed_in
+          .iter()
+          .find(|entry| entry.stored.id == server)
+          .map(|entry| (entry.clone(), lookup.clone()))
+      });
+    let asked = existing.as_ref().map(|(entry, _)| entry).or(chosen.as_ref());
+    let lookup = asked.and_then(|entry| {
+      let lookups = lookups.as_ref()?;
+      Some((lookups.of(entry.stored.id)?.clone(), lookups.at))
+    });
     let mut rows = Vec::new();
+    rows.extend(self.made_local_notice(ctx, open, facts, actions));
+    if let Err(problem) = facts.identity {
+      rows.push(join_offer::identity_notice(ctx, open, problem));
+    }
     rows.extend(offer.clone());
-    rows.push(task_list_row(ctx, open, facts, offer.is_some()));
-    rows.push(repository_row(ctx, facts, chosen.as_ref(), lookup.as_ref()));
+    if let (Some((entry, found)), Some(lookups)) = (&existing, &lookups) {
+      rows.extend(self.existing_notice(ctx, (entry, found, lookups.at), facts));
+    }
+    let joinable = existing.is_some();
+    rows.push(task_list_row(ctx, open, facts, (offer.is_some(), joinable)));
+    rows.push(repository_row(ctx, facts, asked, lookup.as_ref()));
     rows.push(self.share_row(
       ctx,
       facts,
       (&signed_in, chosen.as_ref()),
-      (list.entries().is_empty(), actions),
+      (list.entries().is_empty(), joinable, actions),
     ));
     if offer.is_none() {
-      rows.push(sends_panel(ctx));
+      rows.push(sends_panel(ctx, joinable));
     }
     rows
-  }
-
-  /// What the chosen server has for the repository; `None` while it is asked or cannot say.
-  fn lookup(&self, ctx: &mut Ctx, entry: &ServerEntry, facts: &Facts) -> Option<Result<Lookup, ()>> {
-    let identity = facts.identity.clone().ok()?;
-    let servers = ServerFeed::of(ctx).servers;
-    let deps = (entry.clone(), identity, self.revision.get());
-    let load = ctx.future(
-      deps,
-      move |(entry, identity, _): (ServerEntry, RepositoryIdentity, u64)| {
-        let servers = servers.clone();
-        async move {
-          servers.lookup(&entry, identity).await.map_err(|error| {
-            tracing::warn!(%error, "cannot ask the server for the repository");
-            error.message(&entry.address)
-          })
-        }
-      },
-    );
-    let state = load.state().get();
-    if state.is_pending() {
-      return None;
-    }
-    match (state.data, state.error) {
-      (_, Some(_)) => Some(Err(())),
-      (Some(lookup), None) => Some(Ok(lookup)),
-      (None, None) => None,
-    }
   }
 
   /// The offer of the repository's `orchester.toml` (10.17), while its server is not one the person
@@ -179,7 +176,7 @@ impl SharingTab {
     ctx: &mut Ctx,
     facts: &Facts,
     (signed_in, chosen): (&[ServerEntry], Option<&ServerEntry>),
-    (no_servers, actions): (bool, &Actions),
+    (no_servers, joinable, actions): (bool, bool, &Actions),
   ) -> Element {
     let Some(chosen) = chosen else {
       let nav = self.nav.clone();
@@ -229,7 +226,7 @@ impl SharingTab {
       .id("sharing-share")
       .in_form()
       .height(Dimension::Px(CONTROL_HEIGHT));
-    let button = if facts.plan.is_some() && !pending {
+    let button = if facts.plan.is_some() && !pending && !joinable {
       button.on_click(move || {
         dialog.set(SharingDialog::Share {
           server,
@@ -239,6 +236,15 @@ impl SharingTab {
     } else {
       button.on_click(|| {}).enabled(false)
     };
+    if joinable {
+      // A server holds one project per repository: joining replaces sharing (10.15).
+      return sized_setting_row(
+        VALUE_WIDTH,
+        &ctx.t("sharing.shareOn.name"),
+        &ctx.t("sharing.shareOn.detailJoin"),
+        vec![select, readback(&ctx.t("sharing.shareOn.readbackJoin"))],
+      );
+    }
     sized_setting_row(
       VALUE_WIDTH,
       &ctx.t("sharing.shareOn.name"),
@@ -248,11 +254,17 @@ impl SharingTab {
   }
 }
 
-/// *Task list* (`r6GRLR`): *Local only*, with the key and the count while the discovery offer shows.
-fn task_list_row(ctx: &Ctx, open: &OpenProject, facts: &Facts, offer: bool) -> Element {
+/// *Task list* (`r6GRLR`): *Local only*, with the key and the count while the discovery offer or
+/// the offer to join shows; for a join, which tasks have a run that has not ended (`P1Wytc`).
+fn task_list_row(ctx: &Ctx, open: &OpenProject, facts: &Facts, (offer, joinable): (bool, bool)) -> Element {
   let project = open.project.name().as_str();
   let key = open.project.key().as_str();
-  let (description, back) = if offer {
+  let (description, back) = if joinable {
+    (
+      ctx.t_args("sharing.taskList.localKey", [("project", project), ("key", key)]),
+      join_readback(ctx, key, facts),
+    )
+  } else if offer {
     let count = if facts.tasks == 1 {
       "sharing.taskList.keyCount.one"
     } else {
@@ -282,13 +294,34 @@ fn task_list_row(ctx: &Ctx, open: &OpenProject, facts: &Facts, offer: bool) -> E
   )
 }
 
+/// The key, the count and the tasks whose run has not ended, before a join (`P1Wytc`).
+fn join_readback(ctx: &Ctx, key: &str, facts: &Facts) -> Arc<str> {
+  let count = facts.tasks.to_string();
+  let claimed: Vec<String> = facts
+    .plan
+    .as_ref()
+    .map(|plan| plan.claimed.iter().map(ToString::to_string).collect())
+    .unwrap_or_default();
+  if claimed.is_empty() {
+    return ctx.t_args(
+      "sharing.taskList.joinReadback",
+      [("key", key), ("count", count.as_str())],
+    );
+  }
+  let tasks = super::labels::keys_or(ctx, &claimed, "sharing.join.someone");
+  ctx.t_args(
+    "sharing.taskList.joinReadbackRuns",
+    [("key", key), ("count", count.as_str()), ("tasks", &*tasks)],
+  )
+}
+
 /// *Repository* (`jzqJw`): the identity a server knows the project by, and what the chosen server
-/// has for it.
+/// (or the one that has the repository) has for it, and when it was asked.
 fn repository_row(
   ctx: &Ctx,
   facts: &Facts,
   chosen: Option<&ServerEntry>,
-  lookup: Option<&Result<Lookup, ()>>,
+  lookup: Option<&(Result<Lookup, ()>, Timestamp)>,
 ) -> Element {
   let value: Element = match &facts.identity {
     Ok(identity) => Text::new(identity.as_str())
@@ -307,7 +340,7 @@ fn repository_row(
     (Ok(_), Some(entry), None) => {
       Some(ctx.t_args("sharing.repository.checking", [("server", entry.stored.name.as_str())]))
     }
-    (Ok(_), Some(entry), Some(found)) => Some(lookup_text(ctx, entry, found)),
+    (Ok(_), Some(entry), Some((found, at))) => Some(lookup_text(ctx, entry, found, *at)),
   };
   sized_setting_row(
     VALUE_WIDTH,
@@ -317,11 +350,18 @@ fn repository_row(
   )
 }
 
-fn lookup_text(ctx: &Ctx, entry: &ServerEntry, found: &Result<Lookup, ()>) -> Arc<str> {
+fn lookup_text(ctx: &Ctx, entry: &ServerEntry, found: &Result<Lookup, ()>, at: Timestamp) -> Arc<str> {
   let server = entry.stored.name.as_str();
   match found {
     Ok(Lookup::NotShared) => ctx.t_args("sharing.repository.notShared", [("server", server)]),
-    Ok(Lookup::Shared { key }) => ctx.t_args("sharing.repository.shared", [("server", server), ("key", key.as_str())]),
+    Ok(Lookup::Shared { key }) => ctx.t_args(
+      "sharing.repository.shared",
+      [
+        ("server", server),
+        ("key", key.as_str()),
+        ("time", super::labels::time(at).as_str()),
+      ],
+    ),
     Ok(Lookup::NotMember { .. }) => ctx.t_args("sharing.repository.notMember", [("server", server)]),
     Err(()) => ctx.t_args("sharing.repository.unreachable", [("server", server)]),
   }
@@ -335,24 +375,34 @@ const fn problem_key(problem: IdentityProblem) -> &'static str {
   }
 }
 
-/// *What sharing sends* (`boHko`).
-fn sends_panel(ctx: &Ctx) -> Element {
-  Column::new()
+/// *What sharing sends* (`boHko`), or *What joining sends* before a join (10.15).
+fn sends_panel(ctx: &Ctx, joining: bool) -> Element {
+  let (title, shared) = if joining {
+    ("sharing.sends.titleJoin", "sharing.sends.sharedValueJoin")
+  } else {
+    ("sharing.sends.title", "sharing.sends.sharedValue")
+  };
+  let panel = Column::new()
     .id("sharing-sends")
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
     .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfaceRaised)
     .rounded(ExtraRadius::Notice.role())
-    .child(Text::new(&ctx.t("sharing.sends.title")).variant(ExtraTypography::NoticeHeading.role()))
+    .child(Text::new(&ctx.t(title)).variant(ExtraTypography::NoticeHeading.role()))
+    .child(property(&ctx.t("sharing.sends.shared"), &ctx.t(shared)))
     .child(property(
-      &ctx.t("sharing.sends.shared"),
-      &ctx.t("sharing.sends.sharedValue"),
-    ))
-    .child(property(
-      &ctx.t("sharing.sends.local"),
+      &ctx.t(if joining {
+        "sharing.sends.localJoin"
+      } else {
+        "sharing.sends.local"
+      }),
       &ctx.t("sharing.sends.localValue"),
-    ))
+    ));
+  if joining {
+    return panel.into();
+  }
+  panel
     .child(
       Text::new(&ctx.t("sharing.sends.note"))
         .variant(ExtraTypography::Detail.role())

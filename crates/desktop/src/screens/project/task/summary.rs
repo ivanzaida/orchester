@@ -89,6 +89,14 @@ pub(super) fn summary(
   let details = detail.run_task.as_ref().unwrap_or(&detail.task).details();
   // A request the run's agent waits on comes first, with Review request.
   let waiting = detail.run.as_ref().and_then(|run| review_card(ctx, run));
+  // A task kept Not shared says so in place of its run's notice.
+  let kept = super::sharing::kept_notice(ctx, detail);
+  let notice = match kept {
+    Some(kept) => Some(kept),
+    None => waiting
+      .is_none()
+      .then(|| with_reason(notice(ctx, detail, lost), reason)),
+  };
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Section)
@@ -96,7 +104,7 @@ pub(super) fn summary(
     .padding_right(ExtraSpacing::BesideGutter.role())
     .spacing(ExtraSpacing::Form.role())
     // The card says what the run waits for; the run's own notice would say it is at work.
-    .with_children(waiting.is_none().then(|| with_reason(notice(ctx, detail, lost), reason)))
+    .with_children(notice)
     .with_children(waiting)
     .with_children(raise)
     .with_children(detail.run.as_ref().map(|run| {
@@ -119,9 +127,10 @@ pub(super) fn summary(
     .child(super::organization_history::history(ctx, repo_root, detail.task.id(), revision));
 
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
+  let shared = super::sharing::panel_section(ctx, detail);
   let panel = match &detail.run {
-    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run)),
-    None => this_task(ctx, detail, pipelines, &scrolls.this_run),
+    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run), shared),
+    None => this_task(ctx, detail, pipelines, &scrolls.this_run, shared),
   };
   Row::new()
     .width(Dimension::Pct(100.0))
@@ -212,7 +221,13 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
 }
 
 /// The run's pinned configuration, its limits and usage (`F5Lsi`).
-fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollState)) -> Element {
+/// `shared`: how the task stands on its server, under the run's rows.
+fn this_run(
+  ctx: &mut Ctx,
+  run: &RunView,
+  (repo_root, scroll): (&Path, &ScrollState),
+  shared: Option<Element>,
+) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "runs.summary.pipelineValue",
@@ -284,7 +299,7 @@ fn this_run(ctx: &mut Ctx, run: &RunView, (repo_root, scroll): (&Path, &ScrollSt
         repo_root: repo_root.to_path_buf(),
       },
     ));
-  this_run_panel(rows, scroll, &ctx.t("runs.summary.snapshotNote"))
+  this_run_panel(rows.with_children(shared), scroll, &ctx.t("runs.summary.snapshotNote"))
 }
 
 /// The *Permissions* row of the current step's agent, with its *change ↗* (`C5Ai5o`), beside the

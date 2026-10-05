@@ -32,6 +32,7 @@ mod history;
 mod import;
 mod instructions;
 mod integration;
+mod joining;
 mod lifecycle;
 mod mcp_agent;
 mod mcp_exempt_tools;

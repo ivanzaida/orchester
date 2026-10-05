@@ -73,6 +73,7 @@ fn project_pages(routes: Routes) -> Routes {
         .route("/environment", |_ctx| Element::new())
         .route("/code-index", |_ctx| Element::new())
         .route("/sharing", |_ctx| Element::new())
+        .route("/sharing/join/:server", |_ctx| Element::new())
     })
     .layout("/servers", project::page, |routes| selection(routes, "/:server"))
     .fallback(|_ctx| Element::new())

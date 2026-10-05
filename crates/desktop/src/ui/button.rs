@@ -67,6 +67,8 @@ pub struct ActionButton {
   /// The icon and label start at the left instead of the middle.
   start: bool,
   hover: Option<Hover>,
+  /// A toggle that is on: its border in the text color (the task list's *Not shared*, 10.23).
+  pressed: bool,
   id: Option<Arc<str>>,
 }
 
@@ -87,6 +89,7 @@ impl ActionButton {
       in_form: false,
       start: false,
       hover: None,
+      pressed: false,
       id: None,
     }
   }
@@ -195,6 +198,12 @@ impl ActionButton {
   }
 
   /// Element id for tooling (`lurq_read_tree`, `lurq_interact`).
+  /// Shows the button as a toggle that is on, or off.
+  pub fn pressed(mut self, pressed: bool) -> Self {
+    self.pressed = pressed;
+    self
+  }
+
   pub fn id(mut self, id: impl Into<Arc<str>>) -> Self {
     self.id = Some(id.into());
     self
@@ -226,9 +235,15 @@ impl ActionButton {
           .on_mouse_leave(move || leave(false));
       }
       None => {
+        let border = if self.pressed {
+          PaletteColor::BorderFocus
+        } else {
+          role.border.clone()
+        };
         button = button
           .background(role.background.clone())
-          .border(Border::inside(BorderSize::Sm, role.border.clone()));
+          .border(Border::inside(BorderSize::Sm, border))
+          .describe("pressed", if self.pressed { "true" } else { "false" });
       }
     }
     if let Some(element_ref) = self.element_ref {
