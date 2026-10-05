@@ -24,3 +24,4 @@ mod steps;
 mod stuck;
 mod stuck_loops;
 mod tool;
+mod working_prompt;

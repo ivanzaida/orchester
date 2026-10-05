@@ -9,6 +9,7 @@
 
 mod always;
 mod auto;
+mod permitted;
 mod rule;
 mod subject;
 
@@ -20,6 +21,7 @@ use thiserror::Error;
 pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
+  permitted::permitted,
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::ApprovalSubject,
 };
@@ -110,6 +112,8 @@ pub enum DecidedBy {
   AlwaysAllowed,
   /// Auto-approval answered it.
   AutoApproved,
+  /// The step's own permissions run every part of the command on its own ([`permitted`]).
+  Permissions,
   /// Automation approved it once, through Orchester's MCP server.
   Automation,
   /// Automation denied it, through Orchester's MCP server; the agent was told and continued.
@@ -117,7 +121,7 @@ pub enum DecidedBy {
 }
 
 impl DecidedBy {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 11] = [
     Self::Person,
     Self::PersonSimilar,
     Self::PersonAlways,
@@ -126,6 +130,7 @@ impl DecidedBy {
     Self::SimilarRule,
     Self::AlwaysAllowed,
     Self::AutoApproved,
+    Self::Permissions,
     Self::Automation,
     Self::AutomationDeny,
   ];
@@ -140,6 +145,7 @@ impl DecidedBy {
       Self::SimilarRule => "similar_rule",
       Self::AlwaysAllowed => "always_allowed",
       Self::AutoApproved => "auto_approved",
+      Self::Permissions => "permissions",
       Self::Automation => "automation",
       Self::AutomationDeny => "automation_deny",
     }

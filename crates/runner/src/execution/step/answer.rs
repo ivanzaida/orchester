@@ -1,6 +1,7 @@
 //! How a request is answered (`orchester_core::run::ApprovalAnswer`, "Approval choices and waiting
 //! requests"): Orchester answers it itself when its server lists the tool to run without asking since
-//! the agent started (Always allow), a rule of the run covers it (Approve similar, or a command Always
+//! the agent started (Always allow), the step's own permissions run every part of the command on its
+//! own (`orchester_core::run::permitted`), a rule of the run covers it (Approve similar, or a command Always
 //! allowed during the run), or the run auto-approves and the request is not one auto-approval leaves to
 //! a person. Otherwise a person answers, and a wider answer first leaves what it promises: a rule, a
 //! profile version or a server setting, or the run's auto-approval. Each answer is recorded with who
@@ -13,7 +14,7 @@ use orchester_core::{
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
     ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, codex_denial,
-    denial_message,
+    denial_message, permitted,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -61,6 +62,11 @@ impl Worker {
     let category = category_of(&subject);
     if self.listed_since_start(watch, approval)? {
       return Ok(Some(Settled::by(DecidedBy::AlwaysAllowed, None)));
+    }
+    if let Some(launch) = &watch.invocation.permissions
+      && let Some(category) = permitted(&subject, launch.permissions().commands())
+    {
+      return Ok(Some(Settled::by(DecidedBy::Permissions, Some(category))));
     }
     let rules = watch.db.approval_rules(approval.run)?;
     if let Some(rule) = answering(&rules, &subject) {

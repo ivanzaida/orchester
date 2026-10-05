@@ -1,7 +1,7 @@
 //! Automation answers waiting requests through Orchester's MCP server when a person allows it in the
 //! app (`DecidedBy::Automation`, `DecidedBy::AutomationDeny`): it approves once or denies. SQLite cannot
-//! change a CHECK constraint, so `tool_approvals` is rebuilt with its triggers and index, keeping its
-//! `rowid` (foreign keys are enforced again after migrating).
+//! widen a column's `CHECK` in place, so `tool_approvals` is rebuilt, after the `permissions` rebuild,
+//! with every column, index and trigger it had (foreign keys are enforced again after migrating).
 
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE tool_approvals_answered (
@@ -24,13 +24,13 @@ CREATE TABLE tool_approvals_answered (
   native_time_limit INTEGER CHECK (native_time_limit > 0),
   decided_by TEXT CHECK (decided_by IN (
     'person', 'person_similar', 'person_always', 'person_run', 'person_deny', 'similar_rule', 'always_allowed',
-    'auto_approved', 'automation', 'automation_deny'
+    'auto_approved', 'permissions', 'automation', 'automation_deny'
   )),
   rule_id INTEGER
 ) STRICT;
-INSERT INTO tool_approvals_answered (rowid, id, run_id, step_execution_id, invocation_id, agent, server, action,
-  target, requested_at, state, decided_at, command, scope, native_shell, native_time_limit, decided_by, rule_id)
-  SELECT rowid, id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, state,
+INSERT INTO tool_approvals_answered (id, run_id, step_execution_id, invocation_id, agent, server, action, target,
+  requested_at, state, decided_at, command, scope, native_shell, native_time_limit, decided_by, rule_id)
+  SELECT id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, state,
     decided_at, command, scope, native_shell, native_time_limit, decided_by, rule_id
   FROM tool_approvals;
 DROP TABLE tool_approvals;

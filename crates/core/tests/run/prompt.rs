@@ -114,6 +114,7 @@ impl Prompt {
       messages: None,
       memory: &[],
       retry: None,
+      working: None,
     }
   }
 }
