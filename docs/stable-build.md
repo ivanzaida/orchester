@@ -105,14 +105,23 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
   `run_not_running`…) and the app's own explanation. Its discovery file is
   `%LOCALAPPDATA%\orchester-mcp\<pid>.json` on Windows and
-  `~/Library/Application Support/orchester-mcp/<pid>.json` on macOS (readable only by you): `url`
+  `~/Library/Application Support/orchester-mcp/<pid>.json` on macOS. Only you can read it: on
+  Windows it gets an access list of its own that admits only you, on macOS it is `0600`. It holds `url`
   (`http://127.0.0.1:<port>/mcp`, streamable HTTP), `port` and `token`. To connect a client, read
   the file of the running app's pid and send `Authorization: Bearer <token>`, e.g.
   `claude mcp add --transport http orchester http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`.
   When the app starts it removes the files of Orchester processes that were killed and could not
-  remove theirs (each running process holds a lock on `<pid>.lock` beside its file).
-- **lurq's MCP server** stays for looking at the window: screenshots and the element tree for design
-  verification (`lurq_screenshot`, `lurq_read_tree`, `lurq_interact`). Its discovery file is
+  remove theirs (each running process holds a lock on `<pid>.lock` beside its file). The server
+  refuses a request without the token, and one that a web page sends (an `Origin` other than
+  loopback); it serves at most 32 connections, each with a 10-second deadline for a request's
+  headers and for idling between requests.
+- **lurq's MCP server** is for looking at the window. In a release build, the installed app, it only
+  reads: screenshots, the element tree, inspecting and finding elements, windows, waiting and logs
+  (`lurq_screenshot`, `lurq_read_tree`, `lurq_inspect`, `lurq_find`, `lurq_windows`, `lurq_wait`,
+  `lurq_logs`); it refuses `lurq_interact`, `lurq_act`, `lurq_set_value`, `lurq_resize` and menu
+  activation, so it cannot press a button or flip a switch. A debug build (`tools/run.ps1`), which
+  design verification drives, also takes synthetic input. The build decides
+  (`cfg(debug_assertions)`, `embedded_mcp::McpAccess`). Its discovery file is
   `%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
   administrators) and `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS.
 
@@ -121,20 +130,25 @@ where the token is. If Orchester's server cannot start, the status bar shows *MC
 the app's log has the reason (see [Logs](#logs)).
 
 **Approvals.** Automation answers waiting tool requests only while *Let automation answer approvals*
-is on. It is an application setting, off by default: click the MCP item in the status bar and turn
-it on or off in its popover. While it is off, `decide_approval` is refused
-(`automation_not_allowed`). While it is on, a client approves a request once or denies it (the
-wider answers stay with the person), and the run records the answer as automation's: the activity
-reads *approved by automation* or *denied by automation*, and the run's Approvals count them apart
-from yours.
+is on. It is an application setting, off by default, which only a person changes, in the window:
+click the MCP item in the status bar and turn it on or off in its popover (no tool of Orchester's MCP
+server changes it, and lurq's server of the installed app cannot press it). While it is off,
+`decide_approval` is refused (`automation_not_allowed`). While it is on, a client may deny any
+request, and approve once only what auto-approval would approve: a request auto-approval leaves to a
+person (an unreadable or destructive command, a write outside the worktree, a credential read, an
+install, a network command) is refused (`person_only`, with the reason), as are the wider answers
+(`automation_wider`). The run records automation's answers as such: the activity reads *approved by
+automation* or *denied by automation*, and the run's Approvals count them apart from yours.
 
-What this means: any program running as your user can read the discovery files and control the app
-as you could: create and run tasks, whose agents work in your projects, read what the window shows,
-and click and type. Other users' programs can connect to the ports but cannot read the tokens, so
-the servers refuse them; other machines cannot connect at all. Secret values stay masked on screen,
-in the element tree, and in every tool result. A program running as you can already read your
-files and start the same CLIs, so the servers add no access such a program lacks; they make the app
-scriptable. Answering approvals is the one thing they add, which is why it waits for your setting.
+What this means: any program running as your user can read the discovery files and control the app's
+data through Orchester's server as you could: create and run tasks, whose agents work in your
+projects, and pause or cancel runs. Through lurq's server it can read what the window shows; in a
+debug build it can also click and type. Other users' programs can connect to the ports but cannot
+read the tokens, so the servers refuse them; other machines cannot connect at all. Secret values stay
+masked on screen, in the element tree, and in every tool result. A program running as you can
+already read your files and start the same CLIs, so the servers add no access such a program lacks;
+they make the app scriptable. Answering approvals, the one thing they would add, waits for your
+setting and stays within what auto-approval allows.
 
 ## Data
 

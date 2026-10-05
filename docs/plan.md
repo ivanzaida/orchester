@@ -97,6 +97,15 @@ MCP server").
 - Tests: `cargo test -p orchester-desktop --test form_keyboard app_mcp` (10), `--test status_bar status_bar`,
   `--test i18n`; `cargo test -p orchester-runner --features test-agent --test approval_choices` (automation answers);
   `cargo test -p orchester-store --test approval_rules`, `--test app_db automation`.
+- Security review fixes (2026-10-05): merged master `47291954`; the automation rebuild of `tool_approvals` follows
+  the `permissions` rebuild and admits all eleven answers (`permitted_migration` upgrades a populated database through
+  both). Automation approves once only what auto-approval would approve (`given_by` takes the subject; runner
+  rejections `person_only` with the reason, `automation_wider`); it may deny anything. lurq's MCP server only reads in
+  release builds (`embedded_mcp::McpAccess`, `cfg(debug_assertions)`; no `Interact` scope), so it cannot flip the
+  setting or press Approve. Origin other than loopback refused (403), `Bearer` case-insensitive, 32 connections with a
+  10 s header/idle deadline, a same-pid stale file replaced, the Windows discovery file given a user-only access list
+  (`icacls /inheritance:r`). Not added: limits on brief and criteria, which the new task form does not have either
+  (only the title's 200 characters); a limit would be a new rule (**needs decision**).
 - **Not done:** design verification of the status bar item and the new popover (no Pencil frame exists for the
   popover; it takes the operations popover's panel); the macOS build of the desktop was not checked (no Apple SDK on
   the Windows host; core checks for `aarch64-apple-darwin`).
