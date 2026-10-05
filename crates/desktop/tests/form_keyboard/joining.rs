@@ -22,8 +22,9 @@ use orchester_store::ProjectDb;
 use crate::{
   agent_permissions::shows,
   harness::Desktop,
+  request_count::RequestCount,
   servers::{server_support::TestServer, type_into},
-  sharing::{elsewhere, sharing_tab, signed_in},
+  sharing::{elsewhere, sharing_tab, signed_in, signed_in_via},
 };
 
 const ORIGIN: &str = "https://github.com/ivanzaida/kontur.git";
@@ -201,6 +202,7 @@ fn joining_not_shared_tasks_wait_behind_the_filter_until_shared() {
   assert!(shows(&mut desktop, "Not shared · this computer only"));
   desktop.click("task-share");
   desktop.wait_for("share-task-dialog");
+  crate::modal_layer::assert_dialog_in_screen(&mut desktop, "share-task-dialog");
   assert!(shows(&mut desktop, "Share KON-2 on ORC?"));
   desktop.click("share-task-confirm");
   desktop.wait_until("the task is ORC's now", |desktop| {
@@ -302,4 +304,93 @@ fn joining_a_join_that_fails_on_the_way_keeps_the_ticks() {
       .expect("link")
       .is_none()
   );
+}
+
+/// Bohdan signed in through a port that counts the requests asking for the repository's project,
+/// on a server where the repository is not shared (`None`) or Alice shared it, with Bohdan a member
+/// or not.
+fn counted(member: Option<bool>) -> (Desktop, TestServer, RequestCount) {
+  let server = TestServer::start();
+  server.create_user("root", "Root", true);
+  let first = server.create_user("bohdan", "Bohdan Koval", false);
+  if let Some(member) = member {
+    let alice = alice_shares(&server);
+    if member {
+      add_bohdan(&server, &alice);
+    }
+  }
+  let count = RequestCount::start(server.address, "GET /api/v1/projects?");
+  let desktop = signed_in_via(&count.url(), ("bohdan", &first), &["Add repository switcher"]);
+  (desktop, server, count)
+}
+
+/// The Sharing tab asks the server once while it stays open, and shows `answer`.
+fn asks_once(desktop: &mut Desktop, count: &RequestCount, answer: &str) {
+  sharing_tab(desktop);
+  desktop.wait_until("the answer shows", |desktop| shows(desktop, answer));
+  let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+  while std::time::Instant::now() < until {
+    desktop.tree.tick_futures();
+    desktop.pass();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+  }
+  assert!(shows(desktop, answer), "the answer stays");
+  assert_eq!(count.count(), 1, "one request while the tab is open");
+}
+
+#[test]
+fn joining_sharing_asks_once_when_the_repository_is_not_shared() {
+  let (mut desktop, _server, count) = counted(None);
+  asks_once(&mut desktop, &count, "checked on Kontur team: not shared there yet");
+}
+
+#[test]
+fn joining_sharing_asks_once_when_the_person_is_not_a_member() {
+  let (mut desktop, _server, count) = counted(Some(false));
+  asks_once(
+    &mut desktop,
+    &count,
+    "Kontur team has this repository, but you are not a member",
+  );
+  desktop.click("sharing-check-again");
+  desktop.wait_until("Check again asks again", |_| count.count() == 2);
+}
+
+#[test]
+fn joining_sharing_asks_once_when_the_person_is_a_member() {
+  let (mut desktop, _server, count) = counted(Some(true));
+  asks_once(&mut desktop, &count, "This repository is shared on Kontur team as ORC");
+}
+
+/// git of a clone whose origin is a folder on this computer.
+struct FolderClone;
+
+impl orchester_core::command::CommandRunner for FolderClone {
+  fn run(
+    &self,
+    command: &orchester_core::command::Command,
+  ) -> Result<orchester_core::command::CommandOutput, orchester_core::command::CommandError> {
+    let remote = command.args().first().is_some_and(|arg| arg == "remote");
+    Ok(orchester_core::command::CommandOutput {
+      code: Some(if remote { 0 } else { 1 }),
+      stdout: if remote {
+        "origin\tD:\\mirror\\kontur.git (fetch)\norigin\tD:\\mirror\\kontur.git (push)\n".to_owned()
+      } else {
+        String::new()
+      },
+      stderr: String::new(),
+    })
+  }
+}
+
+#[test]
+fn joining_a_repository_whose_origin_is_a_folder_names_it() {
+  let mut desktop = Desktop::with_project_and_programs(std::sync::Arc::new(FolderClone));
+  sharing_tab(&mut desktop);
+  desktop.wait_for("sharing-cant-share");
+  assert!(shows(&mut desktop, "its origin remote is a folder on this computer"));
+  assert!(shows(
+    &mut desktop,
+    r"origin is D:\mirror\kontur.git, which nobody else can reach"
+  ));
 }

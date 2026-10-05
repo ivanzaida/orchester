@@ -90,16 +90,21 @@ pub fn repository_identity(programs: &Programs, repo_root: &Path) -> Result<Repo
     .unwrap_or_default();
   RepositoryIdentity::from_remote_url(&url).map_err(|error| match error {
     RepositoryIdentityError::MissingOrigin => IdentityProblem::NoOrigin,
-    RepositoryIdentityError::LocalOrigin | RepositoryIdentityError::Invalid => IdentityProblem::LocalOrigin,
+    // The remote's address as git lists it, credentials already removed when it was read.
+    RepositoryIdentityError::LocalOrigin => IdentityProblem::LocalOrigin { origin: Some(url) },
+    RepositoryIdentityError::Invalid => IdentityProblem::LocalOrigin { origin: None },
   })
 }
 
 /// Why the repository cannot be shared (10.16).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IdentityProblem {
   NoOrigin,
-  /// `origin` is a folder on this computer, or not a network repository's address.
-  LocalOrigin,
+  /// `origin` is a folder on this computer (`origin` names it), or not a network repository's
+  /// address.
+  LocalOrigin {
+    origin: Option<String>,
+  },
   /// git could not list the remotes.
   Unreadable,
 }

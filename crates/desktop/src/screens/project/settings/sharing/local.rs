@@ -76,7 +76,7 @@ impl SharingTab {
     });
     let mut rows = Vec::new();
     rows.extend(self.made_local_notice(ctx, open, facts, actions));
-    if let Err(problem) = facts.identity {
+    if let Err(problem) = &facts.identity {
       rows.push(join_offer::identity_notice(ctx, open, problem));
     }
     rows.extend(offer.clone());
@@ -328,7 +328,7 @@ fn repository_row(
       .id("sharing-identity")
       .variant(ExtraTypography::MonoField.role())
       .into(),
-    Err(problem) => Text::new(&ctx.t(problem_key(*problem)))
+    Err(problem) => Text::new(&ctx.t(problem_key(problem)))
       .id("sharing-identity-problem")
       .variant(TypographyStyle::FieldLabel)
       .color(PaletteColor::TextPrimary)
@@ -367,10 +367,10 @@ fn lookup_text(ctx: &Ctx, entry: &ServerEntry, found: &Result<Lookup, ()>, at: T
   }
 }
 
-const fn problem_key(problem: IdentityProblem) -> &'static str {
+const fn problem_key(problem: &IdentityProblem) -> &'static str {
   match problem {
     IdentityProblem::NoOrigin => "sharing.repository.noOrigin",
-    IdentityProblem::LocalOrigin => "sharing.repository.localOrigin",
+    IdentityProblem::LocalOrigin { .. } => "sharing.repository.localOrigin",
     IdentityProblem::Unreadable => "sharing.repository.unreadable",
   }
 }

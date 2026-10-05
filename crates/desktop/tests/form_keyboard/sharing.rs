@@ -67,6 +67,15 @@ pub(crate) fn signed_in_on(
   (username, first): (&str, &orchester_api::Credential),
   tasks: &[&str],
 ) -> Desktop {
+  signed_in_via(&server.url(), (username, first), tasks)
+}
+
+/// [`signed_in_on`] through `url`, e.g. a port in front of the server.
+pub(crate) fn signed_in_via(
+  url: &str,
+  (username, first): (&str, &orchester_api::Credential),
+  tasks: &[&str],
+) -> Desktop {
   let mut desktop = Desktop::with_project_and_programs(Arc::new(Clone));
   if !tasks.is_empty() {
     ProjectDb::open(desktop.repo())
@@ -79,7 +88,7 @@ pub(crate) fn signed_in_on(
       .expect("tasks");
   }
   servers_page(&mut desktop);
-  add_server(&mut desktop, &server.url());
+  add_server(&mut desktop, url);
   sign_in_first_time(&mut desktop, username, first.expose(), "alice's own long password");
   desktop
 }
@@ -164,6 +173,7 @@ fn sharing_share_uploads_the_project_and_writes_the_discovery_file() {
   });
   desktop.click("sharing-share");
   desktop.wait_for("share-dialog");
+  crate::modal_layer::assert_dialog_in_screen(&mut desktop, "share-dialog");
   assert!(shows(&mut desktop, "Share Kontur on Kontur team?"));
   assert!(shows(&mut desktop, "2 · their numbers are kept, KON-1 … KON-2"));
   assert!(shows(&mut desktop, "Continue at KON-3, numbered by the server"));

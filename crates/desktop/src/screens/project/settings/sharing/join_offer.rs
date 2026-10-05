@@ -59,12 +59,23 @@ impl SharingTab {
   pub(super) fn lookups(&self, ctx: &mut Ctx, signed_in: &[ServerEntry], facts: &Facts) -> Option<Lookups> {
     let identity = facts.identity.clone().ok()?;
     let servers = ServerFeed::of(ctx).servers;
-    let deps = (signed_in.to_vec(), identity, self.revision.get());
+    // By the servers' ids: an entry changes with every answer of its server (when it was last
+    // reached), which must not ask again. A sign-in changes the ids, *Check again* the revision.
+    let ids: Vec<ServerId> = signed_in.iter().map(|entry| entry.stored.id).collect();
+    let deps = (ids, identity, self.revision.get());
     let load = ctx.future(
       deps,
-      move |(entries, identity, _): (Vec<ServerEntry>, RepositoryIdentity, u64)| {
+      move |(ids, identity, _): (Vec<ServerId>, RepositoryIdentity, u64)| {
         let servers = servers.clone();
         async move {
+          let read = servers.clone();
+          let entries: Vec<ServerEntry> = crate::background::run(move || read.entries())
+            .await
+            .map_err(drop)?
+            .map_err(|error| tracing::warn!(%error, "cannot read the servers"))?
+            .into_iter()
+            .filter(|entry| ids.contains(&entry.stored.id))
+            .collect();
           let mut found = Vec::with_capacity(entries.len());
           for entry in entries {
             let answer = servers.lookup(&entry, identity.clone()).await.map_err(|error| {
@@ -243,19 +254,25 @@ fn offer_detail(ctx: &Ctx, tasks: usize, key: &str) -> Arc<str> {
 }
 
 /// Why the repository cannot be shared (10.16 B).
-pub(super) fn identity_notice(ctx: &Ctx, open: &OpenProject, problem: IdentityProblem) -> Element {
+pub(super) fn identity_notice(ctx: &Ctx, open: &OpenProject, problem: &IdentityProblem) -> Element {
   let project = open.project.name().as_str();
   let (heading, detail) = match problem {
-    IdentityProblem::LocalOrigin => ("sharing.cantShare.localOrigin", "sharing.cantShare.localOriginDetail"),
-    IdentityProblem::NoOrigin => ("sharing.cantShare.noOrigin", "sharing.cantShare.noOriginDetail"),
-    IdentityProblem::Unreadable => ("sharing.cantShare.unreadable", "sharing.cantShare.unreadableDetail"),
+    IdentityProblem::LocalOrigin { origin: Some(origin) } => (
+      "sharing.cantShare.localOrigin",
+      ctx.t_args("sharing.cantShare.localOriginPath", [("origin", origin.as_str())]),
+    ),
+    IdentityProblem::LocalOrigin { origin: None } => (
+      "sharing.cantShare.localOrigin",
+      ctx.t("sharing.cantShare.localOriginDetail"),
+    ),
+    IdentityProblem::NoOrigin => ("sharing.cantShare.noOrigin", ctx.t("sharing.cantShare.noOriginDetail")),
+    IdentityProblem::Unreadable => (
+      "sharing.cantShare.unreadable",
+      ctx.t("sharing.cantShare.unreadableDetail"),
+    ),
   };
-  Notice::new(
-    Icon::FolderGit,
-    ctx.t_args(heading, [("project", project)]),
-    ctx.t(detail),
-  )
-  .emphasized()
-  .id("sharing-cant-share")
-  .into()
+  Notice::new(Icon::GitBranch, ctx.t_args(heading, [("project", project)]), detail)
+    .emphasized()
+    .id("sharing-cant-share")
+    .into()
 }

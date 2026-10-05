@@ -5961,7 +5961,8 @@
       "noOrigin": "{{project}} can't be shared: the repository has no origin remote",
       "noOriginDetail": "Add the remote your team clones from as origin, then open Sharing again.",
       "unreadable": "{{project}} can't be shared: git couldn't list the repository's remotes",
-      "unreadableDetail": "Check that git works in this repository, then open Sharing again."
+      "unreadableDetail": "Check that git works in this repository, then open Sharing again.",
+      "localOriginPath": "origin is {{origin}}, which nobody else can reach. A server knows a project by a remote others can clone too (HTTPS or SSH)."
     },
     "notShared": {
       "label": "Not shared",

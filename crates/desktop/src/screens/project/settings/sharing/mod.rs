@@ -21,7 +21,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, ScrollVertical, Text},
+  components::{Column, Modal, ModalTarget, ScrollVertical, Text},
   core::{ElementRef, Signal},
   layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
@@ -283,7 +283,12 @@ impl Component for SharingTab {
           .width(Dimension::Pct(100.0))
           .flex(1.0),
       ))
-      .with_children(dialog)
+      // Over the whole window, as every dialog of the app: the sidebar and the tabs take no input.
+      .with_children(dialog.map(|dialog| {
+        Modal::new(dialog)
+          .target(ModalTarget::Root)
+          .dismiss_on_escape(false)
+      }))
   }
 }
 

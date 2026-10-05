@@ -52,7 +52,7 @@ fn assert_near(actual: f32, expected: f32, what: &str) {
 
 /// The scrim spans the window between the title bar and the status bar, and `dialog` is centred
 /// in it.
-fn assert_dialog_in_screen(desktop: &mut Desktop, dialog: &str) {
+pub(crate) fn assert_dialog_in_screen(desktop: &mut Desktop, dialog: &str) {
   let scrim = desktop.bounds("dialog-backdrop");
   let bar = desktop.bounds("status-bar");
   let dialog = desktop.bounds(dialog);

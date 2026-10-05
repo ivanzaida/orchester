@@ -97,6 +97,7 @@ icons! {
   FormInput => '\u{e21f}',
   Gauge => '\u{e1bf}',
   Gear => '\u{e154}',
+  GitBranch => '\u{e0e2}',
   GitCompareArrows => '\u{e553}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',

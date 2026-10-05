@@ -59,6 +59,7 @@ mod project_setup;
 mod pull_request_detail;
 mod pull_requests;
 mod pull_requests_layout;
+mod request_count;
 mod run_again;
 mod run_history;
 mod run_permissions;
