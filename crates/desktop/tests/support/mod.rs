@@ -228,6 +228,32 @@ impl Fixture {
       .id()
   }
 
+  /// A complete task titled `title`, created at `now` and queued with the fixture's pipeline, as
+  /// Run queues it before its first run.
+  pub fn queued_task(&mut self, title: &str, now: Timestamp) -> TaskId {
+    let pinned = self.snapshot.pipeline();
+    let details = TaskDetails {
+      title: name(title),
+      brief: "Sign in with a password.".to_owned(),
+      acceptance_criteria: vec!["A person can sign in".to_owned()],
+      pipeline: Some(pinned.resource),
+      limits: Some(TaskLimits::new(budget(1_000_000), Duration::from_secs(1_800)).expect("limits")),
+    };
+    let mut task = self
+      .db
+      .create_tasks(IdempotencyKey::generate(), vec![details], now)
+      .expect("task")
+      .remove(0);
+    task.queue(pinned.number).expect("a complete draft queues");
+    self
+      .db
+      .save_task(&task)
+      .expect("save")
+      .saved()
+      .expect("no conflict")
+      .id()
+  }
+
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
     self.runs += 1;

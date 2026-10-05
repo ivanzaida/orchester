@@ -48,7 +48,7 @@ fn app_mcp_creates_finds_and_changes_tasks() {
     }),
   );
   assert_eq!(created["task"]["key"], "KON-1");
-  assert_eq!(created["task"]["status"], "draft");
+  assert_eq!(created["task"]["submission"], "draft");
   assert_eq!(created["task"]["priority"], "high");
   assert_eq!(created["task"]["workflow_status"], "backlog");
   // The task list reads the tasks again, as after a save of its own.

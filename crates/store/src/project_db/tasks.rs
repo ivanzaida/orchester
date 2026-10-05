@@ -487,6 +487,7 @@ pub(super) fn is_queued(transaction: &rusqlite::Transaction<'_>, task: TaskId) -
   )?)
 }
 
+/// The `tasks.status` value: draft or submitted ([`TaskStatus`]), which no run event changes.
 pub(super) const fn status_text(status: TaskStatus) -> &'static str {
   match status {
     TaskStatus::Draft => "draft",

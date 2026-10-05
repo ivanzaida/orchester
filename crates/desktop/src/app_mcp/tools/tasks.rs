@@ -119,7 +119,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "title": task.details().title.as_str(),
     "brief": &task.details().brief,
     "criteria": &task.details().acceptance_criteria,
-    "status": wire::task_status(task.status()),
+    "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
     "tags": tag_names,

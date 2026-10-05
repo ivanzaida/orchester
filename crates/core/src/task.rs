@@ -96,9 +96,16 @@ pub fn missing_details(brief: &str, criteria: &[String], pipeline: bool, limits:
     .collect()
 }
 
+/// Whether a person has submitted the task for running (`tasks.status`): a draft, or queued with its
+/// pipeline version pinned. It does not follow the run lifecycle: a task whose run finished stays
+/// `Queued`. Where a task stands comes from its latest run ([`crate::run::TaskPhase::of`]), and the
+/// task list's workflow status (In progress, In review, Done) is
+/// [`organization::WorkflowStatus`], which run events and merges set (`docs/architecture/storage.md`,
+/// "State machines").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TaskStatus {
   Draft,
+  /// Submitted: its run is waiting to start, has started, or has ended.
   Queued,
 }
 

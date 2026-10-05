@@ -87,7 +87,9 @@ impl From<Priority> for Rank {
   }
 }
 
-pub const fn task_status(status: TaskStatus) -> &'static str {
+/// Whether the task is a draft or was submitted ([`TaskStatus`]); a task whose run ended stays
+/// `queued`, so where it stands is its `phase` and its `workflow_status`.
+pub const fn submission(status: TaskStatus) -> &'static str {
   match status {
     TaskStatus::Draft => "draft",
     TaskStatus::Queued => "queued",

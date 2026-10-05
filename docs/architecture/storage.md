@@ -430,7 +430,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 
 | Table | Purpose |
 | --- | --- |
-| `tasks` | key, title, brief, acceptance criteria, pipeline resource, limits, status, idempotency key |
+| `tasks` | key, title, brief, acceptance criteria, pipeline resource, limits, status (`draft` or `queued`: submitted, which a finished run does not change; see "State machines"), idempotency key |
 | `task_dependencies` | task, prerequisite, condition (`ready_for_review`, `merged`) |
 | `run_groups` | mode (parallel with limit / sequential with gate), budget cap, failure policy, scheduling paused, pinned versions |
 | `run_group_items` | group, task, position |
@@ -513,7 +513,16 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
 
 - **Task:** draft → queued → running → awaiting plan approval ⇄ running → ready for review →
   merged / done; any active state → paused, cancelled, failed. Blocked is derived from
-  dependencies, not stored.
+  dependencies, not stored. Only draft → queued is stored on the task: `tasks.status`
+  (`orchester_core::task::TaskStatus`) says whether a person submitted it, and stays `queued` once
+  its run started or ended (a queued task that never started can go back to `draft`). Where the task
+  stands after that is never stored: it is derived from its latest run and that run's merge
+  (`orchester_core::run::TaskPhase::of`), and the task page, the task list's run labels, the Needs
+  you tab, the Queued count and the MCP `phase` read it there. The workflow status the task list's
+  tabs and the overview count (Backlog … Done, `task_organization`) is stored separately: a person
+  sets it, and run events (start → In progress, ready for review → In review) and a merge (Done) set
+  it too. No screen reads `tasks.status` for where a task stands; the MCP tools name it
+  `submission`.
 - **Run:** pending → running ⇄ paused → succeeded / failed / cancelled; running → interrupted
   (session ended) → running on continue; running → waiting for a person (retries exhausted, or a
   step broke again) → running on a person's retry or return, failed on their stop, or cancelled. Interrupted keeps its last checkpoint. A pause is
