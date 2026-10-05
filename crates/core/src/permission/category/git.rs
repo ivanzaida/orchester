@@ -175,7 +175,9 @@ fn argv(with_sub: &[String]) -> Vec<String> {
 /// A subcommand [`known_safe`] rules: Read-only with the options it lists, else Unknown.
 fn known_read(with_sub: &[String]) -> Judged {
   match known_safe::readable_arguments(&argv(with_sub)) {
-    Some(words) => Judged::of(Kind::ReadOnly).reading(words.into_iter().map(str::to_owned).collect()),
+    Some(words) => Judged::of(Kind::ReadOnly)
+      .known_safe()
+      .reading(words.into_iter().map(str::to_owned).collect()),
     None => Judged::unknown(),
   }
 }

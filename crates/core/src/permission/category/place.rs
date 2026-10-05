@@ -105,7 +105,7 @@ fn note(part: &mut CommandPart, path: &Path, place: Place) {
   }
 }
 
-fn is_null_device(target: &str) -> bool {
+pub(super) fn is_null_device(target: &str) -> bool {
   matches!(target, "/dev/null" | "$null") || target.eq_ignore_ascii_case("nul")
 }
 
@@ -133,7 +133,7 @@ pub(super) fn named(args: &[String]) -> Vec<&str> {
 pub(super) fn change_directory(scope: &CommandScope, folders: &mut Folders, args: &[String]) {
   let target = operands(args).into_iter().next().unwrap_or_else(|| "~".to_owned());
   let reached: Option<Vec<PathBuf>> = match folders.as_deref() {
-    Some(current) if target != "-" => current.iter().map(|folder| scope.path(folder, &target)).collect(),
+    Some(current) if target != "-" => current.iter().map(|folder| scope.folder(folder, &target)).collect(),
     _ => None,
   };
   *folders = match (folders.take(), reached) {

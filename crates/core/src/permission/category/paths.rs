@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::glob;
 use crate::permission::canonical::{existing, normalize};
 
 /// Files directly in the home folder that hold credentials besides its dot files (`_netrc` is
@@ -19,6 +20,17 @@ const SECRET_HOME_FILES: [&str; 2] = ["_netrc", "ntuser.dat"];
 /// `.cargo/credentials.toml`, `.git-credentials`, `.codex`, `.claude.json`), which are all credential
 /// locations too.
 const APPLICATION_DATA: [&str; 2] = ["appdata", "library"];
+
+/// Folders in the home folder's dot folders that hold sources published for everyone, not the user's
+/// credentials, by their names (in lower case; `*` is any one name): the crates' sources Cargo unpacks
+/// from its registries and the library sources of the Rust toolchains. What they hold is read like any
+/// folder outside the worktree; the rest of `.cargo` (`credentials.toml`, the registry's index and
+/// cache, `config.toml`) and of `.rustup` stays a credential location. A link in them is followed to
+/// where it leads first.
+const PUBLISHED_SOURCES: [&[&str]; 2] = [
+  &[".cargo", "registry", "src"],
+  &[".rustup", "toolchains", "*", "lib", "rustlib", "src"],
+];
 
 /// Where commands run and may write.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,19 +66,11 @@ impl CommandScope {
   /// `word`, a path as the command names it from `cwd`, resolved, and where it lies. A word with a glob
   /// is the folder before its first glob component (`src/*.rs` is `src`, `*/x` the folder `cwd`), which
   /// is a credential location when what the glob matches in it may be one (`~/.s*`). `None` when it
-  /// names the home folder of another user (`~bob`) or the folders `~+` and `~-`.
+  /// names the home folder of another user (`~bob`) or the folders `~+` and `~-`, or climbs out of what
+  /// a glob matched (`src/*/../..`).
   pub(super) fn locate(&self, cwd: &Path, word: &str) -> Option<(PathBuf, Place)> {
-    let (word, glob) = before_glob(word);
-    let path = if word == "~" {
-      self.home.clone()?
-    } else if let Some(rest) = word.strip_prefix("~/").or_else(|| word.strip_prefix("~\\")) {
-      self.home.as_ref()?.join(rest)
-    } else if word.starts_with('~') {
-      return None;
-    } else {
-      cwd.join(host_path(word))
-    };
-    let path = resolved(&path);
+    let (word, glob) = before_glob(word)?;
+    let path = resolved(&self.absolute(cwd, word)?);
     let place = match self.place(&path) {
       Place::Granted => Place::Granted,
       _ if glob && self.may_hold_secrets(&path) => Place::Secret,
@@ -75,9 +79,27 @@ impl CommandScope {
     Some((path, place))
   }
 
-  /// `word` resolved from `cwd`, without its place.
-  pub(super) fn path(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
+  /// The folder `cd word` goes to from `cwd`, resolved: with a glob, the one folder it matches now
+  /// ([`glob::single_match`]).
+  pub(super) fn folder(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
+    if word.contains(['*', '?', '[']) {
+      return glob::single_match(&self.absolute(cwd, word)?).map(|path| resolved(&path));
+    }
     self.locate(cwd, word).map(|(path, _)| path)
+  }
+
+  /// `word` from `cwd` as written, with `~` as the home folder; `None` for another user's home folder
+  /// (`~bob`) and the folders `~+` and `~-`.
+  fn absolute(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
+    Some(if word == "~" {
+      self.home.clone()?
+    } else if let Some(rest) = word.strip_prefix("~/").or_else(|| word.strip_prefix("~\\")) {
+      self.home.as_ref()?.join(rest)
+    } else if word.starts_with('~') {
+      return None;
+    } else {
+      cwd.join(host_path(word))
+    })
   }
 
   /// Where `path` (resolved) lies. The home folder and the folders that hold it are credential
@@ -119,7 +141,7 @@ impl CommandScope {
       [folder, ..] if APPLICATION_DATA.contains(folder) => {
         !self.temp.as_ref().is_some_and(|temp| path.starts_with(temp))
       }
-      [first, ..] => first.starts_with('.') || SECRET_HOME_FILES.contains(first),
+      [first, ..] => (first.starts_with('.') || SECRET_HOME_FILES.contains(first)) && !published_source(&names),
     }
   }
 }
@@ -143,14 +165,30 @@ fn resolved(path: &Path) -> PathBuf {
   existing(path).map_or_else(|_| normalize(path), |found| found.path)
 }
 
+/// Whether the components `names` (of a path in the home folder, in lower case) lie in one of the
+/// [`PUBLISHED_SOURCES`].
+fn published_source(names: &[String]) -> bool {
+  PUBLISHED_SOURCES.iter().any(|folder| {
+    names.len() >= folder.len()
+      && folder
+        .iter()
+        .zip(names)
+        .all(|(pattern, name)| *pattern == "*" || pattern == name)
+  })
+}
+
 /// The part of `word` before its first component with a glob character (empty when that is the first),
-/// and whether it had one.
-fn before_glob(word: &str) -> (&str, bool) {
+/// and whether it had one; `None` when a `..` after the glob leaves what it matched, which the folder
+/// before it does not tell.
+fn before_glob(word: &str) -> Option<(&str, bool)> {
   let Some(glob) = word.find(['*', '?', '[']) else {
-    return (word, false);
+    return Some((word, false));
   };
-  let folder = word[..glob].rfind(['/', '\\']).map_or("", |end| &word[..=end]);
-  (folder, true)
+  let start = word[..glob].rfind(['/', '\\']).map_or(0, |end| end + 1);
+  if word[start..].split(['/', '\\']).any(|name| name == "..") {
+    return None;
+  }
+  Some((&word[..start], true))
 }
 
 /// `word` as the host reads it: on Windows, Git Bash's `/c/…` is `C:\…`.
