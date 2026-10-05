@@ -64,12 +64,27 @@ pub enum StopReason {
   Filtered,
 }
 
-/// Progress of a response while it streams.
+/// Progress of a response while it streams, and what the client did to get one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StreamEvent {
   Text(String),
   Reasoning(String),
-  ToolCallStarted { name: String },
+  ToolCallStarted {
+    name: String,
+  },
+  /// Attempt `attempt` failed with `error`, and the client waits `wait` before it tries again (§3.1);
+  /// the response streamed so far, if any, is dropped.
+  Retrying {
+    attempt: u32,
+    wait: Duration,
+    error: ModelError,
+  },
+  /// The endpoint refused the conversation's earlier thinking blocks as bound to another history; the
+  /// client sends the conversation without them from now on (§3.1, preserved thinking).
+  ThinkingStripped,
+  /// Tokens of a response the client dropped (a broken stream, or one asked again with more output
+  /// room); they count toward budgets but are not part of the response's usage.
+  Spent(TokenUsage),
 }
 
 /// A model the endpoint lists, with the limits it reported.

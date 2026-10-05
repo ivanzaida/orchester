@@ -2,7 +2,7 @@
 //! are read strictly.
 
 use orchester_core::{
-  native::tools::{ToolInput, ToolInputError, ToolName, ToolSet, parse_call},
+  native::tools::{INVALID_JSON, ToolInput, ToolInputError, ToolName, ToolSet, invalid_json_input, parse_call},
   permission::RepositoryAccess,
   run::StepOutcome,
 };
@@ -119,4 +119,18 @@ fn native_tools_read_only_set_withholds_writes() {
   assert!(!read_only.offers(ToolName::WriteFile));
   assert!(read_only.offers(ToolName::RunCommand));
   assert_eq!(ToolSet::for_access(RepositoryAccess::Write).tools(), ToolName::ALL);
+}
+
+#[test]
+fn native_tools_input_that_is_not_json_names_its_text() {
+  let raw = r#"{"path": "a.rs", "offset": nul"#;
+  let error = parse_call("read_file", &invalid_json_input(raw)).expect_err("not JSON");
+  assert_eq!(error, ToolInputError::NotJson(raw.to_owned()));
+  let result: Value = serde_json::from_str(&error.to_string()).expect("the result is JSON");
+  assert_eq!(result, json!({ INVALID_JSON: raw }));
+  let unknown = parse_call("delete_everything", &invalid_json_input(raw));
+  assert_eq!(
+    unknown,
+    Err(ToolInputError::UnknownTool("delete_everything".to_owned()))
+  );
 }

@@ -1,0 +1,37 @@
+[package]
+name = "orchester-agent"
+description = "Orchester's native agent: model API clients over HTTP and SSE, and the file and search tool executors."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+orchester-core.workspace = true
+# Starts ripgrep for `list_files` and `search` the way Orchester starts every program (no console
+# window, a process group of its own on macOS, the full search path).
+orchester-exec.workspace = true
+# The model clients' memory of what a model supports and of conversations sent without thinking
+# blocks, shared by concurrent requests; and the file tools' read stamps.
+parking_lot.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The content hash of a read stamp (§4.1).
+sha2.workspace = true
+# The atomic write of `edit_file` and `write_file`: a temporary file in the target's folder, renamed
+# over it (§4.4).
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+# The fake model server's state, shared by its connections.
+parking_lot.workspace = true
+# The fake model server's scripted turns and the temporary worktrees of the file tool tests.
+tempfile.workspace = true
+tokio.workspace = true
