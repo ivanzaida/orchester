@@ -1,21 +1,18 @@
-//! Left column of the new task form (`Eaadf`): project, title, brief, acceptance criteria and
-//! context. Attaching context is not available yet.
-
-use std::sync::Arc;
+//! Left column of the new task form (`Eaadf`): project, title, brief, acceptance criteria
+//! ([`super::criteria`]) and context. Attaching context is not available yet.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextInput, TextOverflow},
-  core::Signal,
+  components::{Button, Column, Row, ScrollVertical, Spacer, Text, TextOverflow},
   layout::Alignment,
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{repository::RepositoryLink, task::MissingDetail};
 
-use super::{FOCUS_ROOM, FormState, NewTaskForm, missing_note};
+use super::{FOCUS_ROOM, FormState, NewTaskForm, criteria::criteria_field, missing_note};
 use crate::{
   display,
   theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography},
@@ -25,7 +22,6 @@ use crate::{
     github_mark::github_mark,
     icon::{Icon, IconSize, icon},
     message_text,
-    pressable::{Ring, keyboard_stop},
   },
   workspace::OpenProject,
 };
@@ -38,35 +34,6 @@ const CONTEXT_BUTTON_HEIGHT: f32 = 32.0;
 const BRIEF_ROWS: (usize, usize) = (3, 12);
 /// Longest repository path shown in full.
 const PATH_CHARS: usize = 64;
-
-/// One acceptance criterion row. `id` keeps the row's input when rows above it are removed.
-#[derive(Clone, Debug)]
-pub struct Criterion {
-  id: u64,
-  pub text: Signal<String>,
-  hovered: Signal<bool>,
-  remove_focused: Signal<bool>,
-}
-
-impl lurq::app::component::DevtoolsInspectable for Criterion {}
-
-impl Criterion {
-  pub fn new(id: u64) -> Self {
-    Self {
-      id,
-      text: Signal::new(String::new()),
-      hovered: Signal::new(false),
-      remove_focused: Signal::new(false),
-    }
-  }
-
-  /// A row holding a saved criterion.
-  pub fn with_text(id: u64, text: &str) -> Self {
-    let criterion = Self::new(id);
-    criterion.text.set(text.to_owned());
-    criterion
-  }
-}
 
 pub fn brief_form(
   ctx: &mut Ctx,
@@ -259,136 +226,6 @@ fn brief_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     );
   labelled(ctx, "tasks.new.brief", area)
     .with_children(missing_note(ctx, state, MissingDetail::Brief))
-    .into()
-}
-
-/// Acceptance criteria (`Sc7Ua`): one input per criterion, rows can be added and removed.
-fn criteria_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
-  let criteria = form.criteria.get();
-  let locked = state.queued || state.starting;
-  let removable = criteria.len() > 1 && !locked;
-  let rows: Vec<Element> = criteria
-    .iter()
-    .map(|criterion| criterion_row(ctx, &form.criteria, criterion, removable, locked))
-    .collect();
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Stack.role())
-    .child(Text::new(&ctx.t("tasks.new.criteria")).variant(ExtraTypography::FormLabel.role()))
-    .with_children(rows)
-    .child(add_criterion(ctx, &form.criteria, locked))
-    .with_children(missing_note(ctx, state, MissingDetail::AcceptanceCriteria))
-    // Add criterion may be last; its focus ring reaches past the column.
-    .overflow_visible()
-    .into()
-}
-
-/// *+ Add criterion* (`Sc8e9`). The locked form keeps it in its place (`fblW6` in `WOdDe`,
-/// `T6bVyU`), unavailable like the form's other controls that cannot be used there.
-fn add_criterion(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, locked: bool) -> Element {
-  // The link's padding keeps its focus ring off the text, and an equal shift back keeps the text
-  // in line with the criterion markers (`Sc8e9` in `l2YA4`). The ring reaches into the room the
-  // form's scroll content keeps on its left.
-  let padding = ctx.theme().spacing_value(SpacingSize::Xs).resolve(0.0);
-  let label = Text::new(&ctx.t("tasks.new.addCriterion"))
-    .variant(TypographyStyle::Caption)
-    .color(PaletteColor::TextPrimary);
-  let add = |button: Button| {
-    button
-      .id("add-criterion")
-      .padding_horizontal(SpacingSize::Xs)
-      .offset(-padding, 0.0)
-      .rounded(RadiusSize::Sm)
-      .spacing(SpacingSize::Xs)
-      .align_items(Alignment::Center)
-      .child(label)
-  };
-  if locked {
-    return add(Button::empty().button())
-      .describe("state", "unavailable")
-      .focusable(false)
-      .cursor(CursorIcon::NotAllowed)
-      .opacity(DISABLED_OPACITY)
-      .into();
-  }
-  let criteria = criteria.clone();
-  add(keyboard_stop(Button::empty().button(), Ring::Outer))
-    .cursor(CursorIcon::Pointer)
-    .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-    .on_click(move |_| {
-      criteria.update(|criteria| {
-        let next = criteria
-          .iter()
-          .map(|criterion| criterion.id + 1)
-          .max()
-          .unwrap_or_default();
-        criteria.push(Criterion::new(next));
-      });
-    })
-    .into()
-}
-
-fn criterion_row(
-  ctx: &Ctx,
-  criteria: &Signal<Vec<Criterion>>,
-  criterion: &Criterion,
-  removable: bool,
-  locked: bool,
-) -> Element {
-  // A criterion reads in `$muted` (`Y3PwR0` in `WOdDe`, `egNyW` in `dRN4m`); the placeholder of an
-  // empty one stays apart from it in `$subtle`.
-  let theme = ctx.theme();
-  let text = |color| {
-    FormTextRole {
-      typography: TypographyStyle::FieldLabel,
-      color,
-    }
-    .resolve(&theme.typography(), &theme.palette())
-  };
-  let input = TextInput::styled(criterion.text.clone(), text(PaletteColor::TextSecondary))
-    .placeholder_style(text(PaletteColor::TextMuted))
-    .id(Arc::<str>::from(format!("criterion-{}", criterion.id)))
-    .single_line()
-    .flex(1.0)
-    .caret_color(PaletteColor::TextPrimary)
-    .placeholder(&ctx.t("tasks.new.criterionPlaceholder"));
-  let input = locked_input(input, locked);
-  let row = Row::new()
-    .key(Arc::<str>::from(format!("criterion-{}", criterion.id)))
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Inline.role())
-    .align_items(Alignment::Center)
-    .on_mouse_enter({
-      let hovered = criterion.hovered.clone();
-      move || hovered.set(true)
-    })
-    .on_mouse_leave({
-      let hovered = criterion.hovered.clone();
-      move || hovered.set(false)
-    })
-    .child(icon(Icon::Circle, IconSize::Marker, PaletteColor::TextMuted))
-    .child(input);
-  if !removable {
-    return row.into();
-  }
-  let (criteria, id) = (criteria.clone(), criterion.id);
-  let shown = criterion.hovered.get() || criterion.remove_focused.get();
-  let focused = criterion.remove_focused.clone();
-  let blurred = criterion.remove_focused.clone();
-  row
-    .child(
-      keyboard_stop(Button::empty().button(), Ring::Inset)
-        .id(Arc::<str>::from(format!("remove-criterion-{id}")))
-        .align_items(Alignment::Start)
-        .opacity(if shown { 1.0 } else { 0.0 })
-        .cursor(CursorIcon::Pointer)
-        .rounded(RadiusSize::Sm)
-        .hovered_style(Style::new().background(PaletteColor::AccentMuted))
-        .on_focus(move || focused.set(true))
-        .on_blur(move || blurred.set(false))
-        .on_click(move |_| criteria.update(|rows| rows.retain(|row| row.id != id)))
-        .child(icon(Icon::X, IconSize::Dismiss, PaletteColor::TextSecondary)),
-    )
     .into()
 }
 
