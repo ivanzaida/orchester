@@ -1,7 +1,8 @@
 //! Opening and reading the project database while the other process (desktop or runner) holds it:
 //! the read waits for a lock, and for the shared memory of the write-ahead log that a crashed
 //! runner still maps, then succeeds once they are released. So does opening another project's
-//! database only to read it (Import resources). A real error comes back at once.
+//! database only to read it (Import resources). A real error comes back at once. A read of an open
+//! database does not wait for a write in progress: it reads the last committed state.
 
 use std::{
   fs,
@@ -12,9 +13,10 @@ use std::{
 };
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, RunId},
   name::Name,
   project::{Project, ProjectKey},
+  store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
@@ -194,4 +196,20 @@ fn contention_a_real_error_comes_back_at_once() {
   let error = ProjectDb::open(newer.path()).err().expect("written by a newer build");
   assert!(started.elapsed() < AT_ONCE, "took {:?}", started.elapsed());
   assert!(matches!(error, StoreError::SchemaTooNew { found: 1000, .. }), "{error}");
+}
+
+#[test]
+fn contention_reads_of_runs_and_groups_do_not_wait_for_a_write_in_progress() {
+  let repo = project();
+  let db = ProjectDb::open(repo.path()).expect("open");
+  let writer = rusqlite::Connection::open(database(repo.path())).expect("open");
+  writer
+    .execute_batch("BEGIN IMMEDIATE; UPDATE project SET name = 'Kontur Two';")
+    .expect("hold a write");
+
+  let started = Instant::now();
+  assert!(db.run(RunId::generate()).expect("read a run").is_none());
+  assert!(db.unfinished_task_groups().expect("read the groups").is_empty());
+  assert!(started.elapsed() < AT_ONCE, "took {:?}", started.elapsed());
+  writer.execute_batch("ROLLBACK").expect("end the write");
 }
