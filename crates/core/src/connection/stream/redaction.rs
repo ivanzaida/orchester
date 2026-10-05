@@ -23,6 +23,7 @@ impl AgentEvent {
         }
       }
       Self::RunnerProblem { problem } => problem.redact(redact),
+      Self::NativeCall { call, .. } => call.redact(redact),
       Self::McpServer { server, problem } => {
         if let Some(server) = server {
           *server = redact(server);
@@ -74,7 +75,8 @@ impl RunnerProblem {
       | Self::CheckpointFailed { detail }
       | Self::CodebaseIndexUnavailable { detail }
       | Self::RipgrepUnavailable { detail, .. }
-      | Self::MemoryScanFailed { detail } => *detail = redact(detail),
+      | Self::MemoryScanFailed { detail }
+      | Self::ModelRetrying { error: detail, .. } => *detail = redact(detail),
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } => *program = redact(program),
@@ -91,7 +93,9 @@ impl RunnerProblem {
       | Self::MemoryUnreadable { .. }
       | Self::StderrLeftOut { .. }
       | Self::CliTooOld { .. }
-      | Self::PermissionPromptUnreachable => {}
+      | Self::PermissionPromptUnreachable
+      | Self::ContextCompacted { .. }
+      | Self::ThinkingStripped => {}
     }
   }
 }

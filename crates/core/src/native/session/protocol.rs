@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 use crate::{
-  connection::stream::FileChange,
+  connection::stream::{CallDetail, FileChange},
   id::ConversationId,
   native::{
     command::ParsedCommand,
@@ -12,7 +12,7 @@ use crate::{
     tools::{AskQuestion, EditFile, ListFiles, ReadFile, Search, ToolSet, WriteFile},
   },
   resource::ModelId,
-  run::StepResult,
+  run::{CommandShell, StepResult},
 };
 
 /// The context window assumed when neither the endpoint nor the person named one (§6.3).
@@ -31,6 +31,9 @@ pub struct LoopSettings {
   pub context_window: u64,
   pub system: String,
   pub tools: ToolSet,
+  /// The shell a `shell: true` command goes to, as the system prompt names it (§4.6); `None` when
+  /// this computer has none of them.
+  pub shell: Option<CommandShell>,
 }
 
 /// How the run wants the invocation to stop, as the runner's stops for the CLIs (§2.2).
@@ -139,6 +142,9 @@ pub struct ToolOutcome {
   pub exit_code: Option<i64>,
   /// Files the call added, changed or removed.
   pub changes: Vec<FileChange>,
+  /// What a file tool read, found or changed, for its transcript row; the loop itself names a
+  /// command's shell.
+  pub detail: Option<CallDetail>,
 }
 
 /// What a resumed invocation starts with (§2.2).

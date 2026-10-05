@@ -12,7 +12,8 @@ use super::{
 use crate::{id::ConnectionId, name::Name, resource::ModelId, secret::Secret, time::Timestamp};
 
 /// Who receives an agent's prompts, as its engine is named: see [`AgentConnection::vendor`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "name", rename_all = "snake_case")]
 pub enum EngineVendor {
   Provider(AgentProvider),
   Preset(EndpointPreset),

@@ -1,13 +1,53 @@
-//! The Activity events a native invocation emits: the same [`AgentEvent`]s the CLIs produce (§2.2).
+//! The Activity events a native invocation emits: the same [`AgentEvent`]s the CLIs produce (§2.2), and
+//! before a tool call's end what the call did ([`AgentEvent::NativeCall`]), for its transcript row.
 
 use super::{LoopSettings, ToolOutcome, ToolWork};
 use crate::{
-  connection::stream::{AgentEvent, CommandStatus},
+  connection::stream::{AgentEvent, CallDetail, CommandStatus, Declined, DeclinedBy, NativeCall},
   native::{
+    command::CommandForm,
     item::{Item, ToolCallId},
     model::ModelResponse,
+    tools::ToolName,
   },
+  run::CommandShell,
 };
+
+/// A running call as Activity shows it: its label, its tool and, for a shell command, the shell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Shown {
+  pub(super) call: ToolCallId,
+  label: String,
+  tool: ToolName,
+  shell: Option<CommandShell>,
+}
+
+impl Shown {
+  pub(super) fn of(call: &ToolCallId, work: &ToolWork, settings: &LoopSettings) -> Self {
+    let (tool, shell) = match work {
+      ToolWork::ReadFile(_) => (ToolName::ReadFile, None),
+      ToolWork::ListFiles(_) => (ToolName::ListFiles, None),
+      ToolWork::Search(_) => (ToolName::Search, None),
+      ToolWork::EditFile(_) => (ToolName::EditFile, None),
+      ToolWork::WriteFile(_) => (ToolName::WriteFile, None),
+      ToolWork::Command(command) => (
+        ToolName::RunCommand,
+        command_shell(matches!(command.form(), CommandForm::Shell), settings),
+      ),
+    };
+    Self {
+      call: call.clone(),
+      label: label(work),
+      tool,
+      shell,
+    }
+  }
+}
+
+/// The shell a command goes to: the invocation's, for a shell command.
+pub(super) fn command_shell(shell: bool, settings: &LoopSettings) -> Option<CommandShell> {
+  settings.shell.filter(|_| shell)
+}
 
 pub(super) fn session(settings: &LoopSettings) -> AgentEvent {
   AgentEvent::SessionStarted {
@@ -33,7 +73,7 @@ pub(super) fn response(response: &ModelResponse) -> Vec<AgentEvent> {
 }
 
 /// How Activity names a call: a command as written, a file tool by its name and target.
-pub(super) fn label(work: &ToolWork) -> String {
+fn label(work: &ToolWork) -> String {
   match work {
     ToolWork::ReadFile(read) => {
       let last = read.offset().saturating_add(read.limit() - 1);
@@ -61,30 +101,44 @@ pub(super) fn label(work: &ToolWork) -> String {
   }
 }
 
-pub(super) fn started(call: &ToolCallId, label: &str) -> AgentEvent {
+pub(super) fn started(shown: &Shown) -> AgentEvent {
   AgentEvent::CommandStarted {
-    item: call.to_string(),
-    command: label.to_owned(),
+    item: shown.call.to_string(),
+    command: shown.label.clone(),
   }
 }
 
-/// The finished call, and the files it changed.
-pub(super) fn finished(call: &ToolCallId, label: &str, outcome: &ToolOutcome) -> Vec<AgentEvent> {
+/// What the call did, its end, and the files it changed.
+pub(super) fn finished(shown: &Shown, outcome: &ToolOutcome) -> Vec<AgentEvent> {
   let status = if outcome.is_error {
     CommandStatus::Failed
   } else {
     CommandStatus::Completed
   };
-  let mut events = vec![AgentEvent::CommandFinished {
-    item: call.to_string(),
-    command: label.to_owned(),
-    output: outcome.activity.clone(),
-    exit_code: outcome.exit_code,
-    status,
-  }];
+  let detail = match shown.tool {
+    ToolName::RunCommand => Some(CallDetail::Command { shell: shown.shell }),
+    _ => outcome.detail.clone(),
+  };
+  let mut events = vec![
+    AgentEvent::NativeCall {
+      item: shown.call.to_string(),
+      call: NativeCall {
+        tool: shown.tool,
+        detail,
+        declined: None,
+      },
+    },
+    AgentEvent::CommandFinished {
+      item: shown.call.to_string(),
+      command: shown.label.clone(),
+      output: outcome.activity.clone(),
+      exit_code: outcome.exit_code,
+      status,
+    },
+  ];
   if !outcome.changes.is_empty() {
     events.push(AgentEvent::FileChanged {
-      item: call.to_string(),
+      item: shown.call.to_string(),
       changes: outcome.changes.clone(),
     });
   }
@@ -92,19 +146,49 @@ pub(super) fn finished(call: &ToolCallId, label: &str, outcome: &ToolOutcome) ->
 }
 
 /// A call whose input could not be read: it failed without running.
-pub(super) fn invalid(call: &ToolCallId, name: &str, error: &str) -> AgentEvent {
-  AgentEvent::CommandFinished {
+pub(super) fn invalid(call: &ToolCallId, name: &str, error: &str) -> Vec<AgentEvent> {
+  let told = ToolName::from_name(name).map(|tool| AgentEvent::NativeCall {
     item: call.to_string(),
-    command: name.to_owned(),
-    output: error.to_owned(),
-    exit_code: None,
-    status: CommandStatus::Failed,
-  }
+    call: NativeCall {
+      tool,
+      detail: None,
+      declined: None,
+    },
+  });
+  told
+    .into_iter()
+    .chain([AgentEvent::CommandFinished {
+      item: call.to_string(),
+      command: name.to_owned(),
+      output: error.to_owned(),
+      exit_code: None,
+      status: CommandStatus::Failed,
+    }])
+    .collect()
 }
 
-pub(super) fn denied(call: &ToolCallId, command: &str) -> AgentEvent {
-  AgentEvent::PermissionDenied {
-    item: call.to_string(),
-    command: command.to_owned(),
-  }
+/// A command that did not run: `by` declined it, and the agent was told `result`.
+pub(super) fn declined(
+  call: &ToolCallId,
+  (command, shell): (&str, Option<CommandShell>),
+  by: DeclinedBy,
+  result: &str,
+) -> Vec<AgentEvent> {
+  vec![
+    AgentEvent::NativeCall {
+      item: call.to_string(),
+      call: NativeCall {
+        tool: ToolName::RunCommand,
+        detail: Some(CallDetail::Command { shell }),
+        declined: Some(Declined {
+          by,
+          result: result.to_owned(),
+        }),
+      },
+    },
+    AgentEvent::PermissionDenied {
+      item: call.to_string(),
+      command: command.to_owned(),
+    },
+  ]
 }

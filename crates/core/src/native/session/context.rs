@@ -7,7 +7,7 @@ use super::{
   Continuation, LoopAction, LoopEnd, LoopError, LoopFailure, LoopSettings, MAX_COMPACTIONS, NOT_RUN, NativeLoop, Phase,
 };
 use crate::{
-  connection::stream::AgentEvent,
+  connection::stream::{AgentEvent, RunnerProblem},
   native::{
     item::{Item, ToolCallId, UserOrigin},
     model::ModelResponse,
@@ -68,10 +68,14 @@ impl ContextEstimate {
     self.forced = true;
   }
 
-  pub(super) fn needs_compaction(&self, settings: &LoopSettings) -> bool {
+  /// The tokens the next request is estimated to take.
+  pub(super) fn tokens(&self) -> u64 {
     let appended = u64::try_from(self.bytes_since.div_ceil(4)).unwrap_or(u64::MAX);
-    let tokens = self.last_input.unwrap_or(0).saturating_add(appended);
-    self.forced || tokens.saturating_mul(10) >= settings.context_window.saturating_mul(THRESHOLD_TENTHS)
+    self.last_input.unwrap_or(0).saturating_add(appended)
+  }
+
+  pub(super) fn needs_compaction(&self, settings: &LoopSettings) -> bool {
+    self.forced || self.tokens().saturating_mul(10) >= settings.context_window.saturating_mul(THRESHOLD_TENTHS)
   }
 }
 
@@ -82,14 +86,15 @@ impl NativeLoop {
     if self.compactions >= MAX_COMPACTIONS {
       return self.end(LoopEnd::Failed(LoopFailure::ContextExhausted), actions);
     }
-    self.phase = Phase::Compacting;
+    self.phase = Phase::Compacting(self.context.tokens());
     actions.push(LoopAction::Emit(vec![AgentEvent::TurnStarted]));
     let request = self.request(vec![Item::user(COMPACTION_REQUEST, UserOrigin::Compaction)]);
     actions.push(LoopAction::CallModel(request));
   }
 
-  /// Starts a new segment: the task, the summary, and a note naming the files changed so far.
-  pub(super) fn on_summary(&mut self, response: &ModelResponse, actions: &mut Vec<LoopAction>) {
+  /// Starts a new segment: the task, the summary, and a note naming the files changed so far. Activity
+  /// says how far the conversation shrank from the `before` tokens it was compacted at.
+  pub(super) fn on_summary(&mut self, response: &ModelResponse, before: u64, actions: &mut Vec<LoopAction>) {
     let completed = LoopAction::Emit(vec![AgentEvent::TurnCompleted { usage: response.usage }]);
     let summary = response
       .items
@@ -111,6 +116,11 @@ impl NativeLoop {
     let note = Item::user(compaction_note(&self.changed), UserOrigin::Compaction);
     self.append(vec![Item::Compaction { summary }, note], actions);
     actions.push(completed);
+    let problem = RunnerProblem::ContextCompacted {
+      before,
+      after: self.context.tokens(),
+    };
+    actions.push(LoopAction::Emit(vec![AgentEvent::RunnerProblem { problem }]));
     self.next_request(actions);
   }
 }

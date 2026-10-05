@@ -1,7 +1,7 @@
 //! The agent providers a connection can run agents on, and how Orchester runs each
 //! (`docs/architecture/native-agent.md` §2.1): an agent CLI it starts, or a model API it calls itself
-//! as a native agent. Native agents are not available in this version: connections to them can be
-//! stored and shown, but nothing checks, starts or runs them yet ([`AgentProvider::runs_agents`]).
+//! as a native agent. Of the native agents only the Anthropic API runs in this version; OpenAI Responses
+//! comes with its client (§9, P2) and nothing checks, starts or runs it yet ([`AgentProvider::runs_agents`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -60,10 +60,10 @@ impl AgentProvider {
     matches!(self.runtime(), AgentRuntime::Native(_))
   }
 
-  /// Whether this version can run agents on the provider. Native agents are not available yet
-  /// (§9, P1d): a step on a native connection does not start, and the app says why.
+  /// Whether this version can run agents on the provider. OpenAI Responses has no client yet (§9, P2):
+  /// a step on such a connection does not start, and the app says why.
   pub const fn runs_agents(self) -> bool {
-    !self.is_native()
+    !matches!(self, Self::OpenAiApi)
   }
 
   /// Whether an agent at work on the provider takes a person's message while its turn runs (*Send

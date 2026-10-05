@@ -150,6 +150,9 @@ pub struct ToolDecision {
   /// What the agent was told, for a denial.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub told: Option<String>,
+  /// How long the request waited for a person, in milliseconds; `None` when Orchester answered it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub waited_ms: Option<u64>,
 }
 
 /// What Codex App Server tells its model when Orchester declines a request (`decline`), word for word:

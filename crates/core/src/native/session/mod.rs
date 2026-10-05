@@ -40,10 +40,10 @@ pub const NOT_RUN: &str = "Not run: the step was stopped before this call ran. C
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Phase {
   AwaitingModel,
-  /// Waiting for the summary of a compaction request.
-  Compacting,
-  /// These calls run, each with its Activity label.
-  Running(Vec<(ToolCallId, String)>),
+  /// Waiting for the summary of a compaction request, made at about this many tokens.
+  Compacting(u64),
+  /// These calls run, each as Activity shows it.
+  Running(Vec<events::Shown>),
   AwaitingDecision(ToolCallId, ParsedCommand),
   Ended,
 }
@@ -52,7 +52,7 @@ impl Phase {
   const fn name(&self) -> &'static str {
     match self {
       Self::AwaitingModel => "waits for the model",
-      Self::Compacting => "waits for a summary",
+      Self::Compacting(_) => "waits for a summary",
       Self::Running(_) => "runs tool calls",
       Self::AwaitingDecision(..) => "waits for a decision",
       Self::Ended => "has ended",
@@ -148,7 +148,7 @@ impl NativeLoop {
     match input {
       LoopInput::Responded(response) => match self.phase {
         Phase::AwaitingModel => self.on_response(response, &mut actions),
-        Phase::Compacting => self.on_summary(&response, &mut actions),
+        Phase::Compacting(before) => self.on_summary(&response, before, &mut actions),
         _ => return Err(self.unexpected("a model response")),
       },
       LoopInput::ModelFailed(error) => self.on_model_failed(error, &mut actions)?,
@@ -197,8 +197,8 @@ impl NativeLoop {
         self.context.force();
         self.next_request(actions);
       }
-      (Phase::Compacting, ModelError::TooLarge) => self.end(LoopEnd::Failed(LoopFailure::ContextExhausted), actions),
-      (Phase::AwaitingModel | Phase::Compacting, error) => {
+      (Phase::Compacting(_), ModelError::TooLarge) => self.end(LoopEnd::Failed(LoopFailure::ContextExhausted), actions),
+      (Phase::AwaitingModel | Phase::Compacting(_), error) => {
         self.end(LoopEnd::Failed(LoopFailure::Model(error)), actions)
       }
       _ => return Err(self.unexpected("a model failure")),

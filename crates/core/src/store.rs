@@ -30,7 +30,8 @@ use crate::{
   },
   revision::Revision,
   run::{
-    ActivityEntry, Checkpoint, EditProgress, Invocation, InvocationPrompt, ListedRun, NewRun, Plan, Run, RunEvent,
+    ActivityEntry, Checkpoint, EditProgress, Invocation, InvocationEngine, InvocationPrompt, ListedRun, NewRun, Plan,
+    Run, RunEvent,
     RunNumber, StepOutput,
   },
   secret::Secret,
@@ -484,6 +485,12 @@ pub trait ActivityStore {
 
   /// What `invocation` got of the code index; `None` for one recorded before it was kept.
   fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, Self::Error>;
+
+  /// Stores the endpoint, vendor and effort a native agent's `invocation` uses, once, before it starts.
+  fn save_invocation_engine(&mut self, invocation: InvocationId, engine: &InvocationEngine) -> Result<(), Self::Error>;
+
+  /// What `invocation` reached its model through; `None` for a CLI's invocation.
+  fn invocation_engine(&self, invocation: InvocationId) -> Result<Option<InvocationEngine>, Self::Error>;
 
   /// Stores what `invocation` used before its agent first changed a file, replacing what was
   /// stored.

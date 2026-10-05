@@ -7,7 +7,11 @@ use std::num::NonZeroU32;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{resource::ModelId, time::Timestamp};
+use crate::{
+  native::{model::RemoteModel, session::DEFAULT_CONTEXT_WINDOW},
+  resource::ModelId,
+  time::Timestamp,
+};
 
 /// A reasoning effort a native model accepts, from the least to the most.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -33,6 +37,11 @@ impl Effort {
       Self::XHigh => "xhigh",
       Self::Max => "max",
     }
+  }
+
+  /// The effort `value` names, as [`Self::as_str`] writes it; `None` for one Orchester does not know.
+  pub fn named(value: &str) -> Option<Self> {
+    Self::ALL.into_iter().find(|effort| effort.as_str() == value)
   }
 }
 
@@ -104,6 +113,41 @@ impl NativeModel {
   pub const fn source(&self) -> ModelSource {
     self.source
   }
+
+  /// A model the endpoint listed when its models were fetched at `at`: efforts Orchester does not know
+  /// and limits that do not fit are left out, so they read as unknown.
+  pub fn listed(remote: &RemoteModel, at: Timestamp) -> Self {
+    let fitting = |limit: u64| u32::try_from(limit).ok().and_then(NonZeroU32::new);
+    Self::new(
+      remote.id.clone(),
+      remote.context_window.and_then(fitting),
+      remote.max_output.and_then(NonZeroU32::new),
+      remote.efforts.iter().filter_map(|effort| Effort::named(effort)).collect(),
+      ModelSource::Endpoint { at },
+    )
+  }
+}
+
+/// `models` after a fetch found `fetched`: a model the endpoint listed replaces the one with its id, and
+/// keeps its place; one listed for the first time follows; one the endpoint no longer lists stays as it
+/// was, since a profile may run on it.
+pub fn with_fetched(models: &[NativeModel], fetched: Vec<NativeModel>) -> Vec<NativeModel> {
+  let mut merged: Vec<NativeModel> = models
+    .iter()
+    .map(|model| {
+      fetched
+        .iter()
+        .find(|listed| listed.id == model.id)
+        .unwrap_or(model)
+        .clone()
+    })
+    .collect();
+  merged.extend(
+    fetched
+      .into_iter()
+      .filter(|listed| !models.iter().any(|model| model.id == listed.id)),
+  );
+  merged
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -199,6 +243,30 @@ impl NativeModels {
 
   pub const fn default_effort(&self) -> Option<Effort> {
     self.default_effort
+  }
+
+  /// The effort an agent on `model` runs with: `chosen`, the profile's, when it names an effort the
+  /// model takes (any known one for a model the list does not have), else the default effort when the
+  /// model takes it; `None` leaves the endpoint's own default.
+  pub fn effort_for(&self, model: &ModelId, chosen: Option<&str>) -> Option<Effort> {
+    let listed = self.model(model);
+    let takes = |effort: &Effort| listed.is_none_or(|model| model.efforts.contains(effort));
+    chosen
+      .and_then(Effort::named)
+      .filter(takes)
+      .or_else(|| {
+        self
+          .default_effort
+          .filter(|effort| listed.is_some_and(|model| model.efforts.contains(effort)))
+      })
+  }
+
+  /// The context window of `model` in tokens: as listed, else [`DEFAULT_CONTEXT_WINDOW`] (§6.3).
+  pub fn context_window(&self, model: &ModelId) -> u64 {
+    self
+      .model(model)
+      .and_then(NativeModel::context_window)
+      .map_or(DEFAULT_CONTEXT_WINDOW, |window| u64::from(window.get()))
   }
 }
 

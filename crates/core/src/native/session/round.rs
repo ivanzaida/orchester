@@ -1,17 +1,19 @@
 //! One model turn's tool calls: planned in the order §4.10 gives, then run one step at a time.
 
 use super::{
-  LoopAction, LoopEnd, LoopError, LoopFailure, NativeLoop, Phase, PlannedTool, StopMode, ToolOutcome, ToolWork, events,
+  LoopAction, LoopEnd, LoopError, LoopFailure, NativeLoop, Phase, PlannedTool, StopMode, ToolOutcome, ToolWork,
+  events::{self, Shown},
 };
 use crate::{
+  connection::stream::DeclinedBy,
   native::{
-    command::CommandVerdict,
+    command::{CommandForm, CommandVerdict},
     item::{Item, ToolCallId, UserOrigin},
     model::{ModelResponse, StopReason},
     session::ApprovalAsk,
     tools::{RunCommand, ToolInput, ToolInputError, parse_call},
   },
-  run::StepResult,
+  run::{CommandShell, StepResult},
 };
 
 /// What the model is told when it ends a turn without a tool call (§4.7).
@@ -109,7 +111,7 @@ impl NativeLoop {
     if !invalid.is_empty() {
       let emitted = invalid
         .iter()
-        .map(|(call, name, error)| events::invalid(call, name, error))
+        .flat_map(|(call, name, error)| events::invalid(call, name, error))
         .collect();
       let results = invalid
         .into_iter()
@@ -151,7 +153,10 @@ impl NativeLoop {
         }
         Queued::End(end) => return self.end(end, actions),
         Queued::Command(call, input) => match self.commands.classify(&input, &self.scope) {
-          CommandVerdict::Refuse(refusal) => self.decline(call, input.command(), refusal.to_string(), actions),
+          CommandVerdict::Refuse(refusal) => {
+            let command = (input.command(), events::command_shell(input.shell(), &self.settings));
+            self.decline(call, command, (DeclinedBy::Orchester, refusal.to_string()), actions);
+          }
           CommandVerdict::Run(command) => {
             let work = ToolWork::Command(command);
             return self.run(vec![PlannedTool { call, work }], actions);
@@ -170,16 +175,11 @@ impl NativeLoop {
   }
 
   fn run(&mut self, batch: Vec<PlannedTool>, actions: &mut Vec<LoopAction>) {
-    let running: Vec<(ToolCallId, String)> = batch
+    let running: Vec<Shown> = batch
       .iter()
-      .map(|planned| (planned.call.clone(), events::label(&planned.work)))
+      .map(|planned| Shown::of(&planned.call, &planned.work, &self.settings))
       .collect();
-    actions.push(LoopAction::Emit(
-      running
-        .iter()
-        .map(|(call, label)| events::started(call, label))
-        .collect(),
-    ));
+    actions.push(LoopAction::Emit(running.iter().map(events::started).collect()));
     actions.push(LoopAction::Run(batch));
     self.phase = Phase::Running(running);
   }
@@ -193,17 +193,17 @@ impl NativeLoop {
     let Phase::Running(running) = &mut self.phase else {
       return Err(self.unexpected("a tool outcome"));
     };
-    let Some(index) = running.iter().position(|(id, _)| *id == call) else {
+    let Some(index) = running.iter().position(|shown| shown.call == call) else {
       return Err(LoopError::UnknownCall(call));
     };
-    let (call, label) = running.remove(index);
+    let shown = running.remove(index);
     let done = running.is_empty();
     self
       .changed
       .extend(outcome.changes.iter().map(|change| change.path.clone()));
-    let emitted = events::finished(&call, &label, &outcome);
+    let emitted = events::finished(&shown, &outcome);
     self.append(
-      vec![Item::tool_result(call, outcome.content, outcome.is_error)],
+      vec![Item::tool_result(shown.call, outcome.content, outcome.is_error)],
       actions,
     );
     actions.push(LoopAction::Emit(emitted));
@@ -234,17 +234,25 @@ impl NativeLoop {
       let work = ToolWork::Command(command);
       self.run(vec![PlannedTool { call, work }], actions);
     } else {
-      self.decline(call, command.text(), DENIED.to_owned(), actions);
+      let shell = events::command_shell(matches!(command.form(), CommandForm::Shell), &self.settings);
+      let declined = (DeclinedBy::Person, DENIED.to_owned());
+      self.decline(call, (command.text(), shell), declined, actions);
       self.advance(actions);
     }
     Ok(())
   }
 
-  /// Answers a command that does not run with `message`, and records it as denied.
-  fn decline(&mut self, call: ToolCallId, command: &str, message: String, actions: &mut Vec<LoopAction>) {
-    let denied = events::denied(&call, command);
+  /// Answers a command that does not run with `message`, and records that `by` declined it.
+  fn decline(
+    &mut self,
+    call: ToolCallId,
+    command: (&str, Option<CommandShell>),
+    (by, message): (DeclinedBy, String),
+    actions: &mut Vec<LoopAction>,
+  ) {
+    let declined = events::declined(&call, command, by, &message);
     self.append(vec![Item::tool_result(call, message, true)], actions);
-    actions.push(LoopAction::Emit(vec![denied]));
+    actions.push(LoopAction::Emit(declined));
   }
 
   /// A turn ended without a tool call: remind the model, then, when the next turn has no tool call

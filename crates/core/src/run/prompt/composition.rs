@@ -4,17 +4,26 @@ use std::fmt::Write as _;
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, code_index, memory::push_memory, retry,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, code_index,
+  memory::push_memory, retry,
 };
 use crate::{
   conversation::Message,
   resource::{Exclusion, InjectionEvent, Instruction, InstructionTarget, PromptText, Rendered, Variable},
 };
 
-/// Every turn gets this contract, including resumed CLI sessions without an output schema.
-const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `outcome` and `summary`, for example \
-                                   {\"outcome\":\"question\",\"summary\":\"Which option should I implement?\"}.\n\
-                                   Use `done` when your current step is complete and its required checks pass; \
+/// How an agent CLI hands in its result: its last message.
+const RESULT_AS_MESSAGE: &str = "End with exactly one JSON object containing `outcome` and `summary`, for example \
+                                 {\"outcome\":\"question\",\"summary\":\"Which option should I implement?\"}.";
+/// How a native agent hands in its result: the `finish_step` tool (`docs/architecture/native-agent.md` §4.7,
+/// §6.1).
+const RESULT_AS_TOOL: &str = "End by calling the finish_step tool once with `outcome` and `summary`, for example \
+                              {\"outcome\":\"question\",\"summary\":\"Which option should I implement?\"}; the call \
+                              records your result and ends the step. When you need the person's answer to go on, \
+                              call ask_question instead and wait for it.";
+/// Every turn gets this contract after how to hand the result in, including resumed CLI sessions without an
+/// output schema.
+const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete and its required checks pass; \
                                    summarize its result for the steps that follow. For a review or verification, \
                                    completing the inspection alone is not success. A negative verdict or \
                                    unresolved blocking or major findings requires `failed`, even when you \
@@ -90,6 +99,9 @@ pub struct Composition {
   sections: Vec<PromptSection>,
   excluded: Vec<ExcludedInstruction>,
   text: String,
+  /// Where the task part of the text starts, with the code index, skills and memory before it; the text's
+  /// length when it has none.
+  task_at: usize,
 }
 
 /// A prompt ready to send and its sources, to store with the invocation.
@@ -100,7 +112,7 @@ pub struct AssembledPrompt {
 }
 
 impl Composition {
-  pub(super) fn new(input: &PromptInput<'_>, event: InjectionEvent) -> Self {
+  pub(super) fn new(input: &PromptInput<'_>, event: InjectionEvent, delivery: ResultDelivery) -> Self {
     let target = InstructionTarget {
       pipeline: input.pipeline.id,
       step: &input.step.key,
@@ -127,18 +139,19 @@ impl Composition {
     if event == InjectionEvent::Start {
       included.push((PromptPart::AgentRole, profile_section(input)));
       included.push((PromptPart::Step, step_section(input)));
-      included.push((PromptPart::Task, task_section(input)));
+      included.push((PromptPart::Task, task_section(input, delivery)));
     }
     // Stable: within a part the profile and the step come before their instructions, and
     // instructions keep library order.
     included.sort_by_key(|(part, section)| (*part, !is_base(&section.source)));
     let sections: Vec<PromptSection> = included.into_iter().map(|(_, section)| section).collect();
-    let text = write_text(input, event, &sections);
+    let (text, task_at) = write_text(input, (event, delivery), &sections);
     Self {
       event,
       sections,
       excluded,
       text,
+      task_at,
     }
   }
 
@@ -169,16 +182,22 @@ impl Composition {
 
   /// The prompt to send, or the first variable without a value and the section using it.
   pub fn into_prompt(self) -> Result<AssembledPrompt, PromptAssemblyError> {
+    self.split().map(|(prompt, _)| prompt)
+  }
+
+  /// [`Self::into_prompt`], with where its task part starts.
+  pub(super) fn split(self) -> Result<(AssembledPrompt, usize), PromptAssemblyError> {
     if let Some(section) = self.sections.iter().find(|section| !section.unavailable.is_empty()) {
       return Err(PromptAssemblyError::UnavailableVariable {
         variable: section.unavailable[0],
         section: section.source.clone(),
       });
     }
-    Ok(AssembledPrompt {
+    let prompt = AssembledPrompt {
       sources: self.sources(),
       text: self.text,
-    })
+    };
+    Ok((prompt, self.task_at))
   }
 }
 
@@ -250,7 +269,7 @@ fn step_section(input: &PromptInput<'_>) -> PromptSection {
 /// Brief and criteria, the outputs of earlier steps, the failure that sent the work back, the changes
 /// a reviewer requested to the step's plan, and how to report the result: plain text, already laid
 /// out.
-fn task_section(input: &PromptInput<'_>) -> PromptSection {
+fn task_section(input: &PromptInput<'_>, delivery: ResultDelivery) -> PromptSection {
   let details = input.task.details();
   let mut text = String::new();
   push_block(&mut text, &details.brief);
@@ -272,10 +291,7 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
     push_task_messages(&mut text, delivered);
   }
   text.push_str("\n# When you finish\n");
-  push_block(&mut text, RESULT_INSTRUCTIONS);
-  if input.step.approval_gate {
-    push_block(&mut text, GATED_RESULT_INSTRUCTIONS);
-  }
+  push_result(&mut text, input, delivery);
   PromptSection {
     source: PromptSource::Task { task: input.task.id() },
     name: input.task.key().to_string(),
@@ -285,36 +301,61 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
   }
 }
 
-/// The part headings, each section's text, and for a resumed session the continue prompt first.
-fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[PromptSection]) -> String {
+/// How to hand the result in, what makes a result, and for a gated step that a person reviews it.
+fn push_result(text: &mut String, input: &PromptInput<'_>, delivery: ResultDelivery) {
+  let how = match delivery {
+    ResultDelivery::Message => RESULT_AS_MESSAGE,
+    ResultDelivery::Tool => RESULT_AS_TOOL,
+  };
+  push_block(text, &format!("{how}\n{RESULT_INSTRUCTIONS}"));
+  if input.step.approval_gate {
+    push_block(text, GATED_RESULT_INSTRUCTIONS);
+  }
+}
+
+/// What a resumed session reads first: the reviewer's note, the messages it delivers, or the continue
+/// prompt, then the code index.
+fn push_resume_opening(text: &mut String, input: &PromptInput<'_>) {
+  match input.revision {
+    Some(revision) => {
+      text.push_str(REVISE_PROMPT);
+      // Writing to a String cannot fail.
+      let _ = write!(
+        text,
+        "\n\nWhat should change in plan v{}:\n\n{}",
+        revision.version,
+        revision.note.as_str()
+      );
+      if let Some(delivered) = input.messages {
+        text.push_str("\n\nThe person also wrote to you:\n");
+        push_messages(text, delivered.messages);
+      }
+    }
+    None => match input.messages {
+      Some(delivered) => push_resumed_messages(text, delivered),
+      None => text.push_str(CONTINUE_PROMPT),
+    },
+  }
+  code_index::push(text, input.code_index);
+}
+
+/// The part headings, each section's text, and for a resumed session the continue prompt first; with
+/// where the task part starts (the text's length when it has none).
+fn write_text(
+  input: &PromptInput<'_>,
+  (event, delivery): (InjectionEvent, ResultDelivery),
+  sections: &[PromptSection],
+) -> (String, usize) {
   let mut text = String::new();
   if event == InjectionEvent::Resume {
-    match input.revision {
-      Some(revision) => {
-        text.push_str(REVISE_PROMPT);
-        // Writing to a String cannot fail.
-        let _ = write!(
-          text,
-          "\n\nWhat should change in plan v{}:\n\n{}",
-          revision.version,
-          revision.note.as_str()
-        );
-        if let Some(delivered) = input.messages {
-          text.push_str("\n\nThe person also wrote to you:\n");
-          push_messages(&mut text, delivered.messages);
-        }
-      }
-      None => match input.messages {
-        Some(delivered) => push_resumed_messages(&mut text, delivered),
-        None => text.push_str(CONTINUE_PROMPT),
-      },
-    }
-    code_index::push(&mut text, input.code_index);
+    push_resume_opening(&mut text, input);
   }
+  let mut task_at = None;
   let mut part = None;
   for section in sections {
     let section_part = section.source.part();
     if section_part == PromptPart::Task && part != Some(section_part) {
+      task_at = Some(text.len());
       code_index::push(&mut text, input.code_index);
       push_skills(&mut text, input);
       push_memory(&mut text, input.memory, input.dependencies);
@@ -350,12 +391,10 @@ fn write_text(input: &PromptInput<'_>, event: InjectionEvent, sections: &[Prompt
     let shown = if recovery { input.dependencies } else { &[] };
     push_memory(&mut text, input.memory, shown);
     text.push_str("\n\n# When you finish\n");
-    push_block(&mut text, RESULT_INSTRUCTIONS);
-    if input.step.approval_gate {
-      push_block(&mut text, GATED_RESULT_INSTRUCTIONS);
-    }
+    push_result(&mut text, input, delivery);
   }
-  text
+  let task_at = task_at.unwrap_or(text.len());
+  (text, task_at)
 }
 
 fn heading(input: &PromptInput<'_>, part: PromptPart) -> String {
