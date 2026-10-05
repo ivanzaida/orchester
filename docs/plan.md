@@ -552,8 +552,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
-ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (implemented 2026-10-05; independent
-review pending, not merged)
+ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (implemented 2026-10-05; review
+findings fixed, second review pending, not merged)
 
 - **Crate** `crates/agent` (`orchester-agent`), used by nothing yet (the runner takes it in P1d). No new workspace
   dependency: reqwest with rustls (ring, the OS trust store), tokio, serde_json, sha2, tempfile, parking_lot and
@@ -587,25 +587,41 @@ review pending, not merged)
   context estimate is not doubled).
 - **File tools** (`FileTools`; §4.1–§4.5, §5.1, §6.4): `read_file` (numbered lines, offset/limit, lines cut at 2000
   characters, binary files named with their size, files over 32 MiB refused), `list_files` (`rg --files`, sorted,
-  1000 entries), `search` (`rg --json --max-count 200 --max-columns 500`, 200 matches or 64 KiB, `--no-config` so no
-  configuration adds `--pre`), `edit_file` and `write_file` (read stamp of length, modified time and SHA-256 checked
+  1000 entries), `search` (ripgrep's plain output with `--max-count 200 --max-columns 500 --max-columns-preview`,
+  200 matches or 64 KiB, `--no-config` so no configuration adds `--pre`; not `--json`, which carries every matched
+  line whole however long it is), `edit_file` and `write_file` (read stamp of length, modified time and SHA-256 checked
   at edit time; atomic temp-and-rename in the target's folder, resolved again just before the rename; permissions
   of a replaced file kept). `FileTools::stored(items)` drops every read stamp when a `Compaction` item is stored.
-  ripgrep runs through `orchester_exec::prepare`, read line by line, stopped when enough is read or after 60 s.
+  ripgrep runs through `orchester_exec::prepare`, read line by line (at most 16 KiB kept per line), stopped when
+  enough is read or after 60 s.
 - **Fake model server** (`crates/agent/tests/anthropic_wire/server.rs`): a tokio listener on `127.0.0.1:0` with
   scripted turns (`Script::new().expect(..).reply_sse(..)`, `reply_error`, `reply_status`, pauses and drops), the
   append-only check of `system`, `tools` and the message prefix on every Messages request (a test proves it catches an
   edit), a cache-read echo, and a model catalog with pagination.
-- **Tests:** `cargo test -p orchester-agent --test anthropic_wire anthropic_` (25: SSE, request shape, items and
+- **Tests:** `cargo test -p orchester-agent --test anthropic_wire anthropic_` (25 before the review fixes: SSE, request shape, items and
   usage, append-only history with cache reads, invalid tool JSON, `max_tokens` re-ask with and without room,
   refusal, conservative quirks, a model without adaptive thinking with fallback on, every status, `retry-after`,
   backoff, five retries then the error, broken and idle streams, an `error` event, the thinking recovery, the key in
   no error, event or `Debug`, model pages, *Test connection*); `cargo test -p orchester-agent --test file_tools
-  files_` (20, on real temporary folders: scope, `..`, absolute paths, a junction on Windows / symbolic link on macOS
+  files_` (on real temporary folders: scope, `..`, absolute paths, a junction on Windows / symbolic link on macOS
   that leads out (read, write, both listings and search), `.git` and `.orchester/` and the index protected, a
   read-only step, CRLF/BOM, stale stamps, all-or-nothing multi-edit, no partial file, compaction dropping stamps,
-  ripgrep and the walk without it); `cargo test -p orchester-core --test native native_` (73, with new `edit` and
+  ripgrep and the walk without it; 20 before the review fixes); `cargo test -p orchester-core --test native native_` (73, with new `edit` and
   `NotJson` tests). The ripgrep tests need `rg` on `PATH` and fail without it.
+- **Review fixes (2026-10-05):** search output bounded (plain rg output, lines capped while read, the no-rg search
+  cuts lines and stops at 100 000 files, depth 64 or 60 s, with a note); a `retry-after` too large for a `Duration`
+  no longer panics (it is the longest wait, which is not waited for) and odd values fall back to the backoff;
+  `retry-after` is honoured on every retried status (529, 503, …), not only 429; `Endpoint::reached_directly`
+  (scheme in any case, every loopback host) decides the proxy bypass; SSE events capped at 16 MiB, lone CR line ends
+  and a leading BOM read as the standard says; globs without rg limited to 256 characters and 64 alternatives and
+  matched without recursion; `read_file`, `edit_file` and `write_file` refuse files that are not regular (a FIFO)
+  and files that grow past 32 MiB while read; a new file is renamed into place without replacing one that appeared
+  meanwhile; a 400 naming the "context limit" also compacts; rg exit code 2 with some matches adds a note; the unused
+  `FileTools::scope` is gone. Tests: 30 `anthropic_`, 22 `files_` (the FIFO test runs on macOS only). Not changed:
+  new files still get mode 0644 whatever the umask (reading the umask needs a call that sets it); HTTP-date
+  `retry-after` values are not read (model APIs send seconds); the model lookup before the first request stays
+  (P2/P3 add metadata entered by hand for Custom endpoints); a file appearing between the check and the rename has no
+  test (the race cannot be forced through the public API).
 - **Differs from the design:**
   - Retries: "at most 5 attempts" is read as five retries after the first attempt, one per listed wait (2–32 s).
   - Without ripgrep, `list_files` and `search` walk the folders skipping hidden entries and links but do not read
@@ -1075,6 +1091,20 @@ ORC-61 · Conversation merged with Activity, Send now and following live (absorb
   `run_permissions`, `task_graph`, `changes`, `integration`; `--test changes c`; `-p orchester-core --test app_server
   turn`; `-p orchester-runner --features test-agent --test send_now_delivery send_now_`; `-p orchester-store --test
   conversation conversation`.
+- **Review fixes (2026-10-05):** search output bounded (plain rg output, lines capped while read, the no-rg search
+  cuts lines and stops at 100 000 files, depth 64 or 60 s, with a note); a `retry-after` too large for a `Duration`
+  no longer panics (it is the longest wait, which is not waited for) and odd values fall back to the backoff;
+  `retry-after` is honoured on every retried status (529, 503, …), not only 429; `Endpoint::reached_directly`
+  (scheme in any case, every loopback host) decides the proxy bypass; SSE events capped at 16 MiB, lone CR line ends
+  and a leading BOM read as the standard says; globs without rg limited to 256 characters and 64 alternatives and
+  matched without recursion; `read_file`, `edit_file` and `write_file` refuse files that are not regular (a FIFO)
+  and files that grow past 32 MiB while read; a new file is renamed into place without replacing one that appeared
+  meanwhile; a 400 naming the "context limit" also compacts; rg exit code 2 with some matches adds a note; the unused
+  `FileTools::scope` is gone. Tests: 30 `anthropic_`, 22 `files_` (the FIFO test runs on macOS only). Not changed:
+  new files still get mode 0644 whatever the umask (reading the umask needs a call that sets it); HTTP-date
+  `retry-after` values are not read (model APIs send seconds); the model lookup before the first request stays
+  (P2/P3 add metadata entered by hand for Custom endpoints); a file appearing between the check and the rename has no
+  test (the race cannot be forced through the public API).
 - **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
   Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
   call that asked for it when the CLI reported that call first (they are matched by time, not by call).
@@ -1147,6 +1177,20 @@ ORC-57 · Native agent P1b: core native module
   (`permission::known_safe`), and the I/O-free loop (`session`: §4.10 order, approvals, denials returned to the
   agent, the finish reminder, every stop mode, resume with unanswered calls, compaction at 80 % of the window, at
   most 3 per invocation). Nothing runs it yet (P1c/P1d). Tests: `cargo test -p orchester-core --test native native_`.
+- **Review fixes (2026-10-05):** search output bounded (plain rg output, lines capped while read, the no-rg search
+  cuts lines and stops at 100 000 files, depth 64 or 60 s, with a note); a `retry-after` too large for a `Duration`
+  no longer panics (it is the longest wait, which is not waited for) and odd values fall back to the backoff;
+  `retry-after` is honoured on every retried status (529, 503, …), not only 429; `Endpoint::reached_directly`
+  (scheme in any case, every loopback host) decides the proxy bypass; SSE events capped at 16 MiB, lone CR line ends
+  and a leading BOM read as the standard says; globs without rg limited to 256 characters and 64 alternatives and
+  matched without recursion; `read_file`, `edit_file` and `write_file` refuse files that are not regular (a FIFO)
+  and files that grow past 32 MiB while read; a new file is renamed into place without replacing one that appeared
+  meanwhile; a 400 naming the "context limit" also compacts; rg exit code 2 with some matches adds a note; the unused
+  `FileTools::scope` is gone. Tests: 30 `anthropic_`, 22 `files_` (the FIFO test runs on macOS only). Not changed:
+  new files still get mode 0644 whatever the umask (reading the umask needs a call that sets it); HTTP-date
+  `retry-after` values are not read (model APIs send seconds); the model lookup before the first request stays
+  (P2/P3 add metadata entered by hand for Custom endpoints); a file appearing between the check and the rename has no
+  test (the race cannot be forced through the public API).
 - **Differs from the design:** `cargo metadata`/`cargo tree` are not known-safe, because a `.cargo/config.toml` or
   `rust-toolchain.toml` the agent writes in the worktree can replace `rustc`/the toolchain with any program; they
   ask. Read stamps are left to the file tool executor (P1c), which must drop them when a `Compaction` item is stored.
