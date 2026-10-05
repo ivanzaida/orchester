@@ -20,6 +20,10 @@ use orchester_desktop::{
 };
 
 fn active(project: &str, task_key: &str, task_title: &str, step: &str, agent: &str) -> ActiveWork {
+  on_model(project, task_key, task_title, (step, agent), "gpt-5.5")
+}
+
+fn on_model(project: &str, task_key: &str, task_title: &str, (step, agent): (&str, &str), model: &str) -> ActiveWork {
   ActiveWork::new(&ActiveWorkFields {
     project,
     run: RunId::generate(),
@@ -28,7 +32,7 @@ fn active(project: &str, task_key: &str, task_title: &str, step: &str, agent: &s
     step,
     agent,
     provider: AgentProvider::CodexCli,
-    model: "gpt-5.5",
+    model,
   })
 }
 
@@ -304,6 +308,58 @@ fn close_dialog_keeps_the_badge_and_step_whole_beside_a_long_title() {
       // The one row on its own fits the same way.
       let mut tree = laid_out(stage, work[..1].into(), saves.iter().take(1).cloned().collect(), width);
       assert_rows_fit(&mut tree, &work[..1], &whole[..1], &view);
+    }
+  }
+}
+
+/// Rows with titles and model ids of different lengths: one far longer than its cell, short ones
+/// of different lengths, and a model id wider than its cell.
+fn mixed_work() -> Arc<[ActiveWork]> {
+  let long_model = on_model(
+    "Website",
+    "PW-15",
+    "Fix",
+    ("Implement", "Builder"),
+    "claude-opus-5-5-with-a-long-model-id",
+  );
+  long_work().iter().cloned().chain(std::iter::once(long_model)).collect()
+}
+
+#[test]
+fn close_dialog_lines_up_the_step_status_and_last_columns_of_every_row() {
+  let saved = SaveState::Saved { checkpoint: None };
+  for (stage, saves) in [
+    (CloseStage::Confirm, Vec::new()),
+    (
+      CloseStage::Waiting,
+      vec![
+        SaveState::Saving,
+        saved.clone(),
+        SaveState::Saving,
+        saved.clone(),
+        saved,
+      ],
+    ),
+  ] {
+    for width in [960, 1440, 2160] {
+      let work = mixed_work();
+      let mut tree = laid_out(stage, work.clone(), saves.clone(), width);
+      // Where each cell starts, and where the title ends; the badge's own width follows its word.
+      let columns = |tree: &mut Tree, run| {
+        let title = bounds(tree, &format!("close-title-{run}"));
+        let [step, status, last] =
+          ["close-step", "close-status", "close-last"].map(|cell| bounds(tree, &format!("{cell}-{run}")).x);
+        [title.x, title.x + title.width, step, status, last]
+      };
+      let first = columns(&mut tree, work[0].run());
+      for work in &work[1..] {
+        let row = columns(&mut tree, work.run());
+        assert!(
+          row.iter().zip(first).all(|(x, first_x)| (x - first_x).abs() <= 0.5),
+          "{stage:?} at {width}: {}'s columns line up with the first row's ({row:?}, {first:?})",
+          work.task_key()
+        );
+      }
     }
   }
 }

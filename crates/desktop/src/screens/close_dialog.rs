@@ -31,7 +31,8 @@ use crate::{
 
 /// Action bar and task row heights (`anyo4`, `uHX7b`), status label
 /// height (`JIbWj`) and the row cells' design widths (`F4NwB`, `c2rkx`, `VizsW`, `S2kP9L`): the
-/// least each cell takes, so the columns line up; longer words widen their cell instead of being cut.
+/// least the key, step and status take, so the columns line up, while longer words widen their cell
+/// instead of being cut; the last cell keeps its width and ends in an ellipsis.
 const ACTIONS_HEIGHT: f32 = 76.0;
 const ROW_HEIGHT: f32 = 48.0;
 const STATUS_HEIGHT: f32 = 26.0;
@@ -45,8 +46,8 @@ const TITLE_MIN: f32 = 120.0;
 
 /// The order in which a row's cells give way when the dialog is too narrow for all of them (lurq
 /// `shrink_order`, as the status bar does): first the title, down to [`TITLE_MIN`], then the last cell
-/// (provider · model, or where the run paused), down to its design width; both end in an ellipsis. The
-/// key, the step label and the status badge never give way.
+/// (provider · model, or where the run paused); both end in an ellipsis. The key, the step label and
+/// the status badge never give way.
 mod give_way {
   pub const TITLE: i32 = 0;
   pub const LAST: i32 = 1;
@@ -303,8 +304,8 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
         .color(PaletteColor::TextPrimary)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
-        .flex(1.0)
-        .flex_shrink(1.0)
+        // From nothing, so every row's title takes the same free space and the columns line up.
+        .flex_full(1.0, 1.0, Some(0.0))
         .min_width(Dimension::Px(TITLE_MIN))
         .shrink_order(give_way::TITLE),
     )
@@ -323,7 +324,7 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
-        .min_width(Dimension::Px(MODEL_WIDTH))
+        .width(Dimension::Px(MODEL_WIDTH))
         .flex_shrink(1.0)
         .shrink_order(give_way::LAST),
     )
