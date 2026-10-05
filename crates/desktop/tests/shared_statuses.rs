@@ -226,3 +226,34 @@ fn statuses_a_claim_taken_over_meanwhile_sends_nothing() {
     Some(NotSent::NotHolder)
   );
 }
+
+/// A claim the person's other computer took a moment ago is not in this computer's cache: the
+/// server's answer says it was held already, so a failed start here leaves it alone.
+#[test]
+fn statuses_a_claim_taken_on_the_other_computer_stays() {
+  let server = TestServer::start();
+  let alice = shared(&server);
+  let oleh = Other::new(&server, "oleh", "Oleh Petrenko");
+  member(&alice, "oleh");
+  let task = alice.tasks().remove(0);
+  let project = alice.server().link().project;
+  let elsewhere = server.sign_in_elsewhere("alice", "alice's own long password", "");
+  alice
+    .block_on(
+      oleh
+        .client
+        .claim(&elsewhere, project, task.id(), &ClaimTake { kind: ClaimKind::Run }),
+    )
+    .expect("Alice's other computer takes the task");
+  // The claim's start and its heartbeat must differ for the server to tell them apart.
+  std::thread::sleep(std::time::Duration::from_millis(5));
+  let here = alice
+    .block_on(alice.servers.claim_for_work(alice.root(), task.id()))
+    .expect("confirmed here");
+  assert!(!here.newly_taken(), "the other computer took it");
+  alice.block_on(here.release(&alice.servers));
+  assert!(
+    on_server(&alice, &oleh, task.id()).claim.is_some(),
+    "the other computer's claim stays"
+  );
+}

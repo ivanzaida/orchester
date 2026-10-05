@@ -93,30 +93,21 @@ impl Servers {
   /// the person holds it; a local project's task needs none.
   pub async fn claim_for_work(&self, repo_root: &Path, task: TaskId) -> Result<WorkClaim, WorkRefusal> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
-    let found = background::run(move || -> Result<_, SharingError> {
-      let Some(server) = ProjectServer::open(&servers, &root)? else {
-        return Ok(None);
-      };
-      let held = orchester_store::ProjectDb::open(&root)?
-        .shared_task_info(task)?
-        .and_then(|info| info.claim)
-        .is_some_and(|claim| Some(claim.holder.id) == server.me());
-      Ok(Some((server, held)))
-    })
-    .await
-    .map_err(|message| WorkRefusal::sharing(SharingError::from(message), None))?
-    .map_err(|error| WorkRefusal::sharing(error, None))?;
-    let Some((server, held)) = found else {
+    let server = background::run(move || ProjectServer::open(&servers, &root))
+      .await
+      .map_err(|message| WorkRefusal::sharing(SharingError::from(message), None))?
+      .map_err(|error| WorkRefusal::sharing(error, None))?;
+    let Some(server) = server else {
       return Ok(WorkClaim::default());
     };
-    server.take_run_claim(task).await?;
+    let taken = server.take_run_claim(task).await?;
     Ok(WorkClaim {
-      taken: (!held).then(|| (repo_root.to_owned(), task)),
+      taken: taken.then(|| (repo_root.to_owned(), task)),
     })
   }
 
   /// Releases the run claim of `task` that work which did not start took, unless a run of it is
-  /// under way here.
+  /// under way here (an interrupted run that did not continue is not).
   async fn release_taken_claim(&self, repo_root: &Path, task: TaskId) {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let unused = background::run(move || -> Result<Option<ProjectServer>, SharingError> {
@@ -129,7 +120,7 @@ impl Servers {
         .shared_task_info(task)?
         .and_then(|info| info.claim)
         .is_some_and(|claim| Some(claim.holder.id) == me && claim.kind == ClaimKind::Run);
-      Ok((held && db.active_task_run(task)?.is_none()).then_some(server))
+      Ok((held && !has_live_run(&db, task)?).then_some(server))
     })
     .await;
     let server = match unused {
@@ -148,7 +139,9 @@ impl Servers {
 }
 
 impl ProjectServer {
-  async fn take_run_claim(&self, task: TaskId) -> Result<(), WorkRefusal> {
+  /// Takes or confirms the run claim of `task`; whether this call took it, as the server's answer
+  /// says: a claim it took starts now, while one held already keeps its start and only beats.
+  async fn take_run_claim(&self, task: TaskId) -> Result<bool, WorkRefusal> {
     let address = || Some(self.entry.address.clone());
     self
       .writable()
@@ -162,6 +155,10 @@ impl ProjectServer {
       Err(SharingError::Client(error)) => return Err(refusal(&error, address())),
       Err(error) => return Err(WorkRefusal::sharing(error, address())),
     };
+    let taken = claimed
+      .claim
+      .as_ref()
+      .is_some_and(|claim| claim.since == claim.heartbeat_at);
     let server = self.clone();
     background::run(move || -> Result<(), SharingError> {
       let db = orchester_store::ProjectDb::open(server.repo_root())?;
@@ -172,7 +169,7 @@ impl ProjectServer {
     .map_err(|message| WorkRefusal::sharing(message.into(), address()))?
     .map_err(|error| WorkRefusal::sharing(error, address()))?;
     self.servers.shared_changed();
-    Ok(())
+    Ok(taken)
   }
 }
 
@@ -201,4 +198,14 @@ impl ProjectServer {
     self.servers.shared_changed();
     Ok(())
   }
+}
+
+/// Whether a run of `task` works here, waits for a person or goes on once resumed.
+fn has_live_run(db: &orchester_store::ProjectDb, task: TaskId) -> Result<bool, SharingError> {
+  use orchester_core::store::RunStore;
+  let Some(run) = db.active_task_run(task)? else {
+    return Ok(false);
+  };
+  let run = db.run(run).map_err(crate::tasks::detail::run_store_error)?;
+  Ok(run.is_some_and(|run| run.status().has_live_work()))
 }
