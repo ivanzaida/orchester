@@ -557,8 +557,9 @@ Runner start under load · branch `claude/runner-start` (done 2026-10-05)
 The desktop waits 30 s (was 10 s) for a started runner to open its endpoint and starts it once more when the first
 start fails for a transient reason (slow, exited, connection or handshake failure), after killing and waiting for the
 first runner; a missing program, a held project or a version mismatch is not retried. The state stays *Starting*
-meanwhile; the last attempt's error is shown. Only the retry classification is unit-tested
-(`orchester-ipc --test launch`): there is no fake runner to answer late or fail once.
+meanwhile; the last attempt's error is shown. Tested against `orchester-fake-runner` (feature `test-runner`):
+`cargo test -p orchester-ipc --features test-runner --test runner_start runner_start_` (late, exit once, exit twice,
+held project, missing program; `runner_start_slow` takes 11 s).
 
 S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
 
