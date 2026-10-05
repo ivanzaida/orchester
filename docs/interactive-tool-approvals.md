@@ -153,7 +153,8 @@ activity (`AgentEvent::ToolDecided`):
   covers a part that rewrites history, deletes outside the worktree, reads a credential or is Unknown, and covers a
   part that reaches outside the worktree only in the folders the approved part reached (`cp … /tmp/x` covers
   `cp … /tmp/y`, not `cp … ~/AppData/…`); `ssh`, `scp` and `rsync` make none. Unavailable for a command Orchester
-  cannot read to the end, with several asking parts, that rewrites history or deletes outside, or reads a credential. For an MCP call it names the server and
+  cannot read to the end, with several asking parts that are not alike (several `sed -i` edits in the worktree make
+  one rule), that rewrites history or deletes outside, or reads a credential. For an MCP call it names the server and
   the tool, any arguments. Rules are read at each request, so they apply at once, in the current invocation too;
   later answers are marked *approved by similar rule*. The run's Summary lists them with **Revoke** (the desktop
   marks the rule revoked; the next request asks again); calls approved before keep their mark. Rules end with the
@@ -349,6 +350,23 @@ folders. `dontAsk`, which these steps ran in before, turns exactly those asks in
 `ask` (`TGo` in 2.1.286), so in `default` the same calls reach the prompt tool instead. In a
 read-only step the edit tools stay removed, and the approval says that Claude Code runs an approved
 command outside any sandbox, where it can change files.
+
+Claude Code asks about a command line whose parts it cannot match one by one: a chain (`git status && git diff`), a
+`cd` into the worktree before the command, a variable the line sets and uses (`f=src/lib.rs; sed -n 1,20p $f`).
+Orchester answers such a request itself when every part would run on its own (`run::permitted`, marked *always
+allowed* with the category): listed in the step's allowed commands and staying in the worktree, or a known-safe
+read inside the worktree (`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `sort`, `uniq`, `find` without `-exec`
+or `-delete`, `sed` whose script only prints, selects or changes lines without `-i`, `awk` without `system`,
+`getline` or a redirection, the git subcommands that only read). The classifier reads such lines to their end: a
+leading `cd` into the worktree (written `/h/…`, `H:/…` or `H:\…`) is dropped and the rest placed from that folder,
+a literal assignment (`NAME=value`, no expansion, a lowercase name or one capital letter, in the shell itself)
+is read into its later `$NAME` and `${NAME}`. A part that writes through the shell (`sed -i`, a heredoc, `tee`),
+redirects into a file, runs in the background, reads outside the worktree or a credential, installs or is not read
+to the end still asks, with Approve similar where the existing rules offer it. The step's prompt asks agents to use
+their file tools and to run one bare command per call (*Files and commands*), so they rarely send such lines.
+Reads of the sources Cargo unpacks (`~/.cargo/registry/src`) and of the toolchains' library sources
+(`~/.rustup/toolchains/*/lib/rustlib/src`) are reads outside the worktree, not credential reads; the rest of
+`~/.cargo` and `~/.rustup` stays a credential location.
 
 `acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
 rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a

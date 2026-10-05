@@ -52,7 +52,7 @@ pub enum SimilarUnavailable {
   /// Part of the command is not read to the end, or its arguments are a command for another machine
   /// (`ssh host …`): Orchester cannot tell which later commands are alike.
   Unknown,
-  /// Several parts of the command would ask by themselves.
+  /// Several parts of the command would ask by themselves, not all alike.
   SeveralAsk,
   /// It rewrites or discards history, or deletes outside the worktree: a person answers each.
   Destructive,
@@ -101,8 +101,17 @@ fn similar_command(command: &ClassifiedCommand) -> Result<SimilarCommand, Simila
   if command.category() == CommandCategory::HistoryDestructive {
     return Err(SimilarUnavailable::Destructive);
   }
-  if command.asking().count() > 1 {
-    return Err(SimilarUnavailable::SeveralAsk);
+  let asking: Vec<&CommandPart> = command.asking().collect();
+  if let [first, rest @ ..] = asking.as_slice()
+    && !rest.is_empty()
+  {
+    // Several asking parts alike (`sed -i …; sed -i …` in the worktree) make one rule that covers each.
+    let rule = first.similar().ok_or(SimilarUnavailable::Unknown)?;
+    return if rest.iter().all(|part| part.similar().as_ref() == Some(&rule)) {
+      Ok(rule)
+    } else {
+      Err(SimilarUnavailable::SeveralAsk)
+    };
   }
   command
     .forcing()

@@ -41,6 +41,7 @@ pub use self::{
     AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
     AutoVerdict, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer, allowing_command,
     allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, codex_denial, denial_message, listing,
+    permitted,
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},

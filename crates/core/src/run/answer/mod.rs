@@ -9,6 +9,7 @@
 
 mod always;
 mod auto;
+mod permitted;
 mod rule;
 mod subject;
 
@@ -20,6 +21,7 @@ use thiserror::Error;
 pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
+  permitted::permitted,
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::ApprovalSubject,
 };
