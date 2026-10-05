@@ -61,13 +61,18 @@ impl ApprovalAnswer {
     }
   }
 
-  /// Who answered, when `answerer` gives this answer. Automation answers one request at a time: it
-  /// approves once or denies, and leaves the wider answers, which change later requests, to a person.
-  pub const fn given_by(&self, answerer: Answerer) -> Result<DecidedBy, AutomationAnswerError> {
+  /// Who answered, when `answerer` gives this answer to a request about `subject`. Automation answers
+  /// one request at a time: it denies any, and approves once only what auto-approval would approve
+  /// ([`auto_verdict`]); what auto-approval leaves to a person, and the wider answers, which change
+  /// later requests, stay with a person.
+  pub fn given_by(&self, answerer: Answerer, subject: &ApprovalSubject) -> Result<DecidedBy, AutomationAnswerError> {
     match (answerer, self) {
       (Answerer::Person, answer) => Ok(answer.decided_by()),
-      (Answerer::Automation, Self::Once) => Ok(DecidedBy::Automation),
       (Answerer::Automation, Self::Deny) => Ok(DecidedBy::AutomationDeny),
+      (Answerer::Automation, Self::Once) => match auto_verdict(subject) {
+        AutoVerdict::Approve(_) => Ok(DecidedBy::Automation),
+        AutoVerdict::Ask(ask) => Err(AutomationAnswerError::PersonOnly(ask)),
+      },
       (Answerer::Automation, Self::Similar | Self::Always { .. } | Self::ApproveRun) => {
         Err(AutomationAnswerError::Wider)
       }
@@ -90,6 +95,9 @@ pub enum Answerer {
 pub enum AutomationAnswerError {
   #[error("automation only approves a request once or denies it")]
   Wider,
+  /// Auto-approval leaves this request to a person, for this reason; only a person approves it.
+  #[error("only a person can approve this request: {0:?}")]
+  PersonOnly(AutoAsk),
 }
 
 /// Who answered a request, as it is recorded and marked in the activity.

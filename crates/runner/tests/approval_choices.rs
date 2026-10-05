@@ -18,7 +18,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{AgentProfile, CommandArg, CommandProgram, StepKey},
-  run::{Answerer, ApprovalAnswer, DecidedBy, PendingToolApproval, Run, RunStatus},
+  run::{Answerer, ApprovalAnswer, AutoAsk, DecidedBy, PendingToolApproval, Run, RunStatus},
   store::{ActivityStore, McpServerStore, ResourceStore, RunStore},
   time::Timestamp,
 };
@@ -309,11 +309,11 @@ async fn approval_choices_auto_approval_still_asks_about_a_write_outside() {
   assert_eq!(started.decisions(), [DecidedBy::PersonDeny]);
 }
 
-/// Automation, through Orchester's MCP server, approves once or denies, recorded as its own answers; it
-/// cannot give a wider answer.
+/// Automation, through Orchester's MCP server, approves once what auto-approval would approve, or denies,
+/// recorded as its own answers; it cannot give a wider answer.
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_automation_answers_once_or_denies_and_never_wider() {
-  let mut started = Started::new(builder("Run `cargo add serde` twice.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"], false)).await;
   let first = started.pending().await;
   let wider = started
     .scheduler
@@ -324,7 +324,7 @@ async fn approval_choices_automation_answers_once_or_denies_and_never_wider() {
       Answerer::Automation,
     )
     .await;
-  assert!(matches!(wider, Err(Rejection::Failed { .. })), "{wider:?}");
+  assert_eq!(wider, Err(Rejection::AutomationWider));
   started
     .scheduler
     .decide_tool_approval(started.id, first.id.clone(), ApprovalAnswer::Once, Answerer::Automation)
@@ -346,6 +346,36 @@ async fn approval_choices_automation_answers_once_or_denies_and_never_wider() {
   assert_eq!(started.decisions(), [DecidedBy::Automation, DecidedBy::AutomationDeny]);
   let counts = started.db().decision_counts(started.id).expect("counts");
   assert_eq!((counts.by_automation, counts.denied_by_automation), (1, 1));
+}
+
+/// A credential read, which auto-approval leaves to a person: automation cannot approve it, only deny it.
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_automation_cannot_approve_a_credential_read() {
+  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"], false)).await;
+  let request = started.pending().await;
+  let refused = started
+    .scheduler
+    .decide_tool_approval(
+      started.id,
+      request.id.clone(),
+      ApprovalAnswer::Once,
+      Answerer::Automation,
+    )
+    .await;
+  assert_eq!(refused, Err(Rejection::PersonOnly { ask: AutoAsk::Secrets }));
+  assert_eq!(
+    started.pending().await.id,
+    request.id,
+    "the request still waits for a person"
+  );
+  started
+    .scheduler
+    .decide_tool_approval(started.id, request.id, ApprovalAnswer::Deny, Answerer::Automation)
+    .await
+    .expect("denied");
+  let run = started.ended().await;
+  assert!(run.status().is_terminal());
+  assert_eq!(started.decisions(), [DecidedBy::AutomationDeny]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

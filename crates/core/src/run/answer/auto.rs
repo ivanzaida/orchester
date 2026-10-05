@@ -7,6 +7,8 @@
 //! allowed), and anything it cannot read to the end. Those still ask a person. What the step's
 //! permissions refuse never reaches a person, so auto-approval never approves it either.
 
+use serde::{Deserialize, Serialize};
+
 use super::subject::ApprovalSubject;
 use crate::permission::category::{ClassifiedCommand, CommandCategory};
 
@@ -20,7 +22,8 @@ pub enum AutoVerdict {
 }
 
 /// Why auto-approval leaves a request to a person, most important first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AutoAsk {
   /// Part of the command is not read to the end.
   Unknown,

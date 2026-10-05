@@ -5,15 +5,20 @@
 
 use std::path::Path;
 
-use orchester_core::{connection::AgentProvider, run::PendingToolApproval};
+use orchester_core::{
+  connection::AgentProvider,
+  run::PendingToolApproval,
+  store::{RunStore, TaskStore},
+};
 use orchester_store::{AppDb, ProjectDb};
 use serde_json::{Value, json};
 
 use super::{agent, ok, refused};
 use crate::{
   harness::Desktop,
+  mcp_agent::McpAgent,
   native_run::native_run,
-  task_run::{agent_step, fake_claude, has, init_repository, latest_run, programs, seed_agent},
+  task_run::{agent_step, fake_claude, has, init_repository, programs, seed_agent},
   unreadable_run::at,
 };
 
@@ -104,6 +109,53 @@ fn app_mcp_answers_while_the_approval_dialog_is_open() {
   assert!(has(&mut desktop, DIALOG), "the dialog still waits for the person");
 }
 
+/// `decide_approval`'s arguments.
+fn answer(approval: &str, decision: &str) -> Value {
+  json!({"project": "Kontur", "approval": approval, "decision": decision})
+}
+
+/// Creates task `key` whose brief tells the agent what to run, runs it and waits for its first request.
+fn run_until_asked(desktop: &mut Desktop, agent: &mut McpAgent, (key, brief): (&str, &str)) -> PendingToolApproval {
+  let created = ok(
+    agent,
+    "create_task",
+    &json!({"project": "Kontur", "title": key, "brief": brief, "criteria": ["It ran"], "pipeline": "Delivery"}),
+  );
+  assert_eq!(created["task"]["key"], key);
+  ok(agent, "run_task", &json!({"project": "Kontur", "key": key}));
+  let repo = desktop.repo().to_path_buf();
+  desktop.wait_until("the agent asks", |_| !waiting(&repo).is_empty());
+  desktop.wait_for(DIALOG);
+  waiting(&repo).remove(0)
+}
+
+/// Waits until the latest run of task `key` ended and the dialog closed; that run's answers.
+fn ended(desktop: &mut Desktop, key: &str) -> orchester_store::DecisionCounts {
+  let repo = desktop.repo().to_path_buf();
+  let latest = |repo: &Path| {
+    let db = ProjectDb::open(repo).expect("open");
+    let task = db
+      .tasks()
+      .expect("tasks")
+      .into_iter()
+      .find(|task| task.key().to_string() == key)
+      .expect("the task");
+    db.runs_of_task(task.id())
+      .expect("runs")
+      .pop()
+      .map(|run| run.expect("readable"))
+  };
+  desktop.wait_until("the run ends", |_| {
+    latest(&repo).is_some_and(|run| run.status().is_terminal())
+  });
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
+  let run = latest(&repo).expect("the run");
+  ProjectDb::open(&repo)
+    .expect("open")
+    .decision_counts(run.id())
+    .expect("counts")
+}
+
 #[test]
 fn app_mcp_decides_approvals_only_while_a_person_lets_it() {
   let (runner, fake) = programs();
@@ -114,57 +166,45 @@ fn app_mcp_decides_approvals_only_while_a_person_lets_it() {
         builder,
         "implement",
         "Implement",
-        "Run `cargo add serde` twice.",
+        "Do what the task asks.",
         &[],
       )]
     });
   });
   let mut agent = agent(&desktop);
-  ok(
-    &mut agent,
-    "create_task",
-    &json!({
-      "project": "Kontur",
-      "title": "Add serde",
-      "brief": "Run `cargo add serde` twice.",
-      "criteria": ["serde is a dependency"],
-      "pipeline": "Delivery",
-    }),
-  );
-  ok(&mut agent, "run_task", &json!({"project": "Kontur", "key": "KON-1"}));
-  let repo = desktop.repo().to_path_buf();
-  desktop.wait_until("the agent asks", |_| !waiting(&repo).is_empty());
-  desktop.wait_for(DIALOG);
-  let first = waiting(&repo).remove(0);
+  let install = run_until_asked(&mut desktop, &mut agent, ("KON-1", "Run `cargo add serde`."));
   let listed = ok(&mut agent, "list_approvals", &json!({"project": "Kontur"}));
   assert_eq!(listed["approvals"][0]["kind"], "command");
   assert_eq!(listed["approvals"][0]["action"], "cargo add serde");
-  let answer =
-    |approval: &str, decision: &str| json!({"project": "Kontur", "approval": approval, "decision": decision});
-  let off = refused(&mut agent, "decide_approval", &answer(&first.id, "approve_once"));
+  let off = refused(&mut agent, "decide_approval", &answer(&install.id, "approve_once"));
   assert_eq!(off["code"], "automation_not_allowed");
 
   // A person lets automation answer, in the MCP item's popover, while the dialog is open.
   let_automation_answer(&mut desktop, true);
+  // An install is left to a person, as auto-approval leaves it; automation may only deny it.
+  let person_only = refused(&mut agent, "decide_approval", &answer(&install.id, "approve_once"));
+  assert_eq!(person_only["code"], "person_only");
+  assert!(
+    person_only["message"]
+      .as_str()
+      .is_some_and(|message| message.starts_with("Only a person"))
+  );
+  ok(&mut agent, "decide_approval", &answer(&install.id, "deny"));
+  let unknown = refused(&mut agent, "decide_approval", &answer(&install.id, "deny"));
+  assert_eq!(unknown["code"], "approval_not_found");
+  let counts = ended(&mut desktop, "KON-1");
+  assert_eq!((counts.by_automation, counts.denied_by_automation), (0, 1));
 
+  let first = run_until_asked(&mut desktop, &mut agent, ("KON-2", "Run `cargo test -p core` twice."));
   let once = ok(&mut agent, "decide_approval", &answer(&first.id, "approve_once"));
   assert_eq!(once["approval"]["decided"], "approve_once");
+  let repo = desktop.repo().to_path_buf();
   desktop.wait_until("the agent asks again", |_| {
     waiting(&repo).iter().any(|request| request.id != first.id)
   });
   let second = waiting(&repo).remove(0);
   ok(&mut agent, "decide_approval", &answer(&second.id, "deny"));
-  let unknown = refused(&mut agent, "decide_approval", &answer(&second.id, "deny"));
-  assert_eq!(unknown["code"], "approval_not_found");
-  desktop.wait_until("the run ends", |_| {
-    latest_run(&repo).is_some_and(|run| run.status().is_terminal())
-  });
-  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
-  let run = latest_run(&repo).expect("the run");
-  let counts = ProjectDb::open(&repo)
-    .expect("open")
-    .decision_counts(run.id())
-    .expect("counts");
+  let counts = ended(&mut desktop, "KON-2");
   assert_eq!(
     (counts.by_automation, counts.denied_by_automation, counts.by_you),
     (1, 1, 0)

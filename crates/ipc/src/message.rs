@@ -12,7 +12,7 @@ use orchester_core::{
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
   run::{
-    Answerer, ApprovalAnswer, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
+    Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
     RunAgainBlock, RunLimit, RunNumber, StuckDecision,
   },
   tokens::TokenBudget,
@@ -408,6 +408,13 @@ pub enum Rejection {
   ToolApprovalNotAwaited,
   /// The selected tool request was answered already, by a person or by Orchester.
   ToolApprovalAnswered,
+  /// Automation gave a wider answer than approving once or denying, which only a person gives.
+  AutomationWider,
+  /// Automation tried to approve a request that auto-approval leaves to a person, for reason `ask`:
+  /// only a person approves it (automation may deny it).
+  PersonOnly {
+    ask: AutoAsk,
+  },
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

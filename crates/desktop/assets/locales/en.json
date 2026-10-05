@@ -1776,6 +1776,15 @@
       },
       "notAwaited": "This tool action no longer waits for a decision.",
       "answeredAlready": "This request was answered already.",
+      "automationWider": "Automation only approves a request once or denies it; the wider answers are yours.",
+      "personOnly": {
+        "unknown": "Only a person can approve this request: part of the command cannot be read to the end. Automation may deny it.",
+        "destructive": "Only a person can approve this request: it rewrites or discards history, or deletes outside the temporary folder. Automation may deny it.",
+        "outsideWrite": "Only a person can approve this request: it writes outside the worktree and its writable folders. Automation may deny it.",
+        "secrets": "Only a person can approve this request: it reads a credential location. Automation may deny it.",
+        "installs": "Only a person can approve this request: it installs software or packages. Automation may deny it.",
+        "network": "Only a person can approve this request: it reaches the network. Automation may deny it."
+      },
       "endedNotice": "The previous request ended without an answer: its agent is no longer waiting.",
       "commandTitle": "Approve command?",
       "policyExplanation": {

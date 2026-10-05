@@ -12,9 +12,9 @@ use orchester_core::{
   connection::{mcp::InvocationExemptions, stream::AgentEvent},
   permission::category::CommandCategory,
   run::{
-    Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
-    ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, codex_denial,
-    denial_message, permitted,
+    Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
+    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves,
+    auto_verdict, codex_denial, denial_message, permitted,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -122,15 +122,12 @@ impl Worker {
     approval: &PendingToolApproval,
     (answer, by): (&ApprovalAnswer, Answerer),
   ) -> Result<Result<Settled, Rejection>, StoreError> {
-    let decided_by = match answer.given_by(by) {
-      Ok(decided_by) => decided_by,
-      Err(error) => {
-        return Ok(Err(Rejection::Failed {
-          detail: error.to_string(),
-        }));
-      }
-    };
     let subject = ApprovalSubject::of(approval, &self.scope);
+    let decided_by = match answer.given_by(by, &subject) {
+      Ok(decided_by) => decided_by,
+      Err(AutomationAnswerError::Wider) => return Ok(Err(Rejection::AutomationWider)),
+      Err(AutomationAnswerError::PersonOnly(ask)) => return Ok(Err(Rejection::PersonOnly { ask })),
+    };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
       ..Settled::by(decided_by, category_of(&subject))

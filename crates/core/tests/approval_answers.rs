@@ -8,9 +8,9 @@ use orchester_core::{
     category::{CommandCategory, CommandScope},
   },
   run::{
-    AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
-    AutoVerdict, DecidedBy, PendingToolApproval, RuleScope, SimilarUnavailable, allowing_command, allowing_tool,
-    always_prefixes, answering, auto_approves, auto_verdict, denial_message,
+    AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, PendingToolApproval, RuleScope, SimilarUnavailable,
+    allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, denial_message,
   },
   time::Timestamp,
 };
@@ -282,4 +282,57 @@ fn approval_answers_deny_tells_the_agent_to_continue() {
       prefix: Some(CommandPrefix::new("cargo add").expect("prefix"))
     }
   );
+}
+
+/// Automation approves once only what auto-approval would approve; it denies anything; the rest, and the
+/// wider answers, stay with a person, who answers every request.
+#[test]
+fn approval_answers_automation_approves_only_what_auto_approval_would() {
+  let fixture = Fixture::new();
+  for subject in [
+    mcp("pencil", "batch_design"),
+    fixture.command("cargo test"),
+    fixture.command("git status"),
+  ] {
+    assert_eq!(
+      ApprovalAnswer::Once.given_by(Answerer::Automation, &subject),
+      Ok(DecidedBy::Automation)
+    );
+  }
+  for (command, ask) in [
+    ("cat ~/.ssh/id_rsa", AutoAsk::Secrets),
+    ("git push --force", AutoAsk::Destructive),
+    ("./regen.sh", AutoAsk::Unknown),
+    ("echo x > ../outside.txt", AutoAsk::OutsideWrite),
+    ("npm install left-pad", AutoAsk::Installs),
+    ("curl https://example.dev", AutoAsk::Network),
+  ] {
+    let subject = fixture.command(command);
+    assert_eq!(
+      ApprovalAnswer::Once.given_by(Answerer::Automation, &subject),
+      Err(AutomationAnswerError::PersonOnly(ask)),
+      "{command}"
+    );
+    assert_eq!(
+      ApprovalAnswer::Deny.given_by(Answerer::Automation, &subject),
+      Ok(DecidedBy::AutomationDeny),
+      "{command}"
+    );
+    assert_eq!(
+      ApprovalAnswer::Once.given_by(Answerer::Person, &subject),
+      Ok(DecidedBy::Person),
+      "{command}"
+    );
+  }
+  let subject = fixture.command("cargo test");
+  for wider in [
+    ApprovalAnswer::Similar,
+    ApprovalAnswer::ApproveRun,
+    ApprovalAnswer::Always { prefix: None },
+  ] {
+    assert_eq!(
+      wider.given_by(Answerer::Automation, &subject),
+      Err(AutomationAnswerError::Wider)
+    );
+  }
 }
