@@ -34,6 +34,8 @@ pub struct OptionCard {
   state: State,
   compact: bool,
   height: Option<Dimension>,
+  /// Muted, at the right of the title: e.g. *not saved* or *saved 14:12* in 10.41.
+  meta: Option<Arc<str>>,
 }
 
 impl OptionCard {
@@ -47,6 +49,7 @@ impl OptionCard {
       state: State::Unavailable(None),
       compact: false,
       height: None,
+      meta: None,
     }
   }
 
@@ -65,6 +68,12 @@ impl OptionCard {
   /// Execution-mode card (`YZcH2`, `jPX6u`) in the scheduling review.
   pub fn scheduling_review(mut self) -> Self {
     self.height = Some(Dimension::Px(crate::theme::TASK_REVIEW_MODE_HEIGHT));
+    self
+  }
+
+  /// Says something about the option at the right of its title.
+  pub fn meta(mut self, meta: Arc<str>) -> Self {
+    self.meta = Some(meta);
     self
   }
 
@@ -104,7 +113,7 @@ impl From<OptionCard> for Element {
     let text = Column::new()
       .flex(1.0)
       .spacing(ExtraSpacing::Indicator.role())
-      .child(Text::new(&card.title).variant(title))
+      .child(title_row(&card.title, title, card.meta.as_deref()))
       .child(Text::new(&card.detail).variant(detail));
     let mut button = Button::empty()
       .button()
@@ -150,6 +159,25 @@ impl From<OptionCard> for Element {
         .with_children(reason.map(|reason| unavailable_reason(&reason)))
         .into(),
     }
+  }
+}
+
+/// The title, with its meta at the right when it has one.
+fn title_row(title: &str, typography: TypographyStyle, meta: Option<&str>) -> Element {
+  let title = Text::new(title).variant(typography);
+  match meta {
+    None => title.into(),
+    Some(meta) => Row::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(title.flex(1.0))
+      .child(
+        Text::new(meta)
+          .variant(ExtraTypography::Hint.role())
+          .color(PaletteColor::TextMuted),
+      )
+      .into(),
   }
 }
 

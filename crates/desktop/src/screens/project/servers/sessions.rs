@@ -33,6 +33,8 @@ use crate::{
 const ROW_HEIGHT: f32 = 52.0;
 const REVOKE_HEIGHT: f32 = 28.0;
 const TIME_WIDTH: f32 = 150.0;
+/// Last used in a narrow window, where Signed in is gone.
+const NARROW_TIME_WIDTH: f32 = 110.0;
 const ACTION_WIDTH: f32 = 96.0;
 
 /// Revoking a session of `entry`.
@@ -41,22 +43,36 @@ pub(super) struct Revoke {
   pub entry: ServerEntry,
 }
 
+/// Whether the window has room for Signed in (`SERVERS_DETAILS_WIDE_MIN_WINDOW`). Reading the
+/// width re-renders the caller as the window resizes.
+fn wide(ctx: &Ctx) -> bool {
+  ctx.window().logical_width() >= crate::theme::SERVERS_DETAILS_WIDE_MIN_WINDOW
+}
+
 pub(super) fn sessions_table(ctx: &Ctx, rows: &[SessionRow], revoke: &Revoke) -> Element {
-  let heading = heading([
-    (Width::Fill, Some(ctx.t("servers.sessions.device"))),
-    (Width::Px(TIME_WIDTH), Some(ctx.t("servers.sessions.signedIn"))),
-    (Width::Px(TIME_WIDTH), Some(ctx.t("servers.sessions.lastUsed"))),
-    (Width::Px(ACTION_WIDTH), None),
-  ]);
+  let wide = wide(ctx);
+  let time_width = Width::Px(if wide { TIME_WIDTH } else { NARROW_TIME_WIDTH });
+  let heading = heading(
+    [
+      Some((Width::Fill, Some(ctx.t("servers.sessions.device")))),
+      wide.then(|| (Width::Px(TIME_WIDTH), Some(ctx.t("servers.sessions.signedIn")))),
+      Some((time_width, Some(ctx.t("servers.sessions.lastUsed")))),
+      Some((Width::Px(ACTION_WIDTH), None)),
+    ]
+    .into_iter()
+    .flatten(),
+  );
   let pending = revoke.action.state().get().is_pending();
   table(
     "server-sessions",
     heading,
-    rows.iter().map(|session| session_row(ctx, session, revoke, pending)),
+    rows
+      .iter()
+      .map(|session| session_row(ctx, session, revoke, (pending, wide))),
   )
 }
 
-fn session_row(ctx: &Ctx, session: &SessionRow, revoke: &Revoke, pending: bool) -> Element {
+fn session_row(ctx: &Ctx, session: &SessionRow, revoke: &Revoke, (pending, wide): (bool, bool)) -> Element {
   let last_used = if session.current {
     Text::new(&ctx.t("servers.sessions.now"))
       .variant(ExtraTypography::MonoValue.role())
@@ -82,14 +98,17 @@ fn session_row(ctx: &Ctx, session: &SessionRow, revoke: &Revoke, pending: bool) 
     };
     button.render(ctx)
   };
+  let time_width = Width::Px(if wide { TIME_WIDTH } else { NARROW_TIME_WIDTH });
   row(
     Dimension::Px(ROW_HEIGHT),
     [
-      Cell::new(Width::Fill, device(ctx, session)),
-      Cell::new(Width::Px(TIME_WIDTH), time(ctx, session.created_at)),
-      Cell::new(Width::Px(TIME_WIDTH), last_used),
-      Cell::new(Width::Px(ACTION_WIDTH), action).at_end(),
-    ],
+      Some(Cell::new(Width::Fill, device(ctx, session))),
+      wide.then(|| Cell::new(Width::Px(TIME_WIDTH), time(ctx, session.created_at))),
+      Some(Cell::new(time_width, last_used)),
+      Some(Cell::new(Width::Px(ACTION_WIDTH), action).at_end()),
+    ]
+    .into_iter()
+    .flatten(),
   )
 }
 
@@ -120,6 +139,7 @@ fn device(ctx: &Ctx, session: &SessionRow) -> Element {
     (Icon::Monitor, PaletteColor::TextSecondary)
   };
   Row::new()
+    .id(Arc::<str>::from(format!("server-session-device-{}", session.id)))
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(lurq::app::theme::SpacingSize::Sm)

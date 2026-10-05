@@ -41,6 +41,7 @@ pub(super) use scrolls::TaskScrolls;
 mod tab_state;
 mod tool_approval;
 mod unreadable;
+mod unsent_status;
 mod worktree;
 
 use std::{sync::Arc, time::SystemTime};

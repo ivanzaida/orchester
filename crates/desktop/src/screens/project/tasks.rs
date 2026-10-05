@@ -8,6 +8,7 @@ mod controls;
 mod outcome;
 mod review;
 pub(super) mod selection;
+mod shared;
 
 use std::{
   path::{Path, PathBuf},
@@ -36,6 +37,7 @@ use crate::{
   background,
   messages::Message,
   navigation::route::Page,
+  sharing::project::state::{ProjectSharing, access},
   tasks::{
     browse::{self, PipelineFilter, Query, Selection, TaskSort},
     data::ProjectTasks,
@@ -74,6 +76,8 @@ pub struct TasksProps {
   pub agent_slots: Option<std::num::NonZeroU32>,
   pub tab: TaskTab,
   pub tasks: TasksState,
+  /// How the task list stands with its server; `None` while the project is local.
+  pub sharing: Option<ProjectSharing>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TasksProps {}
@@ -171,13 +175,19 @@ impl Component for TasksScreen {
         )
         .child(empty(ctx, &nav))
         .into(),
-      TasksState::Ready(tasks) => library(ctx, self, &props.root, tasks, tab),
+      TasksState::Ready(tasks) => library(ctx, self, (&props.root, props.sharing.as_ref()), tasks, tab),
     };
+    let sharing = props.sharing.as_ref();
+    let read_only = access(sharing).read_only();
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(topbar(ctx, &props.project, &nav))
-      .child(page::screen_heading(&ctx.t("tasks.title"), &ctx.t("tasks.description")))
+      .child(topbar(ctx, &props.project, &nav, read_only))
+      .child(page::screen_heading_with(
+        &ctx.t("tasks.title"),
+        &ctx.t("tasks.description"),
+        shared::badge(ctx, sharing),
+      ))
       .child(self.tabs(ctx, tab, props.tasks.ready()))
       .child(body)
       .into()
@@ -237,7 +247,8 @@ const fn tab_id(tab: TaskTab) -> &'static str {
   }
 }
 
-fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
+/// The topbar; while the list is `read_only` no task is created.
+fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav, read_only: bool) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(TOPBAR_HEIGHT))
@@ -255,6 +266,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
           Dimension::Px(CREATE_MULTIPLE_WIDTH),
           Dimension::Px(TOPBAR_BUTTON_HEIGHT),
         )
+        .enabled(!read_only)
         .render(ctx),
     )
     .child(
@@ -264,6 +276,7 @@ fn topbar(ctx: &Ctx, project: &str, nav: &ProjectNav) -> Element {
         .id("tasks-new-task")
         .size(Dimension::Px(NEW_TASK_WIDTH), Dimension::Px(TOPBAR_BUTTON_HEIGHT))
         .link(nav.link(Page::NewTask))
+        .enabled(!read_only)
         .render(ctx),
     )
     .into()
@@ -327,7 +340,14 @@ fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
 
 /// Filters, the selection bar, the task table and its footer (`npcrO`); the task Create just made
 /// is highlighted and scrolled into view once the tasks as read include it.
-fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTasks, tab: TaskTab) -> Element {
+fn library(
+  ctx: &mut Ctx,
+  screen: &TasksScreen,
+  (root, sharing): (&Path, Option<&ProjectSharing>),
+  tasks: &ProjectTasks,
+  tab: TaskTab,
+) -> Element {
+  let read_only = access(sharing).read_only();
   let (search, filter) = (screen.search.get(), screen.filter.get());
   let separator = ctx.t("common.listSeparator");
   let query = Query {
@@ -360,24 +380,29 @@ fn library(ctx: &mut Ctx, screen: &TasksScreen, root: &Path, tasks: &ProjectTask
         },
       )
   };
+  let notice = shared::notice(ctx, sharing, &screen.nav);
+  let selection = (!read_only)
+    .then(|| controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
+    .flatten();
   let content = body()
+    .with_children(notice)
     .child(controls::filters(ctx, screen, tasks))
-    .child(organization_filters(ctx, screen, tasks))
-    .with_children(controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
-    .with_children(
-      screen
-        .assigning
-        .get()
-        .then(|| controls::assignment(ctx, screen, root, tasks)),
-    )
+    .child(organization_filters(ctx, screen, tasks, read_only))
+    .with_children(selection)
+    .with_children((screen.assigning.get() && !read_only).then(|| controls::assignment(ctx, screen, root, tasks)))
     .with_children(controls::problems(ctx, screen, tasks))
     .child(table_column(ctx, table, visible.len()))
-    .child(footer(ctx, tasks, &visible, filtered(screen)));
+    .child(footer(
+      ctx,
+      tasks,
+      (&visible, filtered(screen)),
+      shared::footer_sync(ctx, sharing),
+    ));
   crate::ui::form::form(None, content)
 }
 
 /// Status, priority and tag filters with what they hold, and Manage tags (`qVMJh`, `l7kBSq`).
-fn organization_filters(ctx: &mut Ctx, screen: &TasksScreen, tasks: &ProjectTasks) -> Element {
+fn organization_filters(ctx: &mut Ctx, screen: &TasksScreen, tasks: &ProjectTasks, read_only: bool) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Stack.role())
@@ -394,6 +419,7 @@ fn organization_filters(ctx: &mut Ctx, screen: &TasksScreen, tasks: &ProjectTask
         .icon(Icon::Tags)
         .id("project-tags-manage")
         .link(screen.nav.link(Page::ProjectTags))
+        .enabled(!read_only)
         .render(ctx),
     )
     .into()
@@ -463,15 +489,29 @@ fn filtered(screen: &TasksScreen) -> bool {
 }
 
 /// The counts of the rows shown and their runs (`Bpth7`), or how many match the query (`l7kBSq`).
-fn footer(ctx: &Ctx, tasks: &ProjectTasks, rows: &[list::TaskRow], filtered: bool) -> Element {
+/// While the list is read-only, as of its last sync (`synced`), what still works (`emyLg`, `bXEig`).
+fn footer(
+  ctx: &Ctx,
+  tasks: &ProjectTasks,
+  (rows, filtered): (&[list::TaskRow], bool),
+  synced: Option<Arc<str>>,
+) -> Element {
   let count = list::footer(rows.len(), tasks.runs_of(rows), filtered);
+  let count = message_text(ctx, &count);
+  let (count, hint) = match synced {
+    Some(synced) => (
+      ctx.t_args("tasks.shared.footer", [("count", &*count), ("synced", &*synced)]),
+      ctx.t("tasks.shared.readOnlyHint"),
+    ),
+    None => (count, ctx.t("tasks.editingHint")),
+  };
   Row::new()
     .id("tasks-footer")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(FOOTER_HEIGHT))
     .align_items(Alignment::Center)
-    .child(Text::new(&message_text(ctx, &count)).variant(TypographyStyle::Caption))
+    .child(Text::new(&count).variant(TypographyStyle::Caption))
     .child(Spacer::new().flex(1.0))
-    .child(Text::new(&ctx.t("tasks.editingHint")).variant(TypographyStyle::Caption))
+    .child(Text::new(&hint).variant(TypographyStyle::Caption))
     .into()
 }

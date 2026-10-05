@@ -8,7 +8,7 @@
 //! application starts.
 
 #[path = "../server_support/mod.rs"]
-mod server_support;
+pub(crate) mod server_support;
 
 use std::{
   cell::RefCell,
@@ -32,14 +32,14 @@ const TABS: usize = 12;
 const OWN: &str = "alice's own long password";
 
 /// Types `text` into the field `id`, as a user does.
-fn type_into(desktop: &mut Desktop, id: &str, text: &str) {
+pub(crate) fn type_into(desktop: &mut Desktop, id: &str, text: &str) {
   desktop.tree.get_element_by_id_mut(id).expect(id).focus();
   desktop.pass();
   desktop.type_text(text);
 }
 
 /// Deletes `typed` from the end of the field `id`, leaving the focus there.
-fn clear(desktop: &mut Desktop, id: &str, typed: &str) {
+pub(crate) fn clear(desktop: &mut Desktop, id: &str, typed: &str) {
   desktop.tree.get_element_by_id_mut(id).expect(id).focus();
   desktop.pass();
   for _ in typed.chars() {
@@ -47,14 +47,14 @@ fn clear(desktop: &mut Desktop, id: &str, typed: &str) {
   }
 }
 
-fn servers_page(desktop: &mut Desktop) {
+pub(crate) fn servers_page(desktop: &mut Desktop) {
   desktop.wait_for("nav-app-settings");
   desktop.click("nav-app-settings");
   desktop.wait_for("add-server");
 }
 
 /// Adds the server at `url` through the dialog and waits for Sign in.
-fn add_server(desktop: &mut Desktop, url: &str) {
+pub(crate) fn add_server(desktop: &mut Desktop, url: &str) {
   desktop.click("add-server");
   desktop.wait_for("add-server-address");
   type_into(desktop, "add-server-address", url);
@@ -65,7 +65,7 @@ fn add_server(desktop: &mut Desktop, url: &str) {
 }
 
 /// Signs `username` in with the first password `first` and chooses `own`.
-fn sign_in_first_time(desktop: &mut Desktop, username: &str, first: &str, own: &str) {
+pub(crate) fn sign_in_first_time(desktop: &mut Desktop, username: &str, first: &str, own: &str) {
   type_into(desktop, "sign-in-username", username);
   type_into(desktop, "sign-in-password", first);
   desktop.enter();
@@ -224,7 +224,8 @@ fn servers_add_checks_the_address_and_the_first_sign_in_asks_for_an_own_password
   assert!(token(&desktop).expose().starts_with("orc_"));
   assert!(server.accepts(&token(&desktop)));
   assert!(!shows(&mut desktop, OWN) && !shows(&mut desktop, first.expose()));
-  desktop.wait_for("status-server");
+  // 10.43 G: no shared project is open, so the status bar has no server item.
+  assert!(desktop.tree.get_element_by_id("status-server").is_none());
 }
 
 #[test]
@@ -257,14 +258,14 @@ fn servers_a_refused_token_shows_signed_out_and_the_status_bar_signs_in_again() 
   let first = server.create_user("alice", "Alice Moreau", true);
   let admin = server.sign_in_elsewhere("alice", first.expose(), OWN);
   let bohdan = server.create_user("bohdan", "Bohdan Koval", false);
-  let mut desktop = Desktop::with_project();
-  servers_page(&mut desktop);
-  add_server(&mut desktop, &server.url());
-  sign_in_first_time(&mut desktop, "bohdan", bohdan.expose(), "bohdan's own long password");
+  let mut desktop = crate::sharing::signed_in_on(&server, ("bohdan", &bohdan), &[]);
   assert!(
     desktop.tree.get_element_by_id("server-tab-users").is_none(),
     "Users is for admins"
   );
+  // The status bar shows the servers of the open shared projects.
+  crate::sharing::share(&mut desktop);
+  desktop.wait_for("status-server");
 
   server.reset_password(&admin, "bohdan");
   reopen(&mut desktop);
@@ -331,6 +332,63 @@ fn servers_admin_creates_resets_disables_and_enables_users() {
   desktop.wait_for("server-user-disable-maria");
 }
 
+/// At 960 the details' header gives way from its name, then its label: *Sign out* stays whole.
+#[test]
+fn servers_sign_out_stays_whole_in_a_960_window() {
+  let (mut desktop, _server) = signed_in_as_admin();
+  let names: Vec<(String, f32)> = ids_with_prefix(&mut desktop, "server-card-name-")
+    .into_iter()
+    .map(|id| {
+      let width = desktop.bounds(&id).width;
+      (id, width)
+    })
+    .collect();
+  assert!(!names.is_empty(), "the server cards are listed");
+  desktop.tree.resize(960, 960);
+  desktop.pass();
+  desktop.pass();
+  let (button, header) = (
+    desktop.bounds("server-sign-out"),
+    desktop.bounds("server-details-header"),
+  );
+  assert!(button.width > 0.0, "Sign out is shown");
+  assert!(
+    button.x + button.width <= header.x + header.width + 0.5,
+    "{button:?} inside {header:?}"
+  );
+  assert!(shows(&mut desktop, "Sign out"));
+  // The rest of the details fit beside the list too: the account facts, the sessions table with
+  // room for each device, and the keychain note.
+  let details = desktop.bounds("server-details");
+  let right = details.x + details.width + 0.5;
+  for id in ["server-account-facts", "server-sessions", "server-token-note"] {
+    let found = desktop.bounds(id);
+    assert!(
+      found.width > 0.0 && found.x + found.width <= right,
+      "{id} {found:?} inside {details:?}"
+    );
+  }
+  let devices = ids_with_prefix(&mut desktop, "server-session-device-");
+  assert!(!devices.is_empty(), "the sessions are listed");
+  for id in devices {
+    let device = desktop.bounds(&id);
+    assert!(device.width >= 120.0, "{id} keeps room for its name: {device:?}");
+  }
+  assert!(shows(&mut desktop, "Alice Moreau (alice)"));
+  // The server card keeps its name as whole as in a wide window, beside the connection's icon.
+  for (id, wide) in names {
+    let name = desktop.bounds(&id);
+    assert!(name.width + 0.5 >= wide, "{id} keeps its name: {name:?}, {wide} wide");
+  }
+  desktop.click("server-tab-users");
+  desktop.wait_for("server-user-table");
+  let users = desktop.bounds("server-user-table");
+  assert!(
+    users.x + users.width <= right,
+    "the users table {users:?} inside {details:?}"
+  );
+}
+
 #[test]
 #[ignore = "requires an available text clipboard; run separately so the user's clipboard can be restored"]
 fn servers_first_password_copy_puts_the_shown_password_on_the_clipboard() {
@@ -363,7 +421,8 @@ fn servers_sign_out_forgets_the_token_and_the_account() {
 
 #[test]
 fn servers_the_connection_is_checked_when_the_application_starts() {
-  let (desktop, _server) = signed_in_as_admin();
+  let (mut desktop, _server) = crate::sharing::signed_in("alice", true, &[]);
+  crate::sharing::share(&mut desktop);
   // The harness's keychain is in memory: after the restart it has no token, as when the token was
   // removed from the keychain, and the check at start shows the server as signed out.
   let mut desktop = desktop.crash_and_restart(|| {});
@@ -408,4 +467,16 @@ fn servers_plain_http_to_another_computer_needs_the_opt_in_under_its_warning() {
     server.accepts(&token(&desktop)),
     "signed in over plain HTTP with the opt-in"
   );
+}
+
+/// The ids in the tree that start with `prefix`.
+fn ids_with_prefix(desktop: &mut Desktop, prefix: &str) -> Vec<String> {
+  let found = std::cell::RefCell::new(Vec::new());
+  desktop.tree.find_element(|element| {
+    if let Some(id) = element.id().filter(|id| id.starts_with(prefix)) {
+      found.borrow_mut().push(id.to_owned());
+    }
+    false
+  });
+  found.into_inner()
 }

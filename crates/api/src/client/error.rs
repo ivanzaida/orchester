@@ -7,7 +7,7 @@ use std::{error::Error as StdError, io};
 use thiserror::Error;
 
 use super::AddressError;
-use crate::ErrorCode;
+use crate::{ErrorCode, SharingErrorDetails};
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ClientError {
@@ -32,12 +32,14 @@ pub enum ClientError {
   #[error("not an Orchester server (HTTP {status})")]
   NotOrchester { status: u16 },
   /// The server refused the request with one of its error codes; `retry_after` comes with
-  /// `rate_limited`, in seconds.
+  /// `rate_limited`, in seconds, and `details` with the refusals of shared projects that say more:
+  /// the current task of a conflict, the holder of a claim, the owners of a project.
   #[error("the server refused the request: {code:?} (HTTP {status})")]
   Api {
     status: u16,
     code: ErrorCode,
     retry_after: Option<u64>,
+    details: Option<Box<SharingErrorDetails>>,
   },
   /// The HTTP client could not be set up, e.g. the operating system's certificate store failed.
   #[error("the HTTP client cannot be set up")]
@@ -49,6 +51,14 @@ impl ClientError {
   pub fn code(&self) -> Option<ErrorCode> {
     match self {
       Self::Api { code, .. } => Some(*code),
+      _ => None,
+    }
+  }
+
+  /// What a refusal of a shared project's request says beyond its code.
+  pub fn details(&self) -> Option<&SharingErrorDetails> {
+    match self {
+      Self::Api { details, .. } => details.as_deref(),
       _ => None,
     }
   }

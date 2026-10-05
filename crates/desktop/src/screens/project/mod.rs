@@ -409,6 +409,7 @@ impl Component for ProjectShell {
       resources: feed.resources.get(),
       tasks: tasks.clone(),
       usage,
+      sharing: feed.sharing.get(),
     });
     let bar = ProjectBar {
       project_name: open.project.name().as_str().to_owned(),

@@ -145,6 +145,8 @@ pub(super) struct Shared {
   pub(super) published: watch::Sender<RunnerStatus>,
   /// Counts work summaries and state changes of all runners (the close confirmation follows them).
   pub(super) work: watch::Sender<u64>,
+  /// Counts the run changes of all runners (the shared projects send their runs' statuses then).
+  pub(super) runs: watch::Sender<u64>,
   pub(super) limits: watch::Sender<orchester_core::connection::plan_limits::PlanReadings>,
   /// Each project's run change notifications, kept across its runners.
   pub(super) counters: Mutex<HashMap<PathBuf, RunCounters>>,
@@ -217,6 +219,7 @@ impl Reporter {
 
   /// The runner changed a run: screens showing runs and the project's tasks read them again.
   pub(super) fn run_changed(&self) {
+    self.shared.runs.send_modify(|revision| *revision += 1);
     if let Some(counters) = self.counters() {
       counters.states.send_modify(|revision| *revision += 1);
       counters.changes.send_modify(|revision| *revision += 1);

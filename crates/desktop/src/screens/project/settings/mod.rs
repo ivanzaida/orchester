@@ -10,6 +10,7 @@ mod code_index;
 mod environment;
 mod general;
 mod limits;
+mod sharing;
 mod work;
 
 use std::sync::Arc;
@@ -158,6 +159,7 @@ impl Component for SettingsScreen {
       SettingsTab::Limits => ("settings.tabs.limits", "settings.limits.description"),
       SettingsTab::Environment => ("settings.tabs.environment", "settings.environment.description"),
       SettingsTab::CodeIndex => ("settings.tabs.codeIndex", "settings.codeIndex.description"),
+      SettingsTab::Sharing => ("settings.tabs.sharing", "settings.sharing.description"),
     };
     let breadcrumb = ctx.t_args(
       "settings.breadcrumb",
@@ -185,6 +187,18 @@ impl Component for SettingsScreen {
           status: self.code_index_status.clone(),
         },
       ),
+      (_, SettingsTab::Sharing) => {
+        let shared = ctx
+          .use_context::<crate::screens::project::pages::Shown>()
+          .and_then(|shown| shown.sharing);
+        ctx.mount_keyed::<sharing::SharingTab>(
+          "settings-sharing",
+          sharing::SharingProps {
+            open: open.clone(),
+            sharing: shared,
+          },
+        )
+      }
       (Loaded::Loading, SettingsTab::General) => Column::new().flex(1.0).into(),
       (Loaded::Failed(error), SettingsTab::General) => centered(
         RecoveryPanel::new(
@@ -289,6 +303,8 @@ impl SettingsScreen {
       SettingsTab::Limits => self.limits_status.get(),
       SettingsTab::Environment => self.environment_status.get(),
       SettingsTab::CodeIndex => self.code_index_status.get(),
+      // Sharing changes nothing until the server confirmed it; there is nothing to save.
+      SettingsTab::Sharing => SettingsSave::Saved,
     };
     let text = match status {
       SettingsSave::Saved => ctx.t("settings.saved"),
@@ -328,6 +344,7 @@ impl SettingsScreen {
           "settings.tabs.codeIndex",
           SettingsTab::CodeIndex,
         ),
+        tab("settings-tab-sharing", "settings.tabs.sharing", SettingsTab::Sharing),
       ],
     )
   }

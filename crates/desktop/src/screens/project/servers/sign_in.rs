@@ -29,7 +29,11 @@ use super::{
 use crate::{
   display,
   messages::Message,
-  sharing::{PendingPasswordChange, ServerEntry, SharingError, SignedIn, feed::ServerFeed, password_problem},
+  sharing::{
+    PendingPasswordChange, ServerEntry, SharingError, SignedIn,
+    feed::{ReturnTo, ServerFeed},
+    password_problem,
+  },
   ui::{icon::Icon, message_text},
 };
 
@@ -101,13 +105,17 @@ impl Component for SignInDialog {
     };
     let (sign_in, choose, abandon) = (sign_in_action(ctx), choose_action(ctx), abandon_action(ctx));
     let context = ctx.props::<SignInProps>().context.clone();
-    let (finish, pending) = (dialog.finish(&context), dialog.pending.clone());
+    let return_to = ServerFeed::of(ctx).return_to;
+    let (finish, pending) = (
+      signed_in(dialog.finish(&context), (&return_to, &context)),
+      dialog.pending.clone(),
+    );
     ctx.watch(&sign_in.state(), move |state| match (state.is_pending(), &state.data) {
       (false, Some(SignedIn::Done)) => finish(),
       (false, Some(SignedIn::PasswordChangeRequired(change))) => pending.set(Some(change.clone())),
       _ => {}
     });
-    let finish = dialog.finish(&context);
+    let finish = signed_in(dialog.finish(&context), (&return_to, &context));
     ctx.watch(&choose.state(), move |state| {
       if !state.is_pending() && state.data.is_some() {
         finish();
@@ -370,4 +378,20 @@ fn abandon_action(ctx: &mut Ctx) -> AbandonAction {
       })
     }
   })
+}
+
+/// `finish` after a sign-in that went through, returning first to where it was started from (the
+/// Sharing tab of a discovery offer), if anywhere.
+fn signed_in(
+  finish: impl Fn() + Send + Sync + 'static,
+  (return_to, context): (&Signal<ReturnTo>, &Context),
+) -> impl Fn() + Send + Sync + 'static {
+  let (return_to, nav) = (return_to.clone(), context.nav.clone());
+  move || {
+    if let ReturnTo(Some(page)) = return_to.get_untracked() {
+      return_to.set(ReturnTo(None));
+      nav.show(page);
+    }
+    finish();
+  }
 }

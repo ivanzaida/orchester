@@ -5,8 +5,9 @@ use orchester_core::{
   name::Name,
   project::{ProjectKey, TaskKey},
   resource::VersionNumber,
+  sharing::TaskRevision,
   store::TaskStore,
-  task::{Task, TaskDetails, TaskLimits, TaskStatus},
+  task::{Task, TaskDetails, TaskLimits, TaskStatus, TaskUpdate},
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Params, Row, Transaction, params};
@@ -17,7 +18,11 @@ use crate::{
   rows::{budget_value, corrupt, decode_json, duration_value, encode_json, millis_column, parse, tokens_column},
 };
 
-const SELECT_TASKS: &str = "SELECT id, number, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, created_at, pipeline_version FROM tasks";
+/// A shared task names its pipeline by slug (`docs/architecture/server.md`, "Pipelines by name"): it
+/// is this computer's pipeline of that slug, or none when it has none.
+const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS NULL THEN pipeline_id ELSE \
+  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) END, \
+  budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision FROM tasks";
 
 struct RunTaskSnapshot {
   title: String,
@@ -100,7 +105,8 @@ impl ProjectDb {
         task.pipeline_version(),
         task.created_at(),
       )
-      .with_organization(organization),
+      .with_organization(organization)
+      .with_revision(task.revision()),
     ))
   }
 }
@@ -167,6 +173,7 @@ impl TaskStore for ProjectDb {
     let project_key = self.project.key().clone();
     let batch = batch.to_string();
     let transaction = self.connection.transaction()?;
+    super::sharing::ensure_local_project(&transaction)?;
     let existing = load_tasks(
       &transaction,
       &project_key,
@@ -199,22 +206,34 @@ impl TaskStore for ProjectDb {
     load_tasks(&self.connection, self.project.key(), "ORDER BY number", [])
   }
 
-  fn save_task(&mut self, task: &Task) -> Result<(), StoreError> {
+  fn save_task(&mut self, task: &Task) -> Result<TaskUpdate, StoreError> {
     let transaction = self.connection.transaction()?;
-    update_task(&transaction, task)?;
+    let current = load_task(&transaction, self.project.key(), task.id())?;
+    if current.revision() != task.revision() {
+      return Ok(TaskUpdate::Conflict { current });
+    }
+    let revision = update_task(&transaction, task)?;
     transaction.commit()?;
-    Ok(())
+    Ok(TaskUpdate::Saved(task.clone().with_revision(revision)))
   }
 
-  fn update_task(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, StoreError> {
+  fn update_task(&mut self, id: TaskId, read: TaskRevision, details: TaskDetails) -> Result<TaskUpdate, StoreError> {
     let transaction = self.connection.transaction()?;
-    let task = load_tasks(&transaction, self.project.key(), "WHERE id = ?1", [id.to_string()])?
-      .pop()
-      .ok_or(StoreError::TaskNotFound(id))?;
-    let task = edit_task(&transaction, task, details)?;
+    let current = load_task(&transaction, self.project.key(), id)?;
+    if current.revision() != read {
+      return Ok(TaskUpdate::Conflict { current });
+    }
+    let task = edit_task(&transaction, current, details)?;
     transaction.commit()?;
-    Ok(task)
+    Ok(TaskUpdate::Saved(task))
   }
+}
+
+/// The stored task `id`, read in `connection`.
+pub(super) fn load_task(connection: &Connection, project: &ProjectKey, id: TaskId) -> Result<Task, StoreError> {
+  load_tasks(connection, project, "WHERE id = ?1", [id.to_string()])?
+    .pop()
+    .ok_or(StoreError::TaskNotFound(id))
 }
 
 /// Replaces `task`'s details within `transaction`: a task with runs stays complete, and its
@@ -239,32 +258,46 @@ pub(super) fn edit_task(
   if has_run {
     snapshot_earlier_runs(transaction, &before)?;
   }
-  update_task(transaction, &task)?;
-  Ok(task)
+  let revision = update_task(transaction, &task)?;
+  Ok(task.with_revision(revision))
 }
 
-/// Stores the details and status of `task`, which must exist.
-pub(super) fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<(), StoreError> {
+/// Stores the details and status of `task`, which must exist and be this project's own, and
+/// raises its revision; returns the new revision. A shared task changes only on the server.
+pub(super) fn update_task(transaction: &Transaction<'_>, task: &Task) -> Result<TaskRevision, StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
-  let updated = transaction.execute(
-    "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
-     status = ?7, pipeline_version = ?8 WHERE id = ?1",
-    params![
-      task.id().to_string(),
-      details.title.as_str(),
-      details.brief,
-      details.pipeline.map(|id| id.to_string()),
-      budget_tokens,
-      max_duration_ms,
-      status_text(task.status()),
-      task.pipeline_version().map(|version| version.get()),
-    ],
-  )?;
-  if updated == 0 {
+  let revision: Option<i64> = transaction
+    .query_row(
+      "UPDATE tasks SET title = ?2, brief = ?3, pipeline_id = ?4, budget_tokens = ?5, max_duration_ms = ?6, \
+       status = ?7, pipeline_version = ?8, revision = revision + 1 WHERE id = ?1 AND sharing IS NULL \
+       RETURNING revision",
+      params![
+        task.id().to_string(),
+        details.title.as_str(),
+        details.brief,
+        details.pipeline.map(|id| id.to_string()),
+        budget_tokens,
+        max_duration_ms,
+        status_text(task.status()),
+        task.pipeline_version().map(|version| version.get()),
+      ],
+      |row| row.get(0),
+    )
+    .optional()?;
+  let Some(revision) = revision else {
+    super::sharing::ensure_local_task(transaction, task.id())?;
     return Err(StoreError::TaskNotFound(task.id()));
-  }
-  write_criteria(transaction, task.id(), &details.acceptance_criteria)
+  };
+  write_criteria(transaction, task.id(), &details.acceptance_criteria)?;
+  revision_value(revision)
+}
+
+pub(super) fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> {
+  u64::try_from(revision)
+    .ok()
+    .and_then(|revision| TaskRevision::try_from(revision).ok())
+    .ok_or_else(|| corrupt("task revision", revision))
 }
 
 pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
@@ -272,7 +305,7 @@ pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &st
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
   transaction.execute(
     "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
-     created_at, pipeline_version) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+     created_at, pipeline_version, revision) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
     params![
       task.id().to_string(),
       task.key().number().get(),
@@ -285,12 +318,17 @@ pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &st
       status_text(task.status()),
       task.created_at().unix_millis(),
       task.pipeline_version().map(|version| version.get()),
+      tokens_column("task revision", task.revision().get())?,
     ],
   )?;
   write_criteria(transaction, task.id(), &details.acceptance_criteria)
 }
 
-fn write_criteria(transaction: &Transaction<'_>, task: TaskId, criteria: &[String]) -> Result<(), StoreError> {
+pub(super) fn write_criteria(
+  transaction: &Transaction<'_>,
+  task: TaskId,
+  criteria: &[String],
+) -> Result<(), StoreError> {
   let task = task.to_string();
   transaction.execute("DELETE FROM task_criteria WHERE task_id = ?1", [&task])?;
   let mut insert = transaction.prepare("INSERT INTO task_criteria (task_id, position, text) VALUES (?1, ?2, ?3)")?;
@@ -341,6 +379,7 @@ struct TaskRow {
   status: String,
   created_at: i64,
   pipeline_version: Option<i64>,
+  revision: i64,
 }
 
 impl TaskRow {
@@ -356,6 +395,7 @@ impl TaskRow {
       status: row.get(7)?,
       created_at: row.get(8)?,
       pipeline_version: row.get(9)?,
+      revision: row.get(10)?,
     })
   }
 
@@ -373,14 +413,17 @@ impl TaskRow {
       limits,
     };
     let pipeline_version = self.pipeline_version.map(version_number).transpose()?;
-    Ok(Task::from_stored(
-      parse("task id", &self.id)?,
-      TaskKey::new(project.clone(), task_number(self.number)?),
-      details,
-      parse_status(&self.status)?,
-      pipeline_version,
-      Timestamp::from_unix_millis(self.created_at),
-    ))
+    Ok(
+      Task::from_stored(
+        parse("task id", &self.id)?,
+        TaskKey::new(project.clone(), task_number(self.number)?),
+        details,
+        parse_status(&self.status)?,
+        pipeline_version,
+        Timestamp::from_unix_millis(self.created_at),
+      )
+      .with_revision(revision_value(self.revision)?),
+    )
   }
 
   fn limits(&self) -> Result<Option<TaskLimits>, StoreError> {
@@ -396,7 +439,7 @@ impl TaskRow {
   }
 }
 
-fn limit_columns(limits: Option<TaskLimits>) -> Result<(Option<i64>, Option<i64>), StoreError> {
+pub(super) fn limit_columns(limits: Option<TaskLimits>) -> Result<(Option<i64>, Option<i64>), StoreError> {
   let Some(limits) = limits else {
     return Ok((None, None));
   };
@@ -430,7 +473,7 @@ pub(super) fn is_queued(transaction: &rusqlite::Transaction<'_>, task: TaskId) -
   )?)
 }
 
-const fn status_text(status: TaskStatus) -> &'static str {
+pub(super) const fn status_text(status: TaskStatus) -> &'static str {
   match status {
     TaskStatus::Draft => "draft",
     TaskStatus::Queued => "queued",

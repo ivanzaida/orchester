@@ -44,6 +44,8 @@ use crate::{
 pub(super) struct AddProps {
   context: Context,
   entries: Arc<[ServerEntry]>,
+  /// The address a discovery file named, filled in for the person to check.
+  prefill: Option<String>,
 }
 
 impl PartialEq for AddProps {
@@ -54,12 +56,18 @@ impl PartialEq for AddProps {
 
 impl lurq::app::component::DevtoolsInspectable for AddProps {}
 
-pub(super) fn mount(ctx: &mut Ctx, context: &Context, list: &crate::sharing::feed::ServerList) -> Element {
+pub(super) fn mount(
+  ctx: &mut Ctx,
+  context: &Context,
+  list: &crate::sharing::feed::ServerList,
+  prefill: Option<String>,
+) -> Element {
   ctx.mount_keyed::<AddServerDialog>(
     "add-server-dialog",
     AddProps {
       context: context.clone(),
       entries: list.entries().into(),
+      prefill,
     },
   )
 }
@@ -108,8 +116,9 @@ impl Component for AddServerDialog {
         context.dialog.set(ServerDialog::SignIn(server));
       }
     });
+    let prefill = ctx.props::<AddProps>().prefill.clone().unwrap_or_default();
     let dialog = Self {
-      address: ctx.signal(String::new()),
+      address: ctx.signal(prefill),
       opt_in: ctx.signal(false),
       checking: ctx.signal(Checking::default()),
       copied: ctx.signal(Copied::default()),

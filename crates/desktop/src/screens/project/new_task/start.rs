@@ -9,6 +9,7 @@ use super::{NewTaskForm, QueuedTask, RunAction, RunArgs, RunProblems, StartedTas
 use crate::{
   background,
   runner::Runners,
+  sharing::feed::ServerFeed,
   tasks::{
     data::{PipelineChoice, SaveTarget},
     run::{StartOutcome, start_messages},
@@ -36,7 +37,7 @@ impl NewTaskForm {
         target,
         details: Box::new(ready?),
         // Invalid organization is explained beside its fields and prevents Run.
-        organization: self.organization.change()?,
+        organization: Box::new(self.organization.change()?),
         pipeline: Arc::new(
           pipelines?
             .iter()
@@ -62,11 +63,13 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting screens");
+  let servers = ServerFeed::of(ctx).servers;
+  let root = ctx.props::<super::NewTaskProps>().project.repo_root.clone();
   ctx.future_action(move |args: RunArgs| {
-    let runners = runners.clone();
+    let (runners, servers, root) = (runners.clone(), servers.clone(), root.clone());
     let queued_state = queued_task.clone();
     async move {
-      let queued = match args {
+      let (queued, queue_claim) = match args {
         RunArgs::New {
           repo_root,
           target,
@@ -75,9 +78,11 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
           pipeline,
         } => {
           let selected_version = pipeline.version;
+          let servers = servers.clone();
           let queued = background::run(move || {
             crate::tasks::run::queue_organized_in(
               &repo_root,
+              &servers,
               target,
               *details,
               (&organization.0, &organization.1),
@@ -102,13 +107,27 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
             pipeline: Arc::new(saved.pipeline),
           };
           queued_state.set(Some(queued.clone()));
-          queued
+          (queued, saved.claim)
         }
-        RunArgs::Retry { queued } => queued,
+        RunArgs::Retry { queued } => (queued, crate::sharing::project::WorkClaim::default()),
       };
       let task = queued.task;
       let key = task.first_run_key();
-      runners.start_run(key, task).await.map_err(|error| {
+      // Work on a shared task starts only under the person's claim.
+      let claim = queue_claim.and(
+        servers
+          .claim_for_work(&root, task)
+          .await
+          .map_err(|refusal| RunProblems {
+            messages: vec![refusal.message()].into(),
+            queued: Some(queued.clone()),
+          })?,
+      );
+      let started = runners.start_run(key, task).await;
+      if started.is_err() {
+        claim.release(&servers).await;
+      }
+      started.map_err(|error| {
         tracing::warn!(%error, "the start request failed");
         RunProblems {
           messages: start_messages(&error).into(),

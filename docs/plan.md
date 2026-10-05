@@ -525,6 +525,7 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
   (2026-10-04), waiting for design verification and review; see *Done*.
 - **S2b** (share, members, make local, offline, conflict): 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14
   `NaUDV` (with roles), 10.17 `g5r5VU` (discovery), 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.41 `RmDpQ` (the revision; its live use is S2d).
+  Implemented on `claude/s2b` (2026-10-05), waiting for design verification and review; see *Done*.
 - **S2c** (join): 10.15 `y8uP2`, 10.16 `AZwJE`, 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`, 10.24 `FAKNF`,
   10.25 `RuBhQ`, 10.26 `m7jOn9`.
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
@@ -550,6 +551,85 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
+
+Implemented in `.tmp/worktrees/claude-s2b` from master `2fb85037` (S1a, S1b, S2a), with master `aa979bfa` (lurq
+0.40.0) merged in.
+
+- Core: `TaskRevision` on `Task`; `TaskStore::save_task` / `update_task(id, read, details)` return `TaskUpdate`
+  (`Saved` or `Conflict { current }`); `ContentMerge` (`task::content`) puts a change made on an older revision on top
+  of the stored task field by field: a field only one side changed merges without asking, a field both changed to
+  different values is the person's choice; organization fields rebase (decision 26).
+- Store (`orchester-store`, migration after token budgets): `tasks.revision` (every stored change raises it; a local
+  change on an older one is a conflict) and the shared-project cache: `sharing` (the link, role, event cursor, last
+  sync, removal), the task columns `sharing`, `pipeline_slug`, `former_key`, `created_by`, `updated_by`,
+  `updated_at`, and `task_claims`, `task_run_status`, `shared_automatic_status`. A shared project's tasks are written
+  only from what the server confirmed and refuse local writes; the pipeline is the local pipeline of the task's slug
+  (none when this computer lacks it); the workflow status a run of a shared task sets is queued for the desktop to
+  send as Orchester's change; *Make local* keeps every cached task as a local one.
+- `orchester-api` client: projects by repository identity, create, members and roles, tasks, task changes with the
+  revision read (`409 revision_conflict` with the current task), claims, heartbeats, tags; `ClientError::details()`.
+- Desktop service (`sharing::project`): `RemoteTaskStore` (reads the cache; writes go to the server with the
+  revision read, a conflict comes back as a result, a clean one is merged and sent again up to three times); every
+  desktop write goes through `TaskWriter` (local or shared). Share (repository identity from `origin`, confirmation,
+  upload, optional `orchester.toml`), members and roles (the last owner refused), *Make local*, the discovery file
+  (read only; its server is contacted only after the person adds it from Settings › Servers, prefilled; the file is
+  written only when the person asks, never committed), run claims before starting or continuing work on a shared task
+  (refusals name the holder), heartbeats every minute for held claims (≤ 256 ids a call, within 12 calls a minute),
+  a sync every minute (tasks, tags, membership, automatic statuses), and the list's access: writable, offline (last
+  sync, next try), signed out, or no longer a member. The runner starts runs from cached tasks unchanged.
+- Screens: Project settings › Sharing (10.11–10.14 with roles, 10.17), the shared task list's badge, read-only notice
+  and footer (10.42, 10.44; New task, Create multiple, Manage tags and bulk changes unavailable while read-only), the
+  status bar server item for the servers of open shared projects with *Not a member* (10.43 E), the Edit task
+  conflict view (10.41), a shared task's pipeline this computer lacks shown as *<slug> · not on this computer* on the
+  list and the task page (an edit does not clear it), and Settings › Servers' details header giving way at 960 so
+  *Sign out* stays whole.
+
+Deviations: member rows show the display name only (the API's members carry no username); the Holder column of
+10.31 is S2d; joining an existing project (`409 remote_taken`) says it comes in a later version (S2c); *Make
+local…* in the tasks notice leads to the Sharing tab; task groups (bulk queue, release) refuse shared tasks with
+*server only*; the conflict view does not offer editing the person's version in place (they choose a version and edit
+after saving), and a non-conflicting outcome or title shows as read-only text; organization history of shared tasks is
+not cached (S2d).
+
+Tests: `cargo test -p orchester-core --test task_content content_` (3); `-p orchester-store --test shared_tasks
+shared_` (7, including the upgrade of a populated schema-40 database), `--test task_edits task_`/`legacy_`, `--test
+task_groups task_`, `--test task_organization organization_`, `--test project_db _`; `-p orchester-api --features
+client --test client client_` (15); `-p orchester-runner --test pipeline_pin _` (3, including a shared cached task);
+`-p orchester-desktop --test shared_projects shared_` (11, service against a real server on loopback), `--test sharing
+sharing_`, `--test tasks task`, `--test i18n _`, `--test theme roles`, `--test navigation route_`, `--test status_bar
+status`, and `--test form_keyboard` `sharing_` (8), `edit_conflict` (4), `servers_`, `edit_task`, `new_task`,
+`organization`, `plan_review`, `agent_permissions`, `native_connections`, `task_bulk`, `run_again`, `task_run`,
+`conversation`; `tools/check.ps1` passed; `cargo check --target aarch64-apple-darwin -p orchester-core -p
+orchester-api` passed. Not run: the rest of the workspace's suites; the store's `app_db` (two tests expect schema 2
+since S2a) and the runner's `task_groups` (time out on master too) fail before this branch as well.
+
+Review and verification round (2026-10-05): a run's workflow status of a shared task is recorded with the status it
+changed from and sent (as soon as a run changes, and with every sync) only on the revision read while the server still
+has that status and the person holds the task; otherwise the server's stays and the task page says why, quietly, until
+dismissed (`shared_statuses statuses_`, the reviewer's reproduction). `orchester.toml` is never written through a link
+(created only where nothing is). A project's tasks take no change from the screens while it is being shared, and a
+run's change made meanwhile is sent on top of the uploaded copy. A run claim taken for work that did not start is
+released while no run of the task is under way. The Sharing tab and Settings › Servers ask the server who is signed in
+as they open (a dropped admin flag leaves the member's view of 10.14 B), the person's role in the members list gates
+the controls, and an error of one member change no longer shows in the next dialog. Settings › Servers details fit a
+960 window (the list gives way to 220; the sessions drop Signed in, the users drop State). A save that meets a newer
+version is not a status-bar failure, and the same work done after all settles its earlier failure. Signing in from a
+discovery offer returns to the Sharing tab; *What sharing sends* has the raised surface. Not covered by a test: the
+refusal of screen changes while a Share is under way and the re-sending of a run's change made meanwhile (no hook to
+pause a Share in a test), and the link refusal of `orchester.toml` on Windows (making a link needs a privilege; the test
+runs where links can be made, i.e. macOS).
+
+Second review round (2026-10-05): `claim_for_work` says whether it took the claim or confirmed one the person held
+(after a finished run, or working on their other computer); work that does not start releases only a claim its attempt
+took. Before sending a run's status the tasks and claims are read from the server, so a claim taken over a moment ago
+sends nothing; a status the server refuses is not retried and the task says so. The tasks changed while sharing are
+read in the transaction that links the project. At 960 the server card's connection label gives way to its icon so
+the name stays whole. Not covered by a test: a status the server refuses (no server rule refuses one to provoke).
+
+Design verification needed: 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14 `NaUDV`, 10.17 `g5r5VU`, 10.41
+`RmDpQ`, 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.43 E, and Settings › Servers' details header at 960.
 
 lurq 0.40.0 · branch `claude/lurq-040` (2026-10-05)
 

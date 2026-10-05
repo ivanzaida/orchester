@@ -16,7 +16,7 @@ use crate::messages::{self, Message};
 pub enum SharingError {
   #[error(transparent)]
   Client(#[from] ClientError),
-  #[error("the application database failed: {0}")]
+  #[error("the database failed: {0}")]
   Store(#[from] StoreError),
   #[error("the keychain failed: {0}")]
   Vault(#[from] VaultError),
@@ -26,6 +26,26 @@ pub enum SharingError {
   /// Work on a background thread ended before it finished; the cause is logged.
   #[error("the work was interrupted")]
   Interrupted,
+  /// The server of a shared project cannot be reached now: its list is read-only and nothing is
+  /// sent later without the person.
+  #[error("the server cannot be reached; nothing was sent")]
+  Offline,
+  /// The person is no longer a member of the shared project; nothing was sent.
+  #[error("no longer a member of the shared project")]
+  NotMember,
+  /// The shared project's server is no longer in the list of servers.
+  #[error("the shared project's server is not in the list")]
+  ServerMissing,
+  /// The server answered with a value that breaks a rule of the task it describes.
+  #[error("the server's answer has an invalid {0}")]
+  InvalidAnswer(&'static str),
+  /// The task kept changing on the server while Orchester merged a change into it; nothing more
+  /// was sent.
+  #[error("the task kept changing on the server")]
+  KeptChanging,
+  /// The project is being shared now; its tasks take changes again once it is.
+  #[error("the project is being shared")]
+  ShareInProgress,
 }
 
 impl From<Message> for SharingError {
@@ -52,6 +72,12 @@ impl SharingError {
       Self::Vault(error) => messages::vault_error(error),
       Self::SignedOut => Message::new("servers.errors.signedOut"),
       Self::Interrupted => messages::interrupted(),
+      Self::Offline => Message::new("sharing.errors.offline").with("server", address.host().to_owned()),
+      Self::NotMember => Message::new("sharing.errors.notMember"),
+      Self::ServerMissing => Message::new("sharing.errors.serverMissing"),
+      Self::InvalidAnswer(_) => Message::new("sharing.errors.invalidAnswer"),
+      Self::KeptChanging => Message::new("sharing.errors.keptChanging"),
+      Self::ShareInProgress => Message::new("sharing.errors.shareInProgress"),
     }
   }
 }
@@ -86,6 +112,19 @@ fn api_message(code: ErrorCode) -> Message {
     ErrorCode::Forbidden => "servers.errors.forbidden",
     ErrorCode::NotFound => "servers.errors.notFound",
     ErrorCode::RateLimited => "servers.errors.rateLimited",
+    ErrorCode::NotMember => "sharing.errors.notMember",
+    ErrorCode::NotEditable => "sharing.errors.notEditable",
+    ErrorCode::NotQueueable => "runs.start.incomplete",
+    ErrorCode::Organization => "sharing.errors.organization",
+    ErrorCode::RevisionConflict => "tasks.conflict.changedMeanwhile",
+    ErrorCode::NoSuchUser => "sharing.members.noSuchUser",
+    ErrorCode::AlreadyMember => "sharing.members.alreadyMember",
+    ErrorCode::LastOwner => "sharing.members.lastOwner",
+    ErrorCode::RemoteTaken => "sharing.errors.remoteTaken",
+    ErrorCode::TagExists => "tasks.tags.duplicate",
+    ErrorCode::SameTag => "tasks.tags.sameTarget",
+    ErrorCode::ClaimHeld => "claims.refused.heldUnknown",
+    ErrorCode::TaskMerged => "claims.refused.merged",
     _ => "servers.errors.refused",
   })
 }

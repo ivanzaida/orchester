@@ -156,7 +156,10 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
     .expect("create task")
     .remove(0);
   queued.queue(v1.number()).expect("queue v1");
-  db.save_task(&queued).expect("save task");
+  db.save_task(&queued)
+    .expect("save task")
+    .saved()
+    .expect("saved as read");
   let mut changed = pipeline.steps().to_vec();
   changed[0].name = Name::new("Research updated").expect("name");
   let mut draft = v1.to_draft(now());
@@ -165,7 +168,9 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
   let v2 = db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
   drop(db);
 
-  let replay = queue_in(repo.path(), SaveTarget::New(batch), details, v2.number()).expect("replay queued task");
+  let (_data, servers) = servers();
+  let replay =
+    queue_in(repo.path(), &servers, SaveTarget::New(batch), details, v2.number()).expect("replay queued task");
   assert_eq!(replay.task.id(), queued.id());
   assert_eq!(replay.task.pipeline_version(), Some(v1.number()));
   assert_eq!(replay.pipeline.version, v1.number());
@@ -241,4 +246,41 @@ fn published_pipeline_choices_include_executor_and_approval_gate() {
     ]
   );
   assert!(!steps[1].approval_gate);
+}
+
+/// A keychain that holds nothing: a local project's tasks never read it.
+struct NoKeychain;
+
+impl orchester_core::secret::SecretVault for NoKeychain {
+  fn store(
+    &self,
+    _: &orchester_core::secret::VaultKey,
+    _: &orchester_core::secret::SecretValue,
+  ) -> Result<(), orchester_core::secret::VaultError> {
+    Err(orchester_core::secret::VaultError::Unsupported)
+  }
+
+  fn read(
+    &self,
+    _: &orchester_core::secret::VaultKey,
+  ) -> Result<orchester_core::secret::SecretValue, orchester_core::secret::VaultError> {
+    Err(orchester_core::secret::VaultError::NotFound)
+  }
+
+  fn delete(&self, _: &orchester_core::secret::VaultKey) -> Result<(), orchester_core::secret::VaultError> {
+    Err(orchester_core::secret::VaultError::Unsupported)
+  }
+}
+
+/// The servers of a desktop that was never signed in to one, on its application data.
+fn servers() -> (tempfile::TempDir, orchester_desktop::sharing::Servers) {
+  let data = tempfile::TempDir::new().expect("application data");
+  let workspace = orchester_desktop::workspace::Workspace::new(
+    orchester_store::AppDb::open(&data.path().join("orchester.db")).expect("database"),
+  );
+  let servers = orchester_desktop::sharing::Servers::new(
+    workspace,
+    orchester_desktop::secrets::Vault::with(std::sync::Arc::new(NoKeychain)),
+  );
+  (data, servers)
 }

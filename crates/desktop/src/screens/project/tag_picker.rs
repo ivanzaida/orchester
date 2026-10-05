@@ -149,14 +149,17 @@ impl Component for TagPicker {
 /// `render` refer to the same action.
 fn create_action(ctx: &mut Ctx, root: &std::path::Path) -> CreateAction {
   let root = root.to_path_buf();
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   ctx.future_action(move |input: String| {
-    let root = root.clone();
+    let (root, servers) = (root.clone(), servers.clone());
     async move {
       let name = Name::new(&input).map_err(|error| messages::name_error(&error))?;
-      background::run(move || ProjectDb::open(&root).and_then(|mut db| db.create_project_tag(name)))
-        .await?
-        .map(CreatedTag)
-        .map_err(|error| messages::store_error(&error))
+      background::run(move || {
+        crate::tasks::writer::TaskWriter::open(&root, &servers).and_then(|mut writer| writer.create_tag(name))
+      })
+      .await?
+      .map(CreatedTag)
+      .map_err(|error| error.message())
     }
   })
 }

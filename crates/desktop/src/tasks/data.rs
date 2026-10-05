@@ -8,8 +8,9 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
   run::{Run, RunEvent, RunNumber, StepExecutor, TaskPhase},
+  sharing::TaskRevision,
   store::{ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore},
-  task::{Task, TaskDetails, TaskStatus},
+  task::{Task, TaskDetails, TaskStatus, TaskUpdate},
   task_group::GroupHold,
   time::Timestamp,
 };
@@ -55,6 +56,8 @@ pub struct ProjectTasks {
   pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
+  pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
   /// Why each task of a reviewed group that holds its work waits.
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
@@ -87,6 +90,11 @@ impl ProjectTasks {
   /// `row` with its tag names and what blocks it, the blocking tasks' keys joined by `separator`
   /// (`common.listSeparator`).
   pub fn decorate_row(&self, mut row: super::list::TaskRow, separator: &str) -> super::list::TaskRow {
+    if let Some(slug) = self.missing_pipelines.get(&row.id) {
+      row.pipeline = super::list::PipelineLabel::Missing {
+        slug: Arc::from(slug.as_str()),
+      };
+    }
     row.tags = self
       .tags
       .iter()
@@ -191,6 +199,7 @@ impl ProjectTasks {
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(&db)?),
+      missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       phases: Arc::new(phases),
       runs: Arc::new(counts),
@@ -360,14 +369,14 @@ pub fn save_draft<S: TaskStore>(
   batch: IdempotencyKey,
   details: TaskDetails,
   now: Timestamp,
-) -> Result<Task, S::Error> {
+) -> Result<TaskUpdate, S::Error> {
   let task = store
     .create_tasks(batch, vec![details.clone()], now)?
     .into_iter()
     .next()
     .expect("create_tasks returns one task for each of the one details given");
   if task.details() == &details || task.status() != TaskStatus::Draft {
-    return Ok(task);
+    return Ok(TaskUpdate::Saved(task));
   }
   let edited = Task::from_stored(
     task.id(),
@@ -376,16 +385,18 @@ pub fn save_draft<S: TaskStore>(
     task.status(),
     task.pipeline_version(),
     task.created_at(),
-  );
-  store.save_task(&edited)?;
-  Ok(edited)
+  )
+  .with_organization(task.organization().clone())
+  .with_revision(task.revision());
+  store.save_task(&edited)
 }
 
-/// Where the task form saves: a new draft under `New`, or an existing task in place.
+/// Where the task form saves: a new draft under `New`, or an existing task in place, as it was
+/// read at the revision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveTarget {
   New(IdempotencyKey),
-  Task(TaskId),
+  Task(TaskId, TaskRevision),
 }
 
 /// Saves `details` as a new draft or over an existing task in place.
@@ -394,10 +405,10 @@ pub fn save_to<S: TaskStore>(
   target: SaveTarget,
   details: TaskDetails,
   now: Timestamp,
-) -> Result<Task, S::Error> {
+) -> Result<TaskUpdate, S::Error> {
   match target {
     SaveTarget::New(batch) => save_draft(store, batch, details, now),
-    SaveTarget::Task(task) => store.update_task(task, details),
+    SaveTarget::Task(task, read) => store.update_task(task, read, details),
   }
 }
 
@@ -406,17 +417,35 @@ pub fn save_to<S: TaskStore>(
 pub enum TaskDraftSaveError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  /// The shared project's server did not take the save.
+  #[error(transparent)]
+  Write(Box<super::writer::WriteError>),
   #[error("the task is no longer a draft: {0:?}")]
   NotDraft(TaskStatus),
   #[error("the persisted task differs from the requested details")]
   DetailsMismatch,
+  /// The task was changed since the form read it; nothing was saved.
+  #[error("the task was changed since it was read")]
+  Changed(Box<Task>),
+}
+
+impl From<super::writer::WriteError> for TaskDraftSaveError {
+  fn from(error: super::writer::WriteError) -> Self {
+    match error {
+      super::writer::WriteError::Store(error) => Self::Store(error),
+      error => Self::Write(Box::new(error)),
+    }
+  }
 }
 
 /// [`save_to`] in the project database of `repo_root`, confirmed as the requested details: the
 /// saved task.
 pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails) -> Result<Task, TaskDraftSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let saved = save_to(&mut db, target, details.clone(), Timestamp::now())?;
+  let saved = match save_to(&mut db, target, details.clone(), Timestamp::now())? {
+    TaskUpdate::Saved(task) => task,
+    TaskUpdate::Conflict { current } => return Err(TaskDraftSaveError::Changed(Box::new(current))),
+  };
   if matches!(target, SaveTarget::New(_)) && saved.status() != TaskStatus::Draft {
     return Err(TaskDraftSaveError::NotDraft(saved.status()));
   }
@@ -424,21 +453,4 @@ pub fn save_draft_in(repo_root: &Path, target: SaveTarget, details: &TaskDetails
     return Err(TaskDraftSaveError::DetailsMismatch);
   }
   Ok(saved)
-}
-
-/// Save organization and task content as a single transaction.
-pub fn save_organized_to(
-  db: &mut ProjectDb,
-  target: SaveTarget,
-  details: TaskDetails,
-  (base, organization): (
-    &orchester_core::task::organization::TaskOrganization,
-    &orchester_core::task::organization::TaskOrganization,
-  ),
-  now: Timestamp,
-) -> Result<Task, StoreError> {
-  match target {
-    SaveTarget::New(batch) => db.create_organized_task(batch, details, organization, now),
-    SaveTarget::Task(task) => db.update_organized_task(task, details, (base, organization), now),
-  }
 }

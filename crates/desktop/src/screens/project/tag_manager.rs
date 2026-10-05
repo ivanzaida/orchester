@@ -11,7 +11,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::TagId, name::Name, task::organization::Tag, time::Timestamp};
+use orchester_core::{id::TagId, name::Name, task::organization::Tag};
 use orchester_store::ProjectDb;
 
 use super::{ProjectNav, page};
@@ -19,6 +19,7 @@ use crate::{
   background,
   messages::{self, Message},
   navigation::route::Page,
+  tasks::writer::TaskWriter,
   theme::{ExtraColor, ExtraTypography},
   ui::{
     backdrop::backdrop,
@@ -148,10 +149,11 @@ impl Component for TagManager {
 /// refer to the same action.
 fn action(ctx: &mut Ctx, root: &std::path::Path) -> Action {
   let root = root.to_path_buf();
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   ctx.future_action(move |mutation: Mutation| {
-    let root = root.clone();
+    let (root, servers) = (root.clone(), servers.clone());
     async move {
-      background::run(move || mutate(&root, mutation)).await??;
+      background::run(move || mutate(&root, &servers, mutation)).await??;
       Ok(Changed)
     }
   })
@@ -299,17 +301,17 @@ const TAG_ROW_HEIGHT: f32 = 64.0;
 const TAG_COUNT_WIDTH: f32 = 120.0;
 const TAG_ACTIONS_WIDTH: f32 = 340.0;
 const MANAGER_HEIGHT: f32 = 520.0;
-fn mutate(root: &std::path::Path, mutation: Mutation) -> Result<(), Message> {
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+fn mutate(root: &std::path::Path, servers: &crate::sharing::Servers, mutation: Mutation) -> Result<(), Message> {
+  let mut writer = TaskWriter::open(root, servers).map_err(|error| error.message())?;
   match mutation {
-    Mutation::Create(input) => db
-      .create_project_tag(Name::new(&input).map_err(|error| messages::name_error(&error))?)
+    Mutation::Create(input) => writer
+      .create_tag(Name::new(&input).map_err(|error| messages::name_error(&error))?)
       .map(|_| ()),
     Mutation::Rename(id, input) => {
-      db.rename_project_tag(id, &Name::new(&input).map_err(|error| messages::name_error(&error))?)
+      writer.rename_tag(id, &Name::new(&input).map_err(|error| messages::name_error(&error))?)
     }
-    Mutation::Merge(source, target) => db.merge_project_tags(source, target, Timestamp::now()),
-    Mutation::Delete(id) => db.delete_project_tag(id, Timestamp::now()),
+    Mutation::Merge(source, target) => writer.merge_tags(source, target),
+    Mutation::Delete(id) => writer.delete_tag(id),
   }
-  .map_err(|error| messages::store_error(&error))
+  .map_err(|error| error.message())
 }

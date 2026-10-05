@@ -53,6 +53,9 @@ pub struct ProjectFeed {
   pub revision: Signal<u64>,
   /// Counts imports: screens listing resources are mounted again after one.
   pub resources: Signal<u64>,
+  /// Whether the project's task list is shared, and how it stands with its server; `None` while
+  /// it is local.
+  pub sharing: Signal<Option<crate::sharing::project::state::ProjectSharing>>,
   /// Merge and cleanup operations that outlive a task page and are shared by its tabs.
   pub integration: IntegrationJobs,
 }
@@ -70,6 +73,13 @@ impl PartialEq for ProjectFeeds {
 impl lurq::app::component::DevtoolsInspectable for ProjectFeeds {}
 
 impl ProjectFeeds {
+  /// How the shared projects among those the window read stand with their servers, for the status
+  /// bar's server item; reading it follows their changes.
+  pub fn sharing(&self) -> Vec<crate::sharing::project::state::ProjectSharing> {
+    let feeds: Vec<ProjectFeed> = self.0.lock().values().cloned().collect();
+    feeds.iter().filter_map(|feed| feed.sharing.get()).collect()
+  }
+
   /// The feed of `project`, created empty the first time it is asked for.
   pub fn of(&self, project: ProjectId) -> ProjectFeed {
     self
@@ -84,6 +94,7 @@ impl ProjectFeeds {
         changes: Signal::new(0),
         revision: Signal::new(0),
         resources: Signal::new(0),
+        sharing: Signal::new(None),
         integration: IntegrationJobs::default(),
       })
       .clone()
@@ -102,6 +113,8 @@ impl lurq::app::component::DevtoolsInspectable for FeedProps {}
 /// Keeps one project's feed current. Renders nothing.
 pub struct FeedLoader {
   feed: ProjectFeed,
+  /// This loader asked for the shared project's first sync.
+  synced: Signal<bool>,
 }
 
 impl Component for FeedLoader {
@@ -114,6 +127,7 @@ impl Component for FeedLoader {
       .expect("the window provides the project feeds");
     Self {
       feed: feeds.of(project),
+      synced: ctx.signal(false),
     }
   }
 
@@ -129,8 +143,14 @@ impl Component for FeedLoader {
     publish(&self.feed.changes, changes);
     let revision = self.feed.revision.get();
     let resources = self.feed.resources.get();
+    let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
+    let shared = super::shared::changes(ctx, &servers);
+    publish(
+      &self.feed.sharing,
+      super::shared::sharing(ctx, (&root, shared), &self.synced),
+    );
     publish(&self.feed.connections, connections(ctx, (root.clone(), resources)));
-    publish(&self.feed.tasks, tasks(ctx, (root.clone(), revision, states)));
+    publish(&self.feed.tasks, tasks(ctx, (root.clone(), revision + shared, states)));
     let day_start = Timestamp::now().local_day_start();
     if let Some(usage) = usage(ctx, (root, revision, (states, changes), day_start)) {
       publish(&self.feed.usage, Some(usage));

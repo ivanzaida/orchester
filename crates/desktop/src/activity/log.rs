@@ -254,6 +254,7 @@ impl ActivityLog {
       let OperationSpec {
         project,
         done,
+        failed,
         target: planned,
         ..
       } = operation.spec;
@@ -261,6 +262,8 @@ impl ActivityLog {
       let outcome = if title.is_some() {
         Outcome::NotDone
       } else {
+        // The same work done after all: its earlier failures are over.
+        self.settle_failures(&failed, &target, project.as_deref());
         Outcome::Finished
       };
       self.push(Event {
@@ -388,6 +391,19 @@ impl ActivityLog {
 
   /// Newest first; a repeat of the newest finished event replaces it, so autosaves of one
   /// draft do not fill the list.
+  /// Earlier failures of the same work (`failed`, at `target` in `project`) are resolved.
+  fn settle_failures(&mut self, failed: &Message, target: &Target, project: Option<&str>) {
+    for event in &mut self.events {
+      if &event.title == failed
+        && &event.target == target
+        && event.project.as_deref() == project
+        && let Outcome::Failed { resolved, .. } = &mut event.outcome
+      {
+        *resolved = true;
+      }
+    }
+  }
+
   fn push(&mut self, event: Event) {
     if self.events.first().is_some_and(|newest| newest.repeats(&event)) {
       self.events.remove(0);

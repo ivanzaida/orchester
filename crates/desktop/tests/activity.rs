@@ -295,3 +295,19 @@ fn activity_slot_keeps_a_run_waiting_for_a_decision_beside_approvals() {
   assert!(!activity_slot(Some(&RunnerState::Online), &running).beside_approvals());
   assert!(!activity_slot(Some(&RunnerState::Starting), &waiting).beside_approvals());
 }
+
+/// The same work done after all settles its earlier failure: a save that failed and then went
+/// through no longer holds the slot.
+#[test]
+fn activity_the_same_work_done_after_all_settles_its_failure() {
+  let mut log = ActivityLog::default();
+  let failing = log.start(spec("save"), Instant::now());
+  log.fail(failing, Message::new("reason"), at(1));
+  assert!(matches!(log.slot(), Slot::Failure(_)));
+  let other = log.start(spec("other"), Instant::now());
+  log.finish(other, at(2));
+  assert!(matches!(log.slot(), Slot::Failure(_)), "other work leaves it");
+  let saved = log.start(spec("save"), Instant::now());
+  log.finish(saved, at(3));
+  assert!(matches!(log.slot(), Slot::Latest(event) if event.title().key == "save"));
+}

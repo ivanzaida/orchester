@@ -31,10 +31,10 @@ use crate::{
 const DIALOG_WIDTH: f32 = 600.0;
 const ACTIONS_HEIGHT: f32 = 76.0;
 const FIELD_HEIGHT: f32 = 40.0;
-pub(super) const BUTTON_HEIGHT: f32 = 36.0;
+pub(in crate::screens::project) const BUTTON_HEIGHT: f32 = 36.0;
 
 /// What a dialog shows.
-pub(super) struct Dialog {
+pub(in crate::screens::project) struct Dialog {
   pub id: &'static str,
   pub title: Arc<str>,
   pub explanation: Option<Arc<str>>,
@@ -49,7 +49,7 @@ pub(super) struct Dialog {
 
 /// The dialog over its backdrop, as a form that submits with `dialog.submit`. `frame` is focused when
 /// the dialog opens, so Tab starts at its first control.
-pub(super) fn dialog(ctx: &mut Ctx, frame: &ElementRef, dialog: Dialog) -> Element {
+pub(in crate::screens::project) fn dialog(ctx: &mut Ctx, frame: &ElementRef, dialog: Dialog) -> Element {
   let header = Column::new()
     .width(Dimension::Pct(100.0))
     .padding_vertical(SpacingSize::Lg)
@@ -106,7 +106,7 @@ pub(super) fn dialog(ctx: &mut Ctx, frame: &ElementRef, dialog: Dialog) -> Eleme
 }
 
 /// A button of the action bar; without `run` it is unavailable.
-pub(super) fn button(
+pub(in crate::screens::project) fn button(
   id: &'static str,
   label: Arc<str>,
   icon: Option<Icon>,
@@ -126,12 +126,16 @@ pub(super) fn button(
 }
 
 /// Cancel, which closes the dialog.
-pub(super) fn cancel(ctx: &Ctx, id: &'static str, close: Arc<dyn Fn() + Send + Sync>) -> Element {
+pub(in crate::screens::project) fn cancel(ctx: &Ctx, id: &'static str, close: Arc<dyn Fn() + Send + Sync>) -> Element {
   button(id, ctx.t("common.cancel"), None, Some(close)).render(ctx)
 }
 
 /// A field: its 12/500 label over `control`, then `notes` (a hint, an error).
-pub(super) fn field(label: &str, control: impl Into<Element>, notes: impl IntoIterator<Item = Element>) -> Element {
+pub(in crate::screens::project) fn field(
+  label: &str,
+  control: impl Into<Element>,
+  notes: impl IntoIterator<Item = Element>,
+) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -143,7 +147,7 @@ pub(super) fn field(label: &str, control: impl Into<Element>, notes: impl IntoIt
 }
 
 /// A hint under a field (`IUyCh`): 10 muted at 1.5, wrapping.
-pub(super) fn hint(text: &str) -> Element {
+pub(in crate::screens::project) fn hint(text: &str) -> Element {
   Text::new(text)
     .variant(ExtraTypography::Hint.role())
     .width(Dimension::Pct(100.0))
@@ -151,7 +155,7 @@ pub(super) fn hint(text: &str) -> Element {
 }
 
 /// What is wrong with a field's value, under it.
-pub(super) fn error(id: impl Into<Arc<str>>, text: &str) -> Element {
+pub(in crate::screens::project) fn error(id: impl Into<Arc<str>>, text: &str) -> Element {
   Column::new()
     .id(id.into())
     .width(Dimension::Pct(100.0))
@@ -160,7 +164,7 @@ pub(super) fn error(id: impl Into<Arc<str>>, text: &str) -> Element {
 }
 
 /// A 40 high single-line input; `mono` for an address or a username.
-pub(super) fn input(ctx: &Ctx, id: &'static str, value: &Signal<String>, mono: bool) -> TextInput {
+pub(in crate::screens::project) fn input(ctx: &Ctx, id: &'static str, value: &Signal<String>, mono: bool) -> TextInput {
   let typography = if mono {
     ExtraTypography::MonoField.role()
   } else {
@@ -170,6 +174,6 @@ pub(super) fn input(ctx: &Ctx, id: &'static str, value: &Signal<String>, mono: b
 }
 
 /// A password input: masked on screen and in the MCP tree.
-pub(super) fn password(ctx: &Ctx, id: &'static str, value: &Signal<String>) -> TextInput {
+pub(in crate::screens::project) fn password(ctx: &Ctx, id: &'static str, value: &Signal<String>) -> TextInput {
   input(ctx, id, value, false).mask()
 }

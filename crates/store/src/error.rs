@@ -44,6 +44,20 @@ pub enum StoreError {
   TaskNotEditable { task: TaskId, source: EditError },
   #[error("a task batch must contain at least one task")]
   EmptyBatch,
+  /// The task is a shared task: it changes on the server, and the cache only follows what the
+  /// server confirmed. Nothing was changed.
+  #[error("task {0} is shared; it changes on the server")]
+  SharedTask(TaskId),
+  /// The project's task list is shared: its new tasks and its tags are made on the server.
+  /// Nothing was changed.
+  #[error("the project's task list is shared; this change is made on the server")]
+  SharedProject,
+  /// The project's task list is local: it has no server project.
+  #[error("the project's task list is not shared")]
+  NotShared,
+  /// The project is shared already; nothing was changed.
+  #[error("the project's task list is shared already")]
+  AlreadyShared,
   #[error("task {0} no longer uses its reviewed pipeline; review again")]
   TaskGroupReviewChanged(TaskId),
   /// A task of a group being queued is not a draft ready for its first run; nothing was queued.

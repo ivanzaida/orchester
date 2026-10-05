@@ -74,10 +74,11 @@ impl NewTaskForm {
       ready,
       saving: saving.is_pending(),
       // Only a save that failed last shows its error; asking to confirm Canceled is not one.
-      save_error: saving
-        .error
-        .clone()
-        .filter(|error| saving.is_rejected() && !super::persistence::needs_cancel_confirmation(error)),
+      save_error: saving.error.clone().filter(|error| {
+        saving.is_rejected()
+          && !super::persistence::needs_cancel_confirmation(error)
+          && !super::persistence::met_newer_version(error)
+      }),
       starting: starting.is_pending(),
       retrying: self.retrying.get(),
       starting_pipeline: starting
@@ -86,6 +87,7 @@ impl NewTaskForm {
         .flatten(),
       queued_task,
       run_problems: starting.error.clone().filter(|_| !starting.is_pending()),
+      newer_version: self.conflict.get().map(|conflict| conflict.by),
     }
   }
 }

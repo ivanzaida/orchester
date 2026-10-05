@@ -11,4 +11,7 @@ mod rows;
 pub use app_db::{AppDb, PreviousSession, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoredServer};
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
-pub use project_db::{DecisionCounts, ProjectDb, ReadOnlyProjectDb};
+pub use project_db::{
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, DecisionCounts, NotSent, ProjectDb, ReadOnlyProjectDb,
+  SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
+};

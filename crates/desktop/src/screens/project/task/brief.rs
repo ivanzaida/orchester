@@ -109,6 +109,11 @@ pub(super) fn this_task(
 ) -> Element {
   let details = detail.task.details();
   let pipeline = match details.pipeline {
+    None if let Some(slug) = &detail.missing_pipeline => styled_property(
+      &ctx.t("runs.summary.pipeline"),
+      &ctx.t_args("tasks.pipeline.missing", [("slug", slug.as_str())]),
+      ValueStyle::Unset,
+    ),
     None => styled_property(
       &ctx.t("runs.summary.pipeline"),
       &ctx.t("runs.summary.noPipeline"),

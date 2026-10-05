@@ -17,10 +17,8 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, TagId},
-  task::organization::{ChangeActor, OrganizationError, Priority, TaskOrganization, WorkflowStatus},
-  time::Timestamp,
+  task::organization::{OrganizationError, Priority, TaskOrganization, WorkflowStatus},
 };
-use orchester_store::ProjectDb;
 
 use super::super::{
   ProjectNav,
@@ -36,6 +34,7 @@ use crate::{
     organization::{
       OrganizationValue, PickerAppearance, PriorityChoice, WorkflowChoice, priority_select, workflow_select,
     },
+    writer::{TaskWriter, WriteError},
   },
   theme::ExtraSpacing,
   ui::{
@@ -166,9 +165,10 @@ fn action(ctx: &mut Ctx, asked: &Signal<AskedRun>) -> Action {
   let props = ctx.props::<OrganizationProps>();
   let (root, task) = (props.root.clone(), props.detail.task.id());
   let runners = ctx.use_context::<Runners>().expect("root provides runners");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   let asked = asked.clone();
   ctx.future_action(move |mutation: Mutation| {
-    let (root, runners, asked) = (root.clone(), runners.clone(), asked.clone());
+    let (root, runners, asked, servers) = (root.clone(), runners.clone(), asked.clone(), servers.clone());
     async move {
       // Canceled stops only the run the confirmation named; otherwise it names the active run.
       if let Mutation::Status(WorkflowStatus::Canceled, stop) = mutation
@@ -180,23 +180,21 @@ fn action(ctx: &mut Ctx, asked: &Signal<AskedRun>) -> Action {
         return Err(refused.message());
       }
       background::run(move || {
-        let mut db = ProjectDb::open(&root)?;
-        let value = db.task_organization(task)?;
-        let value = match mutation {
+        let mut writer = TaskWriter::open(&root, &servers)?;
+        writer.update_organization(task, |value| match mutation {
           Mutation::Status(status, _) => value.with_status(status),
           Mutation::Priority(priority) => value.with_priority(priority),
           Mutation::Tags(tags) => value.with_tags(tags),
-        };
-        db.set_task_organization(task, &value, ChangeActor::Person, Timestamp::now())?;
-        Ok::<_, orchester_store::StoreError>(OrganizationValue(value))
+        })?;
+        Ok::<_, WriteError>(OrganizationValue(writer.db().task_organization(task)?))
       })
       .await?
       .map_err(|error| {
         // A run that started since the check: the store names it, and the confirmation stops it.
-        if let orchester_store::StoreError::Organization(OrganizationError::StopRunFirst(run)) = &error {
+        if let Some(orchester_store::StoreError::Organization(OrganizationError::StopRunFirst(run))) = error.store() {
           asked.set(AskedRun(Some(*run)));
         }
-        messages::store_error(&error)
+        error.message()
       })
     }
   })

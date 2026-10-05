@@ -10,7 +10,7 @@ mod add;
 mod add_result;
 mod admin_dialogs;
 mod details;
-mod frame;
+pub(super) mod frame;
 mod labels;
 mod list;
 mod password;
@@ -47,7 +47,7 @@ use crate::{
   navigation::route::{Page, Route, ServerTab},
   sharing::{
     ServerEntry,
-    feed::{ServerFeed, ServerList, SignInRequest},
+    feed::{AddRequest, ReturnTo, ServerFeed, ServerList, SignInRequest},
   },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -103,7 +103,8 @@ impl std::fmt::Debug for FirstPassword {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ServerDialog {
   Closed,
-  Add,
+  /// *Add server*, with the address a discovery file named filled in.
+  Add(Option<String>),
   SignIn(ServerId),
   /// The person's own password; `others` names the sessions it signs out.
   ChangePassword(ServerId, Arc<[String]>),
@@ -145,6 +146,23 @@ impl Component for ServersScreen {
     };
     take(feed.sign_in.get_untracked());
     ctx.watch(&feed.sign_in, move |requested| take(*requested));
+    // A project's discovery offer: Add server opens with the file's address, not yet checked.
+    let (request, open) = (feed.add.clone(), dialog.clone());
+    let add = move |requested: &AddRequest| {
+      if let AddRequest(Some(address)) = requested {
+        request.set(AddRequest(None));
+        open.set(ServerDialog::Add(Some(address.clone())));
+      }
+    };
+    add(&feed.add.get_untracked());
+    ctx.watch(&feed.add, move |requested| add(requested));
+    // A sign-in that did not go through returns nowhere: closing the dialog forgets where to.
+    let return_to = feed.return_to.clone();
+    ctx.watch(&dialog, move |shown| {
+      if *shown == ServerDialog::Closed && return_to.get_untracked().0.is_some() {
+        return_to.set(ReturnTo(None));
+      }
+    });
     Self {
       dialog,
       revision: ctx.signal(0_u64),
@@ -196,7 +214,7 @@ impl ServersScreen {
       .icon(Icon::Plus)
       .id("add-server")
       .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
-      .on_click(move || dialog.set(ServerDialog::Add))
+      .on_click(move || dialog.set(ServerDialog::Add(None)))
       .render(ctx)
   }
 
@@ -225,7 +243,13 @@ impl ServersScreen {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(list)
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(details))
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .height(Dimension::Pct(100.0))
+          .child(details),
+      )
       .into()
   }
 
@@ -241,7 +265,7 @@ impl ServersScreen {
     };
     let content = match mode {
       ServerDialog::Closed => return closed(),
-      ServerDialog::Add => add::mount(ctx, &context, list),
+      ServerDialog::Add(prefill) => add::mount(ctx, &context, list, prefill),
       ServerDialog::SignIn(server) => match entry(server) {
         Some(entry) => sign_in::mount(ctx, &context, entry),
         // A server just added appears in the list a moment later.

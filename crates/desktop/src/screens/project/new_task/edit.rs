@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{task::Task, tokens::grouped};
+use orchester_core::{
+  task::{Task, TaskDetails, organization::TaskOrganization},
+  tokens::grouped,
+};
 
 use super::{NewTaskForm, PipelineSelection, brief::Criterion};
 use crate::{
@@ -42,8 +45,18 @@ pub(super) fn open(ctx: &Ctx, form: &NewTaskForm, editing: &Editing) {
 /// Fills the form with `task`'s saved details; an empty criteria list keeps one empty row to type
 /// in, as a new form has.
 pub(super) fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
-  form.organization.seed(task.organization());
-  let details = task.details();
+  fill(ctx, form, task.details(), task.organization());
+}
+
+/// Fills the form with `details` and `organization`, e.g. what a save stored after merging the
+/// person's change with someone else's.
+pub(super) fn fill(ctx: &Ctx, form: &NewTaskForm, details: &TaskDetails, organization: &TaskOrganization) {
+  form.organization.seed(organization);
+  fill_details(ctx, form, details);
+}
+
+/// Fills the content fields with `details`, e.g. the versions the person chose in a conflict.
+pub(super) fn fill_details(ctx: &Ctx, form: &NewTaskForm, details: &TaskDetails) {
   form.title.set(details.title.as_str().to_owned());
   form.brief.set(details.brief.clone());
   let mut criteria: Vec<Criterion> = (0..)

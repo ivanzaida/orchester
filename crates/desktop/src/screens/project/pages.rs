@@ -60,6 +60,8 @@ pub struct Shown {
   pub resources: u64,
   pub tasks: TasksState,
   pub usage: Option<ProjectUsage>,
+  /// How the task list stands with its server; `None` while the project is local.
+  pub sharing: Option<crate::sharing::project::state::ProjectSharing>,
 }
 
 /// The screen of the page the path names. A section (pipelines, instructions, agents, secrets,
@@ -98,6 +100,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         agent_slots: shown.status.work().map(|work| work.agent_slots),
         tab,
         tasks: shown.tasks,
+        sharing: shown.sharing,
       },
     ),
     Page::ProjectTags => ctx.mount_keyed::<super::tag_manager::TagManager>("project-tags", open),

@@ -62,7 +62,9 @@ impl ProjectDb {
         |row| row.get(0),
       )?;
       match task_selection::assign_pipeline(&mut task, has_run, pipeline) {
-        Ok(()) => update_task(&transaction, &task)?,
+        Ok(()) => {
+          update_task(&transaction, &task)?;
+        }
         Err(reason) => skipped.push((*id, reason)),
       }
     }

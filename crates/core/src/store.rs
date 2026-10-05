@@ -34,7 +34,8 @@ use crate::{
     RunNumber, StepOutput,
   },
   secret::Secret,
-  task::{Task, TaskDetails},
+  sharing::TaskRevision,
+  task::{Task, TaskDetails, TaskUpdate},
   time::Timestamp,
   tokens::TokensUsed,
 };
@@ -56,12 +57,14 @@ pub trait TaskStore {
   /// All tasks of the project, ordered by number.
   fn tasks(&self) -> Result<Vec<Task>, Self::Error>;
 
-  /// Persists the details and status of an existing task.
-  fn save_task(&mut self, task: &Task) -> Result<(), Self::Error>;
+  /// Persists the details and status of an existing task, read at `task.revision()`. A task changed
+  /// since is not overwritten: the result is a conflict with the current task.
+  fn save_task(&mut self, task: &Task) -> Result<TaskUpdate, Self::Error>;
 
-  /// Replaces the details of `id` in place. A queued task with no run is locked; existing runs
+  /// Replaces the details of `id`, read at revision `read`, in place; a task changed since is a
+  /// conflict, as for [`TaskStore::save_task`]. A queued task with no run is locked; existing runs
   /// keep their original task content for their prompts.
-  fn update_task(&mut self, id: TaskId, details: TaskDetails) -> Result<Task, Self::Error>;
+  fn update_task(&mut self, id: TaskId, read: TaskRevision, details: TaskDetails) -> Result<TaskUpdate, Self::Error>;
 }
 
 /// Project settings. Written by the desktop; the runner reads them.

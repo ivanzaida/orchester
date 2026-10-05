@@ -7,6 +7,7 @@
 
 mod address;
 mod error;
+mod sharing;
 
 use std::time::Duration;
 
@@ -27,8 +28,8 @@ pub use self::{
   error::ClientError,
 };
 use crate::{
-  ApiError, CreateUser, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse, SignIn, SignedIn, User,
-  UserChanges, UserCreated, UserResponse, UsersResponse,
+  ApiError, CreateUser, PasswordChange, PasswordReset, ServerInfo, Session, SessionsResponse, SharingErrorDetails,
+  SignIn, SignedIn, User, UserChanges, UserCreated, UserResponse, UsersResponse,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -232,7 +233,22 @@ async fn refusal(response: Response, status: StatusCode) -> ClientError {
       status,
       code: error.error,
       retry_after,
+      details: details(&bytes).map(Box::new),
     },
     Err(_) => ClientError::NotOrchester { status },
   }
+}
+
+/// The details of a refusal: its fields beside the code and the English message. A refusal without
+/// any, or with fields the contract does not know, has none.
+fn details(bytes: &[u8]) -> Option<SharingErrorDetails> {
+  let serde_json::Value::Object(mut fields) = serde_json::from_slice(bytes).ok()? else {
+    return None;
+  };
+  fields.remove("error");
+  fields.remove("message");
+  if fields.is_empty() {
+    return None;
+  }
+  serde_json::from_value(serde_json::Value::Object(fields)).ok()
 }

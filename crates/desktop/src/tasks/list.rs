@@ -326,6 +326,10 @@ pub enum PipelineLabel {
   },
   /// The chosen pipeline has no published version in this project any more.
   Unavailable,
+  /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
+  Missing {
+    slug: Arc<str>,
+  },
 }
 
 impl PipelineLabel {
@@ -349,6 +353,7 @@ impl PipelineLabel {
         .with("name", name.to_string())
         .with("version", version.to_string()),
       Self::Unavailable => Message::new("tasks.pipeline.unavailable"),
+      Self::Missing { slug } => Message::new("tasks.pipeline.missing").with("slug", slug.to_string()),
     }
   }
 }

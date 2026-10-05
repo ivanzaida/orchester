@@ -1,7 +1,8 @@
 //! Create & run on the new task form (02.09 `l2YA4`): check that the run can start, save the
 //! task and queue it, then ask the runner to start its run. Every step is safe to retry: the
 //! new draft is saved under the form's batch key or an existing draft is edited in place;
-//! queueing a queued task changes nothing, and the run is started under the form's run key.
+//! queueing a queued task changes nothing, and the run is started under the form's run key. A
+//! shared task is claimed for the person before it is queued: someone else's task is not changed.
 
 use std::{collections::BTreeMap, path::Path};
 
@@ -10,26 +11,39 @@ use orchester_core::{
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{PreflightInput, PreflightProblem, RunLimit, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
-  task::{QueueError, Task, TaskDetails, TaskStatus},
+  task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
   tokens::compact_tokens,
 };
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::data::{PipelineChoice, SaveTarget, pinned_pipeline, save_organized_to, save_to};
+use super::{
+  data::{PipelineChoice, SaveTarget, pinned_pipeline, save_to},
+  writer::{TaskWriter, WriteError},
+};
 use crate::{
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
+  sharing::{
+    Servers,
+    project::{WorkClaim, WorkRefusal},
+  },
 };
 
 /// Why the task was not queued for a run.
 #[derive(Debug)]
 pub enum QueueFailure {
   Store(StoreError),
+  /// The shared project's server did not take the change.
+  Write(Box<WriteError>),
+  /// The shared task's claim was not taken: someone else holds it, or the server cannot be asked.
+  Claim(Box<WorkRefusal>),
   /// The run could not start with the task's configuration; nothing was saved.
   Preflight(Vec<PreflightProblem>),
   Queue(QueueError),
+  /// The task was changed since the form read it: nothing was saved or queued.
+  Changed,
 }
 
 impl From<StoreError> for QueueFailure {
@@ -38,12 +52,24 @@ impl From<StoreError> for QueueFailure {
   }
 }
 
+impl From<WriteError> for QueueFailure {
+  fn from(error: WriteError) -> Self {
+    match error {
+      WriteError::Store(error) => Self::Store(error),
+      error => Self::Write(Box::new(error)),
+    }
+  }
+}
+
 impl QueueFailure {
   pub fn messages(&self) -> Vec<Message> {
     match self {
       Self::Store(error) => vec![messages::store_error(error)],
+      Self::Write(error) => vec![error.message()],
+      Self::Claim(refusal) => vec![refusal.message()],
       Self::Preflight(problems) => problems.iter().map(preflight_message).collect(),
       Self::Queue(_) => vec![Message::new("runs.start.incomplete")],
+      Self::Changed => vec![Message::new("tasks.conflict.changedMeanwhile")],
     }
   }
 }
@@ -52,10 +78,13 @@ impl QueueFailure {
 pub struct QueuedStart {
   pub task: Task,
   pub pipeline: PipelineChoice,
+  /// The run claim queuing took or confirmed; a start that fails releases it if queuing took it.
+  pub claim: WorkClaim,
 }
 
 pub fn queue_organized_in(
   repo_root: &Path,
+  servers: &Servers,
   target: SaveTarget,
   details: TaskDetails,
   organization: (
@@ -64,60 +93,118 @@ pub fn queue_organized_in(
   ),
   version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
-  let mut db = ProjectDb::open(repo_root)?;
+  let mut writer = TaskWriter::open(repo_root, servers)?;
   let existing = match target {
-    SaveTarget::Task(task) => db.task(task)?,
-    SaveTarget::New(batch) => db.task_by_batch(batch)?,
+    SaveTarget::Task(task, _) => writer.db().task(task)?,
+    SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
   };
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
-    db.check_task_readiness(task.id())?;
-    return queued_start(&db, task);
+    writer.db().check_task_readiness(task.id())?;
+    return queued_start(writer.db(), task);
   }
-  let problems = check(&db, &details, version)?;
+  let problems = check(writer.db(), &details, version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
   }
-  let task = save_organized_to(&mut db, target, details.clone(), organization, Timestamp::now())?;
-  db.check_task_readiness(task.id())?;
-  queue_in(repo_root, SaveTarget::Task(task.id()), details, version)
+  let task = saved(writer.save_organized(target, details.clone(), organization, Timestamp::now())?)?;
+  writer.db().check_task_readiness(task.id())?;
+  drop(writer);
+  queue_in(
+    repo_root,
+    servers,
+    SaveTarget::Task(task.id(), task.revision()),
+    details,
+    version,
+  )
 }
 
 /// Checks the selected configuration, then saves and queues the task. A queued task reached by
-/// an idempotent retry keeps its original version, even if a newer version was published.
+/// an idempotent retry keeps its original version, even if a newer version was published. A run
+/// claim taken for a shared task is released when the task is not queued after all.
 pub fn queue_in(
   repo_root: &Path,
+  servers: &Servers,
   target: SaveTarget,
   details: TaskDetails,
   selected_version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let existing = match target {
-    SaveTarget::New(batch) => db.task_by_batch(batch)?,
-    SaveTarget::Task(id) => db.task(id)?,
-  };
-  if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
-    db.check_task_readiness(task.id())?;
-    return queued_start(&db, task);
+  let mut claimed = WorkClaim::default();
+  match queue_claimed((repo_root, servers, &mut claimed), target, details, selected_version) {
+    Ok(queued) => Ok(QueuedStart {
+      claim: claimed,
+      ..queued
+    }),
+    Err(failure) => {
+      if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        runtime.block_on(claimed.release(servers));
+      }
+      Err(failure)
+    }
   }
-  let problems = check(&db, &details, selected_version)?;
+}
+
+fn queue_claimed(
+  (repo_root, servers, claimed): (&Path, &Servers, &mut WorkClaim),
+  target: SaveTarget,
+  details: TaskDetails,
+  selected_version: VersionNumber,
+) -> Result<QueuedStart, QueueFailure> {
+  let mut writer = TaskWriter::open(repo_root, servers)?;
+  let existing = match target {
+    SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
+    SaveTarget::Task(id, _) => writer.db().task(id)?,
+  };
+  if let Some(task) = &existing {
+    *claimed = std::mem::take(claimed).and(claim(&writer, servers, task.id())?);
+  }
+  if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
+    writer.db().check_task_readiness(task.id())?;
+    return queued_start(writer.db(), task);
+  }
+  let problems = check(writer.db(), &details, selected_version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
   }
   // No fallible pipeline read may follow a successful transition to Queued: the form must
   // receive that state even if the database becomes unreadable immediately afterwards.
-  let selected_pipeline = load_pipeline(&db, details.pipeline, selected_version)?;
-  let mut task = save_to(&mut db, target, details, Timestamp::now())?;
-  db.check_task_readiness(task.id())?;
+  let selected_pipeline = load_pipeline(writer.db(), details.pipeline, selected_version)?;
+  let mut task = saved(save_to(&mut writer, target, details, Timestamp::now())?)?;
+  writer.db().check_task_readiness(task.id())?;
   if task.status() == TaskStatus::Draft {
+    *claimed = std::mem::take(claimed).and(claim(&writer, servers, task.id())?);
     task.queue(selected_version).map_err(QueueFailure::Queue)?;
-    db.save_task(&task)?;
+    let task = saved(writer.save_task(&task)?)?;
     return Ok(QueuedStart {
       task,
       pipeline: selected_pipeline,
+      claim: WorkClaim::default(),
     });
   }
   // An idempotent save may return a task queued by another attempt; reload its persisted pin.
-  queued_start(&db, task)
+  queued_start(writer.db(), task)
+}
+
+/// Takes the run claim of a shared `task` before anything changes it for a run; a local task needs
+/// none. Waits on the worker it runs on.
+fn claim(writer: &TaskWriter, servers: &Servers, task: orchester_core::id::TaskId) -> Result<WorkClaim, QueueFailure> {
+  let TaskWriter::Shared(store) = writer else {
+    return Ok(WorkClaim::default());
+  };
+  let repo_root = store.server().repo_root();
+  let runtime = tokio::runtime::Handle::try_current().map_err(|_| {
+    QueueFailure::Claim(Box::new(WorkRefusal::Sharing {
+      source: crate::sharing::SharingError::Interrupted,
+      server: None,
+    }))
+  })?;
+  runtime
+    .block_on(servers.claim_for_work(repo_root, task))
+    .map_err(|refusal| QueueFailure::Claim(Box::new(refusal)))
+}
+
+/// The saved task; a task changed since it was read is not saved, and nothing goes on.
+fn saved(update: TaskUpdate) -> Result<Task, QueueFailure> {
+  update.saved().ok_or(QueueFailure::Changed)
 }
 
 fn queued_start(db: &ProjectDb, task: Task) -> Result<QueuedStart, QueueFailure> {
@@ -125,7 +212,11 @@ fn queued_start(db: &ProjectDb, task: Task) -> Result<QueuedStart, QueueFailure>
     .pipeline_version()
     .ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineVersionNotPinned]))?;
   let pipeline = load_pipeline(db, task.details().pipeline, number)?;
-  Ok(QueuedStart { task, pipeline })
+  Ok(QueuedStart {
+    task,
+    pipeline,
+    claim: WorkClaim::default(),
+  })
 }
 
 fn load_pipeline(

@@ -164,22 +164,50 @@ fn continue_action(ctx: &mut Ctx) -> ContinueAction {
   let runners = ctx
     .use_context::<Runners>()
     .expect("the root provides Runners before mounting the recovery");
+  let servers = crate::sharing::feed::ServerFeed::of(ctx).servers;
   ctx.future_action(move |runs: Arc<[InterruptedRun]>| {
-    let runners = runners.clone();
+    let (runners, servers) = (runners.clone(), servers.clone());
     async move {
-      for (root, name, ids) in by_project(&runs) {
-        let continued = runners
-          .continue_runs(&root, &name, ids)
-          .await
-          .map_err(|error| control_message(&error))?;
-        if let Some(refused) = continued.refused.into_iter().next() {
-          tracing::warn!(run = %refused.run, rejection = ?refused.rejection, "an interrupted run did not continue");
-          return Err(control_message(&RunRequestError::Rejected(refused.rejection)));
+      // A run of a shared task continues only under the person's claim; on any failure the
+      // claims this recovery took are released (a run that did continue keeps its claim).
+      let mut claims = Vec::new();
+      let continued = continue_claimed(&runners, &servers, &runs, &mut claims).await;
+      if continued.is_err() {
+        for claim in claims {
+          claim.release(&servers).await;
         }
       }
-      Ok(())
+      continued
     }
   })
+}
+
+/// Takes the claims of `runs` into `claims`, then asks each project's runner to continue them.
+async fn continue_claimed(
+  runners: &Runners,
+  servers: &crate::sharing::Servers,
+  runs: &[InterruptedRun],
+  claims: &mut Vec<crate::sharing::project::WorkClaim>,
+) -> Result<(), Message> {
+  for run in runs {
+    claims.push(
+      servers
+        .claim_for_work(&run.project_root, run.task)
+        .await
+        .map_err(|refusal| refusal.message())?,
+    );
+  }
+  for (root, name, ids) in by_project(runs) {
+    let continued = runners
+      .continue_runs(&root, &name, ids)
+      .await
+      .map_err(|error| control_message(&error))?;
+    if let Some(refused) = continued.refused.into_iter().next() {
+      tracing::warn!(run = %refused.run, rejection = ?refused.rejection, "an interrupted run did not continue");
+      return Err(control_message(&RunRequestError::Rejected(refused.rejection)));
+    }
+  }
+  Ok(())
 }
 
 /// The runs grouped by project, in the order the projects first appear.

@@ -39,7 +39,12 @@ pub(super) fn topbar(
     .rounded(RadiusSize::Sm)
     .hovered_style(Style::new().background(PaletteColor::AccentMuted))
     .child(icon(Icon::ArrowLeft, IconSize::Option, PaletteColor::TextSecondary));
-  let state = if form.starting {
+  let state = if let Some(by) = &form.newer_version {
+    by.as_ref().map_or_else(
+      || ctx.t("tasks.conflict.notSaved"),
+      |name| ctx.t_args("tasks.conflict.topbar", [("name", &**name)]),
+    )
+  } else if form.starting {
     ctx.t("tasks.new.starting")
   } else if form.saving {
     ctx.t(if form.editing {
@@ -60,6 +65,7 @@ pub(super) fn topbar(
   } else {
     ctx.t("tasks.new.notSaved")
   };
+  let conflicted = form.newer_version.is_some();
   let state = Text::new(&state).variant(TypographyStyle::Caption).id("new-task-state");
   // Changes to a saved draft that are not saved yet read in `$text` (`ctHXE`).
   let state = if form.editing && !form.saved && !form.saving && !form.starting && !form.queued {
@@ -77,6 +83,7 @@ pub(super) fn topbar(
     .child(back)
     .child(Text::new(&edit::breadcrumb(ctx, project, editing, retried)).variant(TypographyStyle::Description))
     .child(Spacer::new().flex(1.0))
+    .with_children(conflicted.then(|| icon(Icon::GitCompareArrows, IconSize::Small, PaletteColor::TextSecondary)))
     .child(state)
     .into()
 }

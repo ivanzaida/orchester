@@ -6,9 +6,12 @@ use orchester_core::{
   revision::Revision,
   run::BranchName,
   store::{MergeStore, RunStore, TaskStore},
-  task::organization::{
-    BlockingTask, ChangeActor, DependencyGate, OrganizationError, Priority, TaskFilter, TaskOrganization,
-    WorkflowStatus,
+  task::{
+    TaskUpdate,
+    organization::{
+      BlockingTask, ChangeActor, DependencyGate, OrganizationError, Priority, TaskFilter, TaskOrganization,
+      WorkflowStatus,
+    },
   },
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -231,8 +234,14 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
   details.title = name("Changed title");
   let canceled = task.organization().clone().with_status(WorkflowStatus::Canceled);
   assert!(
-    db.update_organized_task(task.id(), details, (task.organization(), &canceled), at(30))
-      .is_err()
+    db.update_organized_task(
+      task.id(),
+      task.revision(),
+      details,
+      (task.organization(), &canceled),
+      at(30)
+    )
+    .is_err()
   );
   assert_eq!(
     db.task(task.id()).expect("read").expect("task").details(),
@@ -501,16 +510,33 @@ fn organization_form_save_keeps_the_status_set_meanwhile() {
   details.brief = "Say hello.".into();
   details.acceptance_criteria = vec!["It greets.".into()];
   details.pipeline = Some(orchester_core::id::ResourceId::generate());
+  // Orchester's change raised the revision the form read: the save is a conflict, and the form
+  // sends again on the current revision.
+  let Ok(TaskUpdate::Conflict { current }) =
+    db.update_organized_task(task.id(), task.revision(), details.clone(), (&loaded, &loaded), at(20))
+  else {
+    panic!("Orchester changed the task after the form read it");
+  };
   let saved = db
-    .update_organized_task(task.id(), details, (&loaded, &loaded), at(20))
-    .expect("save");
+    .update_organized_task(task.id(), current.revision(), details, (&loaded, &loaded), at(20))
+    .expect("save")
+    .saved()
+    .expect("saved on the current revision");
   assert_eq!(saved.organization().status(), WorkflowStatus::InReview);
   assert_eq!(db.task_organization_history(task.id()).expect("history").len(), rows);
   // A priority the person changed is saved; the status stays In review.
   let edited = loaded.clone().with_priority(Priority::High);
   let saved = db
-    .update_organized_task(task.id(), saved.details().clone(), (&loaded, &edited), at(21))
-    .expect("save");
+    .update_organized_task(
+      task.id(),
+      saved.revision(),
+      saved.details().clone(),
+      (&loaded, &edited),
+      at(21),
+    )
+    .expect("save")
+    .saved()
+    .expect("saved as read");
   assert_eq!(saved.organization().status(), WorkflowStatus::InReview);
   assert_eq!(saved.organization().priority(), Priority::High);
 }

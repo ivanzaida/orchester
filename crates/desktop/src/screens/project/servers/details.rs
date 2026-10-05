@@ -8,9 +8,12 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Spacer, Text, TextOverflow},
   core::Signal,
-  layout::{Alignment, layout_kind::ScrollState},
+  layout::{
+    Alignment,
+    layout_kind::{ScrollState, ShrinkLimit},
+  },
   node::{Element, dimension::Dimension},
 };
 
@@ -189,11 +192,27 @@ fn header(ctx: &Ctx, props: &DetailsProps, sign_out: &SignOutAction) -> Element 
     .spacing(SpacingSize::Sm)
     .child(
       Row::new()
+        .id("server-details-header")
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Stack.role())
         .align_items(Alignment::Center)
-        .child(Text::new(&entry.stored.name).variant(ExtraTypography::InspectorTitle.role()))
-        .child(status_label(glyph, &state))
+        // In a narrow window the name gives way first, then the label: the action stays whole.
+        .child(
+          Text::new(&entry.stored.name)
+            .id("server-details-name")
+            .variant(ExtraTypography::InspectorTitle.role())
+            .nowrap()
+            .text_overflow(TextOverflow::Elipsis)
+            .flex_shrink(1.0)
+            .shrink_order(0),
+        )
+        .child(
+          Row::new()
+            .child(status_label(glyph, &state))
+            .flex_shrink(1.0)
+            .shrink_order(1)
+            .shrink_limit(ShrinkLimit::Drop),
+        )
         .child(Spacer::new().flex(1.0))
         .child(account_action(ctx, props, sign_out)),
     )

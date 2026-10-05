@@ -4,9 +4,9 @@
 //! each signed-in server's connection ([`monitor`]).
 //!
 //! A server is *in use* while an account is signed in to it from this computer, also after the
-//! server stopped accepting the token (signed out): until shared projects exist (S2b), those are the
-//! servers the status bar shows. Every request reports how the server answered, so a refused token
-//! shows as signed out at once and a server that stopped answering is retried with the backoff.
+//! server stopped accepting the token (signed out). Every request reports how the server answered, so
+//! a refused token shows as signed out at once and a server that stopped answering is retried with
+//! the backoff. Shared projects (S2b) are in [`project`].
 
 mod account;
 mod connection;
@@ -15,9 +15,11 @@ mod error;
 pub mod feed;
 mod monitor;
 mod password;
+pub mod project;
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
+  path::{Path, PathBuf},
   sync::Arc,
   time::{Duration, Instant},
 };
@@ -74,6 +76,12 @@ struct Inner {
   watched: Mutex<HashMap<ServerId, Watched>>,
   /// Counts changes of the list and of connections, for the monitor and the screens.
   changes: watch::Sender<u64>,
+  /// Counts changes of shared projects' caches, for the screens.
+  shared: watch::Sender<u64>,
+  /// Counts requests to read the shared projects' caches again now.
+  sync: watch::Sender<u64>,
+  /// The projects being shared now: their tasks take no change from the screens meanwhile.
+  sharing_now: Mutex<HashSet<PathBuf>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -109,6 +117,9 @@ impl Servers {
         schedule,
         watched: Mutex::new(HashMap::new()),
         changes: watch::channel(0).0,
+        shared: watch::channel(0).0,
+        sync: watch::channel(0).0,
+        sharing_now: Mutex::new(HashSet::new()),
       }),
     }
   }
@@ -120,6 +131,51 @@ impl Servers {
 
   fn changed(&self) {
     self.inner.changes.send_modify(|count| *count += 1);
+  }
+
+  /// Wakes whenever a shared project's cache changed.
+  pub fn subscribe_shared(&self) -> watch::Receiver<u64> {
+    self.inner.shared.subscribe()
+  }
+
+  fn shared_changed(&self) {
+    self.inner.shared.send_modify(|count| *count += 1);
+  }
+
+  fn subscribe_sync(&self) -> watch::Receiver<u64> {
+    self.inner.sync.subscribe()
+  }
+
+  /// Whether the project at `root` is being shared now: its tasks take no change meanwhile.
+  pub fn share_in_progress(&self, root: &Path) -> bool {
+    self.inner.sharing_now.lock().contains(root)
+  }
+
+  /// Reads the shared projects' caches again now (opening a project, *Try now*, *Check again*).
+  pub fn sync_now(&self) {
+    self.inner.sync.send_modify(|count| *count += 1);
+  }
+
+  /// Asks `server` again now (*Try now*): the monitor checks it at once, then the caches are read.
+  pub fn retry_now(&self, server: ServerId) {
+    {
+      let mut watched = self.inner.watched.lock();
+      if let Some(watched) = watched.get_mut(&server).filter(|watched| watched.due.is_some()) {
+        watched.due = Some(Instant::now());
+      }
+    }
+    self.changed();
+    self.sync_now();
+  }
+
+  /// The connection of `server` as last seen: checking until it answered this session.
+  pub fn connection(&self, server: ServerId) -> Connection {
+    self
+      .inner
+      .watched
+      .lock()
+      .get(&server)
+      .map_or(Connection::Checking, |watched| watched.connection)
   }
 
   /// The servers with their connections, in the order they were added. Blocking.

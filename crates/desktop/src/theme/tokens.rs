@@ -262,6 +262,12 @@ pub const CONVERSATION_TOOLBAR_DECISION_STATE: f32 = 50.0;
 /// 200 beside every column; the tag chips under the titles while it keeps 200 without Pipeline;
 /// Priority while it keeps 120. Narrower, the title still keeps 120 down to a 956 window.
 pub const TASK_TABLE_PIPELINE_MIN_WINDOW: f32 = 1348.0;
+/// The narrowest window whose Settings › Servers details keep every table column (10.01 `sXIz1`):
+/// the 216 sidebar, the 380 server list and the details' 64 padding leave the sessions table its
+/// device 200 beside Signed in and Last used (150 each), Revoke (96), its 12 insets and 16 gaps.
+/// Narrower, the list gives way down to 220, the sessions drop Signed in, the users drop State
+/// (a disabled user says so under the username) and the account facts take the width there is.
+pub const SERVERS_DETAILS_WIDE_MIN_WINDOW: f32 = 1328.0;
 pub const TASK_TABLE_TAGS_MIN_WINDOW: f32 = 1196.0;
 pub const TASK_TABLE_PRIORITY_MIN_WINDOW: f32 = 1116.0;
 /// The narrowest window whose Overview keeps the attention column (`NM5My`, 288 and a 32 gap)

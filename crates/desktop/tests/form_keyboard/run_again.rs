@@ -183,7 +183,7 @@ fn queued_task(db: &mut ProjectDb, pipeline: orchester_core::id::ResourceId) -> 
     .expect("task")[0]
     .clone();
   task.queue(VersionNumber::FIRST).expect("a complete task");
-  db.save_task(&task).expect("queue");
+  db.save_task(&task).expect("queue").saved().expect("saved as read");
   task.id()
 }
 

@@ -18,6 +18,7 @@ pub mod label;
 pub mod model;
 mod persist;
 pub mod restore;
+mod shared;
 pub mod strip;
 pub mod window;
 
