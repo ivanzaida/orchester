@@ -36,6 +36,7 @@ mod retry_limit;
 mod run_again;
 mod run_approvals;
 mod scrolls;
+mod sharing;
 mod summary;
 pub(super) use scrolls::TaskScrolls;
 mod tab_state;
@@ -231,17 +232,22 @@ impl Component for TaskScreen {
     let ended = (removal, again.action);
     let mut heading = heading::with_notices(ctx, &detail, lost.is_some(), &props.project.repo_root);
     let earlier_unreadable = heading.split_off(1);
-    column
-      .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
-      .with_children(runner_notice)
-      .with_children(heading)
-      .child(ctx.mount_keyed::<organization::OrganizationHeader>(
+    // A task kept Not shared is read-only: its organization shows as plain labels.
+    let organization = match sharing::kept_tags(&detail) {
+      Some(names) => sharing::kept_organization(ctx, &detail, names),
+      None => ctx.mount_keyed::<organization::OrganizationHeader>(
         "task-organization",
         organization::OrganizationProps {
           root: props.project.repo_root.clone(),
           detail: detail.clone(),
         },
-      ))
+      ),
+    };
+    column
+      .child(self.topbar(ctx, &props, (Some(&detail), ended), &control))
+      .with_children(runner_notice)
+      .with_children(heading)
+      .child(organization)
       .with_children(earlier_unreadable)
       .with_children(control_error)
       .child(self.tabs(ctx, &props, files))
@@ -372,7 +378,7 @@ impl TaskScreen {
   /// notice offers Restart runner. A run that cannot be read shows Cancel run unavailable (`asPAJ`).
   fn topbar(
     &self,
-    ctx: &Ctx,
+    ctx: &mut Ctx,
     props: &TaskProps,
     (detail, (removal, again)): (Option<&TaskDetail>, (Option<Element>, Option<Element>)),
     control: &ControlAction,
@@ -389,6 +395,17 @@ impl TaskScreen {
       .variant(TypographyStyle::Description)
       .nowrap(),
     );
+    if let Some(detail) = detail.filter(|detail| sharing::kept_tags(detail).is_some()) {
+      let share = ctx.mount_keyed::<sharing::ShareTask>(
+        "task-share",
+        sharing::ShareTaskProps {
+          root: props.project.repo_root.clone(),
+          task: detail.task.id(),
+          key: detail.task.key().to_string(),
+        },
+      );
+      return page::topbar_with(breadcrumb.into(), [share]);
+    }
     let online = props.runner == RunnerState::Online;
     let buttons = match detail {
       Some(detail) if detail.latest_unreadable.is_some() => unreadable::controls(ctx),

@@ -129,7 +129,7 @@ const fn section_key(page: Page) -> &'static str {
     Page::Tools(_) => "nav.tools",
     Page::Secrets(_) => "nav.secrets",
     Page::Connections(..) => "nav.connections",
-    Page::Settings(_) => "nav.projectSettings",
+    Page::Settings(_) | Page::Join(_) => "nav.projectSettings",
     Page::Servers(..) => "nav.settings",
   }
 }

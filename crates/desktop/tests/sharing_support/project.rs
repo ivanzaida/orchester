@@ -70,9 +70,6 @@ pub struct Person {
 impl Person {
   /// `username`, signed in to `server` with their own password, with a local project of `titles`.
   pub fn signed_in(server: &TestServer, (username, first): (&str, &Credential), titles: &[&str]) -> Self {
-    let data = TempDir::new().expect("application data");
-    let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
-    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(MemoryVault::default())));
     let repo = TempDir::new().expect("repository");
     std::fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -89,6 +86,15 @@ impl Person {
       )
       .expect("tasks");
     }
+    drop(db);
+    Self::with_repo(server, (username, first), repo)
+  }
+
+  /// `username`, signed in to `server` with their own password, with the project in `repo`.
+  pub fn with_repo(server: &TestServer, (username, first): (&str, &Credential), repo: TempDir) -> Self {
+    let data = TempDir::new().expect("application data");
+    let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
+    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(MemoryVault::default())));
     workspace.open(repo.path()).expect("register the project");
     let person = Self {
       servers,

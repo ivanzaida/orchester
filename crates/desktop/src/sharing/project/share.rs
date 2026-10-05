@@ -90,16 +90,21 @@ pub fn repository_identity(programs: &Programs, repo_root: &Path) -> Result<Repo
     .unwrap_or_default();
   RepositoryIdentity::from_remote_url(&url).map_err(|error| match error {
     RepositoryIdentityError::MissingOrigin => IdentityProblem::NoOrigin,
-    RepositoryIdentityError::LocalOrigin | RepositoryIdentityError::Invalid => IdentityProblem::LocalOrigin,
+    // The remote's address as git lists it, credentials already removed when it was read.
+    RepositoryIdentityError::LocalOrigin => IdentityProblem::LocalOrigin { origin: Some(url) },
+    RepositoryIdentityError::Invalid => IdentityProblem::LocalOrigin { origin: None },
   })
 }
 
 /// Why the repository cannot be shared (10.16).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IdentityProblem {
   NoOrigin,
-  /// `origin` is a folder on this computer, or not a network repository's address.
-  LocalOrigin,
+  /// `origin` is a folder on this computer (`origin` names it), or not a network repository's
+  /// address.
+  LocalOrigin {
+    origin: Option<String>,
+  },
   /// git could not list the remotes.
   Unreadable,
 }
@@ -205,14 +210,15 @@ fn taken(details: Option<&SharingErrorDetails>) -> ShareError {
   }
 }
 
-/// The project at `repo_root` takes no change from this computer's screens while it is shared.
-struct InProgress {
+/// The project at `repo_root` takes no change from this computer's screens while it is shared or
+/// joins a server project.
+pub(super) struct InProgress {
   servers: Servers,
   root: PathBuf,
 }
 
 impl InProgress {
-  fn start(servers: &Servers, root: &Path) -> Self {
+  pub(super) fn start(servers: &Servers, root: &Path) -> Self {
     servers.inner.sharing_now.lock().insert(root.to_owned());
     Self {
       servers: servers.clone(),
@@ -227,8 +233,9 @@ impl Drop for InProgress {
   }
 }
 
-/// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds.
-fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Result<(), SharingError> {
+/// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds
+/// (Share and Join).
+pub(super) fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Result<(), SharingError> {
   if changed.is_empty() {
     return Ok(());
   }
@@ -266,7 +273,7 @@ fn upload(
   let revisions = read.iter().map(|task| (task.id(), task.revision())).collect();
   let tasks = read
     .iter()
-    .map(|task| upload_task(&db, task, &names))
+    .map(|task| upload_task(&db, task, &names, UploadAs::Share))
     .collect::<Result<Vec<_>, _>>()?;
   let create = ProjectCreate {
     idempotency_key: key,
@@ -278,10 +285,19 @@ fn upload(
   Ok((create, revisions))
 }
 
-fn upload_task(
+/// How a task goes to the server: with its number when the project is shared, or for a new number
+/// with its key as its former key when it is imported (*Join*, *Share task*).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum UploadAs {
+  Share,
+  Import,
+}
+
+pub(super) fn upload_task(
   db: &ProjectDb,
   task: &Task,
   names: &HashMap<orchester_core::id::TagId, String>,
+  this: UploadAs,
 ) -> Result<UploadTask, StoreError> {
   let details = task.details();
   let organization = Organization::from_core(task.organization());
@@ -291,8 +307,8 @@ fn upload_task(
     .is_empty();
   Ok(UploadTask {
     id: task.id(),
-    number: Some(task.key().number().get()),
-    former_key: None,
+    number: (this == UploadAs::Share).then(|| task.key().number().get()),
+    former_key: (this == UploadAs::Import).then(|| task.key().to_string()),
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),

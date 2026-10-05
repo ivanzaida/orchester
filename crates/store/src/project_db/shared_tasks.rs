@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
   StoreError,
-  rows::{corrupt, parse, tokens_column},
+  rows::{corrupt, decode_json, parse, tokens_column},
 };
 
 /// A member of the server project, as the cache names them.
@@ -91,6 +91,8 @@ pub struct SharedTaskInfo {
   pub updated_at: Option<Timestamp>,
   pub claim: Option<CachedClaim>,
   pub run: Option<CachedRunStatus>,
+  /// While the task is *Not shared*: the names of its tags, kept until it is shared.
+  pub kept_tags: Option<Vec<String>>,
 }
 
 impl ProjectDb {
@@ -214,7 +216,19 @@ pub(super) fn is_shared(connection: &Connection, task: TaskId) -> Result<bool, S
   )?)
 }
 
-fn replace_tags(connection: &Connection, tags: &[orchester_core::task::organization::Tag]) -> Result<(), StoreError> {
+/// Whether `task` was kept *Not shared* when the project joined.
+pub(super) fn is_not_shared(connection: &Connection, task: TaskId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 AND sharing = 'not_shared')",
+    [task.to_string()],
+    |row| row.get(0),
+  )?)
+}
+
+pub(super) fn replace_tags(
+  connection: &Connection,
+  tags: &[orchester_core::task::organization::Tag],
+) -> Result<(), StoreError> {
   connection.execute("DELETE FROM project_tags", [])?;
   for tag in tags {
     connection.execute(
@@ -231,7 +245,11 @@ fn replace_tags(connection: &Connection, tags: &[orchester_core::task::organizat
 
 /// Writes `cached` over the stored row of its id, or as a new row. The local pin of the pipeline
 /// version stays while the task stays queued: a version number means nothing on another computer.
-fn write_cached(transaction: &Transaction<'_>, cached: &CachedTask, batch: Option<&str>) -> Result<(), StoreError> {
+pub(super) fn write_cached(
+  transaction: &Transaction<'_>,
+  cached: &CachedTask,
+  batch: Option<&str>,
+) -> Result<(), StoreError> {
   let project = project_key(transaction)?;
   let before = tasks::load_tasks(transaction, &project, "WHERE id = ?1", [cached.id.to_string()])?.pop();
   if let Some(before) = before.as_ref().filter(|before| content_differs(before, cached)) {
@@ -248,7 +266,7 @@ fn write_cached(transaction: &Transaction<'_>, cached: &CachedTask, batch: Optio
      pipeline_version = CASE WHEN excluded.status = 'queued' THEN tasks.pipeline_version END, \
      revision = excluded.revision, sharing = 'shared', pipeline_slug = excluded.pipeline_slug, \
      former_key = excluded.former_key, created_by = excluded.created_by, updated_by = excluded.updated_by, \
-     updated_at = excluded.updated_at",
+     updated_at = excluded.updated_at, kept_key = NULL, kept_tag_names = NULL",
     params![
       cached.id.to_string(),
       cached.number.get(),
@@ -281,7 +299,7 @@ fn content_differs(before: &Task, cached: &CachedTask) -> bool {
     || details.limits != cached.limits
 }
 
-fn project_key(connection: &Connection) -> Result<orchester_core::project::ProjectKey, StoreError> {
+pub(super) fn project_key(connection: &Connection) -> Result<orchester_core::project::ProjectKey, StoreError> {
   let key: String = connection.query_row("SELECT key FROM project", [], |row| row.get(0))?;
   orchester_core::project::ProjectKey::new(&key).map_err(|error| corrupt("project key", error))
 }
@@ -339,20 +357,31 @@ type InfoRow = (
   Option<String>,
   Option<String>,
   Option<i64>,
+  Option<String>,
 );
 
 fn info(connection: &Connection, task: TaskId) -> Result<Option<SharedTaskInfo>, StoreError> {
   let row: Option<InfoRow> = connection
     .query_row(
-      "SELECT pipeline_slug, former_key, created_by, updated_by, updated_at FROM tasks \
+      "SELECT pipeline_slug, former_key, created_by, updated_by, updated_at, kept_tag_names FROM tasks \
        WHERE id = ?1 AND sharing IS NOT NULL",
       [task.to_string()],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+      |row| {
+        Ok((
+          row.get(0)?,
+          row.get(1)?,
+          row.get(2)?,
+          row.get(3)?,
+          row.get(4)?,
+          row.get(5)?,
+        ))
+      },
     )
     .optional()?;
-  let Some((pipeline_slug, former_key, created_by, updated_by, updated_at)) = row else {
+  let Some((pipeline_slug, former_key, created_by, updated_by, updated_at, kept)) = row else {
     return Ok(None);
   };
+  let kept_tags = kept.map(|names| decode_json("kept tag names", 1, &names)).transpose()?;
   Ok(Some(SharedTaskInfo {
     pipeline_slug,
     former_key,
@@ -361,6 +390,7 @@ fn info(connection: &Connection, task: TaskId) -> Result<Option<SharedTaskInfo>,
     updated_at: updated_at.map(Timestamp::from_unix_millis),
     claim: read_claim(connection, task)?,
     run: read_run_status(connection, task)?,
+    kept_tags,
   }))
 }
 

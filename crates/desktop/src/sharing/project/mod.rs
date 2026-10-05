@@ -8,11 +8,13 @@ mod automatic;
 mod claims;
 pub mod convert;
 pub mod discovery;
+mod join;
 pub mod lookup;
 mod make_local;
 mod members;
 mod organization;
 mod share;
+mod share_task;
 pub mod state;
 pub mod store;
 mod sync;
@@ -29,6 +31,7 @@ use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
   claims::{WorkClaim, WorkRefusal},
+  join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   members::MemberChange,
   share::{IdentityProblem, ShareError, SharePlan, Shared, plan, repository_identity},
 };

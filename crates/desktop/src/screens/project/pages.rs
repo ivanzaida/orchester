@@ -22,6 +22,7 @@ use super::{
   agents::AgentsScreen,
   connections::ConnectionsScreen,
   instructions::InstructionsScreen,
+  join::{JoinPage, JoinProps},
   new_task::{Editing, NewTaskForm, NewTaskProps, Recovering},
   overview::{OverviewProps, OverviewScreen},
   pipelines::{PipelinesProps, PipelinesScreen},
@@ -144,6 +145,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
     Page::Secrets(_) => ctx.mount_keyed::<SecretsScreen>("secrets", open),
     Page::Connections(..) => ctx.mount_keyed::<ConnectionsScreen>("connections", open),
     Page::Settings(_) => ctx.mount_keyed::<SettingsScreen>("settings", open),
+    Page::Join(server) => ctx.mount_keyed::<JoinPage>(&format!("join-{server}"), JoinProps { open, server }),
     Page::Servers(..) => ctx.mount_keyed::<ServersScreen>("servers", ()),
   }
 }

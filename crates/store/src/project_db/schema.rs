@@ -8,6 +8,7 @@ mod command_approvals;
 mod conversation;
 mod import;
 mod invocation_permissions;
+mod joining;
 mod mcp;
 mod memory;
 mod native_commands;
@@ -505,4 +506,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   organization::MIGRATION,
   worktree_removals::MIGRATION,
   sharing::MIGRATION,
+  joining::MIGRATION,
 ];

@@ -73,6 +73,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::PipelineNotPublished(_) => Message::new("runs.preflight.pipelineNotPublished"),
     StoreError::TaskNotHeld(_) => Message::new("tasks.bulk.notHeld"),
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
+    StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::Sqlite(_)

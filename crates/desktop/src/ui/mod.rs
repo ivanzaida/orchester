@@ -42,3 +42,17 @@ pub fn message_text(ctx: &Ctx, message: &Message) -> Arc<str> {
     message.args.iter().map(|(name, value)| (*name, value.as_str())),
   )
 }
+
+/// The local day of `at`, e.g. "Oct 1".
+pub fn day(ctx: &Ctx, at: orchester_core::time::Timestamp) -> Arc<str> {
+  use chrono::Datelike;
+  let Some(utc) = chrono::DateTime::from_timestamp_millis(at.unix_millis()) else {
+    return ctx.t("sharing.unknownDay");
+  };
+  let local = utc.with_timezone(&chrono::Local).date_naive();
+  let month = ctx.t(crate::display::MONTH_KEYS[local.month0() as usize]);
+  ctx.t_args(
+    "sharing.day",
+    [("month", &*month), ("day", local.day().to_string().as_str())],
+  )
+}

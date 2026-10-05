@@ -6,8 +6,10 @@
 //! and then reads the project again; nothing is changed here that the server refused.
 
 mod dialogs;
+mod join_offer;
 mod labels;
 mod local;
+mod mapping;
 mod members;
 mod shared;
 
@@ -19,7 +21,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::SpacingSize,
   },
-  components::{Column, ScrollVertical, Text},
+  components::{Column, Modal, ModalTarget, ScrollVertical, Text},
   core::{ElementRef, Signal},
   layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
@@ -41,7 +43,7 @@ use crate::{
     ServerEntry, Servers, SharingError,
     feed::ServerFeed,
     project::{
-      IdentityProblem, MemberChange, ProjectServer, ShareError, SharePlan, Shared,
+      IdentityProblem, MemberChange, ProjectServer, ShareError, SharePlan,
       discovery::{self, DiscoveryFile},
       plan, repository_identity,
       state::ProjectSharing,
@@ -71,6 +73,8 @@ struct Facts {
   discovery: DiscoveryFile,
   /// What sharing would do; only for a local project whose repository can be shared.
   plan: Option<SharePlan>,
+  /// The keys the local tasks had when the project joined its server project (10.22).
+  joined: Vec<orchester_store::JoinedKey>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Facts {}
@@ -102,6 +106,28 @@ impl PartialEq for SharingDialog {
 }
 
 impl lurq::app::component::DevtoolsInspectable for SharingDialog {}
+
+/// The tasks kept *Not shared* that *Make local* returned to the list, with their keys (10.26 C).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MadeLocal(std::sync::Arc<[orchester_store::ReturnedTask]>);
+
+impl lurq::app::component::DevtoolsInspectable for MadeLocal {}
+
+/// What Share did: shared the project, or met the repository's project on the server
+/// (`409 remote_taken`, 10.16 C) and changed nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ShareDone {
+  Shared,
+  Taken { server: ServerId, owners: Vec<String> },
+}
+
+impl lurq::app::component::DevtoolsInspectable for ShareDone {}
+
+/// The server whose project Share met, with its owners, until the person sets the notice aside.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Taken(Option<(ServerId, Vec<String>)>);
+
+impl lurq::app::component::DevtoolsInspectable for Taken {}
 
 /// The server *Share on* names.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -141,9 +167,9 @@ impl PartialEq for Members {
 
 impl lurq::app::component::DevtoolsInspectable for Members {}
 
-type ShareAction = FutureAction<(ServerEntry, RepositoryIdentity, IdempotencyKey, bool), Shared, Message>;
+type ShareAction = FutureAction<(ServerEntry, RepositoryIdentity, IdempotencyKey, bool), ShareDone, Message>;
 type MemberAction = FutureAction<MemberWork, (), Message>;
-type LocalAction = FutureAction<(), (), Message>;
+type LocalAction = FutureAction<(), MadeLocal, Message>;
 type DiscoveryAction = FutureAction<(), (), Message>;
 
 /// The tab's futures, requested in this order in `create` and `render`.
@@ -172,6 +198,11 @@ pub(super) struct SharingTab {
   frame: ElementRef,
   /// The dialog shown last, so the focus moves only when another one opens.
   focused: Signal<SharingDialog>,
+  taken: Signal<Taken>,
+  /// Copy put the person's username on the clipboard (10.16 A).
+  copied: Signal<bool>,
+  /// *Dismiss* on the notice after a join or a Make local, for this visit of the tab.
+  notice_dismissed: Signal<bool>,
 }
 
 impl Component for SharingTab {
@@ -192,6 +223,9 @@ impl Component for SharingTab {
       scroll: ScrollState::new(),
       frame: ElementRef::new(),
       focused: ctx.signal(SharingDialog::Closed),
+      taken: ctx.signal(Taken::default()),
+      copied: ctx.signal(false),
+      notice_dismissed: ctx.signal(false),
     };
     let actions = tab.actions(ctx);
     tab.watch(ctx, &actions);
@@ -249,7 +283,12 @@ impl Component for SharingTab {
           .width(Dimension::Pct(100.0))
           .flex(1.0),
       ))
-      .with_children(dialog)
+      // Over the whole window, as every dialog of the app: the sidebar and the tabs take no input.
+      .with_children(dialog.map(|dialog| {
+        Modal::new(dialog)
+          .target(ModalTarget::Root)
+          .dismiss_on_escape(false)
+      }))
   }
 }
 
@@ -280,7 +319,11 @@ impl SharingTab {
       }
     };
     let finished = done(self.dialog.clone(), self.revision.clone(), self.nav.clone());
+    let taken = self.taken.clone();
     ctx.watch(&actions.share.state(), move |state| {
+      if let Some(ShareDone::Taken { server, owners }) = state.data.clone().filter(|_| state.is_fulfilled()) {
+        taken.set(Taken(Some((server, owners))));
+      }
       finished(state.is_pending(), state.is_rejected());
     });
     let (finished, username) = (
@@ -343,7 +386,10 @@ impl SharingTab {
 }
 
 fn read_facts(programs: &Programs, root: &Path, shared: bool) -> Result<Facts, orchester_store::StoreError> {
-  let tasks = ProjectDb::open(root)?.tasks()?.len();
+  let db = ProjectDb::open(root)?;
+  let tasks = db.tasks()?.len();
+  let joined = db.joined_keys()?;
+  drop(db);
   let identity = repository_identity(programs, root);
   let plan = match (&identity, shared) {
     (Ok(identity), false) => Some(plan(root, identity.clone())?),
@@ -355,6 +401,7 @@ fn read_facts(programs: &Programs, root: &Path, shared: bool) -> Result<Facts, o
     identity,
     discovery,
     plan,
+    joined,
   })
 }
 
@@ -364,13 +411,14 @@ fn share_action(ctx: &mut Ctx, servers: &Servers, root: &Path) -> ShareAction {
     move |(entry, identity, key, write): (ServerEntry, RepositoryIdentity, IdempotencyKey, bool)| {
       let (servers, root) = (servers.clone(), root.clone());
       async move {
-        servers
-          .share(&entry, &root, identity, key, write)
-          .await
-          .map_err(|error| match error {
-            ShareError::Taken { .. } => Message::new("sharing.share.taken").with("server", entry.stored.name.clone()),
-            ShareError::Sharing(error) => error.message(&entry.address),
-          })
+        match servers.share(&entry, &root, identity, key, write).await {
+          Ok(_) => Ok(ShareDone::Shared),
+          Err(ShareError::Taken { owners, .. }) => Ok(ShareDone::Taken {
+            server: entry.stored.id,
+            owners: owners.into_iter().map(|owner| owner.display_name).collect(),
+          }),
+          Err(ShareError::Sharing(error)) => Err(error.message(&entry.address)),
+        }
       }
     },
   )
@@ -416,6 +464,7 @@ fn local_action(ctx: &mut Ctx, servers: &Servers, root: &Path) -> LocalAction {
       server
         .make_local()
         .await
+        .map(|returned| MadeLocal(returned.into()))
         .map_err(|error| error_message(&error, Some(&server)))
     }
   })

@@ -75,7 +75,7 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
     .filter(|task| {
       (query.pipeline.0.is_none() || task.details().pipeline == query.pipeline.0)
         && query.organization.includes(task.organization())
-        && matches_text(task, &text)
+        && matches_text(task, data.former_keys.get(&task.id()), &text)
     })
     .cloned()
     .collect();
@@ -114,10 +114,12 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
     .collect()
 }
 
-/// The search matches the title, key, id or brief, ignoring case; an empty search matches all.
-fn matches_text(task: &Task, text: &str) -> bool {
+/// The search matches the title, key, former key, id or brief, ignoring case; an empty search
+/// matches all.
+fn matches_text(task: &Task, former: Option<&String>, text: &str) -> bool {
   text.is_empty()
     || task.details().title.as_str().to_lowercase().contains(text)
+    || former.is_some_and(|key| key.to_lowercase().contains(text))
     || task.key().to_string().to_lowercase().contains(text)
     || task.id().to_string().to_lowercase().contains(text)
     || task.details().brief.to_lowercase().contains(text)

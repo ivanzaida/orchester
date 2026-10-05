@@ -30,6 +30,20 @@ use crate::{
   pipelines::{data::Assignables, describe},
 };
 
+/// The tasks kept *Not shared* when the project joined, with the tag names each kept.
+type Kept = (Vec<Task>, std::collections::HashMap<TaskId, Vec<String>>);
+
+fn kept(db: &ProjectDb) -> Result<Kept, StoreError> {
+  let tasks = db.not_shared_tasks()?;
+  let mut tags = std::collections::HashMap::new();
+  for task in &tasks {
+    if let Some(names) = db.shared_task_info(task.id())?.and_then(|info| info.kept_tags) {
+      tags.insert(task.id(), names);
+    }
+  }
+  Ok((tasks, tags))
+}
+
 /// A step in a published pipeline a task can use.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PipelineStepChoice {
@@ -55,6 +69,12 @@ pub struct ProjectTasks {
   pub tags: Arc<Vec<orchester_core::task::organization::Tag>>,
   pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
+  /// The tasks kept *Not shared* when the project joined a server project, out of `tasks`.
+  pub not_shared: Arc<Vec<Task>>,
+  /// The tag names each *Not shared* task kept.
+  pub kept_tags: Arc<std::collections::HashMap<TaskId, Vec<String>>>,
+  /// The key each task had before it was uploaded (*was KON-12*), which the search finds.
+  pub former_keys: Arc<std::collections::HashMap<TaskId, String>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
   pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
@@ -101,6 +121,13 @@ impl ProjectTasks {
       .filter(|tag| row.organization.tags().contains(&tag.id()))
       .map(|tag| Arc::from(tag.name().as_str()))
       .collect();
+    row.former_key = self.former_keys.get(&row.id).map(|key| Arc::from(key.as_str()));
+    if let Some(kept) = self.kept_tags.get(&row.id) {
+      row.tags = kept.iter().map(|name| Arc::from(name.as_str())).collect();
+      row.not_shared = true;
+      row.detail = UiMessage::new("tasks.notShared.readiness");
+      return row;
+    }
     if let Some(blocking) = self.blocking.get(&row.id).filter(|links| !links.is_empty()) {
       let keys = blocking
         .iter()
@@ -133,9 +160,19 @@ impl ProjectTasks {
       .count()
   }
 
+  /// The *Not shared* tasks in place of the list's, for the list's *Not shared* filter (10.23).
+  #[must_use]
+  pub fn not_shared_view(&self) -> Self {
+    Self {
+      tasks: self.not_shared.clone(),
+      ..self.clone()
+    }
+  }
+
   pub fn load(repo_root: &Path) -> Result<Self, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
+    let (not_shared, kept_tags) = kept(&db)?;
     let pending = approvals::pending(&db, repo_root)?;
     let mut group_holds = BTreeMap::new();
     let mut grouped = std::collections::BTreeSet::new();
@@ -150,7 +187,7 @@ impl ProjectTasks {
     let mut phases = Phases::new();
     let mut counts = BTreeMap::new();
     let mut auto_approving = Vec::new();
-    for task in &tasks {
+    for task in tasks.iter().chain(&not_shared) {
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       counts.insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
       let latest = match runs.last() {
@@ -196,6 +233,9 @@ impl ProjectTasks {
           .collect::<Result<_, _>>()?,
       ),
       tasks: Arc::new(tasks),
+      not_shared: Arc::new(not_shared),
+      kept_tags: Arc::new(kept_tags),
+      former_keys: Arc::new(db.former_keys()?),
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(&db)?),

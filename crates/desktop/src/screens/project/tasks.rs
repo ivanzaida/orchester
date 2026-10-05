@@ -5,6 +5,7 @@
 mod bulk;
 mod bulk_cancel;
 mod controls;
+mod not_shared;
 mod outcome;
 mod review;
 pub(super) mod selection;
@@ -98,6 +99,8 @@ pub struct TasksScreen {
   release: FutureAction<(PathBuf, Vec<TaskId>), (), Message>,
   /// The task Create just made, highlighted while the list is shown.
   created: Option<TaskId>,
+  /// The *Not shared* filter (10.23): the list shows the tasks kept when the project joined.
+  not_shared: Signal<bool>,
 }
 
 impl Component for TasksScreen {
@@ -129,6 +132,7 @@ impl Component for TasksScreen {
       selected: ctx.signal(Selection::default()),
       search: ctx.signal(String::new()),
       search_focused: ctx.signal(false),
+      not_shared: ctx.signal(false),
       pipeline: ctx.signal(PipelineFilter::default()),
       filter: ctx.signal(Filters::default()),
       sort: ctx.signal(TaskSort::default()),
@@ -162,7 +166,14 @@ impl Component for TasksScreen {
     }
     let nav = self.nav.clone();
     let tab = props.tab;
-    let body = match &props.tasks {
+    // While the Not shared filter is on, the kept tasks stand in for the list, tab counts too.
+    let filtered = match &props.tasks {
+      TasksState::Ready(tasks) if self.not_shared.get() && !tasks.not_shared.is_empty() => {
+        TasksState::Ready(tasks.not_shared_view())
+      }
+      other => other.clone(),
+    };
+    let body = match &filtered {
       TasksState::Loading => Column::new().into(),
       TasksState::Failed(error) => load_failed(ctx, &nav, error),
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => Column::new()
@@ -188,7 +199,7 @@ impl Component for TasksScreen {
         &ctx.t("tasks.description"),
         shared::badge(ctx, sharing),
       ))
-      .child(self.tabs(ctx, tab, props.tasks.ready()))
+      .child(self.tabs(ctx, tab, filtered.ready()))
       .child(body)
       .into()
   }
@@ -347,7 +358,8 @@ fn library(
   tasks: &ProjectTasks,
   tab: TaskTab,
 ) -> Element {
-  let read_only = access(sharing).read_only();
+  let kept = screen.not_shared.get() && !tasks.not_shared.is_empty();
+  let read_only = access(sharing).read_only() || kept;
   let (search, filter) = (screen.search.get(), screen.filter.get());
   let separator = ctx.t("common.listSeparator");
   let query = Query {
@@ -380,7 +392,11 @@ fn library(
         },
       )
   };
-  let notice = shared::notice(ctx, sharing, &screen.nav);
+  let notice = if kept {
+    Some(not_shared::notice(ctx, tasks.tasks.len(), sharing))
+  } else {
+    shared::notice(ctx, sharing, &screen.nav)
+  };
   let selection = (!read_only)
     .then(|| controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
     .flatten();
@@ -391,13 +407,17 @@ fn library(
     .with_children(selection)
     .with_children((screen.assigning.get() && !read_only).then(|| controls::assignment(ctx, screen, root, tasks)))
     .with_children(controls::problems(ctx, screen, tasks))
-    .child(table_column(ctx, table, visible.len()))
-    .child(footer(
+    .child(table_column(ctx, table, visible.len()));
+  let content = if kept {
+    content.child(not_shared::footer(ctx, visible.len(), sharing))
+  } else {
+    content.child(footer(
       ctx,
       tasks,
       (&visible, filtered(screen)),
       shared::footer_sync(ctx, sharing),
-    ));
+    ))
+  };
   crate::ui::form::form(None, content)
 }
 
@@ -413,6 +433,9 @@ fn organization_filters(ctx: &mut Ctx, screen: &TasksScreen, tasks: &ProjectTask
         filter: screen.filter.clone(),
       },
     ))
+    .with_children(
+      (!tasks.not_shared.is_empty()).then(|| not_shared::toggle(ctx, &screen.not_shared, tasks.not_shared.len())),
+    )
     .child(Spacer::new().flex(1.0))
     .child(
       ActionButton::new(ctx.t("tasks.tags.manageShort"))

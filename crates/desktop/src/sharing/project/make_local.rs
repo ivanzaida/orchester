@@ -2,15 +2,16 @@
 //! claims are released first when the server can be reached, and otherwise go stale on their own;
 //! then every cached task becomes a local task of the project with its id, number and organization
 //! as last synced. The membership stays: joining again later works. The server project is unchanged
-//! for everyone else.
+//! for everyone else. The tasks kept *Not shared* when the project joined return to the list with
+//! numbers after the highest (10.26 C); they are returned with their keys before and after.
 
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ReturnedTask};
 
 use super::ProjectServer;
 use crate::{background, sharing::SharingError};
 
 impl ProjectServer {
-  pub async fn make_local(&self) -> Result<(), SharingError> {
+  pub async fn make_local(&self) -> Result<Vec<ReturnedTask>, SharingError> {
     if self.writable().is_ok()
       && let Some(me) = self.me()
     {
@@ -27,8 +28,8 @@ impl ProjectServer {
       }
     }
     let root = self.repo_root.clone();
-    background::run(move || ProjectDb::open(&root)?.make_local()).await??;
+    let returned = background::run(move || ProjectDb::open(&root)?.make_local()).await??;
     self.servers.shared_changed();
-    Ok(())
+    Ok(returned)
   }
 }

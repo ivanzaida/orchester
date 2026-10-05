@@ -44,6 +44,7 @@ const LIMITS: &str = "limits";
 const ENVIRONMENT: &str = "environment";
 const CODE_INDEX: &str = "code-index";
 const SHARING: &str = "sharing";
+const JOIN: &str = "join";
 const TAB_QUERY: &str = "tab";
 const AGENT_PROVIDERS: &str = "agent-providers";
 const GITHUB: &str = "github";
@@ -121,6 +122,9 @@ pub enum Page {
   Connections(ConnectionTab, Option<ConnectionId>),
   /// `QV1af`, `c7e729`.
   Settings(SettingsTab),
+  /// Joining the server project the repository is shared as on a server (10.21 `UlHPB`), a page
+  /// under Project settings › Sharing.
+  Join(ServerId),
   /// The application's Settings › Servers (10.01 `sXIz1`) with the server whose details are shown,
   /// the first one without; it keeps the project's sidebar.
   Servers(Option<ServerId>, ServerTab),
@@ -325,6 +329,7 @@ impl Page {
       [SETTINGS, ENVIRONMENT] => Self::Settings(SettingsTab::Environment),
       [SETTINGS, CODE_INDEX] => Self::Settings(SettingsTab::CodeIndex),
       [SETTINGS, SHARING] => Self::Settings(SettingsTab::Sharing),
+      [SETTINGS, SHARING, JOIN, server] => Self::Join(server.parse().ok()?),
       [SERVERS] => Self::Servers(None, server_tab(tab)),
       [SERVERS, server] => Self::Servers(Some(server.parse().ok()?), server_tab(tab)),
       _ => return None,
@@ -371,6 +376,7 @@ impl Page {
       Self::Settings(SettingsTab::Environment) => format!("{root}/{SETTINGS}/{ENVIRONMENT}"),
       Self::Settings(SettingsTab::CodeIndex) => format!("{root}/{SETTINGS}/{CODE_INDEX}"),
       Self::Settings(SettingsTab::Sharing) => format!("{root}/{SETTINGS}/{SHARING}"),
+      Self::Join(server) => format!("{root}/{SETTINGS}/{SHARING}/{JOIN}/{server}"),
       Self::Servers(server, tab) => {
         let server = server.map_or_else(String::new, |server| format!("/{server}"));
         let tab = match tab {
@@ -396,7 +402,7 @@ impl Page {
       Self::Tools(_) => SidebarItem::Tools,
       Self::Secrets(_) => SidebarItem::Secrets,
       Self::Connections(..) => SidebarItem::Connections,
-      Self::Settings(_) => SidebarItem::Settings,
+      Self::Settings(_) | Self::Join(_) => SidebarItem::Settings,
       Self::Servers(..) => SidebarItem::AppSettings,
     }
   }

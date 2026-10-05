@@ -1,8 +1,11 @@
 //! Pure shared-task transitions. Storage serializes each transition with its task.
 
+mod similar;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub use self::similar::similar_titles;
 use crate::{
   id::{ClaimId, UserId},
   run::TaskPhase,

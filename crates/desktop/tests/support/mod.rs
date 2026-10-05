@@ -50,12 +50,22 @@ pub struct Fixture {
 
 impl Fixture {
   pub fn new() -> Self {
-    Self::with_gate(false)
+    Self::with_gate(false, "ORC")
+  }
+
+  /// The repository, for a test that opens its project another way.
+  pub fn into_repo(self) -> TempDir {
+    self.repo
+  }
+
+  /// [`Fixture::new`] whose project has the key `key`.
+  pub fn keyed(key: &str) -> Self {
+    Self::with_gate(false, key)
   }
 
   /// [`Fixture::new`] whose step, Implement, has an approval gate.
   pub fn gated() -> Self {
-    Self::with_gate(true)
+    Self::with_gate(true, "ORC")
   }
 
   /// A two-agent pipeline whose Reviewer runs after Builder.
@@ -140,12 +150,12 @@ impl Fixture {
     fixture
   }
 
-  fn with_gate(approval_gate: bool) -> Self {
+  fn with_gate(approval_gate: bool, key: &str) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
       ProjectId::generate(),
-      ProjectKey::new("ORC").expect("key"),
+      ProjectKey::new(key).expect("key"),
       name("Kontur"),
     );
     let mut db = ProjectDb::create(repo.path(), project).expect("create project");

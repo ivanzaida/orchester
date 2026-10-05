@@ -47,6 +47,9 @@ pub(super) fn with_notices(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_
 /// `lost`: the run is recorded as running but no runner is connected, so it is interrupted. While the
 /// run auto-approves, *Auto-approving* and *Stop* follow (`run_approvals`).
 fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> Element {
+  if let Some(kept) = super::sharing::kept_heading(ctx, detail) {
+    return kept;
+  }
   let title = detail.task.details().title.as_str();
   if let Some(unreadable) = &detail.latest_unreadable {
     return page::heading(title, &unreadable_description(ctx, unreadable));
@@ -57,11 +60,15 @@ fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> 
     .filter(|_| !lost)
     .and_then(|run| waiting_request(ctx, run).map(|shown| (run, shown)));
   let heading = match (&detail.run, waiting) {
-    (_, Some((run, shown))) => waiting_heading(ctx, title, run, &shown),
+    (_, Some((run, shown))) => waiting_heading(ctx, title, (run, detail), &shown),
     (Some(run), None) if *run.run.status() == RunStatus::Succeeded => {
-      ready_heading(ctx, title, run, detail.merge.is_some())
+      ready_heading(ctx, title, (run, detail), detail.merge.is_some())
     }
-    _ => page::heading(title, &description(ctx, detail, lost)).id("task-heading"),
+    _ => page::heading(
+      title,
+      &super::sharing::with_former_key(ctx, detail, description(ctx, detail, lost)),
+    )
+    .id("task-heading"),
   };
   let auto = detail
     .run
@@ -86,7 +93,7 @@ fn heading(ctx: &mut Ctx, detail: &TaskDetail, lost: bool, repo_root: &Path) -> 
 
 /// The title over "Needs you" and "Run 146 · Design review v2 · Design · Designer waits for your answer,
 /// 14:06" while the run's agent waits for a tool decision (`wSMj8` in `G0rzJy`).
-fn waiting_heading(ctx: &Ctx, title: &str, run: &RunView, shown: &ShownApproval) -> Element {
+fn waiting_heading(ctx: &Ctx, title: &str, (run, detail): (&RunView, &TaskDetail), shown: &ShownApproval) -> Element {
   let step = run.step_of(shown.approval.execution).map_or("", |step| &*step.name);
   let meta = ctx.t_args(
     "runs.page.describe.waitsForAnswer",
@@ -102,14 +109,14 @@ fn waiting_heading(ctx: &Ctx, title: &str, run: &RunView, shown: &ShownApproval)
   status_heading(
     title,
     (Icon::Hand, &ctx.t("runs.page.needsYou")),
-    &meta,
+    &super::sharing::with_former_key(ctx, detail, meta),
     "task-waiting-meta",
   )
 }
 
 /// The title over "Ready for review" and "Run #128 · Feature delivery · Finished at 14:32" (`ruBkY`);
 /// "Merged" once the run's work was merged (not drawn yet).
-fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element {
+fn ready_heading(ctx: &Ctx, title: &str, (run, detail): (&RunView, &TaskDetail), merged: bool) -> Element {
   let (glyph, status) = if merged {
     (Icon::GitMerge, ctx.t("runs.merge.status"))
   } else {
@@ -125,6 +132,7 @@ fn ready_heading(ctx: &Ctx, title: &str, run: &RunView, merged: bool) -> Element
       ("time", finished.as_str()),
     ],
   );
+  let meta = super::sharing::with_former_key(ctx, detail, meta);
   status_heading(title, (glyph, &status), &meta, "task-ready-meta")
 }
 

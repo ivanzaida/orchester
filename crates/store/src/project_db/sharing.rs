@@ -13,7 +13,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, joining::ReturnedTask};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -70,24 +70,27 @@ impl ProjectDb {
   /// id, number and organization as last synced, becomes a local task of the project; their
   /// pipelines are this computer's pipelines of their slugs. Claims and run statuses leave the
   /// cache, and the next task number follows the highest. The project's tags, the server project's
-  /// as last synced, become its local tags with their ids.
-  pub fn make_local(&mut self) -> Result<(), StoreError> {
+  /// as last synced, become its local tags with their ids. The tasks kept *Not shared* when it
+  /// joined return to the list after the highest number; they are returned with their keys.
+  pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
     if link(&transaction)?.is_none() {
       return Err(StoreError::NotShared);
     }
     transaction.execute_batch(
-      "UPDATE tasks SET pipeline_id = (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' \
-         AND resources.slug = tasks.pipeline_slug) WHERE sharing IS NOT NULL;
-       UPDATE tasks SET sharing = NULL, pipeline_slug = NULL;
-       DELETE FROM task_claims;
+      "UPDATE tasks SET pipeline_id = (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline'          AND resources.slug = tasks.pipeline_slug) WHERE sharing = 'shared';
+       UPDATE tasks SET sharing = NULL, pipeline_slug = NULL WHERE sharing = 'shared';",
+    )?;
+    let returned = super::joining::return_kept(&transaction, self.project.key())?;
+    transaction.execute_batch(
+      "DELETE FROM task_claims;
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
        DELETE FROM sharing;
        UPDATE counters SET next = (SELECT COALESCE(MAX(number), 0) + 1 FROM tasks) WHERE name = 'task';",
     )?;
     transaction.commit()?;
-    Ok(())
+    Ok(returned)
   }
 }
 
@@ -132,17 +135,20 @@ pub(super) fn ensure_local_project(connection: &Connection) -> Result<(), StoreE
   Ok(())
 }
 
-/// Fails when `task` is shared: it changes on the server only.
+/// Fails when `task` is shared, as it changes on the server only, or kept *Not shared*, as it is
+/// read-only.
 pub(super) fn ensure_local_task(connection: &Connection, task: TaskId) -> Result<(), StoreError> {
-  let shared: bool = connection.query_row(
-    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 AND sharing IS NOT NULL)",
-    [task.to_string()],
-    |row| row.get(0),
-  )?;
-  if shared {
-    return Err(StoreError::SharedTask(task));
+  let sharing: Option<String> = connection
+    .query_row("SELECT sharing FROM tasks WHERE id = ?1", [task.to_string()], |row| {
+      row.get(0)
+    })
+    .optional()?
+    .flatten();
+  match sharing.as_deref() {
+    Some("not_shared") => Err(StoreError::NotSharedTask(task)),
+    Some(_) => Err(StoreError::SharedTask(task)),
+    None => Ok(()),
   }
-  Ok(())
 }
 
 pub(super) const fn role_text(role: MemberRole) -> &'static str {
