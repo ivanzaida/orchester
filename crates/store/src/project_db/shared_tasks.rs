@@ -106,7 +106,10 @@ impl ProjectDb {
     tags: &[orchester_core::task::organization::Tag],
     (tasks, uploaded): (&[CachedTask], &std::collections::HashMap<TaskId, TaskRevision>),
   ) -> Result<Vec<Task>, StoreError> {
-    let transaction = self.connection.transaction()?;
+    // Immediate: the runner may write between the read and the first write of a deferred one.
+    let transaction = self
+      .connection
+      .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     if sharing::link(&transaction)?.is_some() {
       return Err(StoreError::AlreadyShared);
     }
