@@ -28,6 +28,8 @@ pub struct DecisionCounts {
   pub denied_by_you: u32,
   pub by_similar_rule: u32,
   pub always_allowed: u32,
+  /// Answered by the step's own permissions, which run every part of the command on its own.
+  pub by_profile: u32,
   pub auto_approved: u32,
   /// Approved once by automation, through Orchester's MCP server.
   pub by_automation: u32,
@@ -181,8 +183,8 @@ impl ProjectDb {
         ("denied", _) => &mut counts.denied_by_you,
         (_, Some(DecidedBy::Automation)) => &mut counts.by_automation,
         (_, Some(DecidedBy::SimilarRule)) => &mut counts.by_similar_rule,
-        // The profile's allowed commands answer as Always allow's prefixes do.
-        (_, Some(DecidedBy::AlwaysAllowed | DecidedBy::Permissions)) => &mut counts.always_allowed,
+        (_, Some(DecidedBy::AlwaysAllowed)) => &mut counts.always_allowed,
+        (_, Some(DecidedBy::Permissions)) => &mut counts.by_profile,
         (_, Some(DecidedBy::AutoApproved)) => &mut counts.auto_approved,
         _ => &mut counts.by_you,
       };

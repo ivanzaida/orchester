@@ -475,6 +475,8 @@ fn conversation_roles_follow_pencil() {
   assert_eq!(theme.radius_value(ExtraRadius::Round.role()), 16.0);
   assert_eq!(theme.spacing_value(ExtraSpacing::Chip.role()), Dimension::Px(5.0));
   assert_eq!(theme.spacing_value(ExtraSpacing::Snug.role()), Dimension::Px(4.0));
+  // Inside an inset focus ring: the ring and its gap (`Oz9EN`).
+  assert_eq!(theme.spacing_value(ExtraSpacing::FocusInset.role()), Dimension::Px(4.0));
   // The composer (`n0wdPC` in `BRMpj`): its box's radius and its dock's room above and under it.
   assert_eq!(theme.radius_value(ExtraRadius::Composer.role()), 18.0);
   assert_eq!(

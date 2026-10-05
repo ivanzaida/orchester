@@ -101,6 +101,8 @@ pub struct ApprovalCard {
   pub step: Arc<str>,
   /// `None` while it waits; `Some(None)` when it was interrupted.
   pub decided: Option<Option<orchester_core::run::ToolApprovalDecision>>,
+  /// Who answered it, once it is answered and that was recorded.
+  pub decided_by: Option<orchester_core::run::DecidedBy>,
 }
 
 /// How a step execution ended, as its result card says.
@@ -378,15 +380,15 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .pending
     .iter()
     .filter(|request| request.execution == execution)
-    .map(|request| (request.clone(), None));
+    .map(|request| (request.clone(), None, None));
   let decided = sources
     .decided
     .iter()
     .filter(|decided| decided.request.execution == execution)
-    .map(|decided| (decided.request.clone(), Some(decided.decision)));
+    .map(|decided| (decided.request.clone(), Some(decided.decision), decided.decided_by));
   pending
     .chain(decided)
-    .map(|(request, decided)| Item {
+    .map(|(request, decided, decided_by)| Item {
       key: format!("approval-{}", request.id).into(),
       execution: Some(execution),
       at: request.requested_at,
@@ -394,6 +396,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
         step: step.clone(),
         request,
         decided,
+        decided_by,
       }),
     })
     .collect()

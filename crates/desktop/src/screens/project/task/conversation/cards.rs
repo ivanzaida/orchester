@@ -70,14 +70,20 @@ pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Elemen
   }
 }
 
-/// Glyph, title (12/500) and the status label at the right (`PZNJa`).
+/// Glyph, title (12/500) and the status label at the right (`PZNJa`). In a narrow card the title wraps
+/// and the status label stays whole.
 pub(super) fn header(glyph: Icon, title: &str, (state_glyph, state): (Icon, Arc<str>)) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Event, PaletteColor::TextPrimary))
-    .child(Text::new(title).variant(ExtraTypography::NoticeHeading.role()).nowrap())
+    .child(
+      Text::new(title)
+        .variant(ExtraTypography::NoticeHeading.role())
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
     .child(Spacer::new().flex(1.0))
     .child(compact_status_label(state_glyph, &state))
     .into()

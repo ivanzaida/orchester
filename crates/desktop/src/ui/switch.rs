@@ -45,7 +45,7 @@ impl Switch {
   }
 
   /// The option's focus ring on its edge, for a switch in a panel that clips what reaches past it
-  /// (the run's Approvals in its scrolling panel).
+  /// (the run's Approvals in its scrolling panel); the option keeps the ring and its gap inside it.
   pub const fn inset_ring(mut self) -> Self {
     self.ring = Ring::Inset;
     self
@@ -167,7 +167,12 @@ impl Switch {
           .variant(ExtraTypography::CellLabel.role())
           .width(Dimension::Pct(100.0)),
       );
-    keyboard_stop(Button::empty().button(), self.ring)
+    let option = keyboard_stop(Button::empty().button(), self.ring);
+    let option = match self.ring {
+      Ring::Inset => option.padding(ExtraSpacing::FocusInset.role()),
+      Ring::Outer => option,
+    };
+    option
       .id(self.id.clone())
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Stack.role())

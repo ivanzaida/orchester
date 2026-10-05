@@ -43,8 +43,8 @@ impl ProjectDb {
   /// interrupted. One whose decision is still on its way to the agent reads as that decision.
   pub fn decided_tool_approvals(&self, run: RunId) -> Result<Vec<DecidedToolApproval>, StoreError> {
     let mut query = self.connection.prepare(&format!(
-      "SELECT {COLUMNS}, state, decided_at FROM tool_approvals WHERE state != 'pending' AND run_id = ?1 \
-       ORDER BY requested_at, id"
+      "SELECT {COLUMNS}, state, decided_at, decided_by FROM tool_approvals WHERE state != 'pending' \
+       AND run_id = ?1 ORDER BY requested_at, id"
     ))?;
     let rows = query
       .query_map([run.to_string()], |row| {
@@ -52,12 +52,13 @@ impl ProjectDb {
           StoredApproval::read(row)?,
           row.get::<_, String>(13)?,
           row.get::<_, i64>(14)?,
+          row.get::<_, Option<String>>(15)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     rows
       .into_iter()
-      .map(|(stored, state, decided_at)| {
+      .map(|(stored, state, decided_at, decided_by)| {
         let decision = match state.as_str() {
           "approved" | "dispatching_approval" => Some(ToolApprovalDecision::Approved),
           "denied" | "dispatching_denial" => Some(ToolApprovalDecision::Denied),
@@ -67,6 +68,10 @@ impl ProjectDb {
         Ok(DecidedToolApproval {
           request: stored.into_pending()?,
           decision,
+          decided_by: decided_by
+            .as_deref()
+            .map(|decided_by| parse::<DecidedBy>("approval answer", decided_by))
+            .transpose()?,
           decided_at: Timestamp::from_unix_millis(decided_at),
         })
       })

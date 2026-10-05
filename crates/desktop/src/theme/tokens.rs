@@ -245,6 +245,14 @@ pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = 1200.0;
 /// (164), the 150 search, the run's state (*Following live*, 99), *Details* (81) and four 10 gaps.
 /// Narrower, *Show* and the search go to a second line (not drawn).
 pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_CHAT: f32 = 582.0;
+/// The narrowest chat column whose inline approval card (`KpZxA` in `sACJF`) holds its answers on one
+/// line: the 144 around a card's body (the message's indent and padding, the card's 14 padding),
+/// *Always allow for this profile…* (190), *Deny* (72), *Approve similar in this run* (182), *Approve
+/// once* (118) and four 8 gaps. Narrower, *Always allow…* goes to a line of its own above the buttons.
+pub const CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT: f32 = 744.0;
+/// The narrowest chat column whose approval card holds its three buttons on one line: the card's 144,
+/// the buttons (372) and two 8 gaps. Narrower, each button takes a row of its own, full width.
+pub const CONVERSATION_ANSWERS_ROW_MIN_CHAT: f32 = 536.0;
 /// Below this window width the conversation's step rail starts collapsed to its strip (`I35q7D`).
 pub const CONVERSATION_RAIL_COLLAPSE_BELOW_WINDOW: f32 = 1200.0;
 /// The narrowest window, less the Details pane when it is open, whose composer (`C3nu0z`) holds its

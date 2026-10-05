@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use lurq::app::theme::PaletteColor;
 use orchester_core::{
   connection::AgentProvider,
   run::PendingToolApproval,
@@ -25,7 +26,7 @@ use crate::{
 const DIALOG: &str = "tool-approval-dialog";
 
 /// The waiting requests of the project, oldest first.
-fn waiting(repo: &Path) -> Vec<PendingToolApproval> {
+pub(super) fn waiting(repo: &Path) -> Vec<PendingToolApproval> {
   ProjectDb::open(repo)
     .expect("open")
     .pending_tool_approvals_all()
@@ -110,12 +111,16 @@ fn app_mcp_answers_while_the_approval_dialog_is_open() {
 }
 
 /// `decide_approval`'s arguments.
-fn answer(approval: &str, decision: &str) -> Value {
+pub(super) fn answer(approval: &str, decision: &str) -> Value {
   json!({"project": "Kontur", "approval": approval, "decision": decision})
 }
 
 /// Creates task `key` whose brief tells the agent what to run, runs it and waits for its first request.
-fn run_until_asked(desktop: &mut Desktop, agent: &mut McpAgent, (key, brief): (&str, &str)) -> PendingToolApproval {
+pub(super) fn run_until_asked(
+  desktop: &mut Desktop,
+  agent: &mut McpAgent,
+  (key, brief): (&str, &str),
+) -> PendingToolApproval {
   let created = ok(
     agent,
     "create_task",
@@ -130,7 +135,7 @@ fn run_until_asked(desktop: &mut Desktop, agent: &mut McpAgent, (key, brief): (&
 }
 
 /// Waits until the latest run of task `key` ended and the dialog closed; that run's answers.
-fn ended(desktop: &mut Desktop, key: &str) -> orchester_store::DecisionCounts {
+pub(super) fn ended(desktop: &mut Desktop, key: &str) -> orchester_store::DecisionCounts {
   let repo = desktop.repo().to_path_buf();
   let latest = |repo: &Path| {
     let db = ProjectDb::open(repo).expect("open");
@@ -240,5 +245,13 @@ fn app_mcp_popover_lets_automation_answer_and_takes_it_back() {
   let mut desktop = Desktop::with_seeded_project_and_app_mcp(|_| {});
   assert!(!allowed(&desktop), "off until a person turns it on");
   let_automation_answer(&mut desktop, true);
+  // The item keeps its `$hover` fill while its popover is open, the pointer elsewhere.
+  desktop.hover("nav-tasks");
+  let hover = desktop.color(PaletteColor::AccentMuted);
+  assert_eq!(desktop.fill_at("status-mcp"), Some(hover));
   let_automation_answer(&mut desktop, false);
+  desktop.click("status-mcp");
+  desktop.wait_until("the popover closes", |desktop| !has(desktop, "status-mcp-popover"));
+  desktop.hover("nav-tasks");
+  assert_ne!(desktop.fill_at("status-mcp"), Some(hover));
 }

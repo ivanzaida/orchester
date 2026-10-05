@@ -12,7 +12,7 @@ use lurq::{
 use super::{
   super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps},
   Timeline,
-  approval_card::{ApprovalCardProps, ApprovalCardView},
+  approval_card::{AnswersLayout, ApprovalCardProps, ApprovalCardView},
   cards::{self, PlanCardProps, PlanCardView},
   column, divider,
   message::{self, PersonMessageProps, PersonMessageView},
@@ -30,6 +30,8 @@ pub(super) struct RowProps {
   pub(super) line: Line,
   /// Whether unparsed lines are shown line by line.
   pub(super) raw: bool,
+  /// How an approval card lays out its answers in the chat's width.
+  pub(super) answers: AnswersLayout,
 }
 
 /// What a row of the list shows.
@@ -88,7 +90,7 @@ impl Component for TimelineRowView {
       Row::Folded { key, steps } => spaced(divider::folded(ctx, &timeline, key, steps)),
       Row::NotStarted { steps, .. } => spaced(divider::not_started(ctx, steps)),
       Row::Agent(agent) => spaced(message::agent_row(ctx, agent, &timeline, props.raw)),
-      Row::Item(item) => spaced(item_row(ctx, item, &timeline)),
+      Row::Item(item) => spaced(item_row(ctx, item, (&timeline, props.answers))),
       Row::Entry { key, entry } => ctx.mount_keyed::<EntryView>(
         key,
         EntryProps {
@@ -109,7 +111,7 @@ impl Component for TimelineRowView {
 }
 
 /// A person's message, a card, a problem, a return or restart, a step's end or the run's.
-fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
+fn item_row(ctx: &mut Ctx, item: &Item, (timeline, answers): (&Timeline, AnswersLayout)) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => ctx.mount_keyed::<PersonMessageView>(
       &format!("person-{}", entry.id),
@@ -128,9 +130,13 @@ fn item_row(ctx: &mut Ctx, item: &Item, timeline: &Timeline) -> Element {
         task_title: timeline.task_title.clone(),
       },
     ),
-    ItemKind::Approval(card) => {
-      ctx.mount_keyed::<ApprovalCardView>(&item.key, ApprovalCardProps { card: card.clone() })
-    }
+    ItemKind::Approval(card) => ctx.mount_keyed::<ApprovalCardView>(
+      &item.key,
+      ApprovalCardProps {
+        card: card.clone(),
+        answers,
+      },
+    ),
     // A tool step's failing command is the tool step's own message (`FeiRG`).
     ItemKind::Problem(entry) if matches!(entry.kind, EntryKind::ToolCommand(_)) => {
       message::tool_step_failure(ctx, item, entry, timeline)
