@@ -391,9 +391,9 @@ endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design 
 and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
 there; turn the phases into tasks here when work starts, beginning with P1.
 
-P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58) waits for review (see *Done*). The rest:
+P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58) is done (see *Done*). The rest:
 
-- **P1c · ORC-58 (implemented 2026-10-05, branch `claude/orc58`; waiting for review, see *Done*):** the
+- **P1c · ORC-58 (done 2026-10-05, branch `claude/orc58`, see *Done*):** the
   `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
   start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
@@ -552,8 +552,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
-ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (implemented 2026-10-05; review
-findings fixed, second review pending, not merged)
+ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (done 2026-10-05: independent code and security
+review, second round PASS)
 
 - **Crate** `crates/agent` (`orchester-agent`), used by nothing yet (the runner takes it in P1d). No new workspace
   dependency: reqwest with rustls (ring, the OS trust store), tokio, serde_json, sha2, tempfile, parking_lot and
@@ -1091,20 +1091,6 @@ ORC-61 · Conversation merged with Activity, Send now and following live (absorb
   `run_permissions`, `task_graph`, `changes`, `integration`; `--test changes c`; `-p orchester-core --test app_server
   turn`; `-p orchester-runner --features test-agent --test send_now_delivery send_now_`; `-p orchester-store --test
   conversation conversation`.
-- **Review fixes (2026-10-05):** search output bounded (plain rg output, lines capped while read, the no-rg search
-  cuts lines and stops at 100 000 files, depth 64 or 60 s, with a note); a `retry-after` too large for a `Duration`
-  no longer panics (it is the longest wait, which is not waited for) and odd values fall back to the backoff;
-  `retry-after` is honoured on every retried status (529, 503, …), not only 429; `Endpoint::reached_directly`
-  (scheme in any case, every loopback host) decides the proxy bypass; SSE events capped at 16 MiB, lone CR line ends
-  and a leading BOM read as the standard says; globs without rg limited to 256 characters and 64 alternatives and
-  matched without recursion; `read_file`, `edit_file` and `write_file` refuse files that are not regular (a FIFO)
-  and files that grow past 32 MiB while read; a new file is renamed into place without replacing one that appeared
-  meanwhile; a 400 naming the "context limit" also compacts; rg exit code 2 with some matches adds a note; the unused
-  `FileTools::scope` is gone. Tests: 30 `anthropic_`, 22 `files_` (the FIFO test runs on macOS only). Not changed:
-  new files still get mode 0644 whatever the umask (reading the umask needs a call that sets it); HTTP-date
-  `retry-after` values are not read (model APIs send seconds); the model lookup before the first request stays
-  (P2/P3 add metadata entered by hand for Custom endpoints); a file appearing between the check and the rename has no
-  test (the race cannot be forced through the public API).
 - **Differs from the design:** no *Memory* tab yet (its screens come with Memory 3/3), so result cards link Changes and
   Summary only; a failed step starts open; matched words are not highlighted. An approval card sits after the tool
   call that asked for it when the CLI reported that call first (they are matched by time, not by call).
@@ -1177,20 +1163,6 @@ ORC-57 · Native agent P1b: core native module
   (`permission::known_safe`), and the I/O-free loop (`session`: §4.10 order, approvals, denials returned to the
   agent, the finish reminder, every stop mode, resume with unanswered calls, compaction at 80 % of the window, at
   most 3 per invocation). Nothing runs it yet (P1c/P1d). Tests: `cargo test -p orchester-core --test native native_`.
-- **Review fixes (2026-10-05):** search output bounded (plain rg output, lines capped while read, the no-rg search
-  cuts lines and stops at 100 000 files, depth 64 or 60 s, with a note); a `retry-after` too large for a `Duration`
-  no longer panics (it is the longest wait, which is not waited for) and odd values fall back to the backoff;
-  `retry-after` is honoured on every retried status (529, 503, …), not only 429; `Endpoint::reached_directly`
-  (scheme in any case, every loopback host) decides the proxy bypass; SSE events capped at 16 MiB, lone CR line ends
-  and a leading BOM read as the standard says; globs without rg limited to 256 characters and 64 alternatives and
-  matched without recursion; `read_file`, `edit_file` and `write_file` refuse files that are not regular (a FIFO)
-  and files that grow past 32 MiB while read; a new file is renamed into place without replacing one that appeared
-  meanwhile; a 400 naming the "context limit" also compacts; rg exit code 2 with some matches adds a note; the unused
-  `FileTools::scope` is gone. Tests: 30 `anthropic_`, 22 `files_` (the FIFO test runs on macOS only). Not changed:
-  new files still get mode 0644 whatever the umask (reading the umask needs a call that sets it); HTTP-date
-  `retry-after` values are not read (model APIs send seconds); the model lookup before the first request stays
-  (P2/P3 add metadata entered by hand for Custom endpoints); a file appearing between the check and the rename has no
-  test (the race cannot be forced through the public API).
 - **Differs from the design:** `cargo metadata`/`cargo tree` are not known-safe, because a `.cargo/config.toml` or
   `rust-toolchain.toml` the agent writes in the worktree can replace `rustc`/the toolchain with any program; they
   ask. Read stamps are left to the file tool executor (P1c), which must drop them when a `Compaction` item is stored.
