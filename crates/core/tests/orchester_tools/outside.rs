@@ -99,13 +99,14 @@ fn orchester_tools_read_outside_refuses_orchester_state() {
   let folders = Folders::new();
   let other = folders.dependency.join(".orchester").join("orchester.db");
   let installed = folders.dependency.join("install").join("orchester.db-wal");
+  let server = folders.dependency.join("server").join("orchester-server.db");
   let private = folders.private.join("other-project").join("inv-approvals.json");
-  for path in [&other, &installed, &private] {
+  for path in [&other, &installed, &server, &private] {
     fs::create_dir_all(path.parent().expect("a parent")).expect("a folder");
     fs::write(path, "secret").expect("a file");
   }
   let reads = folders.reads();
-  for path in [&other, &installed, &private] {
+  for path in [&other, &installed, &server, &private] {
     assert!(
       matches!(reads.read(&text(path), 1, 10), Err(OutsideReadError::Protected(_))),
       "{}",
@@ -181,5 +182,18 @@ fn orchester_tools_read_outside_follows_the_shared_credential_rule() {
   assert!(matches!(
     reads.read(&text(&credentials), 1, 10),
     Err(OutsideReadError::Credentials(_))
+  ));
+}
+
+/// A NUL makes a file no text file wherever it lies up to the last line read, in a line before the offset too.
+#[test]
+fn orchester_tools_read_outside_refuses_a_nul_before_the_offset() {
+  let folders = Folders::new();
+  let reads = folders.reads();
+  let file = folders.dependency.join("data.db");
+  fs::write(&file, b"SQLite format 3\0\x01\nreadable text\nmore\n").expect("a file");
+  assert!(matches!(
+    reads.read(&text(&file), 2, 10),
+    Err(OutsideReadError::Binary(_))
   ));
 }

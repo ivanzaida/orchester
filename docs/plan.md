@@ -105,7 +105,10 @@ and Codex by the per-invocation relay that already serves `mcp__Orchester__appro
   rule and refuses `.git` and Orchester's own state everywhere. Git is pinned to the worktree's own git folder with
   an absolute empty hooks folder.
 - First review (FAIL, four majors) fixed: other projects' private files, unbounded output, asking tools without a
-  runner check, `run_project_tool` and the network.
+  runner check, `run_project_tool` and the network. Re-review (FAIL, one major) fixed: git never enters a nested
+  repository and `git_add` refuses one (`cargo test -p orchester-runner --test orchester_tools_git
+  orchester_tools_git`, with a real nested filter); prompt grants are bound to their arguments; server databases and
+  NULs before the offset are refused.
 - Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test claude_approvals
   claude_approvals`, `--test claude_invocation claude_invocation`, `--test mcp mcp`; `cargo test -p orchester-runner
   --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`, `claude_approvals`, …);

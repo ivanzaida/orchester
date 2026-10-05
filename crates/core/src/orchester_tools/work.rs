@@ -137,7 +137,10 @@ impl ToolCall {
         Ok(ToolWork::Done(ToolResult::shown(text)))
       }
       Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
-      Self::Git(call) => Ok(ToolWork::Run(Box::new(git::program(call, context)))),
+      Self::Git(call) => {
+        git::refuse_nested(call, context)?;
+        Ok(ToolWork::Run(Box::new(git::program(call, context))))
+      }
     }
   }
 }

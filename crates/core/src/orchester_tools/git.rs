@@ -12,10 +12,17 @@
 //! hooks folder is an empty folder the runner owns (an absolute path, never one relative to the worktree)
 //! and `--no-verify` is given too. Nothing is signed or checked against a signature (`commit.gpgSign`,
 //! `log.showSignature`), which would start a signing program.
+//!
+//! Git never enters a nested repository: a submodule, or a repository the agent made in the worktree and
+//! staged as a gitlink, keeps a configuration of its own, whose filter programs git would run when it looks
+//! at that repository's files. Recursion is off for every call (`submodule.recurse=false`,
+//! `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`, and `--ignore-submodules=all` for the
+//! commands that take it), so a gitlink is only a commit id to git, and `git_add` refuses a path that is or
+//! lies in a nested repository ([`refuse_nested`]).
 
 use std::{path::Path, time::Duration};
 
-use super::{GitCall, OutputKept, ToolContext, ToolProgram};
+use super::{GitCall, OutputKept, ToolCallError, ToolContext, ToolProgram};
 use crate::{
   command::Command,
   native::command::{GIT_DIFF_OPTIONS, GIT_GLOBAL},
@@ -26,6 +33,35 @@ pub const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 /// How much of git's output the agent gets: the start, where a diff or log begins.
 const GIT_OUTPUT: usize = 128 * 1024;
 const PROGRAM: &str = "git";
+/// Settings that keep git out of nested repositories.
+const NO_SUBMODULES: [&str; 3] = [
+  "submodule.recurse=false",
+  "diff.ignoreSubmodules=all",
+  "status.submoduleSummary=false",
+];
+const IGNORE_SUBMODULES: &str = "--ignore-submodules=all";
+/// The entry that makes a folder a repository of its own.
+const GIT_ENTRY: &str = ".git";
+
+/// Refuses a `git_add` of a path in `context`'s worktree that is a nested repository or lies in one: staged,
+/// it would be a gitlink, and its own configuration would be honoured by a git that entered it.
+pub(super) fn refuse_nested(call: &GitCall, context: &ToolContext<'_>) -> Result<(), ToolCallError> {
+  let GitCall::Add { paths } = call else {
+    return Ok(());
+  };
+  for path in paths {
+    let mut folder = context.worktree.join(path.as_str());
+    while folder.starts_with(context.worktree) && folder != context.worktree {
+      if folder.join(GIT_ENTRY).symlink_metadata().is_ok() {
+        return Err(ToolCallError::NestedRepository(path.as_str().to_owned()));
+      }
+      if !folder.pop() {
+        break;
+      }
+    }
+  }
+  Ok(())
+}
 
 /// The git program of `call` in `context`'s worktree.
 pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram {
@@ -38,12 +74,15 @@ pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram 
     "-c".to_owned(),
     "log.showSignature=false".to_owned(),
   ]);
+  for setting in NO_SUBMODULES {
+    args.extend(["-c".to_owned(), setting.to_owned()]);
+  }
   let mut stdin = None;
   let tail: Vec<String> = match call {
-    GitCall::Status => words(&["status", "--short", "--branch"]),
+    GitCall::Status => words(&["status", "--short", "--branch", IGNORE_SUBMODULES]),
     GitCall::Diff { path, staged } => {
       args.push("--literal-pathspecs".to_owned());
-      let mut tail = words(&["diff"]);
+      let mut tail = words(&["diff", IGNORE_SUBMODULES]);
       tail.extend(words(&GIT_DIFF_OPTIONS));
       if *staged {
         tail.push("--cached".to_owned());
@@ -54,7 +93,7 @@ pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram 
     }
     GitCall::Log { path, count } => {
       args.push("--literal-pathspecs".to_owned());
-      let mut tail = words(&["log"]);
+      let mut tail = words(&["log", IGNORE_SUBMODULES]);
       tail.extend(words(&GIT_DIFF_OPTIONS));
       tail.push(format!("--max-count={count}"));
       tail.push("--".to_owned());
@@ -62,7 +101,7 @@ pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram 
       tail
     }
     GitCall::Show { revision, path } => {
-      let mut tail = words(&["show"]);
+      let mut tail = words(&["show", IGNORE_SUBMODULES]);
       tail.extend(words(&GIT_DIFF_OPTIONS));
       tail.push("--end-of-options".to_owned());
       tail.push(match path {

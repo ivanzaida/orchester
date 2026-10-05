@@ -134,9 +134,16 @@ fn orchester_tools_git_runs_hardened_in_the_worktree_without_a_shell() {
       &format!("core.hooksPath={}", Path::new("/orchester-private/no-hooks").display()),
       "-c",
       "log.showSignature=false",
+      "-c",
+      "submodule.recurse=false",
+      "-c",
+      "diff.ignoreSubmodules=all",
+      "-c",
+      "status.submoduleSummary=false",
       "status",
       "--short",
-      "--branch"
+      "--branch",
+      "--ignore-submodules=all"
     ]
   );
   assert!(!command.inherits_env());
@@ -147,4 +154,23 @@ fn orchester_tools_git_runs_hardened_in_the_worktree_without_a_shell() {
       .any(|(name, value)| name == "GIT_TERMINAL_PROMPT" && value == "0")
   );
   assert_eq!(program.timeout(), Duration::from_secs(60));
+}
+
+/// `git_add` stages no repository of its own: neither one in the worktree nor a path inside one.
+#[test]
+fn orchester_tools_git_add_refuses_nested_repositories() {
+  let folders = Folders::new();
+  std::fs::create_dir_all(folders.worktree.join("vendor").join("lib").join(".git")).expect("a nested repository");
+  std::fs::write(folders.worktree.join("vendor").join("lib").join("a.txt"), "a").expect("a file");
+  let reads = folders.reads();
+  let context = context(&folders.worktree, &reads, &[]);
+  for path in ["vendor/lib", "vendor/lib/a.txt"] {
+    let call = parse("git_add", &json!({ "paths": [path] })).expect("valid");
+    assert_eq!(
+      call.work(&context),
+      Err(ToolCallError::NestedRepository(path.to_owned()))
+    );
+  }
+  let call = parse("git_add", &json!({"paths": ["vendor/other.txt"]})).expect("valid");
+  assert!(call.work(&context).is_ok());
 }

@@ -156,13 +156,15 @@ invocation; a native agent can later declare the same schemas in its own request
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
 - **Approval, held by the runner.** A call of a tool that asks runs only once approved, whatever the CLI does: an
-  approval through Claude Code's permission prompt leaves a grant for one call of that tool, and a call that arrives
+  approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
+  arguments the person saw, and a call that arrives
   without one is asked about by the runner itself before it runs (`orchester-call-<n>` requests). Codex is told to
   run every tool (`approval_mode = "approve"` in the thread's configuration), so the runner asks for each call that
   asks; whether Codex 0.159.2 would send its own request for a `prompt` tool while `mcp_elicitations` is off is not
   relied on. A call that asks reaches a person whether or not the step asks before MCP actions; rules of the run and
   auto-approval answer it as they answer an MCP call, but auto-approval never runs a project's program. *Approve
-  similar* covers the tool for the run, whatever its arguments (one approved read covers later reads); *Always allow*
+  similar* covers the tool for the run, whatever its arguments, as for every MCP tool and as its tile says (one
+  approved read covers later reads); no offered tool has fixed arguments a rule could name instead; *Always allow*
   is unavailable (*Orchester's own tools have no list of tools that run without asking yet*).
 - **Execution.** The runner runs every call off its async workers: a program and its arguments, never a shell line,
   in the run's worktree with the environment the agent's own programs get (no secret). Each value is one argument of
@@ -170,7 +172,11 @@ invocation; a native agent can later declare the same schemas in its own request
   may not start with `-` or hold whitespace or `:`; paths are relative, without `..` or `:`); a commit message goes
   to git's standard input (`-F -`). Git is pinned to the worktree and its own git folder (`--git-dir`, read from the
   repository, `--work-tree`), so a rewritten `.git` file cannot lead it to a configuration of the agent's making;
-  the repository's own configuration applies, filters included (as for the runner's checkpoint commits). Git also
+  the repository's own configuration applies, filters included (as for the runner's checkpoint commits). Git never
+  enters a nested repository, whose own configuration (a filter program) it would honour: recursion is off
+  (`submodule.recurse=false`, `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`,
+  `--ignore-submodules=all`), so a gitlink is only a commit id, and `git_add` refuses a path that is or lies in a
+  repository of its own (checked against a real nested repository with a clean filter). Git also
   gets the native agent's hardening, no diff or textconv program, an absolute empty hooks folder the runner owns
   (`<temp>/orchester-mcp/<project>/no-hooks`) with `--no-verify`, no signing and no signature checks. Output is read
   as it comes and kept within the cap: the first 128 KiB for git (60 seconds), the end of a project tool's output
@@ -180,8 +186,10 @@ invocation; a native agent can later declare the same schemas in its own request
   are the shared credential rule's locations (`CommandScope::holds_credentials`; published sources such as a package
   registry's `src` are not credentials), anything in a `.git` folder, and Orchester's own state wherever it lies: the
   whole `<temp>/orchester-mcp` tree (every project's private files with MCP secrets and tokens), any `.orchester`
-  folder but the run's worktree, any `orchester.db*` file and the folder of Orchester's programs; device, stream,
-  verbatim, drive-relative and network paths; a folder or pipe. The file is read as it comes: numbered lines, each
+  folder but the run's worktree, any `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's
+  programs; device, stream,
+  verbatim, drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line
+  read. The file is read as it comes: numbered lines, each
   cut to 16 KiB, at most 256 KiB, with where to read on. Known limits: the path is checked, then opened, so a link
   swapped in between by another program could lead elsewhere (what is opened must still be a file); a mapped network
   drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder, also in a step without network.

@@ -11,9 +11,9 @@
 //!   files and folders, the applications' data in `AppData` and `Library`);
 //! - anything in a `.git` folder (a repository's configuration can hold a remote's credentials);
 //! - Orchester's own state wherever it lies: any `.orchester` folder (every project's database, memory and runs'
-//!   worktrees), an application database (`orchester.db` and its journal files), and the folders the runner names
-//!   (every project's private files with MCP secrets and tokens, the folder of Orchester's programs and database); the
-//!   run's own worktree stays readable.
+//!   worktrees), an application or shared server database (`orchester.db`, `orchester-server.db`, their journals), and
+//!   the folders the runner names (every project's private files with MCP secrets and tokens, the folder of Orchester's
+//!   programs and database); the run's own worktree stays readable.
 //!
 //! Known limits: a path is checked, then opened, so a link swapped in between by another program could lead
 //! the read elsewhere; a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local
@@ -40,8 +40,8 @@ pub const MAX_READ_BYTES: usize = 256 * 1024;
 pub const MAX_LINE_BYTES: usize = 16 * 1024;
 /// The folder of Orchester's state in a repository.
 const STATE_DIR: &str = ".orchester";
-/// The application database, and the files SQLite keeps beside it.
-const DATABASE: &str = "orchester.db";
+/// The application's and the shared server's databases, and the files SQLite keeps beside them.
+const DATABASES: [&str; 2] = ["orchester.db", "orchester-server.db"];
 
 /// Why a file outside the worktree is not read. The message is the error result the agent gets.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -108,7 +108,7 @@ impl OutsideReads {
     let named = path.components().any(|component| match component {
       Component::Normal(name) => {
         let name = name.to_string_lossy().to_lowercase();
-        name == STATE_DIR || name.starts_with(DATABASE)
+        name == STATE_DIR || DATABASES.iter().any(|database| name.starts_with(database))
       }
       _ => false,
     });
@@ -133,15 +133,16 @@ impl OutsideReads {
     let last = offset.saturating_add(limit.saturating_sub(1));
     loop {
       let keep = if number + 1 < offset { 0 } else { MAX_LINE_BYTES };
-      let Some(cut) = next_line(&mut reader, keep, &mut line).map_err(unreadable)? else {
+      let Some(Line { cut, nul }) = next_line(&mut reader, keep, &mut line).map_err(unreadable)? else {
         return Ok(text);
       };
+      // A NUL anywhere up to the last line read, skipped lines too, makes it no text file.
+      if nul {
+        return Err(OutsideReadError::Binary(file));
+      }
       number += 1;
       if number < offset {
         continue;
-      }
-      if line.contains(&0) {
-        return Err(OutsideReadError::Binary(file));
       }
       // Writing to a String cannot fail.
       if number > last || bytes + line.len() > MAX_READ_BYTES {
@@ -156,26 +157,35 @@ impl OutsideReads {
   }
 }
 
+/// What [`next_line`] saw of a line.
+struct Line {
+  /// Part of it was left out.
+  cut: bool,
+  /// It holds a NUL, kept or not.
+  nul: bool,
+}
+
 /// Reads the next line of `reader` into `line`, keeping at most `keep` bytes of it and passing over the
-/// rest; `Some(true)` when part of it was left out, `None` at the end of the file.
-fn next_line(reader: &mut impl BufRead, keep: usize, line: &mut Vec<u8>) -> io::Result<Option<bool>> {
+/// rest; `None` at the end of the file.
+fn next_line(reader: &mut impl BufRead, keep: usize, line: &mut Vec<u8>) -> io::Result<Option<Line>> {
   line.clear();
-  let (mut cut, mut any) = (false, false);
+  let (mut seen, mut any) = (Line { cut: false, nul: false }, false);
   loop {
     let buffer = reader.fill_buf()?;
     if buffer.is_empty() {
-      return Ok(any.then_some(cut));
+      return Ok(any.then_some(seen));
     }
     any = true;
     let end = buffer.iter().position(|byte| *byte == b'\n');
     let chunk = &buffer[..end.map_or(buffer.len(), |at| at + 1)];
     let room = keep.saturating_sub(line.len());
-    cut |= chunk.len() > room;
+    seen.cut |= chunk.len() > room;
+    seen.nul |= chunk.contains(&0);
     line.extend_from_slice(&chunk[..chunk.len().min(room)]);
     let used = chunk.len();
     reader.consume(used);
     if end.is_some() {
-      return Ok(Some(cut));
+      return Ok(Some(seen));
     }
   }
 }

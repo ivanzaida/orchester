@@ -115,6 +115,8 @@ pub enum ToolCallError {
   UnknownProjectTool(String),
   #[error("the program `{0}` of the project tool was not found")]
   ProgramNotFound(String),
+  #[error("`{0}` is or lies in a repository of its own, which Orchester's tools do not stage")]
+  NestedRepository(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
 }

@@ -198,17 +198,7 @@ impl Relay {
       let Some(answer) = answer else {
         return;
       };
-      if write
-        .write_all(
-          format!(
-            "{answer}
-"
-          )
-          .as_bytes(),
-        )
-        .await
-        .is_err()
-      {
+      if write.write_all(format!("{answer}\n").as_bytes()).await.is_err() {
         return;
       }
     }
@@ -227,7 +217,10 @@ impl Relay {
       .flatten();
     let answer = self.ask(request, AskedBy::Prompt, lines).await?;
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
-      self.served.tools.grant(tool);
+      self
+        .served
+        .tools
+        .grant(tool, arguments.get("input").unwrap_or(&Value::Null));
     }
     Some(answer.result())
   }
@@ -246,7 +239,7 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    if tools.asks(call.tool()) && !tools.take_grant(call.tool()) {
+    if tools.asks(call.tool()) && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());

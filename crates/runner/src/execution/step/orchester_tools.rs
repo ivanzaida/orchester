@@ -5,7 +5,8 @@
 //! secret values removed.
 //!
 //! A call of a tool that asks runs only once approved, which the runner holds itself: an approval given
-//! through Claude Code's permission prompt leaves a grant for one call of that tool ([`ToolHost::grant`]),
+//! through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
+//! arguments the person saw ([`ToolHost::grant`]),
 //! and a call that finds none is asked about by the runner before it runs ([`super::relay`]). Codex runs
 //! every tool without asking, so the runner asks for it.
 //!
@@ -60,7 +61,7 @@ pub(in super::super) struct ToolHost {
   /// The invocation's secret values, removed from every answer.
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
-  grants: Mutex<Vec<OrchesterTool>>,
+  grants: Mutex<Vec<(OrchesterTool, Value)>>,
 }
 
 impl ToolHost {
@@ -94,15 +95,19 @@ impl ToolHost {
     self.tools.asks(tool.as_str())
   }
 
-  /// One approved call of `tool`, given through the CLI's own prompt.
-  pub(super) fn grant(&self, tool: OrchesterTool) {
-    self.grants.lock().push(tool);
+  /// One approved call of `tool` with `arguments`, given through the CLI's own prompt.
+  pub(super) fn grant(&self, tool: OrchesterTool, arguments: &Value) {
+    self.grants.lock().push((tool, called_with(arguments)));
   }
 
-  /// Takes the approval of one call of `tool`; `false` when there is none.
-  pub(super) fn take_grant(&self, tool: OrchesterTool) -> bool {
+  /// Takes the approval of one call of `tool` with exactly `arguments`; `false` when there is none.
+  pub(super) fn take_grant(&self, tool: OrchesterTool, arguments: &Value) -> bool {
+    let arguments = called_with(arguments);
     let mut grants = self.grants.lock();
-    let Some(at) = grants.iter().position(|granted| *granted == tool) else {
+    let Some(at) = grants
+      .iter()
+      .position(|(granted, with)| *granted == tool && *with == arguments)
+    else {
       return false;
     };
     grants.remove(at);
@@ -138,6 +143,15 @@ impl ToolHost {
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
     }
+  }
+}
+
+/// `arguments` as a call names them: none is an empty object.
+fn called_with(arguments: &Value) -> Value {
+  if arguments.is_null() {
+    Value::Object(serde_json::Map::new())
+  } else {
+    arguments.clone()
   }
 }
 
@@ -207,7 +221,13 @@ impl RunTask {
       .map_err(|error| problem(format!("cannot read the repository's git folder: {error}")))?;
     let name = worktree.file_name().ok_or_else(missing)?;
     let git_dir = PathBuf::from(common.trim()).join("worktrees").join(name);
-    if git_dir.is_dir() { Ok(git_dir) } else { Err(missing()) }
+    // The folder must be this worktree's: its `gitdir` names the worktree's `.git`.
+    let names = std::fs::read_to_string(git_dir.join("gitdir")).map_err(|_| missing())?;
+    let same = |path: &Path| std::fs::canonicalize(path).ok();
+    match (same(Path::new(names.trim())), same(&worktree.join(".git"))) {
+      (Some(named), Some(own)) if named == own => Ok(git_dir),
+      _ => Err(missing()),
+    }
   }
 
   /// Orchester's server for a Codex invocation serving `tools`: the relay Codex starts and the listener it
