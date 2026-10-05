@@ -168,7 +168,10 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   db.start_sharing(
     &link,
     std::slice::from_ref(&review),
-    &[cached(&db, &task, Some("delivery"), "Alice Moreau"), cached_draft],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau"), cached_draft],
+      &Default::default(),
+    ),
   )
   .expect("share");
 
@@ -221,7 +224,10 @@ fn shared_tasks_a_change_from_the_server_keeps_the_runs_content_and_the_local_pi
   db.start_sharing(
     &link("ORC"),
     &[],
-    &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &Default::default(),
+    ),
   )
   .expect("share");
 
@@ -265,7 +271,10 @@ fn shared_tasks_a_run_of_a_shared_task_records_its_status_for_the_server() {
   db.start_sharing(
     &link("ORC"),
     &[],
-    &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &Default::default(),
+    ),
   )
   .expect("share");
   let events = run.start_step(execution, at(120)).expect("start step");
@@ -298,7 +307,10 @@ fn shared_tasks_a_run_status_the_server_changed_meanwhile_is_not_sent_and_says_w
   db.start_sharing(
     &link("ORC"),
     &[],
-    &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &Default::default(),
+    ),
   )
   .expect("share");
   let events = run.start_step(execution, at(120)).expect("start step");
@@ -340,7 +352,10 @@ fn shared_tasks_make_local_keeps_every_cached_task() {
   db.start_sharing(
     &link("ORC"),
     std::slice::from_ref(&tag),
-    &[cached(&db, &task, Some("delivery"), "Alice Moreau"), theirs.clone()],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau"), theirs.clone()],
+      &Default::default(),
+    ),
   )
   .expect("share");
   db.record_sharing_state(Some(MemberRole::Member), Some(at(150)), None)
@@ -398,4 +413,20 @@ fn shared_tasks_migration_keeps_a_populated_database_of_schema_40() {
   assert_eq!(db.shared_task_info(task.id()).expect("info"), None);
   let saved = completed(&mut db, task.id());
   assert_eq!(saved.revision(), revision(2));
+}
+
+/// A change made here while the project was being shared (a run's) is reported, read in the same
+/// transaction as the link, so it is sent on top of the uploaded copy instead of lost.
+#[test]
+fn shared_tasks_a_change_made_while_sharing_is_reported() {
+  let (_repo, mut db, run, _) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let uploaded = std::collections::HashMap::from([(task.id(), task.revision())]);
+  let changed = completed(&mut db, run.task());
+  let cached = cached(&db, &task, Some("delivery"), "Alice Moreau");
+  let reported = db
+    .start_sharing(&link("ORC"), &[], (&[cached], &uploaded))
+    .expect("share");
+  assert_eq!(reported.len(), 1);
+  assert_eq!(reported[0].details(), changed.details());
 }

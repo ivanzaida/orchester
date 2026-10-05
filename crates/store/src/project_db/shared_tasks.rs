@@ -97,23 +97,31 @@ impl ProjectDb {
   /// Shares the project (*Share*, the first person): records `link`, makes the server project's
   /// `tags` the project's tags and writes the uploaded `tasks` as the server confirmed them, in one
   /// transaction.
+  /// Links the project to its server project and caches what the server confirmed. Returns the
+  /// tasks as they were here, read in the same transaction, whose revision is no longer the one
+  /// `uploaded` read: a change made while sharing (a run's), which the caller sends on top.
   pub fn start_sharing(
     &mut self,
     link: &SharingLink,
     tags: &[orchester_core::task::organization::Tag],
-    tasks: &[CachedTask],
-  ) -> Result<(), StoreError> {
+    (tasks, uploaded): (&[CachedTask], &std::collections::HashMap<TaskId, TaskRevision>),
+  ) -> Result<Vec<Task>, StoreError> {
     let transaction = self.connection.transaction()?;
     if sharing::link(&transaction)?.is_some() {
       return Err(StoreError::AlreadyShared);
     }
+    let project = project_key(&transaction)?;
+    let changed = tasks::load_tasks(&transaction, &project, "", [])?
+      .into_iter()
+      .filter(|task| uploaded.get(&task.id()).is_some_and(|read| *read != task.revision()))
+      .collect();
     sharing::insert_link(&transaction, link)?;
     replace_tags(&transaction, tags)?;
     for task in tasks {
       write_cached(&transaction, task, None)?;
     }
     transaction.commit()?;
-    Ok(())
+    Ok(changed)
   }
 
   /// Writes `tasks` as the server confirmed them; `batch` is the key a creation of them was sent

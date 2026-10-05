@@ -132,7 +132,8 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
     last_synced_at: now,
     removed_at: None,
   };
-  db.start_sharing(&link, &[], &[cached]).expect("share");
+  db.start_sharing(&link, &[], (&[cached], &Default::default()))
+    .expect("share");
   let shared = db.task(fixture.task).expect("task").expect("cached task");
   assert_eq!(
     shared.details(),

@@ -177,9 +177,7 @@ impl Servers {
         .iter()
         .map(convert::cached)
         .collect::<Result<Vec<_>, _>>()?;
-      let mut db = ProjectDb::open(&root)?;
-      let changed = changed_since(&db, &uploaded)?;
-      db.start_sharing(&stored, &tags, &tasks)?;
+      let changed = ProjectDb::open(&root)?.start_sharing(&stored, &tags, (&tasks, &uploaded))?;
       if let Err(error) = reapply(&servers, &root, changed) {
         tracing::error!(%error, "a run's change made while the project was shared was not sent");
       }
@@ -227,17 +225,6 @@ impl Drop for InProgress {
   fn drop(&mut self) {
     self.servers.inner.sharing_now.lock().remove(&self.root);
   }
-}
-
-/// The uploaded tasks that changed here since the upload was read: a run's change, since the
-/// screens' are refused meanwhile.
-fn changed_since(db: &ProjectDb, uploaded: &HashMap<TaskId, TaskRevision>) -> Result<Vec<Task>, StoreError> {
-  Ok(
-    db.tasks()?
-      .into_iter()
-      .filter(|task| uploaded.get(&task.id()).is_some_and(|read| *read != task.revision()))
-      .collect(),
-  )
 }
 
 /// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds.

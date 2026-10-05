@@ -30,6 +30,8 @@ pub enum NotSent {
   Changed { current: WorkflowStatus },
   /// The person no longer holds the task.
   NotHolder,
+  /// The server answered that it does not take the change.
+  Refused,
 }
 
 /// A run's workflow status that was not sent, shown on the task until dismissed.
@@ -85,6 +87,7 @@ impl ProjectDb {
     let (kind, current) = match reason {
       NotSent::Changed { current } => ("changed", Some(encode_json("automatic status", 1, &current)?)),
       NotSent::NotHolder => ("not_holder", None),
+      NotSent::Refused => ("refused", None),
     };
     self.connection.execute(
       "UPDATE shared_automatic_status SET not_sent = ?3, server_status = ?4 \
@@ -120,6 +123,7 @@ impl ProjectDb {
         current: decode_json("automatic status", 1, &current)?,
       },
       ("not_holder", None) => NotSent::NotHolder,
+      ("refused", None) => NotSent::Refused,
       _ => return Err(corrupt("unsent automatic status", kind)),
     };
     Ok(Some(UnsentStatus {

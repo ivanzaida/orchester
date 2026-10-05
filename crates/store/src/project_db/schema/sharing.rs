@@ -60,9 +60,10 @@ CREATE TABLE shared_automatic_status (
   from_status TEXT NOT NULL,
   status TEXT NOT NULL,
   changed_at INTEGER NOT NULL,
-  -- Why it was not sent ('changed': the server's status changed, to server_status; 'not_holder'),
-  -- shown on the task until the person dismisses it; NULL while it waits to be sent.
-  not_sent TEXT CHECK (not_sent IN ('changed', 'not_holder')),
+  -- Why it was not sent ('changed': the server's status changed, to server_status; 'not_holder';
+  -- 'refused': the server did not take it), shown on the task until the person dismisses it; NULL
+  -- while it waits to be sent.
+  not_sent TEXT CHECK (not_sent IN ('changed', 'not_holder', 'refused')),
   server_status TEXT
 ) STRICT;
 ";
