@@ -62,7 +62,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, workflow status, priority, tags, pipeline, limits and runs.",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands and runs.",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },

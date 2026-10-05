@@ -251,7 +251,7 @@ fn saved(task: &Task) -> Value {
   json!({
     "key": task.key().to_string(),
     "id": task.id().to_string(),
-    "status": wire::task_status(task.status()),
+    "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
   })
