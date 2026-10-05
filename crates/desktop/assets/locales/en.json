@@ -1524,7 +1524,7 @@
         "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
         "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
         "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
-        "withMeta": "{{meta}} · {{mark}}",
+        "afterMeta": "· {{mark}}",
         "tool": "{{server}} {{tool}}",
         "aCommand": "command",
         "approvedByYouOnce": "approved by you · {{subject}}",

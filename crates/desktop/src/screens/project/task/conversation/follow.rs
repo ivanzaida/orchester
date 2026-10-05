@@ -15,6 +15,7 @@ use lurq::{
 use super::{
   super::activity::LiveFooterProps,
   ConversationTab,
+  approval_card::AnswersLayout,
   row::{Line, RowProps, TimelineRowView},
 };
 use crate::{
@@ -94,7 +95,7 @@ impl ConversationTab {
     ctx: &mut Ctx,
     shown: &Shown,
     reveal: Option<String>,
-    working: Option<LiveFooterProps>,
+    (working, answers): (Option<LiveFooterProps>, AnswersLayout),
   ) -> Element {
     let raw = self.raw.get();
     let rows: Arc<Vec<RowProps>> = Arc::new(
@@ -103,7 +104,7 @@ impl ConversationTab {
         .iter()
         .map(|row| Line::Row(Box::new(row.clone())))
         .chain(working.map(Line::Working))
-        .map(|line| RowProps { line, raw })
+        .map(|line| RowProps { line, raw, answers })
         .collect(),
     );
     let count = shown.rows.len();

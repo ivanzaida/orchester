@@ -41,6 +41,7 @@ mod mcp_servers;
 mod modal_layer;
 mod multiline_command;
 mod narrow_answers;
+mod narrow_marks;
 mod native_connections;
 mod native_dialog;
 mod native_model_uses;

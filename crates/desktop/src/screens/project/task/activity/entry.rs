@@ -119,6 +119,8 @@ pub(super) struct Shown {
   glyph: Icon,
   title: Arc<str>,
   meta: Arc<str>,
+  /// How a request about it was answered, after the meta; it shows whole or not at all.
+  mark: Option<Arc<str>>,
   body: Option<Arc<str>>,
   /// Lines of the output block, shown while the entry is open.
   output: Option<Vec<Arc<str>>>,
@@ -137,12 +139,18 @@ impl Shown {
       glyph,
       title,
       meta,
+      mark: None,
       body,
       output: None,
       omitted: None,
       collapsible: false,
       opens: None,
     }
+  }
+
+  /// With `mark` after the meta.
+  pub(super) fn marked(self, mark: Option<Arc<str>>) -> Self {
+    Self { mark, ..self }
   }
 }
 
@@ -173,7 +181,7 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
-    .child(entry_header(&shown, open, entry.sequence))
+    .child(entry_header(ctx, &shown, open, entry.sequence))
     .with_children(
       open
         .then(|| entry_details(ctx, (entry, command_box), &shown, copied))
@@ -279,7 +287,7 @@ fn opens_file(nav: &ProjectNav, row: &EntryProps, path: &Arc<str>, line: Element
     .into()
 }
 
-fn entry_header(shown: &Shown, open: bool, sequence: u64) -> Element {
+fn entry_header(ctx: &Ctx, shown: &Shown, open: bool, sequence: u64) -> Element {
   let disclosure = if shown.opens.is_some() {
     Some(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextMuted))
   } else {
@@ -288,8 +296,16 @@ fn entry_header(shown: &Shown, open: bool, sequence: u64) -> Element {
       icon(chevron, IconSize::Small, PaletteColor::TextMuted)
     })
   };
+  // After a meta, the mark goes on from it (*exit 0 · 2.0 s* *· allowed by the profile · Worktree*).
+  let mark = shown.mark.as_ref().map(|mark| {
+    if shown.meta.is_empty() {
+      mark.clone()
+    } else {
+      ctx.t_args("runs.activity.decision.afterMeta", [("mark", &**mark)])
+    }
+  });
   header(
-    (&shown.title, &shown.meta),
+    (&shown.title, &shown.meta, mark.as_deref()),
     disclosure.map(Element::from),
     sequence,
     GLYPH_SIZE,
@@ -444,6 +460,7 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     glyph: Icon::CodeXml,
     title: ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
     meta: ctx.t("runs.activity.rawOutput"),
+    mark: None,
     body: None,
     output: Some(text),
     omitted: None,
@@ -473,16 +490,13 @@ fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       (Icon::Terminal, meta, None)
     }
   };
-  let meta = match &entry.mark {
-    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
-    None => meta,
-  };
   // A person's Deny: what the agent was told says why the command did not run.
   let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
   Shown {
     glyph,
     title: preview_title(&entry.command),
     meta,
+    mark: entry.mark.as_ref().map(|mark| mcp_call::mark_text(ctx, mark)),
     body,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted: None,
@@ -513,6 +527,7 @@ fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
     glyph: Icon::Terminal,
     title: preview_title(&entry.command),
     meta,
+    mark: None,
     body: None,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted,

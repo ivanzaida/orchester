@@ -19,7 +19,7 @@ use lurq::{
   },
   components::{Button, Column, Row, Spacer, Text, TextOverflow},
   core::Signal,
-  layout::{Alignment, layout_kind::ShrinkLimit},
+  layout::Alignment,
   node::{CursorIcon, Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -46,7 +46,10 @@ use crate::{
     approvals::{AlwaysBlocked, ShownApproval},
     timeline::ApprovalCard,
   },
-  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography},
+  theme::{
+    CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT, CONVERSATION_ANSWERS_ROW_MIN_CHAT, DISABLED_OPACITY, ExtraSpacing,
+    ExtraTypography,
+  },
   ui::{
     button::ActionButton,
     category_chip::category_chip,
@@ -62,17 +65,37 @@ use crate::{
 /// The answers' height (`KpZxA`).
 const ANSWER_HEIGHT: f32 = 30.0;
 
-/// The order in which the answers give way on a narrow card (lurq `shrink_order`): *Always allow…*'s
-/// words first, down to its icon, then the buttons, which wrap onto a second line.
-mod give_way {
-  pub const ALWAYS: i32 = 0;
-  pub const BUTTONS: i32 = 1;
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ApprovalCardProps {
   pub(super) card: ApprovalCard,
+  pub(super) answers: AnswersLayout,
 }
+
+/// How a card lays out its answers in the chat's width; no answer ever shrinks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AnswersLayout {
+  /// *Always allow…* at the left, the buttons at the right (`KpZxA`).
+  OneLine,
+  /// *Always allow…* on a line of its own, the buttons on one line under it at the right.
+  AlwaysAbove,
+  /// *Always allow…*, then each button on a row of its own, full width.
+  Stacked,
+}
+
+impl AnswersLayout {
+  /// The layout for a chat column `chat` wide.
+  pub(super) fn for_chat(chat: f32) -> Self {
+    if chat >= CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT {
+      Self::OneLine
+    } else if chat >= CONVERSATION_ANSWERS_ROW_MIN_CHAT {
+      Self::AlwaysAbove
+    } else {
+      Self::Stacked
+    }
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for AnswersLayout {}
 
 impl lurq::app::component::DevtoolsInspectable for ApprovalCardProps {}
 
@@ -154,7 +177,7 @@ impl Component for ApprovalCardView {
     let mut body = self.request_body(ctx, request, shown.as_ref());
     if waiting {
       let queue = ctx.use_context::<ApprovalQueue>();
-      body.push(self.answers(ctx, (&props.card, shown.as_ref()), &action, queue));
+      body.push(self.answers(ctx, (&props.card, shown.as_ref(), props.answers), &action, queue));
     }
     let card = frame(
       format!("conversation-approval-{}", request.id),
@@ -331,11 +354,11 @@ impl Offers {
 }
 
 impl ApprovalCardView {
-  /// The row of answers, why one is unavailable, and why an answer was not carried out.
+  /// The answers as `layout` places them, why one is unavailable, and why an answer was not carried out.
   fn answers(
     &self,
     ctx: &Ctx,
-    (card, shown): (&ApprovalCard, Option<&ShownApproval>),
+    (card, shown, layout): (&ApprovalCard, Option<&ShownApproval>, AnswersLayout),
     action: &DecisionAction,
     queue: Option<ApprovalQueue>,
   ) -> Element {
@@ -343,38 +366,49 @@ impl ApprovalCardView {
     let busy = state.is_pending() || state.data.is_some();
     let offers = Offers::of(shown);
     let task = shown.and_then(|shown| shown.task_id);
-    let button = |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action, task), (answer, busy, offered));
+    let stacked = layout == AnswersLayout::Stacked;
+    let button =
+      |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action, task), (answer, busy, offered), stacked);
     let always = queue.filter(|_| matches!(offers.always, Some(Ok(()))) && !busy);
-    // A narrow card gives way in order: *Always allow…* first, down to its icon, then the buttons wrap.
-    let buttons = Row::new()
-      .id("conversation-approval-buttons")
-      .wrap()
-      .spacing(SpacingSize::Sm)
-      .flex_shrink(1.0)
-      .shrink_order(give_way::BUTTONS)
-      .min_width(Dimension::Px(0.0))
-      .child(button(CardAnswer::Deny, true))
-      .child(button(CardAnswer::Similar, matches!(offers.similar, Some(Ok(())))))
-      .child(button(CardAnswer::Once, true));
-    let row = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(always_action(ctx, &card.request.id, card.request.command, always))
-      .child(Spacer::new().flex(1.0))
-      .child(buttons);
+    let always = always_action(ctx, &card.request.id, card.request.command, always);
+    let buttons = [
+      button(CardAnswer::Deny, true),
+      button(CardAnswer::Similar, matches!(offers.similar, Some(Ok(())))),
+      button(CardAnswer::Once, true),
+    ];
+    let line = |first: Option<Element>| {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(first)
+        .child(Spacer::new().flex(1.0))
+        .with_children(buttons.clone())
+        .into()
+    };
+    let lines: Vec<Element> = match layout {
+      AnswersLayout::OneLine => vec![line(Some(always))],
+      AnswersLayout::AlwaysAbove => vec![always, line(None)],
+      AnswersLayout::Stacked => std::iter::once(always).chain(buttons.clone()).collect(),
+    };
+    let reason = offers.reason(ctx).map(|reason| {
+      let text = Text::new(&reason)
+        .id("conversation-approval-unavailable")
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0));
+      // On one line beside the answers; a narrow card wraps it rather than cut it.
+      if layout == AnswersLayout::OneLine {
+        text.nowrap().text_overflow(TextOverflow::Elipsis)
+      } else {
+        text
+      }
+    });
     Column::new()
+      .id("conversation-approval-answers")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(row)
-      .with_children(offers.reason(ctx).map(|reason| {
-        Text::new(&reason)
-          .id("conversation-approval-unavailable")
-          .variant(TypographyStyle::Caption)
-          .nowrap()
-          .text_overflow(TextOverflow::Elipsis)
-          .width(Dimension::Pct(100.0))
-      }))
+      .with_children(lines)
+      .with_children(reason)
       .with_children(
         state
           .error
@@ -392,6 +426,7 @@ impl ApprovalCardView {
     ctx: &Ctx,
     (card, action, task): (&ApprovalCard, &DecisionAction, Option<TaskId>),
     (answer, busy, offered): (CardAnswer, bool, bool),
+    full_width: bool,
   ) -> Element {
     let (id, glyph, idle, under_way) = answer.look();
     let label = ctx.t(if busy && self.requested.get() == Some(answer) {
@@ -415,6 +450,7 @@ impl ApprovalCardView {
     } else {
       button
     };
+    let button = if full_width { button.fill_width() } else { button };
     button.render(ctx)
   }
 }
@@ -431,26 +467,18 @@ fn always_action(ctx: &Ctx, id: &str, command: bool, queue: Option<ApprovalQueue
   let content = Row::new()
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
-    .flex_shrink(1.0)
-    .shrink_limit(ShrinkLimit::Content)
     .child(icon(Icon::BookmarkPlus, IconSize::Small, PaletteColor::TextSecondary))
     .child(
       Text::new(&label)
         .variant(TypographyStyle::Button)
         .color(PaletteColor::TextSecondary)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0)),
+        .nowrap(),
     );
   let button = Button::empty()
     .button()
     .id("conversation-approval-always")
     .height(Dimension::Px(ANSWER_HEIGHT))
     .align_items(Alignment::Center)
-    .flex_shrink(1.0)
-    .shrink_order(give_way::ALWAYS)
-    .shrink_limit(ShrinkLimit::Content)
     .child(content);
   let Some(queue) = queue else {
     return button
