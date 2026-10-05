@@ -51,8 +51,9 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   .expect("a part");
   assert_eq!(
     claude_writes,
-    "Read, search and edit files with your own tools (Read, Grep, Glob, Edit, Write), not through the shell: no \
-     `cat`, `sed`, `awk` or heredocs to read or change files.\nCommands already run in the task's worktree: never \
+    "Read, search and change files with Orchester's file tools: mcp__Orchester__read_file, \
+     mcp__Orchester__list_files, mcp__Orchester__search, mcp__Orchester__edit_file (after reading the file) and \
+     mcp__Orchester__write_file. Never through the shell: no `cat`, `sed`, `awk` or heredocs.\nCommands already run in the task's worktree: never \
      start one with `cd`. Run one command per call, bare, without `;`, `&&` or variables, so that it matches the \
      allowed commands; other commands wait for a person's approval."
   );
@@ -67,8 +68,8 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   .expect("a part");
   assert_eq!(
     claude_reads,
-    "Read and search files with your own tools (Read, Grep, Glob), not through the shell (`cat`, `sed`, \
-     `awk`).\nCommands already run in the task's worktree: never start one with `cd`. Each command waits for a \
+    "Read and search files with Orchester's file tools: mcp__Orchester__read_file, mcp__Orchester__list_files and \
+     mcp__Orchester__search, not through the shell (`cat`, `sed`, `awk`).\nCommands already run in the task's worktree: never start one with `cd`. Each command waits for a \
      person's approval: run only those the step needs."
   );
   let codex_writes = part(
@@ -82,8 +83,9 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   .expect("a part");
   assert_eq!(
     codex_writes,
-    "Change files with apply_patch, not through the shell (`sed -i`, heredocs, `>`).\nCommands already run in the \
-     task's worktree: never start one with `cd`."
+    "Read, search and change files with the read_file, list_files, search, edit_file (after read_file) and \
+     write_file tools of the Orchester MCP server, not through the shell (`cat`, `sed -i`, heredocs, `>`).\n\
+     Commands already run in the task's worktree: never start one with `cd`."
   );
   let codex_reads = part(
     tools(
@@ -96,7 +98,9 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   .expect("a part");
   assert_eq!(
     codex_reads,
-    "Commands already run in the task's worktree: never start one with `cd`."
+    "Read and search files with the read_file, list_files and search tools of the Orchester MCP server, not \
+     through the shell (`cat`, `sed`, `awk`).\nCommands already run in the task's worktree: never start one with \
+     `cd`."
   );
   for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
     assert_eq!(tools(provider, RepositoryAccess::Write, listed()), None);

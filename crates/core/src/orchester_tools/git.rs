@@ -25,7 +25,7 @@ use std::{
   time::Duration,
 };
 
-use super::{GitCall, OutputKept, ToolCallError, ToolContext, ToolProgram, link::is_link};
+use super::{GitCall, OutputKept, Revision, ToolCallError, ToolContext, ToolProgram, link::is_link};
 use crate::{
   command::Command,
   native::command::{GIT_DIFF_OPTIONS, GIT_GLOBAL},
@@ -91,20 +91,26 @@ fn stageable(path: &str, worktree: &Path) -> Result<(), ToolCallError> {
   Ok(())
 }
 
+/// The programs that list the files of `context`'s worktree changed since revision `base` (`-z`, NUL
+/// between paths): changed or deleted tracked files, then files git does not track and does not ignore.
+pub fn changed_files(base: &Revision, context: &ToolContext<'_>) -> [ToolProgram; 2] {
+  let diff = vec![
+    "diff".to_owned(),
+    IGNORE_SUBMODULES.to_owned(),
+    "--name-only".to_owned(),
+    "--no-renames".to_owned(),
+    "-z".to_owned(),
+    "--end-of-options".to_owned(),
+    base.as_str().to_owned(),
+    "--".to_owned(),
+  ];
+  let untracked = words(&["ls-files", "-z", "--others", "--exclude-standard"]);
+  [diff, untracked].map(|tail| hardened(tail, None, context))
+}
+
 /// The git program of `call` in `context`'s worktree.
 pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram {
-  let mut args: Vec<String> = GIT_GLOBAL.map(str::to_owned).to_vec();
-  args.extend([
-    format!("--git-dir={}", context.git_dir.display()),
-    format!("--work-tree={}", context.worktree.display()),
-    "-c".to_owned(),
-    format!("core.hooksPath={}", context.hooks.display()),
-    "-c".to_owned(),
-    "log.showSignature=false".to_owned(),
-  ]);
-  for setting in NO_SUBMODULES {
-    args.extend(["-c".to_owned(), setting.to_owned()]);
-  }
+  let mut args: Vec<String> = Vec::new();
   let mut stdin = None;
   let tail: Vec<String> = match call {
     GitCall::Status => words(&["status", "--short", "--branch", IGNORE_SUBMODULES]),
@@ -152,6 +158,25 @@ pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram 
     }
   };
   args.extend(tail);
+  hardened(args, stdin, context)
+}
+
+/// Git with `rest` (more global options, then the subcommand) after the hardening every call gets, in
+/// `context`'s worktree, with `stdin` as its input.
+fn hardened(rest: Vec<String>, stdin: Option<String>, context: &ToolContext<'_>) -> ToolProgram {
+  let mut args: Vec<String> = GIT_GLOBAL.map(str::to_owned).to_vec();
+  args.extend([
+    format!("--git-dir={}", context.git_dir.display()),
+    format!("--work-tree={}", context.worktree.display()),
+    "-c".to_owned(),
+    format!("core.hooksPath={}", context.hooks.display()),
+    "-c".to_owned(),
+    "log.showSignature=false".to_owned(),
+  ]);
+  for setting in NO_SUBMODULES {
+    args.extend(["-c".to_owned(), setting.to_owned()]);
+  }
+  args.extend(rest);
   let mut variables = context.variables();
   variables
     .extend([("LC_ALL", "C"), ("GIT_TERMINAL_PROMPT", "0")].map(|(name, value)| (name.to_owned(), value.to_owned())));

@@ -53,6 +53,11 @@ impl ToolResult {
     }
   }
 
+  /// The answer of a file tool: its text, an error when `is_error`.
+  pub const fn of_file_tool(text: String, is_error: bool) -> Self {
+    Self { text, is_error }
+  }
+
   /// The answer of a call that could not reach its program, such as Orchester's tools being unavailable.
   pub fn unavailable(reason: &str) -> Self {
     Self {

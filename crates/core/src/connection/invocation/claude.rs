@@ -201,8 +201,15 @@ impl ClaudeInvocation<'_> {
     };
     let mut permission = permission_args(self.permissions, servers, exempt, folders);
     if self.approvals.is_some() {
-      // Only the tools that run get a rule, and those follow from the permissions alone.
-      let rules = StepTools::for_step(self.permissions.permissions(), &[]).claude_allow_rules();
+      // Only the tools that run get a rule; they follow from the permissions and the code index.
+      let tools = StepTools::for_step(self.permissions.permissions(), &[]);
+      // `find_symbol` comes with the code index the agent gets.
+      let tools = if self.code_index.is_some() {
+        tools.with_code_index()
+      } else {
+        tools
+      };
+      let rules = tools.claude_allow_rules();
       allow_more(&mut permission, rules);
     }
     args.extend(permission);

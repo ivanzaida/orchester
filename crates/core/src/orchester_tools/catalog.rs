@@ -8,6 +8,14 @@ use super::{
   OrchesterTool,
   input::{DEFAULT_LOG_COUNT, DEFAULT_READ_LINES, MAX_ADD_PATHS, MAX_LOG_COUNT, MAX_READ_LINES},
 };
+use crate::native::tools::ToolName as NativeTool;
+
+const FIND_SYMBOL: &str = r#"{"type":"object","properties":{
+  "name":{"type":"string","description":"The item's name, or part of it; any case."},
+  "kind":{"type":["string","null"],"description":"Only items of this kind: struct, enum, trait, function, method, class, interface, type, module, macro, const, static, impl."},
+  "include_tests":{"type":["boolean","null"],"description":"Also definitions in test folders; null for false."},
+  "include_consts":{"type":["boolean","null"],"description":"Also constants and statics; null for false."}
+},"required":["name"],"additionalProperties":false}"#;
 
 const GIT_STATUS: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
 
@@ -29,6 +37,14 @@ impl OrchesterTool {
   /// What the agent is told the tool does.
   pub const fn description(self) -> &'static str {
     match self {
+      Self::ReadFile => NativeTool::ReadFile.description(),
+      Self::ListFiles => NativeTool::ListFiles.description(),
+      Self::Search => NativeTool::Search.description(),
+      Self::EditFile => NativeTool::EditFile.description(),
+      Self::WriteFile => NativeTool::WriteFile.description(),
+      Self::FindSymbol => {
+        "Find where a type, function, method, constant or other item is defined, from the code index: path:line,          kind and signature, best matches first. Faster than searching file contents for a definition."
+      }
       Self::GitStatus => "Show the worktree's branch and changed files (git status --short --branch).",
       Self::GitDiff => "Show uncommitted changes (git diff), or the staged ones, optionally for one path.",
       Self::GitLog => "List recent commits (git log), optionally those that changed one path.",
@@ -50,7 +66,15 @@ impl OrchesterTool {
   pub const fn read_only(self) -> bool {
     matches!(
       self,
-      Self::GitStatus | Self::GitDiff | Self::GitLog | Self::GitShow | Self::ReadOutsideFile
+      Self::ReadFile
+        | Self::ListFiles
+        | Self::Search
+        | Self::FindSymbol
+        | Self::GitStatus
+        | Self::GitDiff
+        | Self::GitLog
+        | Self::GitShow
+        | Self::ReadOutsideFile
     )
   }
 }
@@ -60,6 +84,12 @@ impl OrchesterTool {
 pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   match tool {
+    OrchesterTool::ReadFile => fixed(NativeTool::ReadFile.input_schema()),
+    OrchesterTool::ListFiles => fixed(NativeTool::ListFiles.input_schema()),
+    OrchesterTool::Search => fixed(NativeTool::Search.input_schema()),
+    OrchesterTool::EditFile => fixed(NativeTool::EditFile.input_schema()),
+    OrchesterTool::WriteFile => fixed(NativeTool::WriteFile.input_schema()),
+    OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),
     OrchesterTool::GitStatus => fixed(GIT_STATUS),
     OrchesterTool::GitDiff => fixed(GIT_DIFF),
     OrchesterTool::GitShow => fixed(GIT_SHOW),
@@ -92,10 +122,7 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
 fn project_list(projects: &[(String, String)]) -> String {
   let mut text = "The project tool to run:".to_owned();
   for (name, description) in projects {
-    text.push_str(
-      "
-- ",
-    );
+    text.push_str("\n- ");
     text.push_str(name);
     if !description.is_empty() {
       text.push_str(": ");

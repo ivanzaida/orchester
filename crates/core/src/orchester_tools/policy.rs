@@ -70,6 +70,7 @@ impl StepTools {
     let offered = OrchesterTool::ALL
       .into_iter()
       .filter(|tool| *tool != OrchesterTool::RunProjectTool || !projects.is_empty())
+      .filter(|tool| *tool != OrchesterTool::FindSymbol)
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
       .collect();
     Self {
@@ -79,6 +80,18 @@ impl StepTools {
         .map(|tool| (tool.name().to_owned(), tool.description().to_owned()))
         .collect(),
     }
+  }
+
+  /// These tools and `find_symbol`, for a step whose agent gets the code index of the run's base revision.
+  #[must_use]
+  pub fn with_code_index(mut self) -> Self {
+    let at = self
+      .offered
+      .iter()
+      .position(|(tool, _)| tool.file_tool().is_none())
+      .unwrap_or(self.offered.len());
+    self.offered.insert(at, (OrchesterTool::FindSymbol, ToolPolicy::Runs));
+    self
   }
 
   pub fn offered(&self) -> &[(OrchesterTool, ToolPolicy)] {
@@ -145,13 +158,24 @@ impl StepTools {
       .collect()
   }
 
-  /// The paragraph of the prompt that points the agent at these tools, after its *Files and commands* part,
-  /// which covers the CLI's own file tools.
-  pub fn prompt_paragraph(&self) -> String {
-    let names: Vec<&str> = self.offered.iter().map(|(tool, _)| tool.as_str()).collect();
+  /// The paragraph of the prompt that points the agent at the tools besides the file tools, which its *Files
+  /// and commands* part names: each by the name its CLI sees, `mcp__Orchester__<tool>` for Claude Code.
+  pub fn prompt_paragraph(&self, claude: bool) -> String {
+    let names: Vec<String> = self
+      .offered
+      .iter()
+      .filter(|(tool, _)| tool.file_tool().is_none())
+      .map(|(tool, _)| {
+        if claude {
+          format!("mcp__{SERVER}__{}", tool.as_str())
+        } else {
+          tool.as_str().to_owned()
+        }
+      })
+      .collect();
     format!(
-      "# Orchester tools\n\nFor git, and to read a file outside the worktree, use the tools of the {SERVER} MCP \
-       server ({}) instead of shell commands.",
+      "# Orchester tools\n\nUse the shell only for builds and tests. For git and for files outside the worktree, \
+       use the tools of the {SERVER} MCP server first: {}.",
       names.join(", ")
     )
   }

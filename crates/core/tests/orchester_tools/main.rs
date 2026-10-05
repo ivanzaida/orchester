@@ -3,6 +3,7 @@
 //! reach a credential location or Orchester's own state, answers cut to a size, and how each CLI is told
 //! about them.
 
+mod index;
 mod input;
 mod outside;
 mod policy;

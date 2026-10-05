@@ -8,7 +8,8 @@ use std::{fmt, num::NonZeroU32};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{OrchesterTool, StepTools, ToolCallError};
+use super::{FindSymbol, OrchesterTool, StepTools, ToolCallError};
+use crate::native::tools::{ToolInput, ToolInputError, parse_call};
 
 /// Commits `git_log` lists when the call gives no `count`.
 pub(super) const DEFAULT_LOG_COUNT: u32 = 20;
@@ -103,9 +104,18 @@ impl fmt::Debug for CommitMessage {
 /// One call, read into its tool's input.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToolCall {
+  /// A call of a file tool, read into the native agent's input.
+  File(Box<ToolInput>),
+  FindSymbol(FindSymbol),
   Git(GitCall),
-  ReadOutsideFile { path: String, offset: u32, limit: u32 },
-  RunProjectTool { name: String },
+  ReadOutsideFile {
+    path: String,
+    offset: u32,
+    limit: u32,
+  },
+  RunProjectTool {
+    name: String,
+  },
 }
 
 /// A call of one of the git tools.
@@ -199,8 +209,12 @@ impl ToolCall {
     Ok(call)
   }
 
-  pub const fn tool(&self) -> OrchesterTool {
+  pub fn tool(&self) -> OrchesterTool {
     match self {
+      Self::File(input) => {
+        OrchesterTool::from_name(input.name().as_str()).expect("a file call is one of the file tools")
+      }
+      Self::FindSymbol(_) => OrchesterTool::FindSymbol,
       Self::Git(GitCall::Status) => OrchesterTool::GitStatus,
       Self::Git(GitCall::Diff { .. }) => OrchesterTool::GitDiff,
       Self::Git(GitCall::Log { .. }) => OrchesterTool::GitLog,
@@ -213,11 +227,26 @@ impl ToolCall {
   }
 }
 
+/// `arguments` read as file tool `tool`'s input, as the native agent reads it.
+fn file_call(tool: OrchesterTool, arguments: &Value) -> Result<ToolCall, String> {
+  match parse_call(tool.as_str(), arguments) {
+    Ok(input) => Ok(ToolCall::File(Box::new(input))),
+    Err(ToolInputError::Invalid { message, .. }) => Err(message),
+    Err(error) => Err(error.to_string()),
+  }
+}
+
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
   let invalid = |error: serde_json::Error| error.to_string();
   let path = |path: Option<String>| path.as_deref().map(RepoPath::new).transpose();
   Ok(match tool {
+    OrchesterTool::ReadFile
+    | OrchesterTool::ListFiles
+    | OrchesterTool::Search
+    | OrchesterTool::EditFile
+    | OrchesterTool::WriteFile => file_call(tool, &arguments)?,
+    OrchesterTool::FindSymbol => ToolCall::FindSymbol(serde_json::from_value(arguments).map_err(invalid)?),
     OrchesterTool::GitStatus => {
       serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
       ToolCall::Git(GitCall::Status)
