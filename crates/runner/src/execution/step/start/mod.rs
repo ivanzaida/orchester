@@ -28,7 +28,7 @@ use orchester_core::{
   memory::{InjectedMemory, RecalledMemory},
   permission::LaunchPermissions,
   resource::{AgentProfile, Step},
-  run::{AssembledPrompt, CodeIndexPrompt, InvocationPrompt, ProfileInfo},
+  run::{AssembledPrompt, CodeIndexPrompt, InvocationPrompt, ProfileInfo, WorkingTools},
 };
 
 use self::cli::Cli;
@@ -90,6 +90,7 @@ struct PromptParts<'a> {
   placed: &'a PlacedSkills,
   code_index: Option<CodeIndexPrompt<'a>>,
   memory: &'a [RecalledMemory],
+  working: Option<WorkingTools>,
 }
 
 impl RunTask {
@@ -120,6 +121,7 @@ impl RunTask {
     };
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
+    let enforced = self.enforced(key, &body, provider)?;
     let parts = PromptParts {
       execution,
       step,
@@ -128,9 +130,9 @@ impl RunTask {
       placed: &placed,
       code_index: told.prompt(),
       memory: recalled.entries(),
+      working: WorkingTools::new(provider, enforced.permissions()),
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
-    let enforced = self.enforced(key, &body, provider)?;
     let writable_roots = self.writable_roots(&enforced)?;
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;

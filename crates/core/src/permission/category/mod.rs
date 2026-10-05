@@ -3,16 +3,21 @@
 //! classified by its program, subcommand, options and the paths it names, and the strictest part
 //! names the command. Only what is understood is classified: an unknown program or subcommand, an
 //! option that is not listed for its program, a variable set before a program (`PATH=…`,
-//! `LD_PRELOAD=…`, `GIT_…=…`) and anything not read to the end are Unknown, so they ask.
+//! `LD_PRELOAD=…`, `GIT_…=…`), a command in the background and anything not read to the end are
+//! Unknown, so they ask. A variable the line sets to a plain literal is read where it is used
+//! ([`variables`]), and a `cd` into the worktree is no part of its own: the parts after it are placed
+//! from every folder it may leave them in.
 //!
 //! Run temp (a temporary file this run created) is not told apart yet: a temporary file is outside
 //! the worktree like any other. Besides its category a part says whether it reads a credential
 //! location ([`CommandScope`]) and whether it installs software, which auto-approval never approves
 //! ([`crate::run::auto_verdict`]).
 
+mod awk_program;
 mod files;
 mod gh;
 mod git;
+mod glob;
 mod install;
 mod network;
 mod network_tables;
@@ -24,6 +29,9 @@ mod place;
 mod powershell;
 mod programs;
 mod reason;
+mod scripts;
+mod sed_script;
+mod variables;
 mod words;
 
 use std::path::Path;
@@ -38,6 +46,7 @@ pub use self::{
 use self::{
   place::{Folders, Placing},
   programs::{Judged, Kind},
+  variables::is_assignment,
   words::{Quoting, RawPart},
 };
 use super::known_safe::program_name;
@@ -103,7 +112,12 @@ impl ClassifiedCommand {
   /// `command` run in `folder` (the working folder the agent's CLI reported), placed in `scope`.
   pub fn classify_in(command: &str, folder: &Path, scope: &CommandScope) -> Self {
     let mut folders = Some(vec![scope.worktree().join(folder)]);
-    let parts = classify_line(command, Quoting::Bash, scope, &mut folders, 0);
+    let mut parts = classify_line(command, Quoting::Bash, scope, &mut folders, 0);
+    // A `cd` into the worktree or a writable folder does nothing a person decides about; where the
+    // parts after it run is followed all the same.
+    if parts.iter().any(|part| !part.moves_inside()) {
+      parts.retain(|part| !part.moves_inside());
+    }
     Self { parts }
   }
 
@@ -159,8 +173,13 @@ fn classify_part(
   depth: usize,
 ) -> Vec<CommandPart> {
   let words = raw.words.clone();
-  // A variable set before a program (or for the commands after it) can change what any program does.
-  if raw.unread || words.first().is_some_and(|word| is_assignment(word)) {
+  // Its value was read into the parts after it.
+  if raw.assigns {
+    return Vec::new();
+  }
+  // A variable set before a program (or for the commands after it) can change what any program does,
+  // and a command in the background goes on after the line.
+  if raw.unread || raw.background || words.first().is_some_and(|word| is_assignment(word)) {
     return vec![CommandPart::unknown(words)];
   }
   let placing = Placing {
@@ -197,7 +216,15 @@ fn classify_part(
   };
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
-  for word in place::named(args)
+  // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
+  placing.read(&mut part, ".");
+  let named: Vec<String> = args
+    .iter()
+    .enumerate()
+    .filter(|(at, _)| judged.script != Some(*at))
+    .map(|(_, arg)| arg.clone())
+    .collect();
+  for word in place::named(&named)
     .into_iter()
     .chain(judged.reads.iter().map(String::as_str))
   {
@@ -209,11 +236,20 @@ fn classify_part(
   for word in &judged.inside {
     placing.inside(&mut part, word);
   }
-  let part = redirected(part, raw, placing);
+  let mut part = redirected(part, raw, placing);
+  if program == "cd" {
+    part.moves_inside = enters_plainly(args) && part.known_safe_read();
+  }
   if matches!(program.as_str(), "cd" | "pushd" | "chdir" | "set-location") {
     place::change_directory(scope, folders, args);
   }
   vec![part]
+}
+
+/// Whether `cd args` goes to the one folder its only argument names as written: no option, no `-`
+/// (the previous folder), no `~` and no glob, which could lead elsewhere than the word reads.
+fn enters_plainly(args: &[String]) -> bool {
+  matches!(args, [target] if !target.starts_with(['-', '~']) && !target.contains(['*', '?', '[']))
 }
 
 /// `part` with the files its redirections read and write placed.
@@ -224,15 +260,8 @@ fn redirected(mut part: CommandPart, raw: &RawPart, placing: Placing<'_>) -> Com
   for target in &raw.writes {
     placing.write(&mut part, target, false);
   }
+  part.writes_output |= raw.writes.iter().any(|target| !place::is_null_device(target));
   part
-}
-
-/// `NAME=value` sets a variable.
-fn is_assignment(word: &str) -> bool {
-  word.split_once('=').is_some_and(|(name, _)| {
-    name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-      && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-  })
 }
 
 /// The program as the rules know it. A program written with a folder is known only as a shell

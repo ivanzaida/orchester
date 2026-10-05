@@ -175,7 +175,9 @@ fn argv(with_sub: &[String]) -> Vec<String> {
 /// A subcommand [`known_safe`] rules: Read-only with the options it lists, else Unknown.
 fn known_read(with_sub: &[String]) -> Judged {
   match known_safe::readable_arguments(&argv(with_sub)) {
-    Some(words) => Judged::of(Kind::ReadOnly).reading(words.into_iter().map(str::to_owned).collect()),
+    Some(words) => Judged::of(Kind::ReadOnly)
+      .known_safe()
+      .reading(words.into_iter().map(str::to_owned).collect()),
     None => Judged::unknown(),
   }
 }
@@ -235,7 +237,10 @@ fn config(rest: &[String]) -> Judged {
 /// removing one changes where fetches and pushes go, which is Unknown.
 fn remote(rest: &[String]) -> Judged {
   match rest.first().map(String::as_str) {
-    None | Some("-v" | "--verbose" | "show" | "get-url") => Judged::of(Kind::ReadOnly),
+    None | Some("-v" | "--verbose" | "get-url") => Judged::of(Kind::ReadOnly),
+    // `show` asks the remote, unless `-n` keeps it to what is cached.
+    Some("show") if rest.iter().any(|arg| arg == "-n") => Judged::of(Kind::ReadOnly),
+    Some("show") => Judged::of(Kind::Network),
     Some("update" | "prune") => Judged::of(Kind::Network),
     Some(_) => Judged::unknown(),
   }

@@ -36,6 +36,7 @@ mod composition;
 mod memory;
 mod retry;
 mod source;
+mod working;
 
 use std::num::NonZeroU32;
 
@@ -45,6 +46,7 @@ pub use self::{
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
   retry::{FailureReport, RetryReport},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
+  working::WorkingTools,
 };
 use super::{
   plan::{PlanVersion, ReviewNote},
@@ -202,6 +204,9 @@ pub struct PromptInput<'a> {
   /// The failure that sent the work back, when this execution's attempt is a retry that reports it
   /// to this step ([`super::Run::retry_report`]).
   pub retry: Option<RetryReport<'a>>,
+  /// What the agent's CLI and the step's permissions give it to work with, for the *Files and
+  /// commands* part; `None` leaves the part out (a native agent, a preview).
+  pub working: Option<WorkingTools>,
 }
 
 impl PromptInput<'_> {

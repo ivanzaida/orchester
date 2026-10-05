@@ -176,7 +176,8 @@ impl ProjectDb {
         ("pending", _) => &mut counts.waiting,
         ("denied", _) => &mut counts.denied_by_you,
         (_, Some(DecidedBy::SimilarRule)) => &mut counts.by_similar_rule,
-        (_, Some(DecidedBy::AlwaysAllowed)) => &mut counts.always_allowed,
+        // The profile's allowed commands answer as Always allow's prefixes do.
+        (_, Some(DecidedBy::AlwaysAllowed | DecidedBy::Permissions)) => &mut counts.always_allowed,
         (_, Some(DecidedBy::AutoApproved)) => &mut counts.auto_approved,
         _ => &mut counts.by_you,
       };

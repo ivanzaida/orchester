@@ -37,6 +37,7 @@ impl RunTask {
       placed,
       code_index,
       memory,
+      working,
     } = parts;
     let event = if continuation.session.is_some() {
       InjectionEvent::Resume
@@ -99,6 +100,7 @@ impl RunTask {
       ),
       memory,
       retry: retry.as_ref().map(|loaded| loaded.report(self)),
+      working,
     }
     .assemble(event)
     .map_err(

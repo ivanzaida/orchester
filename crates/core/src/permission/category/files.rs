@@ -1,11 +1,11 @@
-//! Programs that create, copy, move, link or delete the files they name, `find` and `sed`. `cp`, `ln`,
+//! Programs that create, copy, move, link or delete the files they name, and `find`. `cp`, `ln`,
 //! `install` and `mv` are read against the options they are known to take ([`options`]), so a target
 //! written as an option (`--target-directory=…`) is never missed; a link's target must lie inside, as a
 //! link to a folder outside would let later commands reach it through the worktree.
 
 use super::{
   options::{self, Known, Takes},
-  programs::{Judged, Kind, has_option, operands},
+  programs::{Judged, Kind, operands},
 };
 use crate::permission::known_safe;
 
@@ -142,7 +142,6 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
       Judged::writing(Kind::Writes, written).deleting()
     }),
     "find" => find(args),
-    "sed" => sed(args),
     program if WRITES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)),
     program if DELETES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).deleting(),
     _ => return None,
@@ -191,7 +190,7 @@ fn find(args: &[String]) -> Judged {
   };
   let read = words.into_iter().map(str::to_owned).collect();
   if !deletes {
-    return Judged::of(Kind::ReadOnly).reading(read);
+    return Judged::of(Kind::ReadOnly).known_safe().reading(read);
   }
   let roots: Vec<String> = args
     .iter()
@@ -200,22 +199,4 @@ fn find(args: &[String]) -> Judged {
     .collect();
   let roots = if roots.is_empty() { vec![".".to_owned()] } else { roots };
   Judged::writing(Kind::Writes, roots).deleting().reading(read)
-}
-
-/// `sed` prints unless `-i` edits its files in place. A script that may write a file (`w`), read one
-/// (`r`) or run a command (`e`) is not read: any script with those letters is Unknown.
-fn sed(args: &[String]) -> Judged {
-  let operands = operands(args);
-  let script_given = has_option(args, &["-e", "--expression", "-f", "--file"]);
-  let (script, files) = match (script_given, operands.split_first()) {
-    (false, Some((script, files))) => (Some(script.as_str()), files.to_vec()),
-    (..) => (None, operands.clone()),
-  };
-  if script_given || script.is_some_and(|script| script.contains(['w', 'W', 'e', 'r', 'R'])) {
-    return Judged::unknown();
-  }
-  if has_option(args, &["-i", "--in-place"]) {
-    return Judged::writing(Kind::Writes, files);
-  }
-  Judged::of(Kind::ReadOnly)
 }

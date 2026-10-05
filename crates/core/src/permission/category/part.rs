@@ -81,6 +81,12 @@ pub struct CommandPart {
   pub(super) alike: bool,
   /// A prefix of its program and subcommand allows only parts like it ([`Judged::prefix_stays`]).
   pub(super) prefix_stays: bool,
+  /// Its words are a read of the known-safe tables ([`Judged::known_safe`]).
+  pub(super) known_safe: bool,
+  /// It redirects its output into a file (`> out.txt`); not the null device.
+  pub(super) writes_output: bool,
+  /// A `cd` to one folder named plainly, in the worktree or a writable folder.
+  pub(super) moves_inside: bool,
 }
 
 impl CommandPart {
@@ -106,6 +112,9 @@ impl CommandPart {
       outside: Vec::new(),
       alike: judged.alike,
       prefix_stays: judged.prefix_stays,
+      known_safe: judged.known_safe,
+      writes_output: false,
+      moves_inside: false,
     }
   }
 
@@ -139,6 +148,34 @@ impl CommandPart {
   /// It installs software or packages.
   pub const fn installs(&self) -> bool {
     self.installs
+  }
+
+  /// Whether it names, reads or writes anything outside the worktree and its writable folders.
+  pub const fn reaches_outside(&self) -> bool {
+    !self.outside.is_empty()
+  }
+
+  /// Whether it redirects its output into a file.
+  pub const fn writes_output(&self) -> bool {
+    self.writes_output
+  }
+
+  /// Whether it runs without a person on its own (the user's decision, `docs/plan.md` C4): a read of the
+  /// known-safe tables, without a redirection into a file, of nothing outside the worktree and its
+  /// writable folders and of no credential.
+  pub fn known_safe_read(&self) -> bool {
+    self.known_safe
+      && self.category == CommandCategory::ReadOnly
+      && !self.reads_secrets
+      && !self.installs
+      && !self.writes_output
+      && self.outside.is_empty()
+  }
+
+  /// Whether it is a `cd` to one folder named plainly in the worktree or a writable folder, which
+  /// changes nothing a person decides about.
+  pub(super) const fn moves_inside(&self) -> bool {
+    self.moves_inside
   }
 
   /// Whether a person must answer this part each time: it was not read to the end, rewrites history or

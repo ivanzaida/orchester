@@ -163,6 +163,14 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     });
   };
   let rest = &args[at + 1..];
+  // A Cargo setting given on the command line can name a program it starts (`build.rustc-wrapper`).
+  if program == "cargo"
+    && args
+      .iter()
+      .any(|arg| arg == "--config" || arg.starts_with("--config=") || arg.starts_with("-Z"))
+  {
+    return Some(Judged::unknown());
+  }
   // Installs and builds run the packages' and the worktree's own code whatever their arguments, so a
   // prefix of them allows nothing more; `clean` deletes the folder it is given.
   let judged = if has_option(args, &["-g", "--global", "--location=global"]) || manager.installs.contains(&sub) {

@@ -9,7 +9,7 @@
 //! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
 //! credential location asks.
 
-use super::{files, gh, git, install::InstallSource, network, packages, powershell};
+use super::{files, gh, git, install::InstallSource, network, packages, powershell, scripts};
 use crate::permission::known_safe;
 
 /// What a command is by its words.
@@ -54,6 +54,11 @@ pub(super) struct Judged {
   /// follow: builds and tests that run the worktree's own code anyway, installs, and the git
   /// subcommands that cannot reach outside the repository.
   pub(super) prefix_stays: bool,
+  /// A read the known-safe tables judge by their options ([`known_safe`], [`READS`], print-only `sed` and
+  /// `awk`): it starts no other program and writes nothing.
+  pub(super) known_safe: bool,
+  /// The argument that is a script (`sed`'s, `awk`'s program) rather than a path.
+  pub(super) script: Option<usize>,
 }
 
 impl Judged {
@@ -70,6 +75,8 @@ impl Judged {
       subcommand: None,
       alike: true,
       prefix_stays: false,
+      known_safe: false,
+      script: None,
     }
   }
 
@@ -132,6 +139,18 @@ impl Judged {
     self
   }
 
+  /// A Read-only command of the known-safe tables.
+  pub(super) const fn known_safe(mut self) -> Self {
+    self.known_safe = true;
+    self
+  }
+
+  /// Argument `at` is a script, not a path.
+  pub(super) const fn with_script(mut self, at: Option<usize>) -> Self {
+    self.script = at;
+    self
+  }
+
   /// The subcommand `name`, starting at argument `at`.
   pub(super) fn subcommand(mut self, at: usize, name: String) -> Self {
     self.subcommand = Some((at, name));
@@ -142,7 +161,7 @@ impl Judged {
 /// Programs that read or print and change nothing, other than those [`known_safe`] rules by their
 /// options. Their options that write a file, start a program or set a shell variable are refused in
 /// [`plain_read`].
-const READS: [&str; 30] = [
+const READS: [&str; 31] = [
   "grep",
   "egrep",
   "fgrep",
@@ -173,6 +192,7 @@ const READS: [&str; 30] = [
   "cd",
   "whereis",
   "printf",
+  "sort",
 ];
 
 /// Build, test and run tools that work in the worktree. Every path they are given must lie inside.
@@ -221,6 +241,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Judged {
   }
   if let Some(judged) = packages::judge(program, args)
     .or_else(|| files::judge(program, args))
+    .or_else(|| scripts::judge(program, args))
     .or_else(|| network::judge(program, args))
     .or_else(|| powershell::judge(program, args))
   {
@@ -252,44 +273,75 @@ fn known_read(program: &str, args: &[String]) -> Judged {
     .chain(args.iter().cloned())
     .collect();
   match known_safe::readable_arguments(&argv) {
-    Some(words) => Judged::of(Kind::ReadOnly).reading(words.into_iter().map(str::to_owned).collect()),
+    Some(words) => Judged::of(Kind::ReadOnly)
+      .known_safe()
+      .reading(words.into_iter().map(str::to_owned).collect()),
     None => Judged::unknown(),
   }
 }
 
-/// A program of [`READS`], Unknown with an option that writes a file (`tree -o`, `uniq in out`), sets
-/// the system date or a shell variable (`date -s`, `printf -v`), or a `jq` program that reads the
-/// environment.
+/// A program of [`READS`], Unknown with an option that writes a file (`tree -o`, `uniq in out`, `sort -o`),
+/// sets the system date or a shell variable (`date -s`, `printf -v`), starts a program (`sort
+/// --compress-program`), reads the files a file names (`sort --files0-from`), follows links (`grep -R`),
+/// or a `jq` program that reads the environment or a module.
 fn plain_read(program: &str, args: &[String]) -> Judged {
   let refused = match program {
     "tree" => has_option(args, &["-o", "-R", "--output"]),
     "uniq" => operands(args).len() > 1,
     "date" => has_option(args, &["-s", "--set"]) || operands(args).iter().any(|operand| !operand.starts_with('+')),
     "printf" => has_option(args, &["-v"]),
-    "jq" => args
-      .iter()
-      .any(|arg| arg.contains("env") || arg.contains("ENV") || arg.contains("input_filename")),
+    // `-R` follows links, also out of the folders it is given.
+    "grep" | "egrep" | "fgrep" => has_option(args, &["-R"]) || abbreviates(args, &["dereference-recursive"]),
+    "sort" => has_option(args, &["-o", "-T"]) || abbreviates(args, &SORT_REFUSED),
+    // A module (`include`, `import`, `-L`) is read from folders the arguments do not name.
+    "jq" => {
+      has_option(args, &["-L"])
+        || args.iter().any(|arg| {
+          ["env", "ENV", "input_filename", "include", "import"]
+            .iter()
+            .any(|refused| arg.contains(refused))
+        })
+    }
     _ => false,
   };
   if refused {
     Judged::unknown()
   } else {
-    Judged::of(Kind::ReadOnly)
+    Judged::of(Kind::ReadOnly).known_safe()
   }
+}
+
+/// `sort`'s long options that write a file, start a program or read the files a file names.
+const SORT_REFUSED: [&str; 4] = ["output", "compress-program", "files0-from", "temporary-directory"];
+
+/// Whether one of `args` is one of the long options `names` (without `--`), or an abbreviation of
+/// one, which `getopt_long` takes for it.
+fn abbreviates(args: &[String], names: &[&str]) -> bool {
+  args.iter().take_while(|arg| *arg != "--").any(|arg| {
+    arg
+      .strip_prefix("--")
+      .map(|long| long.split_once('=').map_or(long, |(name, _)| name))
+      .is_some_and(|given| !given.is_empty() && names.iter().any(|name| name.starts_with(given)))
+  })
 }
 
 /// The arguments that are not options. `--` ends the options.
 pub(super) fn operands(args: &[String]) -> Vec<String> {
-  let mut operands = Vec::new();
+  operand_positions(args).into_iter().map(|at| args[at].clone()).collect()
+}
+
+/// Where the arguments that are not options are among `args`.
+pub(super) fn operand_positions(args: &[String]) -> Vec<usize> {
+  let mut positions = Vec::new();
   let mut options = true;
-  for arg in args {
+  for (at, arg) in args.iter().enumerate() {
     if options && arg == "--" {
       options = false;
     } else if !(options && arg.starts_with('-') && arg.len() > 1) {
-      operands.push(arg.clone());
+      positions.push(at);
     }
   }
-  operands
+  positions
 }
 
 /// Whether one of `args` is one of `options`, or a short option cluster holding one of the short
