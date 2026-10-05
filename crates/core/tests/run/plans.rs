@@ -226,7 +226,7 @@ fn plans_a_new_session_gets_its_earlier_plan_and_the_note() {
   .expect("no variables");
   assert!(revised.text.contains(
     "# Changes requested to your plan v1\n\nYour earlier result for this step:\n\n1. Replace sign-in.\n\nThe reviewer \
-     asks:\n\nKeep email sign-in.\n\n# When you finish"
+     asks:\n\nKeep email sign-in.\n\n# Files and commands"
   ));
 }
 

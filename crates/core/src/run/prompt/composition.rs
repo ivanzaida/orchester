@@ -48,6 +48,15 @@ const RESULT_INSTRUCTIONS: &str = "End with exactly one JSON object containing `
                                    follow), `open_questions` and `next_agent_should_know`, each a list of short \
                                    strings, or null when you have nothing for it. Orchester keeps the handoff as \
                                    task memory; never put secret values in it.";
+/// How to work with files and commands so that what the step's permissions allow runs without asking a
+/// person: the edit tools need no approval in a writing step, while a shell edit, a `cd` prefix or a
+/// chain of commands does not match the allowed commands one by one and waits for a person.
+const FILES_AND_COMMANDS: &str = "Read, search and edit files with your own file tools (Claude Code: Read, Grep, \
+                                  Glob, Edit, Write; Codex: its read tools and apply_patch), not through the \
+                                  shell: no `cat`, `sed`, `awk` or heredocs to read or change files.\n\
+                                  Commands already run in the task's worktree: never start one with `cd`. Run \
+                                  one command per call, bare, without `;`, `&&` or variables, so that it matches \
+                                  the allowed commands; anything else waits for a person's approval.";
 /// What a gated step's session is told on top: a person reviews its summary as the plan.
 const GATED_RESULT_INSTRUCTIONS: &str = "A person reviews your summary before the steps after this one start: make \
                                          it the complete result of this step (for a plan, the whole plan), in \
@@ -271,6 +280,8 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
   if let Some(delivered) = input.messages {
     push_task_messages(&mut text, delivered);
   }
+  text.push_str("\n# Files and commands\n");
+  push_block(&mut text, FILES_AND_COMMANDS);
   text.push_str("\n# When you finish\n");
   push_block(&mut text, RESULT_INSTRUCTIONS);
   if input.step.approval_gate {
