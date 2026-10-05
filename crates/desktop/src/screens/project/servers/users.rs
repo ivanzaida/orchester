@@ -20,7 +20,7 @@ use orchester_core::id::UserId;
 
 use super::{
   ServerDialog,
-  account::request_entry,
+  account::current_entry,
   details::is_self,
   frame::BUTTON_HEIGHT,
   table::{Cell, Width, heading, row, table},
@@ -155,13 +155,14 @@ pub(super) fn load_people(
   revision: (u64, u64),
 ) -> Option<Result<People, Message>> {
   let servers = ServerFeed::of(ctx).servers;
-  let deps = (request_entry(entry), admin, revision);
-  let load = ctx.future(deps, move |(entry, admin, _)| {
+  let deps = (entry.stored.id, admin, revision);
+  let load = ctx.future(deps, move |(server, admin, _)| {
     let servers = servers.clone();
     async move {
       if !admin {
         return Ok(None);
       }
+      let entry = current_entry(&servers, server).await?;
       match servers.users(&entry).await {
         Ok(users) => Ok(Some(People(users.into_iter().map(Person::from).collect()))),
         Err(error) => Err(error.message(&entry.address)),

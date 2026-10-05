@@ -194,10 +194,11 @@ impl AccountTab {
   /// while they are read for the first time.
   fn sessions(&self, ctx: &mut Ctx, props: &AccountProps) -> Option<Result<Sessions, Message>> {
     let servers = ServerFeed::of(ctx).servers;
-    let deps = (request_entry(&props.entry), props.revision, self.revoked.get());
-    let load = ctx.future(deps, move |(entry, ..)| {
+    let deps = (props.entry.stored.id, props.revision, self.revoked.get());
+    let load = ctx.future(deps, move |(server, ..)| {
       let servers = servers.clone();
       async move {
+        let entry = current_entry(&servers, server).await?;
         // The page shows the person's admin flag: it follows what the server answers now.
         servers.refresh_account(&entry).await;
         match servers.sessions(&entry).await {
@@ -215,14 +216,23 @@ impl AccountTab {
   }
 }
 
-/// `entry` without what changes while it stays the same server, for a request's dependencies: a
-/// connection that answered again must not read the data again.
-pub(super) fn request_entry(entry: &ServerEntry) -> ServerEntry {
-  ServerEntry {
-    connection: None,
-    last_reached: None,
-    ..entry.clone()
-  }
+/// `server` as the list has it now. A request's dependencies name the server by its id: its entry
+/// changes with every answer (when it was last reached, the account the server reports), which
+/// must not read the data again.
+pub(super) async fn current_entry(
+  servers: &crate::sharing::Servers,
+  server: orchester_core::id::ServerId,
+) -> Result<ServerEntry, Message> {
+  let servers = servers.clone();
+  crate::background::run(move || servers.entries())
+    .await?
+    .map_err(|error| {
+      tracing::error!(%error, "cannot read the shared servers");
+      Message::new("servers.loadFailed")
+    })?
+    .into_iter()
+    .find(|entry| entry.stored.id == server)
+    .ok_or_else(|| Message::new("sharing.errors.serverMissing"))
 }
 
 /// The computer a session's device names, for the sessions a password change signs out.

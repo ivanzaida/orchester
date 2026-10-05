@@ -28,6 +28,8 @@ use crate::{
 };
 
 const ORIGIN: &str = "https://github.com/ivanzaida/kontur.git";
+/// The request that asks a server for the repository's project.
+const PROJECTS: &str = "GET /api/v1/projects?";
 
 fn upload(title: &str, number: u32) -> UploadTask {
   UploadTask {
@@ -319,7 +321,7 @@ fn counted(member: Option<bool>) -> (Desktop, TestServer, RequestCount) {
       add_bohdan(&server, &alice);
     }
   }
-  let count = RequestCount::start(server.address, "GET /api/v1/projects?");
+  let count = RequestCount::start(server.address, &[PROJECTS]);
   let desktop = signed_in_via(&count.url(), ("bohdan", &first), &["Add repository switcher"]);
   (desktop, server, count)
 }
@@ -335,7 +337,7 @@ fn asks_once(desktop: &mut Desktop, count: &RequestCount, answer: &str) {
     std::thread::sleep(std::time::Duration::from_millis(50));
   }
   assert!(shows(desktop, answer), "the answer stays");
-  assert_eq!(count.count(), 1, "one request while the tab is open");
+  assert_eq!(count.count(PROJECTS), 1, "one request while the tab is open");
 }
 
 #[test]
@@ -353,7 +355,7 @@ fn joining_sharing_asks_once_when_the_person_is_not_a_member() {
     "Kontur team has this repository, but you are not a member",
   );
   desktop.click("sharing-check-again");
-  desktop.wait_until("Check again asks again", |_| count.count() == 2);
+  desktop.wait_until("Check again asks again", |_| count.count(PROJECTS) == 2);
 }
 
 #[test]

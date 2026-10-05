@@ -480,3 +480,56 @@ fn ids_with_prefix(desktop: &mut Desktop, prefix: &str) -> Vec<String> {
   });
   found.into_inner()
 }
+
+/// The request that reads the person's sessions, and the one that reads the server's users.
+const SESSIONS: &str = "GET /api/v1/auth/sessions ";
+const USERS: &str = "GET /api/v1/admin/users ";
+
+/// Lets the page run for 3 seconds, as a person who only looks at it.
+fn stay(desktop: &mut Desktop) {
+  let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+  while std::time::Instant::now() < until {
+    desktop.tree.tick_futures();
+    desktop.pass();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+  }
+}
+
+fn shows_a_session(desktop: &mut Desktop) -> bool {
+  let found = RefCell::new(false);
+  desktop.tree.find_element(|element| {
+    if element.id().is_some_and(|id| id.starts_with("server-session-device-")) {
+      *found.borrow_mut() = true;
+    }
+    false
+  });
+  found.into_inner()
+}
+
+/// Settings › Servers reads the sessions and, for an admin, the users once for a visit, however
+/// often the server answers meanwhile; opening the Users tab shows what was read.
+#[test]
+fn servers_ask_once_while_the_page_is_open() {
+  let server = server_support::TestServer::start();
+  let first = server.create_user("alice", "Alice Moreau", true);
+  let count = crate::request_count::RequestCount::start(server.address, &[SESSIONS, USERS]);
+  let mut desktop = crate::sharing::signed_in_via(&count.url(), ("alice", &first), &[]);
+  desktop.click("nav-tasks");
+  desktop.wait_for("tasks-new-task");
+  let (sessions, users) = (count.count(SESSIONS), count.count(USERS));
+  servers_page(&mut desktop);
+  desktop.wait_until("the sessions show", shows_a_session);
+  stay(&mut desktop);
+  assert!(shows_a_session(&mut desktop), "the sessions stay");
+  assert_eq!(
+    count.count(SESSIONS),
+    sessions + 1,
+    "one read of the sessions for the visit"
+  );
+  assert_eq!(count.count(USERS), users + 1, "one read of the users for the visit");
+  desktop.click("server-tab-users");
+  desktop.wait_for("server-create-user");
+  stay(&mut desktop);
+  assert!(shows(&mut desktop, "Alice Moreau"));
+  assert_eq!(count.count(USERS), users + 1, "the Users tab shows what was read");
+}
