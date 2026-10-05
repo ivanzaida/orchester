@@ -58,21 +58,34 @@ fn projects_are_registered_once_and_listed_by_last_use() {
   assert_eq!(projects[0].last_opened_at, at(3));
 }
 
+fn schema_version(path: &Path) -> u32 {
+  rusqlite::Connection::open(path)
+    .expect("raw connection")
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("schema version")
+}
+
+/// The schema version a new application database starts at: every migration the build has.
+fn current_schema_version() -> u32 {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  drop(AppDb::open(&path).expect("create"));
+  schema_version(&path)
+}
+
 #[test]
 fn a_database_from_a_newer_build_is_refused() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
   drop(AppDb::open(&path).expect("create"));
+  let current = schema_version(&path);
   rusqlite::Connection::open(&path)
     .expect("raw connection")
-    .pragma_update(None, "user_version", 99)
+    .pragma_update(None, "user_version", current + 1)
     .expect("bump version");
   assert!(matches!(
     AppDb::open(&path),
-    Err(orchester_store::StoreError::SchemaTooNew {
-      found: 99,
-      supported: 2
-    })
+    Err(StoreError::SchemaTooNew { found, supported }) if found == current + 1 && supported == current
   ));
 }
 
@@ -145,24 +158,65 @@ fn ui_state_keeps_the_latest_value_per_key_across_opens() {
   assert_eq!(db.ui_state("other").expect("read").as_deref(), Some("kept apart"));
 }
 
+/// Registers a project the way schema versions 1 and 2 stored it.
+fn insert_project(raw: &rusqlite::Connection, name: &str, repo_root: &str, last_opened_at: i64) {
+  raw
+    .execute(
+      "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES (?1, ?2, ?3, 1, ?4)",
+      rusqlite::params![ProjectId::generate().to_string(), name, repo_root, last_opened_at],
+    )
+    .expect("insert a project");
+}
+
 #[test]
-fn ui_state_is_added_to_a_database_of_the_previous_version() {
+fn ui_state_and_servers_are_added_to_a_database_of_schema_1() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
-  let mut db = AppDb::open(&path).expect("create");
-  let kontur = project("Kontur");
-  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1))
-    .expect("register");
-  drop(db);
-  // As the previous version left it: no ui_state table, schema version 1.
-  let raw = rusqlite::Connection::open(&path).expect("raw connection");
-  raw.execute_batch("DROP TABLE ui_state").expect("drop the table");
-  raw.pragma_update(None, "user_version", 1).expect("set the version");
+  let raw = AppDb::create_at_version(&path, 1).expect("schema 1");
+  insert_project(&raw, "Kontur", "H:/projects/kontur", 1);
   drop(raw);
 
   let mut db = AppDb::open(&path).expect("migrate");
   db.set_ui_state("tabs", "saved").expect("store");
+  db.add_server(&server("https://orchester.kontur.lan", 2))
+    .expect("add a server");
   assert_eq!(db.projects().expect("list").len(), 1, "the projects are kept");
+  drop(db);
+  assert_eq!(schema_version(&path), current_schema_version());
+}
+
+#[test]
+fn servers_are_added_to_a_database_of_schema_2_and_its_rows_are_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, 2).expect("schema 2");
+  insert_project(&raw, "Kontur", "H:/projects/kontur", 2);
+  insert_project(&raw, "Personal website", "H:/projects/website", 1);
+  raw
+    .execute_batch(
+      "INSERT INTO sessions (pid, started_at, ended_at, end_kind) VALUES (7, 1, 2, 'runs_paused');
+       INSERT INTO ui_state (key, value) VALUES ('tabs', 'kontur');",
+    )
+    .expect("rows of schema 2");
+  drop(raw);
+
+  let mut db = AppDb::open(&path).expect("migrate");
+  let names: Vec<String> = db
+    .projects()
+    .expect("list")
+    .iter()
+    .map(|project| project.name.as_str().to_owned())
+    .collect();
+  assert_eq!(names, ["Kontur", "Personal website"]);
+  assert_eq!(db.ui_state("tabs").expect("read").as_deref(), Some("kontur"));
+  let (_, previous) = db.start_session(8, at(3)).expect("start");
+  assert_eq!(previous, PreviousSession::Ended(SessionEnd::RunsPaused));
+  assert_eq!(db.servers().expect("list"), []);
+  let kontur = server("https://orchester.kontur.lan", 4);
+  db.add_server(&kontur).expect("add a server");
+  assert_eq!(db.servers().expect("list"), [kontur]);
+  drop(db);
+  assert_eq!(schema_version(&path), current_schema_version());
 }
 
 fn server(url: &str, added_at: i64) -> StoredServer {

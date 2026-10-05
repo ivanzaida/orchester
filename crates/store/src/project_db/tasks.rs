@@ -47,6 +47,7 @@ impl ProjectDb {
 
   /// The task content a run started with, including after the task is edited for a later run.
   /// A run from before snapshots existed uses current details until its first subsequent edit.
+  /// Status and organization (board status, priority, tags) are the task's current ones.
   pub fn task_for_run(&self, task_id: TaskId, run_id: RunId) -> Result<Option<Task>, StoreError> {
     let Some(task) = self.task(task_id)? else {
       return Ok(None);
@@ -94,6 +95,7 @@ impl ProjectDb {
       (None, None) => None,
       _ => return Err(corrupt("run task limits", "one limit is missing")),
     };
+    let organization = task.organization().clone();
     Ok(Some(
       Task::from_stored(
         task.id(),
@@ -103,6 +105,7 @@ impl ProjectDb {
         task.pipeline_version(),
         task.created_at(),
       )
+      .with_organization(organization)
       .with_revision(task.revision()),
     ))
   }
