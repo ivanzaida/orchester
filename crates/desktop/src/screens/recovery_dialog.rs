@@ -380,6 +380,7 @@ const fn reason_key(cause: InterruptCause) -> &'static str {
     InterruptCause::QuitNow => "lifecycle.recovery.reason.quitNow",
     InterruptCause::Crashed => "lifecycle.recovery.reason.crashed",
     InterruptCause::RunnerLost => "lifecycle.recovery.reason.runnerLost",
+    InterruptCause::RunnerFailed => "lifecycle.recovery.reason.runnerFailed",
   }
 }
 

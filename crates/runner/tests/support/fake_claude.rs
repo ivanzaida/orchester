@@ -15,7 +15,8 @@
 //!   one and waits until it is ended;
 //! - "Keep working": starts a message and waits until it is ended;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
-//!   email sign-in?"}` (a new session only: a resumed one works as below);
+//!   email sign-in?"}` (a new session only: a resumed one works as below); "Ask, then fail" writes the same question,
+//!   then its result reports an API error and it exits with 1 (`fake_claude_ask`);
 //! - "Ask before publishing": wants to run `pnpm publish --dry-run` through Bash and asks its permission prompt
 //!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
 //!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
@@ -154,6 +155,9 @@ impl Fake {
     }
     if prompt.contains("Ask first") {
       return self.ask(worktree);
+    }
+    if prompt.contains("Ask, then fail") {
+      return self.ask_then_fail();
     }
     if prompt.contains("Work in turns") {
       if let Err(error) = append(worktree, "draft") {

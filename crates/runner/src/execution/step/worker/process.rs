@@ -265,11 +265,17 @@ impl Worker {
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
     watch.db.save_invocation(&watch.invocation)?;
+    // Only while that close is still why the turn failed: a later CLI error is a failure of its own.
+    let closed_after_result = watch
+      .closed_after_result
+      .as_ref()
+      .is_some_and(|closed| matches!(&outcome, InvocationOutcome::TurnFailed { message } if message == closed));
     Ok(Finished {
       outcome,
       stopped: watch.stop,
       final_message: watch.tracker.last_message().map(str::to_owned),
       approval_interrupted,
+      closed_after_result,
     })
   }
 }

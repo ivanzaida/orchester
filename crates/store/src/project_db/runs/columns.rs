@@ -124,6 +124,7 @@ const fn interrupt_cause_text(cause: InterruptCause) -> &'static str {
     InterruptCause::RunnerLost => "runner_lost",
     InterruptCause::QuitNow => "quit_now",
     InterruptCause::Crashed => "crashed",
+    InterruptCause::RunnerFailed => "runner_failed",
   }
 }
 
@@ -132,6 +133,7 @@ fn parse_interrupt_cause(value: &str) -> Result<InterruptCause, StoreError> {
     "runner_lost" => Ok(InterruptCause::RunnerLost),
     "quit_now" => Ok(InterruptCause::QuitNow),
     "crashed" => Ok(InterruptCause::Crashed),
+    "runner_failed" => Ok(InterruptCause::RunnerFailed),
     other => Err(corrupt("interrupt cause", other)),
   }
 }

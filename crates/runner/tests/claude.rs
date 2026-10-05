@@ -146,6 +146,26 @@ async fn claude_structured_output_question_asks_the_person() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_question_before_a_cli_error_fails_the_step() {
+  // Only a permission prompt that closed after the result lets a question stand (run 26); a CLI error
+  // after it is a broken turn, and the restarted step breaks again.
+  let (project, run) = finished("Ask, then fail.").await;
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
+  assert_eq!(implement(&run), (StepStatus::Failed, Some(StepFailure::AgentFailed)));
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let conversation = db.messages(project.task).expect("messages");
+  assert!(
+    conversation
+      .iter()
+      .all(|message| message.body().as_str() != "Keep email sign-in?")
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn claude_result_after_prose_fails_the_step_it_reports_failed() {
   let (project, run) = finished("Answer in prose, then JSON.").await;
   assert!(matches!(run.status(), RunStatus::Failed(_)), "{:?}", run.status());

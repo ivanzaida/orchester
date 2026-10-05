@@ -246,7 +246,7 @@ fn stuck_a_retry_reports_the_failure_to_its_target_and_the_failed_step() {
 }
 
 #[test]
-fn stuck_a_failed_or_question_result_wins_over_a_failed_turn() {
+fn stuck_a_failed_result_wins_over_a_failed_turn() {
   let output = |outcome: Option<StepOutcome>| StepOutput {
     run: RunId::generate(),
     execution: StepExecutionId::generate(),
@@ -268,8 +268,6 @@ fn stuck_a_failed_or_question_result_wins_over_a_failed_turn() {
   );
   assert_eq!(output(Some(StepOutcome::Done)).failure(true), None);
   assert_eq!(output(Some(StepOutcome::Question)).failure(true), None);
-  // Run 26: Verify asked a question, then its turn failed when the permission prompt closed.
-  assert_eq!(output(Some(StepOutcome::Question)).failure(false), None);
   assert_eq!(output(None).failure(false), Some(StepFailure::AgentFailed));
   assert_eq!(output(None).failure(true), None);
   assert_eq!(

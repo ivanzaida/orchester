@@ -17,6 +17,7 @@ mod again;
 mod attach;
 mod blocked_runs;
 mod board;
+mod broken;
 mod checkpoint;
 mod codebase_index;
 mod control;

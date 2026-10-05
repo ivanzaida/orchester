@@ -20,11 +20,17 @@ use crate::{
 };
 
 /// A problem row that reads as a titled row with an explanation rather than as its transcript entry:
-/// a command that did not run because it was denied.
+/// a command that did not run because it was denied; a request that ended without a decision, with
+/// what happened to it beside its time, as a denial has.
 pub(super) fn titled(ctx: &Ctx, entry: &Entry) -> Option<Shown> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => {
       Some(denied_command(ctx, command))
+    }
+    EntryKind::Problem(problem @ RunnerProblem::DecisionInterrupted { .. }) => {
+      let (title, body) = problem_text(ctx, problem);
+      let kind = ctx.t("runs.conversation.problem.kind.decisionInterrupted");
+      Some(Shown::plain(Icon::AlertCircle, title, kind, body))
     }
     _ => None,
   }
@@ -123,11 +129,9 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       ),
       None,
     ),
-    RunnerProblem::PermissionPromptUnreachable => (
-      ctx.t("runs.activity.problem.promptUnreachable"),
-      Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
-    ),
+    RunnerProblem::PermissionPromptUnreachable => prompt_unreachable(ctx),
     RunnerProblem::DecisionInterrupted { server, action, .. } => decision_interrupted(ctx, server, action),
+    RunnerProblem::RunnerFailed { detail } => runner_failed(ctx, detail),
     RunnerProblem::CliTooOld {
       model,
       installed,
@@ -167,6 +171,22 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
   }
+}
+
+/// Claude Code's permission prompt never reached the runner.
+fn prompt_unreachable(ctx: &Ctx) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("runs.activity.problem.promptUnreachable"),
+    Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
+  )
+}
+
+/// The runner could not record the run, which was interrupted, and its error.
+fn runner_failed(ctx: &Ctx, detail: &str) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("runs.activity.problem.runnerFailed"),
+    Some(ctx.t_args("runs.activity.problem.runnerFailedDetail", [("detail", detail)])),
+  )
 }
 
 /// A request that ended without a decision, named by its command on one line, or by its MCP server and tool.

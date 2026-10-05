@@ -217,6 +217,9 @@ pub enum RunnerProblem {
     server: String,
     action: String,
   },
+  /// The runner could not record or carry on the run; `detail` is its error. The run was interrupted
+  /// ([`crate::run::InterruptCause::RunnerFailed`]).
+  RunnerFailed { detail: String },
   /// The provider's API refused `model` to the CLI's version `installed`: it needs `required` or
   /// newer.
   CliTooOld {

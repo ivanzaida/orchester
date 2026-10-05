@@ -186,6 +186,25 @@ impl Fake {
     ExitCode::SUCCESS
   }
 
+  /// "Ask, then fail": the question as the agent's last message, then a result that reports an API error
+  /// for the turn, unrelated to any permission prompt.
+  pub fn ask_then_fail(&self) -> ExitCode {
+    let question = serde_json::json!({"outcome": "question", "summary": "Keep email sign-in?"}).to_string();
+    self.assistant(
+      "msg_ask",
+      &serde_json::json!({"type": "text", "text": question}).to_string(),
+    );
+    let result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": true, "num_turns": 1,
+      "result": "API Error: 500 Internal server error", "session_id": self.session,
+      "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    println!("{result}");
+    flush();
+    super::fake_claude_input::later_turns(&self.session);
+    ExitCode::from(1)
+  }
+
   /// A denied call: the agent reads what it was told and goes on without it.
   fn denied(&self, worktree: &Path, call: &str, told: &str) {
     eprintln!("told: {told}");

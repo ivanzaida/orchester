@@ -24,7 +24,7 @@ use super::{
   super::{control::answer, tool_approval::end_unheld},
   answer::Settled,
   claude_approval::{Asked, AskedBy, PromptAnswer},
-  worker::{ApprovalDecision, Watch, Worker},
+  worker::{ApprovalDecision, Transport, Watch, Worker},
 };
 
 /// The call a pending approval answers.
@@ -168,8 +168,9 @@ impl Worker {
 
   /// Claude Code's permission prompt, or the relay of Orchester's tools, closed its connection while a call
   /// waited: the call can no longer be answered, so the request is interrupted, named in the activity, and
-  /// a later decision is refused. The turn fails with it; a result the agent delivered before still
-  /// decides the step (`StepOutput::failure`).
+  /// a later decision is refused. The turn fails with it. When Claude Code had already ended its turn with a
+  /// result and nothing else had failed, the close is remembered: a question the agent delivered then still
+  /// asks the person (`Finished::closed_after_result`).
   pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     let pending = watch.approval.take();
     watch
@@ -179,17 +180,26 @@ impl Worker {
     if let Some((approval, _)) = &pending {
       self.report_interrupted(watch, approval)?;
     }
-    self.observe(
-      watch,
-      AgentEvent::TurnFailed {
-        message: format!(
-          "{}'s permission prompt or tool relay closed before the decision",
-          self.cli()
-        ),
-      },
-    )?;
+    let message = format!(
+      "{}'s permission prompt or tool relay closed before the decision",
+      self.cli()
+    );
+    if self.delivered_result(watch) {
+      watch.closed_after_result = Some(message.clone());
+    }
+    self.observe(watch, AgentEvent::TurnFailed { message })?;
     self.process.terminate();
     Ok(())
+  }
+
+  /// Whether Claude Code ended its turn with a result and nothing failed before.
+  fn delivered_result(&self, watch: &Watch) -> bool {
+    let ended = matches!(&self.transport, Transport::Claude(claude) if claude.results() > 0);
+    let failed = matches!(
+      watch.tracker.outcome(Some(0)),
+      InvocationOutcome::TurnFailed { .. } | InvocationOutcome::NotSignedIn { .. }
+    );
+    ended && !failed
   }
 
   /// Names `approval`, which waited when its CLI could no longer take a decision, so the activity says

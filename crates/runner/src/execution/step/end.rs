@@ -101,11 +101,12 @@ impl RunTask {
     Ok(())
   }
 
-  /// An agent that exited on its own. A turn that ended, or delivered a question, acknowledges the
-  /// messages it read. The step then waits for the answer to the agent's question — also when its turn
-  /// failed afterwards — or continues to read messages queued for its agent meanwhile; otherwise it
-  /// fails when the agent reported `failed` — also when its turn failed afterwards — or when the turn
-  /// failed, and passes otherwise; a step that passes
+  /// An agent that exited on its own. A turn that ended acknowledges the messages it read. The step
+  /// then waits for the answer to the agent's question — also when the permission prompt closed only
+  /// after the question was delivered (run 26), but not after any other failure of the turn — or
+  /// continues to read messages queued for its agent meanwhile; otherwise it fails when the agent
+  /// reported `failed` — also when its turn failed afterwards — or when the turn failed, and passes
+  /// otherwise; a step that passes
   /// joins its work to the run's branch. A follow-up leaves no output: its answer is its
   /// reply in the conversation, and the step's output stays what it was.
   fn finish(&mut self, execution: StepExecutionId, active: &Active, finished: &Finished) -> Result<(), ExecutionError> {
@@ -123,8 +124,9 @@ impl RunTask {
       Timestamp::now(),
     );
     self.note_cli_too_old(execution, active, &finished.outcome)?;
-    let failure = output.failure(finished.outcome.is_success());
-    if finished.outcome.is_success() || output.outcome == Some(StepOutcome::Question) {
+    let asked = finished.closed_after_result && output.outcome == Some(StepOutcome::Question);
+    let failure = output.failure(finished.outcome.is_success() || asked);
+    if finished.outcome.is_success() || asked {
       self.acknowledge(execution, &active.invocation, &output)?;
     }
     if failure.is_none() {
@@ -135,7 +137,10 @@ impl RunTask {
         return self.save(execution, active, "saved to read messages");
       }
     }
-    if (output.outcome.is_some() || !output.text.is_empty()) && !self.run.is_follow_up(execution) {
+    // A question is never a step's output (the store refuses it): one that did not ask, as its turn
+    // broke, leaves none.
+    let question = output.outcome == Some(StepOutcome::Question);
+    if (output.outcome.is_some() || !output.text.is_empty()) && !question && !self.run.is_follow_up(execution) {
       self.db.save_step_output(&output)?;
     }
     if let Some(failure) = failure {
