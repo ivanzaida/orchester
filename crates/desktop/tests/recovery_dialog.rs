@@ -285,6 +285,46 @@ fn recovery_dialog_is_as_wide_as_the_close_dialogs_in_the_design_window() {
   assert_eq!(row.width, 880.0 - 2.0 * 28.0);
 }
 
+fn inside(inner: ElementRect, outer: ElementRect) -> bool {
+  inner.x >= outer.x - 0.5 && inner.x + inner.width <= outer.x + outer.width + 0.5
+}
+
+/// Beside a long task title, every row's last column, the worktree state, stays inside the row and the
+/// dialog, with one row and with several, at the narrowest window and at a wide one.
+#[test]
+fn recovery_dialog_keeps_the_worktree_column_inside_beside_a_long_title() {
+  let mut long = run(
+    "Kontur",
+    "ORC-65",
+    InterruptCause::QuitNow,
+    WorktreeState::Uncommitted(3),
+  );
+  long.task_title = "Close dialog: the run state badge runs past the dialog's right edge when the task title is this \
+                     long"
+    .into();
+  let others = [
+    run("Kontur", "ORC-127", InterruptCause::QuitNow, WorktreeState::Clean),
+    run("Website", "PW-14", InterruptCause::RunnerLost, WorktreeState::Unknown),
+  ];
+  let several: Vec<InterruptedRun> = std::iter::once(long.clone()).chain(others).collect();
+  for runs in [vec![long], several] {
+    for width in [960, 1440, 2160] {
+      let mut tree = laid_out(runs.clone(), width, 960);
+      let dialog = bounds(&mut tree, "recovery-dialog");
+      for run in &runs {
+        let row = bounds(&mut tree, &format!("recovery-run-{}", run.run));
+        let state = bounds(&mut tree, &format!("recovery-worktree-label-{}", run.run));
+        let key = &run.task_key;
+        assert!(inside(row, dialog), "{key} at {width}: the row is inside the dialog");
+        assert!(
+          inside(state, row),
+          "{key} at {width}: the worktree state is inside its row ({state:?}, {row:?})"
+        );
+      }
+    }
+  }
+}
+
 #[test]
 fn recovery_dialog_keeps_its_side_margins_in_a_narrow_window() {
   let runs = vec![run(
