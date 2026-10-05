@@ -62,6 +62,10 @@ impl Component for UnsentStatusNotice {
         "tasks.unsentStatus.notHolder",
         [("status", &*status), ("time", time.as_str())],
       ),
+      NotSent::Refused => ctx.t_args(
+        "tasks.unsentStatus.refused",
+        [("status", &*status), ("time", time.as_str())],
+      ),
     };
     let (root, task) = (props.root.clone(), props.task);
     Notice::new(Icon::CloudOff, ctx.t("tasks.unsentStatus.heading"), detail)

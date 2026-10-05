@@ -45,12 +45,30 @@ impl Servers {
   }
 }
 
-/// Sends each waiting status of `store`'s project.
+/// Sends each waiting status of `store`'s project. The tasks and their claims are read from the
+/// server first, so a claim someone took over a moment ago (which raises no revision) is known.
 pub(super) fn send(store: &mut RemoteTaskStore) -> Result<(), SharingError> {
-  for pending in store.db.automatic_statuses()? {
+  let waiting = store.db.automatic_statuses()?;
+  if waiting.is_empty() {
+    return Ok(());
+  }
+  store.server.writable()?;
+  let tasks = store.block_on(
+    store
+      .server
+      .call(|client, token, project| async move { client.tasks(&token, project).await }),
+  )?;
+  store.cache(&tasks.tasks, None)?;
+  for pending in waiting {
     match send_one(store, &pending) {
       Ok(()) => {}
       Err(error @ (SharingError::Offline | SharingError::SignedOut)) => return Err(error),
+      // The server answered that it does not take it: trying again changes nothing, so it is not
+      // sent, and the task says so.
+      Err(SharingError::Client(error)) if error.code().is_some() => {
+        tracing::warn!(%error, task = %pending.task, "the server did not take a run's workflow status");
+        store.db.record_not_sent(pending.task, pending.at, NotSent::Refused)?;
+      }
       Err(error) => tracing::warn!(%error, task = %pending.task, "a run's workflow status waits"),
     }
   }

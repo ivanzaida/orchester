@@ -959,7 +959,8 @@
       "heading": "A run's status was not sent",
       "changed": "The run moved this task to {{status}} at {{time}}, but its status on the server changed meanwhile to {{current}}. The server's status stays; nothing was sent.",
       "notHolder": "The run moved this task to {{status}} at {{time}}, but you no longer hold the task, so nothing was sent to the server.",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "refused": "The run moved this task to {{status}} at {{time}}, but the server didn't take that change, so the task keeps the server's status."
     }
   },
   "runs": {
