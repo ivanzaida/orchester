@@ -167,14 +167,18 @@ impl Worker {
   }
 
   /// Claude Code's permission prompt, or the relay of Orchester's tools, closed its connection while a call
-  /// waited: the call can no longer be answered, so the request is interrupted and a later decision is
-  /// refused.
+  /// waited: the call can no longer be answered, so the request is interrupted, named in the activity, and
+  /// a later decision is refused. The turn fails with it; a result the agent delivered before still
+  /// decides the step (`StepOutput::failure`).
   pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    watch.approval = None;
+    let pending = watch.approval.take();
     watch
       .db
       .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
     self.end_approval_wait(watch)?;
+    if let Some((approval, _)) = &pending {
+      self.report_interrupted(watch, approval)?;
+    }
     self.observe(
       watch,
       AgentEvent::TurnFailed {
@@ -186,6 +190,17 @@ impl Worker {
     )?;
     self.process.terminate();
     Ok(())
+  }
+
+  /// Names `approval`, which waited when its CLI could no longer take a decision, so the activity says
+  /// which request ended interrupted.
+  pub(super) fn report_interrupted(&self, watch: &mut Watch, approval: &PendingToolApproval) -> Result<(), StoreError> {
+    let problem = RunnerProblem::DecisionInterrupted {
+      request: approval.id.clone(),
+      server: approval.server.clone(),
+      action: approval.action.clone(),
+    };
+    self.observe(watch, AgentEvent::RunnerProblem { problem })
   }
 
   async fn await_person(

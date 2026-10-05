@@ -127,6 +127,7 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       ctx.t("runs.activity.problem.promptUnreachable"),
       Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
     ),
+    RunnerProblem::DecisionInterrupted { server, action, .. } => decision_interrupted(ctx, server, action),
     RunnerProblem::CliTooOld {
       model,
       installed,
@@ -166,6 +167,19 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
   }
+}
+
+/// A request that ended without a decision, named by its command on one line, or by its MCP server and tool.
+fn decision_interrupted(ctx: &Ctx, server: &str, action: &str) -> (Arc<str>, Option<Arc<str>>) {
+  let request: Arc<str> = if server == "command" {
+    command_preview(action).into()
+  } else {
+    ctx.t_args("runs.activity.decision.tool", [("server", server), ("tool", action)])
+  };
+  (
+    ctx.t_args("runs.activity.problem.decisionInterrupted", [("request", &*request)]),
+    Some(ctx.t("runs.activity.problem.decisionInterruptedDetail")),
+  )
 }
 
 /// Lines of the CLI's standard error the activity did not keep.

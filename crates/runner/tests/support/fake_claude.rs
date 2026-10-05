@@ -33,7 +33,9 @@
 //!   MCP servers as it starts;
 //! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
 //!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
-//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
+//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits; "Give up
+//!   waiting" sends its call, gives up on it once `fake-release` exists, ends with a `question` result and a denied
+//!   `Grep`, and ends the prompt server only after its input ended (`fake_claude_ask`);
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;

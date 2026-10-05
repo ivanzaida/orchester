@@ -85,6 +85,10 @@ impl RunnerProblem {
         }
       }
       Self::MemoryNotSaved { reason } => reason.redact(redact),
+      Self::DecisionInterrupted { server, action, .. } => {
+        *server = redact(server);
+        *action = redact(action);
+      }
       // Versions, a model id and counts, parsed as such: no text that could hold a secret.
       Self::StepBudgetReached { .. }
       | Self::RipgrepNotFound { .. }

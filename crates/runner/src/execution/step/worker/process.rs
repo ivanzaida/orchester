@@ -227,10 +227,12 @@ impl Worker {
     let mut approval_interrupted = false;
     self.check_prompt_reached(&mut watch)?;
     self.note_stderr_left_out(&mut watch)?;
-    if watch.approval.is_some()
-      || !watch.approved_calls.is_empty()
-      || self.app_server().is_some_and(|app| !app.complete())
-    {
+    let waiting = watch.approval.take();
+    // A request the run's own stop ended (a pause at the decision, a cancel) needs no naming.
+    if let Some((approval, _)) = waiting.as_ref().filter(|_| watch.stop.is_none()) {
+      self.report_interrupted(&mut watch, approval)?;
+    }
+    if waiting.is_some() || !watch.approved_calls.is_empty() || self.app_server().is_some_and(|app| !app.complete()) {
       approval_interrupted = watch
         .db
         .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;

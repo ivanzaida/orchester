@@ -192,14 +192,16 @@ impl StepOutput {
   }
 
   /// Why the step of an agent that ended with this output fails, `None` when it does not;
-  /// `turn_succeeded`: the CLI completed its turn and exited cleanly. A `failed` result decides,
-  /// also when the turn failed after the agent delivered it: it is a verdict on the work even when a
-  /// permission prompt closed afterwards. Any other failed turn is a breakage. A `done` result does
-  /// not outweigh it: the turn may have failed because nothing could be approved, and a step never
-  /// passes as if a person had been asked.
+  /// `turn_succeeded`: the CLI completed its turn and exited cleanly. A `failed` or `question` result
+  /// decides, also when the turn failed after the agent delivered it (run 19 and run 26: a permission
+  /// prompt closed afterwards): a verdict on the work fails the step, and a question asks the person,
+  /// which passes nothing. Any other failed turn is a breakage. A `done` result does not outweigh it:
+  /// the turn may have failed because nothing could be approved, and a step never passes as if a
+  /// person had been asked.
   pub const fn failure(&self, turn_succeeded: bool) -> Option<StepFailure> {
     match self.outcome {
       Some(StepOutcome::Failed) => Some(StepFailure::ReportedFailed),
+      Some(StepOutcome::Question) => None,
       _ if turn_succeeded => None,
       _ => Some(StepFailure::AgentFailed),
     }

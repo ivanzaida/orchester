@@ -145,6 +145,15 @@ impl Prompt {
   /// Sends a call for `tool` without waiting for its answer, then ends the server once `release`
   /// exists: a relay that goes away while a person decides.
   pub fn leave_while_waiting(mut self, tool: &str, input: &Value, call: &str, release: &std::path::Path) {
+    self.send_call(tool, input, call);
+    while !release.exists() {
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+  }
+
+  /// Sends a call for `tool` and never reads its answer, as Claude Code does with a call it gave up
+  /// on: the server stays started and keeps waiting for the runner.
+  pub fn send_call(&mut self, tool: &str, input: &Value, call: &str) {
     let arguments = json!({"tool_name": tool, "input": input, "tool_use_id": call});
     let name = self.tool.clone();
     self.next += 1;
@@ -152,9 +161,6 @@ impl Prompt {
       "params": {"name": name, "arguments": arguments}});
     if self.send(&request).is_none() {
       eprintln!("cannot send the call");
-    }
-    while !release.exists() {
-      std::thread::sleep(std::time::Duration::from_millis(50));
     }
   }
 }
