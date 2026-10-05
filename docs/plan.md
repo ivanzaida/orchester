@@ -209,27 +209,6 @@ goes beside the search so *Details* stays whole; the send menu and tooltips sit 
 writes an ordinary message, `ComposerMode::without_context`); a failed run's composer says *Continue 03 Implement with
 your instructions · attempt 3* (no ×: continuing is the only message a failed run takes).
 
-### U10 · Pull requests screen jumps while it loads (UI)
-
-Opening the Pull requests tab shifts its content two or three times
-(`crates/desktop/src/screens/project/pull_requests/mod.rs`):
-
-1. The stored inbox is read from the project database asynchronously (`actions::load` → `ctx.future`,
-   `actions.rs`). Until it arrives, `inbox` is `None`: the body is an empty column and the Open tab has no count.
-2. When the stored inbox arrives, the Open tab gains its count (`synced.pull_requests.len()`), so it widens and pushes
-   the other tabs right, and the list appears below. For an unlinked repository the whole tab row disappears
-   (`tabs` is skipped for `Inbox::Unlinked`), which moves the body up.
-3. `create` also starts a GitHub sync through `gh` at once. While it runs the topbar sync status text changes width,
-   and afterwards the list and count may change again.
-
-**Done when** the screen keeps a stable layout from the first frame: the heading, tab row and body keep their place
-until the stored inbox is known (no empty-body frame followed by a list; no tab row that appears and then vanishes),
-the Open tab reserves room for its count so a count arriving does not move the other tabs, and the topbar sync status
-does not shift the Refresh button when its text changes. A sync that changes the list may still add or remove rows.
-Tests: a headless `form_keyboard` test that records the tab and body bounds before and after the stored inbox and a
-sync arrive (fake `gh`), plus the existing `pull_request` tests. UI change: independent design verification against the
-Pull requests frames (`DF8II` tab row, 08.D `dmib5`) is required.
-
 ### ORC-63 · Remove worktree for every ended run · branch `claude/orc63` (done 2026-10-04: three code reviews and three design verifications passed)
 
 Design: `docs/design/orchester-workspace.md` › *ORC-63 · Remove worktree for every ended run* (group `j0VU3B`,
@@ -783,7 +762,9 @@ status changed (measured at 1440 and at the 960 minimum width). Tests: `cargo te
 form_keyboard pull_request` (the new `pull_requests_layout` tests hold the sync's fake `gh` behind a gate and record the
 heading, tab, list and Refresh bounds before and after the stored inbox and the sync arrive), `cargo test -p
 orchester-desktop --test theme pull_request`. **Done when** an independent design verification against `DF8II`
-(08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches.
+(08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches. Rechecked 2026-10-05 on master
+58b076f3: the 28 `pull_request` form_keyboard tests and the 2 theme tests pass; the copy of this task under
+*U · Screens* that the merge 851da1e5 brought back was removed.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 
