@@ -391,10 +391,10 @@ endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design 
 and phases P1–P5 (with P3b, Chat Completions) with acceptance lists. The user's decisions of 2026-10-01 are recorded
 there; turn the phases into tasks here when work starts, beginning with P1.
 
-P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done (see *Done*). The rest:
+P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58) waits for review (see *Done*). The rest:
 
-- **P1c · ORC-58:** the `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server
-  (§8).
+- **P1c · ORC-58 (implemented 2026-10-05, branch `claude/orc58`; waiting for review, see *Done*):** the
+  `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server (§8).
 - **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
   start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
   what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`, §7; it records
@@ -551,6 +551,76 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (implemented 2026-10-05; independent
+review pending, not merged)
+
+- **Crate** `crates/agent` (`orchester-agent`), used by nothing yet (the runner takes it in P1d). No new workspace
+  dependency: reqwest with rustls (ring, the OS trust store), tokio, serde_json, sha2, tempfile, parking_lot and
+  orchester-exec are reused.
+- **HTTP** (§3.0): redirects not followed, connect timeout 30 s, no total timeout but a 120 s idle timeout on every
+  wait for bytes; `HTTPS_PROXY`/`NO_PROXY` from the environment are honoured for remote endpoints as the design says
+  (unlike `orchester-api`, which uses no proxy), an `http://` endpoint on this computer is reached directly. A
+  ~70-line SSE parser (`sse.rs`): comments, multi-line data, CRLF, chunks split anywhere.
+- **Anthropic client** (`AnthropicClient`, implements core's `ModelClient`; §3.1): always streams; tools sorted by
+  name with `strict` and, on the official endpoint, `eager_input_streaming`; the system prompt with a cache
+  breakpoint plus top-level automatic caching; adaptive thinking with summaries and `block_binding:
+  prefix_mismatch_behavior: "error"` (beta `thinking-binding-controls-2026-08-01`) where the model supports it,
+  nothing for models without it (Haiku 4.5); `output_config.effort` as the request names it; `fallbacks: "default"`
+  only when the connection turns provider fallback on. What a model supports and its output cap come from
+  `GET /v1/models/{id}`, asked once per client and model (or from a listing); `max_tokens` is capped there. Streamed
+  blocks become items verbatim (thinking with its signature, `redacted_thinking` as is); a response counts only
+  after `message_stop`. Eager tool input is parsed strictly: input that is not a JSON object, or that the stop cut
+  off, is kept as `{"INVALID_JSON": "<raw>"}`, and core answers such a call with exactly that text as the error
+  result. `max_tokens` inside a tool call asks the same turn again once with the model's whole output cap.
+  Statuses map as §3.1 says (a 400 naming the prompt as too long is `TooLarge`, so core compacts); 429, 5xx, 529,
+  `error` events and transport failures (a broken or idle stream included) are retried after 2, 4, 8, 16 and 32 s
+  plus up to 25 % jitter, or after `retry-after` (a wait over 5 min is not waited for). The preserved-thinking 400
+  strips the thinking blocks the conversation had at that point and retries once; the client remembers it for the
+  conversation. `GET /v1/models` page by page (efforts, context window, output cap); `check_anthropic` for *Test
+  connection* (`CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable`). The key is a sensitive
+  header value; `Endpoint`'s `Debug` hides it and every error and event text is redacted.
+- **Core additions:** `native::edit::apply_edits` (§2.1 `edit.rs`, missing from P1b: in order, all or none, CRLF and
+  BOM kept); `tools::INVALID_JSON`/`invalid_json_input` and `ToolInputError::NotJson`; `StreamEvent::Retrying {
+  attempt, wait, error }` (each wait, for the `RunnerProblem` P1d records), `ThinkingStripped` and `Spent(usage)` (a
+  dropped response's tokens, which budgets must count; the response's own usage stays the final attempt's, so the
+  context estimate is not doubled).
+- **File tools** (`FileTools`; §4.1–§4.5, §5.1, §6.4): `read_file` (numbered lines, offset/limit, lines cut at 2000
+  characters, binary files named with their size, files over 32 MiB refused), `list_files` (`rg --files`, sorted,
+  1000 entries), `search` (`rg --json --max-count 200 --max-columns 500`, 200 matches or 64 KiB, `--no-config` so no
+  configuration adds `--pre`), `edit_file` and `write_file` (read stamp of length, modified time and SHA-256 checked
+  at edit time; atomic temp-and-rename in the target's folder, resolved again just before the rename; permissions
+  of a replaced file kept). `FileTools::stored(items)` drops every read stamp when a `Compaction` item is stored.
+  ripgrep runs through `orchester_exec::prepare`, read line by line, stopped when enough is read or after 60 s.
+- **Fake model server** (`crates/agent/tests/anthropic_wire/server.rs`): a tokio listener on `127.0.0.1:0` with
+  scripted turns (`Script::new().expect(..).reply_sse(..)`, `reply_error`, `reply_status`, pauses and drops), the
+  append-only check of `system`, `tools` and the message prefix on every Messages request (a test proves it catches an
+  edit), a cache-read echo, and a model catalog with pagination.
+- **Tests:** `cargo test -p orchester-agent --test anthropic_wire anthropic_` (25: SSE, request shape, items and
+  usage, append-only history with cache reads, invalid tool JSON, `max_tokens` re-ask with and without room,
+  refusal, conservative quirks, a model without adaptive thinking with fallback on, every status, `retry-after`,
+  backoff, five retries then the error, broken and idle streams, an `error` event, the thinking recovery, the key in
+  no error, event or `Debug`, model pages, *Test connection*); `cargo test -p orchester-agent --test file_tools
+  files_` (20, on real temporary folders: scope, `..`, absolute paths, a junction on Windows / symbolic link on macOS
+  that leads out (read, write, both listings and search), `.git` and `.orchester/` and the index protected, a
+  read-only step, CRLF/BOM, stale stamps, all-or-nothing multi-edit, no partial file, compaction dropping stamps,
+  ripgrep and the walk without it); `cargo test -p orchester-core --test native native_` (73, with new `edit` and
+  `NotJson` tests). The ripgrep tests need `rg` on `PATH` and fail without it.
+- **Differs from the design:**
+  - Retries: "at most 5 attempts" is read as five retries after the first attempt, one per listed wait (2–32 s).
+  - Without ripgrep, `list_files` and `search` walk the folders skipping hidden entries and links but do not read
+    `.gitignore` (not "the code index's exclusions": the index reads git objects), and `search` matches literal text;
+    the result says so. The runner's `RipgrepNotFound` problem stays P1d's.
+  - `read_file` results are capped at 128 KiB (the any-result cap of §6.4), not 256 KiB; files over 32 MiB are refused
+    (the stamp hashes the whole file).
+  - The thinking recovery is remembered per client: a runner that makes a new client for a resumed invocation meets
+    the 400 once more and recovers again.
+  - `WireQuirks` holds only what the Anthropic client uses (`betas`, `eager_input_streaming`, `cache_control`);
+    `WireQuirks::anthropic` gives the official quirks only to the Official preset at its own base URL. The other §3.3
+    fields come with P2/P3. There is no `NativeClient` enum until a second client exists (P2).
+  - Not run: `cargo clippy --target aarch64-apple-darwin` for `orchester-agent` (ring's C code needs a macOS C
+    compiler this Windows machine lacks; core passes); a live API run (P1's acceptance needs one, with a key a person
+    supplies).
 
 S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
 
