@@ -362,7 +362,7 @@ program uses only the names an allow-list holds, the git subcommands that only r
 lines to their end: a `cd` to one folder named plainly in the worktree (written `/h/…`, `H:/…` or `H:\…`) is
 dropped and the rest placed from that folder; a `cd` with an option, `-`, a second operand (zsh's `cd old new`) or a
 target that cannot be told leaves where later parts run unknown, and every part reads the folder it runs in. A
-literal assignment (`NAME=value`, no expansion, a lowercase name or one capital letter, in the shell itself) is read
+literal assignment (`NAME=value`, no expansion, a name of one letter and digits, in the shell itself) is read
 into its later `$NAME` and `${NAME}`. A glob names each path it matches now, links followed (`cat ke?` through a
 link to `~/.ssh` reads a credential). A part that writes through the shell (`sed -i`, a heredoc, `tee`), redirects
 into a file (`>`, `>>`, `&>`, `>&file`; `>|`, here-strings and process substitutions are not read), runs in the

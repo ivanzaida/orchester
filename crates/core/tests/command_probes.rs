@@ -136,6 +136,19 @@ const ASKS: &[&str] = &[
   "f=*; cat $f",
   "ls [kl]*",
   "cat .*/x",
+  // Assignments to variables a shell treats specially or ties to another (zsh's `path` is `PATH`).
+  "path=./bin; ls",
+  "cdpath=/; cd x && ls",
+  "fpath=x; ls",
+  "IFS=x; ls",
+  "BASH_ENV=x; ls",
+  "PS4=x; ls",
+  "ZDOTDIR=x; ls",
+  "file=src; ls $file",
+  // zsh's `**` descends through links at any depth.
+  "cat **/id_rsa",
+  "cat src/**/*.rs",
+  "ls l/**",
   // Reaching further than the words say.
   "grep -R password .",
   "grep --dereference-recursive password .",

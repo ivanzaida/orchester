@@ -543,10 +543,10 @@ registry were *Credential read*s. The requests are the fixture `crates/core/test
   `H:\…`) is no part of its own; a `cd` with an option, `-`, `~`, a glob or a second operand (zsh's `cd old new`) is
   kept, and one with an option, `-` or a second operand leaves where later parts run unknown; a glob `cd` goes to its
   one match. Every part reads the folder it runs in. A glob names each path it matches now, links followed
-  (`glob.rs`, bracket expressions too). `>&file` and `<&file` write and read the file (`>&2`, `>&-` copy a
-  descriptor). A literal assignment (`f=src/x.rs`, `L="C:/…"`: no expansion, quote or space; a lowercase name other
-  than `*proxy` or one capital letter; unquoted, first in its list, not in a pipeline or the background) is read into
-  its later `$f` and `${f}`; a part in the background is Unknown; a `..` after a glob is Unknown; a carriage return
+  (`glob.rs`, bracket expressions too; `**` is Unknown). `>&file` and `<&file` write and read the file (`>&2`,
+  `>&-` copy a descriptor). A literal assignment (`f=src/x.rs`, `L="C:/…"`: no expansion, quote or space; a name
+  of one letter and digits, which no shell treats specially, so zsh's `path=` or `cdpath=` stays unread; unquoted,
+  first in its list, not in a pipeline or the background) is read into its later `$f` and `${f}`; a part in the background is Unknown; a `..` after a glob is Unknown; a carriage return
   stays in its word. `sed` is read by its options and its script (`sed_script`); `awk` by an allow-list of the names
   its program uses (`awk_program`: no `ARGV`, `ARGC`, `ENVIRON`, `FILENAME`, `SYMTAB`, `getline`, `system`,
   `close`, `@`, or `print` with `>`/`|`; `-v` and operand assignments only of the variables it may set); `sort`

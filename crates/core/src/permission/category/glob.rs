@@ -2,7 +2,8 @@
 //! match may be a link that leads anywhere, so each match is placed, not the folder the glob is in.
 //! Components are matched against what their folder holds now, case-sensitively as bash does: `*` and
 //! `?`, bracket expressions (`[abc]`, `[a-z]`, `[!x]`), a leading `.` only by a pattern that starts with
-//! one, which may also match `.` and `..` (bash before 5.2). A folder that cannot be listed matches
+//! one, which may also match `.` and `..` (bash before 5.2). `**`, which zsh expands through every
+//! folder below, cannot be told. A folder that cannot be listed matches
 //! nothing, as in bash; an entry that cannot be read, or more matches than [`MOST_MATCHES`], cannot be
 //! told.
 
@@ -30,6 +31,10 @@ pub(super) fn expand(pattern: &Path) -> Result<Vec<PathBuf>, Untold> {
     if !name.contains(['*', '?', '[']) {
       found.iter_mut().for_each(|path| path.push(name));
       continue;
+    }
+    // zsh's `**` (and bash's with `globstar`) descends into every folder below, links included.
+    if name.contains("**") {
+      return Err(Untold);
     }
     let mut next = Vec::new();
     for folder in &found {
