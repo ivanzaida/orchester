@@ -134,7 +134,11 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
   };
   db.start_sharing(&link, &[], &[cached]).expect("share");
   let shared = db.task(fixture.task).expect("task").expect("cached task");
-  assert_eq!(shared.details(), task.details(), "the cache names the same pipeline by slug");
+  assert_eq!(
+    shared.details(),
+    task.details(),
+    "the cache names the same pipeline by slug"
+  );
   assert_eq!(shared.pipeline_version(), pin);
   drop(db);
 
@@ -147,6 +151,9 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
   let run = db.run(run_id).expect("read run").expect("run exists");
   assert_eq!(Some(run.snapshot().pipeline().number), pin);
   assert_eq!(db.run(run_id).expect("read").map(|run| run.task()), Some(fixture.task));
-  assert!(db.shared_task_info(fixture.task).expect("info").is_some(), "the task stays shared");
+  assert!(
+    db.shared_task_info(fixture.task).expect("info").is_some(),
+    "the task stays shared"
+  );
   scheduler.wait_for_current_tasks().await;
 }

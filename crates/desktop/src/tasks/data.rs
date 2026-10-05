@@ -91,7 +91,9 @@ impl ProjectTasks {
   /// (`common.listSeparator`).
   pub fn decorate_row(&self, mut row: super::list::TaskRow, separator: &str) -> super::list::TaskRow {
     if let Some(slug) = self.missing_pipelines.get(&row.id) {
-      row.pipeline = super::list::PipelineLabel::Missing { slug: Arc::from(slug.as_str()) };
+      row.pipeline = super::list::PipelineLabel::Missing {
+        slug: Arc::from(slug.as_str()),
+      };
     }
     row.tags = self
       .tags

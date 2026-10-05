@@ -327,7 +327,9 @@ pub enum PipelineLabel {
   /// The chosen pipeline has no published version in this project any more.
   Unavailable,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
-  Missing { slug: Arc<str> },
+  Missing {
+    slug: Arc<str>,
+  },
 }
 
 impl PipelineLabel {
