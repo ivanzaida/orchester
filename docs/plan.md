@@ -74,6 +74,33 @@ change, and a dev build on this repository would share `<repo>/.orchester` with 
 
 ## M · MCP servers
 
+### M8 · Orchester's own MCP server · branch `claude/app-mcp` (from master `3d76beff`, UI)
+
+Implemented 2026-10-05 (user approval of 2026-10-05), **waiting for review and an independent design verification**.
+Automation, the coordinator agent included, controls Orchester through data-level tools instead of clicking the
+window through lurq's MCP server, which stays for screenshots and the element tree (`docs/stable-build.md`, "Embedded
+MCP server").
+
+- `crates/desktop/src/app_mcp/`: a loopback streamable-HTTP server (rmcp on axum) started by the root on the app's
+  runtime, with a bearer token in `orchester-mcp/<pid>.json` (`%LOCALAPPDATA%` on Windows, `~/Library/Application
+  Support` on macOS, user-only); each process locks `<pid>.lock`, and a starting server removes the files of ended
+  processes. Tools: `list_projects`, `list_tasks`, `get_task`, `create_task`, `update_task`, `run_task`, `get_run`,
+  `pause_run`, `resume_run`, `cancel_run`, `list_approvals`, `decide_approval`, `list_pipelines`, strict input schemas,
+  typed errors (`code` plus the app's own explanation). They go through the screens' services (`TaskForm`,
+  `TaskWriter`, `save_edit`, `queue_in`, `RunAgainCheck`, `claim_for_work`, `approvals::pending`, `run_view`) and the
+  runner (`Runners::*_in`, which start the named project's runner when no tab shows it). Saved tasks reload the open
+  task lists (`tasks::outside::OutsideChanges`).
+- *Let automation answer approvals*: app setting (`app_settings`, off by default) in the popover of the status bar's
+  MCP item, which now shows Orchester's server; `decide_approval` is refused while it is off. Answers are approve once
+  or deny, recorded as `DecidedBy::Automation` / `AutomationDeny` (core `Answerer`, ipc protocol 17, project schema
+  rebuilds `tool_approvals` for the new values); the activity and the run's Approvals name them.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard app_mcp` (10), `--test status_bar status_bar`,
+  `--test i18n`; `cargo test -p orchester-runner --features test-agent --test approval_choices` (automation answers);
+  `cargo test -p orchester-store --test approval_rules`, `--test app_db automation`.
+- **Not done:** design verification of the status bar item and the new popover (no Pencil frame exists for the
+  popover; it takes the operations popover's panel); the macOS build of the desktop was not checked (no Apple SDK on
+  the Windows host; core checks for `aarch64-apple-darwin`).
+
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
 Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether

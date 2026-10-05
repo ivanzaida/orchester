@@ -90,25 +90,51 @@ Finder (`open` starts it the same way). Starting the program itself from a termi
 
 ## Embedded MCP server
 
-Every build, debug and release, on Windows and macOS, includes the embedded MCP server through
-which agents drive and inspect the running app (the former `-WithMcp` / `--with-mcp` options are
-gone). At start it listens on `127.0.0.1` only, on a free port the OS picks, never a fixed one.
-The status bar shows *MCP* with that address; its hint names the endpoint
-`http://127.0.0.1:<port>/mcp`. Every request needs a bearer token that the app writes, with the
-port, to a discovery file of its process in your user profile, removed when the app closes:
-`%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
-administrators), `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS (the file is
-readable only by you). Orchester never shows, copies or logs the token. If the server cannot
-start, the status bar shows *MCP unavailable* and the app's log has the reason (see
-[Logs](#logs)).
+Every build, debug and release, on Windows and macOS, includes two MCP servers. Both listen on
+`127.0.0.1` only, on a free port the OS picks (never a fixed one), and both need a bearer token on
+every request, which the app writes, with the port, to a discovery file of its process in your
+user profile and removes when the app closes. Orchester never shows, copies or logs a token.
 
-What this means: any program running as your user can read the discovery file and drive the app
-as you could: read what it shows, click and type, and so start runs whose agents work in your
-projects. Other users' programs can connect to the port but cannot read the token, so the server
-refuses them; other machines cannot connect at all. Secret values stay masked on screen and in the
-element tree the MCP server reads. A program running as you can already read
-your files and start the same CLIs, so the server adds no access such a program lacks; it makes
-the app scriptable.
+- **Orchester's MCP server** is how automation controls Orchester, the coordinator agent that
+  develops Orchester through Orchester included. Its tools work on data and go through the same
+  rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
+  `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
+  after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
+  interrupted run), `cancel_run`, `list_approvals`, `decide_approval` and `list_pipelines`. A modal
+  open in the window does not stand in their way. A refusal comes back as a tool error with a stable
+  `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
+  `run_not_running`…) and the app's own explanation. Its discovery file is
+  `%LOCALAPPDATA%\orchester-mcp\<pid>.json` on Windows and
+  `~/Library/Application Support/orchester-mcp/<pid>.json` on macOS (readable only by you): `url`
+  (`http://127.0.0.1:<port>/mcp`, streamable HTTP), `port` and `token`. To connect a client, read
+  the file of the running app's pid and send `Authorization: Bearer <token>`, e.g.
+  `claude mcp add --transport http orchester http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`.
+  When the app starts it removes the files of Orchester processes that were killed and could not
+  remove theirs (each running process holds a lock on `<pid>.lock` beside its file).
+- **lurq's MCP server** stays for looking at the window: screenshots and the element tree for design
+  verification (`lurq_screenshot`, `lurq_read_tree`, `lurq_interact`). Its discovery file is
+  `%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
+  administrators) and `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS.
+
+The status bar shows *MCP* with the address of Orchester's server; its hint names both endpoints and
+where the token is. If Orchester's server cannot start, the status bar shows *MCP unavailable* and
+the app's log has the reason (see [Logs](#logs)).
+
+**Approvals.** Automation answers waiting tool requests only while *Let automation answer approvals*
+is on. It is an application setting, off by default: click the MCP item in the status bar and turn
+it on or off in its popover. While it is off, `decide_approval` is refused
+(`automation_not_allowed`). While it is on, a client approves a request once or denies it (the
+wider answers stay with the person), and the run records the answer as automation's: the activity
+reads *approved by automation* or *denied by automation*, and the run's Approvals count them apart
+from yours.
+
+What this means: any program running as your user can read the discovery files and control the app
+as you could: create and run tasks, whose agents work in your projects, read what the window shows,
+and click and type. Other users' programs can connect to the ports but cannot read the tokens, so
+the servers refuse them; other machines cannot connect at all. Secret values stay masked on screen,
+in the element tree, and in every tool result. A program running as you can already read your
+files and start the same CLIs, so the servers add no access such a program lacks; they make the app
+scriptable. Answering approvals is the one thing they add, which is why it waits for your setting.
 
 ## Data
 
