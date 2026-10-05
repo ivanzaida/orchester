@@ -621,6 +621,13 @@ refusal of screen changes while a Share is under way and the re-sending of a run
 pause a Share in a test), and the link refusal of `orchester.toml` on Windows (making a link needs a privilege; the test
 runs where links can be made, i.e. macOS).
 
+Second review round (2026-10-05): `claim_for_work` says whether it took the claim or confirmed one the person held
+(after a finished run, or working on their other computer); work that does not start releases only a claim its attempt
+took. Before sending a run's status the tasks and claims are read from the server, so a claim taken over a moment ago
+sends nothing; a status the server refuses is not retried and the task says so. The tasks changed while sharing are
+read in the transaction that links the project. At 960 the server card's connection label gives way to its icon so
+the name stays whole. Not covered by a test: a status the server refuses (no server rule refuses one to provoke).
+
 Design verification needed: 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14 `NaUDV`, 10.17 `g5r5VU`, 10.41
 `RmDpQ`, 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.43 E, and Settings › Servers' details header at 960.
 
