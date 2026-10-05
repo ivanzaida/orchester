@@ -12,6 +12,10 @@ use crate::permission::known_safe;
 /// Programs that write each file they name: every argument that is not an option.
 const WRITES_ARGS: [&str; 6] = ["mkdir", "touch", "chmod", "chown", "tee", "truncate"];
 
+/// Programs of [`WRITES_ARGS`] that only create or change the files they name, as an edit does; `chmod`,
+/// `chown` and `truncate` change what an edit does not.
+const EDITS_ARGS: [&str; 3] = ["mkdir", "touch", "tee"];
+
 /// Programs that remove each file they name.
 const DELETES_ARGS: [&str; 3] = ["rm", "rmdir", "unlink"];
 
@@ -130,7 +134,7 @@ const TARGET: [&str; 2] = ["-t", "--target-directory"];
 /// The verdict for a file program; `None` for any other program.
 pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   Some(match program {
-    "cp" => copy(args, &CP),
+    "cp" => copy(args, &CP).editing(),
     "install" if options::parse(args, &INSTALL).is_some_and(|parsed| parsed.has(&["-d", "--directory"])) => {
       Judged::writing(Kind::Writes, operands(args))
     }
@@ -139,11 +143,12 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     "mv" => options::parse(args, &MV).map_or_else(Judged::unknown, |parsed| {
       let mut written = parsed.operands.clone();
       written.extend(parsed.values(&TARGET).map(str::to_owned));
-      Judged::writing(Kind::Writes, written).deleting()
+      Judged::writing(Kind::Writes, written).deleting().editing()
     }),
     "find" => find(args),
+    program if EDITS_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).editing(),
     program if WRITES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)),
-    program if DELETES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).deleting(),
+    program if DELETES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).deleting().editing(),
     _ => return None,
   })
 }

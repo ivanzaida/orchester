@@ -18,6 +18,7 @@ mod files;
 mod gh;
 mod git;
 mod glob;
+mod heredoc;
 mod install;
 mod network;
 mod network_tables;

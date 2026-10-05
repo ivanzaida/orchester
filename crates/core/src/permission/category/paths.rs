@@ -5,7 +5,10 @@
 use std::path::{Component, Path, PathBuf, Prefix};
 
 use super::glob;
-use crate::permission::canonical::{existing, normalize};
+use crate::{
+  native::scope::protected,
+  permission::canonical::{existing, normalize},
+};
 
 /// Files directly in the home folder that hold credentials besides its dot files (`_netrc` is
 /// curl's `.netrc` on Windows).
@@ -135,6 +138,25 @@ impl CommandScope {
       return Place::Temp;
     }
     Place::Outside
+  }
+
+  /// Whether a write to `path` (resolved, in the worktree or a writable folder) is refused as the native
+  /// agent's file tools refuse it ([`crate::native::scope`]): a `.git` entry or anything in one, at any
+  /// depth, or `.orchester/` at the top of the worktree; or, for a delete, the worktree or a writable
+  /// folder itself.
+  pub(super) fn write_refused(&self, path: &Path, delete: bool) -> bool {
+    let root = if path.starts_with(&self.worktree) {
+      Some((&self.worktree, true))
+    } else {
+      self
+        .writable
+        .iter()
+        .find(|folder| path.starts_with(folder))
+        .map(|folder| (folder, false))
+    };
+    root.is_some_and(|(root, in_worktree)| {
+      protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+    })
   }
 
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it

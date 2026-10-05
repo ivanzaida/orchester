@@ -608,6 +608,44 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Shell writes in the worktree run like edits · branch `claude/worktree-writes` (done 2026-10-05)
+
+User decision: in a step that edits files, a command line whose only effects are writes to files in the worktree
+(or its writable folders), with parts that are allowed or known-safe reads on their own, runs without asking, as the
+edit tools write there unasked. The request that prompted it (`cd <worktree>; f=…; sed -i '…' $f; cat >> $f
+<<'EOF' … EOF` then `cargo test … 2>&1 | grep … | head -30` on the next line) now runs.
+
+- `run::permitted` takes the step's effective `AgentPermissions`; with *Edit files* a part runs when
+  `CommandPart::edits_worktree`: `sed -i`, `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`, `rmdir` (`Judged::edits`), or a
+  known-safe read redirected into a file, every write placed in the worktree or a writable folder and nothing named
+  outside. Listed commands may redirect into the worktree there too. Read-only steps are unchanged.
+- Writes are refused (Unknown) where `native::scope::protected` refuses the native file tools' writes (any `.git`
+  entry, `.orchester/` at the worktree's top), and a removal of the worktree or a writable folder itself
+  (`CommandScope::write_refused`).
+- Here-documents (`heredoc.rs`): `<<` and `<<-` with a quoted delimiter take the body as data; a bare delimiter's body
+  with `$` or a backtick, a body without its delimiter and a here-string stay unread. New lines separate commands.
+- `CommandPrefix::covers_argv`: `cargo +<toolchain> <sub>` is covered by `cargo <sub>`.
+- Fixture of runs 22–25 (59 requests, builder listing `cargo test`, `check`, `clippy`, `fmt`):
+
+  | 59 requests | runs unasked | asks, Approve similar | asks, Unknown | asks, other |
+  | --- | --- | --- | --- | --- |
+  | before this branch (any step) | 5 | 40 | 8 | 6 |
+  | read-only step | 5 | 40 | 3 | 11 |
+  | step that edits files | 32 | 24 | 3 | 0 |
+
+  The 24 are reads outside the worktree (23 of lurq's source in the registry, one Windows `grep` pattern read as a
+  root path); the 3 Unknown are `python3 - <<'EOF'`, `python -c` and `L=$(…)`. Quoted here-documents are now read,
+  so in a read-only step 5 former Unknown lines ask as writes with several asking parts. On macOS 33 / 23.
+- Not done: the 33 newest requests were not exported: reading the user's project database was refused by the
+  session's permission check, so `.tmp/orchester-drive/approvals-recent.json` does not exist and the table covers
+  the 59 only.
+- Tests: `core` `worktree_writes` (new; allowed forms, refusals for `.git/config`, `.git/hooks`, `../`, a link out,
+  `/etc`, `~/.bashrc`, an expanding here-document, `> .git/HEAD`, `rm -rf .` and `/`, `cp` from outside, `mv` out, a
+  read-only step), `command_probes` (worktree redirects run only where edits are allowed), `command_sequences`,
+  `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`, `permissions`;
+  `runner --features test-agent` `approval_choices`, `claude_unlisted` (a worktree `sed -i` is answered unasked; `.git`
+  and `rm -rf ..` still ask), `claude_approvals`, `claude`, `command_approvals`, `orchester_tools`. Nothing on macOS.
+
 Agent commands without approvals · branch `claude/agent-tools` (done 2026-10-05)
 
 Four Claude Code runs of Orchester on itself (runs 22–25, Opus 5.5, about 1.5 h) asked 59 times: the agents read and

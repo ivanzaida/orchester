@@ -59,6 +59,9 @@ pub(super) struct Judged {
   pub(super) known_safe: bool,
   /// The argument that is a script (`sed`'s, `awk`'s program) rather than a path.
   pub(super) script: Option<usize>,
+  /// It only creates, changes, copies, moves or removes the files it names, as an edit does (`sed -i`,
+  /// `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`), and starts no other program.
+  pub(super) edits: bool,
 }
 
 impl Judged {
@@ -77,6 +80,7 @@ impl Judged {
       prefix_stays: false,
       known_safe: false,
       script: None,
+      edits: false,
     }
   }
 
@@ -142,6 +146,12 @@ impl Judged {
   /// A Read-only command of the known-safe tables.
   pub(super) const fn known_safe(mut self) -> Self {
     self.known_safe = true;
+    self
+  }
+
+  /// A command that edits the files it names, as [`Self::edits`] says.
+  pub(super) const fn editing(mut self) -> Self {
+    self.edits = true;
     self
   }
 

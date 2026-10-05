@@ -61,6 +61,8 @@ impl Placing<'_> {
     };
     for (path, place) in located {
       let category = match place {
+        // What no edit may change is no worktree write; a person answers each such write.
+        Place::Granted if self.scope.write_refused(&path, delete) => CommandCategory::Unknown,
         Place::Granted => CommandCategory::Worktree,
         Place::Temp => CommandCategory::OutsideWrite,
         Place::Outside | Place::Secret if delete => CommandCategory::HistoryDestructive,
