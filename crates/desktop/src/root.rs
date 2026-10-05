@@ -10,6 +10,7 @@ use orchester_ipc::SessionEnd;
 use crate::{
   activity::Activity,
   background,
+  clock::Clock,
   close::Lifecycle,
   embedded_mcp::McpStatus,
   messages::{self, Message},
@@ -49,6 +50,8 @@ pub enum Startup {
     previous_end: SessionEnd,
     /// When this session started.
     session_start: Timestamp,
+    /// The time live values are shown at.
+    clock: Clock,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed { message: Message, path: Option<String> },
@@ -99,6 +102,7 @@ impl Component for Root {
       lifecycle,
       programs,
       vault,
+      clock,
       ..
     } = startup
     else {
@@ -118,6 +122,7 @@ impl Component for Root {
     ctx.provide(ServerFeed::new(servers));
     ctx.provide(programs);
     ctx.provide(vault);
+    ctx.provide(clock);
     ctx.provide(SessionZooms::default());
     let close = lifecycle.clone();
     ctx

@@ -7,6 +7,7 @@ use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWind
 use orchester_desktop::{
   activity::Activity,
   app_icon, app_log, app_paths,
+  clock::Clock,
   close::{CloseKind, Lifecycle, session_end},
   embedded_mcp::McpStatus,
   i18n,
@@ -105,6 +106,7 @@ fn startup(session: &Result<AppSession, StartupError>, runtime: &Runtime) -> Sta
         vault: Vault::keychain(),
         previous_end: session.previous_end(),
         session_start: session.started_at(),
+        clock: Clock::system(),
       }
     }
     Err(error) => {
