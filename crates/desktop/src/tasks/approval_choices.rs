@@ -11,6 +11,7 @@ use std::{
 use orchester_core::{
   connection::mcp::McpToolName,
   id::{ConnectionId, ResourceId},
+  orchester_tools,
   permission::{
     AgentPermissions, CommandPrefix,
     category::{CommandCategory, CommandReason, CommandScope},
@@ -73,6 +74,8 @@ pub enum AlwaysBlocked {
   ToolName,
   /// The step's profile or the server cannot be read any more.
   Missing,
+  /// One of Orchester's own tools, which no server's list holds.
+  OrchesterTool,
 }
 
 /// The wider answers of one request, and what Deny tells the agent.
@@ -207,6 +210,9 @@ fn pipelines_of(db: &ProjectDb, profile: ResourceId) -> Vec<Arc<str>> {
 
 /// Always allow of `tool` of `server`: the server, and the profiles that get it and those that do not.
 fn tool_choice(db: &ProjectDb, server: &str, tool: &str) -> Result<AlwaysShown, AlwaysBlocked> {
+  if server == orchester_tools::SERVER {
+    return Err(AlwaysBlocked::OrchesterTool);
+  }
   if McpToolName::new(tool).is_err() {
     return Err(AlwaysBlocked::ToolName);
   }

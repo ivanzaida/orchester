@@ -165,6 +165,7 @@ pub(in crate::screens::project::task) fn always_blocked(ctx: &Ctx, blocked: Alwa
     AlwaysBlocked::Command(AlwaysUnavailable::ListFull) => "runs.toolApproval.wider.listFull",
     AlwaysBlocked::ToolName => "runs.toolApproval.wider.toolName",
     AlwaysBlocked::Missing => "runs.toolApproval.wider.missing",
+    AlwaysBlocked::OrchesterTool => "runs.toolApproval.wider.orchesterTool",
   })
 }
 
