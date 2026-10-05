@@ -151,7 +151,9 @@ impl Component for AccountTab {
       ],
     );
     let properties = Column::new()
-      .width(Dimension::Px(PROPERTIES_WIDTH))
+      .id("server-account-facts")
+      .width(Dimension::Pct(100.0))
+      .max_width(Dimension::Px(PROPERTIES_WIDTH))
       .spacing(ExtraSpacing::Stack.role())
       .child(property(&ctx.t("servers.account.signedInAs"), &who))
       .child(property(&ctx.t("servers.account.role"), &role))
@@ -281,7 +283,9 @@ fn token_note(ctx: &Ctx, entry: &ServerEntry) -> Element {
         "servers.account.tokenNote",
         [("server", entry.stored.name.as_str()), ("keychain", &*keychain)],
       ))
-      .variant(TypographyStyle::Caption),
+      .variant(TypographyStyle::Caption)
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0)),
     )
     .into()
 }

@@ -349,6 +349,31 @@ fn servers_sign_out_stays_whole_in_a_960_window() {
     "{button:?} inside {header:?}"
   );
   assert!(shows(&mut desktop, "Sign out"));
+  // The rest of the details fit beside the list too: the account facts, the sessions table with
+  // room for each device, and the keychain note.
+  let details = desktop.bounds("server-details");
+  let right = details.x + details.width + 0.5;
+  for id in ["server-account-facts", "server-sessions", "server-token-note"] {
+    let found = desktop.bounds(id);
+    assert!(
+      found.width > 0.0 && found.x + found.width <= right,
+      "{id} {found:?} inside {details:?}"
+    );
+  }
+  let devices = ids_with_prefix(&mut desktop, "server-session-device-");
+  assert!(!devices.is_empty(), "the sessions are listed");
+  for id in devices {
+    let device = desktop.bounds(&id);
+    assert!(device.width >= 120.0, "{id} keeps room for its name: {device:?}");
+  }
+  assert!(shows(&mut desktop, "Alice Moreau (alice)"));
+  desktop.click("server-tab-users");
+  desktop.wait_for("server-user-table");
+  let users = desktop.bounds("server-user-table");
+  assert!(
+    users.x + users.width <= right,
+    "the users table {users:?} inside {details:?}"
+  );
 }
 
 #[test]
@@ -429,4 +454,16 @@ fn servers_plain_http_to_another_computer_needs_the_opt_in_under_its_warning() {
     server.accepts(&token(&desktop)),
     "signed in over plain HTTP with the opt-in"
   );
+}
+
+/// The ids in the tree that start with `prefix`.
+fn ids_with_prefix(desktop: &mut Desktop, prefix: &str) -> Vec<String> {
+  let found = std::cell::RefCell::new(Vec::new());
+  desktop.tree.find_element(|element| {
+    if let Some(id) = element.id().filter(|id| id.starts_with(prefix)) {
+      found.borrow_mut().push(id.to_owned());
+    }
+    false
+  });
+  found.into_inner()
 }

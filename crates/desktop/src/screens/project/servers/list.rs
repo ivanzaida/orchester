@@ -30,6 +30,12 @@ use crate::{
 
 /// The list column's width (`E72eo`).
 const LIST_WIDTH: f32 = 380.0;
+/// The least the list keeps in a narrow window, where it gives way to the details.
+const LIST_MIN_WIDTH: f32 = 220.0;
+/// The least the details keep beside the list: in a narrow window the list gives way first, down
+/// to its own least, so a 960 window has room for the account and the tables
+/// (`SERVERS_DETAILS_WIDE_MIN_WINDOW`).
+const DETAILS_MIN_WIDTH: f32 = 524.0;
 
 pub(super) fn server_list(
   ctx: &Ctx,
@@ -52,7 +58,7 @@ pub(super) fn server_list(
     .with_children(cards);
   Column::new()
     .id("server-list")
-    .width(Dimension::Px(LIST_WIDTH))
+    .width(Dimension::Px(list_width(ctx)))
     .height(Dimension::Pct(100.0))
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(
@@ -118,4 +124,11 @@ fn lines(name: Row, entry: &ServerEntry, account: &str) -> Column {
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
+}
+
+/// The list's width in the window as it is now: 380, less in a window too narrow for the details
+/// beside it. Reading the width re-renders the caller as the window resizes.
+fn list_width(ctx: &Ctx) -> f32 {
+  let room = ctx.window().logical_width() - crate::theme::PROJECT_SIDEBAR_WIDTH - DETAILS_MIN_WIDTH;
+  room.clamp(LIST_MIN_WIDTH, LIST_WIDTH)
 }

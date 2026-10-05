@@ -44,6 +44,8 @@ const ROW_BUTTON_HEIGHT: f32 = 28.0;
 const ROLE_WIDTH: f32 = 80.0;
 const STATE_WIDTH: f32 = 110.0;
 const ACTIONS_WIDTH: f32 = 300.0;
+/// The actions in a narrow window: *Reset password* and *Disable* side by side.
+const NARROW_ACTIONS_WIDTH: f32 = 250.0;
 
 /// A user of the server as the page shows them.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -206,12 +208,19 @@ fn heading_line(ctx: &Ctx, props: &UsersProps) -> Element {
 }
 
 fn users_table(ctx: &Ctx, props: &UsersProps, people: &[Person], enable: &EnableAction) -> Element {
-  let heading = heading([
-    (Width::Fill, Some(ctx.t("servers.users.name"))),
-    (Width::Px(ROLE_WIDTH), Some(ctx.t("servers.users.role"))),
-    (Width::Px(STATE_WIDTH), Some(ctx.t("servers.users.state"))),
-    (Width::Px(ACTIONS_WIDTH), None),
-  ]);
+  // A narrow window drops State; a disabled user says so under the username.
+  let wide = ctx.window().logical_width() >= crate::theme::SERVERS_DETAILS_WIDE_MIN_WINDOW;
+  let actions_width = Width::Px(if wide { ACTIONS_WIDTH } else { NARROW_ACTIONS_WIDTH });
+  let heading = heading(
+    [
+      Some((Width::Fill, Some(ctx.t("servers.users.name")))),
+      Some((Width::Px(ROLE_WIDTH), Some(ctx.t("servers.users.role")))),
+      wide.then(|| (Width::Px(STATE_WIDTH), Some(ctx.t("servers.users.state")))),
+      Some((actions_width, None)),
+    ]
+    .into_iter()
+    .flatten(),
+  );
   let admins = people.iter().filter(|person| person.admin && !person.disabled).count();
   let rows = people.iter().map(|person| {
     let role = if person.admin {
@@ -227,25 +236,25 @@ fn users_table(ctx: &Ctx, props: &UsersProps, people: &[Person], enable: &Enable
       (Icon::CircleCheck, ctx.t("servers.users.active"))
     };
     let last_admin = person.admin && !person.disabled && admins == 1;
+    let disabled = (!wide && person.disabled).then_some(&*state);
     row(
       Dimension::Px(ROW_HEIGHT),
       [
-        Cell::new(Width::Fill, name(ctx, props, person)),
-        Cell::new(Width::Px(ROLE_WIDTH), role),
-        Cell::new(Width::Px(STATE_WIDTH), status_label(glyph, &state)),
-        Cell::new(
-          Width::Px(ACTIONS_WIDTH),
-          actions(ctx, props, person, last_admin, enable),
-        )
-        .at_end(),
-      ],
+        Some(Cell::new(Width::Fill, name(ctx, props, person, disabled))),
+        Some(Cell::new(Width::Px(ROLE_WIDTH), role)),
+        wide.then(|| Cell::new(Width::Px(STATE_WIDTH), status_label(glyph, &state))),
+        Some(Cell::new(actions_width, actions(ctx, props, person, last_admin, enable)).at_end()),
+      ]
+      .into_iter()
+      .flatten(),
     )
   });
   table("server-user-table", heading, rows)
 }
 
-/// The display name, *you* on the admin's own row, and the username in mono.
-fn name(ctx: &Ctx, props: &UsersProps, person: &Person) -> Element {
+/// The display name, *you* on the admin's own row, and the username in mono; in a narrow window a
+/// disabled user's state after it.
+fn name(ctx: &Ctx, props: &UsersProps, person: &Person, disabled: Option<&str>) -> Element {
   let you = is_self(&props.entry, person.id).then(|| {
     Text::new(&ctx.t("servers.users.you"))
       .variant(ExtraTypography::Footnote.role())
@@ -267,7 +276,18 @@ fn name(ctx: &Ctx, props: &UsersProps, person: &Person) -> Element {
         )
         .with_children(you),
     )
-    .child(Text::new(&person.username).variant(TypographyStyle::Mono).nowrap())
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(Text::new(&person.username).variant(TypographyStyle::Mono).nowrap())
+        .with_children(disabled.map(|state| {
+          Text::new(state)
+            .variant(ExtraTypography::Footnote.role())
+            .color(PaletteColor::TextMuted)
+            .nowrap()
+        })),
+    )
     .into()
 }
 

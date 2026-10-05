@@ -236,7 +236,13 @@ impl ServersScreen {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .child(list)
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(details))
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .height(Dimension::Pct(100.0))
+          .child(details),
+      )
       .into()
   }
 
