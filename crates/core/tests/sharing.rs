@@ -106,3 +106,28 @@ fn s1b_revision_rejects_invalid_and_overflow() {
       .is_err()
   );
 }
+
+#[test]
+fn s2c_similar_titles_share_most_words_regardless_of_case() {
+  let server = [
+    "Fix reconnect after sleep",
+    "Switcher keyboard shortcuts",
+    "Fix flaky sync test",
+    "Runner health indicator",
+    "Token usage",
+  ];
+  let similar = |title: &str| orchester_core::sharing::similar_titles(title, server.iter().copied());
+  assert_eq!(similar("Add switcher KEYBOARD shortcuts"), [1]);
+  assert_eq!(similar("Retry the flaky sync test"), [2]);
+  assert_eq!(similar("Runner health indicator in the status bar"), [3]);
+  // One word in common is chance; so is a small share of the shorter title.
+  assert_eq!(similar("Token usage export to CSV"), [4]);
+  assert!(similar("Notes for the legacy account migration").is_empty());
+  assert!(similar("Fix the docs").is_empty());
+  // The larger share first, ties in the order given.
+  let ordered = orchester_core::sharing::similar_titles(
+    "flaky sync test retry",
+    ["flaky sync bug", "sync test", "flaky sync test retry"],
+  );
+  assert_eq!(ordered, [1, 2, 0]);
+}
