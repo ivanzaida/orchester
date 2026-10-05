@@ -13,6 +13,7 @@
 //! location ([`CommandScope`]) and whether it installs software, which auto-approval never approves
 //! ([`crate::run::auto_verdict`]).
 
+mod awk_program;
 mod files;
 mod gh;
 mod git;
@@ -215,6 +216,8 @@ fn classify_part(
   };
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
+  // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
+  placing.read(&mut part, ".");
   let named: Vec<String> = args
     .iter()
     .enumerate()
@@ -233,11 +236,20 @@ fn classify_part(
   for word in &judged.inside {
     placing.inside(&mut part, word);
   }
-  let part = redirected(part, raw, placing);
+  let mut part = redirected(part, raw, placing);
+  if program == "cd" {
+    part.moves_inside = enters_plainly(args) && part.known_safe_read();
+  }
   if matches!(program.as_str(), "cd" | "pushd" | "chdir" | "set-location") {
     place::change_directory(scope, folders, args);
   }
   vec![part]
+}
+
+/// Whether `cd args` goes to the one folder its only argument names as written: no option, no `-`
+/// (the previous folder), no `~` and no glob, which could lead elsewhere than the word reads.
+fn enters_plainly(args: &[String]) -> bool {
+  matches!(args, [target] if !target.starts_with(['-', '~']) && !target.contains(['*', '?', '[']))
 }
 
 /// `part` with the files its redirections read and write placed.

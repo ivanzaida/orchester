@@ -282,18 +282,26 @@ fn known_read(program: &str, args: &[String]) -> Judged {
 
 /// A program of [`READS`], Unknown with an option that writes a file (`tree -o`, `uniq in out`, `sort -o`),
 /// sets the system date or a shell variable (`date -s`, `printf -v`), starts a program (`sort
-/// --compress-program`), reads the files a file names (`sort --files0-from`), or a `jq` program that
-/// reads the environment.
+/// --compress-program`), reads the files a file names (`sort --files0-from`), follows links (`grep -R`),
+/// or a `jq` program that reads the environment or a module.
 fn plain_read(program: &str, args: &[String]) -> Judged {
   let refused = match program {
     "tree" => has_option(args, &["-o", "-R", "--output"]),
     "uniq" => operands(args).len() > 1,
     "date" => has_option(args, &["-s", "--set"]) || operands(args).iter().any(|operand| !operand.starts_with('+')),
     "printf" => has_option(args, &["-v"]),
+    // `-R` follows links, also out of the folders it is given.
+    "grep" | "egrep" | "fgrep" => has_option(args, &["-R"]) || abbreviates(args, &["dereference-recursive"]),
     "sort" => has_option(args, &["-o", "-T"]) || abbreviates(args, &SORT_REFUSED),
-    "jq" => args
-      .iter()
-      .any(|arg| arg.contains("env") || arg.contains("ENV") || arg.contains("input_filename")),
+    // A module (`include`, `import`, `-L`) is read from folders the arguments do not name.
+    "jq" => {
+      has_option(args, &["-L"])
+        || args.iter().any(|arg| {
+          ["env", "ENV", "input_filename", "include", "import"]
+            .iter()
+            .any(|refused| arg.contains(refused))
+        })
+    }
     _ => false,
   };
   if refused {

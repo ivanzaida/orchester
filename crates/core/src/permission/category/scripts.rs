@@ -2,10 +2,11 @@
 //! path. `sed` prints unless `-i` edits its files in place; a script is read when its commands only
 //! print, select, change or add lines ([`sed_script::harmless`]), or when it holds none of the letters
 //! of the commands that write a file (`w`, `W`), read one (`r`, `R`) or run a command (`e`). `awk` is
-//! read only with a program that cannot write a file, start a program or read the environment, and the
-//! options that change neither.
+//! read only with a program that uses the names [`awk_program`] allows, the options that change
+//! neither what it reads nor what it runs, and command-line assignments of the variables it may set.
 
 use super::{
+  awk_program,
   options::{self, Known, Takes},
   programs::{Judged, Kind, operand_positions},
   sed_script,
@@ -89,24 +90,34 @@ const AWK: [Known; 4] = [
   ("--assign", Takes::Value),
 ];
 
-/// What in an `awk` program may start a program (`system`, a command piped into `getline`), read a file
-/// it does not name as an argument (`getline < file`) or the environment (`ENVIRON`, `PROCINFO`), or
-/// load code (`@load`, `@include`).
-const AWK_REFUSED: [&str; 5] = ["system", "getline", "ENVIRON", "PROCINFO", "@"];
-
 fn awk(args: &[String]) -> Judged {
   let Some(parsed) = options::parse(args, &AWK) else {
     return Judged::unknown();
   };
-  let Some(program) = parsed.operands.first() else {
+  let Some((program, files)) = parsed.operands.split_first() else {
     return Judged::unknown();
   };
-  // Only `print` and `printf` write into a file or a program (`> file`, `| "sh"`); without them `>` and
-  // `|` compare and join conditions.
-  let redirects = program.contains("print") && program.contains(['>', '|']);
-  if redirects || AWK_REFUSED.iter().any(|refused| program.contains(refused)) {
+  // `-v name=value` and an operand `name=value` set a variable before the records are read.
+  let assigned = parsed.values(&["-v", "--assign"]).chain(
+    files
+      .iter()
+      .map(String::as_str)
+      .filter(|file| assignment(file).is_some()),
+  );
+  let settable = assigned
+    .into_iter()
+    .all(|assignment| self::assignment(assignment).is_some_and(awk_program::settable));
+  if !(settable && awk_program::harmless(program)) {
     return Judged::unknown();
   }
   let at = args.iter().position(|arg| arg == program);
   Judged::of(Kind::ReadOnly).known_safe().with_script(at)
+}
+
+/// The variable `word` sets, when it is an assignment (`name=value`).
+fn assignment(word: &str) -> Option<&str> {
+  let (name, _) = word.split_once('=')?;
+  let plain = name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+  plain.then_some(name)
 }

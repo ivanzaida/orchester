@@ -2,7 +2,7 @@
 //! a secret-bearing location of the home folder, or elsewhere. Paths are resolved against the folder
 //! the command runs in, with `~` as the home folder and links followed as far as they exist.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 
 use super::glob;
 use crate::permission::canonical::{existing, normalize};
@@ -63,29 +63,48 @@ impl CommandScope {
     &self.worktree
   }
 
-  /// `word`, a path as the command names it from `cwd`, resolved, and where it lies. A word with a glob
-  /// is the folder before its first glob component (`src/*.rs` is `src`, `*/x` the folder `cwd`), which
-  /// is a credential location when what the glob matches in it may be one (`~/.s*`). `None` when it
-  /// names the home folder of another user (`~bob`) or the folders `~+` and `~-`, or climbs out of what
-  /// a glob matched (`src/*/../..`).
-  pub(super) fn locate(&self, cwd: &Path, word: &str) -> Option<(PathBuf, Place)> {
-    let (word, glob) = before_glob(word)?;
-    let path = resolved(&self.absolute(cwd, word)?);
-    let place = match self.place(&path) {
+  /// The paths `word` names from `cwd`, resolved, and where each lies. A word without a glob names one;
+  /// a word with a glob names the folder before its first glob component (`src/*.rs` is `src`, `*/x`
+  /// the folder `cwd`), a credential location when what the glob matches in it may be one (`~/.s*`),
+  /// and each path it matches now ([`glob::expand`]), links followed. `None` when it names the home
+  /// folder of another user (`~bob`) or the folders `~+` and `~-`, climbs out of what a glob matched
+  /// (`src/*/../..`), or its glob cannot be followed.
+  pub(super) fn locate(&self, cwd: &Path, word: &str) -> Option<Vec<(PathBuf, Place)>> {
+    let (folder, glob) = before_glob(word)?;
+    if !glob {
+      let path = resolved(&self.absolute(cwd, word)?);
+      return Some(vec![(path.clone(), self.place(&path))]);
+    }
+    // A glob that cannot be followed names what cannot be told.
+    let Ok(matches) = glob::expand(&self.absolute(cwd, word)?) else {
+      return None;
+    };
+    let folder = resolved(&self.absolute(cwd, folder)?);
+    let place = match self.place(&folder) {
       Place::Granted => Place::Granted,
-      _ if glob && self.may_hold_secrets(&path) => Place::Secret,
+      _ if self.may_hold_secrets(&folder) => Place::Secret,
       place => place,
     };
-    Some((path, place))
+    let mut located = vec![(folder, place)];
+    located.extend(matches.iter().map(|path| {
+      let path = resolved(path);
+      let place = self.place(&path);
+      (path, place)
+    }));
+    Some(located)
   }
 
-  /// The folder `cd word` goes to from `cwd`, resolved: with a glob, the one folder it matches now
-  /// ([`glob::single_match`]).
+  /// The folder `cd word` goes to from `cwd`, resolved: with a glob, the one folder it matches now;
+  /// `None` when it matches none or several, or cannot be followed.
   pub(super) fn folder(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
-    if word.contains(['*', '?', '[']) {
-      return glob::single_match(&self.absolute(cwd, word)?).map(|path| resolved(&path));
+    let path = self.absolute(cwd, word)?;
+    if !word.contains(['*', '?', '[']) {
+      return Some(resolved(&path));
     }
-    self.locate(cwd, word).map(|(path, _)| path)
+    match glob::expand(&path).as_deref() {
+      Ok([only]) => Some(resolved(only)),
+      _ => None,
+    }
   }
 
   /// `word` from `cwd` as written, with `~` as the home folder; `None` for another user's home folder
@@ -109,7 +128,7 @@ impl CommandScope {
     if path.starts_with(&self.worktree) || self.writable.iter().any(|folder| path.starts_with(folder)) {
       return Place::Granted;
     }
-    if self.secret(path) || self.home.as_ref().is_some_and(|home| home.starts_with(path)) {
+    if self.secret(path) || self.home.as_ref().is_some_and(|home| home.starts_with(path)) || unmapped(path) {
       return Place::Secret;
     }
     if self.temp.as_ref().is_some_and(|temp| path.starts_with(temp)) {
@@ -158,6 +177,16 @@ pub(super) enum Place {
   /// A credential location of the home folder: its dot files and folders, and the applications' data
   /// in `AppData` and `Library`.
   Secret,
+}
+
+/// Whether `path` starts with a Windows prefix other than a drive letter: a share (`\\host\share`, also
+/// `\\localhost\c$`), a `\\?\` or `\\.\` path. Each can name any file of this machine, the home
+/// folder's credentials included, under a name the home folder does not match.
+fn unmapped(path: &Path) -> bool {
+  matches!(
+    path.components().next(),
+    Some(Component::Prefix(prefix)) if !matches!(prefix.kind(), Prefix::Disk(_))
+  )
 }
 
 /// `path` with links followed as far as it exists, or as written when it cannot be read.

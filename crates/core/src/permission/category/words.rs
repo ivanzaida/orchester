@@ -8,6 +8,12 @@
 
 use super::variables::{Variables, is_assignment, name_char};
 
+/// Whether a redirection's word names a file descriptor (`2`, `-`, `2-`) rather than a file.
+fn is_descriptor(word: &str) -> bool {
+  let number = word.strip_suffix('-').unwrap_or(word);
+  word == "-" || (!number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// Whose quoting rules a command line follows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Quoting {
@@ -45,6 +51,11 @@ impl RawPart {
 enum Redirect {
   Write,
   Read,
+  /// `>&word` or `<&word`: a copy of a file descriptor when the word is one (`2`, `-`, `2-`), else the
+  /// file it names, written (both outputs) or read.
+  Duplicate {
+    writes: bool,
+  },
 }
 
 /// What starts or ends a part.
@@ -101,7 +112,8 @@ pub(super) fn split(command: &str, quoting: Quoting) -> Vec<RawPart> {
 impl Splitter {
   fn take(&mut self, c: char, chars: &mut Chars<'_>) {
     match c {
-      ' ' | '\t' | '\r' => self.end_word(),
+      // Bash keeps a carriage return in the word.
+      ' ' | '\t' => self.end_word(),
       '\n' | ';' => self.end_part(Joiner::Sequence),
       '&' => self.ampersand(chars),
       '|' => {
@@ -149,6 +161,9 @@ impl Splitter {
     match self.redirect.take() {
       Some(Redirect::Write) => self.part.writes.push(word),
       Some(Redirect::Read) => self.part.reads.push(word),
+      Some(Redirect::Duplicate { .. }) if is_descriptor(&word) => {}
+      Some(Redirect::Duplicate { writes: true }) => self.part.writes.push(word),
+      Some(Redirect::Duplicate { writes: false }) => self.part.reads.push(word),
       None => {
         if self.part.words.is_empty() {
           self.part.quoted_name = quoted;
@@ -202,8 +217,37 @@ impl Splitter {
     self.end_part(joiner);
   }
 
-  /// `>`, `>>`, `N>`; `>&N` and `N>&M` only join outputs and write no file.
+  /// `>`, `>>`, `N>`; `>&N` and `N>&M` only join outputs, while `>&file` writes the file. A `>|` or a
+  /// `>(` is not read: the `|` or `(` that follows leaves the part unread.
   fn output(&mut self, chars: &mut Chars<'_>) {
+    self.descriptor_number();
+    self.end_word();
+    chars.next_if_eq(&'>');
+    self.redirect = Some(if chars.next_if_eq(&'&').is_some() {
+      Redirect::Duplicate { writes: true }
+    } else {
+      Redirect::Write
+    });
+  }
+
+  /// `<` reads a file, `<&N` copies a descriptor and `<&file` reads the file; `<<` (a here-document or
+  /// here-string) and `<(` (a process substitution) are not read.
+  fn input(&mut self, chars: &mut Chars<'_>) {
+    self.descriptor_number();
+    self.end_word();
+    if chars.next_if(|next| matches!(next, '<' | '(')).is_some() {
+      self.part.unread = true;
+      return;
+    }
+    self.redirect = Some(if chars.next_if_eq(&'&').is_some() {
+      Redirect::Duplicate { writes: false }
+    } else {
+      Redirect::Read
+    });
+  }
+
+  /// Drops the word just before a redirection when it is the descriptor it redirects (`2>`).
+  fn descriptor_number(&mut self) {
     if self
       .word
       .as_deref()
@@ -211,23 +255,6 @@ impl Splitter {
     {
       self.word = None;
     }
-    self.end_word();
-    chars.next_if_eq(&'>');
-    if chars.next_if_eq(&'&').is_some() {
-      while chars.next_if(|next| next.is_ascii_digit() || *next == '-').is_some() {}
-      return;
-    }
-    self.redirect = Some(Redirect::Write);
-  }
-
-  /// `<` reads a file; `<<` (a here-document) and `<(` (a process substitution) are not read.
-  fn input(&mut self, chars: &mut Chars<'_>) {
-    self.end_word();
-    if chars.next_if(|next| matches!(next, '<' | '(')).is_some() {
-      self.part.unread = true;
-      return;
-    }
-    self.redirect = Some(Redirect::Read);
   }
 
   fn single_quoted(&mut self, chars: &mut Chars<'_>) {

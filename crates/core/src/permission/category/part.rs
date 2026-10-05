@@ -85,6 +85,8 @@ pub struct CommandPart {
   pub(super) known_safe: bool,
   /// It redirects its output into a file (`> out.txt`); not the null device.
   pub(super) writes_output: bool,
+  /// A `cd` to one folder named plainly, in the worktree or a writable folder.
+  pub(super) moves_inside: bool,
 }
 
 impl CommandPart {
@@ -112,6 +114,7 @@ impl CommandPart {
       prefix_stays: judged.prefix_stays,
       known_safe: judged.known_safe,
       writes_output: false,
+      moves_inside: false,
     }
   }
 
@@ -147,6 +150,11 @@ impl CommandPart {
     self.installs
   }
 
+  /// Whether it names, reads or writes anything outside the worktree and its writable folders.
+  pub const fn reaches_outside(&self) -> bool {
+    !self.outside.is_empty()
+  }
+
   /// Whether it redirects its output into a file.
   pub const fn writes_output(&self) -> bool {
     self.writes_output
@@ -164,10 +172,10 @@ impl CommandPart {
       && self.outside.is_empty()
   }
 
-  /// Whether it is a `cd` into the worktree or a writable folder, which changes nothing a person decides
-  /// about.
-  pub(super) fn moves_inside(&self) -> bool {
-    matches!(self.program.as_deref(), Some("cd" | "pushd" | "chdir" | "set-location")) && self.known_safe_read()
+  /// Whether it is a `cd` to one folder named plainly in the worktree or a writable folder, which
+  /// changes nothing a person decides about.
+  pub(super) const fn moves_inside(&self) -> bool {
+    self.moves_inside
   }
 
   /// Whether a person must answer this part each time: it was not read to the end, rewrites history or
