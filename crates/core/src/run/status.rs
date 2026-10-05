@@ -14,6 +14,9 @@ pub enum InterruptCause {
   QuitNow,
   /// The application ended abnormally (crash, power loss, process killed).
   Crashed,
+  /// The runner could not record or carry on the run (the project database failed or refused a write):
+  /// its agents were ended, and a person continues it from its last checkpoint or cancels it.
+  RunnerFailed,
 }
 
 impl InterruptCause {

@@ -49,7 +49,7 @@ use self::{
   rail::RailToggle,
 };
 use super::{
-  activity::{OpenRows, Toggles},
+  activity::{OpenRows, RevealRow, Toggles},
   notice::Lost,
   tab_state,
 };
@@ -156,6 +156,8 @@ struct Timeline {
   details: DetailsPane,
   /// Bumped to read the task again, once something was sent.
   reload: Signal<u64>,
+  /// Scrolls the chat to a row: a problem row's link to the request it names.
+  reveal: RevealRow,
 }
 
 impl Timeline {
@@ -196,6 +198,8 @@ pub(super) struct ConversationTab {
   started: Arc<Mutex<bool>>,
   /// The card that waits for the person, which the chat shows until the person scrolls.
   reveal: Arc<Mutex<Reveal>>,
+  /// Bumped when a row asks the chat to reveal another, so the chat renders and reveals it.
+  revealed: Signal<u64>,
   toggles: Toggles,
   scroll: lurq::layout::layout_kind::ScrollState,
   retry: Signal<u64>,
@@ -225,6 +229,7 @@ impl Component for ConversationTab {
       left_at: Arc::new(Mutex::new(LeftAt::default())),
       started: Arc::new(Mutex::new(false)),
       reveal: Arc::new(Mutex::new(Reveal::default())),
+      revealed: ctx.signal(0),
       toggles: Toggles(ctx.signal(OpenRows::default())),
       scroll: lurq::layout::layout_kind::ScrollState::new(),
       retry: ctx.signal(0),
@@ -239,6 +244,7 @@ impl Component for ConversationTab {
 
   fn after_layout(&self) {
     self.keep_at_end();
+    self.reveal_asked();
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -314,6 +320,7 @@ impl ConversationTab {
       focus: props.focus.clone(),
       details: self.details.clone(),
       reload: props.reload.clone(),
+      reveal: self.reveal_row(),
     }
   }
 

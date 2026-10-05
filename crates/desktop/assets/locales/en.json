@@ -256,7 +256,8 @@
       "reason": {
         "quitNow": "Stopped with the app",
         "crashed": "Orchester stopped unexpectedly",
-        "runnerLost": "The runner stopped unexpectedly"
+        "runnerLost": "The runner stopped unexpectedly",
+        "runnerFailed": "The runner could not record the run"
       },
       "checkpointSaved": "Saved {{time}}",
       "noCheckpoint": "No checkpoint yet",
@@ -1406,6 +1407,11 @@
         "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
         "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
         "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
+        "decisionInterrupted": "Request ended without your decision",
+        "decisionInterruptedDetail": "{{request}}\nThe agent CLI’s permission prompt or tool relay closed while this request waited for your decision. Nothing was approved, and the request can no longer be answered.",
+        "showRequest": "Show the request  →",
+        "runnerFailed": "The runner could not record this run, so it was interrupted",
+        "runnerFailedDetail": "Nothing after the last checkpoint counts as done. Continue the run from it, or cancel it.\n{{detail}}",
         "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
         "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
         "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
@@ -2171,7 +2177,8 @@
         "kind": {
           "permissionDenied": "permission_denied",
           "deniedByYou": "denied by you",
-          "deniedByAutomation": "denied by automation"
+          "deniedByAutomation": "denied by automation",
+          "decisionInterrupted": "decision_interrupted"
         },
         "notAllowed": "{{command}} did not run: this run’s permissions do not allow it. The agent was told and continued without it.",
         "deniedByYou": "{{command}} did not run: you denied it. The agent was told and continued.",

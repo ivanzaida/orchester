@@ -112,6 +112,9 @@ pub(in super::super) struct Finished {
   pub(in super::super) final_message: Option<String>,
   /// A pending or delivered decision ended without a confirmed turn completion.
   pub(in super::super) approval_interrupted: bool,
+  /// The turn failed only because the permission prompt or tool relay closed after the CLI had
+  /// delivered its result (run 26): a question in that result still asks the person.
+  pub(in super::super) closed_after_result: bool,
 }
 
 /// How the runner follows a CLI: it reads Claude Code's `stream-json` output, and talks with Codex
@@ -172,6 +175,8 @@ pub(super) struct Watch {
   pub(super) approved_calls: HashSet<String>,
   /// Messages sent now that the CLI has not taken yet.
   steering: steer::Steering,
+  /// The turn failure recorded when the prompt or relay closed after the CLI delivered its result.
+  pub(super) closed_after_result: Option<String>,
 }
 
 impl Watch {
@@ -191,6 +196,7 @@ impl Watch {
       approval: None,
       approved_calls: HashSet::new(),
       steering: steer::Steering::default(),
+      closed_after_result: None,
     })
   }
 

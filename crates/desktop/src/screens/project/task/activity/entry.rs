@@ -27,6 +27,7 @@ use super::{
   mcp::mcp_server_text,
   mcp_call,
   problem::{self, problem_text},
+  request_link::{RequestLink, request_link},
   toggles::Toggles,
 };
 use crate::{
@@ -63,6 +64,8 @@ pub(in crate::screens::project::task) struct EntryProps {
   /// group reads as plain rows until one is opened.
   pub(in crate::screens::project::task) in_group: bool,
   pub(in crate::screens::project::task) toggles: Toggles,
+  /// The card of the request a problem row names, while the run's timeline has it.
+  pub(in crate::screens::project::task) request: Option<RequestLink>,
 }
 
 impl PartialEq for EntryProps {
@@ -74,6 +77,7 @@ impl PartialEq for EntryProps {
       && self.raw == other.raw
       && self.time_column == other.time_column
       && self.in_group == other.in_group
+      && self.request.as_ref().map(|link| &link.target) == other.request.as_ref().map(|link| &link.target)
   }
 }
 
@@ -181,10 +185,10 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
-    .child(entry_header(ctx, &shown, open, entry.sequence))
+    .child(entry_header(ctx, &shown, (open, !row.time_column), entry.sequence))
     .with_children(
       open
-        .then(|| entry_details(ctx, (entry, command_box), &shown, copied))
+        .then(|| entry_details(ctx, (entry, command_box, row.request.as_ref()), &shown, copied))
         .flatten(),
     );
   let line = Row::new()
@@ -224,10 +228,10 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
 }
 
 /// What an open entry shows under its header; `command_box`: its command in a box of its own when
-/// the title does not hold it whole.
+/// the title does not hold it whole; `request`: the link to the card of the request it names.
 fn entry_details(
   ctx: &Ctx,
-  (entry, command_box): (&Entry, bool),
+  (entry, command_box, request): (&Entry, bool, Option<&RequestLink>),
   shown: &Shown,
   copied: &Signal<Copied>,
 ) -> Option<Column> {
@@ -262,6 +266,7 @@ fn entry_details(
           .variant(ExtraTypography::Explanation.role())
           .selectable(true)
       }))
+      .with_children(request.map(|link| request_link(ctx, link, entry.sequence)))
       .with_children(
         shown
           .output
@@ -287,7 +292,8 @@ fn opens_file(nav: &ProjectNav, row: &EntryProps, path: &Arc<str>, line: Element
     .into()
 }
 
-fn entry_header(ctx: &Ctx, shown: &Shown, open: bool, sequence: u64) -> Element {
+/// `problem`: a problem row, whose title says what happened and gives way last.
+fn entry_header(ctx: &Ctx, shown: &Shown, (open, problem): (bool, bool), sequence: u64) -> Element {
   let disclosure = if shown.opens.is_some() {
     Some(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextMuted))
   } else {
@@ -308,7 +314,7 @@ fn entry_header(ctx: &Ctx, shown: &Shown, open: bool, sequence: u64) -> Element 
     (&shown.title, &shown.meta, mark.as_deref()),
     disclosure.map(Element::from),
     sequence,
-    GLYPH_SIZE,
+    (GLYPH_SIZE, problem),
   )
 }
 

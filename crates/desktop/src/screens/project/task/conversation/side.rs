@@ -19,7 +19,7 @@ use super::{
   column,
   composer::{ComposerDock, ComposerProps},
   details::details_pane,
-  follow::LeftAt,
+  follow::{LeftAt, Reveal},
   rail::{Picker, RAIL_WIDTH, RailProps, rail},
   readback::{self, Controls, readback},
   strip::{STRIP_WIDTH, strip},
@@ -148,7 +148,9 @@ impl ConversationTab {
   fn chat(&self, ctx: &mut Ctx, view: &View<'_>) -> Element {
     let conversation = &view.props.conversation;
     let live = conversation.state == PanelState::Live;
-    let reveal = self.follow(view.shown.rows.len(), view.items);
+    // Read so that a row's request to reveal another renders the chat again.
+    self.revealed.get();
+    let reveal = self.follow(&view.shown, view.items);
     let working = live.then(|| LiveFooterProps {
       agent: view
         .run
@@ -165,7 +167,10 @@ impl ConversationTab {
       // The chat column is the window less the project sidebar and the panel beside the chat.
       let chat = view.window - PROJECT_SIDEBAR_WIDTH - view.beside.width();
       let answers = AnswersLayout::for_chat(chat);
-      (self.list(ctx, &view.shown, reveal, (working, answers)), None)
+      (
+        self.list(ctx, (&view.shown, view.items), reveal, (working, answers)),
+        None,
+      )
     };
     let readback = readback(
       ctx,
@@ -254,9 +259,10 @@ impl ConversationTab {
   /// all steps again go to the end and follow it. Over the chat, the rail closes.
   fn picker(&self) -> Picker {
     let (filter, over, left_at) = (self.step.clone(), self.rail.over.clone(), self.left_at.clone());
-    let (scroll, following) = (self.scroll.clone(), self.following.clone());
+    let (scroll, following, reveal) = (self.scroll.clone(), self.following.clone(), self.reveal.clone());
     Arc::new(move |pick: StepFilter| {
       let all = pick.0.is_none();
+      Reveal::let_go(&reveal);
       filter.set(pick);
       over.set(false);
       *left_at.lock() = LeftAt(None);

@@ -33,6 +33,7 @@ mod history;
 mod import;
 mod instructions;
 mod integration;
+mod interrupted_request;
 mod joining;
 mod lifecycle;
 mod mcp_agent;

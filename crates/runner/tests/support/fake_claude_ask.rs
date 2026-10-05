@@ -112,6 +112,9 @@ impl Fake {
       prompt.leave_while_waiting(&ask.tool, &ask.input, &ask.call, &released(worktree));
       wait_to_be_ended();
     }
+    if self.prompt.contains("Give up waiting") {
+      return self.give_up_waiting(worktree, prompt, ask);
+    }
     // As the real CLI's transcript would, the session keeps the call without a result while it
     // waits: a runner that ends the CLI now leaves it unanswered for `--resume`.
     let pending = pending_call(worktree, &self.session);
@@ -148,6 +151,58 @@ impl Fake {
     }
     flush();
     self.finish(worktree, "hello", step)
+  }
+
+  /// "Give up waiting" (run 26 of the user's ORC-21): the call waits for a person until the test writes
+  /// `fake-release`, then fails as Claude Code fails a permission prompt call silent for 30 minutes, while the
+  /// prompt's server stays blocked on it. The agent then ends its turn with a `question` result through its
+  /// `StructuredOutput` tool, the result lists a denied `Grep`, and once its input ends the CLI ends the prompt's
+  /// server before it exits, so the runner sees the prompt close after the result.
+  fn give_up_waiting(&self, worktree: &Path, mut prompt: fake_permission_prompt::Prompt, ask: &Ask) -> ExitCode {
+    prompt.send_call(&ask.tool, &ask.input, &ask.call);
+    let release = released(worktree);
+    while !release.exists() {
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    self.tool_result(&ask.call, GAVE_UP, true);
+    let question = serde_json::json!({"outcome": "question", "summary": "May I run the pin helper?"});
+    let block = serde_json::json!({"type": "tool_use", "id": "toolu_structured", "name": "StructuredOutput",
+      "input": question});
+    self.assistant("msg_structured", &block.to_string());
+    self.tool_result("toolu_structured", "Structured output provided successfully", false);
+    let denials = serde_json::json!([{"tool_name": "Grep", "tool_use_id": "toolu_grep",
+      "tool_input": {"pattern": "lurq_[a-z_]+", "path": "/elsewhere/lurq"}}]);
+    let result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": false, "num_turns": 4, "result": "",
+      "session_id": self.session, "usage": {"input_tokens": 0, "output_tokens": 0},
+      "permission_denials": denials, "structured_output": question,
+    });
+    println!("{result}");
+    flush();
+    super::fake_claude_input::later_turns(&self.session);
+    drop(prompt);
+    // The runner hears of the closed prompt before the CLI's exit, as it did in run 26.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    ExitCode::SUCCESS
+  }
+
+  /// "Ask, then fail": the question as the agent's last message, then a result that reports an API error
+  /// for the turn, unrelated to any permission prompt.
+  pub fn ask_then_fail(&self) -> ExitCode {
+    let question = serde_json::json!({"outcome": "question", "summary": "Keep email sign-in?"}).to_string();
+    self.assistant(
+      "msg_ask",
+      &serde_json::json!({"type": "text", "text": question}).to_string(),
+    );
+    let result = serde_json::json!({
+      "type": "result", "subtype": "success", "is_error": true, "num_turns": 1,
+      "result": "API Error: 500 Internal server error", "session_id": self.session,
+      "usage": {"input_tokens": 0, "output_tokens": 0}, "permission_denials": [],
+    });
+    println!("{result}");
+    flush();
+    super::fake_claude_input::later_turns(&self.session);
+    ExitCode::from(1)
   }
 
   /// A denied call: the agent reads what it was told and goes on without it.
@@ -237,6 +292,9 @@ impl Fake {
 /// What Claude Code 2.1.284 records for a call the ended session never answered.
 const INTERRUPTED: &str = "[Tool call interrupted: the session ended before this call's result was recorded, so its \
                            outcome is unknown. Check whether it took effect before relying on it or running it again.]";
+
+/// What Claude Code 2.1.286 answers a permission prompt call that sent nothing for 30 minutes.
+const GAVE_UP: &str = "Error calling tool (Bash): MCP server Orchester tool approve sent no response or progress for                        1800s; aborting.";
 
 /// Where the fake keeps the call its session `session` waits on, next to the worktrees.
 fn pending_call(worktree: &Path, session: &str) -> std::path::PathBuf {

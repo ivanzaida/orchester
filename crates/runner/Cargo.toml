@@ -109,6 +109,10 @@ name = "unreadable"
 required-features = ["test-agent"]
 
 [[test]]
+name = "store_refusal"
+required-features = ["test-agent"]
+
+[[test]]
 name = "mcp"
 required-features = ["test-agent"]
 

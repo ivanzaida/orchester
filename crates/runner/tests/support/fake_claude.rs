@@ -15,7 +15,8 @@
 //!   one and waits until it is ended;
 //! - "Keep working": starts a message and waits until it is ended;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
-//!   email sign-in?"}` (a new session only: a resumed one works as below);
+//!   email sign-in?"}` (a new session only: a resumed one works as below); "Ask, then fail" writes the same question,
+//!   then its result reports an API error and it exits with 1 (`fake_claude_ask`);
 //! - "Ask before publishing": wants to run `pnpm publish --dry-run` through Bash and asks its permission prompt
 //!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
 //!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
@@ -33,7 +34,9 @@
 //!   MCP servers as it starts;
 //! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
 //!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
-//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
+//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits; "Give up
+//!   waiting" sends its call, gives up on it once `fake-release` exists, ends with a `question` result and a denied
+//!   `Grep`, and ends the prompt server only after its input ended (`fake_claude_ask`);
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -152,6 +155,9 @@ impl Fake {
     }
     if prompt.contains("Ask first") {
       return self.ask(worktree);
+    }
+    if prompt.contains("Ask, then fail") {
+      return self.ask_then_fail();
     }
     if prompt.contains("Work in turns") {
       if let Err(error) = append(worktree, "draft") {

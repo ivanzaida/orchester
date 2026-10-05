@@ -148,16 +148,17 @@ impl RunTask {
   }
 
   /// Executes the run until it ends or settles. A failure of the runner itself (the database, a
-  /// rejected transition) ends the run's agents and leaves the run as last recorded, and is
-  /// logged; its steps are not retried.
+  /// rejected transition) ends the run's agents and interrupts the run where it was last recorded,
+  /// with the error in its activity ([`super::broken`]); it is logged, and its steps are not retried.
   pub(super) async fn drive(mut self) {
     let run = self.run.id();
     tracing::info!(%run, "run executing");
     let result = self.steps().await;
     // A run that waits for a person, or whose task failed, is no longer executed either.
     self.settled.store(true, Ordering::Release);
-    if result.is_err() {
+    if let Err(error) = &result {
       self.end_agents().await;
+      self.interrupt_broken(error);
     }
     self.end_waiting_approvals();
     self.board.settled(&self.run);

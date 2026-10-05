@@ -1,7 +1,7 @@
 //! The Activity transcript built from stored agent events.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, OutputStream, ToolCommandResult},
+  connection::stream::{AgentEvent, CommandStatus, OutputStream, RunnerProblem, ToolCommandResult},
   id::{InvocationId, StepExecutionId},
   permission::category::CommandCategory,
   run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
@@ -100,6 +100,35 @@ fn transcript_shows_a_repeated_turn_failure_once_and_keeps_a_running_command_ope
   assert_eq!(entries.len(), 2);
   assert!(matches!(&entries[0].kind, EntryKind::Command(command) if command.status.is_none()));
   assert_eq!(entries[1].kind, EntryKind::Error("bad model".into()));
+}
+
+#[test]
+fn transcript_folds_only_the_turn_failure_an_interrupted_request_explains() {
+  let interrupted = RunnerProblem::DecisionInterrupted {
+    request: "invocation:toolu_meta".into(),
+    server: "command".into(),
+    action: "cargo metadata".into(),
+  };
+  let activity = stored(vec![
+    AgentEvent::RunnerProblem {
+      problem: interrupted.clone(),
+    },
+    AgentEvent::TurnFailed {
+      message: "Claude Code's permission prompt or tool relay closed before the decision".into(),
+    },
+    AgentEvent::TurnFailed {
+      message: "API Error: 500".into(),
+    },
+  ]);
+  let kinds: Vec<_> = entries(&activity).into_iter().map(|entry| entry.kind).collect();
+  assert_eq!(
+    kinds,
+    [
+      EntryKind::Problem(interrupted),
+      EntryKind::Error("API Error: 500".into())
+    ],
+    "the relay's failure is the request's row; a later CLI error shows on its own"
+  );
 }
 
 #[test]

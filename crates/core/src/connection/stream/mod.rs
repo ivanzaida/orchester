@@ -209,6 +209,17 @@ pub enum RunnerProblem {
   /// Claude Code's permission prompt never reached the runner, so no action could be approved:
   /// every call it asked about was denied as unavailable.
   PermissionPromptUnreachable,
+  /// Tool request `request` (a command, or `action` of MCP server `server`; `server` is `command` for a
+  /// command, as in [`AgentEvent::ToolDecided`]) still waited for a decision when the CLI's permission
+  /// prompt or tool relay closed, or the CLI ended: it ended interrupted, and nothing was approved.
+  DecisionInterrupted {
+    request: String,
+    server: String,
+    action: String,
+  },
+  /// The runner could not record or carry on the run; `detail` is its error. The run was interrupted
+  /// ([`crate::run::InterruptCause::RunnerFailed`]).
+  RunnerFailed { detail: String },
   /// The provider's API refused `model` to the CLI's version `installed`: it needs `required` or
   /// newer.
   CliTooOld {
