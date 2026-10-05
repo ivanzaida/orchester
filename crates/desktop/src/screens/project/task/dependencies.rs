@@ -145,14 +145,16 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
       .map_err(|error| Problems(vec![error].into()))??;
       let task = queued.task.id();
       // Work on a shared task starts only under the person's claim.
-      claims
-        .0
-        .claim_for_work(&claims.1, task)
-        .await
-        .map_err(|refusal| Problems(vec![refusal.message()].into()))?;
+      let claim = queued.claim.and(
+        claims
+          .0
+          .claim_for_work(&claims.1, task)
+          .await
+          .map_err(|refusal| Problems(vec![refusal.message()].into()))?,
+      );
       let started = runners.start_run(task.first_run_key(), task).await;
       if started.is_err() {
-        claims.0.release_unused_claim(&claims.1, task).await;
+        claim.release(&claims.0).await;
       }
       started.map_err(|error| Problems(start_messages(&error).into()))?;
       Ok(Started(task))

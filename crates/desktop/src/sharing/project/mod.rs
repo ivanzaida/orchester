@@ -28,7 +28,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
-  claims::WorkRefusal,
+  claims::{WorkClaim, WorkRefusal},
   members::MemberChange,
   share::{IdentityProblem, ShareError, SharePlan, Shared, plan, repository_identity},
 };

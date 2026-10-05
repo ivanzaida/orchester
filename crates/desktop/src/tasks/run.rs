@@ -25,7 +25,10 @@ use super::{
 use crate::{
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
-  sharing::{Servers, project::WorkRefusal},
+  sharing::{
+    Servers,
+    project::{WorkClaim, WorkRefusal},
+  },
 };
 
 /// Why the task was not queued for a run.
@@ -75,6 +78,8 @@ impl QueueFailure {
 pub struct QueuedStart {
   pub task: Task,
   pub pipeline: PipelineChoice,
+  /// The run claim queuing took or confirmed; a start that fails releases it if queuing took it.
+  pub claim: WorkClaim,
 }
 
 pub fn queue_organized_in(
@@ -123,19 +128,23 @@ pub fn queue_in(
   details: TaskDetails,
   selected_version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
-  let mut claimed = None;
-  let queued = queue_claimed((repo_root, servers, &mut claimed), target, details, selected_version);
-  if queued.is_err()
-    && let Some(task) = claimed
-    && let Ok(runtime) = tokio::runtime::Handle::try_current()
-  {
-    runtime.block_on(servers.release_unused_claim(repo_root, task));
+  let mut claimed = WorkClaim::default();
+  match queue_claimed((repo_root, servers, &mut claimed), target, details, selected_version) {
+    Ok(queued) => Ok(QueuedStart {
+      claim: claimed,
+      ..queued
+    }),
+    Err(failure) => {
+      if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        runtime.block_on(claimed.release(servers));
+      }
+      Err(failure)
+    }
   }
-  queued
 }
 
 fn queue_claimed(
-  (repo_root, servers, claimed): (&Path, &Servers, &mut Option<orchester_core::id::TaskId>),
+  (repo_root, servers, claimed): (&Path, &Servers, &mut WorkClaim),
   target: SaveTarget,
   details: TaskDetails,
   selected_version: VersionNumber,
@@ -146,8 +155,7 @@ fn queue_claimed(
     SaveTarget::Task(id, _) => writer.db().task(id)?,
   };
   if let Some(task) = &existing {
-    claim(&writer, servers, task.id())?;
-    *claimed = Some(task.id());
+    *claimed = std::mem::take(claimed).and(claim(&writer, servers, task.id())?);
   }
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
     writer.db().check_task_readiness(task.id())?;
@@ -163,13 +171,13 @@ fn queue_claimed(
   let mut task = saved(save_to(&mut writer, target, details, Timestamp::now())?)?;
   writer.db().check_task_readiness(task.id())?;
   if task.status() == TaskStatus::Draft {
-    claim(&writer, servers, task.id())?;
-    *claimed = Some(task.id());
+    *claimed = std::mem::take(claimed).and(claim(&writer, servers, task.id())?);
     task.queue(selected_version).map_err(QueueFailure::Queue)?;
     let task = saved(writer.save_task(&task)?)?;
     return Ok(QueuedStart {
       task,
       pipeline: selected_pipeline,
+      claim: WorkClaim::default(),
     });
   }
   // An idempotent save may return a task queued by another attempt; reload its persisted pin.
@@ -178,9 +186,9 @@ fn queue_claimed(
 
 /// Takes the run claim of a shared `task` before anything changes it for a run; a local task needs
 /// none. Waits on the worker it runs on.
-fn claim(writer: &TaskWriter, servers: &Servers, task: orchester_core::id::TaskId) -> Result<(), QueueFailure> {
+fn claim(writer: &TaskWriter, servers: &Servers, task: orchester_core::id::TaskId) -> Result<WorkClaim, QueueFailure> {
   let TaskWriter::Shared(store) = writer else {
-    return Ok(());
+    return Ok(WorkClaim::default());
   };
   let repo_root = store.server().repo_root();
   let runtime = tokio::runtime::Handle::try_current().map_err(|_| {
@@ -204,7 +212,11 @@ fn queued_start(db: &ProjectDb, task: Task) -> Result<QueuedStart, QueueFailure>
     .pipeline_version()
     .ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineVersionNotPinned]))?;
   let pipeline = load_pipeline(db, task.details().pipeline, number)?;
-  Ok(QueuedStart { task, pipeline })
+  Ok(QueuedStart {
+    task,
+    pipeline,
+    claim: WorkClaim::default(),
+  })
 }
 
 fn load_pipeline(

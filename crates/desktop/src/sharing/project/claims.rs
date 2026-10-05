@@ -3,7 +3,7 @@
 //! Send & continue and a follow-up all ask here before they ask the runner. A task someone else
 //! holds starts nothing, and the person is told who holds it. A local project's tasks need no claim.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_api::{
   ClaimTake, ErrorCode, SharingErrorDetails,
@@ -55,19 +55,95 @@ impl WorkRefusal {
   }
 }
 
+/// The run claim work on a task goes on under: one this attempt took, or one the person held
+/// already (kept after a finished run, or working on their other computer), or none for a local
+/// task. Work that does not start releases only a claim its attempt took.
+#[must_use = "work that does not start releases the claim it took"]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WorkClaim {
+  /// The project and task whose claim this attempt took.
+  taken: Option<(PathBuf, TaskId)>,
+}
+
+impl WorkClaim {
+  /// Whether this attempt took the claim.
+  pub const fn newly_taken(&self) -> bool {
+    self.taken.is_some()
+  }
+
+  /// The claim of two attempts at the same work, e.g. queuing the task and then starting it.
+  pub fn and(self, later: Self) -> Self {
+    Self {
+      taken: self.taken.or(later.taken),
+    }
+  }
+
+  /// The work did not start: a claim this attempt took is released, while no run of the task is
+  /// under way here, so it does not stay held (and kept fresh by the heartbeat) for nothing. A claim
+  /// the person held already stays.
+  pub async fn release(self, servers: &Servers) {
+    if let Some((root, task)) = self.taken {
+      servers.release_taken_claim(&root, task).await;
+    }
+  }
+}
+
 impl Servers {
   /// Takes the run claim of `task` in the project at `repo_root` when it is shared, or confirms that
   /// the person holds it; a local project's task needs none.
-  pub async fn claim_for_work(&self, repo_root: &Path, task: TaskId) -> Result<(), WorkRefusal> {
+  pub async fn claim_for_work(&self, repo_root: &Path, task: TaskId) -> Result<WorkClaim, WorkRefusal> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
-    let server = background::run(move || ProjectServer::open(&servers, &root))
-      .await
-      .map_err(|message| WorkRefusal::sharing(SharingError::from(message), None))?
-      .map_err(|error| WorkRefusal::sharing(error, None))?;
-    let Some(server) = server else {
-      return Ok(());
+    let found = background::run(move || -> Result<_, SharingError> {
+      let Some(server) = ProjectServer::open(&servers, &root)? else {
+        return Ok(None);
+      };
+      let held = orchester_store::ProjectDb::open(&root)?
+        .shared_task_info(task)?
+        .and_then(|info| info.claim)
+        .is_some_and(|claim| Some(claim.holder.id) == server.me());
+      Ok(Some((server, held)))
+    })
+    .await
+    .map_err(|message| WorkRefusal::sharing(SharingError::from(message), None))?
+    .map_err(|error| WorkRefusal::sharing(error, None))?;
+    let Some((server, held)) = found else {
+      return Ok(WorkClaim::default());
     };
-    server.take_run_claim(task).await
+    server.take_run_claim(task).await?;
+    Ok(WorkClaim {
+      taken: (!held).then(|| (repo_root.to_owned(), task)),
+    })
+  }
+
+  /// Releases the run claim of `task` that work which did not start took, unless a run of it is
+  /// under way here.
+  async fn release_taken_claim(&self, repo_root: &Path, task: TaskId) {
+    let (servers, root) = (self.clone(), repo_root.to_owned());
+    let unused = background::run(move || -> Result<Option<ProjectServer>, SharingError> {
+      let Some(server) = ProjectServer::open(&servers, &root)? else {
+        return Ok(None);
+      };
+      let db = orchester_store::ProjectDb::open(&root)?;
+      let me = server.me();
+      let held = db
+        .shared_task_info(task)?
+        .and_then(|info| info.claim)
+        .is_some_and(|claim| Some(claim.holder.id) == me && claim.kind == ClaimKind::Run);
+      Ok((held && db.active_task_run(task)?.is_none()).then_some(server))
+    })
+    .await;
+    let server = match unused {
+      Ok(Ok(Some(server))) => server,
+      Ok(Ok(None)) | Err(_) => return,
+      Ok(Err(error)) => {
+        tracing::warn!(%error, %task, "cannot tell whether a claim taken for work is still held");
+        return;
+      }
+    };
+    if let Err(error) = server.release_claim(task).await {
+      // It goes stale 15 minutes after the last heartbeat that names it.
+      tracing::warn!(%error, %task, "a claim taken for work that did not start was not released");
+    }
   }
 }
 
@@ -108,40 +184,6 @@ fn refusal(error: &ClientError, server: Option<ServerAddress>) -> WorkRefusal {
     },
     (Some(ErrorCode::TaskMerged), _) => WorkRefusal::Merged,
     _ => WorkRefusal::sharing(SharingError::Client(error.clone()), server),
-  }
-}
-
-impl Servers {
-  /// After work on `task` failed to start or its save did not go through: the run claim the person
-  /// holds is released when no run of the task is under way here, so it does not stay held (and
-  /// kept fresh by the heartbeat) for work that never started. A claim taken by hand stays.
-  pub async fn release_unused_claim(&self, repo_root: &Path, task: TaskId) {
-    let (servers, root) = (self.clone(), repo_root.to_owned());
-    let unused = background::run(move || -> Result<Option<ProjectServer>, SharingError> {
-      let Some(server) = ProjectServer::open(&servers, &root)? else {
-        return Ok(None);
-      };
-      let db = orchester_store::ProjectDb::open(&root)?;
-      let me = server.me();
-      let held = db
-        .shared_task_info(task)?
-        .and_then(|info| info.claim)
-        .is_some_and(|claim| Some(claim.holder.id) == me && claim.kind == ClaimKind::Run);
-      Ok((held && db.active_task_run(task)?.is_none()).then_some(server))
-    })
-    .await;
-    let server = match unused {
-      Ok(Ok(Some(server))) => server,
-      Ok(Ok(None)) | Err(_) => return,
-      Ok(Err(error)) => {
-        tracing::warn!(%error, %task, "cannot tell whether an unused claim is held");
-        return;
-      }
-    };
-    if let Err(error) = server.release_claim(task).await {
-      // It goes stale 15 minutes after the last heartbeat that names it.
-      tracing::warn!(%error, %task, "an unused claim was not released");
-    }
   }
 }
 

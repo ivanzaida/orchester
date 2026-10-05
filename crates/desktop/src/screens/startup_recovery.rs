@@ -169,17 +169,21 @@ fn continue_action(ctx: &mut Ctx) -> ContinueAction {
     let (runners, servers) = (runners.clone(), servers.clone());
     async move {
       // A run of a shared task continues only under the person's claim.
+      let mut claims = Vec::new();
       for run in runs.iter() {
-        servers
-          .claim_for_work(&run.project_root, run.task)
-          .await
-          .map_err(|refusal| refusal.message())?;
+        claims.push((
+          run.project_root.clone(),
+          servers
+            .claim_for_work(&run.project_root, run.task)
+            .await
+            .map_err(|refusal| refusal.message())?,
+        ));
       }
       for (root, name, ids) in by_project(&runs) {
         let continued = runners.continue_runs(&root, &name, ids).await;
         if continued.is_err() {
-          for run in runs.iter().filter(|run| run.project_root == root) {
-            servers.release_unused_claim(&run.project_root, run.task).await;
+          for (_, claim) in claims.iter().filter(|(claimed, _)| *claimed == root) {
+            claim.clone().release(&servers).await;
           }
         }
         let continued = continued.map_err(|error| control_message(&error))?;

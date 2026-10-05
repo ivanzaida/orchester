@@ -69,7 +69,7 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
     let (runners, servers, root) = (runners.clone(), servers.clone(), root.clone());
     let queued_state = queued_task.clone();
     async move {
-      let queued = match args {
+      let (queued, queue_claim) = match args {
         RunArgs::New {
           repo_root,
           target,
@@ -107,23 +107,25 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
             pipeline: Arc::new(saved.pipeline),
           };
           queued_state.set(Some(queued.clone()));
-          queued
+          (queued, saved.claim)
         }
-        RunArgs::Retry { queued } => queued,
+        RunArgs::Retry { queued } => (queued, crate::sharing::project::WorkClaim::default()),
       };
       let task = queued.task;
       let key = task.first_run_key();
       // Work on a shared task starts only under the person's claim.
-      servers
-        .claim_for_work(&root, task)
-        .await
-        .map_err(|refusal| RunProblems {
-          messages: vec![refusal.message()].into(),
-          queued: Some(queued.clone()),
-        })?;
+      let claim = queue_claim.and(
+        servers
+          .claim_for_work(&root, task)
+          .await
+          .map_err(|refusal| RunProblems {
+            messages: vec![refusal.message()].into(),
+            queued: Some(queued.clone()),
+          })?,
+      );
       let started = runners.start_run(key, task).await;
       if started.is_err() {
-        servers.release_unused_claim(&root, task).await;
+        claim.release(&servers).await;
       }
       started.map_err(|error| {
         tracing::warn!(%error, "the start request failed");

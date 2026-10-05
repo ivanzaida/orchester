@@ -55,12 +55,13 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
         RunControl::Resume | RunControl::Continue => Some(page_task),
         RunControl::Pause | RunControl::Cancel => None,
       };
-      if let Some(task) = works {
-        servers
+      let claim = match works {
+        Some(task) => servers
           .claim_for_work(&root, task)
           .await
-          .map_err(|refusal| refusal.message())?;
-      }
+          .map_err(|refusal| refusal.message())?,
+        None => crate::sharing::project::WorkClaim::default(),
+      };
       let result = match control {
         RunControl::StartFirst(task) => runners.start_run(task.first_run_key(), task).await.map(|_| ()),
         RunControl::Pause => runners.control_run(Command::PauseRun { run }).await,
@@ -68,8 +69,8 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
         RunControl::Continue => runners.continue_run(run).await,
         RunControl::Cancel => runners.control_run(Command::CancelRun { run }).await,
       };
-      if let (Err(_), Some(task)) = (&result, works) {
-        servers.release_unused_claim(&root, task).await;
+      if result.is_err() {
+        claim.release(&servers).await;
       }
       result.map(|()| control).map_err(|error| {
         tracing::warn!(%error, ?control, "the runner did not carry out the request");

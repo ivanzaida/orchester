@@ -61,9 +61,10 @@ fn runners(ctx: &mut Ctx) -> Runners {
 /// the agents of a shared task work, so the person's claim comes first (Send & continue, a
 /// follow-up); without it the message stays queued, with who holds the task.
 async fn tell(runners: &Runners, (servers, root, task): (&Servers, &Path, TaskId), run: RunId) -> Sent {
-  if let Err(refusal) = servers.claim_for_work(root, task).await {
-    return Sent::Queued(refusal.message());
-  }
+  let claim = match servers.claim_for_work(root, task).await {
+    Ok(claim) => claim,
+    Err(refusal) => return Sent::Queued(refusal.message()),
+  };
   match runners.control_run(Command::DeliverMessages { run }).await {
     Ok(()) => Sent::Taken,
     // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
@@ -72,7 +73,7 @@ async fn tell(runners: &Runners, (servers, root, task): (&Servers, &Path, TaskId
     })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
     Err(error) => {
       tracing::warn!(%error, "the runner did not take the message");
-      servers.release_unused_claim(root, task).await;
+      claim.release(servers).await;
       Sent::Queued(control_message(&error))
     }
   }

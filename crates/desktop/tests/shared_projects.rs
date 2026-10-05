@@ -227,18 +227,20 @@ fn shared_work_takes_the_run_claim_and_names_the_holder_when_it_cannot() {
   member(&alice, "oleh");
   let tasks = alice.tasks();
   let project = alice.server().link().project;
-  alice
+  let taken = alice
     .block_on(alice.servers.claim_for_work(alice.root(), tasks[0].id()))
     .expect("alice's claim");
+  assert!(taken.newly_taken());
   let info = alice
     .db()
     .shared_task_info(tasks[0].id())
     .expect("info")
     .expect("shared");
   assert_eq!(info.claim.map(|claim| claim.kind), Some(ClaimKind::Run));
-  alice
+  let confirmed = alice
     .block_on(alice.servers.claim_for_work(alice.root(), tasks[0].id()))
     .expect("the holder confirms her claim");
+  assert!(!confirmed.newly_taken(), "a claim she held already");
 
   alice
     .block_on(oleh.client.claim(
@@ -262,9 +264,10 @@ fn shared_a_heartbeat_keeps_claims_and_writes_the_lost_ones_to_the_cache() {
   let server = TestServer::start();
   let alice = shared(&server);
   let task = alice.tasks().remove(0);
-  alice
+  let claim = alice
     .block_on(alice.servers.claim_for_work(alice.root(), task.id()))
     .expect("claim");
+  assert!(claim.newly_taken());
   let me = alice.server().me().expect("signed in");
   assert_eq!(alice.db().claims_held_by(me).expect("claims"), vec![task.id()]);
   alice.block_on(alice.servers.sync_shared(true));
@@ -390,9 +393,10 @@ fn shared_make_local_releases_claims_and_keeps_every_task() {
   member(&alice, "oleh");
   let project = alice.server().link().project;
   let tasks = alice.tasks();
-  alice
+  let claim = alice
     .block_on(alice.servers.claim_for_work(alice.root(), tasks[0].id()))
     .expect("claim");
+  assert!(claim.newly_taken());
   alice.block_on(alice.server().make_local()).expect("make local");
   assert_eq!(alice.db().sharing().expect("link"), None);
   assert_eq!(alice.tasks().len(), 3);

@@ -225,7 +225,7 @@ impl RunAgain {
       let (servers, root) = (servers.clone(), root.clone());
       async move {
         // A shared task runs again only under the person's claim.
-        servers
+        let claim = servers
           .claim_for_work(&root, request.task)
           .await
           .map_err(|refusal| Refused {
@@ -245,7 +245,7 @@ impl RunAgain {
           }
           Err(error) => {
             tracing::warn!(%error, "the runner did not run the task again");
-            servers.release_unused_claim(&root, request.task).await;
+            claim.release(&servers).await;
             Err(Refused {
               key: request.key,
               messages: request_messages(&error, &request.pipeline),
