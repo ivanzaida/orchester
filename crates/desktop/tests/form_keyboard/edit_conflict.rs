@@ -240,6 +240,8 @@ fn edit_conflict_an_edit_keeps_a_pipeline_this_computer_lacks() {
     remote.task().content.title == "Usage export to CSV"
   });
   assert_eq!(remote.task().content.pipeline.as_deref(), Some("release-train"));
+  // The form holds what is stored, so leaving asks nothing.
+  state_reads(&mut desktop, "Draft saved");
   desktop.click("new-task-back");
   desktop.wait_until("the missing pipeline", |desktop| {
     shows(desktop, "release-train · not on this computer")
