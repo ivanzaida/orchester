@@ -132,6 +132,9 @@ impl FromStr for CommandShell {
 pub struct DecidedToolApproval {
   pub request: PendingToolApproval,
   pub decision: Option<ToolApprovalDecision>,
+  /// Who answered; `None` for an interrupted request and for one decided before answers were recorded
+  /// with who gave them.
+  pub decided_by: Option<super::DecidedBy>,
   pub decided_at: Timestamp,
 }
 

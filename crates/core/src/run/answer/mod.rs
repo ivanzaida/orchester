@@ -226,16 +226,23 @@ pub const fn codex_denial(command: bool) -> &'static str {
   }
 }
 
-/// What an agent is told when a person denies `approval`: the call does not run, and the agent goes on
-/// without it. Claude Code hands it to the agent as the permission prompt's message; Codex declines
-/// the request and tells the agent in its own words ([`codex_denial`]).
-pub fn denial_message(approval: &PendingToolApproval) -> String {
-  if approval.command {
-    "Denied by the person reviewing this run. Continue without it.".to_owned()
-  } else {
-    format!(
+/// What an agent is told when `by`, a person or automation, denies `approval`: the call does not run,
+/// and the agent goes on without it. Automation's denial names no person, as none decided. Claude Code
+/// hands it to the agent as the permission prompt's message; Codex declines the request and tells the
+/// agent in its own words ([`codex_denial`]).
+pub fn denial_message(approval: &PendingToolApproval, by: Answerer) -> String {
+  match (by, approval.command) {
+    (Answerer::Person, true) => "Denied by the person reviewing this run. Continue without it.".to_owned(),
+    (Answerer::Person, false) => format!(
       "The person reviewing this run denied {} {}. Continue without it.",
       approval.server, approval.action
-    )
+    ),
+    (Answerer::Automation, true) => {
+      "Denied by automation through Orchester's MCP server. Continue without it.".to_owned()
+    }
+    (Answerer::Automation, false) => format!(
+      "Automation denied {} {} through Orchester's MCP server. Continue without it.",
+      approval.server, approval.action
+    ),
   }
 }

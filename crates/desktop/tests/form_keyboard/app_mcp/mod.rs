@@ -2,6 +2,7 @@
 //! bearer token, and each tool's happy path and main refusal, through the services the screens use.
 //! Run with `cargo test -p orchester-desktop --test form_keyboard app_mcp`.
 
+mod answered;
 mod approvals;
 mod runs;
 mod server;

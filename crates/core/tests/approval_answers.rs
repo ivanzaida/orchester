@@ -265,12 +265,21 @@ fn approval_answers_deny_tells_the_agent_to_continue() {
   assert_eq!(ApprovalAnswer::Deny.decided_by(), DecidedBy::PersonDeny);
   assert!(!DecidedBy::PersonDeny.approves());
   assert_eq!(
-    denial_message(&approval(false, "pencil", "batch_design")),
+    denial_message(&approval(false, "pencil", "batch_design"), Answerer::Person),
     "The person reviewing this run denied pencil batch_design. Continue without it."
   );
   assert_eq!(
-    denial_message(&approval(true, "command", "cargo add serde")),
+    denial_message(&approval(true, "command", "cargo add serde"), Answerer::Person),
     "Denied by the person reviewing this run. Continue without it."
+  );
+  // Automation's denial invents no person.
+  assert_eq!(
+    denial_message(&approval(false, "Orchester", "git_commit"), Answerer::Automation),
+    "Automation denied Orchester git_commit through Orchester's MCP server. Continue without it."
+  );
+  assert_eq!(
+    denial_message(&approval(true, "command", "cargo add serde"), Answerer::Automation),
+    "Denied by automation through Orchester's MCP server. Continue without it."
   );
   for decided in DecidedBy::ALL {
     assert_eq!(DecidedBy::from_str(decided.as_str()), Ok(decided));

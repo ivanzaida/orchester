@@ -83,8 +83,10 @@ impl Component for RunApprovalsPanel {
       ("runs.summary.approvals.waiting", counts.waiting),
     ]
     .map(|(key, count)| property(&ctx.t(key), &count.to_string()));
-    // Automation answers only where a person let it; its rows show once it has answered.
-    let automation = [
+    // The profile answers only lines whose parts it runs alone, and automation only where a person let
+    // it; their rows show once they have answered.
+    let occasional = [
+      ("runs.summary.approvals.byProfile", counts.by_profile),
       ("runs.summary.approvals.byAutomation", counts.by_automation),
       ("runs.summary.approvals.deniedByAutomation", counts.denied_by_automation),
     ]
@@ -110,7 +112,7 @@ impl Component for RunApprovalsPanel {
       .child(Text::new(&ctx.t("runs.summary.approvals.title")).variant(ExtraTypography::CardTitle.role()))
       .child(switch)
       .with_children(rows)
-      .with_children(automation)
+      .with_children(occasional)
       .with_children(section(ctx, "runs.summary.approvals.similarTitle", similar))
       .with_children(section(ctx, "runs.summary.approvals.alwaysTitle", always))
   }

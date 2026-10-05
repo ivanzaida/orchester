@@ -1290,6 +1290,7 @@
         "alwaysAllowed": "Always allowed",
         "autoApproved": "Auto-approved",
         "denied": "Denied by you",
+        "byProfile": "Allowed by the profile",
         "byAutomation": "Approved by automation",
         "deniedByAutomation": "Denied by automation",
         "waiting": "Waiting",

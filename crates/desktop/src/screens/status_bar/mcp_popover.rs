@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction, FutureState, Placement},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Popup, Rect, Text},
+  components::{Column, Popup, Rect, Row, Text},
   core::{ElementRef, Signal},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -74,13 +74,20 @@ impl Component for McpPopover {
     let panel = Column::new()
       .id("status-mcp-popover")
       .width(Dimension::Px(WIDTH))
-      .padding(SpacingSize::Md)
+      // The title sits 14 from the top, as the operations popover's header does (8 and 6, `E1msJS`).
+      .padding_horizontal(SpacingSize::Md)
+      .padding_bottom(SpacingSize::Md)
+      .padding_top(SpacingSize::Sm)
       .spacing(ExtraSpacing::Stack.role())
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .box_shadow(ExtraShadow::Popover.role())
-      .child(Text::new(&ctx.t("appMcp.title")).variant(ExtraTypography::NoticeHeading.role()))
+      .child(
+        Row::new()
+          .padding_top(ExtraSpacing::Tight.role())
+          .child(Text::new(&ctx.t("appMcp.title")).variant(ExtraTypography::NoticeHeading.role())),
+      )
       .child(value(&app_mcp::endpoint(props.port), PaletteColor::TextPrimary))
       .child(
         Text::new(&ctx.t_args("appMcp.explanation", [("pid", std::process::id().to_string().as_str())]))
@@ -110,7 +117,9 @@ impl McpPopover {
       ctx.t("appMcp.answerApprovals"),
       allowed.unwrap_or(false),
     )
-    .note(ctx.t("appMcp.answerApprovalsNote"));
+    .note(ctx.t("appMcp.answerApprovalsNote"))
+    // The ring stays inside the panel's edge, by the design's focus rule for a row in a panel.
+    .inset_ring();
     match allowed {
       Some(allowed) if !fixed => {
         let (save, saved) = (save.clone(), self.saved.clone());

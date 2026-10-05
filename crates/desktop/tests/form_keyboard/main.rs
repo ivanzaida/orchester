@@ -40,6 +40,7 @@ mod mcp_exempt_tools;
 mod mcp_servers;
 mod modal_layer;
 mod multiline_command;
+mod narrow_answers;
 mod native_connections;
 mod native_dialog;
 mod native_model_uses;

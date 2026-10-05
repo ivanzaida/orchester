@@ -56,6 +56,12 @@ pub fn mcp_item(ctx: &Ctx, mcp: &McpItem, hints: &Hints) -> Element {
           [("endpoint", endpoint.as_str()), ("pid", pid.as_str())],
         ),
       };
+      // It keeps the `$hover` fill while its popover is open, as the activity item does.
+      let row = if mcp.popover.get() {
+        row.background(PaletteColor::AccentMuted)
+      } else {
+        row
+      };
       let popover = mcp.popover.clone();
       (clickable(row, move || popover.update(|open| *open = !*open)), hint)
     }

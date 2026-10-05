@@ -109,6 +109,18 @@ MCP server").
 - **Not done:** design verification of the status bar item and the new popover (no Pencil frame exists for the
   popover; it takes the operations popover's panel); the macOS build of the desktop was not checked (no Apple SDK on
   the Windows host; core checks for `aarch64-apple-darwin`).
+- Design-verification fixes (branch `claude/mcp-ui-fixes`, 2026-10-05, waiting for an independent design
+  verification): at 960 an inline approval card's *Always allow…* gives way first, down to its icon, then its
+  buttons wrap; a transcript row's title keeps 120 beside a long mark, which ends in an ellipsis or drops out
+  (`activity/header.rs`, lurq `shrink_order`), in Tools and in an open chip; automation's denial tells the agent
+  that automation denied it (`denial_message` takes the `Answerer`); the profile's answers count as *Allowed by the
+  profile*, no longer under *Always allowed*; inline cards answered by the profile or automation say so; the MCP
+  item keeps `$hover` while its popover is open; the popover's title sits 14 from its top and its switch has the
+  inset ring. Live states: `ORCHESTER_KEEP_ANSWERED=<folder> cargo test -p orchester-desktop --test form_keyboard
+  app_mcp_answered` keeps a project whose runs the profile and automation answered through the runner.
+- **Follow-up (UI, needs design pass):** decision marks in the transcript and chips are plain mono text after the
+  meta; the design draws them as the *Decision mark* chip (`M7pU0A`). Affects every mark, so it was left out of the
+  fixes above.
 
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 

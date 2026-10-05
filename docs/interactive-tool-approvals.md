@@ -397,7 +397,10 @@ server's own approval hints to the prompt; only the tools a server lists to run 
 (2.1.89 keeps the input when `updatedInput` is empty), no `updatedPermissions` rule is returned, and
 the input is never echoed back. **Deny** answers `{"behavior":"deny","message":"…"}` with what the agent is told
 (`orchester_core::run::denial_message`: *Denied by the person reviewing this run. Continue without it.* for a
-command, *The person reviewing this run denied <server> <tool>. Continue without it.* for an MCP call) and no
+command, *The person reviewing this run denied <server> <tool>. Continue without it.* for an MCP call; when
+automation denies through Orchester's MCP server, which names no person, *Denied by automation through Orchester's
+MCP server. Continue without it.* and *Automation denied <server> <tool> through Orchester's MCP server. Continue
+without it.*) and no
 `interrupt`, so Claude Code hands the message to the agent as the tool's result and the turn goes on, as for
 Codex. Decisions use the same `tool_approvals` rows, ids (`<invocation>:<tool use id>`), claim and
 delivery states and the same "Needs you" modal. A tool use id is asked about once per invocation; a
@@ -432,8 +435,8 @@ command outside any sandbox, where it can change files.
 Claude Code asks about a command line whose parts it cannot match one by one: a chain (`git status && git diff`), a
 `cd` into the worktree before the command, a variable the line sets and uses (`f=src/lib.rs; sed -n 1,20p $f`).
 Orchester answers such a request itself when every part would run on its own (`run::permitted`, recorded as
-`DecidedBy::Permissions` and marked *allowed by the profile · <category>*; the run's Summary counts it with
-*Always allowed*): listed in the step's allowed commands and naming nothing outside the worktree, or a known-safe
+`DecidedBy::Permissions` and marked *allowed by the profile · <category>*; the run's Summary counts it as
+*Allowed by the profile*, and its inline card says so): listed in the step's allowed commands and naming nothing outside the worktree, or a known-safe
 read inside the worktree (`ls`, `cat`, `head`, `tail`, `wc`, `grep` without `-R`, `rg`, `sort`, `uniq`, `find`
 without `-exec` or `-delete`, `sed` whose script only prints, selects or changes lines without `-i`, `awk` whose
 program uses only the names an allow-list holds, the git subcommands that only read). The classifier reads such

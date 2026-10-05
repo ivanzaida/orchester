@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Row, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, dimension::Dimension},
@@ -23,6 +23,7 @@ use orchester_core::{
 
 use super::{
   super::super::ProjectNav,
+  header::header,
   mcp::mcp_server_text,
   mcp_call,
   problem::{self, problem_text},
@@ -287,33 +288,12 @@ fn entry_header(shown: &Shown, open: bool, sequence: u64) -> Element {
       icon(chevron, IconSize::Small, PaletteColor::TextMuted)
     })
   };
-  Row::new()
-    .id(format!("activity-entry-header-{sequence}"))
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(GLYPH_SIZE))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&shown.title)
-        .id(format!("activity-entry-title-{sequence}"))
-        .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextPrimary)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .min_width(Dimension::Px(0.0))
-        .flex(1.0)
-        .selectable(true),
-    )
-    .child(
-      Text::new(&shown.meta)
-        .id(format!("activity-entry-meta-{sequence}"))
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
-        .nowrap()
-        .flex_shrink(0.0),
-    )
-    .with_children(disclosure)
-    .into()
+  header(
+    (&shown.title, &shown.meta),
+    disclosure.map(Element::from),
+    sequence,
+    GLYPH_SIZE,
+  )
 }
 
 /// The entry's glyph on its tile; a problem row's in `$text` (`OlLGD`).

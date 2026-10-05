@@ -141,7 +141,7 @@ impl Worker {
         // Claude Code hands the agent Orchester's message; Codex tells it in its own words.
         let told = match self.app_server() {
           Some(_) => codex_denial(approval.command).to_owned(),
-          None => denial_message(approval),
+          None => denial_message(approval, by),
         };
         return Ok(Ok(Settled {
           told: Some(told),

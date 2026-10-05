@@ -18,7 +18,7 @@ use orchester_core::{
   },
   resource::{AgentProfile, Pipeline, ResourceKind, StepKind, VersionNumber},
   run::{
-    AlwaysUnavailable, ApprovalSubject, AutoVerdict, PendingToolApproval, RuleScope, SimilarUnavailable,
+    AlwaysUnavailable, Answerer, ApprovalSubject, AutoVerdict, PendingToolApproval, RuleScope, SimilarUnavailable,
     always_prefixes, auto_verdict, codex_denial, denial_message,
   },
   store::{McpServerStore, ResourceStore},
@@ -145,7 +145,8 @@ impl ApprovalChoices {
       told: if codex {
         codex_denial(approval.command).into()
       } else {
-        denial_message(approval).into()
+        // The dialog shows what a person's Deny tells the agent.
+        denial_message(approval, Answerer::Person).into()
       },
       codex,
       category: match &subject {
