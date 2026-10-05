@@ -120,6 +120,8 @@ struct Inner {
   /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
   group_retries: task_groups::GroupRetries,
+  /// Read when the scheduler is made, as the runner starts, before the desktop connects.
+  earlier_groups: task_groups::EarlierGroups,
   blocked_runs: blocked_runs::BlockedRuns,
 }
 
@@ -135,6 +137,7 @@ impl Scheduler {
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
         group_retries: task_groups::GroupRetries::default(),
+        earlier_groups: task_groups::EarlierGroups::read(project_root),
         blocked_runs: blocked_runs::BlockedRuns::default(),
       }),
     }

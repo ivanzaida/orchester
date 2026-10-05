@@ -39,20 +39,7 @@ type Incoming = Result<Option<Request>, IpcError>;
 /// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
 /// agents are ended and the runs keep their last checkpoint.
 pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<(), IpcError> {
-  let endpoint = Endpoint::for_project(project_root)?;
-  tracing::info!("listening on {}", endpoint.name());
-  let stream = tokio::select! {
-    stream = endpoint.accept() => stream?,
-    () = shutdown.received() => {
-      tracing::info!("stopping before the desktop connected");
-      return Ok(());
-    }
-  };
-  let (read, write) = tokio::io::split(stream);
-  let mut reader = FrameReader::new(read);
-  let mut writer = FrameWriter::new(write);
-  handshake(&mut reader, &mut writer).await?;
-  tracing::info!("desktop connected");
+  // Made before the desktop can connect: it notes the groups queued before this runner started.
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
   let replies = notifications.clone();
@@ -67,6 +54,20 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     Arc::new(KeychainVault),
     relay,
   );
+  let endpoint = Endpoint::for_project(project_root)?;
+  tracing::info!("listening on {}", endpoint.name());
+  let stream = tokio::select! {
+    stream = endpoint.accept() => stream?,
+    () = shutdown.received() => {
+      tracing::info!("stopping before the desktop connected");
+      return Ok(());
+    }
+  };
+  let (read, write) = tokio::io::split(stream);
+  let mut reader = FrameReader::new(read);
+  let mut writer = FrameWriter::new(write);
+  handshake(&mut reader, &mut writer).await?;
+  tracing::info!("desktop connected");
   // A frame read cannot be interrupted without losing data, so requests are read on their own task.
   let (incoming, requests) = mpsc::unbounded_channel::<Incoming>();
   let reading = tokio::spawn(async move {

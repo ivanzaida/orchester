@@ -88,6 +88,40 @@ async fn task_group_fresh_reopen_holds_second_task_until_explicit_start() {
   }
 }
 
+/// A group queued after the runner started, before the desktop attached for a new session, is the
+/// new session's: it is not held.
+#[tokio::test(flavor = "multi_thread")]
+async fn task_group_queued_while_the_runner_starts_is_not_held_by_a_fresh_attach() {
+  let fixture = project(&Setup::new("Append one line."));
+  let root = fixture.repo.path();
+  let (fresh, mut events) = scheduler(root);
+  let mut db = ProjectDb::open(root).expect("db");
+  let group = reviewed_group(&mut db, fixture.task, Scheduling::Sequential, 3_000_000);
+  fresh
+    .attach(
+      AttachSession::Fresh {
+        previous_end: orchester_ipc::SessionEnd::QuitNow,
+      },
+      NonZeroU32::new(2).expect("slots"),
+    )
+    .await
+    .expect("fresh");
+  fresh.advance_task_groups().await.expect("advance");
+  assert_ne!(
+    db.task_group_hold(group.key()).expect("hold"),
+    Some(GroupHold::SessionEnded)
+  );
+  let first = db
+    .run_with_key(group.tasks()[0].first_run_key())
+    .expect("run")
+    .expect("started");
+  wait_for(root, &mut events, first.id(), |run| {
+    run.status() == &RunStatus::Succeeded
+  })
+  .await;
+  fresh.stop_all(InterruptCause::QuitNow).await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn task_group_fresh_reopen_explicit_continue_keeps_first_run_checkpoint() {
   let fixture = project(&Setup {
