@@ -117,6 +117,26 @@ async fn runner_process_missing_program_fails_visibly() {
   );
 }
 
+/// A request queued while the runner's launch fails was never sent: it is answered as not connected,
+/// not as lost. On one thread the request is queued before the task that launches the runner first
+/// runs; which of the two that task handles first varies, so it is tried several times.
+#[tokio::test]
+async fn runner_process_request_queued_while_the_launch_fails_is_not_connected() {
+  let project = project();
+  let missing = project.path().join("orchester-runner.exe");
+  for _ in 0..16 {
+    let runners = Runners::new(missing.clone(), Handle::current(), Activity::new(), Clean);
+    runners.show(Some(&open(project.path())));
+    let answer = timeout(
+      PATIENCE,
+      runners.start_run(IdempotencyKey::generate(), TaskId::generate()),
+    )
+    .await
+    .expect("answer in time");
+    assert_eq!(answer, Err(RunRequestError::Request(RequestError::NotConnected)));
+  }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_answers_start_run_requests() {
   let repo = tempfile::tempdir().expect("temporary directory");

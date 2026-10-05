@@ -179,8 +179,10 @@ fn skills_setting_saves_when_the_switch_flips() {
   let mut desktop = Desktop::with_seeded_project(repository_files);
   desktop.wait_for("nav-settings");
   desktop.click("nav-settings");
-  desktop.wait_for("settings-agent-files");
-  assert!(shows(&mut desktop, "Found: AGENTS.md, CLAUDE.md, 2 skills folders"));
+  // What the repository holds is read in the background, after the setting is shown.
+  desktop.wait_until("the agent files found", |desktop| {
+    shows(desktop, "Found: AGENTS.md, CLAUDE.md, 2 skills folders")
+  });
   desktop.click("settings-agent-files");
   let repo = desktop.repo().to_path_buf();
   desktop.settle("the setting saved", |_| {

@@ -238,7 +238,11 @@ fn run_permissions_first_next_change_shows_actual_policy_and_queued_approval_set
   desktop.click("task-permissions-ask");
   desktop.click("task-permissions-tool-approvals");
   desktop.click("task-permissions-apply-next");
-  desktop.wait_until("first queued change", |desktop| has(desktop, "task-permissions-next"));
+  // The notice can show before the change's reply closes the popover; until it has, its buttons
+  // wait for that reply and a second change cannot be applied.
+  desktop.wait_until("first queued change", |desktop| {
+    !has(desktop, "task-permissions-popover") && has(desktop, "task-permissions-next")
+  });
   // The notice names what changes against what the agent launched with.
   assert!(shows(
     &mut desktop,

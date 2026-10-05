@@ -323,7 +323,11 @@ fn lifecycle_runs_not_continued_wait_until_their_task_page_continues_them() {
     text_of(desktop, "task-row-KON-1", "Interrupted") && text_of(desktop, "task-row-KON-1", "No checkpoint yet")
   });
   desktop.click("task-row-KON-1");
-  desktop.wait_until("Continue run", |desktop| has(desktop, "task-continue-run"));
+  // Continue run asks the runner, which starts again with the application: until it is online,
+  // the page answers that it is not connected.
+  desktop.wait_until("Continue run with the runner online", |desktop| {
+    has(desktop, "task-continue-run") && text_of(desktop, "status-runner", "Runner online")
+  });
   desktop.click("task-continue-run");
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

@@ -168,8 +168,13 @@ fn ended_approval_waiting_parts_give_way_in_order() {
   desktop.click("task-auto-approve");
   desktop.wait_for(DIALOG);
   desktop.key("Escape", "Escape");
+  // The page reads the run again apart from the status bar; until it has, its switch still shows
+  // auto-approval off, and pressing it later would turn it on again rather than off.
   desktop.wait_until("the status bar names the request", |desktop| {
-    !has(desktop, DIALOG) && has(desktop, "status-auto-approving") && has(desktop, "status-approvals-review")
+    !has(desktop, DIALOG)
+      && has(desktop, "status-auto-approving")
+      && has(desktop, "status-approvals-review")
+      && has(desktop, "task-auto-approving")
   });
   // As the window narrows, what the request asks trims its end down to its minimum, then the run's
   // name, the time and the words after the count drop out whole; the count, Review, Auto-approving and

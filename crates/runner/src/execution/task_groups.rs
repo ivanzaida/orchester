@@ -1,6 +1,7 @@
 //! Advances reviewed groups and persists why unfinished tasks wait.
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
+  path::Path,
   time::{Duration, Instant},
 };
 
@@ -79,6 +80,31 @@ impl GroupRetries {
         Some(error)
       }
     }
+  }
+}
+
+/// The groups queued before this runner started. Only they can be left from an earlier session, so
+/// only they are held when the desktop attaches for a new one: a group the desktop queued while this
+/// runner was starting belongs to the new session and goes on.
+pub(super) struct EarlierGroups(Option<HashSet<IdempotencyKey>>);
+
+impl EarlierGroups {
+  /// Read as the runner starts; when they cannot be read, every unfinished group counts as earlier.
+  pub(super) fn read(project_root: &Path) -> Self {
+    let keys = ProjectDb::open(project_root)
+      .and_then(|db| db.unfinished_task_groups())
+      .map(|groups| groups.iter().map(TaskGroup::key).collect());
+    match keys {
+      Ok(keys) => Self(Some(keys)),
+      Err(error) => {
+        tracing::warn!(%error, "cannot read the groups queued before the runner started; all count as earlier");
+        Self(None)
+      }
+    }
+  }
+
+  fn contain(&self, group: IdempotencyKey) -> bool {
+    self.0.as_ref().is_none_or(|keys| keys.contains(&group))
   }
 }
 
@@ -405,14 +431,17 @@ impl Scheduler {
     Ok(())
   }
 
-  /// Holds the unstarted tasks of every group until a person starts one again. A group held by a
-  /// failed task or its spent cap keeps that hold, so its tasks can still be taken back to the
-  /// drafts.
+  /// Holds the unstarted tasks of every group queued before this runner started ([`EarlierGroups`])
+  /// until a person starts one again. A group held by a failed task or its spent cap keeps that hold,
+  /// so its tasks can still be taken back to the drafts.
   pub(super) fn hold_groups_after_session_end(&self, db: &ProjectDb) -> Result<(), Rejection> {
     for group in db
       .unfinished_task_groups()
       .map_err(|e| super::failed("cannot read task groups", &e))?
     {
+      if !self.inner.earlier_groups.contain(group.key()) {
+        continue;
+      }
       let Some((group, runs)) = scheduled(db, &group)? else {
         continue;
       };

@@ -44,7 +44,7 @@ pub(crate) fn finished_conversation(review: bool) -> Desktop {
 }
 
 /// Presses the chip of the Conversation tab's tool group whose summary says `text`: the fake CLIs'
-/// standard error is a group of unparsed lines of its own.
+/// standard error can be a group of unparsed lines of its own.
 pub(crate) fn open_group(desktop: &mut Desktop, text: &str) {
   desktop.wait_until("the tool group", |desktop| {
     desktop
@@ -120,16 +120,27 @@ fn conversation_timeline_puts_tool_events_in_a_chip_of_the_message() {
   desktop.click("conversation-fold-show");
   desktop.wait_until("the step's items", |desktop| has(desktop, "conversation-agent-message"));
   assert!(shows(&mut desktop, "conversation-agent-message", "Appending the line."));
-  // The command and the file change are one chip, named by what they did, in the agent's message;
-  // the fake CLI's standard error, unparsed lines, is the agent's row of its own before it. The step
-  // result the agent wrote is its result card, not a message.
-  assert!(has(&mut desktop, "conversation-agent-tools"));
+  // The command and the file change are one chip, named by what they did, in the agent's message.
+  // The fake CLI's standard error, unparsed lines, is the agent's row of its own before the message,
+  // or in the chip when the runner reads it after the message: it reads standard error apart from
+  // standard output. The step result the agent wrote is its result card, not a message.
   let summaries = texts(&desktop, "conversation-group-summary");
-  assert_eq!(summaries.len(), 2, "{summaries:?}");
-  assert!(summaries[0].ends_with("unparsed lines"), "{summaries:?}");
-  assert_eq!(summaries[1], "Ran echo hello >> README.md · edited 1 file");
+  let (chip, before) = summaries.split_last().expect("the chip's summary");
+  assert_eq!(chip, "Ran echo hello >> README.md · edited 1 file", "{summaries:?}");
+  assert!(
+    before.len() <= 1 && before.iter().all(|summary| summary.contains(" unparsed line")),
+    "{summaries:?}"
+  );
+  assert_eq!(
+    has(&mut desktop, "conversation-agent-tools"),
+    !before.is_empty(),
+    "{summaries:?}"
+  );
   let toggles = texts(&desktop, "conversation-group-toggle");
-  assert!(toggles[1].contains("2 calls"), "{toggles:?}");
+  assert!(
+    toggles.last().is_some_and(|toggle| toggle.contains("2 calls")),
+    "{toggles:?}"
+  );
   assert!(!has(&mut desktop, "activity-entry"), "a group starts closed");
   assert!(!shows(&mut desktop, "conversation", "\"outcome\""));
   assert!(holds(&mut desktop, "conversation-main", "Implement done"));
@@ -163,15 +174,16 @@ fn conversation_timeline_puts_tool_events_in_a_chip_of_the_message() {
 fn conversation_show_narrows_the_timeline_to_messages_or_tools() {
   let mut desktop = finished_conversation(false);
   desktop.wait_for("conversation-group-toggle");
+  // The chip, and the unparsed lines when the runner read them before the message (see above).
+  let hidden = match texts(&desktop, "conversation-group-toggle").len() {
+    1 => "2 tool calls in 1 group hidden",
+    _ => "2 tool calls in 2 groups hidden",
+  };
 
   desktop.click("conversation-show-1");
   desktop.wait_until("the messages", |desktop| !has(desktop, "conversation-group-toggle"));
   assert!(has(&mut desktop, "conversation-agent-message"));
-  assert!(holds(
-    &mut desktop,
-    "conversation-tools-readback",
-    "2 tool calls in 2 groups hidden"
-  ));
+  assert!(holds(&mut desktop, "conversation-tools-readback", hidden));
   assert!(!has(&mut desktop, "activity-raw"), "raw lines belong to Tools");
 
   desktop.click("conversation-show-2");
