@@ -68,6 +68,9 @@ pub(super) fn control_action(ctx: &mut Ctx) -> ControlAction {
         RunControl::Continue => runners.continue_run(run).await,
         RunControl::Cancel => runners.control_run(Command::CancelRun { run }).await,
       };
+      if let (Err(_), Some(task)) = (&result, works) {
+        servers.release_unused_claim(&root, task).await;
+      }
       result.map(|()| control).map_err(|error| {
         tracing::warn!(%error, ?control, "the runner did not carry out the request");
         control_message(&error)

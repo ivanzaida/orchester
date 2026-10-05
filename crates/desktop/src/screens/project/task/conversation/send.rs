@@ -72,6 +72,7 @@ async fn tell(runners: &Runners, (servers, root, task): (&Servers, &Path, TaskId
     })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
     Err(error) => {
       tracing::warn!(%error, "the runner did not take the message");
+      servers.release_unused_claim(root, task).await;
       Sent::Queued(control_message(&error))
     }
   }

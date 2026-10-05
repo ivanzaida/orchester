@@ -176,10 +176,13 @@ fn continue_action(ctx: &mut Ctx) -> ContinueAction {
           .map_err(|refusal| refusal.message())?;
       }
       for (root, name, ids) in by_project(&runs) {
-        let continued = runners
-          .continue_runs(&root, &name, ids)
-          .await
-          .map_err(|error| control_message(&error))?;
+        let continued = runners.continue_runs(&root, &name, ids).await;
+        if continued.is_err() {
+          for run in runs.iter().filter(|run| run.project_root == root) {
+            servers.release_unused_claim(&run.project_root, run.task).await;
+          }
+        }
+        let continued = continued.map_err(|error| control_message(&error))?;
         if let Some(refused) = continued.refused.into_iter().next() {
           tracing::warn!(run = %refused.run, rejection = ?refused.rejection, "an interrupted run did not continue");
           return Err(control_message(&RunRequestError::Rejected(refused.rejection)));

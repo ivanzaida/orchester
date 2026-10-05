@@ -110,3 +110,53 @@ fn refusal(error: &ClientError, server: Option<ServerAddress>) -> WorkRefusal {
     _ => WorkRefusal::sharing(SharingError::Client(error.clone()), server),
   }
 }
+
+impl Servers {
+  /// After work on `task` failed to start or its save did not go through: the run claim the person
+  /// holds is released when no run of the task is under way here, so it does not stay held (and
+  /// kept fresh by the heartbeat) for work that never started. A claim taken by hand stays.
+  pub async fn release_unused_claim(&self, repo_root: &Path, task: TaskId) {
+    let (servers, root) = (self.clone(), repo_root.to_owned());
+    let unused = background::run(move || -> Result<Option<ProjectServer>, SharingError> {
+      let Some(server) = ProjectServer::open(&servers, &root)? else {
+        return Ok(None);
+      };
+      let db = orchester_store::ProjectDb::open(&root)?;
+      let me = server.me();
+      let held = db
+        .shared_task_info(task)?
+        .and_then(|info| info.claim)
+        .is_some_and(|claim| Some(claim.holder.id) == me && claim.kind == ClaimKind::Run);
+      Ok((held && db.active_task_run(task)?.is_none()).then_some(server))
+    })
+    .await;
+    let server = match unused {
+      Ok(Ok(Some(server))) => server,
+      Ok(Ok(None)) | Err(_) => return,
+      Ok(Err(error)) => {
+        tracing::warn!(%error, %task, "cannot tell whether an unused claim is held");
+        return;
+      }
+    };
+    if let Err(error) = server.release_claim(task).await {
+      // It goes stale 15 minutes after the last heartbeat that names it.
+      tracing::warn!(%error, %task, "an unused claim was not released");
+    }
+  }
+}
+
+impl ProjectServer {
+  async fn release_claim(&self, task: TaskId) -> Result<(), SharingError> {
+    let released = self
+      .call(|client, token, project| async move { client.release_claim(&token, project, task).await })
+      .await?;
+    let server = self.clone();
+    background::run(move || -> Result<(), SharingError> {
+      let db = orchester_store::ProjectDb::open(server.repo_root())?;
+      RemoteTaskStore::new(db, server)?.cache(std::slice::from_ref(&released), None)
+    })
+    .await??;
+    self.servers.shared_changed();
+    Ok(())
+  }
+}

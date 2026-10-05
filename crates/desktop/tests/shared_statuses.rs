@@ -3,6 +3,8 @@
 //! while the server still has the status the run changed from and the person holds the task; a
 //! status someone else set meanwhile stays, and the task says why the run's was not sent.
 //!
+//! Work that did not start releases the run claim taken for it.
+//!
 //! `cargo test -p orchester-desktop --test shared_statuses statuses_`
 
 #[path = "server_support/mod.rs"]
@@ -132,4 +134,24 @@ fn statuses_a_task_the_person_no_longer_holds_is_left_alone() {
     alice.db().automatic_statuses().expect("pending"),
     Vec::<AutomaticStatus>::new()
   );
+}
+
+/// Work that did not start leaves no claim behind: the run claim taken for it is released while no
+/// run of the task is under way.
+#[test]
+fn statuses_a_claim_for_work_that_did_not_start_is_released() {
+  let server = TestServer::start();
+  let alice = shared(&server);
+  let oleh = Other::new(&server, "oleh", "Oleh Petrenko");
+  member(&alice, "oleh");
+  let task = alice.tasks().remove(0);
+  claimed(&alice, task.id());
+  assert!(on_server(&alice, &oleh, task.id()).claim.is_some());
+  alice.block_on(alice.servers.release_unused_claim(alice.root(), task.id()));
+  assert!(
+    on_server(&alice, &oleh, task.id()).claim.is_none(),
+    "released on the server"
+  );
+  let info = alice.db().shared_task_info(task.id()).expect("info").expect("shared");
+  assert!(info.claim.is_none(), "and in the cache");
 }

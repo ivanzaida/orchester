@@ -121,7 +121,11 @@ pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>)
           messages: vec![refusal.message()].into(),
           queued: Some(queued.clone()),
         })?;
-      runners.start_run(key, task).await.map_err(|error| {
+      let started = runners.start_run(key, task).await;
+      if started.is_err() {
+        servers.release_unused_claim(&root, task).await;
+      }
+      started.map_err(|error| {
         tracing::warn!(%error, "the start request failed");
         RunProblems {
           messages: start_messages(&error).into(),

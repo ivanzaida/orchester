@@ -114,10 +114,28 @@ pub fn queue_organized_in(
 }
 
 /// Checks the selected configuration, then saves and queues the task. A queued task reached by
-/// an idempotent retry keeps its original version, even if a newer version was published.
+/// an idempotent retry keeps its original version, even if a newer version was published. A run
+/// claim taken for a shared task is released when the task is not queued after all.
 pub fn queue_in(
   repo_root: &Path,
   servers: &Servers,
+  target: SaveTarget,
+  details: TaskDetails,
+  selected_version: VersionNumber,
+) -> Result<QueuedStart, QueueFailure> {
+  let mut claimed = None;
+  let queued = queue_claimed((repo_root, servers, &mut claimed), target, details, selected_version);
+  if queued.is_err()
+    && let Some(task) = claimed
+    && let Ok(runtime) = tokio::runtime::Handle::try_current()
+  {
+    runtime.block_on(servers.release_unused_claim(repo_root, task));
+  }
+  queued
+}
+
+fn queue_claimed(
+  (repo_root, servers, claimed): (&Path, &Servers, &mut Option<orchester_core::id::TaskId>),
   target: SaveTarget,
   details: TaskDetails,
   selected_version: VersionNumber,
@@ -129,6 +147,7 @@ pub fn queue_in(
   };
   if let Some(task) = &existing {
     claim(&writer, servers, task.id())?;
+    *claimed = Some(task.id());
   }
   if let Some(task) = existing.filter(|task| task.status() == TaskStatus::Queued) {
     writer.db().check_task_readiness(task.id())?;
@@ -145,6 +164,7 @@ pub fn queue_in(
   writer.db().check_task_readiness(task.id())?;
   if task.status() == TaskStatus::Draft {
     claim(&writer, servers, task.id())?;
+    *claimed = Some(task.id());
     task.queue(selected_version).map_err(QueueFailure::Queue)?;
     let task = saved(writer.save_task(&task)?)?;
     return Ok(QueuedStart {

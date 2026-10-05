@@ -245,6 +245,7 @@ impl RunAgain {
           }
           Err(error) => {
             tracing::warn!(%error, "the runner did not run the task again");
+            servers.release_unused_claim(&root, request.task).await;
             Err(Refused {
               key: request.key,
               messages: request_messages(&error, &request.pipeline),

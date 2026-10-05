@@ -150,10 +150,11 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
         .claim_for_work(&claims.1, task)
         .await
         .map_err(|refusal| Problems(vec![refusal.message()].into()))?;
-      runners
-        .start_run(task.first_run_key(), task)
-        .await
-        .map_err(|error| Problems(start_messages(&error).into()))?;
+      let started = runners.start_run(task.first_run_key(), task).await;
+      if started.is_err() {
+        claims.0.release_unused_claim(&claims.1, task).await;
+      }
+      started.map_err(|error| Problems(start_messages(&error).into()))?;
       Ok(Started(task))
     }
   })
