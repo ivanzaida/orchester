@@ -519,3 +519,19 @@ fn shared_an_edit_merges_into_a_newer_version_unless_both_changed_a_field() {
   );
   assert_eq!(conflict.resolved(|_| Choice::Theirs).brief, "Oleh's brief.",);
 }
+
+/// `orchester.toml` is written only where nothing is: a link, even one that leads nowhere, is
+/// refused and nothing is written through it. (Windows needs a privilege to make a link, so this
+/// runs where links can be made without one.)
+#[cfg(unix)]
+#[test]
+fn shared_the_discovery_file_is_never_written_through_a_link() {
+  let repo = tempfile::tempdir().expect("repository");
+  let target = repo.path().join("elsewhere.toml");
+  std::os::unix::fs::symlink(&target, repo.path().join(discovery::FILE)).expect("link");
+  assert!(matches!(
+    discovery::write(repo.path(), "https://orchester.example"),
+    Err(discovery::DiscoveryError::Link)
+  ));
+  assert!(!target.exists(), "nothing was written through the link");
+}

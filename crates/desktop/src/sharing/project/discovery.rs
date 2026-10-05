@@ -4,7 +4,7 @@
 //! repository and is untrusted: reading it never contacts the address; the person confirms adding
 //! the server first. Orchester writes it when the person asks (Share) and never commits it.
 
-use std::{fs, path::Path, time::SystemTime};
+use std::{fs, io::Write, path::Path, time::SystemTime};
 
 use orchester_api::client::ServerAddress;
 use orchester_core::{command::Command, time::Timestamp};
@@ -51,6 +51,9 @@ pub enum DiscoveryError {
   /// The repository has the file already and it names another server; it is left as it is.
   #[error("orchester.toml names another server")]
   Other,
+  /// The repository's `orchester.toml` is a link; Orchester writes no file through it.
+  #[error("orchester.toml is a link")]
+  Link,
   #[error("orchester.toml cannot be written: {0}")]
   Write(String),
 }
@@ -98,8 +101,13 @@ pub fn inspect(programs: &Programs, repo_root: &Path) -> DiscoveryFile {
 }
 
 /// Writes `server = "<url>"` into the repository's discovery file. A file that names this server
-/// already is left as it is; one that names another server is never overwritten.
+/// already is left as it is; one that names another server is never overwritten; a link, even one
+/// that leads nowhere, is never followed. The file is created only if nothing is at its path.
 pub fn write(repo_root: &Path, url: &str) -> Result<(), DiscoveryError> {
+  let path = repo_root.join(FILE);
+  if fs::symlink_metadata(&path).is_ok_and(|found| found.file_type().is_symlink()) {
+    return Err(DiscoveryError::Link);
+  }
   match read(repo_root) {
     Discovery::Server(address) if address.as_str() == url => return Ok(()),
     Discovery::Server(_) | Discovery::Unreadable => return Err(DiscoveryError::Other),
@@ -107,6 +115,13 @@ pub fn write(repo_root: &Path, url: &str) -> Result<(), DiscoveryError> {
     Discovery::Absent => {}
   }
   let quoted = url.replace('\\', "\\\\").replace('"', "\\\"");
-  fs::write(repo_root.join(FILE), format!("server = \"{quoted}\"\n"))
-    .map_err(|error| DiscoveryError::Write(error.to_string()))
+  let written = fs::OpenOptions::new()
+    .write(true)
+    .create_new(true)
+    .open(&path)
+    .and_then(|mut file| file.write_all(format!("server = \"{quoted}\"\n").as_bytes()));
+  written.map_err(|error| match error.kind() {
+    std::io::ErrorKind::AlreadyExists => DiscoveryError::Other,
+    _ => DiscoveryError::Write(error.to_string()),
+  })
 }

@@ -42,6 +42,7 @@ pub(super) const fn role_key(role: MemberRole) -> &'static str {
 pub(super) fn discovery_error(error: &DiscoveryError) -> Message {
   match error {
     DiscoveryError::Other => Message::new("sharing.discoveryFile.other"),
+    DiscoveryError::Link => Message::new("sharing.discoveryFile.link"),
     DiscoveryError::Write(_) => Message::new("sharing.discoveryFile.writeFailed"),
   }
 }

@@ -5839,7 +5839,8 @@
       "absent": "The repository has no orchester.toml",
       "other": "orchester.toml names another server, so Orchester leaves it as it is",
       "write": "Write orchester.toml",
-      "writeFailed": "orchester.toml couldn't be written into the repository."
+      "writeFailed": "orchester.toml couldn't be written into the repository.",
+      "link": "orchester.toml in this repository is a link, so Orchester didn't write it. Replace the link with a file, or add the line yourself."
     },
     "roles": {
       "makeOwner": {
