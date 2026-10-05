@@ -114,6 +114,7 @@ impl Prompt {
       messages: None,
       memory: &[],
       retry: None,
+      working: None,
     }
   }
 }
@@ -144,12 +145,7 @@ fn prompt_assembles_role_step_and_task_in_order() {
   let expected = "# Your role: Builder\n\nImplements the approved plan.\n\nKeep commits small for ORC-12.\n\n# Current \
                   step: implement\n\nWork on orchester/orc-129, attempt 1. Literal {{task.title}}.\n\n# Task ORC-12: \
                   Add GitHub sign-in\n\nUsers sign in with GitHub.\n\n## Acceptance criteria\n- Sign-in works\n- \
-                  Cancel shows an error\n\n# Files and commands\n\nRead, search and edit files with your own file \
-                  tools (Claude Code: Read, Grep, Glob, Edit, Write; Codex: its read tools and apply_patch), not \
-                  through the shell: no `cat`, `sed`, `awk` or heredocs to read or change files.\nCommands already \
-                  run in the task's worktree: never start one with `cd`. Run one command per call, bare, without \
-                  `;`, `&&` or variables, so that it matches the allowed commands; anything else waits for a \
-                  person's approval.\n\n";
+                  Cancel shows an error\n\n";
   let (context, _) = assembled
     .text
     .split_once("# When you finish\n")

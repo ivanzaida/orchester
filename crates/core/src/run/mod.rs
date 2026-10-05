@@ -59,7 +59,7 @@ pub use self::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
     PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource,
-    RetryReport, RunContext, SkillListing,
+    RetryReport, RunContext, SkillListing, WorkingTools,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
