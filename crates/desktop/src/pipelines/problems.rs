@@ -85,7 +85,7 @@ fn rule_step(error: &PipelineError) -> Option<&StepKey> {
   }
 }
 
-fn rule_message(edit: &PipelineEdit, error: &PipelineError) -> Message {
+pub fn rule_message(edit: &PipelineEdit, error: &PipelineError) -> Message {
   let name = |key: &StepKey| step_name(edit, key);
   let about = |key: &StepKey, text: &'static str| Message::new(text).with("step", name(key));
   match error {

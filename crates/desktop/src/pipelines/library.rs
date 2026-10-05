@@ -16,6 +16,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{data::Assignables, layout::levels};
+use crate::messages::{self, Message};
 
 /// Where a pipeline is in its lifecycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,6 +142,24 @@ pub enum CreateError {
   SlugTaken { slug: String, existing: String },
 }
 
+impl CreateError {
+  /// What a person reads when the pipeline is not created.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Store(error) => messages::store_error(error),
+      Self::NoSlug => Message::new("pipelines.create.noSlug"),
+      Self::SlugTaken { slug, existing } => slug_taken(slug, existing),
+    }
+  }
+}
+
+/// The name gives slug `slug`, which pipeline `existing` has.
+pub fn slug_taken(slug: &str, existing: &str) -> Message {
+  Message::new("pipelines.create.slugTaken")
+    .with("slug", slug.to_owned())
+    .with("pipeline", existing.to_owned())
+}
+
 /// The slug a new pipeline named `name` would get, or why it cannot be created with that name.
 pub fn slug_for<S: ResourceStore>(store: &S, name: &str) -> Result<Slug, CreateError>
 where
@@ -166,13 +185,17 @@ where
 /// repeating a create that did happen fails with [`CreateError::SlugTaken`] instead of adding
 /// a second pipeline.
 pub fn create(db: &mut ProjectDb, new: NewPipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
-  let slug = slug_for(db, new.name.as_str())?;
   let body = match new.start {
     StartFrom::Empty => Pipeline::new(Vec::new()).expect("a pipeline without steps is a valid draft"),
     StartFrom::Starter => new.starter.pipeline(&Assignables::load(db)?),
   };
-  let resource = db.create_resource(slug, new.name, &body, now)?;
-  Ok(resource.id())
+  create_with(db, new.name, &body, now)
+}
+
+/// Creates pipeline `name` with `body` as its draft v1, as [`create`] does with a start.
+pub fn create_with(db: &mut ProjectDb, name: Name, body: &Pipeline, now: Timestamp) -> Result<ResourceId, CreateError> {
+  let slug = slug_for(db, name.as_str())?;
+  Ok(db.create_resource(slug, name, body, now)?.id())
 }
 
 pub fn create_in(repo_root: &Path, new: NewPipeline) -> Result<ResourceId, CreateError> {

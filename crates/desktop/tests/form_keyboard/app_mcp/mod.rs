@@ -4,6 +4,7 @@
 
 mod answered;
 mod approvals;
+mod pipelines;
 mod runs;
 mod server;
 mod tasks;

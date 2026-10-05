@@ -5305,6 +5305,7 @@
     "answerApprovals": "Let automation answer approvals",
     "answerApprovalsNote": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
     "errors": {
+      "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
     }
   },

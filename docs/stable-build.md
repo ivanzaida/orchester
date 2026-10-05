@@ -100,7 +100,10 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `list_approvals`, `decide_approval` and `list_pipelines`. A modal
+  interrupted run), `cancel_run`, `list_approvals`, `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  pipeline's latest published version under a new name, optionally with other published profiles on its
+  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
+  (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
   open in the window does not stand in their way. A refusal comes back as a tool error with a stable
   `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
   `run_not_running`…) and the app's own explanation. Its discovery file is

@@ -25,7 +25,7 @@ use crate::{
   activity::{Activity, OperationSpec, operations},
   background,
   messages::{self, Message},
-  pipelines::library::{CreateError, NewPipeline, StartFrom, create_in},
+  pipelines::library::{NewPipeline, StartFrom, create_in, slug_taken},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -306,20 +306,6 @@ fn check_name(name: &str, taken: &[(Arc<str>, Arc<str>)]) -> Result<Name, Messag
   }
 }
 
-fn slug_taken(slug: &str, existing: &str) -> Message {
-  Message::new("pipelines.create.slugTaken")
-    .with("slug", slug.to_owned())
-    .with("pipeline", existing.to_owned())
-}
-
-pub fn create_error(error: &CreateError) -> Message {
-  match error {
-    CreateError::Store(error) => messages::store_error(error),
-    CreateError::NoSlug => Message::new("pipelines.create.noSlug"),
-    CreateError::SlugTaken { slug, existing } => slug_taken(slug, existing),
-  }
-}
-
 fn create_action(ctx: &mut Ctx) -> CreateAction {
   let activity = Activity::of(ctx);
   ctx.future_action(move |(repo_root, new, spec): CreateArgs| {
@@ -330,7 +316,7 @@ fn create_action(ctx: &mut Ctx) -> CreateAction {
         let created = background::run(move || create_in(&repo_root, new)).await?;
         created.map(PipelineId).map_err(|error| {
           tracing::error!(%error, "cannot create the pipeline");
-          create_error(&error)
+          error.message()
         })
       };
       let target = |created: &PipelineId| Some(operations::pipeline(&root, created.0));

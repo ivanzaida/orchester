@@ -21,7 +21,7 @@ use orchester_core::{name::Name, resource::StarterStep};
 use super::{
   PipelineId, PipelinesNav,
   library_row::{column_headings, library_row},
-  new_pipeline::{NewPipelineDialog, NewPipelineProps, create_error},
+  new_pipeline::{NewPipelineDialog, NewPipelineProps},
   starter_text,
 };
 use crate::{
@@ -332,7 +332,7 @@ fn create_starter_action(ctx: &mut Ctx) -> CreateAction {
         let created = background::run(move || create_in(&repo_root, new)).await?;
         created.map(PipelineId).map_err(|error| {
           tracing::error!(%error, "cannot create the starter pipeline");
-          create_error(&error)
+          error.message()
         })
       };
       let target = |created: &PipelineId| Some(operations::pipeline(&root, created.0));

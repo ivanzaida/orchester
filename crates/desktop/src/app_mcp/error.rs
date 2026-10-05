@@ -18,6 +18,8 @@ pub enum Missing {
   Run,
   Approval,
   Pipeline,
+  Profile,
+  Step,
 }
 
 impl Missing {
@@ -28,6 +30,8 @@ impl Missing {
       Self::Run => "run_not_found",
       Self::Approval => "approval_not_found",
       Self::Pipeline => "pipeline_not_found",
+      Self::Profile => "profile_not_found",
+      Self::Step => "step_not_found",
     }
   }
 }
