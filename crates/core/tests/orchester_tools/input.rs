@@ -156,7 +156,7 @@ fn orchester_tools_git_runs_hardened_in_the_worktree_without_a_shell() {
   assert_eq!(program.timeout(), Duration::from_secs(60));
 }
 
-/// `git_add` stages no repository of its own: neither one in the worktree nor a path inside one.
+/// `git_add` stages named files only, none inside a repository of its own.
 #[test]
 fn orchester_tools_git_add_refuses_nested_repositories() {
   let folders = Folders::new();
@@ -164,12 +164,15 @@ fn orchester_tools_git_add_refuses_nested_repositories() {
   std::fs::write(folders.worktree.join("vendor").join("lib").join("a.txt"), "a").expect("a file");
   let reads = folders.reads();
   let context = context(&folders.worktree, &reads, &[]);
-  for path in ["vendor/lib", "vendor/lib/a.txt"] {
+  let call = parse("git_add", &json!({"paths": ["vendor/lib/a.txt"]})).expect("valid");
+  assert_eq!(
+    call.work(&context),
+    Err(ToolCallError::NestedRepository("vendor/lib/a.txt".to_owned()))
+  );
+  // A folder is never staged: it could hold a nested repository at any depth.
+  for path in [".", "vendor", "vendor/lib"] {
     let call = parse("git_add", &json!({ "paths": [path] })).expect("valid");
-    assert_eq!(
-      call.work(&context),
-      Err(ToolCallError::NestedRepository(path.to_owned()))
-    );
+    assert_eq!(call.work(&context), Err(ToolCallError::Folder(path.to_owned())));
   }
   let call = parse("git_add", &json!({"paths": ["vendor/other.txt"]})).expect("valid");
   assert!(call.work(&context).is_ok());

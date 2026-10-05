@@ -33,7 +33,7 @@ impl OrchesterTool {
       Self::GitDiff => "Show uncommitted changes (git diff), or the staged ones, optionally for one path.",
       Self::GitLog => "List recent commits (git log), optionally those that changed one path.",
       Self::GitShow => "Show a commit (git show), or a file's content at a revision.",
-      Self::GitAdd => "Stage files for the next commit (git add).",
+      Self::GitAdd => "Stage the named files for the next commit (git add); folders are refused, name each file.",
       Self::GitCommit => "Commit the staged changes with a message (git commit). Hooks do not run.",
       Self::ReadOutsideFile => {
         "Read a text file outside the worktree, such as a dependency's source, by absolute path. Credential \
@@ -71,7 +71,7 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
     },"additionalProperties":false}),
     OrchesterTool::GitAdd => json!({"type":"object","properties":{
       "paths":{"type":"array","minItems":1,"maxItems":MAX_ADD_PATHS,"items":{"type":"string"},
-        "description":"Files or folders, relative to the worktree root."}
+        "description":"Files, relative to the worktree root; no folders."}
     },"required":["paths"],"additionalProperties":false}),
     OrchesterTool::ReadOutsideFile => json!({"type":"object","properties":{
       "path":{"type":"string","description":"Absolute path of the file."},

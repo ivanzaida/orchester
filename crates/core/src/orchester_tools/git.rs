@@ -17,8 +17,8 @@
 //! staged as a gitlink, keeps a configuration of its own, whose filter programs git would run when it looks
 //! at that repository's files. Recursion is off for every call (`submodule.recurse=false`,
 //! `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`, and `--ignore-submodules=all` for the
-//! commands that take it), so a gitlink is only a commit id to git, and `git_add` refuses a path that is or
-//! lies in a nested repository ([`refuse_nested`]).
+//! commands that take it), so a gitlink is only a commit id to git, and `git_add` stages named files only,
+//! none in a nested repository ([`refuse_nested`]).
 
 use std::{path::Path, time::Duration};
 
@@ -43,14 +43,21 @@ const IGNORE_SUBMODULES: &str = "--ignore-submodules=all";
 /// The entry that makes a folder a repository of its own.
 const GIT_ENTRY: &str = ".git";
 
-/// Refuses a `git_add` of a path in `context`'s worktree that is a nested repository or lies in one: staged,
-/// it would be a gitlink, and its own configuration would be honoured by a git that entered it.
+/// Refuses a `git_add` of a folder, or of a path in `context`'s worktree that is a nested repository or lies
+/// in one. Adding a folder stages every nested repository below it as a gitlink, and a later `git add` of a
+/// folder looks into each staged gitlink with its own configuration, filters included, whatever the
+/// settings say (git 2.46, checked 2026-10-05); adding named files never does. So only files are staged,
+/// listed one by one, a deleted one included.
 pub(super) fn refuse_nested(call: &GitCall, context: &ToolContext<'_>) -> Result<(), ToolCallError> {
   let GitCall::Add { paths } = call else {
     return Ok(());
   };
   for path in paths {
-    let mut folder = context.worktree.join(path.as_str());
+    let named = context.worktree.join(path.as_str());
+    if named.symlink_metadata().is_ok_and(|found| found.is_dir()) {
+      return Err(ToolCallError::Folder(path.as_str().to_owned()));
+    }
+    let mut folder = named;
     while folder.starts_with(context.worktree) && folder != context.worktree {
       if folder.join(GIT_ENTRY).symlink_metadata().is_ok() {
         return Err(ToolCallError::NestedRepository(path.as_str().to_owned()));

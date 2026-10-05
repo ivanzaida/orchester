@@ -117,6 +117,8 @@ pub enum ToolCallError {
   ProgramNotFound(String),
   #[error("`{0}` is or lies in a repository of its own, which Orchester's tools do not stage")]
   NestedRepository(String),
+  #[error("`{0}` is a folder: name the files to stage, as git_status lists them")]
+  Folder(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
 }
