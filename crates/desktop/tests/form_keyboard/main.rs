@@ -54,6 +54,7 @@ mod organization_conflicts;
 mod organization_layout;
 mod organization_review;
 mod organization_tag_manager;
+mod overview_scroll;
 mod pipeline_editor;
 mod pipeline_history;
 mod plan_review;
