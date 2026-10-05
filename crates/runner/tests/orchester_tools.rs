@@ -264,7 +264,7 @@ fn assert_claude_shown(db: &ProjectDb, id: RunId) {
   assert!(
     told
       .iter()
-      .any(|line| line.contains("Prefer the tools of the Orchester MCP server")),
+      .any(|line| line.contains("use the tools of the Orchester MCP server")),
     "the prompt points the agent at the tools"
   );
 }

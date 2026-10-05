@@ -154,3 +154,32 @@ fn orchester_tools_read_outside_stops_at_its_caps() {
   };
   assert!(result.text().starts_with(" 60000\t"), "{}", result.text());
 }
+
+/// The shared credential rule spares published sources in the home folder's dot folders, such as a package
+/// registry's sources, which a read outside the worktree then reaches; the registry's own files stay refused.
+#[test]
+fn orchester_tools_read_outside_follows_the_shared_credential_rule() {
+  let folders = Folders::new();
+  let source = folders
+    .home
+    .join(".cargo")
+    .join("registry")
+    .join("src")
+    .join("index.crates.io-0000")
+    .join("lurq-0.40.1")
+    .join("src")
+    .join("lib.rs");
+  fs::create_dir_all(source.parent().expect("a parent")).expect("a folder");
+  fs::write(&source, "pub fn shown() {}\n").expect("a file");
+  let reads = folders.reads();
+  assert_eq!(
+    reads.read(&text(&source), 1, 10),
+    Ok("     1\tpub fn shown() {}\n".to_owned())
+  );
+  let credentials = folders.home.join(".cargo").join("credentials.toml");
+  fs::write(&credentials, "token = \"x\"\n").expect("a file");
+  assert!(matches!(
+    reads.read(&text(&credentials), 1, 10),
+    Err(OutsideReadError::Credentials(_))
+  ));
+}

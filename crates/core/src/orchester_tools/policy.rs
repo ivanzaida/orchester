@@ -145,13 +145,13 @@ impl StepTools {
       .collect()
   }
 
-  /// The paragraph of the prompt that points the agent at these tools.
+  /// The paragraph of the prompt that points the agent at these tools, after its *Files and commands* part,
+  /// which covers the CLI's own file tools.
   pub fn prompt_paragraph(&self) -> String {
     let names: Vec<&str> = self.offered.iter().map(|(tool, _)| tool.as_str()).collect();
     format!(
-      "# Tools\n\nPrefer the tools of the {SERVER} MCP server ({}) and your own tools for reading, searching and \
-       editing files over shell commands: Orchester cannot tell what a shell command does, so one outside your \
-       allowed commands waits for a person's approval.",
+      "# Orchester tools\n\nFor git, and to read a file outside the worktree, use the tools of the {SERVER} MCP \
+       server ({}) instead of shell commands.",
       names.join(", ")
     )
   }

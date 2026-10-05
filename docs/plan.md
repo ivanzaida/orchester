@@ -94,46 +94,33 @@ inspector line and the activity mark.
 
 ### M8 · Orchester's typed agent tools · branch `claude/orchester-tools` (implemented, waiting for review)
 
-User decision 2026-10-05: one set of typed tools in core (schema, approval policy, execution), served to Claude
-Code and Codex by the per-invocation MCP server that already serves `mcp__Orchester__approve`, so agents stop
-asking for shell lines Orchester cannot read (59 approvals in runs 22–25,
-`.tmp/orchester-drive/approvals-runs-22-25.json`). Described in `docs/interactive-tool-approvals.md`, "Orchester's
-tools".
+User decision 2026-10-05: one set of typed tools in core (schema, approval policy, execution), served to Claude Code
+and Codex by the per-invocation relay that already serves `mcp__Orchester__approve`. Described in
+`docs/interactive-tool-approvals.md`, "Orchester's tools".
 
-- Built: `orchester_core::orchester_tools` with `git_status`, `git_diff`, `git_log`, `git_show` (read-only, run),
-  `git_add`, `git_commit` (run in a writing step, not offered in a read-only one), `read_outside_file` and
-  `run_project_tool` (ask). Strict schemas, program and argv without a shell (`--literal-pathspecs`, `--`,
-  `--end-of-options`, the commit message on standard input, no hooks, no signing), 60 s and 128 KiB for git, the
-  project tool's own limits, exit code in every answer, MCP secrets removed. `read_outside_file` refuses the
-  classifier's credential locations (`CommandScope::holds_credentials`, new), `.git` folders, Orchester's private
-  files and the repository's `.orchester` folder (but the worktree). The relay serves the tools to Claude Code with
-  the permission prompt (allow rules for the tools that run) and to Codex as `orchester-runner --orchester-tools`
-  (the token through `env_vars`, `approve`/`prompt` per tool in the thread's configuration); asking calls reach a
-  person whether or not the step asks before MCP actions, Approve similar covers a tool, Always allow says it is
-  unavailable for Orchester's tools. A new session is told to prefer the tools in a paragraph of its own.
-- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`; `--test claude_approvals
+- Built: `git_status`, `git_diff`, `git_log`, `git_show` (run), `git_add`, `git_commit` (run in a writing step) and
+  `read_outside_file` (asks). The runner holds approvals itself (a prompt approval leaves a one-call grant, any other
+  call that asks is asked about by the runner; Codex approves every tool in its configuration). Output is streamed
+  within its cap (`orchester_exec::run_capped`, streamed line reads). `read_outside_file` uses the shared credential
+  rule and refuses `.git` and Orchester's own state everywhere. Git is pinned to the worktree's own git folder with
+  an absolute empty hooks folder.
+- First review (FAIL, four majors) fixed: other projects' private files, unbounded output, asking tools without a
+  runner check, `run_project_tool` and the network.
+- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test claude_approvals
   claude_approvals`, `--test claude_invocation claude_invocation`, `--test mcp mcp`; `cargo test -p orchester-runner
-  --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`); `cargo test -p
-  orchester-desktop --test form_keyboard approval_choices`.
-- Against the fixture: none of the 59 requests used git, so the git tools replace 0 of them. 6 are single-file
-  reads of lurq's sources (`sed -n … ~/.cargo/registry/…`, 7 reads, #53 has two) that `read_outside_file` would
-  answer, but `~/.cargo` is a credential location under the classifier's rules, so all 6 are refused today; they
-  are replaced only if those rules spare package caches. 18 are searches outside the worktree (`rg`, `grep`, `ls`
-  over the same sources), for which no tool exists. The other 35 are edits, reads and searches in the worktree (7
-  with `cargo check`/`cargo test` attached), which the prompt paragraph sends to the CLI's own file tools; the cargo
-  parts would need a project tool offered to the step.
-- Not built: typed parameters for Tools-library tools (they have fixed arguments; parameters need a schema per tool,
-  an editor for it and a rule for how values become arguments, all UI/design work), an *offered to agents* setting
-  (v1 offers the run's pinned command tools whose access rules allow the step, and the tool editor sets none, so none
-  is offered today; the rules' approval mode, window and denied behaviour are not applied, every call asks), a
-  search outside the worktree, a list for Always allow of Orchester's tools, and the native agent hookup (P1d: the
-  native loop declares `StepTools::mcp_tools` and runs `ToolCall::work` itself). A program a call starts is not
-  ended with its agent before its own time limit.
-- Open: the one visible text change (Always allow's reason for Orchester's tools, `runs.toolApproval.wider.orchesterTool`)
-  needs an independent design verification; no frame draws it. Not checked with the real CLIs: Codex 0.159.2
-  running a `prompt` tool once its elicitation is accepted while `mcp_elicitations` is off, and Claude Code
-  listing the relay's tools to the model (read in the 2.1.286 binary: only the prompt tool is filtered). The
-  runner's macOS build was not cross-checked here (tree-sitter needs a C compiler for that target); core was.
+  --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`, `claude_approvals`, …);
+  `cargo test -p orchester-desktop --test form_keyboard approval_choices`.
+- Against the fixture (59 requests of runs 22–25): no request used git, so the git tools replace none; the 6
+  single-file reads of lurq's sources (`sed -n … ~/.cargo/registry/src/…`) become `read_outside_file` calls (each still
+  asks, or one *Approve similar*); the 18 searches outside the worktree have no tool; the other 35 are worktree work
+  for the CLI's own file tools (the *Files and commands* paragraph).
+- Not built: an *offered to agents* setting and typed parameters for Tools-library tools (a schema per tool, an
+  editor for it, a rule for how values become arguments: UI/design work), so `run_project_tool` is offered to no
+  agent; a search outside the worktree; a list for Always allow of Orchester's tools; the native agent hookup (P1d:
+  the native loop declares `StepTools::mcp_tools` and runs `ToolCall::work` itself).
+- Open: the visible text `runs.toolApproval.wider.orchesterTool` needs an independent design verification; answer
+  sizes against Claude Code's MCP output limit are unchecked with the real CLI; the runner's macOS build was not
+  cross-checked (core was).
 
 ### M6 · Environment names in secret references (needs decision)
 
