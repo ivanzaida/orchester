@@ -233,8 +233,9 @@ impl Drop for InProgress {
   }
 }
 
-/// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds.
-fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Result<(), SharingError> {
+/// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds
+/// (Share and Join).
+pub(super) fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Result<(), SharingError> {
   if changed.is_empty() {
     return Ok(());
   }

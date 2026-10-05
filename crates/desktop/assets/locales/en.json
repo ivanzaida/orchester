@@ -6033,10 +6033,11 @@
       "noteBranch": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached. Branches keep their names ({{branch}}); the next run of {{task}} is {{next}}.",
       "failed": "Couldn't join {{key}}",
       "failedNothing": "Nothing was uploaded and {{project}} is still local with its {{key}} tasks. Your ticks are kept; try again when {{server}} can be reached.",
-      "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again finishes without uploading them twice.",
+      "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again links them without uploading them twice.",
       "tryAgain": "Try again",
       "backToReview": "Back to the review",
-      "titlePending": "Join a project on {{server}}"
+      "titlePending": "Join a project on {{server}}",
+      "failedUnknown": "{{project}} is still local. The connection was lost while your tasks were sent, so some may have reached {{server}}; trying again doesn't upload them twice."
     },
     "joined": {
       "heading": "You joined {{key}} on {{server}}",

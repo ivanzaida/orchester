@@ -11,6 +11,7 @@ use orchester_core::{
   id::{TagId, TaskId},
   name::Name,
   project::{ProjectKey, TaskKey},
+  sharing::TaskRevision,
   task::{Task, organization::Tag},
   time::Timestamp,
 };
@@ -55,13 +56,15 @@ impl ProjectDb {
   /// shared* with its key and tag names, the server project's `tags` and `tasks` (the ticked ones
   /// uploaded among them) are cached, the keys of the local tasks are kept for the mapping, with
   /// the runs in `claimed` their tasks were claimed for, and the project takes the server project's
-  /// key. One transaction.
+  /// key. One transaction. Returns the tasks as they were here, read in the same transaction, whose
+  /// revision is no longer the one `uploaded` read: a change made while joining (a run's), which
+  /// the caller sends on top of the uploaded copy the cache now holds.
   pub fn join_sharing(
     &mut self,
     link: &SharingLink,
     (tags, tasks): (&[Tag], &[CachedTask]),
-    claimed: &HashMap<TaskId, NonZeroU32>,
-  ) -> Result<(), StoreError> {
+    (claimed, uploaded): (&HashMap<TaskId, NonZeroU32>, &HashMap<TaskId, TaskRevision>),
+  ) -> Result<Vec<Task>, StoreError> {
     // Immediate: the runner may write between the read and the first write of a deferred one.
     let transaction = self
       .connection
@@ -70,8 +73,12 @@ impl ProjectDb {
       return Err(StoreError::AlreadyShared);
     }
     let local = shared_tasks::project_key(&transaction)?;
+    let mut changed = Vec::new();
     for task in tasks::load_tasks(&transaction, &local, "WHERE sharing IS NULL ORDER BY number", [])? {
       keep(&transaction, &task, claimed.get(&task.id()).copied())?;
+      if uploaded.get(&task.id()).is_some_and(|read| *read != task.revision()) {
+        changed.push(task);
+      }
     }
     sharing::insert_link(&transaction, link)?;
     shared_tasks::replace_tags(&transaction, tags)?;
@@ -81,7 +88,7 @@ impl ProjectDb {
     transaction.execute("UPDATE project SET key = ?1", [link.key.as_str()])?;
     transaction.commit()?;
     self.project = super::load_project(&self.connection)?;
-    Ok(())
+    Ok(changed)
   }
 
   /// The tasks kept *Not shared* when the project joined, by their kept key.

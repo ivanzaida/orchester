@@ -119,8 +119,15 @@ fn joined() -> (TempDir, ProjectDb, Vec<Task>, Tag) {
     .collect();
   server.push(server_task(tasks[1].id(), 4, "Fix reconnect", Some("KON-2")));
   let claimed = HashMap::from([(tasks[1].id(), NonZeroU32::new(4).expect("run"))]);
-  db.join_sharing(&link(), (std::slice::from_ref(&server_tag), &server), &claimed)
+  let uploaded_read = db.task(tasks[1].id()).expect("read").expect("task").revision();
+  let changed = db
+    .join_sharing(
+      &link(),
+      (std::slice::from_ref(&server_tag), &server),
+      (&claimed, &HashMap::from([(tasks[1].id(), uploaded_read)])),
+    )
     .expect("join");
+  assert!(changed.is_empty(), "nothing changed while joining");
   (repo, db, tasks, server_tag)
 }
 
@@ -217,7 +224,7 @@ fn joined_not_shared_tasks_are_read_only() {
     Err(StoreError::NotSharedTask(_))
   ));
   assert!(matches!(
-    db.join_sharing(&link(), (&[], &[]), &HashMap::new()),
+    db.join_sharing(&link(), (&[], &[]), (&HashMap::new(), &HashMap::new())),
     Err(StoreError::AlreadyShared)
   ));
 }
@@ -327,4 +334,27 @@ fn joined_migration_keeps_a_populated_database_of_schema_41() {
     db.task(tasks[0].id()).expect("read").expect("task").key().to_string(),
     "KON-1"
   );
+}
+
+/// A change made here while the project was joining (a run's) is reported, read in the same
+/// transaction as the link, so it is sent on top of the uploaded copy instead of lost.
+#[test]
+fn joined_a_change_made_while_joining_is_reported() {
+  let (_repo, mut db, tasks, _) = kontur();
+  let read = db.task(tasks[1].id()).expect("read").expect("task");
+  let edited = db
+    .update_task(read.id(), read.revision(), details("Fix reconnect after sleep"))
+    .expect("edit")
+    .saved()
+    .expect("saved");
+  let uploaded = HashMap::from([(read.id(), read.revision())]);
+  let changed = db
+    .join_sharing(
+      &link(),
+      (&[], &[server_task(read.id(), 4, "Fix reconnect", Some("KON-2"))]),
+      (&HashMap::new(), &uploaded),
+    )
+    .expect("join");
+  assert_eq!(changed.len(), 1);
+  assert_eq!(changed[0].details(), edited.details());
 }

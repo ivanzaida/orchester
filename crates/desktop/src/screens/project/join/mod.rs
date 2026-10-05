@@ -1,8 +1,8 @@
 //! *Join ORC on Kontur team* (10.21 `UlHPB`, a page under Project settings › Sharing; failure
 //! 10.26 D): the project's local tasks, all ticked to start, with the server's similar titles as a
 //! hint. Ticked tasks are uploaded with new numbers; a task with a run that has not ended stays
-//! ticked and goes up claimed. Joining is one step: when it fails nothing changed here, the ticks
-//! are kept and *Try again* sends the same request, so an answer lost after the upload joins once.
+//! ticked and goes up claimed. When joining fails nothing changed here and the ticks are kept;
+//! *Try again* does not upload twice what reached the server before.
 
 mod rows;
 
@@ -63,7 +63,9 @@ impl lurq::app::component::DevtoolsInspectable for JoinKey {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Failure {
   reason: Message,
-  uploaded: bool,
+  /// Whether the server holds tasks of the project already; `None` when the connection was lost
+  /// while they were sent.
+  uploaded: Option<bool>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Failure {}
@@ -293,17 +295,20 @@ impl JoinPage {
     let failure = state.error.filter(|_| shown)?;
     let key = review.key.as_str();
     let server = entry.stored.name.as_str();
-    let after = if failure.uploaded {
-      ctx.t_args("sharing.join.failedUploaded", [("server", server)])
-    } else {
-      ctx.t_args(
+    let after = match failure.uploaded {
+      Some(true) => ctx.t_args("sharing.join.failedUploaded", [("server", server)]),
+      None => ctx.t_args(
+        "sharing.join.failedUnknown",
+        [("project", open.project.name().as_str()), ("server", server)],
+      ),
+      Some(false) => ctx.t_args(
         "sharing.join.failedNothing",
         [
           ("project", open.project.name().as_str()),
           ("key", open.project.key().as_str()),
           ("server", server),
         ],
-      )
+      ),
     };
     let retry = {
       let (action, review, entry) = (action.clone(), review.clone(), entry.clone());

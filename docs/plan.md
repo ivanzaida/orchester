@@ -599,8 +599,7 @@ project has no creator or date). The discovery offer is not drawn in its "steps 
 signed in, the join offer of 10.15 shows instead; 10.16 D (*Add the server named in orchester.toml?*) stays S2b's
 route through Settings › Servers. The not-shared task page does not say which server task looked the same at the
 join (not recorded); *Share as* reads *The next ORC number* (the next number is the server's). *Release* on the task
-page's server section is S2d. A run's workflow status changed while the join is under way is not re-sent on top
-(S2b does this for Share). The branch example in the review's note is the first uploaded task that has runs.
+page's server section is S2d. The branch example in the review's note is the first uploaded task that has runs.
 
 Tests: `cargo test -p orchester-core --test sharing s2c_` (1); `-p orchester-store _` (every store test binary,
 including `--test joined_tasks joined_` (5, with the upgrade of a populated schema-41 database) and `--test
@@ -613,6 +612,20 @@ and `--test form_keyboard` `joining_` (7), `sharing_`, `edit_task`, `new_task`, 
 `conversation_queued`, `changes`, `tabs`, `project_settings`, `sidebar`; `tools/check.ps1` passed; `cargo check
 --target aarch64-apple-darwin -p orchester-core -p orchester-api` passed. Not run: the rest of the desktop's and
 the runner's suites, and the server's (unchanged).
+
+Review and verification round (2026-10-05): the Sharing tab asked the servers again with every answer (its lookup
+was keyed by the server entries, which each answer changes) and never showed the answer; it is keyed by the servers'
+ids now and asks once per visit, after a sign-in and on *Check again* (`form_keyboard joining_sharing_asks_once_*`
+count the requests through a port in front of the server). Sharing's dialogs open in a Modal over the whole window
+(`modal_layer::assert_dialog_in_screen` on Share and Share task). A join no longer depends on one key per visit of
+the page: it reads which of the project's tasks the server holds and uploads only the others, so a join whose answer
+was lost, or which could not finish here, links what reached the server instead of meeting `409 id_taken` forever
+(`joined_projects joined_a_join_after_a_lost_answer_does_not_upload_twice`); a failure says whether tasks reached the
+server, or that the connection was lost while they were sent. A run's change made while joining is sent on top of the
+uploaded copy, as for Share (`joined_tasks joined_a_change_made_while_joining_is_reported`). A folder origin names
+its path, with the git-branch icon. Privacy (kept, flagged): the repository's identity goes to every server the
+person is signed in to, as `docs/architecture/server.md` ("Finding the project") says; asking only a chosen server
+plus "Check other servers" would need the user's decision.
 
 Design verification needed: 10.15 `y8uP2`, 10.16 `AZwJE` (A, B, C), 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`,
 10.24 `FAKNF`, 10.25 `RuBhQ`, 10.26 `m7jOn9` (A–D).

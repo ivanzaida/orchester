@@ -297,3 +297,63 @@ fn joined_make_local_returns_not_shared_tasks_after_the_highest_number() {
   assert_eq!(keys, ["ORC-1", "ORC-2", "ORC-3", "ORC-4", "ORC-5", "ORC-6"]);
   assert_eq!(bohdan.db().sharing().expect("link"), None);
 }
+
+/// A join whose import reached the server but whose answer was lost (or which could not finish
+/// here) left KON-2, the task whose run works, on the server under another key. Joining again
+/// uploads only what the server lacks and links the rest as the server holds it, so a task that can
+/// never be unticked does not keep the project from joining.
+#[test]
+fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
+  let server = TestServer::start();
+  let alice = shared(&server);
+  let (bohdan, tasks) = bohdan(&server);
+  member(&alice, "bohdan");
+  let token = server.sign_in_elsewhere("bohdan", "bohdan's own long password", "unused");
+  let client = orchester_api::client::Client::new(
+    orchester_api::client::ServerAddress::parse(&server.url()).expect("address"),
+    orchester_api::client::PlainHttp::NotAllowed,
+  )
+  .expect("client");
+  let project = review(&bohdan).project;
+  let read = bohdan.db().task(tasks[1]).expect("read").expect("task");
+  let earlier = orchester_api::UploadTask {
+    id: read.id(),
+    number: None,
+    former_key: Some("KON-2".into()),
+    title: read.details().title.as_str().into(),
+    brief: read.details().brief.clone(),
+    criteria: read.details().acceptance_criteria.clone(),
+    pipeline: Some("delivery".into()),
+    limits: Some(orchester_api::SharedLimits {
+      budget_tokens: 1_000_000,
+      max_duration_ms: 1_800_000,
+    }),
+    workflow: WorkflowStatus::InProgress,
+    priority: Priority::None,
+    tag_names: Vec::new(),
+    blocking: Vec::new(),
+    blocked_reason: None,
+    status: read.status(),
+    created_at: read.created_at().unix_millis(),
+    claim: true,
+    has_run: true,
+  };
+  bohdan
+    .block_on(client.import_tasks(
+      &token,
+      project,
+      &orchester_api::TasksImport {
+        idempotency_key: IdempotencyKey::generate(),
+        tasks: vec![earlier],
+      },
+    ))
+    .expect("the earlier join's import");
+  let joined = join(&bohdan, &tasks);
+  assert_eq!(joined.open.project.key().as_str(), "ORC");
+  let keys: Vec<String> = bohdan.tasks().iter().map(|task| task.key().to_string()).collect();
+  assert_eq!(keys, ["ORC-1", "ORC-2", "ORC-3", "ORC-4", "ORC-5"]);
+  let working = bohdan.db().task(tasks[1]).expect("read").expect("task");
+  assert_eq!(working.key().to_string(), "ORC-4", "linked as the server holds it");
+  let first = bohdan.db().task(tasks[0]).expect("read").expect("task");
+  assert_eq!(first.key().to_string(), "ORC-5");
+}
