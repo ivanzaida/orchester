@@ -76,3 +76,77 @@ async fn legacy_queued_task_without_a_pin_is_rejected_before_creating_a_run() {
   );
   assert!(db.runs_of_task(fixture.task).expect("runs").is_empty());
 }
+
+/// A shared project's cached task starts like a local one (`docs/architecture/server.md`, "Desktop
+/// data"): the runner reads the cache, runs the pipeline the slug names here at the queued pin, and
+/// the task stays shared.
+#[tokio::test(flavor = "multi_thread")]
+async fn shared_queued_task_runs_from_the_cache_unchanged() {
+  use orchester_core::{
+    id::{ProjectId, ServerId},
+    project::ProjectKey,
+    resource::ResourceKind,
+    sharing::MemberRole,
+  };
+  use orchester_store::{CachedTask, SharingLink};
+
+  let fixture = project(&Setup::new("Do one task."));
+  let root = fixture.repo.path();
+  let mut db = ProjectDb::open(root).expect("open");
+  let task = db.task(fixture.task).expect("task").expect("queued task");
+  let pin = task.pipeline_version();
+  let pipeline = db
+    .resources(ResourceKind::Pipeline)
+    .expect("pipelines")
+    .into_iter()
+    .find(|resource| Some(resource.id()) == task.details().pipeline)
+    .expect("the task's pipeline");
+  let details = task.details();
+  let now = Timestamp::now();
+  let cached = CachedTask {
+    id: task.id(),
+    number: task.key().number(),
+    revision: task.revision(),
+    title: details.title.clone(),
+    brief: details.brief.clone(),
+    criteria: details.acceptance_criteria.clone(),
+    pipeline: Some(pipeline.slug().as_str().to_owned()),
+    limits: details.limits,
+    status: task.status(),
+    organization: db.task_organization(task.id()).expect("organization"),
+    former_key: None,
+    created_by: "Alice Moreau".into(),
+    created_at: task.created_at(),
+    updated_by: "Alice Moreau".into(),
+    updated_at: now,
+    claim: None,
+    run: None,
+  };
+  let link = SharingLink {
+    server: ServerId::generate(),
+    project: ProjectId::generate(),
+    key: ProjectKey::new("KON").expect("key"),
+    role: Some(MemberRole::Owner),
+    joined_at: now,
+    cursor: 0,
+    last_synced_at: now,
+    removed_at: None,
+  };
+  db.start_sharing(&link, &[], &[cached]).expect("share");
+  let shared = db.task(fixture.task).expect("task").expect("cached task");
+  assert_eq!(shared.details(), task.details(), "the cache names the same pipeline by slug");
+  assert_eq!(shared.pipeline_version(), pin);
+  drop(db);
+
+  let (scheduler, _events) = scheduler(root);
+  let run_id = scheduler
+    .start_run(IdempotencyKey::generate(), fixture.task)
+    .await
+    .expect("a cached task starts");
+  let db = ProjectDb::open(root).expect("reopen");
+  let run = db.run(run_id).expect("read run").expect("run exists");
+  assert_eq!(Some(run.snapshot().pipeline().number), pin);
+  assert_eq!(db.run(run_id).expect("read").map(|run| run.task()), Some(fixture.task));
+  assert!(db.shared_task_info(fixture.task).expect("info").is_some(), "the task stays shared");
+  scheduler.wait_for_current_tasks().await;
+}
