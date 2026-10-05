@@ -15,12 +15,11 @@ use super::{
   ProjectBar,
   hint::{HintAnchor, Hints},
   item::{dropping_label, give_way, glyph, item, label, pressed, separator, value},
-  mcp_item::mcp_item,
+  mcp_item::{McpItem, mcp_item},
   open::Opener,
   plan_limits,
 };
 use crate::{
-  embedded_mcp::McpStatus,
   navigation::route::Page,
   runner::state::RunnerState,
   tasks::{
@@ -35,7 +34,7 @@ use crate::{
 /// labels, then the plan limits' resets and reasons; the plan limits and MCP never go.
 pub fn counts(
   ctx: &mut Ctx,
-  (project, mcp): (Option<&ProjectBar>, McpStatus),
+  (project, mcp): (Option<&ProjectBar>, &McpItem),
   opener: &Opener,
   hints: &Hints,
   limits: &plan_limits::Props,

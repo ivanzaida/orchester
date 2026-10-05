@@ -43,6 +43,16 @@ impl McpAgent {
     result["content"][0]["text"].as_str().unwrap_or_default().to_owned()
   }
 
+  /// Calls a tool and returns its whole result, a tool error included.
+  pub fn call(&mut self, name: &str, arguments: &Value) -> Value {
+    self.request("tools/call", &json!({"name": name, "arguments": arguments}))
+  }
+
+  /// The tools the server lists.
+  pub fn tools(&mut self) -> Value {
+    self.request("tools/list", &json!({}))
+  }
+
   fn request(&mut self, method: &str, params: &Value) -> Value {
     self.next_id += 1;
     let reply = self

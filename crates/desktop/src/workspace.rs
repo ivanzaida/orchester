@@ -228,6 +228,16 @@ impl Workspace {
     self.db.lock().set_ui_state(DETAILS_KEY, value)
   }
 
+  /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
+  /// automation answer approvals*); off until a person turns it on.
+  pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {
+    self.db.lock().automation_answers_approvals()
+  }
+
+  pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_automation_answers_approvals(allowed)
+  }
+
   /// The shared servers, in the order they were added.
   pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
     self.db.lock().servers()

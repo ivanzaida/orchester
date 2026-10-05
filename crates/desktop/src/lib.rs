@@ -5,6 +5,7 @@ pub mod activity;
 pub mod agents;
 pub mod app_icon;
 pub mod app_log;
+pub mod app_mcp;
 pub mod app_paths;
 mod background;
 pub mod budget;

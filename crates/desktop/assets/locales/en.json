@@ -5287,6 +5287,15 @@
       }
     }
   },
+  "appMcp": {
+    "title": "Orchester MCP server",
+    "explanation": "Automation controls projects, tasks, runs and approvals here, with the app’s own rules. Clients read the access token from orchester-mcp/{{pid}}.json in your local app data folder.",
+    "answerApprovals": "Let automation answer approvals",
+    "answerApprovalsNote": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
+    "errors": {
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
+    }
+  },
   "statusBar": {
     "planLimits": {
       "claudeFull": "Claude Code",
@@ -5433,8 +5442,9 @@
       "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",
       "releaseBuild": "Orchester {{version}} · release build",
-      "mcp": "Agents can drive this window over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, lurq/mcp/{{pid}}.json in your local app data folder.",
-      "mcpUnavailable": "The MCP server did not start, so agents cannot drive this window. The app log has the reason."
+      "mcp": "Automation controls Orchester over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, orchester-mcp/{{pid}}.json in your local app data folder. The window itself is inspected over MCP at {{window}}. Click for the server’s settings.",
+      "mcpWithoutWindow": "Automation controls Orchester over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, orchester-mcp/{{pid}}.json in your local app data folder. The window’s own MCP server did not start. Click for the server’s settings.",
+      "mcpUnavailable": "Orchester’s MCP server did not start, so automation cannot control the app. The app log has the reason."
     },
     "mcp": {
       "label": "MCP",

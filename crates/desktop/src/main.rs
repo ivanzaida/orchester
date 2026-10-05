@@ -6,7 +6,9 @@
 use lurq::app::{App, Tree, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_desktop::{
   activity::Activity,
-  app_icon, app_log, app_paths,
+  app_icon, app_log,
+  app_mcp::{AppMcpSetup, DiscoveryFolder},
+  app_paths,
   close::{CloseKind, Lifecycle, session_end},
   embedded_mcp::McpStatus,
   i18n,
@@ -40,9 +42,11 @@ fn main() {
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   // Started before the root mounts so the status bar shows its port, or that it did not start,
-  // from the first frame.
+  // from the first frame. lurq's server is for looking at the window; the root starts Orchester's own,
+  // through which automation controls the app's data, with the window's services.
   let mcp = McpStatus::start(&mut tree);
-  tree.mount_root::<root::Root>(&mut app, RootProps { startup, mcp });
+  let app_mcp = AppMcpSetup::On(DiscoveryFolder::User);
+  tree.mount_root::<root::Root>(&mut app, RootProps { startup, mcp, app_mcp });
 
   #[cfg(feature = "devtools")]
   {

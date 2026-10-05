@@ -9,6 +9,7 @@ mod counts;
 mod hint;
 mod item;
 mod mcp_item;
+mod mcp_popover;
 mod open;
 mod plan_limits;
 mod popover;
@@ -33,14 +34,17 @@ use lurq::{
 use self::{
   activity_item::{activity_slot, shows_activity},
   counts::counts,
-  hint::{Anchors, Hint},
+  hint::{Anchors, Hint, HintAnchor},
   item::give_way,
+  mcp_item::McpItem,
+  mcp_popover::{McpPopover, McpPopoverProps},
   open::Opener,
   runner_item::runner_item,
   server_item::server_item,
 };
 use crate::{
   activity::{Activity, ActivityLog, bar},
+  app_mcp::AppMcpStatus,
   embedded_mcp::McpStatus,
   runner::RunnerStatus,
   screens::project::{
@@ -92,6 +96,8 @@ impl lurq::app::component::DevtoolsInspectable for StatusBarProps {}
 pub struct StatusBar {
   activity: Activity,
   popover: Signal<bool>,
+  /// The MCP item's popover is open.
+  mcp_popover: Signal<bool>,
   hint: Signal<Option<Hint>>,
   anchors: Anchors,
 }
@@ -106,6 +112,7 @@ impl Component for StatusBar {
     Self {
       activity: Activity::of(ctx),
       popover: ctx.signal(false),
+      mcp_popover: ctx.signal(false),
       hint: ctx.signal(None),
       anchors: Anchors::default(),
     }
@@ -115,7 +122,7 @@ impl Component for StatusBar {
     let props = ctx.props::<StatusBarProps>().clone();
     let stop = run_approval_action(ctx);
     let log = self.log(ctx);
-    let mcp = McpStatus::of_ctx(ctx);
+    let mcp = self.mcp(ctx);
     let opener = Opener::new(ctx, &self.activity, props.project.as_ref(), &self.popover);
     let runner = props
       .project
@@ -175,7 +182,7 @@ impl Component for StatusBar {
         stop_press(&stop, project),
       ));
     }
-    let right = counts(ctx, (props.project.as_ref(), mcp), &opener, &hints, &limits);
+    let right = counts(ctx, (props.project.as_ref(), &mcp), &opener, &hints, &limits);
     // The popover hangs from the activity item; without it there is nothing to anchor to.
     let popover = shows_activity(&slot).then(|| popover::popover(ctx, &log, &opener, &self.anchors));
     Row::new()
@@ -198,8 +205,9 @@ impl Component for StatusBar {
       )
       .with_children(right)
       .with_children(popover)
+      .with_children(self.mcp_popover(ctx, mcp.app))
       // A hint would cover the popover it belongs to.
-      .with_children(hints.popup().filter(|_| !self.popover.get()))
+      .with_children(hints.popup().filter(|_| !self.popover.get() && !self.mcp_popover.get()))
   }
 }
 
@@ -226,5 +234,29 @@ impl StatusBar {
   /// tab only renders again once its tab is active.
   fn log(&self, ctx: &mut Ctx) -> ActivityLog {
     WindowFeed::of(ctx).activity.get()
+  }
+
+  /// What the MCP item shows.
+  fn mcp(&self, ctx: &mut Ctx) -> McpItem {
+    McpItem {
+      window: McpStatus::of_ctx(ctx),
+      app: AppMcpStatus::of_ctx(ctx),
+      popover: self.mcp_popover.clone(),
+    }
+  }
+
+  /// The MCP item's popover while it is open and Orchester's MCP server listens.
+  fn mcp_popover(&self, ctx: &mut Ctx, app: AppMcpStatus) -> Option<Element> {
+    let AppMcpStatus::Listening { port } = app else {
+      return None;
+    };
+    self.mcp_popover.get().then(|| {
+      let props = McpPopoverProps {
+        port,
+        anchor: self.anchors.get(HintAnchor::Mcp).clone(),
+        open: self.mcp_popover.clone(),
+      };
+      ctx.mount_keyed::<McpPopover>("status-mcp-popover", props)
+    })
   }
 }

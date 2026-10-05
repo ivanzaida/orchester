@@ -90,7 +90,8 @@ pub(super) fn with_bar(
     ShellProps {
       bar,
       log: ActivityLog::default(),
-      mcp: McpStatus::Listening {
+      mcp: McpStatus::Unavailable,
+      app: AppMcpStatus::Listening {
         port: std::num::NonZeroU16::new(47291).expect("port"),
       },
       readings: orchester_desktop::plan_limits::Readings(readings),

@@ -8,6 +8,7 @@
 mod agent_permissions;
 mod agents;
 mod all_projects;
+mod app_mcp;
 mod approval_choices;
 mod canvas_zoom;
 mod changes;

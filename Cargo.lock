@@ -2759,6 +2759,7 @@ dependencies = [
 name = "orchester-desktop"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "embed-resource",
  "image",
@@ -2773,6 +2774,7 @@ dependencies = [
  "orchester-vault",
  "parking_lot",
  "rfd",
+ "rmcp",
  "rusqlite",
  "rustix 1.1.5",
  "serde",
@@ -2784,6 +2786,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "zeroize",
 ]
 
