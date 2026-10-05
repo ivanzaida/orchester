@@ -3,22 +3,29 @@
 //! name) and its pipeline's slug, in one request. Tasks with a run that has not ended are claimed for
 //! the person. The cache then holds what the server confirmed, and the project shares its task list
 //! from here on. The request is idempotent by the key the confirmation was opened with, so a retry
-//! after a lost answer shares once.
+//! after a lost answer shares once. While it is under way the project's tasks take no change from
+//! this computer's screens; a run's change made meanwhile is sent once the project is linked, so
+//! the server's copy of the upload does not replace it.
 
-use std::{collections::HashMap, num::NonZeroU32, path::Path};
+use std::{
+  collections::HashMap,
+  num::NonZeroU32,
+  path::{Path, PathBuf},
+};
 
 use orchester_api::{ErrorCode, Organization, ProjectCreate, SharingErrorDetails, UploadTask, UserRef};
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId},
+  id::{IdempotencyKey, ProjectId, TaskId},
   project::TaskKey,
   repository::{RemoteName, RepositoryIdentity, RepositoryIdentityError, read_remotes},
+  sharing::TaskRevision,
   store::{RunStore, TaskStore},
-  task::Task,
+  task::{Task, TaskUpdate, organization::ChangeActor},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, SharingLink, StoreError};
 
-use super::{convert, discovery, organization::tag};
+use super::{ProjectServer, convert, discovery, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
   programs::Programs,
@@ -130,8 +137,9 @@ impl Servers {
     key: IdempotencyKey,
     write_discovery: bool,
   ) -> Result<Shared, ShareError> {
+    let _in_progress = InProgress::start(self, repo_root);
     let root = repo_root.to_owned();
-    let create = background::run(move || upload(&root, &identity, key))
+    let (create, uploaded) = background::run(move || upload(&root, &identity, key))
       .await
       .map_err(SharingError::from)??;
     let answer = self
@@ -161,6 +169,7 @@ impl Servers {
       removed_at: None,
     };
     let (root, stored, url) = (repo_root.to_owned(), link.clone(), entry.address.as_str().to_owned());
+    let servers = self.clone();
     let discovery = background::run(move || -> Result<_, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let tasks = created
@@ -168,7 +177,12 @@ impl Servers {
         .iter()
         .map(convert::cached)
         .collect::<Result<Vec<_>, _>>()?;
-      ProjectDb::open(&root)?.start_sharing(&stored, &tags, &tasks)?;
+      let mut db = ProjectDb::open(&root)?;
+      let changed = changed_since(&db, &uploaded)?;
+      db.start_sharing(&stored, &tags, &tasks)?;
+      if let Err(error) = reapply(&servers, &root, changed) {
+        tracing::error!(%error, "a run's change made while the project was shared was not sent");
+      }
       Ok(write_discovery.then(|| discovery::write(&root, &url)))
     })
     .await
@@ -193,26 +207,88 @@ fn taken(details: Option<&SharingErrorDetails>) -> ShareError {
   }
 }
 
-/// The request that creates the server project from the project at `repo_root`.
-fn upload(repo_root: &Path, identity: &RepositoryIdentity, key: IdempotencyKey) -> Result<ProjectCreate, StoreError> {
+/// The project at `repo_root` takes no change from this computer's screens while it is shared.
+struct InProgress {
+  servers: Servers,
+  root: PathBuf,
+}
+
+impl InProgress {
+  fn start(servers: &Servers, root: &Path) -> Self {
+    servers.inner.sharing_now.lock().insert(root.to_owned());
+    Self {
+      servers: servers.clone(),
+      root: root.to_owned(),
+    }
+  }
+}
+
+impl Drop for InProgress {
+  fn drop(&mut self) {
+    self.servers.inner.sharing_now.lock().remove(&self.root);
+  }
+}
+
+/// The uploaded tasks that changed here since the upload was read: a run's change, since the
+/// screens' are refused meanwhile.
+fn changed_since(db: &ProjectDb, uploaded: &HashMap<TaskId, TaskRevision>) -> Result<Vec<Task>, StoreError> {
+  Ok(
+    db.tasks()?
+      .into_iter()
+      .filter(|task| uploaded.get(&task.id()).is_some_and(|read| *read != task.revision()))
+      .collect(),
+  )
+}
+
+/// Sends `changed`, as this computer has them, on top of the uploaded copies the cache now holds.
+fn reapply(servers: &Servers, root: &Path, changed: Vec<Task>) -> Result<(), SharingError> {
+  if changed.is_empty() {
+    return Ok(());
+  }
+  let server = ProjectServer::open(servers, root)?.ok_or(StoreError::NotShared)?;
+  let mut store = RemoteTaskStore::new(ProjectDb::open(root)?, server)?;
+  for task in changed {
+    let cached = store.cached(task.id())?;
+    if let TaskUpdate::Conflict { .. } = store.save_task(&task.clone().with_revision(cached.revision()))? {
+      tracing::warn!(task = %task.id(), "the task changed on the server before its run's change was sent");
+      continue;
+    }
+    store.change_organization(
+      task.id(),
+      (cached.organization(), task.organization()),
+      ChangeActor::Orchester,
+    )?;
+  }
+  Ok(())
+}
+
+/// The request that creates the server project from the project at `repo_root`, with the revision
+/// of each task it uploads.
+fn upload(
+  repo_root: &Path,
+  identity: &RepositoryIdentity,
+  key: IdempotencyKey,
+) -> Result<(ProjectCreate, HashMap<TaskId, TaskRevision>), StoreError> {
   let db = ProjectDb::open(repo_root)?;
   let names: HashMap<_, _> = db
     .project_tags()?
     .into_iter()
     .map(|tag| (tag.id(), tag.name().as_str().to_owned()))
     .collect();
-  let tasks = db
-    .tasks()?
+  let read = db.tasks()?;
+  let revisions = read.iter().map(|task| (task.id(), task.revision())).collect();
+  let tasks = read
     .iter()
     .map(|task| upload_task(&db, task, &names))
     .collect::<Result<Vec<_>, _>>()?;
-  Ok(ProjectCreate {
+  let create = ProjectCreate {
     idempotency_key: key,
     name: db.project().name().as_str().to_owned(),
     key: db.project().key().as_str().to_owned(),
     remote: identity.as_str().to_owned(),
     tasks,
-  })
+  };
+  Ok((create, revisions))
 }
 
 fn upload_task(

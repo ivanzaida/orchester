@@ -43,6 +43,9 @@ pub enum SharingError {
   /// was sent.
   #[error("the task kept changing on the server")]
   KeptChanging,
+  /// The project is being shared now; its tasks take changes again once it is.
+  #[error("the project is being shared")]
+  ShareInProgress,
 }
 
 impl From<Message> for SharingError {
@@ -74,6 +77,7 @@ impl SharingError {
       Self::ServerMissing => Message::new("sharing.errors.serverMissing"),
       Self::InvalidAnswer(_) => Message::new("sharing.errors.invalidAnswer"),
       Self::KeptChanging => Message::new("sharing.errors.keptChanging"),
+      Self::ShareInProgress => Message::new("sharing.errors.shareInProgress"),
     }
   }
 }

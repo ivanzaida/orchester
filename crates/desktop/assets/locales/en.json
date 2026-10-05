@@ -5713,7 +5713,8 @@
       "unavailable": "The server of this shared project can't be asked now.",
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
-      "remoteTaken": "This repository is shared on the server already."
+      "remoteTaken": "This repository is shared on the server already.",
+      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

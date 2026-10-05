@@ -86,6 +86,11 @@ impl TaskWriter {
   /// The writer of the project at `repo_root`: its server when it is shared. Must run on a worker
   /// of the application's runtime.
   pub fn open(repo_root: &Path, servers: &Servers) -> Result<Self, WriteError> {
+    // The upload is read when sharing starts: a change made before the project is linked would be
+    // replaced by the server's copy of the upload.
+    if servers.share_in_progress(repo_root) {
+      return Err(WriteError::sharing(SharingError::ShareInProgress, None));
+    }
     let db = ProjectDb::open(repo_root)?;
     if db.sharing()?.is_none() {
       return Ok(Self::Local(db));

@@ -18,7 +18,8 @@ mod password;
 pub mod project;
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
+  path::{Path, PathBuf},
   sync::Arc,
   time::{Duration, Instant},
 };
@@ -79,6 +80,8 @@ struct Inner {
   shared: watch::Sender<u64>,
   /// Counts requests to read the shared projects' caches again now.
   sync: watch::Sender<u64>,
+  /// The projects being shared now: their tasks take no change from the screens meanwhile.
+  sharing_now: Mutex<HashSet<PathBuf>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -116,6 +119,7 @@ impl Servers {
         changes: watch::channel(0).0,
         shared: watch::channel(0).0,
         sync: watch::channel(0).0,
+        sharing_now: Mutex::new(HashSet::new()),
       }),
     }
   }
@@ -140,6 +144,11 @@ impl Servers {
 
   fn subscribe_sync(&self) -> watch::Receiver<u64> {
     self.inner.sync.subscribe()
+  }
+
+  /// Whether the project at `root` is being shared now: its tasks take no change meanwhile.
+  pub fn share_in_progress(&self, root: &Path) -> bool {
+    self.inner.sharing_now.lock().contains(root)
   }
 
   /// Reads the shared projects' caches again now (opening a project, *Try now*, *Check again*).
