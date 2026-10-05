@@ -605,6 +605,22 @@ status`, and `--test form_keyboard` `sharing_` (8), `edit_conflict` (4), `server
 orchester-api` passed. Not run: the rest of the workspace's suites; the store's `app_db` (two tests expect schema 2
 since S2a) and the runner's `task_groups` (time out on master too) fail before this branch as well.
 
+Review and verification round (2026-10-05): a run's workflow status of a shared task is recorded with the status it
+changed from and sent (as soon as a run changes, and with every sync) only on the revision read while the server still
+has that status and the person holds the task; otherwise the server's stays and the task page says why, quietly, until
+dismissed (`shared_statuses statuses_`, the reviewer's reproduction). `orchester.toml` is never written through a link
+(created only where nothing is). A project's tasks take no change from the screens while it is being shared, and a
+run's change made meanwhile is sent on top of the uploaded copy. A run claim taken for work that did not start is
+released while no run of the task is under way. The Sharing tab and Settings › Servers ask the server who is signed in
+as they open (a dropped admin flag leaves the member's view of 10.14 B), the person's role in the members list gates
+the controls, and an error of one member change no longer shows in the next dialog. Settings › Servers details fit a
+960 window (the list gives way to 220; the sessions drop Signed in, the users drop State). A save that meets a newer
+version is not a status-bar failure, and the same work done after all settles its earlier failure. Signing in from a
+discovery offer returns to the Sharing tab; *What sharing sends* has the raised surface. Not covered by a test: the
+refusal of screen changes while a Share is under way and the re-sending of a run's change made meanwhile (no hook to
+pause a Share in a test), and the link refusal of `orchester.toml` on Windows (making a link needs a privilege; the test
+runs where links can be made, i.e. macOS).
+
 Design verification needed: 10.11 `xnhV2`, 10.12 `IDfLs`, 10.13 `V4ZxQG`, 10.14 `NaUDV`, 10.17 `g5r5VU`, 10.41
 `RmDpQ`, 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.43 E, and Settings › Servers' details header at 960.
 
