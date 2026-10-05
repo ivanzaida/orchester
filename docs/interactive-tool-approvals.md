@@ -148,7 +148,7 @@ invocation; a native agent can later declare the same schemas in its own request
 | `git_diff` | `path?`, `staged?` | read-only | runs | runs |
 | `git_log` | `path?`, `count?` (1–200, 20) | read-only | runs | runs |
 | `git_show` | `revision`, `path?` | read-only | runs | runs |
-| `git_add` | `paths` (1–100 files, no folders) | writes the worktree | runs | not offered |
+| `git_add` | `paths` (1–100 plain files, no folders or links) | writes the worktree | runs | not offered |
 | `git_commit` | `message` | writes the worktree | runs | not offered |
 | `read_outside_file` | `path` (absolute), `offset?`, `limit?` (≤ 10 000, 2000) | outside | asks | asks |
 | `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
@@ -175,8 +175,8 @@ invocation; a native agent can later declare the same schemas in its own request
   the repository's own configuration applies, filters included (as for the runner's checkpoint commits). Git never
   enters a nested repository, whose own configuration (a filter program) it would honour: recursion is off
   (`submodule.recurse=false`, `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`,
-  `--ignore-submodules=all`), so a gitlink is only a commit id, and `git_add` stages named files only, none in a
-  repository of its own: adding a folder stages each nested repository in it as a gitlink, and a later add of a folder
+  `--ignore-submodules=all`), so a gitlink is only a commit id, and `git_add` stages named plain files only, none in a
+  repository of its own and none reached through a link or junction (any reparse point on Windows): adding a folder stages each nested repository in it as a gitlink, and a later add of a folder
   runs a staged one's filters whatever the settings say (git 2.46; checked with fresh, staged and submodule nested
   repositories). Git also
   gets the native agent's hardening, no diff or textconv program, an absolute empty hooks folder the runner owns

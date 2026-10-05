@@ -177,3 +177,53 @@ fn orchester_tools_git_add_refuses_nested_repositories() {
   let call = parse("git_add", &json!({"paths": ["vendor/other.txt"]})).expect("valid");
   assert!(call.work(&context).is_ok());
 }
+
+/// A link to `target` folder at `link`: a junction on Windows, which needs no privilege, a symbolic link on macOS.
+fn link_folder(target: &std::path::Path, link: &std::path::Path) {
+  #[cfg(windows)]
+  {
+    let made = std::process::Command::new("cmd")
+      .arg("/C")
+      .arg("mklink")
+      .arg("/J")
+      .arg(link)
+      .arg(target)
+      .output()
+      .expect("cmd runs");
+    assert!(made.status.success(), "{}", String::from_utf8_lossy(&made.stderr));
+  }
+  #[cfg(not(windows))]
+  std::os::unix::fs::symlink(target, link).expect("a link");
+}
+
+/// `git_add` never passes through a link: a junction or symbolic link to a folder holding a nested repository,
+/// as the leaf or a middle component, and a link to a file are refused.
+#[test]
+fn orchester_tools_git_add_refuses_links() {
+  let folders = Folders::new();
+  let holder = folders.worktree.join("holder");
+  std::fs::create_dir_all(holder.join("lib").join(".git")).expect("a nested repository");
+  std::fs::write(holder.join("notes.md"), "notes").expect("a file");
+  link_folder(&holder, &folders.worktree.join("jholder"));
+  let reads = folders.reads();
+  let context = context(&folders.worktree, &reads, &[]);
+  for path in ["jholder", "jholder/notes.md", "jholder/lib/a.txt"] {
+    let call = parse("git_add", &json!({ "paths": [path] })).expect("valid");
+    assert_eq!(call.work(&context), Err(ToolCallError::Link(path.to_owned())), "{path}");
+  }
+  let call = parse("git_add", &json!({"paths": ["holder/notes.md"]})).expect("valid");
+  assert!(call.work(&context).is_ok());
+  // Windows makes a file symbolic link only with Developer Mode or the privilege to: without them the case
+  // cannot be made here, and junctions cover folders.
+  #[cfg(windows)]
+  let file_link = std::os::windows::fs::symlink_file(holder.join("notes.md"), folders.worktree.join("link.md")).is_ok();
+  #[cfg(not(windows))]
+  let file_link = {
+    std::os::unix::fs::symlink(holder.join("notes.md"), folders.worktree.join("link.md")).expect("a link");
+    true
+  };
+  if file_link {
+    let call = parse("git_add", &json!({"paths": ["link.md"]})).expect("valid");
+    assert_eq!(call.work(&context), Err(ToolCallError::Link("link.md".to_owned())));
+  }
+}

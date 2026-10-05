@@ -20,9 +20,12 @@
 //! commands that take it), so a gitlink is only a commit id to git, and `git_add` stages named files only,
 //! none in a nested repository ([`refuse_nested`]).
 
-use std::{path::Path, time::Duration};
+use std::{
+  path::{Component, Path},
+  time::Duration,
+};
 
-use super::{GitCall, OutputKept, ToolCallError, ToolContext, ToolProgram};
+use super::{GitCall, OutputKept, ToolCallError, ToolContext, ToolProgram, link::is_link};
 use crate::{
   command::Command,
   native::command::{GIT_DIFF_OPTIONS, GIT_GLOBAL},
@@ -52,19 +55,37 @@ pub(super) fn refuse_nested(call: &GitCall, context: &ToolContext<'_>) -> Result
   let GitCall::Add { paths } = call else {
     return Ok(());
   };
-  for path in paths {
-    let named = context.worktree.join(path.as_str());
-    if named.symlink_metadata().is_ok_and(|found| found.is_dir()) {
-      return Err(ToolCallError::Folder(path.as_str().to_owned()));
+  paths
+    .iter()
+    .try_for_each(|path| stageable(path.as_str(), context.worktree))
+}
+
+/// Refuses `path` unless every folder from `worktree` down to it is a plain folder of the worktree's own
+/// repository and it is a plain file, or no longer exists (a deletion is staged too). A link or junction
+/// anywhere on the way is refused: git would follow it into a folder of its choosing.
+fn stageable(path: &str, worktree: &Path) -> Result<(), ToolCallError> {
+  let refused = |error: fn(String) -> ToolCallError| Err(error(path.to_owned()));
+  let parts: Vec<Component<'_>> = Path::new(path)
+    .components()
+    .filter(|part| matches!(part, Component::Normal(_)))
+    .collect();
+  let Some(last) = parts.len().checked_sub(1) else {
+    return refused(ToolCallError::Folder);
+  };
+  let mut current = worktree.to_path_buf();
+  for (at, part) in parts.iter().enumerate() {
+    current.push(part);
+    let Ok(entry) = current.symlink_metadata() else {
+      return Ok(());
+    };
+    if is_link(&entry) {
+      return refused(ToolCallError::Link);
     }
-    let mut folder = named;
-    while folder.starts_with(context.worktree) && folder != context.worktree {
-      if folder.join(GIT_ENTRY).symlink_metadata().is_ok() {
-        return Err(ToolCallError::NestedRepository(path.as_str().to_owned()));
-      }
-      if !folder.pop() {
-        break;
-      }
+    if at < last && current.join(GIT_ENTRY).symlink_metadata().is_ok() {
+      return refused(ToolCallError::NestedRepository);
+    }
+    if at == last && !entry.is_file() {
+      return refused(ToolCallError::Folder);
     }
   }
   Ok(())

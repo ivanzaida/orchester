@@ -20,6 +20,7 @@
 mod catalog;
 mod git;
 mod input;
+mod link;
 mod output;
 mod outside;
 mod policy;
@@ -119,6 +120,8 @@ pub enum ToolCallError {
   NestedRepository(String),
   #[error("`{0}` is a folder: name the files to stage, as git_status lists them")]
   Folder(String),
+  #[error("`{0}` is or passes through a link, which Orchester's tools do not stage")]
+  Link(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
 }
