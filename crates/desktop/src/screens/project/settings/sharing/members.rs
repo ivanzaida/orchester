@@ -49,7 +49,7 @@ impl SharingTab {
   /// *Members* (`p0sWX`).
   pub(super) fn members(&self, ctx: &mut Ctx, sharing: &ProjectSharing, actions: &Actions) -> Element {
     let members = self.load_members(ctx, sharing);
-    let manage = sharing.link.role == Some(MemberRole::Owner) || sharing.admin;
+    let manage = manages(sharing, members.as_ref().and_then(|members| members.as_ref().ok()));
     let key = sharing.link.key.as_str();
     let server = sharing.server_name();
     let count = members
@@ -261,10 +261,19 @@ impl SharingTab {
         .await?
         .map_err(|error| super::error_message(&error, None))?
         .ok_or_else(|| Message::new("sharing.errors.notShared"))?;
+        // Who may add, remove and change roles follows the server now: the person's admin flag
+        // and their role in the project.
+        servers.refresh_account(server.entry()).await;
         server
           .members()
           .await
-          .map(|members| Members(members.into()))
+          .map(|members| {
+            let me = members.iter().find(|member| Some(member.user.id) == server.me());
+            if me.map(|member| member.role) != server.link().role {
+              servers.sync_now();
+            }
+            Members(members.into())
+          })
           .map_err(|error| match error.code() {
             // The server no longer has the person as a member: the project is read again, so the
             // list says so at once.
@@ -377,4 +386,18 @@ fn member_row(ctx: &Ctx, sharing: &ProjectSharing, member: &Member, buttons: Vec
         .with_children(buttons),
     )
     .into()
+}
+
+/// Whether the person adds, removes and changes roles: an owner of the project, as its members
+/// say once read (as the last sync said until then), or an admin of the server.
+fn manages(sharing: &ProjectSharing, members: Option<&Members>) -> bool {
+  let role = match (members, sharing.me) {
+    (Some(members), Some(me)) => members
+      .0
+      .iter()
+      .find(|member| member.user.id == me)
+      .map(|member| member.role),
+    _ => sharing.link.role,
+  };
+  role == Some(MemberRole::Owner) || sharing.admin
 }

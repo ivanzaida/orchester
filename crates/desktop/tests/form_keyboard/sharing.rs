@@ -431,3 +431,63 @@ fn sharing_a_run_status_that_was_not_sent_shows_on_the_task_until_dismissed() {
     None
   );
 }
+
+/// 10.14 B after the server drops the person's admin flag: the Sharing tab follows what the server
+/// answers now, so a plain member sees the members without adding, removing or roles.
+#[test]
+fn sharing_a_dropped_admin_flag_leaves_the_member_s_view() {
+  let (mut desktop, server) = signed_in("alice", true, &[]);
+  let first = server.create_user("root", "Root", true);
+  let root = server.sign_in_elsewhere("root", first.expose(), "root's own long password");
+  let _oleh = elsewhere(&server, "oleh", "Oleh Petrenko");
+  share(&mut desktop);
+  add_member(&mut desktop, "oleh");
+  desktop.wait_until("Oleh's row", |desktop| shows(desktop, "Oleh Petrenko"));
+  let oleh = member_id(&mut desktop, "Oleh Petrenko");
+  desktop.click(&format!("sharing-member-make-owner-{oleh}"));
+  desktop.click("make-owner-confirm");
+  desktop.wait_for(&format!("sharing-member-make-member-{oleh}"));
+  let me = member_id(&mut desktop, "Alice Moreau");
+  desktop.click(&format!("sharing-member-make-member-{me}"));
+  desktop.wait_for("make-self-member-dialog");
+  desktop.click("make-self-member-confirm");
+  desktop.wait_for(&format!("sharing-member-leave-{me}"));
+  assert!(
+    desktop.tree.get_element_by_id("sharing-member-add").is_some(),
+    "an admin of the server still manages"
+  );
+  server.set_admin(&root, "alice", false);
+  desktop.click("settings-tab-general");
+  desktop.click("settings-tab-sharing");
+  desktop.wait_for("sharing-members");
+  desktop.wait_until("the member's view", |desktop| {
+    desktop.tree.get_element_by_id("sharing-member-add").is_none()
+      && desktop
+        .tree
+        .get_element_by_id(&format!("sharing-member-leave-{me}"))
+        .is_some()
+  });
+  assert!(
+    desktop
+      .tree
+      .get_element_by_id(&format!("sharing-member-remove-{oleh}"))
+      .is_none()
+  );
+}
+
+/// An error belongs to the change it reports: the next dialog opens without it (10.14 C).
+#[test]
+fn sharing_a_form_error_does_not_follow_into_the_next_dialog() {
+  let (mut desktop, server) = signed_in("alice", true, &[]);
+  let _oleh = elsewhere(&server, "oleh", "Oleh Petrenko");
+  share(&mut desktop);
+  add_member(&mut desktop, "oleh");
+  desktop.wait_until("Oleh's row", |desktop| shows(desktop, "Oleh Petrenko"));
+  add_member(&mut desktop, "oleh");
+  desktop.wait_for("sharing-member-error");
+  assert!(shows(&mut desktop, "already a member"));
+  let oleh = member_id(&mut desktop, "Oleh Petrenko");
+  desktop.click(&format!("sharing-member-remove-{oleh}"));
+  desktop.wait_for("remove-member-dialog");
+  assert!(!shows(&mut desktop, "already a member"));
+}

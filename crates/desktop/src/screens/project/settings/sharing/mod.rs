@@ -288,10 +288,14 @@ impl SharingTab {
       self.username.clone(),
     );
     ctx.watch(&actions.member.state(), move |state| {
+      // Idle again when a dialog opens after an error: nothing finished then.
+      if !state.is_fulfilled() && !state.is_rejected() {
+        return;
+      }
       if state.is_fulfilled() {
         username.set(String::new());
       }
-      finished(state.is_pending(), state.is_rejected());
+      finished(false, state.is_rejected());
     });
     let finished = done(self.dialog.clone(), self.revision.clone(), self.nav.clone());
     ctx.watch(&actions.make_local.state(), move |state| {
@@ -301,6 +305,13 @@ impl SharingTab {
     ctx.watch(&actions.discovery.state(), move |state| {
       if !state.is_pending() {
         revision.update(|revision| *revision += 1);
+      }
+    });
+    // An error belongs to the change it reports: a dialog opened afterwards starts without it.
+    let member = actions.member.state();
+    ctx.watch(&self.dialog, move |dialog| {
+      if *dialog != SharingDialog::Closed && member.get_untracked().is_rejected() {
+        member.set(lurq::app::ctx::FutureState::idle());
       }
     });
   }

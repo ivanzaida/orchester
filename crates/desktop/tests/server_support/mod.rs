@@ -6,7 +6,7 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CreateUser, Credential, PasswordChange, SignIn,
+  CreateUser, Credential, PasswordChange, SignIn, UserChanges,
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::secret::SecretValue;
@@ -139,6 +139,24 @@ impl TestServer {
         .find(|user| user.username == username)
         .expect("the user exists");
       client.reset_password(admin, user.id).await.expect("reset");
+    });
+  }
+
+  /// An admin's change of whether `username` is an admin of the server.
+  pub fn set_admin(&self, admin: &SecretValue, username: &str, is_admin: bool) {
+    let client = self.client();
+    self.block_on(async {
+      let users = client.users(admin).await.expect("users");
+      let user = users
+        .into_iter()
+        .find(|user| user.username == username)
+        .expect("the user exists");
+      let changes = UserChanges {
+        display_name: None,
+        admin: Some(is_admin),
+        disabled: None,
+      };
+      client.update_user(admin, user.id, &changes).await.expect("admin flag");
     });
   }
 }

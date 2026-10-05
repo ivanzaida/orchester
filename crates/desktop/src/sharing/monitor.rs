@@ -53,6 +53,14 @@ impl Servers {
     next
   }
 
+  /// Asks `entry` who is signed in now, as a screen that gates on the person's admin flag opens:
+  /// the stored account follows what the server answers, not only the minute's check.
+  pub async fn refresh_account(&self, entry: &ServerEntry) {
+    if entry.stored.account.is_some() {
+      self.ask(entry).await;
+    }
+  }
+
   /// Asks `entry` who is signed in, and keeps the account's name and admin flag current.
   async fn ask(&self, entry: &ServerEntry) {
     match self.me(entry).await {

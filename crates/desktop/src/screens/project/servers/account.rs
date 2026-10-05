@@ -196,6 +196,8 @@ impl AccountTab {
     let load = ctx.future(deps, move |(entry, ..)| {
       let servers = servers.clone();
       async move {
+        // The page shows the person's admin flag: it follows what the server answers now.
+        servers.refresh_account(&entry).await;
         match servers.sessions(&entry).await {
           Ok(sessions) => Ok(Sessions(sessions.into_iter().map(SessionRow::from).collect())),
           Err(error) => Err(error.message(&entry.address)),
