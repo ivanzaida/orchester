@@ -39,7 +39,12 @@ fn git(repo: &Path, args: &[&str]) -> String {
     .args(args)
     .output()
     .expect("run git");
-  assert!(output.status.success(), "git {args:?}");
+  assert!(
+    output.status.success(),
+    "git {args:?}: {}: {}",
+    output.status,
+    String::from_utf8_lossy(&output.stderr)
+  );
   String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 

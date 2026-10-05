@@ -136,6 +136,22 @@ struct Supervisor {
 
 impl Supervisor {
   async fn run(mut self) {
+    self.supervise().await;
+    self.refuse_unsent();
+  }
+
+  /// Control messages that arrived while the task was ending were never handled: a launch that
+  /// fails at once, or a runner that went for good, ends it without reading them. Each asker gets
+  /// the answer for no runner, as while one is starting, instead of a dropped reply, which would
+  /// read as a request the runner may have carried out ([`RequestError::Lost`]).
+  fn refuse_unsent(&mut self) {
+    self.requests.close();
+    while let Ok(control) = self.requests.try_recv() {
+      self.ends_idle(Some(control));
+    }
+  }
+
+  async fn supervise(&mut self) {
     loop {
       let client = match self.launch().await {
         Some(Ok(client)) => client,

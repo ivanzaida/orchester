@@ -16,7 +16,7 @@ use orchester_store::ProjectDb;
 
 use crate::{
   agents::with_connection,
-  github::shows,
+  github::contains_text,
   harness::Desktop,
   pull_request_detail::signed_in_with_detail,
   pull_requests::{linked, open_pull_requests, settle_on},
@@ -26,6 +26,13 @@ use crate::{
 
 /// More than the new profile form has stops.
 const MAX_STOPS: usize = 30;
+
+/// Waits for the tab `id` to be open and labelled `label`.
+fn tab_labelled(desktop: &mut Desktop, id: &str, label: &str) {
+  desktop.settle(&format!("{id} labelled {label}"), |tree| {
+    tree.get_element_by_id(id).is_some_and(|tab| contains_text(tab, label))
+  });
+}
 
 /// KON-1 "Add repository switcher" with its cancelled run #1 of the published pipeline Delivery.
 fn seed(repo: &Path) {
@@ -68,19 +75,14 @@ fn opens_each_way(desktop: &mut Desktop, reach: impl Fn(&mut Desktop), link: &st
   desktop.wait_for(link);
 
   click_with(desktop, link, MouseButton::Left, (true, false));
-  desktop.settle("a background tab", |tree| {
-    tree.get_element_by_id("window-tab-2").is_some()
-  });
+  // The tab names a task or pipeline once the project's tasks are read, after it opens.
+  tab_labelled(desktop, "window-tab-2", label);
   assert_eq!(active_tab(desktop), Some(1), "Ctrl/Cmd+click does not switch");
   assert!(has(desktop, link), "the page stays where it was");
-  assert!(shows(desktop, "window-tab-2", label));
 
   click_with(desktop, link, MouseButton::Middle, (false, false));
-  desktop.settle("another background tab", |tree| {
-    tree.get_element_by_id("window-tab-3").is_some()
-  });
+  tab_labelled(desktop, "window-tab-3", label);
   assert_eq!(active_tab(desktop), Some(1), "a middle click does not switch");
-  assert!(shows(desktop, "window-tab-3", label));
 
   click_with(desktop, link, MouseButton::Left, (true, true));
   desktop.settle("an active new tab", |tree| {

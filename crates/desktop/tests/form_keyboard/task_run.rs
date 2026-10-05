@@ -75,13 +75,18 @@ pub(crate) fn fake_claude(fake_codex: &Path) -> PathBuf {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-  let status = Command::new("git")
+  let output = Command::new("git")
     .arg("-C")
     .arg(repo)
     .args(args)
-    .status()
+    .output()
     .expect("run git");
-  assert!(status.success(), "git {args:?}");
+  assert!(
+    output.status.success(),
+    "git {args:?}: {}: {}",
+    output.status,
+    String::from_utf8_lossy(&output.stderr)
+  );
 }
 
 pub(crate) fn init_repository(repo: &Path) {
