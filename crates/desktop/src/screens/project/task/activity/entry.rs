@@ -185,7 +185,7 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
-    .child(entry_header(ctx, &shown, open, entry.sequence))
+    .child(entry_header(ctx, &shown, (open, !row.time_column), entry.sequence))
     .with_children(
       open
         .then(|| entry_details(ctx, (entry, command_box, row.request.as_ref()), &shown, copied))
@@ -292,7 +292,8 @@ fn opens_file(nav: &ProjectNav, row: &EntryProps, path: &Arc<str>, line: Element
     .into()
 }
 
-fn entry_header(ctx: &Ctx, shown: &Shown, open: bool, sequence: u64) -> Element {
+/// `problem`: a problem row, whose title says what happened and gives way last.
+fn entry_header(ctx: &Ctx, shown: &Shown, (open, problem): (bool, bool), sequence: u64) -> Element {
   let disclosure = if shown.opens.is_some() {
     Some(icon(Icon::ArrowUpRight, IconSize::Small, PaletteColor::TextMuted))
   } else {
@@ -313,7 +314,7 @@ fn entry_header(ctx: &Ctx, shown: &Shown, open: bool, sequence: u64) -> Element 
     (&shown.title, &shown.meta, mark.as_deref()),
     disclosure.map(Element::from),
     sequence,
-    GLYPH_SIZE,
+    (GLYPH_SIZE, problem),
   )
 }
 

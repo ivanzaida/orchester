@@ -244,6 +244,7 @@ impl Component for ConversationTab {
 
   fn after_layout(&self) {
     self.keep_at_end();
+    self.reveal_asked();
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {

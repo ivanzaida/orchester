@@ -2,8 +2,9 @@
 //! request about it was answered (*· denied by automation · the agent continued*). When the line is too narrow
 //! for all of them (960 with Details open, a long mark), they give way in order (lurq `shrink_order`, as the
 //! status bar does): first the room between them, then the title, down to [`TITLE_MIN`], so the command
-//! stays readable; then the mark, and last the meta. The mark and the meta show whole or drop out whole,
-//! never cut in a word; the title never disappears.
+//! stays readable; then the mark, and last the meta. A problem row's title says what happened, so there
+//! the mark and the meta give way first and the title last. The mark and the meta show whole or drop out
+//! whole, never cut in a word; the title never disappears.
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize, TypographyStyle},
@@ -25,15 +26,23 @@ mod give_way {
   pub const TITLE: i32 = 0;
   pub const MARK: i32 = 1;
   pub const META: i32 = 2;
+  /// A problem row's title.
+  pub const TITLE_LAST: i32 = 3;
 }
 
-/// The header of entry `sequence`, `height` high, with its chevron or ↗ at the end.
+/// The header of entry `sequence`, `height` high, with its chevron or ↗ at the end; `title_last`: its title
+/// gives way after the meta and the mark (a problem row).
 pub(super) fn header(
   (title, meta, mark): (&str, &str, Option<&str>),
   disclosure: Option<Element>,
   sequence: u64,
-  height: f32,
+  (height, title_last): (f32, bool),
 ) -> Element {
+  let title_order = if title_last {
+    give_way::TITLE_LAST
+  } else {
+    give_way::TITLE
+  };
   Row::new()
     .id(format!("activity-entry-header-{sequence}"))
     .width(Dimension::Pct(100.0))
@@ -49,7 +58,7 @@ pub(super) fn header(
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)
         .min_width(Dimension::Px(TITLE_MIN))
-        .shrink_order(give_way::TITLE)
+        .shrink_order(title_order)
         .selectable(true),
     )
     .child(

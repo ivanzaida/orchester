@@ -150,7 +150,7 @@ impl ConversationTab {
     let live = conversation.state == PanelState::Live;
     // Read so that a row's request to reveal another renders the chat again.
     self.revealed.get();
-    let reveal = self.follow(view.shown.rows.len(), view.items);
+    let reveal = self.follow(&view.shown, view.items);
     let working = live.then(|| LiveFooterProps {
       agent: view
         .run

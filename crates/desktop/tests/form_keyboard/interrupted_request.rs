@@ -1,7 +1,8 @@
 //! A tool request that ended without the person's decision because the agent's permission prompt closed
-//! (run 26 of ORC-21), from activity seeded as the runner records it: the problem row names the request,
-//! the turn that failed with it is not a second, nameless error row, the `Grep` the CLI denied reads as a
-//! denied row, and *Show the request* scrolls the chat back to the request's card.
+//! (run 26 of ORC-21), from activity seeded as the runner records it: the problem row says what happened in
+//! words that stay whole at 960 and names the request under them, the turn that failed with it is not a
+//! second, nameless error row, the `Grep` the CLI denied reads as a denied row, and *Show the request*
+//! scrolls the chat back to the request's card.
 
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, RunnerProblem},
@@ -14,12 +15,13 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  narrow_answers::{inside, open_conversation},
+  narrow_answers::{details, inside, open_conversation},
   native_run::native_run,
   task_run::has,
 };
 
-const COMMAND: &str = "cargo metadata --format-version 1 --no-deps";
+const COMMAND: &str = "cargo metadata --format-version 1 --no-deps | python -c \"import json,sys;                        print(json.load(sys.stdin)['target_directory'])\"";
+const TITLE: &str = "Request ended without your decision";
 /// Messages between the request and the problem row: enough to put the card out of the chat's view.
 const MESSAGES: usize = 30;
 
@@ -102,9 +104,13 @@ fn opened() -> (Desktop, String, String, u64) {
 fn reaches(desktop: &mut Desktop, link: &str, card: &str) {
   assert!(!has(desktop, card), "the card is out of the chat's view");
   desktop.click(link);
-  desktop.wait_for(card);
-  let (shown, chat) = (desktop.bounds(card), desktop.bounds("conversation-main"));
-  assert!(shown.height > 0.0 && inside(shown, chat), "{shown:?} shows in {chat:?}");
+  // The list may mount the card above its view before it scrolls to it.
+  desktop.wait_until("the card in the chat's view", |desktop| {
+    has(desktop, card) && {
+      let (shown, chat) = (desktop.bounds(card), desktop.bounds("conversation-main"));
+      shown.height > 0.0 && inside(shown, chat)
+    }
+  });
 }
 
 /// *Jump to latest* puts the card out of the chat's view again.
@@ -116,16 +122,30 @@ fn jump(desktop: &mut Desktop, card: &str) {
 #[test]
 fn interrupted_request_is_named_and_its_link_scrolls_to_its_card() {
   let (mut desktop, link, card, problem) = opened();
+  let title = format!("activity-entry-title-{problem}");
+  assert!(shows(&mut desktop, &title, TITLE));
   assert!(shows(
     &mut desktop,
-    &format!("activity-entry-title-{problem}"),
-    &format!("The request for {COMMAND} ended without your decision")
+    &format!("activity-entry-details-{problem}"),
+    COMMAND
   ));
   assert!(shows(
     &mut desktop,
     &format!("activity-entry-meta-{problem}"),
     "decision_interrupted"
   ));
+  // What happened stays whole at 960, with Details closed and open: the meta gives way first.
+  let whole = desktop.bounds(&title).width;
+  desktop.tree.resize(960, 960);
+  for open in [false, true] {
+    details(&mut desktop, open);
+    desktop.pass();
+    let narrow = desktop.bounds(&title).width;
+    assert!(narrow >= whole - 0.5, "Details open: {open}: {narrow} of {whole}");
+  }
+  details(&mut desktop, false);
+  desktop.tree.resize(1440, 960);
+  desktop.pass();
   desktop.wait_until("the link laid out", |desktop| {
     desktop
       .tree

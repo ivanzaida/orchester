@@ -44,6 +44,16 @@ pub(super) struct LeftAt(pub(super) Option<usize>);
 pub(super) struct Reveal {
   key: Option<String>,
   scrolled: bool,
+  /// A row a link asked for, held back until the list has laid out rows that hold it: rows that changed
+  /// in the same render (*Tools* giving way to *All*) are not measured yet, and the list reveals a key
+  /// only once.
+  asked: Option<Asked>,
+}
+
+/// A row a link asked to reveal, and whether the rows shown hold it.
+struct Asked {
+  key: String,
+  shown: bool,
 }
 
 impl Reveal {
@@ -54,6 +64,7 @@ impl Reveal {
     *reveal.lock() = Self {
       key: None,
       scrolled: true,
+      asked: None,
     };
   }
 }
@@ -77,9 +88,13 @@ impl ConversationTab {
   /// render it appears in (the run's state may read before its question) until it no longer waits.
   /// The key stays the same on every render: a reveal that changes to `None` is dropped before the
   /// list has measured its way to the card.
-  pub(super) fn follow(&self, rows: usize, items: &[Item]) -> Option<String> {
+  pub(super) fn follow(&self, shown: &Shown, items: &[Item]) -> Option<String> {
+    let rows = shown.rows.len();
     let mut started = self.started.lock();
     let mut reveal = self.reveal.lock();
+    if let Some(asked) = &mut reveal.asked {
+      asked.shown = shown.rows.iter().any(|row| **row.key() == *asked.key);
+    }
     if !reveal.scrolled {
       reveal.key = items
         .iter()
@@ -104,6 +119,17 @@ impl ConversationTab {
     if self.scroll.scroll_y() < end - AT_END {
       self.scroll.scroll_to_bottom_pending();
     }
+  }
+
+  /// After each layout: a row a link asked for is revealed once the list has laid out rows that hold it.
+  pub(super) fn reveal_asked(&self) {
+    let mut reveal = self.reveal.lock();
+    if !reveal.asked.as_ref().is_some_and(|asked| asked.shown) {
+      return;
+    }
+    reveal.key = reveal.asked.take().map(|asked| asked.key);
+    drop(reveal);
+    self.revealed.update(|count| *count += 1);
   }
 
   /// The timeline's rows, then `working`, the working line while an agent works.
@@ -172,8 +198,12 @@ impl ConversationTab {
         toggles.open_all(std::slice::from_ref(step));
       }
       *reveal.lock() = Reveal {
-        key: Some(target.card.to_string()),
+        key: None,
         scrolled: true,
+        asked: Some(Asked {
+          key: target.card.to_string(),
+          shown: false,
+        }),
       };
       following.set(false);
       revealed.update(|count| *count += 1);

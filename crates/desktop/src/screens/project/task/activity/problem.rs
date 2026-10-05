@@ -189,7 +189,8 @@ fn runner_failed(ctx: &Ctx, detail: &str) -> (Arc<str>, Option<Arc<str>>) {
   )
 }
 
-/// A request that ended without a decision, named by its command on one line, or by its MCP server and tool.
+/// A request that ended without a decision: what happened as the title, which keeps its words at any width,
+/// and the request under it, by its command on one line or by its MCP server and tool.
 fn decision_interrupted(ctx: &Ctx, server: &str, action: &str) -> (Arc<str>, Option<Arc<str>>) {
   let request: Arc<str> = if server == "command" {
     command_preview(action).into()
@@ -197,8 +198,11 @@ fn decision_interrupted(ctx: &Ctx, server: &str, action: &str) -> (Arc<str>, Opt
     ctx.t_args("runs.activity.decision.tool", [("server", server), ("tool", action)])
   };
   (
-    ctx.t_args("runs.activity.problem.decisionInterrupted", [("request", &*request)]),
-    Some(ctx.t("runs.activity.problem.decisionInterruptedDetail")),
+    ctx.t("runs.activity.problem.decisionInterrupted"),
+    Some(ctx.t_args(
+      "runs.activity.problem.decisionInterruptedDetail",
+      [("request", &*request)],
+    )),
   )
 }
 
