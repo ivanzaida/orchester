@@ -526,6 +526,50 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Agent commands without approvals · branch `claude/agent-tools` (done 2026-10-05)
+
+Four Claude Code runs of Orchester on itself (runs 22–25, Opus 5.5, about 1.5 h) asked 59 times: the agents read and
+edited through Bash (`cat`, `sed -n`, `sed -i`, heredocs, `awk`), prefixed nearly every command with `cd <worktree>;`
+and set variables (`f=…; sed -n 40,52p $f`), so whole lines were *Unknown*, and reads of a crate's source in Cargo's
+registry were *Credential read*s. The requests are the fixture `crates/core/tests/fixtures/approvals/runs-22-25.json`.
+
+- Prompt: every new session's task part gets a *Files and commands* paragraph (`composition.rs`,
+  `FILES_AND_COMMANDS`): read, search and edit with the agent's own file tools (Claude Code: Read, Grep, Glob, Edit,
+  Write; Codex: its read tools and apply_patch), never `cd`, one bare command per call without `;`, `&&` or variables.
+  Resumed sessions keep it from their first prompt. The native agent's prompt is unchanged.
+- Classifier (`permission::category`): a `cd` into the worktree (`/h/…`, `H:/…`, quoted `H:\…`) is no part of its
+  own; a `cd` whose glob matches one folder now goes there (`cd ~/.cargo/registry/src/*/lurq-0.40.1`), else where
+  later parts run is unknown; a literal assignment (`f=src/x.rs`, `L="C:/…"`: no expansion, quote or space; a
+  lowercase name other than `*proxy` or one capital letter; first in its list, not in a pipeline or the background)
+  is read into its later `$f` and `${f}`; a part in the background (`&`) is Unknown; a `..` after a glob is
+  Unknown. `sed` is read by its options (an unlisted or abbreviated one, `-e`, `-f` are Unknown) and its script
+  (`sed_script`: `p`, `d`, `q`, `s` without `w`/`e`, `y`, `a`/`i`/`c`, … with addresses); `awk` without `system`,
+  `getline`, `ENVIRON`, `@load` or a `print` with `>`/`|`; `sort` without `-o`, `-T`, `--compress-program`,
+  `--files0-from` or their abbreviations. Reads of `~/.cargo/registry/src` and `~/.rustup/toolchains/*/lib/rustlib/src`
+  are reads outside the worktree; the rest of `~/.cargo` and `~/.rustup` stays a credential location.
+- Answers: `run::permitted` runs a line Claude Code asked about when every part would run on its own: listed in the
+  step's allowed commands (staying in the worktree, no redirection into a file) or a known-safe read inside the
+  worktree. The runner answers it before a person (`step/answer.rs`), marked *always allowed* with the category
+  (`DecidedBy::AlwaysAllowed`; no new answer kind, so no screen changed). Approve similar now also covers several
+  asking parts that are alike (`sed -i …; sed -i …`). Shell writes still ask.
+- Fixture, with a builder that lists `cargo test`, `cargo check`, `cargo clippy`, `cargo fmt`
+  (`tests/approval_fixtures.rs`):
+
+  | 59 requests | runs unasked | asks, Approve similar | asks, Unknown | asks, other |
+  | --- | --- | --- | --- | --- |
+  | before (master `3d76beff`) | 0 | 1 | 43 | 15 (credential reads, several asking parts) |
+  | now | 5 | 40 | 8 | 6 (`sed -i` with a build in one line) |
+
+  Of the 40, 16 are `sed -i` edits in the worktree and 24 reads outside it (23 of lurq's source in the registry; on
+  Windows one `grep` pattern starting with `\` is a path at the drive's root). The 8 Unknown are heredocs and
+  `python`/`$(…)` lines. On macOS the `grep` line runs unasked (6 / 39).
+- Tests: `core` `command_sequences`, `approval_fixtures`, `command_categories`, `command_fail_closed`,
+  `approval_answers`, `command_approvals`, `run` (`prompt`, `plan`, `conversation`); `runner --features test-agent`
+  `approval_choices` (new: a `$`-line of a read and a listed test runs unasked), `claude_unlisted`,
+  `claude_approvals`, `command_approvals`, `claude`.
+- Open: reads outside the worktree that are no credential still ask (Approve similar available); a line mixing a
+  shell edit with a listed build has no Approve similar; grep and rg patterns are placed like paths.
+
 S2c · Desktop: join a shared repository · branch `claude/s2c` (done 2026-10-05)
 
 Implemented in `.tmp/worktrees/claude-s2c` from master `af858e1d` (S1a, S1b, S2a, S2b).
