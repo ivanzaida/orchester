@@ -751,7 +751,7 @@ waits until the activity log holds exactly one operation that ended without an e
 into each other and start their columns, that the sort box ends at the list's edge, that a title keeps 200, and where
 Open in GitHub shows), `--test theme pull_request`, `--test i18n locale` / `every_key`.
 
-U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-04, design verification pending)
+U10 · Pull requests screen jumps while it loads · branch `claude/u10` (done 2026-10-05: independent design verification passed)
 
 Until the stored inbox is read the screen shows its topbar and heading only; the tab row (linked repositories only,
 08.D has none) and the list or unavailable panel then appear together in their final place, so nothing shows that
@@ -765,6 +765,11 @@ orchester-desktop --test theme pull_request`. **Done when** an independent desig
 (08.01 `wGtxT`) and 08.D `dmib5` reports no blocking or major mismatches. Rechecked 2026-10-05 on master
 58b076f3: the 28 `pull_request` form_keyboard tests and the 2 theme tests pass; the copy of this task under
 *U · Screens* that the merge 851da1e5 brought back was removed.
+Design verification 2026-10-05 (independent, 1440 and 960, fake `gh` behind a gate): no blocking or major
+mismatch; tabs and Refresh keep their place through the count, Syncing, Synced and a Refresh sync, and 08.D shows no
+tab row in any frame. Minor: the tab row sits ~3px lower than `DF8II`; on a first sync the list area stays blank
+under the tabs until the sync arrives (no loading state is drawn). The frame before the stored inbox lasts under
+0.2 s and was not captured live; the tests cover it.
 
 S1a · Server and accounts · branch `codex/server-s1a` (done 2026-10-03)
 
