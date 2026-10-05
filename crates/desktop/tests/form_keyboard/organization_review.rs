@@ -79,12 +79,23 @@ fn save_changes(desktop: &mut Desktop) {
 }
 
 /// Chooses `label` in the header picker `id` and waits until the header saved it: its tag
-/// picker, the header's one tab stop, can be used again.
+/// picker, the header's one tab stop, can be used again, and the picker shows `label`. A read of
+/// the task that began before the save can still arrive and show the earlier value for a moment;
+/// choosing what the picker already shows would save nothing.
 fn choose_in_header(desktop: &mut Desktop, id: &str, label: &str, saved: impl Fn(&Desktop) -> bool) {
   choose(desktop, id, label);
   desktop.wait_until(label, |desktop| {
-    saved(desktop) && reachable(desktop, "task-tags-picker")
+    saved(desktop) && reachable(desktop, "task-tags-picker") && picks(desktop, id, label)
   });
+}
+
+/// Whether the picker `id` shows `label`, and only it, as chosen.
+fn picks(desktop: &mut Desktop, id: &str, label: &str) -> bool {
+  desktop
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.as_select())
+    .is_some_and(|select| select.selected_labels().iter().map(AsRef::as_ref).eq([label]))
 }
 
 /// R1: after one successful save, Canceled for a task with an active run keeps the confirmation
