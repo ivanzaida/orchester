@@ -11,7 +11,10 @@ use crate::time::Timestamp;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActiveClock {
   read_at: Timestamp,
-  active: Duration,
+  /// Time of the invocations that ended or wait for a person: the runner recorded all of it.
+  fixed: Duration,
+  /// Time of the invocations that count on, up to `read_at`.
+  running: Duration,
   /// Invocations that count on: running and not waiting for a person. Agents at work at once each
   /// add their time, as the time limit counts it.
   counting: u32,
@@ -22,18 +25,24 @@ pub struct ActiveClock {
 impl ActiveClock {
   /// The active agent time of `invocations` at `now`, counting on with each that counts now.
   pub fn of<'a>(invocations: impl IntoIterator<Item = &'a Invocation>, now: Timestamp) -> Self {
-    let (millis, counting) = invocations
-      .into_iter()
-      .fold((0_i64, 0_u32), |(millis, counting), invocation| {
-        let counts = u32::from(invocation.ended_at.is_none() && invocation.timing.waiting_since().is_none());
-        (millis + invocation.active_millis(now), counting + counts)
-      });
-    Self {
+    let mut clock = Self {
       read_at: now,
-      active: Duration::from_millis(u64::try_from(millis).expect("active times are never negative")),
-      counting,
+      fixed: Duration::ZERO,
+      running: Duration::ZERO,
+      counting: 0,
       limit: None,
+    };
+    for invocation in invocations {
+      let active =
+        Duration::from_millis(u64::try_from(invocation.active_millis(now)).expect("active times are never negative"));
+      if invocation.ended_at.is_none() && invocation.timing.waiting_since().is_none() {
+        clock.running += active;
+        clock.counting += 1;
+      } else {
+        clock.fixed += active;
+      }
     }
+    clock
   }
 
   /// What `run` lets count on: nothing once it stopped running (paused, stopped at a limit, waiting
@@ -61,17 +70,17 @@ impl ActiveClock {
   }
 
   /// The active agent time at `now`: what was read, and since then the time of each invocation
-  /// that counts, up to the time limit. Never less than what was read, even past the limit or for
-  /// a clock set back.
+  /// that counts, never past the time limit unless the ended invocations already went past it. A
+  /// clock set back reads as the moment of the read.
   pub fn at(&self, now: Timestamp) -> Duration {
     if !self.counting() {
-      return self.active;
+      return self.fixed + self.running;
     }
     let since = u64::try_from(now.unix_millis() - self.read_at.unix_millis()).unwrap_or_default();
-    let grown = self.active + Duration::from_millis(since) * self.counting;
+    let total = self.fixed + self.running + Duration::from_millis(since) * self.counting;
     match self.limit {
-      Some(limit) => grown.min(limit.max(self.active)),
-      None => grown,
+      Some(limit) => total.min(limit.max(self.fixed)),
+      None => total,
     }
   }
 }
