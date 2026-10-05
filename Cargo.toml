@@ -39,7 +39,8 @@ needless_pass_by_value = "warn"
 redundant_clone = "warn"
 
 [workspace.dependencies]
-orchester-agent = { path = "crates/agent" }
+# Without its default `http` feature: the file tools only, without the model clients' TLS stack.
+orchester-agent = { path = "crates/agent", default-features = false }
 orchester-api = { path = "crates/api" }
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }

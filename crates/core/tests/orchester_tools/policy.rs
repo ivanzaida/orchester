@@ -47,7 +47,16 @@ fn orchester_tools_policy_follows_the_table() {
   let names = |tools: &StepTools| -> Vec<&str> { tools.offered().iter().map(|(tool, _)| tool.as_str()).collect() };
   assert_eq!(
     names(&reading()),
-    ["git_status", "git_diff", "git_log", "git_show", "read_outside_file"]
+    [
+      "read_file",
+      "list_files",
+      "search",
+      "git_status",
+      "git_diff",
+      "git_log",
+      "git_show",
+      "read_outside_file"
+    ]
   );
   let project = [project_tool("Run tests", "/bin/true")];
   let mut online = write;
@@ -72,6 +81,9 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
   assert_eq!(
     reading().claude_allow_rules(),
     [
+      "mcp__Orchester__read_file",
+      "mcp__Orchester__list_files",
+      "mcp__Orchester__search",
       "mcp__Orchester__git_status",
       "mcp__Orchester__git_diff",
       "mcp__Orchester__git_log",
@@ -81,6 +93,11 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
   assert_eq!(
     writing().codex_tools(),
     json!({"tools": {
+      "read_file": {"approval_mode": "approve"},
+      "list_files": {"approval_mode": "approve"},
+      "search": {"approval_mode": "approve"},
+      "edit_file": {"approval_mode": "approve"},
+      "write_file": {"approval_mode": "approve"},
       "git_status": {"approval_mode": "approve"},
       "git_diff": {"approval_mode": "approve"},
       "git_log": {"approval_mode": "approve"},

@@ -164,6 +164,7 @@ impl Probe {
     let answer = match call.work(&context)? {
       ToolWork::Run(program) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       ToolWork::Done(result) => result,
+      ToolWork::Files(_) | ToolWork::Symbols(_) => panic!("{tool} is a git tool"),
     };
     assert!(!answer.is_error(), "{tool}: {}", answer.text());
     assert!(

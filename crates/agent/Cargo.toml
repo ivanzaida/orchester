@@ -9,6 +9,12 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The model clients over HTTP and SSE. Without it the crate is the file and search tool executors only,
+# which the runner serves to every agent CLI.
+default = ["http"]
+http = ["dep:reqwest", "dep:rustls", "dep:serde", "dep:serde_json", "dep:tokio"]
+
 [dependencies]
 orchester-core.workspace = true
 # Starts ripgrep for `list_files` and `search` the way Orchester starts every program (no console
@@ -17,17 +23,17 @@ orchester-exec.workspace = true
 # The model clients' memory of what a model supports and of conversations sent without thinking
 # blocks, shared by concurrent requests; and the file tools' read stamps.
 parking_lot.workspace = true
-reqwest.workspace = true
-rustls.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+reqwest = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 # The content hash of a read stamp (§4.1).
 sha2.workspace = true
 # The atomic write of `edit_file` and `write_file`: a temporary file in the target's folder, renamed
 # over it (§4.4).
 tempfile.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 # The fake model server's state, shared by its connections.

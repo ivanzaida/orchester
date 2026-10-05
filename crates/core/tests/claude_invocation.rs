@@ -47,14 +47,22 @@ fn enforced(
 
 /// The Orchester tools that run without asking in a step that only reads, each with its allow rule, after
 /// the step's other allowed tools (`orchester_core::orchester_tools`).
-const READ_RULES: [&str; 4] = [
+const READ_RULES: [&str; 7] = [
+  "mcp__Orchester__read_file",
+  "mcp__Orchester__list_files",
+  "mcp__Orchester__search",
   "mcp__Orchester__git_status",
   "mcp__Orchester__git_diff",
   "mcp__Orchester__git_log",
   "mcp__Orchester__git_show",
 ];
 /// And in a step that may write.
-const WRITE_RULES: [&str; 6] = [
+const WRITE_RULES: [&str; 11] = [
+  "mcp__Orchester__read_file",
+  "mcp__Orchester__list_files",
+  "mcp__Orchester__search",
+  "mcp__Orchester__edit_file",
+  "mcp__Orchester__write_file",
   "mcp__Orchester__git_status",
   "mcp__Orchester__git_diff",
   "mcp__Orchester__git_log",

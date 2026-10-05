@@ -174,6 +174,39 @@ and Codex by the per-invocation relay that already serves `mcp__Orchester__appro
   sizes against Claude Code's MCP output limit are unchecked with the real CLI; the runner's macOS build was not
   cross-checked (core was).
 
+### M9 · Orchester's file tools for Claude Code and Codex · branch `claude/file-tools` (implemented, waiting for review)
+
+User request 2026-10-05: agents edited through shell lines a person had to approve. `read_file`, `list_files`,
+`search`, `edit_file` and `write_file` join Orchester's tools (`docs/interactive-tool-approvals.md`, "Orchester's
+tools"), served by the relay to both CLIs and run by the runner with the native agent's executors
+(`orchester_agent::FileTools`, ORC-58; the runner now depends on `orchester-agent`, one implementation): confined to
+the worktree, the extra writable folders, the code index and skills (read-only); `.git`, `.orchester` and links out
+refused; read stamps per invocation (an edit needs a read in this invocation that still matches); atomic writes;
+answers within 128 KiB. The schemas are the native tools' (`list_files` takes `pattern`, not `glob`; `search` also
+takes `context`). Read, list and search run in every step; edit and write run in a writing step and are not offered
+in a read-only one; nothing asks.
+
+- With the code index of the run's base revision: `find_symbol {name, kind?, include_tests?, include_consts?}`
+  (offered only then; ranked: own definitions, then constants, then tests when asked; exact name, then case, then
+  prefix, then contains), `search` for a name lists its definitions first, `list_files` answers from the index's file
+  list and the files changed since the base revision; hits in changed files are marked. The index prompt part and the
+  codebase-index skill point at these tools.
+- Prompt: the *Files and commands* part names the file tools as each CLI sees them (`mcp__Orchester__edit_file`);
+  the *Orchester tools* paragraph says the shell is for builds and tests, and names the git tools. Claude Code's own
+  Edit/Write stay offered (steered by the prompt, not `--disallowedTools`), so its edit rules and checks are unchanged.
+- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test run working`,
+  `--test claude_invocation claude_invocation`, `--test claude_approvals claude_approvals`; `cargo test -p
+  orchester-runner --features test-agent --test orchester_file_tools orchester_file_tools` (and `orchester_tools`,
+  `orchester_tools_git`, `codebase_index`, `claude*`, `execution`, …); `cargo test -p orchester-agent --test
+  file_tools file`.
+- Security review (FAIL, three majors) fixed: paths from the index and from git pass the same confinement as
+  `read_file` (plain relative paths only, resolved in the scope; others dropped and counted); `list_files` uses
+  the index only for folders of the worktree; every answer is cut to 60 KiB (`MAX_ANSWER_BYTES`, below Claude
+  Code's 25 000-token MCP limit) with a note on how to narrow it. Also: the runner takes `orchester-agent` without
+  its `http` feature (no TLS stack), `search`'s definitions follow its path and glob, `find_symbol` refuses a blank
+  name and finds constants by kind, and an unreadable list of changes falls back to the plain listing.
+- Open: the real CLIs were not run; the ripgrep lookup uses the runner's `PATH`, not the project's environment.
+
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`

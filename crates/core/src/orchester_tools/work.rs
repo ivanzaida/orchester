@@ -9,10 +9,11 @@ use std::{
   time::Duration,
 };
 
-use super::{OutputKept, OutsideReads, ProgramOutput, ToolCall, ToolCallError, ToolResult, git};
+use super::{FindSymbol, OutputKept, OutsideReads, ProgramOutput, ToolCall, ToolCallError, ToolResult, git};
 use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
+  native::tools::ToolInput,
   resource::{CommandAction, CommandEnvironment, ExitCodes},
 };
 
@@ -125,6 +126,10 @@ pub enum ToolWork {
   Run(Box<ToolProgram>),
   /// The answer, already known.
   Done(ToolResult),
+  /// A call of a file tool, which the caller's file tools run, with their read stamps of the invocation.
+  Files(Box<ToolInput>),
+  /// A lookup in the code index, which the caller makes knowing the files changed since the index.
+  Symbols(FindSymbol),
 }
 
 impl ToolCall {
@@ -137,6 +142,8 @@ impl ToolCall {
         Ok(ToolWork::Done(ToolResult::shown(text)))
       }
       Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
+      Self::File(input) => Ok(ToolWork::Files(input.clone())),
+      Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Git(call) => {
         git::refuse_nested(call, context)?;
         Ok(ToolWork::Run(Box::new(git::program(call, context))))

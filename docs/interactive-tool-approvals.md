@@ -144,6 +144,9 @@ invocation; a native agent can later declare the same schemas in its own request
 
 | Tool | Input | Access class | Writing step | Read-only step |
 | --- | --- | --- | --- | --- |
+| `read_file`, `list_files`, `search` | the native agent's | read-only | runs | runs |
+| `edit_file`, `write_file` | the native agent's | writes the worktree | runs | not offered |
+| `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
 | `git_status` | none | read-only | runs | runs |
 | `git_diff` | `path?`, `staged?` | read-only | runs | runs |
 | `git_log` | `path?`, `count?` (1–200, 20) | read-only | runs | runs |

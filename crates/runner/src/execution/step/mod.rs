@@ -16,6 +16,7 @@ mod relay;
 mod skills;
 mod start;
 mod stderr;
+mod tool_files;
 pub(super) mod worker;
 
 use std::path::{Path, PathBuf};

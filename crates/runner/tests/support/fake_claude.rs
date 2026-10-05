@@ -168,6 +168,9 @@ impl Fake {
     if let Some((text, structured)) = answer(prompt) {
       return self.answer(&text, structured);
     }
+    if prompt.contains("Use the file tools") {
+      return self.use_file_tools(worktree, (args, permission_prompt), step);
+    }
     if prompt.contains("Use Orchester's tools") {
       return self.use_orchester_tools(worktree, (args, permission_prompt), step);
     }

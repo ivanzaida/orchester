@@ -83,7 +83,10 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
-    ["approve,git_status,git_diff,git_log,git_show,git_add,git_commit,read_outside_file"]
+    [
+      "approve,read_file,list_files,search,edit_file,write_file,git_status,git_diff,git_log,git_show,git_add,\
+       git_commit,read_outside_file"
+    ]
   );
   assert_eq!(
     reported(&db, id, "orchester-permission: "),
@@ -136,7 +139,7 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
-    ["git_status,git_diff,git_log,git_show,read_outside_file"]
+    ["read_file,list_files,search,git_status,git_diff,git_log,git_show,read_outside_file"]
   );
   assert_eq!(
     reported(&db, id, "orchester-call: "),

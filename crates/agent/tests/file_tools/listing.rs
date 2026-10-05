@@ -63,3 +63,41 @@ fn files_glob_without_ripgrep_is_bounded() {
   assert!(none.starts_with("no files match"), "{none}");
   assert!(started.elapsed() < std::time::Duration::from_secs(5));
 }
+
+/// Known files (the code index's list, git's changes) are confined as `read_file` confines a path: entries
+/// that leave the worktree, are absolute or hide `..` behind `\` are left out and counted, and a folder outside
+/// the worktree is listed as always.
+#[test]
+fn files_list_known_files_are_confined() {
+  let layout = Layout::temporary();
+  let tools = layout.tools();
+  let outside = text(&layout.root.join("outside").join("secret.txt"));
+  let known = [
+    "README.md".to_owned(),
+    "src/main.rs".to_owned(),
+    "../../outside/secret.txt".to_owned(),
+    r"x\..\..\..\outside\secret.txt".to_owned(),
+    outside,
+    "C:secret.txt".to_owned(),
+  ];
+  let listed = ok(tools.list_known_files(&list_input(None, None), &known));
+  assert_eq!(
+    listed,
+    "README.md\nsrc/main.rs\n[4 entries of the code index or of git were no paths in the worktree and were left \
+     out]"
+  );
+  assert!(!listed.contains("secret"));
+  let index = ok(tools.list_known_files(&list_input(None, Some(&text(&layout.index))), &known));
+  assert!(index.contains("symbols.tsv"), "{index}");
+}
+
+#[test]
+fn files_search_covers_its_path_and_glob() {
+  let layout = Layout::temporary();
+  let tools = layout.tools();
+  let input = crate::search_input("hello", Some("src"), Some("*.rs"), None);
+  assert!(tools.search_covers(&input, "src/nested/lib.rs"));
+  assert!(!tools.search_covers(&input, "README.md"));
+  assert!(!tools.search_covers(&crate::search_input("hello", None, Some("*.md"), None), "src/main.rs"));
+  assert!(!tools.search_covers(&crate::search_input("hello", None, None, None), "../outside/secret.txt"));
+}

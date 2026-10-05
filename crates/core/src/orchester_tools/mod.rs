@@ -19,6 +19,7 @@
 
 mod catalog;
 mod git;
+mod index;
 mod input;
 mod link;
 mod output;
@@ -29,20 +30,29 @@ mod work;
 use thiserror::Error;
 
 pub use self::{
-  git::GIT_TIMEOUT,
+  git::{GIT_TIMEOUT, changed_files},
+  index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
   input::{CommitMessage, GitCall, RepoPath, Revision, ToolCall},
-  output::{OutputKept, ProgramOutput, ToolResult},
+  output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
+use crate::native::tools::ToolName as NativeTool;
 
 /// The MCP server that serves the tools, the one that serves Claude Code's permission prompt.
 pub const SERVER: &str = crate::connection::claude_approval::SERVER;
 
-/// The tools Orchester offers agents.
+/// The tools Orchester offers agents. The file tools are the native agent's (`crate::native::tools`), with
+/// its schemas and inputs; the runner runs them with the native agent's executors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OrchesterTool {
+  ReadFile,
+  ListFiles,
+  Search,
+  EditFile,
+  WriteFile,
+  FindSymbol,
   GitStatus,
   GitDiff,
   GitLog,
@@ -65,7 +75,13 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 14] = [
+    Self::ReadFile,
+    Self::ListFiles,
+    Self::Search,
+    Self::EditFile,
+    Self::WriteFile,
+    Self::FindSymbol,
     Self::GitStatus,
     Self::GitDiff,
     Self::GitLog,
@@ -79,6 +95,12 @@ impl OrchesterTool {
   /// The name the agent calls the tool by.
   pub const fn as_str(self) -> &'static str {
     match self {
+      Self::ReadFile => NativeTool::ReadFile.as_str(),
+      Self::ListFiles => NativeTool::ListFiles.as_str(),
+      Self::Search => NativeTool::Search.as_str(),
+      Self::EditFile => NativeTool::EditFile.as_str(),
+      Self::WriteFile => NativeTool::WriteFile.as_str(),
+      Self::FindSymbol => "find_symbol",
       Self::GitStatus => "git_status",
       Self::GitDiff => "git_diff",
       Self::GitLog => "git_log",
@@ -94,10 +116,23 @@ impl OrchesterTool {
     Self::ALL.into_iter().find(|tool| tool.as_str() == name)
   }
 
+  /// The native agent's tool this is, for a file tool.
+  pub const fn file_tool(self) -> Option<NativeTool> {
+    match self {
+      Self::ReadFile => Some(NativeTool::ReadFile),
+      Self::ListFiles => Some(NativeTool::ListFiles),
+      Self::Search => Some(NativeTool::Search),
+      Self::EditFile => Some(NativeTool::EditFile),
+      Self::WriteFile => Some(NativeTool::WriteFile),
+      _ => None,
+    }
+  }
+
   pub const fn access(self) -> AccessClass {
     match self {
+      Self::ReadFile | Self::ListFiles | Self::Search | Self::FindSymbol => AccessClass::ReadOnly,
       Self::GitStatus | Self::GitDiff | Self::GitLog | Self::GitShow => AccessClass::ReadOnly,
-      Self::GitAdd | Self::GitCommit => AccessClass::WritesWorktree,
+      Self::EditFile | Self::WriteFile | Self::GitAdd | Self::GitCommit => AccessClass::WritesWorktree,
       Self::ReadOutsideFile | Self::RunProjectTool => AccessClass::Outside,
     }
   }

@@ -7,13 +7,60 @@
 
 use std::{path::Path, process::Command};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::fake_permission_prompt::Prompt;
 
 const KEY: &str = "mcp_servers.Orchester.";
 
-pub fn report(args: &[String], worktree: &Path) {
+/// The calls of "Use Orchester's tools", "Use the file tools" (in a read-only step: no edit) and "Use the
+/// index tools" (after `src/lib.rs` changed in the worktree, with a file the index does not know).
+fn calls(prompt: &str, worktree: &Path) -> Vec<(&'static str, Value)> {
+  if prompt.contains("Use the index tools") {
+    let changed = "// moved down
+// moved down
+pub fn parse_config() {}
+";
+    if std::fs::write(worktree.join("src").join("lib.rs"), changed).is_err()
+      || std::fs::write(
+        worktree.join("src").join("fresh.rs"),
+        "pub fn fresh() {}
+",
+      )
+      .is_err()
+    {
+      eprintln!("cannot change the sources");
+    }
+    let search =
+      json!({"pattern": "parse_config", "path": null, "glob": null, "case_insensitive": null, "context": null});
+    return vec![
+      ("find_symbol", json!({"name": "parse_config"})),
+      ("find_symbol", json!({"name": "config", "kind": "struct"})),
+      ("search", search),
+      ("list_files", json!({"pattern": "*.rs", "path": null})),
+    ];
+  }
+  if prompt.contains("Use the file tools") {
+    return vec![
+      ("read_file", json!({"path": "README.md", "offset": null, "limit": null})),
+      (
+        "edit_file",
+        json!({"path": "README.md", "edits": [{"old": "hi", "new": "ho", "replace_all": null}]}),
+      ),
+      ("write_file", json!({"path": "new.md", "content": "x"})),
+    ];
+  }
+  let outside = worktree
+    .ancestors()
+    .nth(3)
+    .map(|repository| repository.join("outside-notes.txt").to_string_lossy().into_owned());
+  vec![
+    ("git_status", json!({})),
+    ("read_outside_file", json!({ "path": outside })),
+  ]
+}
+
+pub fn report(args: &[String], worktree: &Path, prompt: &str) {
   let setting = |name: &str| -> Option<serde_json::Value> {
     let value = args
       .iter()
@@ -45,20 +92,18 @@ pub fn report(args: &[String], worktree: &Path) {
     return;
   };
   eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
-  let outside = worktree
-    .ancestors()
-    .nth(3)
-    .map(|repository| repository.join("outside-notes.txt").to_string_lossy().into_owned());
-  for (tool, arguments) in [
-    ("git_status", json!({})),
-    ("read_outside_file", json!({ "path": outside })),
-  ] {
+  for (tool, arguments) in calls(prompt, worktree) {
     match server.call(tool, &arguments) {
-      Some((text, failed)) => eprintln!(
-        "orchester-call: {tool} {}: {}",
-        if failed { "error" } else { "ok" },
-        text.lines().next().unwrap_or_default()
-      ),
+      Some((text, failed)) => {
+        eprintln!(
+          "orchester-call: {tool} {}: {}",
+          if failed { "error" } else { "ok" },
+          text.lines().next().unwrap_or_default()
+        );
+        for line in text.lines() {
+          eprintln!("orchester-answer| {line}");
+        }
+      }
       None => eprintln!("orchester-call: {tool} no answer"),
     }
   }

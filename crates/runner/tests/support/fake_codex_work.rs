@@ -124,8 +124,11 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
   }
-  if prompt.contains("Use Orchester's tools") {
-    fake_codex_tools::report(&session.args, &session.cwd);
+  if ["Use Orchester's tools", "Use the file tools", "Use the index tools"]
+    .iter()
+    .any(|words| prompt.contains(words))
+  {
+    fake_codex_tools::report(&session.args, &session.cwd, prompt);
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
