@@ -50,9 +50,10 @@ pub(super) fn save_action(ctx: &mut Ctx, conflict: Signal<Option<EditConflict>>)
   let servers = ServerFeed::of(ctx).servers;
   ctx.future_action(move |args: SaveArgs| {
     let (runners, servers, conflict) = (runners.clone(), servers.clone(), conflict.clone());
-    let (activity, spec) = (
+    let (activity, spec, name) = (
       activity.clone(),
       operations::task_draft(&open, args.details.title.as_str()),
+      args.details.title.as_str().to_owned(),
     );
     async move {
       use orchester_core::task::organization::WorkflowStatus;
@@ -81,11 +82,7 @@ pub(super) fn save_action(ctx: &mut Ctx, conflict: Signal<Option<EditConflict>>)
         }
         let saved = background::run(move || store(&args, &servers)).await?;
         match saved {
-          Ok(Stored::Saved(draft)) => Ok(*draft),
-          Ok(Stored::Conflict(found)) => {
-            conflict.set(Some(*found));
-            Err(Message::new(CONFLICT))
-          }
+          Ok(stored) => Ok(stored),
           Err(error) => {
             tracing::error!(%error, "cannot save the task draft");
             Err(match error {
@@ -98,7 +95,24 @@ pub(super) fn save_action(ctx: &mut Ctx, conflict: Signal<Option<EditConflict>>)
           }
         }
       };
-      activity.track(spec, save).await
+      // A newer version is not a failure to dismiss in the status bar: the form compares the
+      // versions, and the save that follows settles it.
+      let running = activity.start(spec);
+      match save.await {
+        Ok(Stored::Saved(draft)) => {
+          running.finish();
+          Ok(*draft)
+        }
+        Ok(Stored::Conflict(found)) => {
+          running.finish_as(Message::new("statusBar.operations.taskDraft.newerVersion").with("name", name));
+          conflict.set(Some(*found));
+          Err(Message::new(CONFLICT))
+        }
+        Err(reason) => {
+          running.fail(reason.clone());
+          Err(reason)
+        }
+      }
     }
   })
 }

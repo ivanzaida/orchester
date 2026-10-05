@@ -138,6 +138,11 @@ fn edit_conflict_both_changed_the_outcome_and_the_person_chooses() {
   });
   desktop.wait_for("task-brief");
   state_reads(&mut desktop, "saved");
+  let activity = desktop.activity.snapshot();
+  assert!(
+    !matches!(activity.slot(), orchester_desktop::activity::Slot::Failure(_)),
+    "a newer version is not a failure in the status bar"
+  );
   assert_eq!(desktop.value("task-brief"), "Export one row per run step.");
   assert_eq!(desktop.value("criterion-1"), "Totals match the dashboard");
 }
