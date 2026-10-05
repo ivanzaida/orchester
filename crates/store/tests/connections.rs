@@ -260,6 +260,73 @@ fn connection_round_trip_keeps_the_model_requirements_a_refusal_recorded() {
   assert!(settings().contains(r#""model_requirements":{"claude-opus-5-5":"2.1.280"}"#));
 }
 
+#[test]
+fn recording_a_model_requirement_keeps_an_edit_saved_since_the_runner_read_the_connection() {
+  let (repo, mut runner) = project_repo();
+  let claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  runner.create_connection(&claude).expect("create");
+  let read_by_runner = runner.connection(claude.id()).expect("read").expect("exists");
+  let mut desktop = ProjectDb::open(repo.path()).expect("open as the desktop");
+  let mut edited = claude.clone();
+  edited.rename(Name::new("Claude · Kontur").expect("valid name"));
+  edited
+    .set_executable(executable(&repo, "claude.exe"))
+    .expect("absolute executable");
+  edited
+    .record_check(available())
+    .expect("an agent check fits a CLI connection");
+  desktop.save_connection(&edited).expect("the desktop saves its edit");
+
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  runner
+    .record_model_requirement(read_by_runner.id(), &opus, "2.1.280")
+    .expect("recorded");
+
+  let stored = AgentConnection::try_from(desktop.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored.model_requirements().required(&opus), Some("2.1.280"));
+  let mut expected = edited;
+  expected.record_model_requirement(&opus, "2.1.280");
+  assert_eq!(stored, expected, "name, executable and models of the edit survive");
+}
+
+#[test]
+fn recording_a_model_requirement_on_a_removed_connection_fails_and_creates_nothing() {
+  let (repo, mut db) = project_repo();
+  let claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  db.create_connection(&claude).expect("create");
+  Sqlite::open(repo.path().join(".orchester").join("orchester.db"))
+    .expect("open the database")
+    .execute("DELETE FROM connections WHERE id = ?1", [claude.id().to_string()])
+    .expect("the desktop removes the connection");
+
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  assert!(matches!(
+    db.record_model_requirement(claude.id(), &opus, "2.1.280"),
+    Err(StoreError::ConnectionNotFound(id)) if id == claude.id()
+  ));
+  assert!(db.connections().expect("list").is_empty());
+}
+
+#[test]
+fn recording_a_model_requirement_on_a_native_connection_fails_and_changes_nothing() {
+  let (_repo, mut db) = project_repo();
+  let api = native(
+    AgentProvider::AnthropicApi,
+    EndpointPreset::Official,
+    "https://api.anthropic.com",
+    SecretId::generate(),
+  );
+  db.create_connection(&api).expect("create");
+
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  assert!(matches!(
+    db.record_model_requirement(api.id(), &opus, "2.1.280"),
+    Err(StoreError::NotAnAgentCliConnection(id)) if id == api.id()
+  ));
+  assert_eq!(db.connection(api.id()).expect("read").as_ref(), Some(&*api));
+}
+
 fn native(provider: AgentProvider, preset: EndpointPreset, url: &str, key: SecretId) -> AgentConnection {
   AgentConnection::native(
     ConnectionId::generate(),

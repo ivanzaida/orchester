@@ -12,6 +12,7 @@ use orchester_core::{
   run::StepExecutor,
   store::ConnectionStore,
 };
+use orchester_store::StoreError;
 
 use super::{
   super::run::{ExecutionError, RunTask},
@@ -49,14 +50,21 @@ impl RunTask {
     let Some(profile) = profile else {
       return Ok(());
     };
-    match self.profile_and_connection(&profile) {
-      Ok((_, mut connection)) => {
-        connection.record_model_requirement(model, &refusal.required);
-        self.db.save_connection(&connection.into_connection())?;
+    // The run already says what the model needs; without the connection only its warning is missing.
+    let connection = match self.profile_and_connection(&profile) {
+      Ok((_, connection)) => connection.id(),
+      Err(problem) => {
+        tracing::warn!(?problem, "cannot record the CLI version a model needs");
+        return Ok(());
       }
-      // The run already says what the model needs; only the connection's warning is missing.
-      Err(problem) => tracing::warn!(?problem, "cannot record the CLI version a model needs"),
+    };
+    match self.db.record_model_requirement(connection, model, &refusal.required) {
+      Ok(()) => Ok(()),
+      Err(StoreError::ConnectionNotFound(_)) => {
+        tracing::warn!(%connection, "the connection was removed before the CLI version a model needs was recorded");
+        Ok(())
+      }
+      Err(error) => Err(error.into()),
     }
-    Ok(())
   }
 }

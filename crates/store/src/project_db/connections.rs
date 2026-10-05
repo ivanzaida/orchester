@@ -5,11 +5,12 @@ use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck,
-    GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck,
+    ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
   name::Name,
+  resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
 };
@@ -97,6 +98,27 @@ impl ConnectionStore for ProjectDb {
     if changed == 0 {
       return Err(StoreError::ConnectionNotFound(connection.id()));
     }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn record_model_requirement(&mut self, id: ConnectionId, model: &ModelId, required: &str) -> Result<(), StoreError> {
+    // Immediate (the connection's behavior): no other writer changes the row between this read and
+    // the write, and only the settings column, which holds the requirements, is written back.
+    let transaction = self.connection.transaction()?;
+    let stored = load(&transaction, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .ok_or(StoreError::ConnectionNotFound(id))?;
+    let mut connection = match AgentConnection::try_from(stored) {
+      Ok(connection) if connection.endpoint().program().is_some() => connection,
+      _ => return Err(StoreError::NotAnAgentCliConnection(id)),
+    };
+    connection.record_model_requirement(model, required);
+    let settings = Columns::of(&connection)?.settings;
+    transaction.execute(
+      "UPDATE connections SET settings = ?2 WHERE id = ?1",
+      params![id.to_string(), settings],
+    )?;
     transaction.commit()?;
     Ok(())
   }

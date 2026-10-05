@@ -226,6 +226,12 @@ pub trait ConnectionStore {
   /// Stores the current name, executable and last check of an existing connection.
   fn save_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
 
+  /// Records on the stored agent CLI connection `id` that `model` needs version `required` of the
+  /// CLI or newer ([`crate::connection::AgentConnection::record_model_requirement`]), in one
+  /// transaction that changes nothing else of it: the runner records it while a person may be
+  /// editing the connection. A connection that no longer exists is an error, not created again.
+  fn record_model_requirement(&mut self, id: ConnectionId, model: &ModelId, required: &str) -> Result<(), Self::Error>;
+
   fn connection(&self, id: ConnectionId) -> Result<Option<Connection>, Self::Error>;
 
   /// All connections of the project, ordered by name.

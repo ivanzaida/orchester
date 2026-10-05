@@ -92,6 +92,8 @@ pub enum StoreError {
   ConnectionNotFound(ConnectionId),
   #[error("connection {0} is not a GitHub connection")]
   NotAGitHubConnection(ConnectionId),
+  #[error("connection {0} is not an agent CLI connection")]
+  NotAnAgentCliConnection(ConnectionId),
   #[error("invocation {0} does not exist")]
   InvocationNotFound(InvocationId),
   #[error("invocation {0} is not an open agent launch without a recorded permission snapshot")]
