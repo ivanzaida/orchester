@@ -64,7 +64,8 @@ pub fn git(dir: &Path, args: &[&str]) -> String {
     .expect("run git");
   assert!(
     output.status.success(),
-    "git {args:?}: {}",
+    "git {args:?}: {}: {}",
+    output.status,
     String::from_utf8_lossy(&output.stderr)
   );
   String::from_utf8_lossy(&output.stdout).trim().to_owned()
