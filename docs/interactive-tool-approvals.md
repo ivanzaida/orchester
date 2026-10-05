@@ -353,20 +353,27 @@ command outside any sandbox, where it can change files.
 
 Claude Code asks about a command line whose parts it cannot match one by one: a chain (`git status && git diff`), a
 `cd` into the worktree before the command, a variable the line sets and uses (`f=src/lib.rs; sed -n 1,20p $f`).
-Orchester answers such a request itself when every part would run on its own (`run::permitted`, marked *always
-allowed* with the category): listed in the step's allowed commands and staying in the worktree, or a known-safe
-read inside the worktree (`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `sort`, `uniq`, `find` without `-exec`
-or `-delete`, `sed` whose script only prints, selects or changes lines without `-i`, `awk` without `system`,
-`getline` or a redirection, the git subcommands that only read). The classifier reads such lines to their end: a
-leading `cd` into the worktree (written `/h/…`, `H:/…` or `H:\…`) is dropped and the rest placed from that folder,
-a literal assignment (`NAME=value`, no expansion, a lowercase name or one capital letter, in the shell itself)
-is read into its later `$NAME` and `${NAME}`. A part that writes through the shell (`sed -i`, a heredoc, `tee`),
-redirects into a file, runs in the background, reads outside the worktree or a credential, installs or is not read
-to the end still asks, with Approve similar where the existing rules offer it. The step's prompt asks agents to use
-their file tools and to run one bare command per call (*Files and commands*), so they rarely send such lines.
+Orchester answers such a request itself when every part would run on its own (`run::permitted`, recorded as
+`DecidedBy::Permissions` and marked *allowed by the profile · <category>*; the run's Summary counts it with
+*Always allowed*): listed in the step's allowed commands and naming nothing outside the worktree, or a known-safe
+read inside the worktree (`ls`, `cat`, `head`, `tail`, `wc`, `grep` without `-R`, `rg`, `sort`, `uniq`, `find`
+without `-exec` or `-delete`, `sed` whose script only prints, selects or changes lines without `-i`, `awk` whose
+program uses only the names an allow-list holds, the git subcommands that only read). The classifier reads such
+lines to their end: a `cd` to one folder named plainly in the worktree (written `/h/…`, `H:/…` or `H:\…`) is
+dropped and the rest placed from that folder; a `cd` with an option, `-`, a second operand (zsh's `cd old new`) or a
+target that cannot be told leaves where later parts run unknown, and every part reads the folder it runs in. A
+literal assignment (`NAME=value`, no expansion, a lowercase name or one capital letter, in the shell itself) is read
+into its later `$NAME` and `${NAME}`. A glob names each path it matches now, links followed (`cat ke?` through a
+link to `~/.ssh` reads a credential). A part that writes through the shell (`sed -i`, a heredoc, `tee`), redirects
+into a file (`>`, `>>`, `&>`, `>&file`; `>|`, here-strings and process substitutions are not read), runs in the
+background, reads outside the worktree or a credential, installs or is not read to the end still asks, with
+Approve similar where the existing rules offer it. The step's prompt tells Claude Code and Codex agents how to work
+with the tools they have (*Files and commands*: Claude Code's file tools, the edit tools only in a writing step,
+one bare command per call; Codex's `apply_patch` in a writing step, no `cd`), so they rarely send such lines.
 Reads of the sources Cargo unpacks (`~/.cargo/registry/src`) and of the toolchains' library sources
 (`~/.rustup/toolchains/*/lib/rustlib/src`) are reads outside the worktree, not credential reads; the rest of
-`~/.cargo` and `~/.rustup` stays a credential location.
+`~/.cargo` and `~/.rustup` stays a credential location, and so does any path through a Windows share or a `\\?\`
+prefix, which can name the home folder under another name.
 
 `acceptEdits` would run `mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp` and `sed` in any form without a
 rule (a mode check after the deny, ask and allow rules, both 2.1.89 and 2.1.284), and a
