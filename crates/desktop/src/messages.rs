@@ -88,6 +88,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::NoDraft(_)
     | StoreError::ConnectionNotFound(_)
     | StoreError::NotAGitHubConnection(_)
+    | StoreError::NotAnAgentCliConnection(_)
     | StoreError::InvocationNotFound(_)
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)

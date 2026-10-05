@@ -142,12 +142,6 @@ permission popover (`W29Od2`), the pipeline step switch (`wujuh`), the command a
 mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note's role, the MCP arguments without a
 label) and five minor ones; all are fixed and wait for a re-check.
 
-### C5 · Follow-ups from the Claude Code review (non-UI)
-
-- The runner records a model's required CLI version (C3) by reading, changing and saving the whole connection. A
-  person who edits the same connection in the desktop at that moment wins or loses as the last writer. Record the
-  requirement with a targeted update, or merge it on save.
-
 ## U · Screens
 
 ### ORC-61C · Conversation as a chat with the step rail, and the one-box composer · branch `claude/chat-impl` (UI)
@@ -1484,3 +1478,4 @@ L3 · Outside presses only close popups · branch `codex/popup-dismiss` (lurq 0.
 L5 · Select menus wider than their trigger · branch `codex/select-menu-width` (lurq 0.30.2 adds `SelectStyle::min_menu_width`; the MCP secret menu is 260px wide and shows `NAME (environment)` on one line. Independent app/Pencil check: 0 blocking/major; registry-backed integration test 1 passed; `tools/check.ps1` passed. Minor fixture difference: stored references use canonical `@staging`, while Pencil shows `@Staging`. Local evidence: `.tmp/verify/l5/report.md`).
 L6 · Verifier app windows start without focus · branch `codex/l6-registry-0303` (lurq 0.30.3 registry build and filtered focus-related tests 11/11 passed; `tools/check.ps1` passed. Independent exact-PID MCP and host foreground verification observed no focus across 951 samples; live Pencil Welcome comparison found 0 blocking/major, 1 pre-existing minor copy difference. Evidence: `docs/evidence/l6-registry-0303-2026-09-29.md`).
 ORC-15 · Repository agent files, Orchester-owned skills and import from repository · branch `claude/orc15` (per-project setting, off keeps AGENTS.md and `.agents/skills` out of Codex with `project_doc_max_bytes=0` and per-skill `skills.config` on new and resumed sessions; Claude Code already loads neither with `--setting-sources ""`; skills resource with reference-file blobs, pinned by runs, placed in `.orchester/skills/<execution>/` and listed in new-session prompts; Import from repository creates drafts only. Core, store, runner and desktop tests, `tools/check.ps1` passed; independent MCP/Pencil verification: 0 blocking/major. Open: the setup Ready-step entry point is not built, Claude Code `on` does not load CLAUDE.md (user decision), macOS unchecked).
+C5 · Model requirements are recorded and saved without lost updates · branch `claude/c5` (`ConnectionStore::record_model_requirement`: one immediate transaction writes only the connection's settings; a removed connection is `ConnectionNotFound` and is not created again, a native one `NotAnAgentCliConnection`; the runner logs a removed connection instead of failing the run. `save_connection` merges the stored requirements into what it writes (`ModelRequirements::merge`, higher version wins), so a desktop copy read before the runner's record keeps it; no path clears a requirement. Tests: `orchester-store --test connections model_requirement` 5 passed and `connection` 14 passed, `orchester-runner --features test-agent --test claude claude_refused_model` and `--test execution execution_rejects_what_the_preflight` passed, `orchester-desktop --test connections connection` 8 passed; `tools/check.ps1` passed).

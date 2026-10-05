@@ -5,11 +5,12 @@ use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck, ConnectionKind, GitHubCheck,
-    GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionCheck,
+    ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
   name::Name,
+  resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
 };
@@ -79,10 +80,17 @@ impl ConnectionStore for ProjectDb {
   }
 
   fn save_connection(&mut self, connection: &Connection) -> Result<(), StoreError> {
-    let columns = Columns::of(connection)?;
     let transaction = self.connection.transaction()?;
     ensure_name_free(&transaction, connection)?;
-    let changed = transaction.execute(
+    let stored = load(&transaction, "WHERE id = ?1", [connection.id().to_string()])?
+      .pop()
+      .ok_or(StoreError::ConnectionNotFound(connection.id()))?;
+    // Requirements are the runner's to record (`record_model_requirement`); a person's copy read
+    // before the runner recorded one must not drop it, and nothing in the desktop removes one.
+    let mut requirements = stored.model_requirements().clone();
+    requirements.merge(connection.model_requirements());
+    let columns = Columns::of(&connection.clone().with_model_requirements(requirements))?;
+    transaction.execute(
       "UPDATE connections SET name = ?2, settings = ?3, status = ?4, checked_at = ?5, last_check = ?6 \
        WHERE id = ?1",
       params![
@@ -94,9 +102,27 @@ impl ConnectionStore for ProjectDb {
         columns.last_check
       ],
     )?;
-    if changed == 0 {
-      return Err(StoreError::ConnectionNotFound(connection.id()));
-    }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  fn record_model_requirement(&mut self, id: ConnectionId, model: &ModelId, required: &str) -> Result<(), StoreError> {
+    // Immediate (the connection's behavior): no other writer changes the row between this read and
+    // the write, and only the settings column, which holds the requirements, is written back.
+    let transaction = self.connection.transaction()?;
+    let stored = load(&transaction, "WHERE id = ?1", [id.to_string()])?
+      .pop()
+      .ok_or(StoreError::ConnectionNotFound(id))?;
+    let mut connection = match AgentConnection::try_from(stored) {
+      Ok(connection) if connection.endpoint().program().is_some() => connection,
+      _ => return Err(StoreError::NotAnAgentCliConnection(id)),
+    };
+    connection.record_model_requirement(model, required);
+    let settings = Columns::of(&connection)?.settings;
+    transaction.execute(
+      "UPDATE connections SET settings = ?2 WHERE id = ?1",
+      params![id.to_string(), settings],
+    )?;
     transaction.commit()?;
     Ok(())
   }
