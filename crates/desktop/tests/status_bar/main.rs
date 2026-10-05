@@ -1,9 +1,9 @@
 //! The status bar (`pmOpt`) rendered headlessly: counts match the Overview, a long failure
 //! stays before the right group while its full text remains in the hint, and the MCP item shows
-//! the port the embedded server bound, or that it did not start, never its token.
+//! the port Orchester's own MCP server bound, or that it did not start, and its hint where lurq's
+//! server for the window listens, never a token.
 
 use std::{
-  net::{TcpListener, TcpStream},
   path::PathBuf,
   time::{Instant, SystemTime},
 };
@@ -15,6 +15,7 @@ use lurq::{
 };
 use orchester_desktop::{
   activity::{Activity, ActivityLog, OperationSpec},
+  app_mcp::AppMcpStatus,
   embedded_mcp::McpStatus,
   i18n,
   messages::Message,
@@ -39,6 +40,7 @@ struct ShellProps {
   bar: StatusBarProps,
   log: ActivityLog,
   mcp: McpStatus,
+  app: AppMcpStatus,
 }
 
 impl lurq::app::component::DevtoolsInspectable for ShellProps {}
@@ -47,8 +49,9 @@ impl Component for Shell {
   type Props = ShellProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let mcp = ctx.props::<ShellProps>().mcp;
+    let ShellProps { mcp, app, .. } = ctx.props::<ShellProps>().clone();
     ctx.provide(mcp);
+    ctx.provide(app);
     let activity = Activity::new();
     ctx.provide(WindowFeed::new(&activity));
     ctx.provide(activity);
@@ -94,10 +97,10 @@ fn laid_out(props: StatusBarProps) -> (App, Tree) {
 }
 
 fn laid_out_with_log(props: StatusBarProps, log: ActivityLog) -> (App, Tree) {
-  laid_out_with(props, log, McpStatus::Unavailable)
+  laid_out_with(props, log, (McpStatus::Unavailable, AppMcpStatus::Unavailable))
 }
 
-fn laid_out_with(props: StatusBarProps, log: ActivityLog, mcp: McpStatus) -> (App, Tree) {
+fn laid_out_with(props: StatusBarProps, log: ActivityLog, (mcp, server): (McpStatus, AppMcpStatus)) -> (App, Tree) {
   let mut app = App::new();
   theme::install(&mut app);
   i18n::install(&app).expect("bundled locales load");
@@ -109,6 +112,7 @@ fn laid_out_with(props: StatusBarProps, log: ActivityLog, mcp: McpStatus) -> (Ap
       bar: props,
       log,
       mcp,
+      app: server,
       readings: Default::default(),
     },
   );
@@ -217,50 +221,46 @@ fn all_texts(tree: &mut Tree, id: &str) -> String {
 }
 
 #[test]
-fn status_bar_mcp_shows_the_bound_port_and_never_the_token() {
+fn status_bar_mcp_shows_the_app_server_port_and_never_a_token() {
   let mut server = Tree::new();
   let handle = server.enable_mcp(McpConfig::new());
   let token = handle.token().to_owned();
-  let status = McpStatus::of(&handle);
-  let McpStatus::Listening { port } = status else {
+  let window = McpStatus::of(&handle);
+  let McpStatus::Listening { port: window_port } = window else {
     server.shutdown_mcp();
     panic!("the server binds a free port");
   };
-  let reachable = TcpStream::connect(("127.0.0.1", port.get())).is_ok();
   server.shutdown_mcp();
-  assert!(reachable, "the server listens on the loopback port it reports");
-  assert!(!format!("{status:?}").contains(&token));
+  let port = std::num::NonZeroU16::new(47291).expect("port");
+  let app = AppMcpStatus::Listening { port };
 
-  let (mut app, mut tree) = laid_out_with(project(Some(0)), ActivityLog::default(), status);
-  let address = format!("127.0.0.1:{port}");
-  assert_eq!(item_texts(&mut tree, "status-mcp"), ["MCP", address.as_str()]);
+  let (mut app_state, mut tree) = laid_out_with(project(Some(0)), ActivityLog::default(), (window, app));
+  assert_eq!(item_texts(&mut tree, "status-mcp"), ["MCP", "127.0.0.1:47291"]);
   let (mcp, version) = (bounds(&mut tree, "status-mcp"), bounds(&mut tree, "status-version"));
   assert!(mcp.x + mcp.width <= version.x, "the MCP item sits before the version");
-  hover(&mut app, &mut tree, "status-mcp");
+  hover(&mut app_state, &mut tree, "status-mcp");
   let hint = all_texts(&mut tree, "status-bar-hint");
-  assert!(hint.contains(&format!("http://127.0.0.1:{port}/mcp")), "{hint}");
+  assert!(hint.contains("http://127.0.0.1:47291/mcp"), "{hint}");
   assert!(
-    hint.contains(&format!("lurq/mcp/{}.json", std::process::id())),
+    hint.contains(&format!("orchester-mcp/{}.json", std::process::id())),
     "{hint}"
   );
+  assert!(hint.contains(&format!("http://127.0.0.1:{window_port}/mcp")), "{hint}");
   let shown = format!("{} {hint}", all_texts(&mut tree, "status-bar"));
   assert!(!shown.contains(&token), "the bearer token is never shown");
 }
 
 #[test]
-fn status_bar_mcp_unavailable_when_its_port_cannot_be_bound() {
-  let taken = TcpListener::bind(("127.0.0.1", 0)).expect("a free loopback port");
-  let port = taken.local_addr().expect("bound address").port();
-  let mut server = Tree::new();
-  let status = McpStatus::of(&server.enable_mcp(McpConfig::new().port(port)));
-  server.shutdown_mcp();
-  assert_eq!(status, McpStatus::Unavailable, "lurq reports a failed bind as port 0");
-
-  let (mut app, mut tree) = laid_out_with(StatusBarProps { project: None }, ActivityLog::default(), status);
+fn status_bar_mcp_unavailable_when_the_app_server_did_not_start() {
+  let (mut app, mut tree) = laid_out_with(
+    StatusBarProps { project: None },
+    ActivityLog::default(),
+    (McpStatus::Unavailable, AppMcpStatus::Unavailable),
+  );
   assert_eq!(item_texts(&mut tree, "status-mcp"), ["MCP unavailable"]);
   hover(&mut app, &mut tree, "status-mcp");
   assert_eq!(
     item_texts(&mut tree, "status-bar-hint"),
-    ["The MCP server did not start, so agents cannot drive this window. The app log has the reason."]
+    ["Orchester’s MCP server did not start, so automation cannot control the app. The app log has the reason."]
   );
 }

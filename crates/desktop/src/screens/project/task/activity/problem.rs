@@ -9,6 +9,7 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, RunnerProblem},
+  run::DecidedBy,
   tokens::compact_tokens,
 };
 
@@ -43,26 +44,47 @@ fn denied_command(ctx: &Ctx, command: &CommandEntry) -> Shown {
     None => ctx.t("runs.conversation.problem.commandDenied"),
   };
   let line = command_preview(&command.command);
-  let by_you = command.mark.as_ref().is_some_and(CommandMark::is_denial);
+  let denied = decided
+    .filter(|_| command.mark.as_ref().is_some_and(CommandMark::is_denial))
+    .map(|mark| Denial::by(mark.decision.decided_by));
   let told = decided.and_then(|mark| mark.decision.told.as_deref());
-  let (kind, body) = match (by_you, told) {
-    (true, Some(told)) => (
-      "runs.conversation.problem.kind.deniedByYou",
-      ctx.t_args(
-        "runs.conversation.problem.deniedByYouTold",
-        [("command", &*line), ("message", told)],
-      ),
+  let (kind, body) = match (denied, told) {
+    (Some(denial), Some(told)) => (
+      denial.kind,
+      ctx.t_args(denial.told, [("command", &*line), ("message", told)]),
     ),
-    (true, None) => (
-      "runs.conversation.problem.kind.deniedByYou",
-      ctx.t_args("runs.conversation.problem.deniedByYou", [("command", &*line)]),
-    ),
-    (false, _) => (
+    (Some(denial), None) => (denial.kind, ctx.t_args(denial.text, [("command", &*line)])),
+    (None, _) => (
       "runs.conversation.problem.kind.permissionDenied",
       ctx.t_args("runs.conversation.problem.notAllowed", [("command", &*line)]),
     ),
   };
   Shown::plain(Icon::ShieldAlert, title, ctx.t(kind), Some(body))
+}
+
+/// The keys a denial is told with: by the person, or by automation through Orchester's MCP server.
+struct Denial {
+  kind: &'static str,
+  text: &'static str,
+  told: &'static str,
+}
+
+impl Denial {
+  const fn by(decided_by: DecidedBy) -> Self {
+    if decided_by.by_automation() {
+      Self {
+        kind: "runs.conversation.problem.kind.deniedByAutomation",
+        text: "runs.conversation.problem.deniedByAutomation",
+        told: "runs.conversation.problem.deniedByAutomationTold",
+      }
+    } else {
+      Self {
+        kind: "runs.conversation.problem.kind.deniedByYou",
+        text: "runs.conversation.problem.deniedByYou",
+        told: "runs.conversation.problem.deniedByYouTold",
+      }
+    }
+  }
 }
 
 /// The entry's title and, if it has one, its detail for `problem`.

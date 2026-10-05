@@ -92,6 +92,8 @@ fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
     DecidedBy::AlwaysAllowed => "runs.activity.decision.alwaysAllowed",
     DecidedBy::AutoApproved => "runs.activity.decision.autoApproved",
     DecidedBy::Permissions => "runs.activity.decision.permissions",
+    DecidedBy::Automation => "runs.activity.decision.approvedByAutomation",
+    DecidedBy::AutomationDeny => "runs.activity.decision.deniedByAutomation",
   };
   ctx.t_args(key, [("subject", &*subject)])
 }

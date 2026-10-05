@@ -85,6 +85,8 @@ fn approval_rules_decision_counts_by_who_answered() {
     Some(DecidedBy::AlwaysAllowed),
     Some(DecidedBy::Permissions),
     Some(DecidedBy::PersonDeny),
+    Some(DecidedBy::Automation),
+    Some(DecidedBy::AutomationDeny),
     None,
   ];
   for (number, answer) in answers.into_iter().enumerate() {
@@ -129,6 +131,8 @@ fn approval_rules_decision_counts_by_who_answered() {
       by_similar_rule: 1,
       always_allowed: 2,
       auto_approved: 2,
+      by_automation: 1,
+      denied_by_automation: 1,
       waiting: 1,
     }
   );

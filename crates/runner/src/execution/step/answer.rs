@@ -13,9 +13,9 @@ use orchester_core::{
   orchester_tools::auto_approvable,
   permission::category::CommandCategory,
   run::{
-    ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
-    ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, codex_denial,
-    denial_message, permitted,
+    Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
+    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves,
+    auto_verdict, codex_denial, denial_message, permitted,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -116,18 +116,23 @@ impl Worker {
     })
   }
 
-  /// Leaves what a person's `answer` promises beyond this request, and returns how the request itself
-  /// is answered; a rejection when the answer is not available for it.
+  /// Leaves what `answer`, given `by` a person or automation, promises beyond this request, and returns
+  /// how the request itself is answered; a rejection when the answer is not available for it.
   pub(super) fn widen(
     &self,
     watch: &mut Watch,
     approval: &PendingToolApproval,
-    answer: &ApprovalAnswer,
+    (answer, by): (&ApprovalAnswer, Answerer),
   ) -> Result<Result<Settled, Rejection>, StoreError> {
     let subject = ApprovalSubject::of(approval, &self.scope);
+    let decided_by = match answer.given_by(by, &subject) {
+      Ok(decided_by) => decided_by,
+      Err(AutomationAnswerError::Wider) => return Ok(Err(Rejection::AutomationWider)),
+      Err(AutomationAnswerError::PersonOnly(ask)) => return Ok(Err(Rejection::PersonOnly { ask })),
+    };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
-      ..Settled::by(answer.decided_by(), category_of(&subject))
+      ..Settled::by(decided_by, category_of(&subject))
     };
     let now = Timestamp::now();
     match answer {
@@ -216,7 +221,7 @@ impl Worker {
     if let Some(rule) = settled.rule {
       watch.db.rule_answered(run, rule, &approval.id)?;
     }
-    if settled.decided_by.by_person() {
+    if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
     }
     let item = awaiting.item().to_owned();

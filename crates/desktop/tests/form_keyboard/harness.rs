@@ -24,6 +24,7 @@ use orchester_core::{
 };
 use orchester_desktop::{
   activity::Activity,
+  app_mcp::{AppMcpSetup, DiscoveryFolder},
   close::Lifecycle,
   embedded_mcp::McpStatus,
   i18n,
@@ -54,8 +55,30 @@ const OTHER_REPO: &str = "personal-website";
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 960;
 
+/// Folder of the discovery file of Orchester's MCP server, in the test's temporary folder.
+const MCP_FOLDER: &str = "orchester-mcp";
+
 /// Work on the test repository: setting it up before the project exists, or seeding it after.
 type RepoStep<'a> = Box<dyn FnOnce(&Path) + 'a>;
+
+/// How the application is started: its programs, its runner, and whether the window starts
+/// Orchester's own MCP server.
+struct Launch {
+  programs: Programs,
+  runner: PathBuf,
+  app_mcp: bool,
+}
+
+impl Launch {
+  /// No runner program exists here; the project shows its runner as unable to start.
+  fn without_runner() -> Self {
+    Self {
+      programs: no_programs(),
+      runner: PathBuf::from("no-runner.exe"),
+      app_mcp: false,
+    }
+  }
+}
 
 pub struct Desktop {
   pub tree: Tree,
@@ -107,14 +130,39 @@ impl Desktop {
     init: impl FnOnce(&Path),
     seed: impl FnOnce(&Path),
   ) -> Self {
-    Self::start_with(
-      Some(Box::new(init)),
+    let launch = Launch {
       programs,
       runner,
-      Some(Box::new(seed)),
-      None,
-      "Kontur",
-    )
+      app_mcp: false,
+    };
+    Self::start_with(Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// [`Desktop::with_runner`], with Orchester's own MCP server started by the window, its discovery
+  /// file in [`Desktop::mcp_folder`].
+  pub fn with_runner_and_app_mcp(runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: true,
+    };
+    Self::start_with(Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// [`Desktop::with_seeded_project`], with Orchester's own MCP server started by the window.
+  pub fn with_seeded_project_and_app_mcp(seed: impl FnOnce(&Path)) -> Self {
+    let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
+    let launch = Launch {
+      programs: no_programs(),
+      runner: PathBuf::from("no-runner.exe"),
+      app_mcp: true,
+    };
+    Self::start_with(Some(init), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// Where the window's MCP server, when started, writes its discovery file.
+  pub fn mcp_folder(&self) -> PathBuf {
+    self._dir.path().join(MCP_FOLDER)
   }
 
   /// Kontur, opened at startup and filled by `seed`, and before it another project of the
@@ -123,8 +171,7 @@ impl Desktop {
     let init: RepoStep<'_> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
       Some(init),
-      no_programs(),
-      PathBuf::from("no-runner.exe"),
+      Launch::without_runner(),
       Some(Box::new(seed)),
       Some(Box::new(seed_other)),
       "Kontur",
@@ -137,8 +184,7 @@ impl Desktop {
     let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
       Some(init),
-      no_programs(),
-      PathBuf::from("no-runner.exe"),
+      Launch::without_runner(),
       Some(Box::new(seed)),
       None,
       "Kontur",
@@ -154,13 +200,16 @@ impl Desktop {
       None
     };
     // No runner program exists here; the project shows its runner as unable to start.
-    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None, None, project_name)
+    let launch = Launch {
+      programs,
+      ..Launch::without_runner()
+    };
+    Self::start_with(init, launch, None, None, project_name)
   }
 
   fn start_with<'a>(
     init: Option<RepoStep<'a>>,
-    programs: Programs,
-    runner: PathBuf,
+    launch: Launch,
     seed: Option<RepoStep<'a>>,
     seed_other: Option<RepoStep<'a>>,
     project_name: &str,
@@ -199,16 +248,21 @@ impl Desktop {
     if let Some(seed) = seed {
       seed(&repo);
     }
-    let runner = if runner.is_absolute() {
-      runner
+    let runner = if launch.runner.is_absolute() {
+      launch.runner.clone()
     } else {
-      dir.path().join(runner)
+      dir.path().join(&launch.runner)
     };
-    Self::launch(dir, repo, session, programs, runner)
+    Self::launch(dir, repo, session, Launch { runner, ..launch })
   }
 
   /// Mounts the application on the session's database, as `main` does.
-  fn launch(dir: TempDir, repo: PathBuf, session: AppSession, programs: Programs, runner: PathBuf) -> Self {
+  fn launch(dir: TempDir, repo: PathBuf, session: AppSession, launch: Launch) -> Self {
+    let Launch {
+      programs,
+      runner,
+      app_mcp,
+    } = launch;
     let runtime = Runtime::new().expect("tokio runtime");
     let mut app = App::new();
     app.set_tokio_handle(runtime.handle().clone());
@@ -233,9 +287,15 @@ impl Desktop {
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
-    // The harness starts no MCP server, so the status bar truthfully says it is unavailable.
+    // The harness starts no lurq MCP server, so the status bar truthfully says it is unavailable;
+    // Orchester's own starts when the test asks for it.
     let mcp = McpStatus::Unavailable;
-    tree.mount_root::<Root>(&mut app, RootProps { startup, mcp });
+    let app_mcp = if app_mcp {
+      AppMcpSetup::On(DiscoveryFolder::At(dir.path().join(MCP_FOLDER)))
+    } else {
+      AppMcpSetup::Off
+    };
+    tree.mount_root::<Root>(&mut app, RootProps { startup, mcp, app_mcp });
     Self {
       tree,
       repo,
@@ -271,7 +331,12 @@ impl Desktop {
     ended();
     drop(session);
     let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts again");
-    Self::launch(dir, repo, session, Programs::processes(), runner)
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: false,
+    };
+    Self::launch(dir, repo, session, launch)
   }
 
   pub fn repo(&self) -> &Path {

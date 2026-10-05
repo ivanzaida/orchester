@@ -34,7 +34,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, TaskId},
-  run::{ApprovalAnswer, PendingToolApproval},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval},
 };
 use orchester_ipc::{Command, Rejection};
 
@@ -122,6 +122,7 @@ pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> Decis
           run: decision.run,
           approval: decision.approval.clone(),
           answer: decision.answer,
+          by: Answerer::Person,
         })
         .await
         .map_err(|error| {

@@ -33,7 +33,7 @@ use crate::{
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
   screens::project::TasksState,
-  tasks::{data::ProjectTasks, integration_jobs::IntegrationJobs, usage::ProjectUsage},
+  tasks::{data::ProjectTasks, integration_jobs::IntegrationJobs, outside::OutsideChanges, usage::ProjectUsage},
   workspace::OpenProject,
 };
 
@@ -150,9 +150,11 @@ impl Component for FeedLoader {
       super::shared::sharing(ctx, (&root, shared), &self.synced),
     );
     publish(&self.feed.connections, connections(ctx, (root.clone(), resources)));
-    publish(&self.feed.tasks, tasks(ctx, (root.clone(), revision + shared, states)));
+    // Tasks automation saved count as the screens' own saves.
+    let saved = revision + outside(ctx);
+    publish(&self.feed.tasks, tasks(ctx, (root.clone(), saved + shared, states)));
     let day_start = Timestamp::now().local_day_start();
-    if let Some(usage) = usage(ctx, (root, revision, (states, changes), day_start)) {
+    if let Some(usage) = usage(ctx, (root, saved, (states, changes), day_start)) {
       publish(&self.feed.usage, Some(usage));
     }
     Element::new()
@@ -217,6 +219,23 @@ fn counter(ctx: &mut Ctx, deps: (Runners, PathBuf, Counter)) -> u64 {
       }
     },
   );
+  count.state().get().data.unwrap_or(0)
+}
+
+/// How often tasks were saved outside the screens, by automation through Orchester's MCP server.
+fn outside(ctx: &mut Ctx) -> u64 {
+  let changes = ctx
+    .use_context::<OutsideChanges>()
+    .expect("the root provides the outside changes before mounting the window");
+  let count = ctx.stream(changes, |changes, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = changes.subscribe();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
   count.state().get().data.unwrap_or(0)
 }
 

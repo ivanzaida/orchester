@@ -13,7 +13,7 @@ use std::{
 
 use orchester_core::{
   id::{RunId, StepExecutionId},
-  run::{ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
 use orchester_ipc::{
   Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
@@ -335,7 +335,8 @@ async fn answer(
       run,
       ref approval,
       ref answer,
-    } => return answer_tool_approval(&later, handle, run, approval, answer.clone()),
+      by,
+    } => return answer_tool_approval(&later, handle, run, approval, (answer.clone(), by)),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -348,11 +349,11 @@ fn answer_tool_approval(
   scheduler: Scheduler,
   run: RunId,
   approval: &str,
-  answer: ApprovalAnswer,
+  (answer, by): (ApprovalAnswer, Answerer),
 ) -> Answer {
   let approval = approval.to_owned();
   later.answer(run, async move {
-    scheduler.decide_tool_approval(run, approval, answer).await
+    scheduler.decide_tool_approval(run, approval, answer, by).await
   })
 }
 

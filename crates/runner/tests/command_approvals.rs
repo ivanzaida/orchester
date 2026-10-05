@@ -8,7 +8,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, FolderBounds, LaunchPermissions, WritableFolder, WritableFolders},
   resource::{AgentProfile, StepKey},
-  run::{ApprovalAnswer, PendingToolApproval, PermissionsApply, RunStatus},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, PermissionsApply, RunStatus},
   store::{ActivityStore, ConversationStore, ResourceStore},
   time::Timestamp,
 };
@@ -90,19 +90,20 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
   assert!(command.command);
   assert_eq!(command.target.as_deref(), worktree.to_str());
   assert!(!worktree.join("command-once.txt").exists());
+  let other = "different-request".to_owned();
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, "different-request".to_owned(), ApprovalAnswer::Once)
+      .decide_tool_approval(id, other, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   scheduler
-    .decide_tool_approval(id, command.id.clone(), answer(deny_command))
+    .decide_tool_approval(id, command.id.clone(), answer(deny_command), Answerer::Person)
     .await
     .expect("command decision");
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
+      .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalAnswered)
   );
@@ -117,7 +118,7 @@ async fn migrated(deny_command: bool, deny_tool: bool) {
         .is_some()
     );
     scheduler
-      .decide_tool_approval(id, tool.id, answer(deny_tool))
+      .decide_tool_approval(id, tool.id, answer(deny_tool), Answerer::Person)
       .await
       .expect("tool decision");
   }
@@ -227,7 +228,7 @@ async fn command_approvals_soft_stop_after_delivery_prevents_automatic_replay() 
   first.deliver_messages(id).await.expect("resume");
   let command = pending(root, &mut events, id).await;
   first
-    .decide_tool_approval(id, command.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, command.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approve");
   let marker = root

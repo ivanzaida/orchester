@@ -38,10 +38,10 @@ mod usage;
 pub use self::{
   again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
-    AlwaysAllowError, AlwaysUnavailable, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject, AutoAsk,
-    AutoVerdict, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer, allowing_command,
-    allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, codex_denial, denial_message, listing,
-    permitted,
+    AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer,
+    allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, codex_denial,
+    denial_message, listing, permitted,
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},

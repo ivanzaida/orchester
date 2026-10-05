@@ -1,7 +1,8 @@
-//! The migration that rebuilds `tool_approvals` for `decided_by = 'permissions'`: a populated database
-//! of the schema before it opens with every request as it was (each state, each answer of that schema,
-//! a rule's answer, native commands, a pending request), its index and triggers in place and no
-//! dangling reference.
+//! The migrations that rebuild `tool_approvals` for `decided_by = 'permissions'`, then for automation's
+//! answers (`'automation'`, `'automation_deny'`): a populated database of the schema before either opens
+//! with every request as it was (each state, each answer of that schema, a rule's answer, native
+//! commands, a pending request), its index and triggers in place and no dangling reference; one between
+//! them keeps its `permissions` answers.
 //! `cargo test -p orchester-store --test permitted_migration permitted_migration`.
 mod support;
 
@@ -147,26 +148,85 @@ fn populated() -> (TempDir, Asked) {
   (repo, asked)
 }
 
+/// The schema versions before the `permissions` rebuild and before the automation rebuild, which
+/// follows it, of a database at `current`.
+const fn before_rebuilds(current: u32) -> (u32, u32) {
+  (current - 2, current - 1)
+}
+
+/// Upgrades `old` and checks that its requests, index and triggers are as `old` had them.
+fn upgraded(old: &Path, current: u32) -> Connection {
+  let before = rows(&database(old));
+  let indexes = schema_of(&database(old), "index");
+  let triggers = schema_of(&database(old), "trigger");
+  ProjectDb::open(old).expect("migrate");
+  let after = database(old);
+  assert_eq!(version(&after), current);
+  assert_eq!(rows(&after), before);
+  assert_eq!(schema_of(&after, "index"), indexes);
+  assert_eq!(schema_of(&after, "trigger"), triggers);
+  let dangling: i64 = after
+    .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))
+    .expect("foreign key check");
+  assert_eq!(dangling, 0);
+  after
+}
+
+/// The rebuilt table takes every answer that came with the rebuilds.
+fn takes_the_new_answers(old: &Path, asked: Asked) {
+  let mut db = ProjectDb::open(old).expect("open");
+  for (id, answer) in [
+    ("permitted", DecidedBy::Permissions),
+    ("automation", DecidedBy::Automation),
+    ("automation-deny", DecidedBy::AutomationDeny),
+  ] {
+    let request = asked.request(id, true, None);
+    db.request_tool_approval(&request).expect("request");
+    assert!(
+      db.claim_tool_approval(asked.run, &request.id, answer, at(13))
+        .expect("claimed"),
+      "{answer:?}"
+    );
+  }
+}
+
+#[test]
+fn permitted_migration_then_automation_keeps_permissions_answers() {
+  let (repo, asked) = populated();
+  let mut db = ProjectDb::open(repo.path()).expect("open");
+  let permitted = asked.request("by-permissions", true, None);
+  db.request_tool_approval(&permitted).expect("request");
+  assert!(
+    db.claim_tool_approval(asked.run, &permitted.id, DecidedBy::Permissions, at(12))
+      .expect("claim")
+  );
+  drop(db);
+  let current = version(&database(repo.path()));
+  let old = copied_at_version(
+    &repo.path().join(".orchester").join("orchester.db"),
+    before_rebuilds(current).1,
+  );
+  upgraded(old.path(), current);
+  takes_the_new_answers(old.path(), asked);
+}
+
 #[test]
 fn permitted_migration_keeps_every_request_of_the_schema_before() {
   let (repo, asked) = populated();
   let current = version(&database(repo.path()));
-  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), current - 1);
+  let old = copied_at_version(
+    &repo.path().join(".orchester").join("orchester.db"),
+    before_rebuilds(current).0,
+  );
   let before = rows(&database(old.path()));
   let states: Vec<&Value> = before.1.iter().map(|row| &row[9]).collect();
   for state in ["approved", "denied", "interrupted", "pending"] {
     assert!(states.contains(&&Value::Text(state.to_owned())), "a {state} request");
   }
   assert_eq!(before.1.len(), 10);
-  let indexes = schema_of(&database(old.path()), "index");
-  let triggers = schema_of(&database(old.path()), "trigger");
 
-  ProjectDb::open(old.path()).expect("migrate");
-  let after = database(old.path());
-  assert_eq!(version(&after), current);
-  assert_eq!(rows(&after), before);
-  assert_eq!(schema_of(&after, "index"), indexes);
-  assert_eq!(schema_of(&after, "trigger"), triggers);
+  let after = upgraded(old.path(), current);
+  let triggers = schema_of(&after, "trigger");
   let names: Vec<&str> = triggers.iter().map(|(name, _)| name.as_str()).collect();
   assert_eq!(
     names,
@@ -177,22 +237,12 @@ fn permitted_migration_keeps_every_request_of_the_schema_before() {
       "tool_approvals_decided_once",
     ]
   );
-  let dangling: i64 = after
-    .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))
-    .expect("foreign key check");
-  assert_eq!(dangling, 0);
-  // The rebuilt table keeps refusing a second decision and takes the new answer.
+  // The rebuilt table keeps refusing a second decision.
   let decided = format!("{}:person", asked.invocation);
   assert!(
     after
       .execute("UPDATE tool_approvals SET state = 'denied' WHERE id = ?1", [&decided])
       .is_err()
   );
-  let mut db = ProjectDb::open(old.path()).expect("open");
-  let permitted = asked.request("permitted", true, None);
-  db.request_tool_approval(&permitted).expect("request");
-  assert!(
-    db.claim_tool_approval(asked.run, &permitted.id, DecidedBy::Permissions, at(13))
-      .expect("claimed by the permissions")
-  );
+  takes_the_new_answers(old.path(), asked);
 }

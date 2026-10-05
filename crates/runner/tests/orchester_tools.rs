@@ -15,7 +15,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   orchester_tools::OutputKept,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{ApprovalAnswer, PendingToolApproval, RunStatus},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, RunStatus},
   store::ActivityStore,
 };
 use orchester_exec::run_capped;
@@ -75,7 +75,7 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
   let path = root.join(OUTSIDE).to_string_lossy().into_owned();
   assert_eq!(request.scope, Some(json!({ "path": path }).to_string()));
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -128,7 +128,7 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
     ("Orchester", "read_outside_file")
   );
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -177,7 +177,7 @@ async fn orchester_tools_that_ask_never_run_unapproved() {
   assert_eq!(request.action, "read_outside_file");
   assert!(request.id.contains(":orchester-call-"), "{}", request.id);
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny, Answerer::Person)
     .await
     .expect("denied");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;

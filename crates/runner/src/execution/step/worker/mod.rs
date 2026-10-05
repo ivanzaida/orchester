@@ -22,7 +22,7 @@ use orchester_core::{
   conversation::Message,
   id::{ResourceId, StepExecutionId, TaskId},
   permission::category::CommandScope,
-  run::{ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
+  run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   time::Timestamp,
   tokens::TokensUsed,
 };
@@ -98,6 +98,8 @@ pub(in super::super) enum WorkerEvent {
 pub(in super::super) struct ApprovalDecision {
   pub id: String,
   pub answer: ApprovalAnswer,
+  /// Who gives the answer: the person in the app, or automation.
+  pub by: Answerer,
   pub ack: Ack,
 }
 
