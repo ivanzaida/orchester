@@ -223,7 +223,8 @@ pub trait ConnectionStore {
   /// Stores a new connection. Names are unique within the project.
   fn create_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
 
-  /// Stores the current name, executable and last check of an existing connection.
+  /// Stores the current name, executable and last check of an existing connection. Model
+  /// requirements stored meanwhile are kept: they are merged with the connection's, never dropped.
   fn save_connection(&mut self, connection: &Connection) -> Result<(), Self::Error>;
 
   /// Records on the stored agent CLI connection `id` that `model` needs version `required` of the

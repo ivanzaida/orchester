@@ -291,6 +291,30 @@ fn recording_a_model_requirement_keeps_an_edit_saved_since_the_runner_read_the_c
 }
 
 #[test]
+fn saving_a_copy_read_before_the_runner_recorded_a_model_requirement_keeps_it() {
+  let (repo, mut desktop) = project_repo();
+  let claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);
+  desktop.create_connection(&claude).expect("create");
+  let mut stale = AgentConnection::try_from(desktop.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  let mut runner = ProjectDb::open(repo.path()).expect("open as the runner");
+  let opus = ModelId::new("claude-opus-5-5").expect("valid model");
+  runner
+    .record_model_requirement(claude.id(), &opus, "2.1.280")
+    .expect("recorded");
+
+  stale.rename(Name::new("Claude · Kontur").expect("valid name"));
+  desktop
+    .save_connection(&stale)
+    .expect("the desktop saves its stale copy");
+
+  let stored = AgentConnection::try_from(desktop.connection(claude.id()).expect("read").expect("exists"))
+    .expect("an agent connection");
+  assert_eq!(stored.name().as_str(), "Claude · Kontur");
+  assert_eq!(stored.model_requirements().required(&opus), Some("2.1.280"));
+}
+
+#[test]
 fn recording_a_model_requirement_on_a_removed_connection_fails_and_creates_nothing() {
   let (repo, mut db) = project_repo();
   let claude = connection(&repo, "Claude", AgentProvider::ClaudeCodeCli);

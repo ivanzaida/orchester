@@ -80,10 +80,17 @@ impl ConnectionStore for ProjectDb {
   }
 
   fn save_connection(&mut self, connection: &Connection) -> Result<(), StoreError> {
-    let columns = Columns::of(connection)?;
     let transaction = self.connection.transaction()?;
     ensure_name_free(&transaction, connection)?;
-    let changed = transaction.execute(
+    let stored = load(&transaction, "WHERE id = ?1", [connection.id().to_string()])?
+      .pop()
+      .ok_or(StoreError::ConnectionNotFound(connection.id()))?;
+    // Requirements are the runner's to record (`record_model_requirement`); a person's copy read
+    // before the runner recorded one must not drop it, and nothing in the desktop removes one.
+    let mut requirements = stored.model_requirements().clone();
+    requirements.merge(connection.model_requirements());
+    let columns = Columns::of(&connection.clone().with_model_requirements(requirements))?;
+    transaction.execute(
       "UPDATE connections SET name = ?2, settings = ?3, status = ?4, checked_at = ?5, last_check = ?6 \
        WHERE id = ?1",
       params![
@@ -95,9 +102,6 @@ impl ConnectionStore for ProjectDb {
         columns.last_check
       ],
     )?;
-    if changed == 0 {
-      return Err(StoreError::ConnectionNotFound(connection.id()));
-    }
     transaction.commit()?;
     Ok(())
   }

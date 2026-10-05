@@ -36,6 +36,16 @@ impl ModelRequirements {
     }
   }
 
+  /// Adds what `other` recorded; for a model both know, the higher version stays.
+  pub fn merge(&mut self, other: &Self) {
+    for (model, version) in other.iter() {
+      let known = self.0.get(model).map(String::as_str);
+      if compare_versions(Some(version), known).is_gt() {
+        self.0.insert(model.to_owned(), version.to_owned());
+      }
+    }
+  }
+
   /// Every model with its version, by model id.
   pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
     self.0.iter().map(|(model, version)| (model.as_str(), version.as_str()))
