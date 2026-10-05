@@ -47,7 +47,7 @@ use crate::{
   navigation::route::{Page, Route, ServerTab},
   sharing::{
     ServerEntry,
-    feed::{AddRequest, ServerFeed, ServerList, SignInRequest},
+    feed::{AddRequest, ReturnTo, ServerFeed, ServerList, SignInRequest},
   },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -156,6 +156,13 @@ impl Component for ServersScreen {
     };
     add(&feed.add.get_untracked());
     ctx.watch(&feed.add, move |requested| add(requested));
+    // A sign-in that did not go through returns nowhere: closing the dialog forgets where to.
+    let return_to = feed.return_to.clone();
+    ctx.watch(&dialog, move |shown| {
+      if *shown == ServerDialog::Closed && return_to.get_untracked().0.is_some() {
+        return_to.set(ReturnTo(None));
+      }
+    });
     Self {
       dialog,
       revision: ctx.signal(0_u64),

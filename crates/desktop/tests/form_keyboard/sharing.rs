@@ -263,6 +263,7 @@ fn sharing_make_local_keeps_every_task() {
 #[test]
 fn sharing_the_discovery_file_offers_sign_in_without_contacting_its_server() {
   let server = TestServer::start();
+  let first = server.create_user("alice", "Alice Moreau", true);
   let mut desktop = Desktop::with_project_and_programs(Arc::new(Clone));
   std::fs::write(
     desktop.repo().join("orchester.toml"),
@@ -288,6 +289,18 @@ fn sharing_the_discovery_file_offers_sign_in_without_contacting_its_server() {
   desktop.pass();
   desktop.enter();
   desktop.wait_for("add-server-found");
+  // Signed in, the person is back on the Sharing tab to share.
+  desktop.enter();
+  desktop.wait_for("sign-in-username");
+  type_into(&mut desktop, "sign-in-username", "alice");
+  type_into(&mut desktop, "sign-in-password", first.expose());
+  desktop.enter();
+  desktop.wait_for("choose-password-new");
+  type_into(&mut desktop, "choose-password-new", "alice's own long password");
+  type_into(&mut desktop, "choose-password-repeat", "alice's own long password");
+  desktop.enter();
+  desktop.wait_for("settings-sharing");
+  desktop.wait_for("sharing-share");
 }
 
 #[test]

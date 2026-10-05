@@ -51,7 +51,16 @@ pub struct ServerFeed {
   /// Set by a project's discovery offer (10.17) with the address its `orchester.toml` names; the
   /// servers screen opens *Add server* with it filled in, and checks it only when the person asks.
   pub add: Signal<AddRequest>,
+  /// Where a sign-in started elsewhere returns once it is done (the Sharing tab of the project
+  /// whose discovery offer led to Settings › Servers); cleared when the dialog closes.
+  pub return_to: Signal<ReturnTo>,
 }
+
+/// The page a sign-in returns to once it is done.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ReturnTo(pub Option<crate::navigation::route::Page>);
+
+impl lurq::app::component::DevtoolsInspectable for ReturnTo {}
 
 /// The address a discovery offer asked Settings › Servers to add, until the dialog opened.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -80,6 +89,7 @@ impl ServerFeed {
       list: Signal::new(ServerList::Loading),
       sign_in: Signal::new(SignInRequest::default()),
       add: Signal::new(AddRequest::default()),
+      return_to: Signal::new(ReturnTo::default()),
     }
   }
 

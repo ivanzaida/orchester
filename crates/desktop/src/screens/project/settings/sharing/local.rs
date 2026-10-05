@@ -22,10 +22,10 @@ use crate::{
   screens::project::settings::general::{readback, sized_setting_row},
   sharing::{
     Connection, ServerEntry,
-    feed::{AddRequest, ServerFeed, SignInRequest},
+    feed::{AddRequest, ReturnTo, ServerFeed, SignInRequest},
     project::{IdentityProblem, discovery::Discovery, lookup::Lookup},
   },
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton, field::select_style, icon::Icon, notice::Notice, property::property,
     status_label::status_label,
@@ -119,15 +119,21 @@ impl SharingTab {
       address.as_str().to_owned(),
       known.map(|entry| entry.stored.id),
     );
-    let start = move || match known_id {
-      // Added already: only signing in is left.
-      Some(server) => {
-        nav.show(Page::Servers(Some(server), ServerTab::Account));
-        feed.sign_in.set(SignInRequest(Some(server)));
-      }
-      None => {
-        nav.show(Page::Servers(None, ServerTab::Account));
-        feed.add.set(AddRequest(Some(address_text.clone())));
+    let start = move || {
+      // Signed in, the person comes back here to share.
+      feed.return_to.set(ReturnTo(Some(Page::Settings(
+        crate::navigation::route::SettingsTab::Sharing,
+      ))));
+      match known_id {
+        // Added already: only signing in is left.
+        Some(server) => {
+          nav.show(Page::Servers(Some(server), ServerTab::Account));
+          feed.sign_in.set(SignInRequest(Some(server)));
+        }
+        None => {
+          nav.show(Page::Servers(None, ServerTab::Account));
+          feed.add.set(AddRequest(Some(address_text.clone())));
+        }
       }
     };
     let dismissed = self.dismissed.clone();
@@ -336,7 +342,7 @@ fn sends_panel(ctx: &Ctx) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
     .spacing(SpacingSize::Sm)
-    .background(ExtraColor::Surface.role())
+    .background(PaletteColor::SurfaceRaised)
     .rounded(ExtraRadius::Notice.role())
     .child(Text::new(&ctx.t("sharing.sends.title")).variant(ExtraTypography::NoticeHeading.role()))
     .child(property(

@@ -5415,7 +5415,8 @@
       "taskDraft": {
         "running": "Saving task {{name}}",
         "done": "Task saved · {{name}}",
-        "failed": "Could not save task {{name}}"
+        "failed": "Could not save task {{name}}",
+        "newerVersion": "Not saved yet · {{name}}: a newer version to compare"
       },
       "profileCreate": {
         "running": "Creating agent profile {{name}}",
