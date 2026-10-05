@@ -349,3 +349,26 @@ async fn anthropic_fake_server_catches_an_edited_history() {
     .expect("a response");
   server.finish();
 }
+
+#[test]
+fn anthropic_endpoints_on_this_computer_bypass_proxies() {
+  use std::sync::Arc;
+
+  use orchester_agent::Endpoint;
+  use orchester_core::secret::SecretValue;
+
+  let reached = |url: &str| {
+    let key = Arc::new(SecretValue::new(KEY.to_owned()).expect("a key"));
+    Endpoint::new(BaseUrl::new(url).expect("a URL"), key, WireQuirks::OFFICIAL).reached_directly()
+  };
+  for local in [
+    "HTTP://LOCALHOST:8080",
+    "http://127.0.0.1:9",
+    "https://localhost",
+    "https://[::1]:443",
+    "https://127.0.0.1",
+  ] {
+    assert!(reached(local), "{local}");
+  }
+  assert!(!reached("https://api.anthropic.com"));
+}

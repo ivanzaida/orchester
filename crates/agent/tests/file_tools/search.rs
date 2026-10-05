@@ -63,3 +63,23 @@ fn files_search_without_ripgrep_reads_the_pattern_literally() {
   let none = ok(tools.search(&search_input("hello", None, Some("*.py"), None)));
   assert!(none.starts_with("no matches"), "{none}");
 }
+
+#[test]
+fn files_search_keeps_long_lines_short() {
+  let layout = Layout::temporary();
+  fs::write(
+    layout.worktree.join("bundle.min.js"),
+    format!("{}\n", "ab;".repeat(400_000)),
+  )
+  .expect("file");
+  let content = ok(with_ripgrep(&layout).search(&search_input(".", Some("bundle.min.js"), None, None)));
+  assert!(content.len() < 4 * 1024, "{} bytes", content.len());
+  assert!(content.contains("[... omitted end of long line]"), "{content}");
+  let literal = ok(
+    layout
+      .tools()
+      .search(&search_input(";", Some("bundle.min.js"), None, None)),
+  );
+  assert!(literal.len() < 4 * 1024, "{} bytes", literal.len());
+  assert!(literal.contains("[line cut at 600 characters]"), "{literal}");
+}

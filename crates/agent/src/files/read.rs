@@ -1,7 +1,11 @@
 //! `read_file` (`docs/architecture/native-agent.md` §4.1): numbered lines from a 1-based offset, each
 //! cut at 2000 characters; a binary file (a NUL byte in its first 8 KiB) is named with its size only.
 
-use std::fs;
+use std::{
+  fs,
+  io::{self, Read as _},
+  path::Path,
+};
 
 use orchester_core::native::{session::ToolOutcome, tools::ReadFile};
 
@@ -33,14 +37,7 @@ impl FileTools {
     if metadata.is_dir() {
       return Err(FileError::Folder(shown));
     }
-    if metadata.len() > MAX_READ_BYTES {
-      return Err(FileError::TooLarge {
-        path: shown,
-        size: metadata.len(),
-        limit: MAX_READ_BYTES,
-      });
-    }
-    let bytes = fs::read(&path).map_err(|error| self.io_error(&path, "read", &error))?;
+    let bytes = self.content(&path, &metadata)?;
     self.stamps.record(&path, ReadStamp::of(&bytes, &metadata));
     if bytes.iter().take(BINARY_PROBE).any(|byte| *byte == 0) {
       let text = format!("binary file, {} bytes", bytes.len());
@@ -49,6 +46,37 @@ impl FileTools {
     let text = String::from_utf8_lossy(&bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     Ok(numbered(text, input.offset(), input.limit()))
+  }
+}
+
+impl FileTools {
+  /// The whole content of the regular file at `path`, at most [`MAX_READ_BYTES`]. A FIFO, a device or
+  /// a socket is refused before it is opened, since reading one can wait forever; a file that grows
+  /// past the limit while it is read is refused as well.
+  pub(super) fn content(&self, path: &Path, metadata: &fs::Metadata) -> Result<Vec<u8>, FileError> {
+    let too_large = |size: u64| FileError::TooLarge {
+      path: self.shown(path),
+      size,
+      limit: MAX_READ_BYTES,
+    };
+    if !metadata.is_file() {
+      return Err(FileError::NotRegular(self.shown(path)));
+    }
+    if metadata.len() > MAX_READ_BYTES {
+      return Err(too_large(metadata.len()));
+    }
+    let fail = |error: io::Error| self.io_error(path, "read", &error);
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+      .map_err(fail)?
+      .take(MAX_READ_BYTES + 1)
+      .read_to_end(&mut bytes)
+      .map_err(fail)?;
+    let read = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if read > MAX_READ_BYTES {
+      return Err(too_large(read));
+    }
+    Ok(bytes)
   }
 }
 

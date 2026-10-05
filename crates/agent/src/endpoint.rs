@@ -1,12 +1,13 @@
 //! Where a model client sends its requests and how (`docs/architecture/native-agent.md` §3, §3.3): the
 //! base URL, the API key, what the server is known to accept, and the client's timing.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, net::IpAddr, sync::Arc, time::Duration};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, BaseUrl, EndpointPreset},
   secret::SecretValue,
 };
+use reqwest::Url;
 
 /// What a server accepts beyond the plain wire format. A preset decides it; the client never looks at
 /// host names (§3.3).
@@ -124,6 +125,24 @@ impl Endpoint {
 
   pub const fn timing(&self) -> Timing {
     self.timing
+  }
+
+  /// Whether the endpoint is on this computer (a loopback host, or plain HTTP, which a base URL allows
+  /// only there): it is reached directly, never through a proxy from the environment, which would
+  /// see a plain request and its key.
+  pub fn reached_directly(&self) -> bool {
+    let url = self.base_url.as_str();
+    if url
+      .get(..7)
+      .is_some_and(|scheme| scheme.eq_ignore_ascii_case("http://"))
+    {
+      return true;
+    }
+    let Some(host) = Url::parse(url).ok().and_then(|url| url.host_str().map(str::to_owned)) else {
+      return false;
+    };
+    let address = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost") || address.parse::<IpAddr>().is_ok_and(|address| address.is_loopback())
   }
 }
 

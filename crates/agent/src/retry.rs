@@ -28,16 +28,17 @@ pub(crate) const fn retryable(error: &ModelError) -> bool {
 }
 
 /// How long to wait before retry `retry` (from 1) after `error`, or `None` when the request is not
-/// tried again.
-pub(crate) fn wait(timing: Timing, retry: u32, error: &ModelError) -> Option<Duration> {
+/// tried again. `retry_after` is what the answer asked for (a rate limit carries its own).
+pub(crate) fn wait(timing: Timing, retry: u32, error: &ModelError, retry_after: Option<Duration>) -> Option<Duration> {
   if !retryable(error) || retry > MAX_RETRIES {
     return None;
   }
-  if let ModelError::RateLimited {
-    retry_after: Some(after),
-  } = error
-  {
-    return (*after <= MAX_WAIT).then_some(*after);
+  let asked = match error {
+    ModelError::RateLimited { retry_after: own } => own.or(retry_after),
+    _ => retry_after,
+  };
+  if let Some(after) = asked {
+    return (after <= MAX_WAIT).then_some(after);
   }
   let step = timing.first_backoff.saturating_mul(1 << (retry - 1));
   Some(step + jitter(step))

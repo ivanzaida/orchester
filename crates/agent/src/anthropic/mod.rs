@@ -8,7 +8,7 @@ mod models;
 mod request;
 mod stream;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use orchester_core::{
   id::ConversationId,
@@ -50,14 +50,16 @@ pub struct AnthropicClient {
 /// Why one attempt failed.
 #[derive(Clone, Debug)]
 enum Failure {
-  Model(ModelError),
+  /// The error, with the `retry-after` the answer named, if any (§3.1: honoured for every retried
+  /// status, not only 429).
+  Model(ModelError, Option<Duration>),
   /// The endpoint refused a thinking block as bound to another history; its message.
   ThinkingBound(String),
 }
 
 impl From<ModelError> for Failure {
   fn from(error: ModelError) -> Self {
-    Self::Model(error)
+    Self::Model(error, None)
   }
 }
 
@@ -108,7 +110,7 @@ impl AnthropicClient {
           events(StreamEvent::ThinkingStripped);
         }
         Err(Failure::ThinkingBound(message)) => return Err(ModelError::InvalidRequest(message)),
-        Err(Failure::Model(error)) => return Err(error),
+        Err(Failure::Model(error, _)) => return Err(error),
       }
     }
   }
@@ -126,9 +128,9 @@ impl AnthropicClient {
     let mut retry = 0;
     loop {
       match self.attempt(&body, &betas, &request.model, events).await {
-        Err(Failure::Model(error)) => {
+        Err(Failure::Model(error, retry_after)) => {
           retry += 1;
-          self.pause(retry, error, events).await?;
+          self.pause(retry, error, retry_after, events).await?;
         }
         other => return other,
       }
@@ -141,9 +143,10 @@ impl AnthropicClient {
     &self,
     retry: u32,
     error: ModelError,
+    retry_after: Option<Duration>,
     events: &mut (dyn FnMut(StreamEvent) + Send),
   ) -> Result<(), ModelError> {
-    let Some(wait) = retry::wait(self.http.timing(), retry, &error) else {
+    let Some(wait) = retry::wait(self.http.timing(), retry, &error, retry_after) else {
       return Err(error);
     };
     events(StreamEvent::Retrying {
@@ -169,7 +172,7 @@ impl AnthropicClient {
       .body(body.to_vec());
     let mut response = match self.http.send(builder).await {
       Ok(response) => response,
-      Err(SendError::Transport(error)) => return Err(Failure::Model(error)),
+      Err(SendError::Transport(error)) => return Err(Failure::Model(error, None)),
       Err(SendError::Answer(answer)) => return Err(failure(answer, model)),
     };
     let mut response_so_far = Accumulator::new();
@@ -178,7 +181,7 @@ impl AnthropicClient {
       if spent != TokenUsage::default() {
         events(StreamEvent::Spent(spent));
       }
-      return Err(Failure::Model(error));
+      return Err(Failure::Model(error, None));
     }
     Ok(response_so_far.finish()?)
   }
@@ -197,7 +200,10 @@ impl AnthropicClient {
           "the stream ended before the response was complete".to_owned(),
         ));
       };
-      for event in parser.feed(&chunk) {
+      let parsed = parser
+        .feed(&chunk)
+        .map_err(|error| ModelError::Protocol(error.to_string()))?;
+      for event in parsed {
         into.event(&event, events)?;
         if into.ended() {
           return Ok(());
@@ -222,7 +228,7 @@ impl AnthropicClient {
         Ok(object) => break object,
         Err(error) => {
           retry += 1;
-          self.pause(retry, error, events).await?;
+          self.pause(retry, error, None, events).await?;
         }
       }
     };
@@ -301,11 +307,15 @@ fn failure(answer: ErrorAnswer, model: &ModelId) -> Failure {
     if message.contains("bound to a different conversation") {
       return Failure::ThinkingBound(answer.message);
     }
-    if message.contains("prompt is too long") || message.contains("context window") {
-      return Failure::Model(ModelError::TooLarge);
+    if ["prompt is too long", "context window", "context limit"]
+      .iter()
+      .any(|wording| message.contains(wording))
+    {
+      return Failure::Model(ModelError::TooLarge, None);
     }
   }
-  Failure::Model(answer.into_error(Some(model)))
+  let retry_after = answer.retry_after;
+  Failure::Model(answer.into_error(Some(model)), retry_after)
 }
 
 /// The error an `error` event in the stream reports, by its type.

@@ -2,7 +2,10 @@
 //! sorted, at most 1000. ripgrep lists them (`rg --files`), which respects `.gitignore`; without it the
 //! folder is walked.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  time::Instant,
+};
 
 use orchester_core::native::{session::ToolOutcome, tools::ListFiles};
 
@@ -11,7 +14,7 @@ use super::{
   glob::Glob,
   outcome,
   ripgrep::{self, Want},
-  walk::{self, MAX_WALKED},
+  walk::{self, MAX_WALKED, WALK_TIMEOUT},
 };
 
 /// Entries one result lists.
@@ -41,7 +44,7 @@ impl FileTools {
     }
     let found = match &self.ripgrep {
       Some(program) => listed(program, &folder, input.pattern())?,
-      None => walked(&folder, input.pattern()),
+      None => walked(&folder, input.pattern())?,
     };
     let mut shown: Vec<String> = found.paths.iter().map(|path| self.shown(path)).collect();
     shown.sort();
@@ -96,14 +99,21 @@ fn listed(program: &Path, folder: &Path, pattern: Option<&str>) -> Result<Found,
 }
 
 /// The files under `folder` that match `pattern`, walked.
-fn walked(folder: &Path, pattern: Option<&str>) -> Found {
-  let (files, more) = walk::files(folder);
-  let glob = pattern.map(Glob::new);
-  let paths = files
-    .into_iter()
-    .filter(|path| glob.as_ref().is_none_or(|glob| glob.matches(&relative(folder, path))))
-    .collect();
-  Found { paths, more }
+fn walked(folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
+  let deadline = Instant::now() + WALK_TIMEOUT;
+  let (files, mut more) = walk::files(folder, deadline);
+  let glob = pattern.map(Glob::new).transpose()?;
+  let mut paths = Vec::new();
+  for path in files {
+    if Instant::now() > deadline {
+      more = true;
+      break;
+    }
+    if glob.as_ref().is_none_or(|glob| glob.matches(&relative(folder, &path))) {
+      paths.push(path);
+    }
+  }
+  Ok(Found { paths, more })
 }
 
 /// `path` relative to `folder`, with `/` separators.

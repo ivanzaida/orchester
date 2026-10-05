@@ -65,6 +65,12 @@ pub(crate) enum FileError {
   Stale(String),
   #[error("{0} changed while it was being written; read it again")]
   Moved(String),
+  #[error("the glob cannot be used: {0}")]
+  Glob(String),
+  #[error("{0} is not a regular file")]
+  NotRegular(String),
+  #[error("{0} appeared while it was being written; read it before you replace it")]
+  Appeared(String),
   #[error("ripgrep failed: {0}")]
   Ripgrep(String),
 }
@@ -85,10 +91,6 @@ impl FileTools {
       ripgrep,
       stamps: Stamps::default(),
     }
-  }
-
-  pub const fn scope(&self) -> &FileScope {
-    &self.scope
   }
 
   /// Takes note of items the loop stored: a compaction ends every read, so files are read again

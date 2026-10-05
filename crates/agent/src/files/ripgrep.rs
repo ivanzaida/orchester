@@ -4,7 +4,7 @@
 //! enough; then it is stopped. A run that takes too long is stopped as well.
 
 use std::{
-  io::{BufRead, BufReader, Read},
+  io::{self, BufRead, BufReader, Read},
   path::Path,
   process::Child,
   sync::mpsc,
@@ -20,6 +20,10 @@ use super::FileError;
 const RIPGREP_TIMEOUT: Duration = Duration::from_secs(60);
 /// The most of ripgrep's error output kept.
 const MAX_STDERR: usize = 4 * 1024;
+
+/// The most bytes of one output line kept; the rest of a longer line is skipped. ripgrep cuts matched
+/// lines itself (`--max-columns`), so only a very long path reaches this.
+const MAX_LINE: usize = 16 * 1024;
 
 /// How a run ended.
 #[derive(Debug)]
@@ -61,13 +65,12 @@ pub(super) fn run(
     let mut reader = BufReader::new(stdout);
     let mut bytes = Vec::new();
     // A failed read ends the output like its end does; the exit code then tells what happened.
-    while matches!(reader.read_until(b'\n', &mut bytes), Ok(read) if read > 0) {
+    while let Ok(true) = read_line(&mut reader, &mut bytes) {
       let text = String::from_utf8_lossy(&bytes);
       if line(text.trim_end_matches(['\n', '\r'])) == Want::Enough {
         stopped = true;
         break;
       }
-      bytes.clear();
     }
   }
   // The watchdog ends after this message or its timeout, whichever comes first; a closed channel
@@ -134,4 +137,28 @@ fn drain(stderr: impl Read + Send + 'static) -> thread::JoinHandle<String> {
     }
     String::from_utf8_lossy(&kept).trim().to_owned()
   })
+}
+
+/// Reads the next line of `reader` into `line`, keeping at most [`MAX_LINE`] bytes of it; `false` at
+/// the end of the output. Nothing longer is ever held in memory.
+fn read_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> io::Result<bool> {
+  line.clear();
+  let mut any = false;
+  loop {
+    let available = reader.fill_buf()?;
+    if available.is_empty() {
+      return Ok(any);
+    }
+    any = true;
+    let (taken, ended) = match available.iter().position(|byte| *byte == b'\n') {
+      Some(end) => (end + 1, true),
+      None => (available.len(), false),
+    };
+    let room = MAX_LINE.saturating_sub(line.len());
+    line.extend_from_slice(&available[..taken.min(room)]);
+    reader.consume(taken);
+    if ended {
+      return Ok(true);
+    }
+  }
 }

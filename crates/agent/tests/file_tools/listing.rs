@@ -46,3 +46,20 @@ fn files_list_stays_in_the_scope() {
   let file = failed(layout.tools().list_files(&list_input(None, Some("README.md"))));
   assert!(file.contains("is not a folder"), "{file}");
 }
+
+#[test]
+fn files_glob_without_ripgrep_is_bounded() {
+  let layout = Layout::temporary();
+  let tools = layout.tools();
+  let long = "a".repeat(300);
+  let error = failed(tools.list_files(&list_input(Some(&long), None)));
+  assert!(error.contains("longer than 256 characters"), "{error}");
+  let braces = "{a,b}".repeat(7);
+  let error = failed(tools.list_files(&list_input(Some(&braces), None)));
+  assert!(error.contains("more than 64 alternatives"), "{error}");
+  std::fs::write(layout.worktree.join(format!("{}.txt", "a".repeat(200))), "x").expect("file");
+  let started = std::time::Instant::now();
+  let none = ok(tools.list_files(&list_input(Some("*a*a*a*a*a*a*a*a*a*a*b"), None)));
+  assert!(none.starts_with("no files match"), "{none}");
+  assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}

@@ -72,7 +72,7 @@ impl Http {
     let mut builder = reqwest::Client::builder()
       .redirect(Policy::none())
       .connect_timeout(endpoint.timing().connect);
-    if endpoint.base_url().as_str().starts_with("http://") {
+    if endpoint.reached_directly() {
       builder = builder.no_proxy();
     }
     let redaction = vec![SecretVariable::new("API_KEY", endpoint.shared_key())];
@@ -190,9 +190,7 @@ impl Http {
       .headers()
       .get(RETRY_AFTER)
       .and_then(|value| value.to_str().ok())
-      .and_then(|value| value.trim().parse::<f64>().ok())
-      .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
-      .map(Duration::from_secs_f64);
+      .and_then(retry_after);
     // An error answer whose body cannot be read in full still says what happened by its status.
     let body = self.read(&mut response, MAX_ERROR_BODY).await.unwrap_or_default();
     let (kind, message) = match serde_json::from_slice::<ErrorBody>(&body) {
@@ -228,6 +226,16 @@ impl ErrorAnswer {
       _ => ModelError::InvalidRequest(self.message),
     }
   }
+}
+
+/// A `retry-after` value in seconds; one too large for a `Duration` is the longest one, which no retry
+/// waits for. An HTTP date is not read: model APIs send seconds.
+fn retry_after(value: &str) -> Option<Duration> {
+  let seconds = value.trim().parse::<f64>().ok()?;
+  if !seconds.is_finite() || seconds < 0.0 {
+    return None;
+  }
+  Some(Duration::try_from_secs_f64(seconds).unwrap_or(Duration::MAX))
 }
 
 /// A transport failure as text without the key; the URL it names holds none, but a proxy's might.

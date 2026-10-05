@@ -19,7 +19,7 @@ use orchester_core::{
   },
 };
 
-use super::{FileError, FileTools, done, outcome, read::MAX_READ_BYTES, stamp::ReadStamp};
+use super::{FileError, FileTools, done, outcome, stamp::ReadStamp};
 
 impl FileTools {
   pub fn edit_file(&self, input: &EditFile) -> ToolOutcome {
@@ -77,6 +77,7 @@ impl FileTools {
   fn existing(&self, path: &Path) -> Result<Option<fs::Metadata>, FileError> {
     match fs::metadata(path) {
       Ok(metadata) if metadata.is_dir() => Err(FileError::Folder(self.shown(path))),
+      Ok(metadata) if !metadata.is_file() => Err(FileError::NotRegular(self.shown(path))),
       Ok(metadata) => Ok(Some(metadata)),
       Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
       Err(error) => Err(self.io_error(path, "read", &error)),
@@ -87,10 +88,7 @@ impl FileTools {
   fn checked_content(&self, path: &Path, metadata: &fs::Metadata) -> Result<Vec<u8>, FileError> {
     let shown = self.shown(path);
     let stamp = self.stamps.get(path).ok_or_else(|| FileError::NotRead(shown.clone()))?;
-    if metadata.len() > MAX_READ_BYTES {
-      return Err(FileError::Stale(shown));
-    }
-    let bytes = fs::read(path).map_err(|error| self.io_error(path, "read", &error))?;
+    let bytes = self.content(path, metadata)?;
     if ReadStamp::of(&bytes, metadata) != stamp {
       return Err(FileError::Stale(shown));
     }
@@ -121,7 +119,16 @@ impl FileTools {
       Some(metadata) => fs::set_permissions(temporary.path(), metadata.permissions()).map_err(fail)?,
       None => permissions::new_file(temporary.path()).map_err(fail)?,
     }
-    temporary.persist(path).map_err(|error| fail(error.error))?;
+    // A new file must not replace one that appeared since it was looked for: the agent never read it.
+    let persisted = if existing.is_some() {
+      temporary.persist(path)
+    } else {
+      temporary.persist_noclobber(path)
+    };
+    persisted.map_err(|error| match error.error.kind() {
+      io::ErrorKind::AlreadyExists => FileError::Appeared(self.shown(path)),
+      _ => fail(error.error),
+    })?;
     let metadata = fs::metadata(path).map_err(fail)?;
     self.stamps.record(path, ReadStamp::of(bytes, &metadata));
     Ok(())

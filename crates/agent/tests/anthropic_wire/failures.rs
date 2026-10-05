@@ -74,6 +74,12 @@ async fn anthropic_statuses_map_to_typed_errors() {
       "prompt is too long: 1200000 tokens > 1000000 maximum",
       ModelError::TooLarge,
     ),
+    (
+      400,
+      "invalid_request_error",
+      "input length and `max_tokens` exceed context limit: 990000 + 64000 > 1000000",
+      ModelError::TooLarge,
+    ),
   ];
   for (status, kind, message, expected) in cases {
     let (error, requests) = one_error(Script::new().reply_error(status, kind, message)).await;
@@ -312,4 +318,64 @@ async fn anthropic_key_never_shows_in_errors() {
   assert!(matches!(error, ModelError::Transport(_)), "{error:?}");
   let shown = format!("{error} {error:?} {seen:?}");
   assert!(!shown.contains(KEY), "{shown}");
+}
+
+#[tokio::test]
+async fn anthropic_huge_retry_after_is_an_error_not_a_panic() {
+  let body = json!({"type": "error", "error": {"type": "rate_limit_error", "message": "slow down"}}).to_string();
+  let script = Script::new().reply_status("/v1/messages", 429, &[("retry-after", "1e20")], &body);
+  let (error, requests) = one_error(script).await;
+  assert_eq!(
+    error,
+    ModelError::RateLimited {
+      retry_after: Some(Duration::MAX)
+    }
+  );
+  assert_eq!(requests, 1);
+  for odd in ["-1", "NaN", "inf", "soon"] {
+    let script = Script::new()
+      .reply_status("/v1/messages", 429, &[("retry-after", odd)], &body)
+      .reply_sse(events::text_response("Done."));
+    let server = FakeServer::start(script, events::catalog(), 10).await;
+    let (result, seen) = respond(
+      &client(&server),
+      &request(ConversationId::generate(), vec![task("Go.")]),
+    )
+    .await;
+    result.expect("a response after the backoff");
+    assert_eq!(
+      retries(&seen)[0].2,
+      ModelError::RateLimited { retry_after: None },
+      "{odd}"
+    );
+    server.finish();
+  }
+}
+
+#[tokio::test]
+async fn anthropic_retry_after_is_honoured_on_overload() {
+  let overloaded = json!({"type": "error", "error": {"type": "overloaded_error", "message": "busy"}}).to_string();
+  let script = Script::new()
+    .reply_status("/v1/messages", 529, &[("retry-after", "0")], &overloaded)
+    .reply_status("/v1/messages", 503, &[("retry-after", "0")], "unavailable")
+    .reply_sse(events::text_response("Done."));
+  let server = FakeServer::start(script, events::catalog(), 10).await;
+  let (result, seen) = respond(
+    &client(&server),
+    &request(ConversationId::generate(), vec![task("Go.")]),
+  )
+  .await;
+  result.expect("a response after two retries");
+  let waits: Vec<(Duration, ModelError)> = retries(&seen)
+    .into_iter()
+    .map(|(_, wait, error)| (wait, error))
+    .collect();
+  assert_eq!(
+    waits,
+    vec![
+      (Duration::ZERO, ModelError::Overloaded),
+      (Duration::ZERO, ModelError::Server(503))
+    ]
+  );
+  server.finish();
 }

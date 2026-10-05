@@ -1,12 +1,14 @@
 //! `search` (`docs/architecture/native-agent.md` §4.3): ripgrep with an argument vector Orchester builds
-//! (`--json`, `--max-count`, `--max-columns 500`, never `--pre` or `--search-zip`), at most 200 matches
-//! or 64 KiB. Without ripgrep the pattern is searched as literal text in a folder walk, which the result
-//! says. Matches read `path:line:text`, context lines `path-line-text`, as ripgrep prints them.
+//! (`--max-count`, `--max-columns 500`, never `--pre` or `--search-zip`), at most 200 matches or 64 KiB.
+//! ripgrep's plain output is read, not `--json`: JSON carries every matched line whole, with one entry
+//! per match, however long the line (a minified file gives lines of megabytes), while the plain output
+//! cuts each line at 500 columns and names the matches it left out. Without ripgrep the pattern is
+//! searched as literal text in a folder walk, which the result says. Matches read `path:line:text`,
+//! context lines `path-line-text`, as ripgrep prints them.
 
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{collections::BTreeSet, fs, path::Path, time::Instant};
 
 use orchester_core::native::{session::ToolOutcome, tools::Search};
-use serde_json::Value;
 
 use super::{
   FileError, FileTools, done,
@@ -15,15 +17,16 @@ use super::{
   listing::relative,
   outcome,
   ripgrep::{self, Want},
-  walk,
+  walk::{self, MAX_WALKED, WALK_TIMEOUT},
 };
 
 /// Matches one result shows.
 const MAX_MATCHES: usize = 200;
 /// Bytes one result shows.
 const MAX_BYTES: usize = 64 * 1024;
-/// Characters a shown line keeps.
-const MAX_LINE_CHARS: usize = 500;
+/// Characters a shown line keeps: ripgrep cuts lines at 500 columns itself and adds how many matches
+/// it left out, which must stay visible.
+const MAX_LINE_CHARS: usize = 600;
 /// The largest file the search without ripgrep reads.
 const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const NO_RIPGREP: &str = "[ripgrep was not found: the pattern was searched as literal text, without .gitignore rules]";
@@ -35,6 +38,8 @@ struct Hits {
   matches: usize,
   files: BTreeSet<String>,
   full: bool,
+  /// What the result says beyond its lines: ripgrep's errors, a search that ran out of time.
+  notes: Vec<String>,
 }
 
 impl Hits {
@@ -74,7 +79,7 @@ impl FileTools {
     let mut hits = Hits::default();
     match &self.ripgrep {
       Some(program) => self.with_ripgrep(program, &target, input, &mut hits)?,
-      None => self.literal(&target, input, &mut hits),
+      None => self.literal(&target, input, &mut hits)?,
     }
     let mut text = if hits.matches == 0 {
       "no matches".to_owned()
@@ -87,6 +92,10 @@ impl FileTools {
         hits.matches
       ));
     }
+    for note in &hits.notes {
+      text.push('\n');
+      text.push_str(note);
+    }
     if self.ripgrep.is_none() {
       text.push('\n');
       text.push_str(NO_RIPGREP);
@@ -96,9 +105,22 @@ impl FileTools {
   }
 
   fn with_ripgrep(&self, program: &Path, target: &Path, input: &Search, hits: &mut Hits) -> Result<(), FileError> {
-    let mut args: Vec<String> = ["--json", "--max-count", "200", "--max-columns", "500"]
-      .map(str::to_owned)
-      .to_vec();
+    let mut args: Vec<String> = [
+      "--with-filename",
+      "--line-number",
+      "--null",
+      "--no-heading",
+      "--color",
+      "never",
+      "--no-context-separator",
+      "--max-count",
+      "200",
+      "--max-columns",
+      "500",
+      "--max-columns-preview",
+    ]
+    .map(str::to_owned)
+    .to_vec();
     if input.case_insensitive() {
       args.push("--ignore-case".to_owned());
     }
@@ -119,43 +141,52 @@ impl FileTools {
     } else {
       target.parent().unwrap_or(target)
     };
-    let finished = ripgrep::run(program, &args, folder, |line| self.json_line(line, hits))?;
-    if finished.code == Some(2) && hits.matches == 0 {
-      return Err(FileError::Ripgrep(finished.stderr));
+    let finished = ripgrep::run(program, &args, folder, |line| self.plain_line(line, hits))?;
+    if finished.code == Some(2) {
+      if hits.matches == 0 {
+        return Err(FileError::Ripgrep(finished.stderr));
+      }
+      let first = finished.stderr.lines().next().unwrap_or_default();
+      hits.notes.push(format!(
+        "[ripgrep reported errors, so some files may be missing: {first}]"
+      ));
     }
     Ok(())
   }
 
-  /// One line of `rg --json`: a match or a context line goes to `hits`, anything else is skipped.
-  fn json_line(&self, line: &str, hits: &mut Hits) -> Want {
-    let Ok(event) = serde_json::from_str::<Value>(line) else {
+  /// One line of ripgrep's output, `path\0<line><: or -><text>`: a match or a context line goes to
+  /// `hits`.
+  fn plain_line(&self, line: &str, hits: &mut Hits) -> Want {
+    let Some((path, rest)) = line.split_once('\0') else {
       return Want::More;
     };
-    let is_match = match event["type"].as_str() {
-      Some("match") => true,
-      Some("context") => false,
+    let digits = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let (number, rest) = rest.split_at(digits);
+    let (Ok(number), Some(separator)) = (number.parse::<u64>(), rest.chars().next()) else {
+      return Want::More;
+    };
+    let is_match = match separator {
+      ':' => true,
+      '-' => false,
       _ => return Want::More,
     };
-    let data = &event["data"];
-    let (Some(path), Some(number), Some(text)) = (
-      data["path"]["text"].as_str(),
-      data["line_number"].as_u64(),
-      data["lines"]["text"].as_str(),
-    ) else {
-      return Want::More;
-    };
-    hits.line(&self.shown(Path::new(path)), number, text, is_match)
+    hits.line(&self.shown(Path::new(path)), number, &rest[1..], is_match)
   }
 
   /// The search without ripgrep: `input`'s pattern as literal text in the files under `target`.
-  fn literal(&self, target: &Path, input: &Search, hits: &mut Hits) {
-    let (files, _) = walk::files(target);
+  fn literal(&self, target: &Path, input: &Search, hits: &mut Hits) -> Result<(), FileError> {
+    let deadline = Instant::now() + WALK_TIMEOUT;
+    let (files, stopped) = walk::files(target, deadline);
+    let stopped_note = format!(
+      "[the search stopped early (more than {MAX_WALKED} files or {} s); narrow the path or glob]",
+      WALK_TIMEOUT.as_secs()
+    );
     let folder = if target.is_dir() {
       target
     } else {
       target.parent().unwrap_or(target)
     };
-    let glob = input.glob().map(Glob::new);
+    let glob = input.glob().map(Glob::new).transpose()?;
     let fold = |text: &str| {
       if input.case_insensitive() {
         text.to_lowercase()
@@ -165,6 +196,10 @@ impl FileTools {
     };
     let needle = fold(input.pattern());
     for file in files {
+      if Instant::now() > deadline {
+        hits.notes.push(stopped_note);
+        return Ok(());
+      }
       if glob
         .as_ref()
         .is_some_and(|glob| !glob.matches(&relative(folder, &file)))
@@ -179,9 +214,13 @@ impl FileTools {
         .filter(|at| fold(lines[*at]).contains(&needle))
         .collect();
       if self.show(&file, &lines, &found, input.context(), hits) == Want::Enough {
-        return;
+        return Ok(());
       }
     }
+    if stopped {
+      hits.notes.push(stopped_note);
+    }
+    Ok(())
   }
 
   /// Shows the lines `found` of `file` with `context` lines around each.
@@ -207,7 +246,7 @@ impl FileTools {
 /// The text of `file`, unless it is large or binary.
 fn readable_text(file: &Path) -> Option<String> {
   let metadata = fs::metadata(file).ok()?;
-  if metadata.len() > MAX_FILE_BYTES {
+  if !metadata.is_file() || metadata.len() > MAX_FILE_BYTES {
     return None;
   }
   let bytes = fs::read(file).ok()?;

@@ -69,3 +69,19 @@ fn files_read_stays_in_the_scope() {
   let index = ok(tools.read_file(&read_input(&text(&layout.index.join("symbols.tsv")), None, None)));
   assert!(index.contains("hello\tsrc/nested/lib.rs"), "{index}");
 }
+
+/// A FIFO would make a plain read wait forever; it is refused before it is opened. Windows has no
+/// FIFO a path can name, so this runs on macOS.
+#[cfg(unix)]
+#[test]
+fn files_read_refuses_a_fifo() {
+  let layout = Layout::temporary();
+  let fifo = layout.worktree.join("pipe");
+  let made = std::process::Command::new("mkfifo")
+    .arg(&fifo)
+    .status()
+    .expect("mkfifo runs");
+  assert!(made.success());
+  let error = failed(layout.tools().read_file(&read_input("pipe", None, None)));
+  assert!(error.contains("is not a regular file"), "{error}");
+}
