@@ -290,6 +290,8 @@ impl Resolved<'_> {
       // Memory is recalled for an invocation as it starts, from the records of that moment.
       memory: &[],
       retry: None,
+      // What the agent's CLI gets depends on the connection a run starts it with.
+      working: None,
     }
   }
 }

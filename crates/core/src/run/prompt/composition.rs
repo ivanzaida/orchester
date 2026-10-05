@@ -271,6 +271,10 @@ fn task_section(input: &PromptInput<'_>) -> PromptSection {
   if let Some(delivered) = input.messages {
     push_task_messages(&mut text, delivered);
   }
+  if let Some(working) = input.working {
+    text.push_str("\n# Files and commands\n");
+    push_block(&mut text, &working.text());
+  }
   text.push_str("\n# When you finish\n");
   push_block(&mut text, RESULT_INSTRUCTIONS);
   if input.step.approval_gate {

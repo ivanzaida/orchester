@@ -526,6 +526,63 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Agent commands without approvals · branch `claude/agent-tools` (done 2026-10-05)
+
+Four Claude Code runs of Orchester on itself (runs 22–25, Opus 5.5, about 1.5 h) asked 59 times: the agents read and
+edited through Bash (`cat`, `sed -n`, `sed -i`, heredocs, `awk`), prefixed nearly every command with `cd <worktree>;`
+and set variables (`f=…; sed -n 40,52p $f`), so whole lines were *Unknown*, and reads of a crate's source in Cargo's
+registry were *Credential read*s. The requests are the fixture `crates/core/tests/fixtures/approvals/runs-22-25.json`.
+
+- Prompt: a new Claude Code or Codex session's task part gets *Files and commands* (`run::WorkingTools`, from the
+  CLI and the step's effective permissions): Claude Code reads and searches with Read, Grep, Glob, and edits with
+  Edit and Write only in a writing step; Codex changes files with apply_patch only in a writing step; no `cd`;
+  with allowed commands, one bare command per call without `;`, `&&` or variables; with *Ask before running
+  commands*, that each command waits for a person. Resumed sessions keep it from their first prompt; native agents
+  and the instruction preview get none.
+- Classifier (`permission::category`): a `cd` to one folder named plainly in the worktree (`/h/…`, `H:/…`, quoted
+  `H:\…`) is no part of its own; a `cd` with an option, `-`, `~`, a glob or a second operand (zsh's `cd old new`) is
+  kept, and one with an option, `-` or a second operand leaves where later parts run unknown; a glob `cd` goes to its
+  one match. Every part reads the folder it runs in. A glob names each path it matches now, links followed
+  (`glob.rs`, bracket expressions too; `**` is Unknown). `>&file` and `<&file` write and read the file (`>&2`,
+  `>&-` copy a descriptor). A literal assignment (`f=src/x.rs`, `L="C:/…"`: no expansion, quote or space; a name
+  of one letter and digits, which no shell treats specially, so zsh's `path=` or `cdpath=` stays unread; unquoted,
+  first in its list, not in a pipeline or the background) is read into its later `$f` and `${f}`; a part in the background is Unknown; a `..` after a glob is Unknown; a carriage return
+  stays in its word. `sed` is read by its options and its script (`sed_script`); `awk` by an allow-list of the names
+  its program uses (`awk_program`: no `ARGV`, `ARGC`, `ENVIRON`, `FILENAME`, `SYMTAB`, `getline`, `system`,
+  `close`, `@`, or `print` with `>`/`|`; `-v` and operand assignments only of the variables it may set); `sort`
+  without `-o`, `-T`, `--compress-program`, `--files0-from` or their abbreviations; `grep -R`, a `jq` module,
+  `cargo --config`/`-Z` are Unknown; `git remote show` without `-n` reaches the network. Reads of
+  `~/.cargo/registry/src` and `~/.rustup/toolchains/*/lib/rustlib/src` are reads outside the worktree; the rest of
+  `~/.cargo` and `~/.rustup` stays a credential location, as does every path through a Windows share or `\\?\`.
+- Answers: `run::permitted` runs a line Claude Code asked about when every part would run on its own: listed in the
+  step's allowed commands (naming nothing outside the worktree, no redirection into a file) or a known-safe read
+  inside the worktree. The runner answers it before a person (`step/answer.rs`) as `DecidedBy::Permissions`
+  (`decided_by = 'permissions'`; a migration rebuilds `tool_approvals` for its `CHECK`), marked *allowed by the
+  profile · <category>*; the Summary counts it with *Always allowed*. Approve similar also covers several asking
+  parts that are alike (`sed -i …; sed -i …`). Shell writes still ask.
+- Security review (`.tmp/review-agent-tools.md`, FAIL at `34a10f02`): every finding fixed; its probes are refusal
+  tests in `tests/command_probes.rs` (links are junctions on Windows, symbolic links elsewhere).
+- Fixture, with a builder that lists `cargo test`, `cargo check`, `cargo clippy`, `cargo fmt`
+  (`tests/approval_fixtures.rs`; the user name in its paths replaced):
+
+  | 59 requests | runs unasked | asks, Approve similar | asks, Unknown | asks, other |
+  | --- | --- | --- | --- | --- |
+  | before (master `3d76beff`) | 0 | 1 | 43 | 15 (credential reads, several asking parts) |
+  | now | 5 | 40 | 8 | 6 (`sed -i` with a build in one line) |
+
+  Of the 40, 16 are `sed -i` edits in the worktree and 24 reads outside it (23 of lurq's source in the registry; on
+  Windows one `grep` pattern starting with `\` is a path at the drive's root). The 8 Unknown are heredocs and
+  `python`/`$(…)` lines. On macOS the `grep` line runs unasked (6 / 39).
+- Tests: `core` `command_probes`, `command_sequences`, `approval_fixtures`, `command_categories`,
+  `command_fail_closed`, `approval_answers`, `run` (`prompt`, `plan`, `conversation`, `working`); `store`
+  `approval_rules`, `tool_approvals`, `project_db`, `organization_migration`, `joined_tasks`; `desktop` `i18n`,
+  `transcript`; `runner --features test-agent` `approval_choices` (a `$`-line of a read and a listed test runs
+  unasked), `claude_unlisted`, `claude_approvals`, `command_approvals`, `claude`, `memory`. Nothing run on macOS.
+- Open: the activity mark *allowed by the profile · …* is new text without a design frame and needs the design
+  verification (`AGENTS.md` rule 15); reads outside the worktree that are no credential still ask (Approve similar
+  available); a line mixing a shell edit with a listed build has no Approve similar; grep and rg patterns are placed
+  like paths; `date --se…` and other abbreviations of options in the older tables are not refused.
+
 S2c · Desktop: join a shared repository · branch `claude/s2c` (done 2026-10-05)
 
 Implemented in `.tmp/worktrees/claude-s2c` from master `af858e1d` (S1a, S1b, S2a, S2b).

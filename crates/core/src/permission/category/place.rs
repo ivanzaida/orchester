@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, programs::operands};
+use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place};
 
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
@@ -23,11 +23,12 @@ pub(super) struct Placing<'a> {
 impl Placing<'_> {
   /// Each path `word` names, one per folder the part may run in; `None` when one cannot be told.
   fn locate(&self, word: &str) -> Option<Vec<(PathBuf, Place)>> {
-    self
+    let located: Option<Vec<Vec<(PathBuf, Place)>>> = self
       .folders?
       .iter()
       .map(|folder| self.scope.locate(folder, word))
-      .collect()
+      .collect();
+    located.map(|located| located.into_iter().flatten().collect())
   }
 
   /// `word`, a file the part reads or a word that may name one: a credential location is noted, a
@@ -105,7 +106,7 @@ fn note(part: &mut CommandPart, path: &Path, place: Place) {
   }
 }
 
-fn is_null_device(target: &str) -> bool {
+pub(super) fn is_null_device(target: &str) -> bool {
   matches!(target, "/dev/null" | "$null") || target.eq_ignore_ascii_case("nul")
 }
 
@@ -129,11 +130,18 @@ pub(super) fn named(args: &[String]) -> Vec<&str> {
     .collect()
 }
 
-/// The folders later parts may run in after `cd args`: those before it and the one it goes to.
+/// The folders later parts may run in after `cd args`: those before it and the one it goes to. Only
+/// `cd` alone (the home folder) and `cd <folder>` are followed; an option (`-P`, `-L`, `--`), the
+/// previous folder (`-`), or a second operand (zsh's `cd old new` replaces `old` in the current folder's
+/// path) leaves where later parts run unknown.
 pub(super) fn change_directory(scope: &CommandScope, folders: &mut Folders, args: &[String]) {
-  let target = operands(args).into_iter().next().unwrap_or_else(|| "~".to_owned());
-  let reached: Option<Vec<PathBuf>> = match folders.as_deref() {
-    Some(current) if target != "-" => current.iter().map(|folder| scope.path(folder, &target)).collect(),
+  let target = match args {
+    [] => Some("~"),
+    [target] if !target.starts_with('-') => Some(target.as_str()),
+    _ => None,
+  };
+  let reached: Option<Vec<PathBuf>> = match (folders.as_deref(), target) {
+    (Some(current), Some(target)) => current.iter().map(|folder| scope.folder(folder, target)).collect(),
     _ => None,
   };
   *folders = match (folders.take(), reached) {

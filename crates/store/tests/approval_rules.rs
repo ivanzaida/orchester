@@ -83,6 +83,7 @@ fn approval_rules_decision_counts_by_who_answered() {
     Some(DecidedBy::AutoApproved),
     Some(DecidedBy::AutoApproved),
     Some(DecidedBy::AlwaysAllowed),
+    Some(DecidedBy::Permissions),
     Some(DecidedBy::PersonDeny),
     None,
   ];
@@ -126,7 +127,7 @@ fn approval_rules_decision_counts_by_who_answered() {
       by_you: 2,
       denied_by_you: 1,
       by_similar_rule: 1,
-      always_allowed: 1,
+      always_allowed: 2,
       auto_approved: 2,
       waiting: 1,
     }

@@ -326,3 +326,14 @@ async fn approval_choices_a_credential_read_is_marked_as_one() {
     .collect();
   assert_eq!(secrets, [true]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_choices_a_line_whose_parts_run_alone_runs_unasked() {
+  // The fake CLI asks about any `$`; each part runs on its own: a known-safe read and a listed test.
+  let brief = "Run `f=README.md; cat $f && cargo test -p core`.";
+  let mut started = Started::new(builder(brief, &["cargo test"], false)).await;
+  let run = started.ended().await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(approvals(&started.readme()), 1);
+  assert_eq!(started.decisions(), [DecidedBy::Permissions]);
+}

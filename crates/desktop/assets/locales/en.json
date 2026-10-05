@@ -1532,6 +1532,7 @@
         "bySimilarRule": "approved by similar rule · {{subject}}",
         "alwaysAllowed": "always allowed · {{subject}}",
         "autoApproved": "auto-approved · {{subject}}",
+        "permissions": "allowed by the profile · {{subject}}",
         "told": "Told the agent: {{message}}",
         "category": {
           "readOnly": "Read-only",
