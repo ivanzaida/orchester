@@ -103,11 +103,26 @@ pub enum ToolInputError {
   NotOffered(ToolName),
   #[error("invalid input for `{tool}`: {message}", tool = .tool.as_str())]
   Invalid { tool: ToolName, message: String },
+  /// The model wrote input that is not JSON; the result names it the way the provider asks for (§3.1).
+  #[error("{}", invalid_json_input(.0))]
+  NotJson(String),
+}
+
+/// The key of the input a client gives a tool call whose input was not JSON: `{"INVALID_JSON": "<raw>"}`
+/// holds the text as the model wrote it, so the call can be stored and sent back.
+pub const INVALID_JSON: &str = "INVALID_JSON";
+
+/// The input of a call whose input text `raw` is not JSON.
+pub fn invalid_json_input(raw: &str) -> serde_json::Value {
+  serde_json::json!({ INVALID_JSON: raw })
 }
 
 /// The input of a call of tool `name`, or why it is invalid.
 pub fn parse_call(name: &str, input: &serde_json::Value) -> Result<ToolInput, ToolInputError> {
   let tool = ToolName::from_name(name).ok_or_else(|| ToolInputError::UnknownTool(name.to_owned()))?;
+  if let Some(raw) = not_json(input) {
+    return Err(ToolInputError::NotJson(raw.to_owned()));
+  }
   let invalid = |message: String| ToolInputError::Invalid { tool, message };
   let input = input.clone();
   let parsed = match tool {
@@ -123,4 +138,13 @@ pub fn parse_call(name: &str, input: &serde_json::Value) -> Result<ToolInput, To
   .map_err(|error| invalid(error.to_string()))?;
   input::validate(&parsed).map_err(invalid)?;
   Ok(parsed)
+}
+
+/// The raw text of an input made by [`invalid_json_input`].
+fn not_json(input: &serde_json::Value) -> Option<&str> {
+  let object = input.as_object()?;
+  match (object.len(), object.get(INVALID_JSON)) {
+    (1, Some(serde_json::Value::String(raw))) => Some(raw),
+    _ => None,
+  }
 }

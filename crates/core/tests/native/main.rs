@@ -2,6 +2,7 @@
 //! machine (`docs/architecture/native-agent.md` §8, layer 1).
 
 mod command;
+mod edit;
 mod known_safe;
 mod known_safe_options;
 mod loop_resume;
