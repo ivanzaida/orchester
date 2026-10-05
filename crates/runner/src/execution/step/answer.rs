@@ -65,7 +65,7 @@ impl Worker {
       return Ok(Some(Settled::by(DecidedBy::AlwaysAllowed, None)));
     }
     if let Some(launch) = &watch.invocation.permissions
-      && let Some(category) = permitted(&subject, launch.permissions().commands())
+      && let Some(category) = permitted(&subject, launch.permissions())
     {
       return Ok(Some(Settled::by(DecidedBy::Permissions, Some(category))));
     }

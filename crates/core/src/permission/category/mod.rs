@@ -18,6 +18,7 @@ mod files;
 mod gh;
 mod git;
 mod glob;
+mod heredoc;
 mod install;
 mod network;
 mod network_tables;
@@ -44,7 +45,7 @@ pub use self::{
   reason::CommandReason,
 };
 use self::{
-  place::{Folders, Placing},
+  place::{Line, Placing},
   programs::{Judged, Kind},
   variables::is_assignment,
   words::{Quoting, RawPart},
@@ -111,8 +112,8 @@ impl ClassifiedCommand {
 
   /// `command` run in `folder` (the working folder the agent's CLI reported), placed in `scope`.
   pub fn classify_in(command: &str, folder: &Path, scope: &CommandScope) -> Self {
-    let mut folders = Some(vec![scope.worktree().join(folder)]);
-    let mut parts = classify_line(command, Quoting::Bash, scope, &mut folders, 0);
+    let mut line = Line::new(Some(vec![scope.worktree().join(folder)]));
+    let mut parts = classify_line(command, Quoting::Bash, scope, &mut line, 0);
     // A `cd` into the worktree or a writable folder does nothing a person decides about; where the
     // parts after it run is followed all the same.
     if parts.iter().any(|part| !part.moves_inside()) {
@@ -153,23 +154,25 @@ impl ClassifiedCommand {
 }
 
 fn classify_line(
-  line: &str,
+  text: &str,
   quoting: Quoting,
   scope: &CommandScope,
-  folders: &mut Folders,
+  line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
-  words::split(line, quoting)
-    .into_iter()
-    .flat_map(|raw| classify_part(&raw, quoting, scope, folders, depth))
-    .collect()
+  let mut parts = Vec::new();
+  for raw in words::split(text, quoting) {
+    parts.extend(classify_part(&raw, quoting, scope, line, depth));
+    line.made(scope, &raw.writes);
+  }
+  parts
 }
 
 fn classify_part(
   raw: &RawPart,
   quoting: Quoting,
   scope: &CommandScope,
-  folders: &mut Folders,
+  line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
   let words = raw.words.clone();
@@ -182,10 +185,7 @@ fn classify_part(
   if raw.unread || raw.background || words.first().is_some_and(|word| is_assignment(word)) {
     return vec![CommandPart::unknown(words)];
   }
-  let placing = Placing {
-    scope,
-    folders: folders.as_deref(),
-  };
+  let placing = line.placing(scope);
   let Some((first, args)) = words.split_first() else {
     // Only redirections.
     return vec![redirected(
@@ -199,9 +199,11 @@ fn classify_part(
     let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH) else {
       return vec![CommandPart::unknown(words)];
     };
-    // The script runs in a shell of its own: a `cd` in it changes nothing after it.
-    let mut inner_folders = folders.clone();
-    let mut parts = classify_line(&script, inner, scope, &mut inner_folders, depth + 1);
+    // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
+    let mut inner_line = line.clone();
+    let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
+    line.made = inner_line.made;
+    let placing = line.placing(scope);
     if !raw.writes.is_empty() || !raw.reads.is_empty() {
       parts.push(redirected(
         CommandPart::new(words, None, &Judged::of(Kind::ReadOnly)),
@@ -216,6 +218,7 @@ fn classify_part(
   };
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
+  part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
   let named: Vec<String> = args
@@ -240,8 +243,9 @@ fn classify_part(
   if program == "cd" {
     part.moves_inside = enters_plainly(args) && part.known_safe_read();
   }
+  line.made(scope, &judged.writes);
   if matches!(program.as_str(), "cd" | "pushd" | "chdir" | "set-location") {
-    place::change_directory(scope, folders, args);
+    place::change_directory(scope, &mut line.folders, args);
   }
   vec![part]
 }

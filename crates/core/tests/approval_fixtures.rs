@@ -2,14 +2,15 @@
 //! Orchester would answer them now: how many run without a person (`run::permitted`), how many ask
 //! with Approve similar available, and how many ask without it. The runs' worktrees, Git Bash's
 //! `/h/…` and `H:/…` forms of them and the home folder are mapped onto a temporary folder; the profile
-//! lists the checks a builder runs. A line that writes files through the shell still asks.
+//! lists the checks a builder runs. In a read-only step a line that writes files through the shell asks; in
+//! a step that edits files, one that writes only in the worktree runs, as the edit tools would.
 //! `cargo test -p orchester-core --test approval_fixtures approval_fixtures`.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   permission::{
-    AllowedCommands, CommandPermission, CommandPrefix,
+    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandCategory, CommandScope},
   },
   run::{ApprovalSubject, RuleScope, permitted},
@@ -99,11 +100,12 @@ fn builder() -> CommandPermission {
   CommandPermission::Allowed(AllowedCommands::new(entries).expect("allowed commands"))
 }
 
-#[test]
-fn approval_fixtures_of_runs_22_to_25() {
+/// How the fixture's requests are answered in a builder's step with `repository` access.
+fn answered(repository: RepositoryAccess) -> Table {
   let requests: Vec<Request> = serde_json::from_str(FIXTURE).expect("the fixture is JSON");
+  assert_eq!(requests.len(), 59);
   let machine = Machine::new();
-  let commands = builder();
+  let permissions = AgentPermissions::new(repository, builder(), NetworkAccess::On);
   let mut table = Table::default();
   for request in &requests {
     let (worktree, line) = machine.place(request);
@@ -111,7 +113,7 @@ fn approval_fixtures_of_runs_22_to_25() {
     let command = ClassifiedCommand::classify(&line, &scope);
     let unknown = command.category() == CommandCategory::Unknown;
     let subject = ApprovalSubject::Command(command);
-    let slot = if permitted(&subject, &commands).is_some() {
+    let slot = if permitted(&subject, &permissions).is_some() {
       &mut table.runs
     } else if RuleScope::similar(&subject).is_ok() {
       &mut table.similar
@@ -122,17 +124,32 @@ fn approval_fixtures_of_runs_22_to_25() {
     };
     *slot += 1;
   }
-  assert_eq!(requests.len(), 59);
+  table
+}
+
+#[test]
+fn approval_fixtures_of_runs_22_to_25() {
   // On Windows a word that starts with `\` lies at the root of the drive: one `grep` pattern of the
   // fixture (`\.assemble(`) is then a path outside the worktree, which asks.
   let runs = if cfg!(windows) { 5 } else { 6 };
   assert_eq!(
-    table,
+    answered(RepositoryAccess::ReadOnly),
     Table {
       runs,
       similar: 45 - runs,
-      unknown: 8,
-      other: 6,
+      unknown: 3,
+      other: 11,
+    }
+  );
+  // A step that edits files runs the shell edits in the worktree too.
+  let runs = if cfg!(windows) { 32 } else { 33 };
+  assert_eq!(
+    answered(RepositoryAccess::Write),
+    Table {
+      runs,
+      similar: 56 - runs,
+      unknown: 3,
+      other: 0,
     }
   );
 }

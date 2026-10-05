@@ -87,6 +87,8 @@ pub struct CommandPart {
   pub(super) writes_output: bool,
   /// A `cd` to one folder named plainly, in the worktree or a writable folder.
   pub(super) moves_inside: bool,
+  /// Its program only edits the files it names ([`Judged::edits`]).
+  pub(super) edits: bool,
 }
 
 impl CommandPart {
@@ -115,6 +117,7 @@ impl CommandPart {
       known_safe: judged.known_safe,
       writes_output: false,
       moves_inside: false,
+      edits: judged.edits,
     }
   }
 
@@ -169,6 +172,19 @@ impl CommandPart {
       && !self.reads_secrets
       && !self.installs
       && !self.writes_output
+      && self.outside.is_empty()
+  }
+
+  /// Whether it only writes files in the worktree or its writable folders, as an edit does: a program that
+  /// edits the files it names (`sed -i`, `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`) or a known-safe read
+  /// whose output is redirected there (`cat > f <<'EOF'`, `echo x >> f`), every write placed where an
+  /// edit may write ([`super::CommandScope`]: no `.git`, no `.orchester/`, not the folder itself
+  /// removed), and nothing named, read or written outside, no credential.
+  pub fn edits_worktree(&self) -> bool {
+    (self.edits || self.known_safe)
+      && self.category == CommandCategory::Worktree
+      && !self.reads_secrets
+      && !self.installs
       && self.outside.is_empty()
   }
 

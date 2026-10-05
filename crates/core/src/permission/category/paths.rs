@@ -5,7 +5,10 @@
 use std::path::{Component, Path, PathBuf, Prefix};
 
 use super::glob;
-use crate::permission::canonical::{existing, normalize};
+use crate::{
+  native::scope::protected,
+  permission::canonical::{existing, normalize},
+};
 
 /// Files directly in the home folder that hold credentials besides its dot files (`_netrc` is
 /// curl's `.netrc` on Windows).
@@ -117,7 +120,29 @@ impl CommandScope {
     } else if word.starts_with('~') {
       return None;
     } else {
-      cwd.join(host_path(word))
+      cwd.join(host_path(word)?)
+    })
+  }
+
+  /// `word` from `cwd` as written, `.` and `..` taken away, no link followed; `None` as for
+  /// [`Self::locate`] without a glob.
+  pub(super) fn written(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
+    self.absolute(cwd, word).map(|path| normalize(&path))
+  }
+
+  /// Whether every folder from the worktree or the writable folder `path` (as written) lies in down to
+  /// `path` exists now as a folder, none of them a link or junction.
+  pub(super) fn plain_folders(&self, path: &Path) -> bool {
+    let Some(root) = std::iter::once(&self.worktree)
+      .chain(&self.writable)
+      .find(|root| path.starts_with(root))
+    else {
+      return false;
+    };
+    let mut folder = root.clone();
+    path.components().skip(root.components().count()).all(|component| {
+      folder.push(component);
+      std::fs::symlink_metadata(&folder).is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink())
     })
   }
 
@@ -135,6 +160,25 @@ impl CommandScope {
       return Place::Temp;
     }
     Place::Outside
+  }
+
+  /// Whether a write to `path` (resolved, in the worktree or a writable folder) is refused as the native
+  /// agent's file tools refuse it ([`crate::native::scope`]): a `.git` entry or anything in one, at any
+  /// depth, or `.orchester/` at the top of the worktree; or, for a delete, the worktree or a writable
+  /// folder itself.
+  pub(super) fn write_refused(&self, path: &Path, delete: bool) -> bool {
+    let root = if path.starts_with(&self.worktree) {
+      Some((&self.worktree, true))
+    } else {
+      self
+        .writable
+        .iter()
+        .find(|folder| path.starts_with(folder))
+        .map(|folder| (folder, false))
+    };
+    root.is_some_and(|(root, in_worktree)| {
+      protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+    })
   }
 
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it
@@ -229,18 +273,23 @@ fn before_glob(word: &str) -> Option<(&str, bool)> {
   Some((&word[..start], true))
 }
 
-/// `word` as the host reads it: on Windows, Git Bash's `/c/…` is `C:\…`.
-fn host_path(word: &str) -> PathBuf {
+/// `word` as the host reads it: on Windows, Git Bash's `/c/…` is `C:\…`. Any other path rooted
+/// without a drive (`/projects/x`, `/tmp/x`) Git Bash places under its own installation, which the
+/// classifier does not know: `None`.
+fn host_path(word: &str) -> Option<PathBuf> {
   if cfg!(windows) {
     let bytes = word.as_bytes();
     if bytes.len() >= 2 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && (bytes.len() == 2 || bytes[2] == b'/')
     {
-      return PathBuf::from(format!(
+      return Some(PathBuf::from(format!(
         "{}:\\{}",
         char::from(bytes[1]),
         word.get(3..).unwrap_or_default()
-      ));
+      )));
+    }
+    if word.starts_with('/') && !word.starts_with("//") {
+      return None;
     }
   }
-  PathBuf::from(word)
+  Some(PathBuf::from(word))
 }

@@ -48,7 +48,9 @@ fn sed(args: &[String]) -> Judged {
     return Judged::unknown();
   }
   if in_place {
-    return Judged::writing(Kind::Writes, files.iter().map(|&file| args[file].clone()).collect()).with_script(Some(at));
+    return Judged::writing(Kind::Writes, files.iter().map(|&file| args[file].clone()).collect())
+      .with_script(Some(at))
+      .editing();
   }
   Judged::of(Kind::ReadOnly).known_safe().with_script(Some(at))
 }

@@ -10,6 +10,48 @@ use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place};
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
 
+/// What the parts before a part leave it: the folders it may run in, and the paths they write, create,
+/// copy or move to, as written. The file system is read before the line runs, so what an earlier part
+/// makes is not there yet: a write under it is placed by its words only, which a link brought there
+/// would not follow.
+#[derive(Clone, Debug)]
+pub(super) struct Line {
+  pub(super) folders: Folders,
+  pub(super) made: Vec<PathBuf>,
+}
+
+impl Line {
+  pub(super) const fn new(folders: Folders) -> Self {
+    Self {
+      folders,
+      made: Vec::new(),
+    }
+  }
+
+  pub(super) fn placing<'a>(&'a self, scope: &'a CommandScope) -> Placing<'a> {
+    Placing {
+      scope,
+      folders: self.folders.as_deref(),
+      made: &self.made,
+    }
+  }
+
+  /// Notes the paths `targets` (as a part names them) as made by the line.
+  pub(super) fn made(&mut self, scope: &CommandScope, targets: &[String]) {
+    let Some(folders) = &self.folders else {
+      return;
+    };
+    for target in targets
+      .iter()
+      .filter(|target| *target != "-" && !is_null_device(target))
+    {
+      self
+        .made
+        .extend(folders.iter().filter_map(|folder| scope.written(folder, target)));
+    }
+  }
+}
+
 /// The most folders a command line is followed in; past them it cannot be told.
 const MOST_FOLDERS: usize = 8;
 
@@ -18,6 +60,7 @@ const MOST_FOLDERS: usize = 8;
 pub(super) struct Placing<'a> {
   pub(super) scope: &'a CommandScope,
   pub(super) folders: Option<&'a [PathBuf]>,
+  made: &'a [PathBuf],
 }
 
 impl Placing<'_> {
@@ -55,12 +98,14 @@ impl Placing<'_> {
     if target == "-" || is_null_device(target) {
       return;
     }
-    let Some(located) = self.locate(target) else {
+    let Some(located) = self.locate(target).filter(|_| !self.under_made(target)) else {
       part.at_least(CommandCategory::Unknown);
       return;
     };
     for (path, place) in located {
       let category = match place {
+        // What no edit may change is no worktree write; a person answers each such write.
+        Place::Granted if self.scope.write_refused(&path, delete) => CommandCategory::Unknown,
         Place::Granted => CommandCategory::Worktree,
         Place::Temp => CommandCategory::OutsideWrite,
         Place::Outside | Place::Secret if delete => CommandCategory::HistoryDestructive,
@@ -78,6 +123,34 @@ impl Placing<'_> {
       part.at_least(category);
       note(part, &path, place);
     }
+  }
+
+  /// Whether `target` lies under a path an earlier part of the line makes, in a folder that is not there
+  /// now as a plain folder: what that part brings there cannot be told before the line runs.
+  fn under_made(&self, target: &str) -> bool {
+    let Some(folders) = self.folders else {
+      return true;
+    };
+    folders.iter().any(|folder| {
+      self.scope.written(folder, target).is_none_or(|path| {
+        self.made.iter().any(|made| path != *made && path.starts_with(made))
+          && !path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
+      })
+    })
+  }
+
+  /// Whether `cp` or `mv` of `source` copies or moves a folder or a link (or what cannot be told), whose
+  /// tree can bring links to the target.
+  pub(super) fn moves_tree(&self, source: &str) -> bool {
+    let Some(folders) = self.folders else {
+      return true;
+    };
+    source.contains(['*', '?', '['])
+      || folders.iter().any(|folder| {
+        self.scope.written(folder, source).is_none_or(|path| {
+          std::fs::symlink_metadata(path).is_ok_and(|found| found.is_dir() || found.file_type().is_symlink())
+        })
+      })
   }
 
   /// `word` must lie in the worktree or a writable folder, else the part is Unknown.
