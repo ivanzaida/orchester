@@ -205,14 +205,15 @@ fn taken(details: Option<&SharingErrorDetails>) -> ShareError {
   }
 }
 
-/// The project at `repo_root` takes no change from this computer's screens while it is shared.
-struct InProgress {
+/// The project at `repo_root` takes no change from this computer's screens while it is shared or
+/// joins a server project.
+pub(super) struct InProgress {
   servers: Servers,
   root: PathBuf,
 }
 
 impl InProgress {
-  fn start(servers: &Servers, root: &Path) -> Self {
+  pub(super) fn start(servers: &Servers, root: &Path) -> Self {
     servers.inner.sharing_now.lock().insert(root.to_owned());
     Self {
       servers: servers.clone(),
@@ -266,7 +267,7 @@ fn upload(
   let revisions = read.iter().map(|task| (task.id(), task.revision())).collect();
   let tasks = read
     .iter()
-    .map(|task| upload_task(&db, task, &names))
+    .map(|task| upload_task(&db, task, &names, UploadAs::Share))
     .collect::<Result<Vec<_>, _>>()?;
   let create = ProjectCreate {
     idempotency_key: key,
@@ -278,10 +279,19 @@ fn upload(
   Ok((create, revisions))
 }
 
-fn upload_task(
+/// How a task goes to the server: with its number when the project is shared, or for a new number
+/// with its key as its former key when it is imported (*Join*, *Share task*).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum UploadAs {
+  Share,
+  Import,
+}
+
+pub(super) fn upload_task(
   db: &ProjectDb,
   task: &Task,
   names: &HashMap<orchester_core::id::TagId, String>,
+  this: UploadAs,
 ) -> Result<UploadTask, StoreError> {
   let details = task.details();
   let organization = Organization::from_core(task.organization());
@@ -291,8 +301,8 @@ fn upload_task(
     .is_empty();
   Ok(UploadTask {
     id: task.id(),
-    number: Some(task.key().number().get()),
-    former_key: None,
+    number: (this == UploadAs::Share).then(|| task.key().number().get()),
+    former_key: (this == UploadAs::Import).then(|| task.key().to_string()),
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),

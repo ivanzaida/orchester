@@ -103,6 +103,12 @@ impl PartialEq for SharingDialog {
 
 impl lurq::app::component::DevtoolsInspectable for SharingDialog {}
 
+/// The tasks kept *Not shared* that *Make local* returned to the list, with their keys (10.26 C).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MadeLocal(std::sync::Arc<[orchester_store::ReturnedTask]>);
+
+impl lurq::app::component::DevtoolsInspectable for MadeLocal {}
+
 /// The server *Share on* names.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct ServerChoice(Option<ServerId>);
@@ -143,7 +149,7 @@ impl lurq::app::component::DevtoolsInspectable for Members {}
 
 type ShareAction = FutureAction<(ServerEntry, RepositoryIdentity, IdempotencyKey, bool), Shared, Message>;
 type MemberAction = FutureAction<MemberWork, (), Message>;
-type LocalAction = FutureAction<(), (), Message>;
+type LocalAction = FutureAction<(), MadeLocal, Message>;
 type DiscoveryAction = FutureAction<(), (), Message>;
 
 /// The tab's futures, requested in this order in `create` and `render`.
@@ -416,6 +422,7 @@ fn local_action(ctx: &mut Ctx, servers: &Servers, root: &Path) -> LocalAction {
       server
         .make_local()
         .await
+        .map(|returned| MadeLocal(returned.into()))
         .map_err(|error| error_message(&error, Some(&server)))
     }
   })
