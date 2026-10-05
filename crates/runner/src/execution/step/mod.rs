@@ -11,6 +11,8 @@ mod cli_version;
 mod end;
 mod mcp;
 mod memory;
+mod orchester_tools;
+mod relay;
 mod skills;
 mod start;
 mod stderr;

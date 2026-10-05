@@ -23,6 +23,12 @@
 //! once, as print mode denies it without the tool, so a prompt never grants more than the step's
 //! permissions leave to a person.
 //!
+//! The same server serves the step's Orchester tools (`crate::orchester_tools`): those that run have
+//! `mcp__Orchester__<tool>` allow rules, and a call of one that asks reaches the prompt and a person
+//! whether or not the step asks before MCP actions. Claude Code 2.1.286 removes only the prompt tool
+//! itself from the tools the model may call (`permissionPromptToolName` filters by exact name), so the
+//! server's other tools stay offered.
+//!
 //! A decision covers one call: an approval answers `{"behavior":"allow","updatedInput":{}}`, which
 //! 2.1.89 runs with the call's own input (an empty `updatedInput` keeps it), and never returns
 //! `updatedPermissions`, the rules that would allow later calls. The answer never repeats the input,
@@ -30,7 +36,7 @@
 
 pub mod relay;
 
-use std::{collections::BTreeMap, fmt};
+use std::{collections::BTreeMap, fmt, sync::Arc};
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -40,8 +46,10 @@ use zeroize::Zeroizing;
 use crate::{
   command::{SecretVariable, redact_secrets},
   connection::mcp::McpServerName,
+  orchester_tools::StepTools,
   permission::{AgentPermissions, CommandPermission},
   run::recorded_arguments,
+  secret::SecretValue,
 };
 
 /// The MCP server that serves the permission prompt.
@@ -54,6 +62,8 @@ pub const PROMPT_TOOL: &str = "mcp__Orchester__approve";
 pub const ADDRESS_VARIABLE: &str = "ORCHESTER_APPROVAL_ADDRESS";
 /// The relay's variable holding the invocation's [`ApprovalToken`].
 pub const TOKEN_VARIABLE: &str = "ORCHESTER_APPROVAL_TOKEN";
+/// How Claude Code names the tools of [`SERVER`]; no project server has a capital letter in its name.
+const ORCHESTER_TOOLS: &str = "mcp__Orchester__";
 /// The only command tool of Claude Code.
 const COMMAND_TOOL: &str = "Bash";
 /// What an approval's server is called when it is a command, as for Codex.
@@ -84,6 +94,13 @@ impl ApprovalToken {
   /// The value, for the configuration file the relay starts with.
   pub fn expose(&self) -> &str {
     &self.0
+  }
+
+  /// The token as the relay's variable [`TOKEN_VARIABLE`], for a CLI that hands its servers variables
+  /// from its own environment (Codex) instead of a configuration file.
+  pub fn variable(&self) -> SecretVariable {
+    let value = SecretValue::new(self.0.to_string()).expect("a generated token is never blank");
+    SecretVariable::new(TOKEN_VARIABLE, Arc::new(value))
   }
 }
 
@@ -141,6 +158,8 @@ pub struct ClaudeApprovalScope {
   servers: Vec<McpServerName>,
   /// Secret values of those servers, removed from the arguments an approval shows.
   secrets: Vec<SecretVariable>,
+  /// The step's Orchester tools; a call of one that asks reaches a person.
+  orchester: StepTools,
 }
 
 impl ClaudeApprovalScope {
@@ -156,7 +175,15 @@ impl ClaudeApprovalScope {
       tools,
       servers: servers.to_vec(),
       secrets: Vec::new(),
+      orchester: StepTools::default(),
     })
+  }
+
+  /// This scope, leaving the calls of `tools` that ask to a person.
+  #[must_use]
+  pub fn with_orchester_tools(mut self, tools: StepTools) -> Self {
+    self.orchester = tools;
+    self
   }
 
   /// This scope, removing `secrets` from the MCP arguments its requests show.
@@ -190,6 +217,19 @@ impl ClaudeApprovalScope {
         action: command,
         target: None,
         scope: text("description"),
+      });
+    }
+    if let Some(name) = tool.strip_prefix(ORCHESTER_TOOLS) {
+      if !self.orchester.asks(name) {
+        return ClaudeAsk::Refused;
+      }
+      return ClaudeAsk::Person(ClaudeApprovalRequest {
+        call: call.to_owned(),
+        command: false,
+        server: SERVER.to_owned(),
+        action: name.to_owned(),
+        target: None,
+        scope: Some(shown_arguments(input, &self.secrets)),
       });
     }
     let Some((server, action)) = self.server_tool(tool).filter(|_| self.tools) else {

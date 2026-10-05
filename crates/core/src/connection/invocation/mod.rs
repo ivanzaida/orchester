@@ -5,6 +5,7 @@
 mod claude;
 mod codex;
 pub mod mcp;
+mod orchester;
 
 use std::{
   ffi::OsString,
@@ -15,6 +16,7 @@ pub use self::{
   claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, input_line, result_schema},
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
+  orchester::CodexOrchester,
 };
 use crate::{
   command::{Command, SecretVariable},

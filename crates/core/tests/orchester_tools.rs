@@ -10,7 +10,10 @@ use std::{
 
 use orchester_core::{
   command::{CommandError, CommandOutput},
-  connection::invocation::Platform,
+  connection::{
+    claude_approval::{ApprovalToken, ClaudeApprovalScope, ClaudeAsk},
+    invocation::{CodexMcp, CodexOrchester, Platform},
+  },
   orchester_tools::{
     GitCall, OrchesterTool, OutsideReadError, OutsideReads, ProjectTool, StepTools, ToolCall, ToolCallError,
     ToolContext, ToolPolicy, ToolProgram, ToolWork, decide,
@@ -286,6 +289,86 @@ fn orchester_tools_policy_follows_the_table() {
       .iter()
       .all(|tool| tool["inputSchema"]["additionalProperties"] == json!(false))
   );
+}
+
+#[test]
+fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
+  assert_eq!(
+    reading().claude_allow_rules(),
+    [
+      "mcp__Orchester__git_status",
+      "mcp__Orchester__git_diff",
+      "mcp__Orchester__git_log",
+      "mcp__Orchester__git_show"
+    ]
+  );
+  assert_eq!(
+    writing().codex_tools(),
+    json!({"tools": {
+      "git_status": {"approval_mode": "approve"},
+      "git_diff": {"approval_mode": "approve"},
+      "git_log": {"approval_mode": "approve"},
+      "git_show": {"approval_mode": "approve"},
+      "git_add": {"approval_mode": "approve"},
+      "git_commit": {"approval_mode": "approve"},
+      "read_outside_file": {"approval_mode": "prompt"},
+    }})
+  );
+  let token = ApprovalToken::generate();
+  let server = CodexOrchester::new(
+    "/bin/orchester-runner",
+    &["--orchester-tools"],
+    "127.0.0.1:4000",
+    token.variable(),
+  );
+  let mcp = CodexMcp::new(&[]).0.with_orchester(server);
+  assert_eq!(
+    mcp.args(),
+    [
+      "-c",
+      r#"mcp_servers.Orchester.command="/bin/orchester-runner""#,
+      "-c",
+      r#"mcp_servers.Orchester.args=["--orchester-tools"]"#,
+      "-c",
+      r#"mcp_servers.Orchester.env.ORCHESTER_APPROVAL_ADDRESS="127.0.0.1:4000""#,
+      "-c",
+      r#"mcp_servers.Orchester.env_vars=["ORCHESTER_APPROVAL_TOKEN"]"#,
+      "-c",
+      "mcp_servers.Orchester.tool_timeout_sec=86460",
+      "-c",
+      r#"shell_environment_policy.exclude=["ORCHESTER_APPROVAL_TOKEN"]"#,
+    ]
+  );
+  assert_eq!(mcp.secrets().len(), 1);
+  assert_eq!(mcp.secrets()[0].expose(), token.expose());
+  assert!(!format!("{mcp:?}").contains(token.expose()));
+  assert!(!mcp.args().concat().contains(token.expose()));
+}
+
+/// Claude Code asks through its permission prompt about the tools without an allow rule: those reach a
+/// person whether or not the step asks before MCP actions; a call of one that runs by rule never should.
+#[test]
+fn orchester_tools_that_ask_reach_a_person_through_claudes_prompt() {
+  let scope = ClaudeApprovalScope::of(&permissions(RepositoryAccess::ReadOnly), &[])
+    .expect("a step with allowed commands asks")
+    .with_orchester_tools(reading());
+  let call = |tool: &str| {
+    scope.classify(&json!({
+      "tool_name": tool,
+      "input": {"path": "/deps/src/lib.rs"},
+      "tool_use_id": "toolu_1",
+    }))
+  };
+  let ClaudeAsk::Person(request) = call("mcp__Orchester__read_outside_file") else {
+    panic!("a read outside asks a person");
+  };
+  assert_eq!(request.server(), "Orchester");
+  assert_eq!(request.action(), "read_outside_file");
+  assert!(!request.is_command());
+  assert_eq!(request.scope(), Some(r#"{"path":"/deps/src/lib.rs"}"#));
+  assert_eq!(call("mcp__Orchester__git_status"), ClaudeAsk::Refused);
+  assert_eq!(call("mcp__Orchester__git_commit"), ClaudeAsk::Refused);
+  assert_eq!(call("mcp__Orchester__approve"), ClaudeAsk::Refused);
 }
 
 #[test]

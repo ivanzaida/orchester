@@ -55,6 +55,14 @@ impl McpSetup {
     }
   }
 
+  /// The secret values of every server, whichever CLI takes them.
+  pub(in super::super) fn secrets(&self) -> Vec<SecretVariable> {
+    match self {
+      Self::Codex(mcp) => mcp.secrets().to_vec(),
+      Self::Claude(_) => self.claude_secrets(),
+    }
+  }
+
   /// The tools of Claude Code's servers that run without asking, which its activity marks as not asked,
   /// and an event for each listed tool that gets no allow rule because another server could have its
   /// name: none unless the step `asks` before MCP actions.

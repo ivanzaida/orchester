@@ -41,6 +41,7 @@ use super::{
   app_server::AppServerSetup,
   claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
+  orchester_tools::ToolHost,
   skills::PlacedSkills,
 };
 use crate::private_file::PrivateFile;
@@ -131,7 +132,14 @@ impl RunTask {
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
-    let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
+    let (tools, claude_approvals) = self.step_tools(
+      (key, enforced.permissions(), &setup),
+      (invocation, worktree, &writable_roots),
+      &environment,
+    )?;
+    // The tools reach a Claude Code agent through its permission prompt's relay, and every Codex agent.
+    let served = claude_approvals.is_some() || matches!(setup, McpSetup::Codex(_));
+    let prompt = told_of_tools(prompt, &tools, served && continuation.session.is_none());
     let mcp_secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
@@ -148,16 +156,7 @@ impl RunTask {
       code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
-    let (command, mcp_file, app_server) = match setup {
-      McpSetup::Codex(mcp) => {
-        let (command, app) = self.app_server_command(&cli, &mcp, prompt)?;
-        (command, None, Some(app))
-      }
-      McpSetup::Claude(servers) => {
-        let (command, file) = self.claude_command(&cli, servers, &prompt)?;
-        (command, file, None)
-      }
-    };
+    let (command, mcp_file, app_server) = self.cli_command(&cli, setup, prompt, tools)?;
     let command = match &index.tools {
       Some(tools) => with_tools_on_path(command, tools),
       None => command,
@@ -178,6 +177,21 @@ impl RunTask {
       memory: recalled.injected(),
       permissions: enforced.launch(),
     })
+  }
+}
+
+/// `prompt` with the paragraph that points the agent at its Orchester tools when it is `told` of them: a new
+/// session that gets them.
+fn told_of_tools(prompt: String, tools: &ToolHost, told: bool) -> String {
+  if told {
+    format!(
+      "{prompt}
+
+{}",
+      tools.tools().prompt_paragraph()
+    )
+  } else {
+    prompt
   }
 }
 
