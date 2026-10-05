@@ -552,6 +552,14 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Runner start under load · branch `claude/runner-start` (done 2026-10-05)
+
+The desktop waits 30 s (was 10 s) for a started runner to open its endpoint and starts it once more when the first
+start fails for a transient reason (slow, exited, connection or handshake failure), after killing and waiting for the
+first runner; a missing program, a held project or a version mismatch is not retried. The state stays *Starting*
+meanwhile; the last attempt's error is shown. Only the retry classification is unit-tested
+(`orchester-ipc --test launch`): there is no fake runner to answer late or fail once.
+
 S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
 
 Implemented in `.tmp/worktrees/claude-s2b` from master `2fb85037` (S1a, S1b, S2a), with master `aa979bfa` (lurq
