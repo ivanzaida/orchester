@@ -94,6 +94,21 @@ impl AppDb {
     })
   }
 
+  /// Creates the database at `path` at schema `version`, with only the first `version`
+  /// migrations applied, and returns it empty: a migration test fills it with the rows that
+  /// version wrote, then [`AppDb::open`] applies the rest.
+  #[cfg(feature = "test-support")]
+  pub fn create_at_version(path: &Path, version: u32) -> Result<Connection, StoreError> {
+    let Some(migrations) = MIGRATIONS.get(..version as usize) else {
+      let supported = u32::try_from(MIGRATIONS.len()).expect("fewer than 2^32 migrations");
+      return Err(StoreError::SchemaTooNew {
+        found: version,
+        supported,
+      });
+    };
+    migrate::open(path, migrations)
+  }
+
   /// Adds the project or, if it is already known, updates its name, location and last use.
   pub fn register_project(&mut self, project: &Project, repo_root: &Path, now: Timestamp) -> Result<(), StoreError> {
     self.connection.execute(

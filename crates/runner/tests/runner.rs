@@ -26,6 +26,20 @@ fn project() -> TempDir {
   project
 }
 
+/// A repository with its project database, as the desktop starts a runner for: the runner reads
+/// the database to tell whether it has work.
+fn initialized_project() -> TempDir {
+  let repo = tempfile::tempdir().expect("temporary directory");
+  fs::create_dir(repo.path().join(".git")).expect("create .git");
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("ORC").expect("key"),
+    Name::new("Kontur").expect("name"),
+  );
+  drop(ProjectDb::create(repo.path(), project).expect("create project"));
+  repo
+}
+
 async fn launch(project: &Path) -> RunnerClient {
   timeout(PATIENCE, RunnerClient::launch(Path::new(RUNNER), project))
     .await
@@ -236,14 +250,7 @@ async fn runner_logs_to_the_project_log_directory() {
 
 #[tokio::test]
 async fn runner_answers_attach_and_start_run_requests() {
-  let repo = tempfile::tempdir().expect("temporary directory");
-  fs::create_dir(repo.path().join(".git")).expect("create .git");
-  let project = Project::new(
-    ProjectId::generate(),
-    ProjectKey::new("ORC").expect("key"),
-    Name::new("Kontur").expect("name"),
-  );
-  drop(ProjectDb::create(repo.path(), project).expect("create project"));
+  let repo = initialized_project();
   let mut client = launch(repo.path()).await;
 
   let attach = Command::Attach {
@@ -309,7 +316,7 @@ async fn runner_answers_attach_and_start_run_requests() {
 /// No tab shows the project and the runner has no work: it says it stops, then stops and exits.
 #[tokio::test]
 async fn runner_without_work_stops_when_asked_to_stop_if_idle() {
-  let project = project();
+  let project = initialized_project();
   let mut client = launch(project.path()).await;
 
   client
