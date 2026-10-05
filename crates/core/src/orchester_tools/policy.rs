@@ -5,19 +5,27 @@
 //! | --- | --- | --- |
 //! | read-only (`git_status`, `git_diff`, `git_log`, `git_show`) | runs | runs |
 //! | writes the worktree (`git_add`, `git_commit`) | runs | not offered |
-//! | outside the worktree or the network (`read_outside_file`, `run_project_tool`) | asks | asks |
+//! | outside the worktree (`read_outside_file`) | asks | asks |
+//! | the project's programs (`run_project_tool`), network on | asks | asks |
+//! | the project's programs, network off | not offered | not offered |
 //!
 //! A call that asks reaches a person as any request outside the step's permissions does, and Orchester's
-//! own answers (a rule of Approve similar, auto-approval) apply to it as to an MCP call. Whether the step
-//! asks before MCP actions does not change this: these tools are Orchester's, not a server the profile
-//! chose. Each agent CLI is told the same table its own way: Claude Code an allow rule for each tool that
-//! runs ([`StepTools::claude_allow_rules`]), Codex an approval mode for each tool
-//! ([`StepTools::codex_tools`]).
+//! own answers (a rule of Approve similar, auto-approval) apply to it as to an MCP call, but auto-approval
+//! never runs a project's program ([`auto_approvable`]): it may reach the network, which auto-approval leaves
+//! to a person for commands too. Whether the step asks before MCP actions does not change this: these tools
+//! are Orchester's, not a server the profile chose. The runner holds the line itself: a call of a tool that
+//! asks runs only with a person's or a rule's approval of it, given through the CLI's own prompt or asked by
+//! the runner when the call arrives. Claude Code gets an allow rule for each tool that runs
+//! ([`StepTools::claude_allow_rules`]), so the others reach its permission prompt; Codex runs every tool
+//! without asking ([`StepTools::codex_tools`]), and the runner asks.
 
 use serde_json::{Map, Value, json};
 
 use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, catalog::input_schema};
-use crate::{permission::AgentPermissions, resource::RepositoryAccess};
+use crate::{
+  permission::{AgentPermissions, NetworkAccess},
+  resource::RepositoryAccess,
+};
 
 /// What happens to a call of an offered tool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,13 +36,23 @@ pub enum ToolPolicy {
   Asks,
 }
 
-/// The policy of `tool` in a step with `permissions`; `None` when the step is not offered it.
+/// The policy of `tool` in a step with `permissions`; `None` when the step is not offered it. A project's
+/// program runs outside every sandbox, so a step without network gets none.
 pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<ToolPolicy> {
   match tool.access() {
     AccessClass::ReadOnly => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
+    AccessClass::Outside if tool == OrchesterTool::RunProjectTool && permissions.network() == NetworkAccess::Off => {
+      None
+    }
     AccessClass::Outside => Some(ToolPolicy::Asks),
   }
+}
+
+/// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
+/// `run_project_tool`.
+pub fn auto_approvable(server: &str, tool: &str) -> bool {
+  server != SERVER || tool != OrchesterTool::RunProjectTool.as_str()
 }
 
 /// The tools one step is offered, with their policy, and the project tools `run_project_tool` runs.
@@ -75,7 +93,7 @@ impl StepTools {
       .map(|(_, policy)| *policy)
   }
 
-  /// Whether the tool named `name` is offered and asks.
+  /// Whether the tool named `name` is offered and asks: a call of it runs only once approved.
   pub fn asks(&self, name: &str) -> bool {
     OrchesterTool::from_name(name).and_then(|tool| self.policy(tool)) == Some(ToolPolicy::Asks)
   }
@@ -95,19 +113,14 @@ impl StepTools {
       .collect()
   }
 
-  /// The server's table in a Codex thread's `mcp_servers` configuration: `approve` for each tool that runs,
-  /// so Codex runs it without an approval request, and `prompt` for each tool that asks, so Codex sends one.
+  /// The server's table in a Codex thread's `mcp_servers` configuration: `approve` for every tool, so Codex
+  /// sends no approval request of its own. The runner asks about a tool that asks when its call arrives;
+  /// whether Codex 0.159.2 honours `prompt` while the step's `mcp_elicitations` is off is not verified.
   pub fn codex_tools(&self) -> Value {
     let tools: Map<String, Value> = self
       .offered
       .iter()
-      .map(|(tool, policy)| {
-        let mode = match policy {
-          ToolPolicy::Runs => "approve",
-          ToolPolicy::Asks => "prompt",
-        };
-        (tool.as_str().to_owned(), json!({"approval_mode": mode}))
-      })
+      .map(|(tool, _)| (tool.as_str().to_owned(), json!({"approval_mode": "approve"})))
       .collect();
     json!({"tools": tools})
   }

@@ -7,7 +7,6 @@
 
 use std::{
   collections::HashSet,
-  future::pending,
   io,
   path::{Path, PathBuf},
   sync::Arc,
@@ -37,6 +36,17 @@ use crate::{approval_relay::RELAY_FLAG, private_file::PrivateFile};
 pub(in super::super) struct Asked {
   pub(in super::super) request: ClaudeApprovalRequest,
   pub(in super::super) reply: oneshot::Sender<PromptAnswer>,
+  pub(in super::super) by: AskedBy,
+}
+
+/// Who asks about a call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) enum AskedBy {
+  /// Claude Code, through its permission prompt, before it runs the call.
+  Prompt,
+  /// The runner, about a call of Orchester's tools that arrived without an approval; the relay runs the call
+  /// once approved.
+  ToolCall,
 }
 
 /// The answer on one call: it runs, or it does not and the agent is told this and goes on.
@@ -104,13 +114,7 @@ impl ClaudeApprovals {
 
   /// The next call a person decides; never ready without approvals.
   pub(super) async fn next(approvals: Option<&mut Self>) -> Option<Asked> {
-    let Some(approvals) = approvals else {
-      return pending().await;
-    };
-    match approvals.listening.requests.recv().await {
-      Some(asked) => Some(asked),
-      None => pending().await,
-    }
+    Listening::next(approvals.map(|approvals| &mut approvals.listening)).await
   }
 
   /// Records that `call` is asked about; `false` when it was before.

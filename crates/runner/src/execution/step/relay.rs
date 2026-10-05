@@ -11,16 +11,20 @@
 //! delivered.
 
 use std::{
+  future::pending,
   net::{Ipv4Addr, SocketAddr},
   sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::Duration,
 };
 
-use orchester_core::connection::claude_approval::{
-  ApprovalToken, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, not_answered, refusal, relay::RelayRequest,
+use orchester_core::{
+  connection::claude_approval::{
+    ApprovalToken, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, refusal, relay::RelayRequest,
+  },
+  orchester_tools::{OrchesterTool, SERVER, ToolResult},
 };
 use serde_json::Value;
 use tokio::{
@@ -34,7 +38,10 @@ use tokio::{
   time::timeout,
 };
 
-use super::{claude_approval::Asked, orchester_tools::ToolHost};
+use super::{
+  claude_approval::{Asked, AskedBy, PromptAnswer},
+  orchester_tools::ToolHost,
+};
 
 /// How long a connection has to show the token.
 const HANDSHAKE: Duration = Duration::from_secs(10);
@@ -44,6 +51,8 @@ const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 const ATTEMPTS: usize = 8;
 /// The longest first line read: the token is 64 characters.
 const TOKEN_LINE: u64 = 128;
+/// What the agent is told of a call of Orchester's tools nobody answered.
+const DENIED: &str = "Denied in Orchester.";
 
 /// What one invocation's relay is served.
 pub(super) struct Served {
@@ -55,9 +64,9 @@ pub(super) struct Served {
 /// A listener waiting for its relay, ended when this is dropped.
 pub(super) struct Listening {
   /// The prompt calls a person decides.
-  pub(super) requests: mpsc::UnboundedReceiver<Asked>,
+  requests: mpsc::UnboundedReceiver<Asked>,
   /// Set once the relay showed the token.
-  pub(super) reached: Arc<AtomicBool>,
+  reached: Arc<AtomicBool>,
   listener: JoinHandle<()>,
 }
 
@@ -68,6 +77,17 @@ impl Drop for Listening {
 }
 
 impl Listening {
+  /// The next call a person decides; never ready without a listener.
+  pub(super) async fn next(listening: Option<&mut Self>) -> Option<Asked> {
+    let Some(listening) = listening else {
+      return pending().await;
+    };
+    match listening.requests.recv().await {
+      Some(asked) => Some(asked),
+      None => pending().await,
+    }
+  }
+
   /// Whether the relay reached the runner.
   pub(super) fn reached(&self) -> bool {
     self.reached.load(Ordering::Acquire)
@@ -106,6 +126,7 @@ impl Bound {
       served,
       requests: sender,
       reached: reached.clone(),
+      asked: AtomicU64::new(0),
     };
     Listening {
       requests,
@@ -121,6 +142,8 @@ struct Relay {
   served: Served,
   requests: mpsc::UnboundedSender<Asked>,
   reached: Arc<AtomicBool>,
+  /// Calls of Orchester's tools asked about so far, which name each such request.
+  asked: AtomicU64,
 }
 
 impl Relay {
@@ -163,41 +186,94 @@ impl Relay {
   async fn serve(&self, mut lines: Lines<BufReader<OwnedReadHalf>>, mut write: OwnedWriteHalf) {
     while let Ok(Some(line)) = lines.next_line().await {
       let answer = match serde_json::from_str::<RelayRequest>(&line) {
-        Ok(RelayRequest::Ask(arguments)) => match self.decide(&arguments, &mut lines).await {
-          Some(decision) => decision,
-          // The relay went away while the call waited: the worker's wait ends with it.
-          None => return,
-        },
-        Ok(RelayRequest::List) => Value::Array(self.served.tools.listed()).to_string(),
-        Ok(RelayRequest::Call { name, arguments }) => self.served.tools.call(&name, &arguments).await.mcp().to_string(),
-        Err(_) => refusal(),
+        Ok(RelayRequest::Ask(arguments)) => self.decide(&arguments, &mut lines).await,
+        Ok(RelayRequest::List) => Some(Value::Array(self.served.tools.listed()).to_string()),
+        Ok(RelayRequest::Call { name, arguments }) => self
+          .call(&name, &arguments, &mut lines)
+          .await
+          .map(|result| result.mcp().to_string()),
+        Err(_) => Some(refusal()),
       };
-      if write.write_all(format!("{answer}\n").as_bytes()).await.is_err() {
+      // `None`: the relay went away while a call waited for a person; the worker's wait ends with it.
+      let Some(answer) = answer else {
+        return;
+      };
+      if write
+        .write_all(
+          format!(
+            "{answer}
+"
+          )
+          .as_bytes(),
+        )
+        .await
+        .is_err()
+      {
         return;
       }
     }
   }
 
   /// The decision on permission prompt call `arguments`: a person's, or a refusal of what the step does
-  /// not leave to one; `None` when the relay closed its connection while the call waited.
+  /// not leave to one; `None` when the relay closed its connection while the call waited. An approved call
+  /// of one of Orchester's tools leaves a grant for that call.
   async fn decide(&self, arguments: &Value, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
     let asked = self.served.prompt.as_ref().map(|scope| scope.classify(arguments));
-    match asked {
-      Some(ClaudeAsk::Person(request)) => self.ask(request, lines).await,
-      Some(ClaudeAsk::Refused) | None => Some(refusal()),
+    let Some(ClaudeAsk::Person(request)) = asked else {
+      return Some(refusal());
+    };
+    let tool = (request.server() == SERVER)
+      .then(|| OrchesterTool::from_name(request.action()))
+      .flatten();
+    let answer = self.ask(request, AskedBy::Prompt, lines).await?;
+    if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
+      self.served.tools.grant(tool);
     }
+    Some(answer.result())
   }
 
-  /// The person's decision on `request`; a denial when the worker ended without one; `None` when
-  /// the relay closed its connection or broke the protocol while the call waited.
-  async fn ask(&self, request: ClaudeApprovalRequest, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
+  /// The answer to a call of Orchester's tool `name`: refused when it is not valid or not offered, asked
+  /// about first when it needs an approval and has none; `None` when the relay closed its connection while
+  /// the call waited.
+  async fn call(
+    &self,
+    name: &str,
+    arguments: &Value,
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<ToolResult> {
+    let tools = &self.served.tools;
+    let call = match tools.parse(name, arguments) {
+      Ok(call) => call,
+      Err(error) => return Some(ToolResult::refused(&error)),
+    };
+    if tools.asks(call.tool()) && !tools.take_grant(call.tool()) {
+      let number = self.asked.fetch_add(1, Ordering::Relaxed);
+      let request =
+        ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
+      match self.ask(request, AskedBy::ToolCall, lines).await? {
+        PromptAnswer::Allow => {}
+        PromptAnswer::Deny(told) => return Some(ToolResult::unavailable(&told)),
+        PromptAnswer::Repeated => return Some(ToolResult::unavailable(DENIED)),
+      }
+    }
+    Some(tools.run(call).await)
+  }
+
+  /// The person's answer on `request`; a repeated call's denial when the worker ended without one; `None`
+  /// when the relay closed its connection or broke the protocol while the call waited.
+  async fn ask(
+    &self,
+    request: ClaudeApprovalRequest,
+    by: AskedBy,
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<PromptAnswer> {
     let (reply, decision) = oneshot::channel();
-    if self.requests.send(Asked { request, reply }).is_err() {
-      return Some(not_answered());
+    if self.requests.send(Asked { request, reply, by }).is_err() {
+      return Some(PromptAnswer::Repeated);
     }
     tokio::select! {
       // A dropped sender is a worker that ended without a decision: the call is denied.
-      decision = decision => Some(decision.map_or_else(|_| not_answered(), |answer| answer.result())),
+      decision = decision => Some(decision.unwrap_or(PromptAnswer::Repeated)),
       // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait.
       _ = lines.next_line() => None,
     }

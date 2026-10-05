@@ -30,9 +30,9 @@ use thiserror::Error;
 pub use self::{
   git::GIT_TIMEOUT,
   input::{CommitMessage, GitCall, RepoPath, Revision, ToolCall},
-  output::{OutputKept, ToolResult},
-  outside::{OutsideReadError, OutsideReads},
-  policy::{StepTools, ToolPolicy, decide},
+  output::{OutputKept, ProgramOutput, ToolResult},
+  outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
+  policy::{StepTools, ToolPolicy, auto_approvable, decide},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 

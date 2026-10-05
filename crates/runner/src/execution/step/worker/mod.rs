@@ -34,6 +34,7 @@ use super::{
   app_server::AppServerSession,
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
+  relay::Listening,
 };
 use crate::{private_file::PrivateFile, supervisor::Supervised};
 
@@ -131,6 +132,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) mcp_file: Option<PrivateFile>,
   /// The runner's end of Claude Code's permission prompt, when the step asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// The runner's end of Codex's relay of Orchester's tools, which asks about their calls.
+  pub(super) tool_relay: Option<Listening>,
   /// Secret values of a Claude Code invocation's MCP servers, kept out of its activity and approvals.
   pub(super) mcp_secrets: Vec<SecretVariable>,
   pub(in super::super) agent: String,
@@ -192,7 +195,7 @@ impl Watch {
   /// Ready once the Claude Code call waiting for a person can no longer be answered.
   async fn prompt_closed(&mut self) {
     match &mut self.approval {
-      Some((_, Awaiting::Claude { reply, .. })) => reply.closed().await,
+      Some((_, Awaiting::Claude { reply, .. } | Awaiting::Tool { reply, .. })) => reply.closed().await,
       _ => std::future::pending().await,
     }
   }

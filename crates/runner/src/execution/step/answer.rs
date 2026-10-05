@@ -9,6 +9,7 @@
 
 use orchester_core::{
   connection::{mcp::InvocationExemptions, stream::AgentEvent},
+  orchester_tools::auto_approvable,
   permission::category::CommandCategory,
   run::{
     ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
@@ -80,6 +81,7 @@ impl Worker {
       .as_ref()
       .is_some_and(|launch| launch.permissions().auto_approve());
     if auto_approves(watch.db.run_auto_approve(approval.run)?, profile)
+      && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(&subject)
     {
       return Ok(Some(Settled::by(DecidedBy::AutoApproved, category)));

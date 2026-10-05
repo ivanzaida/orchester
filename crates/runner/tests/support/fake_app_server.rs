@@ -18,8 +18,6 @@
 //! - "Call a tool unasked" calls `batch_design` of `pencil` and asks, as Codex 0.159.2 does even with
 //!   `mcp_elicitations` off; it reports the answer (`mcp answer: <action>`), and when declined ends the call failed and
 //!   works on.
-//! - "Read outside unasked" calls `read_outside_file` of Orchester's own server and asks, as Codex does for a tool
-//!   whose approval mode is `prompt`, then goes on as "Call a tool unasked" does.
 //! - "Design twice" calls `batch_design` of `pencil` twice in one turn, each asking; each approved call appends
 //!   `approved` to `README.md`. A declined MCP call (here or in the fixture) ends failed, appends `went on`, and the
 //!   turn works on.
@@ -69,9 +67,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
   let patch = prompt.contains("Patch outside");
   let design = prompt.contains("Use the design tools");
   let unasked = prompt.contains("Call a tool unasked");
-  let outside = prompt.contains("Read outside unasked");
   let twice = prompt.contains("Design twice");
-  if !fixture && escalation.is_none() && !patch && !design && !unasked && !outside && !twice {
+  if !fixture && escalation.is_none() && !patch && !design && !unasked && !twice {
     return None;
   }
   session.approvals = Some(Approvals {
@@ -100,8 +97,6 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
     design_calls(session);
   } else if unasked || twice {
     tool_request(session, "pencil", "batch_design");
-  } else if outside {
-    tool_request(session, "Orchester", "read_outside_file");
   } else if patch {
     request(
       session,
@@ -209,11 +204,10 @@ fn command_answered(session: &mut Session, answer: &Value) -> Step {
 }
 
 fn mcp_answered(session: &mut Session, answer: &Value) -> Step {
-  let unasked = session.approvals.as_ref().is_some_and(|approvals| {
-    ["Call a tool unasked", "Read outside unasked"]
-      .iter()
-      .any(|words| approvals.prompt.contains(words))
-  });
+  let unasked = session
+    .approvals
+    .as_ref()
+    .is_some_and(|approvals| approvals.prompt.contains("Call a tool unasked"));
   if unasked {
     eprintln!(
       "mcp answer: {}",

@@ -40,7 +40,7 @@ use orchester_core::{
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use super::{orchester_tools::CodexTools, stderr::StderrLog};
+use super::stderr::StderrLog;
 use crate::supervisor::Supervised;
 
 /// Characters kept of Codex's reason for refusing to resume a session.
@@ -88,8 +88,8 @@ pub(super) struct AppServerSetup {
   pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
-  /// Orchester's server: its tools' approval modes for the thread, and the listener its relay reaches.
-  pub orchester: CodexTools,
+  /// Orchester's server's table in the thread's `mcp_servers` configuration: its tools' approval modes.
+  pub orchester: Value,
 }
 
 impl AppServerSetup {
@@ -266,8 +266,7 @@ impl AppServerSession {
             .into(),
         );
       }
-      // Orchester's own tools that ask reach a person whatever the step says about MCP actions.
-      if !request.is_command() && !self.setup.tool_approvals && request.server != SERVER {
+      if !request.is_command() && !self.setup.tool_approvals {
         screened.push(Update::Activity(AgentEvent::McpToolDeclined {
           item: request.item().to_owned(),
           server: request.server.clone(),
@@ -529,7 +528,7 @@ impl AppServerSession {
     }});
     let cwd = self.setup.worktree.to_string_lossy();
     let mut servers = thread_servers(&self.turned_off, &self.setup.exemptions);
-    servers.insert(SERVER.to_owned(), self.setup.orchester.table.clone());
+    servers.insert(SERVER.to_owned(), self.setup.orchester.clone());
     let config = json!({ "mcp_servers": servers });
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,

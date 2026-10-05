@@ -4,7 +4,8 @@
 //! the tools (`orchester-tools: <names>`), then stages and commits a file larger than a git answer holds,
 //! shows it, reads a file outside the worktree and tries to stage one there, reporting each decision
 //! (`orchester-permission: <tool> <decision>`) and answer (`orchester-call: <tool> <ok|error> <bytes>: <first
-//! line> | <last line>`).
+//! line> | <last line>`). With "without asking" it runs the calls that should ask without asking
+//! (`orchester-permission: <tool> skipped`), as a CLI that ignored its rules would.
 
 use std::{path::Path, process::ExitCode};
 
@@ -66,7 +67,11 @@ impl Fake {
     let block = json!({"type": "tool_use", "id": call, "name": name, "input": input});
     self.assistant(&format!("msg_{call}"), &block.to_string());
     let rule = fake_claude_rules::mcp(args, &name);
-    let decision = if rule == fake_claude_rules::Decision::Ask {
+    // A CLI that runs a call it should have asked about: the runner must ask itself.
+    let unasked = self.prompt.contains("without asking") && rule == fake_claude_rules::Decision::Ask;
+    let decision = if unasked {
+      "skipped".to_owned()
+    } else if rule == fake_claude_rules::Decision::Ask {
       server
         .ask(&name, input, call)
         .map_or_else(|| "none".to_owned(), |(decision, _)| decision)
@@ -74,7 +79,7 @@ impl Fake {
       rule.as_str().to_owned()
     };
     eprintln!("orchester-permission: {tool} {decision}");
-    if !(rule.runs() || decision == "allow") {
+    if !(rule.runs() || decision == "allow" || unasked) {
       self.tool_result(call, "Denied.", true);
       return;
     }

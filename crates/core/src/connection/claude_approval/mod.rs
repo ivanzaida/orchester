@@ -282,6 +282,20 @@ pub struct ClaudeApprovalRequest {
 }
 
 impl ClaudeApprovalRequest {
+  /// A call `call` of Orchester's tool `tool` with `arguments` that reached the runner without an
+  /// approval, which the runner asks a person about before it runs it; `secrets` are removed from the
+  /// arguments the approval shows.
+  pub fn tool_call(call: String, tool: &str, arguments: &Value, secrets: &[SecretVariable]) -> Self {
+    Self {
+      call,
+      command: false,
+      server: SERVER.to_owned(),
+      action: tool.to_owned(),
+      target: None,
+      scope: Some(shown_arguments(arguments, secrets)),
+    }
+  }
+
   /// The tool use the CLI asks about, unique within its session.
   pub fn call(&self) -> &str {
     &self.call

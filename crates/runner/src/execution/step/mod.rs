@@ -320,6 +320,7 @@ impl RunTask {
       stops: stopped,
       mcp_file: start.mcp_file,
       claude_approvals: start.claude_approvals,
+      tool_relay: start.tool_relay,
       mcp_secrets: start.mcp_secrets,
       agent: start.agent,
       task: self.task.id(),

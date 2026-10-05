@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::ToolCallError;
 use crate::{
-  command::{CommandError, CommandOutput, SecretVariable, redact_secrets},
+  command::{CommandError, SecretVariable, redact_secrets},
   resource::ExitCodes,
 };
 
@@ -18,6 +18,18 @@ pub enum OutputKept {
   Head,
   /// The end, where a build or a test run reports how it went, as a tool step keeps it.
   Tail,
+}
+
+/// What a program left, as the caller's process runner captured it within the program's cap
+/// ([`super::ToolProgram::cap`]): its exit code, the kept part of each stream, and how many bytes of them
+/// were not kept. A plain record: the runner reads the streams as they come, never holding more than the cap.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ProgramOutput {
+  /// `None` for a program ended by a signal (macOS).
+  pub code: Option<i32>,
+  pub stdout: String,
+  pub stderr: String,
+  pub left_out: u64,
 }
 
 /// The answer to one call.
@@ -53,7 +65,7 @@ impl ToolResult {
   /// `limit` bytes at the `kept` end. An exit code outside `expected`, a stop at `timeout` or a start
   /// that failed is an error result.
   pub(super) fn of_program(
-    outcome: Result<CommandOutput, CommandError>,
+    outcome: Result<ProgramOutput, CommandError>,
     expected: &ExitCodes,
     (limit, kept): (usize, OutputKept),
     timeout: Duration,
@@ -87,7 +99,8 @@ impl ToolResult {
       printed.push_str("[stderr]\n");
       printed.push_str(&output.stderr);
     }
-    let (shown, left_out) = bounded(&printed, limit, kept);
+    let (shown, cut) = bounded(&printed, limit, kept);
+    let left_out = output.left_out + cut as u64;
     let mut text = format!("exit code: {code}\n{shown}");
     if left_out > 0 {
       let end = match kept {

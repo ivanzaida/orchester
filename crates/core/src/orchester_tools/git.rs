@@ -5,16 +5,19 @@
 //!
 //! Git gets the native agent's hardening ([`GIT_GLOBAL`]: no fsmonitor program, no pager, no optional
 //! locks, no bare repository found from a working folder) and, for diffs, no configured diff or textconv
-//! program. A commit runs no hook: hooks are programs in a folder the repository's configuration names,
-//! which a call must not start; they are pointed at a folder that cannot exist (`NUL` on Windows, below
-//! `/dev/null` on macOS) and skipped (`--no-verify`), and commits are not signed (no signing program).
+//! program. It is pinned to the worktree and its own git folder (`--git-dir`, `--work-tree`), so a `.git`
+//! file the agent rewrote cannot lead it to a configuration of the agent's making, with filter, signing or
+//! hook programs; the repository's own configuration applies, as to the runner's checkpoint commits (a
+//! `git lfs` filter keeps working). No hook runs: hooks are programs, which a call must not start, so the
+//! hooks folder is an empty folder the runner owns (an absolute path, never one relative to the worktree)
+//! and `--no-verify` is given too. Nothing is signed or checked against a signature (`commit.gpgSign`,
+//! `log.showSignature`), which would start a signing program.
 
 use std::{path::Path, time::Duration};
 
 use super::{GitCall, OutputKept, ToolContext, ToolProgram};
 use crate::{
   command::Command,
-  connection::invocation::Platform,
   native::command::{GIT_DIFF_OPTIONS, GIT_GLOBAL},
 };
 
@@ -24,17 +27,17 @@ pub const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 const GIT_OUTPUT: usize = 128 * 1024;
 const PROGRAM: &str = "git";
 
-/// A hooks folder that cannot exist on `platform`.
-const fn no_hooks(platform: Platform) -> &'static str {
-  match platform {
-    Platform::Windows => "core.hooksPath=NUL",
-    Platform::MacOs => "core.hooksPath=/dev/null",
-  }
-}
-
 /// The git program of `call` in `context`'s worktree.
 pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram {
   let mut args: Vec<String> = GIT_GLOBAL.map(str::to_owned).to_vec();
+  args.extend([
+    format!("--git-dir={}", context.git_dir.display()),
+    format!("--work-tree={}", context.worktree.display()),
+    "-c".to_owned(),
+    format!("core.hooksPath={}", context.hooks.display()),
+    "-c".to_owned(),
+    "log.showSignature=false".to_owned(),
+  ]);
   let mut stdin = None;
   let tail: Vec<String> = match call {
     GitCall::Status => words(&["status", "--short", "--branch"]),
@@ -76,7 +79,6 @@ pub(super) fn program(call: &GitCall, context: &ToolContext<'_>) -> ToolProgram 
       tail
     }
     GitCall::Commit { message } => {
-      args.extend(["-c".to_owned(), no_hooks(context.platform).to_owned()]);
       args.extend(words(&["-c", "commit.gpgSign=false"]));
       stdin = Some(message.as_str().to_owned());
       words(&["commit", "--no-verify", "-F", "-"])

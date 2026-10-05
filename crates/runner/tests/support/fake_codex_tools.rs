@@ -1,10 +1,11 @@
 //! How `orchester-fake-codex` uses Orchester's tools ("Use Orchester's tools"), as Codex does: it starts the
 //! server its `-c mcp_servers.Orchester.…` overrides configure, handing it the variables `env_vars` names from
-//! its own environment, lists the tools (`orchester-tools: <names>`) and calls `git_status`
-//! (`orchester-call: git_status <ok|error>: <first line>`). Codex sends no approval request for a tool whose
-//! approval mode is `approve`, so neither does the fake.
+//! its own environment, lists the tools (`orchester-tools: <names>`), calls `git_status`, then reads
+//! `outside-notes.txt` next to the repository's `.orchester` folder with `read_outside_file`
+//! (`orchester-call: <tool> <ok|error>: <first line>`). Codex sends no approval request for a tool whose
+//! approval mode is `approve`, so neither does the fake: the runner asks about the read before it answers.
 
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 use serde_json::json;
 
@@ -12,7 +13,7 @@ use super::fake_permission_prompt::Prompt;
 
 const KEY: &str = "mcp_servers.Orchester.";
 
-pub fn report(args: &[String]) {
+pub fn report(args: &[String], worktree: &Path) {
   let setting = |name: &str| -> Option<serde_json::Value> {
     let value = args
       .iter()
@@ -44,12 +45,21 @@ pub fn report(args: &[String]) {
     return;
   };
   eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
-  match server.call("git_status", &json!({})) {
-    Some((text, failed)) => eprintln!(
-      "orchester-call: git_status {}: {}",
-      if failed { "error" } else { "ok" },
-      text.lines().next().unwrap_or_default()
-    ),
-    None => eprintln!("orchester-call: git_status no answer"),
+  let outside = worktree
+    .ancestors()
+    .nth(3)
+    .map(|repository| repository.join("outside-notes.txt").to_string_lossy().into_owned());
+  for (tool, arguments) in [
+    ("git_status", json!({})),
+    ("read_outside_file", json!({ "path": outside })),
+  ] {
+    match server.call(tool, &arguments) {
+      Some((text, failed)) => eprintln!(
+        "orchester-call: {tool} {}: {}",
+        if failed { "error" } else { "ok" },
+        text.lines().next().unwrap_or_default()
+      ),
+      None => eprintln!("orchester-call: {tool} no answer"),
+    }
   }
 }

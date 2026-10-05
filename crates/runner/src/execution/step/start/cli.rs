@@ -30,11 +30,21 @@ use super::{
     app_server::AppServerSetup,
     mcp::{ClaudeServers, McpSetup},
     orchester_tools::{CodexTools, ToolHost},
+    relay::Listening,
     skills::repository_skills,
   },
   NATIVE_NOT_AVAILABLE, problem,
 };
 use crate::private_file::PrivateFile;
+
+/// The CLI's command, and what must live as long as the CLI: Claude Code's MCP configuration file, or
+/// what the runner tells Codex App Server and the listener of its relay of Orchester's tools.
+pub(super) struct CliCommand {
+  pub(super) command: Command,
+  pub(super) mcp_file: Option<PrivateFile>,
+  pub(super) app_server: Option<AppServerSetup>,
+  pub(super) tool_relay: Option<Listening>,
+}
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
 pub(super) struct Cli<'a> {
@@ -93,29 +103,44 @@ impl RunTask {
     setup: McpSetup,
     prompt: String,
     tools: Arc<ToolHost>,
-  ) -> Result<(Command, Option<PrivateFile>, Option<AppServerSetup>), RunnerProblem> {
+  ) -> Result<CliCommand, RunnerProblem> {
     match setup {
       McpSetup::Codex(mcp) => {
-        let served = self.codex_tools(tools)?;
-        let mcp = mcp.with_orchester(served.server.clone());
-        let (command, app) = self.app_server_command(cli, &mcp, prompt, served)?;
-        Ok((command, None, Some(app)))
+        let CodexTools {
+          server,
+          table,
+          listening,
+        } = self.codex_tools(tools)?;
+        let mcp = mcp.with_orchester(server);
+        let (command, app) = self.app_server_command(cli, &mcp, prompt, table)?;
+        Ok(CliCommand {
+          command,
+          mcp_file: None,
+          app_server: Some(app),
+          tool_relay: Some(listening),
+        })
       }
       McpSetup::Claude(servers) => {
-        let (command, file) = self.claude_command(cli, servers, &prompt)?;
-        Ok((command, file, None))
+        let (command, mcp_file) = self.claude_command(cli, servers, &prompt)?;
+        Ok(CliCommand {
+          command,
+          mcp_file,
+          app_server: None,
+          tool_relay: None,
+        })
       }
     }
   }
 
-  /// Codex App Server with the MCP servers `mcp` and Orchester's server `orchester`, and what the runner
-  /// tells it once it runs: the prompt, the thread's settings and the approvals it may ask a person for.
+  /// Codex App Server with the MCP servers `mcp` and Orchester's server, whose tools' table in the thread's
+  /// configuration is `orchester`, and what the runner tells it once it runs: the prompt, the thread's
+  /// settings and the approvals it may ask a person for.
   fn app_server_command(
     &self,
     cli: &Cli<'_>,
     mcp: &CodexMcp,
     prompt: String,
-    orchester: CodexTools,
+    orchester: serde_json::Value,
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
     let mut expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     expected_servers.insert(SERVER.to_owned());

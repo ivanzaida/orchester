@@ -9,9 +9,9 @@ use std::{
   time::Duration,
 };
 
-use super::{OutputKept, OutsideReads, ToolCall, ToolCallError, ToolResult, git};
+use super::{OutputKept, OutsideReads, ProgramOutput, ToolCall, ToolCallError, ToolResult, git};
 use crate::{
-  command::{Command, CommandError, CommandOutput},
+  command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
   resource::{CommandAction, CommandEnvironment, ExitCodes},
 };
@@ -54,6 +54,11 @@ pub struct ToolContext<'a> {
   pub outside: &'a OutsideReads,
   pub project_tools: &'a [ProjectTool],
   pub platform: Platform,
+  /// The worktree's own git folder, which git is pinned to: a `.git` file the agent rewrote cannot send git
+  /// to a folder with a configuration of its making.
+  pub git_dir: &'a Path,
+  /// An empty folder the runner owns, which git takes as its hooks folder, so no hook runs.
+  pub hooks: &'a Path,
 }
 
 impl ToolContext<'_> {
@@ -102,8 +107,13 @@ impl ToolProgram {
     self.timeout
   }
 
+  /// How much of each stream the runner keeps, and which end: it reads them as they come and holds no more.
+  pub const fn cap(&self) -> (usize, OutputKept) {
+    (self.limit, self.kept)
+  }
+
   /// What the agent is answered once the program ended as `outcome` says.
-  pub fn finished(&self, outcome: Result<CommandOutput, CommandError>) -> ToolResult {
+  pub fn finished(&self, outcome: Result<ProgramOutput, CommandError>) -> ToolResult {
     ToolResult::of_program(outcome, &self.expected, (self.limit, self.kept), self.timeout)
   }
 }

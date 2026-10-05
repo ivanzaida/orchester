@@ -125,7 +125,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     }
   }
   if prompt.contains("Use Orchester's tools") {
-    fake_codex_tools::report(&session.args);
+    fake_codex_tools::report(&session.args, &session.cwd);
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;

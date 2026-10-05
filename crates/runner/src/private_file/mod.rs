@@ -22,9 +22,31 @@ use unix as platform;
 #[cfg(windows)]
 use windows as platform;
 
+/// The folder of every project's private files.
+pub fn root() -> PathBuf {
+  std::env::temp_dir().join("orchester-mcp")
+}
+
 /// The folder of `project`'s private files.
 pub fn directory(project: ProjectId) -> PathBuf {
-  std::env::temp_dir().join("orchester-mcp").join(project.to_string())
+  root().join(project.to_string())
+}
+
+/// An empty folder `name` among `project`'s private files, made if missing; an error when something lies
+/// in it. Git takes it as a hooks folder that holds no hook.
+pub fn empty_folder(project: ProjectId, name: &str) -> io::Result<PathBuf> {
+  let folder = directory(project);
+  platform::create_folder(&folder)?;
+  let empty = folder.join(name);
+  if let Err(error) = fs::create_dir(&empty)
+    && error.kind() != io::ErrorKind::AlreadyExists
+  {
+    return Err(error);
+  }
+  if fs::read_dir(&empty)?.next().is_some() {
+    return Err(io::Error::other(format!("{} is not empty", empty.display())));
+  }
+  Ok(empty)
 }
 
 /// Removes the files a runner of `project` left behind.
