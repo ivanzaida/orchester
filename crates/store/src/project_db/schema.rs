@@ -13,6 +13,7 @@ mod mcp;
 mod memory;
 mod native_commands;
 mod organization;
+mod permitted_decisions;
 mod recovery;
 mod sharing;
 mod steering;
@@ -507,4 +508,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   worktree_removals::MIGRATION,
   sharing::MIGRATION,
   joining::MIGRATION,
+  permitted_decisions::MIGRATION,
 ];

@@ -6,7 +6,7 @@
 //! ([`CommandPart::known_safe_read`], the user's decision C4), the line runs as its parts would. Nothing
 //! else does: a part that is not read to the end, reads a credential, installs, writes outside the
 //! worktree, redirects into a file, runs in the background or reads outside the worktree still asks,
-//! as it would on its own. The answer is marked as allowed by the profile (*always allowed*).
+//! as it would on its own. The answer is recorded as given by the permissions ([`super::DecidedBy::Permissions`]).
 
 use super::subject::ApprovalSubject;
 use crate::permission::{
@@ -32,12 +32,13 @@ pub fn permitted(subject: &ApprovalSubject, commands: &CommandPermission) -> Opt
 }
 
 /// Whether `part` would run without a person on its own: a known-safe read inside the worktree, or a
-/// listed command that stays in the worktree and redirects into no file.
+/// listed command that names nothing outside the worktree and redirects into no file.
 fn runs_alone(part: &CommandPart, list: &AllowedCommands) -> bool {
   part.known_safe_read()
     || (list.allows_argv(part.words())
       && matches!(part.category(), CommandCategory::ReadOnly | CommandCategory::Worktree)
       && !part.always_asks()
       && !part.installs()
+      && !part.reaches_outside()
       && !part.writes_output())
 }

@@ -66,7 +66,7 @@ impl Worker {
     if let Some(launch) = &watch.invocation.permissions
       && let Some(category) = permitted(&subject, launch.permissions().commands())
     {
-      return Ok(Some(Settled::by(DecidedBy::AlwaysAllowed, Some(category))));
+      return Ok(Some(Settled::by(DecidedBy::Permissions, Some(category))));
     }
     let rules = watch.db.approval_rules(approval.run)?;
     if let Some(rule) = answering(&rules, &subject) {

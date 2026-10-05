@@ -335,5 +335,5 @@ async fn approval_choices_a_line_whose_parts_run_alone_runs_unasked() {
   let run = started.ended().await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(approvals(&started.readme()), 1);
-  assert_eq!(started.decisions(), [DecidedBy::AlwaysAllowed]);
+  assert_eq!(started.decisions(), [DecidedBy::Permissions]);
 }
