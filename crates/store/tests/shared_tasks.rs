@@ -182,6 +182,11 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   assert_eq!(other.organization().tags(), [review.id()]);
   let info = db.shared_task_info(draft.id()).expect("info").expect("shared");
   assert_eq!(info.pipeline_slug.as_deref(), Some("design-review"));
+  assert_eq!(
+    db.missing_pipelines().expect("missing pipelines"),
+    std::collections::HashMap::from([(draft.id(), "design-review".to_owned())]),
+    "only the pipeline this computer lacks is missing"
+  );
   assert_eq!(info.claim.map(|claim| claim.holder), Some(alice.clone()));
   assert_eq!(db.claims_held_by(alice.id).expect("claims"), vec![draft.id()]);
 

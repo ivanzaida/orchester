@@ -642,7 +642,8 @@
     "pipeline": {
       "notChosen": "No pipeline",
       "published": "{{name}} · {{version}}",
-      "unavailable": "Pipeline not published"
+      "unavailable": "Pipeline not published",
+      "missing": "{{slug}} · not on this computer"
     },
     "count": {
       "one": "{{count}} task",

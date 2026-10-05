@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use orchester_api::{TaskChanges, TaskPatch};
+use orchester_api::{SharedTask, TaskChanges, TaskPatch};
 use orchester_core::{
   id::IdempotencyKey,
   name::Name,
@@ -142,53 +142,101 @@ fn edit_conflict_both_changed_the_outcome_and_the_person_chooses() {
   assert_eq!(desktop.value("criterion-1"), "Totals match the dashboard");
 }
 
+/// The server Kontur is shared on, and Bohdan, a member saving from another computer.
+struct Remote {
+  server: crate::servers::server_support::TestServer,
+  client: orchester_api::client::Client,
+  bohdan: orchester_core::secret::SecretValue,
+  project: orchester_core::id::ProjectId,
+}
+
+impl Remote {
+  /// Kontur shared by Alice with its draft KON-1, and Bohdan a member.
+  fn start() -> (Desktop, Self) {
+    let (mut desktop, server) = signed_in("alice", true, &["Token usage export to CSV"]);
+    let (client, bohdan) = elsewhere(&server, "bohdan", "Bohdan Kravets");
+    share(&mut desktop);
+    add_member(&mut desktop, "bohdan");
+    desktop.wait_until("Bohdan's row", |desktop| shows(desktop, "Bohdan Kravets"));
+    let project = ProjectDb::open(desktop.repo())
+      .expect("project")
+      .sharing()
+      .expect("link")
+      .expect("shared")
+      .project;
+    let remote = Self {
+      server,
+      client,
+      bohdan,
+      project,
+    };
+    (desktop, remote)
+  }
+
+  /// KON-1 as the server holds it.
+  fn task(&self) -> SharedTask {
+    self
+      .server
+      .block_on(self.client.tasks(&self.bohdan, self.project))
+      .expect("Bohdan reads the tasks")
+      .tasks
+      .into_iter()
+      .next()
+      .expect("the task")
+  }
+
+  /// Bohdan saves `changes` of KON-1 first.
+  fn bohdan_saves(&self, changes: TaskChanges) {
+    let task = self.task();
+    let patch = TaskPatch {
+      revision: task.revision,
+      changes,
+    };
+    self
+      .server
+      .block_on(self.client.update_task(&self.bohdan, self.project, task.id, &patch))
+      .expect("Bohdan saves first");
+  }
+}
+
 #[test]
 fn edit_conflict_a_shared_task_names_who_saved_it_and_takes_their_version() {
-  let (mut desktop, server) = signed_in("alice", true, &["Token usage export to CSV"]);
-  let (client, bohdan) = elsewhere(&server, "bohdan", "Bohdan Kravets");
-  share(&mut desktop);
-  add_member(&mut desktop, "bohdan");
-  desktop.wait_until("Bohdan's row", |desktop| shows(desktop, "Bohdan Kravets"));
+  let (mut desktop, remote) = Remote::start();
   open_edit(&mut desktop);
   set_text(&mut desktop, "task-brief", "Alice's outcome.");
-  let project = ProjectDb::open(desktop.repo())
-    .expect("project")
-    .sharing()
-    .expect("link")
-    .expect("shared")
-    .project;
-  let task = server
-    .block_on(client.tasks(&bohdan, project))
-    .expect("Bohdan reads the tasks")
-    .tasks
-    .into_iter()
-    .next()
-    .expect("the task");
-  let patch = TaskPatch {
-    revision: task.revision,
-    changes: TaskChanges {
-      brief: Some("Bohdan's outcome.".into()),
-      ..TaskChanges::default()
-    },
-  };
-  server
-    .block_on(client.update_task(&bohdan, project, task.id, &patch))
-    .expect("Bohdan saves first");
+  remote.bohdan_saves(TaskChanges {
+    brief: Some("Bohdan's outcome.".into()),
+    ..TaskChanges::default()
+  });
   desktop.click("save-draft");
   desktop.wait_for("task-conflict");
   state_reads(&mut desktop, "Not saved · Bohdan Kravets saved a newer version");
   assert!(shows(&mut desktop, "Bohdan Kravets saved KON-1"));
   assert!(shows(&mut desktop, "Bohdan Kravets's version"));
   desktop.click("task-conflict-use-theirs");
-  desktop.wait_until("Bohdan's version stays on the server", |desktop| {
+  desktop.wait_until("Bohdan's version stays", |desktop| {
     desktop.tree.get_element_by_id("task-brief").is_some() && desktop.value("task-brief") == "Bohdan's outcome."
   });
-  let stored = server
-    .block_on(client.tasks(&bohdan, project))
-    .expect("tasks")
-    .tasks
-    .into_iter()
-    .next()
-    .expect("the task");
-  assert_eq!(stored.content.brief, "Bohdan's outcome.");
+  assert_eq!(remote.task().content.brief, "Bohdan's outcome.");
+}
+
+/// A shared task's pipeline this computer lacks shows as missing, and an edit keeps it.
+#[test]
+fn edit_conflict_an_edit_keeps_a_pipeline_this_computer_lacks() {
+  let (mut desktop, remote) = Remote::start();
+  remote.bohdan_saves(TaskChanges {
+    pipeline: Some(Some("release-train".into())),
+    ..TaskChanges::default()
+  });
+  open_edit(&mut desktop);
+  set_text(&mut desktop, "task-title", "Usage export to CSV");
+  desktop.click("save-draft");
+  desktop.wait_until("the title is saved", |_| {
+    remote.task().content.title == "Usage export to CSV"
+  });
+  assert_eq!(remote.task().content.pipeline.as_deref(), Some("release-train"));
+  desktop.click("new-task-back");
+  desktop.wait_until("the missing pipeline", |desktop| {
+    shows(desktop, "release-train · not on this computer")
+  });
 }

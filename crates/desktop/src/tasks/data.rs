@@ -56,6 +56,8 @@ pub struct ProjectTasks {
   pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
+  pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
   /// Why each task of a reviewed group that holds its work waits.
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
@@ -88,6 +90,9 @@ impl ProjectTasks {
   /// `row` with its tag names and what blocks it, the blocking tasks' keys joined by `separator`
   /// (`common.listSeparator`).
   pub fn decorate_row(&self, mut row: super::list::TaskRow, separator: &str) -> super::list::TaskRow {
+    if let Some(slug) = self.missing_pipelines.get(&row.id) {
+      row.pipeline = super::list::PipelineLabel::Missing { slug: Arc::from(slug.as_str()) };
+    }
     row.tags = self
       .tags
       .iter()
@@ -192,6 +197,7 @@ impl ProjectTasks {
       group_holds: Arc::new(group_holds),
       grouped: Arc::new(grouped),
       pipelines: Arc::new(published_pipelines(&db)?),
+      missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
       phases: Arc::new(phases),
       runs: Arc::new(counts),

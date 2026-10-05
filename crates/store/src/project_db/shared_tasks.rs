@@ -167,6 +167,21 @@ impl ProjectDb {
     info(&self.connection, task)
   }
 
+  /// The shared tasks whose pipeline this computer has no pipeline for, with the pipeline's slug:
+  /// they show it as missing, and an edit sends no pipeline change for them.
+  pub fn missing_pipelines(&self) -> Result<std::collections::HashMap<TaskId, String>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT id, pipeline_slug FROM tasks WHERE sharing IS NOT NULL AND pipeline_slug IS NOT NULL        AND NOT EXISTS (SELECT 1 FROM resources WHERE resources.kind = 'pipeline'        AND resources.slug = tasks.pipeline_slug)",
+    )?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(id, slug)| Ok((parse("task id", &id)?, slug)))
+      .collect()
+  }
+
   /// The cached tasks whose claim `holder` holds, which this computer's heartbeat keeps fresh.
   pub fn claims_held_by(&self, holder: UserId) -> Result<Vec<TaskId>, StoreError> {
     let mut statement = self
