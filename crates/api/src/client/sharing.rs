@@ -13,7 +13,7 @@ use super::{Client, ClientError, bearer};
 use crate::{
   ClaimTake, Heartbeat, HeartbeatResponse, Member, MemberChanges, MemberCreate, MemberResponse, Members, ProjectCreate,
   ProjectCreated, ProjectResponse, Projects, SharedProject, SharedTag, SharedTask, TagMerge, TagName, TagResponse,
-  Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated,
+  Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate, TasksCreated, TasksImport,
 };
 
 impl Client {
@@ -106,6 +106,18 @@ impl Client {
   ) -> Result<TasksCreated, ClientError> {
     let path = format!("/projects/{project}/tasks");
     self.call(bearer(self.json(Method::POST, &path, create)?, token)).await
+  }
+
+  /// `POST …/tasks/import`: uploads local tasks with new numbers, their ids and former keys kept
+  /// (Join, *Share task*); a repeated batch key returns the first ones.
+  pub async fn import_tasks(
+    &self,
+    token: &SecretValue,
+    project: ProjectId,
+    import: &TasksImport,
+  ) -> Result<TasksCreated, ClientError> {
+    let path = format!("/projects/{project}/tasks/import");
+    self.call(bearer(self.json(Method::POST, &path, import)?, token)).await
   }
 
   /// `PATCH …/tasks/{task}`: the changes, made on the revision read; `409 revision_conflict` carries

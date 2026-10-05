@@ -61,6 +61,9 @@ impl ProjectDb {
     if queued && !is_queued(&transaction, new.task)? {
       return Err(RunStoreError::TaskNotQueued(new.task));
     }
+    if super::shared_tasks::is_not_shared(&transaction, new.task)? {
+      return Err(StoreError::NotSharedTask(new.task).into());
+    }
     super::organization::check_readiness(&transaction, new.task)?;
     let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
     let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;

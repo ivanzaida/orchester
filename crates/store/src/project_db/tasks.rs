@@ -19,10 +19,12 @@ use crate::{
 };
 
 /// A shared task names its pipeline by slug (`docs/architecture/server.md`, "Pipelines by name"): it
-/// is this computer's pipeline of that slug, or none when it has none.
-const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS NULL THEN pipeline_id ELSE \
-  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) END, \
-  budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision FROM tasks";
+/// is this computer's pipeline of that slug, or none when it has none. A *Not shared* task keeps its
+/// own pipeline and the key it had before the project joined (`kept_key`).
+const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
+  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) \
+  ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key \
+  FROM tasks";
 
 struct RunTaskSnapshot {
   title: String,
@@ -202,8 +204,14 @@ impl TaskStore for ProjectDb {
     Ok(found.pop())
   }
 
+  /// The project's task list: without the tasks kept *Not shared* when it joined a server project.
   fn tasks(&self) -> Result<Vec<Task>, StoreError> {
-    load_tasks(&self.connection, self.project.key(), "ORDER BY number", [])
+    load_tasks(
+      &self.connection,
+      self.project.key(),
+      "WHERE sharing IS NOT 'not_shared' ORDER BY number",
+      [],
+    )
   }
 
   fn save_task(&mut self, task: &Task) -> Result<TaskUpdate, StoreError> {
@@ -380,6 +388,7 @@ struct TaskRow {
   created_at: i64,
   pipeline_version: Option<i64>,
   revision: i64,
+  kept_key: Option<String>,
 }
 
 impl TaskRow {
@@ -396,6 +405,7 @@ impl TaskRow {
       created_at: row.get(8)?,
       pipeline_version: row.get(9)?,
       revision: row.get(10)?,
+      kept_key: row.get(11)?,
     })
   }
 
@@ -413,10 +423,14 @@ impl TaskRow {
       limits,
     };
     let pipeline_version = self.pipeline_version.map(version_number).transpose()?;
+    let project = match self.kept_key.as_deref() {
+      Some(kept) => ProjectKey::new(kept).map_err(|error| corrupt("kept task key", error))?,
+      None => project.clone(),
+    };
     Ok(
       Task::from_stored(
         parse("task id", &self.id)?,
-        TaskKey::new(project.clone(), task_number(self.number)?),
+        TaskKey::new(project, task_number(self.number)?),
         details,
         parse_status(&self.status)?,
         pipeline_version,

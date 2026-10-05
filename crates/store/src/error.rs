@@ -52,6 +52,10 @@ pub enum StoreError {
   /// Nothing was changed.
   #[error("the project's task list is shared; this change is made on the server")]
   SharedProject,
+  /// The task was kept *Not shared* when the project joined a server project: it is read-only until
+  /// *Share task* uploads it. Nothing was changed.
+  #[error("task {0} is not shared; it is read-only")]
+  NotSharedTask(TaskId),
   /// The project's task list is local: it has no server project.
   #[error("the project's task list is not shared")]
   NotShared,

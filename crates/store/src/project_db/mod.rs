@@ -10,6 +10,7 @@ mod consistent;
 mod environment;
 mod import;
 mod invocation_prompts;
+mod joining;
 mod limits;
 mod mcp_servers;
 mod memory;
@@ -52,6 +53,7 @@ use rusqlite::{Connection, params};
 pub use self::{
   approval_rules::DecisionCounts,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
+  joining::{JoinedKey, ReturnedTask},
   read_only::ReadOnlyProjectDb,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
