@@ -526,7 +526,7 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
-S2c · Desktop: join a shared repository · branch `claude/s2c` (implemented 2026-10-05; design verification and review pending)
+S2c · Desktop: join a shared repository · branch `claude/s2c` (done 2026-10-05)
 
 Implemented in `.tmp/worktrees/claude-s2c` from master `af858e1d` (S1a, S1b, S2a, S2b).
 
@@ -601,7 +601,20 @@ person is signed in to, as `docs/architecture/server.md` ("Finding the project")
 plus "Check other servers" would need the user's decision.
 
 Design verification needed: 10.15 `y8uP2`, 10.16 `AZwJE` (A, B, C), 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`,
-10.24 `FAKNF`, 10.25 `RuBhQ`, 10.26 `m7jOn9` (A–D).
+10.24 `FAKNF`, 10.25 `RuBhQ`, 10.26 `m7jOn9` (A–D). **Done 2026-10-05:** security re-review PASS, independent design
+verification PASS (all frames; one lookup per Sharing-tab visit; root scrims; Settings › Servers does not poll),
+merged into master. Minors left: a server 422 in 10.26 D reads as *can't be reached*; a *Not shared* task page shows
+*Ready to queue*; the Share task and Make local dialogs lack the Similar / Not-shared rows; a local edit made between
+a failed join and its retry is replaced by the server copy.
+
+Runner start under load · branch `claude/runner-start` (done 2026-10-05)
+
+The desktop waits 30 s (was 10 s) for a started runner to open its endpoint and starts it once more when the first
+start fails for a transient reason (slow, exited, connection or handshake failure), after killing and waiting for the
+first runner; a missing program, a held project or a version mismatch is not retried. The state stays *Starting*
+meanwhile; the last attempt's error is shown. Tested against `orchester-fake-runner` (feature `test-runner`):
+`cargo test -p orchester-ipc --features test-runner --test runner_start runner_start_` (late, exit once, exit twice,
+held project, missing program; `runner_start_slow` takes 11 s).
 
 S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
 

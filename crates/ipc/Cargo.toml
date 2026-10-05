@@ -9,6 +9,20 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# A stand-in for `orchester-runner` that answers late or fails on purpose, for the runner start
+# tests. Built only with the `test-runner` feature, so it never ships.
+[[bin]]
+name = "orchester-fake-runner"
+path = "tests/support/fake_runner.rs"
+required-features = ["test-runner"]
+
+[[test]]
+name = "runner_start"
+required-features = ["test-runner"]
+
+[features]
+test-runner = []
+
 [dependencies]
 # Ids and preflight problems travel in messages.
 orchester-core.workspace = true
@@ -29,5 +43,8 @@ win32job.workspace = true
 windows-sys.workspace = true
 
 [dev-dependencies]
+# Collects the log lines of the runner start tests.
+parking_lot.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+tracing-subscriber.workspace = true

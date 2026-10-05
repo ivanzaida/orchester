@@ -23,8 +23,9 @@ use crate::{
   handshake, server_process_id,
 };
 
-/// How long a freshly started runner may take to open its endpoint.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a freshly started runner may take to open its endpoint. Generous: under load (parallel
+/// builds and tests) a runner can take well over ten seconds to get there.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const CONNECT_RETRY: Duration = Duration::from_millis(20);
 /// Runner diagnostics kept for the error when it exits before accepting the connection.
 const STDERR_KEPT_BYTES: usize = 8 * 1024;
@@ -52,6 +53,20 @@ pub enum LaunchError {
   Ipc(#[from] IpcError),
 }
 
+impl LaunchError {
+  /// Whether starting the runner once more may succeed: not while its program cannot be started
+  /// or another runner holds the project, and not when the protocol versions differ.
+  pub fn is_transient(&self) -> bool {
+    match self {
+      Self::RunnerExited { .. } | Self::ConnectTimeout(_) | Self::Connect(_) => true,
+      #[cfg(windows)]
+      Self::Job(_) => true,
+      Self::Ipc(error) => matches!(error, IpcError::Frame(_) | IpcError::ClosedDuringHandshake),
+      Self::Spawn { .. } | Self::ProjectLocked | Self::ForeignPipeServer { .. } => false,
+    }
+  }
+}
+
 /// A connected runner for one project.
 pub struct RunnerClient {
   commands: CommandSender,
@@ -61,20 +76,43 @@ pub struct RunnerClient {
 
 impl RunnerClient {
   /// Starts `runner_exe` for the project at `project_root` (see [`RunnerProcess`] for how it is
-  /// ended), connects to it and performs the handshake.
+  /// ended), connects to it and performs the handshake. A start that fails for a
+  /// [transient](LaunchError::is_transient) reason is tried once more, after the first runner has
+  /// ended, so two runners never hold the project.
   pub async fn launch(runner_exe: &Path, project_root: &Path) -> Result<Self, LaunchError> {
     let endpoint = Endpoint::for_project(project_root)?;
-    let process = RunnerProcess::spawn(runner_exe, project_root)?;
-    let (stream, process) = connect(&endpoint, process).await?;
-    let (read, write) = tokio::io::split(stream);
-    let mut events = FrameReader::new(read);
-    let mut commands = FrameWriter::new(write);
-    handshake(&mut events, &mut commands).await?;
-    Ok(Self {
-      commands: CommandSender { writer: commands },
-      events: EventReceiver { reader: events },
-      process,
-    })
+    match Self::attempt(runner_exe, project_root, &endpoint).await {
+      Err(Failed { error, ended: true }) if error.is_transient() => {
+        tracing::warn!(project = %project_root.display(), %error, "the runner did not start; starting it once more");
+        Self::attempt(runner_exe, project_root, &endpoint)
+          .await
+          .map_err(|failed| failed.error)
+      }
+      result => result.map_err(|failed| failed.error),
+    }
+  }
+
+  /// One start of the runner; a runner that fails to start is ended before this returns.
+  async fn attempt(runner_exe: &Path, project_root: &Path, endpoint: &Endpoint) -> Result<Self, Failed> {
+    let mut process = RunnerProcess::spawn(runner_exe, project_root).map_err(|error| Failed { error, ended: true })?;
+    let error = match open(endpoint, &mut process).await {
+      Ok((commands, events)) => {
+        return Ok(Self {
+          commands,
+          events,
+          process,
+        });
+      }
+      Err(error) => error,
+    };
+    let ended = match process.end().await {
+      Ok(()) => true,
+      Err(end_error) => {
+        tracing::warn!(project = %project_root.display(), %end_error, "cannot end the runner that failed to start");
+        false
+      }
+    };
+    Err(Failed { error, ended })
   }
 
   pub async fn send(&mut self, request: &Request) -> Result<(), IpcError> {
@@ -114,11 +152,24 @@ impl EventReceiver {
   }
 }
 
+/// A failed start, and whether its runner is known to have ended.
+struct Failed {
+  error: LaunchError,
+  ended: bool,
+}
+
+/// Connects to the started runner and performs the handshake.
+async fn open(endpoint: &Endpoint, process: &mut RunnerProcess) -> Result<(CommandSender, EventReceiver), LaunchError> {
+  let stream = connect(endpoint, process).await?;
+  let (read, write) = tokio::io::split(stream);
+  let mut reader = FrameReader::new(read);
+  let mut writer = FrameWriter::new(write);
+  handshake(&mut reader, &mut writer).await?;
+  Ok((CommandSender { writer }, EventReceiver { reader }))
+}
+
 /// Connects once the runner has opened its endpoint, or reports why it never will.
-async fn connect(
-  endpoint: &Endpoint,
-  mut process: RunnerProcess,
-) -> Result<(ClientStream, RunnerProcess), LaunchError> {
+async fn connect(endpoint: &Endpoint, process: &mut RunnerProcess) -> Result<ClientStream, LaunchError> {
   let deadline = Instant::now() + CONNECT_TIMEOUT;
   loop {
     match endpoint.connect().await {
@@ -127,7 +178,7 @@ async fn connect(
         if process.id() != Some(found) {
           return Err(LaunchError::ForeignPipeServer { found });
         }
-        return Ok((stream, process));
+        return Ok(stream);
       }
       Err(error) if Endpoint::not_ready(&error) => {}
       Err(error) => return Err(LaunchError::Connect(error)),

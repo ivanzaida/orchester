@@ -79,7 +79,16 @@ impl RunnerProcess {
     self.child().try_wait()
   }
 
-  pub(super) async fn exited(mut self, status: ExitStatus) -> LaunchError {
+  /// Kills a runner that failed to start and waits until it is gone. It never accepted a
+  /// connection, so it has started no agents that would outlive it.
+  pub(super) async fn end(&mut self) -> io::Result<()> {
+    if self.try_wait()?.is_some() {
+      return Ok(());
+    }
+    self.child().kill().await
+  }
+
+  pub(super) async fn exited(&mut self, status: ExitStatus) -> LaunchError {
     if status.code() == Some(i32::from(EXIT_PROJECT_LOCKED)) {
       return LaunchError::ProjectLocked;
     }
