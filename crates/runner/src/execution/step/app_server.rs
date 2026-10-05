@@ -33,6 +33,7 @@ use orchester_core::{
     mcp::{InvocationExemptions, McpServerProblem},
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
+  orchester_tools::SERVER,
   permission::NetworkAccess,
   resource::RepositoryAccess,
 };
@@ -87,6 +88,8 @@ pub(super) struct AppServerSetup {
   pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
+  /// Orchester's server's table in the thread's `mcp_servers` configuration: its tools' approval modes.
+  pub orchester: Value,
 }
 
 impl AppServerSetup {
@@ -524,7 +527,9 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
-    let config = json!({"mcp_servers":thread_servers(&self.turned_off, &self.setup.exemptions)});
+    let mut servers = thread_servers(&self.turned_off, &self.setup.exemptions);
+    servers.insert(SERVER.to_owned(), self.setup.orchester.clone());
+    let config = json!({ "mcp_servers": servers });
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),

@@ -165,6 +165,15 @@ impl CommandScope {
   }
 }
 
+impl CommandScope {
+  /// Whether `path`, absolute, is a credential location for a program that reads it: the home folder's
+  /// dot files and folders, the applications' data, and the folders that hold the home folder; never the
+  /// worktree or a writable folder. Links are followed as far as they exist.
+  pub fn holds_credentials(&self, path: &Path) -> bool {
+    self.place(&resolved(path)) == Place::Secret
+  }
+}
+
 /// Where a path lies, from the most to the least granted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Place {

@@ -92,6 +92,39 @@ independent design verifier (no frame exists; closest patterns) reports no block
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.
 
+### M8 · Orchester's typed agent tools · branch `claude/orchester-tools` (implemented, waiting for review)
+
+User decision 2026-10-05: one set of typed tools in core (schema, approval policy, execution), served to Claude Code
+and Codex by the per-invocation relay that already serves `mcp__Orchester__approve`. Described in
+`docs/interactive-tool-approvals.md`, "Orchester's tools".
+
+- Built: `git_status`, `git_diff`, `git_log`, `git_show` (run), `git_add`, `git_commit` (run in a writing step) and
+  `read_outside_file` (asks). The runner holds approvals itself (a prompt approval leaves a one-call grant, any other
+  call that asks is asked about by the runner; Codex approves every tool in its configuration). Output is streamed
+  within its cap (`orchester_exec::run_capped`, streamed line reads). `read_outside_file` uses the shared credential
+  rule and refuses `.git` and Orchester's own state everywhere. Git is pinned to the worktree's own git folder with
+  an absolute empty hooks folder.
+- First review (FAIL, four majors) fixed: other projects' private files, unbounded output, asking tools without a
+  runner check, `run_project_tool` and the network. Re-review (FAIL, one major) fixed: git never enters a nested
+  repository and `git_add` refuses one (`cargo test -p orchester-runner --test orchester_tools_git
+  orchester_tools_git`, with a real nested filter); prompt grants are bound to their arguments; server databases and
+  NULs before the offset are refused.
+- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test claude_approvals
+  claude_approvals`, `--test claude_invocation claude_invocation`, `--test mcp mcp`; `cargo test -p orchester-runner
+  --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`, `claude_approvals`, …);
+  `cargo test -p orchester-desktop --test form_keyboard approval_choices`.
+- Against the fixture (59 requests of runs 22–25): no request used git, so the git tools replace none; the 6
+  single-file reads of lurq's sources (`sed -n … ~/.cargo/registry/src/…`) become `read_outside_file` calls (each still
+  asks, or one *Approve similar*); the 18 searches outside the worktree have no tool; the other 35 are worktree work
+  for the CLI's own file tools (the *Files and commands* paragraph).
+- Not built: an *offered to agents* setting and typed parameters for Tools-library tools (a schema per tool, an
+  editor for it, a rule for how values become arguments: UI/design work), so `run_project_tool` is offered to no
+  agent; a search outside the worktree; a list for Always allow of Orchester's tools; the native agent hookup (P1d:
+  the native loop declares `StepTools::mcp_tools` and runs `ToolCall::work` itself).
+- Open: the visible text `runs.toolApproval.wider.orchesterTool` needs an independent design verification; answer
+  sizes against Claude Code's MCP output limit are unchecked with the real CLI; the runner's macOS build was not
+  cross-checked (core was).
+
 ### M6 · Environment names in secret references (needs decision)
 
 Environments display in lower case (`@staging`, *(staging)*) where the design writes *Staging*, and typing `@Staging`

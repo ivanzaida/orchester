@@ -1,6 +1,7 @@
 //! `orchester-runner <project-root>`: started by the desktop, one per project. Started by Claude
-//! Code as `orchester-runner --claude-permission-prompt`, it is the relay of a step's permission
-//! prompt instead ([`orchester_runner::approval_relay`]).
+//! Code as `orchester-runner --claude-permission-prompt`, or by Codex as `orchester-runner
+//! --orchester-tools`, it is the relay of a step's permission prompt and Orchester tools instead
+//! ([`orchester_runner::approval_relay`]).
 
 use std::{io, path::PathBuf, process::ExitCode, sync::Arc, time::Duration};
 
@@ -35,11 +36,10 @@ enum RunnerError {
 }
 
 fn main() -> ExitCode {
-  if std::env::args_os()
-    .nth(1)
-    .is_some_and(|first| first == approval_relay::RELAY_FLAG)
-  {
-    return approval_relay::run();
+  match std::env::args_os().nth(1) {
+    Some(first) if first == approval_relay::RELAY_FLAG => return approval_relay::run(true),
+    Some(first) if first == approval_relay::TOOLS_FLAG => return approval_relay::run(false),
+    _ => {}
   }
   let project_root = project_root_argument();
   let (log_file, log_error) = match project_root.as_ref().map(|root| log_file::open(root)) {

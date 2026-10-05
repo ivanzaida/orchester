@@ -217,6 +217,27 @@ impl FileScope {
   }
 }
 
+/// `path`, an existing absolute local path, with its links resolved, for a read outside every scope
+/// (`crate::orchester_tools::OutsideReads`). The spellings the file tools refuse are refused here too, and
+/// a network path before anything resolves it.
+pub fn resolve_local(path: &str) -> Result<PathBuf, ScopeError> {
+  if path.contains(' ') {
+    return Err(ScopeError::Nul);
+  }
+  if platform::path_form(path)? == PathForm::Network {
+    return Err(ScopeError::NetworkPath(path.to_owned()));
+  }
+  canonical_root(Path::new(path))
+}
+
+/// Whether `path` is a `.git` entry or lies in one, at any depth, as the platform opens names.
+pub fn in_git_folder(path: &Path) -> bool {
+  path.components().any(|component| match component {
+    Component::Normal(name) => platform::is_named(name, GIT_DIR),
+    _ => false,
+  })
+}
+
 /// A root folder, which must exist, with links resolved.
 fn canonical_root(path: &Path) -> Result<PathBuf, ScopeError> {
   fs::canonicalize(path)

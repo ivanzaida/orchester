@@ -198,13 +198,20 @@ async fn mcp_servers_reach_codex_as_overrides_with_secrets_in_its_environment_on
       .iter()
       .any(|arg| arg.starts_with("mcp_servers.off.") || arg.starts_with("mcp_servers.ghost."))
   );
-  assert!(argv[0].contains(r#"shell_environment_policy.exclude=["DOCS_TOKEN","ORCHESTER_MCP_TOKEN_KNOWLEDGE"]"#));
+  // Orchester's own server hands its relay the invocation's token the same way.
+  assert!(argv[0].contains(
+    r#"shell_environment_policy.exclude=["DOCS_TOKEN","ORCHESTER_MCP_TOKEN_KNOWLEDGE","ORCHESTER_APPROVAL_TOKEN"]"#
+  ));
   // The fake printed each value it got; the run's activity keeps every secret value out, so a value
   // shows as redacted exactly where the secret reached the CLI's environment.
   let env = reported(&db, run.id(), "mcp-env: ");
   assert_eq!(
     env,
-    ["DOCS_TOKEN=<redacted>", "ORCHESTER_MCP_TOKEN_KNOWLEDGE=<redacted>"]
+    [
+      "DOCS_TOKEN=<redacted>",
+      "ORCHESTER_MCP_TOKEN_KNOWLEDGE=<redacted>",
+      "ORCHESTER_APPROVAL_TOKEN=<redacted>"
+    ]
   );
   let activity = format!("{:?}", db.activity(run.id(), 0).expect("activity"));
   assert!(

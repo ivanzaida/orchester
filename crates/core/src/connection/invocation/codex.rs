@@ -35,6 +35,9 @@
 //!   writable roots and model Codex activated against the step's permissions before the turn starts. The MCP servers
 //!   the profile chooses are passed as configuration overrides ([`CodexMcp`]), their secrets through the process
 //!   environment only.
+//! - Orchester's own tools ([`crate::orchester_tools`]) come from an MCP server of the same overrides,
+//!   `mcp_servers.Orchester`: the runner's relay ([`super::CodexOrchester`]), its token in the process environment
+//!   only.
 //! - Repository agent files ([`crate::agent_files`]): while the project has them off, `AGENTS.md` is left out with
 //!   `project_doc_max_bytes=0` and each skill of `<worktree>/.agents/skills` is disabled by the path of its `SKILL.md`
 //!   (`{path="…",enabled=false}`), on new and resumed sessions alike.
@@ -144,7 +147,7 @@ impl CodexInvocation<'_> {
       }
     }
     if let Some(mcp) = self.mcp {
-      args.extend(mcp.args().iter().cloned());
+      args.extend(mcp.args());
     }
     Ok(args)
   }

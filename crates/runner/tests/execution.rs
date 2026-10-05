@@ -67,11 +67,14 @@ fn assert_thread_and_turn(stderr: &[&str]) {
   };
   let thread = reported("thread: ");
   assert_eq!(thread["model"], "gpt-5.5");
-  // The user's own MCP server, read from `config/read`, is turned off for the thread.
+  // The user's own MCP server, read from `config/read`, is turned off for the thread; Orchester's own tools
+  // have their approval modes (`orchester_tools`).
   assert_eq!(
-    thread["config"],
-    serde_json::json!({"mcp_servers": {"user-global": {"enabled": false}}})
+    thread["config"]["mcp_servers"]["user-global"],
+    serde_json::json!({"enabled": false})
   );
+  let servers = thread["config"]["mcp_servers"].as_object().expect("servers");
+  assert_eq!(servers.keys().collect::<Vec<_>>(), ["Orchester", "user-global"]);
   assert_eq!(thread["sandbox"], "workspace-write");
   // Commands that need more than the sandbox ask a person; nothing else does.
   assert_eq!(

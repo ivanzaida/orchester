@@ -267,11 +267,12 @@ fn mcp_claude_gets_a_private_config_file_and_allows_only_the_servers_tools() {
     .iter()
     .position(|arg| arg == "--allowedTools")
     .expect("allowed tools");
+  // The servers' rules, then those of Orchester's own tools (`claude_invocation`).
   assert_eq!(
     &args[allowed + 1..allowed + 3],
     ["mcp__files", "mcp__project-knowledge"]
   );
-  assert_eq!(args[allowed + 3], "--session-id");
+  assert!(args[allowed + 3].starts_with("mcp__Orchester__"));
   assert_hidden(&command, &[TOKEN, BEARER]);
   assert!(
     command.secret_env().is_empty(),

@@ -1,10 +1,12 @@
-//! `orchester-runner --claude-permission-prompt`: the MCP server Claude Code starts as its
-//! permission prompt (`orchester_core::connection::claude_approval`). It reads the runner's
-//! loopback address and the invocation's token from its environment, speaks MCP on standard input
-//! and output, and hands each call to the runner, which answers it with a person's decision. It
-//! holds no decision of its own: a call it cannot hand over is denied as unavailable
-//! ([`unavailable`]), never as a person's denial, and the reason goes to standard error, which
-//! Claude Code keeps in its MCP log. The runner reports a relay that never reached it
+//! `orchester-runner --claude-permission-prompt` and `orchester-runner --orchester-tools`: the MCP server
+//! an agent CLI starts for one invocation. Claude Code starts it as its permission prompt
+//! (`orchester_core::connection::claude_approval`), which also serves the step's Orchester tools
+//! (`orchester_core::orchester_tools`); Codex starts it for the tools only. It reads the runner's loopback
+//! address and the invocation's token from its environment, speaks MCP on standard input and output, and
+//! hands each prompt call, tool list and tool call to the runner, which answers it. It holds no decision
+//! of its own: a prompt call it cannot hand over is denied as unavailable ([`unavailable`]), never as a
+//! person's denial, a tool call fails as unavailable, and the reason goes to standard error, which the CLI
+//! keeps in its MCP log. The runner reports a prompt relay that never reached it
 //! (`RunnerProblem::PermissionPromptUnreachable`).
 
 use std::{
@@ -14,46 +16,52 @@ use std::{
   process::ExitCode,
 };
 
-use orchester_core::connection::claude_approval::{
-  ADDRESS_VARIABLE, TOKEN_VARIABLE,
-  relay::{RelayStep, ask_result, relay_step},
-  unavailable,
+use orchester_core::{
+  connection::claude_approval::{
+    ADDRESS_VARIABLE, TOKEN_VARIABLE,
+    relay::{RelayRequest, RelayStep, ask_result, call_result, list_result, relay_step},
+    unavailable,
+  },
+  orchester_tools::ToolResult,
 };
 use serde_json::Value;
 
-/// The argument that starts `orchester-runner` as the relay.
+/// The argument that starts `orchester-runner` as Claude Code's permission prompt relay.
 pub const RELAY_FLAG: &str = "--claude-permission-prompt";
+/// The argument that starts it as the relay of the Orchester tools only.
+pub const TOOLS_FLAG: &str = "--orchester-tools";
+const TOOLS_UNAVAILABLE: &str = "Orchester's tools are unavailable: the runner cannot be reached.";
 
-/// Relays until Claude Code closes standard input.
-#[allow(
-  clippy::print_stderr,
-  reason = "standard error is the relay's log, which Claude Code keeps"
-)]
-pub fn run() -> ExitCode {
-  let mut runner = Runner::connect()
-    .inspect_err(|reason| eprintln!("{RELAY_FLAG}: cannot reach Orchester: {reason}"))
-    .ok();
+/// Relays until the CLI closes standard input; `prompt` when it serves Claude Code's permission prompt.
+pub fn run(prompt: bool) -> ExitCode {
+  let mut relay = Relay::connect(if prompt { RELAY_FLAG } else { TOOLS_FLAG });
   let mut output = io::stdout().lock();
   for line in io::stdin().lock().lines() {
     let Ok(line) = line else {
       return ExitCode::FAILURE;
     };
-    let reply = match relay_step(&line) {
+    let reply = match relay_step(&line, prompt) {
       RelayStep::Reply(reply) => reply,
-      RelayStep::Ask { id, arguments } => {
-        let answer = runner.as_mut().map(|connected| connected.ask(&arguments));
-        let decision = match answer {
-          Some(Ok(decision)) => decision,
-          Some(Err(reason)) => {
-            eprintln!("{RELAY_FLAG}: lost Orchester: {reason}");
-            runner = None;
-            unavailable()
-          }
-          None => unavailable(),
-        };
-        ask_result(&id, &decision)
-      }
       RelayStep::Ignore => continue,
+      RelayStep::Ask { id, arguments } => {
+        let decision = relay.exchange(&RelayRequest::Ask(arguments));
+        ask_result(&id, &decision.unwrap_or_else(unavailable))
+      }
+      RelayStep::List { id } => {
+        // A list that cannot be read lists no Orchester tool rather than failing the CLI's start.
+        let tools = relay
+          .exchange(&RelayRequest::List)
+          .and_then(|answer| serde_json::from_str::<Vec<Value>>(&answer).ok())
+          .unwrap_or_default();
+        list_result(&id, tools, prompt)
+      }
+      RelayStep::Call { id, name, arguments } => {
+        let result = relay
+          .exchange(&RelayRequest::Call { name, arguments })
+          .and_then(|answer| serde_json::from_str::<Value>(&answer).ok())
+          .unwrap_or_else(|| ToolResult::unavailable(TOOLS_UNAVAILABLE).mcp());
+        call_result(&id, &result)
+      }
     };
     if writeln!(output, "{reply}").and_then(|()| output.flush()).is_err() {
       return ExitCode::FAILURE;
@@ -62,7 +70,39 @@ pub fn run() -> ExitCode {
   ExitCode::SUCCESS
 }
 
-/// The connection to the runner that waits for the decisions.
+/// The relay's connection to the runner, while it holds.
+struct Relay {
+  flag: &'static str,
+  runner: Option<Runner>,
+}
+
+#[allow(
+  clippy::print_stderr,
+  reason = "standard error is the relay's log, which the CLI keeps"
+)]
+impl Relay {
+  fn connect(flag: &'static str) -> Self {
+    let runner = Runner::connect()
+      .inspect_err(|reason| eprintln!("{flag}: cannot reach Orchester: {reason}"))
+      .ok();
+    Self { flag, runner }
+  }
+
+  /// The runner's answer to `request`; `None` without a runner, or when the connection broke, which
+  /// then stays closed.
+  fn exchange(&mut self, request: &RelayRequest) -> Option<String> {
+    match self.runner.as_mut()?.ask(request) {
+      Ok(answer) => Some(answer),
+      Err(reason) => {
+        eprintln!("{}: lost Orchester: {reason}", self.flag);
+        self.runner = None;
+        None
+      }
+    }
+  }
+}
+
+/// The connection to the runner that answers.
 struct Runner {
   reader: BufReader<TcpStream>,
   writer: TcpStream,
@@ -82,10 +122,11 @@ impl Runner {
     })
   }
 
-  /// The runner's answer to the call with `arguments`, waiting as long as the person takes, or
-  /// why the connection broke.
-  fn ask(&mut self, arguments: &Value) -> Result<String, String> {
-    writeln!(self.writer, "{arguments}").map_err(|error| error.to_string())?;
+  /// The runner's answer to `request`, waiting as long as a person or the call takes, or why the
+  /// connection broke.
+  fn ask(&mut self, request: &RelayRequest) -> Result<String, String> {
+    let line = serde_json::to_string(request).map_err(|error| error.to_string())?;
+    writeln!(self.writer, "{line}").map_err(|error| error.to_string())?;
     let mut answer = String::new();
     match self.reader.read_line(&mut answer) {
       Ok(0) => Err("the connection closed".to_owned()),
