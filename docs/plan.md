@@ -527,7 +527,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
   `NaUDV` (with roles), 10.17 `g5r5VU` (discovery), 10.42 `Cc4WH`, 10.44 `Y6H8A`, 10.41 `RmDpQ` (the revision; its live use is S2d).
   Implemented on `claude/s2b` (2026-10-05), waiting for design verification and review; see *Done*.
 - **S2c** (join): 10.15 `y8uP2`, 10.16 `AZwJE`, 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`, 10.24 `FAKNF`,
-  10.25 `RuBhQ`, 10.26 `m7jOn9`.
+  10.25 `RuBhQ`, 10.26 `m7jOn9`. Implemented on `claude/s2c` (2026-10-05), waiting for design verification and
+  review; see *Done*.
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
 - **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
@@ -551,6 +552,70 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+S2c · Desktop: join a shared repository · branch `claude/s2c` (implemented 2026-10-05; design verification and review pending)
+
+Implemented in `.tmp/worktrees/claude-s2c` from master `af858e1d` (S1a, S1b, S2a, S2b).
+
+- Core: `sharing::similar_titles` (case-folded words; at least two words and three fifths of the shorter title's
+  words in common; the most similar first), tested in `tests/sharing.rs`.
+- Store (migration 42, after shared projects): `tasks` is rebuilt so a number is unique only among the tasks that
+  are not *Not shared* (partial index), with `kept_key` and `kept_tag_names` for a task kept *Not shared*;
+  `joined_keys` holds every local task's key before the join (and the run it was claimed for) until *Make local*.
+  `join_sharing` keeps the local tasks not uploaded as *Not shared* (their tags by name, cleared from their
+  organization), caches the server project's tasks and tags, and gives the project the server's key, in one
+  transaction. `tasks()` leaves *Not shared* tasks out; `not_shared_tasks`, `former_keys`, `joined_keys`; a *Not
+  shared* task refuses edits, organization changes and runs (`StoreError::NotSharedTask`). *Make local* returns
+  them after the highest number with their key before as their former key and their tags matched by name (made
+  when missing), and returns the mapping. `cache_shared_tasks` makes a kept task the server's (*Share task*).
+- `orchester-api` client: `import_tasks` (`POST …/tasks/import`).
+- Desktop service: `Servers::join_review` (the server project for the repository's identity, the local tasks with
+  their latest run and the server's most similar title) and `Servers::join` (one import of the ticked tasks and of
+  every task with a run that has not ended, `claim: true` for those, new numbers, ids and former keys; dropped
+  links named by their keys before; the cache and the link written after; the application's project list takes
+  the new key). A failure says whether the import reached the server; *Try again* sends the same key, so a lost
+  answer joins once. `ProjectServer::share_kept` (*Share task*), `make_local` returns the returned tasks.
+- Screens: Sharing asks every signed-in server for the repository when it opens and after *Check again*; a member
+  gets *This repository is shared on … as ORC* with *Review and join…* (10.15), Share is not offered and *What
+  joining sends* replaces *What sharing sends*; a person who is not a member gets the owners, their username with
+  Copy, *Check again* and when it last asked (10.16 A); a Share that meets `409 remote_taken` shows *… already has
+  this repository as ORC* with *Review and join…* (10.16 C, replacing S2b's "later version"); a repository that
+  cannot be shared says why (10.16 B). The join page (`Page::Join`, 10.21) with the review bar, the table (local
+  key, task with the similar-title hint and why a locked task cannot be unticked, workflow and run, what it
+  becomes), the note with a branch example, and *Join and upload N*; a failed join (10.26 D) keeps the ticks.
+  After the join Sharing shows *You joined ORC on …* (with the dropped links) and *Keys before joining* (10.22),
+  which stays until *Make local*; after *Make local*, *Kontur is local again* with the returned tasks (10.26 C).
+  Tasks: the *Not shared · N* toggle (tab counts follow it), its notice, rows and footer (10.23); *was KON-12*
+  under a row's title; the search finds former keys (10.26 B). Task page: *· was KON-12* after the run line
+  (10.25), the side panel's *On <server>* (holder and claim kind, since, heartbeat, shared status, created as,
+  last edit); a *Not shared* task (10.24) with its label and kept key, its organization as plain labels with the
+  kept tag names, its notice and lock line, *Edit* unavailable, *Share task* with *Share KON-15 on ORC?* (10.26 A),
+  and the panel's *Sharing* (state, similar on ORC, share as).
+
+Deviations: the server is asked when the Sharing tab opens (and on Share), not when the project opens elsewhere: no
+frame shows a result outside Sharing. The not-a-member state names the owners by display name only and no key (the
+`403 not_member` answer carries neither usernames nor the key). 10.15 does not say who shared it and when (the API's
+project has no creator or date). The discovery offer is not drawn in its "steps 1 and 2 done" form (10.16 E): once
+signed in, the join offer of 10.15 shows instead; 10.16 D (*Add the server named in orchester.toml?*) stays S2b's
+route through Settings › Servers. The not-shared task page does not say which server task looked the same at the
+join (not recorded); *Share as* reads *The next ORC number* (the next number is the server's). *Release* on the task
+page's server section is S2d. A run's workflow status changed while the join is under way is not re-sent on top
+(S2b does this for Share). The branch example in the review's note is the first uploaded task that has runs.
+
+Tests: `cargo test -p orchester-core --test sharing s2c_` (1); `-p orchester-store _` (every store test binary,
+including `--test joined_tasks joined_` (5, with the upgrade of a populated schema-41 database) and `--test
+shared_tasks shared_`); `-p orchester-api --features client --test client client_`; `-p orchester-runner --test
+pipeline_pin _`; `-p orchester-desktop --test joined_projects joined_` (5, service against a real server on loopback
+with two people), `--test shared_projects shared_`, `--test shared_statuses statuses_`, `--test sharing sharing_`,
+`--test tasks task`, `--test theme roles`, `--test status_bar status`, `--test i18n _`, `--test navigation route_`,
+and `--test form_keyboard` `joining_` (7), `sharing_`, `edit_task`, `new_task`, `organization`, `task_run`,
+`run_again`, `edit_conflict`, `task_bulk`, `plan_review`, `servers_`, `unreadable_run`, `run_history`, `history`,
+`conversation_queued`, `changes`, `tabs`, `project_settings`, `sidebar`; `tools/check.ps1` passed; `cargo check
+--target aarch64-apple-darwin -p orchester-core -p orchester-api` passed. Not run: the rest of the desktop's and
+the runner's suites, and the server's (unchanged).
+
+Design verification needed: 10.15 `y8uP2`, 10.16 `AZwJE` (A, B, C), 10.21 `UlHPB`, 10.22 `m9omas`, 10.23 `l9jYZS`,
+10.24 `FAKNF`, 10.25 `RuBhQ`, 10.26 `m7jOn9` (A–D).
 
 S2b · Desktop: share, members, make local, offline, conflict · branch `claude/s2b` (implemented 2026-10-05; design verification and review pending)
 

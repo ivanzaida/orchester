@@ -104,15 +104,20 @@ impl SharingTab {
 
   /// *Keys before joining* (`O92PE4`): every local task's key before the join and now.
   pub(super) fn mapping(&self, ctx: &Ctx, facts: &Facts) -> Option<Element> {
-    let example = facts.joined.iter().find(|row| !row.not_shared)?;
-    let description = ctx.t_args(
-      "sharing.mapping.detail",
-      [
-        ("key", example.key.project().as_str()),
-        ("before", example.former.as_str()),
-        ("now", example.key.to_string().as_str()),
-      ],
-    );
+    if facts.joined.is_empty() {
+      return None;
+    }
+    let description = match facts.joined.iter().find(|row| !row.not_shared) {
+      Some(example) => ctx.t_args(
+        "sharing.mapping.detail",
+        [
+          ("key", example.key.project().as_str()),
+          ("before", example.former.as_str()),
+          ("now", example.key.to_string().as_str()),
+        ],
+      ),
+      None => ctx.t("sharing.mapping.detailNone"),
+    };
     let mut table = Column::new().width(Dimension::Pct(100.0)).child(headings(ctx));
     for row in &facts.joined {
       table = table.child(mapping_row(ctx, row));

@@ -6034,7 +6034,8 @@
       "failedNothing": "Nothing was uploaded and {{project}} is still local with its {{key}} tasks. Your ticks are kept; try again when {{server}} can be reached.",
       "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again finishes without uploading them twice.",
       "tryAgain": "Try again",
-      "backToReview": "Back to the review"
+      "backToReview": "Back to the review",
+      "titlePending": "Join a project on {{server}}"
     },
     "joined": {
       "heading": "You joined {{key}} on {{server}}",
@@ -6052,7 +6053,8 @@
       "task": "TASK",
       "claimed": "claimed for you · run #{{number}}",
       "notSharedNote": "read-only · Share task on its page",
-      "branches": "Run branches keep the names they started with. The next run of a task is named by its new key."
+      "branches": "Run branches keep the names they started with. The next run of a task is named by its new key.",
+      "detailNone": "None of your local tasks was uploaded when you joined: they stay on this computer as Not shared until you share them."
     },
     "madeLocal": {
       "heading": "{{project}} is local again",

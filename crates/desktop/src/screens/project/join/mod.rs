@@ -102,8 +102,8 @@ impl Component for JoinPage {
     let review = entry.as_ref().map(|_| self.review(ctx, &props.open, props.server));
     let project = props.open.project.name().as_str();
     let (key, count) = match &review {
-      Some(Ok(Some(review))) => (review.key.as_str().to_owned(), review.tasks.len()),
-      _ => (String::new(), 0),
+      Some(Ok(Some(review))) => (review.key.as_str().to_owned(), Some(review.tasks.len())),
+      _ => (String::new(), None),
     };
     let server = entry
       .as_ref()
@@ -327,14 +327,22 @@ impl JoinPage {
 }
 
 /// *Join ORC on Kontur team* and what the page does (`IkZhh`, `R52wl`).
-fn heading(ctx: &Ctx, (key, server): (&str, &str), count: usize) -> Element {
-  let description = if count == 1 {
-    ctx.t_args("sharing.join.description.one", [("key", key)])
-  } else {
-    ctx.t_args(
-      "sharing.join.description.other",
-      [("key", key), ("count", count.to_string().as_str())],
-    )
+/// `count` is the number of local tasks, once the review is read; until then the title names the
+/// server only.
+fn heading(ctx: &Ctx, (key, server): (&str, &str), count: Option<usize>) -> Element {
+  let (title, description) = match count {
+    None => (ctx.t_args("sharing.join.titlePending", [("server", server)]), None),
+    Some(1) => (
+      ctx.t_args("sharing.join.title", [("key", key), ("server", server)]),
+      Some(ctx.t_args("sharing.join.description.one", [("key", key)])),
+    ),
+    Some(count) => (
+      ctx.t_args("sharing.join.title", [("key", key), ("server", server)]),
+      Some(ctx.t_args(
+        "sharing.join.description.other",
+        [("key", key), ("count", count.to_string().as_str())],
+      )),
+    ),
   };
   Column::new()
     .width(Dimension::Pct(100.0))
@@ -342,15 +350,12 @@ fn heading(ctx: &Ctx, (key, server): (&str, &str), count: usize) -> Element {
     .padding_horizontal(SpacingSize::Section)
     .padding_bottom(SpacingSize::Lg)
     .spacing(crate::theme::ExtraSpacing::Stack.role())
-    .child(
-      Text::new(&ctx.t_args("sharing.join.title", [("key", key), ("server", server)]))
-        .variant(ExtraTypography::PageTitle.role()),
-    )
-    .child(
+    .child(Text::new(&title).variant(ExtraTypography::PageTitle.role()))
+    .with_children(description.map(|description| {
       Text::new(&description)
         .variant(ExtraTypography::Explanation.role())
-        .width(Dimension::Px(DESCRIPTION_WIDTH)),
-    )
+        .width(Dimension::Px(DESCRIPTION_WIDTH))
+    }))
     .into()
 }
 
