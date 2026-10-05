@@ -64,7 +64,7 @@ pub(in crate::screens::project::task) struct EntryProps {
   /// group reads as plain rows until one is opened.
   pub(in crate::screens::project::task) in_group: bool,
   pub(in crate::screens::project::task) toggles: Toggles,
-  /// The card of the request a problem row names, while the chat shows it.
+  /// The card of the request a problem row names, while the run's timeline has it.
   pub(in crate::screens::project::task) request: Option<RequestLink>,
 }
 
@@ -77,7 +77,7 @@ impl PartialEq for EntryProps {
       && self.raw == other.raw
       && self.time_column == other.time_column
       && self.in_group == other.in_group
-      && self.request.as_ref().map(|link| &link.card) == other.request.as_ref().map(|link| &link.card)
+      && self.request.as_ref().map(|link| &link.target) == other.request.as_ref().map(|link| &link.target)
   }
 }
 

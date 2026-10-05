@@ -408,15 +408,22 @@ fn approval_key(id: &str) -> Arc<str> {
   format!("approval-{id}").into()
 }
 
-/// The key of the card of the tool request problem `item` names: one that ended without a decision.
-pub fn named_request(item: &Item) -> Option<Arc<str>> {
-  match &item.kind {
-    ItemKind::Problem(Entry {
-      kind: EntryKind::Problem(RunnerProblem::DecisionInterrupted { request, .. }),
-      ..
-    }) => Some(approval_key(request)),
+/// The key of the card of the tool request problem `entry` names: one that ended without a decision.
+pub fn named_request(entry: &Entry) -> Option<Arc<str>> {
+  match &entry.kind {
+    EntryKind::Problem(RunnerProblem::DecisionInterrupted { request, .. }) => Some(approval_key(request)),
     _ => None,
   }
+}
+
+/// The key of the step whose items hold the item `key` among `items`; `None` when there is no such
+/// item, or it belongs to no step.
+pub fn step_of(items: &[Item], key: &str) -> Option<Arc<str>> {
+  let execution = items.iter().find(|item| *item.key == *key)?.execution?;
+  items
+    .iter()
+    .find(|item| matches!(item.kind, ItemKind::Step(_)) && item.execution == Some(execution))
+    .map(|item| item.key.clone())
 }
 
 /// The result card of `execution` once it passed or failed, with what its transcript among `entries`

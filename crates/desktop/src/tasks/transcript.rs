@@ -4,8 +4,8 @@
 //! its own (it opens the file in the Changes tab), consecutive unparsed lines become one collapsed
 //! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
 //! of its own (Codex, which reports no command for it), and a failed turn that repeats the error before
-//! it, or follows the request a closed permission prompt interrupted, is not shown twice. Session and turn starts carry
-//! no text of their own; the invocation panel shows the session. Nothing else is left out.
+//! it, or comes right after the request a closed permission prompt interrupted, is not shown twice. Session and turn
+//! starts carry no text of their own; the invocation panel shows the session. Nothing else is left out.
 
 use std::sync::Arc;
 
@@ -166,7 +166,10 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   let mut entries: Vec<Entry> = Vec::new();
   // Answers recorded before the command they answer started (Codex asks before it starts a command).
   let mut early: Vec<(InvocationId, Arc<str>, CommandMark)> = Vec::new();
+  // The invocation whose request a closed prompt interrupted, for the one event right after it.
+  let mut interrupted: Option<InvocationId> = None;
   for stored in activity {
+    let explains = interrupted.take() == Some(stored.invocation);
     let entry = |kind| Entry {
       sequence: stored.sequence,
       part: 0,
@@ -204,14 +207,16 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       }
       AgentEvent::TurnCompleted { usage } => entries.push(entry(EntryKind::Usage(*usage))),
       AgentEvent::Error { message } => entries.push(entry(EntryKind::Error(message.as_str().into()))),
+      // The runner records the failed turn right after the request it interrupted, which says why.
+      AgentEvent::TurnFailed { .. } if explains => {}
       AgentEvent::TurnFailed { message } => {
-        if !says_why(entries.last(), stored, message) {
+        if !repeats(entries.last(), stored, message) {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
       AgentEvent::PermissionDenied { item, command } => deny_command(&mut entries, stored, (item, command)),
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
-      AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
+      AgentEvent::RunnerProblem { problem } => interrupted = push_problem(&mut entries, stored, problem),
       AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
         server.as_deref().map(Arc::from),
         problem.clone(),
@@ -240,18 +245,24 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   entries
 }
 
-/// Whether `last`, the entry before a failed turn of the same invocation, already says why it failed: the
-/// same error, or the request a closed permission prompt or tool relay interrupted, which the runner records
-/// right before the turn fails with it.
-fn says_why(last: Option<&Entry>, stored: &ActivityEntry, message: &str) -> bool {
-  let Some(last) = last.filter(|last| last.invocation == stored.invocation) else {
-    return false;
-  };
-  match &last.kind {
-    EntryKind::Error(previous) => **previous == *message,
-    EntryKind::Problem(RunnerProblem::DecisionInterrupted { .. }) => true,
-    _ => false,
-  }
+/// Adds the entry of runner problem `problem`; the invocation whose request it names as interrupted, if it
+/// does.
+fn push_problem(entries: &mut Vec<Entry>, stored: &ActivityEntry, problem: &RunnerProblem) -> Option<InvocationId> {
+  entries.push(Entry {
+    sequence: stored.sequence,
+    part: 0,
+    execution: stored.execution,
+    invocation: stored.invocation,
+    at: stored.at,
+    kind: EntryKind::Problem(problem.clone()),
+  });
+  matches!(problem, RunnerProblem::DecisionInterrupted { .. }).then_some(stored.invocation)
+}
+
+/// Whether `last` is the error a failed turn of the same invocation repeats.
+fn repeats(last: Option<&Entry>, stored: &ActivityEntry, message: &str) -> bool {
+  matches!(last, Some(Entry { kind: EntryKind::Error(previous), invocation, .. })
+    if **previous == *message && *invocation == stored.invocation)
 }
 
 /// Marks the command of a call nobody was asked about, or adds an entry for the call when no command

@@ -26,7 +26,7 @@ pub(super) use self::{
   first_edit::header_tokens,
   footer::{LiveFooter, LiveFooterProps},
   panel::{PANEL_WIDTH as DETAILS_WIDTH, invocation_panel},
-  request_link::{RequestLink, RevealRow},
+  request_link::{RequestLink, RequestTarget, RevealRow},
   toggles::{OpenRows, Toggles},
 };
 use crate::screens::project::connections::status::{preset_name_key, short_key as provider_short_key};

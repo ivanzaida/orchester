@@ -3,7 +3,7 @@
 //! waits for the person until the person scrolls; scrolling up stops following and shows *Jump to
 //! latest · N new*; sending a message follows again.
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, events::scroll_event::ScrollEvent, theme::SpacingSize},
@@ -11,17 +11,18 @@ use lurq::{
   layout::layout_kind::Justify,
   node::{Element, dimension::Dimension},
 };
+use parking_lot::Mutex;
 
 use super::{
-  super::activity::{LiveFooterProps, RevealRow},
-  ConversationTab,
+  super::activity::{LiveFooterProps, RequestTarget, RevealRow},
+  ConversationTab, ShowChoice,
   approval_card::AnswersLayout,
   row::{Line, RowProps, TimelineRowView},
 };
 use crate::{
   tasks::timeline::{
-    self, Item,
-    view::{Row as ChatRow, Shown},
+    self, Item, ItemKind,
+    view::{self, Row as ChatRow, Shown},
   },
   theme::gutter_scrollbar,
   ui::{button::ActionButton, icon::Icon},
@@ -45,11 +46,24 @@ pub(super) struct Reveal {
   scrolled: bool,
 }
 
+impl Reveal {
+  /// The person moved the chat (scrolled, jumped to the latest, sent a message or picked a step): no
+  /// row holds it any more. The list reveals a row only when its key changes, so a row revealed before
+  /// must be let go for a later reveal of the same row to scroll again.
+  pub(super) fn let_go(reveal: &Mutex<Self>) {
+    *reveal.lock() = Self {
+      key: None,
+      scrolled: true,
+    };
+  }
+}
+
 impl ConversationTab {
   /// Once a message was sent, the timeline goes to its end and follows again.
   pub(super) fn sent_handler(&self) -> Arc<dyn Fn() + Send + Sync> {
-    let (scroll, following) = (self.scroll.clone(), self.following.clone());
+    let (scroll, following, reveal) = (self.scroll.clone(), self.following.clone(), self.reveal.clone());
     Arc::new(move || {
+      Reveal::let_go(&reveal);
       scroll.scroll_to_bottom_pending();
       following.set(true);
     })
@@ -96,17 +110,16 @@ impl ConversationTab {
   pub(super) fn list(
     &self,
     ctx: &mut Ctx,
-    shown: &Shown,
+    (shown, items): (&Shown, &[Item]),
     reveal: Option<String>,
     (working, answers): (Option<LiveFooterProps>, AnswersLayout),
   ) -> Element {
     let raw = self.raw.get();
-    let keys: HashSet<&str> = shown.rows.iter().map(|row| &**row.key()).collect();
     let rows: Arc<Vec<RowProps>> = Arc::new(
       shown
         .rows
         .iter()
-        .map(|row| (Line::Row(Box::new(row.clone())), shown_request(row, &keys)))
+        .map(|row| (Line::Row(Box::new(row.clone())), request_target(row, items)))
         .chain(working.map(|working| (Line::Working(working), None)))
         .map(|(line, request)| RowProps {
           line,
@@ -128,10 +141,7 @@ impl ConversationTab {
       .reveal_key(reveal)
       .on_scroll(move |event: ScrollEvent| {
         // The person scrolls: the card the tab opened at no longer holds the list.
-        *revealed.lock() = Reveal {
-          key: None,
-          scrolled: true,
-        };
+        Reveal::let_go(&revealed);
         // The handler runs before the wheel moves the list, which moves by the opposite of the delta.
         let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);
         let at_end = scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
@@ -145,13 +155,24 @@ impl ConversationTab {
       .mount_keyed::<TimelineRowView, _, _, _>(|row| row.key().to_string(), Clone::clone)
   }
 
-  /// Scrolls the chat to a row once, as when the tab reveals the card that waits for the person: the
-  /// chat stops following, and the person's next scroll lets the row go.
+  /// Shows a request's card and scrolls the chat to it once, as when the tab reveals the card that waits
+  /// for the person: *Tools* gives way to *All*, a search is cleared and the card's step opens, so the
+  /// card is a row; the chat stops following, and the person's next scroll lets the row go.
   pub(super) fn reveal_row(&self) -> RevealRow {
     let (reveal, following, revealed) = (self.reveal.clone(), self.following.clone(), self.revealed.clone());
-    Arc::new(move |key: Arc<str>| {
+    let (show, query, toggles) = (self.show.clone(), self.query.clone(), self.toggles.clone());
+    Arc::new(move |target: &RequestTarget| {
+      if show.get_untracked().0 == view::Show::Tools {
+        show.set(ShowChoice(view::Show::All));
+      }
+      if !query.get_untracked().is_empty() {
+        query.set(String::new());
+      }
+      if let Some(step) = &target.step {
+        toggles.open_all(std::slice::from_ref(step));
+      }
       *reveal.lock() = Reveal {
-        key: Some(key.to_string()),
+        key: Some(target.card.to_string()),
         scrolled: true,
       };
       following.set(false);
@@ -173,12 +194,13 @@ impl ConversationTab {
     } else {
       ctx.t_args("runs.activity.jumpNew", [("count", new.to_string().as_str())])
     };
-    let (scroll, following) = (self.scroll.clone(), self.following.clone());
+    let (scroll, following, reveal) = (self.scroll.clone(), self.following.clone(), self.reveal.clone());
     let button = ActionButton::new(label)
       .icon(Icon::ArrowDown)
       .id("conversation-jump")
       .height(Dimension::Px(JUMP_HEIGHT))
       .on_click(move || {
+        Reveal::let_go(&reveal);
         scroll.scroll_to_bottom_pending();
         following.set(true);
       })
@@ -192,10 +214,20 @@ impl ConversationTab {
   }
 }
 
-/// The card of the tool request problem row `row` names, when `keys`, the rows shown, hold it.
-fn shown_request(row: &ChatRow, keys: &HashSet<&str>) -> Option<Arc<str>> {
-  let ChatRow::Item(item) = row else {
-    return None;
+/// The card of the tool request problem row `row` names and its step, when `items`, the run's timeline,
+/// hold the card.
+fn request_target(row: &ChatRow, items: &[Item]) -> Option<RequestTarget> {
+  let entry = match row {
+    ChatRow::Item(Item {
+      kind: ItemKind::Problem(entry),
+      ..
+    })
+    | ChatRow::Entry { entry, .. } => entry,
+    _ => return None,
   };
-  timeline::named_request(item).filter(|card| keys.contains(&**card))
+  let card = timeline::named_request(entry)?;
+  items.iter().any(|item| item.key == card).then(|| RequestTarget {
+    step: timeline::step_of(items, &card),
+    card,
+  })
 }

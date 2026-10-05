@@ -3,8 +3,6 @@
 //! return or restart, a step's end or result card, or the run's end; in *Tools*, an entry or a
 //! message on one line; and last, while an agent works, the working line (`kpnmP`).
 
-use std::sync::Arc;
-
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::Column,
@@ -12,7 +10,7 @@ use lurq::{
 };
 
 use super::{
-  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps, RequestLink},
+  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps, RequestLink, RequestTarget},
   Timeline,
   approval_card::{AnswersLayout, ApprovalCardProps, ApprovalCardView},
   cards::{self, PlanCardProps, PlanCardView},
@@ -34,8 +32,8 @@ pub(super) struct RowProps {
   pub(super) raw: bool,
   /// How an approval card lays out its answers in the chat's width.
   pub(super) answers: AnswersLayout,
-  /// The card of the tool request a problem row names, while the chat shows it.
-  pub(super) request: Option<Arc<str>>,
+  /// The card of the tool request a problem row names, while the run's timeline has it.
+  pub(super) request: Option<RequestTarget>,
 }
 
 /// What a row of the list shows.
@@ -106,7 +104,10 @@ impl Component for TimelineRowView {
           time_column: true,
           in_group: false,
           toggles: timeline.toggles.clone(),
-          request: None,
+          request: props.request.map(|target| RequestLink {
+            target,
+            reveal: timeline.reveal.clone(),
+          }),
         },
       ),
       Row::Line(item) => message::one_line(ctx, item),
@@ -120,7 +121,7 @@ impl Component for TimelineRowView {
 fn item_row(
   ctx: &mut Ctx,
   item: &Item,
-  (timeline, answers, request): (&Timeline, AnswersLayout, Option<Arc<str>>),
+  (timeline, answers, request): (&Timeline, AnswersLayout, Option<RequestTarget>),
 ) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => ctx.mount_keyed::<PersonMessageView>(
@@ -162,8 +163,8 @@ fn item_row(
         time_column: false,
         in_group: false,
         toggles: timeline.toggles.clone(),
-        request: request.map(|card| RequestLink {
-          card,
+        request: request.map(|target| RequestLink {
+          target,
           reveal: timeline.reveal.clone(),
         }),
       },

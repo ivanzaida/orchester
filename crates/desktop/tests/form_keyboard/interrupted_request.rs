@@ -85,8 +85,9 @@ fn interrupted(repo: &std::path::Path) -> (String, u64) {
   (request.id, last - 1)
 }
 
-#[test]
-fn interrupted_request_is_named_and_its_link_scrolls_to_its_card() {
+/// The project's run open in Conversation at 1440 × 960, the problem row shown; the ids of its link and of
+/// the request's card, and the row's sequence.
+fn opened() -> (Desktop, String, String, u64) {
   let mut seeded = None;
   let mut desktop = Desktop::with_seeded_project(|repo| seeded = Some(interrupted(repo)));
   let (request, problem) = seeded.expect("seeded");
@@ -94,21 +95,75 @@ fn interrupted_request_is_named_and_its_link_scrolls_to_its_card() {
   open_conversation(&mut desktop);
   let link = format!("activity-show-request-{problem}");
   desktop.wait_for(&link);
-  let row = format!("activity-entry-title-{problem}");
+  (desktop, link, format!("conversation-approval-{request}"), problem)
+}
+
+/// Presses `link` with the card out of the chat's view, and the card then shows in it.
+fn reaches(desktop: &mut Desktop, link: &str, card: &str) {
+  assert!(!has(desktop, card), "the card is out of the chat's view");
+  desktop.click(link);
+  desktop.wait_for(card);
+  let (shown, chat) = (desktop.bounds(card), desktop.bounds("conversation-main"));
+  assert!(shown.height > 0.0 && inside(shown, chat), "{shown:?} shows in {chat:?}");
+}
+
+/// *Jump to latest* puts the card out of the chat's view again.
+fn jump(desktop: &mut Desktop, card: &str) {
+  desktop.click("conversation-jump");
+  desktop.wait_until("the chat at its end", |desktop| !has(desktop, card));
+}
+
+#[test]
+fn interrupted_request_is_named_and_its_link_scrolls_to_its_card() {
+  let (mut desktop, link, card, problem) = opened();
   assert!(shows(
     &mut desktop,
-    &row,
+    &format!("activity-entry-title-{problem}"),
     &format!("The request for {COMMAND} ended without your decision")
   ));
+  assert!(shows(
+    &mut desktop,
+    &format!("activity-entry-meta-{problem}"),
+    "decision_interrupted"
+  ));
+  desktop.wait_until("the link laid out", |desktop| {
+    desktop
+      .tree
+      .get_element_by_id_mut(&link)
+      .and_then(|element| element.bounds())
+      .is_some()
+  });
+  assert!(
+    desktop.bounds(&link).height >= 22.0 - 0.5,
+    "the link is as easy to hit as a quiet action"
+  );
   assert!(shows(&mut desktop, "conversation", "Grep lurq_[a-z_]+"));
   assert!(
     !shows(&mut desktop, "conversation", "The agent CLI reported an error"),
     "the failed turn is the named request's row, not a second one"
   );
-  let card = format!("conversation-approval-{request}");
-  assert!(!has(&mut desktop, &card), "the card is out of the chat's view");
-  desktop.click(&link);
-  desktop.wait_for(&card);
-  let (card, chat) = (desktop.bounds(&card), desktop.bounds("conversation-main"));
-  assert!(card.height > 0.0 && inside(card, chat), "{card:?} shows in {chat:?}");
+  reaches(&mut desktop, &link, &card);
+}
+
+#[test]
+fn interrupted_request_link_reaches_its_card_again_after_jump_to_latest() {
+  let (mut desktop, link, card, _) = opened();
+  reaches(&mut desktop, &link, &card);
+  jump(&mut desktop, &card);
+  reaches(&mut desktop, &link, &card);
+  // Jumping in Tools, then back in All.
+  desktop.click("conversation-show-2");
+  jump(&mut desktop, &card);
+  desktop.click("conversation-show-0");
+  desktop.wait_for(&link);
+  reaches(&mut desktop, &link, &card);
+}
+
+#[test]
+fn interrupted_request_link_in_tools_shows_the_card_in_all() {
+  let (mut desktop, link, card, _) = opened();
+  // *Tools* lists the problem as an entry and no card: the link brings back *All* with the card.
+  desktop.click("conversation-show-2");
+  desktop.wait_for(&link);
+  reaches(&mut desktop, &link, &card);
 }
