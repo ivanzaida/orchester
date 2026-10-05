@@ -58,6 +58,36 @@ impl ApprovalAnswer {
       Self::Deny => DecidedBy::PersonDeny,
     }
   }
+
+  /// Who answered, when `answerer` gives this answer. Automation answers one request at a time: it
+  /// approves once or denies, and leaves the wider answers, which change later requests, to a person.
+  pub const fn given_by(&self, answerer: Answerer) -> Result<DecidedBy, AutomationAnswerError> {
+    match (answerer, self) {
+      (Answerer::Person, answer) => Ok(answer.decided_by()),
+      (Answerer::Automation, Self::Once) => Ok(DecidedBy::Automation),
+      (Answerer::Automation, Self::Deny) => Ok(DecidedBy::AutomationDeny),
+      (Answerer::Automation, Self::Similar | Self::Always { .. } | Self::ApproveRun) => {
+        Err(AutomationAnswerError::Wider)
+      }
+    }
+  }
+}
+
+/// Who gives an answer to a waiting request: the person in the app, or automation through
+/// Orchester's own MCP server, which a person allows in the app's settings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Answerer {
+  #[default]
+  Person,
+  Automation,
+}
+
+/// An answer automation may not give.
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum AutomationAnswerError {
+  #[error("automation only approves a request once or denies it")]
+  Wider,
 }
 
 /// Who answered a request, as it is recorded and marked in the activity.
@@ -80,10 +110,14 @@ pub enum DecidedBy {
   AlwaysAllowed,
   /// Auto-approval answered it.
   AutoApproved,
+  /// Automation approved it once, through Orchester's MCP server.
+  Automation,
+  /// Automation denied it, through Orchester's MCP server; the agent was told and continued.
+  AutomationDeny,
 }
 
 impl DecidedBy {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 10] = [
     Self::Person,
     Self::PersonSimilar,
     Self::PersonAlways,
@@ -92,6 +126,8 @@ impl DecidedBy {
     Self::SimilarRule,
     Self::AlwaysAllowed,
     Self::AutoApproved,
+    Self::Automation,
+    Self::AutomationDeny,
   ];
 
   pub const fn as_str(self) -> &'static str {
@@ -104,11 +140,13 @@ impl DecidedBy {
       Self::SimilarRule => "similar_rule",
       Self::AlwaysAllowed => "always_allowed",
       Self::AutoApproved => "auto_approved",
+      Self::Automation => "automation",
+      Self::AutomationDeny => "automation_deny",
     }
   }
 
   pub const fn approves(self) -> bool {
-    !matches!(self, Self::PersonDeny)
+    !matches!(self, Self::PersonDeny | Self::AutomationDeny)
   }
 
   /// A person answered, rather than Orchester by a rule or auto-approval.
@@ -117,6 +155,17 @@ impl DecidedBy {
       self,
       Self::Person | Self::PersonSimilar | Self::PersonAlways | Self::PersonRun | Self::PersonDeny
     )
+  }
+
+  /// Automation answered, through Orchester's MCP server.
+  pub const fn by_automation(self) -> bool {
+    matches!(self, Self::Automation | Self::AutomationDeny)
+  }
+
+  /// Someone answered a request that waited for them, a person or automation, rather than Orchester
+  /// itself as the request came.
+  pub const fn answered_waiting(self) -> bool {
+    self.by_person() || self.by_automation()
   }
 }
 

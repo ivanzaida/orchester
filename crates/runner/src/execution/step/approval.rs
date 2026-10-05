@@ -270,7 +270,7 @@ impl Worker {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
     let (approval, awaiting) = watch.approval.take().expect("the pending approval was matched above");
-    let settled = match self.widen(watch, &approval, &decision.answer)? {
+    let settled = match self.widen(watch, &approval, (&decision.answer, decision.by))? {
       Ok(settled) => settled,
       Err(rejection) => {
         // The request still waits for an answer that can be given.

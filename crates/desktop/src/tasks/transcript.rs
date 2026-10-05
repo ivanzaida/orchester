@@ -15,7 +15,7 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
   },
   id::{InvocationId, StepExecutionId},
-  run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
+  run::{ActivityEntry, TokenUsage, ToolDecision},
   time::Timestamp,
 };
 
@@ -65,9 +65,9 @@ pub enum CommandMark {
 }
 
 impl CommandMark {
-  /// A person denied the request: the row stays open and shows what the agent was told.
+  /// A person or automation denied the request: the row stays open and shows what the agent was told.
   pub fn is_denial(&self) -> bool {
-    matches!(self, Self::Decided(mark) if mark.decision.decided_by == DecidedBy::PersonDeny)
+    matches!(self, Self::Decided(mark) if !mark.decision.decided_by.approves())
   }
 }
 

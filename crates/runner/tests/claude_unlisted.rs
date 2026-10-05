@@ -15,7 +15,7 @@ use orchester_core::{
     RepositoryAccess,
   },
   resource::StepKey,
-  run::{ApprovalAnswer, PendingToolApproval, Run, RunStatus, StepStatus},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, Run, RunStatus, StepStatus},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -72,7 +72,7 @@ impl Started {
   async fn decide(&mut self, request: PendingToolApproval, answer: ApprovalAnswer) -> Run {
     self
       .scheduler
-      .decide_tool_approval(self.id, request.id, answer)
+      .decide_tool_approval(self.id, request.id, answer, Answerer::Person)
       .await
       .expect("decided");
     // A denial tells the agent, which goes on: the run settles as after an approval.

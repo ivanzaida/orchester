@@ -29,6 +29,9 @@ pub struct DecisionCounts {
   pub by_similar_rule: u32,
   pub always_allowed: u32,
   pub auto_approved: u32,
+  /// Approved once by automation, through Orchester's MCP server.
+  pub by_automation: u32,
+  pub denied_by_automation: u32,
   pub waiting: u32,
 }
 
@@ -174,7 +177,9 @@ impl ProjectDb {
         .transpose()?;
       let slot = match (state.as_str(), decided_by) {
         ("pending", _) => &mut counts.waiting,
+        ("denied", Some(DecidedBy::AutomationDeny)) => &mut counts.denied_by_automation,
         ("denied", _) => &mut counts.denied_by_you,
+        (_, Some(DecidedBy::Automation)) => &mut counts.by_automation,
         (_, Some(DecidedBy::SimilarRule)) => &mut counts.by_similar_rule,
         (_, Some(DecidedBy::AlwaysAllowed)) => &mut counts.always_allowed,
         (_, Some(DecidedBy::AutoApproved)) => &mut counts.auto_approved,

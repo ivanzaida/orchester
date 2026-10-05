@@ -13,7 +13,7 @@ use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
-  run::{ApprovalAnswer, PendingToolApproval},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -79,7 +79,7 @@ async fn stale_approvals_end_when_no_live_agent_holds_them() {
   // A request the agent at work does not wait on ends at its answer; the agent's own keeps waiting.
   let unheld = recorded(root, &request, "unheld");
   let answer = scheduler
-    .decide_tool_approval(id, unheld.clone(), ApprovalAnswer::Once)
+    .decide_tool_approval(id, unheld.clone(), ApprovalAnswer::Once, Answerer::Person)
     .await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
   assert!(!waits(root, id, &unheld));
@@ -91,14 +91,14 @@ async fn stale_approvals_end_when_no_live_agent_holds_them() {
   assert!(run.status().is_terminal());
   assert!(!waits(root, id, &request.id));
   let answer = scheduler
-    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once, Answerer::Person)
     .await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
 
   // No task executes the run any more: a request recorded for it ends at its answer.
   let left = recorded(root, &request, "left");
   let answer = scheduler
-    .decide_tool_approval(id, left.clone(), ApprovalAnswer::Deny)
+    .decide_tool_approval(id, left.clone(), ApprovalAnswer::Deny, Answerer::Person)
     .await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
   assert!(!waits(root, id, &left));
@@ -152,7 +152,9 @@ async fn stale_approvals_left_by_an_earlier_runner_end_when_the_next_attaches() 
     .expect("attached");
   assert!(!waits(root, id, &left.id));
   assert!(db.pending_tool_approvals_all().expect("requests").is_empty());
-  let answer = next.decide_tool_approval(id, left.id, ApprovalAnswer::Once).await;
+  let answer = next
+    .decide_tool_approval(id, left.id, ApprovalAnswer::Once, Answerer::Person)
+    .await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
 }
 
@@ -196,7 +198,7 @@ async fn stale_approvals_end_when_their_steps_worker_is_gone_and_an_answered_one
   };
   let gone = recorded(root, &gone, "gone");
   let answer = scheduler
-    .decide_tool_approval(id, gone.clone(), ApprovalAnswer::Once)
+    .decide_tool_approval(id, gone.clone(), ApprovalAnswer::Once, Answerer::Person)
     .await;
   assert_eq!(answer, Err(Rejection::ToolApprovalNotAwaited));
   assert!(!waits(root, id, &gone));
@@ -204,17 +206,17 @@ async fn stale_approvals_end_when_their_steps_worker_is_gone_and_an_answered_one
 
   // A second answer to a request answered already is refused as answered, not as ended.
   scheduler
-    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let again = scheduler
-    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Deny)
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Deny, Answerer::Person)
     .await;
   assert_eq!(again, Err(Rejection::ToolApprovalAnswered));
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert!(run.status().is_terminal());
   let again = scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await;
   assert_eq!(again, Err(Rejection::ToolApprovalAnswered));
 }
