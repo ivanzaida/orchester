@@ -1,8 +1,8 @@
 //! The step's Orchester tools (`orchester_core::orchester_tools`), served over the invocation's relay
-//! ([`super::relay`]) and run by the runner: git in the worktree, pinned to its own git folder, and a read
-//! outside it. A call runs off the async workers, in the worktree, with the environment the agent's own
-//! programs get; its output is read as it comes and kept within its cap, and its answer has the invocation's
-//! secret values removed.
+//! ([`super::relay`]) and run by the runner: the native agent's file tools ([`super::tool_files`]), git in
+//! the worktree, pinned to its own git folder, and a read outside it. A call runs off the async workers, in the
+//! worktree, with the environment the agent's own programs get; its output is read as it comes and kept within its cap,
+//! and its answer has the invocation's secret values removed.
 //!
 //! A call of a tool that asks runs only once approved, which the runner holds itself: an approval given
 //! through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
@@ -30,7 +30,7 @@ use orchester_core::{
   orchester_tools::{
     OrchesterTool, OutsideReads, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult, ToolWork,
   },
-  permission::{AgentPermissions, category::CommandScope},
+  permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
 };
 use orchester_exec::run_capped;
@@ -43,8 +43,36 @@ use super::{
   mcp::McpSetup,
   relay::{Listening, Served, bind},
   start::problem,
+  tool_files::ToolFiles,
 };
 use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
+
+/// The folders the file tools of one step work in.
+#[derive(Clone, Copy)]
+pub(in super::super) struct ToolFolders<'a> {
+  pub(in super::super) worktree: &'a Path,
+  /// The extra writable folders the step is granted.
+  pub(in super::super) writable: &'a [ResolvedFolder],
+  /// The code index of the run's base revision, read-only, when the agent gets it.
+  pub(in super::super) code_index: Option<&'a Path>,
+  /// The step's skills, read-only, when it has any.
+  pub(in super::super) skills: Option<&'a Path>,
+}
+
+impl<'a> ToolFolders<'a> {
+  pub(in super::super) const fn new(
+    worktree: &'a Path,
+    writable: &'a [ResolvedFolder],
+    (code_index, skills): (Option<&'a Path>, Option<&'a Path>),
+  ) -> Self {
+    Self {
+      worktree,
+      writable,
+      code_index,
+      skills,
+    }
+  }
+}
 
 /// The hooks folder git gets, empty, among the project's private files.
 const NO_HOOKS: &str = "no-hooks";
@@ -58,6 +86,8 @@ pub(in super::super) struct ToolHost {
   inherited: Vec<(OsString, OsString)>,
   project: CommandEnvironment,
   outside: OutsideReads,
+  /// The file tools, with the read stamps of this invocation.
+  files: ToolFiles,
   /// The invocation's secret values, removed from every answer.
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
@@ -140,6 +170,8 @@ impl ToolHost {
     };
     match call.work(&context) {
       Ok(ToolWork::Done(result)) => result,
+      Ok(ToolWork::Files(input)) => self.files.run(&input, &context),
+      Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
     }
@@ -170,23 +202,31 @@ impl RunTask {
   pub(super) fn step_tools(
     &self,
     (permissions, setup): (&AgentPermissions, &McpSetup),
-    (invocation, worktree, writable): (orchester_core::id::InvocationId, &Path, &[PathBuf]),
+    (invocation, folders): (orchester_core::id::InvocationId, ToolFolders<'_>),
     environment: &CommandEnvironment,
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
-    let host = self.tool_host(permissions, (worktree, writable), environment)?;
+    let worktree = folders.worktree;
+    let host = self.tool_host(permissions, folders, environment)?;
     let tools = Arc::new(host.with_secrets(setup.secrets()));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }
 
-  /// The Orchester tools of a step with `permissions`, working in `worktree` with the project's
-  /// `environment` and the extra writable folders `writable`.
+  /// The Orchester tools of a step with `permissions`, working in `folders` with the project's
+  /// `environment`.
   fn tool_host(
     &self,
     permissions: &AgentPermissions,
-    (worktree, writable): (&Path, &[PathBuf]),
+    folders: ToolFolders<'_>,
     environment: &CommandEnvironment,
   ) -> Result<ToolHost, RunnerProblem> {
+    let worktree = folders.worktree;
+    let writable: Vec<PathBuf> = folders
+      .writable
+      .iter()
+      .map(|folder| folder.path().to_path_buf())
+      .collect();
+    let writable = writable.as_slice();
     let hooks = private_file::empty_folder(self.project.id(), NO_HOOKS).map_err(|error| {
       problem(format!(
         "cannot make the empty hooks folder of Orchester's tools: {error}"
@@ -194,14 +234,21 @@ impl RunTask {
     })?;
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
+    let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
+    let tools = StepTools::for_step(permissions, &[]);
     Ok(ToolHost {
-      tools: StepTools::for_step(permissions, &[]),
+      tools: if files.indexed() {
+        tools.with_code_index()
+      } else {
+        tools
+      },
       worktree: worktree.to_path_buf(),
       git_dir: self.worktree_git_dir(worktree)?,
       hooks,
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
       outside: OutsideReads::new(CommandScope::on_host(worktree, writable), &refused),
+      files,
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
     })

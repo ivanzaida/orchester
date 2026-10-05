@@ -14,7 +14,7 @@ mod prompt;
 mod retry;
 mod shared;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   code_index::CodeIndexUse,
@@ -41,7 +41,7 @@ use super::{
   app_server::AppServerSetup,
   claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
-  orchester_tools::ToolHost,
+  orchester_tools::{ToolFolders, ToolHost},
   relay::Listening,
   skills::PlacedSkills,
 };
@@ -133,18 +133,15 @@ impl RunTask {
       working: WorkingTools::new(provider, enforced.permissions()),
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
-    let writable_roots = self.writable_roots(&enforced)?;
+    let writable = self.writable_folders(&enforced)?;
+    let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
-    let (tools, claude_approvals) = self.step_tools(
-      (enforced.permissions(), &setup),
-      (invocation, worktree, &writable_roots),
-      &environment,
-    )?;
-    // The tools reach a Claude Code agent through its permission prompt's relay, and every Codex agent.
-    let served = claude_approvals.is_some() || matches!(setup, McpSetup::Codex(_));
-    let prompt = told_of_tools(prompt, &tools, served && continuation.session.is_none());
+    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let (tools, claude_approvals) =
+      self.step_tools((enforced.permissions(), &setup), (invocation, folders), &environment)?;
+    let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
     let mcp_secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
@@ -185,16 +182,16 @@ impl RunTask {
   }
 }
 
-/// `prompt` with the paragraph that points the agent at its Orchester tools when it is `told` of them: a new
-/// session that gets them.
-fn told_of_tools(prompt: String, tools: &ToolHost, told: bool) -> String {
-  if told {
-    format!(
-      "{prompt}
-
-{}",
-      tools.tools().prompt_paragraph()
-    )
+/// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:
+/// a Claude Code agent through its permission prompt's relay (`prompted`), every Codex agent.
+fn told_of_tools(
+  prompt: String,
+  tools: &ToolHost,
+  (setup, prompted, continuation): (&McpSetup, bool, &Continuation),
+) -> String {
+  let codex = matches!(setup, McpSetup::Codex(_));
+  if continuation.session.is_none() && (prompted || codex) {
+    format!("{prompt}\n\n{}", tools.tools().prompt_paragraph(!codex))
   } else {
     prompt
   }

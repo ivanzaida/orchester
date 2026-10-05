@@ -8,6 +8,18 @@ description: Use at the start of any task in a repository, before listing or sea
 Every listing or whole-file dump you print stays in your context for the rest of the task. Find the few files
 that matter first, then read only the lines you need.
 
+**When Orchester's tools are offered** (the tools of the `Orchester` MCP server; Claude Code names them
+`mcp__Orchester__<tool>`), use them instead of the commands below: they read this index for you.
+
+- `find_symbol {name, kind?, include_tests?, include_consts?}`: where an item is defined, with its signature,
+  best matches first.
+- `search {pattern, path?, glob?}`: a name's definitions from the index first, then the matching lines.
+- `list_files {path?, pattern?}`: the files of the index and those changed since, by glob.
+- `read_file {path, offset?, limit?}`: the lines you need.
+
+Results in files changed since the base revision are marked: read those files again before you rely on a
+line number. The rest of this skill is for when the tools are not offered.
+
 ## 1. The codebase index
 
 Your prompt names a *codebase index* folder and shows its package and module map. The index describes this

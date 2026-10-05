@@ -2849,6 +2849,7 @@ dependencies = [
 name = "orchester-runner"
 version = "0.1.0"
 dependencies = [
+ "orchester-agent",
  "orchester-core",
  "orchester-exec",
  "orchester-index",

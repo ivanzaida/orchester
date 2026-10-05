@@ -61,6 +61,73 @@ impl Fake {
     self.finish(worktree, "hello", step)
   }
 
+  /// "Use the file tools": Orchester's file tools in the worktree, each refusal included; an edit before the
+  /// file is read, then after; a write; a search; reads and writes that leave the worktree or reach protected
+  /// folders; a read of a file larger than an answer holds.
+  pub fn use_file_tools(&self, worktree: &Path, (args, opened): (&[String], Option<Prompt>), step: &str) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+    let wide = format!(
+      "{}
+",
+      "y".repeat(1000)
+    )
+    .repeat(300);
+    if let Err(error) = std::fs::write(worktree.join("wide.txt"), wide) {
+      eprintln!("cannot write wide.txt: {error}");
+      return ExitCode::from(2);
+    }
+    let edit = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
+    let calls = [
+      ("toolu_list", "list_files", json!({"pattern": null, "path": null})),
+      ("toolu_edit_unread", "edit_file", edit.clone()),
+      (
+        "toolu_read",
+        "read_file",
+        json!({"path": "README.md", "offset": null, "limit": null}),
+      ),
+      ("toolu_edit", "edit_file", edit),
+      (
+        "toolu_write",
+        "write_file",
+        json!({"path": "notes/new.md", "content": "new notes
+"}),
+      ),
+      (
+        "toolu_search",
+        "search",
+        json!({"pattern": "hi there", "path": null, "glob": null, "case_insensitive": null, "context": null}),
+      ),
+      (
+        "toolu_up",
+        "read_file",
+        json!({"path": "../outside.txt", "offset": null, "limit": null}),
+      ),
+      (
+        "toolu_git",
+        "write_file",
+        json!({"path": ".git/config", "content": "x"}),
+      ),
+      (
+        "toolu_state",
+        "write_file",
+        json!({"path": ".orchester/x.txt", "content": "x"}),
+      ),
+      (
+        "toolu_wide",
+        "read_file",
+        json!({"path": "wide.txt", "offset": null, "limit": null}),
+      ),
+    ];
+    for (call, tool, input) in calls {
+      self.use_tool(args, &mut server, (call, tool, &input));
+    }
+    self.finish(worktree, "hello", step)
+  }
+
   /// One call of Orchester's `tool`, asked about first when no rule allows it.
   fn use_tool(&self, args: &[String], server: &mut Prompt, (call, tool, input): (&str, &str, &Value)) {
     let name = format!("mcp__Orchester__{tool}");
