@@ -2706,6 +2706,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "orchester-agent"
+version = "0.1.0"
+dependencies = [
+ "orchester-core",
+ "orchester-exec",
+ "parking_lot",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "orchester-api"
 version = "0.1.0"
 dependencies = [

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+  "crates/agent",
   "crates/api",
   "crates/core",
   "crates/desktop",
@@ -38,6 +39,7 @@ needless_pass_by_value = "warn"
 redundant_clone = "warn"
 
 [workspace.dependencies]
+orchester-agent = { path = "crates/agent" }
 orchester-api = { path = "crates/api" }
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
