@@ -3,8 +3,8 @@
 //!
 //! | Access class | Step that may write | Read-only step |
 //! | --- | --- | --- |
-//! | read-only (`git_status`, `git_diff`, `git_log`, `git_show`) | runs | runs |
-//! | writes the worktree (`git_add`, `git_commit`) | runs | not offered |
+//! | read-only (`read_file`, `list_files`, `search`, `find_symbol` with the code index, `git_status`, `git_diff`, `git_log`, `git_show`) | runs | runs |
+//! | writes the worktree (`edit_file`, `write_file`, `git_add`, `git_commit`) | runs | not offered |
 //! | outside the worktree (`read_outside_file`) | asks | asks |
 //! | the project's programs (`run_project_tool`), network on | asks | asks |
 //! | the project's programs, network off | not offered | not offered |

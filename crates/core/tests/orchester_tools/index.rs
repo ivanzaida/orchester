@@ -148,3 +148,79 @@ fn orchester_tools_file_tools_follow_the_step() {
   let edit = listed.iter().find(|tool| tool["name"] == "edit_file").expect("listed");
   assert_eq!(edit["inputSchema"]["required"], json!(["path", "edits"]));
 }
+
+/// Paths from the index are plain relative paths or nothing: a symbol or file entry that leaves the index or
+/// the worktree is dropped before anything reads it, so no outline outside the index is read.
+#[test]
+fn orchester_tools_index_drops_crafted_paths() {
+  for (path, plain) in [
+    ("src/lib.rs", true),
+    ("../../loot", false),
+    (r"x\..\..\secret.txt", false),
+    ("/etc/passwd", false),
+    ("C:secret.txt", false),
+    ("src//lib.rs", false),
+    ("./src/lib.rs", false),
+    ("src/\u{7}bell.rs", false),
+  ] {
+    assert_eq!(orchester_core::orchester_tools::plain_relative(path), plain, "{path}");
+  }
+  let (folder, index) = index();
+  let root = folder.path();
+  fs::write(
+    root.join("symbols.tsv"),
+    "evil\t../../loot\t7\tfunction\t\nevil\tsrc/evil.rs\t2\tfunction\t\n",
+  )
+  .expect("symbols");
+  fs::write(
+    root.join("..").join("loot.md"),
+    "- L7-9 a line from outside the index\n",
+  )
+  .expect("loot");
+  let hits = index.find(&query(&json!({"name": "evil"})), false).expect("found");
+  assert_eq!(hits.len(), 1);
+  assert_eq!(hits[0].path, "src/evil.rs");
+  fs::write(
+    root.join("tree.txt"),
+    "src/a.rs\trust\t1\n../../secret.txt\ttext\t1\nx\\..\\y\ttext\t1\n",
+  )
+  .expect("tree");
+  assert_eq!(index.files().expect("files"), ["src/a.rs"]);
+}
+
+#[test]
+fn orchester_tools_find_symbol_needs_a_name_and_finds_consts_by_kind() {
+  assert!(matches!(
+    parse("find_symbol", &json!({"name": "  "})),
+    Err(ToolCallError::NotOffered(_) | ToolCallError::Invalid { .. })
+  ));
+  let indexed = writing().with_code_index();
+  assert!(matches!(
+    orchester_core::orchester_tools::ToolCall::parse("find_symbol", &json!({"name": " "}), &indexed),
+    Err(ToolCallError::Invalid { .. })
+  ));
+  let (_folder, index) = index();
+  let hits = index
+    .find(&query(&json!({"name": "limit", "kind": "const"})), false)
+    .expect("found");
+  assert_eq!(
+    hits.iter().map(|hit| hit.name.as_str()).collect::<Vec<_>>(),
+    ["CONFIG_LIMIT"]
+  );
+}
+
+/// Every answer stays below Claude Code's MCP output limit, with a note on how to narrow it.
+#[test]
+fn orchester_tools_answers_stay_within_the_mcp_limit() {
+  use orchester_core::orchester_tools::{MAX_ANSWER_BYTES, ToolResult};
+  let answer = ToolResult::of_file_tool("z".repeat(500_000), false).mcp();
+  let text = answer["content"][0]["text"].as_str().expect("text");
+  assert!(text.len() <= MAX_ANSWER_BYTES, "{}", text.len());
+  assert!(
+    text.ends_with("narrow the call with offset and limit, a path or a glob]"),
+    "{}",
+    &text[text.len() - 120..]
+  );
+  let small = ToolResult::of_file_tool("small".to_owned(), false).mcp();
+  assert_eq!(small["content"][0]["text"], "small");
+}

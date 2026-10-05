@@ -11,6 +11,12 @@ use crate::{
   resource::ExitCodes,
 };
 
+/// The most bytes of text one answer holds: below Claude Code's limit for an MCP tool's output
+/// (`MAX_MCP_OUTPUT_TOKENS`, 25 000 tokens by default), at about three to four bytes a token.
+pub const MAX_ANSWER_BYTES: usize = 60 * 1024;
+/// Room kept for the note of a cut answer.
+const ANSWER_NOTE_ROOM: usize = 200;
+
 /// Which end of a program's output is kept when it is longer than its limit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputKept {
@@ -138,10 +144,22 @@ impl ToolResult {
     }
   }
 
-  /// The MCP `tools/call` result.
+  /// The MCP `tools/call` result, its text within [`MAX_ANSWER_BYTES`] whatever the tool's own limit.
   pub fn mcp(&self) -> Value {
-    json!({"content": [{"type": "text", "text": self.text}], "isError": self.is_error})
+    json!({"content": [{"type": "text", "text": answer_text(&self.text)}], "isError": self.is_error})
   }
+}
+
+/// `text` within [`MAX_ANSWER_BYTES`], with a note when it was cut.
+fn answer_text(text: &str) -> String {
+  let (shown, left_out) = bounded(text, MAX_ANSWER_BYTES - ANSWER_NOTE_ROOM, OutputKept::Head);
+  if left_out == 0 {
+    return text.to_owned();
+  }
+  format!(
+    "{shown}\n[truncated: {left_out} more bytes of this answer were left out; narrow the call with offset and \
+     limit, a path or a glob]"
+  )
 }
 
 /// `text` cut to at most `limit` bytes at the `kept` end, on a character boundary, and how many bytes

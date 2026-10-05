@@ -28,6 +28,8 @@ use orchester_exec::{
 
 use super::{orchester_tools::ToolFolders, start::problem};
 
+/// What a definition list says when the files changed since the index are unknown.
+const UNKNOWN_CHANGES: &str = "[the files changed since the index could not be read: any line may have moved]";
 /// The most bytes of git's list of changed files read.
 const CHANGED_CAP: usize = 4 * 1024 * 1024;
 
@@ -97,7 +99,7 @@ impl ToolFiles {
       Ok(hits) if hits.is_empty() => {
         ToolResult::of_file_tool(format!("no definition of {} in the code index", query.name()), false)
       }
-      Ok(hits) => ToolResult::of_file_tool(shown_hits(&hits, &changed(base, context)), false),
+      Ok(hits) => ToolResult::of_file_tool(marked(&hits, changed(base, context).as_ref()), false),
       Err(error) => ToolResult::unavailable(&format!("the code index cannot be read: {error}")),
     }
   }
@@ -106,12 +108,16 @@ impl ToolFiles {
   fn list(&self, input: &ListFiles, context: &ToolContext<'_>) -> ToolResult {
     let outcome = match &self.index {
       Some((index, base)) => match index.files() {
-        Ok(mut known) => {
-          known.extend(changed(base, context));
-          known.sort();
-          known.dedup();
-          self.files.list_known_files(input, &known)
-        }
+        // Without the worktree's changes the index's list would miss files: the folder is listed instead.
+        Ok(mut known) => match changed(base, context) {
+          Some(changed) => {
+            known.extend(changed);
+            known.sort();
+            known.dedup();
+            self.files.list_known_files(input, &known)
+          }
+          None => self.files.list_files(input),
+        },
         Err(_) => self.files.list_files(input),
       },
       None => self.files.list_files(input),
@@ -130,9 +136,9 @@ impl ToolFiles {
           .find(&FindSymbol::definitions_of(input.pattern()), true)
           .unwrap_or_default()
           .into_iter()
-          .filter(|hit| input.path().is_none_or(|folder| under(&hit.path, folder)))
+          .filter(|hit| self.files.search_covers(input, &hit.path))
           .collect();
-        (!hits.is_empty()).then(|| shown_hits(&hits, &changed(base, context)))
+        (!hits.is_empty()).then(|| marked(&hits, changed(base, context).as_ref()))
       }
       _ => None,
     };
@@ -157,21 +163,15 @@ fn is_name(pattern: &str) -> bool {
     && pattern.len() >= 3
 }
 
-/// Whether index path `path` lies in `folder`, a path relative to the worktree.
-fn under(path: &str, folder: &str) -> bool {
-  let folder = folder.replace('\\', "/");
-  let folder = folder.trim_start_matches("./").trim_end_matches('/');
-  folder.is_empty() || folder == "." || path == folder || path.starts_with(&format!("{folder}/"))
-}
-
-/// The files of the worktree changed since `base`, relative to it with `/`; none when git cannot say.
-fn changed(base: &Revision, context: &ToolContext<'_>) -> HashSet<String> {
+/// The files of the worktree changed since `base`, relative to it with `/`; `None` when git cannot say.
+fn changed(base: &Revision, context: &ToolContext<'_>) -> Option<HashSet<String>> {
   let mut paths = HashSet::new();
   for program in changed_files(base, context) {
-    let Ok(output) = run_capped(program.command(), program.timeout(), (CHANGED_CAP, program.cap().1)) else {
-      // Without the list nothing is marked or added: the index's own answer still stands.
-      continue;
-    };
+    let output = run_capped(program.command(), program.timeout(), (CHANGED_CAP, program.cap().1)).ok()?;
+    // A git that failed, or a list cut short, tells nothing reliable.
+    if output.code != Some(0) || output.left_out > 0 {
+      return None;
+    }
     paths.extend(
       output
         .stdout
@@ -180,5 +180,13 @@ fn changed(base: &Revision, context: &ToolContext<'_>) -> HashSet<String> {
         .map(str::to_owned),
     );
   }
-  paths
+  Some(paths)
+}
+
+/// `hits` as the agent reads them, marked by `changed`, or with a note when the changes are unknown.
+fn marked(hits: &[SymbolHit], changed: Option<&HashSet<String>>) -> String {
+  match changed {
+    Some(changed) => shown_hits(hits, changed),
+    None => format!("{}{UNKNOWN_CHANGES}\n", shown_hits(hits, &HashSet::new())),
+  }
 }

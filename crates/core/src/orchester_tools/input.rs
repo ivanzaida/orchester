@@ -246,7 +246,13 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     | OrchesterTool::Search
     | OrchesterTool::EditFile
     | OrchesterTool::WriteFile => file_call(tool, &arguments)?,
-    OrchesterTool::FindSymbol => ToolCall::FindSymbol(serde_json::from_value(arguments).map_err(invalid)?),
+    OrchesterTool::FindSymbol => {
+      let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
+      if query.name().trim().is_empty() {
+        return Err("name the item to find".to_owned());
+      }
+      ToolCall::FindSymbol(query)
+    }
     OrchesterTool::GitStatus => {
       serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
       ToolCall::Git(GitCall::Status)

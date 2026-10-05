@@ -32,6 +32,16 @@ const TESTS: &str = "symbols-tests.tsv";
 const TREE: &str = "tree.txt";
 const OUTLINES: &str = "outline";
 
+/// Whether `path`, from the index or from git, is a plain path relative to the worktree: names separated by
+/// `/` or `\\`, none empty, `.` or `..`, none with `:` (a drive or a stream) or a control character. Anything
+/// else is dropped before it names a file: a git tree can hold a single name such as `x\\..\\..\\secret`.
+pub fn plain_relative(path: &str) -> bool {
+  !path.is_empty()
+    && path
+      .split(['/', '\\'])
+      .all(|name| !matches!(name, "" | "." | "..") && !name.contains(':') && !name.chars().any(char::is_control))
+}
+
 /// The input of `find_symbol`.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -92,7 +102,11 @@ impl CodeIndex {
   /// equal to it.
   pub fn find(&self, query: &FindSymbol, exact: bool) -> io::Result<Vec<SymbolHit>> {
     let mut tables = vec![(SYMBOLS, 0)];
-    if query.include_consts.unwrap_or(false) {
+    let constant = query
+      .kind
+      .as_ref()
+      .is_some_and(|kind| kind.eq_ignore_ascii_case("const") || kind.eq_ignore_ascii_case("static"));
+    if query.include_consts.unwrap_or(false) || constant {
       tables.push((CONSTS, 1));
     }
     if query.include_tests.unwrap_or(false) {
@@ -105,7 +119,7 @@ impl CodeIndex {
         continue;
       };
       for line in lines {
-        let Some(hit) = symbol(&line?, (&query.name, &wanted), order) else {
+        let Some(hit) = symbol(&line?, (&query.name, &wanted), order).filter(|hit| plain_relative(&hit.path)) else {
           continue;
         };
         let kind_matches = query
@@ -128,13 +142,15 @@ impl CodeIndex {
   }
 
   /// The files the index lists, relative to the repository root with `/`.
+  /// Paths that are not plain relative paths are left out ([`plain_relative`]); the caller still confines
+  /// each to its scope.
   pub fn files(&self) -> io::Result<Vec<String>> {
     let Some(lines) = self.lines(TREE)? else {
       return Ok(Vec::new());
     };
     lines
       .map(|line| line.map(|line| line.split('\t').next().unwrap_or_default().to_owned()))
-      .filter(|path| path.as_ref().map_or(true, |path| !path.is_empty()))
+      .filter(|path| path.as_ref().map_or(true, |path| plain_relative(path)))
       .collect()
   }
 

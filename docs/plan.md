@@ -199,7 +199,13 @@ in a read-only one; nothing asks.
   orchester-runner --features test-agent --test orchester_file_tools orchester_file_tools` (and `orchester_tools`,
   `orchester_tools_git`, `codebase_index`, `claude*`, `execution`, …); `cargo test -p orchester-agent --test
   file_tools file`.
-- Open: the real CLIs were not run; Claude Code's own MCP output limit against 128 KiB answers is unchecked.
+- Security review (FAIL, three majors) fixed: paths from the index and from git pass the same confinement as
+  `read_file` (plain relative paths only, resolved in the scope; others dropped and counted); `list_files` uses
+  the index only for folders of the worktree; every answer is cut to 60 KiB (`MAX_ANSWER_BYTES`, below Claude
+  Code's 25 000-token MCP limit) with a note on how to narrow it. Also: the runner takes `orchester-agent` without
+  its `http` feature (no TLS stack), `search`'s definitions follow its path and glob, `find_symbol` refuses a blank
+  name and finds constants by kind, and an unreadable list of changes falls back to the plain listing.
+- Open: the real CLIs were not run; the ripgrep lookup uses the runner's `PATH`, not the project's environment.
 
 ### M6 · Environment names in secret references (needs decision)
 

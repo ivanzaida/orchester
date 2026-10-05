@@ -34,7 +34,7 @@ use crate::{
 /// How long a git call may run: these read or write the worktree's own files and index.
 pub const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 /// How much of git's output the agent gets: the start, where a diff or log begins.
-const GIT_OUTPUT: usize = 128 * 1024;
+const GIT_OUTPUT: usize = 56 * 1024;
 const PROGRAM: &str = "git";
 /// Settings that keep git out of nested repositories.
 const NO_SUBMODULES: [&str; 3] = [

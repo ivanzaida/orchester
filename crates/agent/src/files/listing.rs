@@ -8,7 +8,10 @@ use std::{
   time::Instant,
 };
 
-use orchester_core::native::{session::ToolOutcome, tools::ListFiles};
+use orchester_core::{
+  native::{session::ToolOutcome, tools::ListFiles},
+  orchester_tools::plain_relative,
+};
 
 use super::{
   FileError, FileTools, done,
@@ -34,14 +37,23 @@ impl FileTools {
     outcome(self.list(input, None))
   }
 
-  /// `list_files` over `known`, the files the caller knows the worktree holds (relative to it, with `/`),
-  /// instead of listing the folder: those that exist, lie under the input's folder and match its glob.
+  /// `list_files` over `known`, the files the caller knows the worktree holds (relative to it, with `/`), for
+  /// a folder of the worktree; any other folder is listed as always. Each known path must be a plain relative
+  /// path that resolves in the scope as `read_file` resolves it; the others are left out, and counted.
   pub fn list_known_files(&self, input: &ListFiles, known: &[String]) -> ToolOutcome {
-    let known: Vec<PathBuf> = known.iter().map(|path| self.scope.worktree().join(path)).collect();
-    outcome(self.list(input, Some(&known)))
+    let mut dropped = 0;
+    let known: Vec<PathBuf> = known
+      .iter()
+      .filter_map(|path| {
+        let resolved = plain_relative(path).then(|| self.scope.readable(path).ok()).flatten();
+        dropped += usize::from(resolved.is_none());
+        resolved
+      })
+      .collect();
+    outcome(self.list(input, Some((&known, dropped))))
   }
 
-  fn list(&self, input: &ListFiles, known: Option<&[PathBuf]>) -> Result<ToolOutcome, FileError> {
+  fn list(&self, input: &ListFiles, known: Option<(&[PathBuf], usize)>) -> Result<ToolOutcome, FileError> {
     let folder = self.scope.readable(input.path().unwrap_or("."))?;
     if !folder.is_dir() {
       return Err(if folder.exists() {
@@ -50,8 +62,11 @@ impl FileTools {
         FileError::Missing(self.shown(&folder))
       });
     }
+    // What the caller knows covers the worktree only: the code index, the skills and the extra writable
+    // folders are listed as always.
+    let known = known.filter(|_| folder.starts_with(self.scope.worktree()));
     let found = match (known, &self.ripgrep) {
-      (Some(known), _) => filtered(known, &folder, input.pattern())?,
+      (Some((known, _)), _) => filtered(known, &folder, input.pattern())?,
       (None, Some(program)) => listed(program, &folder, input.pattern())?,
       (None, None) => walked(&folder, input.pattern())?,
     };
@@ -72,6 +87,11 @@ impl FileTools {
       };
       text.push_str(&format!(
         "\n[truncated: {counted} files match; showing the first {MAX_ENTRIES}. Narrow the pattern or path]"
+      ));
+    }
+    if let Some((_, dropped)) = known.filter(|(_, dropped)| *dropped > 0) {
+      text.push_str(&format!(
+        "\n[{dropped} entries of the code index or of git were no paths in the worktree and were left out]"
       ));
     }
     if known.is_none() && self.ripgrep.is_none() {

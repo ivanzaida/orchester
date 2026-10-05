@@ -140,7 +140,7 @@ fn orchester_tools_read_outside_stops_at_its_caps() {
   let read = reads.read(&text(&many), 2, 10_000).expect("readable");
   assert!(read.len() <= MAX_READ_BYTES + 30_000, "{}", read.len());
   assert!(
-    read.ends_with("[the file goes on: read on from offset 2623]\n"),
+    read.ends_with("[the file goes on: read on from offset 575]\n"),
     "{}",
     &read[read.len() - 80..]
   );

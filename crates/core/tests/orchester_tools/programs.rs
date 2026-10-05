@@ -106,7 +106,7 @@ fn orchester_tools_answers_count_what_the_runner_left_out() {
     &parse("git_show", &json!({"revision": "HEAD"})).expect("valid"),
     &context,
   );
-  assert_eq!(git.cap(), (128 * 1024, OutputKept::Head));
+  assert_eq!(git.cap(), (56 * 1024, OutputKept::Head));
   let result = git.finished(Ok(ProgramOutput {
     code: Some(0),
     stdout: "commit 1".to_owned(),

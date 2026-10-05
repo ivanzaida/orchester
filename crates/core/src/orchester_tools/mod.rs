@@ -31,9 +31,9 @@ use thiserror::Error;
 
 pub use self::{
   git::{GIT_TIMEOUT, changed_files},
-  index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, shown_hits},
+  index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
   input::{CommitMessage, GitCall, RepoPath, Revision, ToolCall},
-  output::{OutputKept, ProgramOutput, ToolResult},
+  output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},

@@ -35,7 +35,7 @@ use crate::{
 };
 
 /// The most a read answers with, in bytes of the file's lines.
-pub const MAX_READ_BYTES: usize = 256 * 1024;
+pub const MAX_READ_BYTES: usize = 56 * 1024;
 /// The most of one line a read answers with.
 pub const MAX_LINE_BYTES: usize = 16 * 1024;
 /// The folder of Orchester's state in a repository.
