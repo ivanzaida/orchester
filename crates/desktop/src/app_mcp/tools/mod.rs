@@ -3,6 +3,7 @@
 //! services the screens use; none of them holds a rule of its own.
 
 mod approvals;
+mod pipeline_copy;
 mod projects;
 mod run_task;
 mod runs;
@@ -121,6 +122,18 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "set_code_index",
+    description: "Turns the project's code index on or off for agents that start from now on, as Project settings does. Returns the new state.",
+    schema: schema_for_type::<projects::SetCodeIndex>,
+    read_only: false,
+  },
+  Spec {
+    name: "duplicate_pipeline",
+    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. Refusals name why.",
+    schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
+    read_only: false,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps.",
     schema: schema_for_type::<projects::InProject>,
@@ -172,6 +185,8 @@ async fn dispatch(
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
+    "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
+    "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

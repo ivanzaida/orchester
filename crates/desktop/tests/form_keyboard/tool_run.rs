@@ -32,7 +32,7 @@ fn test_command(fake_codex: &Path) -> String {
 }
 
 /// A published command tool "Print lines" running the test program.
-fn seed_tool(repo: &Path, program: &str) -> ResourceId {
+pub(crate) fn seed_tool(repo: &Path, program: &str) -> ResourceId {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let now = Timestamp::now();
   let action = CommandAction::new(
@@ -54,7 +54,7 @@ fn seed_tool(repo: &Path, program: &str) -> ResourceId {
   tool
 }
 
-fn tool_step(tool: ResourceId) -> Step {
+pub(crate) fn tool_step(tool: ResourceId) -> Step {
   Step {
     key: StepKey::new("checks").expect("key"),
     name: Name::new("Checks").expect("name"),

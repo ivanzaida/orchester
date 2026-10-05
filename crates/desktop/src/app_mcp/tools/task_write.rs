@@ -238,7 +238,10 @@ fn organized(base: TaskOrganization, status: Option<Workflow>, priority: Option<
 }
 
 /// The published pipeline `named` by its id or, ignoring case, its name.
-fn pipeline_named<'a>(published: &'a [PipelineChoice], named: &str) -> Result<&'a PipelineChoice, ToolError> {
+pub(super) fn pipeline_named<'a>(
+  published: &'a [PipelineChoice],
+  named: &str,
+) -> Result<&'a PipelineChoice, ToolError> {
   let lowered = named.to_lowercase();
   published
     .iter()
