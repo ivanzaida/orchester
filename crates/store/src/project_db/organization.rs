@@ -181,7 +181,8 @@ pub(super) fn automatic(
 ) -> Result<(), StoreError> {
   // The server has a shared task's organization: its holder's desktop sends the change.
   if super::shared_tasks::is_shared(connection, task)? {
-    return super::shared_tasks::record_automatic(connection, task, status, at);
+    let from = load(connection, task)?.status();
+    return super::automatic_status::record(connection, task, (from, status), at);
   }
   let value = load(connection, task)?.with_status(status);
   write(connection, task, &value, ChangeActor::Orchester, at)

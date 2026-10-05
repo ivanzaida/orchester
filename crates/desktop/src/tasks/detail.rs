@@ -218,6 +218,8 @@ pub struct TaskDetail {
   pub blocked_by: Vec<String>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
   pub missing_pipeline: Option<String>,
+  /// A run's workflow status of this shared task that was not sent to its server, and why.
+  pub unsent_status: Option<orchester_store::UnsentStatus>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskDetail {}
@@ -247,6 +249,7 @@ impl TaskDetail {
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
     let blocked_by = blocking_keys(&db, &task)?;
     let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
+    let unsent_status = db.unsent_status(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     history::note_missing_worktrees(&mut db, repo_root, &runs)?;
     let messages = db.messages(task.id())?;
@@ -258,6 +261,7 @@ impl TaskDetail {
         history,
         blocked_by,
         missing_pipeline,
+        unsent_status,
         ..Self::without_runs(task, messages)
       });
     }
@@ -284,6 +288,7 @@ impl TaskDetail {
       earlier_unreadable,
       blocked_by,
       missing_pipeline,
+      unsent_status,
       ..Self::without_runs(task, messages)
     })
   }
@@ -300,6 +305,7 @@ impl TaskDetail {
       earlier_unreadable: Vec::new(),
       blocked_by: Vec::new(),
       missing_pipeline: None,
+      unsent_status: None,
     }
   }
 }

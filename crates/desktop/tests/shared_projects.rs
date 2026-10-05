@@ -18,7 +18,6 @@ use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::{
-  secret::SecretValue,
   sharing::ClaimKind,
   store::TaskStore,
   task::{
@@ -38,45 +37,7 @@ use orchester_desktop::{
   },
 };
 use server_support::TestServer;
-use support::{Person, details};
-
-/// Another member's computer, which talks to the server's API directly.
-struct Other {
-  client: Client,
-  token: SecretValue,
-}
-
-impl Other {
-  fn new(server: &TestServer, username: &str, name: &str) -> Self {
-    let first = server.create_user(username, name, false);
-    let token = server.sign_in_elsewhere(username, first.expose(), &format!("{username}'s own long password"));
-    let client = Client::new(
-      ServerAddress::parse(&server.url()).expect("address"),
-      PlainHttp::NotAllowed,
-    )
-    .expect("client");
-    Self { client, token }
-  }
-}
-
-/// Alice, the server's first admin, with a local project of three tasks, shared.
-fn shared(server: &TestServer) -> Person {
-  let first = server.create_user("alice", "Alice Moreau", true);
-  let alice = Person::signed_in(
-    server,
-    ("alice", &first),
-    &["Repository switcher", "Fix reconnect", "Merge queue"],
-  );
-  alice.share();
-  alice
-}
-
-/// Adds `other` to Alice's project as a member.
-fn member(alice: &Person, username: &str) {
-  alice
-    .block_on(alice.server().add_member(username.into(), MemberRole::Member))
-    .expect("add a member");
-}
+use support::{Other, Person, details, member, shared};
 
 #[test]
 fn shared_share_keeps_numbers_writes_the_discovery_file_and_caches_the_server_s_tasks() {

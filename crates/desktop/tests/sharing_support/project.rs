@@ -7,8 +7,8 @@
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 use orchester_api::{
-  Credential,
-  client::{PlainHttp, ServerAddress},
+  Credential, MemberRole,
+  client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::{
   id::{IdempotencyKey, ProjectId},
@@ -180,4 +180,42 @@ pub fn details(title: &str) -> TaskDetails {
     pipeline: None,
     limits: None,
   }
+}
+
+/// Another member's computer, which talks to the server's API directly.
+pub struct Other {
+  pub client: Client,
+  pub token: SecretValue,
+}
+
+impl Other {
+  pub fn new(server: &TestServer, username: &str, name: &str) -> Self {
+    let first = server.create_user(username, name, false);
+    let token = server.sign_in_elsewhere(username, first.expose(), &format!("{username}'s own long password"));
+    let client = Client::new(
+      ServerAddress::parse(&server.url()).expect("address"),
+      PlainHttp::NotAllowed,
+    )
+    .expect("client");
+    Self { client, token }
+  }
+}
+
+/// Alice, the server's first admin, with a local project of three tasks, shared.
+pub fn shared(server: &TestServer) -> Person {
+  let first = server.create_user("alice", "Alice Moreau", true);
+  let alice = Person::signed_in(
+    server,
+    ("alice", &first),
+    &["Repository switcher", "Fix reconnect", "Merge queue"],
+  );
+  alice.share();
+  alice
+}
+
+/// Adds `other` to Alice's project as a member.
+pub fn member(alice: &Person, username: &str) {
+  alice
+    .block_on(alice.server().add_member(username.into(), MemberRole::Member))
+    .expect("add a member");
 }

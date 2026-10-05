@@ -140,6 +140,7 @@ impl Runners {
           displayed: Mutex::new(None),
           published: watch::Sender::new(RunnerStatus::none()),
           work: watch::Sender::new(0),
+          runs: watch::Sender::new(0),
           limits: watch::Sender::new(Default::default()),
           counters: Mutex::new(HashMap::new()),
           activity,
@@ -323,6 +324,11 @@ impl Runners {
   /// Changes whenever project `root`'s runner reports that a run or its transcript changed.
   pub fn changes_of(&self, root: &Path) -> watch::Receiver<u64> {
     self.inner.shared.counters(root).changes.subscribe()
+  }
+
+  /// Changes whenever any runner reports that a run changed.
+  pub fn run_changes(&self) -> watch::Receiver<u64> {
+    self.inner.shared.runs.subscribe()
   }
 
   /// Changes whenever a runner reports what it works on, or its state changes.

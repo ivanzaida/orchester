@@ -2,6 +2,7 @@ mod activity;
 mod agent_files;
 mod always_allow;
 mod approval_rules;
+mod automatic_status;
 mod blobs;
 mod code_index;
 mod connections;
@@ -50,6 +51,7 @@ use rusqlite::{Connection, params};
 
 pub use self::{
   approval_rules::DecisionCounts,
+  automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   read_only::ReadOnlyProjectDb,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,

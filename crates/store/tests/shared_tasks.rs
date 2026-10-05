@@ -23,7 +23,9 @@ use orchester_core::{
     organization::{ChangeActor, Priority, Tag, TaskOrganization, WorkflowStatus},
   },
 };
-use orchester_store::{CachedClaim, CachedRunStatus, CachedTask, ProjectDb, SharedPerson, SharingLink, StoreError};
+use orchester_store::{
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, SharedPerson, SharingLink, StoreError,
+};
 use support::{at, copied_at_version, name, started_run};
 
 /// The schema before shared projects: ORC-63's worktree removals (40). Migrations are append-only.
@@ -276,11 +278,44 @@ fn shared_tasks_a_run_of_a_shared_task_records_its_status_for_the_server() {
     "the cache changes only with what the server confirmed"
   );
   let pending = db.automatic_statuses().expect("pending");
-  assert_eq!(pending, vec![(task.id(), WorkflowStatus::InReview, at(121))]);
+  let sent = AutomaticStatus {
+    task: task.id(),
+    from: organization.status(),
+    status: WorkflowStatus::InReview,
+    at: at(121),
+  };
+  assert_eq!(pending, vec![sent], "the status the run changed from is the first one");
   db.clear_automatic_status(task.id(), at(120)).expect("an older one");
   assert_eq!(db.automatic_statuses().expect("pending").len(), 1);
   db.clear_automatic_status(task.id(), at(121)).expect("sent");
   assert!(db.automatic_statuses().expect("pending").is_empty());
+}
+
+#[test]
+fn shared_tasks_a_run_status_the_server_changed_meanwhile_is_not_sent_and_says_why() {
+  let (_repo, mut db, mut run, execution) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  db.start_sharing(
+    &link("ORC"),
+    &[],
+    &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+  )
+  .expect("share");
+  let events = run.start_step(execution, at(120)).expect("start step");
+  db.append_events(&run, &events).expect("stored");
+  let events = run.complete_step(execution, at(121)).expect("complete step");
+  db.append_events(&run, &events).expect("stored");
+  let pending = db.automatic_statuses().expect("pending").remove(0);
+  let reason = NotSent::Changed {
+    current: WorkflowStatus::Canceled,
+  };
+  db.record_not_sent(task.id(), pending.at, reason).expect("not sent");
+  assert!(db.automatic_statuses().expect("pending").is_empty(), "it is never sent");
+  let unsent = db.unsent_status(task.id()).expect("unsent").expect("shown");
+  assert_eq!(unsent.reason, reason);
+  assert_eq!(unsent.status, WorkflowStatus::InReview);
+  db.dismiss_unsent_status(task.id()).expect("dismissed");
+  assert_eq!(db.unsent_status(task.id()).expect("unsent"), None);
 }
 
 #[test]

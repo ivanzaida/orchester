@@ -110,7 +110,10 @@ impl Component for Root {
     let servers = Servers::new(workspace, vault.clone());
     let background = vec![
       lifecycle.runtime().spawn(sharing::monitor(servers.clone())),
-      lifecycle.runtime().spawn(sharing::project::work::run(servers.clone())),
+      lifecycle.runtime().spawn(sharing::project::work::run(
+        servers.clone(),
+        lifecycle.runners().run_changes(),
+      )),
     ];
     ctx.provide(ServerFeed::new(servers));
     ctx.provide(programs);

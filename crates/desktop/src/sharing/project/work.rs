@@ -13,7 +13,10 @@ use std::{
 use orchester_api::Heartbeat;
 use orchester_core::id::{ServerId, TaskId};
 use orchester_store::ProjectDb;
-use tokio::time::sleep;
+use tokio::{
+  sync::watch,
+  time::{sleep, sleep_until},
+};
 
 use super::{ProjectServer, convert};
 use crate::{
@@ -28,11 +31,17 @@ const HEARTBEAT_IDS: usize = 256;
 /// The most heartbeats a session may send in a minute.
 const HEARTBEATS_PER_MINUTE: usize = 12;
 
+/// How long run changes settle before their workflow statuses are sent, so a burst of them sends
+/// once.
+const RUN_SETTLE: Duration = Duration::from_secs(1);
+
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it
-/// drops.
-pub async fn run(servers: Servers) {
+/// drops. `runs` changes whenever a runner reports a run change: the workflow statuses runs reached
+/// are sent then, between the minute's syncs.
+pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>) {
   let mut requests = servers.subscribe_sync();
   let mut last_heartbeat: Option<Instant> = None;
+  let mut runs_open = true;
   loop {
     requests.borrow_and_update();
     let beat = last_heartbeat.is_none_or(|at| at.elapsed() >= INTERVAL);
@@ -40,9 +49,21 @@ pub async fn run(servers: Servers) {
       last_heartbeat = Some(Instant::now());
     }
     servers.sync_shared(beat).await;
-    tokio::select! {
-      () = sleep(INTERVAL) => {}
-      changed = requests.changed() => if changed.is_err() { return },
+    let next = tokio::time::Instant::now() + INTERVAL;
+    loop {
+      tokio::select! {
+        () = sleep_until(next) => break,
+        changed = requests.changed() => if changed.is_err() { return } else { break },
+        changed = runs.changed(), if runs_open => {
+          if changed.is_err() {
+            runs_open = false;
+            continue;
+          }
+          sleep(RUN_SETTLE).await;
+          runs.borrow_and_update();
+          servers.send_automatic_statuses().await;
+        }
+      }
     }
   }
 }
@@ -139,7 +160,7 @@ impl Servers {
 }
 
 /// The shared projects of the workspace whose folder can be read.
-fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
+pub(super) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
   let projects = match servers.inner.workspace.projects() {
     Ok(projects) => projects,
     Err(error) => {

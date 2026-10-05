@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
   StoreError,
-  rows::{corrupt, encode_json, parse, tokens_column},
+  rows::{corrupt, parse, tokens_column},
 };
 
 /// A member of the server project, as the cache names them.
@@ -192,64 +192,6 @@ impl ProjectDb {
       .collect::<Result<Vec<_>, _>>()?;
     ids.into_iter().map(|id| parse("task id", &id)).collect()
   }
-
-  /// The tasks whose runs moved them to a workflow status the server does not have yet: the
-  /// holder's desktop sends each as Orchester's change.
-  pub fn automatic_statuses(
-    &self,
-  ) -> Result<Vec<(TaskId, orchester_core::task::organization::WorkflowStatus, Timestamp)>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare("SELECT task_id, status, changed_at FROM shared_automatic_status ORDER BY changed_at")?;
-    let rows = statement
-      .query_map([], |row| {
-        Ok((
-          row.get::<_, String>(0)?,
-          row.get::<_, String>(1)?,
-          row.get::<_, i64>(2)?,
-        ))
-      })?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .map(|(task, status, at)| {
-        Ok((
-          parse("task id", &task)?,
-          crate::rows::decode_json("automatic status", 1, &status)?,
-          Timestamp::from_unix_millis(at),
-        ))
-      })
-      .collect()
-  }
-
-  /// Forgets the automatic status of `task` recorded at `at`, once the server has it; a later one
-  /// stays to be sent.
-  pub fn clear_automatic_status(&mut self, task: TaskId, at: Timestamp) -> Result<(), StoreError> {
-    self.connection.execute(
-      "DELETE FROM shared_automatic_status WHERE task_id = ?1 AND changed_at = ?2",
-      params![task.to_string(), at.unix_millis()],
-    )?;
-    Ok(())
-  }
-}
-
-/// Records that a run moved shared `task` to `status`: the server gets it from the holder's desktop.
-pub(super) fn record_automatic(
-  connection: &Connection,
-  task: TaskId,
-  status: orchester_core::task::organization::WorkflowStatus,
-  at: Timestamp,
-) -> Result<(), StoreError> {
-  connection.execute(
-    "INSERT INTO shared_automatic_status (task_id, status, changed_at) VALUES (?1, ?2, ?3) \
-     ON CONFLICT (task_id) DO UPDATE SET status = excluded.status, changed_at = excluded.changed_at",
-    params![
-      task.to_string(),
-      encode_json("automatic status", 1, &status)?,
-      at.unix_millis()
-    ],
-  )?;
-  Ok(())
 }
 
 /// Whether `task` is a shared task.

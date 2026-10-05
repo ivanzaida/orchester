@@ -16,7 +16,7 @@ use orchester_core::{
   id::IdempotencyKey,
   name::Name,
   store::TaskStore,
-  task::TaskDetails,
+  task::{TaskDetails, organization::WorkflowStatus},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -383,4 +383,51 @@ fn sharing_a_member_sees_the_members_and_leaves_from_their_row() {
       .expect("link")
       .is_some_and(|link| link.removed_at.is_some())
   });
+}
+
+/// A run's status Orchester did not send because the server's changed meanwhile says so, quietly,
+/// on the task until the person dismisses it.
+#[test]
+fn sharing_a_run_status_that_was_not_sent_shows_on_the_task_until_dismissed() {
+  let (mut desktop, _server) = signed_in("alice", true, &["Repository switcher"]);
+  share(&mut desktop);
+  let task = ProjectDb::open(desktop.repo())
+    .expect("project")
+    .tasks()
+    .expect("tasks")
+    .remove(0);
+  let status = |status: WorkflowStatus| serde_json::json!({ "schema": 1, "body": status }).to_string();
+  // As the desktop leaves it after the server's status changed under a run's.
+  rusqlite::Connection::open(desktop.repo().join(".orchester").join("orchester.db"))
+    .expect("database")
+    .execute(
+      "INSERT INTO shared_automatic_status (task_id, from_status, status, changed_at, not_sent, server_status) \
+       VALUES (?1, ?2, ?3, ?4, 'changed', ?5)",
+      rusqlite::params![
+        task.id().to_string(),
+        status(WorkflowStatus::Todo),
+        status(WorkflowStatus::InReview),
+        Timestamp::now().unix_millis(),
+        status(WorkflowStatus::Canceled)
+      ],
+    )
+    .expect("the unsent status");
+  desktop.wait_for("nav-tasks");
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.press("task-row-KON-1");
+  desktop.wait_for("task-unsent-status");
+  assert!(shows(&mut desktop, "A run's status was not sent"));
+  assert!(shows(&mut desktop, "changed meanwhile to Canceled"));
+  desktop.click("task-unsent-status-dismiss");
+  desktop.settle("the notice is gone", |tree| {
+    tree.get_element_by_id("task-unsent-status").is_none()
+  });
+  assert_eq!(
+    ProjectDb::open(desktop.repo())
+      .expect("project")
+      .unsent_status(task.id())
+      .expect("unsent"),
+    None
+  );
 }

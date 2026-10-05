@@ -12,6 +12,6 @@ pub use app_db::{AppDb, PreviousSession, RegisteredProject, ServerAccount, Sessi
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 pub use project_db::{
-  CachedClaim, CachedRunStatus, CachedTask, DecisionCounts, ProjectDb, ReadOnlyProjectDb, SharedPerson, SharedTaskInfo,
-  SharingLink,
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, DecisionCounts, NotSent, ProjectDb, ReadOnlyProjectDb,
+  SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
 };

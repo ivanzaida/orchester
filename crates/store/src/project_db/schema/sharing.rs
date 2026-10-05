@@ -3,8 +3,9 @@
 //! desktop from what the server confirmed, with the pipeline by slug, the former key and who created
 //! and last changed them. `sharing` holds the link to the server project (no row: the project is
 //! local), `task_claims` and `task_run_status` the cached claim and run status of each task, and
-//! `shared_automatic_status` the workflow status a run of a shared task moved it to, which the
-//! holder's desktop sends to the server as Orchester's change.
+//! `shared_automatic_status` the workflow status a run of a shared task moved it to and from, which
+//! the holder's desktop sends to the server as Orchester's change while the server still has the
+//! status it changed from.
 
 pub(super) const MIGRATION: &str = r"
 ALTER TABLE tasks ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0);
@@ -55,7 +56,13 @@ CREATE TABLE task_run_status (
 
 CREATE TABLE shared_automatic_status (
   task_id TEXT PRIMARY KEY REFERENCES tasks (id),
+  -- The status the cache had when the run changed it: sent only while the server still has it.
+  from_status TEXT NOT NULL,
   status TEXT NOT NULL,
-  changed_at INTEGER NOT NULL
+  changed_at INTEGER NOT NULL,
+  -- Why it was not sent ('changed': the server's status changed, to server_status; 'not_holder'),
+  -- shown on the task until the person dismisses it; NULL while it waits to be sent.
+  not_sent TEXT CHECK (not_sent IN ('changed', 'not_holder')),
+  server_status TEXT
 ) STRICT;
 ";

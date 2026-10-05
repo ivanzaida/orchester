@@ -3,10 +3,10 @@
 //! matched. Until the live event stream (S2d) this runs when the project is opened, every minute
 //! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
 //! no longer has the person as a member (10.44); the cache then says since when. The workflow
-//! statuses this computer's runs reached go to the server as Orchester's changes.
+//! statuses this computer's runs reached go to the server then ([`super::automatic`]).
 
 use orchester_api::ErrorCode;
-use orchester_core::{task::organization::ChangeActor, time::Timestamp};
+use orchester_core::time::Timestamp;
 use orchester_store::ProjectDb;
 
 use super::{ProjectServer, organization::tag, store::RemoteTaskStore};
@@ -41,7 +41,7 @@ impl ProjectServer {
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
-      send_automatic(&mut store)
+      super::automatic::send(&mut store)
     })
     .await??;
     self.servers.shared_changed();
@@ -58,18 +58,4 @@ impl ProjectServer {
     self.servers.shared_changed();
     Ok(())
   }
-}
-
-/// Sends each workflow status a run of this computer moved a shared task to, as Orchester's change,
-/// and forgets the ones the server took. One that cannot be sent waits for the next sync.
-fn send_automatic(store: &mut RemoteTaskStore) -> Result<(), SharingError> {
-  for (task, status, at) in store.db.automatic_statuses()? {
-    let base = store.cached(task)?.organization().clone();
-    let edited = base.clone().with_status(status);
-    match store.change_organization(task, (&base, &edited), ChangeActor::Orchester) {
-      Ok(_) => store.db.clear_automatic_status(task, at)?,
-      Err(error) => tracing::warn!(%error, %task, "the server did not take a run's workflow status yet"),
-    }
-  }
-  Ok(())
 }

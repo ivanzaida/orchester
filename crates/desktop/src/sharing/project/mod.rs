@@ -4,6 +4,7 @@
 //! ([`store::RemoteTaskStore`]). While the server cannot be reached, or the person is no longer a
 //! member, nothing is sent: the change fails at once and the list stays read-only.
 
+mod automatic;
 mod claims;
 pub mod convert;
 pub mod discovery;

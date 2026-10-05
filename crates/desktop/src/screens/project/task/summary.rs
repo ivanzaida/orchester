@@ -105,6 +105,16 @@ pub(super) fn summary(
     }))
     .with_children(runs)
     .with_children(blocked_notice(ctx, detail))
+    .with_children(detail.unsent_status.map(|unsent| {
+      ctx.mount_keyed::<super::unsent_status::UnsentStatusNotice>(
+        "task-unsent-status",
+        super::unsent_status::UnsentProps {
+          root: repo_root.to_owned(),
+          task: detail.task.id(),
+          unsent,
+        },
+      )
+    }))
     .with_children(brief_section(ctx, details))
     .child(super::organization_history::history(ctx, repo_root, detail.task.id(), revision));
 
