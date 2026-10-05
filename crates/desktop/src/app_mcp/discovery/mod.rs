@@ -80,12 +80,20 @@ impl DiscoveryFile {
     remove_stale(folder);
     let pid = std::process::id();
     let lock_path = folder.join(format!("{pid}.lock"));
-    let lock = File::create(&lock_path)?;
+    // Not truncated: a lock is empty, and a link planted in its place keeps what it points to.
+    let lock = File::options()
+      .write(true)
+      .create(true)
+      .truncate(false)
+      .open(&lock_path)?;
     lock.try_lock().map_err(|error| match error {
       TryLockError::Error(error) => error,
       TryLockError::WouldBlock => io::Error::other("this process's discovery lock is held already"),
     })?;
     let path = folder.join(format!("{pid}.json"));
+    // A file under this pid is left by an earlier process that had it and was killed: this process
+    // holds the pid's lock now. It is replaced, as the new file is created only where none is.
+    remove(&path);
     let contents = Contents {
       version: VERSION,
       pid,

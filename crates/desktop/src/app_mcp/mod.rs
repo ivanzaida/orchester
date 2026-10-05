@@ -11,6 +11,7 @@
 
 mod discovery;
 mod error;
+mod guard;
 mod handler;
 mod server;
 mod services;

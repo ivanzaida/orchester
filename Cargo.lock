@@ -2762,6 +2762,8 @@ dependencies = [
  "axum",
  "chrono",
  "embed-resource",
+ "hyper",
+ "hyper-util",
  "image",
  "lurq",
  "orchester-api",

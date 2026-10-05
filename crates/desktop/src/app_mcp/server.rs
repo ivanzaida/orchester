@@ -7,25 +7,29 @@ use std::{
   net::{Ipv4Addr, SocketAddr, TcpListener},
   num::NonZeroU16,
   sync::Arc,
+  time::Duration,
 };
 
-use axum::{
-  Router,
-  extract::{Request, State},
-  http::{StatusCode, header::AUTHORIZATION},
-  middleware::{self, Next},
-  response::{IntoResponse, Response},
+use axum::{Router, middleware};
+use hyper::server::conn::http1;
+use hyper_util::{
+  rt::{TokioIo, TokioTimer},
+  service::TowerToHyperService,
 };
 use rmcp::transport::streamable_http_server::{
   StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
-use tokio::{runtime::Handle, sync::oneshot};
+use tokio::{runtime::Handle, sync::oneshot, task::JoinSet};
 
-use super::handler::Handler;
+use super::{guard, handler::Handler};
 
 /// The only address the server listens on.
 const LOOPBACK: Ipv4Addr = Ipv4Addr::LOCALHOST;
 const PATH: &str = "/mcp";
+/// How long a client may take to send a request's headers, and how long a kept-alive connection idles.
+const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
+/// Connections served at once; local clients need a few.
+const MAX_CONNECTIONS: usize = 32;
 
 /// `127.0.0.1:<port>`.
 pub fn address(port: NonZeroU16) -> String {
@@ -60,7 +64,7 @@ impl BearerToken {
 
   /// Whether `presented` is this token, compared in constant time so the comparison does not tell how
   /// much of it matched.
-  fn admits(&self, presented: &str) -> bool {
+  pub(super) fn admits(&self, presented: &str) -> bool {
     let (expected, presented) = (self.0.as_bytes(), presented.as_bytes());
     expected.len() == presented.len()
       && expected
@@ -104,7 +108,7 @@ impl Drop for Listening {
   }
 }
 
-async fn serve(listener: TcpListener, handler: Handler, token: BearerToken, stopped: oneshot::Receiver<()>) {
+async fn serve(listener: TcpListener, handler: Handler, token: BearerToken, mut stopped: oneshot::Receiver<()>) {
   let listener = match tokio::net::TcpListener::from_std(listener) {
     Ok(listener) => listener,
     Err(error) => {
@@ -121,30 +125,45 @@ async fn serve(listener: TcpListener, handler: Handler, token: BearerToken, stop
   );
   let router = Router::new()
     .route_service(PATH, service)
-    .layer(middleware::from_fn_with_state(token, authorize));
-  let shutdown = async move {
-    // Stopped, or its owner is gone without saying so: the server stops either way.
-    drop(stopped.await);
-    sessions.cancel();
-  };
-  if let Err(error) = axum::serve(listener, router).with_graceful_shutdown(shutdown).await {
-    tracing::error!(%error, "Orchester's MCP server stopped");
+    .layer(middleware::from_fn_with_state(token, guard::admit));
+  let mut connections = JoinSet::new();
+  loop {
+    tokio::select! {
+      // Stopped, or its owner is gone without saying so: the server stops either way.
+      _ = &mut stopped => break,
+      accepted = listener.accept() => match accepted {
+        // Past the cap the connection is closed at once rather than queued behind idle ones.
+        Ok((stream, _)) if connections.len() < MAX_CONNECTIONS => {
+          connections.spawn(connection(stream, router.clone()));
+        }
+        Ok(_) => tracing::warn!("Orchester's MCP server refused a connection over its limit"),
+        Err(error) => tracing::warn!(%error, "Orchester's MCP server could not accept a connection"),
+      },
+      Some(ended) = connections.join_next() => {
+        if let Err(error) = ended {
+          tracing::error!(%error, "an MCP connection's task failed");
+        }
+      }
+    }
   }
+  sessions.cancel();
+  connections.abort_all();
 }
 
-/// Lets a request through only with the bearer token.
-async fn authorize(State(token): State<BearerToken>, request: Request, next: Next) -> Response {
-  let presented = request
-    .headers()
-    .get(AUTHORIZATION)
-    .and_then(|value| value.to_str().ok())
-    .and_then(|value| value.strip_prefix("Bearer "));
-  if presented.is_some_and(|presented| token.admits(presented)) {
-    return next.run(request).await;
+/// Serves one connection. The header deadline starts on accept and again after each response, so it
+/// also bounds how long a kept-alive connection idles; a response that streams events is not cut.
+async fn connection(stream: tokio::net::TcpStream, router: Router) {
+  let mut builder = http1::Builder::new();
+  builder.timer(TokioTimer::new()).header_read_timeout(HEADER_TIMEOUT);
+  let served = builder
+    .serve_connection(TokioIo::new(stream), TowerToHyperService::new(router))
+    .await;
+  if let Err(error) = served {
+    // Hyper's text can quote the request; only its kind is logged.
+    tracing::debug!(
+      timeout = error.is_timeout(),
+      parse = error.is_parse(),
+      "an MCP connection ended"
+    );
   }
-  (
-    StatusCode::UNAUTHORIZED,
-    "missing or invalid bearer token; read it from Orchester's MCP discovery file",
-  )
-    .into_response()
 }

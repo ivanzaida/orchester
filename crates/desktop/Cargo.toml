@@ -24,6 +24,10 @@ perf_profile = ["lurq/perf_profile"]
 # The HTTP routing and bearer check of Orchester's own MCP server (`app_mcp`), on loopback.
 axum.workspace = true
 chrono.workspace = true
+# Orchester's MCP server serves each connection with header and idle deadlines and a connection cap
+# (`app_mcp::server`), which axum::serve cannot set; both are already built through lurq and axum.
+hyper.workspace = true
+hyper-util.workspace = true
 image.workspace = true
 orchester-core.workspace = true
 # Shared servers: the HTTP client of the server's API (`sharing`).

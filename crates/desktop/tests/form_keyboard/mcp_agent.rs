@@ -53,11 +53,16 @@ impl McpAgent {
     self.request("tools/list", &json!({}))
   }
 
-  fn request(&mut self, method: &str, params: &Value) -> Value {
+  /// The whole JSON-RPC reply to `method`, an error included.
+  pub fn reply(&mut self, method: &str, params: &Value) -> Value {
     self.next_id += 1;
-    let reply = self
+    self
       .post(&json!({"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params}))
-      .expect("a request gets a reply");
+      .expect("a request gets a reply")
+  }
+
+  fn request(&mut self, method: &str, params: &Value) -> Value {
+    let reply = self.reply(method, params);
     reply
       .get("result")
       .cloned()
