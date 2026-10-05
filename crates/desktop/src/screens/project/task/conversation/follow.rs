@@ -3,7 +3,7 @@
 //! waits for the person until the person scrolls; scrolling up stops following and shows *Jump to
 //! latest · N new*; sending a message follows again.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use lurq::{
   app::{ctx::Ctx, events::scroll_event::ScrollEvent, theme::SpacingSize},
@@ -13,13 +13,16 @@ use lurq::{
 };
 
 use super::{
-  super::activity::LiveFooterProps,
+  super::activity::{LiveFooterProps, RevealRow},
   ConversationTab,
   approval_card::AnswersLayout,
   row::{Line, RowProps, TimelineRowView},
 };
 use crate::{
-  tasks::timeline::{self, Item, view::Shown},
+  tasks::timeline::{
+    self, Item,
+    view::{Row as ChatRow, Shown},
+  },
   theme::gutter_scrollbar,
   ui::{button::ActionButton, icon::Icon},
 };
@@ -98,13 +101,19 @@ impl ConversationTab {
     (working, answers): (Option<LiveFooterProps>, AnswersLayout),
   ) -> Element {
     let raw = self.raw.get();
+    let keys: HashSet<&str> = shown.rows.iter().map(|row| &**row.key()).collect();
     let rows: Arc<Vec<RowProps>> = Arc::new(
       shown
         .rows
         .iter()
-        .map(|row| Line::Row(Box::new(row.clone())))
-        .chain(working.map(Line::Working))
-        .map(|line| RowProps { line, raw, answers })
+        .map(|row| (Line::Row(Box::new(row.clone())), shown_request(row, &keys)))
+        .chain(working.map(|working| (Line::Working(working), None)))
+        .map(|(line, request)| RowProps {
+          line,
+          raw,
+          answers,
+          request,
+        })
         .collect(),
     );
     let count = shown.rows.len();
@@ -134,6 +143,20 @@ impl ConversationTab {
         }
       })
       .mount_keyed::<TimelineRowView, _, _, _>(|row| row.key().to_string(), Clone::clone)
+  }
+
+  /// Scrolls the chat to a row once, as when the tab reveals the card that waits for the person: the
+  /// chat stops following, and the person's next scroll lets the row go.
+  pub(super) fn reveal_row(&self) -> RevealRow {
+    let (reveal, following, revealed) = (self.reveal.clone(), self.following.clone(), self.revealed.clone());
+    Arc::new(move |key: Arc<str>| {
+      *reveal.lock() = Reveal {
+        key: Some(key.to_string()),
+        scrolled: true,
+      };
+      following.set(false);
+      revealed.update(|count| *count += 1);
+    })
   }
 
   /// "Jump to latest · N new" (`iwe3p`), centred above the composer.
@@ -167,4 +190,12 @@ impl ConversationTab {
       .child(button)
       .into()
   }
+}
+
+/// The card of the tool request problem row `row` names, when `keys`, the rows shown, hold it.
+fn shown_request(row: &ChatRow, keys: &HashSet<&str>) -> Option<Arc<str>> {
+  let ChatRow::Item(item) = row else {
+    return None;
+  };
+  timeline::named_request(item).filter(|card| keys.contains(&**card))
 }

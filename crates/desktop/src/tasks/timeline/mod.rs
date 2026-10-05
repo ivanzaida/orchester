@@ -17,6 +17,7 @@ pub mod view;
 use std::sync::Arc;
 
 use orchester_core::{
+  connection::stream::RunnerProblem,
   id::StepExecutionId,
   integration::RunMerge,
   run::{DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
@@ -389,7 +390,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
   pending
     .chain(decided)
     .map(|(request, decided, decided_by)| Item {
-      key: format!("approval-{}", request.id).into(),
+      key: approval_key(&request.id),
       execution: Some(execution),
       at: request.requested_at,
       kind: ItemKind::Approval(ApprovalCard {
@@ -400,6 +401,22 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
       }),
     })
     .collect()
+}
+
+/// The key of the card of tool request `id`.
+fn approval_key(id: &str) -> Arc<str> {
+  format!("approval-{id}").into()
+}
+
+/// The key of the card of the tool request problem `item` names: one that ended without a decision.
+pub fn named_request(item: &Item) -> Option<Arc<str>> {
+  match &item.kind {
+    ItemKind::Problem(Entry {
+      kind: EntryKind::Problem(RunnerProblem::DecisionInterrupted { request, .. }),
+      ..
+    }) => Some(approval_key(request)),
+    _ => None,
+  }
 }
 
 /// The result card of `execution` once it passed or failed, with what its transcript among `entries`

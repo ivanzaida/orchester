@@ -3,6 +3,8 @@
 //! return or restart, a step's end or result card, or the run's end; in *Tools*, an entry or a
 //! message on one line; and last, while an agent works, the working line (`kpnmP`).
 
+use std::sync::Arc;
+
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::Column,
@@ -10,7 +12,7 @@ use lurq::{
 };
 
 use super::{
-  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps},
+  super::activity::{EntryProps, EntryView, LiveFooter, LiveFooterProps, RequestLink},
   Timeline,
   approval_card::{AnswersLayout, ApprovalCardProps, ApprovalCardView},
   cards::{self, PlanCardProps, PlanCardView},
@@ -32,6 +34,8 @@ pub(super) struct RowProps {
   pub(super) raw: bool,
   /// How an approval card lays out its answers in the chat's width.
   pub(super) answers: AnswersLayout,
+  /// The card of the tool request a problem row names, while the chat shows it.
+  pub(super) request: Option<Arc<str>>,
 }
 
 /// What a row of the list shows.
@@ -90,7 +94,7 @@ impl Component for TimelineRowView {
       Row::Folded { key, steps } => spaced(divider::folded(ctx, &timeline, key, steps)),
       Row::NotStarted { steps, .. } => spaced(divider::not_started(ctx, steps)),
       Row::Agent(agent) => spaced(message::agent_row(ctx, agent, &timeline, props.raw)),
-      Row::Item(item) => spaced(item_row(ctx, item, (&timeline, props.answers))),
+      Row::Item(item) => spaced(item_row(ctx, item, (&timeline, props.answers, props.request))),
       Row::Entry { key, entry } => ctx.mount_keyed::<EntryView>(
         key,
         EntryProps {
@@ -102,6 +106,7 @@ impl Component for TimelineRowView {
           time_column: true,
           in_group: false,
           toggles: timeline.toggles.clone(),
+          request: None,
         },
       ),
       Row::Line(item) => message::one_line(ctx, item),
@@ -110,8 +115,13 @@ impl Component for TimelineRowView {
   }
 }
 
-/// A person's message, a card, a problem, a return or restart, a step's end or the run's.
-fn item_row(ctx: &mut Ctx, item: &Item, (timeline, answers): (&Timeline, AnswersLayout)) -> Element {
+/// A person's message, a card, a problem, a return or restart, a step's end or the run's; `request`, the
+/// card a problem row links to.
+fn item_row(
+  ctx: &mut Ctx,
+  item: &Item,
+  (timeline, answers, request): (&Timeline, AnswersLayout, Option<Arc<str>>),
+) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => ctx.mount_keyed::<PersonMessageView>(
       &format!("person-{}", entry.id),
@@ -152,6 +162,10 @@ fn item_row(ctx: &mut Ctx, item: &Item, (timeline, answers): (&Timeline, Answers
         time_column: false,
         in_group: false,
         toggles: timeline.toggles.clone(),
+        request: request.map(|card| RequestLink {
+          card,
+          reveal: timeline.reveal.clone(),
+        }),
       },
     ),
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),

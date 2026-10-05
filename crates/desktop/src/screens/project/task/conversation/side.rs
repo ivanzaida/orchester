@@ -148,6 +148,8 @@ impl ConversationTab {
   fn chat(&self, ctx: &mut Ctx, view: &View<'_>) -> Element {
     let conversation = &view.props.conversation;
     let live = conversation.state == PanelState::Live;
+    // Read so that a row's request to reveal another renders the chat again.
+    self.revealed.get();
     let reveal = self.follow(view.shown.rows.len(), view.items);
     let working = live.then(|| LiveFooterProps {
       agent: view

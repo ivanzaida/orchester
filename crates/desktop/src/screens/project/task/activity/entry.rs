@@ -27,6 +27,7 @@ use super::{
   mcp::mcp_server_text,
   mcp_call,
   problem::{self, problem_text},
+  request_link::{RequestLink, request_link},
   toggles::Toggles,
 };
 use crate::{
@@ -63,6 +64,8 @@ pub(in crate::screens::project::task) struct EntryProps {
   /// group reads as plain rows until one is opened.
   pub(in crate::screens::project::task) in_group: bool,
   pub(in crate::screens::project::task) toggles: Toggles,
+  /// The card of the request a problem row names, while the chat shows it.
+  pub(in crate::screens::project::task) request: Option<RequestLink>,
 }
 
 impl PartialEq for EntryProps {
@@ -74,6 +77,7 @@ impl PartialEq for EntryProps {
       && self.raw == other.raw
       && self.time_column == other.time_column
       && self.in_group == other.in_group
+      && self.request.as_ref().map(|link| &link.card) == other.request.as_ref().map(|link| &link.card)
   }
 }
 
@@ -184,7 +188,7 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .child(entry_header(ctx, &shown, open, entry.sequence))
     .with_children(
       open
-        .then(|| entry_details(ctx, (entry, command_box), &shown, copied))
+        .then(|| entry_details(ctx, (entry, command_box, row.request.as_ref()), &shown, copied))
         .flatten(),
     );
   let line = Row::new()
@@ -224,10 +228,10 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
 }
 
 /// What an open entry shows under its header; `command_box`: its command in a box of its own when
-/// the title does not hold it whole.
+/// the title does not hold it whole; `request`: the link to the card of the request it names.
 fn entry_details(
   ctx: &Ctx,
-  (entry, command_box): (&Entry, bool),
+  (entry, command_box, request): (&Entry, bool, Option<&RequestLink>),
   shown: &Shown,
   copied: &Signal<Copied>,
 ) -> Option<Column> {
@@ -262,6 +266,7 @@ fn entry_details(
           .variant(ExtraTypography::Explanation.role())
           .selectable(true)
       }))
+      .with_children(request.map(|link| request_link(ctx, link, entry.sequence)))
       .with_children(
         shown
           .output

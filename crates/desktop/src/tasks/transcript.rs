@@ -3,9 +3,9 @@
 //! too), a permission denial marks the command it denied, each file of a file change is an entry of
 //! its own (it opens the file in the Changes tab), consecutive unparsed lines become one collapsed
 //! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
-//! of its own (Codex, which reports no command for it), and a failed turn
-//! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
-//! invocation panel shows the session. Nothing else is left out.
+//! of its own (Codex, which reports no command for it), and a failed turn that repeats the error before
+//! it, or follows the request a closed permission prompt interrupted, is not shown twice. Session and turn starts carry
+//! no text of their own; the invocation panel shows the session. Nothing else is left out.
 
 use std::sync::Arc;
 
@@ -205,9 +205,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::TurnCompleted { usage } => entries.push(entry(EntryKind::Usage(*usage))),
       AgentEvent::Error { message } => entries.push(entry(EntryKind::Error(message.as_str().into()))),
       AgentEvent::TurnFailed { message } => {
-        let repeated = matches!(entries.last(), Some(Entry { kind: EntryKind::Error(previous), invocation, .. })
-          if **previous == **message && *invocation == stored.invocation);
-        if !repeated {
+        if !says_why(entries.last(), stored, message) {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
@@ -240,6 +238,20 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
     }
   }
   entries
+}
+
+/// Whether `last`, the entry before a failed turn of the same invocation, already says why it failed: the
+/// same error, or the request a closed permission prompt or tool relay interrupted, which the runner records
+/// right before the turn fails with it.
+fn says_why(last: Option<&Entry>, stored: &ActivityEntry, message: &str) -> bool {
+  let Some(last) = last.filter(|last| last.invocation == stored.invocation) else {
+    return false;
+  };
+  match &last.kind {
+    EntryKind::Error(previous) => **previous == *message,
+    EntryKind::Problem(RunnerProblem::DecisionInterrupted { .. }) => true,
+    _ => false,
+  }
 }
 
 /// Marks the command of a call nobody was asked about, or adds an entry for the call when no command
