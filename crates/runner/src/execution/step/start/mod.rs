@@ -41,6 +41,8 @@ use super::{
   app_server::AppServerSetup,
   claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
+  orchester_tools::ToolHost,
+  relay::Listening,
   skills::PlacedSkills,
 };
 use crate::private_file::PrivateFile;
@@ -66,6 +68,8 @@ pub(super) struct AgentStart {
   pub(super) app_server: Option<AppServerSetup>,
   /// Claude Code's permission prompt, for a step that asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Codex's relay of Orchester's tools, which asks about their calls.
+  pub(super) tool_relay: Option<Listening>,
   /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
   pub(super) mcp_secrets: Vec<SecretVariable>,
   /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
@@ -133,7 +137,14 @@ impl RunTask {
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
-    let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
+    let (tools, claude_approvals) = self.step_tools(
+      (enforced.permissions(), &setup),
+      (invocation, worktree, &writable_roots),
+      &environment,
+    )?;
+    // The tools reach a Claude Code agent through its permission prompt's relay, and every Codex agent.
+    let served = claude_approvals.is_some() || matches!(setup, McpSetup::Codex(_));
+    let prompt = told_of_tools(prompt, &tools, served && continuation.session.is_none());
     let mcp_secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
@@ -150,36 +161,42 @@ impl RunTask {
       code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
-    let (command, mcp_file, app_server) = match setup {
-      McpSetup::Codex(mcp) => {
-        let (command, app) = self.app_server_command(&cli, &mcp, prompt)?;
-        (command, None, Some(app))
-      }
-      McpSetup::Claude(servers) => {
-        let (command, file) = self.claude_command(&cli, servers, &prompt)?;
-        (command, file, None)
-      }
-    };
-    let command = match &index.tools {
-      Some(tools) => with_tools_on_path(command, tools),
-      None => command,
-    };
+    let started = self.cli_command(&cli, setup, prompt, tools)?;
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
-      command,
+      command: match &index.tools {
+        Some(tools) => with_tools_on_path(started.command, tools),
+        None => started.command,
+      },
       prompt: sources,
-      mcp_file,
+      mcp_file: started.mcp_file,
       left_out,
       code_index: index.used,
-      app_server,
+      app_server: started.app_server,
       claude_approvals,
+      tool_relay: started.tool_relay,
       mcp_secrets,
       claude_exemptions,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
     })
+  }
+}
+
+/// `prompt` with the paragraph that points the agent at its Orchester tools when it is `told` of them: a new
+/// session that gets them.
+fn told_of_tools(prompt: String, tools: &ToolHost, told: bool) -> String {
+  if told {
+    format!(
+      "{prompt}
+
+{}",
+      tools.tools().prompt_paragraph()
+    )
+  } else {
+    prompt
   }
 }
 

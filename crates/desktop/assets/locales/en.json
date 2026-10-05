@@ -1718,6 +1718,7 @@
         "listFull": "The profile lists as many commands as a profile can.",
         "toolName": "This tool’s name can’t be listed: a listed name has only letters, digits, - and _.",
         "missing": "The step’s profile or the server can no longer be read.",
+        "orchesterTool": "Orchester’s own tools have no list of tools that run without asking yet. Approve similar covers this run.",
         "similarUnknown": "Unavailable: Orchester can’t tell which later commands would be alike.",
         "alwaysUnknown": "Unavailable for an Unknown command."
       },

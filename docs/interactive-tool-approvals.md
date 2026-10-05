@@ -134,6 +134,84 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
   actions, its enforcement panel has a row per server (*pencil: 6 tools run without asking*, with the CLI's rule), and
   the pipeline step inspector repeats the line under *Ask when a tool needs approval*.
 
+## Orchester's tools
+
+Built 2026-10-05 on `claude/orchester-tools` (`orchester_core::orchester_tools`), from the user's decision of that day:
+an agent's shell lines cannot be read by Orchester, so each one outside the allowed commands asks a person (59
+approvals in 1.5 hours of Orchester developing itself). One set of typed tools is defined in core, with its schema,
+its approval policy and its execution, and served to both CLIs by the relay Orchester already runs for each
+invocation; a native agent can later declare the same schemas in its own request and run the same calls (P1d).
+
+| Tool | Input | Access class | Writing step | Read-only step |
+| --- | --- | --- | --- | --- |
+| `git_status` | none | read-only | runs | runs |
+| `git_diff` | `path?`, `staged?` | read-only | runs | runs |
+| `git_log` | `path?`, `count?` (1–200, 20) | read-only | runs | runs |
+| `git_show` | `revision`, `path?` | read-only | runs | runs |
+| `git_add` | `paths` (1–100 plain files, no folders or links) | writes the worktree | runs | not offered |
+| `git_commit` | `message` | writes the worktree | runs | not offered |
+| `read_outside_file` | `path` (absolute), `offset?`, `limit?` (≤ 10 000, 2000) | outside | asks | asks |
+| `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
+
+- **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
+  type with unknown fields refused, and an invalid call is answered with an error result that says why.
+- **Approval, held by the runner.** A call of a tool that asks runs only once approved, whatever the CLI does: an
+  approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
+  arguments the person saw, and a call that arrives
+  without one is asked about by the runner itself before it runs (`orchester-call-<n>` requests). Codex is told to
+  run every tool (`approval_mode = "approve"` in the thread's configuration), so the runner asks for each call that
+  asks; whether Codex 0.159.2 would send its own request for a `prompt` tool while `mcp_elicitations` is off is not
+  relied on. A call that asks reaches a person whether or not the step asks before MCP actions; rules of the run and
+  auto-approval answer it as they answer an MCP call, but auto-approval never runs a project's program. *Approve
+  similar* covers the tool for the run, whatever its arguments, as for every MCP tool and as its tile says (one
+  approved read covers later reads); no offered tool has fixed arguments a rule could name instead; *Always allow*
+  is unavailable (*Orchester's own tools have no list of tools that run without asking yet*).
+- **Execution.** The runner runs every call off its async workers: a program and its arguments, never a shell line,
+  in the run's worktree with the environment the agent's own programs get (no secret). Each value is one argument of
+  its own after the options (`--literal-pathspecs`, `--` before paths, `--end-of-options` before a revision, which
+  may not start with `-` or hold whitespace or `:`; paths are relative, without `..` or `:`); a commit message goes
+  to git's standard input (`-F -`). Git is pinned to the worktree and its own git folder (`--git-dir`, read from the
+  repository, `--work-tree`), so a rewritten `.git` file cannot lead it to a configuration of the agent's making;
+  the repository's own configuration applies, filters included (as for the runner's checkpoint commits). Git never
+  enters a nested repository, whose own configuration (a filter program) it would honour: recursion is off
+  (`submodule.recurse=false`, `diff.ignoreSubmodules=all`, `status.submoduleSummary=false`,
+  `--ignore-submodules=all`), so a gitlink is only a commit id, and `git_add` stages named plain files only, none in a
+  repository of its own and none reached through a link or junction (any reparse point on Windows): adding a folder stages each nested repository in it as a gitlink, and a later add of a folder
+  runs a staged one's filters whatever the settings say (git 2.46; checked with fresh, staged and submodule nested
+  repositories). Git also
+  gets the native agent's hardening, no diff or textconv program, an absolute empty hooks folder the runner owns
+  (`<temp>/orchester-mcp/<project>/no-hooks`) with `--no-verify`, no signing and no signature checks. Output is read
+  as it comes and kept within the cap: the first 128 KiB for git (60 seconds), the end of a project tool's output
+  within its own limits; the answer starts with the exit code and has the invocation's MCP secrets removed.
+- **`read_outside_file`** reads the whole disk but a deny list, rather than an allow list of dependency folders:
+  where toolchains keep sources differs by toolchain and machine, and Orchester names no toolchain's folders. Refused
+  are the shared credential rule's locations (`CommandScope::holds_credentials`; published sources such as a package
+  registry's `src` are not credentials), anything in a `.git` folder, and Orchester's own state wherever it lies: the
+  whole `<temp>/orchester-mcp` tree (every project's private files with MCP secrets and tokens), any `.orchester`
+  folder but the run's worktree, any `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's
+  programs; device, stream,
+  verbatim, drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line
+  read. The file is read as it comes: numbered lines, each
+  cut to 16 KiB, at most 256 KiB, with where to read on. Known limits: the path is checked, then opened, so a link
+  swapped in between by another program could lead elsewhere (what is opened must still be a file); a mapped network
+  drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local folder, also in a step without network.
+- **`run_project_tool`** is built in core but offered to no agent: the Tools library has no *offered to agents*
+  setting and no typed parameters, and its access rules were made for pipeline steps. When offered, it is not offered
+  without network (the program runs outside every sandbox) and always asks.
+- **Claude Code** gets the tools from the permission prompt's relay (`--claude-permission-prompt`), which lists them
+  after `approve`; every tool that runs gets an allow rule (`mcp__Orchester__<tool>`), so the others reach the
+  prompt. Claude Code 2.1.286 removes only the prompt tool from the model's tools (`permissionPromptToolName` is
+  filtered by exact name). **Codex** gets the same relay (`orchester-runner --orchester-tools`, no `approve`) as the
+  server `Orchester` of its configuration, the runner's address in `env`, the token through `env_vars` (kept out of
+  the agent's shell commands) and a `tool_timeout_sec` long enough for a person's decision. A user's own server named
+  `Orchester` refuses the step. The relay handles one request at a time, so a call waiting for a person holds the
+  invocation's other calls of the relay.
+- **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
+  its own (*# Orchester tools*) to use them for git and for files outside the worktree.
+- **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
+  orchester_tools`). Not checked with the real CLIs: how large answers fare against Claude Code's MCP output limit
+  (`MAX_MCP_OUTPUT_TOKENS`).
+
 ## Answers and waiting requests
 
 Built 2026-10-02 from the user's decisions of that day (design doc, "Approval choices and waiting requests";

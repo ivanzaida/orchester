@@ -22,7 +22,7 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 use serde::Serialize;
 use zeroize::Zeroizing;
 
-use super::is_agent_variable;
+use super::{CodexOrchester, is_agent_variable};
 use crate::{
   command::SecretVariable,
   connection::mcp::{ExemptTools, InvocationExemptions, McpServerName, McpServerProblem, McpUrl},
@@ -137,6 +137,8 @@ pub struct CodexMcp {
   secrets: Vec<SecretVariable>,
   servers: Vec<McpServerName>,
   exemptions: InvocationExemptions,
+  /// Orchester's own server, with the step's Orchester tools.
+  orchester: Option<CodexOrchester>,
 }
 
 impl CodexMcp {
@@ -156,19 +158,37 @@ impl CodexMcp {
       }
     }
     mcp.exemptions = exemptions(servers.iter().filter(|server| mcp.servers.contains(&server.name)));
-    if !mcp.secrets.is_empty() {
-      let names: Vec<&str> = mcp.secrets.iter().map(SecretVariable::name).collect();
-      mcp.args.extend([
+    (mcp, left_out)
+  }
+
+  /// These servers and Orchester's own, `server`.
+  #[must_use]
+  pub fn with_orchester(mut self, server: CodexOrchester) -> Self {
+    self.secrets.push(server.token().clone());
+    self.orchester = Some(server);
+    self
+  }
+
+  /// Whether Codex gets Orchester's own server.
+  pub const fn has_orchester(&self) -> bool {
+    self.orchester.is_some()
+  }
+
+  /// Arguments after the sandbox settings, in order: the servers, then the secret variables kept out of the
+  /// agent's shell commands.
+  pub fn args(&self) -> Vec<String> {
+    let mut args = self.args.clone();
+    if let Some(orchester) = &self.orchester {
+      args.extend(orchester.args());
+    }
+    if !self.secrets.is_empty() {
+      let names: Vec<&str> = self.secrets.iter().map(SecretVariable::name).collect();
+      args.extend([
         "-c".to_owned(),
         format!("shell_environment_policy.exclude={}", toml_array(&names)),
       ]);
     }
-    (mcp, left_out)
-  }
-
-  /// Arguments after the sandbox settings, in order.
-  pub fn args(&self) -> &[String] {
-    &self.args
+    args
   }
 
   /// Variables of the Codex process that its servers take their secrets from.

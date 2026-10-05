@@ -23,7 +23,7 @@ use tokio::sync::oneshot;
 use super::{
   super::{control::answer, tool_approval::end_unheld},
   answer::Settled,
-  claude_approval::{Asked, PromptAnswer},
+  claude_approval::{Asked, AskedBy, PromptAnswer},
   worker::{ApprovalDecision, Watch, Worker},
 };
 
@@ -35,6 +35,11 @@ pub(super) enum Awaiting {
     call: String,
     reply: oneshot::Sender<PromptAnswer>,
   },
+  /// A call `call` of Orchester's tools waiting in the relay, which runs it once approved.
+  Tool {
+    call: String,
+    reply: oneshot::Sender<PromptAnswer>,
+  },
 }
 
 impl Awaiting {
@@ -42,7 +47,7 @@ impl Awaiting {
   pub(super) fn item(&self) -> &str {
     match self {
       Self::Codex(request) => request.item(),
-      Self::Claude { call, .. } => call,
+      Self::Claude { call, .. } | Self::Tool { call, .. } => call,
     }
   }
 }
@@ -84,14 +89,14 @@ impl Worker {
       .await
   }
 
-  /// A permission prompt call of Claude Code that a person decides. A call asked about before is
-  /// denied without asking again.
+  /// A permission prompt call of Claude Code, or a call of Orchester's tools the relay holds, that a person
+  /// decides. A prompt call asked about before is denied without asking again.
   pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
-    let Asked { request, reply } = asked;
-    let first = self
-      .claude_approvals
-      .as_mut()
-      .is_some_and(|approvals| approvals.first_ask(request.call()));
+    let Asked { request, reply, by } = asked;
+    let first = match (by, self.claude_approvals.as_mut()) {
+      (AskedBy::ToolCall, _) => true,
+      (AskedBy::Prompt, approvals) => approvals.is_some_and(|approvals| approvals.first_ask(request.call())),
+    };
     if !first {
       // The relay reads the denial; a closed relay has nothing to deny.
       if reply.send(PromptAnswer::Repeated).is_err() {
@@ -118,9 +123,11 @@ impl Worker {
     };
     let call = request.call().to_owned();
     let key = call.clone();
-    self
-      .await_person(watch, &key, shown, Awaiting::Claude { call, reply })
-      .await
+    let awaiting = match by {
+      AskedBy::Prompt => Awaiting::Claude { call, reply },
+      AskedBy::ToolCall => Awaiting::Tool { call, reply },
+    };
+    self.await_person(watch, &key, shown, awaiting).await
   }
 
   pub(super) fn redact(&self, text: &str) -> String {
@@ -159,8 +166,9 @@ impl Worker {
     Ok(())
   }
 
-  /// Claude Code's permission prompt closed its connection while a call waited: the call can no
-  /// longer be answered, so the request is interrupted and a later decision is refused.
+  /// Claude Code's permission prompt, or the relay of Orchester's tools, closed its connection while a call
+  /// waited: the call can no longer be answered, so the request is interrupted and a later decision is
+  /// refused.
   pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.approval = None;
     watch
@@ -170,7 +178,10 @@ impl Worker {
     self.observe(
       watch,
       AgentEvent::TurnFailed {
-        message: "Claude Code's permission prompt closed before the decision".to_owned(),
+        message: format!(
+          "{}'s permission prompt or tool relay closed before the decision",
+          self.cli()
+        ),
       },
     )?;
     self.process.terminate();
@@ -292,19 +303,18 @@ impl Worker {
         .await
         .map_err(|error| error.to_string()),
       Awaiting::Claude { call, reply } => {
-        let prompt = match &answer.told {
-          Some(told) if !approve => PromptAnswer::Deny(told.clone()),
-          None if !approve => PromptAnswer::Repeated,
-          _ => PromptAnswer::Allow,
-        };
         reply
-          .send(prompt)
+          .send(prompt_answer(answer, approve))
           .map_err(|_| "its permission prompt has closed".to_owned())?;
         if approve {
           watch.approved_calls.insert(call);
         }
         Ok(())
       }
+      // The relay runs the call and answers it itself; the agent's CLI reports no result to wait for.
+      Awaiting::Tool { reply, .. } => reply
+        .send(prompt_answer(answer, approve))
+        .map_err(|_| "Orchester's tool relay has closed".to_owned()),
     }
   }
 
@@ -320,5 +330,14 @@ impl Worker {
       });
     }
     Ok(())
+  }
+}
+
+/// The answer a relay call gets: allowed, or denied with what the agent is told.
+fn prompt_answer(answer: &Settled, approve: bool) -> PromptAnswer {
+  match &answer.told {
+    Some(told) if !approve => PromptAnswer::Deny(told.clone()),
+    None if !approve => PromptAnswer::Repeated,
+    _ => PromptAnswer::Allow,
   }
 }

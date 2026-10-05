@@ -45,6 +45,24 @@ fn enforced(
     .expect("enforceable on Claude Code")
 }
 
+/// The Orchester tools that run without asking in a step that only reads, each with its allow rule, after
+/// the step's other allowed tools (`orchester_core::orchester_tools`).
+const READ_RULES: [&str; 4] = [
+  "mcp__Orchester__git_status",
+  "mcp__Orchester__git_diff",
+  "mcp__Orchester__git_log",
+  "mcp__Orchester__git_show",
+];
+/// And in a step that may write.
+const WRITE_RULES: [&str; 6] = [
+  "mcp__Orchester__git_status",
+  "mcp__Orchester__git_diff",
+  "mcp__Orchester__git_log",
+  "mcp__Orchester__git_show",
+  "mcp__Orchester__git_add",
+  "mcp__Orchester__git_commit",
+];
+
 /// The permission prompt's configuration file, for the invocations that ask a person.
 const APPROVALS: &str = "/tmp/approvals.json";
 
@@ -156,7 +174,11 @@ fn claude_invocation_read_only_without_commands_asks_about_every_command() {
           "NotebookEdit",
           "WebFetch",
           "WebSearch",
+          "--allowedTools",
         ]
+        .into_iter()
+        .chain(READ_RULES)
+        .collect::<Vec<_>>()
       )
     );
   }
@@ -189,6 +211,9 @@ fn claude_invocation_read_only_runs_the_listed_commands_and_asks_for_others() {
           "Bash(git log:*)",
           "Bash(rg:*)",
         ]
+        .into_iter()
+        .chain(READ_RULES)
+        .collect::<Vec<_>>()
       )
     );
   }
@@ -222,6 +247,9 @@ fn claude_invocation_write_allows_the_listed_commands_and_asks_for_others() {
           "Bash(pnpm test:*)",
           "Edit(//repo/.orchester/worktrees/run/**)",
         ]
+        .into_iter()
+        .chain(WRITE_RULES)
+        .collect::<Vec<_>>()
       )
     );
   }
@@ -279,6 +307,9 @@ fn claude_invocation_write_runs_listed_file_commands_in_their_listed_forms_only(
           "Bash(rm -f build/x:*)",
           "Edit(//repo/.orchester/worktrees/run/**)",
         ]
+        .into_iter()
+        .chain(WRITE_RULES)
+        .collect::<Vec<_>>()
       )
     );
   }

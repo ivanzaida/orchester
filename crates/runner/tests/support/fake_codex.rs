@@ -42,10 +42,14 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_tools.rs"]
+mod fake_codex_tools;
 #[path = "fake_codex_work.rs"]
 mod fake_codex_work;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
+#[path = "fake_permission_prompt.rs"]
+mod fake_permission_prompt;
 
 /// Set for the helper process, which only waits.
 const HELPER: &str = "ORCHESTER_FAKE_CODEX_HELPER";

@@ -11,6 +11,8 @@ mod cli_version;
 mod end;
 mod mcp;
 mod memory;
+mod orchester_tools;
+mod relay;
 mod skills;
 mod start;
 mod stderr;
@@ -318,6 +320,7 @@ impl RunTask {
       stops: stopped,
       mcp_file: start.mcp_file,
       claude_approvals: start.claude_approvals,
+      tool_relay: start.tool_relay,
       mcp_secrets: start.mcp_secrets,
       agent: start.agent,
       task: self.task.id(),

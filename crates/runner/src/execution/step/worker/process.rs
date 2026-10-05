@@ -21,6 +21,7 @@ use super::{
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
+    relay::Listening,
   },
   FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
 };
@@ -61,6 +62,10 @@ impl Worker {
           None => steering = false,
         },
         Some(asked) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => {
+          self.request_claude_approval(&mut watch, asked).await?;
+          self.stop_at_checkpoint(&mut watch);
+        },
+        Some(asked) = Listening::next(self.tool_relay.as_mut()) => {
           self.request_claude_approval(&mut watch, asked).await?;
           self.stop_at_checkpoint(&mut watch);
         },

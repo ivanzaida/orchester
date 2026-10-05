@@ -70,6 +70,8 @@ mod fake_claude_ask;
 mod fake_claude_input;
 #[path = "fake_claude_rules.rs"]
 mod fake_claude_rules;
+#[path = "fake_claude_tools.rs"]
+mod fake_claude_tools;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
@@ -165,6 +167,9 @@ impl Fake {
     }
     if let Some((text, structured)) = answer(prompt) {
       return self.answer(&text, structured);
+    }
+    if prompt.contains("Use Orchester's tools") {
+      return self.use_orchester_tools(worktree, (args, permission_prompt), step);
     }
     if let Some(ask) = fake_claude_ask::Ask::of(prompt) {
       return self.ask_prompt(worktree, (args, permission_prompt), &ask, step);

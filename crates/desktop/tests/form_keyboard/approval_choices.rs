@@ -97,6 +97,42 @@ fn approval_choices_dialog_shows_the_wider_answers_and_what_deny_tells() {
   assert!(later.x < deny.x && deny.x < once.x);
 }
 
+/// Orchester's own tools are no project server's: Approve similar covers the tool for the run, and Always allow
+/// says that they have no list of tools that run without asking.
+#[test]
+fn approval_choices_orchester_tool_offers_similar_but_not_always() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let (run, invocation) = native_run(repo);
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let approval = PendingToolApproval {
+      id: format!("{}:call_outside", invocation.id),
+      run: run.id(),
+      execution: invocation.execution,
+      invocation: invocation.id,
+      agent: "Builder".to_owned(),
+      command: false,
+      scope: Some(r#"{"path":"/deps/src/lib.rs"}"#.to_owned()),
+      server: "Orchester".to_owned(),
+      action: "read_outside_file".to_owned(),
+      target: None,
+      requested_at: at(20),
+      native: None,
+    };
+    db.request_tool_approval(&approval).expect("pending approval");
+  });
+  desktop.wait_for(DIALOG);
+  assert!(shows(
+    &mut desktop,
+    "tool-approval-similar",
+    "Orchester read_outside_file, every call until Run 1 ends"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "tool-approval-always",
+    "Orchester’s own tools have no list of tools that run without asking yet"
+  ));
+}
+
 #[test]
 fn approval_choices_tab_follows_the_visual_order_and_wraps() {
   let (mut desktop, _) = open(2);

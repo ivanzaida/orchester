@@ -25,7 +25,7 @@ use crate::permission::known_safe;
 /// (git 2.38 and later; an older git ignores the setting); a pager would wait for input that never
 /// comes; and `--no-optional-locks` keeps `git status` from rewriting `.git/index` to refresh its
 /// cached file stamps.
-const GIT_GLOBAL: [&str; 6] = [
+pub(crate) const GIT_GLOBAL: [&str; 6] = [
   "-c",
   "core.fsmonitor=false",
   "-c",
@@ -35,7 +35,7 @@ const GIT_GLOBAL: [&str; 6] = [
 ];
 /// Git subcommands that print diffs, and the options that keep configured diff programs from running.
 const GIT_DIFFS: [&str; 3] = ["diff", "log", "show"];
-const GIT_DIFF_OPTIONS: [&str; 2] = ["--no-ext-diff", "--no-textconv"];
+pub(crate) const GIT_DIFF_OPTIONS: [&str; 2] = ["--no-ext-diff", "--no-textconv"];
 /// `git blame` runs a configured textconv program by default; it takes no diff program.
 const GIT_BLAME_OPTIONS: [&str; 1] = ["--no-textconv"];
 

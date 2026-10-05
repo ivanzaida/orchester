@@ -2,6 +2,7 @@
 //!
 //! - "Please fail": fails the turn as Codex did for an unsupported model;
 //! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
+//! - "Use Orchester's tools": first lists and calls Orchester's tools (`fake_codex_tools`), then works as below;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
 //! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
@@ -42,7 +43,7 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, notify};
+use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, fake_codex_tools, notify};
 
 /// The account's limits App Server reports during a turn.
 const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
@@ -122,6 +123,9 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Ok(limits) => emit(&limits),
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
+  }
+  if prompt.contains("Use Orchester's tools") {
+    fake_codex_tools::report(&session.args, &session.cwd);
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
