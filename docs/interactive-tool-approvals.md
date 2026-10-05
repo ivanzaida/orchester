@@ -443,7 +443,9 @@ program uses only the names an allow-list holds, the git subcommands that only r
 files (user decision 2026-10-05), a part that only writes files in the worktree or its writable folders runs too,
 as the edit tools write there without asking (`CommandPart::edits_worktree`): `sed -i`, a redirect into a file
 (`>`, `>>`, `>&file`), a here-document into one (`cat > f <<'EOF'`; a bare delimiter's body with `$` or a
-backtick is not read), `tee`, `mkdir`, `touch`, `cp` and `mv` within, `rm` of what lies inside. Each target is
+backtick is not read), `tee`, `mkdir`, `touch`, `cp` and `mv` of files within (not of a folder or a link, nor
+with `-r`, `-a`, `-P` or `-d`), `rm` of what lies inside. A write under what an earlier part of the line made asks
+unless every folder down to it is there as a plain folder; on Windows a path rooted without a drive is not placed. Each target is
 resolved with its links followed and refused where the native agent's file tools refuse a write
 (`native::scope::protected`: any `.git` entry, `.orchester/` at the top of the worktree), and so is removing the
 worktree or a writable folder itself; a read outside (`cp ~/x src/`) follows the rules for reads outside. In a

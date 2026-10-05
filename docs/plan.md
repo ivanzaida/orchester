@@ -624,6 +624,11 @@ edit tools write there unasked. The request that prompted it (`cd <worktree>; f=
   (`CommandScope::write_refused`).
 - Here-documents (`heredoc.rs`): `<<` and `<<-` with a quoted delimiter take the body as data; a bare delimiter's body
   with `$` or a backtick, a body without its delimiter and a here-string stay unread. New lines separate commands.
+- Security review (`.tmp/review-worktree-writes.md`, FAIL at `3efb189d`, one major): paths are placed before the line
+  runs, so `cp -r`/`-R`/`-a`/`-P`/`-d` and a `cp` or `mv` of a folder or a link are no edits (they could bring a link
+  that leads out), and a write under a path an earlier part of the line wrote, created, copied or moved is Unknown
+  unless every folder down to it is there now as a plain folder (`place::Line`). Minor: on Windows a path rooted
+  without a drive (`/projects/x`, `/tmp/x`; Git Bash places it under its installation) is Unknown.
 - `CommandPrefix::covers_argv`: `cargo +<toolchain> <sub>` is covered by `cargo <sub>`.
 - Fixture of runs 22–25 (59 requests, builder listing `cargo test`, `check`, `clippy`, `fmt`):
 

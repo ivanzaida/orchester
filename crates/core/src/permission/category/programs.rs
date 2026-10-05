@@ -62,6 +62,8 @@ pub(super) struct Judged {
   /// It only creates, changes, copies, moves or removes the files it names, as an edit does (`sed -i`,
   /// `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`), and starts no other program.
   pub(super) edits: bool,
+  /// What `cp` and `mv` copy or move.
+  pub(super) sources: Vec<String>,
 }
 
 impl Judged {
@@ -81,6 +83,7 @@ impl Judged {
       known_safe: false,
       script: None,
       edits: false,
+      sources: Vec::new(),
     }
   }
 
@@ -152,6 +155,12 @@ impl Judged {
   /// A command that edits the files it names, as [`Self::edits`] says.
   pub(super) const fn editing(mut self) -> Self {
     self.edits = true;
+    self
+  }
+
+  /// A copy or move of `sources`.
+  pub(super) fn moving(mut self, sources: Vec<String>) -> Self {
+    self.sources = sources;
     self
   }
 

@@ -134,7 +134,7 @@ const TARGET: [&str; 2] = ["-t", "--target-directory"];
 /// The verdict for a file program; `None` for any other program.
 pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   Some(match program {
-    "cp" => copy(args, &CP).editing(),
+    "cp" => copy_files(args),
     "install" if options::parse(args, &INSTALL).is_some_and(|parsed| parsed.has(&["-d", "--directory"])) => {
       Judged::writing(Kind::Writes, operands(args))
     }
@@ -142,8 +142,15 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     "ln" => link(args),
     "mv" => options::parse(args, &MV).map_or_else(Judged::unknown, |parsed| {
       let mut written = parsed.operands.clone();
+      let mut sources = parsed.operands.clone();
+      if parsed.values(&TARGET).next().is_none() {
+        sources.pop();
+      }
       written.extend(parsed.values(&TARGET).map(str::to_owned));
-      Judged::writing(Kind::Writes, written).deleting().editing()
+      Judged::writing(Kind::Writes, written)
+        .deleting()
+        .moving(sources)
+        .editing()
     }),
     "find" => find(args),
     program if EDITS_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).editing(),
@@ -151,6 +158,31 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     program if DELETES_ARGS.contains(&program) => Judged::writing(Kind::Writes, operands(args)).deleting().editing(),
     _ => return None,
   })
+}
+
+/// `cp` options that copy a folder's tree or a link as it is (`-r`, `-a`, `-P`, `-d`): what they bring
+/// to the target can be links that lead anywhere, which a later write through the copy would follow.
+const COPIES_TREES: [&str; 8] = [
+  "-r",
+  "-R",
+  "-a",
+  "-P",
+  "-d",
+  "--recursive",
+  "--archive",
+  "--no-dereference",
+];
+
+/// `cp`: an edit when it copies files as they are named, not a tree or a link as it is.
+fn copy_files(args: &[String]) -> Judged {
+  let judged = copy(args, &CP);
+  let sources = judged.reads.clone();
+  let judged = judged.moving(sources);
+  if options::parse(args, &CP).is_some_and(|parsed| parsed.has(&COPIES_TREES)) {
+    judged
+  } else {
+    judged.editing()
+  }
 }
 
 /// A copy writes `-t <folder>`, else its last operand, and reads the others.

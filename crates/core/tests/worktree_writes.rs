@@ -46,6 +46,8 @@ impl Fixture {
     std::fs::write(home.join(".ssh").join("id_rsa"), "key").expect("key");
     std::fs::write(home.join(".bashrc"), "").expect("bashrc");
     link_folder(&worktree.join("out"), &elsewhere);
+    std::fs::create_dir_all(worktree.join("src").join("venv")).expect("venv");
+    link_folder(&worktree.join("src").join("venv").join("link"), &elsewhere);
     let scope = CommandScope::new(
       &worktree,
       std::slice::from_ref(&build),
@@ -119,7 +121,8 @@ const EDITS: &[&str] = &[
   "cat <<-\"EOF\" > src/new.rs\n\tfn x() {}\n\tEOF",
   "echo x | tee -a src/lib.rs",
   "tee src/a.rs < src/lib.rs",
-  "mkdir -p src/deep/er && touch src/deep/er/x.rs",
+  "mkdir -p src/deep/er\ntouch src/x.rs",
+  "mkdir -p src; echo x > src/made.rs",
   "cp src/lib.rs src/copy.rs\nmv src/copy.rs src/moved.rs",
   "rm src/moved.rs; rm -rf src/deep",
   "echo x > {BUILD}/out.txt",
@@ -162,6 +165,23 @@ const ASKS: &[&str] = &[
   "chmod +x src/lib.rs",
   "ln -s ../.. src/up",
   "python3 - <<'EOF'\nprint(1)\nEOF",
+  // A tree or a link copied or moved can bring links that lead anywhere.
+  "cp -r src src2",
+  "cp -R src src2",
+  "cp -a src/lib.rs src/x.rs",
+  "cp -P src/lib.rs src/x.rs",
+  "cp -d src/lib.rs src/x.rs",
+  "cp --recursive src src2",
+  "cp out src/o",
+  "cp src src2",
+  "mv out src/o",
+  "mv src src3",
+  "cp -r src/venv src/v2 && echo x > src/v2/link/f",
+  // A write under what an earlier part made is not placed by what is there now.
+  "mkdir -p src/deep/er && touch src/deep/er/x.rs",
+  "mkdir -p src/venv && echo x > src/venv/link/f",
+  "touch src/t; echo x > src/t/f",
+  "cp src/lib.rs src/a.rs && echo x > src/a.rs/f",
 ];
 
 #[test]
@@ -176,6 +196,19 @@ fn worktree_writes_run_in_a_step_that_edits_files() {
 fn worktree_writes_ask_where_no_edit_may_write() {
   let fixture = Fixture::new();
   for line in ASKS {
+    assert!(!fixture.runs(line, RepositoryAccess::Write), "`{line}` must ask");
+  }
+}
+
+/// Git Bash places a path rooted without a drive under its own installation, which is not placed.
+#[test]
+fn worktree_writes_ask_for_a_path_rooted_without_a_drive() {
+  let fixture = Fixture::new();
+  for line in [
+    "echo x > /projects/x",
+    "sed -i s/a/b/ /tmp/x",
+    "cp src/lib.rs /projects/x",
+  ] {
     assert!(!fixture.runs(line, RepositoryAccess::Write), "`{line}` must ask");
   }
 }
