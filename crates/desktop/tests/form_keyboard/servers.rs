@@ -336,6 +336,14 @@ fn servers_admin_creates_resets_disables_and_enables_users() {
 #[test]
 fn servers_sign_out_stays_whole_in_a_960_window() {
   let (mut desktop, _server) = signed_in_as_admin();
+  let names: Vec<(String, f32)> = ids_with_prefix(&mut desktop, "server-card-name-")
+    .into_iter()
+    .map(|id| {
+      let width = desktop.bounds(&id).width;
+      (id, width)
+    })
+    .collect();
+  assert!(!names.is_empty(), "the server cards are listed");
   desktop.tree.resize(960, 960);
   desktop.pass();
   desktop.pass();
@@ -367,6 +375,11 @@ fn servers_sign_out_stays_whole_in_a_960_window() {
     assert!(device.width >= 120.0, "{id} keeps room for its name: {device:?}");
   }
   assert!(shows(&mut desktop, "Alice Moreau (alice)"));
+  // The server card keeps its name as whole as in a wide window, beside the connection's icon.
+  for (id, wide) in names {
+    let name = desktop.bounds(&id);
+    assert!(name.width + 0.5 >= wide, "{id} keeps its name: {name:?}, {wide} wide");
+  }
   desktop.click("server-tab-users");
   desktop.wait_for("server-user-table");
   let users = desktop.bounds("server-user-table");

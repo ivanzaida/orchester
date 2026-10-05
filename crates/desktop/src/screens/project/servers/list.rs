@@ -24,7 +24,7 @@ use crate::{
   ui::{
     icon::{Icon, IconSize, icon},
     pressable::surface,
-    status_label::status_label,
+    status_label::{icon_status_label, status_label},
   },
 };
 
@@ -79,13 +79,20 @@ fn card(ctx: &Ctx, entry: &ServerEntry, selected: bool, nav: &ProjectNav) -> Ele
     .child(icon(Icon::Server, IconSize::Dismiss, PaletteColor::TextPrimary))
     .child(
       Text::new(&entry.stored.name)
+        .id(Arc::<str>::from(format!("server-card-name-{}", entry.stored.id)))
         .variant(TypographyStyle::Label)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0),
     )
     .child(Spacer::new().flex(1.0))
-    .child(status_label(glyph, &state));
+    // In a narrow list the name keeps the room: the label gives way to its icon, and the details
+    // beside say the connection in words.
+    .child(if list_width(ctx) < LIST_WIDTH {
+      icon_status_label(glyph)
+    } else {
+      status_label(glyph, &state)
+    });
   let card = surface()
     .id(Arc::<str>::from(format!("server-{}", entry.stored.id)))
     .describe("connection", connection_name(entry.connection))

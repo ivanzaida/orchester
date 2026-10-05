@@ -30,6 +30,19 @@ pub fn compact_status_label(glyph: Icon, label: &str) -> Element {
   labelled(glyph, label, ExtraTypography::CompactStatusLabel, None)
 }
 
+/// The label without its word, where a narrow row needs the room for a name beside it (a server
+/// card in a narrow window); the word is said elsewhere on the screen.
+pub fn icon_status_label(glyph: Icon) -> Element {
+  Row::new()
+    .height(Dimension::Px(LABEL_HEIGHT))
+    .padding_horizontal(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .background(PaletteColor::AccentMuted)
+    .rounded(RadiusSize::Sm)
+    .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
+    .into()
+}
+
 /// `color` replaces the text color of the icon and the word.
 fn labelled(glyph: Icon, label: &str, typography: ExtraTypography, color: Option<PaletteColor>) -> Element {
   let mut word = Text::new(label).variant(typography.role()).nowrap();
