@@ -28,7 +28,7 @@ use orchester_desktop::{
   clock::Clock,
   close::Lifecycle,
   embedded_mcp::McpStatus,
-  i18n,
+  i18n, loader,
   programs::Programs,
   project_setup::ProjectDraft,
   root::{Root, RootProps, Startup},
@@ -291,6 +291,7 @@ impl Desktop {
       clock: Clock::with(clock.clone()),
     };
     let mut tree = Tree::new();
+    loader::install(&mut tree);
     tree.resize(WIDTH, HEIGHT);
     // The harness starts no lurq MCP server, so the status bar truthfully says it is unavailable;
     // Orchester's own starts when the test asks for it.

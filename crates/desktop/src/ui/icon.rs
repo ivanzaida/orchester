@@ -249,11 +249,16 @@ impl IconSize {
   }
 }
 
+/// `icon` at `size` in `color`; the loader turns while it is shown.
 pub fn icon(icon: Icon, size: IconSize, color: PaletteColor) -> Text {
-  Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
+  let glyph = Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
     .variant(size.role().role())
     .color(color)
-    .nowrap()
+    .nowrap();
+  match icon {
+    Icon::Loader => super::loader::turning(glyph),
+    _ => glyph,
+  }
 }
 
 /// A Windows title-bar window control drawn with a lucide glyph in the color lurq passes for the

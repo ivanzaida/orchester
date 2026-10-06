@@ -16,6 +16,8 @@ mod shadow;
 mod tokens;
 mod typography;
 
+use std::time::Duration;
+
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
 pub use form::{
   command_scrollbar, gutter_scrollbar, gutter_width, input_line_height, select_menu_scrollbar, value_box_scrollbar,
@@ -54,6 +56,8 @@ pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
 pub const DISABLED_OPACITY: f32 = tokens::DISABLED_OPACITY;
 /// Opacity of a switch whose value is fixed, track and label as one group (`lW7Sp`).
 pub const LOCKED_SWITCH_OPACITY: f32 = tokens::LOCKED_SWITCH_OPACITY;
+/// How long a loader icon takes for one full turn.
+pub const LOADER_TURN: Duration = Duration::from_millis(tokens::LOADER_TURN_MS);
 pub const TASK_REVIEW_ROW_HEIGHT: f32 = tokens::TASK_REVIEW_ROW_HEIGHT;
 pub const TASK_REVIEW_RAIL_WIDTH: f32 = tokens::TASK_REVIEW_RAIL_WIDTH;
 pub const TASK_REVIEW_MODE_HEIGHT: f32 = tokens::TASK_REVIEW_MODE_HEIGHT;

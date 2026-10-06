@@ -14,6 +14,7 @@ pub mod form;
 pub mod github_mark;
 pub mod icon;
 pub mod link;
+pub mod loader;
 pub mod menu_option;
 pub mod nav_item;
 pub mod notice;
