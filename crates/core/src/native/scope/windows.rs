@@ -18,6 +18,12 @@ const DEVICES: [&str; 7] = ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "CL
 const NUMBERED: [&str; 2] = ["COM", "LPT"];
 const DEVICE_DIGITS: &str = "0123456789¹²³";
 
+/// Whether `name` names a stream (`file:stream`, `folder::$INDEX_ALLOCATION`), which opens the file or
+/// folder before the colon.
+pub(super) fn names_stream(name: &OsStr) -> bool {
+  name.to_string_lossy().contains(':')
+}
+
 /// Whether `path` starts with two separators: a network, device or verbatim path, which resolving could
 /// send to another machine.
 pub(super) fn names_another_machine(path: &str) -> bool {

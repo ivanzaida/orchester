@@ -18,6 +18,7 @@ use tempfile::TempDir;
 
 struct Fixture {
   _root: TempDir,
+  writable: String,
   scope: CommandScope,
 }
 
@@ -38,6 +39,14 @@ impl Fixture {
     for script in ["start.py", "launch.py", "tree.py", "start-app.ps1", "x.js", "x.sh"] {
       std::fs::write(verify.join(script), "").expect("script");
     }
+    let kontur = verify.join("kontur");
+    std::fs::create_dir_all(kontur.join(".git").join("hooks")).expect("hooks");
+    std::fs::write(kontur.join("f.py"), "").expect("fixture script");
+    std::fs::write(kontur.join(".git").join("hooks").join("pre-commit"), "").expect("hook");
+    link_folder(&kontur.join("lnk"), &elsewhere);
+    let writable = root.path().join("wr");
+    std::fs::create_dir_all(writable.join("repo").join(".git")).expect("writable repository");
+    std::fs::write(writable.join("s.py"), "").expect("writable script");
     for file in [
       worktree.join(".git").join("hooks").join("x.py"),
       worktree.join(".orchester").join("x.py"),
@@ -48,12 +57,22 @@ impl Fixture {
     }
     link_folder(&worktree.join("out"), &elsewhere);
     let home = root.path().join("home");
-    let scope = CommandScope::new(&worktree, &[], Some(&home), Some(&root.path().join("temp")));
-    Self { _root: root, scope }
+    let scope = CommandScope::new(
+      &worktree,
+      std::slice::from_ref(&writable),
+      Some(&home),
+      Some(&root.path().join("temp")),
+    );
+    Self {
+      writable: writable.to_string_lossy().replace('\\', "/"),
+      _root: root,
+      scope,
+    }
   }
 
   fn runs(&self, line: &str, repository: RepositoryAccess) -> bool {
-    let command = ClassifiedCommand::classify(line, &self.scope);
+    let line = line.replace("{WR}", &self.writable);
+    let command = ClassifiedCommand::classify(&line, &self.scope);
     let entry = CommandPrefix::new("cargo test").expect("prefix");
     let list = CommandPermission::Allowed(AllowedCommands::new(vec![entry]).expect("list"));
     let permissions = AgentPermissions::new(repository, list, NetworkAccess::Off);
@@ -97,6 +116,7 @@ const RUNS: &[&str] = &[
   "pwsh -NoProfile -NonInteractive -File .tmp/verify/start-app.ps1 -Port 1",
   "python .tmp/verify/tree.py 1 2>&1 | grep -E 'ok' | head -5",
   "git -C .tmp/verify/kontur add -A",
+  "git status && python .tmp/verify/start.py",
 ];
 
 const ASKS: &[&str] = &[
@@ -141,6 +161,41 @@ const ASKS: &[&str] = &[
   "git -C . commit -m m",
   "git -C .tmp/verify commit -m m",
   "git commit -m m",
+  // An interpreter given with a folder could be any program.
+  "../elsewhere/bash .tmp/verify/x.sh",
+  "C:/evil/sh.exe .tmp/verify/x.sh",
+  "/c/evil/bash .tmp/verify/x.sh",
+  "//server/share/bash.exe .tmp/verify/x.sh",
+  "~/bin/pwsh -NoProfile -File .tmp/verify/start-app.ps1",
+  "out/bash .tmp/verify/x.sh",
+  "/usr/bin/python3 .tmp/verify/start.py",
+  // Other spellings of `.git` and `.orchester` (a stream, a short name).
+  "python '.git::$INDEX_ALLOCATION/hooks/x.py'",
+  "python '.orchester::$INDEX_ALLOCATION/x.py'",
+  "bash '.tmp/verify/kontur/.git::$INDEX_ALLOCATION/hooks/pre-commit'",
+  "bash .tmp/verify/kontur/.git/hooks/pre-commit",
+  "python GIT~1/hooks/x.py",
+  "python ORCHES~1/x.py",
+  // A part before the script may change the file it runs.
+  "git -C .tmp/verify/kontur apply p.patch && python .tmp/verify/kontur/f.py",
+  "git -C .tmp/verify/kontur checkout x -- f.py && python .tmp/verify/kontur/f.py",
+  "git -C .tmp/verify/kontur mv -f lnk f.py && python .tmp/verify/kontur/f.py",
+  "git -C .tmp/verify/kontur stash pop && python .tmp/verify/kontur/f.py",
+  "echo x > .tmp/verify/start.py && python .tmp/verify/start.py",
+  "python .tmp/verify/launch.py; python .tmp/verify/start.py",
+  // The step's writable folders may hold the user's own repositories.
+  "python {WR}/s.py",
+  "git -C {WR}/repo commit -m m",
+  // Startup code of the user, options that write or load elsewhere, signing, links from the `-C` folder.
+  "pwsh -File .tmp/verify/start-app.ps1",
+  "powershell -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1",
+  "zsh .tmp/verify/x.sh",
+  "python -X pycache_prefix=C:/x .tmp/verify/start.py",
+  "python -Xpresite=mod .tmp/verify/start.py",
+  "git -C .tmp/verify/kontur commit -F lnk/secret",
+  "git -C .tmp/verify/kontur commit -S -m m",
+  "git -C .tmp/verify/kontur commit --gpg-sign -m m",
+  "git -C .tmp/verify/kontur tag -s v1 -m m",
 ];
 
 #[test]

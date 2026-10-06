@@ -11,6 +11,11 @@ pub(super) const fn path_form(_path: &str) -> Result<PathForm, ScopeError> {
   Ok(PathForm::Local)
 }
 
+/// A colon is a plain character of a Unix name.
+pub(super) const fn names_stream(_name: &OsStr) -> bool {
+  false
+}
+
 /// No spelling of a Unix path names another machine.
 pub(super) const fn names_another_machine(_path: &str) -> bool {
   false

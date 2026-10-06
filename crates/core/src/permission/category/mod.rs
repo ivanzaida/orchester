@@ -36,7 +36,7 @@ mod sed_script;
 mod variables;
 mod words;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -163,7 +163,11 @@ fn classify_line(
 ) -> Vec<CommandPart> {
   let mut parts = Vec::new();
   for raw in words::split(text, quoting) {
-    parts.extend(classify_part(&raw, quoting, scope, line, depth));
+    let classified = classify_part(&raw, quoting, scope, line, depth);
+    line.changes |= classified
+      .iter()
+      .any(|part| part.category() != CommandCategory::ReadOnly);
+    parts.extend(classified);
     line.made(scope, &raw.writes);
   }
   parts
@@ -207,6 +211,7 @@ fn classify_part(
     let mut inner_line = line.clone();
     let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
     line.made = inner_line.made;
+    line.changes = inner_line.changes;
     let placing = line.placing(scope);
     if !raw.writes.is_empty() || !raw.reads.is_empty() {
       parts.push(redirected(
@@ -220,34 +225,16 @@ fn classify_part(
   let Some(program) = program else {
     return vec![CommandPart::unknown(words)];
   };
+  // An interpreter given with a folder could be any program.
+  if first.contains(['/', '\\']) && interpreters::script(&program, args).is_some() {
+    return vec![CommandPart::unknown(words)];
+  }
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
-  part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
-  // A script in the worktree, or git in a repository nested in it, changes no more than an edit could.
-  // A script that is no regular file of the worktree is code from elsewhere, not read.
-  if let Some(at) = judged.runs {
-    part.edits = placing.plain_file(&args[at]);
-    if !part.edits {
-      part.at_least(CommandCategory::Unknown);
-    }
-  }
-  if let Some(repository) = &judged.repository {
-    part.edits = placing.nested_repository(repository);
-  }
+  judge_edits(&mut part, &judged, args, placing, line.changes);
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
-  let named: Vec<String> = args
-    .iter()
-    .enumerate()
-    .filter(|(at, _)| judged.script != Some(*at))
-    .map(|(_, arg)| arg.clone())
-    .collect();
-  for word in place::named(&named)
-    .into_iter()
-    .chain(judged.reads.iter().map(String::as_str))
-  {
-    placing.read(&mut part, word);
-  }
+  place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
   for target in &judged.writes {
     placing.write(&mut part, target, judged.deletes);
   }
@@ -263,6 +250,56 @@ fn classify_part(
     place::change_directory(scope, &mut line.folders, args);
   }
   vec![part]
+}
+
+/// Whether `part` edits the worktree as [`CommandPart::edits_worktree`] needs: a copy or move of no tree, a
+/// script in the worktree or git in a repository nested in it, which change no more than an edit could. A
+/// script that is no regular file of the worktree is code from elsewhere, not read; after a part that
+/// `changes` files, the script may not be the file there now.
+fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing: Placing<'_>, changes: bool) {
+  part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
+  if let Some(at) = judged.runs {
+    part.edits = !changes && placing.plain_file(&args[at]);
+    if !part.edits {
+      part.at_least(CommandCategory::Unknown);
+    }
+  }
+  if let Some(repository) = &judged.repository {
+    part.edits = placing.nested_repository(repository);
+  }
+}
+
+/// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
+/// `folders` it runs in, or for `git -C <folder>` from that folder.
+fn place_arguments(
+  part: &mut CommandPart,
+  judged: &Judged,
+  args: &[String],
+  placing: Placing<'_>,
+  folders: Option<&[PathBuf]>,
+) {
+  let named: Vec<String> = args
+    .iter()
+    .enumerate()
+    .filter(|(at, _)| judged.script != Some(*at))
+    .map(|(_, arg)| arg.clone())
+    .collect();
+  let shifted: Option<Vec<PathBuf>> = judged.repository.as_ref().and_then(|repository| {
+    folders?
+      .iter()
+      .map(|folder| placing.scope.folder(folder, repository))
+      .collect()
+  });
+  let arguments = match judged.repository {
+    Some(_) => placing.placed_in(shifted.as_deref()),
+    None => placing,
+  };
+  for word in place::named(&named)
+    .into_iter()
+    .chain(judged.reads.iter().map(String::as_str))
+  {
+    arguments.read(part, word);
+  }
 }
 
 /// Whether `cd args` goes to the one folder its only argument names as written: no option, no `-`

@@ -271,14 +271,21 @@ fn within(path: &Path, root: &Path) -> bool {
 }
 
 /// Whether `path` inside `root` is a `.git` entry or lies in one, or, in the worktree, lies in
-/// `.orchester/`. The command classifier refuses a shell write there by this same rule.
+/// `.orchester/`, or names a stream of a file or folder (on Windows, `name:stream`), which opens what
+/// the name before it opens. Callers check the path with its links and short names resolved as well:
+/// `GIT~1` is `.git` only once resolved. The command classifier refuses a shell write there by this same
+/// rule.
 pub(crate) fn protected(path: &Path, root: &Path, in_worktree: bool) -> bool {
   let below = path.components().skip(root.components().count());
   for (depth, component) in below.enumerate() {
     let Component::Normal(name) = component else {
       continue;
     };
-    if platform::is_named(name, GIT_DIR) || (in_worktree && depth == 0 && platform::is_named(name, STATE_DIR)) {
+    // A stream of a name (`.git::$INDEX_ALLOCATION`) opens what the name opens.
+    if platform::names_stream(name)
+      || platform::is_named(name, GIT_DIR)
+      || (in_worktree && depth == 0 && platform::is_named(name, STATE_DIR))
+    {
       return true;
     }
   }

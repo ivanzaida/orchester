@@ -659,10 +659,21 @@ and `git -C .tmp/verify/kontur -c user.name=… -c user.email=… commit -q …`
   Worktree subcommand is an edit when the folder is a plain folder below the worktree (not the worktree itself)
   holding its own `.git` folder (`Placing::nested_repository`): the agent's fixture. In the run's own worktree, a
   git change still asks.
+- Security review (`.tmp/review-worktree-scripts.md`, FAIL at `9740e844`): an interpreter given with a folder
+  (`../x/bash`, `C:/evil/sh.exe`, `//server/share/bash.exe`) is Unknown; `native::scope::protected` refuses a stream
+  spelling (`.git::$INDEX_ALLOCATION`) and the classifier checks a write or script path resolved as well, so a
+  short name (`GIT~1`, `ORCHES~1`) is `.git` or `.orchester`; a script after a part that may change files (any
+  part that is not Read-only: git in the fixture repository, an edit, another script) is Unknown; scripts and
+  nested repositories count only in the worktree, not the step's writable folders, which may hold the user's own
+  repositories; `pwsh` needs `-NoProfile`, `zsh` (which reads `~/.zshenv`) asks, `-X` takes only `importtime`,
+  `utf8`, `dev`, `faulthandler`, `tracemalloc`; `git -C <folder>` places its arguments from that folder; signing
+  (`commit -S`, `--gpg-sign`, `tag -s`/`-u`) is Unknown. Still as before: a shell given with a folder that runs
+  inline code (`C:\…\pwsh.exe -Command …`, Codex's form) is read like the bare shell.
 - Read-only steps are unchanged. The fixture table of runs 22–25 is unchanged (its scripts are `python -` and
   `python -c`).
 - Tests: `core` `worktree_scripts` (new: the six real lines, more forms, every refusal above, a script through a link,
-  outside, in `.git/hooks` and `.orchester`, a read-only step), `worktree_writes`, `command_probes`,
+  outside, in `.git/hooks` and `.orchester`, a read-only step), `native` (`scope_windows`: the aliases of protected
+  folders), `worktree_writes`, `command_probes`,
   `command_sequences`, `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`;
   `runner --features test-agent` `claude_unlisted`, `approval_choices`, `claude`, `command_approvals`,
   `orchester_tools`. Nothing on macOS.

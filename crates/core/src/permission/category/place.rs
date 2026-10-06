@@ -18,6 +18,9 @@ pub(super) type Folders = Option<Vec<PathBuf>>;
 pub(super) struct Line {
   pub(super) folders: Folders,
   pub(super) made: Vec<PathBuf>,
+  /// An earlier part may change files (any part that is not Read-only): a script run after it may not
+  /// be the file that is there now.
+  pub(super) changes: bool,
 }
 
 impl Line {
@@ -25,6 +28,7 @@ impl Line {
     Self {
       folders,
       made: Vec::new(),
+      changes: false,
     }
   }
 
@@ -63,7 +67,7 @@ pub(super) struct Placing<'a> {
   made: &'a [PathBuf],
 }
 
-impl Placing<'_> {
+impl<'a> Placing<'a> {
   /// Each path `word` names, one per folder the part may run in; `None` when one cannot be told.
   fn locate(&self, word: &str) -> Option<Vec<(PathBuf, Place)>> {
     let located: Option<Vec<Vec<(PathBuf, Place)>>> = self
@@ -139,6 +143,18 @@ impl Placing<'_> {
     })
   }
 
+  /// This placing from `folders` instead (where `git -C <folder>` reads its arguments).
+  pub(super) const fn placed_in<'b>(&self, folders: Option<&'b [PathBuf]>) -> Placing<'b>
+  where
+    'a: 'b,
+  {
+    Placing {
+      scope: self.scope,
+      folders,
+      made: self.made,
+    }
+  }
+
   /// Whether `word` names a regular file in the worktree or a writable folder, no folder on its way and
   /// not the file a link or junction, where an edit may write (no `.git`, no `.orchester/`).
   pub(super) fn plain_file(&self, word: &str) -> bool {
@@ -159,14 +175,16 @@ impl Placing<'_> {
     })
   }
 
-  /// Whether `word`, from every folder the part may run in, is a path whose folders are plain folders in
-  /// the worktree or a writable folder, where an edit may write, and that `is` says it is.
+  /// Whether `word`, from every folder the part may run in, is a path in the worktree (not a writable
+  /// folder, which may hold the user's own repositories) whose folders are plain folders, where an edit may
+  /// write, and that `is` says it is.
   fn plain(&self, word: &str, is: impl Fn(&Path) -> bool) -> bool {
     !word.contains(['*', '?', '['])
       && self.folders.is_some_and(|folders| {
         folders.iter().all(|folder| {
           self.scope.written(folder, word).is_some_and(|path| {
-            path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
+            self.scope.in_worktree(&path)
+              && path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
               && !self.scope.write_refused(&path, false)
               && is(&path)
           })

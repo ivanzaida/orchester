@@ -167,18 +167,26 @@ impl CommandScope {
   /// depth, or `.orchester/` at the top of the worktree; or, for a delete, the worktree or a writable
   /// folder itself.
   pub(super) fn write_refused(&self, path: &Path, delete: bool) -> bool {
-    let root = if path.starts_with(&self.worktree) {
-      Some((&self.worktree, true))
-    } else {
-      self
-        .writable
-        .iter()
-        .find(|folder| path.starts_with(folder))
-        .map(|folder| (folder, false))
-    };
-    root.is_some_and(|(root, in_worktree)| {
-      protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+    // As written and resolved: a short name (`GIT~1`) or a stream spelling opens `.git` only resolved.
+    [path.to_path_buf(), resolved(path)].iter().any(|path| {
+      let root = if path.starts_with(&self.worktree) {
+        Some((&self.worktree, true))
+      } else {
+        self
+          .writable
+          .iter()
+          .find(|folder| path.starts_with(folder))
+          .map(|folder| (folder, false))
+      };
+      root.is_some_and(|(root, in_worktree)| {
+        protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+      })
     })
+  }
+
+  /// Whether `path` lies in the worktree, as written and resolved.
+  pub(super) fn in_worktree(&self, path: &Path) -> bool {
+    path.starts_with(&self.worktree) && resolved(path).starts_with(&self.worktree)
   }
 
   /// Whether `path` is the worktree or a writable folder itself.

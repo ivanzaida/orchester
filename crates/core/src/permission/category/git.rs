@@ -144,6 +144,11 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
   let rest = &with_sub[1..];
   match sub {
     "status" | "log" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" | "grep" => known_read(with_sub),
+    // Signing runs gpg or ssh-keygen with the user's key.
+    "commit" | "merge" | "revert" | "cherry-pick" | "am" | "rebase" if has_option(rest, &["-S", "--gpg-sign"]) => {
+      Judged::unknown()
+    }
+    "tag" if has_option(rest, &["-s", "-u", "--sign", "--local-user"]) => Judged::unknown(),
     "branch" | "tag" if has_option(rest, &["-d", "-D", "--delete", "-f", "--force", "-m", "-M", "-c", "-C"]) => {
       Judged::of(Kind::Destructive)
     }

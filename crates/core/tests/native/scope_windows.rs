@@ -98,3 +98,27 @@ fn native_scope_windows_names_without_case() {
     assert!(matches!(scope.writable(path), Err(ScopeError::Protected(_))), "{path}");
   }
 }
+
+/// Other spellings NTFS opens as a protected folder: a stream of it (`.git::$INDEX_ALLOCATION`) and, on a
+/// volume that keeps them, its short name (`GIT~1`), which resolving turns into the long one.
+#[test]
+fn native_scope_windows_aliases_of_protected_folders() {
+  let layout = Layout::new();
+  let scope = layout.scope(RepositoryAccess::Write);
+  for path in [
+    "vendor/lib/.git::$INDEX_ALLOCATION/hooks/x",
+    ".orchester::$INDEX_ALLOCATION/x",
+  ] {
+    assert!(scope.writable(path).is_err(), "{path}");
+  }
+  let short = layout.worktree.join("vendor/lib/GIT~1");
+  if std::fs::symlink_metadata(&short).is_ok() {
+    assert!(
+      matches!(
+        scope.writable("vendor/lib/GIT~1/hooks/x"),
+        Err(ScopeError::Protected(_))
+      ),
+      "the short name of .git"
+    );
+  }
+}
