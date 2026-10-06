@@ -535,7 +535,7 @@ that is not measured.
 | Agents | bot · *Agents* `2/4` | agent slots in use / configured (`settings`, runner) | Tasks › Queue (`Z22wg`) |
 | Queued | clock · *Queued* `2` | queued task runs in the project | Tasks › Queue (`Z22wg`) |
 | Needs you | message · *Needs you* `2` | runs waiting for the user: plan approvals, questions, reviews — exactly the count of the Overview metric *Need your input* and the Overview *Needs you* heading (decided 2026-09-27). The plain number; `0` in `$subtle`, never `00` or a dash | Overview › Needs you panel |
-| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | **Not built:** usage accounting and a usage screen do not exist; until then the item is non-interactive with a tooltip |
+| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | The project's [Usage dashboard](#usage-dashboard) (built 2026-10-06, ORC-72); the tooltip names the exact counts |
 | Plan limits (`XCXvw`, proposed 2026-09-29, hidden until approved) | hourglass · *Codex* `65%` · *Claude* `42%` | the `account/rateLimits/updated` / `rate_limit_event` data each agent CLI reports with its turns, for the account it is signed in to (see [Plan limits in the status bar](#status-bar)) | Non-interactive (pointer only, no focus); the hint lists each window, its reset, and the turn the numbers came from |
 | MCP (`JaMJ7`, added 2026-09-29) | radio · *MCP* `127.0.0.1:52341` | the port the embedded MCP server bound at start (every build; loopback, a free port the OS picks) | Non-interactive (pointer only, no focus); the hint names the endpoint `http://127.0.0.1:<port>/mcp` and says clients read the access token from this process's discovery file (`lurq/mcp/<pid>.json` in the local app data folder). The token is never shown, copied or logged. Shown with and without a project |
 | Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
@@ -1687,6 +1687,8 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 | Plan limits without history: *No plan limits recorded yet* in the chart's place | `T6i75` (x 3088, row 3) |
 
 Decided 2026-09-30 (user): plan limits stay in the project view as the shared account-wide chart; the threshold is an app-wide setting in the card menu; snapshots are kept 90 days; *Usage* follows *Pull requests*; All projects has the *Projects* | *Usage* tabs; the table's *Runs* mode has its own frame.
+
+Built 2026-10-06 (ORC-72). Each project's runner stores the reports of its runs in that project's database; the dashboard reads every listed project's for the account-wide chart. Two consecutive reports of a window more than an hour apart are joined dotted (a gap); a report whose reset passed before the next is not joined to it. A *profile · step* row of *Where tokens go* adds its profile to the *Agent profile* filter. *Custom…* takes dates as `2026-09-01`.
 
 ## Memory screens
 

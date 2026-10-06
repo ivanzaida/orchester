@@ -398,13 +398,33 @@ Not done: Cancel run stays beside Continue run for an interrupted run (63.04/63.
 (separate agent) is outstanding.
 
 
+### ORC-72 · Usage dashboard · branch `orchester/orc-72-run-1` (implemented 2026-10-06, waiting for design verification)
+
+The Usage page (sidebar item after Pull requests, `/usage`) and All projects › *Projects* | *Usage* (`/projects?tab=usage`)
+as designed in `docs/design/orchester-workspace.md`, "Usage dashboard": pinned toolbar (period, Group by, filter chips,
+read-back with the previous period), Summary, Tokens over time, Plan limits, Where tokens go, Most expensive, Efficiency,
+a table view for every chart and the loading, no-runs, filters-match-nothing and no-plan-limits states. The status bar's
+*Tokens today* opens it. Data: `orchester_core::usage` aggregates what `ProjectDb::usage_facts` reads (per-turn usage
+from `agent_events`, invocations with CLI, model, profile, step, code index and first edit, runs with task, pipeline,
+tags and outcome); the runner stores every plan limits report in `plan_limit_snapshots` (project migration, kept 90
+days); the warning threshold is an app-database setting (default 80). Charts are lurq canvases (`canvas` feature) in
+the new `chart-series-1/2/3` colors. Tests: `cargo test -p orchester-core --test usage usage`, `cargo test -p
+orchester-store --test usage usage`, `cargo test -p orchester-store --test app_db usage_warning`, `cargo test -p
+orchester-runner --features test-agent --test plan_limits plan_limits`, `cargo test -p orchester-desktop --test
+form_keyboard usage_`, `--test theme usage`, `--test navigation route`.
+
+**Done when** an independent design verifier reports no blocking or major mismatches against `C2pTYF`, `p4eVV6`,
+`e5PbG`, `sOQmy`, `BLY4R`, `CDcij`, `qQOKw`, `AY6FM`, `YxAed` and `T6i75`; then move this entry to *Done*. Decided while
+building (not in the design): a stretch of more than an hour between two reports of a window is a gap; a profile ·
+step row of *Where tokens go* filters by its profile; the custom range takes dates as `2026-09-01`.
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
 could stay cut after the window widened; fixed by lurq 0.33.0 (text layout cache). Implemented on `claude/orc17`, with master merged into the branch on 2026-10-02 (merge `c290682`) and the review and
 design follow-ups on top. Codex and Claude Code report their account's limits live during agent turns: Codex App
 Server's `account/rateLimits/updated` notification and Claude Code's `stream-json` `rate_limit_event`. The runner hands
-each reading to the desktop without storing it; the status bar shows the newest reading per CLI across open projects,
+each reading to the desktop (since ORC-72 it also keeps it in the plan limits history); the status bar shows the newest reading per CLI across open projects,
 with hover details, near/reached/reset states, block reasons, extra usage and narrow-window priorities (Pencil `poPso`,
 item `XCXvw`). Tests: `cargo test -p orchester-core --test plan_limits plan_limits`, `cargo test -p orchester-runner
 --features test-agent --test plan_limits plan_limits`, `cargo test -p orchester-desktop --test status_bar status_bar`.

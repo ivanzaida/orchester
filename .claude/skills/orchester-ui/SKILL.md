@@ -127,6 +127,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `diff-add-bg` / `diff-add-text`, `diff-remove-bg` / `diff-remove-text` (`vEZ42`) | `ExtraColor::DiffAddedBackground` / `DiffAddedMark`, `DiffRemovedBackground` / `DiffRemovedMark` |
 | `canvas` fully transparent, where the tab strip's edge fade ends (`xpSC0`) | `ExtraColor::CanvasClear.role()` |
 | macOS traffic lights #FF5F57 / #FEBC2E / #28C840 (`R3RtGs` in `V70DN`) | `ExtraColor::TrafficClose` / `TrafficMinimize` / `TrafficZoom` |
+| Usage dashboard `chart-series-1/2/3` #3987E5 / #D95926 / #199E70 (Codex, Claude Code, a third CLI) and the `#FFFFFF0F` hatching (`C2pTYF`) | `ExtraColor::ChartSeries1` / `ChartSeries2` / `ChartSeries3` / `ChartHatch`; canvas charts draw with `theme::chart::ChartStyle` and the geometry in `theme::chart` |
 | title bar tab avatar and close button radius 4 (`b9QQb`, `OvWLh` in `nAKyb`) | `ExtraRadius::TabControl.role()` |
 | switcher row *Open in new tab* radius 5 (`NcJQ0`) | `ExtraRadius::RowAction.role()` |
 | conversation *Show* segment radius 5, usage period style (toolbar of `RrScB`) | `ExtraRadius::Segment.role()` |
