@@ -43,7 +43,7 @@ pub(super) struct RawPart {
   /// It reads a here-document, data that follows the line.
   heredoc: bool,
   /// Its first word has a quote or an escape before its first `=`: no assignment, whatever it reads.
-  quoted_name: bool,
+  pub(super) quoted_name: bool,
 }
 
 impl RawPart {
