@@ -13,7 +13,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::secret::Environment;
+use orchester_core::{connection::AgentProvider, secret::Environment};
 use zeroize::Zeroize;
 
 use super::{
@@ -96,7 +96,10 @@ impl NativeDialog {
       ExtraTypography::MonoField.role(),
     )
     .height(Dimension::Px(FIELD_HEIGHT))
-    .placeholder(&ctx.t("connections.native.key.namePlaceholder"));
+    .placeholder(&ctx.t(match self.provider {
+      AgentProvider::OpenAiApi => "connections.native.key.namePlaceholder.openai",
+      _ => "connections.native.key.namePlaceholder.anthropic",
+    }));
     let value = text_input(
       ctx,
       "native-key-value",

@@ -296,9 +296,21 @@ fn native_openai_connection_is_added_like_the_anthropic_one() {
   ] {
     assert!(shows(&mut desktop, DIALOG, text), "{text}");
   }
+  assert!(!whole_screen_shows(&mut desktop, "Anthropic may answer"));
   desktop.press("native-url-advanced");
-  assert!(shows(&mut desktop, DIALOG, "Wire format · OpenAI Responses"));
+  assert!(shows(
+    &mut desktop,
+    DIALOG,
+    "Wire format · OpenAI Responses · stateless, store off"
+  ));
   desktop.click("native-key-new");
+  desktop.wait_for("native-key-name");
+  let placeholder = desktop
+    .tree
+    .get_element_by_id_mut("native-key-name")
+    .and_then(|element| element.as_text_input())
+    .and_then(|input| input.placeholder());
+  assert_eq!(placeholder.as_deref(), Some("OPENAI_API_KEY"));
   set(&mut desktop, "native-key-name", "OPENAI_API_KEY");
   set(&mut desktop, "native-key-value", KEY_VALUE);
   add_model(

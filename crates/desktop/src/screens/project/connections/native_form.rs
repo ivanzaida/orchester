@@ -357,24 +357,23 @@ impl NativeDialog {
   }
 
   /// *Provider fallback* (`K8ItM`), off unless turned on; offered on the official Anthropic API only.
+  /// Where it is not offered, the reason replaces what On and Off do (`EcI8m`).
   fn fallback_field(&self, ctx: &Ctx) -> Element {
     let on = self.fallback.get();
     let switch = Switch::new("native-fallback", ctx.t("connections.native.fallback.switch"), on).emphasized();
-    let control: Element = if offers_provider_fallback(self.provider, self.preset.get().0) {
+    let (control, note): (Element, Element) = if offers_provider_fallback(self.provider, self.preset.get().0) {
       let fallback = self.fallback.clone();
-      switch.render(move || fallback.set(!on))
+      let detail = Text::new(&ctx.t("connections.native.fallback.detail")).variant(ExtraTypography::Hint.role());
+      (switch.render(move || fallback.set(!on)), detail.into())
     } else {
-      Column::new()
-        .spacing(SpacingSize::Sm)
-        .child(switch.locked())
-        .child(unavailable_reason(&ctx.t("connections.native.fallback.notOffered")))
-        .into()
+      let reason = unavailable_reason(&ctx.t("connections.native.fallback.notOffered"));
+      (switch.locked(), reason)
     };
     let content = Column::new()
       .spacing(SpacingSize::Sm)
       .overflow_visible()
       .child(control)
-      .child(Text::new(&ctx.t("connections.native.fallback.detail")).variant(ExtraTypography::Hint.role()));
+      .child(note);
     field(
       &ctx.t("connections.native.fallback.label"),
       content.into(),
