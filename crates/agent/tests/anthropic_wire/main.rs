@@ -6,6 +6,7 @@
 mod events;
 mod failures;
 mod models;
+mod review;
 mod server;
 mod sse;
 mod wire;
