@@ -10,7 +10,7 @@ use orchester_core::{
   tokens::grouped,
 };
 
-use super::{NewTaskForm, PipelineSelection, brief::Criterion};
+use super::{NewTaskForm, PipelineSelection, criteria::Criterion};
 use crate::{
   budget::minutes_text,
   messages::{Message, edit_error},

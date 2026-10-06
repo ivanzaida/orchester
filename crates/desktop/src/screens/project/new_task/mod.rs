@@ -11,6 +11,7 @@
 mod brief;
 mod cancellation;
 mod conflict;
+mod criteria;
 mod edit;
 mod header;
 mod persistence;
@@ -45,7 +46,7 @@ use orchester_core::{
 
 pub use self::edit::{Editing, Recovering};
 use self::{
-  brief::Criterion,
+  criteria::Criterion,
   persistence::{repository_link, save_action},
   start::run_action,
 };

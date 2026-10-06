@@ -8,8 +8,10 @@ use orchester_core::{resource::Step, run::RunStatus};
 use crate::{
   github::shows,
   harness::Desktop,
+  new_task::{LONG_CRITERION, ends},
   task_run::{
-    agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps, set_text,
+    agent_step, create_and_run, fill_new_task, has, init_repository, latest_run, programs, run_finished, seed_steps,
+    set_text,
   },
 };
 
@@ -87,6 +89,28 @@ fn plan_review_shows_the_plan_and_approving_continues_the_run() {
   desktop.wait_until("the review to go", |desktop| {
     !has(desktop, "plan-review") && shows(desktop, "status-needs-you", "0")
   });
+}
+
+#[test]
+fn plan_review_long_criterion_wraps_in_the_aside() {
+  let mut desktop = gated_desktop();
+  fill_new_task(&mut desktop, "Say hello.", "1400000");
+  desktop.tab_to("criterion-0", 40);
+  desktop.enter();
+  desktop.wait_for("criterion-1");
+  set_text(&mut desktop, "criterion-1", LONG_CRITERION);
+  desktop.wait_until("the task page", |desktop| {
+    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
+      desktop.click("create-and-run");
+    }
+    has(desktop, "task-page")
+  });
+  reviewing(&mut desktop, "1");
+  let short = desktop.bounds("plan-review-criterion-1");
+  let long = desktop.bounds("plan-review-criterion-2");
+  assert!(long.height > 1.5 * short.height, "{} vs {}", long.height, short.height);
+  let (details_right, _) = ends(&mut desktop, "plan-review-details");
+  assert!(long.x + long.width <= details_right + 0.5);
 }
 
 #[test]

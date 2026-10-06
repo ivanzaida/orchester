@@ -3,6 +3,8 @@
 //! without a run shows its pipeline and limits in *This task* (`FLGqL`; nothing chosen `h3IIs`),
 //! and a draft that can still be edited has *Edit* in the topbar.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -79,9 +81,10 @@ fn heading(ctx: &Ctx, key: &str) -> Text {
   Text::new(&ctx.t(key)).variant(ExtraTypography::SectionHeading.role())
 }
 
-/// One numbered criterion (`L9DuW`).
+/// One numbered criterion (`L9DuW`); a long one wraps beside its number.
 fn criterion(number: usize, text: &str) -> Row {
   Row::new()
+    .id(Arc::<str>::from(format!("task-criterion-{number}")))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Inline.role())
     .align_items(Alignment::Start)

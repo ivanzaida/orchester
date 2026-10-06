@@ -42,10 +42,12 @@ pub(super) fn aside(
   let criteria: Vec<Element> = if props.criteria.is_empty() {
     vec![detail(ctx.t("runs.plan.noCriteria").as_ref())]
   } else {
-    props
-      .criteria
-      .iter()
-      .map(|criterion| detail(&ctx.t_args("runs.plan.criterion", [("criterion", criterion.as_str())])))
+    (1..)
+      .zip(props.criteria.iter())
+      .map(|(number, criterion)| {
+        detail(&ctx.t_args("runs.plan.criterion", [("criterion", criterion.as_str())]))
+          .id(Arc::<str>::from(format!("plan-review-criterion-{number}")))
+      })
       .collect()
   };
   // The note is for the plan that waits; an earlier version reads without it. What was typed stays
