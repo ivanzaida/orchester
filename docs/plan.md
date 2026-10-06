@@ -138,17 +138,24 @@ text as JSON data; it is stopped when the person answers or the worker ends. Rec
 and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs, model).
 `set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*. Open: turning auto mode on
 while a request waits does not review that request.
+The reviewer is any agent connection (`review::choice`: Claude Code, Codex through `codex exec` read-only, a native
+Anthropic API connection through `orchester-agent`'s client; not the OpenAI API yet) with a model and effort, chosen in
+Project settings or with `get_auto_mode`/`set_auto_mode`; default: the first Claude Code connection with Haiku 4.5,
+else the first usable connection with its default model (`project_auto_mode.connection`, `.effort`). The Codex flags
+were not run against a live Codex.
 Tests: `cargo test -p orchester-core --test auto_mode auto_mode`, `-p orchester-store --test auto_mode auto_mode`,
 `--test permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode
-auto_mode`, `-p orchester-desktop --test form_keyboard auto_mode`, `run_permissions_popover_fits`, `app_mcp`.
+auto_mode`, `-p orchester-desktop --test form_keyboard auto_mode`, `run_permissions_popover_fits`, `app_mcp`;
+`-p orchester-core --test auto_mode_reviewers auto_mode`, `-p orchester-agent --test anthropic_wire anthropic_`.
 
 UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: the *Auto mode* option
 under *Approve everything in this run*; without a Claude Code connection it is fixed, keeps its explanation and says
 why after the lock glyph inside its row; (2) the run permissions popover (the run's permissions row › link): the
 *Auto mode* section last, after a divider, a plain switch *Use auto mode in this run* with its hints and *Saves at
 once…* (it is not part of Apply), at 960 × 700 scrolled with the text clear of the gutter; (3) Project settings ›
-General › *Auto mode*: *New runs use auto mode* (fixed with the lock line in its row without a connection) and
-*Reviewer model* with *Reviews with <connection>*; (4) the approval dialog of a request auto mode left to the person:
+General › *Auto mode*: *New runs use auto mode* (fixed without a reviewer) and *Reviewer* (connection select with
+*Default · …*, model select, effort select where the model has efforts, *Reviewed by <model> on <connection>*, or the
+lock line saying why there is no reviewer); the Approvals option's note and the popover also end with *Reviewed by …*; (4) the approval dialog of a request auto mode left to the person:
 the line under the explanation (auto mode glyph, *Auto mode asked you:* and the quoted reason, or *Auto mode left this
 to you: …*); (5) the conversation's request card: the same line, not repeating the chip; (6) the activity rows: the
 mark *approved by auto mode · <subject>* (or *approved by you · …*) and the review line under the row, at 1440 and
