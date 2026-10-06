@@ -8,10 +8,11 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CheckResult, ConnectionCheck, ConnectionError,
     ConnectionStatus, Effort, EndpointPreset, ModelSource, NativeModel, NativeModels, NativeModelsError,
-    ensure_used_kept, offers_provider_fallback,
+    ensure_used_kept, offers_provider_fallback, with_fetched,
   },
   id::{ConnectionId, SecretId},
   name::Name,
+  native::{model::RemoteModel, session::DEFAULT_CONTEXT_WINDOW},
   resource::ModelId,
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   time::Timestamp,
@@ -287,4 +288,53 @@ fn changing_models_or_fallback_keeps_the_last_check_and_another_key_drops_it() {
   assert_eq!(connection.status(), ConnectionStatus::NotChecked);
   let custom = api(EndpointPreset::Custom, "https://gateway.example.dev", key.id()).with_provider_fallback(true);
   assert_eq!(connection.set_api(custom), Err(ConnectionError::FallbackNotOffered));
+}
+
+#[test]
+fn native_setup_fetched_models_and_the_effort_a_run_uses() {
+  let at = Timestamp::from_unix_millis(5_000);
+  let remote = RemoteModel {
+    id: model_id("claude-opus-5-5"),
+    context_window: Some(u64::from(u32::MAX) + 1),
+    max_output: Some(128_000),
+    efforts: vec!["low".into(), "turbo".into(), "max".into()],
+  };
+  let listed = NativeModel::listed(&remote, at);
+  assert_eq!(listed.context_window(), None, "a window that does not fit is unknown");
+  assert_eq!(listed.max_output(), NonZeroU32::new(128_000));
+  assert_eq!(listed.efforts(), [Effort::Low, Effort::Max]);
+  assert_eq!(listed.source(), ModelSource::Endpoint { at });
+
+  let manual = NativeModel::new(
+    model_id("lab-mini"),
+    NonZeroU32::new(32_000),
+    None,
+    vec![Effort::High],
+    ModelSource::Manual,
+  );
+  let older = NativeModel::new(model_id("claude-opus-5-5"), None, None, Vec::new(), ModelSource::Manual);
+  let merged = with_fetched(&[older, manual.clone()], vec![listed.clone()]);
+  assert_eq!(merged, [listed.clone(), manual.clone()]);
+
+  let opus = model_id("claude-opus-5-5");
+  let models = NativeModels::new(vec![listed, manual], Some(opus.clone()), Some(Effort::Max)).expect("valid models");
+  assert_eq!(models.effort_for(&opus, Some("low")), Some(Effort::Low));
+  assert_eq!(models.effort_for(&opus, None), Some(Effort::Max));
+  assert_eq!(
+    models.effort_for(&opus, Some("high")),
+    Some(Effort::Max),
+    "the model takes no high"
+  );
+  assert_eq!(
+    models.effort_for(&model_id("lab-mini"), None),
+    None,
+    "the default effort is not its"
+  );
+  assert_eq!(
+    models.effort_for(&model_id("unlisted"), Some("xhigh")),
+    Some(Effort::XHigh)
+  );
+  assert_eq!(models.effort_for(&model_id("unlisted"), None), None);
+  assert_eq!(models.context_window(&model_id("lab-mini")), 32_000);
+  assert_eq!(models.context_window(&opus), DEFAULT_CONTEXT_WINDOW);
 }

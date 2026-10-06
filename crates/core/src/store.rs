@@ -31,8 +31,7 @@ use crate::{
   revision::Revision,
   run::{
     ActivityEntry, Checkpoint, EditProgress, Invocation, InvocationEngine, InvocationPrompt, ListedRun, NewRun, Plan,
-    Run, RunEvent,
-    RunNumber, StepOutput,
+    Run, RunEvent, RunNumber, StepOutput,
   },
   secret::Secret,
   sharing::TaskRevision,

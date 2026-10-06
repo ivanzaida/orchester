@@ -37,7 +37,11 @@ impl PromptInput<'_> {
     let (AssembledPrompt { mut text, sources }, task_at) = composition.split()?;
     let task = text.split_off(task_at).trim().to_owned();
     let mut system = preamble(setting);
-    if let Some(instructions) = setting.repository_instructions.map(str::trim).filter(|text| !text.is_empty()) {
+    if let Some(instructions) = setting
+      .repository_instructions
+      .map(str::trim)
+      .filter(|text| !text.is_empty())
+    {
       system.push_str("\n\n# Repository instructions: AGENTS.md\n\n");
       system.push_str(instructions);
     }
@@ -57,7 +61,11 @@ fn preamble(setting: NativeSetting<'_>) -> String {
     Platform::MacOs => "macOS",
   };
   let shell = match setting.shell {
-    Some(shell) => format!("set shell to true: the string then runs in {} ({}).", shell.name(), shell.invocation()),
+    Some(shell) => format!(
+      "set shell to true: the string then runs in {} ({}).",
+      shell.name(),
+      shell.invocation()
+    ),
     None => "no shell is available on this computer, so run each program directly.".to_owned(),
   };
   format!(

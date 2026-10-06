@@ -16,27 +16,28 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{CommandStatus, FileChangeKind, OutputStream, ToolCommandResult},
+  connection::stream::{FileChangeKind, OutputStream},
   id::TaskId,
+  native::tools::ToolName,
   tokens::compact_tokens,
 };
 
 use super::{
   super::super::ProjectNav,
+  command_entry,
   mcp::mcp_server_text,
-  mcp_call,
+  mcp_call, native_call,
   problem::{self, problem_text},
   toggles::Toggles,
 };
 use crate::{
   display,
   navigation::route::ChangedFile,
-  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
+  tasks::transcript::{Entry, EntryKind},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNPARSED_OPACITY},
   ui::{
     command_row::{CommandPlace, Copied, command_preview, command_row},
     icon::{Icon, IconSize, icon},
-    message_text,
     pressable::{pressable, surface},
   },
 };
@@ -115,18 +116,18 @@ fn entry_starts_open(entry: &Entry) -> bool {
 
 /// What an entry shows, apart from its time and whether it is open.
 pub(super) struct Shown {
-  glyph: Icon,
-  title: Arc<str>,
-  meta: Arc<str>,
-  body: Option<Arc<str>>,
+  pub(super) glyph: Icon,
+  pub(super) title: Arc<str>,
+  pub(super) meta: Arc<str>,
+  pub(super) body: Option<Arc<str>>,
   /// Lines of the output block, shown while the entry is open.
-  output: Option<Vec<Arc<str>>>,
+  pub(super) output: Option<Vec<Arc<str>>>,
   /// What the output block leaves out, said above it.
-  omitted: Option<Arc<str>>,
+  pub(super) omitted: Option<Arc<str>>,
   /// Opens and closes on a press.
-  collapsible: bool,
+  pub(super) collapsible: bool,
   /// The repository path a press opens in the Changes tab.
-  opens: Option<Arc<str>>,
+  pub(super) opens: Option<Arc<str>>,
 }
 
 impl Shown {
@@ -224,6 +225,15 @@ fn entry_details(
 ) -> Option<Column> {
   let command = match &entry.kind {
     _ if !command_box => None,
+    // A native file tool's row names its target; a declined native command is its row's body.
+    EntryKind::Command(command)
+      if command
+        .native
+        .as_ref()
+        .is_some_and(|call| call.tool != ToolName::RunCommand || call.declined.is_some()) =>
+    {
+      None
+    }
     EntryKind::Command(command) => Some(&*command.command),
     // A tool step's one-line command is whole in the row's title: its output follows (`hep0l`).
     EntryKind::ToolCommand(command) if matches!(command_preview(&command.command), Cow::Borrowed(_)) => None,
@@ -379,7 +389,11 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
         Some(text.clone()),
       )
     },
-    EntryKind::Command(entry) => command(ctx, entry),
+    EntryKind::Command(entry) => match &entry.native {
+      Some(call) => native_call::call(ctx, entry, call),
+      None => command_entry::command(ctx, entry),
+    },
+    EntryKind::Approval(approval) => native_call::approval(ctx, approval),
     EntryKind::FileChange(change) => {
       let (glyph, key) = file_change_kind(change.kind);
       // Git's paths use `/` whatever the CLI reported.
@@ -429,7 +443,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
       }
     }
     EntryKind::Raw(lines) => unparsed(ctx, lines, raw_lines),
-    EntryKind::ToolCommand(entry) => tool_command(ctx, entry),
+    EntryKind::ToolCommand(entry) => command_entry::tool_command(ctx, entry),
     EntryKind::McpTool(call) => mcp_call::call(ctx, call),
     EntryKind::ExemptionNotApplied { server, tool, other } => {
       mcp_call::exemption_not_applied(ctx, (server, tool, other))
@@ -438,7 +452,7 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
 }
 
 /// A file change's glyph and the key of its status.
-fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
+pub(super) const fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static str) {
   match kind {
     FileChangeKind::Added => (Icon::FilePlus, "runs.activity.fileAdded"),
     FileChangeKind::Deleted => (Icon::FileMinus, "runs.activity.fileDeleted"),
@@ -470,89 +484,6 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     collapsible: !raw_lines,
     opens: None,
   }
-}
-
-fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
-  let code = entry.exit_code.map(|code| code.to_string()).unwrap_or_default();
-  let seconds = entry.duration.map(tenths_of_seconds);
-  let (glyph, meta, body) = match entry.status {
-    None => (Icon::Terminal, ctx.t("runs.activity.commandRunning"), None),
-    Some(CommandStatus::Declined) => (
-      Icon::AlertCircle,
-      ctx.t("runs.activity.declined"),
-      Some(ctx.t("runs.activity.declinedDetail")),
-    ),
-    Some(CommandStatus::Completed | CommandStatus::Failed) => {
-      let meta = match &seconds {
-        Some(seconds) => ctx.t_args(
-          "runs.activity.exitDuration",
-          [("code", code.as_str()), ("seconds", seconds)],
-        ),
-        None => ctx.t_args("runs.activity.exit", [("code", code.as_str())]),
-      };
-      (Icon::Terminal, meta, None)
-    }
-  };
-  let meta = match &entry.mark {
-    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
-    None => meta,
-  };
-  // A person's Deny: what the agent was told says why the command did not run.
-  let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
-  Shown {
-    glyph,
-    title: preview_title(&entry.command),
-    meta,
-    body,
-    output: Some(entry.output.lines().map(Arc::from).collect()),
-    omitted: None,
-    collapsible: true,
-    opens: None,
-  }
-}
-
-/// A tool step's command: its command line, how it ended and the output its tool kept.
-fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
-  let seconds = entry.duration.map(tenths_of_seconds).unwrap_or_default();
-  let code = entry.exit_code.map(|code| code.to_string()).unwrap_or_default();
-  let meta = match (entry.result, entry.exit_code) {
-    (None, _) => ctx.t("runs.activity.commandRunning"),
-    (Some(ToolCommandResult::TimedOut), _) => ctx.t_args("runs.activity.timedOut", [("seconds", seconds.as_str())]),
-    (Some(ToolCommandResult::Stopped), _) => ctx.t("runs.activity.stopped"),
-    (Some(_), Some(_)) => ctx.t_args(
-      "runs.activity.exitDuration",
-      [("code", code.as_str()), ("seconds", seconds.as_str())],
-    ),
-    (Some(_), None) => ctx.t_args("runs.activity.noExitCode", [("seconds", seconds.as_str())]),
-  };
-  let omitted = (entry.omitted_bytes > 0).then(|| {
-    let size = message_text(ctx, &display::byte_size(entry.omitted_bytes));
-    ctx.t_args("runs.activity.outputOmitted", [("size", &*size)])
-  });
-  Shown {
-    glyph: Icon::Terminal,
-    title: preview_title(&entry.command),
-    meta,
-    body: None,
-    output: Some(entry.output.lines().map(Arc::from).collect()),
-    omitted,
-    collapsible: true,
-    opens: None,
-  }
-}
-
-/// The header's one-line preview, sharing the command itself when it already is one line.
-fn preview_title(command: &Arc<str>) -> Arc<str> {
-  match command_preview(command) {
-    Cow::Borrowed(_) => command.clone(),
-    Cow::Owned(preview) => preview.into(),
-  }
-}
-
-/// `4.2` for 4,213 milliseconds.
-fn tenths_of_seconds(millis: i64) -> String {
-  let tenths = millis.max(0) / 100;
-  format!("{}.{}", tenths / 10, tenths % 10)
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree

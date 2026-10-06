@@ -7,7 +7,8 @@ use orchester_core::{
   permission::{AgentPermissions, LaunchPermissions},
   resource::ModelId,
   run::{
-    ActivityEntry, EditProgress, Invocation, InvocationKind, InvocationPrompt, InvocationTiming, StepOutput, TokenUsage,
+    ActivityEntry, EditProgress, Invocation, InvocationEngine, InvocationKind, InvocationPrompt, InvocationTiming,
+    StepOutput, TokenUsage,
   },
   store::ActivityStore,
   time::Timestamp,
@@ -15,7 +16,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, code_index, invocation_prompts, step_outputs};
+use super::{ProjectDb, code_index, invocation_prompts, native, step_outputs};
 use crate::{
   StoreError,
   rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
@@ -136,6 +137,14 @@ impl ActivityStore for ProjectDb {
 
   fn invocation_code_index(&self, invocation: InvocationId) -> Result<Option<CodeIndexUse>, StoreError> {
     code_index::load_use(&self.connection, invocation)
+  }
+
+  fn save_invocation_engine(&mut self, invocation: InvocationId, engine: &InvocationEngine) -> Result<(), StoreError> {
+    native::save_engine(&self.connection, invocation, engine)
+  }
+
+  fn invocation_engine(&self, invocation: InvocationId) -> Result<Option<InvocationEngine>, StoreError> {
+    native::load_engine(&self.connection, invocation)
   }
 
   fn save_edit_progress(&mut self, invocation: InvocationId, progress: &EditProgress) -> Result<(), StoreError> {

@@ -5,19 +5,24 @@
 //! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
 //! of its own (Codex, which reports no command for it), and a failed turn
 //! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
-//! invocation panel shows the session. Nothing else is left out.
+//! invocation panel shows the session. A native agent's calls read as rows of their tools ([`native`]).
+//! Nothing else is left out.
+
+mod native;
 
 use std::sync::Arc;
 
 use orchester_core::{
   connection::{
     mcp::McpServerProblem,
-    stream::{AgentEvent, CommandStatus, FileChange, OutputStream, RunnerProblem, ToolCommandResult},
+    stream::{AgentEvent, CommandStatus, FileChange, NativeCall, OutputStream, RunnerProblem, ToolCommandResult},
   },
   id::{InvocationId, StepExecutionId},
   run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
   time::Timestamp,
 };
+
+pub use self::native::ApprovalEntry;
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,6 +51,8 @@ pub enum EntryKind {
     tool: Arc<str>,
     other: Arc<str>,
   },
+  /// A native agent's command a person or a rule approved.
+  Approval(ApprovalEntry),
 }
 
 /// How a call of a tool of MCP server `server` was decided, as the decision marks of the command
@@ -80,6 +87,9 @@ pub struct DecidedMark {
   /// Whether the request was about a command (not an MCP tool).
   pub command: bool,
   pub decision: ToolDecision,
+  /// The transcript position and time of the answer.
+  pub sequence: u64,
+  pub at: Timestamp,
 }
 
 /// An MCP tool call that no command shows.
@@ -123,6 +133,8 @@ pub struct CommandEntry {
   pub duration: Option<i64>,
   /// Why nobody was asked about it, when it says.
   pub mark: Option<CommandMark>,
+  /// What a native agent's call did; `None` for a CLI's command.
+  pub native: Option<NativeCall>,
 }
 
 /// One entry of the transcript.
@@ -161,11 +173,29 @@ impl Entry {
   }
 }
 
+/// What arrived before the entry it belongs to: answers recorded before the command they answer started
+/// (Codex asks before it starts a command, a native agent before it runs one), and what a native call
+/// did before its end made its entry.
+#[derive(Default)]
+struct Early {
+  marks: Vec<(InvocationId, Arc<str>, CommandMark)>,
+  told: native::Told,
+}
+
+impl Early {
+  fn mark(&mut self, invocation: InvocationId, item: &str) -> Option<CommandMark> {
+    let at = self
+      .marks
+      .iter()
+      .position(|(early, early_item, _)| *early == invocation && **early_item == *item)?;
+    Some(self.marks.remove(at).2)
+  }
+}
+
 /// The entries of `activity`, in order.
 pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   let mut entries: Vec<Entry> = Vec::new();
-  // Answers recorded before the command they answer started (Codex asks before it starts a command).
-  let mut early: Vec<(InvocationId, Arc<str>, CommandMark)> = Vec::new();
+  let mut early = Early::default();
   for stored in activity {
     let entry = |kind| Entry {
       sequence: stored.sequence,
@@ -180,10 +210,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::Message { text } => entries.push(entry(EntryKind::Message(text.as_str().into()))),
       AgentEvent::Reasoning { text } => entries.push(entry(EntryKind::Reasoning(text.as_str().into()))),
       AgentEvent::CommandStarted { item, command } => {
-        let mark = early
-          .iter()
-          .position(|(invocation, early, _)| *invocation == stored.invocation && **early == **item)
-          .map(|at| early.remove(at).2);
+        let mark = early.mark(stored.invocation, item);
         entries.push(entry(EntryKind::Command(CommandEntry {
           item: item.as_str().into(),
           command: command.as_str().into(),
@@ -192,15 +219,19 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
           exit_code: None,
           duration: None,
           mark,
+          native: None,
         })));
       }
-      AgentEvent::ToolDecided { .. } => decided(&mut entries, &mut early, stored),
-      AgentEvent::CommandFinished { .. } => finish_command(&mut entries, stored),
-      AgentEvent::FileChanged { changes, .. } => {
-        entries.extend(changes.iter().enumerate().map(|(part, change)| Entry {
-          part,
-          ..entry(EntryKind::FileChange(change.clone()))
-        }));
+      AgentEvent::ToolDecided { .. } => decided(&mut entries, &mut early.marks, stored),
+      AgentEvent::NativeCall { item, call } => early.told.note(&mut entries, stored, item, call),
+      AgentEvent::CommandFinished { .. } => finish_command(&mut entries, &mut early, stored),
+      AgentEvent::FileChanged { item, changes } => {
+        if !native::shown_by_edit(&entries, stored, item) {
+          entries.extend(changes.iter().enumerate().map(|(part, change)| Entry {
+            part,
+            ..entry(EntryKind::FileChange(change.clone()))
+          }));
+        }
       }
       AgentEvent::TurnCompleted { usage } => entries.push(entry(EntryKind::Usage(*usage))),
       AgentEvent::Error { message } => entries.push(entry(EntryKind::Error(message.as_str().into()))),
@@ -211,7 +242,9 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
-      AgentEvent::PermissionDenied { item, command } => deny_command(&mut entries, stored, (item, command)),
+      AgentEvent::PermissionDenied { item, command } => {
+        deny_command(&mut entries, &mut early, stored, (item, command));
+      }
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
       AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
       AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
@@ -239,7 +272,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       }
     }
   }
-  entries
+  native::approvals_apart(entries)
 }
 
 /// Marks the command of a call nobody was asked about, or adds an entry for the call when no command
@@ -342,6 +375,8 @@ fn decided(entries: &mut Vec<Entry>, early: &mut Vec<(InvocationId, Arc<str>, Co
     action: action.as_str().into(),
     command,
     decision: decision.clone(),
+    sequence: stored.sequence,
+    at: stored.at,
   });
   let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
     EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.item == **item => {
@@ -381,10 +416,15 @@ fn push_mcp_tool(entries: &mut Vec<Entry>, stored: &ActivityEntry, call: McpTool
 }
 
 /// Marks the latest entry of `command` in the same invocation as declined, or adds a declined one
-/// when the command was not shown.
-fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, (item, command): (&str, &str)) {
+/// when the command was not shown: a native agent's command that did not run is never shown before.
+fn deny_command(entries: &mut Vec<Entry>, early: &mut Early, stored: &ActivityEntry, (item, command): (&str, &str)) {
+  let native = early.told.take(stored.invocation, item);
   let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
-    EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.command == *command => Some(shown),
+    EntryKind::Command(shown)
+      if native.is_none() && entry.invocation == stored.invocation && *shown.command == *command =>
+    {
+      Some(shown)
+    }
     _ => None,
   });
   match shown {
@@ -402,14 +442,15 @@ fn deny_command(entries: &mut Vec<Entry>, stored: &ActivityEntry, (item, command
         status: Some(CommandStatus::Declined),
         exit_code: None,
         duration: None,
-        mark: None,
+        mark: early.mark(stored.invocation, item),
+        native,
       }),
     }),
   }
 }
 
 /// Completes the entry its start created, or adds one when the start was not seen.
-fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
+fn finish_command(entries: &mut Vec<Entry>, early: &mut Early, stored: &ActivityEntry) {
   let AgentEvent::CommandFinished {
     item,
     command,
@@ -424,7 +465,7 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
     entry.invocation == stored.invocation
       && matches!(&entry.kind, EntryKind::Command(started) if started.status.is_none() && *started.command == **command)
   });
-  let finished = |duration, mark| {
+  let finished = |duration, (mark, native)| {
     EntryKind::Command(CommandEntry {
       item: item.as_str().into(),
       command: command.as_str().into(),
@@ -433,24 +474,28 @@ fn finish_command(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
       exit_code: *exit_code,
       duration,
       mark,
+      native,
     })
   };
   match started {
     Some(entry) => {
-      let mark = match &entry.kind {
-        EntryKind::Command(started) => started.mark.clone(),
-        _ => None,
+      let started = match &entry.kind {
+        EntryKind::Command(started) => (started.mark.clone(), started.native.clone()),
+        _ => (None, None),
       };
-      entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis()), mark);
+      entry.kind = finished(Some(stored.at.unix_millis() - entry.at.unix_millis()), started);
     }
-    None => entries.push(Entry {
-      sequence: stored.sequence,
-      part: 0,
-      execution: stored.execution,
-      invocation: stored.invocation,
-      at: stored.at,
-      kind: finished(None, None),
-    }),
+    None => {
+      let native = early.told.take(stored.invocation, item);
+      entries.push(Entry {
+        sequence: stored.sequence,
+        part: 0,
+        execution: stored.execution,
+        invocation: stored.invocation,
+        at: stored.at,
+        kind: finished(None, (None, native)),
+      });
+    }
   }
 }
 

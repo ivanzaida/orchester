@@ -12,7 +12,7 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 
-use super::{entry::Shown, mcp_call::subject_key};
+use super::{entry::Shown, mcp_call::subject_key, native_call};
 use crate::{
   tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind},
   ui::{command_row::command_preview, icon::Icon},
@@ -22,9 +22,10 @@ use crate::{
 /// a command that did not run because it was denied.
 pub(super) fn titled(ctx: &Ctx, entry: &Entry) -> Option<Shown> {
   match &entry.kind {
-    EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => {
-      Some(denied_command(ctx, command))
-    }
+    EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => Some(match &command.native {
+      Some(call) => native_call::call(ctx, command, call),
+      None => denied_command(ctx, command),
+    }),
     _ => None,
   }
 }
@@ -143,6 +144,44 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::MemoryUnreadable { records } => memory_unreadable(ctx, *records),
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
+    RunnerProblem::ContextCompacted { .. } | RunnerProblem::ModelRetrying { .. } | RunnerProblem::ThinkingStripped => {
+      native_problem(ctx, problem)
+    }
+  }
+}
+
+/// What happened to a native agent's conversation with its model: a compaction, a retried request, its
+/// earlier reasoning dropped.
+fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
+  match problem {
+    RunnerProblem::ContextCompacted { before, after } => (
+      ctx.t("runs.activity.problem.contextCompacted"),
+      Some(ctx.t_args(
+        "runs.activity.problem.contextCompactedDetail",
+        [
+          ("before", compact_tokens(*before).as_str()),
+          ("after", compact_tokens(*after).as_str()),
+        ],
+      )),
+    ),
+    RunnerProblem::ModelRetrying {
+      attempt,
+      wait_seconds,
+      error,
+    } => (
+      ctx.t_args(
+        "runs.activity.problem.modelRetrying",
+        [
+          ("seconds", wait_seconds.to_string().as_str()),
+          ("attempt", attempt.to_string().as_str()),
+        ],
+      ),
+      Some(error.as_str().into()),
+    ),
+    _ => (
+      ctx.t("runs.activity.problem.thinkingStripped"),
+      Some(ctx.t("runs.activity.problem.thinkingStrippedDetail")),
+    ),
   }
 }
 

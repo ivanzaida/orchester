@@ -74,7 +74,10 @@ fn native_edit_counts_changed_lines() {
   assert_eq!(lines("a\nb\n", &[("a\n", "a\nnew\n", false)]), changes(1, 0));
   assert_eq!(lines("x y x\n", &[("x", "z", true)]), changes(2, 2));
   assert_eq!(
-    lines("one\r\ntwo\r\n", &[("one\r\ntwo", "one\r\n2", false), ("2", "3", false)]),
+    lines(
+      "one\r\ntwo\r\n",
+      &[("one\r\ntwo", "one\r\n2", false), ("2", "3", false)]
+    ),
     changes(2, 2)
   );
   assert_eq!(LineChanges::between("", "a\nb\n"), LineChanges { added: 2, removed: 0 });

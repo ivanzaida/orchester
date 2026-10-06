@@ -326,6 +326,7 @@ fn transcript_marks_answered_requests_on_their_calls() {
       category: (server == "command").then_some(CommandCategory::Network),
       secrets: false,
       told: told.map(str::to_owned),
+      waited_ms: None,
     },
   };
   let activity = stored(vec![

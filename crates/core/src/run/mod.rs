@@ -58,10 +58,9 @@ pub use self::{
   preflight::{PreflightInput, PreflightProblem, preflight},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
-    NativePrompt, NativeSetting, ResultDelivery,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
-    PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource,
-    RetryReport, RunContext, SkillListing,
+    NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
+    PromptSection, PromptSource, ResultDelivery, RetryReport, RunContext, SkillListing,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},

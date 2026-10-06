@@ -122,7 +122,11 @@ impl NativeModel {
       remote.id.clone(),
       remote.context_window.and_then(fitting),
       remote.max_output.and_then(NonZeroU32::new),
-      remote.efforts.iter().filter_map(|effort| Effort::named(effort)).collect(),
+      remote
+        .efforts
+        .iter()
+        .filter_map(|effort| Effort::named(effort))
+        .collect(),
       ModelSource::Endpoint { at },
     )
   }
@@ -251,14 +255,11 @@ impl NativeModels {
   pub fn effort_for(&self, model: &ModelId, chosen: Option<&str>) -> Option<Effort> {
     let listed = self.model(model);
     let takes = |effort: &Effort| listed.is_none_or(|model| model.efforts.contains(effort));
-    chosen
-      .and_then(Effort::named)
-      .filter(takes)
-      .or_else(|| {
-        self
-          .default_effort
-          .filter(|effort| listed.is_some_and(|model| model.efforts.contains(effort)))
-      })
+    chosen.and_then(Effort::named).filter(takes).or_else(|| {
+      self
+        .default_effort
+        .filter(|effort| listed.is_some_and(|model| model.efforts.contains(effort)))
+    })
   }
 
   /// The context window of `model` in tokens: as listed, else [`DEFAULT_CONTEXT_WINDOW`] (§6.3).

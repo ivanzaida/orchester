@@ -26,7 +26,7 @@ use std::{
 };
 
 use orchester_core::{
-  connection::stream::FileChange,
+  connection::stream::{CallDetail, FileChange},
   native::{
     edit::EditError,
     item::Item,
@@ -127,15 +127,21 @@ impl FileTools {
   }
 }
 
-/// A successful call's outcome.
-fn done(content: String, activity: String, changes: Vec<FileChange>) -> ToolOutcome {
+/// A successful call's outcome: `detail` says what it read, found or changed.
+fn done(content: String, activity: String, changes: Vec<FileChange>, detail: CallDetail) -> ToolOutcome {
   ToolOutcome {
     content: limits::capped(content),
     is_error: false,
     activity,
     exit_code: None,
     changes,
+    detail: Some(detail),
   }
+}
+
+/// A count as a transcript row records it.
+fn count(value: usize) -> u64 {
+  u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 /// A failed call's outcome.
@@ -147,6 +153,7 @@ fn failed(error: &FileError) -> ToolOutcome {
     activity: message,
     exit_code: None,
     changes: Vec::new(),
+    detail: None,
   }
 }
 

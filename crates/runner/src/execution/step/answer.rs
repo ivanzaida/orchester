@@ -246,11 +246,17 @@ impl Worker {
       }));
     }
     self.end_approval_wait(watch)?;
+    let waited = Timestamp::now().unix_millis() - approval.requested_at.unix_millis();
     let decision = ToolDecision {
       decided_by: settled.decided_by,
       category: settled.category,
       secrets: settled.secrets,
       told: settled.told,
+      // A clock set back while it waited reads as no wait at all.
+      waited_ms: settled
+        .decided_by
+        .by_person()
+        .then(|| u64::try_from(waited).unwrap_or(0)),
     };
     self.observe(
       watch,

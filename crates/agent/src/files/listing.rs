@@ -7,10 +7,13 @@ use std::{
   time::Instant,
 };
 
-use orchester_core::native::{session::ToolOutcome, tools::ListFiles};
+use orchester_core::{
+  connection::stream::CallDetail,
+  native::{session::ToolOutcome, tools::ListFiles},
+};
 
 use super::{
-  FileError, FileTools, done,
+  FileError, FileTools, count, done,
   glob::Glob,
   outcome,
   ripgrep::{self, Want},
@@ -69,7 +72,8 @@ impl FileTools {
       text.push('\n');
       text.push_str(NO_RIPGREP);
     }
-    Ok(done(text, format!("{total} files"), Vec::new()))
+    let detail = CallDetail::Listed { entries: count(total) };
+    Ok(done(text, format!("{total} files"), Vec::new(), detail))
   }
 }
 
