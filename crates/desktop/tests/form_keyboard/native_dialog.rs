@@ -21,7 +21,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  native_connections::{NativeSeed, key_secret, model, native_connection, open_connections, profile},
+  native_connections::{NativeSeed, key_secret, model, native_connection, open_connections, profile, seeded},
   task_run::has,
 };
 
@@ -339,6 +339,32 @@ fn native_form_says_why_it_cannot_save() {
     shows(desktop, "native-test", "The project’s runner is not connected")
   });
   assert!(shows(&mut desktop, "native-test", "Not checked"));
+}
+
+/// Orchester does not run OpenAI API agents yet: the dialog's Test again and Fetch models stay
+/// unavailable and say why, and pressing them reaches no runner.
+#[test]
+fn native_dialog_keeps_testing_an_openai_connection_unavailable() {
+  let (mut desktop, ..) = seeded(AgentProvider::OpenAiApi);
+  open_connections(&mut desktop);
+  desktop.click("edit-connection");
+  desktop.wait_for("native-preset");
+  let unavailable = "Testing an OpenAI API connection comes with its agent runs in a later version.";
+  assert!(shows(&mut desktop, "native-test", unavailable));
+  assert!(shows(
+    &mut desktop,
+    DIALOG,
+    "Fetching models from an OpenAI API endpoint comes with its agent runs in a later version."
+  ));
+  assert!(!whole_screen_shows(&mut desktop, "Fetching tests the connection"));
+  desktop.press("native-test-again");
+  desktop.press("native-fetch-models");
+  assert!(shows(&mut desktop, "native-test", unavailable));
+  assert!(!shows(
+    &mut desktop,
+    "native-test",
+    "The project’s runner is not connected"
+  ));
 }
 
 /// A custom gateway with two models added by hand, the default one used by a Planner profile.

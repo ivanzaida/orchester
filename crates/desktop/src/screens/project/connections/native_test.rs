@@ -42,8 +42,12 @@ pub(super) fn test_action(ctx: &mut Ctx) -> TestAction {
 }
 
 impl NativeDialog {
-  /// The model API the dialog's fields name, to test; why it cannot be tested yet otherwise.
+  /// The model API the dialog's fields name, to test; why it cannot be tested yet otherwise, also when
+  /// Orchester does not run this provider's agents yet.
   pub(super) fn tested_api(&self) -> Result<ApiEndpoint, Message> {
+    if !self.provider.runs_agents() {
+      return Err(Message::new("connections.native.testUnavailable"));
+    }
     let base_url = self.base_url()?;
     let key = match self.key.get() {
       KeyChoice::Existing(key) => key,

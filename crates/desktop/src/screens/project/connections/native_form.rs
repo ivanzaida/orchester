@@ -294,6 +294,11 @@ impl NativeDialog {
     let ctx: &Ctx = ctx;
     let count = self.models.get().0.len().to_string();
     let fetch = self.test_button(ctx, test, "native-fetch-models", "connections.models.fetch");
+    let hint = if self.provider.runs_agents() {
+      "connections.models.fetchHint"
+    } else {
+      "connections.models.fetchUnavailable"
+    };
     // *Models* and how many (`J27qQ`).
     let heading = Row::new()
       .width(Dimension::Pct(100.0))
@@ -314,7 +319,7 @@ impl NativeDialog {
       .spacing(SpacingSize::Md)
       .overflow_visible()
       .child(heading)
-      .child(Text::new(&ctx.t("connections.models.fetchHint")).variant(ExtraTypography::Hint.role()))
+      .child(Text::new(&ctx.t(hint)).variant(ExtraTypography::Hint.role()))
       .child(editor)
       .into()
   }

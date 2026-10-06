@@ -645,7 +645,8 @@ independent review and design verification pending)
 - **Test connection / Fetch models.** `Command::CheckConnection` (protocol 17) → `Reply::ConnectionChecked`; the
   runner reads the key and runs `check_anthropic`. The inspector records the result and merges the models
   (`record_check_in`); the dialog shows the result and merges the models into the form; a new key typed in the dialog
-  is tested after saving. Both buttons are enabled for Anthropic API connections; OpenAI API ones stay unavailable.
+  is tested after saving. Both buttons are enabled for Anthropic API connections; for OpenAI API ones they stay
+  unavailable in the inspector and the dialog, whose test row and models hint say why (fixed after the first review).
 - **What the run used.** `InvocationEngine` (endpoint, vendor, effort) recorded before a native invocation starts;
   the task page's step view takes it for the 04.H10 header and panel (*Endpoint* instead of *Endpoint now*, the
   *Effort* row) and the 04.H9 agent row.
@@ -667,8 +668,8 @@ independent review and design verification pending)
   native_setup native_setup`, `--test native_connection native`, `--test activity_redaction redact`; `cargo test -p
   orchester-store --test native_conversations native_` (2), `--test activity activity`, `--test tool_approvals tool`;
   `cargo test -p orchester-agent --test file_tools files_` (23); `cargo test -p orchester-ipc --test framing
-  frames_round_trip`; `cargo test -p orchester-desktop --test form_keyboard native_` (30, with the new
-  `native_rows`), `connection`, `conversation`, `approval`, `activity`, `agent`; `--test transcript transcript`,
+  frames_round_trip`; `cargo test -p orchester-desktop --test form_keyboard native_` (31, with the new
+  `native_rows` and `native_dialog_keeps_testing_an_openai_connection_unavailable`), `connection`, `conversation`, `approval`, `activity`, `agent`; `--test transcript transcript`,
   `--test timeline timeline`, `--test i18n locales`/`every_key`. CLI regressions: runner `claude_approvals`, `claude`,
   `execution`, `codex_resume`, `send_now`, `command_approvals`, `approval_choices`. `tools/check.ps1`: OK.
 - **Not run:** a live API run (P1's acceptance needs one with a key a person supplies); runner tests for a budget
@@ -698,7 +699,8 @@ independent review and design verification pending)
     the server's models), a profile on it, then *Create and run*. Its approvals show in 04.H9 when the profile asks
     before commands.
   - 04.H1/H4 test row and *Fetch models*: open Connections, select or edit an Anthropic API connection; without a
-    reachable runner the row says the runner is not connected.
+    reachable runner the row says the runner is not connected. The unavailable state: edit an OpenAI API connection
+    (seeded as in `native_connections::seed_native`; the dialog cannot add one).
 
 ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (done 2026-10-05: independent code and security
 review, second round PASS)

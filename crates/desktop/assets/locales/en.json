@@ -3220,6 +3220,7 @@
       "testBalance": "Balance {{balance}}",
       "testFailed": "The runner could not test the connection. The runner log says why.",
       "testNoRunner": "The project’s runner is not connected, so the connection can’t be tested now.",
+      "testUnavailable": "Testing an OpenAI API connection comes with its agent runs in a later version. Until then Orchester neither reaches its API nor reads its key.",
       "execution": "This computer (Orchester runs the agent)",
       "modelTraffic": "Orchester’s own HTTPS",
       "property": {
@@ -3245,6 +3246,7 @@
       "edit": "Edit models",
       "fetch": "Fetch models",
       "fetchHint": "Fetching tests the connection and adds the models the endpoint lists; a model already here is updated, none is removed.",
+      "fetchUnavailable": "Fetching models from an OpenAI API endpoint comes with its agent runs in a later version. Add models by hand meanwhile.",
       "fetchInvalid": "The endpoint listed models that can’t be kept as they are; add them by hand.",
       "addByHand": "Add a model by hand",
       "add": "Add a model",

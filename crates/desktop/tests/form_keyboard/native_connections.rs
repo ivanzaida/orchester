@@ -190,7 +190,7 @@ fn seed_native(repo: &Path, provider: AgentProvider) -> (ConnectionId, ResourceI
   (connection, builder)
 }
 
-fn seeded(provider: AgentProvider) -> (Desktop, ConnectionId, ResourceId) {
+pub(crate) fn seeded(provider: AgentProvider) -> (Desktop, ConnectionId, ResourceId) {
   let mut seeded = None;
   let desktop = Desktop::with_seeded_project(|repo| seeded = Some(seed_native(repo, provider)));
   let (connection, builder) = seeded.expect("the project was seeded");
