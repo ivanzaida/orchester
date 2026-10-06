@@ -48,6 +48,7 @@ pub struct ReviewFolder {
 pub struct ClaudeReviewer<R> {
   executable: PathBuf,
   model: ModelId,
+  effort: Option<String>,
   folder: ReviewFolder,
   /// The variables the CLI starts with: the agent environment and the project's own.
   environment: Vec<(String, String)>,
@@ -55,17 +56,18 @@ pub struct ClaudeReviewer<R> {
 }
 
 impl<R: CommandRunner> ClaudeReviewer<R> {
-  /// A reviewer that runs the CLI at `executable` with `model` in `folder`, through `runner`, which stops
-  /// it when it takes too long.
+  /// A reviewer that runs the CLI at `executable` with `model` and `effort` in `folder`, through `runner`,
+  /// which stops it when it takes too long.
   pub fn new(
     executable: &Path,
-    model: ModelId,
+    (model, effort): (ModelId, Option<String>),
     (folder, environment): (ReviewFolder, Vec<(String, String)>),
     runner: R,
   ) -> Self {
     Self {
       executable: executable.to_path_buf(),
       model,
+      effort,
       folder,
       environment,
       runner,
@@ -74,7 +76,8 @@ impl<R: CommandRunner> ClaudeReviewer<R> {
 
   /// The command that reviews `input`.
   pub fn command(&self, input: &ReviewInput) -> Command {
-    Command::new(&self.executable, reviewer_args(&self.model, &self.folder.instructions))
+    let args = reviewer_args((&self.model, self.effort.as_deref()), &self.folder.instructions);
+    Command::new(&self.executable, args)
       .with_current_dir(&self.folder.work)
       .with_environment(self.environment.clone())
       .with_stdin(review_prompt(input))
@@ -108,9 +111,15 @@ fn run(runner: &impl CommandRunner, command: &Command) -> Result<String, ReviewE
   Ok(output.stdout)
 }
 
-/// Claude Code's arguments after the program: print mode, the model, nothing of the user's or an agent's
-/// setup, no tools, the system prompt in `instructions`, and the verdict's schema.
-pub fn reviewer_args(model: &ModelId, instructions: &Path) -> Vec<String> {
+/// Whether `word` may be passed as an effort: a plain word, nothing a CLI could read as more.
+fn plain_word(word: &str) -> bool {
+  !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Claude Code's arguments after the program: print mode, the model and its effort (only a plain word is
+/// passed), nothing of the user's or an agent's setup, no tools, the system prompt in `instructions`, and
+/// the verdict's schema.
+pub fn reviewer_args((model, effort): (&ModelId, Option<&str>), instructions: &Path) -> Vec<String> {
   let mut args: Vec<String> = [
     "-p",
     "--output-format",
@@ -124,11 +133,13 @@ pub fn reviewer_args(model: &ModelId, instructions: &Path) -> Vec<String> {
     "--no-session-persistence",
     "--tools",
     "",
-    "--system-prompt-file",
   ]
   .map(str::to_owned)
   .to_vec();
-  args.push(instructions.display().to_string());
+  if let Some(effort) = effort.filter(|effort| plain_word(effort)) {
+    args.extend(["--effort".to_owned(), effort.to_owned()]);
+  }
+  args.extend(["--system-prompt-file".to_owned(), instructions.display().to_string()]);
   args.extend(["--json-schema".to_owned(), REVIEW_SCHEMA.to_owned()]);
   args
 }

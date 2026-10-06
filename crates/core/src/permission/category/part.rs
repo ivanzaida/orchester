@@ -165,6 +165,25 @@ impl CommandPart {
     !self.outside.is_empty()
   }
 
+  /// The program as the rules know it; `None` when it is written with a folder or was not read.
+  pub fn program(&self) -> Option<&str> {
+    self.program.as_deref()
+  }
+
+  /// The subcommand (`push`, `pr view`), when the program has them.
+  pub fn subcommand(&self) -> Option<&str> {
+    self.subcommand.as_ref().map(|(_, sub)| sub.as_str())
+  }
+
+  /// The words after the subcommand; all words after the program for one without a subcommand.
+  pub fn after_subcommand(&self) -> &[String] {
+    let start = match &self.subcommand {
+      Some((at, sub)) => at + sub.split(' ').count(),
+      None => 1,
+    };
+    self.words.get(start..).unwrap_or_default()
+  }
+
   /// Whether it writes a file outside the worktree, or deletes one outside the temporary folder.
   pub const fn writes_outside(&self) -> bool {
     self.outside_write.is_some() || self.outside_delete.is_some()

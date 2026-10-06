@@ -61,6 +61,8 @@ pub struct ReviewInput {
   step: ReviewedStep,
   task: ReviewedTask,
   messages: Vec<String>,
+  /// How many parts of the command Orchester could not read to the end.
+  unread: usize,
 }
 
 impl ReviewInput {
@@ -113,7 +115,20 @@ impl ReviewInput {
       step,
       task,
       messages,
+      unread: 0,
     })
+  }
+
+  /// The input, telling the reviewer that Orchester could not read `parts` parts of the command.
+  #[must_use]
+  pub const fn with_unread(mut self, parts: usize) -> Self {
+    self.unread = parts;
+    self
+  }
+
+  /// How many parts of the command Orchester could not read to the end.
+  pub const fn unread(&self) -> usize {
+    self.unread
   }
 
   pub const fn request(&self) -> &ReviewedRequest {

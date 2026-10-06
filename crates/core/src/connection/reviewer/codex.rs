@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{ReviewFolder, run};
+use super::{ReviewFolder, plain_word, run};
 use crate::{
   command::{Command, CommandRunner},
   connection::invocation::CODEX_ISOLATION as ISOLATION,
@@ -98,8 +98,7 @@ pub fn codex_reviewer_args((model, effort): (&ModelId, Option<&str>), folder: &R
   ]
   .map(str::to_owned)
   .to_vec();
-  let plain = |word: &str| !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-  if let Some(effort) = effort.filter(|effort| plain(effort)) {
+  if let Some(effort) = effort.filter(|effort| plain_word(effort)) {
     args.extend(["-c".to_owned(), format!("model_reasoning_effort={effort}")]);
   }
   for setting in ISOLATION

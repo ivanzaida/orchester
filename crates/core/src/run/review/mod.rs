@@ -26,17 +26,23 @@ pub use self::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
     default_review_model, resolve_reviewer, reviewer_kind,
   },
-  hold::{ReviewHold, review_hold},
+  hold::{HoldRules, ReviewHold, review_hold, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
   prompt::{
     DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
   },
 };
 use super::answer::ApprovalSubject;
-use crate::{permission::AgentPermissions, resource::ModelId};
+use crate::resource::ModelId;
 
 /// The longest a reason is kept; a longer one is cut.
 const REASON_MAX_CHARS: usize = 200;
+/// Characters that change how text around them reads without showing: bidirectional controls and
+/// zero-width characters. A reason loses them before it is stored and shown.
+const INVISIBLE: [char; 18] = [
+  '\u{061c}', '\u{180e}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}',
+  '\u{202c}', '\u{202d}', '\u{202e}', '\u{2060}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}', '\u{feff}',
+];
 /// The quotation marks a reason may not hold, as the app quotes it.
 const QUOTES: [char; 6] = ['"', '\u{201c}', '\u{201d}', '\u{201e}', '\u{ab}', '\u{bb}'];
 
@@ -143,6 +149,7 @@ fn kept(reason: &str) -> String {
       c if c.is_control() || c.is_whitespace() => ' ',
       c => c,
     })
+    .filter(|c| !INVISIBLE.contains(c))
     .collect();
   let line = plain.split_whitespace().collect::<Vec<_>>().join(" ");
   if line.chars().count() <= REASON_MAX_CHARS {
@@ -153,19 +160,19 @@ fn kept(reason: &str) -> String {
   cut
 }
 
-/// Auto mode's handling of a request about `subject`: a hard rule first, under the step's recorded
-/// `permissions`; then a request too long to be reviewed whole (`input`'s hold); then `reviewer`'s
-/// verdict on `input`, or a failure when the project has none.
+/// Auto mode's handling of a request about `subject`: a hard rule first, under `rules`; then a request
+/// too long to be reviewed whole (`input`'s hold); then `reviewer`'s verdict on `input`, told how many
+/// parts Orchester could not read, or a failure when the project has none.
 pub fn review_request(
   reviewer: Option<&dyn RequestReviewer>,
-  (subject, permissions): (&ApprovalSubject, Option<&AgentPermissions>),
+  (subject, rules): (&ApprovalSubject, &HoldRules<'_>),
   input: Result<ReviewInput, ReviewHold>,
 ) -> Review {
-  if let Some(hold) = review_hold(subject, permissions) {
+  if let Some(hold) = review_hold(subject, rules) {
     return Review::Held { hold };
   }
   let input = match input {
-    Ok(input) => input,
+    Ok(input) => input.with_unread(unread_parts(subject)),
     Err(hold) => return Review::Held { hold },
   };
   match reviewer {
