@@ -16,11 +16,11 @@ mod matching;
 
 use std::sync::Arc;
 
-use orchester_core::{id::StepExecutionId, run::StepStatus, time::Timestamp};
+use orchester_core::{connection::AgentProvider, id::StepExecutionId, run::StepStatus, time::Timestamp};
 
 use self::matching::{entry_matches, matches};
 use super::{Item, ItemKind, StepHead, ToolGroup};
-use crate::tasks::transcript::Entry;
+use crate::tasks::transcript::{Entry, EntryKind};
 
 /// The *Show* control.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -372,10 +372,21 @@ impl Pass<'_> {
         self.shown.hidden_tools.0 += group.summary.calls;
         self.shown.hidden_tools.1 += 1;
       }
-      Show::Tools => self.shown.rows.extend(matching.into_iter().map(|entry| Row::Entry {
-        key: format!("entry-{}-{}", entry.sequence, entry.part).into(),
-        entry,
-      })),
+      Show::Tools => {
+        // A native agent reports usage per model request; its step's header and the panel carry the
+        // totals, so its Tools list holds only the calls (04.H10 `IcGvI`).
+        let native = self
+          .step
+          .as_ref()
+          .is_some_and(|open| open.head.provider.is_some_and(AgentProvider::is_native));
+        let listed = matching
+          .into_iter()
+          .filter(|entry| !(native && matches!(entry.kind, EntryKind::Usage(_))));
+        self.shown.rows.extend(listed.map(|entry| Row::Entry {
+          key: format!("entry-{}-{}", entry.sequence, entry.part).into(),
+          entry,
+        }));
+      }
       Show::All => {
         let chip = Chip {
           key: item.key.clone(),

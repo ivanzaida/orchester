@@ -506,3 +506,35 @@ fn editing_a_native_connection_keeps_its_key_models_and_last_test() {
   assert_eq!(stored.name().as_str(), "Claude API · Main");
   assert_eq!(stored.status(), ConnectionStatus::KeyRejected);
 }
+
+#[test]
+fn native_dialog_says_what_a_passed_test_found() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let key = key_secret(&mut db, "ANTHROPIC_API_KEY", Environment::Staging, false);
+    let models = NativeModels::new(
+      vec![model("claude-opus-5-5", None, &[Effort::Medium], ModelSource::Manual)],
+      None,
+      None,
+    )
+    .expect("models");
+    native_connection(
+      &mut db,
+      NativeSeed {
+        name: "Claude API · Kontur",
+        provider: AgentProvider::AnthropicApi,
+        preset: EndpointPreset::Official,
+        url: "https://api.anthropic.com",
+        key,
+        models,
+        check: Some(CheckResult::Api { balance: None }),
+      },
+    );
+  });
+  open_connections(&mut desktop);
+  desktop.click("edit-connection");
+  desktop.wait_for("native-test");
+  assert!(shows(&mut desktop, "native-test", "Key accepted"));
+  assert!(shows(&mut desktop, "native-test", "api.anthropic.com answered · "));
+  assert!(!shows(&mut desktop, "native-test", "Connected"));
+}

@@ -38,7 +38,7 @@ pub(super) fn is_native(step: &StepView) -> bool {
   step.provider.is_some_and(|provider| provider.is_native())
 }
 
-/// *Runs* on this computer, the *Endpoint* its model requests went to, and the *Effort* they named.
+/// *Runs* on this computer and the *Endpoint* its model requests went to.
 pub(super) fn launch_rows(ctx: &Ctx, step: &StepView) -> Vec<Element> {
   let mut rows = vec![property(
     &ctx.t("runs.activity.panel.runs"),
@@ -56,12 +56,14 @@ pub(super) fn launch_rows(ctx: &Ctx, step: &StepView) -> Vec<Element> {
       .as_ref()
       .map(|endpoint| styled_property(&ctx.t(label), endpoint, ValueStyle::Path)),
   );
-  rows.extend(
-    step
-      .effort
-      .map(|effort| property(&ctx.t("runs.activity.panel.effort"), effort.as_str())),
-  );
   rows
+}
+
+/// The *Effort* its model requests named, when they named one.
+pub(super) fn effort_row(ctx: &Ctx, step: &StepView) -> Option<Element> {
+  step
+    .effort
+    .map(|effort| property(&ctx.t("runs.activity.panel.effort"), effort.as_str()))
 }
 
 /// *Network* as the agent ran with it, and its *Tool calls* with how many were denied.

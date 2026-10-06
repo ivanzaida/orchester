@@ -26,7 +26,7 @@ use super::{
   model_editor::{ModelEditor, ModelEditorProps},
   model_text,
   native_dialog::{DefaultEffort, DefaultModel, NativeDialog, NativeErrors, PresetChoice},
-  native_test::{TestAction, test_action},
+  native_test::{LastTest, TestAction, test_action},
   status::{CHECKING, status_label},
 };
 use crate::{
@@ -220,28 +220,39 @@ impl NativeDialog {
   /// line says what the test found, why it failed, or why the fields cannot be tested yet.
   fn test_row(&self, ctx: &Ctx, test: &TestAction) -> Element {
     let state = test.state().get();
-    let stored = match &self.context.mode {
-      DialogMode::EditNative(connection) => connection.last_check().map(|check| check.result.clone()),
+    let tested = state.data.as_ref().map(|tested| LastTest {
+      result: tested.result.clone(),
+      host: tested.host.clone(),
+      at: tested.at,
+      listed: Some(tested.models.len()),
+    });
+    let tested = tested.or_else(|| match &self.context.mode {
+      DialogMode::EditNative(connection) => connection.last_check().map(|check| LastTest {
+        result: check.result.clone(),
+        host: connection.api().map_or("".into(), |api| api.base_url().host().into()),
+        at: check.at,
+        listed: None,
+      }),
       _ => None,
-    };
-    let tested = state.data.as_ref().map(|tested| tested.result.clone()).or(stored);
-    let (glyph, status) = if state.is_pending() {
-      CHECKING
-    } else {
-      status_label(
+    });
+    let (glyph, status) = match &tested {
+      _ if state.is_pending() => CHECKING,
+      // The model API took the key (`VFEkh`).
+      Some(LastTest {
+        result: CheckResult::Api { .. },
+        ..
+      }) => (Icon::CircleCheck, "connections.native.keyAccepted"),
+      _ => status_label(
         tested
           .as_ref()
-          .map_or(ConnectionStatus::NotChecked, CheckResult::status),
-      )
+          .map_or(ConnectionStatus::NotChecked, |tested| tested.result.status()),
+      ),
     };
     let api = self.tested_api();
     let note = match (&api, &state.error) {
       _ if state.is_pending() => None,
       (Err(reason), _) | (Ok(_), Some(reason)) => Some(message_text(ctx, reason)),
-      (Ok(_), None) => tested
-        .as_ref()
-        .and_then(CheckResult::balance)
-        .map(|balance| ctx.t_args("connections.native.testBalance", [("balance", balance)])),
+      (Ok(_), None) => tested.as_ref().and_then(|tested| tested.found(ctx)),
     };
     Row::new()
       .id("native-test")

@@ -120,6 +120,8 @@ pub(super) struct Shown {
   pub(super) title: Arc<str>,
   pub(super) meta: Arc<str>,
   pub(super) body: Option<Arc<str>>,
+  /// The body is a command, set in mono (a denied native command, 04.H10 `IcGvI`).
+  pub(super) mono_body: bool,
   /// Lines of the output block, shown while the entry is open.
   pub(super) output: Option<Vec<Arc<str>>>,
   /// What the output block leaves out, said above it.
@@ -138,6 +140,7 @@ impl Shown {
       title,
       meta,
       body,
+      mono_body: false,
       output: None,
       omitted: None,
       collapsible: false,
@@ -259,9 +262,12 @@ fn entry_details(
         )
       }))
       .with_children(shown.body.as_ref().map(|body| {
-        Text::new(body)
-          .variant(ExtraTypography::Explanation.role())
-          .selectable(true)
+        let style = if shown.mono_body {
+          ExtraTypography::MonoArea
+        } else {
+          ExtraTypography::Explanation
+        };
+        Text::new(body).variant(style.role()).selectable(true)
       }))
       .with_children(
         shown
@@ -479,6 +485,7 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     title: ctx.t_args(key, [("count", lines.len().to_string().as_str())]),
     meta: ctx.t("runs.activity.rawOutput"),
     body: None,
+    mono_body: false,
     output: Some(text),
     omitted: None,
     collapsible: !raw_lines,

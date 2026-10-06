@@ -654,10 +654,15 @@ independent review and design verification pending)
   match and file counts, +/− lines, the shell; `Declined` by a person or by Orchester with the result the agent got),
   told before the call's end. Rows: file tools with their own glyph, the target as title, the tool first in the meta
   (*read_file · lines 1–140 · 4.7 KiB*, *search · src/\*\* · 9 matches in 4 files*, *edit_file · M · +38 −6 · open in
-  Changes*, the separate file-change row folded in); `run_command` as a CLI command row plus *shell · pwsh*; an
-  approval as an entry of its own (*Approved by you*, meta *approve once · waited 48 s*); a denial *Denied by a person*
-  (meta *the agent continues*, circle-x, the command as body, the result in the output block); Orchester's refusal
-  (*refused by Orchester · the agent continues*). `RunnerProblem::ContextCompacted` (emitted by the loop with the
+  Changes*, the separate file-change row folded in; a search titled by its quoted pattern, *“registerShortcut”*);
+  `run_command` as a CLI command row plus *shell · pwsh*; an approval as one line of its own (hand glyph, *Approved by
+  you · pnpm add @kontur/keymap*, meta *approve once · waited 48 s*); a denial *Denied by a person · the agent
+  continues* (circle-x, meta *run_command · shell · pwsh*, the command in mono as body, the output block opening with
+  *Given to the agent as the command’s result:*); Orchester's refusal (*refused by Orchester · the agent continues*).
+  The *Tools* view leaves a native step's per-request *Usage reported* rows out (its header and panel carry the
+  totals); the panel lists *Effort* after *Started*. The dialog's test row after a passed test reads *Key accepted* and
+  *api.anthropic.com answered · 4 models listed · 14:02* (a test recorded before the dialog opened: *… answered ·
+  14:02*). These follow the first design verification (four major findings, fixed). `RunnerProblem::ContextCompacted` (emitted by the loop with the
   tokens before and after), `ModelRetrying` and `ThinkingStripped` have Activity texts; a profile's MCP servers are left
   out with `McpServerProblem::NotSupportedByConnection`.
 - **Tests run (all pass):** `cargo test -p orchester-runner --features test-agent --test native native_` (5: a step
@@ -668,8 +673,9 @@ independent review and design verification pending)
   native_setup native_setup`, `--test native_connection native`, `--test activity_redaction redact`; `cargo test -p
   orchester-store --test native_conversations native_` (2), `--test activity activity`, `--test tool_approvals tool`;
   `cargo test -p orchester-agent --test file_tools files_` (23); `cargo test -p orchester-ipc --test framing
-  frames_round_trip`; `cargo test -p orchester-desktop --test form_keyboard native_` (31, with the new
-  `native_rows` and `native_dialog_keeps_testing_an_openai_connection_unavailable`), `connection`, `conversation`, `approval`, `activity`, `agent`; `--test transcript transcript`,
+  frames_round_trip`; `cargo test -p orchester-desktop --test form_keyboard native_` (33, with the new
+  `native_rows`, `native_rows_leave_usage_out_of_the_tools_list`, `native_dialog_says_what_a_passed_test_found` and
+  `native_dialog_keeps_testing_an_openai_connection_unavailable`), `connection`, `conversation`, `approval`, `activity`, `agent`; `--test transcript transcript`,
   `--test timeline timeline`, `--test i18n locales`/`every_key`. CLI regressions: runner `claude_approvals`, `claude`,
   `execution`, `codex_resume`, `send_now`, `command_approvals`, `approval_choices`. `tools/check.ps1`: OK.
 - **Not run:** a live API run (P1's acceptance needs one with a key a person supplies); runner tests for a budget
@@ -685,8 +691,11 @@ independent review and design verification pending)
   reaches no command, prompt or tool output Orchester makes, only a file in the worktree could hold it), while
   Activity and approvals are redacted with the key; read stamps live per invocation, so a resumed agent reads a file again before it edits it;
   sizes read KiB as everywhere in the app, not *KB* as 04.H10 draws them; *Test again* and *Fetch models* both test
-  and merge the listed models. The title/meta split of the approval and denial entries follows the design text, not
-  the frame, which this step could not open (no Pencil access): the design verifier decides.
+  and merge the listed models; a search's scope is the path or glob the agent passed (*src* when it named a folder,
+  not the frame's *src/\*\**); the *All* view's open tool groups still list a native step's usage rows (the
+  verification flagged only *Tools*). Not changed after the design verification (minor, follow-ups): the agent
+  message line in *Tools* (one line *Builder: …* · *message*, as for the CLIs), and 04.H4's *Last checked* (relative
+  time) and footer copy.
 - **How to reach each state (design verifier):**
   - 04.H10 rows, header and panel with *Endpoint* and *Effort*: the headless harness seeds them in
     `crates/desktop/tests/form_keyboard/native_rows.rs` (`seeded`: a DeepSeek run, an `InvocationEngine` on
@@ -699,7 +708,9 @@ independent review and design verification pending)
     the server's models), a profile on it, then *Create and run*. Its approvals show in 04.H9 when the profile asks
     before commands.
   - 04.H1/H4 test row and *Fetch models*: open Connections, select or edit an Anthropic API connection; without a
-    reachable runner the row says the runner is not connected. The unavailable state: edit an OpenAI API connection
+    reachable runner the row says the runner is not connected. *Key accepted* with *host answered · N models listed ·
+    time*: press *Test again* against the fake Messages API (or edit a connection whose last check passed:
+    *host answered · time*, seeded in `native_dialog::native_dialog_says_what_a_passed_test_found`). The unavailable state: edit an OpenAI API connection
     (seeded as in `native_connections::seed_native`; the dialog cannot add one).
 
 ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (done 2026-10-05: independent code and security

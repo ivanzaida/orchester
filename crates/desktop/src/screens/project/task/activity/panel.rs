@@ -220,9 +220,11 @@ fn details(ctx: &Ctx, run: &RunView, invocation: &Invocation, narrowed: bool) ->
     property(&ctx.t(label), &agent),
   ];
   if native::is_native(step) {
-    // 04.H10 `f0xJK`: where it ran, then when it started and for how long; no invocation number.
+    // 04.H10 `f0xJK`: where it ran, when it started and for how long, then its effort; no invocation
+    // number.
     rows.extend(native::launch_rows(ctx, step));
     rows.push(native::started_row(ctx, invocation));
+    rows.extend(native::effort_row(ctx, step));
   } else {
     rows.push(property(&ctx.t("runs.activity.panel.invocation"), &invocation_number));
     rows.push(when);

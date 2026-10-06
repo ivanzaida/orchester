@@ -10,7 +10,7 @@ use orchester_core::{
     stream::{AgentEvent, CallDetail, CommandStatus, Declined, DeclinedBy, FileChange, FileChangeKind, NativeCall},
   },
   native::{session::DENIED, tools::ToolName},
-  run::{CommandShell, DecidedBy, InvocationEngine, ToolDecision},
+  run::{CommandShell, DecidedBy, InvocationEngine, TokenUsage, ToolDecision},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -88,9 +88,9 @@ fn transcript() -> Vec<AgentEvent> {
     started("call_1", "read_file src/switcher.ts:1-140"),
     call("call_1", ToolName::ReadFile, read, None),
     finished("call_1", "read_file src/switcher.ts:1-140", "lines 1–140 of 300", None),
-    started("call_2", "search useKeymap src"),
+    started("call_2", "search useKeymap src/**"),
     call("call_2", ToolName::Search, searched, None),
-    finished("call_2", "search useKeymap src", "9 matches in 4 files", None),
+    finished("call_2", "search useKeymap src/**", "9 matches in 4 files", None),
     started("call_3", "edit_file src/switcher.ts"),
     call("call_3", ToolName::EditFile, changed, None),
     finished("call_3", "edit_file src/switcher.ts", "edited src/switcher.ts", None),
@@ -100,6 +100,14 @@ fn transcript() -> Vec<AgentEvent> {
         path: "src/switcher.ts".to_owned(),
         kind: FileChangeKind::Modified,
       }],
+    },
+    // A native agent reports usage after each model request.
+    AgentEvent::TurnCompleted {
+      usage: TokenUsage {
+        input: 1_200,
+        cached_input: 0,
+        output: 80,
+      },
     },
     decided("call_4", DecidedBy::Person, None, Some(48_000)),
     started("call_4", "pnpm vitest run"),
@@ -170,19 +178,27 @@ fn native_rows_show_tool_calls_approvals_and_denials() {
   desktop.wait_for("task-page");
   desktop.click("task-tab-conversation");
   desktop.wait_for("conversation-group-toggle");
+  // The open group's rows push the step's header out of the virtualized list.
+  assert!(shows(
+    &mut desktop,
+    "activity-step-header",
+    "gateway.kontur.lan / deepseek-v4-pro · native"
+  ));
   desktop.click("conversation-group-toggle");
   desktop.wait_until("the group opens", |desktop| {
     shows(desktop, "conversation", "read_file · lines 1–140 · 4.7 KiB")
   });
   for text in [
     "src/switcher.ts",
+    "“useKeymap”",
     "search · src/** · 9 matches in 4 files",
     "edit_file · M · +38 −6 · open in Changes",
-    "Approved by you",
+    "Approved by you · pnpm vitest run",
     "approve once · waited 48 s",
     "shell · pwsh",
-    "Denied by a person",
-    "the agent continues",
+    "Denied by a person · the agent continues",
+    "run_command · shell · pwsh",
+    "Given to the agent as the command’s result:",
     "refused by Orchester · the agent continues",
     "The conversation was shortened to fit the model’s context window",
     "about 164k tokens became about 12k",
@@ -192,13 +208,28 @@ fn native_rows_show_tool_calls_approvals_and_denials() {
   desktop.click("conversation-details");
   desktop.wait_for("activity-invocation");
   let panel = "activity-invocation";
-  assert!(shows(
-    &mut desktop,
-    "activity-step-header",
-    "gateway.kontur.lan / deepseek-v4-pro · native"
-  ));
   assert!(shows(&mut desktop, panel, "https://gateway.kontur.lan/v1"));
   assert!(!shows(&mut desktop, panel, "Endpoint now"), "the endpoint the run used");
   assert!(shows(&mut desktop, panel, "Effort"));
   assert!(shows(&mut desktop, panel, "high"));
+}
+
+#[test]
+fn native_rows_leave_usage_out_of_the_tools_list() {
+  let mut desktop = seeded();
+  desktop.wait_for("nav-tasks");
+  desktop.press("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.click("task-row-KON-1");
+  desktop.wait_for("task-page");
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-show-2");
+  desktop.click("conversation-show-2");
+  desktop.wait_until("the tools", |desktop| {
+    shows(desktop, "conversation", "edit_file · M · +38 −6 · open in Changes")
+  });
+  assert!(
+    !shows(&mut desktop, "conversation", "Usage reported"),
+    "the step's header and panel carry a native agent's usage"
+  );
 }
