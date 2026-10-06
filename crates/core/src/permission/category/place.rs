@@ -63,7 +63,7 @@ pub(super) struct Placing<'a> {
   made: &'a [PathBuf],
 }
 
-impl Placing<'_> {
+impl<'a> Placing<'a> {
   /// Each path `word` names, one per folder the part may run in; `None` when one cannot be told.
   fn locate(&self, word: &str) -> Option<Vec<(PathBuf, Place)>> {
     let located: Option<Vec<Vec<(PathBuf, Place)>>> = self
@@ -137,6 +137,55 @@ impl Placing<'_> {
           && !path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
       })
     })
+  }
+
+  /// This placing from `folders` instead (where `git -C <folder>` reads its arguments).
+  pub(super) const fn placed_in<'b>(&self, folders: Option<&'b [PathBuf]>) -> Placing<'b>
+  where
+    'a: 'b,
+  {
+    Placing {
+      scope: self.scope,
+      folders,
+      made: self.made,
+    }
+  }
+
+  /// Whether `word` names a regular file in the worktree or a writable folder, no folder on its way and
+  /// not the file a link or junction, where an edit may write (no `.git`, no `.orchester/`).
+  pub(super) fn plain_file(&self, word: &str) -> bool {
+    self.plain(word, |path| {
+      std::fs::symlink_metadata(path).is_ok_and(|found| found.is_file() && !found.file_type().is_symlink())
+    })
+  }
+
+  /// Whether `word` names a repository nested in the worktree or a writable folder: a plain folder below
+  /// it that holds its own `.git` folder (not a file that points elsewhere, not a link), where an edit may
+  /// write.
+  pub(super) fn nested_repository(&self, word: &str) -> bool {
+    self.plain(word, |path| {
+      std::fs::symlink_metadata(path).is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink())
+        && !self.scope.is_root(path)
+        && std::fs::symlink_metadata(path.join(".git"))
+          .is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink())
+    })
+  }
+
+  /// Whether `word`, from every folder the part may run in, is a path in the worktree (not a writable
+  /// folder, which may hold the user's own repositories) whose folders are plain folders, where an edit may
+  /// write, and that `is` says it is.
+  fn plain(&self, word: &str, is: impl Fn(&Path) -> bool) -> bool {
+    !word.contains(['*', '?', '['])
+      && self.folders.is_some_and(|folders| {
+        folders.iter().all(|folder| {
+          self.scope.written(folder, word).is_some_and(|path| {
+            self.scope.in_worktree(&path)
+              && path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
+              && !self.scope.write_refused(&path, false)
+              && is(&path)
+          })
+        })
+      })
   }
 
   /// Whether `cp` or `mv` of `source` copies or moves a folder or a link (or what cannot be told), whose

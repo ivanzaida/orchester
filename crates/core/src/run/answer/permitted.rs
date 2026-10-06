@@ -40,6 +40,9 @@ pub fn permitted(subject: &ApprovalSubject, permissions: &AgentPermissions) -> O
 /// listed command that names nothing outside the worktree, or, when the step `edits`, a part that only
 /// writes there as an edit would. A listed command redirects into a file only when the step edits.
 fn runs_alone(part: &CommandPart, list: &AllowedCommands, edits: bool) -> bool {
+  if part.through_path() {
+    return false;
+  }
   part.known_safe_read()
     || (edits && part.edits_worktree())
     || (list.allows_argv(part.words())

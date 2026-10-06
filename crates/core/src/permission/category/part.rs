@@ -87,6 +87,11 @@ pub struct CommandPart {
   pub(super) writes_output: bool,
   /// A `cd` to one folder named plainly, in the worktree or a writable folder.
   pub(super) moves_inside: bool,
+  /// It runs a script file of the worktree ([`super::interpreters`]).
+  pub(super) runs_script: bool,
+  /// It runs inside the inline script of a shell written with a folder, which is not the bare shell a
+  /// rule names.
+  pub(super) through_path: bool,
   /// Its program only edits the files it names ([`Judged::edits`]).
   pub(super) edits: bool,
 }
@@ -117,6 +122,8 @@ impl CommandPart {
       known_safe: judged.known_safe,
       writes_output: false,
       moves_inside: false,
+      runs_script: false,
+      through_path: false,
       edits: judged.edits,
     }
   }
@@ -156,6 +163,12 @@ impl CommandPart {
   /// Whether it names, reads or writes anything outside the worktree and its writable folders.
   pub const fn reaches_outside(&self) -> bool {
     !self.outside.is_empty()
+  }
+
+  /// Whether it runs in a shell written with a folder (`C:\Program Files\PowerShell\7\pwsh.exe -Command …`):
+  /// no rule for a bare program name runs it.
+  pub const fn through_path(&self) -> bool {
+    self.through_path
   }
 
   /// Whether it redirects its output into a file.

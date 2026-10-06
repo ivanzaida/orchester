@@ -641,6 +641,47 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Worktree scripts and nested fixture repositories run like edits · branch `claude/worktree-scripts` (done 2026-10-06)
+
+User decision: in a step that edits files, running a script file of the worktree adds nothing an agent cannot do by
+writing a test and running an allowed `cargo test`. Verify steps asked about `python .tmp/verify/start.py`,
+`python .tmp/verify/tree.py 39684 …`, `powershell -NoProfile -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1`
+and `git -C .tmp/verify/kontur -c user.name=… -c user.email=… commit -q …`; they now run.
+
+- `category::interpreters`: `python`/`python3`/`py` (flags `-u -B -E -s -I -O -OO`, `-X …`, `py -3`), `node`, `bash`/`sh`/
+  `zsh` (`-e -u -x -v`), `pwsh`/`powershell` (`-NoProfile`, `-NonInteractive`, `-NoLogo`, `-ExecutionPolicy
+  Bypass|RemoteSigned`, `-File`) running a file. The part is Worktree and an edit when the script is a regular file
+  in the worktree or a writable folder, no link on its way, not in `.git` or `.orchester/` (`Placing::plain_file`,
+  the same placing and `write_refused` as edits); any other script is Unknown. Inline code (`-c`, `-e`, `-Command`,
+  `-EncodedCommand`), `-m`, `node -r`, `bash --rcfile`, `PYTHONPATH=`/`NODE_OPTIONS=` prefixes still ask; the
+  script's arguments are placed like any other.
+- git: `-c user.name=…` and `-c user.email=…` are read (every other `-c` is Unknown); `git -C <folder>` with a
+  Worktree subcommand is an edit when the folder is a plain folder below the worktree (not the worktree itself)
+  holding its own `.git` folder (`Placing::nested_repository`): the agent's fixture. In the run's own worktree, a
+  git change still asks.
+- Security review (`.tmp/review-worktree-scripts.md`, FAIL at `9740e844`): an interpreter given with a folder
+  (`../x/bash`, `C:/evil/sh.exe`, `//server/share/bash.exe`) is Unknown; `native::scope::protected` refuses a stream
+  spelling (`.git::$INDEX_ALLOCATION`) and the classifier checks a write or script path resolved as well, so a
+  short name (`GIT~1`, `ORCHES~1`) is `.git` or `.orchester`; a script after a part that may change files (any
+  part that is not Read-only: git in the fixture repository, an edit, another script) is Unknown, and after the
+  re-review also with such a part after it or beside it in a pipeline (a script runs unasked only when every other
+  part of the line is Read-only); scripts and
+  nested repositories count only in the worktree, not the step's writable folders, which may hold the user's own
+  repositories; `pwsh` needs `-NoProfile`, `zsh` (which reads `~/.zshenv`) asks, `-X` takes only `importtime`,
+  `utf8`, `dev`, `faulthandler`, `tracemalloc`; `git -C <folder>` places its arguments from that folder; signing
+  (`commit -S`, `--gpg-sign`, `tag -s`/`-u`) is Unknown. A shell given with a folder that runs inline code is read
+  only when installed (an absolute path outside the worktree, the writable and temporary folders: Codex's
+  `C:\…\pwsh.exe -Command …`), else Unknown (`../x/bash -c ls` ran unasked before), and what it runs is never
+  answered by a rule for a bare program (`CommandPart::through_path`).
+- Read-only steps are unchanged. The fixture table of runs 22–25 is unchanged (its scripts are `python -` and
+  `python -c`).
+- Tests: `core` `worktree_scripts` (new: the six real lines, more forms, every refusal above, a script through a link,
+  outside, in `.git/hooks` and `.orchester`, a read-only step), `native` (`scope_windows`: the aliases of protected
+  folders), `worktree_writes`, `command_probes`,
+  `command_sequences`, `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`;
+  `runner --features test-agent` `claude_unlisted`, `approval_choices`, `claude`, `command_approvals`,
+  `orchester_tools`. Nothing on macOS.
+
 Shell writes in the worktree run like edits · branch `claude/worktree-writes` (done 2026-10-05)
 
 User decision: in a step that edits files, a command line whose only effects are writes to files in the worktree
