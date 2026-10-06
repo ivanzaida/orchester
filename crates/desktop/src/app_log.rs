@@ -22,6 +22,9 @@ use crate::app_paths;
 
 /// Days of logs kept, today included.
 pub const KEPT_DAYS: u32 = 14;
+/// What the log keeps unless `RUST_LOG` says otherwise: Orchester's INFO lines, and only warnings
+/// and errors from lurq, which logs its reactivity diagnostics at INFO several times per frame.
+pub const DEFAULT_FILTER: &str = "info,lurq=warn";
 const PREFIX: &str = "orchester-";
 const EXTENSION: &str = ".log";
 const DAY: Duration = Duration::from_secs(86_400);
@@ -142,7 +145,7 @@ pub fn install() {
     .map(|log| fmt::layer().with_ansi(false).with_writer(Arc::clone(log)));
   let console = (cfg!(debug_assertions) || log.is_err()).then(fmt::layer);
   tracing_subscriber::registry()
-    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+    .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
     .with(console)
     .with(file)
     .init();
