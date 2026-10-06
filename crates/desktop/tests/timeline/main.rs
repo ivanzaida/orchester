@@ -198,10 +198,22 @@ fn timeline_a_message_carries_the_chips_of_its_tool_groups() {
 
 #[test]
 fn timeline_finished_steps_fold_into_one_line_unless_opened() {
-  let (items, ..) = two_steps();
-  // The step before the last that ran stays open; the last, finished, folds.
+  let (mut items, ..) = two_steps();
+  let review = StepExecutionId::generate();
+  items.push(item("step-review", review, ItemKind::Step(head(review, 3, "Review"))));
+  items.push(item(
+    "review-message",
+    review,
+    ItemKind::AgentMessage {
+      agent: "Builder".into(),
+      step: "Review".into(),
+      text: "The dialog closes.".into(),
+    },
+  ));
+  // The last two that ran stay open, also between two steps, before the next starts; a finished step
+  // before them folds.
   let folded = shown(&items, &Choice::default(), &|_, default| default);
-  assert_eq!(kinds(&folded.rows), ["step", "agent", "folded"]);
+  assert_eq!(kinds(&folded.rows), ["folded", "step", "agent", "step", "agent"]);
   // Finished steps in a row share one line, with their keys to open them.
   let all = shown(&items, &Choice::default(), &|_, _| false);
   assert_eq!(kinds(&all.rows), ["folded"]);
@@ -209,7 +221,7 @@ fn timeline_finished_steps_fold_into_one_line_unless_opened() {
     panic!("the fold");
   };
   let keys: Vec<&str> = steps.iter().map(|(key, _)| &**key).collect();
-  assert_eq!(keys, ["step-research", "step-implement"]);
+  assert_eq!(keys, ["step-research", "step-implement", "step-review"]);
 }
 
 #[test]

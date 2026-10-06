@@ -2,7 +2,7 @@
 //! (approved …)", `YJfPo`): one rounded box, the message on top and a row inside it — *Attach*
 //! (unavailable), the run's permissions as a chip, the recipient as a quiet selector and a round
 //! send button ([`controls`]). What it answers or changes stands above the box, and one quiet line
-//! under it while it changes what happens ([`text`]). Once no agent reads messages, the box keeps
+//! under it while it changes what happens or an agent works ([`text`]). Once no agent reads messages, the box keeps
 //! only the lock and the reason.
 //!
 //! Send and Enter send now while the agent the message is for works mid-turn, and press the state's

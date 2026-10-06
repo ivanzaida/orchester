@@ -132,17 +132,24 @@ pub(super) fn tip(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -
   )
 }
 
-/// The quiet line under the box, while what it says changes the outcome (`okcPt` in `l7cEtA`,
-/// `Alok8` in `cHDF1`): the message queues, a follow-up resumes the session, a failed run
-/// continues, the run has not started.
+/// The quiet line under the box (`okcPt` in `l7cEtA`, `Alok8` in `cHDF1`): the message queues, a
+/// follow-up resumes the session, a failed run continues, the run has not started; and while an agent
+/// works, when it gets the message, in one line. The line stays as the run goes from one step to the
+/// next and back to work, so the chat above the box does not move (ORC-71).
 pub(super) fn quiet(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Option<Arc<str>> {
   match mode {
     ComposerMode::Queue(_) | ComposerMode::FollowUp | ComposerMode::Continue | ComposerMode::NotStarted => {
       Some(hint(ctx, mode, conversation))
     }
-    ComposerMode::Steer(_) | ComposerMode::Answer { .. } | ComposerMode::PlanChanges { .. } | ComposerMode::Closed => {
-      None
+    ComposerMode::Steer(working) => {
+      let key = if working.mid_turn {
+        "runs.conversation.hint.quietSteer"
+      } else {
+        "runs.conversation.hint.quietSteerAfterTurn"
+      };
+      Some(ctx.t_args(key, [("agent", &*working.agent)]))
     }
+    ComposerMode::Answer { .. } | ComposerMode::PlanChanges { .. } | ComposerMode::Closed => None,
   }
 }
 

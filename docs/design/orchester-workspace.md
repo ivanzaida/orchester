@@ -1582,8 +1582,11 @@ tests still name them; they go when the new design is built.
   waiting for your decision, not started).
 - **Context lines sit above the box** (*Answering Builder's question from 16:42*, *Changes to plan v1 · Planner writes
   plan v2 from your note*, *Continue 03 Implement with your instructions · attempt 3*) with × to leave that mode.
-- **Help text** moves to the send tooltip; one quiet line (10, `$subtle`) under the box only while it changes the
-  outcome (queued, paused, a follow-up resumes the session, continue starts a new attempt).
+- **Help text** moves to the send tooltip; one quiet line (10, `$subtle`) under the box while it changes the
+  outcome (queued, paused, a follow-up resumes the session, continue starts a new attempt), and while an agent works,
+  when it gets the message (*Builder gets your message at its next tool call.*). The line stays from one step to the
+  next, so the chat above the box does not move as steps change (ORC-71; the Pencil frames do not show it while an
+  agent works yet).
 - **Permission chip** shows this run's permissions (*Read-only*, *Edit files · asks for the rest*) in `$muted`, and in
   `$danger` once this run allows more than its profile (*Network on · approves similar (2)*); it opens the run
   permissions popover (02.J). No new colour: the reference's orange would need a warning role the theme does not have.

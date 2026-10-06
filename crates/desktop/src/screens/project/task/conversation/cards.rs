@@ -52,7 +52,7 @@ use crate::{
 const PLAN_LINES: usize = 6;
 
 /// A card's frame: raised while it waits for the person, a border only once decided.
-pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Element>) -> Element {
+pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Element>) -> Column {
   let card = Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -64,9 +64,9 @@ pub(super) fn frame(id: String, waiting: bool, header: Element, body: Vec<Elemen
     .child(header)
     .with_children(body);
   if waiting {
-    card.background(PaletteColor::SurfaceRaised).into()
+    card.background(PaletteColor::SurfaceRaised)
   } else {
-    card.into()
+    card
   }
 }
 
@@ -131,7 +131,8 @@ pub(super) fn question(ctx: &Ctx, (entry, _step): (&Entry, Option<&Arc<str>>), t
     open,
     header(Icon::MessageCircleQuestion, &title, state),
     body,
-  );
+  )
+  .into();
   let meta = ctx.t_args(
     "runs.conversation.asksMeta",
     [("time", display::clock(entry.at).as_str())],
@@ -225,7 +226,8 @@ impl Component for PlanCardView {
       props.card.waiting,
       header(Icon::ListChecks, &title, state),
       body,
-    );
+    )
+    .into();
     chat_row(
       format!("conversation-plan-row-{}", plan.version),
       Avatar::Plan,

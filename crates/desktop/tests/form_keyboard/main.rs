@@ -23,6 +23,7 @@ mod conversation_composer_box;
 mod conversation_composer_ime;
 mod conversation_queued;
 mod conversation_rail;
+mod conversation_steady;
 mod decided_card;
 mod dialogs;
 mod draft_autosave;

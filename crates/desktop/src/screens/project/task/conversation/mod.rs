@@ -198,6 +198,8 @@ pub(super) struct ConversationTab {
   left_at: Arc<Mutex<LeftAt>>,
   /// Whether the list has shown rows yet: the first time, it starts at the end.
   started: Arc<Mutex<bool>>,
+  /// Whether the list has laid out every one of its rows since it showed rows.
+  measured: Signal<bool>,
   /// The card that waits for the person, which the chat shows until the person scrolls.
   reveal: Arc<Mutex<Reveal>>,
   /// Bumped when a row asks the chat to reveal another, so the chat renders and reveals it.
@@ -230,6 +232,7 @@ impl Component for ConversationTab {
       following: ctx.signal(true),
       left_at: Arc::new(Mutex::new(LeftAt::default())),
       started: Arc::new(Mutex::new(false)),
+      measured: ctx.signal(false),
       reveal: Arc::new(Mutex::new(Reveal::default())),
       revealed: ctx.signal(0),
       toggles: Toggles(ctx.signal(OpenRows::default())),
@@ -245,7 +248,6 @@ impl Component for ConversationTab {
   }
 
   fn after_layout(&self) {
-    self.keep_at_end();
     self.reveal_asked();
   }
 

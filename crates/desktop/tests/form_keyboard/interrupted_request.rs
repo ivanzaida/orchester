@@ -97,7 +97,10 @@ fn opened() -> (Desktop, String, String, u64) {
   open_conversation(&mut desktop);
   let link = format!("activity-show-request-{problem}");
   desktop.wait_for(&link);
-  (desktop, link, format!("conversation-approval-{request}"), problem)
+  // As it opens, the list lays out every row once, the card too, before it keeps to its end.
+  let card = format!("conversation-approval-{request}");
+  desktop.wait_until("the chat at its end", |desktop| !has(desktop, &card));
+  (desktop, link, card, problem)
 }
 
 /// Presses `link` with the card out of the chat's view, and the card then shows in it.

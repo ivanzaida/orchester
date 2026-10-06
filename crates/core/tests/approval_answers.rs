@@ -302,6 +302,30 @@ fn approval_answers_deny_tells_the_agent_to_continue() {
   );
 }
 
+/// A person, automation and auto mode's reviewer answer a request that waited for them; the step's
+/// permissions, a rule of the run and auto-approval answer it as it comes, so the Conversation shows it
+/// in the agent's tool chip, not as a card (ORC-71).
+#[test]
+fn approval_answers_who_answered_a_waiting_request() {
+  let waited: Vec<DecidedBy> = DecidedBy::ALL
+    .into_iter()
+    .filter(|decided| decided.answered_waiting())
+    .collect();
+  assert_eq!(
+    waited,
+    [
+      DecidedBy::Person,
+      DecidedBy::PersonSimilar,
+      DecidedBy::PersonAlways,
+      DecidedBy::PersonRun,
+      DecidedBy::PersonDeny,
+      DecidedBy::Automation,
+      DecidedBy::AutomationDeny,
+      DecidedBy::Reviewer,
+    ]
+  );
+}
+
 /// Automation approves once only what auto-approval would approve; it denies anything; the rest, and the
 /// wider answers, stay with a person, who answers every request.
 #[test]
