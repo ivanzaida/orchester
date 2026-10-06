@@ -1,7 +1,10 @@
 //! What the reviewer reads about one request: the request as the approval card shows it (already
-//! redacted), the step's permissions, the task, and the last few messages the step's agent wrote. Each
-//! part is kept within a size, so a long brief or transcript never makes the review slow or costly.
+//! redacted), the step's permissions, the task, and the last few messages the step's agent wrote. The
+//! request itself is never cut: one too long to be read whole is held for the person
+//! ([`ReviewHold::TooLong`]), as a cut one could hide its harmful end. Only the context (the agent's
+//! note and messages, the task) is kept within a size, and what was cut says so.
 
+use super::ReviewHold;
 use crate::permission::{NetworkAccess, RepositoryAccess};
 
 /// The most messages of the agent the reviewer reads, newest last…
@@ -12,8 +15,10 @@ const MESSAGE_MAX_CHARS: usize = 2_000;
 const BRIEF_MAX_CHARS: usize = 6_000;
 const CRITERION_MAX_CHARS: usize = 500;
 const CRITERIA_KEPT: usize = 20;
-/// …and the request's arguments or note to this.
-const DETAIL_MAX_CHARS: usize = 6_000;
+/// …and the agent's note to this.
+const NOTE_MAX_CHARS: usize = 2_000;
+/// The longest request reviewed: its command or tool, arguments, server and working folder together.
+const REQUEST_MAX_CHARS: usize = 8_000;
 
 /// The request under review.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,21 +65,42 @@ pub struct ReviewInput {
 
 impl ReviewInput {
   /// The input of a review; `messages` are the agent's, oldest first, of which the last few are kept.
-  pub fn new(request: ReviewedRequest, step: ReviewedStep, task: ReviewedTask, messages: &[String]) -> Self {
+  /// [`ReviewHold::TooLong`] when the request is longer than a review reads whole.
+  pub fn new(
+    request: ReviewedRequest,
+    step: ReviewedStep,
+    task: ReviewedTask,
+    messages: &[String],
+  ) -> Result<Self, ReviewHold> {
+    let length = [
+      Some(&request.action),
+      Some(&request.server),
+      request.arguments.as_ref(),
+      request.working_folder.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|text| text.chars().count())
+    .sum::<usize>();
+    if length > REQUEST_MAX_CHARS {
+      return Err(ReviewHold::TooLong);
+    }
     let request = ReviewedRequest {
-      arguments: request.arguments.as_deref().map(|text| cut(text, DETAIL_MAX_CHARS)),
-      note: request.note.as_deref().map(|text| cut(text, DETAIL_MAX_CHARS)),
-      action: cut(&request.action, DETAIL_MAX_CHARS),
+      note: request.note.as_deref().map(|text| cut(text, NOTE_MAX_CHARS)),
       ..request
     };
+    let mut criteria: Vec<String> = task
+      .criteria
+      .iter()
+      .take(CRITERIA_KEPT)
+      .map(|criterion| cut(criterion, CRITERION_MAX_CHARS))
+      .collect();
+    if task.criteria.len() > CRITERIA_KEPT {
+      criteria.push(format!("(cut: {} more criteria)", task.criteria.len() - CRITERIA_KEPT));
+    }
     let task = ReviewedTask {
       brief: cut(&task.brief, BRIEF_MAX_CHARS),
-      criteria: task
-        .criteria
-        .iter()
-        .take(CRITERIA_KEPT)
-        .map(|criterion| cut(criterion, CRITERION_MAX_CHARS))
-        .collect(),
+      criteria,
       ..task
     };
     let skipped = messages.len().saturating_sub(MESSAGES_KEPT);
@@ -82,12 +108,12 @@ impl ReviewInput {
       .iter()
       .map(|message| cut(message, MESSAGE_MAX_CHARS))
       .collect();
-    Self {
+    Ok(Self {
       request,
       step,
       task,
       messages,
-    }
+    })
   }
 
   pub const fn request(&self) -> &ReviewedRequest {

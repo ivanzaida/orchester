@@ -165,6 +165,16 @@ impl CommandPart {
     !self.outside.is_empty()
   }
 
+  /// Whether it writes a file outside the worktree, or deletes one outside the temporary folder.
+  pub const fn writes_outside(&self) -> bool {
+    self.outside_write.is_some() || self.outside_delete.is_some()
+  }
+
+  /// Whether it runs a script file of the worktree, whose content Orchester does not read.
+  pub const fn runs_script(&self) -> bool {
+    self.runs_script
+  }
+
   /// Whether it runs in a shell written with a folder (`C:\Program Files\PowerShell\7\pwsh.exe -Command …`):
   /// no rule for a bare program name runs it.
   pub const fn through_path(&self) -> bool {

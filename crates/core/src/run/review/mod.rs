@@ -4,28 +4,34 @@
 //! exfiltrating, nor escaping the step's permissions; everything else still goes to the person, with the
 //! reviewer's reason. It is not "approve everything".
 //!
-//! Hard rules come before the reviewer and it cannot override them ([`review_hold`]): a credential read,
-//! and anything outside the step's permissions (a write in a read-only step, the network while it is off,
-//! a write outside the worktree and its writable folders), always go to the person. The reviewer fails
-//! closed: an error, a timeout or an answer that cannot be read goes to the person too ([`Review::of`]).
-//! What it reads holds no secret value: the request as the approval card shows it, redacted the same way.
+//! Hard rules come before the reviewer and it cannot override them ([`review_hold`], every part of a
+//! command line checked on its own): a credential read, a part Orchester could not read to the end, a
+//! rewrite of history or a delete outside the worktree, and anything outside the step's permissions (a
+//! write in a read-only step, the network while it is off, a write outside the worktree and its writable
+//! folders) always go to the person, as do Codex escalations and requests too long to be reviewed whole.
+//! The reviewer fails closed: an error, a timeout or an answer that cannot be read goes to the person too
+//! ([`Review::of`]). What it reads holds no secret value: the request as the approval card shows it,
+//! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
 
+mod hold;
 mod input;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask};
-use super::answer::ApprovalSubject;
-use crate::{
-  permission::{AgentPermissions, NetworkAccess, RepositoryAccess, category::CommandCategory},
-  resource::ModelId,
+pub use self::{
+  hold::{ReviewHold, review_hold},
+  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
 };
+use super::answer::ApprovalSubject;
+use crate::{permission::AgentPermissions, resource::ModelId};
 
 /// The reviewer's model unless a project names another: small and quick, as one review holds the agent.
 pub const DEFAULT_REVIEW_MODEL: &str = "claude-haiku-4-5-20251001";
 /// The longest a reason is kept; a longer one is cut.
-const REASON_MAX_CHARS: usize = 500;
+const REASON_MAX_CHARS: usize = 200;
+/// The quotation marks a reason may not hold, as the app quotes it.
+const QUOTES: [char; 6] = ['"', '\u{201c}', '\u{201d}', '\u{201e}', '\u{ab}', '\u{bb}'];
 
 /// What the reviewer decided about one request.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,22 +57,6 @@ pub trait RequestReviewer {
   /// The model that reviews.
   fn model(&self) -> &ModelId;
   fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError>;
-}
-
-/// A hard rule that sends a request to the person without a review.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReviewHold {
-  /// It reads a credential location or store.
-  Secrets,
-  /// The step only reads the repository, and the command may write.
-  ReadOnlyStep,
-  /// The step's network is off, and the command reaches it or installs.
-  NetworkOff,
-  /// It writes outside the worktree and the step's writable folders.
-  OutsideFolders,
-  /// The step's permissions were not recorded, so nothing tells what is within them.
-  PermissionsUnknown,
 }
 
 /// Why a review that ran gave no verdict, as it is recorded.
@@ -136,45 +126,43 @@ impl Review {
   }
 }
 
-/// `reason` trimmed and cut to [`REASON_MAX_CHARS`].
+/// `reason` as one plain line: control characters and line breaks become spaces, runs of spaces one,
+/// double quotation marks single ones (the app quotes it), cut to [`REASON_MAX_CHARS`] with an ellipsis.
 fn kept(reason: &str) -> String {
-  reason.trim().chars().take(REASON_MAX_CHARS).collect()
-}
-
-/// The hard rule that sends `subject` to the person without a review, under the step's recorded
-/// `permissions`; `None` when the reviewer may judge it.
-pub fn review_hold(subject: &ApprovalSubject, permissions: Option<&AgentPermissions>) -> Option<ReviewHold> {
-  let ApprovalSubject::Command(command) = subject else {
-    return permissions.is_none().then_some(ReviewHold::PermissionsUnknown);
-  };
-  if command.reads_secrets() {
-    return Some(ReviewHold::Secrets);
+  let plain: String = reason
+    .chars()
+    .map(|c| match c {
+      c if QUOTES.contains(&c) => '\'',
+      c if c.is_control() || c.is_whitespace() => ' ',
+      c => c,
+    })
+    .collect();
+  let line = plain.split_whitespace().collect::<Vec<_>>().join(" ");
+  if line.chars().count() <= REASON_MAX_CHARS {
+    return line;
   }
-  let Some(permissions) = permissions else {
-    return Some(ReviewHold::PermissionsUnknown);
-  };
-  let category = command.category();
-  if permissions.repository() == RepositoryAccess::ReadOnly && category != CommandCategory::ReadOnly {
-    return Some(ReviewHold::ReadOnlyStep);
-  }
-  if permissions.network() == NetworkAccess::Off && (category == CommandCategory::Network || command.installs()) {
-    return Some(ReviewHold::NetworkOff);
-  }
-  (category == CommandCategory::OutsideWrite).then_some(ReviewHold::OutsideFolders)
+  let mut cut: String = line.chars().take(REASON_MAX_CHARS - 1).collect();
+  cut.push('\u{2026}');
+  cut
 }
 
 /// Auto mode's handling of a request about `subject`: a hard rule first, under the step's recorded
-/// `permissions`; then `reviewer`'s verdict on `input`, or a failure when the project has none.
+/// `permissions`; then a request too long to be reviewed whole (`input`'s hold); then `reviewer`'s
+/// verdict on `input`, or a failure when the project has none.
 pub fn review_request(
   reviewer: Option<&dyn RequestReviewer>,
   (subject, permissions): (&ApprovalSubject, Option<&AgentPermissions>),
-  input: &ReviewInput,
+  input: Result<ReviewInput, ReviewHold>,
 ) -> Review {
   if let Some(hold) = review_hold(subject, permissions) {
     return Review::Held { hold };
   }
+  let input = match input {
+    Ok(input) => input,
+    Err(hold) => return Review::Held { hold },
+  };
   match reviewer {
-    Some(reviewer) => Review::of(reviewer.review(input), reviewer.model()),
+    Some(reviewer) => Review::of(reviewer.review(&input), reviewer.model()),
     None => Review::Failed {
       failure: ReviewFailure::NoReviewer,
       model: None,
