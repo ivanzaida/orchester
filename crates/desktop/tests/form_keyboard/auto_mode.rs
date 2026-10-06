@@ -84,7 +84,7 @@ fn seeded_with(
 }
 
 /// A signed-in Claude Code connection, which auto mode reviews with.
-fn claude_connection(repo: &Path) {
+pub(crate) fn claude_connection(repo: &Path) {
   let now = Timestamp::now();
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -249,13 +249,9 @@ fn auto_mode_project_setting_turns_new_runs_on_and_chooses_the_reviewer() {
   ));
   let repo = desktop.repo().to_path_buf();
   assert!(!settings(&repo).new_runs, "off until a person turns it on");
-  desktop.wait_until("new runs use auto mode", |desktop| {
-    if settings(&repo).new_runs {
-      return true;
-    }
-    desktop.click("settings-auto-mode-new-runs");
-    false
-  });
+  // One click: the switch shows the change at once, and a second click would undo it.
+  desktop.click("settings-auto-mode-new-runs");
+  desktop.wait_until("new runs use auto mode", |_| settings(&repo).new_runs);
 
   choose(&mut desktop, "settings-auto-mode-connection", "Codex · Review");
   desktop.wait_until("Codex reviews", |_| settings(&repo).reviewer.is_some());

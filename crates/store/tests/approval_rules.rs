@@ -161,6 +161,7 @@ fn approval_rules_decision_counts_by_who_answered() {
       by_reviewer: 1,
       asked_by_reviewer: 1,
       waiting: 1,
+      reviewing: 0,
     }
   );
   assert_eq!(db.approval_rules(run.id()).expect("rules")[0].answered, 1);

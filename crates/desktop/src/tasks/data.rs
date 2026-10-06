@@ -82,8 +82,11 @@ pub struct ProjectTasks {
   pub group_holds: Arc<BTreeMap<TaskId, GroupHold>>,
   /// The tasks of reviewed groups, which a group starts in its turn unless they are Canceled.
   pub grouped: Arc<std::collections::BTreeSet<TaskId>>,
-  /// Tool requests awaiting a decision anywhere in this project, oldest first.
+  /// Tool requests awaiting a person's decision anywhere in this project, oldest first.
   pub pending_tool_approvals: Arc<Vec<ShownApproval>>,
+  /// Tool requests auto mode's reviewer is judging: they wait without asking the person (no dialog, no
+  /// *Needs you*) until the review ends, and only their card says so.
+  pub reviewing_tool_approvals: Arc<Vec<ShownApproval>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -173,7 +176,10 @@ impl ProjectTasks {
     let db = ProjectDb::open(repo_root)?;
     let tasks = db.tasks()?;
     let (not_shared, kept_tags) = kept(&db)?;
-    let pending = approvals::pending(&db, repo_root)?;
+    let under_review = db.reviewing_tool_approvals()?;
+    let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
+      .into_iter()
+      .partition(|shown| under_review.contains(&shown.approval.id));
     let mut group_holds = BTreeMap::new();
     let mut grouped = std::collections::BTreeSet::new();
     for group in db.task_groups()? {
@@ -241,6 +247,7 @@ impl ProjectTasks {
       pipelines: Arc::new(published_pipelines(&db)?),
       missing_pipelines: Arc::new(db.missing_pipelines()?),
       pending_tool_approvals: Arc::new(pending),
+      reviewing_tool_approvals: Arc::new(reviewing),
       phases: Arc::new(phases),
       runs: Arc::new(counts),
       lost_to_runner: 0,

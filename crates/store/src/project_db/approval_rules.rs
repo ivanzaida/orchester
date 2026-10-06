@@ -39,7 +39,10 @@ pub struct DecisionCounts {
   /// Requests auto mode looked at and left to a person: its reviewer asked, a hard rule held them, or the
   /// review gave no verdict.
   pub asked_by_reviewer: u32,
+  /// Waiting for a person.
   pub waiting: u32,
+  /// Waiting for auto mode's reviewer, not yet for a person.
+  pub reviewing: u32,
 }
 
 impl ProjectDb {
@@ -164,8 +167,9 @@ impl ProjectDb {
   /// How `run`'s requests were answered, by who answered them, and how many wait.
   pub fn decision_counts(&self, run: RunId) -> Result<DecisionCounts, StoreError> {
     let mut query = self.connection.prepare(
-      "SELECT state, decided_by, COUNT(*) FROM tool_approvals WHERE run_id = ?1 \
-       AND state IN ('pending', 'approved', 'denied') GROUP BY state, decided_by",
+      "SELECT CASE WHEN state = 'pending' AND reviewing = 1 THEN 'reviewing' ELSE state END, decided_by, \
+       COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND state IN ('pending', 'approved', 'denied') \
+       GROUP BY 1, decided_by",
     )?;
     let rows = query
       .query_map([run.to_string()], |row| {
@@ -184,6 +188,7 @@ impl ProjectDb {
         .transpose()?;
       let slot = match (state.as_str(), decided_by) {
         ("pending", _) => &mut counts.waiting,
+        ("reviewing", _) => &mut counts.reviewing,
         ("denied", Some(DecidedBy::AutomationDeny)) => &mut counts.denied_by_automation,
         ("denied", _) => &mut counts.denied_by_you,
         (_, Some(DecidedBy::Automation)) => &mut counts.by_automation,

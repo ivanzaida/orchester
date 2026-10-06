@@ -14,8 +14,9 @@ use orchester_core::{
   run::{
     ApprovalSubject, PendingToolApproval,
     review::{
-      DATA_START, HoldRules, PushFacts, RequestReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict,
-      ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt, review_request,
+      DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, RequestReviewer, Review, ReviewError, ReviewHold,
+      ReviewInput, ReviewVerdict, ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt,
+      review_request,
     },
   },
   time::Timestamp,
@@ -278,4 +279,59 @@ fn auto_mode_holds_git_run_in_a_form_the_push_rules_cannot_follow() {
       "{command}"
     );
   }
+}
+
+/// A reviewer that reads its instructions and message as a model would and asks only for what they say
+/// to ask for: here, it approves a command with unread parts in a writing step with network on only
+/// when the instructions say unread parts alone are no reason to ask.
+struct ReadsItsPrompt {
+  model: ModelId,
+}
+
+impl RequestReviewer for ReadsItsPrompt {
+  fn model(&self) -> &ModelId {
+    &self.model
+  }
+
+  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+    let message = review_prompt(input);
+    let told_unread = message.contains(&format!(
+      r#""command_parts_orchester_could_not_read":{}"#,
+      input.unread()
+    )) && input.unread() > 0;
+    let writing_with_network = message.contains(r#""network":"on""#) && message.contains("may write in its worktree");
+    let unread_is_no_reason = REVIEW_INSTRUCTIONS.contains("that alone is never a reason to ask")
+      && REVIEW_INSTRUCTIONS.contains("running the project's own scripts, tools, tests or interpreters");
+    if told_unread && writing_with_network && unread_is_no_reason {
+      Ok(ReviewVerdict::Approve {
+        reason: "It runs the project's verify script for the task.".to_owned(),
+      })
+    } else {
+      Ok(ReviewVerdict::AskPerson {
+        reason: "Orchester could not read parts of it.".to_owned(),
+      })
+    }
+  }
+}
+
+#[test]
+fn auto_mode_reviewer_is_told_unread_parts_alone_are_no_reason_to_ask() {
+  let command = r#"sh .tmp/verify/m.sh lurq_read_tree '{"window":"main"}' | python -c "import sys,json; print(1)""#;
+  let (_root, verify) = subject(command);
+  let writing = step(RepositoryAccess::Write, NetworkAccess::On);
+  let rules = HoldRules {
+    permissions: Some(&writing),
+    push: PushFacts::default(),
+    escalation: false,
+  };
+  let reviewer = ReadsItsPrompt {
+    model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),
+  };
+  let review = review_request(
+    Some(&reviewer),
+    (&verify, &rules),
+    Ok(input(command, "Verify the tree")),
+  );
+  assert!(review.approves(), "{review:?}");
+  assert!(!REVIEW_INSTRUCTIONS.contains("approve only when the command clearly stays in the worktree"));
 }

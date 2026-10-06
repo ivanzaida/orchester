@@ -74,3 +74,8 @@ ALTER TABLE project_auto_mode ADD COLUMN effort TEXT CHECK (effort IS NULL OR co
 pub(super) const ORIGIN_MIGRATION: &str = r"
 ALTER TABLE runs ADD COLUMN origin_url TEXT;
 ";
+
+/// A request auto mode's reviewer is judging: it waits without asking the person until the review ends.
+pub(super) const REVIEWING_MIGRATION: &str = r"
+ALTER TABLE tool_approvals ADD COLUMN reviewing INTEGER NOT NULL DEFAULT 0 CHECK (reviewing IN (0, 1));
+";

@@ -104,6 +104,7 @@ impl Component for RunApprovalsPanel {
       ("runs.summary.approvals.deniedByAutomation", counts.denied_by_automation),
       ("runs.summary.approvals.byReviewer", counts.by_reviewer),
       ("runs.summary.approvals.askedByReviewer", counts.asked_by_reviewer),
+      ("runs.summary.approvals.reviewing", counts.reviewing),
     ]
     .into_iter()
     .filter(|(_, count)| *count > 0)

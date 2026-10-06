@@ -33,6 +33,9 @@ use crate::{
   },
 };
 
+/// Claude Code's switch for its nonessential traffic (update check, telemetry, error reports).
+pub const QUIET: (&str, &str) = ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1");
+
 /// Where a CLI reviewer runs: an empty folder, and the files it reads beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewFolder {
@@ -80,6 +83,8 @@ impl<R: CommandRunner> ClaudeReviewer<R> {
     Command::new(&self.executable, args)
       .with_current_dir(&self.folder.work)
       .with_environment(self.environment.clone())
+      // No update check, telemetry or error reports before the one request: they only delay the verdict.
+      .with_env(QUIET.0, QUIET.1)
       .with_stdin(review_prompt(input))
   }
 }

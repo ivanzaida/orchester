@@ -1,7 +1,8 @@
-//! Auto mode in the worker (`orchester_core::run::review`): a request the rules leave to a person is
-//! shown and waits as always, and meanwhile, when the run uses auto mode, the reviewer judges it on the
-//! blocking pool, so the worker keeps following its agent. An approval answers the request as the
-//! reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
+//! Auto mode in the worker (`orchester_core::run::review`): when the run uses auto mode, a request the
+//! rules leave to a person waits under review, without asking the person (no dialog, no *Needs you*),
+//! while the reviewer judges it on the blocking pool, so the worker keeps following its agent; it asks
+//! the person once the reviewer asks, fails or times out. A hard rule asks the person at once. An approval answers the
+//! request as the reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
 //! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
 //! result is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
 //! hard rules, which keep it from the reviewer where the step's network is off or it only reads.
@@ -18,7 +19,8 @@ use orchester_core::{
     ApprovalSubject, DecidedBy, PendingToolApproval,
     review::{Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
   },
-  store::{RunStore, TaskStore},
+  store::{ActivityStore, RunStore, TaskStore},
+  time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_store::StoreError;
@@ -27,7 +29,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 pub(in crate::execution::step) use self::setup::ReviewerKeys;
 use self::{
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob},
+  setup::{PushPlace, ReviewJob, hold_now},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -80,8 +82,6 @@ impl Worker {
       .as_ref()
       .map(|launch| launch.permissions().clone());
     let input = self.review_input(watch, approval, permissions.as_ref())?;
-    let setup = self.reviewer(watch)?;
-    let (stop, stopped) = stop_review();
     let push = PushPlace {
       branch: watch
         .db
@@ -94,6 +94,17 @@ impl Worker {
       worktree: self.scope.worktree().to_path_buf(),
       origin: watch.db.run_origin(approval.run)?,
     };
+    // A hard rule asks the person at once; anything else waits, without asking, for the reviewer.
+    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), &push, &input) {
+      watch
+        .db
+        .record_review(approval.run, &approval.id, &Review::Held { hold })?;
+      return Ok(None);
+    }
+    // Marked last, after everything that can fail: a request marked under review always gets its review.
+    let setup = self.reviewer(watch)?;
+    watch.db.set_reviewing(approval.run, &approval.id, true)?;
+    let (stop, stopped) = stop_review();
     let job = ReviewJob {
       subject,
       permissions,
@@ -121,14 +132,23 @@ impl Worker {
   ) -> Result<(), StoreError> {
     let waiting = watch.approval.as_ref().is_some_and(|(approval, _)| approval.id == id);
     let run = watch.invocation.run;
-    if !waiting || watch.stop.is_some() || !watch.db.run_auto_mode(run)? {
+    if !waiting || watch.stop.is_some() {
       return Ok(());
     }
-    watch.db.record_review(run, &id, &review)?;
+    if !watch.db.run_auto_mode(run)? {
+      // Auto mode was turned off meanwhile: its result is dropped, and the person decides now.
+      watch.db.set_reviewing(run, &id, false)?;
+      return self.ask_person(watch);
+    }
+    if let Err(error) = watch.db.record_review(run, &id, &review) {
+      // The review is lost, but the request must not stay hidden: the person decides.
+      watch.db.set_reviewing(run, &id, false)?;
+      self.ask_person(watch)?;
+      return Err(error);
+    }
     if !review.approves() {
       // The person decides, and now reads why auto mode left it to them.
-      self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
-      return Ok(());
+      return self.ask_person(watch);
     }
     let (approval, awaiting) = watch.approval.take().expect("the waiting request was matched above");
     let subject = ApprovalSubject::of(&approval, &self.scope);
@@ -136,6 +156,18 @@ impl Worker {
     if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
       tracing::debug!(?rejection, "auto mode's approval did not reach the agent");
     }
+    Ok(())
+  }
+
+  /// The waiting request asks the person from now on: the agent's time stops counting, and the app shows
+  /// it.
+  fn ask_person(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    watch.invocation.timing.wait_for_person(Timestamp::now());
+    watch.db.save_invocation(&watch.invocation)?;
+    self.notifier.send(Event::ToolApprovalChanged {
+      run: watch.invocation.run,
+      task: self.task,
+    });
     Ok(())
   }
 

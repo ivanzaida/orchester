@@ -1296,6 +1296,7 @@
         "deniedByAutomation": "Denied by automation",
         "byReviewer": "Approved by auto mode",
         "askedByReviewer": "Auto mode asked you",
+        "reviewing": "Auto mode is reviewing",
         "waiting": "Waiting",
         "similarTitle": "Approved as similar in this run",
         "alwaysTitle": "Always allowed during this run",
@@ -2281,7 +2282,8 @@
         "approveStarts": "Approves plan v{{version}} and starts {{agent}} on {{step}}. To change it, describe what it needs below.",
         "approveStartsTool": "Approves plan v{{version}} and starts {{step}}. To change it, describe what it needs below.",
         "approveLast": "Approves plan v{{version}}; no step follows it. To change it, describe what it needs below.",
-        "answerBelow": "Answer in the box below. {{agent}} waits for you; waiting does not count toward the run’s time limit."
+        "answerBelow": "Answer in the box below. {{agent}} waits for you; waiting does not count toward the run’s time limit.",
+        "reviewing": "Auto mode is reviewing"
       },
       "result": {
         "passed": "{{step}} passed",
@@ -2490,7 +2492,8 @@
           "noReviewer": "Auto mode asked you: the project has no reviewer to review with."
         },
         "quoted": "“{{reason}}”"
-      }
+      },
+      "reviewing": "Auto mode is reviewing this request. It asks you only if the reviewer does; you can decide now."
     }
   },
   "conversation": {
