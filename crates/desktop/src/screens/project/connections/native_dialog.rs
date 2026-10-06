@@ -1,9 +1,8 @@
 //! Add a native connection, also used to edit one (04.H1 `Byo8K`, 04.H1B `h2OUr`, 04.H3 `KGciR`, in the
 //! connection dialog frame of 04.E): name, kind, preset and base URL, the API key's project secret (picked,
 //! or created with the connection; its value is typed once, masked, and goes to the keychain), the models
-//! with the default model and effort, and provider fallback. Testing the connection and fetching its
-//! models need the runner to reach the model API, which this version does not do yet; both say so. The
-//! fields are in `native_form`.
+//! with the default model and effort, and provider fallback. The runner tests the connection and lists its
+//! models, which join the dialog's (`native_test`). The fields are in `native_form`.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -18,6 +17,7 @@ use lurq::{
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, BaseUrl, Effort, EndpointError, EndpointPreset, NativeModel, NativeModels,
+    with_fetched,
   },
   id::{ConnectionId, SecretId},
   resource::ModelId,
@@ -30,6 +30,7 @@ use super::{
   dialog_frame::{self, SaveBar, dialog, save_reason_of},
   form,
   model_editor::ModelRows,
+  native_test::test_action,
   status::short_key,
 };
 use crate::{
@@ -245,6 +246,15 @@ impl NativeDialog {
     ctx.watch(&save.state(), move |state| {
       if let (false, Some(Saved(id))) = (state.is_pending(), state.data) {
         saved(id);
+      }
+    });
+    // The models a test listed join the dialog's, by id.
+    let (test, listed) = (test_action(ctx), self.models.clone());
+    ctx.watch(&test.state(), move |state| {
+      if let (false, Some(tested)) = (state.is_pending(), &state.data)
+        && !tested.models.is_empty()
+      {
+        listed.update(|rows| rows.0 = with_fetched(&rows.0, tested.models.clone()));
       }
     });
     // Editing the default model in place can take away the default effort without changing which

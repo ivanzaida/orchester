@@ -51,6 +51,8 @@ mod native_connections;
 mod native_dialog;
 mod native_model_uses;
 mod native_models;
+mod native_openai_dialog;
+mod native_rows;
 mod native_run;
 mod new_task;
 mod organization;

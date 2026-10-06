@@ -15,7 +15,8 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::{
-  AgentProvider, AgentRuntime, BaseUrl, ConnectionStatus, EndpointPreset, WireApi, offers_provider_fallback,
+  AgentProvider, AgentRuntime, BaseUrl, CheckResult, ConnectionStatus, EndpointPreset, WireApi,
+  offers_provider_fallback,
 };
 
 use super::{
@@ -25,7 +26,8 @@ use super::{
   model_editor::{ModelEditor, ModelEditorProps},
   model_text,
   native_dialog::{DefaultEffort, DefaultModel, NativeDialog, NativeErrors, PresetChoice},
-  status::status_label,
+  native_test::{LastTest, TestAction, test_action},
+  status::{CHECKING, status_label},
 };
 use crate::{
   connections::model_uses::of_connection,
@@ -49,7 +51,8 @@ const BUTTON_HEIGHT: f32 = 30.0;
 
 impl NativeDialog {
   pub(super) fn form(&self, ctx: &mut Ctx, errors: &NativeErrors) -> Element {
-    let models = self.models_section(ctx);
+    let test = test_action(ctx);
+    let models = self.models_section(ctx, &test);
     let ctx: &Ctx = ctx;
     let editing = matches!(self.context.mode, DialogMode::EditNative(_));
     Column::new()
@@ -64,7 +67,7 @@ impl NativeDialog {
       .child(self.preset_field(ctx))
       .child(self.url_field(ctx, errors.url.as_ref()))
       .child(self.key_field(ctx, errors.key.as_ref()))
-      .child(self.test_row(ctx))
+      .child(self.test_row(ctx, &test))
       .child(models)
       .child(pair(self.default_model_field(ctx), self.default_effort_field(ctx)))
       .child(self.fallback_field(ctx))
@@ -213,20 +216,44 @@ impl NativeDialog {
       .into()
   }
 
-  /// The last test and *Test again* (`VFEkh`): the runner cannot reach a model API in this version, so
-  /// the test is unavailable and the line says why.
-  fn test_row(&self, ctx: &Ctx) -> Element {
-    let checked = match &self.context.mode {
-      DialogMode::EditNative(connection) => connection.last_check().map(|check| check.result.status()),
+  /// The last test and *Test again* (`VFEkh`): the runner tests the model API with the chosen key; the
+  /// line says what the test found, why it failed, or why the fields cannot be tested yet.
+  fn test_row(&self, ctx: &Ctx, test: &TestAction) -> Element {
+    let state = test.state().get();
+    let tested = state.data.as_ref().map(|tested| LastTest {
+      result: tested.result.clone(),
+      host: tested.host.clone(),
+      at: tested.at,
+      listed: Some(tested.models.len()),
+    });
+    let tested = tested.or_else(|| match &self.context.mode {
+      DialogMode::EditNative(connection) => connection.last_check().map(|check| LastTest {
+        result: check.result.clone(),
+        host: connection.api().map_or("".into(), |api| api.base_url().host().into()),
+        at: check.at,
+        listed: None,
+      }),
       _ => None,
+    });
+    let (glyph, status) = match &tested {
+      _ if state.is_pending() => CHECKING,
+      // The model API took the key (`VFEkh`).
+      Some(LastTest {
+        result: CheckResult::Api { .. },
+        ..
+      }) => (Icon::CircleCheck, "connections.native.keyAccepted"),
+      _ => status_label(
+        tested
+          .as_ref()
+          .map_or(ConnectionStatus::NotChecked, |tested| tested.result.status()),
+      ),
     };
-    let (glyph, status) = status_label(checked.unwrap_or(ConnectionStatus::NotChecked));
-    let test = ActionButton::new(ctx.t("connections.native.testAgain"))
-      .icon(Icon::RefreshCw)
-      .id("native-test-again")
-      .in_form()
-      .height(Dimension::Px(BUTTON_HEIGHT))
-      .disabled();
+    let api = self.tested_api();
+    let note = match (&api, &state.error) {
+      _ if state.is_pending() => None,
+      (Err(reason), _) | (Ok(_), Some(reason)) => Some(message_text(ctx, reason)),
+      (Ok(_), None) => tested.as_ref().and_then(|tested| tested.found(ctx)),
+    };
     Row::new()
       .id("native-test")
       .width(Dimension::Pct(100.0))
@@ -235,17 +262,33 @@ impl NativeDialog {
       .align_items(Alignment::Center)
       .child(label(glyph, &ctx.t(status)))
       .child(
-        Text::new(&ctx.t("connections.native.testUnavailable"))
+        Text::new(&note.unwrap_or_default())
           .variant(TypographyStyle::Caption)
           .flex(1.0),
       )
-      .child(test.render(ctx))
+      .child(self.test_button(ctx, test, "native-test-again", "connections.native.testAgain"))
       .into()
+  }
+
+  /// A button that tests the fields' model API, unavailable while they cannot be tested or a test runs.
+  fn test_button(&self, ctx: &Ctx, test: &TestAction, id: &'static str, key: &str) -> Element {
+    let button = ActionButton::new(ctx.t(key))
+      .icon(Icon::RefreshCw)
+      .id(id)
+      .in_form()
+      .height(Dimension::Px(BUTTON_HEIGHT));
+    match self.tested_api() {
+      Ok(api) if !test.state().get().is_pending() => {
+        let (test, provider) = (test.clone(), self.provider);
+        button.on_click(move || test.run((provider, api.clone()))).render(ctx)
+      }
+      _ => button.disabled().render(ctx),
+    }
   }
 
   /// *Models*: the list with its in-place editor, and fetching them from the endpoint, which needs a
   /// test.
-  fn models_section(&self, ctx: &mut Ctx) -> Element {
+  fn models_section(&self, ctx: &mut Ctx, test: &TestAction) -> Element {
     let uses = match &self.context.mode {
       DialogMode::EditNative(connection) => of_connection(&self.context.model_uses, connection.id()),
       _ => Vec::new(),
@@ -261,14 +304,12 @@ impl NativeDialog {
     );
     let ctx: &Ctx = ctx;
     let count = self.models.get().0.len().to_string();
-    let fetch = ActionButton::new(ctx.t("connections.models.fetch"))
-      .icon(Icon::RefreshCw)
-      .compact()
-      .id("native-fetch-models")
-      .in_form()
-      .height(Dimension::Px(BUTTON_HEIGHT))
-      .disabled()
-      .render(ctx);
+    let fetch = self.test_button(ctx, test, "native-fetch-models", "connections.models.fetch");
+    let hint = if self.provider.runs_agents() {
+      "connections.models.fetchHint"
+    } else {
+      "connections.models.fetchUnavailable"
+    };
     // *Models* and how many (`J27qQ`).
     let heading = Row::new()
       .width(Dimension::Pct(100.0))
@@ -289,7 +330,7 @@ impl NativeDialog {
       .spacing(SpacingSize::Md)
       .overflow_visible()
       .child(heading)
-      .child(Text::new(&ctx.t("connections.models.fetchUnavailable")).variant(ExtraTypography::Hint.role()))
+      .child(Text::new(&ctx.t(hint)).variant(ExtraTypography::Hint.role()))
       .child(editor)
       .into()
   }

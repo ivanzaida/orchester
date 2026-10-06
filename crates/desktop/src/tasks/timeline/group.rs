@@ -10,6 +10,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use orchester_core::{
   connection::stream::{CommandStatus, ToolCommandResult},
+  native::tools::ToolName,
   time::Timestamp,
 };
 
@@ -68,7 +69,15 @@ pub enum ToolKind {
 pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => None,
-    EntryKind::Command(command) => Some(command_kind(&command.command)),
+    EntryKind::Command(command) => Some(
+      command
+        .native
+        .as_ref()
+        .and_then(|call| native_kind(call.tool))
+        .unwrap_or_else(|| command_kind(&command.command)),
+    ),
+    // A native command's approval sits with the calls around it, uncounted.
+    EntryKind::Approval(_) => Some(ToolKind::Note),
     // A tool step's failing command is what failed the step: a row of its own, its output open (`hep0l`).
     EntryKind::ToolCommand(_) if entry.is_failure() => None,
     EntryKind::ToolCommand(_) => Some(ToolKind::Command),
@@ -84,6 +93,16 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
     | EntryKind::Problem(_)
     | EntryKind::McpServer(..)
     | EntryKind::ExemptionNotApplied { .. } => None,
+  }
+}
+
+/// A native file tool's kind; `None` for `run_command`, whose kind is what it runs.
+const fn native_kind(tool: ToolName) -> Option<ToolKind> {
+  match tool {
+    ToolName::ReadFile => Some(ToolKind::Read),
+    ToolName::ListFiles | ToolName::Search => Some(ToolKind::Search),
+    ToolName::EditFile | ToolName::WriteFile => Some(ToolKind::Edit),
+    ToolName::RunCommand | ToolName::FinishStep | ToolName::AskQuestion => None,
   }
 }
 

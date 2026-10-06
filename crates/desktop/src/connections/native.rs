@@ -1,12 +1,16 @@
 //! Native agent connections as the Connections screen sets them up (`docs/architecture/native-agent.md`
 //! §7): adding or editing one, with its key secret picked from the project's secrets or created with it,
-//! and saving the models added by hand. The key's value goes to the keychain only and is never read
-//! back here. Every function blocks on SQLite or on the keychain; the UI calls them off the UI thread.
+//! saving the models added by hand, and recording what a test through the runner found with the models it
+//! listed. The key's value goes to the keychain only and is never read back here. Every function blocks on SQLite or on
+//! the keychain; the UI calls them off the UI thread.
 
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, ConnectionError, EndpointPreset, NativeModels},
+  connection::{
+    AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, CheckResult, ConnectionCheck, ConnectionError,
+    EndpointPreset, NativeModel, NativeModels, with_fetched,
+  },
   id::{ConnectionId, SecretId},
   name::Name,
   secret::{self, NewSecret, SecretValue, SecretVault},
@@ -120,6 +124,46 @@ pub fn save_models_in(repo_root: &Path, id: ConnectionId, models: NativeModels) 
   db.save_connection(&connection).map_err(|error| store_failure(&error))
 }
 
+/// Records a test of native connection `id` (`docs/architecture/native-agent.md` §7): what it found, and
+/// the models the API listed merged into its models.
+pub fn record_check_in(
+  repo_root: &Path,
+  id: ConnectionId,
+  result: CheckResult,
+  fetched: Vec<NativeModel>,
+) -> Result<(), Message> {
+  let mut db = ProjectDb::open(repo_root).map_err(|error| store_failure(&error))?;
+  let mut connection = stored(&db, id)?;
+  if !fetched.is_empty() {
+    let api = connection.api().ok_or_else(|| Message::new("errors.storage"))?.clone();
+    let models = merged_models(api.models(), fetched)?;
+    connection
+      .set_api(api.with_models(models))
+      .map_err(|error| connection_failure(&error))?;
+  }
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result,
+    })
+    .map_err(|error| connection_failure(&error))?;
+  db.save_connection(&connection).map_err(|error| store_failure(&error))
+}
+
+/// `models` with the models an endpoint listed, `fetched`, merged in (core's `with_fetched`); the default
+/// model and effort stay while the models still take them.
+pub fn merged_models(models: &NativeModels, fetched: Vec<NativeModel>) -> Result<NativeModels, Message> {
+  let merged = with_fetched(models.models(), fetched);
+  let default = models.default_model().cloned();
+  NativeModels::new(merged.clone(), default.clone(), models.default_effort())
+    .or_else(|_| NativeModels::new(merged.clone(), default, None))
+    .or_else(|_| NativeModels::new(merged, None, None))
+    .map_err(|error| {
+      tracing::warn!(%error, "the endpoint listed models that cannot be kept");
+      Message::new("connections.models.fetchInvalid")
+    })
+}
+
 /// Refuses `models` for `connection` while something, as stored now, runs on a model its stored models
 /// list and `models` no longer do.
 fn ensure_kept(db: &ProjectDb, connection: &AgentConnection, models: &NativeModels) -> Result<(), Message> {
@@ -135,6 +179,12 @@ fn ensure_kept(db: &ProjectDb, connection: &AgentConnection, models: &NativeMode
   .inspect_err(|_| {
     tracing::warn!(connection = %id, "something still uses a model the saved models leave out");
   })
+}
+
+/// Native connection `id` as stored now.
+pub fn load_in(repo_root: &Path, id: ConnectionId) -> Result<AgentConnection, Message> {
+  let db = ProjectDb::open(repo_root).map_err(|error| store_failure(&error))?;
+  stored(&db, id)
 }
 
 fn stored(db: &ProjectDb, id: ConnectionId) -> Result<AgentConnection, Message> {

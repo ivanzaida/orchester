@@ -34,4 +34,6 @@ pub enum McpServerProblem {
   ReservedVariable { variable: String },
   /// The agent's CLI reported that the server did not start; `detail` is what it said, if anything.
   FailedToStart { detail: Option<String> },
+  /// A native agent reaches no MCP server yet (`docs/architecture/native-agent.md` §5.4, P4).
+  NotSupportedByConnection,
 }

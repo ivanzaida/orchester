@@ -143,6 +143,7 @@ pub fn settings(access: RepositoryAccess, context_window: u64) -> LoopSettings {
     context_window,
     system: "You are a native agent.".to_owned(),
     tools: ToolSet::for_access(access),
+    shell: None,
   }
 }
 
@@ -168,6 +169,7 @@ pub fn ok(content: &str) -> ToolOutcome {
     activity: String::new(),
     exit_code: None,
     changes: Vec::new(),
+    detail: None,
   }
 }
 

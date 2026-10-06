@@ -6,6 +6,7 @@
 mod input;
 mod schema;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
@@ -18,7 +19,8 @@ pub use self::{
 use crate::run::StepResult;
 
 /// The tools a native agent can call.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolName {
   ReadFile,
   ListFiles,

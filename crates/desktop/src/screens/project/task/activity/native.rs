@@ -1,6 +1,7 @@
 //! What the invocation panel adds for an agent Orchester runs itself (04.H10 `f0xJK`): that it ran on
-//! this computer, the endpoint its connection names now (an invocation records none), whether network
-//! stayed on, and its tool calls with those that were denied. Its agent reads with its model only.
+//! this computer, the endpoint and effort its invocation recorded (the endpoint its connection names now
+//! for an invocation recorded before that was kept), whether network stayed on, and its tool calls with
+//! those that were denied. Its agent reads with its model only.
 
 use std::{sync::Arc, time::Duration};
 
@@ -37,20 +38,32 @@ pub(super) fn is_native(step: &StepView) -> bool {
   step.provider.is_some_and(|provider| provider.is_native())
 }
 
-/// *Runs* on this computer, and the *Endpoint* its model requests went to.
+/// *Runs* on this computer and the *Endpoint* its model requests went to.
 pub(super) fn launch_rows(ctx: &Ctx, step: &StepView) -> Vec<Element> {
   let mut rows = vec![property(
     &ctx.t("runs.activity.panel.runs"),
     &ctx.t("runs.activity.panel.runsHere"),
   )];
-  // The invocation records no endpoint: the row says it is the connection's, as it is now.
+  // An invocation recorded before it kept its endpoint shows the connection's, as it is now.
+  let label = if step.engine_recorded {
+    "runs.activity.panel.endpoint"
+  } else {
+    "runs.activity.panel.endpointNow"
+  };
   rows.extend(
     step
       .endpoint
       .as_ref()
-      .map(|endpoint| styled_property(&ctx.t("runs.activity.panel.endpointNow"), endpoint, ValueStyle::Path)),
+      .map(|endpoint| styled_property(&ctx.t(label), endpoint, ValueStyle::Path)),
   );
   rows
+}
+
+/// The *Effort* its model requests named, when they named one.
+pub(super) fn effort_row(ctx: &Ctx, step: &StepView) -> Option<Element> {
+  step
+    .effort
+    .map(|effort| property(&ctx.t("runs.activity.panel.effort"), effort.as_str()))
 }
 
 /// *Network* as the agent ran with it, and its *Tool calls* with how many were denied.

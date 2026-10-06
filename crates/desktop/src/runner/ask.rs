@@ -154,7 +154,7 @@ impl Runners {
       .unwrap_or(Err(RequestError::NotConnected))
   }
 
-  async fn ask(&self, root: Option<&Path>, command: Command) -> Result<Reply, RequestError> {
+  pub(super) async fn ask(&self, root: Option<&Path>, command: Command) -> Result<Reply, RequestError> {
     let answer = {
       let projects = self.inner.projects.lock();
       match root

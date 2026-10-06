@@ -24,8 +24,8 @@
 //!   macOS: its file tools stay in the worktree (and the writable folders), its write tools are withheld from a
 //!   read-only step, and every command outside the allowed list asks a person, except known-safe read-only ones once
 //!   the list has an entry. It has no sandbox for commands, so it can neither confine any command to the worktree nor
-//!   keep commands off the network. Native agents do not run in this version yet ([`AgentProvider::runs_agents`]);
-//!   these rows say how they are enforced once they do.
+//!   keep commands off the network. Of the native providers only the Anthropic API runs agents in this version
+//!   ([`AgentProvider::runs_agents`]); the rows say how the others will be enforced.
 //! - Extra writable folders ([`super::writable`]) widen what an agent that edits files may write. Codex adds them to
 //!   its `workspace-write` sandbox (`sandbox_workspace_write.writable_roots`); Claude Code lets its edit tools write
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.

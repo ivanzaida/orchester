@@ -5,12 +5,12 @@ use std::fs;
 
 use orchester_agent::FileTools;
 use orchester_core::{
-  connection::stream::{FileChange, FileChangeKind},
+  connection::stream::{CallDetail, FileChange, FileChangeKind},
   native::item::{Item, UserOrigin},
   permission::RepositoryAccess,
 };
 
-use crate::{Layout, edit_input, failed, ok, read_input, text, write_input};
+use crate::{Layout, edit_input, failed, ok, read_input, search_input, text, write_input};
 
 fn temporaries(folder: &std::path::Path) -> Vec<String> {
   fs::read_dir(folder)
@@ -123,6 +123,50 @@ fn files_protected_and_read_only_paths_are_refused() {
   let error = failed(read_only.edit_file(&edit_input("README.md", &[("Readme", "x", false)])));
   assert!(error.contains("outside the folders this step may write"), "{error}");
   assert_eq!(layout.read("README.md"), "# Readme\nhello there\n");
+}
+
+/// What each call did, for its transcript row: lines read and the size, matches found, lines changed.
+#[test]
+fn files_tell_what_a_call_did() {
+  let layout = Layout::temporary();
+  let tools = layout.tools();
+  let read = tools.read_file(&read_input("src/main.rs", Some(2), None));
+  assert_eq!(
+    read.detail,
+    Some(CallDetail::Read {
+      first: 2,
+      last: 3,
+      bytes: 37
+    })
+  );
+  let search = tools.search(&search_input("hello", Some("src"), None, None));
+  assert!(
+    matches!(&search.detail, Some(CallDetail::Searched { scope: Some(scope), matches: 2, files: 2 }) if scope == "src"),
+    "{:?}",
+    search.detail
+  );
+  let edit = tools.edit_file(&edit_input(
+    "src/main.rs",
+    &[("    println!(\"hello\");\n", "    let a = 1;\n    let b = 2;\n", false)],
+  ));
+  assert_eq!(
+    edit.detail,
+    Some(CallDetail::Changed {
+      change: FileChangeKind::Modified,
+      added: 2,
+      removed: 1
+    })
+  );
+  let new = tools.write_file(&write_input("src/new.rs", "one\ntwo\n"));
+  assert_eq!(
+    new.detail,
+    Some(CallDetail::Changed {
+      change: FileChangeKind::Added,
+      added: 2,
+      removed: 0
+    })
+  );
+  assert_eq!(tools.read_file(&read_input("missing.rs", None, None)).detail, None);
 }
 
 #[test]

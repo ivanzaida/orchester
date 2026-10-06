@@ -14,6 +14,7 @@ mod joining;
 mod mcp;
 mod memory;
 mod native_commands;
+mod native_conversations;
 mod organization;
 mod permitted_decisions;
 mod recovery;
@@ -516,4 +517,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   auto_mode::REVIEWER_MIGRATION,
   auto_mode::ORIGIN_MIGRATION,
   auto_mode::REVIEWING_MIGRATION,
+  native_conversations::MIGRATION,
 ];

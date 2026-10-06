@@ -34,6 +34,7 @@
 mod code_index;
 mod composition;
 mod memory;
+mod native;
 mod retry;
 mod source;
 mod working;
@@ -44,6 +45,7 @@ use thiserror::Error;
 
 pub use self::{
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
+  native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
   working::WorkingTools,
@@ -209,15 +211,33 @@ pub struct PromptInput<'a> {
   pub working: Option<WorkingTools>,
 }
 
+/// How the agent hands its result in, which the prompt's *When you finish* says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResultDelivery {
+  /// An agent CLI ends with the result as its last message.
+  Message,
+  /// A native agent calls `finish_step` (`docs/architecture/native-agent.md` §4.7).
+  Tool,
+}
+
 impl PromptInput<'_> {
   /// The prompt text sent to the agent CLI at `event`, with where each part came from.
   pub fn assemble(&self, event: InjectionEvent) -> Result<AssembledPrompt, PromptAssemblyError> {
-    self.compose(event).into_prompt()
+    self.assemble_for(event, ResultDelivery::Message)
+  }
+
+  /// The prompt text at `event` for an agent that hands its result in as `delivery` says.
+  pub fn assemble_for(
+    &self,
+    event: InjectionEvent,
+    delivery: ResultDelivery,
+  ) -> Result<AssembledPrompt, PromptAssemblyError> {
+    Composition::new(self, event, delivery).into_prompt()
   }
 
   /// Every section of the prompt at `event`, and the instructions left out and why.
   pub fn compose(&self, event: InjectionEvent) -> Composition {
-    Composition::new(self, event)
+    Composition::new(self, event, ResultDelivery::Message)
   }
 
   /// The value of `variable` for this prompt; `None` when it has none.

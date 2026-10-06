@@ -29,6 +29,7 @@ mod native_dialog;
 mod native_form;
 mod native_inspector;
 mod native_key;
+mod native_test;
 pub(crate) mod status;
 
 use std::{path::PathBuf, sync::Arc};

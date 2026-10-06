@@ -20,6 +20,7 @@ mod board;
 mod broken;
 mod checkpoint;
 mod codebase_index;
+mod connection_check;
 mod control;
 mod conversation;
 mod environment;

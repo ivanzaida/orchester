@@ -5,8 +5,13 @@
 
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
-  connection::stream::{AgentEvent, InvocationOutcome},
+  connection::{
+    BaseUrl, Effort, EngineVendor,
+    stream::{AgentEvent, InvocationOutcome},
+  },
   id::{InvocationId, RunId, StepExecutionId},
   permission::LaunchPermissions,
   resource::ModelId,
@@ -48,6 +53,19 @@ pub struct Invocation {
   pub outcome: Option<InvocationOutcome>,
   /// Time spent waiting for an interactive tool decision, excluded from the active limit.
   pub timing: InvocationTiming,
+}
+
+/// What a native agent's invocation reached its model through, recorded once before it starts (04.H9,
+/// 04.H10): its connection may change or go afterwards, the record stays as the run used it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvocationEngine {
+  /// The base URL of the model API, in full.
+  pub endpoint: BaseUrl,
+  /// Who received the agent's prompts.
+  pub vendor: EngineVendor,
+  /// The effort the requests named; `None` left the endpoint's default.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub effort: Option<Effort>,
 }
 
 /// A persisted stop watch for one invocation's interactive approval waits.

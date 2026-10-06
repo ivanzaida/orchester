@@ -4,6 +4,7 @@
 
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -71,9 +72,11 @@ pub struct NativeCommandAsk {
 
 /// The shell a native agent's `shell: true` command runs in (§4.6, decision 3): `pwsh` where it is
 /// found on Windows, otherwise Windows PowerShell 5.1; zsh on macOS.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CommandShell {
   Pwsh,
+  #[serde(rename = "windows_powershell")]
   WindowsPowerShell,
   Zsh,
 }

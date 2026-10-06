@@ -23,6 +23,7 @@ impl AgentEvent {
         }
       }
       Self::RunnerProblem { problem } => problem.redact(redact),
+      Self::NativeCall { call, .. } => call.redact(redact),
       Self::McpServer { server, problem } => {
         if let Some(server) = server {
           *server = redact(server);
@@ -62,6 +63,7 @@ impl McpServerProblem {
       | Self::WorkingDirectoryUnsupported
       | Self::UnsafeScriptArgument { .. }
       | Self::NotUnicode
+      | Self::NotSupportedByConnection
       | Self::FailedToStart { detail: None } => {}
     }
   }
@@ -75,7 +77,8 @@ impl RunnerProblem {
       | Self::CodebaseIndexUnavailable { detail }
       | Self::RipgrepUnavailable { detail, .. }
       | Self::MemoryScanFailed { detail }
-      | Self::RunnerFailed { detail } => *detail = redact(detail),
+      | Self::RunnerFailed { detail }
+      | Self::ModelRetrying { error: detail, .. } => *detail = redact(detail),
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } => *program = redact(program),
@@ -96,7 +99,9 @@ impl RunnerProblem {
       | Self::MemoryUnreadable { .. }
       | Self::StderrLeftOut { .. }
       | Self::CliTooOld { .. }
-      | Self::PermissionPromptUnreachable => {}
+      | Self::PermissionPromptUnreachable
+      | Self::ContextCompacted { .. }
+      | Self::ThinkingStripped => {}
     }
   }
 }

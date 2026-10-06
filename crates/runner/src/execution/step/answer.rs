@@ -10,6 +10,7 @@
 
 use orchester_core::{
   connection::{mcp::InvocationExemptions, stream::AgentEvent},
+  native::session::DENIED,
   orchester_tools::auto_approvable,
   permission::category::CommandCategory,
   run::{
@@ -142,9 +143,11 @@ impl Worker {
     match answer {
       ApprovalAnswer::Once => {}
       ApprovalAnswer::Deny => {
-        // Claude Code hands the agent Orchester's message; Codex tells it in its own words.
+        // Claude Code hands the agent Orchester's message; Codex tells it in its own words; a native
+        // agent gets the denial result its loop answers the call with.
         let told = match self.app_server() {
           Some(_) => codex_denial(approval.command).to_owned(),
+          None if self.is_native() => DENIED.to_owned(),
           None => denial_message(approval, by),
         };
         return Ok(Ok(Settled {
@@ -240,7 +243,7 @@ impl Worker {
           message: format!("The {} session closed before the tool decision arrived", self.cli()),
         },
       )?;
-      self.process.terminate();
+      self.driver.end();
       return Ok(Err(Rejection::Failed {
         detail: format!("cannot send the tool decision to {}: {error}", self.cli()),
       }));
@@ -259,17 +262,23 @@ impl Worker {
           message: "The tool decision could not be recorded after delivery".to_owned(),
         },
       )?;
-      self.process.terminate();
+      self.driver.end();
       return Ok(Err(Rejection::Failed {
         detail: "the tool decision could not be recorded after delivery".to_owned(),
       }));
     }
     self.end_approval_wait(watch)?;
+    let waited = Timestamp::now().unix_millis() - approval.requested_at.unix_millis();
     let decision = ToolDecision {
       decided_by: settled.decided_by,
       category: settled.category,
       secrets: settled.secrets,
       told: settled.told,
+      // A clock set back while it waited reads as no wait at all.
+      waited_ms: settled
+        .decided_by
+        .by_person()
+        .then(|| u64::try_from(waited).unwrap_or(0)),
       review: settled.review,
     };
     self.observe(

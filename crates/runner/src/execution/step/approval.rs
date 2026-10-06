@@ -1,8 +1,9 @@
 //! One tool call an agent waits on: the request is recorded, Orchester answers it itself when a rule of
 //! the run, Always allow or auto-approval covers it ([`super::answer`]), and otherwise it is shown and
 //! the agent's time stops counting while a person decides. The answer goes to exactly the call that
-//! asked — a Codex App Server JSON-RPC request or a Claude Code permission prompt call
-//! ([`super::claude_approval`]). A denial tells the agent and lets it continue. A decision that no
+//! asked — a Codex App Server JSON-RPC request, a Claude Code permission prompt call
+//! ([`super::claude_approval`]) or a native agent's command ([`super::native`]). A denial tells the agent
+//! and lets it continue. A decision that no
 //! longer matches the waiting call is refused, so a stale one never approves a later action.
 
 use orchester_core::{
@@ -12,7 +13,8 @@ use orchester_core::{
     parse_cli_too_old,
     stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   },
-  run::PendingToolApproval,
+  native::{command::CommandForm, item::ToolCallId},
+  run::{NativeCommandAsk, PendingToolApproval},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -24,8 +26,12 @@ use super::{
   super::{control::answer, tool_approval::end_unheld},
   answer::Settled,
   claude_approval::{Asked, AskedBy, PromptAnswer},
-  worker::{ApprovalDecision, Transport, Watch, Worker},
+  native::NativeAsk,
+  worker::{ApprovalDecision, Driver, Transport, Watch, Worker},
 };
+
+/// Who answers a native agent's command request, as its approval records it.
+const COMMAND_SERVER: &str = "command";
 
 /// The call a pending approval answers.
 pub(super) enum Awaiting {
@@ -35,6 +41,8 @@ pub(super) enum Awaiting {
     call: String,
     reply: oneshot::Sender<PromptAnswer>,
   },
+  /// A native agent's command, answered through the worker's native driver.
+  Native(ToolCallId),
   /// A call `call` of Orchester's tools waiting in the relay, which runs it once approved.
   Tool {
     call: String,
@@ -48,6 +56,7 @@ impl Awaiting {
     match self {
       Self::Codex(request) => request.item(),
       Self::Claude { call, .. } | Self::Tool { call, .. } => call,
+      Self::Native(call) => call.as_str(),
     }
   }
 }
@@ -59,6 +68,7 @@ struct Shown {
   action: String,
   target: Option<String>,
   scope: Option<String>,
+  native: Option<NativeCommandAsk>,
 }
 
 impl Worker {
@@ -66,9 +76,30 @@ impl Worker {
   pub(super) const fn cli(&self) -> &'static str {
     if self.app_server().is_some() {
       "Codex"
+    } else if self.is_native() {
+      "native agent"
     } else {
       "Claude Code"
     }
+  }
+
+  /// A native agent's command that a person decides: its shell, full string, working folder and time
+  /// limit are what the person sees (04.H9).
+  pub(super) async fn request_native_approval(&mut self, watch: &mut Watch, ask: NativeAsk) -> Result<(), StoreError> {
+    let NativeAsk { call, command, shell } = ask;
+    let shown = Shown {
+      command: true,
+      server: COMMAND_SERVER.to_owned(),
+      action: command.text().to_owned(),
+      target: Some(command.workdir().to_string_lossy().into_owned()),
+      scope: None,
+      native: Some(NativeCommandAsk {
+        shell: shell.filter(|_| matches!(command.form(), CommandForm::Shell)),
+        time_limit_seconds: command.timeout_seconds(),
+      }),
+    };
+    let key = call.to_string();
+    self.await_person(watch, &key, shown, Awaiting::Native(call)).await
   }
 
   pub(super) async fn request_approval(
@@ -82,6 +113,7 @@ impl Worker {
       action: request.action.clone(),
       target: request.target.clone(),
       scope: request.scope.clone(),
+      native: None,
     };
     let key = request.request_key();
     self
@@ -120,6 +152,7 @@ impl Worker {
         request.target().map(str::to_owned)
       },
       scope: request.scope().map(str::to_owned),
+      native: None,
     };
     let call = request.call().to_owned();
     let key = call.clone();
@@ -133,7 +166,7 @@ impl Worker {
   pub(super) fn redact(&self, text: &str) -> String {
     match self.app_server() {
       Some(app) => app.redact(text),
-      None => redact_secrets(text, &self.mcp_secrets),
+      None => redact_secrets(text, &self.secrets),
     }
   }
 
@@ -188,13 +221,16 @@ impl Worker {
       watch.closed_after_result = Some(message.clone());
     }
     self.observe(watch, AgentEvent::TurnFailed { message })?;
-    self.process.terminate();
+    self.driver.end();
     Ok(())
   }
 
   /// Whether Claude Code ended its turn with a result and nothing failed before.
   fn delivered_result(&self, watch: &Watch) -> bool {
-    let ended = matches!(&self.transport, Transport::Claude(claude) if claude.results() > 0);
+    let ended = matches!(
+      &self.driver,
+      Driver::Process { transport: Transport::Claude(claude), .. } if claude.results() > 0
+    );
     let failed = matches!(
       watch.tracker.outcome(Some(0)),
       InvocationOutcome::TurnFailed { .. } | InvocationOutcome::NotSignedIn { .. }
@@ -227,7 +263,7 @@ impl Worker {
           message: format!("{} requested another tool decision while one is pending", self.cli()),
         },
       )?;
-      self.process.terminate();
+      self.driver.end();
       return Ok(());
     }
     let approval = PendingToolApproval {
@@ -242,7 +278,7 @@ impl Worker {
       action: self.redact(&shown.action),
       target: shown.target.map(|target| self.redact(&target)),
       requested_at: Timestamp::now(),
-      native: None,
+      native: shown.native,
     };
     watch.db.request_tool_approval(&approval)?;
     if let Some(settled) = self.answer_itself(watch, &approval)? {
@@ -280,7 +316,7 @@ impl Worker {
             detail: "the tool decision could not be recorded".to_owned(),
           }),
         );
-        self.process.terminate();
+        self.driver.end();
         return Err(error);
       }
     }
@@ -328,11 +364,17 @@ impl Worker {
   pub(super) async fn deliver(&self, watch: &mut Watch, awaiting: Awaiting, answer: &Settled) -> Result<(), String> {
     let approve = answer.decided_by.approves();
     match awaiting {
-      Awaiting::Codex(request) => self
-        .process
-        .send_line(request.response(approve))
-        .await
-        .map_err(|error| error.to_string()),
+      Awaiting::Codex(request) => match self.driver.process() {
+        Some(process) => process
+          .send_line(request.response(approve))
+          .await
+          .map_err(|error| error.to_string()),
+        None => Err("Codex has no process".to_owned()),
+      },
+      Awaiting::Native(call) => match &self.driver {
+        Driver::Native(handle) => handle.decide(call, approve),
+        Driver::Process { .. } => Err("a CLI takes no native decision".to_owned()),
+      },
       Awaiting::Claude { call, reply } => {
         reply
           .send(prompt_answer(answer, approve))

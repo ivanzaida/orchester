@@ -5,6 +5,7 @@ mod command;
 mod edit;
 mod known_safe;
 mod known_safe_options;
+mod loop_events;
 mod loop_resume;
 mod loop_stop;
 mod loop_turns;
