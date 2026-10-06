@@ -7,14 +7,14 @@ use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Select, SelectOption},
+  components::{Column, Select, SelectOption},
   core::SignalValue,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   connection::{AgentConnection, ModelSupport},
   resource::ModelId,
-  run::review::{AutoModeSettings, resolve_reviewer},
+  run::review::{AutoModeSettings, ReviewerUnavailable, resolve_reviewer},
 };
 
 use super::{
@@ -28,6 +28,7 @@ use super::{
 use crate::{
   agents::form::{effort_options, model_options},
   tasks::run_approvals::{ReviewerShown, unavailable_key},
+  theme::ExtraSpacing,
   ui::{
     field::{FieldNote, field, select_style},
     switch::{Switch, locked_reason},
@@ -42,16 +43,28 @@ impl AutoModeSection {
   /// *Reviewer*: the connection, its model and effort, and which model reviews or why none does.
   pub(super) fn reviewer_row(&self, ctx: &Ctx, stored: &Stored) -> Element {
     // Without an agent connection there is nothing to choose: the row says why auto mode has no reviewer.
-    let mut value: Vec<Element> = (!stored.connections.is_empty())
+    let mut fields: Vec<Element> = (!stored.connections.is_empty())
       .then(|| self.connection_select(ctx, stored))
       .into_iter()
       .collect();
-    match &resolve_reviewer(&stored.settings, &stored.connections) {
+    let resolved = resolve_reviewer(&stored.settings, &stored.connections);
+    if let Ok(reviewer) = &resolved
+      && let Ok(agent) = AgentConnection::try_from(reviewer.connection.clone())
+    {
+      fields.push(self.model_select(ctx, &agent, &reviewer.model));
+      fields.extend(self.effort_select(ctx, &agent, &reviewer.model));
+    }
+    // The fields stand apart as an agent profile's do.
+    let mut value: Vec<Element> = vec![
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .overflow_visible()
+        .spacing(ExtraSpacing::Step.role())
+        .with_children(fields)
+        .into(),
+    ];
+    match &resolved {
       Ok(reviewer) => {
-        if let Ok(agent) = AgentConnection::try_from(reviewer.connection.clone()) {
-          value.push(self.model_select(ctx, &agent, &reviewer.model));
-          value.extend(self.effort_select(ctx, &agent, &reviewer.model));
-        }
         let shown = ReviewerShown {
           connection: reviewer.connection.name().as_str().into(),
           model: reviewer.model.clone(),
@@ -95,7 +108,7 @@ impl AutoModeSection {
     for connection in &stored.connections {
       let option = SelectOption::new(ConnectionPick(Some(connection.id())), connection.name().as_str());
       options.push(match cannot_review(connection) {
-        Some(why) => option.detail(ctx.t(unavailable_key(why))).disabled(true),
+        Some(why) => option.detail(ctx.t(cannot_review_key(why))).disabled(true),
         None => option,
       });
     }
@@ -155,6 +168,16 @@ impl AutoModeSection {
       "settings-auto-mode-effort",
     );
     Some(field(&ctx.t("agents.effort"), select, FieldNote::None))
+  }
+}
+
+/// Why a connection cannot review, short enough for its option.
+const fn cannot_review_key(why: ReviewerUnavailable) -> &'static str {
+  match why {
+    ReviewerUnavailable::NoModel => "settings.autoMode.cannotReview.noModel",
+    ReviewerUnavailable::NoConnection | ReviewerUnavailable::ConnectionGone | ReviewerUnavailable::Unsupported => {
+      "settings.autoMode.cannotReview.unsupported"
+    }
   }
 }
 

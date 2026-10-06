@@ -2480,7 +2480,7 @@
           "outsideFolders": "Auto mode left this to you: it writes outside the worktree and the step’s writable folders.",
           "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded.",
           "tooLong": "Auto mode left this to you: the request is too long to review.",
-          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox, and the step’s network is off or it only reads.",
+          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox.",
           "projectProgram": "Auto mode left this to you: it runs a project program outside every sandbox."
         },
         "failed": {
@@ -3887,7 +3887,10 @@
       "reviewerDescription": "The agent connection, model and effort that review requests. Until you choose, the first Claude Code connection reviews with Haiku 4.5.",
       "defaultConnection": "Default · {{connection}}",
       "defaultNone": "Default · no connection can review",
-      "cannotReview": "{{connection}} · cannot review yet",
+      "cannotReview": {
+        "unsupported": "Can’t review yet: no reviewer runs on this kind of connection.",
+        "noModel": "Can’t review yet: its check listed no model."
+      },
       "removedConnection": "A removed connection"
     }
   },
