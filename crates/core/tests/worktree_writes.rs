@@ -164,7 +164,7 @@ const ASKS: &[&str] = &[
   "echo x > out/x",
   "chmod +x src/lib.rs",
   "ln -s ../.. src/up",
-  "python3 - <<'EOF'\nprint(1)\nEOF",
+  "python3 - <<EOF\n$(id)\nEOF",
   // A tree or a link copied or moved can bring links that lead anywhere.
   "cp -r src src2",
   "cp -R src src2",

@@ -20,12 +20,13 @@ use crate::{
   messages::{self, Message},
   navigation::route::Page,
   tasks::writer::TaskWriter,
-  theme::{ExtraColor, ExtraTypography},
+  theme::{ExtraColor, ExtraTypography, gutter_scrollbar},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
     field::{field_error, select_style, text_input},
     form::form,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::Icon,
     message_text,
   },
@@ -102,17 +103,21 @@ impl Component for TagManager {
     let state = load.state().get();
     let pending = action.state().get().is_pending();
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
+    // The tags scroll beside the gutter in the right padding; the rest keeps out of it.
     let mut body = Column::new()
       .padding_horizontal(SpacingSize::Section)
+      .padding_right(beside_gutter(ctx, SpacingSize::Section))
       .spacing(SpacingSize::Lg)
       .flex(1.0);
     if let Some(error) = state.error {
       let retry = self.revision.clone();
-      body = body.child(field_error(&message_text(ctx, &error))).child(
-        ActionButton::new(ctx.t("common.retry"))
-          .on_click(move || retry.update(|value| *value += 1))
-          .render(ctx),
-      );
+      body = body
+        .child(clear_of_gutter(field_error(&message_text(ctx, &error))))
+        .child(clear_of_gutter(
+          ActionButton::new(ctx.t("common.retry"))
+            .on_click(move || retry.update(|value| *value += 1))
+            .render(ctx),
+        ));
     } else if let Some(Catalog(tags)) = state.data {
       body = if matches!(
         self.editing.get(),
@@ -125,7 +130,9 @@ impl Component for TagManager {
           .child(self.dialog(ctx, &tags, &action))
       };
     } else {
-      body = body.child(Text::new(&ctx.t("tasks.tags.loading")).variant(TypographyStyle::Caption));
+      body = body.child(clear_of_gutter(
+        Text::new(&ctx.t("tasks.tags.loading")).variant(TypographyStyle::Caption),
+      ));
     }
     Column::new()
       .height(Dimension::Pct(100.0))
@@ -290,8 +297,10 @@ impl TagManager {
           .padding_top(SpacingSize::Lg),
       );
     }
-    ScrollVertical::new(Column::new().child(actions).child(column))
+    ScrollVertical::new(Column::new().width(Dimension::Pct(100.0)).child(actions).child(column))
+      .width(Dimension::Pct(100.0))
       .max_height(Dimension::Px(MANAGER_HEIGHT))
+      .scrollbar(gutter_scrollbar())
       .into()
   }
 }

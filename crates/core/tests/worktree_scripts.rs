@@ -117,12 +117,14 @@ const RUNS: &[&str] = &[
   "python .tmp/verify/tree.py 1 2>&1 | grep -E 'ok' | head -5",
   "git -C .tmp/verify/kontur add -A",
   "git status && python .tmp/verify/start.py",
+  // Inline code and another script are the agent's own code too (decision 2026-10-06).
+  "python -c 'print(1)'",
+  "node -e 1",
+  "python .tmp/verify/launch.py; python .tmp/verify/start.py",
 ];
 
 const ASKS: &[&str] = &[
   // Inline code, modules and code loaded from elsewhere.
-  "python -c 'print(1)'",
-  "node -e 1",
   "bash -c 'rm -rf ~'",
   "python -m http.server",
   "python -m pip install x",
@@ -182,7 +184,6 @@ const ASKS: &[&str] = &[
   "git -C .tmp/verify/kontur mv -f lnk f.py && python .tmp/verify/kontur/f.py",
   "git -C .tmp/verify/kontur stash pop && python .tmp/verify/kontur/f.py",
   "echo x > .tmp/verify/start.py && python .tmp/verify/start.py",
-  "python .tmp/verify/launch.py; python .tmp/verify/start.py",
   // The parts of a pipeline run together; a part after the script may change files it reads.
   "python .tmp/verify/kontur/f.py | git -C .tmp/verify/kontur apply p.patch",
   "git -C .tmp/verify/kontur apply p.patch | python .tmp/verify/kontur/f.py",

@@ -32,11 +32,12 @@ use crate::{
     describe::step_count,
     library::{LibraryEntry, NewPipeline, StartFrom, StarterText, VersionState, create_in, library_in},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
     field::{ValueTone, field_error, value_box_sized},
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::ownership_note,
@@ -109,24 +110,33 @@ impl Component for Library {
     });
     let state = load.state().get();
     let project = props.project.project.name().as_str();
-    let content = match (&state.data, &state.error) {
-      (_, Some(error)) => RecoveryPanel::new(
-        Icon::AlertCircle,
-        &ctx.t("pipelines.library.loadFailed"),
-        &message_text(ctx, error),
-      )
-      .into(),
-      (Some(entries), None) if entries.is_empty() => self.empty(ctx, project, &props.project, &create_starter),
-      (Some(entries), None) => self.list(ctx, entries, project),
-      (None, None) => Column::new().into(),
+    // The rows' scroll gutter sits in the gap before the side panel; what does not scroll keeps out
+    // of it.
+    let column = Column::new().flex(1.0).height(Dimension::Pct(100.0));
+    let column = match (&state.data, &state.error) {
+      (Some(entries), None) if !entries.is_empty() => column.child(self.list(ctx, entries, project)),
+      (_, Some(error)) => column
+        .padding_right(Dimension::Px(gutter_width()))
+        .child(RecoveryPanel::new(
+          Icon::AlertCircle,
+          &ctx.t("pipelines.library.loadFailed"),
+          &message_text(ctx, error),
+        )),
+      (Some(_), None) => column.padding_right(Dimension::Px(gutter_width())).child(self.empty(
+        ctx,
+        project,
+        &props.project,
+        &create_starter,
+      )),
+      (None, None) => column,
     };
     let body = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_horizontal(SpacingSize::Section)
       .padding_bottom(SpacingSize::Section)
-      .spacing(SpacingSize::Section)
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content))
+      .spacing(beside_gutter(ctx, SpacingSize::Section))
+      .child(column)
       .child(versions_panel(ctx));
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -226,11 +236,15 @@ impl Library {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .spacing(SpacingSize::Md)
-      .child(filters)
-      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
-      .child(ownership_note(
+      .child(clear_of_gutter(filters))
+      .child(
+        ScrollVertical::new(rows)
+          .width(Dimension::Pct(100.0))
+          .scrollbar(gutter_scrollbar()),
+      )
+      .child(clear_of_gutter(ownership_note(
         &ctx.t_args("pipelines.library.ownership", [("project", project)]),
-      ))
+      )))
       .into()
   }
 

@@ -29,10 +29,11 @@ use crate::{
     data::{ProjectSkills, SkillEntry},
     repository::{RepositoryScan, scan},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   ui::{
     button::ActionButton,
     field::select_style,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::ownership_note,
@@ -127,24 +128,33 @@ impl Component for Library {
     let empty = props.data.as_ref().is_some_and(|data| data.entries.is_empty());
     let found = self.found(ctx, &props.project, empty);
     let project = props.project.project.name().as_str();
-    let content = match (&props.data, &props.error) {
-      (_, Some(error)) => RecoveryPanel::new(
-        Icon::AlertCircle,
-        &ctx.t("skills.library.loadFailed"),
-        &message_text(ctx, error),
-      )
-      .into(),
-      (Some(_), None) if empty => self.empty(ctx, project, found.as_ref(), &props.creating),
-      (Some(data), None) => self.list(ctx, data, project),
-      (None, None) => Column::new().into(),
+    // The rows' scroll gutter sits in the gap before the side panel; what does not scroll keeps out
+    // of it.
+    let column = Column::new().flex(1.0).height(Dimension::Pct(100.0));
+    let column = match (&props.data, &props.error) {
+      (Some(data), None) if !empty => column.child(self.list(ctx, data, project)),
+      (_, Some(error)) => column
+        .padding_right(Dimension::Px(gutter_width()))
+        .child(RecoveryPanel::new(
+          Icon::AlertCircle,
+          &ctx.t("skills.library.loadFailed"),
+          &message_text(ctx, error),
+        )),
+      (Some(_), None) => column.padding_right(Dimension::Px(gutter_width())).child(self.empty(
+        ctx,
+        project,
+        found.as_ref(),
+        &props.creating,
+      )),
+      (None, None) => column,
     };
     let body = Row::new()
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .padding_horizontal(SpacingSize::Section)
       .padding_bottom(SpacingSize::Section)
-      .spacing(SpacingSize::Section)
-      .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content))
+      .spacing(beside_gutter(ctx, SpacingSize::Section))
+      .child(column)
       .child(versions_panel(ctx, empty));
     Column::new()
       .id("skills-library")
@@ -238,11 +248,15 @@ impl Library {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .spacing(SpacingSize::Md)
-      .child(filters)
-      .child(ScrollVertical::new(rows).width(Dimension::Pct(100.0)))
-      .child(ownership_note(
+      .child(clear_of_gutter(filters))
+      .child(
+        ScrollVertical::new(rows)
+          .width(Dimension::Pct(100.0))
+          .scrollbar(gutter_scrollbar()),
+      )
+      .child(clear_of_gutter(ownership_note(
         &ctx.t_args("skills.library.ownership", [("project", project)]),
-      ))
+      )))
       .into()
   }
 

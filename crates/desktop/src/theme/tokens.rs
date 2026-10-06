@@ -210,6 +210,9 @@ pub const DISABLED_OPACITY: f32 = 0.4;
 /// A switch whose value is fixed fades as one row, its label with it, to 45 % (`lW7Sp` in 04.B
 /// `W0Owo`).
 pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
+/// One full turn of a loader icon (`lucide/loader`). The design draws loaders still and gives no
+/// speed, so they turn at lucide's own spinning speed, one turn a second.
+pub const LOADER_TURN_MS: u64 = 1000;
 
 /// Scheduling review (02.05 `W1Dq6`, 02.06 `IyJ5a`): a task in the order (`gj5Cf`, a `zemhy` row).
 pub const TASK_REVIEW_ROW_HEIGHT: f32 = 50.0;

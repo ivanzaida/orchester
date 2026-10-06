@@ -18,9 +18,10 @@ use lurq::{
 use super::EditorHandle;
 use crate::{
   pipelines::{describe::task_count, editor::EditorState},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     field::{ValueTone, styled_input, value_box_sized},
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::Notice,
@@ -142,24 +143,35 @@ impl Component for PipelineInspector {
         ),
       ))
       .child(facts(ctx, &props));
-    let mut panel = Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .padding(SpacingSize::Lg)
-      .spacing(SpacingSize::Md)
-      .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0));
-    if props.published.is_none() {
-      panel = panel.child(Notice::new(
+    panel(ctx, content, &props)
+  }
+}
+
+/// The details, which scroll beside the gutter in the panel's right padding, over the notice that
+/// a pipeline without a published version cannot run yet, which keeps out of the gutter.
+fn panel(ctx: &Ctx, content: Column, props: &PipelineInspectorProps) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .padding_right(beside_gutter(ctx, SpacingSize::Lg))
+    .spacing(SpacingSize::Md)
+    .child(
+      ScrollVertical::new(content)
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
+    )
+    .with_children(props.published.is_none().then(|| {
+      clear_of_gutter(Notice::new(
         Icon::Info,
         ctx.t("pipelines.inspector.notAvailableTitle"),
         ctx.t_args(
           "pipelines.inspector.notAvailableDetail",
           [("pipeline", props.name.as_str())],
         ),
-      ));
-    }
-    panel
-  }
+      ))
+    }))
 }
 
 fn field(ctx: &Ctx, key: &str, control: impl Into<Element>) -> Element {

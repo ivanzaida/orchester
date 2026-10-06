@@ -63,9 +63,10 @@ use crate::{
     list::missing_key,
     run::StartOutcome,
   },
-  theme::{ExtraSpacing, gutter_width},
+  theme::ExtraSpacing,
   ui::{
     form::form,
+    gutter::beside_gutter,
     icon::{Icon, IconSize, icon},
     unit_input::FocusedInput,
   },
@@ -546,9 +547,11 @@ fn content_row(ctx: &Ctx) -> Row {
     .padding_left(Dimension::Px(brief_left))
     // The plan's scroll gutter sits in the right padding, so its content ends at the designed
     // inset (`HVSv5`).
-    .padding_right(Dimension::Px(indent - gutter_width()))
+    .padding_right(beside_gutter(ctx, ExtraSpacing::Indent.role()))
     .padding_bottom(SpacingSize::Section)
-    .spacing(ExtraSpacing::Indent.role())
+    // The left column's scroll gutter sits in the gap to the plan, so its fields keep their
+    // drawn width and right edge.
+    .spacing(beside_gutter(ctx, ExtraSpacing::Indent.role()))
 }
 
 /// The detail is needed before the task can run; a draft may still be saved without it.

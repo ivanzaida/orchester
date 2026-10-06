@@ -3,7 +3,7 @@
 //! the step header's `315k tokens · 43k before first edit`. A count Codex reported for a whole turn
 //! that went on after the first edit is marked `≤` (`EditProgress::at_most`).
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use lurq::{app::ctx::Ctx, components::Text, node::Element};
 use orchester_core::{
@@ -14,6 +14,7 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 
+use super::entry::in_worktree;
 use crate::{
   display,
   tasks::detail::RunView,
@@ -89,7 +90,7 @@ pub(super) fn before_first_edit(ctx: &Ctx, run: &RunView, execution: StepExecuti
       "runs.activity.panel.firstEditValue",
       [
         ("time", display::clock(first.at).as_str()),
-        ("path", first.path.as_str()),
+        ("path", &*repository_path(&first.path)),
       ],
     ),
     (None, true) => ctx.t("runs.activity.panel.noEditYet"),
@@ -109,6 +110,13 @@ pub(super) fn before_first_edit(ctx: &Ctx, run: &RunView, execution: StepExecuti
     property(&ctx.t("runs.activity.panel.firstEdit"), &first),
   ];
   Some((rows, edit.at_most && !so_far))
+}
+
+/// The first edit's path as the repository names it, with `/` between its parts, when the CLI
+/// reported it in the agent's worktree (Codex and Claude Code report it absolute); a path outside
+/// the worktree as reported.
+fn repository_path(path: &str) -> Cow<'_, str> {
+  in_worktree(path).map_or(Cow::Borrowed(path), |relative| Cow::Owned(relative.replace('\\', "/")))
 }
 
 /// The step header's tokens (`T7P4Wo`): with what they were before the first edit, or `no edit`

@@ -12,7 +12,7 @@ use orchester_desktop::{
   clock::Clock,
   close::{CloseKind, Lifecycle, session_end},
   embedded_mcp::McpStatus,
-  i18n,
+  i18n, loader,
   messages::Message,
   programs::Programs,
   root::{self, RootProps, Startup},
@@ -42,6 +42,7 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
+  loader::install(&mut tree);
   // Started before the root mounts so the status bar shows its port, or that it did not start,
   // from the first frame. lurq's server is for looking at the window; the root starts Orchester's own,
   // through which automation controls the app's data, with the window's services.

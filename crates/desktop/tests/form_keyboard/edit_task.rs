@@ -49,7 +49,7 @@ fn stored(repo: &Path) -> Vec<orchester_core::task::Task> {
 }
 
 /// Kontur with the draft KON-1 open on its page.
-fn draft_page() -> Desktop {
+pub(crate) fn draft_page() -> Desktop {
   let mut desktop = Desktop::with_seeded_project(|repo| save(repo, draft("Add GitHub authentication")));
   open_task(&mut desktop);
   desktop
@@ -63,7 +63,7 @@ fn open_task(desktop: &mut Desktop) {
   desktop.wait_for("task-this-run");
 }
 
-fn edit(desktop: &mut Desktop) {
+pub(crate) fn edit(desktop: &mut Desktop) {
   desktop.wait_for("task-edit");
   desktop.click("task-edit");
   desktop.wait_for("task-title");

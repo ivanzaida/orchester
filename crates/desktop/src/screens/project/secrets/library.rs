@@ -26,9 +26,10 @@ use super::{
 use crate::{
   navigation::route::Page,
   secrets::data::ProjectSecrets,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     field::select_style,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     panel::RecoveryPanel,
   },
@@ -138,20 +139,25 @@ impl SecretsScreen {
       )
       .child(handling_notice(&ctx.t("secrets.handling"), None))
       .child(recent_access(ctx));
+    // The secrets scroll beside the gutter; the filter and the ownership line keep out of it.
     Column::new()
       .flex(1.0)
       .height(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Rail.role())
+      .padding_right(beside_gutter(ctx, ExtraSpacing::Rail.role()))
       .spacing(SpacingSize::Lg)
-      .child(self.filters(ctx, count))
+      .child(clear_of_gutter(self.filters(ctx, count)))
       .child(
         ScrollVertical::new(content)
           .id("secret-list-scroll")
           .with_scroll_state(self.list_scroll.clone())
           .width(Dimension::Pct(100.0))
-          .flex(1.0),
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar()),
       )
-      .child(Text::new(&ctx.t("secrets.ownership")).variant(TypographyStyle::Caption))
+      .child(clear_of_gutter(
+        Text::new(&ctx.t("secrets.ownership")).variant(TypographyStyle::Caption),
+      ))
       .into()
   }
 

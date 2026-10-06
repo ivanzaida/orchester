@@ -19,8 +19,13 @@ use crate::{
   agents::data::VersionState,
   navigation::route::Page,
   skills::data::SkillEntry,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, pressable::surface},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  ui::{
+    button::ActionButton,
+    gutter::{beside_gutter, clear_of_gutter},
+    icon::Icon,
+    pressable::surface,
+  },
 };
 
 /// List width, New skill height and item height (`Y09b1`, `SypxD`, `jNTVN`).
@@ -57,16 +62,20 @@ impl SkillEditor {
       .map(|(entry, shown)| self.item(ctx, entry, shown))
       .collect();
     let project = self.context.project.project.name().as_str();
+    // The skills scroll beside the gutter; the rest keeps out of it.
     Column::new()
       .id("skill-list")
       .width(Dimension::Px(LIST_WIDTH))
       .height(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)
+      .padding_right(beside_gutter(ctx, SpacingSize::Md))
       .spacing(SpacingSize::Sm)
       .background(PaletteColor::SurfacePanel)
       .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(new.render(ctx))
-      .child(Text::new(&ctx.t("skills.list.label")).variant(ExtraTypography::Overline.role()))
+      .child(clear_of_gutter(new.render(ctx)))
+      .child(clear_of_gutter(
+        Text::new(&ctx.t("skills.list.label")).variant(ExtraTypography::Overline.role()),
+      ))
       .child(
         ScrollVertical::new(
           Column::new()
@@ -75,11 +84,12 @@ impl SkillEditor {
             .with_children(items),
         )
         .width(Dimension::Pct(100.0))
-        .flex(1.0),
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
       )
-      .child(
+      .child(clear_of_gutter(
         Text::new(&ctx.t_args("skills.list.storage", [("project", project)])).variant(ExtraTypography::Detail.role()),
-      )
+      ))
       .into()
   }
 

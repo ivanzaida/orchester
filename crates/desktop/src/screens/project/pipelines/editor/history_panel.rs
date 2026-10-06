@@ -40,9 +40,10 @@ use crate::{
     history::{PublishedVersion, VersionHistory},
   },
   screens::project::pipelines::PipelinesNav,
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::Notice,
@@ -109,16 +110,16 @@ impl Component for HistoryPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<HistoryPanelProps>().clone();
+    // The versions scroll beside the gutter; what does not scroll keeps out of it.
     let body = match &props.history {
-      HistoryState::Loading => Text::new(&ctx.t("pipelines.history.loading"))
-        .variant(TypographyStyle::Caption)
-        .into(),
-      HistoryState::Failed(error) => Notice::new(
+      HistoryState::Loading => {
+        clear_of_gutter(Text::new(&ctx.t("pipelines.history.loading")).variant(TypographyStyle::Caption))
+      }
+      HistoryState::Failed(error) => clear_of_gutter(Notice::new(
         Icon::AlertCircle,
         ctx.t("pipelines.history.failed"),
         message_text(ctx, error),
-      )
-      .into(),
+      )),
       HistoryState::Ready(history) => self.versions(ctx, &props, history),
     };
     Column::new()
@@ -126,8 +127,9 @@ impl Component for HistoryPanel {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .padding(SpacingSize::Lg)
+      .padding_right(beside_gutter(ctx, SpacingSize::Lg))
       .spacing(SpacingSize::Md)
-      .child(self.header(ctx, props.pipeline))
+      .child(clear_of_gutter(self.header(ctx, props.pipeline)))
       .child(body)
   }
 }
@@ -170,7 +172,11 @@ impl HistoryPanel {
         list = list.child(self.details(ctx, props, version));
       }
     }
-    ScrollVertical::new(list).width(Dimension::Pct(100.0)).flex(1.0).into()
+    ScrollVertical::new(list)
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar())
+      .into()
   }
 
   /// A version: its number, "Latest" on the newest, how long ago it was published, and how much

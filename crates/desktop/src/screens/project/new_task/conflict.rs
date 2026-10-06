@@ -33,7 +33,7 @@ use crate::{
     conflict::EditConflict,
     data::{PipelineChoice, SaveTarget},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_width},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   ui::{
     button::ActionButton,
     field::{ValueTone, value_box},
@@ -93,10 +93,12 @@ impl NewTaskForm {
       .spacing(SpacingSize::Lg)
       .child(notice(ctx, conflict))
       .with_children(fields.map(|field| self.field_block(ctx, &shown, field)));
+    // Its scroll gutter sits in the gap to the panel, as the brief's does (see `content_row`).
     ScrollVertical::new(content)
       .id("task-conflict")
       .flex(1.0)
       .height(Dimension::Pct(100.0))
+      .scrollbar(gutter_scrollbar())
       .into()
   }
 

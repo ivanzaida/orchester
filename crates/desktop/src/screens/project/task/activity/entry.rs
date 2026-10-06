@@ -389,7 +389,10 @@ fn shown(ctx: &Ctx, entry: &Entry, agent: &Arc<str>, raw_lines: bool) -> Shown {
     EntryKind::FileChange(change) => {
       let (glyph, key) = file_change_kind(change.kind);
       // Git's paths use `/` whatever the CLI reported.
-      let path: Arc<str> = in_worktree(&change.path).replace('\\', "/").into();
+      let path: Arc<str> = in_worktree(&change.path)
+        .unwrap_or(&change.path)
+        .replace('\\', "/")
+        .into();
       let meta = ctx.t_args("runs.activity.fileMeta", [("status", &*ctx.t(key))]);
       Shown {
         opens: Some(path.clone()),
@@ -561,15 +564,13 @@ fn tenths_of_seconds(millis: i64) -> String {
 }
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree
-/// (`<repo>/.orchester/worktrees/<run>/src/a.rs` reads `src/a.rs`); other paths as reported.
-fn in_worktree(path: &str) -> &str {
-  const WORKTREES: [&str; 2] = [".orchester\\worktrees\\", ".orchester/worktrees/"];
-  let Some(start) = WORKTREES
-    .iter()
-    .find_map(|marker| path.find(marker).map(|at| at + marker.len()))
-  else {
-    return path;
-  };
+/// (`<repo>/.orchester/worktrees/<run>/src/a.rs` reads `src/a.rs`); `None` for other paths. On
+/// Windows the worktree's path mixes separators (`H:\repo\.orchester/worktrees\<run>`). The run's
+/// worktree is the innermost one: the repository itself may lie in another project's worktree.
+pub(super) fn in_worktree(path: &str) -> Option<&str> {
+  const WORKTREES: &str = ".orchester/worktrees/";
+  // Both separators are one byte: the offsets in the copy are the path's.
+  let start = path.replace('\\', "/").rfind(WORKTREES)? + WORKTREES.len();
   let rest = &path[start..];
-  rest.find(['\\', '/']).map_or(path, |separator| &rest[separator + 1..])
+  rest.find(['\\', '/']).map(|separator| &rest[separator + 1..])
 }

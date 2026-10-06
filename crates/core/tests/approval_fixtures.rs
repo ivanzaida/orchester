@@ -136,19 +136,20 @@ fn approval_fixtures_of_runs_22_to_25() {
     answered(RepositoryAccess::ReadOnly),
     Table {
       runs,
-      similar: 45 - runs,
-      unknown: 3,
+      similar: 47 - runs,
+      unknown: 1,
       other: 11,
     }
   );
-  // A step that edits files runs the shell edits in the worktree too.
-  let runs = if cfg!(windows) { 32 } else { 33 };
+  // A step that edits files runs the shell edits in the worktree and inline code (`python -c`, `python -`
+  // with a here-document) too.
+  let runs = if cfg!(windows) { 34 } else { 35 };
   assert_eq!(
     answered(RepositoryAccess::Write),
     Table {
       runs,
-      similar: 56 - runs,
-      unknown: 3,
+      similar: 58 - runs,
+      unknown: 1,
       other: 0,
     }
   );

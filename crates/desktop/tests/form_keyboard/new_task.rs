@@ -30,7 +30,7 @@ const CREATE: &str = "save-draft";
 /// More than the window has stops on this screen.
 const MAX_STOPS: usize = 30;
 
-fn new_task() -> Desktop {
+pub(crate) fn new_task() -> Desktop {
   let mut desktop = Desktop::with_project();
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
@@ -359,10 +359,11 @@ fn new_task_layout_ends_the_plan_with_its_actions_and_pins_the_footer() {
   let (readback_right, _) = ends(&mut desktop, "task-budget-readback");
   assert!(close(readback_right, run_right), "{readback_right} vs {run_right}");
   // The instructions footer sits at the foot of the brief column, level with the plan's, with
-  // Preview at its right (`MoDET`).
-  let (footer_right, footer_bottom) = ends(&mut desktop, "new-task-preview-footer");
+  // Preview at its right, where the fields end (`MoDET`).
+  let (_, footer_bottom) = ends(&mut desktop, "new-task-preview-footer");
   let (_, plan_bottom) = ends(&mut desktop, "execution-plan");
   assert!(close(footer_bottom, plan_bottom), "{footer_bottom} vs {plan_bottom}");
   let (preview_right, _) = ends(&mut desktop, "task-preview");
-  assert!(close(preview_right, footer_right), "{preview_right} vs {footer_right}");
+  let (title_right, _) = ends(&mut desktop, TITLE);
+  assert!(close(preview_right, title_right), "{preview_right} vs {title_right}");
 }
