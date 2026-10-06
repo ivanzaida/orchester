@@ -68,6 +68,9 @@ pub(super) struct Judged {
   pub(super) runs: Option<usize>,
   /// It runs inline code (`python -c`, `node -e`), whose argument is [`Self::script`].
   pub(super) inline: bool,
+  /// The inline code is its standard input (`python -`), which only a here-document makes the agent's
+  /// own code as written.
+  pub(super) stdin_code: bool,
   /// Its arguments name no file (`tasklist /FI …`): none is placed.
   pub(super) no_paths: bool,
   /// The repository `git -C <folder>` works in.
@@ -94,6 +97,7 @@ impl Judged {
       sources: Vec::new(),
       runs: None,
       inline: false,
+      stdin_code: false,
       no_paths: false,
       repository: None,
     }
@@ -275,6 +279,13 @@ const SECRET_STORES: [&str; 6] = [
 pub(super) fn judge(program: &str, args: &[String]) -> Judged {
   if SECRET_STORES.contains(&program) {
     return Judged::unknown().secret();
+  }
+  if interpreters::reads_code(program, args) {
+    return Judged {
+      inline: true,
+      stdin_code: true,
+      ..Judged::of(Kind::Worktree)
+    };
   }
   if let Some(at) = interpreters::inline(program, args) {
     return Judged {

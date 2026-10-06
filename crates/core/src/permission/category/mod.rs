@@ -248,6 +248,12 @@ fn classify_part(
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
   judge_edits(&mut part, &judged, args, placing);
+  // `python -` runs what its standard input holds: the agent's code only from a here-document read as
+  // written, not from a pipe or a file.
+  if judged.stdin_code && (!raw.heredoc || !raw.reads.is_empty()) {
+    part.edits = false;
+    part.at_least(CommandCategory::Unknown);
+  }
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
   place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
