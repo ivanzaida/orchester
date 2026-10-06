@@ -23,6 +23,7 @@ mod preflight;
 mod prompt;
 mod recovery;
 mod result;
+pub mod review;
 mod schedule;
 mod snapshot;
 mod state;

@@ -126,10 +126,12 @@ pub enum DecidedBy {
   Automation,
   /// Automation denied it, through Orchester's MCP server; the agent was told and continued.
   AutomationDeny,
+  /// Auto mode's reviewer approved it ([`super::review`]).
+  Reviewer,
 }
 
 impl DecidedBy {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::Person,
     Self::PersonSimilar,
     Self::PersonAlways,
@@ -141,6 +143,7 @@ impl DecidedBy {
     Self::Permissions,
     Self::Automation,
     Self::AutomationDeny,
+    Self::Reviewer,
   ];
 
   pub const fn as_str(self) -> &'static str {
@@ -156,6 +159,7 @@ impl DecidedBy {
       Self::Permissions => "permissions",
       Self::Automation => "automation",
       Self::AutomationDeny => "automation_deny",
+      Self::Reviewer => "reviewer",
     }
   }
 
@@ -179,7 +183,7 @@ impl DecidedBy {
   /// Someone answered a request that waited for them, a person or automation, rather than Orchester
   /// itself as the request came.
   pub const fn answered_waiting(self) -> bool {
-    self.by_person() || self.by_automation()
+    self.by_person() || self.by_automation() || matches!(self, Self::Reviewer)
   }
 }
 
@@ -213,6 +217,9 @@ pub struct ToolDecision {
   /// What the agent was told, for a denial.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub told: Option<String>,
+  /// What auto mode did with the request before it was answered: its approval, or why it asked.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub review: Option<super::review::Review>,
 }
 
 /// What Codex App Server tells its model when Orchester declines a request (`decline`), word for word:
