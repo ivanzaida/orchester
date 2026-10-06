@@ -163,6 +163,19 @@ const ASKS: &[&str] = &[
   "ls; for i in 1; do ls; done",
   "for path in a b; do ls; done",
   "for i in 1 2; do ls; donex",
+  "for i in a
+do rm -rf /c/Users/x
+done
+for j in b; do echo; done",
+  "for i in a
+do ls
+done
+for j in b; do echo; done",
+  "for i in a; do ls; done; for j in b; do echo; done",
+  "for i in a; do for j in b; do ls; done; done",
+  "for i in a;; do ls; done",
+  "for i in a; do ls;; done",
+  "for i in a do ls; done",
   // Inline code that loads from elsewhere, or after a part that changes files.
   "python -m http.server",
   "node --require x -e 1",
@@ -191,6 +204,66 @@ fn quick_rules_run_process_listings_in_every_step() {
     for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
       assert!(fixture.runs(line, repository), "`{line}` runs");
     }
+  }
+}
+
+/// The benign prefixes of rule 1, each in front of a shell, an interpreter or a wrapper given in a way no
+/// rule for a bare program covers.
+const PREFIXED: &[&str] = &[
+  "{VAR}=1 /any/dir/bash -c ls",
+  "{VAR}=1 ../x/bash -c ls",
+  "{VAR}=1 C:/evil/sh.exe -c ls",
+  "{VAR}=1 /any/dir/pwsh -NoProfile -Command 'Get-Process'",
+  "{VAR}=1 ../x/python .tmp/verify/orc50b/drive.py",
+  "{VAR}=1 C:/evil/python -c 1",
+  "{VAR}=1 out/x.exe",
+  "{VAR}=1 env ls",
+  "{VAR}=1 nohup ls",
+  "{VAR}=1 timeout 5 ls",
+  "{VAR}=1 PATH=x ls",
+];
+
+const BENIGN: [&str; 11] = [
+  "PYTHONIOENCODING",
+  "PYTHONUTF8",
+  "PYTHONUNBUFFERED",
+  "NO_COLOR",
+  "FORCE_COLOR",
+  "TERM",
+  "LANG",
+  "LC_ALL",
+  "RUST_LOG",
+  "RUST_BACKTRACE",
+  "CARGO_TERM_COLOR",
+];
+
+#[test]
+fn quick_rules_check_the_program_after_the_prefixes() {
+  let fixture = Fixture::new();
+  for var in BENIGN {
+    for line in PREFIXED {
+      let line = line.replace("{VAR}", var);
+      for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
+        assert!(!fixture.runs(&line, repository), "`{line}` must ask");
+      }
+    }
+    let line = format!("{var}=1 ls");
+    assert!(fixture.runs(&line, RepositoryAccess::ReadOnly), "`{line}` runs");
+  }
+}
+
+#[test]
+fn quick_rules_read_a_loop_with_its_body_on_lines_of_its_own() {
+  let fixture = Fixture::new();
+  for line in [
+    "for i in 1 2
+do ls
+done",
+    "for i in 1 2; do
+  ls
+done",
+  ] {
+    assert!(fixture.runs(line, RepositoryAccess::ReadOnly), "`{line}` runs");
   }
 }
 

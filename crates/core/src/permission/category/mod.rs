@@ -236,7 +236,7 @@ fn classify_part(
     .as_deref()
     .filter(|program| interpreters::script(program, args).is_none());
   if let Some(script) = inline.and_then(|program| shell_script(program, args)) {
-    return shell_parts(raw, script, scope, line, depth);
+    return shell_parts(raw, words, script, scope, line, depth);
   }
   let Some(program) = program else {
     return vec![worktree_program(words, raw, placing)];
@@ -293,14 +293,15 @@ fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing
 /// The parts of the inline `script` a shell runs (`bash -c …`, `pwsh -Command …`). The shell written with a
 /// folder must be installed where the agent cannot have written it, and no rule for a bare program runs
 /// what it runs ([`CommandPart::through_path`]).
+/// `words` are the part's words after its benign prefixes ([`prefixes`]): the shell is the first.
 fn shell_parts(
   raw: &RawPart,
+  words: Vec<String>,
   script: Option<(String, Quoting)>,
   scope: &CommandScope,
   line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
-  let words = raw.words.clone();
   let by_path = words.first().is_some_and(|first| first.contains(['/', '\\']));
   let installed = !by_path || words.first().is_some_and(|first| scope.installed(first));
   let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {

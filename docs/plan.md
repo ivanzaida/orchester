@@ -741,7 +741,9 @@ what ran before (`crates/core/tests/quick_rules.rs`, with refusals):
    `Format-Table`, `Format-List`, `Sort-Object`, `Out-String` or a one-comparison `Where-Object`, parsed strictly
    (no `;`, `&`, `$(`, `@`, script blocks but `{ $_.X -eq Y }`). `taskkill` and everything else ask.
 4. `for NAME in <literals>; do BODY; done` as the whole line reads as `NAME=v; BODY` per value (`category::loops`, at
-   most 64); other loops ask.
+   most 64); the word list ends at the first `;` or new line, and a keyword left in the body (a second or nested
+   loop) is an unknown program; `;;` and other loops ask. Review fixes: the list no longer runs past a new line, and
+   every program check (a shell or interpreter given by path) looks at the program after the benign prefixes.
 5. Inline code (`python -c`, `py -c`, `node -e`/`-p`) runs like a worktree script in a writing step. A script,
    executable or inline code runs unasked only when every other part of the line that may change files is itself
    such a run (`sh m.sh … | python -c …` runs; `echo > a.py; python -c 'import a'` asks).
