@@ -125,7 +125,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     "rename-item" => RENAME_ITEM,
     "invoke-webrequest" | "invoke-restmethod" => WEB_REQUEST,
     "sc" => return Some(Judged::unknown()),
-    program if READS.contains(&program) => return Some(read(args)),
+    program if READS.contains(&program) => return Some(read(program, args)),
     _ => return None,
   };
   if args.iter().any(|arg| unread(arg)) {
@@ -134,16 +134,41 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   Some(read_parameters(args, &parameters).map_or_else(Judged::unknown, |given| writes(program, &given)))
 }
 
-fn read(args: &[String]) -> Judged {
+fn read(program: &str, args: &[String]) -> Judged {
   let refused = args.iter().any(|arg| {
     unread(arg) || parameter(arg).is_some_and(|(name, _)| SETS_VARIABLE.contains(&name.to_lowercase().as_str()))
   });
   if refused {
-    Judged::unknown()
+    return Judged::unknown();
+  }
+  // The file readers with only the parameters that pick what they read: a known-safe read like `cat` or
+  // `ls`, its paths placed as theirs (`-Stream`, a data stream of a file, is not among them).
+  let known = KNOWN_READS.contains(&program)
+    && args
+      .iter()
+      .all(|arg| parameter(arg).is_none_or(|(name, _)| KNOWN_READ_PARAMETERS.contains(&name.to_lowercase().as_str())));
+  if known {
+    Judged::of(Kind::ReadOnly).known_safe()
   } else {
     Judged::of(Kind::ReadOnly)
   }
 }
+
+/// Reading cmdlets that are known-safe reads with [`KNOWN_READ_PARAMETERS`].
+const KNOWN_READS: [&str; 5] = ["get-childitem", "get-item", "test-path", "get-content", "resolve-path"];
+const KNOWN_READ_PARAMETERS: [&str; 11] = [
+  "path",
+  "literalpath",
+  "filter",
+  "recurse",
+  "depth",
+  "name",
+  "force",
+  "totalcount",
+  "tail",
+  "raw",
+  "encoding",
+];
 
 /// What a writing cmdlet or a web request writes, from its parameters: the path is `-Path` (or
 /// `-LiteralPath`, `-FilePath`), else the first positional argument.

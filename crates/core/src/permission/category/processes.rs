@@ -1,6 +1,8 @@
 //! Listing processes, which reads and changes nothing: `tasklist` with its filters and formats, `ps`
 //! without the forms that print processes' environments, and a PowerShell pipeline that only gets
-//! processes and shapes the output (`Get-Process -Id 1 | Select-Object Id,ProcessName`). Their arguments
+//! processes or network endpoints and shapes the output (`Get-Process -Id 1 | Select-Object
+//! Id,ProcessName`, `Get-NetTCPConnection -LocalPort 47811 | Select-Object -ExpandProperty
+//! OwningProcess`). Their arguments
 //! name no file. Everything else, `taskkill` and `Stop-Process` included, is read as before.
 
 use super::programs::{Judged, Kind};
@@ -89,6 +91,18 @@ const SHAPE_PARAMETERS: [&str; 9] = [
   "-width",
   "-unique",
 ];
+/// Commands that list network endpoints and the processes that own them, and their parameters, each
+/// with a value.
+const ENDPOINTS: [&str; 2] = ["get-nettcpconnection", "get-netudpendpoint"];
+const ENDPOINT_PARAMETERS: [&str; 7] = [
+  "-localport",
+  "-remoteport",
+  "-localaddress",
+  "-remoteaddress",
+  "-state",
+  "-owningprocess",
+  "-erroraction",
+];
 /// Comparisons of a `Where-Object` filter.
 const COMPARISONS: [&str; 9] = ["-eq", "-ne", "-like", "-notlike", "-match", "-gt", "-lt", "-ge", "-le"];
 
@@ -149,7 +163,13 @@ fn is_source(words: &[String]) -> bool {
     return false;
   };
   let command = command.to_lowercase();
-  if !SOURCES.contains(&command.as_str()) || words.iter().any(|word| word.contains('$') || word.contains('{')) {
+  if words.iter().any(|word| word.contains('$') || word.contains('{')) {
+    return false;
+  }
+  if ENDPOINTS.contains(&command.as_str()) {
+    return is_endpoint_listing(rest);
+  }
+  if !SOURCES.contains(&command.as_str()) {
     return false;
   }
   let process = command == "get-process";
@@ -169,6 +189,14 @@ fn is_source(words: &[String]) -> bool {
     }
   }
   class
+}
+
+/// `Get-NetTCPConnection` / `Get-NetUDPEndpoint` arguments: listed parameters, each with a value.
+fn is_endpoint_listing(args: &[String]) -> bool {
+  args.len().is_multiple_of(2)
+    && args
+      .chunks(2)
+      .all(|pair| ENDPOINT_PARAMETERS.contains(&pair[0].to_lowercase().as_str()) && is_names(&pair[1]))
 }
 
 /// A shaping command with property names and its listed parameters, or `Where-Object` with one
