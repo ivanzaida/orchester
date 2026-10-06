@@ -29,8 +29,6 @@ use self::{
 use crate::{
   endpoint::Endpoint,
   http::{ErrorAnswer, Http, SendError},
-  retry,
-  sse::SseParser,
 };
 
 /// Pages of `GET /v1/models` read at most; a listing that goes on longer is not a model list.
@@ -130,32 +128,11 @@ impl AnthropicClient {
       match self.attempt(&body, &betas, &request.model, events).await {
         Err(Failure::Model(error, retry_after)) => {
           retry += 1;
-          self.pause(retry, error, retry_after, events).await?;
+          self.http.pause(retry, error, retry_after, events).await?;
         }
         other => return other,
       }
     }
-  }
-
-  /// Waits before retry `retry` after `error`, once the wait is reported; `Err(error)` when the request
-  /// is not tried again (§3.1).
-  async fn pause(
-    &self,
-    retry: u32,
-    error: ModelError,
-    retry_after: Option<Duration>,
-    events: &mut (dyn FnMut(StreamEvent) + Send),
-  ) -> Result<(), ModelError> {
-    let Some(wait) = retry::wait(self.http.timing(), retry, &error, retry_after) else {
-      return Err(error);
-    };
-    events(StreamEvent::Retrying {
-      attempt: retry,
-      wait,
-      error: self.http.redact_error(error),
-    });
-    tokio::time::sleep(wait).await;
-    Ok(())
   }
 
   async fn attempt(
@@ -193,23 +170,13 @@ impl AnthropicClient {
     into: &mut Accumulator,
     events: &mut (dyn FnMut(StreamEvent) + Send),
   ) -> Result<(), ModelError> {
-    let mut parser = SseParser::new();
-    loop {
-      let Some(chunk) = self.http.chunk(response).await? else {
-        return Err(ModelError::Transport(
-          "the stream ended before the response was complete".to_owned(),
-        ));
-      };
-      let parsed = parser
-        .feed(&chunk)
-        .map_err(|error| ModelError::Protocol(error.to_string()))?;
-      for event in parsed {
-        into.event(&event, events)?;
-        if into.ended() {
-          return Ok(());
-        }
-      }
-    }
+    self
+      .http
+      .read_events(response, |event| {
+        into.event(event, events)?;
+        Ok(into.ended())
+      })
+      .await
   }
 
   /// What `model` supports, asked of the Models API once per client, with the retries of a request.
@@ -228,7 +195,7 @@ impl AnthropicClient {
         Ok(object) => break object,
         Err(error) => {
           retry += 1;
-          self.pause(retry, error, None, events).await?;
+          self.http.pause(retry, error, None, events).await?;
         }
       }
     };

@@ -1,6 +1,6 @@
 //! Kind of a new agent connection (04.H1 `Byo8K`, compact option cards `lcwsy` in `W897Q`): the two CLIs
 //! and the two model APIs Orchester runs agents on itself, in one row, with what native kinds are
-//! (`nFBxV`). A kind this version cannot add is faded, with the reason under the row.
+//! (`nFBxV`).
 
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     field::{FieldNote, field},
-    option_card::{OptionCard, unavailable_reason},
+    option_card::OptionCard,
   },
 };
 
@@ -28,8 +28,8 @@ const KINDS: [AgentProvider; 4] = [
   AgentProvider::OpenAiApi,
 ];
 
-/// The *Kind* field: a compact card per kind in one row, `chosen` selected, what native kinds are,
-/// and why a kind this version cannot add is faded; choosing another calls `choose`.
+/// The *Kind* field: a compact card per kind in one row, `chosen` selected, and what native kinds
+/// are; choosing another calls `choose`.
 pub fn kind_field(ctx: &Ctx, chosen: AgentProvider, choose: &Arc<dyn Fn(AgentProvider) + Send + Sync>) -> Element {
   let cards = Row::new()
     .width(Dimension::Pct(100.0))
@@ -42,17 +42,12 @@ pub fn kind_field(ctx: &Ctx, chosen: AgentProvider, choose: &Arc<dyn Fn(AgentPro
         .overflow_visible()
         .child(card(ctx, provider, chosen, choose.clone()))
     }));
-  let unavailable = KINDS
-    .iter()
-    .any(|provider| !provider.can_be_added())
-    .then(|| unavailable_reason(&ctx.t("connections.kind.notYet")));
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .overflow_visible()
     .child(cards)
-    .child(Text::new(&ctx.t("connections.kind.nativeHint")).variant(ExtraTypography::Hint.role()))
-    .with_children(unavailable);
+    .child(Text::new(&ctx.t("connections.kind.nativeHint")).variant(ExtraTypography::Hint.role()));
   field(&ctx.t("connections.kind.label"), content.into(), FieldNote::None)
 }
 
@@ -68,22 +63,17 @@ fn card(
     AgentProvider::AnthropicApi => ("connection-kind-anthropic", "connections.kind.anthropicDetail"),
     AgentProvider::OpenAiApi => ("connection-kind-openai", "connections.kind.openaiDetail"),
   };
-  let card = OptionCard::new(
+  OptionCard::new(
     id,
     ctx.t(super::status::program_key(provider)),
     ctx.t(detail),
     provider == chosen,
   )
-  .compact();
-  if !provider.can_be_added() {
-    // Its reason is said once, under the row.
-    return card.unavailable(None).into();
-  }
-  card
-    .on_choose(move || {
-      if provider != chosen {
-        choose(provider);
-      }
-    })
-    .into()
+  .compact()
+  .on_choose(move || {
+    if provider != chosen {
+      choose(provider);
+    }
+  })
+  .into()
 }

@@ -1,5 +1,5 @@
 //! Adding and editing a native connection (04.H1 `Byo8K`, H1B `h2OUr`, H3 `KGciR`) and its models
-//! (04.H6 `zHowy`): the four kinds, the Official preset with the others unavailable, the key secret
+//! (04.H6 `zHowy`): the four kinds, the Official preset with the others unavailable on both APIs, the key secret
 //! picked or created with the connection, models added by hand with their default model and effort,
 //! provider fallback, why the form cannot save, and the models dialog. Key values here are fake, and
 //! the keychain is the harness's one in memory.
@@ -103,13 +103,10 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
   ] {
     assert!(shows(&mut desktop, kind, title), "{title}");
   }
-  assert!(whole_screen_shows(
+  assert!(!whole_screen_shows(
     &mut desktop,
-    "OpenAI API connections come in a later version of Orchester."
+    "come in a later version of Orchester."
   ));
-  // The OpenAI card cannot be chosen: pressing it changes nothing.
-  desktop.press("connection-kind-openai");
-  assert!(!has(&mut desktop, "native-preset"));
   desktop.press("connection-kind-anthropic");
   desktop.wait_for("native-preset");
   assert_eq!(desktop.value("connection-name"), "Anthropic API · Kontur");
@@ -158,7 +155,7 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
 }
 
 /// Tab goes through the native form's controls in the order they read and stays in the dialog;
-/// what cannot be used (the OpenAI kind, DeepSeek and Custom, Test again, Fetch models) is no stop.
+/// what cannot be used (DeepSeek and Custom, Test again, Fetch models) is no stop.
 #[test]
 fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
   let mut desktop = Desktop::with_project_named("Kontur");
@@ -171,6 +168,7 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
     "connection-kind-codex",
     "connection-kind-claude",
     "connection-kind-anthropic",
+    "connection-kind-openai",
     "native-preset-official",
     "native-url-advanced",
     "native-key-select",
@@ -186,7 +184,6 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
     assert!(order.contains(&stop.as_str()), "Tab left the dialog for {stop}");
   }
   for never in [
-    "connection-kind-openai",
     "native-preset-deepseek",
     "native-preset-custom",
     "native-test-again",
@@ -269,6 +266,79 @@ fn native_connection_saves_a_new_key_secret_and_models_added_by_hand() {
     "connection-inspector",
     "API key · ANTHROPIC_API_KEY (Development)"
   ));
+}
+
+/// The OpenAI kind is added as the Anthropic one is: the Official preset at OpenAI's base URL, the
+/// Responses wire format, a key secret and models by hand; testing and fetching models stay
+/// unavailable until native runs, and provider fallback is Anthropic's only.
+#[test]
+fn native_openai_connection_is_added_like_the_anthropic_one() {
+  let mut desktop = Desktop::with_project_named("Kontur");
+  desktop.wait_for("nav-connections");
+  desktop.click("nav-connections");
+  desktop.wait_for("add-connection");
+  desktop.click("add-connection");
+  desktop.wait_for(DIALOG);
+  desktop.press("connection-kind-openai");
+  desktop.wait_for("native-preset");
+  assert_eq!(desktop.value("connection-name"), "OpenAI API · Kontur");
+  assert!(shows(&mut desktop, "native-url", "https://api.openai.com/v1"));
+  assert!(shows(
+    &mut desktop,
+    "native-preset",
+    "Compatible endpoints come in a later version of Orchester."
+  ));
+  for text in [
+    "Set by the preset. Prompts, repository content and command output are sent to api.openai.com.",
+    "Testing a native connection comes with native agent runs in a later version.",
+    "Fetching models needs a test of the connection",
+    "Not offered on this endpoint: only the official Anthropic API retries on another model.",
+  ] {
+    assert!(shows(&mut desktop, DIALOG, text), "{text}");
+  }
+  assert!(!whole_screen_shows(&mut desktop, "Anthropic may answer"));
+  desktop.press("native-url-advanced");
+  assert!(shows(
+    &mut desktop,
+    DIALOG,
+    "Wire format · OpenAI Responses · stateless, store off"
+  ));
+  desktop.click("native-key-new");
+  desktop.wait_for("native-key-name");
+  let placeholder = desktop
+    .tree
+    .get_element_by_id_mut("native-key-name")
+    .and_then(|element| element.as_text_input())
+    .and_then(|input| input.placeholder());
+  assert_eq!(placeholder.as_deref(), Some("OPENAI_API_KEY"));
+  set(&mut desktop, "native-key-name", "OPENAI_API_KEY");
+  set(&mut desktop, "native-key-value", KEY_VALUE);
+  add_model(
+    &mut desktop,
+    "gpt-6.1-sol",
+    ("1050000", "128000"),
+    &["low", "medium", "high"],
+  );
+  choose(&mut desktop, "native-default-model-select", "gpt-6.1-sol");
+  choose(&mut desktop, "native-default-effort-select", "medium");
+  assert!(!has_reason(&mut desktop), "nothing keeps it from saving");
+  desktop.press("connection-save");
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
+  let db = ProjectDb::open(desktop.repo()).expect("open the project");
+  let connection = db
+    .connections()
+    .expect("connections")
+    .into_iter()
+    .find_map(|connection| AgentConnection::try_from(connection).ok())
+    .expect("the native connection");
+  assert_eq!(connection.provider(), AgentProvider::OpenAiApi);
+  let api = connection.api().expect("an API endpoint");
+  assert_eq!(api.preset(), EndpointPreset::Official);
+  assert_eq!(api.base_url().as_str(), "https://api.openai.com/v1");
+  assert!(!api.provider_fallback());
+  assert_eq!(api.models().default_effort(), Some(Effort::Medium));
+  assert_eq!(desktop.vault.values(), [KEY_VALUE.to_owned()]);
+  assert!(!whole_screen_shows(&mut desktop, KEY_VALUE));
 }
 
 /// 04.H3: values the form cannot save say why, under their field and at the left of the actions.

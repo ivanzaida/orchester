@@ -6,7 +6,7 @@ use orchester_core::{
   native::model::{ModelClient, ModelError, RemoteModel},
 };
 
-use crate::{anthropic::AnthropicClient, endpoint::Endpoint};
+use crate::{anthropic::AnthropicClient, endpoint::Endpoint, responses::ResponsesClient};
 
 /// What a check found: the result to record, and the models the endpoint listed when it answered.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +23,19 @@ pub async fn check_anthropic(endpoint: Endpoint) -> ApiCheck {
     Ok(client) => client.models().await,
     Err(error) => Err(error),
   };
+  checked(listed)
+}
+
+/// Checks an OpenAI Responses endpoint with `GET /models`.
+pub async fn check_responses(endpoint: Endpoint) -> ApiCheck {
+  let listed = match ResponsesClient::new(endpoint) {
+    Ok(client) => client.models().await,
+    Err(error) => Err(error),
+  };
+  checked(listed)
+}
+
+fn checked(listed: Result<Vec<RemoteModel>, ModelError>) -> ApiCheck {
   match listed {
     Ok(models) => ApiCheck {
       result: CheckResult::Api { balance: None },

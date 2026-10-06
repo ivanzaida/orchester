@@ -140,8 +140,8 @@ pub fn parse_call(name: &str, input: &serde_json::Value) -> Result<ToolInput, To
   Ok(parsed)
 }
 
-/// The raw text of an input made by [`invalid_json_input`].
-fn not_json(input: &serde_json::Value) -> Option<&str> {
+/// The raw text of an input made by [`invalid_json_input`]; `None` for any other input.
+pub fn not_json(input: &serde_json::Value) -> Option<&str> {
   let object = input.as_object()?;
   match (object.len(), object.get(INVALID_JSON)) {
     (1, Some(serde_json::Value::String(raw))) => Some(raw),

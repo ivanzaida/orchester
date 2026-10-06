@@ -8,7 +8,7 @@ use std::{future::Future, time::Duration};
 
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
-  native::model::ModelError,
+  native::model::{ModelError, StreamEvent},
   resource::ModelId,
 };
 use reqwest::{
@@ -18,12 +18,18 @@ use reqwest::{
 };
 use serde::Deserialize;
 
-use crate::endpoint::{Endpoint, Timing};
+use crate::{
+  endpoint::{Endpoint, Timing},
+  retry,
+  sse::{SseEvent, SseParser},
+};
 
 /// The most of an error answer that is read.
 const MAX_ERROR_BODY: usize = 64 * 1024;
 /// The most of a JSON answer (a model list) that is read.
 const MAX_JSON_BODY: usize = 16 * 1024 * 1024;
+/// `retry-after` in milliseconds.
+const RETRY_AFTER_MS: &str = "retry-after-ms";
 
 /// One endpoint's HTTP client.
 #[derive(Clone, Debug)]
@@ -43,11 +49,13 @@ pub(crate) enum SendError {
   Transport(ModelError),
 }
 
-/// An error answer: its status, the provider's error type and message, and `retry-after`.
+/// An error answer: its status, the provider's error type, code and message, and `retry-after`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ErrorAnswer {
   pub status: u16,
   pub kind: Option<String>,
+  /// OpenAI's finer reason (`insufficient_quota`, `context_length_exceeded`); Anthropic sends none.
+  pub code: Option<String>,
   pub message: String,
   pub retry_after: Option<Duration>,
 }
@@ -61,6 +69,7 @@ struct ErrorBody {
 struct ErrorDetail {
   #[serde(rename = "type")]
   kind: Option<String>,
+  code: Option<String>,
   message: Option<String>,
 }
 
@@ -114,9 +123,12 @@ impl Http {
 
   /// The API key as a header value marked sensitive, so that it is never shown.
   pub(crate) fn key_header(&self) -> Result<HeaderValue, ModelError> {
-    let mut value = HeaderValue::from_str(self.endpoint.key().expose()).map_err(|_| ModelError::KeyRejected)?;
-    value.set_sensitive(true);
-    Ok(value)
+    sensitive(self.endpoint.key().expose())
+  }
+
+  /// `Bearer <key>` as a header value marked sensitive.
+  pub(crate) fn bearer_header(&self) -> Result<HeaderValue, ModelError> {
+    sensitive(&format!("Bearer {}", self.endpoint.key().expose()))
   }
 
   /// Sends `request` and waits for the answer's head within the idle timeout.
@@ -138,6 +150,52 @@ impl Http {
       Ok(chunk) => Ok(chunk.map(|bytes| bytes.to_vec())),
       Err(error) => Err(self.transport(&error)),
     }
+  }
+
+  /// Reads `response`'s events into `take` until it says the response ended; a stream that ends
+  /// before that has failed. Every event is bounded by the parser ([`crate::sse::MAX_EVENT`]).
+  pub(crate) async fn read_events(
+    &self,
+    response: &mut Response,
+    mut take: impl FnMut(&SseEvent) -> Result<bool, ModelError> + Send,
+  ) -> Result<(), ModelError> {
+    let mut parser = SseParser::new();
+    loop {
+      let Some(chunk) = self.chunk(response).await? else {
+        return Err(ModelError::Transport(
+          "the stream ended before the response was complete".to_owned(),
+        ));
+      };
+      let parsed = parser
+        .feed(&chunk)
+        .map_err(|error| ModelError::Protocol(error.to_string()))?;
+      for event in &parsed {
+        if take(event)? {
+          return Ok(());
+        }
+      }
+    }
+  }
+
+  /// Waits before retry `retry` (from 1) after `error`, once the wait is reported to `events`;
+  /// `Err(error)` when the request is not tried again (§3.1).
+  pub(crate) async fn pause(
+    &self,
+    retry: u32,
+    error: ModelError,
+    retry_after: Option<Duration>,
+    events: &mut (dyn FnMut(StreamEvent) + Send),
+  ) -> Result<(), ModelError> {
+    let Some(wait) = retry::wait(self.timing(), retry, &error, retry_after) else {
+      return Err(error);
+    };
+    events(StreamEvent::Retrying {
+      attempt: retry,
+      wait,
+      error: self.redact_error(error),
+    });
+    tokio::time::sleep(wait).await;
+    Ok(())
   }
 
   /// `response`'s whole body as JSON of type `T`.
@@ -186,20 +244,25 @@ impl Http {
 
   async fn error_answer(&self, mut response: Response) -> ErrorAnswer {
     let status = response.status();
-    let retry_after = response
-      .headers()
-      .get(RETRY_AFTER)
-      .and_then(|value| value.to_str().ok())
-      .and_then(retry_after);
+    let header = |name: &str| response.headers().get(name).and_then(|value| value.to_str().ok());
+    // OpenAI's SDKs read the finer `retry-after-ms` first; Anthropic sends `retry-after` only.
+    let retry_after = header(RETRY_AFTER_MS)
+      .and_then(|millis| retry_after(millis).map(|seconds| seconds / 1000))
+      .or_else(|| header(RETRY_AFTER.as_str()).and_then(retry_after));
     // An error answer whose body cannot be read in full still says what happened by its status.
     let body = self.read(&mut response, MAX_ERROR_BODY).await.unwrap_or_default();
-    let (kind, message) = match serde_json::from_slice::<ErrorBody>(&body) {
-      Ok(parsed) => (parsed.error.kind, parsed.error.message.unwrap_or_default()),
-      Err(_) => (None, String::from_utf8_lossy(&body).trim().to_owned()),
+    let (kind, code, message) = match serde_json::from_slice::<ErrorBody>(&body) {
+      Ok(parsed) => (
+        parsed.error.kind,
+        parsed.error.code,
+        parsed.error.message.unwrap_or_default(),
+      ),
+      Err(_) => (None, None, String::from_utf8_lossy(&body).trim().to_owned()),
     };
     ErrorAnswer {
       status: status.as_u16(),
       kind,
+      code,
       message: self.redact(&message),
       retry_after,
     }
@@ -236,6 +299,12 @@ fn retry_after(value: &str) -> Option<Duration> {
     return None;
   }
   Some(Duration::try_from_secs_f64(seconds).unwrap_or(Duration::MAX))
+}
+
+fn sensitive(value: &str) -> Result<HeaderValue, ModelError> {
+  let mut value = HeaderValue::from_str(value).map_err(|_| ModelError::KeyRejected)?;
+  value.set_sensitive(true);
+  Ok(value)
 }
 
 /// A transport failure as text without the key; the URL it names holds none, but a proxy's might.
