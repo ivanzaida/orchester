@@ -123,6 +123,30 @@ MCP server").
   meta; the design draws them as the *Decision mark* chip (`M7pU0A`). Affects every mark, so it was left out of the
   fixes above.
 
+### M10 · Auto mode for approvals · branch `claude/auto-mode` (from master `6d44bdfe`, UI)
+
+Implemented 2026-10-06, **waiting for review and an independent design verification** (no Pencil frame; judge
+consistency with *Approve everything in this run*, the approval dialog and Project settings › General). A reviewer
+model judges the requests the rules leave to the person (`orchester_core::run::review`, `RequestReviewer`; Claude
+Code in print mode without tools, `connection::reviewer`); hard rules first (credential reads, read-only step,
+network off, outside folders, unrecorded permissions), fail closed (error, 60 s timeout, unreadable answer). Recorded
+as `decided_by = 'reviewer'` and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs,
+model); the activity, the dialog, the conversation card and the run's Approvals say what auto mode did.
+`set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*.
+Tests: `cargo test -p orchester-core --test auto_mode`, `-p orchester-store --test auto_mode`, `--test
+permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode`,
+`-p orchester-desktop --test form_keyboard auto_mode`, `app_mcp`.
+
+UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: *Auto mode* switch under
+*Approve everything in this run*; without a Claude Code connection it is fixed with *Auto mode needs a Claude Code
+connection…*; (2) the run permissions popover (the run's permissions row › link): the same switch under the MCP
+servers; (3) Project settings › General › *Auto mode*: *New runs use auto mode* and *Reviewer model* with *Reviews
+with <connection>*, or the unavailable line; (4) the approval dialog of a request auto mode left to the person: the
+line under the explanation (*Auto mode asked you: …*, *Auto mode left this to you: …*); (5) the conversation's
+request card: the same line; (6) the activity mark *approved by auto mode · <subject>* and, for a person's answer,
+*· Auto mode asked you: …*; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once
+non-zero. States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review`.
+
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
 Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether

@@ -100,7 +100,8 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `list_approvals`, `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  interrupted run), `cancel_run`, `set_run_auto_mode` (a run's auto mode, see below), `list_approvals`,
+  `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
   (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
@@ -142,6 +143,25 @@ person (an unreadable or destructive command, a write outside the worktree, a cr
 install, a network command) is refused (`person_only`, with the reason), as are the wider answers
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
+
+**Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
+model judges each request the rules leave to the person (rules of the run, Always allow and
+auto-approval answer first) in its context: the request as the approval card shows it (secret values
+removed), the step's permissions, the task and the agent's last few messages. It approves only what
+clearly serves the task and is not destructive, exfiltrating or escaping, and not an install of
+anything persistent; everything else still asks the person, with its reason. Hard rules come first and
+the reviewer cannot override them: a credential read, and anything outside the step's permissions (a
+write in a read-only step, the network while it is off, a write outside the worktree and its writable
+folders), always ask the person. A reviewer that fails, takes longer than 60 seconds or answers with
+something unreadable asks the person too. The reviewer is the project's Claude Code connection (the
+first by name), run in print mode with no tools, no MCP servers and no settings, on the model Project
+settings › General › Auto mode names (`claude-haiku-4-5-20251001` by default); without a Claude Code
+connection auto mode is unavailable and the app says so. Each run has its own *Auto mode* switch, in its
+Approvals and its permissions popover; *New runs use auto mode* in Project settings (off by default)
+turns it on for runs created from then on. The run records each review with the request: the activity
+reads *approved by auto mode* with the reviewer's reason, a request it left to you says *Auto mode asked
+you: …* in the approval dialog and on the conversation's card, and the run's Approvals count both.
+`set_run_auto_mode` changes a run's switch only while *Let automation answer approvals* is on.
 
 What this means: any program running as your user can read the discovery files and control the app's
 data through Orchester's server as you could: create and run tasks, whose agents work in your
