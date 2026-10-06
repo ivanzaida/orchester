@@ -130,6 +130,8 @@ struct Held {
   height: f32,
 }
 
+impl lurq::app::component::DevtoolsInspectable for Held {}
+
 pub(super) struct ApprovalCardView {
   requested: Signal<Option<CardAnswer>>,
   copy: CopyState,
@@ -230,7 +232,7 @@ impl Component for ApprovalCardView {
       body,
     )
     .ref_element(self.frame.clone())
-    .min_height(Dimension::Px(self.held.get().height * 0.0))
+    .min_height(Dimension::Px(self.held.get().height))
     .into();
     chat_row(
       format!("conversation-request-{}", request.id),

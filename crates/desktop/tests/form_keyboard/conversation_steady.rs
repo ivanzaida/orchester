@@ -41,7 +41,7 @@ fn rows(desktop: &mut Desktop) -> HashMap<String, ElementRect> {
   if let Some(root) = desktop.tree.root() {
     walk(root, &mut ids);
   }
-  // A row the list mounted in this pass, for a row whose key changed, is laid out in the next.
+  // A row mounted in this pass and not laid out yet is not shown either.
   ids
     .into_iter()
     .filter_map(|id| {
@@ -129,10 +129,10 @@ impl Frame {
       .is_some_and(|row| row.y + row.height > self.top && row.y < self.bottom)
   }
 
-  /// How far above the list's end row `id` starts. The composer under the list changes its height as
-  /// it says more or less, and the list's end moves with it.
-  fn above_end(&self, id: &str) -> Option<f32> {
-    self.rows.get(id).map(|row| self.bottom - row.y)
+  /// How far under the toolbar row `id` starts: a composer that changes its height moves the list's end
+  /// with it, and the rows in view with the end, which a person sees.
+  fn below_top(&self, id: &str) -> Option<f32> {
+    self.rows.get(id).map(|row| row.y - self.top)
   }
 }
 
@@ -173,10 +173,10 @@ fn conversation_steady_following_shows_the_end_in_every_frame() {
     let mut before = before.borrow_mut();
     let both = now.fills && before.fills;
     for id in now.rows.keys().filter(|id| both && (now.shows(id) || before.shows(id))) {
-      if let (Some(was), Some(is)) = (before.above_end(id), now.above_end(id)) {
+      if let (Some(was), Some(is)) = (before.below_top(id), now.below_top(id)) {
         assert!(
-          is >= was - 0.5,
-          "{id} moved down to {is} above the end from {was}\nbefore: {}\nnow: {}",
+          is <= was + 0.5,
+          "{id} moved down to {is} under the toolbar from {was}\nbefore: {}\nnow: {}",
           listed(&before.rows),
           listed(&now.rows)
         );
@@ -259,9 +259,11 @@ fn conversation_steady_scrolled_up_rows_stay_as_the_agent_goes_on() {
 /// The card of the request the chat shows, by its row: `conversation-row:approval-<id>`.
 fn request_card(desktop: &mut Desktop) -> Option<String> {
   let prefix = format!("{ROW}approval-");
-  rows(desktop)
-    .into_keys()
-    .find_map(|row| row.strip_prefix(&prefix).map(|id| format!("conversation-approval-{id}")))
+  rows(desktop).into_keys().find_map(|row| {
+    row
+      .strip_prefix(&prefix)
+      .map(|id| format!("conversation-approval-{id}"))
+  })
 }
 
 #[test]
