@@ -101,8 +101,9 @@ impl Worker {
         .record_review(approval.run, &approval.id, &Review::Held { hold })?;
       return Ok(None);
     }
-    watch.db.set_reviewing(approval.run, &approval.id, true)?;
+    // Marked last, after everything that can fail: a request marked under review always gets its review.
     let setup = self.reviewer(watch)?;
+    watch.db.set_reviewing(approval.run, &approval.id, true)?;
     let (stop, stopped) = stop_review();
     let job = ReviewJob {
       subject,
@@ -139,7 +140,12 @@ impl Worker {
       watch.db.set_reviewing(run, &id, false)?;
       return self.ask_person(watch);
     }
-    watch.db.record_review(run, &id, &review)?;
+    if let Err(error) = watch.db.record_review(run, &id, &review) {
+      // The review is lost, but the request must not stay hidden: the person decides.
+      watch.db.set_reviewing(run, &id, false)?;
+      self.ask_person(watch)?;
+      return Err(error);
+    }
     if !review.approves() {
       // The person decides, and now reads why auto mode left it to them.
       return self.ask_person(watch);
