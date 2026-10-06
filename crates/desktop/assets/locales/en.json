@@ -1296,6 +1296,7 @@
         "deniedByAutomation": "Denied by automation",
         "byReviewer": "Approved by auto mode",
         "askedByReviewer": "Auto mode asked you",
+        "reviewing": "Auto mode is reviewing",
         "waiting": "Waiting",
         "similarTitle": "Approved as similar in this run",
         "alwaysTitle": "Always allowed during this run",
