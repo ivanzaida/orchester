@@ -14,6 +14,8 @@ pub mod files;
 #[cfg(feature = "http")]
 mod http;
 #[cfg(feature = "http")]
+pub mod responses;
+#[cfg(feature = "http")]
 mod retry;
 #[cfg(feature = "http")]
 pub mod sse;
@@ -22,6 +24,7 @@ pub use self::files::FileTools;
 #[cfg(feature = "http")]
 pub use self::{
   anthropic::AnthropicClient,
-  check::{ApiCheck, check_anthropic},
+  check::{ApiCheck, check_anthropic, check_responses},
   endpoint::{Endpoint, Timing, WireQuirks},
+  responses::ResponsesClient,
 };

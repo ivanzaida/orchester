@@ -6,6 +6,7 @@
 mod events;
 mod failures;
 mod models;
+#[path = "../fake_server/mod.rs"]
 mod server;
 mod sse;
 mod wire;

@@ -43,7 +43,7 @@ async fn one_error(script: Script) -> (ModelError, usize) {
   )
   .await;
   let error = result.expect_err("an error");
-  let count = server.messages_requests().len();
+  let count = server.model_requests().len();
   server.finish();
   (error, count)
 }
@@ -153,7 +153,7 @@ async fn anthropic_retries_end_after_five() {
   .await;
   assert_eq!(result.expect_err("overloaded"), ModelError::Overloaded);
   assert_eq!(retries(&seen).len(), 5);
-  assert_eq!(server.messages_requests().len(), 6);
+  assert_eq!(server.model_requests().len(), 6);
   server.finish();
 }
 
