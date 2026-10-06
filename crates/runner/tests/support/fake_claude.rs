@@ -55,6 +55,8 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
+//! Started with `--output-format json`, it is auto mode's reviewer instead (`fake_claude_review`).
+//!
 //! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
 //! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP
 //! configuration (`fake_mcp`), like `orchester-fake-codex`.
@@ -71,6 +73,8 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 mod fake_claude_ask;
 #[path = "fake_claude_input.rs"]
 mod fake_claude_input;
+#[path = "fake_claude_review.rs"]
+mod fake_claude_review;
 #[path = "fake_claude_rules.rs"]
 mod fake_claude_rules;
 #[path = "fake_claude_tools.rs"]
@@ -89,6 +93,9 @@ const NO_USAGE: &str = r#"{"input_tokens":0,"output_tokens":0}"#;
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if fake_claude_review::is_review(&args) {
+    return fake_claude_review::review(&args);
+  }
   let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
   };

@@ -15,7 +15,7 @@ use orchester_core::{
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
     PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves,
-    auto_verdict, codex_denial, denial_message, permitted,
+    auto_verdict, codex_denial, denial_message, permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -38,16 +38,19 @@ pub(super) struct Settled {
   /// A command that reads a credential location, which its mark names; only a person answers one.
   pub(super) secrets: bool,
   pub(super) told: Option<String>,
+  /// What auto mode did with the request before it was answered.
+  pub(super) review: Option<Review>,
 }
 
 impl Settled {
-  const fn by(decided_by: DecidedBy, category: Option<CommandCategory>) -> Self {
+  pub(super) const fn by(decided_by: DecidedBy, category: Option<CommandCategory>) -> Self {
     Self {
       decided_by,
       rule: None,
       category,
       secrets: false,
       told: None,
+      review: None,
     }
   }
 }
@@ -132,6 +135,7 @@ impl Worker {
     };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      review: watch.db.tool_approval_review(approval.run, &approval.id)?,
       ..Settled::by(decided_by, category_of(&subject))
     };
     let now = Timestamp::now();
@@ -264,6 +268,7 @@ impl Worker {
       category: settled.category,
       secrets: settled.secrets,
       told: settled.told,
+      review: settled.review,
     };
     self.observe(
       watch,

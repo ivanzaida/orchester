@@ -327,6 +327,7 @@ impl RunTask {
       task: self.task.id(),
       decisions,
       steers: steered,
+      reviewing: None,
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the

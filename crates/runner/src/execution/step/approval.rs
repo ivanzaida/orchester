@@ -255,6 +255,8 @@ impl Worker {
     }
     watch.invocation.timing.wait_for_person(approval.requested_at);
     watch.db.save_invocation(&watch.invocation)?;
+    // Auto mode judges it while it waits; the person may answer first.
+    self.reviewing = self.start_review(watch, &approval)?;
     self.notifier.send(Event::ToolApprovalChanged {
       run: approval.run,
       task: self.task,

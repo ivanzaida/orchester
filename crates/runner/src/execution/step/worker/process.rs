@@ -23,7 +23,7 @@ use super::{
     claude_approval::ClaudeApprovals,
     relay::Listening,
   },
-  FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
+  FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
 
@@ -69,33 +69,18 @@ impl Worker {
           self.request_claude_approval(&mut watch, asked).await?;
           self.stop_at_checkpoint(&mut watch);
         },
+        reviewed = review::next(&mut self.reviewing), if self.reviewing.is_some() => {
+          self.apply_review(&mut watch, reviewed).await?;
+        },
         // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
         () = watch.prompt_closed(), if watch.stop.is_none() => self.prompt_closed(&mut watch)?,
         stop = self.stops.recv(), if listening => match stop {
-          Some(Stop::Now(cause)) => {
-            if watch.stop.is_none() {
-              watch.stop = Some(cause);
-              self.process.terminate();
-            }
-          }
-          Some(Stop::AfterTurn(cause)) => {
-            if watch.over.is_none() && watch.stop.is_none() {
-              watch.over = Some(cause);
+          Some(stop) => {
+            if self.receive_stop(&mut watch, stop) {
               grace.as_mut().reset(Instant::now() + TURN_GRACE);
               grace_armed = true;
             }
           }
-          Some(Stop::AfterCommand(cause)) => {
-            if watch.stop.is_none() && watch.over.is_none() {
-              watch.after_command = Some(cause);
-              self.stop_at_checkpoint(&mut watch);
-            }
-          }
-          Some(Stop::AtApproval) => {
-            watch.pause_requested = true;
-            self.stop_at_checkpoint(&mut watch);
-          }
-          Some(Stop::Withdraw) => watch.after_command = None,
           None => listening = false,
         },
         () = &mut grace, if grace_armed && watch.stop.is_none() => {
@@ -104,6 +89,36 @@ impl Worker {
         }
       }
     }
+  }
+
+  /// Carries out what the run tells the agent; whether its turn now has [`TURN_GRACE`] to end on its own.
+  fn receive_stop(&mut self, watch: &mut Watch, stop: Stop) -> bool {
+    match stop {
+      Stop::Now(cause) => {
+        if watch.stop.is_none() {
+          watch.stop = Some(cause);
+          self.process.terminate();
+        }
+      }
+      Stop::AfterTurn(cause) => {
+        if watch.over.is_none() && watch.stop.is_none() {
+          watch.over = Some(cause);
+          return true;
+        }
+      }
+      Stop::AfterCommand(cause) => {
+        if watch.stop.is_none() && watch.over.is_none() {
+          watch.after_command = Some(cause);
+          self.stop_at_checkpoint(watch);
+        }
+      }
+      Stop::AtApproval => {
+        watch.pause_requested = true;
+        self.stop_at_checkpoint(watch);
+      }
+      Stop::Withdraw => watch.after_command = None,
+    }
+    false
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
