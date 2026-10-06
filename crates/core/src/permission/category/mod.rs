@@ -103,6 +103,8 @@ impl CommandCategory {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassifiedCommand {
   parts: Vec<CommandPart>,
+  /// The command line as asked about.
+  text: String,
 }
 
 impl ClassifiedCommand {
@@ -132,11 +134,19 @@ impl ClassifiedCommand {
         part.at_least(CommandCategory::Unknown);
       }
     }
-    Self { parts }
+    Self {
+      parts,
+      text: command.to_owned(),
+    }
   }
 
   pub fn parts(&self) -> &[CommandPart] {
     &self.parts
+  }
+
+  /// The command line as asked about.
+  pub fn text(&self) -> &str {
+    &self.text
   }
 
   /// The strictest part's category; Unknown for a command with no part.

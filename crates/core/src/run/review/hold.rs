@@ -15,7 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::push::{PushFacts, is_push, reviewable_push};
+use super::push::{PushFacts, disguised_git, is_push, reviewable_push};
 use crate::{
   orchester_tools::auto_approvable,
   permission::{
@@ -74,6 +74,9 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   // Approved, an escalation runs the command outside Codex's sandbox, beyond any step's permissions.
   if rules.escalation {
     return Some(ReviewHold::Escalation);
+  }
+  if disguised_git(command) {
+    return Some(ReviewHold::Push);
   }
   let Some(permissions) = rules.permissions else {
     return Some(ReviewHold::PermissionsUnknown);

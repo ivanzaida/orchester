@@ -10,7 +10,7 @@
 //! - another part of the line that changes git's configuration or remotes (`git config`, `git remote`, git with options
 //!   before its subcommand), changes folder, or that Orchester could not read.
 
-use crate::permission::category::{CommandCategory, CommandPart};
+use crate::permission::category::{ClassifiedCommand, CommandCategory, CommandPart};
 
 /// The only remote a push may go to without the person.
 const OWN_REMOTE: &str = "origin";
@@ -28,6 +28,43 @@ pub struct PushFacts<'a> {
   pub head: Option<&'a str>,
   /// `origin` still pushes where it pushed when the run started.
   pub origin_kept: bool,
+}
+
+/// Programs that run another program they are given.
+const WRAPPERS: [&str; 11] = [
+  "env", "command", "builtin", "exec", "timeout", "nice", "nohup", "xargs", "sudo", "stdbuf", "time",
+];
+
+/// Whether `command` may run git in a form the push rules cannot follow: it names a `GIT_*` variable, runs
+/// git through a path or under a wrapper, or names `push` in a part that is not a plain `git push`.
+/// Checked on the words of the whole line, so a form the classifier did not read still counts.
+pub(super) fn disguised_git(command: &ClassifiedCommand) -> bool {
+  let tokens: Vec<&str> = command
+    .text()
+    .split(|c: char| c.is_whitespace() || ";|&()`$<>\"'{}".contains(c))
+    .filter(|token| !token.is_empty())
+    .collect();
+  let git_like = |token: &str| {
+    let name = token.rsplit(['/', '\\']).next().unwrap_or(token).to_lowercase();
+    name == "git" || name == "git.exe"
+  };
+  if tokens.iter().any(|token| token.contains("GIT_")) {
+    return true;
+  }
+  if !tokens.iter().any(|token| git_like(token)) {
+    return false;
+  }
+  let plain_push = |part: &CommandPart| {
+    let words = part.words();
+    words.first().map(String::as_str) == Some("git") && words.get(1).map(String::as_str) == Some("push")
+  };
+  tokens.iter().any(|token| git_like(token) && *token != "git")
+    || tokens.iter().any(|token| WRAPPERS.contains(token))
+    || (tokens.contains(&"push")
+      && command
+        .parts()
+        .iter()
+        .any(|part| part.words().iter().any(|word| word.contains("push")) && !plain_push(part)))
 }
 
 /// Whether `part` runs `git push`, with whatever options come before it.
