@@ -67,14 +67,16 @@ fn approval_rules_run_auto_approval_choice() {
   assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(false));
 }
 
-/// Auto mode looked at the reviewer's approval and at the person's first answer, which it asked about.
+/// Auto mode looked at the reviewer's approval, at the person's first answer, which it asked about, and at
+/// the request still waiting.
 fn reviewed(db: &mut ProjectDb, approval: &PendingToolApproval, answer: Option<DecidedBy>) {
   let review = match answer {
     Some(DecidedBy::Reviewer) => Review::Approved {
       reason: "It serves the task.".to_owned(),
       model: "claude-haiku-4-5-20251001".to_owned(),
     },
-    Some(DecidedBy::Person) => Review::Asked {
+    // The person's first answer, and the request still waiting, which no count of auto mode holds yet.
+    Some(DecidedBy::Person) | None => Review::Asked {
       reason: "Not needed for the task.".to_owned(),
       model: "claude-haiku-4-5-20251001".to_owned(),
     },

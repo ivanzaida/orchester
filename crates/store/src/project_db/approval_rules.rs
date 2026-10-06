@@ -198,7 +198,7 @@ impl ProjectDb {
     }
     counts.asked_by_reviewer = self.connection.query_row(
       "SELECT COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND review IS NOT NULL \
-       AND decided_by IS NOT 'reviewer' AND state IN ('pending', 'approved', 'denied')",
+       AND decided_by IS NOT 'reviewer' AND state IN ('approved', 'denied')",
       [run.to_string()],
       |row| row.get(0),
     )?;
