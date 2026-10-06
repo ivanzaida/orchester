@@ -227,6 +227,13 @@ async fn responses_errors_in_the_stream_are_retried() {
     events::created(),
     Part::Event(json!({"type": "error", "code": "rate_limit_exceeded", "message": "slow down", "param": null})),
   ];
+  let nested = vec![
+    events::created(),
+    Part::Event(
+      json!({"type": "error", "error": {"type": "server_error", "code": "server_error",
+      "message": "internal", "param": null}}),
+    ),
+  ];
   let failed = vec![
     events::created(),
     Part::Event(
@@ -236,6 +243,7 @@ async fn responses_errors_in_the_stream_are_retried() {
   ];
   let script = Script::new()
     .reply_sse(error_event)
+    .reply_sse(nested)
     .reply_sse(failed)
     .reply_sse(events::text_response("Done."));
   let server = start(script).await;
@@ -244,7 +252,11 @@ async fn responses_errors_in_the_stream_are_retried() {
   let errors: Vec<ModelError> = retries(&seen).into_iter().map(|(_, _, error)| error).collect();
   assert_eq!(
     errors,
-    vec![ModelError::RateLimited { retry_after: None }, ModelError::Server(500)]
+    vec![
+      ModelError::RateLimited { retry_after: None },
+      ModelError::Server(500),
+      ModelError::Server(500)
+    ]
   );
   server.finish();
 }
@@ -304,6 +316,18 @@ async fn responses_unreadable_reasoning_is_left_out_and_sent_again() {
   let (third, _) = respond(&client, &request(conversation, items)).await;
   third.expect("the conversation goes on without the old reasoning");
   server.finish();
+}
+
+#[tokio::test]
+async fn responses_other_400s_naming_encrypted_content_keep_the_reasoning() {
+  let script = Script::new().reply_error(
+    400,
+    "invalid_value",
+    "include: encrypted content is not supported with this model",
+  );
+  let (error, requests) = one_error(script).await;
+  assert!(matches!(error, ModelError::InvalidRequest(_)), "{error:?}");
+  assert_eq!(requests, 1);
 }
 
 #[tokio::test]

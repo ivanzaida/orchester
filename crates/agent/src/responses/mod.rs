@@ -194,8 +194,7 @@ impl ModelClient for ResponsesClient {
 /// What an error answer to a Responses request means: encrypted reasoning the endpoint cannot read is
 /// told apart from other refused requests.
 fn failure(answer: ErrorAnswer, model: &ModelId) -> Failure {
-  let code = answer.code.as_deref().unwrap_or_default();
-  if answer.status == 400 && (code == "invalid_encrypted_content" || answer.message.contains("encrypted content")) {
+  if answer.status == 400 && answer.code.as_deref() == Some("invalid_encrypted_content") {
     return Failure::ReasoningRefused(answer.message);
   }
   let retry_after = answer.retry_after;
@@ -214,8 +213,14 @@ fn answer_error(answer: ErrorAnswer, model: Option<&ModelId>) -> ModelError {
 }
 
 /// The error an `error` event or a failed response reports, by its code: the response object's codes
-/// as the API reference lists them, and the codes of error answers.
+/// as the API reference lists them, and the codes of error answers. An `error` event may carry its code
+/// at the top level or nested as an error answer does (`error: {code, message}`).
 pub(super) fn stream_error(error: &Value) -> ModelError {
+  let error = if error["code"].is_string() || !error["error"].is_object() {
+    error
+  } else {
+    &error["error"]
+  };
   let message = error["message"].as_str().unwrap_or_default().to_owned();
   match error["code"].as_str().unwrap_or_default() {
     "server_error" => ModelError::Server(500),
