@@ -3,9 +3,9 @@
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::{RunId, StepExecutionId},
+  id::{ConnectionId, RunId, StepExecutionId},
   resource::ModelId,
-  run::review::{AutoModeSettings, Review},
+  run::review::{AutoModeSettings, DEFAULT_REVIEW_MODEL, Review, ReviewerChoice},
 };
 use rusqlite::{OptionalExtension, params};
 
@@ -19,29 +19,43 @@ const REVIEW: &str = "tool approval review";
 const REVIEW_SCHEMA: u32 = 1;
 
 impl ProjectDb {
-  /// Whether new runs use auto mode, and the reviewer's model; off, with the default model, until a
-  /// person changes it.
+  /// Whether new runs use auto mode, and the reviewer a person chose; off, with the default reviewer,
+  /// until a person changes them.
   pub fn auto_mode_settings(&self) -> Result<AutoModeSettings, StoreError> {
-    let stored: Option<(bool, String)> = self
+    let stored: Option<(bool, String, Option<String>, Option<String>)> = self
       .connection
       .query_row(
-        "SELECT new_runs, model FROM project_auto_mode WHERE id = 1",
+        "SELECT new_runs, model, connection, effort FROM project_auto_mode WHERE id = 1",
         [],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
       )
       .optional()?;
-    let Some((new_runs, model)) = stored else {
+    let Some((new_runs, model, connection, effort)) = stored else {
       return Ok(AutoModeSettings::default());
     };
-    let model = ModelId::new(&model).map_err(|_| corrupt("auto mode model", model))?;
-    Ok(AutoModeSettings { new_runs, model })
+    let reviewer = match connection {
+      None => None,
+      Some(connection) => Some(ReviewerChoice {
+        connection: connection
+          .parse::<ConnectionId>()
+          .map_err(|_| corrupt("auto mode reviewer connection", connection))?,
+        model: ModelId::new(&model).map_err(|_| corrupt("auto mode model", model))?,
+        effort,
+      }),
+    };
+    Ok(AutoModeSettings { new_runs, reviewer })
   }
 
   pub fn save_auto_mode_settings(&mut self, settings: &AutoModeSettings) -> Result<(), StoreError> {
+    let reviewer = settings.reviewer.as_ref();
     self.connection.execute(
-      "INSERT INTO project_auto_mode (id, new_runs, model) VALUES (1, ?1, ?2) \
-       ON CONFLICT (id) DO UPDATE SET new_runs = excluded.new_runs, model = excluded.model",
-      params![settings.new_runs, settings.model.as_str()],
+      "INSERT INTO project_auto_mode (id, new_runs, model, connection, effort) VALUES (1, ?1, ?2, ?3, ?4)        ON CONFLICT (id) DO UPDATE SET new_runs = excluded.new_runs, model = excluded.model,        connection = excluded.connection, effort = excluded.effort",
+      params![
+        settings.new_runs,
+        reviewer.map_or(DEFAULT_REVIEW_MODEL, |choice| choice.model.as_str()),
+        reviewer.map(|choice| choice.connection.to_string()),
+        reviewer.and_then(|choice| choice.effort.as_deref()),
+      ],
     )?;
     Ok(())
   }

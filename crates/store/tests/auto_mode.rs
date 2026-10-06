@@ -1,4 +1,4 @@
-//! Auto mode in the project database: the project's setting for new runs and the reviewer's model, each
+//! Auto mode in the project database: the project's setting for new runs and the reviewer a person chose, each
 //! run's own choice taken from it when the run is created, and the agent's last messages the reviewer
 //! reads. `cargo test -p orchester-store --test auto_mode auto_mode`.
 
@@ -8,10 +8,13 @@ use std::time::Duration;
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::IdempotencyKey,
+  id::{ConnectionId, IdempotencyKey},
   resource::ModelId,
   revision::Revision,
-  run::{BranchName, NewRun, review::AutoModeSettings},
+  run::{
+    BranchName, NewRun,
+    review::{AutoModeSettings, ReviewerChoice},
+  },
   store::{ActivityStore, RunStore},
 };
 use support::{at, budget, started_run};
@@ -25,10 +28,22 @@ fn auto_mode_new_runs_take_the_projects_setting() {
 
   let settings = AutoModeSettings {
     new_runs: true,
-    model: ModelId::new("claude-sonnet-5-5").expect("model"),
+    reviewer: Some(ReviewerChoice {
+      connection: ConnectionId::generate(),
+      model: ModelId::new("claude-sonnet-5-5").expect("model"),
+      effort: Some("high".to_owned()),
+    }),
   };
   db.save_auto_mode_settings(&settings).expect("save");
   assert_eq!(db.auto_mode_settings().expect("read"), settings);
+  // Back to the default reviewer: no connection, model or effort is read.
+  let default = AutoModeSettings {
+    new_runs: true,
+    reviewer: None,
+  };
+  db.save_auto_mode_settings(&default).expect("save");
+  assert_eq!(db.auto_mode_settings().expect("read"), default);
+  db.save_auto_mode_settings(&settings).expect("save");
   // A run created before keeps its own choice; a new one takes the setting.
   assert!(!db.run_auto_mode(run.id()).expect("read"));
   let next = NewRun {

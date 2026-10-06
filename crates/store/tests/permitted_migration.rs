@@ -155,9 +155,10 @@ fn populated() -> (TempDir, Asked) {
 }
 
 /// The schema versions before the `permissions` rebuild, before the automation rebuild, which follows
-/// it, and before the auto mode rebuild, which follows that, of a database at `current`.
+/// it, and before the auto mode rebuild, which follows that, of a database at `current`; the auto mode
+/// reviewer's columns come last.
 const fn before_rebuilds(current: u32) -> (u32, u32, u32) {
-  (current - 3, current - 2, current - 1)
+  (current - 4, current - 3, current - 2)
 }
 
 /// Upgrades `old` and checks that its requests, index and triggers are as `old` had them.

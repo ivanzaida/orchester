@@ -62,3 +62,10 @@ CREATE TRIGGER native_command_approvals_immutable BEFORE UPDATE ON tool_approval
 WHEN NEW.native_shell IS NOT OLD.native_shell OR NEW.native_time_limit IS NOT OLD.native_time_limit
 BEGIN SELECT RAISE(ABORT, 'a native command keeps the shell and time limit it was requested with'); END;
 ";
+
+/// The reviewer a person chose: any agent connection of the project, a model of it, and the effort.
+/// Without a connection the reviewer is the default one, and `model` is not read.
+pub(super) const REVIEWER_MIGRATION: &str = r"
+ALTER TABLE project_auto_mode ADD COLUMN connection TEXT;
+ALTER TABLE project_auto_mode ADD COLUMN effort TEXT CHECK (effort IS NULL OR connection IS NOT NULL);
+";
