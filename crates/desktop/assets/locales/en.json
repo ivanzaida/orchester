@@ -3142,8 +3142,7 @@
       "claudeDetail": "Runs the claude program, signed in on this computer.",
       "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
       "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
-      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
-      "notYet": "OpenAI API connections come in a later version of Orchester."
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules."
     },
     "native": {
       "row": "{{provider}} · {{preset}} · {{host}}",
