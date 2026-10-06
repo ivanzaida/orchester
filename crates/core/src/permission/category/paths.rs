@@ -184,6 +184,13 @@ impl CommandScope {
     })
   }
 
+  /// Whether a program written with a folder is installed where the agent cannot have written it: an
+  /// absolute path, resolved, outside the worktree, the writable and temporary folders and the credential
+  /// locations (`C:\Program Files\PowerShell\7\pwsh.exe`, not `../x/bash`).
+  pub(super) fn installed(&self, word: &str) -> bool {
+    host_path(word).is_some_and(|path| path.is_absolute() && self.place(&resolved(&path)) == Place::Outside)
+  }
+
   /// Whether `path` lies in the worktree, as written and resolved.
   pub(super) fn in_worktree(&self, path: &Path) -> bool {
     path.starts_with(&self.worktree) && resolved(path).starts_with(&self.worktree)

@@ -183,6 +183,17 @@ const ASKS: &[&str] = &[
   "git -C .tmp/verify/kontur stash pop && python .tmp/verify/kontur/f.py",
   "echo x > .tmp/verify/start.py && python .tmp/verify/start.py",
   "python .tmp/verify/launch.py; python .tmp/verify/start.py",
+  // The parts of a pipeline run together; a part after the script may change files it reads.
+  "python .tmp/verify/kontur/f.py | git -C .tmp/verify/kontur apply p.patch",
+  "git -C .tmp/verify/kontur apply p.patch | python .tmp/verify/kontur/f.py",
+  "python .tmp/verify/start.py | tee .tmp/verify/start.py",
+  "python .tmp/verify/start.py; echo x > .tmp/verify/launch.py",
+  // A shell written with a folder is not the bare shell a rule names.
+  "../elsewhere/bash -c 'ls'",
+  "./bash -c 'ls'",
+  "out/bash -c 'ls'",
+  "C:/evil/bash -c 'ls'",
+  r"'C:\Program Files\PowerShell\7\pwsh.exe' -Command 'Get-ChildItem'",
   // The step's writable folders may hold the user's own repositories.
   "python {WR}/s.py",
   "git -C {WR}/repo commit -m m",

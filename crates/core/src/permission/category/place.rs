@@ -18,9 +18,6 @@ pub(super) type Folders = Option<Vec<PathBuf>>;
 pub(super) struct Line {
   pub(super) folders: Folders,
   pub(super) made: Vec<PathBuf>,
-  /// An earlier part may change files (any part that is not Read-only): a script run after it may not
-  /// be the file that is there now.
-  pub(super) changes: bool,
 }
 
 impl Line {
@@ -28,7 +25,6 @@ impl Line {
     Self {
       folders,
       made: Vec::new(),
-      changes: false,
     }
   }
 

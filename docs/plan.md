@@ -663,12 +663,16 @@ and `git -C .tmp/verify/kontur -c user.name=… -c user.email=… commit -q …`
   (`../x/bash`, `C:/evil/sh.exe`, `//server/share/bash.exe`) is Unknown; `native::scope::protected` refuses a stream
   spelling (`.git::$INDEX_ALLOCATION`) and the classifier checks a write or script path resolved as well, so a
   short name (`GIT~1`, `ORCHES~1`) is `.git` or `.orchester`; a script after a part that may change files (any
-  part that is not Read-only: git in the fixture repository, an edit, another script) is Unknown; scripts and
+  part that is not Read-only: git in the fixture repository, an edit, another script) is Unknown, and after the
+  re-review also with such a part after it or beside it in a pipeline (a script runs unasked only when every other
+  part of the line is Read-only); scripts and
   nested repositories count only in the worktree, not the step's writable folders, which may hold the user's own
   repositories; `pwsh` needs `-NoProfile`, `zsh` (which reads `~/.zshenv`) asks, `-X` takes only `importtime`,
   `utf8`, `dev`, `faulthandler`, `tracemalloc`; `git -C <folder>` places its arguments from that folder; signing
-  (`commit -S`, `--gpg-sign`, `tag -s`/`-u`) is Unknown. Still as before: a shell given with a folder that runs
-  inline code (`C:\…\pwsh.exe -Command …`, Codex's form) is read like the bare shell.
+  (`commit -S`, `--gpg-sign`, `tag -s`/`-u`) is Unknown. A shell given with a folder that runs inline code is read
+  only when installed (an absolute path outside the worktree, the writable and temporary folders: Codex's
+  `C:\…\pwsh.exe -Command …`), else Unknown (`../x/bash -c ls` ran unasked before), and what it runs is never
+  answered by a rule for a bare program (`CommandPart::through_path`).
 - Read-only steps are unchanged. The fixture table of runs 22–25 is unchanged (its scripts are `python -` and
   `python -c`).
 - Tests: `core` `worktree_scripts` (new: the six real lines, more forms, every refusal above, a script through a link,

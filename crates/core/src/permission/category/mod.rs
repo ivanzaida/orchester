@@ -120,6 +120,18 @@ impl ClassifiedCommand {
     if parts.iter().any(|part| !part.moves_inside()) {
       parts.retain(|part| !part.moves_inside());
     }
+    // Another part that may change files, before, after or beside it in a pipeline, may change the
+    // script before it runs: the file there now is not what runs.
+    let changing = parts
+      .iter()
+      .filter(|part| part.category() != CommandCategory::ReadOnly)
+      .count();
+    if changing > 1 {
+      for part in parts.iter_mut().filter(|part| part.runs_script) {
+        part.edits = false;
+        part.at_least(CommandCategory::Unknown);
+      }
+    }
     Self { parts }
   }
 
@@ -163,11 +175,7 @@ fn classify_line(
 ) -> Vec<CommandPart> {
   let mut parts = Vec::new();
   for raw in words::split(text, quoting) {
-    let classified = classify_part(&raw, quoting, scope, line, depth);
-    line.changes |= classified
-      .iter()
-      .any(|part| part.category() != CommandCategory::ReadOnly);
-    parts.extend(classified);
+    parts.extend(classify_part(&raw, quoting, scope, line, depth));
     line.made(scope, &raw.writes);
   }
   parts
@@ -204,23 +212,7 @@ fn classify_part(
     .as_deref()
     .filter(|program| interpreters::script(program, args).is_none());
   if let Some(script) = inline.and_then(|program| shell_script(program, args)) {
-    let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH) else {
-      return vec![CommandPart::unknown(words)];
-    };
-    // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
-    let mut inner_line = line.clone();
-    let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
-    line.made = inner_line.made;
-    line.changes = inner_line.changes;
-    let placing = line.placing(scope);
-    if !raw.writes.is_empty() || !raw.reads.is_empty() {
-      parts.push(redirected(
-        CommandPart::new(words, None, &Judged::of(Kind::ReadOnly)),
-        raw,
-        placing,
-      ));
-    }
-    return parts;
+    return shell_parts(raw, script, scope, line, depth);
   }
   let Some(program) = program else {
     return vec![CommandPart::unknown(words)];
@@ -231,7 +223,7 @@ fn classify_part(
   }
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
-  judge_edits(&mut part, &judged, args, placing, line.changes);
+  judge_edits(&mut part, &judged, args, placing);
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
   place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
@@ -254,12 +246,12 @@ fn classify_part(
 
 /// Whether `part` edits the worktree as [`CommandPart::edits_worktree`] needs: a copy or move of no tree, a
 /// script in the worktree or git in a repository nested in it, which change no more than an edit could. A
-/// script that is no regular file of the worktree is code from elsewhere, not read; after a part that
-/// `changes` files, the script may not be the file there now.
-fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing: Placing<'_>, changes: bool) {
+/// script that is no regular file of the worktree is code from elsewhere, not read.
+fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing: Placing<'_>) {
   part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
   if let Some(at) = judged.runs {
-    part.edits = !changes && placing.plain_file(&args[at]);
+    part.runs_script = true;
+    part.edits = placing.plain_file(&args[at]);
     if !part.edits {
       part.at_least(CommandCategory::Unknown);
     }
@@ -267,6 +259,39 @@ fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing
   if let Some(repository) = &judged.repository {
     part.edits = placing.nested_repository(repository);
   }
+}
+
+/// The parts of the inline `script` a shell runs (`bash -c …`, `pwsh -Command …`). The shell written with a
+/// folder must be installed where the agent cannot have written it, and no rule for a bare program runs
+/// what it runs ([`CommandPart::through_path`]).
+fn shell_parts(
+  raw: &RawPart,
+  script: Option<(String, Quoting)>,
+  scope: &CommandScope,
+  line: &mut Line,
+  depth: usize,
+) -> Vec<CommandPart> {
+  let words = raw.words.clone();
+  let by_path = words.first().is_some_and(|first| first.contains(['/', '\\']));
+  let installed = !by_path || words.first().is_some_and(|first| scope.installed(first));
+  let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {
+    return vec![CommandPart::unknown(words)];
+  };
+  // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
+  let mut inner_line = line.clone();
+  let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
+  line.made = inner_line.made;
+  if by_path {
+    parts.iter_mut().for_each(|part| part.through_path = true);
+  }
+  if !raw.writes.is_empty() || !raw.reads.is_empty() {
+    parts.push(redirected(
+      CommandPart::new(words, None, &Judged::of(Kind::ReadOnly)),
+      raw,
+      line.placing(scope),
+    ));
+  }
+  parts
 }
 
 /// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
