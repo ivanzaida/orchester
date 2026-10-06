@@ -8,6 +8,7 @@
 
 mod observe;
 mod process;
+mod review;
 mod steer;
 
 use std::{
@@ -29,6 +30,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
+pub(in crate::execution::step) use self::review::ReviewerKeys;
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,
@@ -150,6 +152,10 @@ pub(in super::super) struct Worker {
   pub(in super::super) profile: Option<ResourceId>,
   /// People's messages sent now, for the running turn.
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
+  /// Auto mode's review of the waiting approval, while it is under way.
+  pub(super) reviewing: Option<review::Reviewing>,
+  /// Where a native reviewer's API key is read.
+  pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
 }
 
 pub(super) struct Watch {
@@ -170,6 +176,7 @@ pub(super) struct Watch {
   pause_requested: bool,
   /// The approval waiting for a person, and the call it answers.
   pub(super) approval: Option<(PendingToolApproval, Awaiting)>,
+
   /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
   /// they do, the actions may have run, and the run is not resumed on its own.
   pub(super) approved_calls: HashSet<String>,

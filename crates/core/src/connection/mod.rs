@@ -25,6 +25,7 @@ mod model_requirements;
 mod native_models;
 pub mod plan_limits;
 mod provider;
+pub mod reviewer;
 pub mod stream;
 
 use std::path::{Path, PathBuf};

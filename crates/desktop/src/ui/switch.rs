@@ -1,5 +1,6 @@
 //! Switch (`K8ItM`): a small track with a knob, off at the left and on at the right, beside its
-//! label. A form control: Tab reaches it and Enter or Space flips it (see `ui::pressable`).
+//! label. A form control: Tab reaches it and Enter or Space flips it (see `ui::pressable`). A locked
+//! option keeps its note, faded with it, and says why it is fixed after the lock glyph ([`locked_reason`]).
 
 use std::sync::Arc;
 
@@ -10,7 +11,10 @@ use lurq::{
   node::{CursorIcon, Element, dimension::Dimension},
 };
 
-use super::pressable::{Ring, keyboard_stop};
+use super::{
+  icon::{Icon, IconSize, icon},
+  pressable::{Ring, keyboard_stop},
+};
 use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, LOCKED_SWITCH_OPACITY};
 
 /// Track and knob sizes (`K8ItM`, knob `Y0aZS`).
@@ -26,6 +30,8 @@ pub struct Switch {
   emphasized: bool,
   detail: Option<Arc<str>>,
   note: Option<Arc<str>>,
+  /// Why a locked option is fixed: its id for tooling, and the words.
+  reason: Option<(String, Arc<str>)>,
   /// Where the focus ring of an option is drawn.
   ring: Ring,
 }
@@ -40,6 +46,7 @@ impl Switch {
       emphasized: false,
       detail: None,
       note: None,
+      reason: None,
       ring: Ring::Outer,
     }
   }
@@ -80,6 +87,12 @@ impl Switch {
     self
   }
 
+  /// Why the option is fixed, under its note after the lock glyph, while it is [`Self::locked`].
+  pub fn reason(mut self, id: String, reason: Arc<str>) -> Self {
+    self.reason = Some((id, reason));
+    self
+  }
+
   /// The label and its distance from the track.
   fn label(&self) -> (Text, SpacingSize) {
     if self.emphasized {
@@ -106,6 +119,9 @@ impl Switch {
   /// The switch and its label, faded together as one row, not focusable and not flippable: the
   /// value is fixed, and the caller says why (04.B `lW7Sp`).
   pub fn locked(self) -> Element {
+    if let Some(note) = self.note.clone() {
+      return self.locked_option(&note);
+    }
     let (label, gap) = self.label();
     Row::new()
       .id(self.id.clone())
@@ -153,9 +169,10 @@ impl Switch {
     }
   }
 
-  fn option(&self, note: &str, flip: impl Fn() + Send + Sync + 'static) -> Element {
-    let copy = Column::new()
-      .flex(1.0)
+  /// An option's title over its note.
+  fn copy(&self, note: &str) -> Column {
+    Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
       .child(
         Text::new(&self.label)
@@ -166,7 +183,44 @@ impl Switch {
         Text::new(note)
           .variant(ExtraTypography::CellLabel.role())
           .width(Dimension::Pct(100.0)),
-      );
+      )
+  }
+
+  /// A locked option: the track, title and note faded where the option stands, then why it is fixed.
+  fn locked_option(self, note: &str) -> Element {
+    let row = Row::new();
+    let row = match self.ring {
+      Ring::Inset => row.padding(ExtraSpacing::FocusInset.role()),
+      Ring::Outer => row,
+    };
+    row
+      .id(self.id.clone())
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Stack.role())
+      .align_items(Alignment::Start)
+      .cursor(CursorIcon::NotAllowed)
+      .describe("checked", if self.on { "true" } else { "false" })
+      .describe("label", self.label.clone())
+      .describe("state", "locked")
+      .child(self.track().opacity(LOCKED_SWITCH_OPACITY))
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .spacing(SpacingSize::Xs)
+          .child(self.copy(note).opacity(LOCKED_SWITCH_OPACITY))
+          .with_children(
+            self
+              .reason
+              .as_ref()
+              .map(|(id, reason)| locked_reason(id.clone(), reason)),
+          ),
+      )
+      .into()
+  }
+
+  fn option(&self, note: &str, flip: impl Fn() + Send + Sync + 'static) -> Element {
+    let copy = self.copy(note).flex(1.0);
     let option = keyboard_stop(Button::empty().button(), self.ring);
     let option = match self.ring {
       Ring::Inset => option.padding(ExtraSpacing::FocusInset.role()),
@@ -220,6 +274,23 @@ impl Switch {
           .rounded(ExtraRadius::Pill.role()),
       )
   }
+}
+
+/// Why a switch is fixed, after the lock glyph, `id` for tooling.
+pub fn locked_reason(id: String, reason: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Inline.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Lock, IconSize::Small, PaletteColor::TextMuted))
+    .child(
+      Text::new(reason)
+        .id(id)
+        .variant(ExtraTypography::Hint.role())
+        .color(PaletteColor::TextMuted)
+        .flex(1.0),
+    )
+    .into()
 }
 
 /// The detail after a switch's label (`E42by` in `k1QWD`).

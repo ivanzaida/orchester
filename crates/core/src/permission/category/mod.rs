@@ -103,6 +103,8 @@ impl CommandCategory {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassifiedCommand {
   parts: Vec<CommandPart>,
+  /// The command line as asked about.
+  text: String,
 }
 
 impl ClassifiedCommand {
@@ -132,11 +134,19 @@ impl ClassifiedCommand {
         part.at_least(CommandCategory::Unknown);
       }
     }
-    Self { parts }
+    Self {
+      parts,
+      text: command.to_owned(),
+    }
   }
 
   pub fn parts(&self) -> &[CommandPart] {
     &self.parts
+  }
+
+  /// The command line as asked about.
+  pub fn text(&self) -> &str {
+    &self.text
   }
 
   /// The strictest part's category; Unknown for a command with no part.
@@ -196,7 +206,7 @@ fn classify_part(
   // A variable set before a program (or for the commands after it) can change what any program does,
   // and a command in the background goes on after the line.
   if raw.unread || raw.background || words.first().is_some_and(|word| is_assignment(word)) {
-    return vec![CommandPart::unknown(words)];
+    return vec![unknown(words, raw, line.placing(scope))];
   }
   let placing = line.placing(scope);
   let Some((first, args)) = words.split_first() else {
@@ -215,11 +225,11 @@ fn classify_part(
     return shell_parts(raw, script, scope, line, depth);
   }
   let Some(program) = program else {
-    return vec![CommandPart::unknown(words)];
+    return vec![unknown(words, raw, placing)];
   };
   // An interpreter given with a folder could be any program.
   if first.contains(['/', '\\']) && interpreters::script(&program, args).is_some() {
-    return vec![CommandPart::unknown(words)];
+    return vec![unknown(words, raw, placing)];
   }
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
@@ -275,7 +285,7 @@ fn shell_parts(
   let by_path = words.first().is_some_and(|first| first.contains(['/', '\\']));
   let installed = !by_path || words.first().is_some_and(|first| scope.installed(first));
   let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {
-    return vec![CommandPart::unknown(words)];
+    return vec![unknown(words, raw, line.placing(scope))];
   };
   // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
   let mut inner_line = line.clone();
@@ -331,6 +341,12 @@ fn place_arguments(
 /// (the previous folder), no `~` and no glob, which could lead elsewhere than the word reads.
 fn enters_plainly(args: &[String]) -> bool {
   matches!(args, [target] if !target.starts_with(['-', '~']) && !target.contains(['*', '?', '[']))
+}
+
+/// A part Orchester could not read, with where its redirections go placed all the same: what it writes
+/// outside the worktree, or a credential location it names, still counts.
+fn unknown(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
+  redirected(CommandPart::unknown(words), raw, placing)
 }
 
 /// `part` with the files its redirections read and write placed.

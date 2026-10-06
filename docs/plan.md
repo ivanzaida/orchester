@@ -123,6 +123,46 @@ MCP server").
   meta; the design draws them as the *Decision mark* chip (`M7pU0A`). Affects every mark, so it was left out of the
   fixes above.
 
+### M10 · Auto mode for approvals · branch `claude/auto-mode` (from master `6d44bdfe`, UI)
+
+Implemented 2026-10-06; the security review (`B1`, `B2`, `M1`–`M4` and the minors) and the design verification
+findings of the same day are fixed, **waiting for a second review and design verification** (no Pencil frame; judge
+consistency with *Approve everything in this run*, the approval dialog, the permissions popover's sections and
+Project settings › General). A reviewer model judges the requests the rules leave to the person
+(`orchester_core::run::review`, `RequestReviewer`; Claude Code in print mode without tools, `connection::reviewer`);
+hard rules first on every part of a line (`review::hold`: credential reads, unreadable parts and scripts,
+destructive parts, read-only step, network off, outside folders, unrecorded permissions, Codex escalations,
+`run_project_tool`, requests too long to review whole), fail closed (error, 60 s timeout, unreadable answer). The
+reviewer runs supervised in an empty temporary folder with its instructions as the system prompt and the agent's
+text as JSON data; it is stopped when the person answers or the worker ends. Recorded as `decided_by = 'reviewer'`
+and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs, model).
+`set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*. Open: turning auto mode on
+while a request waits does not review that request.
+The reviewer is any agent connection (`review::choice`: Claude Code, Codex through `codex exec` read-only, a native
+Anthropic API connection through `orchester-agent`'s client; not the OpenAI API yet) with a model and effort, chosen in
+Project settings or with `get_auto_mode`/`set_auto_mode`; default: the first Claude Code connection with Haiku 4.5,
+else the first usable connection with its default model (`project_auto_mode.connection`, `.effort`). The Codex flags
+were not run against a live Codex.
+Tests: `cargo test -p orchester-core --test auto_mode auto_mode`, `-p orchester-store --test auto_mode auto_mode`,
+`--test permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode
+auto_mode`, `-p orchester-desktop --test form_keyboard auto_mode`, `run_permissions_popover_fits`, `app_mcp`;
+`-p orchester-core --test auto_mode_reviewers auto_mode`, `-p orchester-agent --test anthropic_wire anthropic_`.
+
+UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: the *Auto mode* option
+under *Approve everything in this run*; without a Claude Code connection it is fixed, keeps its explanation and says
+why after the lock glyph inside its row; (2) the run permissions popover (the run's permissions row › link): the
+*Auto mode* section last, after a divider, a plain switch *Use auto mode in this run* with its hints and *Saves at
+once…* (it is not part of Apply), at 960 × 700 scrolled with the text clear of the gutter; (3) Project settings ›
+General › *Auto mode*: *New runs use auto mode* (fixed without a reviewer) and *Reviewer* (connection select with
+*Default · …*, model select, effort select where the model has efforts, *Reviewed by <model> on <connection>*, or the
+lock line saying why there is no reviewer); the Approvals option's note and the popover also end with *Reviewed by …*; (4) the approval dialog of a request auto mode left to the person:
+the line under the explanation (auto mode glyph, *Auto mode asked you:* and the quoted reason, or *Auto mode left this
+to you: …*); (5) the conversation's request card: the same line, not repeating the chip; (6) the activity rows: the
+mark *approved by auto mode · <subject>* (or *approved by you · …*) and the review line under the row, at 1440 and
+960; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once non-zero, before *Waiting*.
+States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review` and
+`ToolDecided` activity.
+
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
 Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether

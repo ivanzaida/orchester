@@ -100,7 +100,9 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `list_approvals`, `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
+  see below), `list_approvals`,
+  `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
   (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
@@ -142,6 +144,53 @@ person (an unreadable or destructive command, a write outside the worktree, a cr
 install, a network command) is refused (`person_only`, with the reason), as are the wider answers
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
+
+**Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
+model judges each request the rules leave to the person (rules of the run, Always allow and
+auto-approval answer first) in its context: the request as the approval card shows it (secret values
+removed), the step's permissions, the task and the agent's last few messages. It approves only what
+clearly serves the task and is not destructive, exfiltrating or escaping, and not an install of
+anything persistent; everything else still asks the person, with its reason. Hard rules come first, on
+every part of a command line Orchester can read, and the reviewer cannot override them: a credential
+read, or a write to one, also through a redirect of a part Orchester cannot read; a rewrite of history or a
+delete outside the worktree; any push but a plain `git push [-u] origin <the run's branch>` (no option
+before `push`, `HEAD` only while the run's branch is checked out, `origin` still pushing where it did as
+the run started, nothing else in the line changing git's configuration, remotes or folder); every Codex
+escalation; anything outside the step's
+permissions (a write in a read-only step, the network or an install while it is off, a write outside the
+worktree and its writable folders); Orchester's `run_project_tool`; and a request longer than a review
+reads whole (8,000 characters; it is never cut) all ask the person. A part Orchester cannot read to the
+end (an unknown program, a script) goes to the reviewer, which is told so, except in a step whose
+network is off or that only reads.
+A reviewer that fails, takes longer than 60 seconds or
+answers with something unreadable asks the person too. The reviewer is any agent connection of the
+project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
+list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
+connection with `claude-haiku-4-5-20251001`, else the first connection a reviewer runs on with its default
+model. Claude Code runs in print mode with no tools, no MCP servers and no settings, its instructions as
+the system prompt (`--system-prompt-file`); Codex runs `codex -a never exec` in its read-only sandbox with
+the user's configuration, rules, shell tool and web search off and the verdict's `--output-schema` (these
+flags were not run against a live Codex); both run in an empty folder the runner makes and removes. A
+native connection on the Anthropic API gets one Messages request without tools through Orchester's own
+client, its key read from the keychain in the runner; a native OpenAI API connection cannot review yet.
+What the agent wrote reaches every reviewer only as JSON data on one line between markers it cannot
+write, with the step's facts from Orchester before and after it, and the instructions tell it that data
+is untrusted; the answer must be the verdict's JSON alone. Without a reviewer (no connection, a chosen one
+removed or not supported) auto mode is unavailable and the app says why. The Approvals switch, the
+popover and Project settings say which model on which connection reviews, and each recorded review keeps
+the model that gave it. A person who answers first stops the review (its process and what it started); so
+do the end of the step or run and the runner's exit, and a run whose auto mode is turned off meanwhile
+drops the review's result. Each run has its own *Auto mode* switch, in its Approvals and, as a section of
+its own that saves at once apart from Apply, in its permissions popover; *New runs use auto mode* in
+Project settings (off by default) turns it on for runs created from then on. The run records each review
+with the request: the activity marks *approved by auto mode*, and under the row, the dialog's explanation
+and the conversation's card a line of its own says what auto mode did, the reviewer's reason quoted on
+one line (cut at 200 characters, line breaks and double quotation marks removed), never inside a mark or
+chip. The run's Approvals count *Approved by auto mode* and, once the person decided, *Auto mode asked
+you*. `get_auto_mode` reads a project's setting and reviewer; `set_auto_mode` (new runs, reviewer) and
+`set_run_auto_mode` change them only while *Let automation answer approvals* is on; `list_approvals`
+carries what auto mode did with each request and which model reviewed it.
+Not done yet: turning auto mode on while a request waits does not review that request.
 
 What this means: any program running as your user can read the discovery files and control the app's
 data through Orchester's server as you could: create and run tasks, whose agents work in your

@@ -21,7 +21,7 @@ use crate::{
   rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
-const EVENT_SCHEMA: u32 = 1;
+pub(super) const EVENT_SCHEMA: u32 = 1;
 const OUTCOME_SCHEMA: u32 = 1;
 /// 2: launch permissions with what happened to commands outside them; 1 held the permissions alone.
 const PERMISSIONS_SCHEMA: u32 = 2;

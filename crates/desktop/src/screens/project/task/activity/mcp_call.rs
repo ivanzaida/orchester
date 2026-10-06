@@ -6,11 +6,15 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::stream::CommandStatus, permission::category::CommandCategory, run::DecidedBy};
+use orchester_core::{
+  connection::stream::CommandStatus,
+  permission::category::CommandCategory,
+  run::{DecidedBy, review::Review},
+};
 
 use super::entry::Shown;
 use crate::{
-  tasks::transcript::{CommandMark, DecidedMark, McpToolEntry},
+  tasks::transcript::{CommandMark, DecidedMark, Entry, EntryKind, McpToolEntry},
   ui::icon::Icon,
 };
 
@@ -85,8 +89,23 @@ fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
     DecidedBy::Permissions => "runs.activity.decision.permissions",
     DecidedBy::Automation => "runs.activity.decision.approvedByAutomation",
     DecidedBy::AutomationDeny => "runs.activity.decision.deniedByAutomation",
+    DecidedBy::Reviewer => "runs.activity.decision.approvedByAutoMode",
   };
   ctx.t_args(key, [("subject", &*subject)])
+}
+
+/// What auto mode did with the request about `entry`, shown on a line of its own under the row, never in
+/// its mark.
+pub(super) fn review_of(entry: &Entry) -> Option<&Review> {
+  let mark = match &entry.kind {
+    EntryKind::Command(command) => command.mark.as_ref(),
+    EntryKind::McpTool(call) => call.mark.as_ref(),
+    _ => None,
+  };
+  match mark? {
+    CommandMark::Decided(mark) => mark.decision.review.as_ref(),
+    _ => None,
+  }
 }
 
 /// A command category's name in a mark.

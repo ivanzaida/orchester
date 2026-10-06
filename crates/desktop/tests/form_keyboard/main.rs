@@ -10,6 +10,7 @@ mod agents;
 mod all_projects;
 mod app_mcp;
 mod approval_choices;
+mod auto_mode;
 mod canvas_zoom;
 mod changes;
 mod claude_run;

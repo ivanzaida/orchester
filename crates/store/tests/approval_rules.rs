@@ -8,7 +8,7 @@ use orchester_core::{
     category::{ClassifiedCommand, CommandScope},
   },
   resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, Slug, VersionNumber},
-  run::{DecidedBy, PendingToolApproval, RuleScope, ToolApprovalDecision},
+  run::{DecidedBy, PendingToolApproval, RuleScope, ToolApprovalDecision, review::Review},
   store::{ActivityStore, ConversationStore, ResourceStore, RunStore},
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
@@ -67,6 +67,28 @@ fn approval_rules_run_auto_approval_choice() {
   assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(false));
 }
 
+/// Auto mode looked at the reviewer's approval, at the person's first answer, which it asked about, and at
+/// the request still waiting.
+fn reviewed(db: &mut ProjectDb, approval: &PendingToolApproval, answer: Option<DecidedBy>) {
+  let review = match answer {
+    Some(DecidedBy::Reviewer) => Review::Approved {
+      reason: "It serves the task.".to_owned(),
+      model: "claude-haiku-4-5-20251001".to_owned(),
+    },
+    // The person's first answer, and the request still waiting, which no count of auto mode holds yet.
+    Some(DecidedBy::Person) | None => Review::Asked {
+      reason: "Not needed for the task.".to_owned(),
+      model: "claude-haiku-4-5-20251001".to_owned(),
+    },
+    _ => return,
+  };
+  db.record_review(approval.run, &approval.id, &review).expect("review");
+  assert_eq!(
+    db.tool_approval_review(approval.run, &approval.id).expect("read"),
+    Some(review)
+  );
+}
+
 #[test]
 fn approval_rules_decision_counts_by_who_answered() {
   let (_repo, mut db, run, execution) = started_run();
@@ -87,6 +109,7 @@ fn approval_rules_decision_counts_by_who_answered() {
     Some(DecidedBy::PersonDeny),
     Some(DecidedBy::Automation),
     Some(DecidedBy::AutomationDeny),
+    Some(DecidedBy::Reviewer),
     None,
   ];
   for (number, answer) in answers.into_iter().enumerate() {
@@ -105,6 +128,7 @@ fn approval_rules_decision_counts_by_who_answered() {
       native: None,
     };
     db.request_tool_approval(&approval).expect("request");
+    reviewed(&mut db, &approval, answer);
     let Some(answer) = answer else { continue };
     assert!(
       db.claim_tool_approval(run.id(), &approval.id, answer, at(12))
@@ -134,6 +158,8 @@ fn approval_rules_decision_counts_by_who_answered() {
       auto_approved: 2,
       by_automation: 1,
       denied_by_automation: 1,
+      by_reviewer: 1,
+      asked_by_reviewer: 1,
       waiting: 1,
     }
   );

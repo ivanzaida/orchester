@@ -136,6 +136,8 @@ pub struct DecidedToolApproval {
   /// with who gave them.
   pub decided_by: Option<super::DecidedBy>,
   pub decided_at: Timestamp,
+  /// What auto mode did with the request before it was answered.
+  pub review: Option<super::review::Review>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -41,7 +41,10 @@ use self::{
   policy::{PolicyText, ROW_HEIGHT, Wording, label_text, policy_property, policy_text, value_text},
   settings::{Draft, Edit},
 };
-use super::heading::agent_of;
+use super::{
+  auto_mode::{AutoModePlace, AutoModeProps, AutoModeSwitch},
+  heading::agent_of,
+};
 use crate::{
   agents::data::save_permissions_to_draft,
   background,
@@ -156,9 +159,20 @@ impl Component for RunPermissionsRow {
     let window = ctx.window().info().logical_height() - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT;
     let above = self.anchor.bounds().y - TITLE_BAR_HEIGHT - POPOVER_GAP;
     let available = if above > 0.0 { above.min(window) } else { window }.max(0.0);
+    // Auto mode is the run's, not the profile's: it saves at once, apart from Apply.
+    let auto_mode = ctx.mount_keyed::<AutoModeSwitch>(
+      "task-permissions-auto-mode",
+      AutoModeProps {
+        repo_root: props.repo_root.clone(),
+        run: props.run,
+        live: props.live,
+        id: "task-permissions-auto-mode-switch",
+        place: AutoModePlace::Popover,
+      },
+    );
     let content = Column::new()
       .child(Spacer::new().height(Dimension::Px(TITLE_BAR_HEIGHT)))
-      .child(self.popover(ctx, &props, &apply, available))
+      .child(self.popover(ctx, &props, &apply, (available, auto_mode)))
       .child(Spacer::new().height(Dimension::Px(STATUS_BAR_HEIGHT)));
     let placement = match props.look {
       Look::Row { .. } => Placement::TopEnd,

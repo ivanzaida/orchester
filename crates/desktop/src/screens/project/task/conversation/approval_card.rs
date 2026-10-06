@@ -31,6 +31,7 @@ use super::{
   super::{
     approval_arguments::ArgumentsCache,
     approval_value::ValueRows,
+    review_note::review_line,
     tool_approval::{
       Decision as ApprovalDecision, DecisionAction, Unanswered, always_blocked, chip,
       decision_action as approval_decision, quiet_reason, similar_unavailable,
@@ -175,6 +176,12 @@ impl Component for ApprovalCardView {
     };
     let shown = shown_request(ctx, &request.id);
     let mut body = self.request_body(ctx, request, shown.as_ref());
+    let review = props
+      .card
+      .review
+      .as_ref()
+      .or_else(|| shown.as_ref().and_then(|shown| shown.review.as_ref()));
+    body.extend(review.map(|review| review_line(ctx, format!("conversation-approval-review-{}", request.id), review)));
     if waiting {
       let queue = ctx.use_context::<ApprovalQueue>();
       body.push(self.answers(ctx, (&props.card, shown.as_ref(), props.answers), &action, queue));
@@ -239,6 +246,7 @@ fn answered_state(ctx: &Ctx, decision: ToolApprovalDecision, by: Option<DecidedB
   let key = match (decision, by) {
     (ToolApprovalDecision::Approved, Some(DecidedBy::Permissions)) => "runs.summary.approvals.byProfile",
     (ToolApprovalDecision::Approved, Some(DecidedBy::Automation)) => "runs.summary.approvals.byAutomation",
+    (ToolApprovalDecision::Approved, Some(DecidedBy::Reviewer)) => "runs.summary.approvals.byReviewer",
     (ToolApprovalDecision::Approved, _) => "runs.conversation.card.approved",
     (ToolApprovalDecision::Denied, Some(DecidedBy::AutomationDeny)) => "runs.summary.approvals.deniedByAutomation",
     (ToolApprovalDecision::Denied, _) => "runs.conversation.card.denied",

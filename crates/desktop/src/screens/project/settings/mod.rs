@@ -6,6 +6,7 @@
 //! search tool it needs (ORC-38 `i220W`).
 
 mod agent_files;
+mod auto_mode;
 mod code_index;
 mod environment;
 mod general;

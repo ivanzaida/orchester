@@ -18,7 +18,8 @@ mod typography;
 
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
 pub use form::{
-  command_scrollbar, gutter_scrollbar, gutter_width, input_line_height, select_menu_scrollbar, value_box_scrollbar,
+  command_scrollbar, gutter_scrollbar, gutter_width, input_line_height, padding_beside_gutter, select_menu_scrollbar,
+  value_box_scrollbar,
 };
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};

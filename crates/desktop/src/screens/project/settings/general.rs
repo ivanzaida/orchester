@@ -21,6 +21,7 @@ use orchester_core::{
 use super::{
   Actions, SettingsScreen,
   agent_files::{AgentFilesProps, AgentFilesSection},
+  auto_mode::{AutoModeSection, AutoModeSettingsProps},
   work::SettingsWork,
 };
 use crate::{
@@ -121,9 +122,16 @@ impl SettingsScreen {
         status: self.general_status.clone(),
       },
     );
+    let auto_mode = ctx.mount_keyed::<AutoModeSection>(
+      "settings-auto-mode",
+      AutoModeSettingsProps {
+        open: open.clone(),
+        status: self.general_status.clone(),
+      },
+    );
     form(
       None,
-      ScrollVertical::new(content.child(agent_files))
+      ScrollVertical::new(content.child(agent_files).child(auto_mode))
         .with_scroll_state(self.scroll.clone())
         .id("settings-general")
         .width(Dimension::Pct(100.0))

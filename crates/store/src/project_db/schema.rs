@@ -3,6 +3,7 @@
 
 mod agent_files;
 mod approval_choices;
+mod auto_mode;
 mod automation_answers;
 mod code_index;
 mod command_approvals;
@@ -511,4 +512,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   joining::MIGRATION,
   permitted_decisions::MIGRATION,
   automation_answers::MIGRATION,
+  auto_mode::MIGRATION,
+  auto_mode::REVIEWER_MIGRATION,
+  auto_mode::ORIGIN_MIGRATION,
 ];

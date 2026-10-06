@@ -34,6 +34,11 @@ pub struct DecisionCounts {
   /// Approved once by automation, through Orchester's MCP server.
   pub by_automation: u32,
   pub denied_by_automation: u32,
+  /// Approved by auto mode's reviewer.
+  pub by_reviewer: u32,
+  /// Requests auto mode looked at and left to a person: its reviewer asked, a hard rule held them, or the
+  /// review gave no verdict.
+  pub asked_by_reviewer: u32,
   pub waiting: u32,
 }
 
@@ -182,6 +187,7 @@ impl ProjectDb {
         ("denied", Some(DecidedBy::AutomationDeny)) => &mut counts.denied_by_automation,
         ("denied", _) => &mut counts.denied_by_you,
         (_, Some(DecidedBy::Automation)) => &mut counts.by_automation,
+        (_, Some(DecidedBy::Reviewer)) => &mut counts.by_reviewer,
         (_, Some(DecidedBy::SimilarRule)) => &mut counts.by_similar_rule,
         (_, Some(DecidedBy::AlwaysAllowed)) => &mut counts.always_allowed,
         (_, Some(DecidedBy::Permissions)) => &mut counts.by_profile,
@@ -190,6 +196,12 @@ impl ProjectDb {
       };
       *slot += count;
     }
+    counts.asked_by_reviewer = self.connection.query_row(
+      "SELECT COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND review IS NOT NULL \
+       AND decided_by IS NOT 'reviewer' AND state IN ('approved', 'denied')",
+      [run.to_string()],
+      |row| row.get(0),
+    )?;
     Ok(counts)
   }
 }

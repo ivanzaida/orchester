@@ -78,7 +78,10 @@ pub(super) fn body(request: &ModelRequest, shape: Shape, endpoint: &Endpoint) ->
   if quirks.cache_control {
     body.insert("cache_control".to_owned(), json!({"type": "ephemeral"}));
   }
-  body.insert("tools".to_owned(), tools(&request.tools, quirks.eager_input_streaming));
+  // A request that offers no tools (auto mode's review) sends none.
+  if !request.tools.tools().is_empty() {
+    body.insert("tools".to_owned(), tools(&request.tools, quirks.eager_input_streaming));
+  }
   if shape.thinking {
     let mut thinking = json!({"type": "adaptive", "display": "summarized"});
     if quirks.betas {

@@ -120,7 +120,7 @@ const fn decision_name(decision: Decision) -> &'static str {
 }
 
 /// A waiting request as the approval card shows it: what asks, from which run, task, step and
-/// agent, and since when. Recorded arguments have secret values removed already.
+/// agent, since when, and what auto mode did with it. Recorded arguments have secret values removed already.
 pub fn approval(shown: &ShownApproval) -> Value {
   let request = &shown.approval;
   let (kind, arguments, reason) = if request.command {
@@ -143,5 +143,7 @@ pub fn approval(shown: &ShownApproval) -> Value {
     "step": shown.step.as_deref(),
     "read_only_step": shown.read_only,
     "waiting_since": wire::time(request.requested_at),
+    // What auto mode did with it, and which model reviewed; absent when auto mode did not look at it.
+    "auto_mode": shown.review.as_ref(),
   })
 }
