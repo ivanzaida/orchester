@@ -29,7 +29,7 @@ use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, is_running, pending_approval, project, scheduler_with, wait_for};
+use self::support::{PATIENCE, Setup, TestProject, is_running, project, scheduler_with, wait_for};
 
 /// A Claude Code Builder that asks about every command, in a writing step with `network`.
 fn asking(brief: &'static str, network: NetworkAccess) -> Setup {
@@ -135,8 +135,37 @@ impl Started {
     .expect("auto mode leaves a request to the person")
   }
 
-  async fn pending(&mut self) -> PendingToolApproval {
-    pending_approval(self.project.repo.path(), &mut self.events, self.id).await
+  /// The first request auto mode's reviewer is judging: it waits, but not yet for the person.
+  async fn under_review(&mut self) -> PendingToolApproval {
+    let root = self.project.repo.path().to_path_buf();
+    let (id, events) = (self.id, &mut self.events);
+    tokio::time::timeout(PATIENCE, async {
+      loop {
+        let db = ProjectDb::open(&root).expect("open");
+        let reviewing = db.reviewing_tool_approvals().expect("under review");
+        if let Some(request) = db
+          .pending_tool_approvals(id)
+          .expect("requests")
+          .into_iter()
+          .find(|request| reviewing.contains(&request.id))
+        {
+          return request;
+        }
+        events.recv().await.expect("notification");
+      }
+    })
+    .await
+    .expect("a request under review")
+  }
+
+  /// Whether the run's agent waits for the person, as the run's phase and *Needs you* read it.
+  fn waits_for_person(&self) -> bool {
+    self
+      .db()
+      .invocations(self.id)
+      .expect("invocations")
+      .iter()
+      .any(|invocation| invocation.timing.waiting_since().is_some())
   }
 
   async fn ended(&mut self) -> Run {
@@ -198,6 +227,11 @@ async fn auto_mode_approves_a_command_that_serves_the_task_in_a_folder_of_its_ow
   assert!(started.db().run_auto_mode(started.id).expect("read"));
   let run = started.ended().await;
   assert!(run.status().is_terminal());
+  let decided = started.db().decided_tool_approvals(started.id).expect("decided");
+  let millis = decided[0].decided_at.unix_millis() - decided[0].request.requested_at.unix_millis();
+  // The review's own cost with the fake reviewer (start, the empty folder, the CLI, the verdict): about a
+  // second on a loaded test machine.
+  assert!(millis < 10_000, "review latency with the fake reviewer: {millis} ms");
   let decisions = started.decisions();
   assert_eq!(decisions.len(), 1, "{decisions:?}");
   assert_eq!(decisions[0].0, DecidedBy::Reviewer);
@@ -360,7 +394,7 @@ async fn auto_mode_asks_the_person_when_the_reviewer_asks_or_babbles() {
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_mode_turned_off_during_a_review_drops_its_approval() {
   let mut started = Started::new(&claude("Run `cargo build`. Reviewer waits.")).await;
-  let request = started.pending().await;
+  let request = started.under_review().await;
   started.reviewer_started().await;
   started
     .db()
@@ -380,7 +414,7 @@ async fn auto_mode_turned_off_during_a_review_drops_its_approval() {
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_mode_stops_the_reviewer_when_the_person_answers_first() {
   let mut started = Started::new(&claude("Run `cargo build`. Reviewer hangs.")).await;
-  let request = started.pending().await;
+  let request = started.under_review().await;
   let pid = started.reviewer_started().await;
   assert!(is_running(&pid));
   started.deny(request).await;
@@ -447,4 +481,35 @@ async fn auto_mode_reviews_with_a_codex_connection_in_its_read_only_sandbox() {
   );
   failed.deny(request).await;
   failed.ended().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_keeps_a_request_from_the_person_until_the_reviewer_asks() {
+  let mut started = Started::new(&claude("Run `cargo build`. Reviewer waits. Reviewer asks.")).await;
+  let request = started.under_review().await;
+  assert!(
+    !started.waits_for_person(),
+    "no wait for the person while the reviewer judges it"
+  );
+  let (asked, review) = started.left_to_person().await;
+  assert_eq!(asked.id, request.id);
+  assert!(matches!(review, Review::Asked { .. }), "{review:?}");
+  assert!(started.db().reviewing_tool_approvals().expect("read").is_empty());
+  tokio::time::timeout(PATIENCE, async {
+    while !started.waits_for_person() {
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await
+  .expect("after the reviewer asks, the agent waits for the person");
+  started.deny(asked).await;
+  started.ended().await;
+
+  // A hard rule asks the person at once, without a review.
+  let mut held = Started::new(&claude("Run `cp ~/.orchester-test-token token.txt`.")).await;
+  let (request, _) = held.left_to_person().await;
+  assert!(held.db().reviewing_tool_approvals().expect("read").is_empty());
+  assert!(held.waits_for_person());
+  held.deny(request).await;
+  held.ended().await;
 }

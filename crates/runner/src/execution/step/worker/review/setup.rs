@@ -19,7 +19,7 @@ use orchester_core::{
     ApprovalSubject,
     review::{
       HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput,
-      ReviewVerdict, ReviewerKind, resolve_reviewer, review_request,
+      ReviewVerdict, ReviewerKind, resolve_reviewer, review_hold, review_request,
     },
   },
   secret::{SecretValue, SecretVault},
@@ -68,7 +68,7 @@ pub(super) struct PushPlace {
 impl PushPlace {
   /// The branch checked out in the worktree now, and whether `origin` still pushes where it did as the
   /// run started; what git cannot tell counts against the push.
-  fn read(&self) -> (Option<String>, bool) {
+  pub(super) fn read(&self) -> (Option<String>, bool) {
     let git = Git::new(&self.worktree);
     let answer = |args: &[&str]| match git.attempt(args) {
       Ok(Ok(out)) => Some(out),
@@ -97,6 +97,26 @@ pub(super) struct ReviewJob {
   pub(super) runtime: Handle,
   pub(super) timeout: Duration,
   pub(super) stop: watch::Receiver<()>,
+}
+
+/// The hard rule that keeps `subject` from the reviewer, or its input's (a request too long to review
+/// whole); checked before the review starts, so a held request asks the person at once.
+pub(super) fn hold_now(
+  (subject, permissions, escalation): (&ApprovalSubject, Option<&AgentPermissions>, bool),
+  push: &PushPlace,
+  input: &Result<ReviewInput, ReviewHold>,
+) -> Option<ReviewHold> {
+  let (head, origin_kept) = push.read();
+  let rules = HoldRules {
+    permissions,
+    push: PushFacts {
+      branch: push.branch.as_deref(),
+      head: head.as_deref(),
+      origin_kept,
+    },
+    escalation,
+  };
+  review_hold(subject, &rules).or_else(|| input.as_ref().err().copied())
 }
 
 impl ReviewerSetup {

@@ -253,12 +253,14 @@ impl Worker {
       }
       return Ok(());
     }
-    watch.invocation.timing.wait_for_person(approval.requested_at);
-    watch.db.save_invocation(&watch.invocation)?;
-    // Auto mode judges it while it waits; the person may answer first. A Codex command asks to leave
-    // its sandbox, which only the person grants.
+    // Auto mode judges it first, without asking the person; a hard rule (a Codex command asks to leave
+    // its sandbox, which only the person grants) asks the person at once.
     let escalation = matches!(&awaiting, Awaiting::Codex(request) if request.is_command());
     self.reviewing = self.start_review(watch, &approval, escalation)?;
+    if self.reviewing.is_none() {
+      watch.invocation.timing.wait_for_person(approval.requested_at);
+      watch.db.save_invocation(&watch.invocation)?;
+    }
     self.notifier.send(Event::ToolApprovalChanged {
       run: approval.run,
       task: self.task,
