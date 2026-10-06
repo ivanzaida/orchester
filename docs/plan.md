@@ -418,6 +418,14 @@ form_keyboard usage_`, `--test theme usage`, `--test navigation route`.
 building (not in the design): a stretch of more than an hour between two reports of a window is a gap; a profile ·
 step row of *Where tokens go* filters by its profile; the custom range takes dates as `2026-09-01`.
 
+First verification (2026-10-06) failed on layout; reworked the same day: Tokens over time beside Plan limits and the
+three *Efficiency* cards side by side (stacked under lurq's `Xl` breakpoint, 1280 logical), plain summary figures over a
+hairline with the failed-run share and counts for runs, legends and captions above the charts with the design's
+footnotes, the two-column Plan limits legend, step names (from the run's pinned pipeline) in *Where tokens go*, the
+table's Total row, the empty states with the compact Plan limits card (it keeps the … menu so the threshold stays
+reachable), All projects' controls at the right of the filters and *Project* after *Task*, day labels on multi-day
+hourly Plan limits axes, and charts that redraw when the layout moves them to a new canvas.
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label

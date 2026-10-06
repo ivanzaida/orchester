@@ -1688,7 +1688,7 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 
 Decided 2026-09-30 (user): plan limits stay in the project view as the shared account-wide chart; the threshold is an app-wide setting in the card menu; snapshots are kept 90 days; *Usage* follows *Pull requests*; All projects has the *Projects* | *Usage* tabs; the table's *Runs* mode has its own frame.
 
-Built 2026-10-06 (ORC-72). Each project's runner stores the reports of its runs in that project's database; the dashboard reads every listed project's for the account-wide chart. Two consecutive reports of a window more than an hour apart are joined dotted (a gap); a report whose reset passed before the next is not joined to it. A *profile · step* row of *Where tokens go* adds its profile to the *Agent profile* filter. *Custom…* takes dates as `2026-09-01`.
+Built 2026-10-06 (ORC-72). Each project's runner stores the reports of its runs in that project's database; the dashboard reads every listed project's for the account-wide chart. Two consecutive reports of a window more than an hour apart are joined dotted (a gap); a report whose reset passed before the next is not joined to it. A *profile · step* row of *Where tokens go* adds its profile to the *Agent profile* filter. *Custom…* takes dates as `2026-09-01`. Narrower than 1280 (lurq's `Xl` breakpoint) the cards that sit side by side stack. The compact Plan limits card of the no-runs and filters-match-nothing states keeps the … menu, leaves out windows that reset since their last report (unless nothing else is known), and *Tokens before first edit* counts spent tokens (input − cached + output) up to the first edit.
 
 ## Memory screens
 
