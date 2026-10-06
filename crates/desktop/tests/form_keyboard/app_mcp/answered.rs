@@ -1,7 +1,8 @@
 //! Answers that no person gave, produced live through the runner and `orchester-fake-claude`: the
 //! profile's permissions run a line whose parts each run alone, automation approves a test once and
 //! denies an install, through Orchester's MCP server. Each inline approval card says who answered, in
-//! the words of the run's Approvals, which count the profile's answers on their own.
+//! the words of the run's Approvals, which count the profile's answers on their own. The profile's
+//! answer is no card: the command's line in the agent's chip says it (ORC-71).
 //!
 //! With `ORCHESTER_KEEP_ANSWERED` set to a folder that does not exist yet, the test copies the project
 //! there when it is done, so the three runs can be opened in a debug build for design verification:
@@ -19,6 +20,7 @@ use super::{
   ok,
 };
 use crate::{
+  conversation::open_group,
   github::shows,
   harness::Desktop,
   task_run::{agent_step, fake_claude, init_repository, programs, seed_agent},
@@ -39,13 +41,18 @@ fn copy_folder(from: &Path, to: &Path) -> io::Result<()> {
   Ok(())
 }
 
-/// Opens task `key`'s Conversation tab and waits until its request's card says `state`.
-fn card_says(desktop: &mut Desktop, key: &str, state: &str) {
+/// Opens task `key`'s Conversation tab.
+fn open_conversation(desktop: &mut Desktop, key: &str) {
   desktop.press("nav-tasks");
   desktop.wait_for(&format!("task-row-{key}"));
   desktop.click(&format!("task-row-{key}"));
   desktop.wait_for("task-page");
   desktop.click("task-tab-conversation");
+}
+
+/// Opens task `key`'s Conversation tab and waits until its request's card says `state`.
+fn card_says(desktop: &mut Desktop, key: &str, state: &str) {
+  open_conversation(desktop, key);
   desktop.wait_until(state, |desktop| shows(desktop, "conversation", state));
 }
 
@@ -85,7 +92,15 @@ fn app_mcp_answered_by_the_profile_and_automation_say_so() {
   ok(&mut agent, "decide_approval", &answer(&install.id, "deny"));
   assert_eq!(ended(&mut desktop, "KON-3").denied_by_automation, 1);
 
-  card_says(&mut desktop, "KON-1", "Allowed by the profile");
+  open_conversation(&mut desktop, "KON-1");
+  open_group(&mut desktop, "Ran");
+  desktop.wait_until("the profile's mark", |desktop| {
+    shows(desktop, "conversation", "allowed by the profile")
+  });
+  assert!(
+    !shows(&mut desktop, "conversation", "Allowed by the profile"),
+    "no card for the profile's answer"
+  );
   card_says(&mut desktop, "KON-2", "Approved by automation");
   card_says(&mut desktop, "KON-3", "Denied by automation");
   // The agent was told that automation denied it, by no person; Tools shows the denial open.

@@ -244,11 +244,11 @@ impl ApprovalCardView {
   }
 }
 
-/// An answered request's state: who answered when Orchester's profile or automation did, in the words
-/// of the run's Approvals; a person's answer reads plain *Approved* or *Denied*.
+/// An answered request's state: who answered when automation or auto mode did, in the words of the
+/// run's Approvals; a person's answer reads plain *Approved* or *Denied*. What Orchester answered
+/// itself, the profile among them, has no card (`tasks::timeline`).
 fn answered_state(ctx: &Ctx, decision: ToolApprovalDecision, by: Option<DecidedBy>) -> (Icon, Arc<str>) {
   let key = match (decision, by) {
-    (ToolApprovalDecision::Approved, Some(DecidedBy::Permissions)) => "runs.summary.approvals.byProfile",
     (ToolApprovalDecision::Approved, Some(DecidedBy::Automation)) => "runs.summary.approvals.byAutomation",
     (ToolApprovalDecision::Approved, Some(DecidedBy::Reviewer)) => "runs.summary.approvals.byReviewer",
     (ToolApprovalDecision::Approved, _) => "runs.conversation.card.approved",

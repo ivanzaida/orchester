@@ -8,7 +8,8 @@
 //! activity with no message before it is a row of the agent's own. A step starts with its divider.
 //! It shows its items unless it is folded: steps that finished fold, and the finished ones in a row
 //! share one line ([`Row::Folded`]); the step that runs, waits for the person, failed or the run
-//! ended on stays open, and so does the one before the last that ran (`kpnmP`, `K4AOD`, `FeiRG`). A
+//! ended on stays open, and so do the last two that ran (`kpnmP`, `K4AOD`, `FeiRG`): between two steps
+//! the one that just finished stays open until the next starts, so it does not fold and open again. A
 //! person's choice to open or fold a step or a chip wins, but the step picked and a step with a
 //! match always show their items.
 
@@ -155,7 +156,7 @@ pub fn shown(items: &[Item], choice: &Choice, open: &dyn Fn(&str, bool) -> bool)
     choice,
     needle: choice.needle(),
     open,
-    recent: ran.len().checked_sub(2).map(|index| ran[index]),
+    recent: ran.iter().rev().take(2).copied().collect(),
     shown: Shown::default(),
     step: None,
     folded: Vec::new(),
@@ -184,8 +185,8 @@ struct Pass<'a> {
   choice: &'a Choice,
   needle: Option<String>,
   open: &'a dyn Fn(&str, bool) -> bool,
-  /// The execution before the last that ran, which starts open as well.
-  recent: Option<StepExecutionId>,
+  /// The last two executions that ran, which start open as well.
+  recent: Vec<StepExecutionId>,
   shown: Shown,
   step: Option<OpenStep>,
   /// Finished steps folded since the last row shown.
@@ -241,7 +242,8 @@ impl Pass<'_> {
       self.shown.matched_steps.push(head.clone());
     }
     let picked = self.choice.step.is_some();
-    let default = head.starts_open() || picked || matched == Some(true) || head.execution == self.recent;
+    let recent = head.execution.is_some_and(|execution| self.recent.contains(&execution));
+    let default = head.starts_open() || picked || matched == Some(true) || recent;
     // The step picked and a step with a match show their items whatever the person folded.
     if !(picked || self.needle.is_some() || (self.open)(&item.key, default)) {
       self.folded.push((item.key.clone(), head.clone()));

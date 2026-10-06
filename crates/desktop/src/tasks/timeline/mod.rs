@@ -3,9 +3,10 @@
 //! Each step execution that ran has its header, then in the order they happened its agent's
 //! messages, the person's messages it took, its tool groups ([`group`]), the cards that wait for or
 //! record a person's decision (question, plan, tool approval) and its problems on their own; its
-//! result closes it. An attempt that returned or restarted the work starts with its mark ([`mark`]).
-//! Messages that wait for a step follow, and a run that ended closes with its end. What is shown of
-//! it is [`view`]'s.
+//! result closes it. A tool request Orchester answered itself as it came (the profile's permissions, a
+//! rule of the run, auto-approval) is no card: its call's entry in the tool group carries the mark. An attempt that
+//! returned or restarted the work starts with its mark ([`mark`]). Messages that wait for a step follow, and a run that
+//! ended closes with its end. What is shown of it is [`view`]'s.
 
 pub mod group;
 pub mod load;
@@ -20,7 +21,7 @@ use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
   integration::RunMerge,
-  run::{DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
+  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
   time::Timestamp,
 };
 
@@ -388,6 +389,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .decided
     .iter()
     .filter(|decided| decided.request.execution == execution)
+    .filter(|decided| decided.decided_by.is_none_or(DecidedBy::answered_waiting))
     .map(|decided| {
       (
         decided.request.clone(),

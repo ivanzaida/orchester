@@ -1,14 +1,16 @@
 //! Following the run live (`docs/design/orchester-workspace.md`, "Following live (ORC-36)"): the
 //! virtualized timeline keeps its newest row in view while its end is in view, or the card that
 //! waits for the person until the person scrolls; scrolling up stops following and shows *Jump to
-//! latest · N new*; sending a message follows again.
+//! latest · N new*; sending a message follows again. Rows that arrive or change while the person reads
+//! further up leave what they read where it is: the list keeps the row at the top of its view in place.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, events::scroll_event::ScrollEvent, theme::SpacingSize},
-  components::{Row, VirtualizedList},
-  layout::layout_kind::Justify,
+  app::{component::Component, ctx::Ctx, events::scroll_event::ScrollEvent, theme::SpacingSize},
+  components::{Column, Row, VirtualizedList},
+  core::Signal,
+  layout::layout_kind::{Justify, ScrollState},
   node::{Element, dimension::Dimension},
 };
 use parking_lot::Mutex;
@@ -33,6 +35,11 @@ const JUMP_HEIGHT: f32 = 30.0;
 const FOLLOW_SLACK: f32 = 24.0;
 /// How far from the end a following timeline may sit before it goes to the end again.
 const AT_END: f32 = 0.5;
+/// The list's reach beyond its view while it measures its rows: all of them.
+const MEASURE_ALL: f32 = f32::MAX;
+/// The layouts that measure every row once the list shows rows: the list lays out a first batch of rows
+/// to learn their size, then every row.
+const MEASURING_LAYOUTS: u8 = 2;
 
 /// How many rows the timeline showed when it stopped following, for *N new*; `None` until the
 /// render after a step was picked, which shows other rows than before without any arriving.
@@ -108,17 +115,18 @@ impl ConversationTab {
     reveal.key.clone()
   }
 
-  /// After each layout: a timeline that follows and has come short of its end (rows measured taller
-  /// than the list estimated them, a row that grew after the render went to the end) goes to it
-  /// again, so *Following live* never shows anything but the end.
-  pub(super) fn keep_at_end(&self) {
-    if !self.following.get_untracked() || !*self.started.lock() || self.reveal.lock().key.is_some() {
-      return;
-    }
-    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
-    if self.scroll.scroll_y() < end - AT_END {
-      self.scroll.scroll_to_bottom_pending();
-    }
+  /// What holds the timeline at its end while it follows, mounted after the list ([`FollowEnd`]).
+  pub(super) fn follow_end(&self, ctx: &mut Ctx) -> Element {
+    ctx.mount_keyed::<FollowEnd>(
+      "conversation-follow-end",
+      EndHold {
+        scroll: self.scroll.clone(),
+        following: self.following.clone(),
+        started: self.started.clone(),
+        reveal: self.reveal.clone(),
+        measured: self.measured.clone(),
+      },
+    )
   }
 
   /// After each layout: a row a link asked for is revealed once the list has laid out rows that hold it.
@@ -158,7 +166,17 @@ impl ConversationTab {
     let count = shown.rows.len();
     let (scroll, following, left_at) = (self.scroll.clone(), self.following.clone(), self.left_at.clone());
     let revealed = self.reveal.clone();
-    VirtualizedList::new_shared(ctx, rows)
+    let list = VirtualizedList::new_shared(ctx, rows);
+    // Until it has laid out every row once, the list sizes the rows it has not laid out by an estimate.
+    // When rows arrive, it lays out every row it only estimated, and for one frame the rows in view
+    // move by how far its estimates were off; laid out at once, while it shows its end, no row is left
+    // to estimate but the ones that arrive under the view.
+    let list = if self.measured.get() {
+      list
+    } else {
+      list.overscan_px(MEASURE_ALL)
+    };
+    list
       .list_key("conversation-timeline")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
@@ -241,6 +259,83 @@ impl ConversationTab {
       .justify(Justify::Center)
       .child(button)
       .into()
+  }
+}
+
+/// What holds a following timeline at its end: the list's scroll, whether it follows, whether it has
+/// shown rows yet, and the card it reveals instead; and whether the list has laid out all its rows.
+#[derive(Clone)]
+pub(super) struct EndHold {
+  scroll: ScrollState,
+  following: Signal<bool>,
+  started: Arc<Mutex<bool>>,
+  reveal: Arc<Mutex<Reveal>>,
+  measured: Signal<bool>,
+}
+
+impl PartialEq for EndHold {
+  /// The tab's own handles, the same for as long as the tab is mounted.
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.started, &other.started) && Arc::ptr_eq(&self.reveal, &other.reveal)
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for EndHold {}
+
+impl EndHold {
+  /// A timeline that follows and has come short of its end goes to it at once, before the next frame
+  /// is laid out: as rows arrive, the list puts the row it anchored back where it was, which leaves the
+  /// newest rows under the view. Going there at once lets the list build the rows of the end, so no
+  /// frame shows anything but the end while *Following live* is on.
+  fn keep_at_end(&self) {
+    if !self.following.get_untracked() || !*self.started.lock() || self.reveal.lock().key.is_some() {
+      return;
+    }
+    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
+    if self.scroll.scroll_y() < end - AT_END {
+      self.scroll.set_scroll(0.0, end);
+      // Rows the next layout measures taller than the list estimated them move the end further.
+      self.scroll.scroll_to_bottom_pending();
+    }
+  }
+}
+
+/// Mounted after the timeline's list, and with it, so that its `after_layout` runs after the list's,
+/// which moves the scroll: the components the tab mounted run theirs after the tab's own, in the order
+/// they were mounted. It counts the layouts the list measures every row in.
+pub(super) struct FollowEnd {
+  hold: Mutex<Option<EndHold>>,
+  layouts: Mutex<u8>,
+}
+
+impl Component for FollowEnd {
+  type Props = EndHold;
+
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self {
+      hold: Mutex::new(None),
+      layouts: Mutex::new(0),
+    }
+  }
+
+  fn after_layout(&self) {
+    let Some(hold) = &*self.hold.lock() else {
+      return;
+    };
+    hold.keep_at_end();
+    if hold.measured.get_untracked() {
+      return;
+    }
+    let mut layouts = self.layouts.lock();
+    *layouts += 1;
+    if *layouts >= MEASURING_LAYOUTS {
+      hold.measured.set(true);
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    *self.hold.lock() = Some(ctx.props::<EndHold>().clone());
+    Column::new()
   }
 }
 

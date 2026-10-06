@@ -287,7 +287,7 @@ fn conversation_step_picked_in_the_rail_says_which_steps_it_hides() {
 
 /// Appends `count` agent messages to the transcript of the run's live invocation, as if the agent
 /// had written them.
-fn notes(desktop: &Desktop, count: usize) {
+pub(crate) fn notes(desktop: &Desktop, count: usize) {
   let db = ProjectDb::open(desktop.repo()).expect("open the project");
   let run = latest_run(desktop.repo()).expect("the run");
   let invocation = db
@@ -324,7 +324,7 @@ pub(crate) fn scroll_up(desktop: &mut Desktop) {
   desktop.pass();
 }
 
-fn release(desktop: &Desktop) {
+pub(crate) fn release(desktop: &Desktop) {
   std::fs::write(desktop.repo().join(".orchester").join("fake-release"), "go").expect("release");
 }
 
