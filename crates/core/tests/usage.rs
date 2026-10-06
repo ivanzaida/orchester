@@ -16,7 +16,8 @@ use orchester_core::{
   time::Timestamp,
   usage::{
     BreakdownKey, Change, CliSeries, DayRange, FilterOptions, Grouping, IndexGiven, InvocationFacts, Period,
-    ProjectFacts, RunFacts, RunOutcome, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport, day_start,
+    ProjectFacts, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport,
+    day_start,
     limits::{Join, LimitHistory, LimitSnapshot, WarningThreshold},
   },
 };
@@ -176,6 +177,9 @@ fn usage_summary_counts_spent_cached_runs_agent_time_cache_share_and_failed_runs
   assert_eq!((summary.runs, summary.finished, summary.failed), (2, 1, 1));
   assert_eq!(summary.agent_ms, u64::try_from(3 * HOUR).expect("positive"));
   assert_eq!(summary.failed_spent, 7_000);
+  assert_eq!(summary.failed_share(), Some(50));
+  assert_eq!(report.previous.failed_share(), Some(0));
+  assert_eq!(Summary::default().failed_share(), None);
   assert_eq!(report.previous.spent(), 4_000);
   assert_eq!(report.previous.runs, 1);
   assert_eq!(
@@ -196,6 +200,9 @@ fn usage_changes_are_more_or_less_never_good_or_bad() {
   assert_eq!(Change::between(5, 0), Change::NoBaseline);
   assert_eq!(Change::between(0, 0), Change::Same);
   assert_eq!(Change::points(None, Some(40)), None);
+  assert_eq!(Change::count(64, 55), Change::More(9));
+  assert_eq!(Change::count(3, 5), Change::Less(2));
+  assert_eq!(Change::count(0, 0), Change::Same);
 }
 
 #[test]

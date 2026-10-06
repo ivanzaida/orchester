@@ -50,6 +50,7 @@ pub struct InvocationFacts {
   pub model: Option<Arc<str>>,
   /// The agent profile's name; `None` for a command tool.
   pub profile: Option<Arc<str>>,
+  /// The step's name in the run's pinned pipeline (*Implement*).
   pub step: Arc<str>,
   pub started_at: Timestamp,
   /// `None` while it runs.

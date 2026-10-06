@@ -48,6 +48,12 @@ impl Summary {
   pub fn cache_share(&self) -> Option<u64> {
     super::percent(self.usage.cached_input, self.usage.input)
   }
+
+  /// Failed runs of all runs, in whole percent; `None` without runs.
+  pub fn failed_share(&self) -> Option<u64> {
+    let count = |count: usize| u64::try_from(count).unwrap_or(u64::MAX);
+    super::percent(count(self.failed), count(self.runs))
+  }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

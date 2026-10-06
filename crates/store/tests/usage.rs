@@ -109,7 +109,7 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   assert_eq!(read.cli, Some(AgentProvider::CodexCli));
   assert_eq!(read.model.as_deref(), Some(model().as_str()));
   assert_eq!(read.profile.as_deref(), Some("Builder"));
-  assert_eq!(&*read.step, "implement");
+  assert_eq!(&*read.step, "Implement", "the step's name, not its key");
   assert_eq!(read.index, IndexGiven::Yes);
   assert_eq!(read.edit.as_ref(), Some(&progress));
   assert_eq!(read.active_ms, u64::try_from(5 * DAY).expect("positive"));

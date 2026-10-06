@@ -83,6 +83,15 @@ impl Change {
     }
   }
 
+  /// The change of a count from `before` to `now`, in the count's own units (*9 more*).
+  pub fn count(now: u64, before: u64) -> Self {
+    match now.cmp(&before) {
+      std::cmp::Ordering::Greater => Self::More(now - before),
+      std::cmp::Ordering::Less => Self::Less(before - now),
+      std::cmp::Ordering::Equal => Self::Same,
+    }
+  }
+
   /// The change of a share from `before` to `now`, in percentage points; `None` when either share
   /// is unknown.
   pub fn points(now: Option<u64>, before: Option<u64>) -> Option<Self> {

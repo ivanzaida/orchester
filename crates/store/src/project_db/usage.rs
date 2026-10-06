@@ -74,11 +74,15 @@ impl ProjectDb {
   }
 
   fn invocations_since(&self, since: Timestamp, now: Timestamp) -> Result<Vec<InvocationFacts>, StoreError> {
+    // The step's name as the run's pinned pipeline has it, or its key when the snapshot lacks it.
     let mut statement = self.connection.prepare(&format!(
-      "SELECT invocations.id, invocations.run_id, invocations.kind, invocations.model, executions.step_key, \
+      "SELECT invocations.id, invocations.run_id, invocations.kind, invocations.model, \
+         COALESCE((SELECT json_extract(step.value, '$.name') FROM json_each(runs.snapshot, '$.body.body.steps') AS step \
+           WHERE json_extract(step.value, '$.key') = executions.step_key), executions.step_key), \
          profiles.name, connections.provider, invocations.started_at, invocations.ended_at, invocations.inactive_ms, \
          invocations.waiting_since, index_use.body, edits.body \
        FROM invocations \
+       JOIN runs ON runs.id = invocations.run_id \
        JOIN step_executions AS executions ON executions.id = invocations.step_execution_id \
        LEFT JOIN resource_versions AS versions ON versions.id = executions.profile_version_id \
        LEFT JOIN resources AS profiles ON profiles.id = versions.resource_id \
