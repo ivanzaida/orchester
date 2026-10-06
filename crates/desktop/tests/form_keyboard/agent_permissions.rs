@@ -298,7 +298,7 @@ fn agent_permissions_locked_network_switch_shows_the_network_a_run_gets() {
   ));
   // The panel agrees with the switch and says how the run gets network: without the web tools.
   assert!(shows(&mut desktop, "Network stays on · off is not enforceable"));
-  assert!(shows(&mut desktop, "web tools removed · commands keep network"));
+  assert!(shows(&mut desktop, "web tools off · commands keep network"));
   assert!(!shows(&mut desktop, "Network off"));
   assert!(switched_on(&mut desktop, "agent-network"));
   let label = desktop
@@ -499,9 +499,9 @@ fn agent_permissions_claude_asking_read_only_asks_about_every_command() {
   permissions_of(&mut desktop, "Reviewer");
   assert!(shows(&mut desktop, "edit tools off · list runs · others ask"));
   desktop.press("agent-permission-ask");
-  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(shows(&mut desktop, "--permission-prompt-tool · each command"));
   assert!(shows(&mut desktop, "edit tools off · commands ask"));
   assert!(!shows(&mut desktop, "list runs"));
   desktop.press("agent-permission-edit");
-  assert!(shows(&mut desktop, "--permission-prompt-tool · asks each command"));
+  assert!(shows(&mut desktop, "--permission-prompt-tool · each command"));
 }

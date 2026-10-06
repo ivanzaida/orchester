@@ -15,7 +15,7 @@ use orchester_core::{
     RepositoryAccess,
   },
   resource::StepKey,
-  run::{ApprovalAnswer, PendingToolApproval, Run, RunStatus, StepStatus},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, Run, RunStatus, StepStatus},
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -72,7 +72,7 @@ impl Started {
   async fn decide(&mut self, request: PendingToolApproval, answer: ApprovalAnswer) -> Run {
     self
       .scheduler
-      .decide_tool_approval(self.id, request.id, answer)
+      .decide_tool_approval(self.id, request.id, answer, Answerer::Person)
       .await
       .expect("decided");
     // A denial tells the agent, which goes on: the run settles as after an approval.
@@ -177,7 +177,7 @@ async fn claude_unlisted_expansions_and_compound_commands_ask() {
   for (brief, command) in [
     ("Run `git log $BRANCH`.", "git log $BRANCH"),
     ("Run `git status && pnpm build`.", "git status && pnpm build"),
-    ("Run `git status; rm -rf src`.", "git status; rm -rf src"),
+    ("Run `git status; rm -rf ../src`.", "git status; rm -rf ../src"),
   ] {
     let mut started = Started::new(brief, listed(RepositoryAccess::Write, &["git"])).await;
     let request = started.pending().await;
@@ -205,14 +205,28 @@ async fn claude_unlisted_file_commands_run_listed_forms_and_ask_for_others() {
     assert_eq!(started.reported("permission: "), [decision], "{brief}");
   }
   for (brief, command) in [
-    ("Run `sed -i s/hello/bye/ README.md`.", "sed -i s/hello/bye/ README.md"),
-    ("Run `rm -rf src`.", "rm -rf src"),
+    (
+      "Run `sed -i s/hello/bye/ .git/config`.",
+      "sed -i s/hello/bye/ .git/config",
+    ),
+    ("Run `rm -rf ..`.", "rm -rf .."),
   ] {
     let mut started = Started::new(brief, listed(RepositoryAccess::Write, &entries)).await;
     let request = started.pending().await;
     assert_eq!(request.action, command, "{brief}");
     started.decide(request, ApprovalAnswer::Deny).await;
   }
+  // An edit in the worktree is what the step's edit tools do unasked; Orchester answers its CLI's ask.
+  let brief = "Run `sed -i s/hello/bye/ README.md`.";
+  let mut started = Started::new(brief, listed(RepositoryAccess::Write, &entries)).await;
+  assert_eq!(started.ended().await.status(), &RunStatus::Succeeded);
+  assert!(
+    started
+      .db()
+      .pending_tool_approvals(started.id)
+      .expect("requests")
+      .is_empty()
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]

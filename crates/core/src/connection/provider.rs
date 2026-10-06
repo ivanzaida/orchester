@@ -73,10 +73,4 @@ impl AgentProvider {
   pub const fn takes_messages_mid_turn(self) -> bool {
     matches!(self, Self::CodexCli | Self::ClaudeCodeCli)
   }
-
-  /// Whether a connection to the provider can be added in this version. OpenAI Responses comes after
-  /// Anthropic's Messages API (§9, P2).
-  pub const fn can_be_added(self) -> bool {
-    !matches!(self, Self::OpenAiApi)
-  }
 }

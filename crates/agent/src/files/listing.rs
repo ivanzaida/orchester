@@ -1,6 +1,7 @@
 //! `list_files` (`docs/architecture/native-agent.md` §4.2): the files under a folder that match a glob,
 //! sorted, at most 1000. ripgrep lists them (`rg --files`), which respects `.gitignore`; without it the
-//! folder is walked.
+//! folder is walked. A caller that knows the files already (the code index's list and the worktree's
+//! changes since) has them filtered the same way instead ([`FileTools::list_known_files`]).
 
 use std::{
   path::{Path, PathBuf},
@@ -10,6 +11,7 @@ use std::{
 use orchester_core::{
   connection::stream::CallDetail,
   native::{session::ToolOutcome, tools::ListFiles},
+  orchester_tools::plain_relative,
 };
 
 use super::{
@@ -33,10 +35,26 @@ struct Found {
 
 impl FileTools {
   pub fn list_files(&self, input: &ListFiles) -> ToolOutcome {
-    outcome(self.list(input))
+    outcome(self.list(input, None))
   }
 
-  fn list(&self, input: &ListFiles) -> Result<ToolOutcome, FileError> {
+  /// `list_files` over `known`, the files the caller knows the worktree holds (relative to it, with `/`), for
+  /// a folder of the worktree; any other folder is listed as always. Each known path must be a plain relative
+  /// path that resolves in the scope as `read_file` resolves it; the others are left out, and counted.
+  pub fn list_known_files(&self, input: &ListFiles, known: &[String]) -> ToolOutcome {
+    let mut dropped = 0;
+    let known: Vec<PathBuf> = known
+      .iter()
+      .filter_map(|path| {
+        let resolved = plain_relative(path).then(|| self.scope.readable(path).ok()).flatten();
+        dropped += usize::from(resolved.is_none());
+        resolved
+      })
+      .collect();
+    outcome(self.list(input, Some((&known, dropped))))
+  }
+
+  fn list(&self, input: &ListFiles, known: Option<(&[PathBuf], usize)>) -> Result<ToolOutcome, FileError> {
     let folder = self.scope.readable(input.path().unwrap_or("."))?;
     if !folder.is_dir() {
       return Err(if folder.exists() {
@@ -45,9 +63,13 @@ impl FileTools {
         FileError::Missing(self.shown(&folder))
       });
     }
-    let found = match &self.ripgrep {
-      Some(program) => listed(program, &folder, input.pattern())?,
-      None => walked(&folder, input.pattern())?,
+    // What the caller knows covers the worktree only: the code index, the skills and the extra writable
+    // folders are listed as always.
+    let known = known.filter(|_| folder.starts_with(self.scope.worktree()));
+    let found = match (known, &self.ripgrep) {
+      (Some((known, _)), _) => filtered(known, &folder, input.pattern())?,
+      (None, Some(program)) => listed(program, &folder, input.pattern())?,
+      (None, None) => walked(&folder, input.pattern())?,
     };
     let mut shown: Vec<String> = found.paths.iter().map(|path| self.shown(path)).collect();
     shown.sort();
@@ -68,7 +90,12 @@ impl FileTools {
         "\n[truncated: {counted} files match; showing the first {MAX_ENTRIES}. Narrow the pattern or path]"
       ));
     }
-    if self.ripgrep.is_none() {
+    if let Some((_, dropped)) = known.filter(|(_, dropped)| *dropped > 0) {
+      text.push_str(&format!(
+        "\n[{dropped} entries of the code index or of git were no paths in the worktree and were left out]"
+      ));
+    }
+    if known.is_none() && self.ripgrep.is_none() {
       text.push('\n');
       text.push_str(NO_RIPGREP);
     }
@@ -118,6 +145,18 @@ fn walked(folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
     }
   }
   Ok(Found { paths, more })
+}
+
+/// The files of `known` under `folder` that exist and match `pattern`.
+fn filtered(known: &[PathBuf], folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
+  let glob = pattern.map(Glob::new).transpose()?;
+  let paths = known
+    .iter()
+    .filter(|path| path.starts_with(folder) && path.is_file())
+    .filter(|path| glob.as_ref().is_none_or(|glob| glob.matches(&relative(folder, path))))
+    .cloned()
+    .collect();
+  Ok(Found { paths, more: false })
 }
 
 /// `path` relative to `folder`, with `/` separators.

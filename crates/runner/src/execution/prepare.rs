@@ -179,6 +179,8 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
       .create(run.id(), run.branch().as_str(), run.base().as_str())
       .map_err(|error| failed("cannot create the run's worktree", &error))?;
   }
+  db.record_run_origin(run.id(), origin_push_url(root).as_deref())
+    .map_err(|error| failed("cannot record the run's origin", &error))?;
   let events = run
     .start(Timestamp::now())
     .map_err(|error| failed("cannot start the run", &error))?;
@@ -247,6 +249,19 @@ pub(super) fn existing_worktree(root: &Path, run: RunId) -> Result<PathBuf, Reje
 fn preflight_failed(problem: PreflightProblem) -> Rejection {
   Rejection::Preflight {
     problems: vec![problem],
+  }
+}
+
+/// Where a push to `origin` goes as the run starts, which a push auto mode reviews must still go to;
+/// `None` when the repository has no `origin` or git cannot tell, and then every push asks the person.
+fn origin_push_url(root: &Path) -> Option<String> {
+  match Git::new(root).attempt(&["remote", "get-url", "--push", "origin"]) {
+    Ok(Ok(url)) => Some(url.trim().to_owned()).filter(|url| !url.is_empty()),
+    Ok(Err(_)) => None,
+    Err(error) => {
+      tracing::warn!(%error, "cannot read the push URL of origin");
+      None
+    }
   }
 }
 

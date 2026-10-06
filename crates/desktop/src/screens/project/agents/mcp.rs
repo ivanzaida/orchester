@@ -273,7 +273,7 @@ fn app_server_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
     row(
       Icon::CircleCheck,
       &ctx.t("agents.permissions.toolApprovals"),
-      &ctx.t("runs.toolApproval.scope"),
+      &ctx.t("agents.permissions.enforcement.mcp.codexCallsAskHow"),
     )
   } else {
     row(
@@ -286,7 +286,7 @@ fn app_server_enforcement(ctx: &Ctx, tool_approvals: bool) -> Vec<Element> {
     row(
       Icon::CircleCheck,
       &ctx.t("agents.permissions.enforcement.mcp.codexChosen"),
-      &ctx.t("agents.permissions.transport"),
+      &ctx.t("agents.permissions.enforcement.mcp.codexChosenHow"),
     ),
     approvals,
     row(

@@ -5,13 +5,16 @@
 //! requests were answered. The desktop writes the run's choice and revokes rules; the runner reads both
 //! at each request, so a change applies from the next one.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
-  resource::AgentProfile,
-  run::{ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves},
-  store::ResourceStore,
+  resource::{AgentProfile, ModelId},
+  run::{
+    ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves,
+    review::{ReviewerUnavailable, resolve_reviewer},
+  },
+  store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
@@ -42,6 +45,8 @@ pub enum RunApprovalChange {
   AutoApprove(bool),
   /// Revoke a rule of Approve similar: its requests ask again from the next one.
   Revoke(ApprovalRuleId),
+  /// Use auto mode for the run's requests, or stop.
+  AutoMode(bool),
 }
 
 impl lurq::app::component::DevtoolsInspectable for RunApprovalChange {}
@@ -53,7 +58,55 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
     RunApprovalChange::AutoApprove(chosen) => db.set_run_auto_approve(run, Some(chosen)),
     // A rule revoked already, or one of Always allow, stays as it is.
     RunApprovalChange::Revoke(rule) => db.revoke_approval_rule(run, rule, Timestamp::now()).map(|_| ()),
+    RunApprovalChange::AutoMode(on) => db.set_run_auto_mode(run, on),
   }
+}
+
+/// The reviewer of a project's auto mode, as the app names it: the connection and the model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReviewerShown {
+  pub connection: Arc<str>,
+  pub model: ModelId,
+  pub effort: Option<String>,
+}
+
+/// The project's reviewer, or why auto mode has none.
+pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnavailable>, StoreError> {
+  let settings = db.auto_mode_settings()?;
+  let connections = db.connections()?;
+  Ok(resolve_reviewer(&settings, &connections).map(|resolved| ReviewerShown {
+    connection: resolved.connection.name().as_str().into(),
+    model: resolved.model,
+    effort: resolved.effort,
+  }))
+}
+
+/// Why auto mode has no reviewer, as the app says it.
+pub const fn unavailable_key(why: ReviewerUnavailable) -> &'static str {
+  match why {
+    ReviewerUnavailable::NoConnection => "runs.autoMode.unavailable.noConnection",
+    ReviewerUnavailable::ConnectionGone => "runs.autoMode.unavailable.connectionGone",
+    ReviewerUnavailable::Unsupported => "runs.autoMode.unavailable.unsupported",
+    ReviewerUnavailable::NoModel => "runs.autoMode.unavailable.noModel",
+  }
+}
+
+/// A run's auto mode, and the project's reviewer or why it has none.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutoModeState {
+  pub on: bool,
+  pub reviewer: Result<ReviewerShown, ReviewerUnavailable>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for AutoModeState {}
+
+/// [`AutoModeState`] of run `run` of the project at `repo_root`.
+pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, StoreError> {
+  let db = ProjectDb::open(repo_root)?;
+  Ok(AutoModeState {
+    on: db.run_auto_mode(run)?,
+    reviewer: reviewer_of(&db)?,
+  })
 }
 
 /// What a run keeps of its approvals.

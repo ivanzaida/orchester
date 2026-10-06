@@ -13,7 +13,7 @@ use orchester_core::{
   resource::StepKey,
   run::{RunLimit, TaskPhase},
   store::TaskStore,
-  task::{MissingDetail, Task, TaskDetails},
+  task::{MissingDetail, Task, TaskDetails, TaskStatus, organization::WorkflowStatus},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -386,6 +386,32 @@ fn task_page_run_recorded_running_lost_its_agent_without_a_runner() {
   let settled = TaskDetail::load_in(fixture.repo.path(), done).expect("read the task");
   assert_eq!(settled.phase(), TaskPhase::Succeeded);
   assert!(!settled.lost_its_runner(false));
+}
+
+/// `tasks.status` stays queued after the run ends (it only says the task was submitted); the task
+/// list, its tabs and the Queued count read where the task stands from its run, as its page does.
+#[test]
+fn task_list_shows_a_queued_task_whose_run_finished_as_ready_for_review() {
+  let mut fixture = support::Fixture::new();
+  let task = fixture.queued_task("Add login", support::at(10));
+  let mut run = fixture.started_run(task, support::at(20));
+  fixture.succeed(&mut run, support::at(30));
+  let stored = fixture.db.task(task).expect("read the task").expect("the task exists");
+  assert_eq!(stored.status(), TaskStatus::Queued);
+
+  let loaded = ProjectTasks::load(fixture.repo.path()).expect("load the project's tasks");
+  let rows = list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, TaskTab::InReview);
+  assert_eq!(rows.len(), 1);
+  assert_eq!(rows[0].id, task);
+  assert_eq!(rows[0].organization.status(), WorkflowStatus::InReview);
+  assert_eq!(rows[0].phase, Some(TaskPhase::Succeeded));
+  assert_eq!(rows[0].detail.key, "tasks.progress.succeeded");
+  for tab in [TaskTab::Todo, TaskTab::InProgress, TaskTab::NeedsYou] {
+    assert!(list::rows(&loaded.tasks, &loaded.pipelines, &loaded.phases, tab).is_empty());
+  }
+  assert_eq!(list::queued(&loaded.tasks, &loaded.phases), 0);
+  let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("read the task");
+  assert_eq!(detail.phase(), TaskPhase::Succeeded);
 }
 
 /// A run cancelled before its first attempt reads back into the task list and the task page: the

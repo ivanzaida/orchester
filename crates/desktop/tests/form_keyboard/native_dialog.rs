@@ -1,8 +1,8 @@
 //! Adding and editing a native connection (04.H1 `Byo8K`, H1B `h2OUr`, H3 `KGciR`) and its models
-//! (04.H6 `zHowy`): the four kinds, the Official preset with the others unavailable, the key secret
+//! (04.H6 `zHowy`): the four kinds, the Official preset with the others unavailable on both APIs, the key secret
 //! picked or created with the connection, models added by hand with their default model and effort,
-//! provider fallback, why the form cannot save, and the models dialog. Key values here are fake, and
-//! the keychain is the harness's one in memory.
+//! provider fallback, why the form cannot save, and the models dialog; the OpenAI kind in
+//! [`super::native_openai_dialog`]. Key values here are fake, and the keychain is the harness's one in memory.
 
 use std::path::Path;
 
@@ -21,13 +21,13 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::Desktop,
-  native_connections::{NativeSeed, key_secret, model, native_connection, open_connections, profile, seeded},
+  native_connections::{NativeSeed, key_secret, model, native_connection, open_connections, profile},
   task_run::has,
 };
 
-const DIALOG: &str = "connection-dialog";
+pub(crate) const DIALOG: &str = "connection-dialog";
 const REASON: &str = "connection-save-reason";
-const KEY_VALUE: &str = "fake-key-Q7x2";
+pub(crate) const KEY_VALUE: &str = "fake-key-Q7x2";
 
 pub(crate) fn add_native(desktop: &mut Desktop) {
   desktop.wait_for("nav-connections");
@@ -66,11 +66,11 @@ pub(crate) fn choose(desktop: &mut Desktop, id: &str, label: &str) {
 }
 
 /// Whether the action bar says why the connection cannot be saved.
-fn has_reason(desktop: &mut Desktop) -> bool {
+pub(crate) fn has_reason(desktop: &mut Desktop) -> bool {
   desktop.tree.get_element_by_id(REASON).is_some()
 }
 
-fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&str]) {
+pub(crate) fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&str]) {
   desktop.click("model-add");
   desktop.wait_for("model-editor");
   set(desktop, "model-id", id);
@@ -83,7 +83,7 @@ fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&
   desktop.wait_for(&format!("model-row-{id}"));
 }
 
-fn whole_screen_shows(desktop: &mut Desktop, text: &str) -> bool {
+pub(crate) fn whole_screen_shows(desktop: &mut Desktop, text: &str) -> bool {
   desktop.tree.root().is_some_and(|root| contains_text(root, text))
 }
 
@@ -103,13 +103,10 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
   ] {
     assert!(shows(&mut desktop, kind, title), "{title}");
   }
-  assert!(whole_screen_shows(
+  assert!(!whole_screen_shows(
     &mut desktop,
-    "OpenAI API connections come in a later version of Orchester."
+    "come in a later version of Orchester."
   ));
-  // The OpenAI card cannot be chosen: pressing it changes nothing.
-  desktop.press("connection-kind-openai");
-  assert!(!has(&mut desktop, "native-preset"));
   desktop.press("connection-kind-anthropic");
   desktop.wait_for("native-preset");
   assert_eq!(desktop.value("connection-name"), "Anthropic API · Kontur");
@@ -159,7 +156,7 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
 }
 
 /// Tab goes through the native form's controls in the order they read and stays in the dialog;
-/// what cannot be used (the OpenAI kind, DeepSeek and Custom, Test again, Fetch models) is no stop.
+/// what cannot be used (DeepSeek and Custom, Test again, Fetch models) is no stop.
 #[test]
 fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
   let mut desktop = Desktop::with_project_named("Kontur");
@@ -172,6 +169,7 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
     "connection-kind-codex",
     "connection-kind-claude",
     "connection-kind-anthropic",
+    "connection-kind-openai",
     "native-preset-official",
     "native-url-advanced",
     "native-key-select",
@@ -187,7 +185,6 @@ fn native_dialog_tab_reaches_its_controls_in_order_and_stays_in_the_dialog() {
     assert!(order.contains(&stop.as_str()), "Tab left the dialog for {stop}");
   }
   for never in [
-    "connection-kind-openai",
     "native-preset-deepseek",
     "native-preset-custom",
     "native-test-again",
@@ -339,32 +336,6 @@ fn native_form_says_why_it_cannot_save() {
     shows(desktop, "native-test", "The project’s runner is not connected")
   });
   assert!(shows(&mut desktop, "native-test", "Not checked"));
-}
-
-/// Orchester does not run OpenAI API agents yet: the dialog's Test again and Fetch models stay
-/// unavailable and say why, and pressing them reaches no runner.
-#[test]
-fn native_dialog_keeps_testing_an_openai_connection_unavailable() {
-  let (mut desktop, ..) = seeded(AgentProvider::OpenAiApi);
-  open_connections(&mut desktop);
-  desktop.click("edit-connection");
-  desktop.wait_for("native-preset");
-  let unavailable = "Testing an OpenAI API connection comes with its agent runs in a later version.";
-  assert!(shows(&mut desktop, "native-test", unavailable));
-  assert!(shows(
-    &mut desktop,
-    DIALOG,
-    "Fetching models from an OpenAI API endpoint comes with its agent runs in a later version."
-  ));
-  assert!(!whole_screen_shows(&mut desktop, "Fetching tests the connection"));
-  desktop.press("native-test-again");
-  desktop.press("native-fetch-models");
-  assert!(shows(&mut desktop, "native-test", unavailable));
-  assert!(!shows(
-    &mut desktop,
-    "native-test",
-    "The project’s runner is not connected"
-  ));
 }
 
 /// A custom gateway with two models added by hand, the default one used by a Planner profile.

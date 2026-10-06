@@ -1,7 +1,10 @@
 //! What `orchester-fake-claude` does with `--permission-prompt-tool`, as Claude Code does: it finds
 //! the named tool's server among the `--mcp-config` files, starts it, speaks MCP to it on its
 //! standard input and output, and calls the tool with `{tool_name, input, tool_use_id}` whenever it
-//! wants to use a tool no rule allows. The decision is the `behavior` of the text the tool returns.
+//! wants to use a tool no rule allows. The decision is the `behavior` of the text the tool returns. The
+//! same client calls the other tools of a server (Orchester's tools, for both fake CLIs).
+
+#![allow(dead_code, reason = "shared by both fake CLIs; the fake Codex calls tools only")]
 
 use std::{
   fs,
@@ -40,21 +43,7 @@ impl Prompt {
     for (name, value) in config.get("env")?.as_object()? {
       command.env(name, value.as_str()?);
     }
-    let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().ok()?;
-    let input = child.stdin.take()?;
-    let output = BufReader::new(child.stdout.take()?);
-    let mut prompt = Self {
-      child,
-      input,
-      output,
-      tool,
-      next: 0,
-    };
-    prompt.request(
-      "initialize",
-      &json!({"protocolVersion": "2025-06-18", "capabilities": {}}),
-    )?;
-    prompt.send(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}))?;
+    let mut prompt = Self::start(command, &tool)?;
     let tools = prompt.request("tools/list", &json!({}))?;
     let listed = tools["tools"]
       .as_array()?
@@ -73,6 +62,43 @@ impl Prompt {
     let decision: Value = serde_json::from_str(text).ok()?;
     let message = decision.get("message").and_then(Value::as_str).unwrap_or_default();
     Some((decision.get("behavior")?.as_str()?.to_owned(), message.to_owned()))
+  }
+
+  /// The server `command` starts, initialized; `tool` is the tool [`Self::ask`] calls.
+  pub fn start(mut command: Command, tool: &str) -> Option<Self> {
+    let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().ok()?;
+    let input = child.stdin.take()?;
+    let output = BufReader::new(child.stdout.take()?);
+    let mut server = Self {
+      child,
+      input,
+      output,
+      tool: tool.to_owned(),
+      next: 0,
+    };
+    server.request(
+      "initialize",
+      &json!({"protocolVersion": "2025-06-18", "capabilities": {}}),
+    )?;
+    server.send(&json!({"jsonrpc": "2.0", "method": "notifications/initialized"}))?;
+    Some(server)
+  }
+
+  /// The names of the tools the server lists.
+  pub fn list(&mut self) -> Option<Vec<String>> {
+    let tools = self.request("tools/list", &json!({}))?;
+    tools["tools"]
+      .as_array()?
+      .iter()
+      .map(|tool| tool["name"].as_str().map(str::to_owned))
+      .collect()
+  }
+
+  /// The text and error flag of a call of the server's tool `name` with `arguments`.
+  pub fn call(&mut self, name: &str, arguments: &Value) -> Option<(String, bool)> {
+    let result = self.request("tools/call", &json!({"name": name, "arguments": arguments}))?;
+    let text = result.pointer("/content/0/text")?.as_str()?.to_owned();
+    Some((text, result["isError"].as_bool().unwrap_or(false)))
   }
 
   fn request(&mut self, method: &str, params: &Value) -> Option<Value> {
@@ -119,6 +145,15 @@ impl Prompt {
   /// Sends a call for `tool` without waiting for its answer, then ends the server once `release`
   /// exists: a relay that goes away while a person decides.
   pub fn leave_while_waiting(mut self, tool: &str, input: &Value, call: &str, release: &std::path::Path) {
+    self.send_call(tool, input, call);
+    while !release.exists() {
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+  }
+
+  /// Sends a call for `tool` and never reads its answer, as Claude Code does with a call it gave up
+  /// on: the server stays started and keeps waiting for the runner.
+  pub fn send_call(&mut self, tool: &str, input: &Value, call: &str) {
     let arguments = json!({"tool_name": tool, "input": input, "tool_use_id": call});
     let name = self.tool.clone();
     self.next += 1;
@@ -126,9 +161,6 @@ impl Prompt {
       "params": {"name": name, "arguments": arguments}});
     if self.send(&request).is_none() {
       eprintln!("cannot send the call");
-    }
-    while !release.exists() {
-      std::thread::sleep(std::time::Duration::from_millis(50));
     }
   }
 }

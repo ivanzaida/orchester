@@ -104,7 +104,8 @@ fn claude_args(tool_approvals: bool, config: &ClaudeMcpConfig) -> Vec<String> {
   .collect()
 }
 
-/// The values after `--allowedTools`, up to the next option.
+/// The values after `--allowedTools`, up to the next option, but the rules of Orchester's own tools
+/// (`claude_invocation`).
 fn allowed(args: &[String]) -> Vec<&str> {
   let Some(start) = args.iter().position(|arg| arg == "--allowedTools") else {
     return Vec::new();
@@ -113,6 +114,7 @@ fn allowed(args: &[String]) -> Vec<&str> {
     .iter()
     .take_while(|arg| !arg.starts_with("--"))
     .map(String::as_str)
+    .filter(|rule| !rule.starts_with("mcp__Orchester__"))
     .collect()
 }
 

@@ -31,8 +31,11 @@ Workspace layout:
   own directory (inside `Orchester.app` both are in `Contents/MacOS`). Run the app with
   `powershell -File tools/run.ps1` (extra arguments go to `cargo run`, e.g. `--features devtools`); plain
   `cargo run -p orchester-desktop` does not build the runner, and the app then shows the runner as unable to start.
-  Every build includes the embedded MCP server (loopback, free port, token in the per-user discovery file; see
-  `docs/stable-build.md`, "Embedded MCP server"); the status bar shows its port.
+  Every build runs two loopback MCP servers (free port, token in a per-user discovery file; see
+  `docs/stable-build.md`): Orchester's domain server (`%LOCALAPPDATA%\orchester-mcp\<pid>.json`; tasks, runs,
+  approvals, pipelines; the status bar shows its port) for controlling the app, and lurq's UI server
+  (`%LOCALAPPDATA%\lurq\mcp\<pid>.json`) for screenshots and the element tree, which only reads in release builds
+  and also drives the UI in debug builds (design verification).
   On macOS: `cargo build -p orchester-runner && cargo run -p orchester-desktop`; `tools/package-macos.sh` builds
   `Orchester.app` and `tools/install-macos.sh` installs it (`docs/stable-build.md`).
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,

@@ -24,13 +24,14 @@ use lurq::{
 };
 use orchester_core::{
   id::TaskId,
-  run::{ApprovalAnswer, PendingToolApproval, SimilarUnavailable, ToolApprovalDecision},
+  run::{ApprovalAnswer, DecidedBy, PendingToolApproval, SimilarUnavailable, ToolApprovalDecision},
 };
 
 use super::{
   super::{
     approval_arguments::ArgumentsCache,
     approval_value::ValueRows,
+    review_note::{review_line, reviewing_line},
     tool_approval::{
       Decision as ApprovalDecision, DecisionAction, Unanswered, always_blocked, chip,
       decision_action as approval_decision, quiet_reason, similar_unavailable,
@@ -46,7 +47,10 @@ use crate::{
     approvals::{AlwaysBlocked, ShownApproval},
     timeline::ApprovalCard,
   },
-  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography},
+  theme::{
+    CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT, CONVERSATION_ANSWERS_ROW_MIN_CHAT, DISABLED_OPACITY, ExtraSpacing,
+    ExtraTypography,
+  },
   ui::{
     button::ActionButton,
     category_chip::category_chip,
@@ -65,7 +69,34 @@ const ANSWER_HEIGHT: f32 = 30.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ApprovalCardProps {
   pub(super) card: ApprovalCard,
+  pub(super) answers: AnswersLayout,
 }
+
+/// How a card lays out its answers in the chat's width; no answer ever shrinks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AnswersLayout {
+  /// *Always allow…* at the left, the buttons at the right (`KpZxA`).
+  OneLine,
+  /// *Always allow…* on a line of its own, the buttons on one line under it at the right.
+  AlwaysAbove,
+  /// *Always allow…*, then each button on a row of its own, full width.
+  Stacked,
+}
+
+impl AnswersLayout {
+  /// The layout for a chat column `chat` wide.
+  pub(super) fn for_chat(chat: f32) -> Self {
+    if chat >= CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT {
+      Self::OneLine
+    } else if chat >= CONVERSATION_ANSWERS_ROW_MIN_CHAT {
+      Self::AlwaysAbove
+    } else {
+      Self::Stacked
+    }
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for AnswersLayout {}
 
 impl lurq::app::component::DevtoolsInspectable for ApprovalCardProps {}
 
@@ -136,19 +167,28 @@ impl Component for ApprovalCardView {
         ("time", display::clock(request.requested_at).as_str()),
       ],
     );
+    let (shown, reviewing) = shown_request(ctx, &request.id);
     let state = match props.card.decided {
       None if ended => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
       None if answered => (Icon::Check, ctx.t("runs.conversation.card.answered")),
+      None if reviewing => (Icon::Bot, ctx.t("runs.conversation.card.reviewing")),
       None => (Icon::Hand, ctx.t("runs.conversation.card.waitingAnswer")),
-      Some(Some(ToolApprovalDecision::Approved)) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
-      Some(Some(ToolApprovalDecision::Denied)) => (Icon::X, ctx.t("runs.conversation.card.denied")),
+      Some(Some(decision)) => answered_state(ctx, decision, props.card.decided_by),
       Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
     };
-    let shown = shown_request(ctx, &request.id);
     let mut body = self.request_body(ctx, request, shown.as_ref());
+    let review = props
+      .card
+      .review
+      .as_ref()
+      .or_else(|| shown.as_ref().and_then(|shown| shown.review.as_ref()));
+    body.extend(review.map(|review| review_line(ctx, format!("conversation-approval-review-{}", request.id), review)));
+    body.extend(
+      (reviewing && waiting).then(|| reviewing_line(ctx, format!("conversation-approval-reviewing-{}", request.id))),
+    );
     if waiting {
       let queue = ctx.use_context::<ApprovalQueue>();
-      body.push(self.answers(ctx, (&props.card, shown.as_ref()), &action, queue));
+      body.push(self.answers(ctx, (&props.card, shown.as_ref(), props.answers), &action, queue));
     }
     let card = frame(
       format!("conversation-approval-{}", request.id),
@@ -204,6 +244,24 @@ impl ApprovalCardView {
   }
 }
 
+/// An answered request's state: who answered when Orchester's profile or automation did, in the words
+/// of the run's Approvals; a person's answer reads plain *Approved* or *Denied*.
+fn answered_state(ctx: &Ctx, decision: ToolApprovalDecision, by: Option<DecidedBy>) -> (Icon, Arc<str>) {
+  let key = match (decision, by) {
+    (ToolApprovalDecision::Approved, Some(DecidedBy::Permissions)) => "runs.summary.approvals.byProfile",
+    (ToolApprovalDecision::Approved, Some(DecidedBy::Automation)) => "runs.summary.approvals.byAutomation",
+    (ToolApprovalDecision::Approved, Some(DecidedBy::Reviewer)) => "runs.summary.approvals.byReviewer",
+    (ToolApprovalDecision::Approved, _) => "runs.conversation.card.approved",
+    (ToolApprovalDecision::Denied, Some(DecidedBy::AutomationDeny)) => "runs.summary.approvals.deniedByAutomation",
+    (ToolApprovalDecision::Denied, _) => "runs.conversation.card.denied",
+  };
+  let glyph = match decision {
+    ToolApprovalDecision::Approved => Icon::Check,
+    ToolApprovalDecision::Denied => Icon::X,
+  };
+  (glyph, ctx.t(key))
+}
+
 /// The line over the request's box: a command's chip and why it asks (the dialog's), or the MCP
 /// server's chip and the tool.
 fn heading(ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApproval>) -> Element {
@@ -232,15 +290,20 @@ fn heading(ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApprova
   row.into()
 }
 
-/// The request with its choices, as the project's waiting requests know it.
-fn shown_request(ctx: &mut Ctx, id: &str) -> Option<ShownApproval> {
-  let shown = ctx.use_context::<Shown>()?;
-  let tasks = shown.tasks.ready()?;
-  tasks
-    .pending_tool_approvals
-    .iter()
-    .find(|pending| pending.approval.id == id)
-    .cloned()
+/// The request with its choices, as the project's waiting requests know it, and whether auto mode's
+/// reviewer is still judging it (the person may decide all the same).
+fn shown_request(ctx: &mut Ctx, id: &str) -> (Option<ShownApproval>, bool) {
+  let Some(tasks) = ctx
+    .use_context::<Shown>()
+    .and_then(|shown| shown.tasks.ready().cloned())
+  else {
+    return (None, false);
+  };
+  let find = |list: &[ShownApproval]| list.iter().find(|pending| pending.approval.id == id).cloned();
+  match find(&tasks.reviewing_tool_approvals) {
+    Some(reviewing) => (Some(reviewing), true),
+    None => (find(&tasks.pending_tool_approvals), false),
+  }
 }
 
 impl CardAnswer {
@@ -308,11 +371,11 @@ impl Offers {
 }
 
 impl ApprovalCardView {
-  /// The row of answers, why one is unavailable, and why an answer was not carried out.
+  /// The answers as `layout` places them, why one is unavailable, and why an answer was not carried out.
   fn answers(
     &self,
     ctx: &Ctx,
-    (card, shown): (&ApprovalCard, Option<&ShownApproval>),
+    (card, shown, layout): (&ApprovalCard, Option<&ShownApproval>, AnswersLayout),
     action: &DecisionAction,
     queue: Option<ApprovalQueue>,
   ) -> Element {
@@ -320,29 +383,49 @@ impl ApprovalCardView {
     let busy = state.is_pending() || state.data.is_some();
     let offers = Offers::of(shown);
     let task = shown.and_then(|shown| shown.task_id);
-    let button = |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action, task), (answer, busy, offered));
+    let stacked = layout == AnswersLayout::Stacked;
+    let button =
+      |answer: CardAnswer, offered: bool| self.answer(ctx, (card, action, task), (answer, busy, offered), stacked);
     let always = queue.filter(|_| matches!(offers.always, Some(Ok(()))) && !busy);
-    let row = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(always_action(ctx, &card.request.id, card.request.command, always))
-      .child(Spacer::new().flex(1.0))
-      .child(button(CardAnswer::Deny, true))
-      .child(button(CardAnswer::Similar, matches!(offers.similar, Some(Ok(())))))
-      .child(button(CardAnswer::Once, true));
+    let always = always_action(ctx, &card.request.id, card.request.command, always);
+    let buttons = [
+      button(CardAnswer::Deny, true),
+      button(CardAnswer::Similar, matches!(offers.similar, Some(Ok(())))),
+      button(CardAnswer::Once, true),
+    ];
+    let line = |first: Option<Element>| {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(first)
+        .child(Spacer::new().flex(1.0))
+        .with_children(buttons.clone())
+        .into()
+    };
+    let lines: Vec<Element> = match layout {
+      AnswersLayout::OneLine => vec![line(Some(always))],
+      AnswersLayout::AlwaysAbove => vec![always, line(None)],
+      AnswersLayout::Stacked => std::iter::once(always).chain(buttons.clone()).collect(),
+    };
+    let reason = offers.reason(ctx).map(|reason| {
+      let text = Text::new(&reason)
+        .id("conversation-approval-unavailable")
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0));
+      // On one line beside the answers; a narrow card wraps it rather than cut it.
+      if layout == AnswersLayout::OneLine {
+        text.nowrap().text_overflow(TextOverflow::Elipsis)
+      } else {
+        text
+      }
+    });
     Column::new()
+      .id("conversation-approval-answers")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(row)
-      .with_children(offers.reason(ctx).map(|reason| {
-        Text::new(&reason)
-          .id("conversation-approval-unavailable")
-          .variant(TypographyStyle::Caption)
-          .nowrap()
-          .text_overflow(TextOverflow::Elipsis)
-          .width(Dimension::Pct(100.0))
-      }))
+      .with_children(lines)
+      .with_children(reason)
       .with_children(
         state
           .error
@@ -360,6 +443,7 @@ impl ApprovalCardView {
     ctx: &Ctx,
     (card, action, task): (&ApprovalCard, &DecisionAction, Option<TaskId>),
     (answer, busy, offered): (CardAnswer, bool, bool),
+    full_width: bool,
   ) -> Element {
     let (id, glyph, idle, under_way) = answer.look();
     let label = ctx.t(if busy && self.requested.get() == Some(answer) {
@@ -383,6 +467,7 @@ impl ApprovalCardView {
     } else {
       button
     };
+    let button = if full_width { button.fill_width() } else { button };
     button.render(ctx)
   }
 }

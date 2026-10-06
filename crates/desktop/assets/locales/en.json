@@ -256,7 +256,8 @@
       "reason": {
         "quitNow": "Stopped with the app",
         "crashed": "Orchester stopped unexpectedly",
-        "runnerLost": "The runner stopped unexpectedly"
+        "runnerLost": "The runner stopped unexpectedly",
+        "runnerFailed": "The runner could not record the run"
       },
       "checkpointSaved": "Saved {{time}}",
       "noCheckpoint": "No checkpoint yet",
@@ -1290,6 +1291,12 @@
         "alwaysAllowed": "Always allowed",
         "autoApproved": "Auto-approved",
         "denied": "Denied by you",
+        "byProfile": "Allowed by the profile",
+        "byAutomation": "Approved by automation",
+        "deniedByAutomation": "Denied by automation",
+        "byReviewer": "Approved by auto mode",
+        "askedByReviewer": "Auto mode asked you",
+        "reviewing": "Auto mode is reviewing",
         "waiting": "Waiting",
         "similarTitle": "Approved as similar in this run",
         "alwaysTitle": "Always allowed during this run",
@@ -1406,6 +1413,10 @@
         "bySimilarRule": "Approved by a similar rule · {{command}}",
         "alwaysAllowed": "Always allowed · {{command}}",
         "autoApproved": "Auto-approved · {{command}}",
+        "allowedByProfile": "Allowed by the profile · {{command}}",
+        "approvedByAutomation": "Approved by automation · {{command}}",
+        "deniedByAutomation": "Denied by automation · the agent continues",
+        "approvedByAutoMode": "Approved by auto mode · {{command}}",
         "once": "approve once",
         "similar": "approve similar",
         "always": "always allow",
@@ -1427,6 +1438,11 @@
         "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
         "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
         "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
+        "decisionInterrupted": "Request ended without your decision",
+        "decisionInterruptedDetail": "{{request}}\nThe agent CLI’s permission prompt or tool relay closed while this request waited for your decision. Nothing was approved, and the request can no longer be answered.",
+        "showRequest": "Show the request  →",
+        "runnerFailed": "The runner could not record this run, so it was interrupted",
+        "runnerFailedDetail": "Nothing after the last checkpoint counts as done. Continue the run from it, or cancel it.\n{{detail}}",
         "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
         "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
         "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
@@ -1552,7 +1568,7 @@
         "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
         "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
         "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
-        "withMeta": "{{meta}} · {{mark}}",
+        "afterMeta": "· {{mark}}",
         "tool": "{{server}} {{tool}}",
         "aCommand": "command",
         "approvedByYouOnce": "approved by you · {{subject}}",
@@ -1560,9 +1576,13 @@
         "approvedAlwaysAdded": "approved by you · {{subject}} · always allowed",
         "approvedRunAdded": "approved by you · {{subject}} · auto-approving this run",
         "deniedByYou": "denied by you · the agent continued",
+        "approvedByAutomation": "approved by automation · {{subject}}",
+        "deniedByAutomation": "denied by automation · the agent continued",
+        "approvedByAutoMode": "approved by auto mode · {{subject}}",
         "bySimilarRule": "approved by similar rule · {{subject}}",
         "alwaysAllowed": "always allowed · {{subject}}",
         "autoApproved": "auto-approved · {{subject}}",
+        "permissions": "allowed by the profile · {{subject}}",
         "told": "Told the agent: {{message}}",
         "category": {
           "readOnly": "Read-only",
@@ -1745,6 +1765,7 @@
         "listFull": "The profile lists as many commands as a profile can.",
         "toolName": "This tool’s name can’t be listed: a listed name has only letters, digits, - and _.",
         "missing": "The step’s profile or the server can no longer be read.",
+        "orchesterTool": "Orchester’s own tools have no list of tools that run without asking yet. Approve similar covers this run.",
         "similarUnknown": "Unavailable: Orchester can’t tell which later commands would be alike.",
         "alwaysUnknown": "Unavailable for an Unknown command."
       },
@@ -1803,6 +1824,15 @@
       },
       "notAwaited": "This tool action no longer waits for a decision.",
       "answeredAlready": "This request was answered already.",
+      "automationWider": "Automation only approves a request once or denies it; the wider answers are yours.",
+      "personOnly": {
+        "unknown": "Only a person can approve this request: part of the command cannot be read to the end. Automation may deny it.",
+        "destructive": "Only a person can approve this request: it rewrites or discards history, or deletes outside the temporary folder. Automation may deny it.",
+        "outsideWrite": "Only a person can approve this request: it writes outside the worktree and its writable folders. Automation may deny it.",
+        "secrets": "Only a person can approve this request: it reads a credential location. Automation may deny it.",
+        "installs": "Only a person can approve this request: it installs software or packages. Automation may deny it.",
+        "network": "Only a person can approve this request: it reaches the network. Automation may deny it."
+      },
       "endedNotice": "The previous request ended without an answer: its agent is no longer waiting.",
       "commandTitle": "Approve command?",
       "policyExplanation": {
@@ -2186,11 +2216,15 @@
         "commandDenied": "Command denied",
         "kind": {
           "permissionDenied": "permission_denied",
-          "deniedByYou": "denied by you"
+          "deniedByYou": "denied by you",
+          "deniedByAutomation": "denied by automation",
+          "decisionInterrupted": "decision_interrupted"
         },
         "notAllowed": "{{command}} did not run: this run’s permissions do not allow it. The agent was told and continued without it.",
         "deniedByYou": "{{command}} did not run: you denied it. The agent was told and continued.",
-        "deniedByYouTold": "{{command}} did not run: you denied it and told the agent: {{message}}"
+        "deniedByYouTold": "{{command}} did not run: you denied it and told the agent: {{message}}",
+        "deniedByAutomation": "{{command}} did not run: automation denied it through Orchester’s MCP server. The agent was told and continued.",
+        "deniedByAutomationTold": "{{command}} did not run: automation denied it through Orchester’s MCP server and told the agent: {{message}}"
       },
       "editInComposer": "Edit in composer",
       "line": {
@@ -2284,7 +2318,8 @@
         "approveStarts": "Approves plan v{{version}} and starts {{agent}} on {{step}}. To change it, describe what it needs below.",
         "approveStartsTool": "Approves plan v{{version}} and starts {{step}}. To change it, describe what it needs below.",
         "approveLast": "Approves plan v{{version}}; no step follows it. To change it, describe what it needs below.",
-        "answerBelow": "Answer in the box below. {{agent}} waits for you; waiting does not count toward the run’s time limit."
+        "answerBelow": "Answer in the box below. {{agent}} waits for you; waiting does not count toward the run’s time limit.",
+        "reviewing": "Auto mode is reviewing"
       },
       "result": {
         "passed": "{{step}} passed",
@@ -2455,6 +2490,46 @@
         "nowMeta": "{{agent}} gets it at its next tool call",
         "afterTurnMeta": "Waits until {{agent}} finishes its turn"
       }
+    },
+    "autoMode": {
+      "switch": "Auto mode",
+      "explanation": "A separate reviewer model answers the requests the rules leave to you, and approves only those that clearly serve the task and step. Credential reads, anything outside the step’s permissions, and whatever the reviewer is unsure of still ask you, with its reason. It is not “approve everything”.",
+      "unavailable": {
+        "noConnection": "Auto mode needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
+        "connectionGone": "The reviewer connection chosen in Project settings is gone. Choose another there.",
+        "unsupported": "The reviewer connection chosen in Project settings cannot review yet (the OpenAI API). Choose another there.",
+        "noModel": "The reviewer connection lists no model. Check it under Connections, or choose a model in Project settings."
+      },
+      "reviewedBy": "Reviewed by {{model}} on {{connection}}.",
+      "reviewedByWithEffort": "Reviewed by {{model}} ({{effort}} effort) on {{connection}}.",
+      "popoverSwitch": "Use auto mode in this run",
+      "popoverExplanation": "A separate reviewer model answers the requests the rules leave to you. Whatever it is unsure of, and anything outside the step’s permissions, still asks you.",
+      "savesAtOnce": "Saves at once for the whole run; Apply and Cancel do not change it.",
+      "note": {
+        "approved": "Auto mode:",
+        "asked": "Auto mode asked you:",
+        "held": {
+          "secrets": "Auto mode left this to you: it reads a credential location.",
+          "unreadable": "Auto mode left this to you: Orchester could not read all of it, and the step’s network is off or it only reads.",
+          "destructive": "Auto mode left this to you: it rewrites history or deletes outside the worktree.",
+          "push": "Auto mode left this to you: it pushes something other than the run’s branch to origin, or forces the push.",
+          "readOnlyStep": "Auto mode left this to you: the step only reads the repository, and this may write.",
+          "networkOff": "Auto mode left this to you: the step’s network is off, and this may reach it.",
+          "outsideFolders": "Auto mode left this to you: it writes outside the worktree and the step’s writable folders.",
+          "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded.",
+          "tooLong": "Auto mode left this to you: the request is too long to review.",
+          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox.",
+          "projectProgram": "Auto mode left this to you: it runs a project program outside every sandbox."
+        },
+        "failed": {
+          "timedOut": "Auto mode asked you: its reviewer did not answer in time.",
+          "unreadable": "Auto mode asked you: its reviewer’s answer could not be read.",
+          "couldNotRun": "Auto mode asked you: its reviewer could not run.",
+          "noReviewer": "Auto mode asked you: the project has no reviewer to review with."
+        },
+        "quoted": "“{{reason}}”"
+      },
+      "reviewing": "Auto mode is reviewing this request. It asks you only if the reviewer does; you can decide now."
     }
   },
   "conversation": {
@@ -2905,6 +2980,8 @@
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
           "codexChosen": "Only the chosen MCP servers run",
+          "codexChosenHow": "App Server · user’s own servers off",
+          "codexCallsAskHow": "App Server · each call",
           "codexDenied": "not asked · the call fails",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
@@ -2914,17 +2991,17 @@
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
           "claudeCallsAsk": "Each tool call waits for your decision",
-          "claudeCallsAskHow": "--permission-prompt-tool · one call each",
+          "claudeCallsAskHow": "--permission-prompt-tool · each call",
           "exempt": {
             "one": "{{server}}: 1 tool runs without asking",
             "other": "{{server}}: {{count}} tools run without asking"
           },
-          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool> · other tools ask",
-          "exemptCodexHow": "tools.<tool>.approval_mode = approve · other tools ask",
+          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool>",
+          "exemptCodexHow": "tools.<tool>.approval_mode = approve",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
-          "noneLoadHow": "none can start here · user’s own ignored"
+          "noneLoadHow": "none starts here · user’s own ignored"
         },
         "repositoryFiles": {
           "off": "Repository agent files off · enforced",
@@ -2956,9 +3033,9 @@
           "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
-        "claudeWebToolsRemoved": "web tools removed · commands keep network",
-        "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "claudeWebToolsRemoved": "web tools off · commands keep network",
+        "claudeAddDir": "--add-dir · edit tools, not commands",
+        "claudePermissionPrompt": "--permission-prompt-tool · each command",
         "nativeWriteToolsWithheld": "write tools withheld · reads stay in the worktree",
         "nativeFileScope": "file tools · worktree only, .git protected",
         "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
@@ -3148,8 +3225,7 @@
       "claudeDetail": "Runs the claude program, signed in on this computer.",
       "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
       "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
-      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
-      "notYet": "OpenAI API connections come in a later version of Orchester."
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules."
     },
     "native": {
       "row": "{{provider}} · {{preset}} · {{host}}",
@@ -3173,7 +3249,7 @@
         "presetHint": "Set by the preset. Prompts, repository content and command output are sent to {{host}}. Change it under Advanced.",
         "hint": "https://, or http:// for localhost, 127.0.0.1 or [::1]. Shown in full wherever the connection is.",
         "wireMessages": "Wire format · Anthropic Messages",
-        "wireResponses": "Wire format · OpenAI Responses",
+        "wireResponses": "Wire format · OpenAI Responses · stateless, store off",
         "blank": "Enter the base URL.",
         "scheme": "Use https://, or http:// for localhost, 127.0.0.1 or [::1].",
         "host": "Enter a valid host and port.",
@@ -3188,7 +3264,10 @@
         "option": "{{name}} ({{environment}})",
         "new": "New secret…",
         "name": "Secret name",
-        "namePlaceholder": "ANTHROPIC_API_KEY",
+        "namePlaceholder": {
+          "anthropic": "ANTHROPIC_API_KEY",
+          "openai": "OPENAI_API_KEY"
+        },
         "value": "Value",
         "environment": "Environment",
         "newLabel": "API key · new project secret",
@@ -3854,6 +3933,22 @@
     },
     "sharing": {
       "description": "Name, folder, limits, environment, and where the task list lives."
+    },
+    "autoMode": {
+      "section": "Auto mode",
+      "newRunsName": "New runs use auto mode",
+      "newRunsDescription": "A separate reviewer model answers the requests the rules leave to you, approving only those that clearly serve the task; the rest still ask you, with its reason. Each run can turn it on or off in its Approvals.",
+      "on": "On",
+      "off": "Off",
+      "reviewerName": "Reviewer",
+      "reviewerDescription": "The agent connection, model and effort that review requests. Until you choose, the first Claude Code connection reviews with Haiku 4.5.",
+      "defaultConnection": "Default · {{connection}}",
+      "defaultNone": "Default · no connection can review",
+      "cannotReview": {
+        "unsupported": "Can’t review yet: no reviewer runs on this kind of connection.",
+        "noModel": "Can’t review yet: its check listed no model."
+      },
+      "removedConnection": "A removed connection"
     }
   },
   "servers": {
@@ -5326,6 +5421,16 @@
       }
     }
   },
+  "appMcp": {
+    "title": "Orchester MCP server",
+    "explanation": "Automation controls projects, tasks, runs and approvals here, with the app’s own rules. Clients read the access token from orchester-mcp/{{pid}}.json in your application data folder (Local AppData on Windows, Application Support on macOS).",
+    "answerApprovals": "Let automation answer approvals",
+    "answerApprovalsNote": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
+    "errors": {
+      "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
+    }
+  },
   "statusBar": {
     "planLimits": {
       "claudeFull": "Claude Code",
@@ -5472,8 +5577,9 @@
       "tokensUnknown": "Reading today’s token usage",
       "debugBuild": "Orchester {{version}} · development build",
       "releaseBuild": "Orchester {{version}} · release build",
-      "mcp": "Agents can drive this window over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, lurq/mcp/{{pid}}.json in your local app data folder.",
-      "mcpUnavailable": "The MCP server did not start, so agents cannot drive this window. The app log has the reason."
+      "mcp": "Automation controls Orchester over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, orchester-mcp/{{pid}}.json in your application data folder (Local AppData on Windows, Application Support on macOS). The window itself is inspected over MCP at {{window}}. Click for the server’s settings.",
+      "mcpWithoutWindow": "Automation controls Orchester over MCP at {{endpoint}}. Clients read the access token from this process’s discovery file, orchester-mcp/{{pid}}.json in your application data folder (Local AppData on Windows, Application Support on macOS). The window’s own MCP server did not start. Click for the server’s settings.",
+      "mcpUnavailable": "Orchester’s MCP server did not start, so automation cannot control the app. The app log has the reason."
     },
     "mcp": {
       "label": "MCP",

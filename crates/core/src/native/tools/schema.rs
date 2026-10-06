@@ -100,6 +100,11 @@ impl ToolSet {
     Self(tools.collect())
   }
 
+  /// No tools: a request that only asks for an answer (auto mode's review).
+  pub const fn none() -> Self {
+    Self(Vec::new())
+  }
+
   pub fn tools(&self) -> &[ToolName] {
     &self.0
   }

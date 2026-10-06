@@ -17,6 +17,7 @@ pub mod view;
 use std::sync::Arc;
 
 use orchester_core::{
+  connection::stream::RunnerProblem,
   id::StepExecutionId,
   integration::RunMerge,
   run::{DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
@@ -101,6 +102,10 @@ pub struct ApprovalCard {
   pub step: Arc<str>,
   /// `None` while it waits; `Some(None)` when it was interrupted.
   pub decided: Option<Option<orchester_core::run::ToolApprovalDecision>>,
+  /// Who answered it, once it is answered and that was recorded.
+  pub decided_by: Option<orchester_core::run::DecidedBy>,
+  /// What auto mode did with it, once it is answered; while it waits, the shown request says.
+  pub review: Option<orchester_core::run::review::Review>,
 }
 
 /// How a step execution ended, as its result card says.
@@ -378,25 +383,57 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .pending
     .iter()
     .filter(|request| request.execution == execution)
-    .map(|request| (request.clone(), None));
+    .map(|request| (request.clone(), None, None, None));
   let decided = sources
     .decided
     .iter()
     .filter(|decided| decided.request.execution == execution)
-    .map(|decided| (decided.request.clone(), Some(decided.decision)));
+    .map(|decided| {
+      (
+        decided.request.clone(),
+        Some(decided.decision),
+        decided.decided_by,
+        decided.review.clone(),
+      )
+    });
   pending
     .chain(decided)
-    .map(|(request, decided)| Item {
-      key: format!("approval-{}", request.id).into(),
+    .map(|(request, decided, decided_by, review)| Item {
+      key: approval_key(&request.id),
       execution: Some(execution),
       at: request.requested_at,
       kind: ItemKind::Approval(ApprovalCard {
         step: step.clone(),
         request,
         decided,
+        decided_by,
+        review,
       }),
     })
     .collect()
+}
+
+/// The key of the card of tool request `id`.
+fn approval_key(id: &str) -> Arc<str> {
+  format!("approval-{id}").into()
+}
+
+/// The key of the card of the tool request problem `entry` names: one that ended without a decision.
+pub fn named_request(entry: &Entry) -> Option<Arc<str>> {
+  match &entry.kind {
+    EntryKind::Problem(RunnerProblem::DecisionInterrupted { request, .. }) => Some(approval_key(request)),
+    _ => None,
+  }
+}
+
+/// The key of the step whose items hold the item `key` among `items`; `None` when there is no such
+/// item, or it belongs to no step.
+pub fn step_of(items: &[Item], key: &str) -> Option<Arc<str>> {
+  let execution = items.iter().find(|item| *item.key == *key)?.execution?;
+  items
+    .iter()
+    .find(|item| matches!(item.kind, ItemKind::Step(_)) && item.execution == Some(execution))
+    .map(|item| item.key.clone())
 }
 
 /// The result card of `execution` once it passed or failed, with what its transcript among `entries`

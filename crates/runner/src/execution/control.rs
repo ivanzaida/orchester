@@ -3,7 +3,7 @@
 
 use orchester_core::{
   id::ResourceId,
-  run::{ApprovalAnswer, InterruptCause},
+  run::{Answerer, ApprovalAnswer, InterruptCause},
 };
 use orchester_ipc::Rejection;
 use tokio::sync::oneshot;
@@ -28,6 +28,7 @@ pub(super) enum Control {
   DecideToolApproval {
     approval: String,
     answer: ApprovalAnswer,
+    by: Answerer,
     ack: Ack,
   },
   /// People's messages were stored; answered at once, delivered at the next boundary.

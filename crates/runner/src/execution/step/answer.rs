@@ -1,6 +1,7 @@
 //! How a request is answered (`orchester_core::run::ApprovalAnswer`, "Approval choices and waiting
 //! requests"): Orchester answers it itself when its server lists the tool to run without asking since
-//! the agent started (Always allow), a rule of the run covers it (Approve similar, or a command Always
+//! the agent started (Always allow), the step's own permissions run every part of the command on its
+//! own (`orchester_core::run::permitted`), a rule of the run covers it (Approve similar, or a command Always
 //! allowed during the run), or the run auto-approves and the request is not one auto-approval leaves to
 //! a person. Otherwise a person answers, and a wider answer first leaves what it promises: a rule, a
 //! profile version or a server setting, or the run's auto-approval. Each answer is recorded with who
@@ -10,11 +11,12 @@
 use orchester_core::{
   connection::{mcp::InvocationExemptions, stream::AgentEvent},
   native::session::DENIED,
+  orchester_tools::auto_approvable,
   permission::category::CommandCategory,
   run::{
-    ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, DecidedBy, PendingToolApproval, RuleScope,
-    ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves, auto_verdict, codex_denial,
-    denial_message,
+    Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
+    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves,
+    auto_verdict, codex_denial, denial_message, permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -37,16 +39,19 @@ pub(super) struct Settled {
   /// A command that reads a credential location, which its mark names; only a person answers one.
   pub(super) secrets: bool,
   pub(super) told: Option<String>,
+  /// What auto mode did with the request before it was answered.
+  pub(super) review: Option<Review>,
 }
 
 impl Settled {
-  const fn by(decided_by: DecidedBy, category: Option<CommandCategory>) -> Self {
+  pub(super) const fn by(decided_by: DecidedBy, category: Option<CommandCategory>) -> Self {
     Self {
       decided_by,
       rule: None,
       category,
       secrets: false,
       told: None,
+      review: None,
     }
   }
 }
@@ -62,6 +67,11 @@ impl Worker {
     let category = category_of(&subject);
     if self.listed_since_start(watch, approval)? {
       return Ok(Some(Settled::by(DecidedBy::AlwaysAllowed, None)));
+    }
+    if let Some(launch) = &watch.invocation.permissions
+      && let Some(category) = permitted(&subject, launch.permissions())
+    {
+      return Ok(Some(Settled::by(DecidedBy::Permissions, Some(category))));
     }
     let rules = watch.db.approval_rules(approval.run)?;
     if let Some(rule) = answering(&rules, &subject) {
@@ -81,6 +91,7 @@ impl Worker {
       .as_ref()
       .is_some_and(|launch| launch.permissions().auto_approve());
     if auto_approves(watch.db.run_auto_approve(approval.run)?, profile)
+      && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(&subject)
     {
       return Ok(Some(Settled::by(DecidedBy::AutoApproved, category)));
@@ -109,18 +120,24 @@ impl Worker {
     })
   }
 
-  /// Leaves what a person's `answer` promises beyond this request, and returns how the request itself
-  /// is answered; a rejection when the answer is not available for it.
+  /// Leaves what `answer`, given `by` a person or automation, promises beyond this request, and returns
+  /// how the request itself is answered; a rejection when the answer is not available for it.
   pub(super) fn widen(
     &self,
     watch: &mut Watch,
     approval: &PendingToolApproval,
-    answer: &ApprovalAnswer,
+    (answer, by): (&ApprovalAnswer, Answerer),
   ) -> Result<Result<Settled, Rejection>, StoreError> {
     let subject = ApprovalSubject::of(approval, &self.scope);
+    let decided_by = match answer.given_by(by, &subject) {
+      Ok(decided_by) => decided_by,
+      Err(AutomationAnswerError::Wider) => return Ok(Err(Rejection::AutomationWider)),
+      Err(AutomationAnswerError::PersonOnly(ask)) => return Ok(Err(Rejection::PersonOnly { ask })),
+    };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
-      ..Settled::by(answer.decided_by(), category_of(&subject))
+      review: watch.db.tool_approval_review(approval.run, &approval.id)?,
+      ..Settled::by(decided_by, category_of(&subject))
     };
     let now = Timestamp::now();
     match answer {
@@ -131,7 +148,7 @@ impl Worker {
         let told = match self.app_server() {
           Some(_) => codex_denial(approval.command).to_owned(),
           None if self.is_native() => DENIED.to_owned(),
-          None => denial_message(approval),
+          None => denial_message(approval, by),
         };
         return Ok(Ok(Settled {
           told: Some(told),
@@ -202,6 +219,8 @@ impl Worker {
     settled: Settled,
   ) -> Result<Result<(), Rejection>, StoreError> {
     let run = approval.run;
+    // A review still under way is no longer wanted: dropping it stops the reviewer.
+    self.reviewing = None;
     if !watch
       .db
       .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
@@ -211,7 +230,7 @@ impl Worker {
     if let Some(rule) = settled.rule {
       watch.db.rule_answered(run, rule, &approval.id)?;
     }
-    if settled.decided_by.by_person() {
+    if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
     }
     let item = awaiting.item().to_owned();
@@ -260,6 +279,7 @@ impl Worker {
         .decided_by
         .by_person()
         .then(|| u64::try_from(waited).unwrap_or(0)),
+      review: settled.review,
     };
     self.observe(
       watch,

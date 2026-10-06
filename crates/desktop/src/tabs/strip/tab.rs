@@ -220,11 +220,9 @@ fn close_button(view: &TabView, handlers: Option<&TabHandlers>) -> Element {
   );
   button
     .cursor(CursorIcon::Pointer)
-    // Neither the tab's drag nor the window's starts on the close button.
-    .on_mouse_down(|event: MouseEvent| {
-      event.prevent_default();
-      event.stop_propagation();
-    })
+    // The window's drag does not start on the close button, the tab's does: its default stays, so a
+    // press moved off it drags the tab like a press anywhere else on it, and only a click closes.
+    .on_mouse_down(|event: MouseEvent| event.stop_propagation())
     .on_click(move |event: MouseEvent| {
       event.stop_propagation();
       close();

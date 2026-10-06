@@ -9,7 +9,9 @@ use orchester_ipc::SessionEnd;
 
 use crate::{
   activity::Activity,
+  app_mcp::{AppMcp, AppMcpSetup, AppMcpStatus, Services},
   background,
+  clock::Clock,
   close::Lifecycle,
   embedded_mcp::McpStatus,
   messages::{self, Message},
@@ -27,6 +29,7 @@ use crate::{
     restore::{self, Opening},
     window::{LEADING_WIDTH, Window, WindowProps, chrome, leading},
   },
+  tasks::outside::OutsideChanges,
   theme::ExtraColor,
   ui::{icon::Icon, message_text, panel::RecoveryPanel},
   workspace::Workspace,
@@ -49,6 +52,8 @@ pub enum Startup {
     previous_end: SessionEnd,
     /// When this session started.
     session_start: Timestamp,
+    /// The time live values are shown at.
+    clock: Clock,
   },
   /// The application database cannot be used; `path` is the file involved, if known.
   Failed { message: Message, path: Option<String> },
@@ -56,11 +61,13 @@ pub enum Startup {
 
 impl lurq::app::component::DevtoolsInspectable for Startup {}
 
-/// What `main` hands the window: how startup went and whether the embedded MCP server listens.
+/// What `main` hands the window: how startup went, whether lurq's embedded MCP server listens, and
+/// whether to start Orchester's own MCP server.
 #[derive(Clone, PartialEq)]
 pub struct RootProps {
   pub startup: Startup,
   pub mcp: McpStatus,
+  pub app_mcp: AppMcpSetup,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RootProps {}
@@ -71,6 +78,8 @@ pub struct Root {
   /// The shared servers' connection monitor and the shared projects' heartbeat and sync, tasks of
   /// the application's runtime that wake on their own timers; they end with the window.
   background: Vec<tokio::task::JoinHandle<()>>,
+  /// Orchester's own MCP server, when it started; held so it stops with the window.
+  _app_mcp: Option<AppMcp>,
 }
 
 impl Drop for Root {
@@ -85,8 +94,10 @@ impl Component for Root {
   type Props = RootProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let RootProps { startup, mcp } = ctx.props::<RootProps>().clone();
+    let RootProps { startup, mcp, app_mcp } = ctx.props::<RootProps>().clone();
     ctx.provide(mcp);
+    let changes = OutsideChanges::default();
+    ctx.provide(changes.clone());
     // Without a session nothing reports activity; the status bar still shows the version.
     let activity = match &startup {
       Startup::Ready { activity, .. } => activity.clone(),
@@ -99,15 +110,18 @@ impl Component for Root {
       lifecycle,
       programs,
       vault,
+      clock,
       ..
     } = startup
     else {
+      ctx.provide(AppMcpStatus::Unavailable);
       return Self {
         places: None,
         background: Vec::new(),
+        _app_mcp: None,
       };
     };
-    let servers = Servers::new(workspace, vault.clone());
+    let servers = Servers::new(workspace.clone(), vault.clone());
     let background = vec![
       lifecycle.runtime().spawn(sharing::monitor(servers.clone())),
       lifecycle.runtime().spawn(sharing::project::work::run(
@@ -115,9 +129,23 @@ impl Component for Root {
         lifecycle.runners().run_changes(),
       )),
     ];
+    let services = Services::new(
+      workspace.clone(),
+      lifecycle.runners().clone(),
+      servers.clone(),
+      programs.clone(),
+      changes,
+    );
+    let app_mcp = match app_mcp {
+      AppMcpSetup::On(folder) => AppMcp::start(&folder, services, (lifecycle.runtime(), ctx.i18n().clone())),
+      AppMcpSetup::Off => None,
+    };
+    ctx.provide(app_mcp.as_ref().map_or(AppMcpStatus::Unavailable, AppMcp::status));
     ctx.provide(ServerFeed::new(servers));
+    ctx.provide(workspace);
     ctx.provide(programs);
     ctx.provide(vault);
+    ctx.provide(clock);
     ctx.provide(SessionZooms::default());
     let close = lifecycle.clone();
     ctx
@@ -128,6 +156,7 @@ impl Component for Root {
     Self {
       places: Some(Places::default()),
       background,
+      _app_mcp: app_mcp,
     }
   }
 

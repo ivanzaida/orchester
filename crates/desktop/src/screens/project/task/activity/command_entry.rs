@@ -34,16 +34,13 @@ pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       (Icon::Terminal, meta, None)
     }
   };
-  let meta = match &entry.mark {
-    Some(mark) => mcp_call::with_mark(ctx, &meta, mark),
-    None => meta,
-  };
   // A person's Deny: what the agent was told says why the command did not run.
   let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
   Shown {
     glyph,
     title: preview_title(&entry.command),
     meta,
+    mark: entry.mark.as_ref().map(|mark| mcp_call::mark_text(ctx, mark)),
     body,
     mono_body: false,
     output: Some(entry.output.lines().map(Arc::from).collect()),
@@ -75,6 +72,7 @@ pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
     glyph: Icon::Terminal,
     title: preview_title(&entry.command),
     meta,
+    mark: None,
     body: None,
     mono_body: false,
     output: Some(entry.output.lines().map(Arc::from).collect()),

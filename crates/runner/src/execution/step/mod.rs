@@ -12,9 +12,12 @@ mod end;
 mod mcp;
 mod memory;
 mod native;
+mod orchester_tools;
+mod relay;
 mod skills;
 mod start;
 mod stderr;
+mod tool_files;
 pub(super) mod worker;
 
 use std::path::{Path, PathBuf};
@@ -311,6 +314,7 @@ impl RunTask {
       driver,
       mcp_file,
       claude_approvals,
+      tool_relay,
       interactive,
       steered: takes_steers,
     } = driven;
@@ -325,11 +329,17 @@ impl RunTask {
       stops: stopped,
       mcp_file,
       claude_approvals,
+      tool_relay,
       secrets,
       agent,
       task: self.task.id(),
       decisions,
       steers: steered,
+      reviewing: None,
+      reviewer_keys: worker::ReviewerKeys {
+        vault: self.vault.clone(),
+        project: self.project.id(),
+      },
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the

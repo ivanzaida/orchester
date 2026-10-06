@@ -3,10 +3,10 @@
 //! too), a permission denial marks the command it denied, each file of a file change is an entry of
 //! its own (it opens the file in the Changes tab), consecutive unparsed lines become one collapsed
 //! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
-//! of its own (Codex, which reports no command for it), and a failed turn
-//! that repeats the error before it is not shown twice. Session and turn starts carry no text of their own; the
-//! invocation panel shows the session. A native agent's calls read as rows of their tools ([`native`]).
-//! Nothing else is left out.
+//! of its own (Codex, which reports no command for it), and a failed turn that repeats the error before
+//! it, or comes right after the request a closed permission prompt interrupted, is not shown twice. Session and turn
+//! starts carry no text of their own; the invocation panel shows the session. A native agent's calls read as rows of
+//! their tools ([`native`]). Nothing else is left out.
 
 mod native;
 
@@ -18,7 +18,7 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, FileChange, NativeCall, OutputStream, RunnerProblem, ToolCommandResult},
   },
   id::{InvocationId, StepExecutionId},
-  run::{ActivityEntry, DecidedBy, TokenUsage, ToolDecision},
+  run::{ActivityEntry, TokenUsage, ToolDecision},
   time::Timestamp,
 };
 
@@ -72,9 +72,9 @@ pub enum CommandMark {
 }
 
 impl CommandMark {
-  /// A person denied the request: the row stays open and shows what the agent was told.
+  /// A person or automation denied the request: the row stays open and shows what the agent was told.
   pub fn is_denial(&self) -> bool {
-    matches!(self, Self::Decided(mark) if mark.decision.decided_by == DecidedBy::PersonDeny)
+    matches!(self, Self::Decided(mark) if !mark.decision.decided_by.approves())
   }
 }
 
@@ -196,7 +196,10 @@ impl Early {
 pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
   let mut entries: Vec<Entry> = Vec::new();
   let mut early = Early::default();
+  // The invocation whose request a closed prompt interrupted, for the one event right after it.
+  let mut interrupted: Option<InvocationId> = None;
   for stored in activity {
+    let explains = interrupted.take() == Some(stored.invocation);
     let entry = |kind| Entry {
       sequence: stored.sequence,
       part: 0,
@@ -235,10 +238,10 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       }
       AgentEvent::TurnCompleted { usage } => entries.push(entry(EntryKind::Usage(*usage))),
       AgentEvent::Error { message } => entries.push(entry(EntryKind::Error(message.as_str().into()))),
+      // The runner records the failed turn right after the request it interrupted, which says why.
+      AgentEvent::TurnFailed { .. } if explains => {}
       AgentEvent::TurnFailed { message } => {
-        let repeated = matches!(entries.last(), Some(Entry { kind: EntryKind::Error(previous), invocation, .. })
-          if **previous == **message && *invocation == stored.invocation);
-        if !repeated {
+        if !repeats(entries.last(), stored, message) {
           entries.push(entry(EntryKind::Error(message.as_str().into())));
         }
       }
@@ -246,7 +249,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
         deny_command(&mut entries, &mut early, stored, (item, command));
       }
       AgentEvent::NotSignedIn { message } => entries.push(entry(EntryKind::NotSignedIn(message.as_str().into()))),
-      AgentEvent::RunnerProblem { problem } => entries.push(entry(EntryKind::Problem(problem.clone()))),
+      AgentEvent::RunnerProblem { problem } => interrupted = push_problem(&mut entries, stored, problem),
       AgentEvent::McpServer { server, problem } => entries.push(entry(EntryKind::McpServer(
         server.as_deref().map(Arc::from),
         problem.clone(),
@@ -273,6 +276,26 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
     }
   }
   native::approvals_apart(entries)
+}
+
+/// Adds the entry of runner problem `problem`; the invocation whose request it names as interrupted, if it
+/// does.
+fn push_problem(entries: &mut Vec<Entry>, stored: &ActivityEntry, problem: &RunnerProblem) -> Option<InvocationId> {
+  entries.push(Entry {
+    sequence: stored.sequence,
+    part: 0,
+    execution: stored.execution,
+    invocation: stored.invocation,
+    at: stored.at,
+    kind: EntryKind::Problem(problem.clone()),
+  });
+  matches!(problem, RunnerProblem::DecisionInterrupted { .. }).then_some(stored.invocation)
+}
+
+/// Whether `last` is the error a failed turn of the same invocation repeats.
+fn repeats(last: Option<&Entry>, stored: &ActivityEntry, message: &str) -> bool {
+  matches!(last, Some(Entry { kind: EntryKind::Error(previous), invocation, .. })
+    if **previous == *message && *invocation == stored.invocation)
 }
 
 /// Marks the command of a call nobody was asked about, or adds an entry for the call when no command

@@ -8,6 +8,7 @@
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
 //! object) exists only on Windows.
 
+mod ask;
 mod check;
 mod connection;
 mod lifetime;
@@ -28,11 +29,8 @@ use std::{
   time::{Duration, SystemTime},
 };
 
-use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
-  integration::Leftovers,
-};
-use orchester_ipc::{AttachSession, Command, RefusedRun, Rejection, Reply, SessionEnd, WorkState};
+use orchester_core::id::RunId;
+use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch};
 
@@ -57,9 +55,6 @@ pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
 /// time, so this is also how many runs execute at once. There is no setting for it yet (the
 /// application `settings` in `docs/architecture/storage.md`); this is the default until there is.
 pub const AGENT_SLOTS: NonZeroU32 = NonZeroU32::new(4).expect("four is above zero");
-
-/// How long continuing interrupted runs waits for a project's runner to come online.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How asking the runners to stop ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -335,142 +330,6 @@ impl Runners {
   /// Changes whenever a runner reports what it works on, or its state changes.
   pub fn work_changes(&self) -> watch::Receiver<u64> {
     self.inner.shared.work.subscribe()
-  }
-
-  /// Asks the displayed project's runner to start a run of queued task `task`. Idempotent by
-  /// `key`: retrying after a lost reply answers with the run the first request created.
-  pub async fn start_run(&self, key: IdempotencyKey, task: TaskId) -> Result<RunId, RunRequestError> {
-    match self
-      .ask(self.displayed().as_deref(), Command::StartRun { key, task })
-      .await?
-    {
-      Reply::RunStarted { run } => Ok(run),
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to StartRun");
-        Err(RunRequestError::Request(RequestError::Lost))
-      }
-    }
-  }
-
-  /// Asks the displayed project's runner to start the next run of task `task` after its latest
-  /// run `after` failed or was cancelled (Run again), removing `remove_worktrees`, what `after`
-  /// left, first. Idempotent by `key`, like [`Runners::start_run`].
-  pub async fn run_again(
-    &self,
-    key: IdempotencyKey,
-    task: TaskId,
-    after: RunId,
-    remove_worktrees: Option<Leftovers>,
-  ) -> Result<RunId, RunRequestError> {
-    let command = Command::RunAgain {
-      key,
-      task,
-      after,
-      remove_worktrees,
-    };
-    match self.ask(self.displayed().as_deref(), command).await? {
-      Reply::RunStarted { run } => Ok(run),
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to RunAgain");
-        Err(RunRequestError::Request(RequestError::Lost))
-      }
-    }
-  }
-
-  /// Asks the displayed project's runner to pause, resume or cancel a run, or to raise its
-  /// limits (`command`); returns once the runner has carried it out.
-  pub async fn control_run(&self, command: Command) -> Result<(), RunRequestError> {
-    match self.ask(self.displayed().as_deref(), command).await? {
-      Reply::Accepted { .. } => Ok(()),
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to a run control request");
-        Err(RunRequestError::Request(RequestError::Lost))
-      }
-    }
-  }
-
-  /// Asks the displayed project's runner to continue interrupted run `run` from its last
-  /// checkpoint; returns once it runs again.
-  pub async fn continue_run(&self, run: RunId) -> Result<(), RunRequestError> {
-    let command = Command::ContinueRuns { runs: vec![run] };
-    match self.ask(self.displayed().as_deref(), command).await? {
-      Reply::Continued { refused, .. } => match refused.into_iter().next() {
-        Some(refused) => Err(RunRequestError::Rejected(refused.rejection)),
-        None => Ok(()),
-      },
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to ContinueRuns");
-        Err(RunRequestError::Request(RequestError::Lost))
-      }
-    }
-  }
-
-  /// Continues interrupted runs `runs` of project `root` from their last checkpoints, starting
-  /// its runner (named `name`) if needed and waiting for it to attach.
-  pub async fn continue_runs(&self, root: &Path, name: &str, runs: Vec<RunId>) -> Result<Continued, RunRequestError> {
-    self.ensure(root, name);
-    // A project no tab shows keeps its runner for the runs it continues, then lets it stop.
-    let _pin = self.pin(root);
-    self.linger_untabbed();
-    self.attached(root).await?;
-    match self.ask(Some(root), Command::ContinueRuns { runs }).await? {
-      Reply::Continued { continued, refused } => Ok(Continued { continued, refused }),
-      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
-      other => {
-        tracing::error!(?other, "unexpected reply to ContinueRuns");
-        Err(RunRequestError::Request(RequestError::Lost))
-      }
-    }
-  }
-
-  /// Waits until the runner of `root` has attached (it reported its work), or gave up.
-  async fn attached(&self, root: &Path) -> Result<(), RequestError> {
-    let Some(mut updates) = self
-      .inner
-      .projects
-      .lock()
-      .get(root)
-      .map(|entry| entry.status.subscribe())
-    else {
-      return Err(RequestError::NotConnected);
-    };
-    let ready = async {
-      loop {
-        {
-          let status = updates.borrow_and_update();
-          match status.state() {
-            RunnerState::Online if status.work().is_some() => return Ok(()),
-            RunnerState::Failed { .. } | RunnerState::Stopped => return Err(RequestError::NotConnected),
-            _ => {}
-          }
-        }
-        if updates.changed().await.is_err() {
-          return Err(RequestError::NotConnected);
-        }
-      }
-    };
-    tokio::time::timeout(CONNECT_TIMEOUT, ready)
-      .await
-      .unwrap_or(Err(RequestError::NotConnected))
-  }
-
-  async fn ask(&self, root: Option<&Path>, command: Command) -> Result<Reply, RequestError> {
-    let answer = {
-      let projects = self.inner.projects.lock();
-      match root
-        .and_then(|root| projects.get(root))
-        .and_then(|entry| entry.connection.as_ref())
-      {
-        Some(connection) => connection.request(command),
-        None => return Err(RequestError::NotConnected),
-      }
-    };
-    // The task ended without answering, e.g. when the runner stopped meanwhile.
-    answer.await.unwrap_or(Err(RequestError::Lost))
   }
 
   /// Work that closing would interrupt: every run with an agent at work, across the projects'

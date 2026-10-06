@@ -24,11 +24,12 @@ use super::{
 };
 use crate::{
   instructions::data::{InstructionEntry, ProjectInstructions},
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     backdrop::backdrop,
     button::ActionButton,
     command_row::Copied,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     pressable::{Ring, keyboard_stop},
     status_label::topbar_status_label,
@@ -68,23 +69,34 @@ impl InstructionEditor {
         ("event", &*copy::event_label(ctx, composition.event())),
       ],
     );
+    // The sources scroll beside the gutter; the rest keeps out of it.
     let navigator = Column::new()
       .width(Dimension::Px(NAVIGATOR_WIDTH))
       .height(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)
+      .padding_right(beside_gutter(ctx, SpacingSize::Md))
       .spacing(ExtraSpacing::Tight.role())
       .background(PaletteColor::SurfacePanel)
       .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(self.context_selectors(ctx, catalog, &resolved, live))
-      .child(
+      .child(clear_of_gutter(self.context_selectors(ctx, catalog, &resolved, live)))
+      .child(clear_of_gutter(
         Text::new(&ctx.t_args(
           "instructions.viewer.sourceCount",
           [("count", composition.sections().len().to_string().as_str())],
         ))
         .variant(ExtraTypography::Overline.role()),
+      ))
+      .child(
+        ScrollVertical::new(self.navigator_rows(ctx, &composition, resolved.pipeline_name()))
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar()),
       )
-      .child(ScrollVertical::new(self.navigator_rows(ctx, &composition, resolved.pipeline_name())).flex(1.0))
-      .with_children(excluded(ctx, &composition, &self.context.data));
+      .with_children(
+        excluded(ctx, &composition, &self.context.data)
+          .into_iter()
+          .map(clear_of_gutter),
+      );
     let dialog = Column::new()
       .id("instruction-viewer")
       .width(Dimension::Px(DIALOG_WIDTH))

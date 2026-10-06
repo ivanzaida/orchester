@@ -213,7 +213,8 @@ fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: O
     })
     .map(|view| view.key.as_str())
     .collect();
-  let attempt_rows: Vec<_> = progress(run, false, Timestamp::now())
+  let now = Timestamp::now();
+  let attempt_rows: Vec<_> = progress(run, false, now)
     .into_iter()
     .filter(|row| executed.contains(&&*row.id))
     .collect();
@@ -221,7 +222,7 @@ fn evidence(ctx: &Ctx, run: &RunView, (step, broke): (&StepKey, bool), reason: O
     .spacing(ExtraSpacing::Form.role())
     .child(with_reason(notice.into(), reason))
     .child(Text::new(&latest).variant(ExtraTypography::Subheading.role()))
-    .child(rows(ctx, &attempt_rows, ExtraSpacing::Form.role()))
+    .child(rows(ctx, &attempt_rows, ExtraSpacing::Form.role(), now))
     .with_children(excerpt(ctx, run, step))
     .child(
       ActionButton::new(ctx.t("runs.retryLimit.openReport"))

@@ -1,20 +1,24 @@
 //! The fake model server (`docs/architecture/native-agent.md` §8, layer 2): a tokio listener on
-//! `127.0.0.1:0` that answers scripted turns over plain HTTP/1.1, one request per connection.
+//! `127.0.0.1:0` that answers scripted turns over plain HTTP/1.1, one request per connection, in either
+//! wire format ([`Wire`]). The `anthropic_wire` and `responses_wire` tests share it.
 //!
-//! It checks what the design requires of every conversation: each Messages request's `system` and
-//! `tools` are the same JSON text as the previous request's, and the previous request's messages are a
-//! prefix of its own, message by message (append-only history), unless the turn says the history may
-//! change. It echoes the
-//! cache: a `cache_read_input_tokens` of `"echo"` in a scripted `message_start` becomes the size of the
-//! prefix shared with the previous request. `GET /v1/models` and `GET /v1/models/{id}` are answered from
-//! a model catalog unless a scripted turn is waiting for that path.
+//! It checks what the design requires of every conversation: each model request's frozen fields
+//! (`system` and `tools`, or `instructions` and `tools`) are the same JSON text as the previous
+//! request's, and the previous request's history (`messages`, or `input`) is a prefix of its own, entry
+//! by entry (append-only history), unless the turn says the history may change. It echoes the cache: a
+//! cache read of `"echo"` in a scripted event (`message.usage.cache_read_input_tokens`, or
+//! `response.usage.input_tokens_details.cached_tokens`) becomes the size of the prefix shared with the
+//! previous request. `GET /v1/models` and `GET /v1/models/{id}` are answered from a model catalog unless
+//! a scripted turn is waiting for that path.
+
+mod script;
+mod wire;
 
 use std::{
   collections::VecDeque,
   net::SocketAddr,
   panic::{self, AssertUnwindSafe},
   sync::Arc,
-  time::Duration,
 };
 
 use parking_lot::Mutex;
@@ -23,6 +27,12 @@ use tokio::{
   io::{AsyncReadExt, AsyncWriteExt},
   net::{TcpListener, TcpStream},
   task::JoinHandle,
+};
+
+use self::script::{Reply, Route, Turn};
+pub use self::{
+  script::{Part, Script},
+  wire::Wire,
 };
 
 /// One request as the server got it.
@@ -48,108 +58,14 @@ impl Recorded {
   }
 }
 
-/// A piece of a streamed answer.
-#[derive(Clone, Debug)]
-pub enum Part {
-  /// One SSE event, written as `event: <type>` and `data: <json>`.
-  Event(Value),
-  /// Bytes as they are, for comments and odd framing.
-  Raw(String),
-  Pause(Duration),
-  /// The connection is closed here, mid-answer.
-  Drop,
-}
-
-#[derive(Clone, Debug)]
-enum Reply {
-  Stream(Vec<Part>),
-  Status {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: String,
-  },
-}
-
-type Expectation = Box<dyn Fn(&Recorded) + Send>;
-
-struct Turn {
-  path: &'static str,
-  expect: Option<Expectation>,
-  reply: Reply,
-  history_may_change: bool,
-}
-
-/// The turns a test expects, in order.
-#[derive(Default)]
-pub struct Script {
-  turns: Vec<Turn>,
-  expect: Option<Expectation>,
-  history_may_change: bool,
-}
-
-impl Script {
-  pub fn new() -> Self {
-    Self::default()
-  }
-
-  /// Checks the next turn's request.
-  pub fn expect(mut self, check: impl Fn(&Recorded) + Send + 'static) -> Self {
-    self.expect = Some(Box::new(check));
-    self
-  }
-
-  /// The next turn's request may start a new history (a compaction, the thinking recovery).
-  pub const fn history_may_change(mut self) -> Self {
-    self.history_may_change = true;
-    self
-  }
-
-  /// A Messages turn answered with a stream.
-  pub fn reply_sse(self, parts: Vec<Part>) -> Self {
-    self.push("/v1/messages", Reply::Stream(parts))
-  }
-
-  /// A turn on `path` answered with `status`, `headers` and `body`.
-  pub fn reply_status(self, path: &'static str, status: u16, headers: &[(&str, &str)], body: &str) -> Self {
-    let headers = headers
-      .iter()
-      .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
-      .collect();
-    self.push(
-      path,
-      Reply::Status {
-        status,
-        headers,
-        body: body.to_owned(),
-      },
-    )
-  }
-
-  /// A Messages turn answered with an error of `status` and the provider's error body.
-  pub fn reply_error(self, status: u16, kind: &str, message: &str) -> Self {
-    let body = json!({"type": "error", "error": {"type": kind, "message": message}}).to_string();
-    self.reply_status("/v1/messages", status, &[], &body)
-  }
-
-  fn push(mut self, path: &'static str, reply: Reply) -> Self {
-    self.turns.push(Turn {
-      path,
-      expect: self.expect.take(),
-      reply,
-      history_may_change: std::mem::take(&mut self.history_may_change),
-    });
-    self
-  }
-}
-
-#[derive(Default)]
 struct State {
+  wire: Wire,
   turns: VecDeque<Turn>,
   models: Vec<Value>,
   page_size: usize,
   requests: Vec<Recorded>,
   violations: Vec<String>,
-  last_messages: Option<Value>,
+  last_request: Option<Value>,
 }
 
 /// A running fake server.
@@ -160,15 +76,24 @@ pub struct FakeServer {
 }
 
 impl FakeServer {
-  /// A server playing `script`, with `models` as its catalog, listed `page_size` per page.
+  /// An Anthropic Messages server playing `script`, with `models` as its catalog, listed `page_size`
+  /// per page.
   pub async fn start(script: Script, models: Vec<Value>, page_size: usize) -> Self {
+    Self::start_wire(Wire::Messages, script, models, page_size).await
+  }
+
+  /// A server of `wire` playing `script`, with `models` as its catalog, listed `page_size` per page.
+  pub async fn start_wire(wire: Wire, script: Script, models: Vec<Value>, page_size: usize) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind the fake server");
     let address = listener.local_addr().expect("the fake server's address");
     let state = Arc::new(Mutex::new(State {
+      wire,
       turns: script.turns.into(),
       models,
       page_size,
-      ..State::default()
+      requests: Vec::new(),
+      violations: Vec::new(),
+      last_request: None,
     }));
     let shared = Arc::clone(&state);
     let task = tokio::spawn(async move {
@@ -187,12 +112,13 @@ impl FakeServer {
     self.state.lock().requests.clone()
   }
 
-  /// The Messages requests so far.
-  pub fn messages_requests(&self) -> Vec<Recorded> {
+  /// The model requests so far.
+  pub fn model_requests(&self) -> Vec<Recorded> {
+    let path = self.state.lock().wire.path();
     self
       .requests()
       .into_iter()
-      .filter(|request| request.path == "/v1/messages")
+      .filter(|request| request.path == path)
       .collect()
   }
 
@@ -234,6 +160,7 @@ async fn serve(mut stream: TcpStream, state: Arc<Mutex<State>>) {
       stream.write_all(body.as_bytes()).await.ok();
     }
     Reply::Stream(parts) => stream_parts(&mut stream, parts).await,
+    Reply::Error { .. } => unreachable!("`answer` writes an error as a status"),
   }
   stream.shutdown().await.ok();
 }
@@ -264,14 +191,26 @@ async fn stream_parts(stream: &mut TcpStream, parts: Vec<Part>) {
 }
 
 /// The reply to `request`: the next scripted turn for its path, the model catalog, or a 500 recorded as
-/// a violation.
+/// a violation. An error reply is written out in the server's wire format.
 fn answer(request: &Recorded, state: &Mutex<State>) -> Reply {
   let mut state = state.lock();
+  match reply(request, &mut state) {
+    Reply::Error { status, kind, message } => Reply::Status {
+      status,
+      headers: Vec::new(),
+      body: state.wire.error_body(&kind, &message),
+    },
+    other => other,
+  }
+}
+
+fn reply(request: &Recorded, state: &mut State) -> Reply {
   state.requests.push(request.clone());
-  let scripted = state
-    .turns
-    .front()
-    .is_some_and(|turn| request.path.starts_with(turn.path));
+  let model_path = state.wire.path();
+  let scripted = state.turns.front().is_some_and(|turn| match turn.route {
+    Route::Model => request.path == model_path,
+    Route::Path(path) => request.path.starts_with(path),
+  });
   if scripted {
     let turn = state.turns.pop_front().expect("a turn is waiting");
     if let Some(expect) = &turn.expect
@@ -284,13 +223,13 @@ fn answer(request: &Recorded, state: &Mutex<State>) -> Reply {
         .unwrap_or_default();
       state.violations.push(format!("expectation failed: {message}"));
     }
-    if request.path == "/v1/messages" {
-      check_history(&mut state, request, turn.history_may_change);
+    if request.path == model_path {
+      check_history(state, request, turn.history_may_change);
     }
-    return echo_cache(turn.reply, &state);
+    return echo_cache(turn.reply, state);
   }
   if request.method == "GET" && request.path.starts_with("/v1/models") {
-    return catalog(&state, &request.path);
+    return catalog(state, &request.path);
   }
   state
     .violations
@@ -302,19 +241,20 @@ fn answer(request: &Recorded, state: &Mutex<State>) -> Reply {
   }
 }
 
-/// Records a violation when `request` does not continue the previous Messages request.
+/// Records a violation when `request` does not continue the previous model request.
 fn check_history(state: &mut State, request: &Recorded, may_change: bool) {
   let body = request.json();
-  if let (Some(previous), false) = (&state.last_messages, may_change) {
-    for field in ["system", "tools"] {
+  let wire = state.wire;
+  if let (Some(previous), false) = (&state.last_request, may_change) {
+    for field in wire.frozen() {
       if text(&previous[field]) != text(&body[field]) {
         state
           .violations
           .push(format!("`{field}` changed within the conversation"));
       }
     }
-    let before = previous["messages"].as_array().cloned().unwrap_or_default();
-    let now = body["messages"].as_array().cloned().unwrap_or_default();
+    let before = previous[wire.history()].as_array().cloned().unwrap_or_default();
+    let now = body[wire.history()].as_array().cloned().unwrap_or_default();
     let prefix = now.len() >= before.len() && before.iter().zip(&now).all(|(a, b)| text(a) == text(b));
     if !prefix {
       state
@@ -322,7 +262,7 @@ fn check_history(state: &mut State, request: &Recorded, may_change: bool) {
         .push("the history was edited, not appended to".to_owned());
     }
   }
-  state.last_messages = Some(body);
+  state.last_request = Some(body);
 }
 
 /// `value` as JSON text.
@@ -330,32 +270,31 @@ fn text(value: &Value) -> String {
   value.to_string()
 }
 
-/// `reply` with an echoed cache read: the bytes of the messages the request shares with the previous
-/// one, as tokens.
+/// `reply` with an echoed cache read: the bytes the request shares with the previous one, as tokens.
 fn echo_cache(reply: Reply, state: &State) -> Reply {
   let Reply::Stream(parts) = reply else {
     return reply;
   };
   let cached = shared_prefix_tokens(state);
+  let pointer = state.wire.cache_read();
   let parts = parts
     .into_iter()
-    .map(|part| match part {
-      Part::Event(mut event) if event["message"]["usage"]["cache_read_input_tokens"] == json!("echo") => {
-        event["message"]["usage"]["cache_read_input_tokens"] = json!(cached);
-        Part::Event(event)
+    .map(|mut part| {
+      if let Part::Event(event) = &mut part
+        && let Some(read) = event.pointer_mut(pointer)
+        && *read == json!("echo")
+      {
+        *read = json!(cached);
       }
-      other => other,
+      part
     })
     .collect();
   Reply::Stream(parts)
 }
 
 fn shared_prefix_tokens(state: &State) -> u64 {
-  let requests: Vec<&Recorded> = state
-    .requests
-    .iter()
-    .filter(|request| request.path == "/v1/messages")
-    .collect();
+  let path = state.wire.path();
+  let requests: Vec<&Recorded> = state.requests.iter().filter(|request| request.path == path).collect();
   let [.., previous, current] = requests.as_slice() else {
     return 0;
   };

@@ -21,7 +21,13 @@ devtools = ["lurq/devtools"]
 perf_profile = ["lurq/perf_profile"]
 
 [dependencies]
+# The HTTP routing and bearer check of Orchester's own MCP server (`app_mcp`), on loopback.
+axum.workspace = true
 chrono.workspace = true
+# Orchester's MCP server serves each connection with header and idle deadlines and a connection cap
+# (`app_mcp::server`), which axum::serve cannot set; both are already built through lurq and axum.
+hyper.workspace = true
+hyper-util.workspace = true
 image.workspace = true
 orchester-core.workspace = true
 # Shared servers: the HTTP client of the server's API (`sharing`).
@@ -51,6 +57,8 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 rfd.workspace = true
+# Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it.
+rmcp.workspace = true
 # Checks that an MCP call's arguments are JSON, without building them, before the approval dialog
 # lays them out for reading.
 serde.workspace = true
@@ -63,6 +71,8 @@ toml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# The bearer token of Orchester's MCP server, from the OS random source (`app_mcp`).
+uuid.workspace = true
 # Wipes a secret value typed but not saved.
 zeroize.workspace = true
 

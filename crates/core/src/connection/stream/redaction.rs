@@ -77,6 +77,7 @@ impl RunnerProblem {
       | Self::CodebaseIndexUnavailable { detail }
       | Self::RipgrepUnavailable { detail, .. }
       | Self::MemoryScanFailed { detail }
+      | Self::RunnerFailed { detail }
       | Self::ModelRetrying { error: detail, .. } => *detail = redact(detail),
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
@@ -88,6 +89,10 @@ impl RunnerProblem {
         }
       }
       Self::MemoryNotSaved { reason } => reason.redact(redact),
+      Self::DecisionInterrupted { server, action, .. } => {
+        *server = redact(server);
+        *action = redact(action);
+      }
       // Versions, a model id and counts, parsed as such: no text that could hold a secret.
       Self::StepBudgetReached { .. }
       | Self::RipgrepNotFound { .. }

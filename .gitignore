@@ -3,3 +3,4 @@
 .tmp/
 # Local junction to .claude/skills, recreated by tools/setup-agent-skills.ps1.
 .agents/
+__pycache__/

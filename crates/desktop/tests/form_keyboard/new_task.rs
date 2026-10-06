@@ -15,6 +15,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::{contains_text, shows},
   harness::{Desktop, expected},
+  task_run::set_text,
 };
 
 const TITLE: &str = "task-title";
@@ -29,7 +30,7 @@ const CREATE: &str = "save-draft";
 /// More than the window has stops on this screen.
 const MAX_STOPS: usize = 30;
 
-fn new_task() -> Desktop {
+pub(crate) fn new_task() -> Desktop {
   let mut desktop = Desktop::with_project();
   desktop.wait_for("nav-tasks");
   desktop.click("nav-tasks");
@@ -98,6 +99,81 @@ fn new_task_criteria_are_added_and_removed_from_the_keyboard() {
     tree.get_element_by_id(FIRST_CRITERION).is_none()
   });
   assert!(desktop.tree.get_element_by_id(SECOND_CRITERION).is_some());
+}
+
+/// A criterion longer than the form's column, like ORC-20's.
+pub(crate) const LONG_CRITERION: &str = "A criterion longer than the column wraps onto further lines in New task and \
+                                         Edit task, grows the row, and keeps its radio and remove control on the \
+                                         first line, so its end stays visible while typing and after saving.";
+
+#[test]
+fn new_task_enter_adds_a_criterion_and_backspace_removes_an_empty_one() {
+  let mut desktop = new_task();
+  desktop.tab_to(FIRST_CRITERION, MAX_STOPS);
+  desktop.type_text("a");
+  desktop.enter();
+  desktop.settle("the added criterion to take the focus", |tree| {
+    tree
+      .focused_element()
+      .is_some_and(|element| element.id() == Some(SECOND_CRITERION))
+  });
+  assert_eq!(
+    desktop.value(FIRST_CRITERION),
+    "a",
+    "Enter puts no line break in a criterion"
+  );
+  desktop.type_text("b");
+  assert_eq!(desktop.value(SECOND_CRITERION), "b");
+  // Backspace edits a criterion that has text; in an empty one it removes the row.
+  desktop.key("Backspace", "Backspace");
+  assert_eq!(desktop.value(SECOND_CRITERION), "");
+  desktop.key("Backspace", "Backspace");
+  desktop.settle("the empty criterion to go", |tree| {
+    tree.get_element_by_id(SECOND_CRITERION).is_none()
+      && tree
+        .focused_element()
+        .is_some_and(|element| element.id() == Some(FIRST_CRITERION))
+  });
+  assert_eq!(desktop.value(FIRST_CRITERION), "a");
+  // The last criterion stays, empty.
+  desktop.key("Backspace", "Backspace");
+  desktop.key("Backspace", "Backspace");
+  assert_eq!(desktop.value(FIRST_CRITERION), "");
+  assert!(desktop.tree.get_element_by_id(FIRST_CRITERION).is_some());
+}
+
+#[test]
+fn new_task_long_criterion_wraps_in_its_row_and_is_saved_as_typed() {
+  let mut desktop = new_task();
+  desktop.tab_to(TITLE, MAX_STOPS);
+  desktop.type_text("Wrap criteria");
+  desktop.tab_to(FIRST_CRITERION, MAX_STOPS);
+  desktop.type_text("Short");
+  let line = desktop.bounds(FIRST_CRITERION);
+  desktop.enter();
+  desktop.wait_for(SECOND_CRITERION);
+  set_text(&mut desktop, SECOND_CRITERION, LONG_CRITERION);
+  desktop.type_text(" More.");
+  let typed = format!("{LONG_CRITERION} More.");
+  assert_eq!(desktop.value(SECOND_CRITERION), typed);
+  // The long criterion wraps within the column and grows its row; the short one keeps one line.
+  let long = desktop.bounds(SECOND_CRITERION);
+  assert!(long.height > 1.5 * line.height, "{} vs {}", long.height, line.height);
+  assert!(close(desktop.bounds(FIRST_CRITERION).height, line.height));
+  let (column_right, _) = ends(&mut desktop, "new-task-brief");
+  let (remove_right, _) = ends(&mut desktop, "remove-criterion-1");
+  assert!(long.x + long.width <= remove_right && remove_right <= column_right);
+  // Its remove control stays beside its first line.
+  let remove = desktop.bounds("remove-criterion-1");
+  let middle = remove.y + remove.height / 2.0;
+  assert!(close(middle, long.y + line.height / 2.0), "{middle} vs {}", long.y);
+  desktop.press(CREATE);
+  desktop.settle("the new task in the list", |tree| {
+    tree.get_element_by_id(TITLE).is_none() && highlighted(tree, "KON-1")
+  });
+  let db = ProjectDb::open(&desktop.repo).expect("open project");
+  let tasks = db.tasks().expect("read tasks");
+  assert_eq!(tasks[0].details().acceptance_criteria, ["Short".to_owned(), typed]);
 }
 
 #[test]
@@ -283,10 +359,11 @@ fn new_task_layout_ends_the_plan_with_its_actions_and_pins_the_footer() {
   let (readback_right, _) = ends(&mut desktop, "task-budget-readback");
   assert!(close(readback_right, run_right), "{readback_right} vs {run_right}");
   // The instructions footer sits at the foot of the brief column, level with the plan's, with
-  // Preview at its right (`MoDET`).
-  let (footer_right, footer_bottom) = ends(&mut desktop, "new-task-preview-footer");
+  // Preview at its right, where the fields end (`MoDET`).
+  let (_, footer_bottom) = ends(&mut desktop, "new-task-preview-footer");
   let (_, plan_bottom) = ends(&mut desktop, "execution-plan");
   assert!(close(footer_bottom, plan_bottom), "{footer_bottom} vs {plan_bottom}");
   let (preview_right, _) = ends(&mut desktop, "task-preview");
-  assert!(close(preview_right, footer_right), "{preview_right} vs {footer_right}");
+  let (title_right, _) = ends(&mut desktop, TITLE);
+  assert!(close(preview_right, title_right), "{preview_right} vs {title_right}");
 }

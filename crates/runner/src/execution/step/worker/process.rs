@@ -21,8 +21,9 @@ use super::{
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
+    relay::Listening,
   },
-  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
+  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
 
@@ -72,33 +73,22 @@ impl Worker {
           self.request_claude_approval(&mut watch, asked).await?;
           self.stop_at_checkpoint(&mut watch);
         },
+        Some(asked) = Listening::next(self.tool_relay.as_mut()) => {
+          self.request_claude_approval(&mut watch, asked).await?;
+          self.stop_at_checkpoint(&mut watch);
+        },
+        reviewed = review::next(&mut self.reviewing), if self.reviewing.is_some() => {
+          self.apply_review(&mut watch, reviewed).await?;
+        },
         // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
         () = watch.prompt_closed(), if watch.stop.is_none() => self.prompt_closed(&mut watch)?,
         stop = self.stops.recv(), if listening => match stop {
-          Some(Stop::Now(cause)) => {
-            if watch.stop.is_none() {
-              watch.stop = Some(cause);
-              self.driver.end();
-            }
-          }
-          Some(Stop::AfterTurn(cause)) => {
-            if watch.over.is_none() && watch.stop.is_none() {
-              watch.over = Some(cause);
+          Some(stop) => {
+            if self.receive_stop(&mut watch, stop) {
               grace.as_mut().reset(Instant::now() + TURN_GRACE);
               grace_armed = true;
             }
           }
-          Some(Stop::AfterCommand(cause)) => {
-            if watch.stop.is_none() && watch.over.is_none() {
-              watch.after_command = Some(cause);
-              self.stop_at_checkpoint(&mut watch);
-            }
-          }
-          Some(Stop::AtApproval) => {
-            watch.pause_requested = true;
-            self.stop_at_checkpoint(&mut watch);
-          }
-          Some(Stop::Withdraw) => watch.after_command = None,
           None => listening = false,
         },
         () = &mut grace, if grace_armed && watch.stop.is_none() => {
@@ -107,6 +97,36 @@ impl Worker {
         }
       }
     }
+  }
+
+  /// Carries out what the run tells the agent; whether its turn now has [`TURN_GRACE`] to end on its own.
+  fn receive_stop(&mut self, watch: &mut Watch, stop: Stop) -> bool {
+    match stop {
+      Stop::Now(cause) => {
+        if watch.stop.is_none() {
+          watch.stop = Some(cause);
+          self.driver.end();
+        }
+      }
+      Stop::AfterTurn(cause) => {
+        if watch.over.is_none() && watch.stop.is_none() {
+          watch.over = Some(cause);
+          return true;
+        }
+      }
+      Stop::AfterCommand(cause) => {
+        if watch.stop.is_none() && watch.over.is_none() {
+          watch.after_command = Some(cause);
+          self.stop_at_checkpoint(watch);
+        }
+      }
+      Stop::AtApproval => {
+        watch.pause_requested = true;
+        self.stop_at_checkpoint(watch);
+      }
+      Stop::Withdraw => watch.after_command = None,
+    }
+    false
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
@@ -249,10 +269,12 @@ impl Worker {
     let mut approval_interrupted = false;
     self.check_prompt_reached(&mut watch)?;
     self.note_stderr_left_out(&mut watch)?;
-    if watch.approval.is_some()
-      || !watch.approved_calls.is_empty()
-      || self.app_server().is_some_and(|app| !app.complete())
-    {
+    let waiting = watch.approval.take();
+    // A request the run's own stop ended (a pause at the decision, a cancel) needs no naming.
+    if let Some((approval, _)) = waiting.as_ref().filter(|_| watch.stop.is_none()) {
+      self.report_interrupted(&mut watch, approval)?;
+    }
+    if waiting.is_some() || !watch.approved_calls.is_empty() || self.app_server().is_some_and(|app| !app.complete()) {
       approval_interrupted = watch
         .db
         .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
@@ -285,11 +307,17 @@ impl Worker {
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
     watch.db.save_invocation(&watch.invocation)?;
+    // Only while that close is still why the turn failed: a later CLI error is a failure of its own.
+    let closed_after_result = watch
+      .closed_after_result
+      .as_ref()
+      .is_some_and(|closed| matches!(&outcome, InvocationOutcome::TurnFailed { message } if message == closed));
     Ok(Finished {
       outcome,
       stopped: watch.stop,
       final_message: watch.tracker.last_message().map(str::to_owned),
       approval_interrupted,
+      closed_after_result,
     })
   }
 }

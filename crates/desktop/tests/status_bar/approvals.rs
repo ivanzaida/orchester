@@ -46,6 +46,7 @@ fn waiting(number: usize) -> ShownApproval {
     step: Some("Design".into()),
     step_key: Some("design".into()),
     cwd: None,
+    review: None,
     choices: ApprovalChoices {
       similar: Err(SimilarUnavailable::Unknown),
       always: Err(AlwaysBlocked::Missing),

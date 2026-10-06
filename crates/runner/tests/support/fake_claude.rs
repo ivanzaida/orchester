@@ -15,7 +15,8 @@
 //!   one and waits until it is ended;
 //! - "Keep working": starts a message and waits until it is ended;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
-//!   email sign-in?"}` (a new session only: a resumed one works as below);
+//!   email sign-in?"}` (a new session only: a resumed one works as below); "Ask, then fail" writes the same question,
+//!   then its result reports an API error and it exits with 1 (`fake_claude_ask`);
 //! - "Ask before publishing": wants to run `pnpm publish --dry-run` through Bash and asks its permission prompt
 //!   (`fake_permission_prompt`); approved, it appends `approved` to `README.md` and asks about the same call once more;
 //!   then works as below. "Ask before writing docs" does the same for the `write` tool of the `docs` MCP server, with
@@ -27,13 +28,17 @@
 //!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
 //!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
+//! - "Find a stopped background task": first ends a turn of its own, before it takes the prompt, then answers with
+//!   prose and the step result through `StructuredOutput` (`fake_claude_background`);
 //! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
 //!   newer is required") and exits with 1;
 //! - "Leave the prompt unstarted": never starts the permission prompt's server, which Claude Code starts with the other
 //!   MCP servers as it starts;
 //! - "Knock first" (with "Ask before publishing"): first connects to the prompt's runner end with a wrong token, and
 //!   after the decision once more with the right one, reporting `knock: ` and `second: ` (`answered` or `closed`);
-//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits;
+//!   "Leave while waiting" sends its call, then ends the prompt server once `fake-release` exists and waits; "Give up
+//!   waiting" sends its call, gives up on it once `fake-release` exists, ends with a `question` result and a denied
+//!   `Grep`, and ends the prompt server only after its input ended (`fake_claude_ask`);
 //! - "Wait for release": runs `pnpm test` through Bash, which ends once the test writes `fake-release` next to the
 //!   worktrees (`<repo>/.orchester/`), appending `draft` to `README.md` first when the prompt also says "Draft first";
 //!   then it waits until it is ended when the prompt also says "Then keep working", else works as below;
@@ -52,6 +57,8 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
+//! Started with `--output-format json`, it is auto mode's reviewer instead (`fake_claude_review`).
+//!
 //! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
 //! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP
 //! configuration (`fake_mcp`), like `orchester-fake-codex`.
@@ -66,10 +73,16 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 #[path = "fake_claude_ask.rs"]
 mod fake_claude_ask;
+#[path = "fake_claude_background.rs"]
+mod fake_claude_background;
 #[path = "fake_claude_input.rs"]
 mod fake_claude_input;
+#[path = "fake_claude_review.rs"]
+mod fake_claude_review;
 #[path = "fake_claude_rules.rs"]
 mod fake_claude_rules;
+#[path = "fake_claude_tools.rs"]
+mod fake_claude_tools;
 #[path = "fake_mcp.rs"]
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
@@ -84,6 +97,9 @@ const NO_USAGE: &str = r#"{"input_tokens":0,"output_tokens":0}"#;
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if fake_claude_review::is_review(&args) {
+    return fake_claude_review::review(&args);
+  }
   let Some(prompt) = read_prompt(&args) else {
     return ExitCode::from(2);
   };
@@ -118,6 +134,9 @@ fn main() -> ExitCode {
   } else {
     "[]"
   };
+  if prompt.contains(fake_claude_background::PROMPT) {
+    fake_claude_background::stopped_task(&fake.session);
+  }
   println!(
     r#"{{"type":"system","subtype":"init","cwd":"worktree","session_id":"{}","tools":[],"mcp_servers":{servers},"model":"claude-haiku-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.89"}}"#,
     fake.session
@@ -151,6 +170,9 @@ impl Fake {
     if prompt.contains("Ask first") {
       return self.ask(worktree);
     }
+    if prompt.contains("Ask, then fail") {
+      return self.ask_then_fail();
+    }
     if prompt.contains("Work in turns") {
       if let Err(error) = append(worktree, "draft") {
         eprintln!("cannot write README.md: {error}");
@@ -163,8 +185,17 @@ impl Fake {
     if prompt.contains("Refuse the model") {
       return self.refuse_the_model();
     }
+    if prompt.contains(fake_claude_background::PROMPT) {
+      return self.structured_output(step);
+    }
     if let Some((text, structured)) = answer(prompt) {
       return self.answer(&text, structured);
+    }
+    if prompt.contains("Use the file tools") {
+      return self.use_file_tools(worktree, (args, permission_prompt), step);
+    }
+    if prompt.contains("Use Orchester's tools") {
+      return self.use_orchester_tools(worktree, (args, permission_prompt), step);
     }
     if let Some(ask) = fake_claude_ask::Ask::of(prompt) {
       return self.ask_prompt(worktree, (args, permission_prompt), &ask, step);

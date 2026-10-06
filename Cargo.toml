@@ -39,7 +39,8 @@ needless_pass_by_value = "warn"
 redundant_clone = "warn"
 
 [workspace.dependencies]
-orchester-agent = { path = "crates/agent" }
+# Without its default `http` feature: the file tools only, without the model clients' TLS stack.
+orchester-agent = { path = "crates/agent", default-features = false }
 orchester-api = { path = "crates/api" }
 orchester-core = { path = "crates/core" }
 orchester-exec = { path = "crates/exec" }
@@ -73,10 +74,14 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio", "
 # and macOS. Applications that pick their stores link it with the stores they need instead of
 # the `keyring` facade (keyring-rs wiki, "Keyring").
 keyring-core = "1"
-lurq = { version = "0.40.1", default-features = false }
+lurq = { version = "0.41.2", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
+# The MCP protocol of Orchester's own MCP server in the desktop (`orchester_desktop::app_mcp`): its
+# streamable HTTP transport and tool handler. Already built, with these features, for lurq's embedded
+# MCP server, so it adds no crate; the protocol and its sessions are not a few lines of code.
+rmcp = { version = "3.4", default-features = false, features = ["server", "transport-streamable-http-server"] }
 # The shared server's HTTP client, behind `orchester-api`'s `client` feature (`docs/architecture/server.md`,
 # "Dependencies"): rustls with the operating system's trust store (`rustls-platform-verifier`) on Windows
 # and macOS, no OpenSSL. A TLS-capable HTTP client is not a few lines of code; hyper is already built

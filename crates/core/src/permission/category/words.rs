@@ -3,7 +3,19 @@
 //! its words and the files its redirections write or read. Bash quoting by default; PowerShell's
 //! (a backslash is a plain character) for the script a `pwsh -Command` runs. Nothing is guessed: a
 //! variable, a substitution, a subshell or group, a here-document, a brace expansion or an unclosed
-//! quote leaves the part unread, and it is then classified as Unknown.
+//! quote leaves the part unread, and it is then classified as Unknown. The one variable read is one the
+//! line set to a plain literal before ([`Variables`]): its uses are its value.
+
+use super::{
+  heredoc::Heredoc,
+  variables::{Variables, is_assignment, name_char},
+};
+
+/// Whether a redirection's word names a file descriptor (`2`, `-`, `2-`) rather than a file.
+fn is_descriptor(word: &str) -> bool {
+  let number = word.strip_suffix('-').unwrap_or(word);
+  word == "-" || (!number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
+}
 
 /// Whose quoting rules a command line follows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,11 +36,19 @@ pub(super) struct RawPart {
   pub(super) reads: Vec<String>,
   /// Something in it cannot be read to the end without running it.
   pub(super) unread: bool,
+  /// It runs in the background (`&`), on after the line ends.
+  pub(super) background: bool,
+  /// It only sets a variable to a literal, whose later uses were read as its value.
+  pub(super) assigns: bool,
+  /// It reads a here-document, data that follows the line.
+  pub(super) heredoc: bool,
+  /// Its first word has a quote or an escape before its first `=`: no assignment, whatever it reads.
+  pub(super) quoted_name: bool,
 }
 
 impl RawPart {
   fn is_empty(&self) -> bool {
-    self.words.is_empty() && self.writes.is_empty() && self.reads.is_empty() && !self.unread
+    self.words.is_empty() && self.writes.is_empty() && self.reads.is_empty() && !self.unread && !self.heredoc
   }
 }
 
@@ -36,6 +56,26 @@ impl RawPart {
 enum Redirect {
   Write,
   Read,
+  /// `>&word` or `<&word`: a copy of a file descriptor when the word is one (`2`, `-`, `2-`), else the
+  /// file it names, written (both outputs) or read.
+  Duplicate {
+    writes: bool,
+  },
+}
+
+/// What starts or ends a part.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Joiner {
+  /// The start or the end of the line.
+  Edge,
+  /// `;` or a new line.
+  Sequence,
+  /// `&&` or `||`: the part after it may not run.
+  Condition,
+  /// `|` or `|&`: both sides run in subshells of their own.
+  Pipe,
+  /// A lone `&`: the part before it runs in a subshell in the background.
+  Background,
 }
 
 /// The parts being collected.
@@ -45,6 +85,13 @@ struct Splitter {
   part: RawPart,
   word: Option<String>,
   redirect: Option<Redirect>,
+  variables: Variables,
+  /// What started the part being collected.
+  opened_by: Joiner,
+  /// The word being collected has a quote or an escape before its first `=`.
+  name_quoted: bool,
+  /// Here-documents whose bodies follow the current line, with the number of the part that reads each.
+  heredocs: Vec<(usize, Heredoc)>,
 }
 
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
@@ -57,24 +104,40 @@ pub(super) fn split(command: &str, quoting: Quoting) -> Vec<RawPart> {
     part: RawPart::default(),
     word: None,
     redirect: None,
+    variables: Variables::default(),
+    opened_by: Joiner::Edge,
+    name_quoted: false,
+    heredocs: Vec::new(),
   };
   let mut chars = command.chars().peekable();
   while let Some(c) = chars.next() {
     splitter.take(c, &mut chars);
   }
-  splitter.end_part();
+  splitter.end_part(Joiner::Edge);
+  // A body that never came is not read.
+  for (at, _) in std::mem::take(&mut splitter.heredocs) {
+    splitter.parts[at].unread = true;
+  }
   splitter.parts
 }
 
 impl Splitter {
   fn take(&mut self, c: char, chars: &mut Chars<'_>) {
     match c {
-      ' ' | '\t' | '\r' => self.end_word(),
-      '\n' | ';' => self.end_part(),
+      // Bash keeps a carriage return in the word.
+      ' ' | '\t' => self.end_word(),
+      '\n' => {
+        self.end_part(Joiner::Sequence);
+        self.bodies(chars);
+      }
+      ';' => self.end_part(Joiner::Sequence),
       '&' => self.ampersand(chars),
       '|' => {
-        chars.next_if(|next| matches!(next, '|' | '&'));
-        self.end_part();
+        let joiner = match chars.next_if(|next| matches!(next, '|' | '&')) {
+          Some('|') => Joiner::Condition,
+          _ => Joiner::Pipe,
+        };
+        self.end_part(joiner);
       }
       '>' => self.output(chars),
       '<' => self.input(chars),
@@ -83,7 +146,10 @@ impl Splitter {
       '\\' if self.quoting == Quoting::Bash => match chars.next() {
         // A line continuation joins the lines.
         Some('\n') | None => {}
-        Some(escaped) => self.push(escaped),
+        Some(escaped) => {
+          self.quoting_name();
+          self.push(escaped);
+        }
       },
       '$' => self.dollar(chars, false),
       '`' | '(' | ')' | '{' | '}' => self.part.unread = true,
@@ -96,24 +162,56 @@ impl Splitter {
     self.word.get_or_insert_with(String::new).push(c);
   }
 
+  /// Notes a quote or an escape in the word being collected, before its first `=` when it has none yet.
+  fn quoting_name(&mut self) {
+    if !self.word.as_deref().is_some_and(|word| word.contains('=')) {
+      self.name_quoted = true;
+    }
+  }
+
   fn end_word(&mut self) {
+    let quoted = std::mem::take(&mut self.name_quoted);
     let Some(word) = self.word.take() else {
       return;
     };
     match self.redirect.take() {
       Some(Redirect::Write) => self.part.writes.push(word),
       Some(Redirect::Read) => self.part.reads.push(word),
-      None => self.part.words.push(word),
+      Some(Redirect::Duplicate { .. }) if is_descriptor(&word) => {}
+      Some(Redirect::Duplicate { writes: true }) => self.part.writes.push(word),
+      Some(Redirect::Duplicate { writes: false }) => self.part.reads.push(word),
+      None => {
+        if self.part.words.is_empty() {
+          self.part.quoted_name = quoted;
+        }
+        self.part.words.push(word);
+      }
     }
   }
 
-  fn end_part(&mut self) {
+  fn end_part(&mut self, closed_by: Joiner) {
     self.end_word();
     // A redirection without its file is not read to the end.
     if self.redirect.take().is_some() {
       self.part.unread = true;
     }
-    let part = std::mem::take(&mut self.part);
+    let mut part = std::mem::take(&mut self.part);
+    part.background = closed_by == Joiner::Background;
+    if let [word] = part.words.as_slice()
+      && is_assignment(word)
+      && !part.quoted_name
+    {
+      // Only an assignment that surely runs in the shell itself sets what later parts read.
+      let in_shell = matches!(self.opened_by, Joiner::Edge | Joiner::Sequence | Joiner::Background)
+        && !matches!(closed_by, Joiner::Pipe | Joiner::Background);
+      let alone = part.writes.is_empty() && part.reads.is_empty() && !part.unread;
+      if in_shell && alone && self.variables.assign(word) {
+        part.assigns = true;
+      } else {
+        self.variables.forget(word);
+      }
+    }
+    self.opened_by = closed_by;
     if !part.is_empty() {
       self.parts.push(part);
     }
@@ -127,12 +225,75 @@ impl Splitter {
       self.redirect = Some(Redirect::Write);
       return;
     }
-    chars.next_if_eq(&'&');
-    self.end_part();
+    let joiner = if chars.next_if_eq(&'&').is_some() {
+      Joiner::Condition
+    } else {
+      Joiner::Background
+    };
+    self.end_part(joiner);
   }
 
-  /// `>`, `>>`, `N>`; `>&N` and `N>&M` only join outputs and write no file.
+  /// `>`, `>>`, `N>`; `>&N` and `N>&M` only join outputs, while `>&file` writes the file. A `>|` or a
+  /// `>(` is not read: the `|` or `(` that follows leaves the part unread.
   fn output(&mut self, chars: &mut Chars<'_>) {
+    self.descriptor_number();
+    self.end_word();
+    chars.next_if_eq(&'>');
+    self.redirect = Some(if chars.next_if_eq(&'&').is_some() {
+      Redirect::Duplicate { writes: true }
+    } else {
+      Redirect::Write
+    });
+  }
+
+  /// `<` reads a file, `<&N` copies a descriptor and `<&file` reads the file; `<<` (a here-document or
+  /// here-string) and `<(` (a process substitution) are not read.
+  fn input(&mut self, chars: &mut Chars<'_>) {
+    self.descriptor_number();
+    self.end_word();
+    if chars.next_if_eq(&'<').is_some() {
+      self.here_document(chars);
+      return;
+    }
+    if chars.next_if_eq(&'(').is_some() {
+      self.part.unread = true;
+      return;
+    }
+    self.redirect = Some(if chars.next_if_eq(&'&').is_some() {
+      Redirect::Duplicate { writes: false }
+    } else {
+      Redirect::Read
+    });
+  }
+
+  /// `<<word` or `<<-word`: the part reads the body that follows the line; a here-string (`<<<`) is not
+  /// read.
+  fn here_document(&mut self, chars: &mut Chars<'_>) {
+    if chars.next_if_eq(&'<').is_some() {
+      self.part.unread = true;
+      return;
+    }
+    match Heredoc::after_operator(chars) {
+      Some(heredoc) => {
+        self.part.heredoc = true;
+        // The part is pushed when it ends: it is the next one, and holds the here-document at least.
+        self.heredocs.push((self.parts.len(), heredoc));
+      }
+      None => self.part.unread = true,
+    }
+  }
+
+  /// Takes the bodies of the line's here-documents, which follow it in order.
+  fn bodies(&mut self, chars: &mut Chars<'_>) {
+    for (at, heredoc) in std::mem::take(&mut self.heredocs) {
+      if !heredoc.take_body(chars) {
+        self.parts[at].unread = true;
+      }
+    }
+  }
+
+  /// Drops the word just before a redirection when it is the descriptor it redirects (`2>`).
+  fn descriptor_number(&mut self) {
     if self
       .word
       .as_deref()
@@ -140,26 +301,10 @@ impl Splitter {
     {
       self.word = None;
     }
-    self.end_word();
-    chars.next_if_eq(&'>');
-    if chars.next_if_eq(&'&').is_some() {
-      while chars.next_if(|next| next.is_ascii_digit() || *next == '-').is_some() {}
-      return;
-    }
-    self.redirect = Some(Redirect::Write);
-  }
-
-  /// `<` reads a file; `<<` (a here-document) and `<(` (a process substitution) are not read.
-  fn input(&mut self, chars: &mut Chars<'_>) {
-    self.end_word();
-    if chars.next_if(|next| matches!(next, '<' | '(')).is_some() {
-      self.part.unread = true;
-      return;
-    }
-    self.redirect = Some(Redirect::Read);
   }
 
   fn single_quoted(&mut self, chars: &mut Chars<'_>) {
+    self.quoting_name();
     self.word.get_or_insert_with(String::new);
     loop {
       match chars.next() {
@@ -174,6 +319,7 @@ impl Splitter {
   }
 
   fn double_quoted(&mut self, chars: &mut Chars<'_>) {
+    self.quoting_name();
     self.word.get_or_insert_with(String::new);
     loop {
       match chars.next() {
@@ -202,6 +348,9 @@ impl Splitter {
   /// that closes a double-quoted string. Anything else may expand (`$x`, `$(…)`, `$'…'`, `$"…"`,
   /// `$[…]`) and leaves the part unread; PowerShell's `$null` is kept as a word, the null device.
   fn dollar(&mut self, chars: &mut Chars<'_>, quoted: bool) {
+    if self.quoting == Quoting::Bash && self.literal_variable(chars) {
+      return;
+    }
     let plain = match chars.peek() {
       None => true,
       Some(next) if quoted => *next == '"',
@@ -214,6 +363,27 @@ impl Splitter {
     } else {
       self.part.unread = true;
     }
+  }
+
+  /// Whether a variable set to a literal follows (`name` or `{name}`); its value is taken in its place.
+  fn literal_variable(&mut self, chars: &mut Chars<'_>) -> bool {
+    let mut ahead = chars.clone();
+    let braced = ahead.next_if_eq(&'{').is_some();
+    let mut name = String::new();
+    while let Some(c) = ahead.next_if(|next| name_char(*next)) {
+      name.push(c);
+    }
+    if braced && ahead.next_if_eq(&'}').is_none() {
+      return false;
+    }
+    let Some(value) = self.variables.value(&name).map(str::to_owned) else {
+      return false;
+    };
+    *chars = ahead;
+    for c in value.chars() {
+      self.push(c);
+    }
+    true
   }
 
   /// Whether `null` follows, ending the word; it is taken.

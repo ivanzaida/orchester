@@ -500,12 +500,17 @@ fn agent_profile_codex_mcp_enforcement_says_when_approval_requests_are_denied() 
   assert!(shows(
     &mut desktop,
     "agent-enforcement",
+    "App Server · user’s own servers off"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "agent-enforcement",
     "MCP approval requests are denied"
   ));
   assert!(shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
-  assert!(!shows(&mut desktop, "agent-enforcement", "One requested action only"));
+  assert!(!shows(&mut desktop, "agent-enforcement", "App Server · each call"));
   desktop.tab_to("agent-tool-approvals", PRESSES);
   desktop.enter();
-  assert!(shows(&mut desktop, "agent-enforcement", "One requested action only"));
+  assert!(shows(&mut desktop, "agent-enforcement", "App Server · each call"));
   assert!(!shows(&mut desktop, "agent-enforcement", "not asked · the call fails"));
 }

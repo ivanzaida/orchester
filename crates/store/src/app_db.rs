@@ -1,8 +1,10 @@
 //! The application database next to the executable: known projects, the session log used to
 //! detect that the previous run of Orchester ended abnormally, the state of the window
-//! (`ui_state`) that outlives a session, such as its tabs, and the shared servers ([`servers`]).
+//! (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and the
+//! application's own settings ([`settings`]).
 
 mod servers;
+mod settings;
 
 use std::path::{Path, PathBuf};
 
@@ -40,6 +42,7 @@ CREATE TABLE ui_state (
 ) STRICT;
 ",
   servers::MIGRATION,
+  settings::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

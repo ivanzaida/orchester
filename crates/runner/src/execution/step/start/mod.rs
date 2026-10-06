@@ -15,7 +15,7 @@ mod prompt;
 mod retry;
 mod shared;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   code_index::CodeIndexUse,
@@ -29,7 +29,9 @@ use orchester_core::{
   memory::{InjectedMemory, RecalledMemory},
   permission::LaunchPermissions,
   resource::{AgentProfile, ModelId, Step},
-  run::{AssembledPrompt, CodeIndexPrompt, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo},
+  run::{
+    AssembledPrompt, CodeIndexPrompt, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo, WorkingTools,
+  },
 };
 
 use self::cli::Cli;
@@ -43,6 +45,8 @@ use super::{
   claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
   native::{NativeHandle, NativeSession},
+  orchester_tools::{ToolFolders, ToolHost},
+  relay::Listening,
   skills::PlacedSkills,
   worker::{Driver, Transport},
 };
@@ -90,6 +94,8 @@ pub(super) struct Driven {
   /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
   pub(super) mcp_file: Option<PrivateFile>,
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Codex's relay of Orchester's tools, which asks about their calls.
+  pub(super) tool_relay: Option<Listening>,
   /// Whether the agent can ask a person to decide about a tool call.
   pub(super) interactive: bool,
   /// Whether people's messages sent now reach the agent while it works; a native agent reads them
@@ -107,6 +113,7 @@ impl Launch {
           mcp_file,
           app_server,
           claude_approvals,
+          tool_relay,
           claude_exemptions,
         } = *cli;
         let process = Supervised::start(&command)?;
@@ -119,6 +126,7 @@ impl Launch {
           driver: Driver::Process { transport, process },
           mcp_file,
           claude_approvals,
+          tool_relay,
           interactive,
           steered: true,
         })
@@ -127,6 +135,7 @@ impl Launch {
         driver: Driver::Native(NativeHandle::spawn(*session)),
         mcp_file: None,
         claude_approvals: None,
+        tool_relay: None,
         interactive: true,
         steered: false,
       }),
@@ -142,6 +151,8 @@ pub(super) struct CliLaunch {
   pub(super) app_server: Option<AppServerSetup>,
   /// Claude Code's permission prompt, for a step that asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Codex's relay of Orchester's tools, which asks about their calls.
+  pub(super) tool_relay: Option<Listening>,
   /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
   pub(super) claude_exemptions: InvocationExemptions,
 }
@@ -192,6 +203,7 @@ struct PromptParts<'a> {
   placed: &'a PlacedSkills,
   code_index: Option<CodeIndexPrompt<'a>>,
   memory: &'a [RecalledMemory],
+  working: Option<WorkingTools>,
 }
 
 impl RunTask {
@@ -239,6 +251,7 @@ impl RunTask {
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
+    let enforced = self.enforced(key, body, provider)?;
     let parts = PromptParts {
       execution,
       step,
@@ -247,14 +260,18 @@ impl RunTask {
       placed: &placed,
       code_index: told.prompt(),
       memory: recalled.entries(),
+      working: WorkingTools::new(provider, enforced.permissions()),
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
-    let enforced = self.enforced(key, body, provider)?;
-    let writable_roots = self.writable_roots(&enforced)?;
+    let writable = self.writable_folders(&enforced)?;
+    let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
-    let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
+    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let (tools, claude_approvals) =
+      self.step_tools((enforced.permissions(), &setup), (invocation, folders), &environment)?;
+    let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
     let secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
@@ -271,28 +288,19 @@ impl RunTask {
       code_index: index.folder.as_deref(),
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
     };
-    let (command, mcp_file, app_server) = match setup {
-      McpSetup::Codex(mcp) => {
-        let (command, app) = self.app_server_command(&cli, &mcp, prompt)?;
-        (command, None, Some(app))
-      }
-      McpSetup::Claude(servers) => {
-        let (command, file) = self.claude_command(&cli, servers, &prompt)?;
-        (command, file, None)
-      }
-    };
-    let command = match &index.tools {
-      Some(tools) => with_tools_on_path(command, tools),
-      None => command,
-    };
+    let started = self.cli_command(&cli, setup, prompt, tools)?;
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
       launch: Launch::Cli(Box::new(CliLaunch {
-        command,
-        mcp_file,
-        app_server,
+        command: match &index.tools {
+          Some(tools) => with_tools_on_path(started.command, tools),
+          None => started.command,
+        },
+        mcp_file: started.mcp_file,
+        app_server: started.app_server,
         claude_approvals,
+        tool_relay: started.tool_relay,
         claude_exemptions,
       })),
       prompt: sources,
@@ -304,6 +312,21 @@ impl RunTask {
       permissions: enforced.launch(),
       engine: None,
     })
+  }
+}
+
+/// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:
+/// a Claude Code agent through its permission prompt's relay (`prompted`), every Codex agent.
+fn told_of_tools(
+  prompt: String,
+  tools: &ToolHost,
+  (setup, prompted, continuation): (&McpSetup, bool, &Continuation),
+) -> String {
+  let codex = matches!(setup, McpSetup::Codex(_));
+  if continuation.session.is_none() && (prompted || codex) {
+    format!("{prompt}\n\n{}", tools.tools().prompt_paragraph(!codex))
+  } else {
+    prompt
   }
 }
 

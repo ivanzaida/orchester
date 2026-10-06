@@ -9,6 +9,7 @@
 
 mod always;
 mod auto;
+mod permitted;
 mod rule;
 mod subject;
 
@@ -20,6 +21,7 @@ use thiserror::Error;
 pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
+  permitted::permitted,
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::ApprovalSubject,
 };
@@ -58,6 +60,44 @@ impl ApprovalAnswer {
       Self::Deny => DecidedBy::PersonDeny,
     }
   }
+
+  /// Who answered, when `answerer` gives this answer to a request about `subject`. Automation answers
+  /// one request at a time: it denies any, and approves once only what auto-approval would approve
+  /// ([`auto_verdict`]); what auto-approval leaves to a person, and the wider answers, which change
+  /// later requests, stay with a person.
+  pub fn given_by(&self, answerer: Answerer, subject: &ApprovalSubject) -> Result<DecidedBy, AutomationAnswerError> {
+    match (answerer, self) {
+      (Answerer::Person, answer) => Ok(answer.decided_by()),
+      (Answerer::Automation, Self::Deny) => Ok(DecidedBy::AutomationDeny),
+      (Answerer::Automation, Self::Once) => match auto_verdict(subject) {
+        AutoVerdict::Approve(_) => Ok(DecidedBy::Automation),
+        AutoVerdict::Ask(ask) => Err(AutomationAnswerError::PersonOnly(ask)),
+      },
+      (Answerer::Automation, Self::Similar | Self::Always { .. } | Self::ApproveRun) => {
+        Err(AutomationAnswerError::Wider)
+      }
+    }
+  }
+}
+
+/// Who gives an answer to a waiting request: the person in the app, or automation through
+/// Orchester's own MCP server, which a person allows in the app's settings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Answerer {
+  #[default]
+  Person,
+  Automation,
+}
+
+/// An answer automation may not give.
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum AutomationAnswerError {
+  #[error("automation only approves a request once or denies it")]
+  Wider,
+  /// Auto-approval leaves this request to a person, for this reason; only a person approves it.
+  #[error("only a person can approve this request: {0:?}")]
+  PersonOnly(AutoAsk),
 }
 
 /// Who answered a request, as it is recorded and marked in the activity.
@@ -80,10 +120,18 @@ pub enum DecidedBy {
   AlwaysAllowed,
   /// Auto-approval answered it.
   AutoApproved,
+  /// The step's own permissions run every part of the command on its own ([`permitted`]).
+  Permissions,
+  /// Automation approved it once, through Orchester's MCP server.
+  Automation,
+  /// Automation denied it, through Orchester's MCP server; the agent was told and continued.
+  AutomationDeny,
+  /// Auto mode's reviewer approved it ([`super::review`]).
+  Reviewer,
 }
 
 impl DecidedBy {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 12] = [
     Self::Person,
     Self::PersonSimilar,
     Self::PersonAlways,
@@ -92,6 +140,10 @@ impl DecidedBy {
     Self::SimilarRule,
     Self::AlwaysAllowed,
     Self::AutoApproved,
+    Self::Permissions,
+    Self::Automation,
+    Self::AutomationDeny,
+    Self::Reviewer,
   ];
 
   pub const fn as_str(self) -> &'static str {
@@ -104,11 +156,15 @@ impl DecidedBy {
       Self::SimilarRule => "similar_rule",
       Self::AlwaysAllowed => "always_allowed",
       Self::AutoApproved => "auto_approved",
+      Self::Permissions => "permissions",
+      Self::Automation => "automation",
+      Self::AutomationDeny => "automation_deny",
+      Self::Reviewer => "reviewer",
     }
   }
 
   pub const fn approves(self) -> bool {
-    !matches!(self, Self::PersonDeny)
+    !matches!(self, Self::PersonDeny | Self::AutomationDeny)
   }
 
   /// A person answered, rather than Orchester by a rule or auto-approval.
@@ -117,6 +173,17 @@ impl DecidedBy {
       self,
       Self::Person | Self::PersonSimilar | Self::PersonAlways | Self::PersonRun | Self::PersonDeny
     )
+  }
+
+  /// Automation answered, through Orchester's MCP server.
+  pub const fn by_automation(self) -> bool {
+    matches!(self, Self::Automation | Self::AutomationDeny)
+  }
+
+  /// Someone answered a request that waited for them, a person or automation, rather than Orchester
+  /// itself as the request came.
+  pub const fn answered_waiting(self) -> bool {
+    self.by_person() || self.by_automation() || matches!(self, Self::Reviewer)
   }
 }
 
@@ -153,6 +220,9 @@ pub struct ToolDecision {
   /// How long the request waited for a person, in milliseconds; `None` when Orchester answered it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub waited_ms: Option<u64>,
+  /// What auto mode did with the request before it was answered: its approval, or why it asked.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub review: Option<super::review::Review>,
 }
 
 /// What Codex App Server tells its model when Orchester declines a request (`decline`), word for word:
@@ -166,16 +236,23 @@ pub const fn codex_denial(command: bool) -> &'static str {
   }
 }
 
-/// What an agent is told when a person denies `approval`: the call does not run, and the agent goes on
-/// without it. Claude Code hands it to the agent as the permission prompt's message; Codex declines
-/// the request and tells the agent in its own words ([`codex_denial`]).
-pub fn denial_message(approval: &PendingToolApproval) -> String {
-  if approval.command {
-    "Denied by the person reviewing this run. Continue without it.".to_owned()
-  } else {
-    format!(
+/// What an agent is told when `by`, a person or automation, denies `approval`: the call does not run,
+/// and the agent goes on without it. Automation's denial names no person, as none decided. Claude Code
+/// hands it to the agent as the permission prompt's message; Codex declines the request and tells the
+/// agent in its own words ([`codex_denial`]).
+pub fn denial_message(approval: &PendingToolApproval, by: Answerer) -> String {
+  match (by, approval.command) {
+    (Answerer::Person, true) => "Denied by the person reviewing this run. Continue without it.".to_owned(),
+    (Answerer::Person, false) => format!(
       "The person reviewing this run denied {} {}. Continue without it.",
       approval.server, approval.action
-    )
+    ),
+    (Answerer::Automation, true) => {
+      "Denied by automation through Orchester's MCP server. Continue without it.".to_owned()
+    }
+    (Answerer::Automation, false) => format!(
+      "Automation denied {} {} through Orchester's MCP server. Continue without it.",
+      approval.server, approval.action
+    ),
   }
 }

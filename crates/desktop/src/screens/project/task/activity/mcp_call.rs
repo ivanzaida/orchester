@@ -6,29 +6,32 @@
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{connection::stream::CommandStatus, permission::category::CommandCategory, run::DecidedBy};
+use orchester_core::{
+  connection::stream::CommandStatus,
+  permission::category::CommandCategory,
+  run::{DecidedBy, review::Review},
+};
 
 use super::entry::Shown;
 use crate::{
-  tasks::transcript::{CommandMark, DecidedMark, McpToolEntry},
+  tasks::transcript::{CommandMark, DecidedMark, Entry, EntryKind, McpToolEntry},
   ui::icon::Icon,
 };
 
 /// The row of a Codex MCP call: the tool, and how it was decided or which server it belongs to.
 pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
-  let meta = match &call.mark {
-    Some(mark) => mark_text(ctx, mark),
-    None => ctx.t_args("runs.activity.mcpCall", [("server", &*call.server)]),
-  };
-  let (glyph, meta) = match call.status {
-    Some(CommandStatus::Failed | CommandStatus::Declined) => (
-      Icon::AlertCircle,
-      with_mark_text(ctx, &ctx.t("runs.activity.mcpCallFailed"), &meta),
+  let mark = call.mark.as_ref().map(|mark| mark_text(ctx, mark));
+  let failed = matches!(call.status, Some(CommandStatus::Failed | CommandStatus::Declined));
+  let (glyph, meta) = match (failed, &mark) {
+    (true, _) => (Icon::AlertCircle, ctx.t("runs.activity.mcpCallFailed")),
+    (false, Some(_)) => (Icon::Plug, "".into()),
+    (false, None) => (
+      Icon::Plug,
+      ctx.t_args("runs.activity.mcpCall", [("server", &*call.server)]),
     ),
-    _ => (Icon::Plug, meta),
   };
   let told = denial_told(ctx, call.mark.as_ref());
-  Shown::plain(glyph, call.tool.clone(), meta, told)
+  Shown::plain(glyph, call.tool.clone(), meta, told).marked(mark)
 }
 
 /// What a person's Deny told the agent, under the row of the call it denied.
@@ -51,16 +54,8 @@ pub(super) fn exemption_not_applied(ctx: &Ctx, (server, tool, other): (&str, &st
   )
 }
 
-/// A command row's `meta` followed by `mark`.
-pub(super) fn with_mark(ctx: &Ctx, meta: &str, mark: &CommandMark) -> Arc<str> {
-  with_mark_text(ctx, meta, &mark_text(ctx, mark))
-}
-
-fn with_mark_text(ctx: &Ctx, meta: &str, mark: &str) -> Arc<str> {
-  ctx.t_args("runs.activity.decision.withMeta", [("meta", meta), ("mark", mark)])
-}
-
-fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
+/// How a request about a call was answered, as its row marks it after the meta.
+pub(super) fn mark_text(ctx: &Ctx, mark: &CommandMark) -> Arc<str> {
   let (key, server) = match mark {
     CommandMark::Decided(mark) => return decided_text(ctx, mark),
     CommandMark::ExemptTool { server } => ("runs.activity.decision.notAskedExempt", server),
@@ -91,8 +86,27 @@ fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
     DecidedBy::SimilarRule => "runs.activity.decision.bySimilarRule",
     DecidedBy::AlwaysAllowed => "runs.activity.decision.alwaysAllowed",
     DecidedBy::AutoApproved => "runs.activity.decision.autoApproved",
+    DecidedBy::Permissions => "runs.activity.decision.permissions",
+    DecidedBy::Automation => "runs.activity.decision.approvedByAutomation",
+    DecidedBy::AutomationDeny => "runs.activity.decision.deniedByAutomation",
+    DecidedBy::Reviewer => "runs.activity.decision.approvedByAutoMode",
   };
   ctx.t_args(key, [("subject", &*subject)])
+}
+
+/// What auto mode did with the request about `entry`, shown on a line of its own under the row, never in
+/// its mark.
+pub(super) fn review_of(entry: &Entry) -> Option<&Review> {
+  let mark = match &entry.kind {
+    EntryKind::Command(command) => command.mark.as_ref(),
+    EntryKind::McpTool(call) => call.mark.as_ref(),
+    EntryKind::Approval(approval) => return approval.mark.decision.review.as_ref(),
+    _ => None,
+  };
+  match mark? {
+    CommandMark::Decided(mark) => mark.decision.review.as_ref(),
+    _ => None,
+  }
 }
 
 /// A command category's name in a mark.

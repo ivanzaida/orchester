@@ -19,8 +19,13 @@ use super::{super::ProjectNav, copy};
 use crate::{
   instructions::data::{InstructionEntry, ProjectInstructions},
   navigation::route::{InstructionsTab, Page},
-  theme::{ExtraColor, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, pressable::surface},
+  theme::{ExtraColor, ExtraTypography, gutter_scrollbar},
+  ui::{
+    button::ActionButton,
+    gutter::{beside_gutter, clear_of_gutter},
+    icon::Icon,
+    pressable::surface,
+  },
 };
 
 /// Library width, New instruction height and rule item height (`aYBe1`, `La1cB`, `jNTVN`).
@@ -93,16 +98,20 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
     InstructionsTab::PipelineOverrides => "instructions.library.pipelineOverrides",
     InstructionsTab::StepOverrides => "instructions.library.stepOverrides",
   };
+  // The rules scroll beside the gutter; the rest keeps out of it.
   Column::new()
     .id("instruction-library")
     .width(Dimension::Px(LIBRARY_WIDTH))
     .height(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
+    .padding_right(beside_gutter(ctx, SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfacePanel)
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(new.render(ctx))
-    .child(Text::new(&ctx.t(label)).variant(ExtraTypography::Overline.role()))
+    .child(clear_of_gutter(new.render(ctx)))
+    .child(clear_of_gutter(
+      Text::new(&ctx.t(label)).variant(ExtraTypography::Overline.role()),
+    ))
     .child(
       ScrollVertical::new(
         Column::new()
@@ -112,12 +121,13 @@ pub fn library(ctx: &Ctx, library: &Library<'_>) -> Element {
       )
       .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
-      .flex(1.0),
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar()),
     )
-    .child(
+    .child(clear_of_gutter(
       Text::new(&ctx.t_args("instructions.library.storage", [("project", project)]))
         .variant(ExtraTypography::Detail.role()),
-    )
+    ))
     .into()
 }
 

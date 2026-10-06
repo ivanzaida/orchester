@@ -137,9 +137,6 @@ fn native_models_keep_every_listed_model_in_use() {
 
 #[test]
 fn only_the_official_presets_can_be_set_up_and_each_sets_its_base_url() {
-  assert!(AgentProvider::AnthropicApi.can_be_added());
-  assert!(!AgentProvider::OpenAiApi.can_be_added());
-  assert!(AgentProvider::CLI.iter().all(|provider| provider.can_be_added()));
   assert!(EndpointPreset::Official.is_available());
   assert!(!EndpointPreset::DeepSeek.is_available());
   assert!(!EndpointPreset::Custom.is_available());

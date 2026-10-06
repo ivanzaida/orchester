@@ -20,7 +20,7 @@ use orchester_store::ProjectDb;
 use crate::{
   github::shows,
   harness::Desktop,
-  new_task::{close, ends},
+  new_task::{LONG_CRITERION, close, ends},
   tabs::{BACK, click_with, command, has, side_button},
   task_run::{init_repository, latest_run, programs, seed_claude, set_text},
 };
@@ -49,7 +49,7 @@ fn stored(repo: &Path) -> Vec<orchester_core::task::Task> {
 }
 
 /// Kontur with the draft KON-1 open on its page.
-fn draft_page() -> Desktop {
+pub(crate) fn draft_page() -> Desktop {
   let mut desktop = Desktop::with_seeded_project(|repo| save(repo, draft("Add GitHub authentication")));
   open_task(&mut desktop);
   desktop
@@ -63,7 +63,7 @@ fn open_task(desktop: &mut Desktop) {
   desktop.wait_for("task-this-run");
 }
 
-fn edit(desktop: &mut Desktop) {
+pub(crate) fn edit(desktop: &mut Desktop) {
   desktop.wait_for("task-edit");
   desktop.click("task-edit");
   desktop.wait_for("task-title");
@@ -95,6 +95,46 @@ fn edit_task_draft_summary_shows_the_brief_criteria_and_this_task() {
   assert!(shows(&mut desktop, "task-this-run", "No pipeline chosen"));
   assert!(shows(&mut desktop, "task-this-run", "No limits set"));
   assert!(shows(&mut desktop, "task-edit", "Edit"));
+}
+
+#[test]
+fn edit_task_long_criterion_wraps_on_the_summary_and_in_the_form() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    save(
+      repo,
+      TaskDetails {
+        acceptance_criteria: vec!["A new user can sign in.".into(), LONG_CRITERION.into()],
+        ..draft("Add GitHub authentication")
+      },
+    );
+  });
+  open_task(&mut desktop);
+  desktop.wait_for("task-criterion-2");
+  // On the Summary the long criterion wraps beside its number, within the criteria's column.
+  let short = desktop.bounds("task-criterion-1");
+  let long = desktop.bounds("task-criterion-2");
+  assert!(long.height > 1.5 * short.height, "{} vs {}", long.height, short.height);
+  let (column_right, _) = ends(&mut desktop, "task-criteria");
+  assert!(long.x + long.width <= column_right + 0.5);
+  assert!(shows(
+    &mut desktop,
+    "task-criteria",
+    "so its end stays visible while typing and after saving."
+  ));
+
+  edit(&mut desktop);
+  let short = desktop.bounds("criterion-0");
+  let long = desktop.bounds("criterion-1");
+  assert!(long.height > 1.5 * short.height, "{} vs {}", long.height, short.height);
+  assert_eq!(desktop.value("criterion-1"), LONG_CRITERION);
+  set_text(&mut desktop, "task-title", "Add GitHub sign-in");
+  desktop.press("save-draft");
+  state_reads(&mut desktop, "Draft saved locally");
+  assert_eq!(
+    stored(&desktop.repo)[0].details().acceptance_criteria,
+    ["A new user can sign in.".to_owned(), LONG_CRITERION.to_owned()],
+    "saving keeps the criterion as it was, without line breaks"
+  );
 }
 
 #[test]

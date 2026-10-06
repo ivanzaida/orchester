@@ -59,6 +59,7 @@ fn decided(item: &str, decided_by: DecidedBy, told: Option<&str>, waited_ms: Opt
       secrets: false,
       told: told.map(str::to_owned),
       waited_ms,
+      review: None,
     },
   }
 }

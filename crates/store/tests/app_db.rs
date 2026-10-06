@@ -279,3 +279,17 @@ fn servers_refuse_an_address_twice_and_an_unknown_server() {
   ));
   assert_eq!(db.servers().expect("list").len(), 1);
 }
+
+#[test]
+fn automation_answers_approvals_is_off_until_turned_on_and_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  assert!(!db.automation_answers_approvals().expect("read"));
+  db.set_automation_answers_approvals(true).expect("turn on");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.automation_answers_approvals().expect("read"));
+  db.set_automation_answers_approvals(false).expect("turn off");
+  assert!(!db.automation_answers_approvals().expect("read"));
+}

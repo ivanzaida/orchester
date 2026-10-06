@@ -7,7 +7,7 @@ use orchester_core::{
   id::IdempotencyKey,
   native::session::DENIED,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{ApprovalAnswer, DecidedBy, NativeCommandAsk, RunStatus},
+  run::{Answerer, ApprovalAnswer, DecidedBy, NativeCommandAsk, RunStatus},
 };
 
 use crate::{
@@ -50,14 +50,14 @@ async fn native_approvals_run_once_and_a_denial_continues() {
   );
   tokio::time::sleep(std::time::Duration::from_millis(30)).await;
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
 
   let request = pending_approval(root, &mut events, id).await;
   assert_eq!(request.action, "git log -1");
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny, Answerer::Person)
     .await
     .expect("denied");
 
@@ -83,6 +83,6 @@ async fn native_approvals_run_once_and_a_denial_continues() {
     _ => None,
   });
   assert_eq!(ran, [Some(0)], "the approved command ran once");
-  let first = &server.messages_requests()[1];
+  let first = &server.model_requests()[1];
   assert!(tool_results(first).iter().any(|result| result.contains("exit code 0")));
 }

@@ -281,4 +281,13 @@ fn tool_requests_that_end_no_longer_wait_and_read_as_ended_without_an_answer() {
   assert_eq!(decision(&one.id), Some(None));
   assert_eq!(decision(&two.id), Some(None));
   assert_eq!(decision(&claimed.id), Some(Some(ToolApprovalDecision::Approved)));
+  // Who answered is read back with the answer; an ended request has no one.
+  let decided_by = |id: &str| {
+    decided
+      .iter()
+      .find(|decided| decided.request.id == id)
+      .map(|decided| decided.decided_by)
+  };
+  assert_eq!(decided_by(&claimed.id), Some(Some(DecidedBy::Person)));
+  assert_eq!(decided_by(&one.id), Some(None));
 }

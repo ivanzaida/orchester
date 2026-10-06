@@ -257,6 +257,7 @@ fn entries(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip, raw: bool) -> Vec<El
           time_column: true,
           in_group: true,
           toggles: timeline.toggles.clone(),
+          request: None,
         },
       );
       ruled(view)

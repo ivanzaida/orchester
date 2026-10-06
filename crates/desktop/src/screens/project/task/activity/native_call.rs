@@ -207,6 +207,10 @@ pub(super) fn approval(ctx: &Ctx, approval: &ApprovalEntry) -> Shown {
     DecidedBy::AlwaysAllowed => ("runs.activity.native.alwaysAllowed", None),
     DecidedBy::AutoApproved => ("runs.activity.native.autoApproved", None),
     DecidedBy::PersonDeny => ("runs.activity.native.denied", None),
+    DecidedBy::Permissions => ("runs.activity.native.allowedByProfile", None),
+    DecidedBy::Automation => ("runs.activity.native.approvedByAutomation", None),
+    DecidedBy::AutomationDeny => ("runs.activity.native.deniedByAutomation", None),
+    DecidedBy::Reviewer => ("runs.activity.native.approvedByAutoMode", None),
   };
   // An approval a person gave shows their hand (`IcGvI`), one a rule gave its shield.
   let glyph = if how.is_some() { Icon::Hand } else { Icon::ShieldCheck };

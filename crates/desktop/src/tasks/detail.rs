@@ -12,9 +12,9 @@ use orchester_core::{
   integration::RunMerge,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
-    ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent, RunEventKind, RunLimit,
-    RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, attempt_starts,
-    execution_tokens,
+    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent,
+    RunEventKind, RunLimit, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage,
+    active_time, attempt_starts, execution_tokens,
   },
   store::{
     ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
@@ -149,6 +149,18 @@ impl RunView {
   /// Active agent time of the run so far: pauses and waits for a person do not count.
   pub fn active_time(&self, now: Timestamp) -> std::time::Duration {
     active_time(&self.invocations, now)
+  }
+
+  /// Active agent time of `invocations` of the run at `now`, counting on while the run lets it,
+  /// but not while it has no runner (`lost`) to look after its agents.
+  pub fn active_clock<'a>(
+    &self,
+    invocations: impl IntoIterator<Item = &'a Invocation>,
+    now: Timestamp,
+    lost: bool,
+  ) -> ActiveClock {
+    let clock = ActiveClock::of(invocations, now).within(&self.run);
+    if lost { clock.stopped() } else { clock }
   }
 
   /// The step a run stopped at its limit was working on, if it stopped mid-step: after a step's

@@ -37,7 +37,7 @@ use orchester_core::{id::TaskId, integration::Leftovers, run::StepStatus};
 
 use self::merge::{MergeAction, merge_action, merge_button, merge_problem, merge_unavailable, readiness};
 use super::{
-  super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, history, progress::progress_list,
+  super::ProjectNav, changes::CheckpointedLoad, conversation::ComposerFocus, history, progress::ended_progress_list,
   worktree::TaskLeftovers,
 };
 use crate::{
@@ -316,7 +316,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
             .variant(TypographyStyle::Mono),
         ),
     )
-    .child(progress_list(ctx, run, false, &[]))
+    .child(ended_progress_list(ctx, run))
     .into()
 }
 

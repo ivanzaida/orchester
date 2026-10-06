@@ -25,6 +25,9 @@
 //! - Approvals: a step that asks a person before commands or MCP actions, or about commands outside its allowed list,
 //!   also gets the configuration file of Orchester's permission prompt relay and `--permission-prompt-tool` naming its
 //!   tool ([`crate::connection::claude_approval`]); on a resumed session too, as the prompt is not part of the session.
+//! - Orchester's tools ([`crate::orchester_tools`]) are served by the same relay: each tool the step's permissions let
+//!   run without asking gets an `mcp__Orchester__<tool>` allow rule, added to the other allowed tools; the others reach
+//!   the permission prompt.
 //! - Permissions: the step's enforced permissions as [`crate::permission::claude::permission_args`] maps them (tools
 //!   offered, permission mode, denied tools, allowed command prefixes, and the edit rules of the worktree and the extra
 //!   writable folders when the step does not run in `acceptEdits`). Bypass modes are never used.
@@ -66,6 +69,7 @@ use crate::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     mcp::{InvocationExemptions, McpServerName},
   },
+  orchester_tools::StepTools,
   permission::{
     capability::{EnforcedPermissions, Mechanism, PermissionSetting},
     claude::{PermissionFolders, edits_allowed_by_rule, permission_args},
@@ -195,7 +199,20 @@ impl ClaudeInvocation<'_> {
       editable: &editable,
       protected: &protected,
     };
-    args.extend(permission_args(self.permissions, servers, exempt, folders));
+    let mut permission = permission_args(self.permissions, servers, exempt, folders);
+    if self.approvals.is_some() {
+      // Only the tools that run get a rule; they follow from the permissions and the code index.
+      let tools = StepTools::for_step(self.permissions.permissions(), &[]);
+      // `find_symbol` comes with the code index the agent gets.
+      let tools = if self.code_index.is_some() {
+        tools.with_code_index()
+      } else {
+        tools
+      };
+      let rules = tools.claude_allow_rules();
+      allow_more(&mut permission, rules);
+    }
+    args.extend(permission);
     for root in granted {
       args.extend(["--add-dir".to_owned(), root.to_string_lossy().into_owned()]);
     }
@@ -252,5 +269,26 @@ impl ClaudeInvocation<'_> {
       input_line(prompt),
       (environment, project, &[]),
     )
+  }
+}
+
+/// `permission` with `rules` added to its `--allowedTools` list, which takes every value up to the next
+/// option; a list of its own when it has none.
+fn allow_more(permission: &mut Vec<String>, rules: Vec<String>) {
+  if rules.is_empty() {
+    return;
+  }
+  match permission.iter().position(|arg| arg == "--allowedTools") {
+    Some(flag) => {
+      let end = permission[flag + 1..]
+        .iter()
+        .position(|arg| arg.starts_with("--"))
+        .map_or(permission.len(), |offset| flag + 1 + offset);
+      permission.splice(end..end, rules);
+    }
+    None => {
+      permission.push("--allowedTools".to_owned());
+      permission.extend(rules);
+    }
   }
 }

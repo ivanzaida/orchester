@@ -5,7 +5,7 @@
 
 use orchester_core::{
   id::{RunId, TaskId},
-  run::{ApprovalAnswer, PendingToolApproval},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval},
   store::RunStore,
 };
 use orchester_ipc::{Event, Rejection};
@@ -26,9 +26,15 @@ impl Scheduler {
     run: RunId,
     approval: String,
     answer: ApprovalAnswer,
+    by: Answerer,
   ) -> Result<(), Rejection> {
     let id = approval.clone();
-    let Some(reply) = self.ask(run, |ack| Control::DecideToolApproval { approval, answer, ack }) else {
+    let Some(reply) = self.ask(run, |ack| Control::DecideToolApproval {
+      approval,
+      answer,
+      by,
+      ack,
+    }) else {
       return Err(self.end_unheld(run, &id));
     };
     // A task that drops the request has no agent left that could hold it.
@@ -116,7 +122,7 @@ impl RunTask {
   pub(super) fn decide_tool_approval(
     &mut self,
     id: String,
-    given: ApprovalAnswer,
+    (given, by): (ApprovalAnswer, Answerer),
     ack: Ack,
   ) -> Result<(), ExecutionError> {
     let pending = self.db.pending_tool_approvals(self.run.id())?;
@@ -131,7 +137,12 @@ impl RunTask {
     let Some(worker) = worker else {
       return self.end_unheld(&id, ack);
     };
-    if let Err(SendError(decision)) = worker.send(ApprovalDecision { id, answer: given, ack }) {
+    if let Err(SendError(decision)) = worker.send(ApprovalDecision {
+      id,
+      answer: given,
+      by,
+      ack,
+    }) {
       // The worker has ended, and with it the call it waited on: whatever of it still waits can no longer
       // be answered.
       tracing::debug!(run = %self.run.id(), "tool decision arrived after the agent's worker ended");

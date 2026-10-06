@@ -3,6 +3,8 @@
 
 mod agent_files;
 mod approval_choices;
+mod auto_mode;
+mod automation_answers;
 mod code_index;
 mod command_approvals;
 mod conversation;
@@ -14,6 +16,7 @@ mod memory;
 mod native_commands;
 mod native_conversations;
 mod organization;
+mod permitted_decisions;
 mod recovery;
 mod sharing;
 mod steering;
@@ -508,5 +511,11 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   worktree_removals::MIGRATION,
   sharing::MIGRATION,
   joining::MIGRATION,
+  permitted_decisions::MIGRATION,
+  automation_answers::MIGRATION,
+  auto_mode::MIGRATION,
+  auto_mode::REVIEWER_MIGRATION,
+  auto_mode::ORIGIN_MIGRATION,
+  auto_mode::REVIEWING_MIGRATION,
   native_conversations::MIGRATION,
 ];

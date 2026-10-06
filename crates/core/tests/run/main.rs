@@ -1,5 +1,6 @@
 //! Run execution model: snapshots, state machines, failure routing, interruption and replay.
 
+mod active_clock;
 mod again;
 mod agent;
 mod code_index;
@@ -25,3 +26,4 @@ mod steps;
 mod stuck;
 mod stuck_loops;
 mod tool;
+mod working_prompt;

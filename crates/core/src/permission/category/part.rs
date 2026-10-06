@@ -81,6 +81,19 @@ pub struct CommandPart {
   pub(super) alike: bool,
   /// A prefix of its program and subcommand allows only parts like it ([`Judged::prefix_stays`]).
   pub(super) prefix_stays: bool,
+  /// Its words are a read of the known-safe tables ([`Judged::known_safe`]).
+  pub(super) known_safe: bool,
+  /// It redirects its output into a file (`> out.txt`); not the null device.
+  pub(super) writes_output: bool,
+  /// A `cd` to one folder named plainly, in the worktree or a writable folder.
+  pub(super) moves_inside: bool,
+  /// It runs a script file of the worktree ([`super::interpreters`]).
+  pub(super) runs_script: bool,
+  /// It runs inside the inline script of a shell written with a folder, which is not the bare shell a
+  /// rule names.
+  pub(super) through_path: bool,
+  /// Its program only edits the files it names ([`Judged::edits`]).
+  pub(super) edits: bool,
 }
 
 impl CommandPart {
@@ -106,6 +119,12 @@ impl CommandPart {
       outside: Vec::new(),
       alike: judged.alike,
       prefix_stays: judged.prefix_stays,
+      known_safe: judged.known_safe,
+      writes_output: false,
+      moves_inside: false,
+      runs_script: false,
+      through_path: false,
+      edits: judged.edits,
     }
   }
 
@@ -139,6 +158,82 @@ impl CommandPart {
   /// It installs software or packages.
   pub const fn installs(&self) -> bool {
     self.installs
+  }
+
+  /// Whether it names, reads or writes anything outside the worktree and its writable folders.
+  pub const fn reaches_outside(&self) -> bool {
+    !self.outside.is_empty()
+  }
+
+  /// The program as the rules know it; `None` when it is written with a folder or was not read.
+  pub fn program(&self) -> Option<&str> {
+    self.program.as_deref()
+  }
+
+  /// The subcommand (`push`, `pr view`), when the program has them.
+  pub fn subcommand(&self) -> Option<&str> {
+    self.subcommand.as_ref().map(|(_, sub)| sub.as_str())
+  }
+
+  /// The words after the subcommand; all words after the program for one without a subcommand.
+  pub fn after_subcommand(&self) -> &[String] {
+    let start = match &self.subcommand {
+      Some((at, sub)) => at + sub.split(' ').count(),
+      None => 1,
+    };
+    self.words.get(start..).unwrap_or_default()
+  }
+
+  /// Whether it writes a file outside the worktree, or deletes one outside the temporary folder.
+  pub const fn writes_outside(&self) -> bool {
+    self.outside_write.is_some() || self.outside_delete.is_some()
+  }
+
+  /// Whether it runs a script file of the worktree, whose content Orchester does not read.
+  pub const fn runs_script(&self) -> bool {
+    self.runs_script
+  }
+
+  /// Whether it runs in a shell written with a folder (`C:\Program Files\PowerShell\7\pwsh.exe -Command …`):
+  /// no rule for a bare program name runs it.
+  pub const fn through_path(&self) -> bool {
+    self.through_path
+  }
+
+  /// Whether it redirects its output into a file.
+  pub const fn writes_output(&self) -> bool {
+    self.writes_output
+  }
+
+  /// Whether it runs without a person on its own (the user's decision, `docs/plan.md` C4): a read of the
+  /// known-safe tables, without a redirection into a file, of nothing outside the worktree and its
+  /// writable folders and of no credential.
+  pub fn known_safe_read(&self) -> bool {
+    self.known_safe
+      && self.category == CommandCategory::ReadOnly
+      && !self.reads_secrets
+      && !self.installs
+      && !self.writes_output
+      && self.outside.is_empty()
+  }
+
+  /// Whether it only writes files in the worktree or its writable folders, as an edit does: a program that
+  /// edits the files it names (`sed -i`, `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`) or a known-safe read
+  /// whose output is redirected there (`cat > f <<'EOF'`, `echo x >> f`), every write placed where an
+  /// edit may write ([`super::CommandScope`]: no `.git`, no `.orchester/`, not the folder itself
+  /// removed), and nothing named, read or written outside, no credential.
+  pub fn edits_worktree(&self) -> bool {
+    (self.edits || self.known_safe)
+      && self.category == CommandCategory::Worktree
+      && !self.reads_secrets
+      && !self.installs
+      && self.outside.is_empty()
+  }
+
+  /// Whether it is a `cd` to one folder named plainly in the worktree or a writable folder, which
+  /// changes nothing a person decides about.
+  pub(super) const fn moves_inside(&self) -> bool {
+    self.moves_inside
   }
 
   /// Whether a person must answer this part each time: it was not read to the end, rewrites history or

@@ -10,7 +10,7 @@ use orchester_core::{
     claude_approval::{
       ApprovalToken, ClaudeApprovalConfig, ClaudeApprovalScope, ClaudeAsk, PROMPT_TOOL, not_answered, prompt_result,
       refusal,
-      relay::{RelayStep, ask_result, relay_step},
+      relay::{RelayRequest, RelayStep, ask_result, list_result, relay_step},
     },
     invocation::{ClaudeInvocation, ClaudeMcp, ClaudeSession, InvocationError, Platform},
     mcp::{InvocationExemptions, McpServerName},
@@ -196,39 +196,79 @@ fn claude_approvals_answer_one_call_without_grants_or_its_input() {
 
 #[test]
 fn claude_approvals_relay_answers_the_handshake_and_hands_over_calls() {
-  let RelayStep::Reply(init) =
-    relay_step(r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#)
-  else {
+  let RelayStep::Reply(init) = relay_step(
+    r#"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#,
+    true,
+  ) else {
     panic!("initialize is answered");
   };
   let init: Value = serde_json::from_str(&init).expect("JSON");
   assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
   assert_eq!(init["id"], 0);
   assert_eq!(
-    relay_step(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+    relay_step(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, true),
     RelayStep::Ignore
   );
-  let RelayStep::Reply(list) = relay_step(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#) else {
-    panic!("the tool list is answered");
-  };
-  let list: Value = serde_json::from_str(&list).expect("JSON");
+  assert_eq!(
+    relay_step(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#, true),
+    RelayStep::List { id: json!(1) }
+  );
+  let list: Value =
+    serde_json::from_str(&list_result(&json!(1), vec![json!({"name": "git_status"})], true)).expect("JSON");
   assert_eq!(list["result"]["tools"][0]["name"], "approve");
+  assert_eq!(list["result"]["tools"][1]["name"], "git_status");
   let arguments = json!({"tool_name": "Bash", "input": {"command": "ls"}, "tool_use_id": "toolu_1"});
   let request = json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"approve","arguments":arguments}});
   assert_eq!(
-    relay_step(&request.to_string()),
+    relay_step(&request.to_string(), true),
     RelayStep::Ask {
       id: json!(2),
       arguments
     }
   );
-  let RelayStep::Reply(unknown) = relay_step(r#"{"jsonrpc":"2.0","id":3,"method":"resources/list"}"#) else {
+  let RelayStep::Reply(unknown) = relay_step(r#"{"jsonrpc":"2.0","id":3,"method":"resources/list"}"#, true) else {
     panic!("an unknown request is answered");
   };
   assert!(unknown.contains("-32601"));
   let answer: Value = serde_json::from_str(&ask_result(&json!(2), &prompt_result(None))).expect("JSON");
   assert_eq!(answer["id"], 2);
   assert_eq!(answer["result"]["content"][0]["text"], prompt_result(None));
+}
+
+/// Started for Codex, the relay serves no permission prompt: `approve` is not listed, and a call of it is
+/// an ordinary tool call the runner refuses.
+#[test]
+fn claude_approvals_relay_for_tools_only_hands_every_call_over() {
+  let list: Value = serde_json::from_str(&list_result(&json!(1), Vec::new(), false)).expect("JSON");
+  assert_eq!(list["result"]["tools"], json!([]));
+  let arguments = json!({"tool_name": "Bash", "input": {"command": "ls"}});
+  let request = json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"approve","arguments":arguments}});
+  assert_eq!(
+    relay_step(&request.to_string(), false),
+    RelayStep::Call {
+      id: json!(2),
+      name: "approve".to_owned(),
+      arguments
+    }
+  );
+  let call = json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"git_status"}});
+  assert_eq!(
+    relay_step(&call.to_string(), true),
+    RelayStep::Call {
+      id: json!(4),
+      name: "git_status".to_owned(),
+      arguments: Value::Null
+    }
+  );
+  assert_eq!(
+    serde_json::to_string(&RelayRequest::Call {
+      name: "git_status".to_owned(),
+      arguments: json!({})
+    })
+    .expect("JSON"),
+    r#"{"call":{"name":"git_status","arguments":{}}}"#
+  );
+  assert_eq!(serde_json::to_string(&RelayRequest::List).expect("JSON"), r#""list""#);
 }
 
 #[test]
@@ -289,8 +329,17 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       ),
       "{args}"
     );
-    assert!(!args.contains("--allowedTools"), "{args}");
-    assert!(args.ends_with("--resume s"), "{args}");
+    // Only Orchester's own tools that run get a rule; the server's tools all ask.
+    assert!(!args.contains("mcp__docs"), "{args}");
+    assert!(
+      args.ends_with(
+        "--allowedTools mcp__Orchester__read_file mcp__Orchester__list_files mcp__Orchester__search \
+         mcp__Orchester__edit_file mcp__Orchester__write_file mcp__Orchester__git_status mcp__Orchester__git_diff \
+         mcp__Orchester__git_log mcp__Orchester__git_show mcp__Orchester__git_add mcp__Orchester__git_commit \
+         --resume s"
+      ),
+      "{args}"
+    );
     invocation.approvals = None;
     let command = invocation.command("", Vec::new(), &CommandEnvironment::default());
     assert_eq!(command.err(), Some(InvocationError::NoPermissionPrompt));

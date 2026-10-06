@@ -10,6 +10,7 @@
 mod native;
 mod observe;
 mod process;
+mod review;
 mod steer;
 
 use std::{
@@ -25,19 +26,21 @@ use orchester_core::{
   id::{ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   permission::category::CommandScope,
-  run::{ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
+  run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   time::Timestamp,
   tokens::TokensUsed,
 };
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
+pub(in crate::execution::step) use self::review::ReviewerKeys;
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
   native::NativeHandle,
+  relay::Listening,
 };
 use crate::{private_file::PrivateFile, supervisor::Supervised};
 
@@ -101,6 +104,8 @@ pub(in super::super) enum WorkerEvent {
 pub(in super::super) struct ApprovalDecision {
   pub id: String,
   pub answer: ApprovalAnswer,
+  /// Who gives the answer: the person in the app, or automation.
+  pub by: Answerer,
   pub ack: Ack,
 }
 
@@ -113,6 +118,9 @@ pub(in super::super) struct Finished {
   pub(in super::super) final_message: Option<String>,
   /// A pending or delivered decision ended without a confirmed turn completion.
   pub(in super::super) approval_interrupted: bool,
+  /// The turn failed only because the permission prompt or tool relay closed after the CLI had
+  /// delivered its result (run 26): a question in that result still asks the person.
+  pub(in super::super) closed_after_result: bool,
 }
 
 /// How the runner follows a CLI: it reads Claude Code's `stream-json` output, and talks with Codex
@@ -159,6 +167,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) mcp_file: Option<PrivateFile>,
   /// The runner's end of Claude Code's permission prompt, when the step asks a person.
   pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// The runner's end of Codex's relay of Orchester's tools, which asks about their calls.
+  pub(super) tool_relay: Option<Listening>,
   /// Secret values kept out of the invocation's activity and approvals: those of a Claude Code
   /// invocation's MCP servers, a native agent's API key.
   pub(in super::super) secrets: Vec<SecretVariable>,
@@ -171,6 +181,10 @@ pub(in super::super) struct Worker {
   pub(in super::super) profile: Option<ResourceId>,
   /// People's messages sent now, for the running turn.
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
+  /// Auto mode's review of the waiting approval, while it is under way.
+  pub(super) reviewing: Option<review::Reviewing>,
+  /// Where a native reviewer's API key is read.
+  pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
 }
 
 pub(super) struct Watch {
@@ -191,11 +205,14 @@ pub(super) struct Watch {
   pause_requested: bool,
   /// The approval waiting for a person, and the call it answers.
   pub(super) approval: Option<(PendingToolApproval, Awaiting)>,
+
   /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
   /// they do, the actions may have run, and the run is not resumed on its own.
   pub(super) approved_calls: HashSet<String>,
   /// Messages sent now that the CLI has not taken yet.
   steering: steer::Steering,
+  /// The turn failure recorded when the prompt or relay closed after the CLI delivered its result.
+  pub(super) closed_after_result: Option<String>,
 }
 
 impl Watch {
@@ -215,13 +232,14 @@ impl Watch {
       approval: None,
       approved_calls: HashSet::new(),
       steering: steer::Steering::default(),
+      closed_after_result: None,
     })
   }
 
   /// Ready once the Claude Code call waiting for a person can no longer be answered.
   async fn prompt_closed(&mut self) {
     match &mut self.approval {
-      Some((_, Awaiting::Claude { reply, .. })) => reply.closed().await,
+      Some((_, Awaiting::Claude { reply, .. } | Awaiting::Tool { reply, .. })) => reply.closed().await,
       _ => std::future::pending().await,
     }
   }

@@ -4,17 +4,27 @@
 //! talking and the file work; the runner drives both. The desktop does not depend on it: API keys are
 //! read in the runner only.
 
+#[cfg(feature = "http")]
 pub mod anthropic;
+#[cfg(feature = "http")]
 mod check;
+#[cfg(feature = "http")]
 pub mod endpoint;
 pub mod files;
+#[cfg(feature = "http")]
 mod http;
+#[cfg(feature = "http")]
+pub mod responses;
+#[cfg(feature = "http")]
 mod retry;
+#[cfg(feature = "http")]
 pub mod sse;
 
+pub use self::files::FileTools;
+#[cfg(feature = "http")]
 pub use self::{
   anthropic::AnthropicClient,
-  check::{ApiCheck, check_anthropic},
+  check::{ApiCheck, check_anthropic, check_responses},
   endpoint::{Endpoint, Timing, WireQuirks},
-  files::FileTools,
+  responses::ResponsesClient,
 };

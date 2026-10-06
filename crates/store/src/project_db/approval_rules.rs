@@ -28,8 +28,21 @@ pub struct DecisionCounts {
   pub denied_by_you: u32,
   pub by_similar_rule: u32,
   pub always_allowed: u32,
+  /// Answered by the step's own permissions, which run every part of the command on its own.
+  pub by_profile: u32,
   pub auto_approved: u32,
+  /// Approved once by automation, through Orchester's MCP server.
+  pub by_automation: u32,
+  pub denied_by_automation: u32,
+  /// Approved by auto mode's reviewer.
+  pub by_reviewer: u32,
+  /// Requests auto mode looked at and left to a person: its reviewer asked, a hard rule held them, or the
+  /// review gave no verdict.
+  pub asked_by_reviewer: u32,
+  /// Waiting for a person.
   pub waiting: u32,
+  /// Waiting for auto mode's reviewer, not yet for a person.
+  pub reviewing: u32,
 }
 
 impl ProjectDb {
@@ -154,8 +167,9 @@ impl ProjectDb {
   /// How `run`'s requests were answered, by who answered them, and how many wait.
   pub fn decision_counts(&self, run: RunId) -> Result<DecisionCounts, StoreError> {
     let mut query = self.connection.prepare(
-      "SELECT state, decided_by, COUNT(*) FROM tool_approvals WHERE run_id = ?1 \
-       AND state IN ('pending', 'approved', 'denied') GROUP BY state, decided_by",
+      "SELECT CASE WHEN state = 'pending' AND reviewing = 1 THEN 'reviewing' ELSE state END, decided_by, \
+       COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND state IN ('pending', 'approved', 'denied') \
+       GROUP BY 1, decided_by",
     )?;
     let rows = query
       .query_map([run.to_string()], |row| {
@@ -174,14 +188,25 @@ impl ProjectDb {
         .transpose()?;
       let slot = match (state.as_str(), decided_by) {
         ("pending", _) => &mut counts.waiting,
+        ("reviewing", _) => &mut counts.reviewing,
+        ("denied", Some(DecidedBy::AutomationDeny)) => &mut counts.denied_by_automation,
         ("denied", _) => &mut counts.denied_by_you,
+        (_, Some(DecidedBy::Automation)) => &mut counts.by_automation,
+        (_, Some(DecidedBy::Reviewer)) => &mut counts.by_reviewer,
         (_, Some(DecidedBy::SimilarRule)) => &mut counts.by_similar_rule,
         (_, Some(DecidedBy::AlwaysAllowed)) => &mut counts.always_allowed,
+        (_, Some(DecidedBy::Permissions)) => &mut counts.by_profile,
         (_, Some(DecidedBy::AutoApproved)) => &mut counts.auto_approved,
         _ => &mut counts.by_you,
       };
       *slot += count;
     }
+    counts.asked_by_reviewer = self.connection.query_row(
+      "SELECT COUNT(*) FROM tool_approvals WHERE run_id = ?1 AND review IS NOT NULL \
+       AND decided_by IS NOT 'reviewer' AND state IN ('approved', 'denied')",
+      [run.to_string()],
+      |row| row.get(0),
+    )?;
     Ok(counts)
   }
 }

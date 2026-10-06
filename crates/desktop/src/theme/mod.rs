@@ -16,8 +16,13 @@ mod shadow;
 mod tokens;
 mod typography;
 
+use std::time::Duration;
+
 pub use canvas_grid::{CANVAS_GRID_TILE, canvas_grid};
-pub use form::{command_scrollbar, gutter_scrollbar, gutter_width, select_menu_scrollbar, value_box_scrollbar};
+pub use form::{
+  command_scrollbar, gutter_scrollbar, gutter_width, input_line_height, padding_beside_gutter, select_menu_scrollbar,
+  value_box_scrollbar,
+};
 use lurq::app::App;
 pub use metrics::{ExtraRadius, ExtraSpacing};
 pub use palette::ExtraColor;
@@ -52,6 +57,8 @@ pub const UNAVAILABLE_OPTION_OPACITY: f32 = tokens::UNAVAILABLE_OPTION_OPACITY;
 pub const DISABLED_OPACITY: f32 = tokens::DISABLED_OPACITY;
 /// Opacity of a switch whose value is fixed, track and label as one group (`lW7Sp`).
 pub const LOCKED_SWITCH_OPACITY: f32 = tokens::LOCKED_SWITCH_OPACITY;
+/// How long a loader icon takes for one full turn.
+pub const LOADER_TURN: Duration = Duration::from_millis(tokens::LOADER_TURN_MS);
 pub const TASK_REVIEW_ROW_HEIGHT: f32 = tokens::TASK_REVIEW_ROW_HEIGHT;
 pub const TASK_REVIEW_RAIL_WIDTH: f32 = tokens::TASK_REVIEW_RAIL_WIDTH;
 pub const TASK_REVIEW_MODE_HEIGHT: f32 = tokens::TASK_REVIEW_MODE_HEIGHT;
@@ -65,6 +72,8 @@ pub const TASK_REVIEW_BACK_WIDTH: f32 = tokens::TASK_REVIEW_BACK_WIDTH;
 pub const TASK_REVIEW_COLUMNS_MIN_WINDOW: f32 = tokens::TASK_REVIEW_COLUMNS_MIN_WINDOW;
 pub const RETRY_LIMIT_COLUMNS_MIN_WINDOW: f32 = tokens::RETRY_LIMIT_COLUMNS_MIN_WINDOW;
 pub const CONVERSATION_TOOLBAR_ONE_LINE_MIN_CHAT: f32 = tokens::CONVERSATION_TOOLBAR_ONE_LINE_MIN_CHAT;
+pub const CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT: f32 = tokens::CONVERSATION_ANSWERS_ONE_LINE_MIN_CHAT;
+pub const CONVERSATION_ANSWERS_ROW_MIN_CHAT: f32 = tokens::CONVERSATION_ANSWERS_ROW_MIN_CHAT;
 pub const CONVERSATION_RAIL_COLLAPSE_BELOW_WINDOW: f32 = tokens::CONVERSATION_RAIL_COLLAPSE_BELOW_WINDOW;
 pub const CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW: f32 = tokens::CONVERSATION_COMPOSER_ONE_LINE_MIN_WINDOW;
 pub const CONVERSATION_TOOLBAR_RAW_SWITCH: f32 = tokens::CONVERSATION_TOOLBAR_RAW_SWITCH;

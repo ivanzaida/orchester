@@ -6,6 +6,11 @@
 //! similar rule's Revoke, and auto-approval's switch, indicator and Stop. This harness has no runner, so its status
 //! bar shows that problem in place of the waiting requests (`tests/status_bar/approvals.rs` shows them).
 
+use lurq::{
+  app::events::MouseButton,
+  core::ElementRect,
+  layout::quad::{Quad, QuadContent},
+};
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
@@ -97,6 +102,42 @@ fn approval_choices_dialog_shows_the_wider_answers_and_what_deny_tells() {
   assert!(later.x < deny.x && deny.x < once.x);
 }
 
+/// Orchester's own tools are no project server's: Approve similar covers the tool for the run, and Always allow
+/// says that they have no list of tools that run without asking.
+#[test]
+fn approval_choices_orchester_tool_offers_similar_but_not_always() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let (run, invocation) = native_run(repo);
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let approval = PendingToolApproval {
+      id: format!("{}:call_outside", invocation.id),
+      run: run.id(),
+      execution: invocation.execution,
+      invocation: invocation.id,
+      agent: "Builder".to_owned(),
+      command: false,
+      scope: Some(r#"{"path":"/deps/src/lib.rs"}"#.to_owned()),
+      server: "Orchester".to_owned(),
+      action: "read_outside_file".to_owned(),
+      target: None,
+      requested_at: at(20),
+      native: None,
+    };
+    db.request_tool_approval(&approval).expect("pending approval");
+  });
+  desktop.wait_for(DIALOG);
+  assert!(shows(
+    &mut desktop,
+    "tool-approval-similar",
+    "Orchester read_outside_file, every call until Run 1 ends"
+  ));
+  assert!(shows(
+    &mut desktop,
+    "tool-approval-always",
+    "Orchester’s own tools have no list of tools that run without asking yet"
+  ));
+}
+
 #[test]
 fn approval_choices_tab_follows_the_visual_order_and_wraps() {
   let (mut desktop, _) = open(2);
@@ -129,6 +170,131 @@ fn approval_choices_one_request_at_a_time_oldest_first() {
   desktop.wait_until("the first request again", |desktop| {
     shows(desktop, "tool-approval-position", "1 of 3 waiting")
   });
+}
+
+/// ‹ and › hold their chevron in the middle of their 26 square (`YLfbU`, `H4ip59`) whether they can be
+/// pressed or not, under the pointer and with the focus, at 1x and at 1.5x. The chevron is a lucide glyph
+/// whose ink is centred in its one-em box, so its text box centred in the button centres the ink.
+#[test]
+fn approval_choices_queue_chevrons_are_centred_in_their_buttons() {
+  let (mut desktop, _) = open(3);
+  // The design's 1440 × 960 window in physical pixels at each scale.
+  for (scale, width, height) in [(1.0, 1440, 960), (1.5, 2160, 1440)] {
+    desktop.tree.set_scale_factor(scale);
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    // The first request: ‹ cannot be pressed, › can.
+    assert_chevrons_centred(&mut desktop, scale, "first request");
+    pointer(&mut desktop, "tool-approval-next", scale, false);
+    assert_chevrons_centred(&mut desktop, scale, "› under the pointer");
+    desktop.tab_to("tool-approval-next", 12);
+    assert_chevrons_centred(&mut desktop, scale, "› focused");
+    pointer(&mut desktop, "tool-approval-next", scale, true);
+    desktop.wait_until("the second request", |desktop| {
+      shows(desktop, "tool-approval-position", "2 of 3 waiting")
+    });
+    // The middle request: both can be pressed.
+    assert_chevrons_centred(&mut desktop, scale, "middle request");
+    pointer(&mut desktop, "tool-approval-previous", scale, true);
+    desktop.wait_until("the first request again", |desktop| {
+      shows(desktop, "tool-approval-position", "1 of 3 waiting")
+    });
+  }
+}
+
+/// The pointer over the middle of `id`, and a press there if `press`. lurq takes the pointer in the
+/// window's physical pixels, which `Desktop::hover` and `Desktop::press` assume are logical ones.
+fn pointer(desktop: &mut Desktop, id: &str, scale: f32, press: bool) {
+  let bounds = desktop.bounds(id);
+  let (x, y) = (
+    (bounds.x + bounds.width / 2.0) * scale,
+    (bounds.y + bounds.height / 2.0) * scale,
+  );
+  desktop.tree.mouse_move(x, y);
+  if press {
+    desktop.tree.mouse_down(x, y, MouseButton::Left);
+    desktop.tree.mouse_up(x, y, MouseButton::Left);
+  }
+  desktop.pass();
+}
+
+fn assert_chevrons_centred(desktop: &mut Desktop, scale: f32, state: &str) {
+  for id in ["tool-approval-previous", "tool-approval-next"] {
+    let button = desktop.bounds(id);
+    let glyph = painted_text_in(desktop, &button).unwrap_or_else(|| panic!("{id} paints its chevron"));
+    let what = format!("{id} at {scale}x, {state}: chevron {glyph:?} in {button:?}");
+    assert_eq!(glyph.width, glyph.height, "{what}: the chevron's box is its square em");
+    let centre = |rect: &ElementRect| (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let ((glyph_x, glyph_y), (button_x, button_y)) = (centre(&glyph), centre(&button));
+    // Within a quarter of a physical pixel, so a rounding of the layout passes and an offset does not.
+    let tolerance = 0.25 / scale;
+    assert!((glyph_x - button_x).abs() <= tolerance, "{what}: centred across");
+    assert!((glyph_y - button_y).abs() <= tolerance, "{what}: centred down");
+  }
+}
+
+/// The box of the one text painted inside `bounds` in the last pass.
+fn painted_text_in(desktop: &Desktop, bounds: &ElementRect) -> Option<ElementRect> {
+  let inside = |x: f32, y: f32, width: f32, height: f32| {
+    x >= bounds.x && y >= bounds.y && x + width <= bounds.x + bounds.width && y + height <= bounds.y + bounds.height
+  };
+  desktop
+    .tree
+    .painted_quads()
+    .into_iter()
+    .filter(|quad| matches!(quad.content, QuadContent::Text { .. }))
+    .find(|quad| inside(quad.x, quad.y, quad.width, quad.height))
+    .map(|quad| ElementRect {
+      x: quad.x,
+      y: quad.y,
+      width: quad.width,
+      height: quad.height,
+      ..ElementRect::default()
+    })
+}
+
+/// A focused ‹ or › shows its whole focus ring (`xURvJ`): the header row ends at › and is taller
+/// than the buttons by less than the ring reaches, so it must not clip them.
+#[test]
+fn approval_choices_queue_buttons_show_their_whole_focus_ring() {
+  let (mut desktop, _) = open(3);
+  desktop.press("tool-approval-next");
+  desktop.wait_until("the middle request", |desktop| {
+    shows(desktop, "tool-approval-position", "2 of 3 waiting")
+  });
+  for id in ["tool-approval-previous", "tool-approval-next"] {
+    desktop.tab_to(id, 12);
+    let button = desktop.bounds(id);
+    let rings: Vec<_> = desktop
+      .tree
+      .painted_quads()
+      .into_iter()
+      .filter_map(|quad| match &quad.content {
+        QuadContent::BoxShadow(shadow) if !shadow.inset && same_box(&quad, &button) => {
+          Some((shadow.outset(), quad.clip))
+        }
+        _ => None,
+      })
+      .collect();
+    assert!(!rings.is_empty(), "{id} paints its focus ring");
+    for (outset, clip) in rings {
+      let (left, top) = (button.x - outset, button.y - outset);
+      let (right, bottom) = (button.x + button.width + outset, button.y + button.height + outset);
+      let whole = !clip.active
+        || (clip.x <= left && clip.y <= top && clip.x + clip.width >= right && clip.y + clip.height >= bottom);
+      let clipped = (clip.x, clip.y, clip.width, clip.height);
+      assert!(
+        whole,
+        "{id}'s ring reaching {outset} past {button:?} is clipped to {clipped:?}"
+      );
+    }
+  }
+}
+
+/// Whether `quad` is painted on `bounds`, to within a layout rounding.
+fn same_box(quad: &Quad, bounds: &ElementRect) -> bool {
+  let near = |a: f32, b: f32| (a - b).abs() <= 0.5;
+  near(quad.x, bounds.x) && near(quad.y, bounds.y) && near(quad.width, bounds.width) && near(quad.height, bounds.height)
 }
 
 #[test]
@@ -227,7 +393,7 @@ fn first_review(desktop: &Desktop) -> Option<String> {
   Some(format!("overview-request-review-{}", oldest.id))
 }
 
-fn open_task(desktop: &mut Desktop) {
+pub(crate) fn open_task(desktop: &mut Desktop) {
   desktop.wait_for("nav-tasks");
   desktop.press("nav-tasks");
   desktop.wait_for("task-row-KON-1");

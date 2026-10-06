@@ -95,7 +95,7 @@ async fn native_step_reads_edits_and_finishes() {
   let stored = db.native_conversation(conversation).expect("read").expect("stored");
   assert!(stored.system.starts_with("You are a coding agent"), "{}", stored.system);
   assert_eq!(db.native_items(conversation).expect("items").len(), 7);
-  let requests = server.messages_requests();
+  let requests = server.model_requests();
   assert_eq!(requests.len(), 3);
   assert_eq!(requests[0].json()["output_config"]["effort"], json!("low"));
 }

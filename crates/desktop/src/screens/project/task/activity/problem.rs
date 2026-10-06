@@ -9,6 +9,7 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, RunnerProblem},
+  run::DecidedBy,
   tokens::compact_tokens,
 };
 
@@ -19,13 +20,19 @@ use crate::{
 };
 
 /// A problem row that reads as a titled row with an explanation rather than as its transcript entry:
-/// a command that did not run because it was denied.
+/// a command that did not run because it was denied; a request that ended without a decision, with
+/// what happened to it beside its time, as a denial has.
 pub(super) fn titled(ctx: &Ctx, entry: &Entry) -> Option<Shown> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => Some(match &command.native {
       Some(call) => native_call::call(ctx, command, call),
       None => denied_command(ctx, command),
     }),
+    EntryKind::Problem(problem @ RunnerProblem::DecisionInterrupted { .. }) => {
+      let (title, body) = problem_text(ctx, problem);
+      let kind = ctx.t("runs.conversation.problem.kind.decisionInterrupted");
+      Some(Shown::plain(Icon::AlertCircle, title, kind, body))
+    }
     _ => None,
   }
 }
@@ -44,26 +51,47 @@ fn denied_command(ctx: &Ctx, command: &CommandEntry) -> Shown {
     None => ctx.t("runs.conversation.problem.commandDenied"),
   };
   let line = command_preview(&command.command);
-  let by_you = command.mark.as_ref().is_some_and(CommandMark::is_denial);
+  let denied = decided
+    .filter(|_| command.mark.as_ref().is_some_and(CommandMark::is_denial))
+    .map(|mark| Denial::by(mark.decision.decided_by));
   let told = decided.and_then(|mark| mark.decision.told.as_deref());
-  let (kind, body) = match (by_you, told) {
-    (true, Some(told)) => (
-      "runs.conversation.problem.kind.deniedByYou",
-      ctx.t_args(
-        "runs.conversation.problem.deniedByYouTold",
-        [("command", &*line), ("message", told)],
-      ),
+  let (kind, body) = match (denied, told) {
+    (Some(denial), Some(told)) => (
+      denial.kind,
+      ctx.t_args(denial.told, [("command", &*line), ("message", told)]),
     ),
-    (true, None) => (
-      "runs.conversation.problem.kind.deniedByYou",
-      ctx.t_args("runs.conversation.problem.deniedByYou", [("command", &*line)]),
-    ),
-    (false, _) => (
+    (Some(denial), None) => (denial.kind, ctx.t_args(denial.text, [("command", &*line)])),
+    (None, _) => (
       "runs.conversation.problem.kind.permissionDenied",
       ctx.t_args("runs.conversation.problem.notAllowed", [("command", &*line)]),
     ),
   };
   Shown::plain(Icon::ShieldAlert, title, ctx.t(kind), Some(body))
+}
+
+/// The keys a denial is told with: by the person, or by automation through Orchester's MCP server.
+struct Denial {
+  kind: &'static str,
+  text: &'static str,
+  told: &'static str,
+}
+
+impl Denial {
+  const fn by(decided_by: DecidedBy) -> Self {
+    if decided_by.by_automation() {
+      Self {
+        kind: "runs.conversation.problem.kind.deniedByAutomation",
+        text: "runs.conversation.problem.deniedByAutomation",
+        told: "runs.conversation.problem.deniedByAutomationTold",
+      }
+    } else {
+      Self {
+        kind: "runs.conversation.problem.kind.deniedByYou",
+        text: "runs.conversation.problem.deniedByYou",
+        told: "runs.conversation.problem.deniedByYouTold",
+      }
+    }
+  }
 }
 
 /// The entry's title and, if it has one, its detail for `problem`.
@@ -102,10 +130,9 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
       ),
       None,
     ),
-    RunnerProblem::PermissionPromptUnreachable => (
-      ctx.t("runs.activity.problem.promptUnreachable"),
-      Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
-    ),
+    RunnerProblem::PermissionPromptUnreachable => prompt_unreachable(ctx),
+    RunnerProblem::DecisionInterrupted { server, action, .. } => decision_interrupted(ctx, server, action),
+    RunnerProblem::RunnerFailed { detail } => runner_failed(ctx, detail),
     RunnerProblem::CliTooOld {
       model,
       installed,
@@ -183,6 +210,39 @@ fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<s
       Some(ctx.t("runs.activity.problem.thinkingStrippedDetail")),
     ),
   }
+}
+
+/// Claude Code's permission prompt never reached the runner.
+fn prompt_unreachable(ctx: &Ctx) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("runs.activity.problem.promptUnreachable"),
+    Some(ctx.t("runs.activity.problem.promptUnreachableDetail")),
+  )
+}
+
+/// The runner could not record the run, which was interrupted, and its error.
+fn runner_failed(ctx: &Ctx, detail: &str) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("runs.activity.problem.runnerFailed"),
+    Some(ctx.t_args("runs.activity.problem.runnerFailedDetail", [("detail", detail)])),
+  )
+}
+
+/// A request that ended without a decision: what happened as the title, which keeps its words at any width,
+/// and the request under it, by its command on one line or by its MCP server and tool.
+fn decision_interrupted(ctx: &Ctx, server: &str, action: &str) -> (Arc<str>, Option<Arc<str>>) {
+  let request: Arc<str> = if server == "command" {
+    command_preview(action).into()
+  } else {
+    ctx.t_args("runs.activity.decision.tool", [("server", server), ("tool", action)])
+  };
+  (
+    ctx.t("runs.activity.problem.decisionInterrupted"),
+    Some(ctx.t_args(
+      "runs.activity.problem.decisionInterruptedDetail",
+      [("request", &*request)],
+    )),
+  )
 }
 
 /// Lines of the CLI's standard error the activity did not keep.

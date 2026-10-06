@@ -4,6 +4,7 @@
 //! timeout. Everything here blocks; callers with a UI or an async runtime run it off their
 //! thread.
 
+mod capped;
 mod console;
 
 pub mod launch;
@@ -21,6 +22,8 @@ use std::{
 };
 
 use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
+
+pub use self::capped::run_capped;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 

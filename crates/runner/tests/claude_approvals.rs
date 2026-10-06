@@ -17,7 +17,7 @@ use orchester_core::{
   id::{ConnectionId, IdempotencyKey, RunId, SecretId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, StepKey, VariableName},
-  run::{ApprovalAnswer, PauseReason, PendingToolApproval, RunStatus, StepStatus},
+  run::{Answerer, ApprovalAnswer, PauseReason, PendingToolApproval, RunStatus, StepStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::ActivityStore,
   time::Timestamp,
@@ -140,17 +140,17 @@ async fn claude_approvals_run_an_approved_command_once() {
   tokio::time::sleep(std::time::Duration::from_millis(60)).await;
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, "another-call".to_owned(), ApprovalAnswer::Once)
+      .decide_tool_approval(id, "another-call".to_owned(), ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
   scheduler
-    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalAnswered),
     "a decision is taken once"
@@ -239,7 +239,7 @@ async fn stop_at_a_pending_approval(stopping: Stopping) -> PausedAtApproval {
   assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "the call was not granted and cannot be later"
@@ -308,7 +308,7 @@ async fn claude_approvals_resume_after_a_pause_at_a_pending_call_asks_again() {
     "the interrupted call did not run"
   );
   scheduler
-    .decide_tool_approval(id, again.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, again.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -355,7 +355,7 @@ async fn claude_approvals_ask_even_for_a_command_accept_edits_would_run() {
   let request = pending(root, &mut events, id).await;
   assert_eq!(request.action, "mkdir build-output");
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -380,7 +380,7 @@ async fn claude_approvals_ask_in_a_read_only_step_too() {
   let request = pending(root, &mut events, id).await;
   assert_eq!(request.action, "mkdir build-output");
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -420,7 +420,7 @@ async fn claude_approvals_denial_tells_the_agent_and_the_step_goes_on() {
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Deny, Answerer::Person)
     .await
     .expect("denied");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -469,7 +469,7 @@ async fn claude_approvals_cancel_while_waiting_leaves_a_stale_decision_unusable(
   assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalNotAwaited)
   );
@@ -493,7 +493,7 @@ async fn claude_approvals_show_an_mcp_action_without_its_secret() {
   assert_eq!((request.server.as_str(), request.action.as_str()), ("docs", "write"));
   assert_eq!(request.target.as_deref(), Some("docs/<redacted>.md"));
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;

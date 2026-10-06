@@ -1,8 +1,8 @@
 //! A native agent's side of a worker (`docs/architecture/native-agent.md` §2.2): its task's events are
 //! taken in as a CLI's would be, a command that waits for a person goes through the approvals every
-//! agent uses, the run's stops are handed to the loop, which carries them out itself, and how the loop
-//! ended becomes the invocation's outcome. A result or a question becomes the agent's last message,
-//! where the step's end reads it as for a CLI.
+//! agent uses (auto mode's review and its hard rules included), the run's stops are handed to the loop,
+//! which carries them out itself, and how the loop ended becomes the invocation's outcome. A result or a
+//! question becomes the agent's last message, where the step's end reads it as for a CLI.
 
 use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome},
@@ -19,7 +19,7 @@ use orchester_store::StoreError;
 
 use super::{
   super::native::{NativeHandle, NativeUpdate},
-  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, Watch, Worker,
+  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, Watch, Worker, review,
 };
 
 impl Worker {
@@ -40,6 +40,9 @@ impl Worker {
         decision = self.decisions.recv(), if deciding => match decision {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,
+        },
+        reviewed = review::next(&mut self.reviewing), if self.reviewing.is_some() => {
+          self.apply_review(&mut watch, reviewed).await?;
         },
         stop = self.stops.recv(), if listening => match stop {
           Some(stop) => self.native_stop(&mut watch, stop),
@@ -113,6 +116,7 @@ impl Worker {
       stopped,
       final_message: watch.tracker.last_message().map(str::to_owned),
       approval_interrupted,
+      closed_after_result: false,
     })
   }
 

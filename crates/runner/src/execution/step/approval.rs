@@ -25,9 +25,9 @@ use tokio::sync::oneshot;
 use super::{
   super::{control::answer, tool_approval::end_unheld},
   answer::Settled,
-  claude_approval::{Asked, PromptAnswer},
+  claude_approval::{Asked, AskedBy, PromptAnswer},
   native::NativeAsk,
-  worker::{ApprovalDecision, Driver, Watch, Worker},
+  worker::{ApprovalDecision, Driver, Transport, Watch, Worker},
 };
 
 /// Who answers a native agent's command request, as its approval records it.
@@ -43,6 +43,11 @@ pub(super) enum Awaiting {
   },
   /// A native agent's command, answered through the worker's native driver.
   Native(ToolCallId),
+  /// A call `call` of Orchester's tools waiting in the relay, which runs it once approved.
+  Tool {
+    call: String,
+    reply: oneshot::Sender<PromptAnswer>,
+  },
 }
 
 impl Awaiting {
@@ -50,7 +55,7 @@ impl Awaiting {
   pub(super) fn item(&self) -> &str {
     match self {
       Self::Codex(request) => request.item(),
-      Self::Claude { call, .. } => call,
+      Self::Claude { call, .. } | Self::Tool { call, .. } => call,
       Self::Native(call) => call.as_str(),
     }
   }
@@ -116,14 +121,14 @@ impl Worker {
       .await
   }
 
-  /// A permission prompt call of Claude Code that a person decides. A call asked about before is
-  /// denied without asking again.
+  /// A permission prompt call of Claude Code, or a call of Orchester's tools the relay holds, that a person
+  /// decides. A prompt call asked about before is denied without asking again.
   pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
-    let Asked { request, reply } = asked;
-    let first = self
-      .claude_approvals
-      .as_mut()
-      .is_some_and(|approvals| approvals.first_ask(request.call()));
+    let Asked { request, reply, by } = asked;
+    let first = match (by, self.claude_approvals.as_mut()) {
+      (AskedBy::ToolCall, _) => true,
+      (AskedBy::Prompt, approvals) => approvals.is_some_and(|approvals| approvals.first_ask(request.call())),
+    };
     if !first {
       // The relay reads the denial; a closed relay has nothing to deny.
       if reply.send(PromptAnswer::Repeated).is_err() {
@@ -151,9 +156,11 @@ impl Worker {
     };
     let call = request.call().to_owned();
     let key = call.clone();
-    self
-      .await_person(watch, &key, shown, Awaiting::Claude { call, reply })
-      .await
+    let awaiting = match by {
+      AskedBy::Prompt => Awaiting::Claude { call, reply },
+      AskedBy::ToolCall => Awaiting::Tool { call, reply },
+    };
+    self.await_person(watch, &key, shown, awaiting).await
   }
 
   pub(super) fn redact(&self, text: &str) -> String {
@@ -192,22 +199,54 @@ impl Worker {
     Ok(())
   }
 
-  /// Claude Code's permission prompt closed its connection while a call waited: the call can no
-  /// longer be answered, so the request is interrupted and a later decision is refused.
+  /// Claude Code's permission prompt, or the relay of Orchester's tools, closed its connection while a call
+  /// waited: the call can no longer be answered, so the request is interrupted, named in the activity, and
+  /// a later decision is refused. The turn fails with it. When Claude Code had already ended its turn with a
+  /// result and nothing else had failed, the close is remembered: a question the agent delivered then still
+  /// asks the person (`Finished::closed_after_result`).
   pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    watch.approval = None;
+    let pending = watch.approval.take();
     watch
       .db
       .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
     self.end_approval_wait(watch)?;
-    self.observe(
-      watch,
-      AgentEvent::TurnFailed {
-        message: "Claude Code's permission prompt closed before the decision".to_owned(),
-      },
-    )?;
+    if let Some((approval, _)) = &pending {
+      self.report_interrupted(watch, approval)?;
+    }
+    let message = format!(
+      "{}'s permission prompt or tool relay closed before the decision",
+      self.cli()
+    );
+    if self.delivered_result(watch) {
+      watch.closed_after_result = Some(message.clone());
+    }
+    self.observe(watch, AgentEvent::TurnFailed { message })?;
     self.driver.end();
     Ok(())
+  }
+
+  /// Whether Claude Code ended its turn with a result and nothing failed before.
+  fn delivered_result(&self, watch: &Watch) -> bool {
+    let ended = matches!(
+      &self.driver,
+      Driver::Process { transport: Transport::Claude(claude), .. } if claude.results() > 0
+    );
+    let failed = matches!(
+      watch.tracker.outcome(Some(0)),
+      InvocationOutcome::TurnFailed { .. } | InvocationOutcome::NotSignedIn { .. }
+    );
+    ended && !failed
+  }
+
+  /// Names `approval`, which waited when its CLI could no longer take a decision, so the activity says
+  /// which request ended interrupted.
+  pub(super) fn report_interrupted(&self, watch: &mut Watch, approval: &PendingToolApproval) -> Result<(), StoreError> {
+    let problem = RunnerProblem::DecisionInterrupted {
+      request: approval.id.clone(),
+      server: approval.server.clone(),
+      action: approval.action.clone(),
+    };
+    self.observe(watch, AgentEvent::RunnerProblem { problem })
   }
 
   async fn await_person(
@@ -250,8 +289,14 @@ impl Worker {
       }
       return Ok(());
     }
-    watch.invocation.timing.wait_for_person(approval.requested_at);
-    watch.db.save_invocation(&watch.invocation)?;
+    // Auto mode judges it first, without asking the person; a hard rule (a Codex command asks to leave
+    // its sandbox, which only the person grants) asks the person at once.
+    let escalation = matches!(&awaiting, Awaiting::Codex(request) if request.is_command());
+    self.reviewing = self.start_review(watch, &approval, escalation)?;
+    if self.reviewing.is_none() {
+      watch.invocation.timing.wait_for_person(approval.requested_at);
+      watch.db.save_invocation(&watch.invocation)?;
+    }
     self.notifier.send(Event::ToolApprovalChanged {
       run: approval.run,
       task: self.task,
@@ -303,7 +348,7 @@ impl Worker {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
     let (approval, awaiting) = watch.approval.take().expect("the pending approval was matched above");
-    let settled = match self.widen(watch, &approval, &decision.answer)? {
+    let settled = match self.widen(watch, &approval, (&decision.answer, decision.by))? {
       Ok(settled) => settled,
       Err(rejection) => {
         // The request still waits for an answer that can be given.
@@ -331,19 +376,18 @@ impl Worker {
         Driver::Process { .. } => Err("a CLI takes no native decision".to_owned()),
       },
       Awaiting::Claude { call, reply } => {
-        let prompt = match &answer.told {
-          Some(told) if !approve => PromptAnswer::Deny(told.clone()),
-          None if !approve => PromptAnswer::Repeated,
-          _ => PromptAnswer::Allow,
-        };
         reply
-          .send(prompt)
+          .send(prompt_answer(answer, approve))
           .map_err(|_| "its permission prompt has closed".to_owned())?;
         if approve {
           watch.approved_calls.insert(call);
         }
         Ok(())
       }
+      // The relay runs the call and answers it itself; the agent's CLI reports no result to wait for.
+      Awaiting::Tool { reply, .. } => reply
+        .send(prompt_answer(answer, approve))
+        .map_err(|_| "Orchester's tool relay has closed".to_owned()),
     }
   }
 
@@ -359,5 +403,14 @@ impl Worker {
       });
     }
     Ok(())
+  }
+}
+
+/// The answer a relay call gets: allowed, or denied with what the agent is told.
+fn prompt_answer(answer: &Settled, approve: bool) -> PromptAnswer {
+  match &answer.told {
+    Some(told) if !approve => PromptAnswer::Deny(told.clone()),
+    None if !approve => PromptAnswer::Repeated,
+    _ => PromptAnswer::Allow,
   }
 }

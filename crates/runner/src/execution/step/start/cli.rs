@@ -5,6 +5,7 @@
 use std::{
   collections::BTreeSet,
   path::{Path, PathBuf},
+  sync::Arc,
 };
 
 use orchester_core::{
@@ -17,16 +18,33 @@ use orchester_core::{
     mcp::InvocationExemptions,
     stream::RunnerProblem,
   },
+  orchester_tools::SERVER,
   permission::{CommandPermission, OutsideCommands, capability::EnforcedPermissions},
   resource::{CommandEnvironment, ModelId},
   store::SettingsStore,
 };
 
 use super::{
-  super::{super::run::RunTask, app_server::AppServerSetup, mcp::ClaudeServers, skills::repository_skills},
+  super::{
+    super::run::RunTask,
+    app_server::AppServerSetup,
+    mcp::{ClaudeServers, McpSetup},
+    orchester_tools::{CodexTools, ToolHost},
+    relay::Listening,
+    skills::repository_skills,
+  },
   NATIVE_NOT_AVAILABLE, problem,
 };
 use crate::private_file::PrivateFile;
+
+/// The CLI's command, and what must live as long as the CLI: Claude Code's MCP configuration file, or
+/// what the runner tells Codex App Server and the listener of its relay of Orchester's tools.
+pub(super) struct CliCommand {
+  pub(super) command: Command,
+  pub(super) mcp_file: Option<PrivateFile>,
+  pub(super) app_server: Option<AppServerSetup>,
+  pub(super) tool_relay: Option<Listening>,
+}
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
 pub(super) struct Cli<'a> {
@@ -77,15 +95,55 @@ impl RunTask {
     })
   }
 
-  /// Codex App Server with the MCP servers `mcp`, and what the runner tells it once it runs: the
-  /// prompt, the thread's settings and the approvals it may ask a person for.
-  pub(super) fn app_server_command(
+  /// The CLI's command with `prompt`, the MCP servers of `setup` and the Orchester tools of `tools`; Claude
+  /// Code's MCP configuration file, or what the runner tells Codex App Server once it runs.
+  pub(super) fn cli_command(
+    &self,
+    cli: &Cli<'_>,
+    setup: McpSetup,
+    prompt: String,
+    tools: Arc<ToolHost>,
+  ) -> Result<CliCommand, RunnerProblem> {
+    match setup {
+      McpSetup::Codex(mcp) => {
+        let CodexTools {
+          server,
+          table,
+          listening,
+        } = self.codex_tools(tools)?;
+        let mcp = mcp.with_orchester(server);
+        let (command, app) = self.app_server_command(cli, &mcp, prompt, table)?;
+        Ok(CliCommand {
+          command,
+          mcp_file: None,
+          app_server: Some(app),
+          tool_relay: Some(listening),
+        })
+      }
+      McpSetup::Claude(servers) => {
+        let (command, mcp_file) = self.claude_command(cli, servers, &prompt)?;
+        Ok(CliCommand {
+          command,
+          mcp_file,
+          app_server: None,
+          tool_relay: None,
+        })
+      }
+    }
+  }
+
+  /// Codex App Server with the MCP servers `mcp` and Orchester's server, whose tools' table in the thread's
+  /// configuration is `orchester`, and what the runner tells it once it runs: the prompt, the thread's
+  /// settings and the approvals it may ask a person for.
+  fn app_server_command(
     &self,
     cli: &Cli<'_>,
     mcp: &CodexMcp,
     prompt: String,
+    orchester: serde_json::Value,
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
-    let expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+    let mut expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+    expected_servers.insert(SERVER.to_owned());
     let invocation = CodexInvocation {
       executable: cli.executable,
       repository: &self.root,
@@ -128,13 +186,14 @@ impl RunTask {
         },
         output_schema: schema,
         secrets: mcp.secrets().to_vec(),
+        orchester,
       },
     ))
   }
 
   /// Claude Code's command with `prompt` on its standard input and the MCP servers `servers`, and the
   /// configuration file it reads them from, if any.
-  pub(super) fn claude_command(
+  fn claude_command(
     &self,
     cli: &Cli<'_>,
     servers: Option<ClaudeServers>,

@@ -8,7 +8,7 @@
 #[path = "../../../agent/tests/anthropic_wire/events.rs"]
 mod events;
 #[allow(dead_code, reason = "shared with the agent crate's tests, which use all of it")]
-#[path = "../../../agent/tests/anthropic_wire/server.rs"]
+#[path = "../../../agent/tests/fake_server/mod.rs"]
 mod server;
 #[path = "../support/mod.rs"]
 mod support;

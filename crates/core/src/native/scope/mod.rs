@@ -217,6 +217,27 @@ impl FileScope {
   }
 }
 
+/// `path`, an existing absolute local path, with its links resolved, for a read outside every scope
+/// (`crate::orchester_tools::OutsideReads`). The spellings the file tools refuse are refused here too, and
+/// a network path before anything resolves it.
+pub fn resolve_local(path: &str) -> Result<PathBuf, ScopeError> {
+  if path.contains(' ') {
+    return Err(ScopeError::Nul);
+  }
+  if platform::path_form(path)? == PathForm::Network {
+    return Err(ScopeError::NetworkPath(path.to_owned()));
+  }
+  canonical_root(Path::new(path))
+}
+
+/// Whether `path` is a `.git` entry or lies in one, at any depth, as the platform opens names.
+pub fn in_git_folder(path: &Path) -> bool {
+  path.components().any(|component| match component {
+    Component::Normal(name) => platform::is_named(name, GIT_DIR),
+    _ => false,
+  })
+}
+
 /// A root folder, which must exist, with links resolved.
 fn canonical_root(path: &Path) -> Result<PathBuf, ScopeError> {
   fs::canonicalize(path)
@@ -250,14 +271,21 @@ fn within(path: &Path, root: &Path) -> bool {
 }
 
 /// Whether `path` inside `root` is a `.git` entry or lies in one, or, in the worktree, lies in
-/// `.orchester/`.
-fn protected(path: &Path, root: &Path, in_worktree: bool) -> bool {
+/// `.orchester/`, or names a stream of a file or folder (on Windows, `name:stream`), which opens what
+/// the name before it opens. Callers check the path with its links and short names resolved as well:
+/// `GIT~1` is `.git` only once resolved. The command classifier refuses a shell write there by this same
+/// rule.
+pub(crate) fn protected(path: &Path, root: &Path, in_worktree: bool) -> bool {
   let below = path.components().skip(root.components().count());
   for (depth, component) in below.enumerate() {
     let Component::Normal(name) = component else {
       continue;
     };
-    if platform::is_named(name, GIT_DIR) || (in_worktree && depth == 0 && platform::is_named(name, STATE_DIR)) {
+    // A stream of a name (`.git::$INDEX_ALLOCATION`) opens what the name opens.
+    if platform::names_stream(name)
+      || platform::is_named(name, GIT_DIR)
+      || (in_worktree && depth == 0 && platform::is_named(name, STATE_DIR))
+    {
       return true;
     }
   }

@@ -3,17 +3,25 @@
 //! classified by its program, subcommand, options and the paths it names, and the strictest part
 //! names the command. Only what is understood is classified: an unknown program or subcommand, an
 //! option that is not listed for its program, a variable set before a program (`PATH=…`,
-//! `LD_PRELOAD=…`, `GIT_…=…`) and anything not read to the end are Unknown, so they ask.
+//! `LD_PRELOAD=…`, `GIT_…=…`), a command in the background and anything not read to the end are
+//! Unknown, so they ask. A variable the line sets to a plain literal is read where it is used
+//! ([`variables`]), and a `cd` into the worktree is no part of its own: the parts after it are placed
+//! from every folder it may leave them in.
 //!
 //! Run temp (a temporary file this run created) is not told apart yet: a temporary file is outside
 //! the worktree like any other. Besides its category a part says whether it reads a credential
 //! location ([`CommandScope`]) and whether it installs software, which auto-approval never approves
 //! ([`crate::run::auto_verdict`]).
 
+mod awk_program;
 mod files;
 mod gh;
 mod git;
+mod glob;
+mod heredoc;
 mod install;
+mod interpreters;
+mod loops;
 mod network;
 mod network_tables;
 mod options;
@@ -22,11 +30,16 @@ mod part;
 mod paths;
 mod place;
 mod powershell;
+mod prefixes;
+mod processes;
 mod programs;
 mod reason;
+mod scripts;
+mod sed_script;
+mod variables;
 mod words;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -36,8 +49,9 @@ pub use self::{
   reason::CommandReason,
 };
 use self::{
-  place::{Folders, Placing},
+  place::{Line, Placing},
   programs::{Judged, Kind},
+  variables::is_assignment,
   words::{Quoting, RawPart},
 };
 use super::known_safe::program_name;
@@ -92,6 +106,8 @@ impl CommandCategory {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassifiedCommand {
   parts: Vec<CommandPart>,
+  /// The command line as asked about.
+  text: String,
 }
 
 impl ClassifiedCommand {
@@ -102,13 +118,38 @@ impl ClassifiedCommand {
 
   /// `command` run in `folder` (the working folder the agent's CLI reported), placed in `scope`.
   pub fn classify_in(command: &str, folder: &Path, scope: &CommandScope) -> Self {
-    let mut folders = Some(vec![scope.worktree().join(folder)]);
-    let parts = classify_line(command, Quoting::Bash, scope, &mut folders, 0);
-    Self { parts }
+    let mut line = Line::new(Some(vec![scope.worktree().join(folder)]));
+    let mut parts = classify_line(command, Quoting::Bash, scope, &mut line, 0);
+    // A `cd` into the worktree or a writable folder does nothing a person decides about; where the
+    // parts after it run is followed all the same.
+    if parts.iter().any(|part| !part.moves_inside()) {
+      parts.retain(|part| !part.moves_inside());
+    }
+    // Another part that may change files, before, after or beside it in a pipeline, may change the
+    // script before it runs: the file there now is not what runs. Another script run changes nothing a
+    // script could not: its code is the agent's too.
+    let changing = parts
+      .iter()
+      .any(|part| part.category() != CommandCategory::ReadOnly && !part.runs_script);
+    if changing {
+      for part in parts.iter_mut().filter(|part| part.runs_script) {
+        part.edits = false;
+        part.at_least(CommandCategory::Unknown);
+      }
+    }
+    Self {
+      parts,
+      text: command.to_owned(),
+    }
   }
 
   pub fn parts(&self) -> &[CommandPart] {
     &self.parts
+  }
+
+  /// The command line as asked about.
+  pub fn text(&self) -> &str {
+    &self.text
   }
 
   /// The strictest part's category; Unknown for a command with no part.
@@ -139,34 +180,49 @@ impl ClassifiedCommand {
 }
 
 fn classify_line(
-  line: &str,
+  text: &str,
   quoting: Quoting,
   scope: &CommandScope,
-  folders: &mut Folders,
+  line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
-  words::split(line, quoting)
-    .into_iter()
-    .flat_map(|raw| classify_part(&raw, quoting, scope, folders, depth))
-    .collect()
+  if quoting == Quoting::Bash
+    && let Some(rounds) = loops::rounds(text)
+  {
+    let Some(rounds) = rounds else {
+      return vec![CommandPart::unknown(vec![text.to_owned()])];
+    };
+    return rounds
+      .iter()
+      .flat_map(|round| classify_line(round, quoting, scope, line, depth))
+      .collect();
+  }
+  let mut parts = Vec::new();
+  for raw in words::split(text, quoting) {
+    parts.extend(classify_part(&raw, quoting, scope, line, depth));
+    line.made(scope, &raw.writes);
+  }
+  parts
 }
 
 fn classify_part(
   raw: &RawPart,
   quoting: Quoting,
   scope: &CommandScope,
-  folders: &mut Folders,
+  line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
-  let words = raw.words.clone();
-  // A variable set before a program (or for the commands after it) can change what any program does.
-  if raw.unread || words.first().is_some_and(|word| is_assignment(word)) {
-    return vec![CommandPart::unknown(words)];
+  // Its value was read into the parts after it.
+  if raw.assigns {
+    return Vec::new();
   }
-  let placing = Placing {
-    scope,
-    folders: folders.as_deref(),
-  };
+  let words = prefixes::without_benign(&raw.words, raw.quoted_name).to_vec();
+  // A variable set before a program (or for the commands after it) can change what any program does,
+  // and a command in the background goes on after the line.
+  if raw.unread || raw.background || words.first().is_some_and(|word| is_assignment(word)) {
+    return vec![unknown(words, raw, line.placing(scope))];
+  }
+  let placing = line.placing(scope);
   let Some((first, args)) = words.split_first() else {
     // Only redirections.
     return vec![redirected(
@@ -176,44 +232,188 @@ fn classify_part(
     )];
   };
   let program = program_key(first, quoting);
-  if let Some(script) = program.as_deref().and_then(|program| shell_script(program, args)) {
-    let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH) else {
-      return vec![CommandPart::unknown(words)];
-    };
-    // The script runs in a shell of its own: a `cd` in it changes nothing after it.
-    let mut inner_folders = folders.clone();
-    let mut parts = classify_line(&script, inner, scope, &mut inner_folders, depth + 1);
-    if !raw.writes.is_empty() || !raw.reads.is_empty() {
-      parts.push(redirected(
-        CommandPart::new(words, None, &Judged::of(Kind::ReadOnly)),
-        raw,
-        placing,
-      ));
-    }
-    return parts;
+  let inline = program
+    .as_deref()
+    .filter(|program| interpreters::script(program, args).is_none());
+  if let Some(script) = inline.and_then(|program| shell_script(program, args)) {
+    return shell_parts(raw, words, script, scope, line, depth);
   }
   let Some(program) = program else {
-    return vec![CommandPart::unknown(words)];
+    return vec![worktree_program(words, raw, placing)];
   };
+  // An interpreter given with a folder could be any program.
+  if first.contains(['/', '\\']) && interpreters::script(&program, args).is_some() {
+    return vec![unknown(words, raw, placing)];
+  }
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
-  for word in place::named(args)
-    .into_iter()
-    .chain(judged.reads.iter().map(String::as_str))
-  {
-    placing.read(&mut part, word);
+  judge_edits(&mut part, &judged, args, placing);
+  // `python -` runs what its standard input holds: the agent's code only from a here-document read as
+  // written, not from a pipe or a file.
+  if judged.stdin_code && (!raw.heredoc || !raw.reads.is_empty()) {
+    part.edits = false;
+    part.at_least(CommandCategory::Unknown);
   }
+  // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
+  placing.read(&mut part, ".");
+  place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
   for target in &judged.writes {
     placing.write(&mut part, target, judged.deletes);
   }
   for word in &judged.inside {
     placing.inside(&mut part, word);
   }
-  let part = redirected(part, raw, placing);
+  let mut part = redirected(part, raw, placing);
+  if program == "cd" {
+    part.moves_inside = enters_plainly(args) && part.known_safe_read();
+  }
+  line.made(scope, &judged.writes);
   if matches!(program.as_str(), "cd" | "pushd" | "chdir" | "set-location") {
-    place::change_directory(scope, folders, args);
+    place::change_directory(scope, &mut line.folders, args);
   }
   vec![part]
+}
+
+/// Whether `part` edits the worktree as [`CommandPart::edits_worktree`] needs: a copy or move of no tree, a
+/// script in the worktree or git in a repository nested in it, which change no more than an edit could. A
+/// script that is no regular file of the worktree is code from elsewhere, not read.
+fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing: Placing<'_>) {
+  part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
+  // Inline code is the agent's own, as a script it writes would be.
+  if judged.inline {
+    part.runs_script = true;
+    part.edits = true;
+  }
+  if let Some(at) = judged.runs {
+    part.runs_script = true;
+    part.edits = placing.plain_file(&args[at]);
+    if !part.edits {
+      part.at_least(CommandCategory::Unknown);
+    }
+  }
+  if let Some(repository) = &judged.repository {
+    part.edits = placing.nested_repository(repository);
+  }
+}
+
+/// The parts of the inline `script` a shell runs (`bash -c …`, `pwsh -Command …`). The shell written with a
+/// folder must be installed where the agent cannot have written it, and no rule for a bare program runs
+/// what it runs ([`CommandPart::through_path`]).
+/// `words` are the part's words after its benign prefixes ([`prefixes`]): the shell is the first.
+fn shell_parts(
+  raw: &RawPart,
+  words: Vec<String>,
+  script: Option<(String, Quoting)>,
+  scope: &CommandScope,
+  line: &mut Line,
+  depth: usize,
+) -> Vec<CommandPart> {
+  let by_path = words.first().is_some_and(|first| first.contains(['/', '\\']));
+  let installed = !by_path || words.first().is_some_and(|first| scope.installed(first));
+  let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {
+    return vec![unknown(words, raw, line.placing(scope))];
+  };
+  // `pwsh -NoProfile -Command` that only lists processes; a profile is the user's code. Only the
+  // arguments before `-Command` are the shell's own.
+  let no_profile = words
+    .iter()
+    .skip(1)
+    .map(|word| word.to_lowercase())
+    .take_while(|word| !(word.len() >= 2 && "-command".starts_with(word.as_str())))
+    .any(|word| matches!(word.as_str(), "-noprofile" | "-nop"));
+  if inner == Quoting::PowerShell && no_profile && processes::listing(&script) {
+    let program = words.first().map(|first| first.to_lowercase());
+    let mut part = CommandPart::new(
+      words,
+      program,
+      &Judged::of(Kind::ReadOnly).known_safe().naming_no_file(),
+    );
+    part.through_path = by_path;
+    return vec![redirected(part, raw, line.placing(scope))];
+  }
+  // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
+  let mut inner_line = line.clone();
+  let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
+  line.made = inner_line.made;
+  // A shell written with a folder is not the bare shell a rule names, and PowerShell without
+  // `-NoProfile` runs the user's profile first: no rule runs what either runs.
+  if by_path || (inner == Quoting::PowerShell && !no_profile) {
+    parts.iter_mut().for_each(|part| part.through_path = true);
+  }
+  if !raw.writes.is_empty() || !raw.reads.is_empty() {
+    parts.push(redirected(
+      CommandPart::new(words, None, &Judged::of(Kind::ReadOnly)),
+      raw,
+      line.placing(scope),
+    ));
+  }
+  parts
+}
+
+/// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
+/// `folders` it runs in, or for `git -C <folder>` from that folder.
+fn place_arguments(
+  part: &mut CommandPart,
+  judged: &Judged,
+  args: &[String],
+  placing: Placing<'_>,
+  folders: Option<&[PathBuf]>,
+) {
+  let named: Vec<String> = args
+    .iter()
+    .enumerate()
+    .filter(|(at, _)| !judged.no_paths && judged.script != Some(*at))
+    .map(|(_, arg)| arg.clone())
+    .collect();
+  let shifted: Option<Vec<PathBuf>> = judged.repository.as_ref().and_then(|repository| {
+    folders?
+      .iter()
+      .map(|folder| placing.scope.folder(folder, repository))
+      .collect()
+  });
+  let arguments = match judged.repository {
+    Some(_) => placing.placed_in(shifted.as_deref()),
+    None => placing,
+  };
+  for word in place::named(&named)
+    .into_iter()
+    .chain(judged.reads.iter().map(String::as_str))
+  {
+    arguments.read(part, word);
+  }
+}
+
+/// Whether `cd args` goes to the one folder its only argument names as written: no option, no `-`
+/// (the previous folder), no `~` and no glob, which could lead elsewhere than the word reads.
+fn enters_plainly(args: &[String]) -> bool {
+  matches!(args, [target] if !target.starts_with(['-', '~']) && !target.contains(['*', '?', '[']))
+}
+
+/// A part Orchester could not read, with where its redirections go placed all the same: what it writes
+/// outside the worktree, or a credential location it names, still counts.
+/// A program written with a folder that is no shell: an executable built in the worktree runs like a
+/// script of it (a regular file there, no link on its way, not in `.git` or `.orchester/`); any other is
+/// Unknown.
+fn worktree_program(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
+  let built = words
+    .first()
+    .is_some_and(|first| first.contains(['/', '\\']) && placing.plain_file(first));
+  if !built {
+    return unknown(words, raw, placing);
+  }
+  let args = words[1..].to_vec();
+  let mut part = CommandPart::new(words.clone(), words.first().cloned(), &Judged::of(Kind::Worktree));
+  part.runs_script = true;
+  part.edits = true;
+  placing.read(&mut part, ".");
+  for word in place::named(&args) {
+    placing.read(&mut part, word);
+  }
+  redirected(part, raw, placing)
+}
+
+fn unknown(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
+  redirected(CommandPart::unknown(words), raw, placing)
 }
 
 /// `part` with the files its redirections read and write placed.
@@ -224,15 +424,8 @@ fn redirected(mut part: CommandPart, raw: &RawPart, placing: Placing<'_>) -> Com
   for target in &raw.writes {
     placing.write(&mut part, target, false);
   }
+  part.writes_output |= raw.writes.iter().any(|target| !place::is_null_device(target));
   part
-}
-
-/// `NAME=value` sets a variable.
-fn is_assignment(word: &str) -> bool {
-  word.split_once('=').is_some_and(|(name, _)| {
-    name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-      && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-  })
 }
 
 /// The program as the rules know it. A program written with a folder is known only as a shell

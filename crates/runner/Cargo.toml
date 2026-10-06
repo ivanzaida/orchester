@@ -109,7 +109,19 @@ name = "unreadable"
 required-features = ["test-agent"]
 
 [[test]]
+name = "store_refusal"
+required-features = ["test-agent"]
+
+[[test]]
 name = "mcp"
+required-features = ["test-agent"]
+
+[[test]]
+name = "orchester_tools"
+required-features = ["test-agent"]
+
+[[test]]
+name = "orchester_file_tools"
 required-features = ["test-agent"]
 
 [[test]]
@@ -200,8 +212,10 @@ required-features = ["test-agent"]
 test-agent = []
 
 [dependencies]
-# Native agents: the model API client and the file tools their loop runs (`docs/architecture/native-agent.md` §2.2).
-orchester-agent.workspace = true
+# Native agents (`docs/architecture/native-agent.md` §2.2): the model API clients (`http`) their loop and
+# auto mode's reviewer on a native connection ask, and the file tools their loop runs, which Orchester's
+# tools serve to Claude Code and Codex too.
+orchester-agent = { workspace = true, features = ["http"] }
 orchester-core.workspace = true
 orchester-exec.workspace = true
 # The codebase index of each run's base revision, built before its first step.
@@ -212,6 +226,8 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 serde_json.workspace = true
+# The empty folder auto mode's reviewer runs in, removed after the review; already a test dependency.
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

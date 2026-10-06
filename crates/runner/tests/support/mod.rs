@@ -228,6 +228,11 @@ pub fn project(setup: &Setup) -> TestProject {
   }
 }
 
+/// A checked connection of `provider` to its fake CLI.
+pub fn agent_connection_of(provider: AgentProvider) -> orchester_core::connection::Connection {
+  agent_connection(provider)
+}
+
 fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Connection {
   let (title, fake, version) = match provider {
     AgentProvider::CodexCli => ("Codex · Kontur", FAKE_CODEX, "0.139.0"),

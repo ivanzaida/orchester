@@ -74,6 +74,22 @@ impl FileTools {
     outcome(self.find(input))
   }
 
+  /// Whether `path`, relative to the worktree with `/`, is a file `input` searches: under its
+  /// path and matching its glob, as the search itself reads them.
+  pub fn search_covers(&self, input: &Search, path: &str) -> bool {
+    let (Ok(target), Ok(file)) = (
+      self.scope.readable(input.path().unwrap_or(".")),
+      self.scope.readable(path),
+    ) else {
+      return false;
+    };
+    let glob = match input.glob().map(Glob::new).transpose() {
+      Ok(glob) => glob,
+      Err(_) => return false,
+    };
+    file.starts_with(&target) && glob.is_none_or(|glob| glob.matches(&relative(&target, &file)))
+  }
+
   fn find(&self, input: &Search) -> Result<ToolOutcome, FileError> {
     let target = self.scope.readable(input.path().unwrap_or("."))?;
     if !target.exists() {

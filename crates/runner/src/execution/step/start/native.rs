@@ -97,6 +97,8 @@ impl RunTask {
       placed: &placed,
       code_index: told.prompt(),
       memory: recalled.entries(),
+      // A native agent's own prompt names its tools.
+      working: None,
     };
     let effort = api.models().effort_for(model, reasoning_effort(body));
     let settings = loop_settings(api, model, effort, &prepared);

@@ -90,25 +90,121 @@ Finder (`open` starts it the same way). Starting the program itself from a termi
 
 ## Embedded MCP server
 
-Every build, debug and release, on Windows and macOS, includes the embedded MCP server through
-which agents drive and inspect the running app (the former `-WithMcp` / `--with-mcp` options are
-gone). At start it listens on `127.0.0.1` only, on a free port the OS picks, never a fixed one.
-The status bar shows *MCP* with that address; its hint names the endpoint
-`http://127.0.0.1:<port>/mcp`. Every request needs a bearer token that the app writes, with the
-port, to a discovery file of its process in your user profile, removed when the app closes:
-`%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
-administrators), `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS (the file is
-readable only by you). Orchester never shows, copies or logs the token. If the server cannot
-start, the status bar shows *MCP unavailable* and the app's log has the reason (see
-[Logs](#logs)).
+Every build, debug and release, on Windows and macOS, includes two MCP servers. Both listen on
+`127.0.0.1` only, on a free port the OS picks (never a fixed one), and both need a bearer token on
+every request, which the app writes, with the port, to a discovery file of its process in your
+user profile and removes when the app closes. Orchester never shows, copies or logs a token.
 
-What this means: any program running as your user can read the discovery file and drive the app
-as you could: read what it shows, click and type, and so start runs whose agents work in your
-projects. Other users' programs can connect to the port but cannot read the token, so the server
-refuses them; other machines cannot connect at all. Secret values stay masked on screen and in the
-element tree the MCP server reads. A program running as you can already read
-your files and start the same CLIs, so the server adds no access such a program lacks; it makes
-the app scriptable.
+- **Orchester's MCP server** is how automation controls Orchester, the coordinator agent that
+  develops Orchester through Orchester included. Its tools work on data and go through the same
+  rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
+  `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
+  after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
+  interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
+  see below), `list_approvals`,
+  `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  pipeline's latest published version under a new name, optionally with other published profiles on its
+  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
+  (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
+  open in the window does not stand in their way. A refusal comes back as a tool error with a stable
+  `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
+  `run_not_running`…) and the app's own explanation. Its discovery file is
+  `%LOCALAPPDATA%\orchester-mcp\<pid>.json` on Windows and
+  `~/Library/Application Support/orchester-mcp/<pid>.json` on macOS. Only you can read it: on
+  Windows it gets an access list of its own that admits only you, on macOS it is `0600`. It holds `url`
+  (`http://127.0.0.1:<port>/mcp`, streamable HTTP), `port` and `token`. To connect a client, read
+  the file of the running app's pid and send `Authorization: Bearer <token>`, e.g.
+  `claude mcp add --transport http orchester http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`.
+  When the app starts it removes the files of Orchester processes that were killed and could not
+  remove theirs (each running process holds a lock on `<pid>.lock` beside its file). The server
+  refuses a request without the token, and one that a web page sends (an `Origin` other than
+  loopback); it serves at most 32 connections, each with a 10-second deadline for a request's
+  headers and for idling between requests.
+- **lurq's MCP server** is for looking at the window. In a release build, the installed app, it only
+  reads: screenshots, the element tree, inspecting and finding elements, windows, waiting and logs
+  (`lurq_screenshot`, `lurq_read_tree`, `lurq_inspect`, `lurq_find`, `lurq_windows`, `lurq_wait`,
+  `lurq_logs`); it refuses `lurq_interact`, `lurq_act`, `lurq_set_value`, `lurq_resize` and menu
+  activation, so it cannot press a button or flip a switch. A debug build (`tools/run.ps1`), which
+  design verification drives, also takes synthetic input. The build decides
+  (`cfg(debug_assertions)`, `embedded_mcp::McpAccess`). Its discovery file is
+  `%LOCALAPPDATA%\lurq\mcp\<pid>.json` on Windows (the folder admits you, SYSTEM and
+  administrators) and `~/Library/Application Support/lurq/mcp/<pid>.json` on macOS.
+
+The status bar shows *MCP* with the address of Orchester's server; its hint names both endpoints and
+where the token is. If Orchester's server cannot start, the status bar shows *MCP unavailable* and
+the app's log has the reason (see [Logs](#logs)).
+
+**Approvals.** Automation answers waiting tool requests only while *Let automation answer approvals*
+is on. It is an application setting, off by default, which only a person changes, in the window:
+click the MCP item in the status bar and turn it on or off in its popover (no tool of Orchester's MCP
+server changes it, and lurq's server of the installed app cannot press it). While it is off,
+`decide_approval` is refused (`automation_not_allowed`). While it is on, a client may deny any
+request, and approve once only what auto-approval would approve: a request auto-approval leaves to a
+person (an unreadable or destructive command, a write outside the worktree, a credential read, an
+install, a network command) is refused (`person_only`, with the reason), as are the wider answers
+(`automation_wider`). The run records automation's answers as such: the activity reads *approved by
+automation* or *denied by automation*, and the run's Approvals count them apart from yours.
+
+**Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
+model judges each request the rules leave to the person (rules of the run, Always allow and
+auto-approval answer first) in its context: the request as the approval card shows it (secret values
+removed), the step's permissions, the task and the agent's last few messages. It approves only what
+clearly serves the task and is not destructive, exfiltrating or escaping, and not an install of
+anything persistent; everything else still asks the person, with its reason. Hard rules come first, on
+every part of a command line Orchester can read, and the reviewer cannot override them: a credential
+read, or a write to one, also through a redirect of a part Orchester cannot read; a rewrite of history or a
+delete outside the worktree; any push but a plain `git push [-u] origin <the run's branch>` (no option
+before `push`, `HEAD` only while the run's branch is checked out, `origin` still pushing where it did as
+the run started, nothing else in the line changing git's configuration, remotes or folder); every Codex
+escalation; anything outside the step's
+permissions (a write in a read-only step, the network or an install while it is off, a write outside the
+worktree and its writable folders); Orchester's `run_project_tool`; and a request longer than a review
+reads whole (8,000 characters; it is never cut) all ask the person. A part Orchester cannot read to the
+end (an unknown program, a script) goes to the reviewer, which is told so, except in a step whose
+network is off or that only reads.
+A reviewer that fails, takes longer than 60 seconds or
+answers with something unreadable asks the person too. The reviewer is any agent connection of the
+project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
+list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
+connection with `claude-haiku-4-5-20251001`, else the first connection a reviewer runs on with its default
+model. Claude Code runs in print mode with no tools, no MCP servers and no settings, its instructions as
+the system prompt (`--system-prompt-file`); Codex runs `codex -a never exec` in its read-only sandbox with
+the user's configuration, rules, shell tool and web search off and the verdict's `--output-schema` (these
+flags were not run against a live Codex); both run in an empty folder the runner makes and removes. A
+native connection on the Anthropic API gets one Messages request without tools through Orchester's own
+client, its key read from the keychain in the runner; a native OpenAI API connection cannot review yet.
+What the agent wrote reaches every reviewer only as JSON data on one line between markers it cannot
+write, with the step's facts from Orchester before and after it, and the instructions tell it that data
+is untrusted; the answer must be the verdict's JSON alone. Without a reviewer (no connection, a chosen one
+removed or not supported) auto mode is unavailable and the app says why. The Approvals switch, the
+popover and Project settings say which model on which connection reviews, and each recorded review keeps
+the model that gave it. A person who answers first stops the review (its process and what it started); so
+do the end of the step or run and the runner's exit, and a run whose auto mode is turned off meanwhile
+drops the review's result. While the reviewer judges a request, the request waits without asking the person: no approval dialog,
+no *Needs you*, and the agent's time keeps counting; only its card in the conversation says *Auto mode is
+reviewing* and keeps the answers, so a person may decide before. It asks the person once the reviewer
+asks, fails or times out; a hard rule asks at once. Unreadable parts alone are no reason for the reviewer
+to ask, and Claude Code reviews without its nonessential startup traffic. Each run has its own *Auto mode* switch, in its Approvals and, as a section of
+its own that saves at once apart from Apply, in its permissions popover; *New runs use auto mode* in
+Project settings (off by default) turns it on for runs created from then on. The run records each review
+with the request: the activity marks *approved by auto mode*, and under the row, the dialog's explanation
+and the conversation's card a line of its own says what auto mode did, the reviewer's reason quoted on
+one line (cut at 200 characters, line breaks and double quotation marks removed), never inside a mark or
+chip. The run's Approvals count *Approved by auto mode* and, once the person decided, *Auto mode asked
+you*. `get_auto_mode` reads a project's setting and reviewer; `set_auto_mode` (new runs, reviewer) and
+`set_run_auto_mode` change them only while *Let automation answer approvals* is on; `list_approvals`
+carries what auto mode did with each request and which model reviewed it.
+Not done yet: turning auto mode on while a request waits does not review that request.
+
+What this means: any program running as your user can read the discovery files and control the app's
+data through Orchester's server as you could: create and run tasks, whose agents work in your
+projects, and pause or cancel runs. Through lurq's server it can read what the window shows; in a
+debug build it can also click and type. Other users' programs can connect to the ports but cannot
+read the tokens, so the servers refuse them; other machines cannot connect at all. Secret values stay
+masked on screen, in the element tree, and in every tool result. A program running as you can
+already read your files and start the same CLIs, so the servers add no access such a program lacks;
+they make the app scriptable. Answering approvals, the one thing they would add, waits for your
+setting and stays within what auto-approval allows.
 
 ## Data
 

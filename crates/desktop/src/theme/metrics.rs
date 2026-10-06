@@ -97,10 +97,13 @@ pub enum ExtraSpacing {
   ComposerTop,
   /// Under the composer's box, and the closed box's side padding (`CoGTj`, `W9LMuM`).
   ComposerEdge,
+  /// Inside a control with the inset focus ring: its ring and the gap after it, so the ring never
+  /// touches what the control holds (`Oz9EN`).
+  FocusInset,
 }
 
 impl ExtraSpacing {
-  const ALL: [Self; 34] = [
+  const ALL: [Self; 35] = [
     Self::Hair,
     Self::PlanRows,
     Self::Mark,
@@ -135,6 +138,7 @@ impl ExtraSpacing {
     Self::Snug,
     Self::ComposerTop,
     Self::ComposerEdge,
+    Self::FocusInset,
   ];
 
   fn name(self) -> &'static str {
@@ -173,6 +177,7 @@ impl ExtraSpacing {
       Self::Snug => "snug",
       Self::ComposerTop => "composer-top",
       Self::ComposerEdge => "composer-edge",
+      Self::FocusInset => "focus-inset",
     }
   }
 
@@ -212,6 +217,7 @@ impl ExtraSpacing {
       Self::Snug => SPACE_SNUG,
       Self::ComposerTop => SPACE_COMPOSER_TOP,
       Self::ComposerEdge => SPACE_COMPOSER_EDGE,
+      Self::FocusInset => super::tokens::FOCUS_EXTENT,
     }
   }
 

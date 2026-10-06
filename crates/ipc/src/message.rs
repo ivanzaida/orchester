@@ -13,8 +13,8 @@ use orchester_core::{
   permission::{AgentPermissions, capability::PermissionProblem},
   resource::StepKey,
   run::{
-    ApprovalAnswer, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem, RunAgainBlock,
-    RunLimit, RunNumber, StuckDecision,
+    Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
+    RunAgainBlock, RunLimit, RunNumber, StuckDecision,
   },
   tokens::TokenBudget,
 };
@@ -136,11 +136,14 @@ pub enum Command {
   /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
   /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
   /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
-  /// lets it continue. A stale or already-decided request is rejected.
+  /// lets it continue. A stale or already-decided request is rejected. `by` says who answers: the
+  /// person in the app, or automation through Orchester's MCP server, which only approves once or
+  /// denies (protocol 17).
   DecideToolApproval {
     run: RunId,
     approval: String,
     answer: ApprovalAnswer,
+    by: Answerer,
   },
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
@@ -418,6 +421,13 @@ pub enum Rejection {
   ToolApprovalNotAwaited,
   /// The selected tool request was answered already, by a person or by Orchester.
   ToolApprovalAnswered,
+  /// Automation gave a wider answer than approving once or denying, which only a person gives.
+  AutomationWider,
+  /// Automation tried to approve a request that auto-approval leaves to a person, for reason `ask`:
+  /// only a person approves it (automation may deny it).
+  PersonOnly {
+    ask: AutoAsk,
+  },
   /// The runner is stopping and starts no work.
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.

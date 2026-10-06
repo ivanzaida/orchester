@@ -3,7 +3,6 @@
 //! inspectors and dialogs are all reachable, and the focus is read from the tree.
 
 use std::{
-  collections::HashMap,
   fs,
   path::{Path, PathBuf},
   sync::Arc,
@@ -18,15 +17,14 @@ use lurq::{
   mcp::McpConfig,
   node::color::Color,
 };
-use orchester_core::{
-  command::{Command, CommandError, CommandOutput, CommandRunner},
-  secret::{SecretValue, SecretVault, VaultError, VaultKey},
-};
+use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 use orchester_desktop::{
   activity::Activity,
+  app_mcp::{AppMcpSetup, DiscoveryFolder},
+  clock::Clock,
   close::Lifecycle,
   embedded_mcp::McpStatus,
-  i18n,
+  i18n, loader,
   programs::Programs,
   project_setup::ProjectDraft,
   root::{Root, RootProps, Startup},
@@ -35,11 +33,10 @@ use orchester_desktop::{
   session::AppSession,
   theme,
 };
-use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use crate::mcp_agent::McpAgent;
+use crate::{mcp_agent::McpAgent, memory_vault::MemoryVault, test_clock::TestClock};
 
 /// How long a wait may take before the test fails. A wait ends as soon as what it waits for is
 /// shown, so this only bounds a broken test. It is generous because the tests run side by side,
@@ -48,14 +45,38 @@ use crate::mcp_agent::McpAgent;
 const PATIENCE: Duration = Duration::from_secs(120);
 /// Between two looks at the tree, background work runs.
 const POLL_PAUSE: Duration = Duration::from_millis(10);
+/// Folder of the project's repository, unless a test names another.
+const REPO: &str = "kontur";
 /// Folder of the other project of [`Desktop::with_other_project`].
 const OTHER_REPO: &str = "personal-website";
 /// The design's window size (`ZBoBm` and the other 1440 screens).
 const WIDTH: u32 = 1440;
 const HEIGHT: u32 = 960;
 
+/// Folder of the discovery file of Orchester's MCP server, in the test's temporary folder.
+const MCP_FOLDER: &str = "orchester-mcp";
+
 /// Work on the test repository: setting it up before the project exists, or seeding it after.
 type RepoStep<'a> = Box<dyn FnOnce(&Path) + 'a>;
+
+/// How the application is started: its programs, its runner, and whether the window starts
+/// Orchester's own MCP server.
+struct Launch {
+  programs: Programs,
+  runner: PathBuf,
+  app_mcp: bool,
+}
+
+impl Launch {
+  /// No runner program exists here; the project shows its runner as unable to start.
+  fn without_runner() -> Self {
+    Self {
+      programs: no_programs(),
+      runner: PathBuf::from("no-runner.exe"),
+      app_mcp: false,
+    }
+  }
+}
 
 pub struct Desktop {
   pub tree: Tree,
@@ -66,6 +87,8 @@ pub struct Desktop {
   pub runners: Runners,
   /// The keychain secret values go to: in memory, never the keychain of the user running tests.
   pub vault: Arc<MemoryVault>,
+  /// The time live values are shown at.
+  pub clock: Arc<TestClock>,
   runner: PathBuf,
   app: App,
   _session: AppSession,
@@ -101,20 +124,62 @@ impl Desktop {
     Self::with_runner_and_programs(runner, Programs::processes(), init, seed)
   }
 
+  /// [`Desktop::with_runner`], with the repository at `folder` in the test's temporary folder.
+  pub fn with_runner_at(folder: &str, runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: false,
+    };
+    Self::start_with(
+      folder,
+      Some(Box::new(init)),
+      launch,
+      Some(Box::new(seed)),
+      None,
+      "Kontur",
+    )
+  }
+
   pub fn with_runner_and_programs(
     runner: PathBuf,
     programs: Programs,
     init: impl FnOnce(&Path),
     seed: impl FnOnce(&Path),
   ) -> Self {
-    Self::start_with(
-      Some(Box::new(init)),
+    let launch = Launch {
       programs,
       runner,
-      Some(Box::new(seed)),
-      None,
-      "Kontur",
-    )
+      app_mcp: false,
+    };
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// [`Desktop::with_runner`], with Orchester's own MCP server started by the window, its discovery
+  /// file in [`Desktop::mcp_folder`].
+  pub fn with_runner_and_app_mcp(runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: true,
+    };
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// [`Desktop::with_seeded_project`], with Orchester's own MCP server started by the window.
+  pub fn with_seeded_project_and_app_mcp(seed: impl FnOnce(&Path)) -> Self {
+    let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
+    let launch = Launch {
+      programs: no_programs(),
+      runner: PathBuf::from("no-runner.exe"),
+      app_mcp: true,
+    };
+    Self::start_with(REPO, Some(init), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// Where the window's MCP server, when started, writes its discovery file.
+  pub fn mcp_folder(&self) -> PathBuf {
+    self._dir.path().join(MCP_FOLDER)
   }
 
   /// Kontur, opened at startup and filled by `seed`, and before it another project of the
@@ -122,9 +187,9 @@ impl Desktop {
   pub fn with_other_project(seed_other: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
     let init: RepoStep<'_> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
+      REPO,
       Some(init),
-      no_programs(),
-      PathBuf::from("no-runner.exe"),
+      Launch::without_runner(),
       Some(Box::new(seed)),
       Some(Box::new(seed_other)),
       "Kontur",
@@ -136,9 +201,9 @@ impl Desktop {
   pub fn with_seeded_project(seed: impl FnOnce(&Path)) -> Self {
     let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
+      REPO,
       Some(init),
-      no_programs(),
-      PathBuf::from("no-runner.exe"),
+      Launch::without_runner(),
       Some(Box::new(seed)),
       None,
       "Kontur",
@@ -154,20 +219,24 @@ impl Desktop {
       None
     };
     // No runner program exists here; the project shows its runner as unable to start.
-    Self::start_with(init, programs, PathBuf::from("no-runner.exe"), None, None, project_name)
+    let launch = Launch {
+      programs,
+      ..Launch::without_runner()
+    };
+    Self::start_with(REPO, init, launch, None, None, project_name)
   }
 
   fn start_with<'a>(
+    folder: &str,
     init: Option<RepoStep<'a>>,
-    programs: Programs,
-    runner: PathBuf,
+    launch: Launch,
     seed: Option<RepoStep<'a>>,
     seed_other: Option<RepoStep<'a>>,
     project_name: &str,
   ) -> Self {
     let with_project = init.is_some();
     let dir = TempDir::new().expect("temporary directory");
-    let repo = dir.path().join("kontur");
+    let repo = dir.path().join(folder);
     fs::create_dir_all(&repo).expect("create the repository folder");
     match init {
       Some(init) => init(&repo),
@@ -199,16 +268,21 @@ impl Desktop {
     if let Some(seed) = seed {
       seed(&repo);
     }
-    let runner = if runner.is_absolute() {
-      runner
+    let runner = if launch.runner.is_absolute() {
+      launch.runner.clone()
     } else {
-      dir.path().join(runner)
+      dir.path().join(&launch.runner)
     };
-    Self::launch(dir, repo, session, programs, runner)
+    Self::launch(dir, repo, session, Launch { runner, ..launch })
   }
 
   /// Mounts the application on the session's database, as `main` does.
-  fn launch(dir: TempDir, repo: PathBuf, session: AppSession, programs: Programs, runner: PathBuf) -> Self {
+  fn launch(dir: TempDir, repo: PathBuf, session: AppSession, launch: Launch) -> Self {
+    let Launch {
+      programs,
+      runner,
+      app_mcp,
+    } = launch;
     let runtime = Runtime::new().expect("tokio runtime");
     let mut app = App::new();
     app.set_tokio_handle(runtime.handle().clone());
@@ -222,6 +296,7 @@ impl Desktop {
       session.previous_end(),
     );
     let vault = Arc::new(MemoryVault::default());
+    let clock = Arc::new(TestClock::default());
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners.clone(), runtime.handle().clone()),
@@ -230,18 +305,27 @@ impl Desktop {
       vault: Vault::with(vault.clone()),
       previous_end: session.previous_end(),
       session_start: session.started_at(),
+      clock: Clock::with(clock.clone()),
     };
     let mut tree = Tree::new();
+    loader::install(&mut tree);
     tree.resize(WIDTH, HEIGHT);
-    // The harness starts no MCP server, so the status bar truthfully says it is unavailable.
+    // The harness starts no lurq MCP server, so the status bar truthfully says it is unavailable;
+    // Orchester's own starts when the test asks for it.
     let mcp = McpStatus::Unavailable;
-    tree.mount_root::<Root>(&mut app, RootProps { startup, mcp });
+    let app_mcp = if app_mcp {
+      AppMcpSetup::On(DiscoveryFolder::At(dir.path().join(MCP_FOLDER)))
+    } else {
+      AppMcpSetup::Off
+    };
+    tree.mount_root::<Root>(&mut app, RootProps { startup, mcp, app_mcp });
     Self {
       tree,
       repo,
       activity,
       runners,
       vault,
+      clock,
       runner,
       app,
       _session: session,
@@ -271,7 +355,12 @@ impl Desktop {
     ended();
     drop(session);
     let session = AppSession::start_at(&dir.path().join("orchester.db")).expect("session starts again");
-    Self::launch(dir, repo, session, Programs::processes(), runner)
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: false,
+    };
+    Self::launch(dir, repo, session, launch)
   }
 
   pub fn repo(&self) -> &Path {
@@ -476,34 +565,6 @@ fn covers(quad: &Quad, x: f32, y: f32) -> bool {
     |left: f32, top: f32, width: f32, height: f32| x >= left && x <= left + width && y >= top && y <= top + height;
   let clip = &quad.clip;
   inside(quad.x, quad.y, quad.width, quad.height) && (!clip.active || inside(clip.x, clip.y, clip.width, clip.height))
-}
-
-/// A keychain in memory. It keeps what it is given, so tests can check the value arrived.
-#[derive(Default)]
-pub struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
-
-impl MemoryVault {
-  /// The stored values, in no particular order.
-  pub fn values(&self) -> Vec<String> {
-    self.0.lock().values().cloned().collect()
-  }
-}
-
-impl SecretVault for MemoryVault {
-  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
-    self.0.lock().insert(key.clone(), value.expose().to_owned());
-    Ok(())
-  }
-
-  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
-    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
-    SecretValue::new(value).map_err(|_| VaultError::Failed("blank".to_owned()))
-  }
-
-  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
-    self.0.lock().remove(key);
-    Ok(())
-  }
 }
 
 /// Programs for screens that are not expected to run any: a run fails the test.

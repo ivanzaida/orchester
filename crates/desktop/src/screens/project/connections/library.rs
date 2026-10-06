@@ -31,9 +31,10 @@ use crate::{
   connections::data::ProjectConnections,
   messages::Message,
   navigation::route::{AgentSelection, ConnectionTab, Page},
-  theme::ExtraTypography,
+  theme::{ExtraTypography, gutter_scrollbar},
   ui::{
     field::{ValueTone, value_box_sized},
+    gutter::{beside_gutter, clear_of_gutter},
     icon::Icon,
     notice::Notice,
     panel::RecoveryPanel,
@@ -357,23 +358,26 @@ fn list_column(
         ctx.t("connections.mixDetail"),
       )
     }));
+  // The rows scroll beside the gutter; the search and the ownership line keep out of it.
   Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))
     .padding(SpacingSize::Section)
+    .padding_right(beside_gutter(ctx, SpacingSize::Section))
     .spacing(SpacingSize::Md)
-    .child(search)
+    .child(clear_of_gutter(search))
     .child(
       ScrollVertical::new(content)
         .id("connection-list")
         .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
-        .flex(1.0),
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
     )
-    .child(
+    .child(clear_of_gutter(
       Text::new(&ctx.t_args("connections.ownership", [("project", open.project.name().as_str())]))
         .variant(ExtraTypography::Detail.role())
         .color(PaletteColor::TextSecondary),
-    )
+    ))
     .into()
 }

@@ -74,6 +74,95 @@ change, and a dev build on this repository would share `<repo>/.orchester` with 
 
 ## M · MCP servers
 
+### M8 · Orchester's own MCP server · branch `claude/app-mcp` (from master `3d76beff`, UI)
+
+Implemented 2026-10-05 (user approval of 2026-10-05), **waiting for review and an independent design verification**.
+Automation, the coordinator agent included, controls Orchester through data-level tools instead of clicking the
+window through lurq's MCP server, which stays for screenshots and the element tree (`docs/stable-build.md`, "Embedded
+MCP server").
+
+- `crates/desktop/src/app_mcp/`: a loopback streamable-HTTP server (rmcp on axum) started by the root on the app's
+  runtime, with a bearer token in `orchester-mcp/<pid>.json` (`%LOCALAPPDATA%` on Windows, `~/Library/Application
+  Support` on macOS, user-only); each process locks `<pid>.lock`, and a starting server removes the files of ended
+  processes. Tools: `list_projects`, `list_tasks`, `get_task`, `create_task`, `update_task`, `run_task`, `get_run`,
+  `pause_run`, `resume_run`, `cancel_run`, `list_approvals`, `decide_approval`, `list_pipelines`, strict input schemas,
+  typed errors (`code` plus the app's own explanation). They go through the screens' services (`TaskForm`,
+  `TaskWriter`, `save_edit`, `queue_in`, `RunAgainCheck`, `claim_for_work`, `approvals::pending`, `run_view`) and the
+  runner (`Runners::*_in`, which start the named project's runner when no tab shows it). Saved tasks reload the open
+  task lists (`tasks::outside::OutsideChanges`).
+- *Let automation answer approvals*: app setting (`app_settings`, off by default) in the popover of the status bar's
+  MCP item, which now shows Orchester's server; `decide_approval` is refused while it is off. Answers are approve once
+  or deny, recorded as `DecidedBy::Automation` / `AutomationDeny` (core `Answerer`, ipc protocol 17, project schema
+  rebuilds `tool_approvals` for the new values); the activity and the run's Approvals name them.
+- Tests: `cargo test -p orchester-desktop --test form_keyboard app_mcp` (10), `--test status_bar status_bar`,
+  `--test i18n`; `cargo test -p orchester-runner --features test-agent --test approval_choices` (automation answers);
+  `cargo test -p orchester-store --test approval_rules`, `--test app_db automation`.
+- Security review fixes (2026-10-05): merged master `47291954`; the automation rebuild of `tool_approvals` follows
+  the `permissions` rebuild and admits all eleven answers (`permitted_migration` upgrades a populated database through
+  both). Automation approves once only what auto-approval would approve (`given_by` takes the subject; runner
+  rejections `person_only` with the reason, `automation_wider`); it may deny anything. lurq's MCP server only reads in
+  release builds (`embedded_mcp::McpAccess`, `cfg(debug_assertions)`; no `Interact` scope), so it cannot flip the
+  setting or press Approve. Origin other than loopback refused (403), `Bearer` case-insensitive, 32 connections with a
+  10 s header/idle deadline, a same-pid stale file replaced, the Windows discovery file given a user-only access list
+  (`icacls /inheritance:r`). Not added: limits on brief and criteria, which the new task form does not have either
+  (only the title's 200 characters); a limit would be a new rule (**needs decision**).
+- **Not done:** design verification of the status bar item and the new popover (no Pencil frame exists for the
+  popover; it takes the operations popover's panel); the macOS build of the desktop was not checked (no Apple SDK on
+  the Windows host; core checks for `aarch64-apple-darwin`).
+- Design-verification fixes (branch `claude/mcp-ui-fixes`, 2026-10-05, waiting for an independent design
+  verification): an inline approval card lays out its answers by the chat's width (one line; *Always allow…*
+  above the buttons; each button on a full-width row), never shrinking one, and its title wraps before its
+  status label; a transcript row's title keeps 120 while its mark, then its meta, show whole or drop out whole
+  (`activity/header.rs`, lurq `shrink_order`), in Tools and in an open chip; automation's denial tells the agent
+  that automation denied it (`denial_message` takes the `Answerer`); the profile's answers count as *Allowed by the
+  profile*, no longer under *Always allowed*; inline cards answered by the profile or automation say so; the MCP
+  item keeps `$hover` while its popover is open; the popover's title sits 14 from its top and its switch has the
+  inset ring with its gap inside (`ExtraSpacing::FocusInset`). Live states: `ORCHESTER_KEEP_ANSWERED=<folder> cargo test -p orchester-desktop --test form_keyboard
+  app_mcp_answered` keeps a project whose runs the profile and automation answered through the runner.
+- **Follow-up (UI, needs design pass):** decision marks in the transcript and chips are plain mono text after the
+  meta; the design draws them as the *Decision mark* chip (`M7pU0A`). Affects every mark, so it was left out of the
+  fixes above.
+
+### M10 · Auto mode for approvals · branch `claude/auto-mode` (from master `6d44bdfe`, UI)
+
+Implemented 2026-10-06; the security review (`B1`, `B2`, `M1`–`M4` and the minors) and the design verification
+findings of the same day are fixed, **waiting for a second review and design verification** (no Pencil frame; judge
+consistency with *Approve everything in this run*, the approval dialog, the permissions popover's sections and
+Project settings › General). A reviewer model judges the requests the rules leave to the person
+(`orchester_core::run::review`, `RequestReviewer`; Claude Code in print mode without tools, `connection::reviewer`);
+hard rules first on every part of a line (`review::hold`: credential reads, unreadable parts and scripts,
+destructive parts, read-only step, network off, outside folders, unrecorded permissions, Codex escalations,
+`run_project_tool`, requests too long to review whole), fail closed (error, 60 s timeout, unreadable answer). The
+reviewer runs supervised in an empty temporary folder with its instructions as the system prompt and the agent's
+text as JSON data; it is stopped when the person answers or the worker ends. Recorded as `decided_by = 'reviewer'`
+and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs, model).
+`set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*. Open: turning auto mode on
+while a request waits does not review that request.
+The reviewer is any agent connection (`review::choice`: Claude Code, Codex through `codex exec` read-only, a native
+Anthropic API connection through `orchester-agent`'s client; not the OpenAI API yet) with a model and effort, chosen in
+Project settings or with `get_auto_mode`/`set_auto_mode`; default: the first Claude Code connection with Haiku 4.5,
+else the first usable connection with its default model (`project_auto_mode.connection`, `.effort`). The Codex flags
+were not run against a live Codex.
+Tests: `cargo test -p orchester-core --test auto_mode auto_mode`, `-p orchester-store --test auto_mode auto_mode`,
+`--test permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode
+auto_mode`, `-p orchester-desktop --test form_keyboard auto_mode`, `run_permissions_popover_fits`, `app_mcp`;
+`-p orchester-core --test auto_mode_reviewers auto_mode`, `-p orchester-agent --test anthropic_wire anthropic_`.
+
+UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: the *Auto mode* option
+under *Approve everything in this run*; without a Claude Code connection it is fixed, keeps its explanation and says
+why after the lock glyph inside its row; (2) the run permissions popover (the run's permissions row › link): the
+*Auto mode* section last, after a divider, a plain switch *Use auto mode in this run* with its hints and *Saves at
+once…* (it is not part of Apply), at 960 × 700 scrolled with the text clear of the gutter; (3) Project settings ›
+General › *Auto mode*: *New runs use auto mode* (fixed without a reviewer) and *Reviewer* (connection select with
+*Default · …*, model select, effort select where the model has efforts, *Reviewed by <model> on <connection>*, or the
+lock line saying why there is no reviewer); the Approvals option's note and the popover also end with *Reviewed by …*; (4) the approval dialog of a request auto mode left to the person:
+the line under the explanation (auto mode glyph, *Auto mode asked you:* and the quoted reason, or *Auto mode left this
+to you: …*); (5) the conversation's request card: the same line, not repeating the chip; (6) the activity rows: the
+mark *approved by auto mode · <subject>* (or *approved by you · …*) and the review line under the row, at 1440 and
+960; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once non-zero, before *Waiting*.
+States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review` and
+`ToolDecided` activity.
+
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
 Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether
@@ -91,6 +180,72 @@ An MCP server lists tools that run without asking when a profile asks before MCP
 independent design verifier (no frame exists; closest patterns) reports no blocking or major mismatch for the MCP
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.
+
+### M8 · Orchester's typed agent tools · branch `claude/orchester-tools` (implemented, waiting for review)
+
+User decision 2026-10-05: one set of typed tools in core (schema, approval policy, execution), served to Claude Code
+and Codex by the per-invocation relay that already serves `mcp__Orchester__approve`. Described in
+`docs/interactive-tool-approvals.md`, "Orchester's tools".
+
+- Built: `git_status`, `git_diff`, `git_log`, `git_show` (run), `git_add`, `git_commit` (run in a writing step) and
+  `read_outside_file` (asks). The runner holds approvals itself (a prompt approval leaves a one-call grant, any other
+  call that asks is asked about by the runner; Codex approves every tool in its configuration). Output is streamed
+  within its cap (`orchester_exec::run_capped`, streamed line reads). `read_outside_file` uses the shared credential
+  rule and refuses `.git` and Orchester's own state everywhere. Git is pinned to the worktree's own git folder with
+  an absolute empty hooks folder.
+- First review (FAIL, four majors) fixed: other projects' private files, unbounded output, asking tools without a
+  runner check, `run_project_tool` and the network. Re-review (FAIL, one major) fixed: git never enters a nested
+  repository and `git_add` refuses one (`cargo test -p orchester-runner --test orchester_tools_git
+  orchester_tools_git`, with a real nested filter); prompt grants are bound to their arguments; server databases and
+  NULs before the offset are refused.
+- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test claude_approvals
+  claude_approvals`, `--test claude_invocation claude_invocation`, `--test mcp mcp`; `cargo test -p orchester-runner
+  --features test-agent --test orchester_tools orchester_tools` (and `mcp`, `execution`, `claude_approvals`, …);
+  `cargo test -p orchester-desktop --test form_keyboard approval_choices`.
+- Against the fixture (59 requests of runs 22–25): no request used git, so the git tools replace none; the 6
+  single-file reads of lurq's sources (`sed -n … ~/.cargo/registry/src/…`) become `read_outside_file` calls (each still
+  asks, or one *Approve similar*); the 18 searches outside the worktree have no tool; the other 35 are worktree work
+  for the CLI's own file tools (the *Files and commands* paragraph).
+- Not built: an *offered to agents* setting and typed parameters for Tools-library tools (a schema per tool, an
+  editor for it, a rule for how values become arguments: UI/design work), so `run_project_tool` is offered to no
+  agent; a search outside the worktree; a list for Always allow of Orchester's tools; the native agent hookup (P1d:
+  the native loop declares `StepTools::mcp_tools` and runs `ToolCall::work` itself).
+- Open: the visible text `runs.toolApproval.wider.orchesterTool` needs an independent design verification; answer
+  sizes against Claude Code's MCP output limit are unchecked with the real CLI; the runner's macOS build was not
+  cross-checked (core was).
+
+### M9 · Orchester's file tools for Claude Code and Codex · branch `claude/file-tools` (implemented, waiting for review)
+
+User request 2026-10-05: agents edited through shell lines a person had to approve. `read_file`, `list_files`,
+`search`, `edit_file` and `write_file` join Orchester's tools (`docs/interactive-tool-approvals.md`, "Orchester's
+tools"), served by the relay to both CLIs and run by the runner with the native agent's executors
+(`orchester_agent::FileTools`, ORC-58; the runner now depends on `orchester-agent`, one implementation): confined to
+the worktree, the extra writable folders, the code index and skills (read-only); `.git`, `.orchester` and links out
+refused; read stamps per invocation (an edit needs a read in this invocation that still matches); atomic writes;
+answers within 128 KiB. The schemas are the native tools' (`list_files` takes `pattern`, not `glob`; `search` also
+takes `context`). Read, list and search run in every step; edit and write run in a writing step and are not offered
+in a read-only one; nothing asks.
+
+- With the code index of the run's base revision: `find_symbol {name, kind?, include_tests?, include_consts?}`
+  (offered only then; ranked: own definitions, then constants, then tests when asked; exact name, then case, then
+  prefix, then contains), `search` for a name lists its definitions first, `list_files` answers from the index's file
+  list and the files changed since the base revision; hits in changed files are marked. The index prompt part and the
+  codebase-index skill point at these tools.
+- Prompt: the *Files and commands* part names the file tools as each CLI sees them (`mcp__Orchester__edit_file`);
+  the *Orchester tools* paragraph says the shell is for builds and tests, and names the git tools. Claude Code's own
+  Edit/Write stay offered (steered by the prompt, not `--disallowedTools`), so its edit rules and checks are unchanged.
+- Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test run working`,
+  `--test claude_invocation claude_invocation`, `--test claude_approvals claude_approvals`; `cargo test -p
+  orchester-runner --features test-agent --test orchester_file_tools orchester_file_tools` (and `orchester_tools`,
+  `orchester_tools_git`, `codebase_index`, `claude*`, `execution`, …); `cargo test -p orchester-agent --test
+  file_tools file`.
+- Security review (FAIL, three majors) fixed: paths from the index and from git pass the same confinement as
+  `read_file` (plain relative paths only, resolved in the scope; others dropped and counted); `list_files` uses
+  the index only for folders of the worktree; every answer is cut to 60 KiB (`MAX_ANSWER_BYTES`, below Claude
+  Code's 25 000-token MCP limit) with a note on how to narrow it. Also: the runner takes `orchester-agent` without
+  its `http` feature (no TLS stack), `search`'s definitions follow its path and glob, `find_symbol` refuses a blank
+  name and finds constants by kind, and an unreadable list of changes falls back to the plain listing.
+- Open: the real CLIs were not run; the ripgrep lookup uses the runner's `PATH`, not the project's environment.
 
 ### M6 · Environment names in secret references (needs decision)
 
@@ -356,7 +511,7 @@ task_groups task_group`, `cargo test -p orchester-runner --features test-agent -
 `J9467` and the scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential), at 1440 and 960; then move this entry
 to *Done*. Not verified yet after the follow-ups.
 
-## N · Native agent (P1 in progress)
+## N · Native agent (P1 in progress, P2 waiting for review)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
 endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design is
@@ -411,12 +566,56 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58
   04.H10 moved to P1d by the user's decision of 2026-10-02 (see P1d). Tests: `form_keyboard native_`
   (`native_connections`, `native_dialog`, `native_models`, `native_model_uses`, `native_run`), core `native_connection`/`native_setup`,
   store `connections native`, `tool_approvals native_`.
+- **P2 · OpenAI Responses · branch `claude/native-p2` (implemented 2026-10-06, waiting for review; from master
+  `18168b3e`):**
+  - `orchester_agent::ResponsesClient` implements core's `ModelClient` statelessly (§3.2): `store: false`, no
+    `previous_response_id`, the whole conversation each turn; reasoning items are stored verbatim (with
+    `encrypted_content`) and sent back as `{type, summary, encrypted_content}` without the id and status of an
+    item the provider did not keep, as the Codex CLI does. Strict function tools sorted by name, `tool_choice:
+    "auto"`, `parallel_tool_calls`, `reasoning: {effort, summary: "auto"}` with `include:
+    ["reasoning.encrypted_content"]` (a model outside the table reasons only when the request names an effort),
+    explicit `max_output_tokens`, `prompt_cache_key` = conversation id, `Authorization: Bearer` as a sensitive
+    header. Usage per §2.2. A failed tool's output starts with `Error: ` (the wire has no error flag).
+  - Errors as for Anthropic, OpenAI's codes first: 429 `insufficient_quota` is `Billing`, `context_length_exceeded`
+    is `TooLarge` (core compacts); `retry-after-ms`, then `retry-after`, read defensively and capped at 5 min (shared
+    with Anthropic). `error` events and `response.failed` map by code; `response.failed` with `bio_policy` or
+    `misalignment_policy_violation` ends as a refusal with that category; a refusal content part ends as a refusal;
+    `incomplete` maps `max_output_tokens`/`content_filter`. A cut call is asked again with the model's output room.
+    A 400 `invalid_encrypted_content` leaves the conversation's reasoning out once and sends the turn again
+    (`ThinkingStripped`); that code comes from reported answers, not the reference, so it is *to verify* live.
+  - Shared code: `Http::pause` (retry waits) and `Http::read_events` (the bounded SSE loop) now serve both clients;
+    core's `tools::not_json` is public. No new dependency.
+  - Models: `GET {base}/models` joined with a built-in table, checked against developers.openai.com model pages
+    on 2026-10-06: `gpt-6-astra` (922K input, 128K output, low–max), `gpt-6.1-sol` and `gpt-6-luna` (1.05M,
+    128K; Luna adds `none`), `gpt-5.5` (1.05M, 128K, none–xhigh); `reasoning.summary: "auto"` per the reasoning
+    guide. Other listed models come without limits or efforts (manual entry). `check_responses` serves *Test
+    connection*.
+  - Fake server: moved to `crates/agent/tests/fake_server/` and speaks both wire formats (`Wire`), with the
+    append-only check of `instructions`, `tools` and the `input` prefix and the cache echo;
+    `crates/agent/tests/responses_wire` ports every §8 case.
+  - Desktop: the *OpenAI API (native)* kind in Add connection is unlocked (`AgentProvider::can_be_added` removed)
+    and opens the same native form, models dialog and inspector as Anthropic. Test connection and Fetch models stay
+    visibly unavailable for both, as on master, until P1d.
+  - Tests: `cargo test -p orchester-agent --test responses_wire responses_` (22),
+    `--test anthropic_wire anthropic_` (30), `cargo test -p orchester-desktop --test form_keyboard native_` (30),
+    `--test i18n`, `cargo test -p orchester-core --test native_setup only_the_official`.
+  - UI states for the design verifier (not verified by the implementer): Connections → *Add connection*: the four
+    kind cards with none faded and no "later version" note (04.H1); choose *OpenAI API (native)*: the native form
+    with the Official preset at `https://api.openai.com/v1`, DeepSeek and Custom locked with *Compatible endpoints
+    come in a later version*, Test connection and Fetch models unavailable, provider fallback *Not offered*;
+    *Advanced* shows *Wire format · OpenAI Responses*; after saving, the inspector (04.H4) and *Edit models*
+    (04.H6) of the OpenAI connection.
+  - Open: **one live run** (§8 live-test policy, `ORCHESTER_LIVE_OPENAI_KEY`) is not recorded: no real API was
+    called. **P1d hookup:** the runner's `Command::CheckConnection` must call `check_responses` for `OpenAiApi`
+    and run native steps on `ResponsesClient`; P1d's effort mapping drops `none`, which `connection::Effort` lacks
+    (adding it needs a decision). The `safety_identifier` user tag is P3. `clippy --target aarch64-apple-darwin`
+    could not run here (`ring` needs a C cross-compiler); the change has no platform-specific code.
 
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.40.1 (inspection screenshots cover sensitive text): a resize restores a minimized window first, `lurq_resize` answers with the size the window took (or fails saying why), `lurq_windows` reports `minimized`, `maximized` and `full_screen`, `on_size_changed` reports the size read back from the window, an `Enter` marked `composing` triggers no lurq default (form submit, activation, newline, blur), and `Text::sensitive` with `lurq::core::Sensitive<T>` shows a value on screen while the MCP and DevTools trees show `•••` (the first password of 10.08 B) (0.40.0). A text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.41.2 (a long text clipped to its paint is no longer cached as whole; MCP discovery files of ended processes are removed; 0.41.1: Canvas shaped-text and asset caches stay resident across frames; 0.40.1: inspection screenshots cover sensitive text): a resize restores a minimized window first, `lurq_resize` answers with the size the window took (or fails saying why), `lurq_windows` reports `minimized`, `maximized` and `full_screen`, `on_size_changed` reports the size read back from the window, an `Enter` marked `composing` triggers no lurq default (form submit, activation, newline, blur), and `Text::sensitive` with `lurq::core::Sensitive<T>` shows a value on screen while the MCP and DevTools trees show `•••` (the first password of 10.08 B) (0.40.0). A text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
@@ -526,6 +725,186 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+Quick rules for Verify steps · branch `claude/quick-rules` (done 2026-10-06)
+
+In 15 minutes after an install, 44 of 218 requests still asked; the user decided these rules, each no wider than
+what ran before (`crates/core/tests/quick_rules.rs`, with refusals):
+
+1. Benign environment prefixes (`category::prefixes`): `PYTHONIOENCODING`, `PYTHONUTF8`, `PYTHONUNBUFFERED`,
+   `NO_COLOR`, `FORCE_COLOR`, `TERM`, `LANG`, `LC_ALL`, `RUST_LOG`, `RUST_BACKTRACE`, `CARGO_TERM_COLOR` set to a
+   plain literal before a program are dropped; any other variable keeps the part Unknown.
+2. An executable built in the worktree (`.tmp/…/target/debug/seed.exe …`) runs like a worktree script
+   (`worktree_program`: a regular file there, no link on its way, not in `.git`/`.orchester`), in a writing step.
+3. Process listings are known-safe reads in every step (`category::processes`): `tasklist` with `/FI`, `/FO`, `/V`,
+   `/NH` (also `//FI`), `ps` without `e`/`-E` (environments), and `pwsh -NoProfile -Command` whose script is only
+   `Get-Process` / `Get-CimInstance Win32_Process` / `Get-WmiObject Win32_Process` piped into `Select-Object`,
+   `Format-Table`, `Format-List`, `Sort-Object`, `Out-String` or a one-comparison `Where-Object`, parsed strictly
+   (no `;`, `&`, `$(`, `@`, script blocks but `{ $_.X -eq Y }`). `taskkill` and everything else ask.
+4. `for NAME in <literals>; do BODY; done` as the whole line reads as `NAME=v; BODY` per value (`category::loops`, at
+   most 64); the word list ends at the first `;` or new line, and a keyword left in the body (a second or nested
+   loop) is an unknown program; `;;` and other loops ask. Review fixes: the list no longer runs past a new line, and
+   every program check (a shell or interpreter given by path) looks at the program after the benign prefixes.
+5. Inline code (`python -c`, `py -c`, `node -e`/`-p`) runs like a worktree script in a writing step. A script,
+   executable or inline code runs unasked only when every other part of the line that may change files is itself
+   such a run (`sh m.sh … | python -c …` runs; `echo > a.py; python -c 'import a'` asks).
+
+| real lines of the 44 | before | now (writing step) |
+| --- | --- | --- |
+| `PYTHONIOENCODING=utf-8 python .tmp/verify/orc50b/drive.py …` | asks | runs |
+| `.tmp/verify/seed/target/debug/seed.exe …`, `…/orc50-seeder.exe …` | asks | runs |
+| `tasklist //FI …` (2 forms) | asks | runs (any step) |
+| `powershell -NoProfile -Command "Get-Process … \| Select-Object …"`, `Get-CimInstance Win32_Process …` | asks | runs (any step) |
+| `for i in 1 … 12; do sh .tmp/verify/m.sh … \| grep -o … \| head -1; done` | asks | runs |
+| `sh .tmp/verify/m.sh … \| python -c "import sys,json; …"` and other `python -c` | asks (reviewer) | runs |
+
+Fixture of runs 22–25: read-only step 5 / 41 / 2 / 11, writing step 33 / 24 / 2 / 0 (the `python -c` line runs).
+Still as before: `bash -c`/`sh -c` scripts are read part by part (their parts must run on their own);
+`-EncodedCommand` and other `pwsh -Command` scripts go to the reviewer. Tests: `core` `quick_rules`,
+`worktree_scripts`, `worktree_writes`, `command_probes`, `command_sequences`, `command_categories`,
+`command_fail_closed`, `approval_answers`, `approval_fixtures`; `runner --features test-agent` `claude_unlisted`,
+`approval_choices`, `command_approvals`, `auto_mode`, `send_now`. Nothing on macOS.
+
+Worktree scripts and nested fixture repositories run like edits · branch `claude/worktree-scripts` (done 2026-10-06)
+
+User decision: in a step that edits files, running a script file of the worktree adds nothing an agent cannot do by
+writing a test and running an allowed `cargo test`. Verify steps asked about `python .tmp/verify/start.py`,
+`python .tmp/verify/tree.py 39684 …`, `powershell -NoProfile -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1`
+and `git -C .tmp/verify/kontur -c user.name=… -c user.email=… commit -q …`; they now run.
+
+- `category::interpreters`: `python`/`python3`/`py` (flags `-u -B -E -s -I -O -OO`, `-X …`, `py -3`), `node`, `bash`/`sh`/
+  `zsh` (`-e -u -x -v`), `pwsh`/`powershell` (`-NoProfile`, `-NonInteractive`, `-NoLogo`, `-ExecutionPolicy
+  Bypass|RemoteSigned`, `-File`) running a file. The part is Worktree and an edit when the script is a regular file
+  in the worktree or a writable folder, no link on its way, not in `.git` or `.orchester/` (`Placing::plain_file`,
+  the same placing and `write_refused` as edits); any other script is Unknown. Inline code (`-c`, `-e`, `-Command`,
+  `-EncodedCommand`), `-m`, `node -r`, `bash --rcfile`, `PYTHONPATH=`/`NODE_OPTIONS=` prefixes still ask; the
+  script's arguments are placed like any other.
+- git: `-c user.name=…` and `-c user.email=…` are read (every other `-c` is Unknown); `git -C <folder>` with a
+  Worktree subcommand is an edit when the folder is a plain folder below the worktree (not the worktree itself)
+  holding its own `.git` folder (`Placing::nested_repository`): the agent's fixture. In the run's own worktree, a
+  git change still asks.
+- Security review (`.tmp/review-worktree-scripts.md`, FAIL at `9740e844`): an interpreter given with a folder
+  (`../x/bash`, `C:/evil/sh.exe`, `//server/share/bash.exe`) is Unknown; `native::scope::protected` refuses a stream
+  spelling (`.git::$INDEX_ALLOCATION`) and the classifier checks a write or script path resolved as well, so a
+  short name (`GIT~1`, `ORCHES~1`) is `.git` or `.orchester`; a script after a part that may change files (any
+  part that is not Read-only: git in the fixture repository, an edit, another script) is Unknown, and after the
+  re-review also with such a part after it or beside it in a pipeline (a script runs unasked only when every other
+  part of the line is Read-only); scripts and
+  nested repositories count only in the worktree, not the step's writable folders, which may hold the user's own
+  repositories; `pwsh` needs `-NoProfile`, `zsh` (which reads `~/.zshenv`) asks, `-X` takes only `importtime`,
+  `utf8`, `dev`, `faulthandler`, `tracemalloc`; `git -C <folder>` places its arguments from that folder; signing
+  (`commit -S`, `--gpg-sign`, `tag -s`/`-u`) is Unknown. A shell given with a folder that runs inline code is read
+  only when installed (an absolute path outside the worktree, the writable and temporary folders: Codex's
+  `C:\…\pwsh.exe -Command …`), else Unknown (`../x/bash -c ls` ran unasked before), and what it runs is never
+  answered by a rule for a bare program (`CommandPart::through_path`).
+- Read-only steps are unchanged. The fixture table of runs 22–25 is unchanged (its scripts are `python -` and
+  `python -c`).
+- Tests: `core` `worktree_scripts` (new: the six real lines, more forms, every refusal above, a script through a link,
+  outside, in `.git/hooks` and `.orchester`, a read-only step), `native` (`scope_windows`: the aliases of protected
+  folders), `worktree_writes`, `command_probes`,
+  `command_sequences`, `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`;
+  `runner --features test-agent` `claude_unlisted`, `approval_choices`, `claude`, `command_approvals`,
+  `orchester_tools`. Nothing on macOS.
+
+Shell writes in the worktree run like edits · branch `claude/worktree-writes` (done 2026-10-05)
+
+User decision: in a step that edits files, a command line whose only effects are writes to files in the worktree
+(or its writable folders), with parts that are allowed or known-safe reads on their own, runs without asking, as the
+edit tools write there unasked. The request that prompted it (`cd <worktree>; f=…; sed -i '…' $f; cat >> $f
+<<'EOF' … EOF` then `cargo test … 2>&1 | grep … | head -30` on the next line) now runs.
+
+- `run::permitted` takes the step's effective `AgentPermissions`; with *Edit files* a part runs when
+  `CommandPart::edits_worktree`: `sed -i`, `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`, `rmdir` (`Judged::edits`), or a
+  known-safe read redirected into a file, every write placed in the worktree or a writable folder and nothing named
+  outside. Listed commands may redirect into the worktree there too. Read-only steps are unchanged.
+- Writes are refused (Unknown) where `native::scope::protected` refuses the native file tools' writes (any `.git`
+  entry, `.orchester/` at the worktree's top), and a removal of the worktree or a writable folder itself
+  (`CommandScope::write_refused`).
+- Here-documents (`heredoc.rs`): `<<` and `<<-` with a quoted delimiter take the body as data; a bare delimiter's body
+  with `$` or a backtick, a body without its delimiter and a here-string stay unread. New lines separate commands.
+- Security review (`.tmp/review-worktree-writes.md`, FAIL at `3efb189d`, one major): paths are placed before the line
+  runs, so `cp -r`/`-R`/`-a`/`-P`/`-d` and a `cp` or `mv` of a folder or a link are no edits (they could bring a link
+  that leads out), and a write under a path an earlier part of the line wrote, created, copied or moved is Unknown
+  unless every folder down to it is there now as a plain folder (`place::Line`). Minor: on Windows a path rooted
+  without a drive (`/projects/x`, `/tmp/x`; Git Bash places it under its installation) is Unknown.
+- `CommandPrefix::covers_argv`: `cargo +<toolchain> <sub>` is covered by `cargo <sub>`.
+- Fixture of runs 22–25 (59 requests, builder listing `cargo test`, `check`, `clippy`, `fmt`):
+
+  | 59 requests | runs unasked | asks, Approve similar | asks, Unknown | asks, other |
+  | --- | --- | --- | --- | --- |
+  | before this branch (any step) | 5 | 40 | 8 | 6 |
+  | read-only step | 5 | 40 | 3 | 11 |
+  | step that edits files | 32 | 24 | 3 | 0 |
+
+  The 24 are reads outside the worktree (23 of lurq's source in the registry, one Windows `grep` pattern read as a
+  root path); the 3 Unknown are `python3 - <<'EOF'`, `python -c` and `L=$(…)`. Quoted here-documents are now read,
+  so in a read-only step 5 former Unknown lines ask as writes with several asking parts. On macOS 33 / 23.
+- Not done: the 33 newest requests were not exported: reading the user's project database was refused by the
+  session's permission check, so `.tmp/orchester-drive/approvals-recent.json` does not exist and the table covers
+  the 59 only.
+- Tests: `core` `worktree_writes` (new; allowed forms, refusals for `.git/config`, `.git/hooks`, `../`, a link out,
+  `/etc`, `~/.bashrc`, an expanding here-document, `> .git/HEAD`, `rm -rf .` and `/`, `cp` from outside, `mv` out, a
+  read-only step), `command_probes` (worktree redirects run only where edits are allowed), `command_sequences`,
+  `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`, `permissions`;
+  `runner --features test-agent` `approval_choices`, `claude_unlisted` (a worktree `sed -i` is answered unasked; `.git`
+  and `rm -rf ..` still ask), `claude_approvals`, `claude`, `command_approvals`, `orchester_tools`. Nothing on macOS.
+
+Agent commands without approvals · branch `claude/agent-tools` (done 2026-10-05)
+
+Four Claude Code runs of Orchester on itself (runs 22–25, Opus 5.5, about 1.5 h) asked 59 times: the agents read and
+edited through Bash (`cat`, `sed -n`, `sed -i`, heredocs, `awk`), prefixed nearly every command with `cd <worktree>;`
+and set variables (`f=…; sed -n 40,52p $f`), so whole lines were *Unknown*, and reads of a crate's source in Cargo's
+registry were *Credential read*s. The requests are the fixture `crates/core/tests/fixtures/approvals/runs-22-25.json`.
+
+- Prompt: a new Claude Code or Codex session's task part gets *Files and commands* (`run::WorkingTools`, from the
+  CLI and the step's effective permissions): Claude Code reads and searches with Read, Grep, Glob, and edits with
+  Edit and Write only in a writing step; Codex changes files with apply_patch only in a writing step; no `cd`;
+  with allowed commands, one bare command per call without `;`, `&&` or variables; with *Ask before running
+  commands*, that each command waits for a person. Resumed sessions keep it from their first prompt; native agents
+  and the instruction preview get none.
+- Classifier (`permission::category`): a `cd` to one folder named plainly in the worktree (`/h/…`, `H:/…`, quoted
+  `H:\…`) is no part of its own; a `cd` with an option, `-`, `~`, a glob or a second operand (zsh's `cd old new`) is
+  kept, and one with an option, `-` or a second operand leaves where later parts run unknown; a glob `cd` goes to its
+  one match. Every part reads the folder it runs in. A glob names each path it matches now, links followed
+  (`glob.rs`, bracket expressions too; `**` is Unknown). `>&file` and `<&file` write and read the file (`>&2`,
+  `>&-` copy a descriptor). A literal assignment (`f=src/x.rs`, `L="C:/…"`: no expansion, quote or space; a name
+  of one letter and digits, which no shell treats specially, so zsh's `path=` or `cdpath=` stays unread; unquoted,
+  first in its list, not in a pipeline or the background) is read into its later `$f` and `${f}`; a part in the background is Unknown; a `..` after a glob is Unknown; a carriage return
+  stays in its word. `sed` is read by its options and its script (`sed_script`); `awk` by an allow-list of the names
+  its program uses (`awk_program`: no `ARGV`, `ARGC`, `ENVIRON`, `FILENAME`, `SYMTAB`, `getline`, `system`,
+  `close`, `@`, or `print` with `>`/`|`; `-v` and operand assignments only of the variables it may set); `sort`
+  without `-o`, `-T`, `--compress-program`, `--files0-from` or their abbreviations; `grep -R`, a `jq` module,
+  `cargo --config`/`-Z` are Unknown; `git remote show` without `-n` reaches the network. Reads of
+  `~/.cargo/registry/src` and `~/.rustup/toolchains/*/lib/rustlib/src` are reads outside the worktree; the rest of
+  `~/.cargo` and `~/.rustup` stays a credential location, as does every path through a Windows share or `\\?\`.
+- Answers: `run::permitted` runs a line Claude Code asked about when every part would run on its own: listed in the
+  step's allowed commands (naming nothing outside the worktree, no redirection into a file) or a known-safe read
+  inside the worktree. The runner answers it before a person (`step/answer.rs`) as `DecidedBy::Permissions`
+  (`decided_by = 'permissions'`; a migration rebuilds `tool_approvals` for its `CHECK`), marked *allowed by the
+  profile · <category>*; the Summary counts it with *Always allowed*. Approve similar also covers several asking
+  parts that are alike (`sed -i …; sed -i …`). Shell writes still ask.
+- Security review (`.tmp/review-agent-tools.md`, FAIL at `34a10f02`): every finding fixed; its probes are refusal
+  tests in `tests/command_probes.rs` (links are junctions on Windows, symbolic links elsewhere).
+- Fixture, with a builder that lists `cargo test`, `cargo check`, `cargo clippy`, `cargo fmt`
+  (`tests/approval_fixtures.rs`; the user name in its paths replaced):
+
+  | 59 requests | runs unasked | asks, Approve similar | asks, Unknown | asks, other |
+  | --- | --- | --- | --- | --- |
+  | before (master `3d76beff`) | 0 | 1 | 43 | 15 (credential reads, several asking parts) |
+  | now | 5 | 40 | 8 | 6 (`sed -i` with a build in one line) |
+
+  Of the 40, 16 are `sed -i` edits in the worktree and 24 reads outside it (23 of lurq's source in the registry; on
+  Windows one `grep` pattern starting with `\` is a path at the drive's root). The 8 Unknown are heredocs and
+  `python`/`$(…)` lines. On macOS the `grep` line runs unasked (6 / 39).
+- Tests: `core` `command_probes`, `command_sequences`, `approval_fixtures`, `command_categories`,
+  `command_fail_closed`, `approval_answers`, `run` (`prompt`, `plan`, `conversation`, `working`); `store`
+  `approval_rules`, `tool_approvals`, `project_db`, `organization_migration`, `joined_tasks`; `desktop` `i18n`,
+  `transcript`; `runner --features test-agent` `approval_choices` (a `$`-line of a read and a listed test runs
+  unasked), `claude_unlisted`, `claude_approvals`, `command_approvals`, `claude`, `memory`. Nothing run on macOS.
+- Open: the activity mark *allowed by the profile · …* is new text without a design frame and needs the design
+  verification (`AGENTS.md` rule 15); reads outside the worktree that are no credential still ask (Approve similar
+  available); a line mixing a shell edit with a listed build has no Approve similar; grep and rg patterns are placed
+  like paths; `date --se…` and other abbreviations of options in the older tables are not refused.
 
 S2c · Desktop: join a shared repository · branch `claude/s2c` (done 2026-10-05)
 

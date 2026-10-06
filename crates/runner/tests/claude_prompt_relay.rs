@@ -16,11 +16,12 @@ use orchester_core::{
     AgentProvider,
     stream::{AgentEvent, RunnerProblem},
   },
+  conversation::latest_question,
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::StepKey,
-  run::{ApprovalAnswer, PendingToolApproval, RunStatus, StepFailure, Stuck},
-  store::ActivityStore,
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, RunStatus, StepFailure, Stuck},
+  store::{ActivityStore, ConversationStore},
 };
 use orchester_ipc::{Event, Rejection};
 use orchester_store::ProjectDb;
@@ -71,7 +72,7 @@ async fn claude_prompt_relay_serves_only_the_one_relay_with_the_token() {
     .expect("the run starts");
   let request = pending(root, &mut events, id).await;
   scheduler
-    .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -109,10 +110,70 @@ async fn claude_prompt_relay_leaving_while_a_person_decides_interrupts_the_reque
   assert!(db.has_interrupted_tool_approval(id).expect("approvals"));
   assert_eq!(
     scheduler
-      .decide_tool_approval(id, request.id, ApprovalAnswer::Once)
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
       .await,
     Err(Rejection::ToolApprovalNotAwaited),
     "a later decision is not recorded as delivered"
+  );
+  scheduler.cancel_run(id).await.expect("cancelled");
+}
+
+/// Run 26 of the user's ORC-21: a command waited for a person until Claude Code gave up on its prompt call, the
+/// agent ended its turn with a `question` through `structured_output`, the result listed a denied `Grep`, and only
+/// then did the prompt close, with the request still pending. The step asks the person instead of staying
+/// running, and the request ends interrupted, named in the activity before the failed turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_prompt_relay_closing_after_the_result_asks_the_question() {
+  let project = asking("Ask before publishing. Give up waiting.");
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let request = pending(root, &mut events, id).await;
+  std::fs::write(root.join(".orchester").join("fake-release"), "").expect("release");
+  let run = wait_for(root, &mut events, id, |run| settled(run) || run.waits_for_a_person()).await;
+  assert!(run.waits_for_a_person(), "{:?}", run.status());
+  let db = ProjectDb::open(root).expect("open");
+  let conversation = db.messages(project.task).expect("messages");
+  let invocation = &db.invocations(id).expect("invocations")[0];
+  let question = latest_question(&conversation, invocation.execution).expect("a question");
+  assert_eq!(question.body().as_str(), "May I run the pin helper?");
+  assert!(db.pending_tool_approvals(id).expect("requests").is_empty());
+  assert!(db.has_interrupted_tool_approval(id).expect("approvals"));
+  assert_eq!(
+    scheduler
+      .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Once, Answerer::Person)
+      .await,
+    Err(Rejection::ToolApprovalNotAwaited)
+  );
+  let ending: Vec<_> = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::PermissionDenied { command, .. } => Some(format!("denied {command}")),
+      AgentEvent::Message { text } if text.contains("question") => Some("result".to_owned()),
+      AgentEvent::RunnerProblem {
+        problem: RunnerProblem::DecisionInterrupted {
+          request,
+          server,
+          action,
+        },
+      } => Some(format!("interrupted {request} {server} {action}")),
+      AgentEvent::TurnFailed { message } => Some(format!("failed {message}")),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(
+    ending,
+    [
+      "denied Grep lurq_[a-z_]+".to_owned(),
+      "result".to_owned(),
+      format!("interrupted {} command pnpm publish --dry-run", request.id),
+      "failed Claude Code's permission prompt or tool relay closed before the decision".to_owned(),
+    ]
   );
   scheduler.cancel_run(id).await.expect("cancelled");
 }

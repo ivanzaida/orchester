@@ -1,14 +1,23 @@
 use lurq::{
   app::theme::{FormTextRole, FormTheme, PaletteColor, RadiusSize, TypographyStyle},
-  layout::scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+  layout::{
+    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+    text_style::TextStyle,
+  },
   node::{color::Color, dimension::Dimension, padding::Padding},
 };
 
 use super::tokens::{
   BORDER, BUTTON_HEIGHT, COMMAND_SCROLLBAR_EDGE_INSET, COMMAND_SCROLLBAR_END_INSET, CONTROL_PADDING_X, FIELD_HEIGHT,
   GUTTER_SCROLLBAR_INSET, NO_TRACK, SCROLLBAR_MIN_THUMB, SCROLLBAR_RADIUS, SCROLLBAR_WIDTH,
-  SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET, VALUE_BOX_SCROLLBAR_END_INSET,
+  SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET, SPACE_MD, VALUE_BOX_SCROLLBAR_END_INSET,
 };
+
+/// Height of one line of a text input in `style`: lurq lays an input's lines out at its font size
+/// times its line height. Controls beside a growing text area center on its first line with it.
+pub fn input_line_height(style: &TextStyle) -> f32 {
+  style.font_size * style.line_height
+}
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
 pub fn form(mut form: FormTheme) -> FormTheme {
@@ -103,6 +112,12 @@ pub fn gutter_scrollbar() -> ScrollBarStyle {
     ..thumb()
   }
   .insets(GUTTER_SCROLLBAR_INSET, GUTTER_SCROLLBAR_INSET)
+}
+
+/// The right padding of a box padded `SpacingSize::Md` whose body scrolls with `gutter_scrollbar`: the
+/// gutter takes the rest of the padding, so the body keeps its width and its text stays off the thumb.
+pub fn padding_beside_gutter() -> Dimension {
+  Dimension::Px((SPACE_MD - gutter_width()).max(0.0))
 }
 
 /// Width of the gutter `gutter_scrollbar` reserves: the thumb and the inset on each side of it.

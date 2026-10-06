@@ -43,11 +43,26 @@ impl McpAgent {
     result["content"][0]["text"].as_str().unwrap_or_default().to_owned()
   }
 
-  fn request(&mut self, method: &str, params: &Value) -> Value {
+  /// Calls a tool and returns its whole result, a tool error included.
+  pub fn call(&mut self, name: &str, arguments: &Value) -> Value {
+    self.request("tools/call", &json!({"name": name, "arguments": arguments}))
+  }
+
+  /// The tools the server lists.
+  pub fn tools(&mut self) -> Value {
+    self.request("tools/list", &json!({}))
+  }
+
+  /// The whole JSON-RPC reply to `method`, an error included.
+  pub fn reply(&mut self, method: &str, params: &Value) -> Value {
     self.next_id += 1;
-    let reply = self
+    self
       .post(&json!({"jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params}))
-      .expect("a request gets a reply");
+      .expect("a request gets a reply")
+  }
+
+  fn request(&mut self, method: &str, params: &Value) -> Value {
+    let reply = self.reply(method, params);
     reply
       .get("result")
       .cloned()

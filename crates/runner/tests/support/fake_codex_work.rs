@@ -2,6 +2,7 @@
 //!
 //! - "Please fail": fails the turn as Codex did for an unsupported model;
 //! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
+//! - "Use Orchester's tools": first lists and calls Orchester's tools (`fake_codex_tools`), then works as below;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
 //! - "Wait for release": runs a command (`pnpm test`) that ends once the test writes `fake-release` next to the
@@ -25,6 +26,8 @@
 //!   line of 5000 characters, 3995 `y` followed by the value of `DOCS_TOKEN` (an MCP server's secret, when the process
 //!   has it) and 1100 numbered lines (`stderr line <n>`) to standard error, then works as below;
 //! - "Write own file": writes `<step>.txt` instead of appending to `README.md`;
+//! - "Report the absolute path": reports the file change at its absolute path in the worktree, as Codex does, instead
+//!   of relative to it;
 //! - "Sign the line": appends `hello from <step>` instead of `hello`;
 //! - "Ask first": appends `draft` to `README.md` and ends with the step result `{"outcome":"question","summary":"Keep
 //!   email sign-in?"}` (a new session only: a resumed one works as below);
@@ -42,7 +45,7 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 use serde_json::json;
 
-use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, notify};
+use super::{HELPER, Session, Step, TURN, complete, emit, fake_app_server, fake_codex_tools, notify};
 
 /// The account's limits App Server reports during a turn.
 const LIMITS: &str = include_str!("../../../core/tests/fixtures/codex/plan-limits.jsonl");
@@ -56,6 +59,7 @@ pub struct StepReport {
   structured: bool,
   failed: bool,
   own_file: bool,
+  absolute_path: bool,
   handoff: bool,
 }
 
@@ -123,12 +127,19 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
   }
+  if ["Use Orchester's tools", "Use the file tools", "Use the index tools"]
+    .iter()
+    .any(|words| prompt.contains(words))
+  {
+    fake_codex_tools::report(&session.args, &session.cwd, prompt);
+  }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
   }
   let mut result = report_of(prompt, structured);
   result.failed = prompt.contains("Report failure") || (prompt.contains("Fail once") && first_time(&worktree, prompt));
   result.own_file = prompt.contains("Write own file");
+  result.absolute_path = prompt.contains("Report the absolute path");
   result.handoff = prompt.contains("Leave a handoff");
   if session.resumed {
     wait_while_held(&worktree);
@@ -260,6 +271,11 @@ pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
     return Step::Exit(ExitCode::from(2));
   }
   let command = format!("echo {line} >> {file}");
+  let reported = if result.absolute_path {
+    worktree.join(&file).display().to_string()
+  } else {
+    file
+  };
   message(session, "item_0", "Appending the line.");
   notify(
     session,
@@ -274,7 +290,7 @@ pub fn finish(session: &Session, line: &str, result: &StepReport) -> Step {
   notify(
     session,
     "item/completed",
-    json!({"item": {"id": "item_2", "type": "fileChange", "status": "completed", "changes": [{"path": file, "kind": {"type": "update"}}]}}),
+    json!({"item": {"id": "item_2", "type": "fileChange", "status": "completed", "changes": [{"path": reported, "kind": {"type": "update"}}]}}),
   );
   let text = if result.structured {
     let mut report = json!({
@@ -402,6 +418,7 @@ pub fn report_of(prompt: &str, structured: bool) -> StepReport {
     structured,
     failed: false,
     own_file: false,
+    absolute_path: false,
     handoff: false,
   }
 }
