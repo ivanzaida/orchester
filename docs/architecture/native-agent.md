@@ -965,10 +965,10 @@ Done when:
   verification (rule 15) once Pencil designs exist.
 
 **P2 · OpenAI Responses.** Size **M**.
-- [ ] `ResponsesClient` is stateless (§3.2), with reasoning items persisted and resent.
-- [ ] Models come from `GET /models` plus the built-in metadata table and manual entries. Effort and summary values
-  are verified against the docs.
-- [ ] Every fake-server case from §8 is ported to the Responses wire format. One live run is recorded.
+- [x] `ResponsesClient` is stateless (§3.2), with reasoning items persisted and resent.
+- [x] Models come from `GET /models` plus the built-in metadata table and manual entries. Effort and summary values
+  are verified against the docs (developers.openai.com, 2026-10-06; see `docs/plan.md`, P2).
+- [ ] Every fake-server case from §8 is ported to the Responses wire format (done). One live run is recorded (open).
 
 **P3 · Compatible endpoints and DeepSeek.** Size **M**.
 - [ ] Presets and `WireQuirks`, with a `Custom` base URL on both wire formats.

@@ -1,6 +1,9 @@
 use lurq::{
   app::theme::{FormTextRole, FormTheme, PaletteColor, RadiusSize, TypographyStyle},
-  layout::scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+  layout::{
+    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+    text_style::TextStyle,
+  },
   node::{color::Color, dimension::Dimension, padding::Padding},
 };
 
@@ -9,6 +12,12 @@ use super::tokens::{
   GUTTER_SCROLLBAR_INSET, NO_TRACK, SCROLLBAR_MIN_THUMB, SCROLLBAR_RADIUS, SCROLLBAR_WIDTH,
   SELECT_SCROLLBAR_EDGE_INSET, SELECT_SCROLLBAR_END_INSET, SPACE_MD, VALUE_BOX_SCROLLBAR_END_INSET,
 };
+
+/// Height of one line of a text input in `style`: lurq lays an input's lines out at its font size
+/// times its line height. Controls beside a growing text area center on its first line with it.
+pub fn input_line_height(style: &TextStyle) -> f32 {
+  style.font_size * style.line_height
+}
 
 /// Field (`ZGwlv`) and button (`u1XBP`) roles for lurq's compound form controls.
 pub fn form(mut form: FormTheme) -> FormTheme {

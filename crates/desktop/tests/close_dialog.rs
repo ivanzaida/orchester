@@ -8,6 +8,7 @@ use std::sync::{
 
 use lurq::{
   app::{App, Tree},
+  core::ElementRect,
   node::element::ElementRef,
 };
 use orchester_core::{connection::AgentProvider, id::RunId};
@@ -19,6 +20,10 @@ use orchester_desktop::{
 };
 
 fn active(project: &str, task_key: &str, task_title: &str, step: &str, agent: &str) -> ActiveWork {
+  on_model(project, task_key, task_title, (step, agent), "gpt-5.5")
+}
+
+fn on_model(project: &str, task_key: &str, task_title: &str, (step, agent): (&str, &str), model: &str) -> ActiveWork {
   ActiveWork::new(&ActiveWorkFields {
     project,
     run: RunId::generate(),
@@ -27,7 +32,7 @@ fn active(project: &str, task_key: &str, task_title: &str, step: &str, agent: &s
     step,
     agent,
     provider: AgentProvider::CodexCli,
-    model: "gpt-5.5",
+    model,
   })
 }
 
@@ -180,6 +185,183 @@ fn close_dialog_waiting_shows_each_run_saving_or_saved_and_keeps_only_quit_now()
 
   tree.get_element_by_id_mut("close-quit-now").expect("quit now").click();
   assert_eq!(presses.count(1), 1);
+}
+
+/// The fixture work with a first row whose task title is far longer than its cell (ORC-65 as seen
+/// 2026-10-05), so that several rows share the columns.
+fn long_work() -> Arc<[ActiveWork]> {
+  let long = active(
+    "Kontur",
+    "ORC-65",
+    "Close dialog: the run state badge runs past the dialog's right edge when the task title is this long",
+    "Design",
+    "Designer",
+  );
+  std::iter::once(long).chain(work().iter().cloned()).collect()
+}
+
+/// The dialog laid out in a window `width` wide.
+fn laid_out(stage: CloseStage, work: Arc<[ActiveWork]>, saves: Vec<SaveState>, width: u32) -> Tree {
+  let mut app = app();
+  let mut tree = Tree::new();
+  tree.resize(width, 960);
+  let presses = Arc::new(Presses::default());
+  let props = CloseDialogProps {
+    work,
+    ..props(stage, saves, &presses)
+  };
+  tree.mount_root::<CloseDialog>(&mut app, props);
+  tree.pass_headless(&mut app);
+  tree
+}
+
+fn bounds(tree: &mut Tree, id: &str) -> ElementRect {
+  tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+fn inside(inner: ElementRect, outer: ElementRect) -> bool {
+  inner.x >= outer.x - 0.5
+    && inner.x + inner.width <= outer.x + outer.width + 0.5
+    && inner.y >= outer.y - 0.5
+    && inner.y + inner.height <= outer.y + outer.height + 0.5
+}
+
+/// Each row keeps its status badge and step label inside the dialog and as wide as with a short
+/// title (`whole`, by run), while a long title ends before the step label.
+fn assert_rows_fit(tree: &mut Tree, work: &[ActiveWork], whole: &[(f32, f32)], view: &str) {
+  let dialog = bounds(tree, "close-dialog");
+  for (work, (step_whole, status_whole)) in work.iter().zip(whole) {
+    let run = work.run();
+    let row = bounds(tree, &format!("close-row-{run}"));
+    let title = bounds(tree, &format!("close-title-{run}"));
+    let step = bounds(tree, &format!("close-step-{run}"));
+    let status = bounds(tree, &format!("close-status-{run}"));
+    let last = bounds(tree, &format!("close-last-{run}"));
+    let key = work.task_key();
+    assert!(
+      inside(row, dialog),
+      "{view}: {key}'s row is inside the dialog ({row:?}, {dialog:?})"
+    );
+    assert!(
+      inside(status, dialog),
+      "{view}: {key}'s badge is inside the dialog ({status:?}, {dialog:?})"
+    );
+    assert!(
+      inside(last, row),
+      "{view}: {key}'s last cell is inside its row ({last:?}, {row:?})"
+    );
+    assert!(
+      title.x + title.width <= step.x + 0.5,
+      "{view}: {key}'s title ends before its step"
+    );
+    assert!(
+      step.x + step.width <= status.x + 0.5,
+      "{view}: {key}'s step ends before its badge"
+    );
+    assert!(
+      (step.width - step_whole).abs() <= 0.5,
+      "{view}: {key}'s step label is whole"
+    );
+    assert!(
+      (status.width - status_whole).abs() <= 0.5,
+      "{view}: {key}'s badge is whole"
+    );
+  }
+}
+
+/// The step label's and the badge's widths of each row of `work` with short titles only.
+fn whole_widths(stage: CloseStage, work: &[ActiveWork], saves: &[SaveState]) -> Vec<(f32, f32)> {
+  let short: Arc<[ActiveWork]> = work
+    .iter()
+    .map(|work| active(work.project(), work.task_key(), "Short", work.step(), work.agent()))
+    .collect();
+  let mut tree = laid_out(stage, short.clone(), saves.to_vec(), 1440);
+  short
+    .iter()
+    .map(|work| {
+      let run = work.run();
+      let step = bounds(&mut tree, &format!("close-step-{run}")).width;
+      (step, bounds(&mut tree, &format!("close-status-{run}")).width)
+    })
+    .collect()
+}
+
+#[test]
+fn close_dialog_keeps_the_badge_and_step_whole_beside_a_long_title() {
+  let saving = SaveState::Saved { checkpoint: None };
+  for (stage, saves) in [
+    (CloseStage::Confirm, Vec::new()),
+    (
+      CloseStage::Waiting,
+      vec![SaveState::Saving, saving.clone(), SaveState::Saving, saving],
+    ),
+  ] {
+    let work = long_work();
+    let whole = whole_widths(stage, &work, &saves);
+    for width in [960, 1440, 2160] {
+      let view = format!("{stage:?} at {width}");
+      let mut tree = laid_out(stage, work.clone(), saves.clone(), width);
+      assert_rows_fit(&mut tree, &work, &whole, &view);
+      // The one row on its own fits the same way.
+      let mut tree = laid_out(stage, work[..1].into(), saves.iter().take(1).cloned().collect(), width);
+      assert_rows_fit(&mut tree, &work[..1], &whole[..1], &view);
+    }
+  }
+}
+
+/// Rows with titles and model ids of different lengths: one far longer than its cell, short ones
+/// of different lengths, and a model id wider than its cell.
+fn mixed_work() -> Arc<[ActiveWork]> {
+  let long_model = on_model(
+    "Website",
+    "PW-15",
+    "Fix",
+    ("Implement", "Builder"),
+    "claude-opus-5-5-with-a-long-model-id",
+  );
+  long_work().iter().cloned().chain(std::iter::once(long_model)).collect()
+}
+
+#[test]
+fn close_dialog_lines_up_the_step_status_and_last_columns_of_every_row() {
+  let saved = SaveState::Saved { checkpoint: None };
+  for (stage, saves) in [
+    (CloseStage::Confirm, Vec::new()),
+    (
+      CloseStage::Waiting,
+      vec![
+        SaveState::Saving,
+        saved.clone(),
+        SaveState::Saving,
+        saved.clone(),
+        saved,
+      ],
+    ),
+  ] {
+    for width in [960, 1440, 2160] {
+      let work = mixed_work();
+      let mut tree = laid_out(stage, work.clone(), saves.clone(), width);
+      // Where each cell starts, and where the title ends; the badge's own width follows its word.
+      let columns = |tree: &mut Tree, run| {
+        let title = bounds(tree, &format!("close-title-{run}"));
+        let [step, status, last] =
+          ["close-step", "close-status", "close-last"].map(|cell| bounds(tree, &format!("{cell}-{run}")).x);
+        [title.x, title.x + title.width, step, status, last]
+      };
+      let first = columns(&mut tree, work[0].run());
+      for work in &work[1..] {
+        let row = columns(&mut tree, work.run());
+        assert!(
+          row.iter().zip(first).all(|(x, first_x)| (x - first_x).abs() <= 0.5),
+          "{stage:?} at {width}: {}'s columns line up with the first row's ({row:?}, {first:?})",
+          work.task_key()
+        );
+      }
+    }
+  }
 }
 
 #[test]

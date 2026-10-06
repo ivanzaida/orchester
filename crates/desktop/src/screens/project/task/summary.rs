@@ -20,7 +20,6 @@ use orchester_core::{
   connection::stream::InvocationOutcome,
   limits::ProjectLimits,
   run::{PauseReason, RunFailure, RunLimit, RunStatus},
-  time::Timestamp,
   tokens::compact_tokens,
 };
 
@@ -30,6 +29,7 @@ use super::{
   brief::{brief_section, this_task},
   heading::agent_of,
   limit_panel::{RaiseLimitPanel, RaiseLimitProps},
+  live_time::{ActiveTime, ActiveTimeProps, clock},
   notice::{Lost, notice},
   permissions::{Look, RunPermissionsProps, RunPermissionsRow},
   progress::progress_list,
@@ -44,10 +44,7 @@ use crate::{
     detail::{RunView, TaskDetail},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
-  ui::{
-    message_text,
-    property::{ValueStyle, property, styled_property},
-  },
+  ui::property::{ValueStyle, property, styled_property},
 };
 
 /// "This run" panel width (`F5Lsi`).
@@ -129,7 +126,7 @@ pub(super) fn summary(
   let latest = detail.run.as_ref().and_then(|run| latest(ctx, run));
   let shared = super::sharing::panel_section(ctx, detail);
   let panel = match &detail.run {
-    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run), shared),
+    Some(run) => this_run(ctx, run, (repo_root, &scrolls.this_run, lost.is_some()), shared),
     None => this_task(ctx, detail, pipelines, &scrolls.this_run, shared),
   };
   Row::new()
@@ -220,12 +217,13 @@ fn latest(ctx: &Ctx, run: &RunView) -> Option<Element> {
   )
 }
 
-/// The run's pinned configuration, its limits and usage (`F5Lsi`).
+/// The run's pinned configuration, its limits and usage (`F5Lsi`), its active agent time going on
+/// while an agent works and the run has a runner (not `lost`).
 /// `shared`: how the task stands on its server, under the run's rows.
 fn this_run(
   ctx: &mut Ctx,
   run: &RunView,
-  (repo_root, scroll): (&Path, &ScrollState),
+  (repo_root, scroll, lost): (&Path, &ScrollState, bool),
   shared: Option<Element>,
 ) -> Element {
   let version = run.version.to_string();
@@ -238,7 +236,8 @@ fn this_run(
     "runs.cachedValue",
     [("count", compact_tokens(usage.cached_input).as_str())],
   );
-  let time = message_text(ctx, &display::duration(run.active_time(Timestamp::now())));
+  let active = run.active_clock(&run.invocations, clock(ctx).now(), lost);
+  let time = ctx.mount_keyed::<ActiveTime>("task-active-time", ActiveTimeProps { active });
   let time_limit = ctx.t_args(
     "runs.summary.timeLimitValue",
     [("minutes", whole_minutes(run.run.max_duration()).to_string().as_str())],
@@ -287,7 +286,7 @@ fn this_run(
     .child(property(&ctx.t("runs.summary.budget"), &budget_value(ctx, run)))
     .child(property(&ctx.t("runs.cached"), &cached))
     .child(property(&ctx.t("runs.summary.timeLimit"), &time_limit))
-    .child(property(&ctx.t("runs.summary.time"), &time))
+    .child(time)
     .with_children(permissions)
     .child(ctx.mount_keyed::<RunApprovalsPanel>(
       &format!("task-run-approvals-{}", run.id()),

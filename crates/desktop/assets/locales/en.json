@@ -3184,8 +3184,7 @@
       "claudeDetail": "Runs the claude program, signed in on this computer.",
       "anthropicDetail": "Orchester runs the agent on the Messages API with a project API key.",
       "openaiDetail": "Orchester runs the agent on the Responses API with a project API key.",
-      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules.",
-      "notYet": "OpenAI API connections come in a later version of Orchester."
+      "nativeHint": "Native kinds need no CLI: Orchester sends requests to the model API itself and runs the tools under its own permission rules."
     },
     "native": {
       "row": "{{provider}} · {{preset}} · {{host}}",
@@ -3209,7 +3208,7 @@
         "presetHint": "Set by the preset. Prompts, repository content and command output are sent to {{host}}. Change it under Advanced.",
         "hint": "https://, or http:// for localhost, 127.0.0.1 or [::1]. Shown in full wherever the connection is.",
         "wireMessages": "Wire format · Anthropic Messages",
-        "wireResponses": "Wire format · OpenAI Responses",
+        "wireResponses": "Wire format · OpenAI Responses · stateless, store off",
         "blank": "Enter the base URL.",
         "scheme": "Use https://, or http:// for localhost, 127.0.0.1 or [::1].",
         "host": "Enter a valid host and port.",
@@ -3224,7 +3223,10 @@
         "option": "{{name}} ({{environment}})",
         "new": "New secret…",
         "name": "Secret name",
-        "namePlaceholder": "ANTHROPIC_API_KEY",
+        "namePlaceholder": {
+          "anthropic": "ANTHROPIC_API_KEY",
+          "openai": "OPENAI_API_KEY"
+        },
         "value": "Value",
         "environment": "Environment",
         "newLabel": "API key · new project secret",

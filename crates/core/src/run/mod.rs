@@ -4,6 +4,7 @@
 //! the event log is the source of truth and the current state is derivable from it
 //! ([`Run::replay`]). See `docs/architecture/storage.md` (Execution, State machines).
 
+mod active_clock;
 mod again;
 mod answer;
 mod apply;
@@ -37,6 +38,7 @@ mod unreadable;
 mod usage;
 
 pub use self::{
+  active_clock::ActiveClock,
   again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,

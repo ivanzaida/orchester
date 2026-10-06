@@ -2079,9 +2079,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.40.1"
+version = "0.41.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db24403a8d8b4088f2c3beefd76910baab0ab152763f817ac11373779626eab0"
+checksum = "2f4d8f683042f0bba7a045d134e842e3725b3f063708a6f31dd25c5f001da062"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2093,6 +2093,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
+ "libc",
  "lurq_macros",
  "lyon",
  "objc2 0.6.4",

@@ -511,7 +511,7 @@ task_groups task_group`, `cargo test -p orchester-runner --features test-agent -
 `J9467` and the scheduling reviews `W1Dq6` (parallel) and `IyJ5a` (sequential), at 1440 and 960; then move this entry
 to *Done*. Not verified yet after the follow-ups.
 
-## N · Native agent (P1 in progress)
+## N · Native agent (P1 in progress, P2 waiting for review)
 
 Orchester runs the coding-agent loop itself against model APIs (Anthropic Messages, OpenAI Responses, compatible
 endpoints such as DeepSeek), next to the Codex and Claude Code CLIs. The design is
@@ -565,12 +565,56 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58
   04.H10 moved to P1d by the user's decision of 2026-10-02 (see P1d). Tests: `form_keyboard native_`
   (`native_connections`, `native_dialog`, `native_models`, `native_model_uses`, `native_run`), core `native_connection`/`native_setup`,
   store `connections native`, `tool_approvals native_`.
+- **P2 · OpenAI Responses · branch `claude/native-p2` (implemented 2026-10-06, waiting for review; from master
+  `18168b3e`):**
+  - `orchester_agent::ResponsesClient` implements core's `ModelClient` statelessly (§3.2): `store: false`, no
+    `previous_response_id`, the whole conversation each turn; reasoning items are stored verbatim (with
+    `encrypted_content`) and sent back as `{type, summary, encrypted_content}` without the id and status of an
+    item the provider did not keep, as the Codex CLI does. Strict function tools sorted by name, `tool_choice:
+    "auto"`, `parallel_tool_calls`, `reasoning: {effort, summary: "auto"}` with `include:
+    ["reasoning.encrypted_content"]` (a model outside the table reasons only when the request names an effort),
+    explicit `max_output_tokens`, `prompt_cache_key` = conversation id, `Authorization: Bearer` as a sensitive
+    header. Usage per §2.2. A failed tool's output starts with `Error: ` (the wire has no error flag).
+  - Errors as for Anthropic, OpenAI's codes first: 429 `insufficient_quota` is `Billing`, `context_length_exceeded`
+    is `TooLarge` (core compacts); `retry-after-ms`, then `retry-after`, read defensively and capped at 5 min (shared
+    with Anthropic). `error` events and `response.failed` map by code; `response.failed` with `bio_policy` or
+    `misalignment_policy_violation` ends as a refusal with that category; a refusal content part ends as a refusal;
+    `incomplete` maps `max_output_tokens`/`content_filter`. A cut call is asked again with the model's output room.
+    A 400 `invalid_encrypted_content` leaves the conversation's reasoning out once and sends the turn again
+    (`ThinkingStripped`); that code comes from reported answers, not the reference, so it is *to verify* live.
+  - Shared code: `Http::pause` (retry waits) and `Http::read_events` (the bounded SSE loop) now serve both clients;
+    core's `tools::not_json` is public. No new dependency.
+  - Models: `GET {base}/models` joined with a built-in table, checked against developers.openai.com model pages
+    on 2026-10-06: `gpt-6-astra` (922K input, 128K output, low–max), `gpt-6.1-sol` and `gpt-6-luna` (1.05M,
+    128K; Luna adds `none`), `gpt-5.5` (1.05M, 128K, none–xhigh); `reasoning.summary: "auto"` per the reasoning
+    guide. Other listed models come without limits or efforts (manual entry). `check_responses` serves *Test
+    connection*.
+  - Fake server: moved to `crates/agent/tests/fake_server/` and speaks both wire formats (`Wire`), with the
+    append-only check of `instructions`, `tools` and the `input` prefix and the cache echo;
+    `crates/agent/tests/responses_wire` ports every §8 case.
+  - Desktop: the *OpenAI API (native)* kind in Add connection is unlocked (`AgentProvider::can_be_added` removed)
+    and opens the same native form, models dialog and inspector as Anthropic. Test connection and Fetch models stay
+    visibly unavailable for both, as on master, until P1d.
+  - Tests: `cargo test -p orchester-agent --test responses_wire responses_` (22),
+    `--test anthropic_wire anthropic_` (30), `cargo test -p orchester-desktop --test form_keyboard native_` (30),
+    `--test i18n`, `cargo test -p orchester-core --test native_setup only_the_official`.
+  - UI states for the design verifier (not verified by the implementer): Connections → *Add connection*: the four
+    kind cards with none faded and no "later version" note (04.H1); choose *OpenAI API (native)*: the native form
+    with the Official preset at `https://api.openai.com/v1`, DeepSeek and Custom locked with *Compatible endpoints
+    come in a later version*, Test connection and Fetch models unavailable, provider fallback *Not offered*;
+    *Advanced* shows *Wire format · OpenAI Responses*; after saving, the inspector (04.H4) and *Edit models*
+    (04.H6) of the OpenAI connection.
+  - Open: **one live run** (§8 live-test policy, `ORCHESTER_LIVE_OPENAI_KEY`) is not recorded: no real API was
+    called. **P1d hookup:** the runner's `Command::CheckConnection` must call `check_responses` for `OpenAiApi`
+    and run native steps on `ResponsesClient`; P1d's effort mapping drops `none`, which `connection::Effort` lacks
+    (adding it needs a decision). The `safety_identifier` user tag is P3. `clippy --target aarch64-apple-darwin`
+    could not run here (`ring` needs a C cross-compiler); the change has no platform-specific code.
 
 ## L · After lurq 0.30.0
 
 The tab and text-input fixes shipped in lurq 0.30.0, the outside-press fix for window chrome in 0.30.1, the
 select-menu width option in 0.30.2, the verifier window focus option in 0.30.3, and text selection after a drag on
-scaled displays in 0.30.4. This workspace uses 0.40.1 (inspection screenshots cover sensitive text): a resize restores a minimized window first, `lurq_resize` answers with the size the window took (or fails saying why), `lurq_windows` reports `minimized`, `maximized` and `full_screen`, `on_size_changed` reports the size read back from the window, an `Enter` marked `composing` triggers no lurq default (form submit, activation, newline, blur), and `Text::sensitive` with `lurq::core::Sensitive<T>` shows a value on screen while the MCP and DevTools trees show `•••` (the first password of 10.08 B) (0.40.0). A text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
+scaled displays in 0.30.4. This workspace uses 0.41.2 (a long text clipped to its paint is no longer cached as whole; MCP discovery files of ended processes are removed; 0.41.1: Canvas shaped-text and asset caches stay resident across frames; 0.40.1: inspection screenshots cover sensitive text): a resize restores a minimized window first, `lurq_resize` answers with the size the window took (or fails saying why), `lurq_windows` reports `minimized`, `maximized` and `full_screen`, `on_size_changed` reports the size read back from the window, an `Enter` marked `composing` triggers no lurq default (form submit, activation, newline, blur), and `Text::sensitive` with `lurq::core::Sensitive<T>` shows a value on screen while the MCP and DevTools trees show `•••` (the first password of 10.08 B) (0.40.0). A text input composes with an input method (IME), the keys the input method takes reach no handler, and a press it passes on is marked `KeyboardEvent::composing` (the composer's Enter skips it); a select trigger part without a background paints no fill (it was white), unstyled checkbox and slider fills follow the theme's roles, and `Tree::painted_quads` lets a headless test read fills (`form_keyboard select_fill`) (0.39.0). A shrinking child of a single-line row gives way in its `shrink_order`, down to its `shrink_limit` (`MinSize`, `Content`, or `Drop`: natural size or dropped whole), in whole pixels (0.35.0), or trims to `shrink_drop_below(size)` and then drops, and a drop gives its width back to the line (0.36.0); what gives way whole only accumulates as a line narrows, and an item holding droppable children keeps its natural size until its line collapses it (0.37.0); the status bar's one line uses them. Its layout cache restores text output (ellipsis, wrap, caret geometry) on a cache hit (0.33.0); a scrollbar takes the pointer around its thumb, or its whole lane when the lane is reserved or painted, so pressing there never selects text (0.33.1); and a window-sized layer (a `Modal` a component declares itself, a popup) is laid out at the current window size after a resize back (0.34.0, which also adds profiling sessions and the `lurq_profile_*` MCP tools). A component's `ctx.future`/`ctx.stream` tasks are aborted when it unmounts (0.34.2), so a page's watchers stop with the page. Since 0.31.0 the MCP server also offers `lurq_inspect` and
 `lurq_act`, and `lurq_read_tree` quotes app-provided text that is not a plain word (`{tab="All projects"}`); since
 0.32.0 percentage-width children of a wrapping row resolve against the row's width. A later patch release needs only `cargo update -p lurq` (the requirement in `[workspace.dependencies]` already
 admits it) and, to keep naming the version in use, this line.
