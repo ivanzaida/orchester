@@ -135,7 +135,7 @@ fn writable_folders_ignore_a_folder_a_project_variable_names() {
   let entry = desktop.tree.get_element_by_id("agent-folder-0").expect("the entry");
   assert!(contains_text(entry, ".orchester/build"));
   // Claude Code lets its edit tools write there; its commands were never confined.
-  assert!(shows(&mut desktop, "--add-dir for edit tools · commands not confined"));
+  assert!(shows(&mut desktop, "--add-dir · edit tools, not commands"));
   assert!(shows(
     &mut desktop,
     "Edits files in the task worktree and 1 more folder · 3 allowed commands · Network on"
