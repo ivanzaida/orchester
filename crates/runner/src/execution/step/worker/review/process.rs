@@ -1,19 +1,16 @@
-//! Where and how the reviewer's CLI runs. It runs in an empty folder the runner owns, removed after the
-//! review ([`ReviewPlace`]), never in the project's repository, so nothing of the project (its CLAUDE.md,
-//! its git status) reaches it. It is supervised like an agent ([`Supervised`]): contained with everything
+//! Where and how a reviewer's CLI (Claude Code or Codex) runs. It runs in an empty folder the runner owns,
+//! removed after the review ([`ReviewPlace`]), never in the project's repository, so nothing of the project (its
+//! CLAUDE.md, its git status) reaches it. It is supervised like an agent ([`Supervised`]): contained with everything
 //! it starts, stopped after the review's time, and stopped at once when the review is no longer wanted
 //! (the person answered, the step or run ended, the runner exits), as the worker then drops the review's
 //! [`StopReview`].
 
-use std::{io, path::Path, time::Duration};
+use std::{io, time::Duration};
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
-  connection::{
-    reviewer::{ClaudeReviewer, REVIEW_INSTRUCTIONS},
-    stream::OutputStream,
-  },
-  resource::ModelId,
+  connection::{reviewer::ReviewFolder, stream::OutputStream},
+  run::review::{REVIEW_INSTRUCTIONS, REVIEW_SCHEMA},
 };
 use tempfile::TempDir;
 use tokio::{runtime::Handle, sync::watch};
@@ -32,7 +29,8 @@ pub(super) fn stop_review() -> (StopReview, watch::Receiver<()>) {
   (StopReview(sender), receiver)
 }
 
-/// An empty folder for one review, with the reviewer's system prompt beside it; removed when dropped.
+/// An empty folder for one review, with the reviewer's system prompt and the verdict's schema beside it;
+/// removed when dropped.
 pub(super) struct ReviewPlace {
   root: TempDir,
 }
@@ -40,23 +38,20 @@ pub(super) struct ReviewPlace {
 impl ReviewPlace {
   pub(super) fn new() -> io::Result<Self> {
     let root = tempfile::Builder::new().prefix("orchester-review-").tempdir()?;
-    std::fs::create_dir(root.path().join("work"))?;
-    std::fs::write(root.path().join("instructions.md"), REVIEW_INSTRUCTIONS)?;
-    Ok(Self { root })
+    let place = Self { root };
+    let folder = place.folder();
+    std::fs::create_dir(&folder.work)?;
+    std::fs::write(&folder.instructions, REVIEW_INSTRUCTIONS)?;
+    std::fs::write(&folder.schema, REVIEW_SCHEMA)?;
+    Ok(place)
   }
 
-  /// The reviewer on this place's folder, with `executable`, `model` and `environment`, run through
-  /// `runner`.
-  pub(super) fn reviewer(
-    &self,
-    executable: &Path,
-    model: ModelId,
-    environment: Vec<(String, String)>,
-    runner: SupervisedRunner,
-  ) -> ClaudeReviewer<SupervisedRunner> {
-    let folder = self.root.path().join("work");
-    let instructions = self.root.path().join("instructions.md");
-    ClaudeReviewer::new(executable, model, (&folder, &instructions, environment), runner)
+  pub(super) fn folder(&self) -> ReviewFolder {
+    ReviewFolder {
+      work: self.root.path().join("work"),
+      instructions: self.root.path().join("instructions.md"),
+      schema: self.root.path().join("schema.json"),
+    }
   }
 }
 

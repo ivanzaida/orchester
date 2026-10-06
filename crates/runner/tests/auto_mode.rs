@@ -3,7 +3,8 @@
 //! with its system prompt; a credential read, an unreadable script and a Codex escalation still ask the
 //! person without a review; a question of the reviewer and an answer it cannot read leave the request to
 //! the person with what auto mode said; a review whose run turned auto mode off meanwhile is dropped; and
-//! a reviewer still at work when the person answers is stopped. Needs `git`. Run with
+//! a reviewer still at work when the person answers is stopped. A Codex connection reviews through `codex
+//! exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
 
 mod support;
@@ -14,12 +15,12 @@ use orchester_core::{
   connection::{AgentProvider, stream::AgentEvent},
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
-  resource::{CommandEnvironment, VariableName},
+  resource::{CommandEnvironment, ModelId, VariableName},
   run::{
     Answerer, ApprovalAnswer, DecidedBy, PendingToolApproval, Run,
-    review::{AutoModeSettings, Review, ReviewFailure, ReviewHold},
+    review::{AutoModeSettings, Review, ReviewFailure, ReviewHold, ReviewerChoice},
   },
-  store::{ActivityStore, SettingsStore},
+  store::{ActivityStore, ConnectionStore, SettingsStore},
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
@@ -53,14 +54,18 @@ struct Started {
 }
 
 impl Started {
-  /// A run of `setup` in a project whose new runs use auto mode.
+  /// A run of `setup` in a project whose new runs use auto mode, with the default reviewer.
   async fn new(setup: &Setup) -> Self {
-    let project = project(setup);
+    Self::of(project(setup), None).await
+  }
+
+  /// A run of `project`'s task, its new runs using auto mode with `reviewer`.
+  async fn of(project: TestProject, reviewer: Option<ReviewerChoice>) -> Self {
     let log = tempfile::tempdir().expect("a folder for the review log");
     let mut db = ProjectDb::open(project.repo.path()).expect("open");
     let settings = AutoModeSettings {
       new_runs: true,
-      ..AutoModeSettings::default()
+      reviewer,
     };
     db.save_auto_mode_settings(&settings).expect("auto mode for new runs");
     let variable = VariableName::new("FAKE_REVIEW_LOG").expect("name");
@@ -294,4 +299,57 @@ async fn auto_mode_stops_the_reviewer_when_the_person_answers_first() {
   .await
   .expect("the reviewer is stopped and its folder removed");
   assert_eq!(started.decisions(), [(DecidedBy::PersonDeny, None)]);
+}
+
+/// A run of a Claude Code Builder reviewed by a Codex connection of the project, with `model` and effort.
+async fn reviewed_by_codex(brief: &'static str) -> Started {
+  let setup = claude(brief);
+  let project = project(&setup);
+  let codex = support::agent_connection_of(AgentProvider::CodexCli);
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  db.create_connection(&codex).expect("a Codex connection");
+  let choice = ReviewerChoice {
+    connection: codex.id(),
+    model: ModelId::new("gpt-5.5-codex").expect("model"),
+    effort: Some("low".to_owned()),
+  };
+  Started::of(project, Some(choice)).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_reviews_with_a_codex_connection_in_its_read_only_sandbox() {
+  let mut started = reviewed_by_codex("Run `cargo build`.").await;
+  started.ended().await;
+  let decisions = started.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+  assert!(
+    matches!(&decisions[0].1, Some(Review::Approved { reason, model })
+      if reason == "The fake Codex reviewer finds it serves the task." && model == "gpt-5.5-codex"),
+    "{decisions:?}"
+  );
+  let argv = started.logged("argv").remove(0);
+  for part in [
+    "-a never exec --json --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --sandbox read-only",
+    "-m gpt-5.5-codex -c model_reasoning_effort=low",
+    "-c features.shell_tool=false -c tools.web_search=false --output-schema ",
+  ] {
+    assert!(argv.contains(part), "{part} in {argv}");
+  }
+  assert!(argv.ends_with(" -"), "the message comes on standard input: {argv}");
+  let cwd = PathBuf::from(started.logged("cwd").first().expect("logged"));
+  assert!(!cwd.starts_with(started.project.repo.path()), "{}", cwd.display());
+  assert_eq!(started.logged("empty"), ["true"]);
+  assert_eq!(started.logged("schema"), ["true"]);
+  assert_eq!(started.logged("instructions"), ["true"]);
+  assert!(!cwd.exists(), "the review's folder is removed");
+
+  let mut failed = reviewed_by_codex("Run `cargo build`. Reviewer fails.").await;
+  let (request, review) = failed.left_to_person().await;
+  assert!(
+    matches!(&review, Review::Failed { failure: ReviewFailure::CouldNotRun, model: Some(model) } if model == "gpt-5.5-codex"),
+    "{review:?}"
+  );
+  failed.deny(request).await;
+  failed.ended().await;
 }

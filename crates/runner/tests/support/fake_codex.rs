@@ -1,9 +1,9 @@
-//! A stand-in for `codex app-server --stdio` in the runner's execution tests, the only way Orchester
-//! starts Codex. It speaks the part of the JSON-RPC protocol the runner uses (`initialize`,
-//! `account/read`, `config/read`, `thread/start` or `thread/resume`, `mcpServerStatus/list`, `turn/start`) and
-//! answers the way Codex 0.159 did in the probes (`.tmp/agent-runtime/`), without a model. What a
-//! turn does depends on its prompt (`fake_codex_work`); the requests a person decides are in
-//! `fake_app_server`.
+//! A stand-in for `codex app-server --stdio` in the runner's execution tests, the way Orchester starts
+//! Codex agents; started with `exec`, it is auto mode's reviewer instead (`fake_codex_review`). It speaks the part of
+//! the JSON-RPC protocol the runner uses (`initialize`, `account/read`, `config/read`, `thread/start` or
+//! `thread/resume`, `mcpServerStatus/list`, `turn/start`) and answers the way Codex 0.159 did in the probes
+//! (`.tmp/agent-runtime/`), without a model. What a turn does depends on its prompt (`fake_codex_work`); the requests a
+//! person decides are in `fake_app_server`.
 //!
 //! On standard error it reports what it was given: its arguments (`argv: `), the names of its
 //! environment variables, its `PATH`, `BUILD_DIR`, its process id and its MCP servers
@@ -42,6 +42,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_review.rs"]
+mod fake_codex_review;
 #[path = "fake_codex_tools.rs"]
 mod fake_codex_tools;
 #[path = "fake_codex_work.rs"]
@@ -62,8 +64,11 @@ fn main() -> ExitCode {
     return ExitCode::SUCCESS;
   }
   let args: Vec<String> = std::env::args().skip(1).collect();
+  if fake_codex_review::is_review(&args) {
+    return fake_codex_review::review(&args);
+  }
   if args.first().is_none_or(|first| first != "app-server") {
-    eprintln!("this fake Codex runs as App Server only");
+    eprintln!("this fake Codex runs as App Server or as a reviewer only");
     return ExitCode::from(2);
   }
   report_start(&args);

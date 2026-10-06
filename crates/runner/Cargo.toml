@@ -210,8 +210,9 @@ test-agent = []
 [dependencies]
 orchester-core.workspace = true
 orchester-exec.workspace = true
-# The native agent's file tools, which Orchester's tools serve to Claude Code and Codex too.
-orchester-agent.workspace = true
+# The native agent's file tools, which Orchester's tools serve to Claude Code and Codex too; and its
+# Anthropic Messages client (`http`), which auto mode's reviewer on a native connection asks.
+orchester-agent = { workspace = true, features = ["http"] }
 # The codebase index of each run's base revision, built before its first step.
 orchester-index.workspace = true
 orchester-ipc.workspace = true

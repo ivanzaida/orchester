@@ -30,6 +30,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
+pub(in crate::execution::step) use self::review::ReviewerKeys;
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,
@@ -153,6 +154,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
   /// Auto mode's review of the waiting approval, while it is under way.
   pub(super) reviewing: Option<review::Reviewing>,
+  /// Where a native reviewer's API key is read.
+  pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
 }
 
 pub(super) struct Watch {

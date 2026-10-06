@@ -5,28 +5,29 @@
 //! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
 //! result is then dropped. A Codex escalation (a command outside its sandbox) never reaches the reviewer.
 
+mod native;
 mod process;
+mod setup;
 
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use orchester_core::{
-  connection::{invocation::agent_environment, reviewer::reviewer_connection},
   permission::AgentPermissions,
-  resource::ModelId,
   run::{
     ApprovalSubject, DecidedBy, PendingToolApproval,
-    review::{
-      RequestReviewer, Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask,
-      review_request,
-    },
+    review::{Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
   },
-  store::{ConnectionStore, RunStore, SettingsStore, TaskStore},
+  store::{RunStore, TaskStore},
 };
 use orchester_ipc::Event;
 use orchester_store::StoreError;
 use tokio::{runtime::Handle, task::JoinHandle};
 
-use self::process::{ReviewPlace, StopReview, SupervisedRunner, stop_review};
+pub(in crate::execution::step) use self::setup::ReviewerKeys;
+use self::{
+  process::{StopReview, stop_review},
+  setup::ReviewJob,
+};
 use super::{super::answer::Settled, Watch, Worker};
 
 /// The longest a review may take; the reviewer is stopped then, and the person decides.
@@ -55,13 +56,6 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
   });
   let reviewing = slot.take().expect("the review awaited above is under way");
   (reviewing.approval, review)
-}
-
-/// The project's reviewer, before the folder of one review is made.
-struct ReviewerSetup {
-  executable: PathBuf,
-  model: ModelId,
-  environment: Vec<(String, String)>,
 }
 
 impl Worker {
@@ -94,29 +88,15 @@ impl Worker {
     let input = self.review_input(watch, approval, permissions.as_ref())?;
     let setup = self.reviewer(watch)?;
     let (stop, stopped) = stop_review();
-    let runtime = Handle::current();
-    let work = tokio::task::spawn_blocking(move || {
-      let place = match setup.as_ref().map(|_| ReviewPlace::new()).transpose() {
-        Ok(place) => place,
-        Err(error) => {
-          tracing::warn!(%error, "cannot make the folder a review runs in");
-          return Review::Failed {
-            failure: ReviewFailure::CouldNotRun,
-            model: None,
-          };
-        }
-      };
-      let runner = SupervisedRunner {
-        runtime,
-        timeout: REVIEW_TIMEOUT,
-        stop: stopped,
-      };
-      let reviewer = setup
-        .zip(place.as_ref())
-        .map(|(setup, place)| place.reviewer(&setup.executable, setup.model, setup.environment, runner));
-      let reviewer = reviewer.as_ref().map(|reviewer| reviewer as &dyn RequestReviewer);
-      review_request(reviewer, (&subject, permissions.as_ref()), input)
-    });
+    let job = ReviewJob {
+      subject,
+      permissions,
+      input,
+      runtime: Handle::current(),
+      timeout: REVIEW_TIMEOUT,
+      stop: stopped,
+    };
+    let work = tokio::task::spawn_blocking(move || setup.review(job));
     Ok(Some(Reviewing {
       approval: approval.id.clone(),
       work,
@@ -230,23 +210,6 @@ impl Worker {
           .collect()
       })
       .unwrap_or_default()
-  }
-
-  /// The project's reviewer: its Claude Code connection with auto mode's model and the agent environment;
-  /// `None` when the project has no Claude Code connection.
-  fn reviewer(&self, watch: &Watch) -> Result<Option<ReviewerSetup>, StoreError> {
-    let connections = watch.db.connections()?;
-    let Some(executable) = reviewer_connection(&connections).and_then(|connection| connection.executable()) else {
-      return Ok(None);
-    };
-    let model = watch.db.auto_mode_settings()?.model;
-    let mut environment = agent_environment(std::env::vars_os());
-    watch.db.project_environment()?.add_to(&mut environment);
-    Ok(Some(ReviewerSetup {
-      executable: executable.to_path_buf(),
-      model,
-      environment,
-    }))
   }
 }
 

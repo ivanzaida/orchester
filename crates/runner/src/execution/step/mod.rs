@@ -328,6 +328,10 @@ impl RunTask {
       decisions,
       steers: steered,
       reviewing: None,
+      reviewer_keys: worker::ReviewerKeys {
+        vault: self.vault.clone(),
+        project: self.project.id(),
+      },
     };
     tokio::spawn(worker.work());
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
