@@ -31,7 +31,7 @@ use super::{
   super::{
     approval_arguments::ArgumentsCache,
     approval_value::ValueRows,
-    review_note::review_line,
+    review_note::{review_line, reviewing_line},
     tool_approval::{
       Decision as ApprovalDecision, DecisionAction, Unanswered, always_blocked, chip,
       decision_action as approval_decision, quiet_reason, similar_unavailable,
@@ -167,14 +167,15 @@ impl Component for ApprovalCardView {
         ("time", display::clock(request.requested_at).as_str()),
       ],
     );
+    let (shown, reviewing) = shown_request(ctx, &request.id);
     let state = match props.card.decided {
       None if ended => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
       None if answered => (Icon::Check, ctx.t("runs.conversation.card.answered")),
+      None if reviewing => (Icon::Bot, ctx.t("runs.conversation.card.reviewing")),
       None => (Icon::Hand, ctx.t("runs.conversation.card.waitingAnswer")),
       Some(Some(decision)) => answered_state(ctx, decision, props.card.decided_by),
       Some(None) => (Icon::CirclePause, ctx.t("runs.conversation.card.ended")),
     };
-    let shown = shown_request(ctx, &request.id);
     let mut body = self.request_body(ctx, request, shown.as_ref());
     let review = props
       .card
@@ -182,6 +183,9 @@ impl Component for ApprovalCardView {
       .as_ref()
       .or_else(|| shown.as_ref().and_then(|shown| shown.review.as_ref()));
     body.extend(review.map(|review| review_line(ctx, format!("conversation-approval-review-{}", request.id), review)));
+    body.extend(
+      (reviewing && waiting).then(|| reviewing_line(ctx, format!("conversation-approval-reviewing-{}", request.id))),
+    );
     if waiting {
       let queue = ctx.use_context::<ApprovalQueue>();
       body.push(self.answers(ctx, (&props.card, shown.as_ref(), props.answers), &action, queue));
@@ -286,15 +290,20 @@ fn heading(ctx: &Ctx, request: &PendingToolApproval, shown: Option<&ShownApprova
   row.into()
 }
 
-/// The request with its choices, as the project's waiting requests know it.
-fn shown_request(ctx: &mut Ctx, id: &str) -> Option<ShownApproval> {
-  let shown = ctx.use_context::<Shown>()?;
-  let tasks = shown.tasks.ready()?;
-  tasks
-    .pending_tool_approvals
-    .iter()
-    .find(|pending| pending.approval.id == id)
-    .cloned()
+/// The request with its choices, as the project's waiting requests know it, and whether auto mode's
+/// reviewer is still judging it (the person may decide all the same).
+fn shown_request(ctx: &mut Ctx, id: &str) -> (Option<ShownApproval>, bool) {
+  let Some(tasks) = ctx
+    .use_context::<Shown>()
+    .and_then(|shown| shown.tasks.ready().cloned())
+  else {
+    return (None, false);
+  };
+  let find = |list: &[ShownApproval]| list.iter().find(|pending| pending.approval.id == id).cloned();
+  match find(&tasks.reviewing_tool_approvals) {
+    Some(reviewing) => (Some(reviewing), true),
+    None => (find(&tasks.pending_tool_approvals), false),
+  }
 }
 
 impl CardAnswer {

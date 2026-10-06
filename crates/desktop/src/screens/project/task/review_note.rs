@@ -88,3 +88,22 @@ pub(in crate::screens::project) fn review_line(ctx: &Ctx, id: String, review: &R
     }))
     .into()
 }
+
+/// *Auto mode is reviewing this request…* under a request its reviewer is still judging, `id` for tooling:
+/// the request asks the person only once the review ends, and the person may decide before.
+pub(in crate::screens::project) fn reviewing_line(ctx: &Ctx, id: String) -> Element {
+  Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Start)
+    .child(icon(Icon::Bot, IconSize::Small, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(
+      Text::new(&ctx.t("runs.autoMode.reviewing"))
+        .variant(ExtraTypography::CellLabel.role())
+        .color(PaletteColor::TextSecondary)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
+    .into()
+}

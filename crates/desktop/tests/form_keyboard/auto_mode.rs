@@ -84,7 +84,7 @@ fn seeded_with(
 }
 
 /// A signed-in Claude Code connection, which auto mode reviews with.
-fn claude_connection(repo: &Path) {
+pub(crate) fn claude_connection(repo: &Path) {
   let now = Timestamp::now();
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
