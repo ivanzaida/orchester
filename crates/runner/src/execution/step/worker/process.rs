@@ -22,9 +22,17 @@ use super::{
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
   },
-  FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
+  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
+
+/// The next event of a CLI's process; a native driver has none.
+async fn next_event(driver: &mut Driver) -> Option<ProcessEvent> {
+  match driver {
+    Driver::Process { process, .. } => process.next().await,
+    Driver::Native(_) => std::future::pending().await,
+  }
+}
 
 impl Worker {
   pub(super) async fn follow(mut self) -> Result<Finished, StoreError> {
@@ -39,13 +47,13 @@ impl Worker {
     let mut steering = true;
     loop {
       tokio::select! {
-        event = self.process.next() => match event {
+        event = next_event(&mut self.driver) => match event {
           Some(ProcessEvent::Output { stream, line }) => {
             self.receive_output(&mut watch, stream, &line).await?;
             self.steer_early(&mut watch).await?;
             self.stop_at_checkpoint(&mut watch);
             if watch.stop.is_some() {
-              self.process.terminate();
+              self.driver.end();
             }
           }
           Some(ProcessEvent::Exited(exit)) => return self.finish(watch, &exit),
@@ -70,7 +78,7 @@ impl Worker {
           Some(Stop::Now(cause)) => {
             if watch.stop.is_none() {
               watch.stop = Some(cause);
-              self.process.terminate();
+              self.driver.end();
             }
           }
           Some(Stop::AfterTurn(cause)) => {
@@ -95,16 +103,23 @@ impl Worker {
         },
         () = &mut grace, if grace_armed && watch.stop.is_none() => {
           watch.stop = watch.over;
-          self.process.terminate();
+          self.driver.end();
         }
       }
     }
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
-    let received = match &mut self.transport {
-      Transport::AppServer(app) => app.receive(stream, line, &self.process).await,
-      Transport::Claude(claude) => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
+    let received = match &mut self.driver {
+      Driver::Process {
+        transport: Transport::AppServer(app),
+        process,
+      } => app.receive(stream, line, process).await,
+      Driver::Process {
+        transport: Transport::Claude(claude),
+        ..
+      } => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
+      Driver::Native(_) => Ok(Vec::new()),
     };
     self.took_input(watch)?;
     match received {
@@ -119,7 +134,7 @@ impl Worker {
           AppServerFailure::NotSignedIn(message) => AgentEvent::NotSignedIn { message },
         };
         self.observe(watch, event)?;
-        self.process.terminate();
+        self.driver.end();
       }
     }
     Ok(())
@@ -139,34 +154,44 @@ impl Worker {
       watch.stop = Some(StopCause::Paused);
     }
     if watch.stop.is_some() {
-      self.process.terminate();
+      self.driver.end();
     }
   }
 
   /// What the CLI said of the messages sent now: Codex's answers to them and the ones Claude Code
   /// took. A turn Claude Code ended closes its input: it exits once it has read what it was given.
   fn took_input(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    match &mut self.transport {
-      Transport::AppServer(app) => {
+    match &mut self.driver {
+      Driver::Process {
+        transport: Transport::AppServer(app),
+        ..
+      } => {
         let answers = app.take_steer_answers();
         self.steer_answered(watch, answers)
       }
-      Transport::Claude(claude) => {
+      Driver::Process {
+        transport: Transport::Claude(claude),
+        process,
+      } => {
         let (taken, results) = (claude.take_replayed(), claude.results());
         if results > 0 {
-          self.process.close_input();
+          process.close_input();
         }
         for text in taken {
           self.input_taken(watch, &text, Some(results))?;
         }
         Ok(())
       }
+      Driver::Native(_) => Ok(()),
     }
   }
 
   async fn initialize_app_server(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
-    if let Some(app) = self.app_server()
-      && let Err(error) = app.start(&self.process).await
+    if let Driver::Process {
+      transport: Transport::AppServer(app),
+      process,
+    } = &self.driver
+      && let Err(error) = app.start(process).await
     {
       self.observe(
         watch,
@@ -174,7 +199,7 @@ impl Worker {
           message: format!("cannot initialize Codex App Server: {error}"),
         },
       )?;
-      self.process.terminate();
+      self.driver.end();
     }
     Ok(())
   }
@@ -189,7 +214,9 @@ impl Worker {
       Update::Approval(request) => self.request_approval(watch, request).await,
       Update::Declined(response) => {
         // A process that cannot take the answer is ending; its exit says how.
-        if let Err(error) = self.process.send_line(response).await {
+        if let Some(process) = self.driver.process()
+          && let Err(error) = process.send_line(response).await
+        {
           tracing::warn!(%error, "Codex App Server did not take a declined request's answer");
         }
         Ok(())
@@ -199,7 +226,7 @@ impl Worker {
         if input_kept {
           self.kept_at_turn_end(watch)?;
         }
-        self.process.terminate();
+        self.driver.end();
         Ok(())
       }
     }

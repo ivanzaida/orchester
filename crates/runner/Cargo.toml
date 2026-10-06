@@ -192,10 +192,16 @@ required-features = ["test-agent"]
 name = "task_organization"
 required-features = ["test-agent"]
 
+[[test]]
+name = "native"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
 [dependencies]
+# Native agents: the model API client and the file tools their loop runs (`docs/architecture/native-agent.md` §2.2).
+orchester-agent.workspace = true
 orchester-core.workspace = true
 orchester-exec.workspace = true
 # The codebase index of each run's base revision, built before its first step.

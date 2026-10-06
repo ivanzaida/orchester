@@ -1585,7 +1585,8 @@
         "secretUnreadable": "The system keychain did not give the value of {{secret}}. The runner log says why.",
         "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
         "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
-        "failedToStart": "The agent’s CLI reported that the server did not start."
+        "failedToStart": "The agent’s CLI reported that the server did not start.",
+        "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it."
       }
     },
     "changes": {

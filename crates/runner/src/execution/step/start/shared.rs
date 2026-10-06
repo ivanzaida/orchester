@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  permission::{FolderBounds, capability::EnforcedPermissions},
+  permission::{FolderBounds, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
   store::{ConnectionStore, ResourceStore},
@@ -63,6 +63,17 @@ impl RunTask {
   /// The extra writable folders `enforced` grants, resolved in the project's repository, the missing
   /// ones created; or why one cannot be given (it was moved, or now lies somewhere refused).
   pub(super) fn writable_roots(&self, enforced: &EnforcedPermissions) -> Result<Vec<PathBuf>, RunnerProblem> {
+    Ok(
+      self
+        .writable_folders(enforced)?
+        .iter()
+        .map(|folder| folder.path().to_path_buf())
+        .collect(),
+    )
+  }
+
+  /// [`Self::writable_roots`] as resolved.
+  pub(super) fn writable_folders(&self, enforced: &EnforcedPermissions) -> Result<Vec<ResolvedFolder>, RunnerProblem> {
     let Some(folders) = enforced
       .permissions()
       .granted_folders()
@@ -86,7 +97,7 @@ impl RunTask {
             ))
           })?;
         }
-        Ok(folder.path().to_path_buf())
+        Ok(folder)
       })
       .collect()
   }

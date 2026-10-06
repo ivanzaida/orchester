@@ -1,6 +1,6 @@
-//! How an agent step's invocation starts, for the provider of its profile's connection (Codex or
-//! Claude Code): the connection and settings, the worktree it works in, the variables the project
-//! adds to its environment (read at each start), the MCP servers the profile chooses (`mcp`), and
+//! How an agent step's invocation starts, for the provider of its profile's connection (Codex, Claude
+//! Code or a native agent, [`native`]): the connection and settings, the worktree it works in, the variables the
+//! project adds to its environment (read at each start), the MCP servers the profile chooses (`mcp`), and
 //! the prompt assembled for its injection event ([`prompt`]). The CLI's command is built in
 //! [`cli`]; what every provider shares (the step, its profile and connection, the permissions and
 //! writable folders) in [`shared`]. The skills that reach the agent are placed and listed in its
@@ -10,6 +10,7 @@
 //! gets the folder with `--add-dir`), and ripgrep's folder first on the CLI's `PATH`.
 
 mod cli;
+mod native;
 mod prompt;
 mod retry;
 mod shared;
@@ -20,15 +21,15 @@ use orchester_core::{
   code_index::CodeIndexUse,
   command::{Command, SecretVariable},
   connection::{
-    REASONING_EFFORT,
+    AgentConnection, REASONING_EFFORT,
     mcp::InvocationExemptions,
-    stream::{AgentEvent, RunnerProblem},
+    stream::{AgentEvent, ClaudeStream, RunnerProblem},
   },
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   permission::LaunchPermissions,
-  resource::{AgentProfile, Step},
-  run::{AssembledPrompt, CodeIndexPrompt, InvocationPrompt, ProfileInfo},
+  resource::{AgentProfile, ModelId, Step},
+  run::{AssembledPrompt, CodeIndexPrompt, InvocationEngine, InvocationPrompt, PinnedVersion, ProfileInfo},
 };
 
 use self::cli::Cli;
@@ -38,12 +39,17 @@ use super::{
     run::RunTask,
   },
   Continuation,
-  app_server::AppServerSetup,
+  app_server::{AppServerSession, AppServerSetup},
   claude_approval::ClaudeApprovals,
   mcp::{McpServers, McpSetup},
+  native::{NativeHandle, NativeSession},
   skills::PlacedSkills,
+  worker::{Driver, Transport},
 };
-use crate::private_file::PrivateFile;
+use crate::{
+  private_file::PrivateFile,
+  supervisor::{Supervised, SupervisorError},
+};
 
 /// Why an agent on a native connection does not start: preflight refuses such steps, and an agent
 /// never starts on a connection this version cannot run.
@@ -55,25 +61,125 @@ pub(super) fn problem(detail: String) -> RunnerProblem {
 
 /// How an agent invocation starts.
 pub(super) struct AgentStart {
-  pub(super) command: Command,
+  pub(super) launch: Launch,
   pub(super) prompt: InvocationPrompt,
-  /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
-  pub(super) mcp_file: Option<PrivateFile>,
   /// An event for each MCP server the agent works without, and for the code index it lacks.
   pub(super) left_out: Vec<AgentEvent>,
   /// What the agent gets of the code index.
   pub(super) code_index: CodeIndexUse,
-  pub(super) app_server: Option<AppServerSetup>,
-  /// Claude Code's permission prompt, for a step that asks a person.
-  pub(super) claude_approvals: Option<ClaudeApprovals>,
-  /// Secret values of Claude Code's MCP servers, kept out of the invocation's activity.
-  pub(super) mcp_secrets: Vec<SecretVariable>,
-  /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
-  pub(super) claude_exemptions: InvocationExemptions,
+  /// Secret values kept out of the invocation's activity: Claude Code's MCP servers', a native
+  /// agent's API key.
+  pub(super) secrets: Vec<SecretVariable>,
   pub(super) agent: String,
   /// The task memory its prompt holds, to record with the invocation.
   pub(super) memory: Vec<InjectedMemory>,
   pub(super) permissions: LaunchPermissions,
+  /// What a native agent reaches its model through; `None` for a CLI.
+  pub(super) engine: Option<InvocationEngine>,
+}
+
+/// What starts: an agent CLI's process, or a native agent's loop.
+pub(super) enum Launch {
+  Cli(Box<CliLaunch>),
+  Native(Box<NativeSession>),
+}
+
+/// A started agent and what its worker follows it with.
+pub(super) struct Driven {
+  pub(super) driver: Driver,
+  /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
+  pub(super) mcp_file: Option<PrivateFile>,
+  pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// Whether the agent can ask a person to decide about a tool call.
+  pub(super) interactive: bool,
+  /// Whether people's messages sent now reach the agent while it works; a native agent reads them
+  /// once its turn is over.
+  pub(super) steered: bool,
+}
+
+impl Launch {
+  /// Starts the CLI's process, or the native agent's task.
+  pub(super) fn start(self) -> Result<Driven, SupervisorError> {
+    match self {
+      Self::Cli(cli) => {
+        let CliLaunch {
+          command,
+          mcp_file,
+          app_server,
+          claude_approvals,
+          claude_exemptions,
+        } = *cli;
+        let process = Supervised::start(&command)?;
+        let interactive = app_server.is_some() || claude_approvals.is_some();
+        let transport = match app_server {
+          Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
+          None => Transport::Claude(Box::new(ClaudeStream::with_exemptions(claude_exemptions))),
+        };
+        Ok(Driven {
+          driver: Driver::Process { transport, process },
+          mcp_file,
+          claude_approvals,
+          interactive,
+          steered: true,
+        })
+      }
+      Self::Native(session) => Ok(Driven {
+        driver: Driver::Native(NativeHandle::spawn(*session)),
+        mcp_file: None,
+        claude_approvals: None,
+        interactive: true,
+        steered: false,
+      }),
+    }
+  }
+}
+
+/// An agent CLI's process and what the runner follows it with.
+pub(super) struct CliLaunch {
+  pub(super) command: Command,
+  /// Claude Code's MCP configuration file, removed when this is dropped: once the CLI has ended.
+  pub(super) mcp_file: Option<PrivateFile>,
+  pub(super) app_server: Option<AppServerSetup>,
+  /// Claude Code's permission prompt, for a step that asks a person.
+  pub(super) claude_approvals: Option<ClaudeApprovals>,
+  /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
+  pub(super) claude_exemptions: InvocationExemptions,
+}
+
+/// The agent step an invocation runs: its step, the profile version that runs it and the model, and the
+/// connection it runs on.
+#[derive(Clone, Copy)]
+struct StepAgent<'a> {
+  step: &'a Step,
+  profile: &'a PinnedVersion,
+  model: &'a ModelId,
+  body: &'a AgentProfile,
+  connection: &'a AgentConnection,
+}
+
+impl<'a> StepAgent<'a> {
+  const fn info(&self) -> ProfileInfo<'a> {
+    ProfileInfo {
+      id: self.profile.resource,
+      version: self.profile.number,
+      body: self.body,
+    }
+  }
+}
+
+impl RunTask {
+  /// The internal code index skill, placed among `placed` when the agent gets the index.
+  fn place_code_map_for(
+    &self,
+    index: &AgentIndex,
+    execution: StepExecutionId,
+    placed: &mut PlacedSkills,
+  ) -> Result<Option<std::path::PathBuf>, RunnerProblem> {
+    match index.folder {
+      Some(_) => self.place_code_map(execution, placed).map(Some),
+      None => Ok(None),
+    }
+  }
 }
 
 /// What the prompt of an agent step's invocation is made of besides the run.
@@ -100,20 +206,37 @@ impl RunTask {
     index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
     let (step, profile, model) = self.agent_step(execution)?;
-    let key = &step.key;
     let (body, connection) = self.profile_and_connection(profile)?;
-    let provider = connection.provider();
-    let executable = cli::program(&connection)?;
-    let info = ProfileInfo {
-      id: profile.resource,
-      version: profile.number,
+    let agent = StepAgent {
+      step,
+      profile,
+      model,
       body: &body,
+      connection: &connection,
     };
+    if connection.provider().is_native() {
+      self.native_start(execution, continuation, (invocation, worktree), index, agent)
+    } else {
+      self.cli_start(execution, continuation, (invocation, worktree), index, agent)
+    }
+  }
+
+  /// How an agent CLI's invocation starts; see [`Self::command`].
+  fn cli_start(
+    &self,
+    execution: StepExecutionId,
+    continuation: &Continuation,
+    (invocation, worktree): (InvocationId, &Path),
+    index: AgentIndex,
+    agent: StepAgent<'_>,
+  ) -> Result<AgentStart, RunnerProblem> {
+    let (step, model, body, connection) = (agent.step, agent.model, agent.body, agent.connection);
+    let key = &step.key;
+    let provider = connection.provider();
+    let executable = cli::program(connection)?;
+    let info = agent.info();
     let mut placed = self.place_skills(execution, step, info)?;
-    let skill = match index.folder {
-      Some(_) => Some(self.place_code_map(execution, &mut placed)?),
-      None => None,
-    };
+    let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
     let parts = PromptParts {
@@ -126,18 +249,18 @@ impl RunTask {
       memory: recalled.entries(),
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
-    let enforced = self.enforced(key, &body, provider)?;
+    let enforced = self.enforced(key, body, provider)?;
     let writable_roots = self.writable_roots(&enforced)?;
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
-    let McpServers { setup, left_out } = self.mcp_servers(&body, provider, (invocation, worktree, &environment))?;
+    let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let claude_approvals = self.claude_approvals(enforced.permissions(), &setup, (invocation, worktree))?;
-    let mcp_secrets = setup.claude_secrets();
+    let secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let cli = Cli {
       executable,
       model,
-      effort: reasoning_effort(&body),
+      effort: reasoning_effort(body),
       enforced: &enforced,
       writable_roots: &writable_roots,
       worktree,
@@ -165,18 +288,21 @@ impl RunTask {
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
-      command,
+      launch: Launch::Cli(Box::new(CliLaunch {
+        command,
+        mcp_file,
+        app_server,
+        claude_approvals,
+        claude_exemptions,
+      })),
       prompt: sources,
-      mcp_file,
       left_out,
       code_index: index.used,
-      app_server,
-      claude_approvals,
-      mcp_secrets,
-      claude_exemptions,
+      secrets,
       agent: body.role().as_str().to_owned(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
+      engine: None,
     })
   }
 }

@@ -63,6 +63,7 @@ impl McpServerProblem {
       | Self::WorkingDirectoryUnsupported
       | Self::UnsafeScriptArgument { .. }
       | Self::NotUnicode
+      | Self::NotSupportedByConnection
       | Self::FailedToStart { detail: None } => {}
     }
   }

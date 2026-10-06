@@ -29,6 +29,16 @@ impl RunTask {
   /// gated one's approved plan), and what a reviewer asked to change in its own plan, if the
   /// invocation revises it.
   pub(super) fn prompt(&self, parts: PromptParts<'_>) -> Result<AssembledPrompt, RunnerProblem> {
+    self.with_prompt(parts, |input, event| input.assemble(event))
+  }
+
+  /// What `assemble` makes of the prompt input of `parts` at its injection event: a new session's at
+  /// [`InjectionEvent::Start`], a resumed one's at [`InjectionEvent::Resume`].
+  pub(super) fn with_prompt<T>(
+    &self,
+    parts: PromptParts<'_>,
+    assemble: impl FnOnce(&PromptInput<'_>, InjectionEvent) -> Result<T, PromptAssemblyError>,
+  ) -> Result<T, RunnerProblem> {
     let PromptParts {
       execution,
       step,
@@ -66,7 +76,7 @@ impl RunTask {
       })
       .collect();
     let skills = placed.listings();
-    PromptInput {
+    let input = PromptInput {
       project: &self.project,
       task: &self.task,
       run: Some(RunContext {
@@ -99,13 +109,12 @@ impl RunTask {
       ),
       memory,
       retry: retry.as_ref().map(|loaded| loaded.report(self)),
-    }
-    .assemble(event)
-    .map_err(
-      |PromptAssemblyError::UnavailableVariable { variable, .. }| RunnerProblem::UnavailableVariable {
+    };
+    assemble(&input, event).map_err(|PromptAssemblyError::UnavailableVariable { variable, .. }| {
+      RunnerProblem::UnavailableVariable {
         variable: variable.name().to_owned(),
-      },
-    )
+      }
+    })
   }
 
   /// The number of the attempt `execution` belongs to.

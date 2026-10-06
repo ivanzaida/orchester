@@ -6,6 +6,7 @@
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
 pub mod hold;
+pub mod native;
 pub mod tools;
 pub mod vault;
 
@@ -155,6 +156,8 @@ pub struct Setup {
   /// Off unless a test is about the code index: what an agent is given then depends on where
   /// ripgrep is on the machine.
   pub code_index: CodeIndexSetting,
+  /// The model API of a native connection, for [`AgentProvider::AnthropicApi`].
+  pub native: Option<native::NativeApi>,
 }
 
 impl Setup {
@@ -169,6 +172,7 @@ impl Setup {
       mcp: Vec::new(),
       secrets: Vec::new(),
       code_index: CodeIndexSetting::Off,
+      native: None,
       budget: 1_400_000,
       max_duration: Duration::from_secs(30 * 60),
     }
@@ -201,7 +205,10 @@ pub fn project(setup: &Setup) -> TestProject {
   );
   let id = project.id();
   let mut db = ProjectDb::create(root, project).expect("create project");
-  let connection = agent_connection(setup.provider);
+  let connection = match &setup.native {
+    Some(api) => native::connection(api),
+    None => agent_connection(setup.provider),
+  };
   db.create_connection(&connection).expect("connection");
   let mut values = Vec::new();
   for (secret, value) in &setup.secrets {
@@ -225,7 +232,7 @@ fn agent_connection(provider: AgentProvider) -> orchester_core::connection::Conn
   let (title, fake, version) = match provider {
     AgentProvider::CodexCli => ("Codex · Kontur", FAKE_CODEX, "0.139.0"),
     AgentProvider::ClaudeCodeCli => ("Claude · Kontur", FAKE_CLAUDE, "2.1.89"),
-    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("a native connection is made from its API"),
   };
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
@@ -305,7 +312,8 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
     ModelId::new(setup.model.unwrap_or(match setup.provider {
       AgentProvider::CodexCli => "gpt-5.5",
       AgentProvider::ClaudeCodeCli => "haiku",
-      AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
+      AgentProvider::AnthropicApi => native::MODEL,
+      AgentProvider::OpenAiApi => panic!("the runner tests have no OpenAI agent"),
     }))
     .expect("model"),
     settings,
@@ -355,15 +363,15 @@ fn queued_task(db: &mut ProjectDb, connection: ConnectionId, setup: &Setup) -> T
   task.id()
 }
 
-/// What the Builder may run: Codex confines any command to the worktree; Claude Code can only
-/// limit commands to a list, here git.
+/// What the Builder may run: Codex confines any command to the worktree; Claude Code and a native
+/// agent can only limit commands to a list, here git.
 fn commands(provider: AgentProvider) -> CommandPermission {
   match provider {
     AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
-    AgentProvider::ClaudeCodeCli => CommandPermission::Allowed(
+    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi => CommandPermission::Allowed(
       AllowedCommands::new(vec![CommandPrefix::new("git").expect("valid prefix")]).expect("valid list"),
     ),
-    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => panic!("the runner tests have no native agent"),
+    AgentProvider::OpenAiApi => panic!("the runner tests have no OpenAI agent"),
   }
 }
 

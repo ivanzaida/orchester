@@ -245,6 +245,15 @@ impl RunTask {
     }
   }
 
+  /// The folder holding the copy of ripgrep for a native agent without the code index; `None` when
+  /// it gets none, which the caller reports as ripgrep not found (why is in the runner's log).
+  pub(super) fn ripgrep_folder(&self) -> Result<Option<PathBuf>, RunnerProblem> {
+    let provided = self
+      .provide_ripgrep()
+      .map_err(|detail| RunnerProblem::CouldNotStart { detail })?;
+    Ok(provided.ok())
+  }
+
   /// The folder holding the copy of ripgrep for an agent; else why the agent has none: none was
   /// found on the `PATH` the agent starts with (the project's, else the runner's), where winget
   /// installs for the agent's user or with an agent CLI, or the one found could not be copied.

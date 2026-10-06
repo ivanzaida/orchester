@@ -1,7 +1,7 @@
 //! Starting agent steps: which ready executions start (as agent slots allow), where each works
-//! ([`super::workspace`]), its invocation record and its agent CLI (Codex or Claude Code) in its
-//! worktree — a new session,
-//! or the step's earlier session continued — handed to a [`worker::Worker`] of its own.
+//! ([`super::workspace`]), its invocation record and its agent (Codex, Claude Code, or a native agent,
+//! [`native`]) in its worktree — a new session, or the step's earlier session continued — handed to a
+//! [`worker::Worker`] of its own.
 
 mod answer;
 mod app_server;
@@ -11,6 +11,7 @@ mod cli_version;
 mod end;
 mod mcp;
 mod memory;
+mod native;
 mod skills;
 mod start;
 mod stderr;
@@ -19,7 +20,8 @@ pub(super) mod worker;
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
-  connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, RunnerProblem},
+  command::SecretVariable,
+  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
@@ -34,15 +36,14 @@ use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
 use self::{
-  app_server::AppServerSession,
-  worker::{Stop, Transport, Worker},
+  start::Driven,
+  worker::{Stop, Worker},
 };
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
 };
-use crate::supervisor::Supervised;
 
 /// How an execution's next invocation continues it: the CLI session it resumes, if its last
 /// invocation reported one, when that invocation started, and the people's messages it delivers.
@@ -247,14 +248,17 @@ impl RunTask {
     };
     self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
     invocation.permissions = Some(start.permissions.clone());
+    if let Some(engine) = &start.engine {
+      self.db.save_invocation_engine(invocation.id, engine)?;
+    }
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
     self.db.save_injected_memory(invocation.id, &start.memory)?;
     self.report_unreadable_memory(&invocation)?;
     self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;
-    let process = match Supervised::start(&start.command) {
-      Ok(process) => process,
+    let driven = match start.launch.start() {
+      Ok(driven) => driven,
       Err(error) => {
         let problem = RunnerProblem::CouldNotStart {
           detail: error.to_string(),
@@ -271,7 +275,8 @@ impl RunTask {
       std::mem::take(&mut continuation.messages),
       arrival,
     )?;
-    self.spawn(execution, invocation, (process, start), workspace)?;
+    let agent = (start.permissions, start.secrets, start.agent);
+    self.spawn(execution, invocation, (driven, agent), workspace)?;
     Ok(true)
   }
 
@@ -295,31 +300,33 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: Invocation,
-    (process, start): (Supervised, start::AgentStart),
+    (driven, (permissions, secrets, agent)): (Driven, (LaunchPermissions, Vec<SecretVariable>, String)),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
     let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
     let (steers, steered) = mpsc::unbounded_channel();
-    let interactive = start.app_server.is_some() || start.claude_approvals.is_some();
+    let Driven {
+      driver,
+      mcp_file,
+      claude_approvals,
+      interactive,
+      steered: takes_steers,
+    } = driven;
     let worker = Worker {
-      scope: command_scope(&self.root, workspace.path(), &start.permissions),
+      scope: command_scope(&self.root, workspace.path(), &permissions),
       profile: self.profile_of(execution),
       root: self.root.clone(),
       invocation: invocation.clone(),
-      transport: match start.app_server {
-        Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
-        None => Transport::Claude(Box::new(ClaudeStream::with_exemptions(start.claude_exemptions))),
-      },
-      process,
+      driver,
       notifier: self.notifier.clone(),
       events: self.worker_events.clone(),
       stops: stopped,
-      mcp_file: start.mcp_file,
-      claude_approvals: start.claude_approvals,
-      mcp_secrets: start.mcp_secrets,
-      agent: start.agent,
+      mcp_file,
+      claude_approvals,
+      secrets,
+      agent,
       task: self.task.id(),
       decisions,
       steers: steered,
@@ -336,7 +343,7 @@ impl RunTask {
       Active {
         stops,
         approvals: interactive.then_some(approvals),
-        steers: Some(steers),
+        steers: takes_steers.then_some(steers),
         workspace,
         invocation,
         budget,

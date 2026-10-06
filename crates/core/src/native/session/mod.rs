@@ -169,6 +169,11 @@ impl NativeLoop {
     self.phase == Phase::Ended
   }
 
+  /// The shell the conversation's `shell: true` commands go to.
+  pub const fn shell(&self) -> Option<crate::run::CommandShell> {
+    self.settings.shell
+  }
+
   fn on_stop(&mut self, mode: StopMode, actions: &mut Vec<LoopAction>) {
     if self.phase == Phase::Ended {
       return;
