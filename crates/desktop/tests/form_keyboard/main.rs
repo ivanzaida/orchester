@@ -78,6 +78,7 @@ mod sidebar;
 mod skills;
 mod tab_links;
 mod tabs;
+mod tabs_drag;
 mod tabs_live;
 mod tabs_window;
 mod task_bulk;
