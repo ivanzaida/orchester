@@ -28,6 +28,8 @@
 //!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
 //!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
+//! - "Find a stopped background task": first ends a turn of its own, before it takes the prompt, then answers with
+//!   prose and the step result through `StructuredOutput` (`fake_claude_background`);
 //! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
 //!   newer is required") and exits with 1;
 //! - "Leave the prompt unstarted": never starts the permission prompt's server, which Claude Code starts with the other
@@ -71,6 +73,8 @@ use std::{fs::OpenOptions, io::Write, path::Path, process::ExitCode, thread, tim
 
 #[path = "fake_claude_ask.rs"]
 mod fake_claude_ask;
+#[path = "fake_claude_background.rs"]
+mod fake_claude_background;
 #[path = "fake_claude_input.rs"]
 mod fake_claude_input;
 #[path = "fake_claude_review.rs"]
@@ -130,6 +134,9 @@ fn main() -> ExitCode {
   } else {
     "[]"
   };
+  if prompt.contains(fake_claude_background::PROMPT) {
+    fake_claude_background::stopped_task(&fake.session);
+  }
   println!(
     r#"{{"type":"system","subtype":"init","cwd":"worktree","session_id":"{}","tools":[],"mcp_servers":{servers},"model":"claude-haiku-4-5","permissionMode":"acceptEdits","apiKeySource":"none","claude_code_version":"2.1.89"}}"#,
     fake.session
@@ -177,6 +184,9 @@ impl Fake {
     }
     if prompt.contains("Refuse the model") {
       return self.refuse_the_model();
+    }
+    if prompt.contains(fake_claude_background::PROMPT) {
+      return self.structured_output(step);
     }
     if let Some((text, structured)) = answer(prompt) {
       return self.answer(&text, structured);

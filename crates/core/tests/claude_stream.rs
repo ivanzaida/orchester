@@ -355,3 +355,59 @@ fn claude_stream_keeps_what_the_cli_took_from_its_input_out_of_the_transcript() 
   stream.parse(OutputStream::Stdout, result);
   assert_eq!(stream.results(), 1, "a result ends a turn");
 }
+
+/// Run 22 (2026-10-06): Claude Code resuming a session whose background command the previous process
+/// left ends a turn of its own before it takes the prompt; the agent's turn then gives the step result
+/// through its `StructuredOutput` tool.
+const RESUMED_WITH_A_STOPPED_TASK: [&str; 9] = [
+  r#"{"type":"system","subtype":"task_notification","task_id":"b1","tool_use_id":"t0","status":"stopped","output_file":"","summary":"Background shell command didn't finish before the previous session ended","session_id":"s"}"#,
+  r#"{"type":"system","subtype":"init","session_id":"s","mcp_servers":[]}"#,
+  r#"{"type":"result","subtype":"success","is_error":false,"num_turns":0,"result":"","session_id":"s","usage":{"input_tokens":0,"output_tokens":0},"permission_denials":[]}"#,
+  r#"{"type":"system","subtype":"init","session_id":"s","mcp_servers":[]}"#,
+  r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Verify"}]},"isReplay":true}"#,
+  r#"{"type":"assistant","message":{"id":"m1","content":[{"type":"text","text":"It passes."}],"usage":{"input_tokens":5,"output_tokens":2}}}"#,
+  r#"{"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"StructuredOutput","input":{"outcome":"done","summary":"It passes."}}],"usage":{"input_tokens":5,"output_tokens":9}}}"#,
+  r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Structured output provided successfully"}]}}"#,
+  r#"{"type":"result","subtype":"success","is_error":false,"result":"It passes.","structured_output":{"outcome":"done","summary":"It passes."},"usage":{"input_tokens":5,"output_tokens":9},"permission_denials":[]}"#,
+];
+
+#[test]
+fn claude_stream_result_before_the_prompt_is_taken_ends_no_turn_of_the_agent() {
+  let mut stream = ClaudeStream::default();
+  let (before, after) = RESUMED_WITH_A_STOPPED_TASK.split_at(3);
+  let early: Vec<AgentEvent> = before
+    .iter()
+    .flat_map(|line| stream.parse(OutputStream::Stdout, line))
+    .collect();
+  assert!(
+    !early.iter().any(|event| matches!(event, AgentEvent::TurnFailed { .. })),
+    "{early:?}"
+  );
+  assert_eq!(stream.results(), 0, "the CLI's own turn is not one the agent ended");
+  let events: Vec<AgentEvent> = early
+    .into_iter()
+    .chain(after.iter().flat_map(|line| stream.parse(OutputStream::Stdout, line)))
+    .collect();
+  assert_eq!(stream.results(), 1);
+  let tracker = tracked(&events);
+  assert_eq!(tracker.outcome(Some(0)), InvocationOutcome::Completed);
+  let result = tracker
+    .last_message()
+    .and_then(StepResult::parse)
+    .expect("a step result");
+  assert_eq!(result.outcome, StepOutcome::Done);
+}
+
+#[test]
+fn claude_stream_empty_result_after_the_prompt_was_taken_still_fails() {
+  let mut stream = ClaudeStream::default();
+  let lines = [RESUMED_WITH_A_STOPPED_TASK[4], RESUMED_WITH_A_STOPPED_TASK[2]];
+  let events: Vec<AgentEvent> = lines
+    .iter()
+    .flat_map(|line| stream.parse(OutputStream::Stdout, line))
+    .collect();
+  assert!(matches!(
+    tracked(&events).outcome(Some(0)),
+    InvocationOutcome::TurnFailed { message } if message.contains("without the step result")
+  ));
+}
