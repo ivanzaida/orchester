@@ -52,6 +52,17 @@ pub(super) fn inline(program: &str, args: &[String]) -> Option<usize> {
   (code && args.len() > at + 1).then_some(at + 1)
 }
 
+/// Whether `program` reads its code from its standard input (`python -`, `node -`, the flags before as
+/// for a script): inline code when a here-document is that input ([`super::words`]).
+pub(super) fn reads_code(program: &str, args: &[String]) -> bool {
+  let at = match program {
+    "python" | "python3" | "py" => python_flags(args),
+    "node" => Some(0),
+    _ => None,
+  };
+  at.and_then(|at| args.get(at)).is_some_and(|arg| arg == "-")
+}
+
 /// How many of `args` are Python flags that change neither what runs nor where code is loaded from.
 fn python_flags(args: &[String]) -> Option<usize> {
   let mut at = 0;

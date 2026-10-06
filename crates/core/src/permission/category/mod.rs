@@ -248,6 +248,12 @@ fn classify_part(
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
   judge_edits(&mut part, &judged, args, placing);
+  // `python -` runs what its standard input holds: the agent's code only from a here-document read as
+  // written, not from a pipe or a file.
+  if judged.stdin_code && (!raw.heredoc || !raw.reads.is_empty()) {
+    part.edits = false;
+    part.at_least(CommandCategory::Unknown);
+  }
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
   place_arguments(&mut part, &judged, args, placing, line.folders.as_deref());
@@ -307,10 +313,14 @@ fn shell_parts(
   let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {
     return vec![unknown(words, raw, line.placing(scope))];
   };
-  // `pwsh -NoProfile -Command` that only lists processes; a profile is the user's code.
+  // `pwsh -NoProfile -Command` that only lists processes; a profile is the user's code. Only the
+  // arguments before `-Command` are the shell's own.
   let no_profile = words
     .iter()
-    .any(|word| matches!(word.to_lowercase().as_str(), "-noprofile" | "-nop"));
+    .skip(1)
+    .map(|word| word.to_lowercase())
+    .take_while(|word| !(word.len() >= 2 && "-command".starts_with(word.as_str())))
+    .any(|word| matches!(word.as_str(), "-noprofile" | "-nop"));
   if inner == Quoting::PowerShell && no_profile && processes::listing(&script) {
     let program = words.first().map(|first| first.to_lowercase());
     let mut part = CommandPart::new(
@@ -325,7 +335,9 @@ fn shell_parts(
   let mut inner_line = line.clone();
   let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
   line.made = inner_line.made;
-  if by_path {
+  // A shell written with a folder is not the bare shell a rule names, and PowerShell without
+  // `-NoProfile` runs the user's profile first: no rule runs what either runs.
+  if by_path || (inner == Quoting::PowerShell && !no_profile) {
     parts.iter_mut().for_each(|part| part.through_path = true);
   }
   if !raw.writes.is_empty() || !raw.reads.is_empty() {

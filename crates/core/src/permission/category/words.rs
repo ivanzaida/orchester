@@ -41,7 +41,7 @@ pub(super) struct RawPart {
   /// It only sets a variable to a literal, whose later uses were read as its value.
   pub(super) assigns: bool,
   /// It reads a here-document, data that follows the line.
-  heredoc: bool,
+  pub(super) heredoc: bool,
   /// Its first word has a quote or an escape before its first `=`: no assignment, whatever it reads.
   pub(super) quoted_name: bool,
 }

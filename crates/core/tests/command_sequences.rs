@@ -222,10 +222,7 @@ fn command_sequences_offer_approve_similar_for_the_part_that_asks() {
     similar("sed -i 1d src/a.rs; mkdir -p out"),
     Err(SimilarUnavailable::SeveralAsk)
   );
-  assert_eq!(
-    similar("python3 - <<'EOF'\nprint(1)\nEOF"),
-    Err(SimilarUnavailable::Unknown)
-  );
+  assert_eq!(similar("python3 - <<EOF\n$(id)\nEOF"), Err(SimilarUnavailable::Unknown));
   assert_eq!(similar("cat ~/.ssh/id_rsa"), Err(SimilarUnavailable::Secrets));
 }
 
