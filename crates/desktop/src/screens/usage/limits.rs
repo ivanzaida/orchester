@@ -1,72 +1,75 @@
 //! *Plan limits* (`C2pTYF`, `e5PbG`, `T6i75`): % used per window as lines, account-wide (limits
-//! belong to the CLI account, so the project view uses every project's reports), with a legend of
-//! each window's current value and reset, the warning threshold in the card's menu, a footnote on
-//! what is recorded and where nothing is known, and the same readings as a table. Plan limits follow
-//! the CLI filter only. Without any report the card says *No plan limits recorded yet*.
+//! belong to the CLI account, so the project view uses every project's reports), with the windows'
+//! legend above the chart, the warning threshold in the card's menu, a footnote on what is recorded
+//! and where nothing is known, and the same readings as a table. Plan limits follow the CLI filter
+//! only. Without any report the card says *No plan limits recorded yet*.
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::Text,
-  core::Signal,
-  node::Element,
-};
-use orchester_core::usage::{
-  CliSeries, Grouping,
-  limits::{CurrentLimit, WindowKind},
-};
+use lurq::{app::ctx::Ctx, core::Signal, node::Element};
+use orchester_core::usage::Grouping;
 
 use super::{
-  card::{Card, legend, legend_item, nothing, series_color, view_switch},
+  card::{Card, footnote, nothing, push_down, view_switch},
   format,
   limits_chart::{LimitsChart, LimitsProps, drawn, window_name},
+  limits_legend::legend,
   state::{Dashboard, Views},
-  table::{Cell, Width, column, row, table},
+  table::{Cell, Width, column, data_row, table},
   threshold::{ThresholdMenu, ThresholdProps},
 };
-use crate::workspace::Workspace;
+use crate::{ui::icon::Icon, workspace::Workspace};
 
-pub fn limits_card(
+/// The card with its title, note, switch and menu, before its body.
+pub fn header(
   ctx: &mut Ctx,
-  dashboard: &Arc<Dashboard>,
+  dashboard: Option<&Dashboard>,
   views: &Signal<Views>,
   (workspace, saved): (&Workspace, &Signal<u64>),
-) -> Element {
+) -> Card {
   let table_shown = views.get().limits_table;
   let views = views.clone();
-  let switch = view_switch(ctx, "usage-limits-view", table_shown, move |table| {
-    views.update(|views| views.limits_table = table);
-  });
-  let menu = ctx.mount_keyed::<ThresholdMenu>(
+  let switch = view_switch(
+    ctx,
+    ("usage-limits-view", Icon::ChartColumn),
+    table_shown,
+    false,
+    move |table| views.update(|views| views.limits_table = table),
+  );
+  let card = Card::new("usage-limits", ctx.t("usage.limits.title"))
+    .note(ctx.t("usage.limits.note"))
+    .trailing(switch)
+    .fill();
+  match dashboard {
+    Some(dashboard) => card.trailing(menu(ctx, dashboard, (workspace, saved))),
+    None => card,
+  }
+}
+
+/// The card's … menu with the warning threshold.
+pub fn menu(ctx: &mut Ctx, dashboard: &Dashboard, (workspace, saved): (&Workspace, &Signal<u64>)) -> Element {
+  ctx.mount_keyed::<ThresholdMenu>(
     "usage-threshold-menu",
     ThresholdProps {
       threshold: dashboard.threshold,
       workspace: workspace.clone(),
       saved: saved.clone(),
     },
-  );
-  let note = if dashboard.all_projects() {
-    ctx.t("usage.limits.noteAll")
-  } else {
-    ctx.t("usage.limits.noteProject")
-  };
-  let card = Card::new("usage-limits", ctx.t("usage.limits.title"))
-    .note(note)
-    .trailing(switch)
-    .trailing(menu);
+  )
+}
+
+pub fn limits_card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, card: Card) -> Element {
   if dashboard.limits.is_empty() {
     return card.body([nothing(
+      Icon::Gauge,
       &ctx.t("usage.limits.none"),
       Some(&ctx.t("usage.limits.noneDetail")),
       None,
     )]);
   }
-  if table_shown {
-    return card.body([limits_table(ctx, dashboard), footnote(ctx, dashboard)]);
+  let note = footnote("usage-limits-footnote", &footnote_text(ctx, dashboard));
+  if views.get().limits_table {
+    return card.body([limits_table(ctx, dashboard), push_down(), note]);
   }
   let chart = ctx.mount_keyed::<LimitsChart>(
     "usage-limits-chart",
@@ -74,58 +77,11 @@ pub fn limits_card(
       dashboard: Arc::clone(dashboard),
     },
   );
-  card.body([chart, current(ctx, dashboard), footnote(ctx, dashboard)])
+  card.body([legend(ctx, dashboard), chart, push_down(), note])
 }
 
-/// Each window's current value and reset (*Codex · weekly 41% resets Oct 4, 09:00*); grouped by
-/// day, 5-hour windows are not drawn and their entries are dimmed but keep the value.
-fn current(ctx: &Ctx, dashboard: &Dashboard) -> Element {
-  let mut windows: Vec<&CurrentLimit> = dashboard.limits.current.iter().collect();
-  windows.sort_by_key(|window| (CliSeries::of(Some(window.provider)), std::cmp::Reverse(window.minutes)));
-  let items = windows
-    .into_iter()
-    .map(|window| {
-      let dimmed = dashboard.grouping == Grouping::Day && WindowKind::of(window.minutes) == WindowKind::FiveHour;
-      let name = ctx.t_args(
-        "usage.limits.legendName",
-        [
-          ("cli", &*format::cli_name(ctx, window.provider)),
-          ("window", &*window_name(ctx, window.minutes)),
-        ],
-      );
-      legend_item(
-        series_color(CliSeries::of(Some(window.provider))),
-        &name,
-        &value(ctx, dashboard, window),
-        dimmed,
-      )
-    })
-    .collect();
-  legend(items, None)
-}
-
-/// `41% resets Oct 4, 09:00`; once the reset has passed the share is no longer known.
-fn value(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit) -> Arc<str> {
-  match window.resets {
-    Some(resets) if resets <= dashboard.now => {
-      ctx.t_args("usage.limits.wasReset", [("time", &*format::date_time(ctx, resets))])
-    }
-    Some(resets) => ctx.t_args(
-      "usage.limits.current",
-      [
-        (
-          "percent",
-          &*format::share(ctx, window.percent.map(|percent| percent.round() as u64)),
-        ),
-        ("time", &*format::date_time(ctx, resets)),
-      ],
-    ),
-    None => format::share(ctx, window.percent.map(|percent| percent.round() as u64)),
-  }
-}
-
-/// What is recorded, and before when nothing is known for each CLI.
-fn footnote(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+/// What a point is, what the dotted, hatched and dashed marks mean, and when 5-hour windows show.
+fn footnote_text(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
   let start = dashboard.range.start();
   let gaps: Vec<Arc<str>> = dashboard
     .limits
@@ -142,27 +98,30 @@ fn footnote(ctx: &Ctx, dashboard: &Dashboard) -> Element {
       )
     })
     .collect();
-  let text = if gaps.is_empty() {
-    ctx.t("usage.limits.footnote")
-  } else {
-    ctx.t_args(
-      "usage.limits.footnoteGaps",
+  let mut sentences = vec![
+    ctx.t("usage.limits.footnote.points"),
+    ctx.t("usage.limits.footnote.dotted"),
+  ];
+  if !gaps.is_empty() {
+    sentences.push(ctx.t_args(
+      "usage.limits.footnote.hatched",
       [("gaps", gaps.join(&ctx.t("usage.listSeparator")).as_str())],
-    )
-  };
-  Text::new(&text)
-    .id("usage-limits-footnote")
-    .variant(TypographyStyle::Caption)
-    .color(PaletteColor::TextMuted)
-    .into()
+    ));
+  }
+  sentences.push(ctx.t("usage.limits.footnote.threshold"));
+  sentences.push(ctx.t(match dashboard.grouping {
+    Grouping::Day => "usage.limits.footnote.byDay",
+    Grouping::Hour => "usage.limits.footnote.byHour",
+  }));
+  sentences.join(&ctx.t("usage.sentenceSeparator")).into()
 }
 
 /// The readings as a table: when, which window, % used, its reset and the run that reported it.
 fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
   let columns = [
-    column(ctx.t("usage.table.when"), Width::Flex(1.0), false),
+    column(ctx.t("usage.table.reported"), Width::Flex(1.0), false),
     column(ctx.t("usage.table.window"), Width::Flex(1.0), false),
-    column(ctx.t("usage.table.used"), Width::Flex(0.6), true),
+    column(ctx.t("usage.table.used"), Width::Flex(0.5), true),
     column(ctx.t("usage.table.resets"), Width::Flex(1.0), false),
     column(ctx.t("usage.table.reportedBy"), Width::Flex(1.2), false),
   ];
@@ -194,7 +153,7 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
           )
         },
       );
-      row(
+      data_row(
         &columns,
         vec![
           Cell::Text(format::date_time(ctx, point.at)),

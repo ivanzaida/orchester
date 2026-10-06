@@ -1,5 +1,5 @@
 //! The dashboard's tables: each chart's data with exact numbers (`CDcij`), and *Most expensive*
-//! (`sOQmy`). Uppercase column headings, rows divided by hairlines, figures in mono at the right.
+//! (`sOQmy`). Sentence-case column headings, rows divided by hairlines, figures in mono at the right.
 
 use std::sync::Arc;
 
@@ -12,8 +12,9 @@ use lurq::{
 
 use crate::theme::{ExtraColor, ExtraTypography};
 
-/// A row's height in the dashboard's tables (`CDcij`, `sOQmy`).
-pub const ROW_HEIGHT: f32 = 40.0;
+/// Row heights: *Most expensive* (`sOQmy`) and a chart's data (`CDcij`).
+const ROW_HEIGHT: f32 = 40.0;
+const DATA_ROW_HEIGHT: f32 = 30.0;
 const HEADING_HEIGHT: f32 = 28.0;
 
 /// How a column takes its width: a share of what is left, or a fixed width.
@@ -44,6 +45,8 @@ pub enum Cell {
   Text(Arc<str>),
   /// Text in `muted`, e.g. a task's title beside its key.
   Muted(Arc<str>),
+  /// A total: the label and figures stand out from the rows above.
+  Strong(Arc<str>),
   Element(Element),
 }
 
@@ -58,8 +61,9 @@ pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Eleme
     .with_children(columns.iter().map(|column| {
       sized(
         Row::new().child(
-          Text::new(&column.heading.to_uppercase())
-            .variant(ExtraTypography::ColumnHeading.role())
+          Text::new(&column.heading)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextMuted)
             .nowrap(),
         ),
         column,
@@ -73,30 +77,50 @@ pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Eleme
     .into()
 }
 
-/// One row of `cells` under `columns`.
+/// One row of `cells` under `columns`, as *Most expensive* lists them.
 pub fn row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
+  sized_row(columns, cells, ROW_HEIGHT)
+}
+
+/// One row of a chart's data: denser than a list of tasks.
+pub fn data_row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
+  sized_row(columns, cells, DATA_ROW_HEIGHT)
+}
+
+fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, height: f32) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_HEIGHT))
+    .height(Dimension::Px(height))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(columns.iter().zip(cells).map(|(column, cell)| {
-      let content: Element = match cell {
-        Cell::Text(text) if column.figures => Text::new(&text)
-          .variant(ExtraTypography::MonoValue.role())
-          .nowrap()
-          .into(),
-        Cell::Text(text) => Text::new(&text).variant(TypographyStyle::Body).nowrap().into(),
-        Cell::Muted(text) => Text::new(&text)
-          .variant(TypographyStyle::Body)
-          .color(PaletteColor::TextSecondary)
-          .nowrap()
-          .into(),
-        Cell::Element(element) => element,
-      };
-      sized(Row::new().child(content), column)
-    }))
+    .with_children(
+      columns
+        .iter()
+        .zip(cells)
+        .map(|(column, cell)| sized(Row::new().child(content(column, cell)), column)),
+    )
+}
+
+fn content(column: &TableColumn, cell: Cell) -> Element {
+  match cell {
+    Cell::Text(text) if column.figures => Text::new(&text)
+      .variant(ExtraTypography::MonoValue.role())
+      .nowrap()
+      .into(),
+    Cell::Text(text) => Text::new(&text).variant(TypographyStyle::Body).nowrap().into(),
+    Cell::Muted(text) => Text::new(&text)
+      .variant(TypographyStyle::Body)
+      .color(PaletteColor::TextSecondary)
+      .nowrap()
+      .into(),
+    Cell::Strong(text) if column.figures => Text::new(&text)
+      .variant(ExtraTypography::MonoTitle.role())
+      .nowrap()
+      .into(),
+    Cell::Strong(text) => Text::new(&text).variant(TypographyStyle::Label).nowrap().into(),
+    Cell::Element(element) => element,
+  }
 }
 
 fn sized(cell: Row, column: &TableColumn) -> Element {

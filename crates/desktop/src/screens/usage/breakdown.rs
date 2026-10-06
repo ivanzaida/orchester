@@ -18,14 +18,17 @@ use lurq::{
 use orchester_core::usage::{BreakdownKey, BreakdownRow, CliSeries, percent, toggle};
 
 use super::{
-  card::{Card, series_color, view_switch},
+  card::{Card, legend_item, series_color, view_switch},
   format,
   state::{Controls, Dashboard, Views},
-  table::{Cell, Width, column, row, table},
+  table::{Cell, Width, column, data_row, table},
 };
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, chart::BREAKDOWN_BAR_HEIGHT},
-  ui::pressable::{pressable, surface},
+  ui::{
+    icon::Icon,
+    pressable::{pressable, surface},
+  },
 };
 
 /// Rows a column shows; the rest are in the table.
@@ -34,9 +37,13 @@ const ROWS: usize = 6;
 pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, controls: &Signal<Controls>) -> Element {
   let table_shown = views.get().breakdown_table;
   let views = views.clone();
-  let switch = view_switch(ctx, "usage-breakdown-view", table_shown, move |table| {
-    views.update(|views| views.breakdown_table = table);
-  });
+  let switch = view_switch(
+    ctx,
+    ("usage-breakdown-view", Icon::ChartColumn),
+    table_shown,
+    false,
+    move |table| views.update(|views| views.breakdown_table = table),
+  );
   let breakdowns = &dashboard.report.breakdowns;
   let mut columns = Vec::new();
   if dashboard.all_projects() {
@@ -83,9 +90,25 @@ pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, contro
       Element::from(column)
     }));
   Card::new("usage-breakdown", ctx.t("usage.breakdown.title"))
+    .lead(series_legend(ctx, dashboard))
     .note(ctx.t("usage.breakdown.note"))
     .trailing(switch)
     .body([body.into()])
+}
+
+/// The CLIs the bars are split by, each with its swatch.
+fn series_legend(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+  let rows = &dashboard.report.breakdowns.pipelines;
+  Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .with_children(
+      CliSeries::ALL
+        .into_iter()
+        .filter(|series| rows.iter().any(|row| row.by_cli[series.index()] > 0))
+        .map(|series| legend_item(series_color(series), &format::series_name(ctx, series), None)),
+    )
+    .into()
 }
 
 /// A row's name: *Builder · implement*, a model in mono, a pipeline or a project.
@@ -202,7 +225,7 @@ fn rows_table(ctx: &Ctx, rows: &[BreakdownRow], spent: u64) -> Element {
   let rows = rows
     .iter()
     .map(|entry| {
-      row(
+      data_row(
         &columns,
         vec![
           Cell::Text(label(ctx, &entry.key).0),

@@ -11,7 +11,7 @@ use lurq::{
     events::MouseEvent,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  canvas::{CanvasHandle, CanvasObserver},
+  canvas::CanvasHandle,
   components::{Canvas, Column, Stack, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
@@ -25,13 +25,17 @@ use parking_lot::Mutex;
 use super::{
   format,
   limits_draw::{DrawnLine, DrawnPoint, LimitPlot, draw},
-  plot::Frame,
+  plot::{Frame, Redraw},
   state::Dashboard,
 };
 use crate::theme::{
   ExtraRadius, ExtraShadow, ExtraSpacing,
   chart::{ChartStyle, LIMITS_PLOT_HEIGHT, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
 };
+
+/// Hours between the labels of one day, and the most day labels the axis keeps.
+const HOUR_LABEL_STEP: usize = 4;
+const DAY_LABELS: usize = 8;
 
 #[derive(Clone, PartialEq)]
 pub struct LimitsProps {
@@ -55,7 +59,7 @@ pub struct LimitsChart {
   reference: ElementRef,
   hovered: Signal<Hovered>,
   plot: Arc<Mutex<Option<LimitPlot>>>,
-  observer: Mutex<Option<CanvasObserver>>,
+  redraw: Redraw,
 }
 
 /// The lines a range shows: by day, 5-hour windows would be a comb of spikes and are left out.
@@ -85,7 +89,7 @@ impl Component for LimitsChart {
       reference: ctx.element_ref(),
       hovered: ctx.signal(Hovered::default()),
       plot: Arc::new(Mutex::new(None)),
-      observer: Mutex::new(None),
+      redraw: Redraw::default(),
     }
   }
 
@@ -150,16 +154,8 @@ impl Component for LimitsChart {
   }
 
   fn after_layout(&self) {
-    let mut observer = self.observer.lock();
-    if observer.is_none()
-      && let Some(canvas) = self.reference.as_canvas()
-    {
-      let (target, plot) = (canvas.clone(), Arc::clone(&self.plot));
-      *observer = Some(canvas.observe_metrics(move |_| {
-        if let Some(plot) = plot.lock().as_ref() {
-          draw(&target, plot);
-        }
-      }));
+    if let Some(canvas) = self.reference.as_canvas() {
+      self.redraw.bind(&canvas, &self.plot, draw);
     }
   }
 }
@@ -264,21 +260,34 @@ fn reset_name(ctx: &Ctx, line: &LimitLine, at: orchester_core::time::Timestamp) 
   )
 }
 
-/// The x axis: each day at its middle, or the hours of one day.
+/// The x axis: one day's hours at every fourth hour from 00:00 to 24:00 (`e5PbG`), or each day at
+/// its middle, whatever the grouping, so a week by hour still reads by day.
 fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
-  let buckets = dashboard.range.buckets(dashboard.grouping);
-  let step = buckets.len().div_ceil(8).max(1);
-  buckets
+  let (start, end) = (dashboard.range.start(), dashboard.range.end());
+  if dashboard.range.days() == 1 {
+    let hour = (end.unix_millis() - start.unix_millis()) / 24;
+    return (0..=24)
+      .step_by(HOUR_LABEL_STEP)
+      .map(|index| {
+        let at = start.unix_millis() + hour * i64::from(index);
+        (at, format::hour(index).into())
+      })
+      .collect();
+  }
+  let days = dashboard.range.buckets(Grouping::Day);
+  let step = days.len().div_ceil(DAY_LABELS).max(1);
+  days
     .windows(2)
     .map(|pair| (pair[0], pair[1].start))
-    .chain(buckets.last().map(|last| (*last, dashboard.range.end())))
+    .chain(days.last().map(|last| (*last, end)))
     .enumerate()
     .filter(|(index, _)| index % step == 0)
-    .map(|(_, (bucket, next))| {
-      let middle = (bucket.start.unix_millis() + next.unix_millis()) / 2;
-      let label = match bucket.hour {
-        Some(hour) => format::hour(hour).into(),
-        None => format::weekday(ctx, bucket.date),
+    .map(|(_, (day, next))| {
+      let middle = (day.start.unix_millis() + next.unix_millis()) / 2;
+      let label = if day.date == orchester_core::usage::local_date(dashboard.now) {
+        ctx.t("usage.tokens.today")
+      } else {
+        format::weekday(ctx, day.date)
       };
       (middle, label)
     })

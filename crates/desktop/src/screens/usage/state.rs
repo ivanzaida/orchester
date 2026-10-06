@@ -65,7 +65,10 @@ pub struct Views {
   pub tokens_table: bool,
   pub limits_table: bool,
   pub breakdown_table: bool,
-  pub efficiency_table: bool,
+  /// The three *Efficiency* cards switch on their own.
+  pub cache_table: bool,
+  pub edits_table: bool,
+  pub failed_table: bool,
   /// *Most expensive* shows runs instead of tasks.
   pub runs: bool,
   /// *Most expensive* shows every row instead of the first five.
@@ -91,6 +94,8 @@ pub struct Dashboard {
   pub threshold: WarningThreshold,
   /// The filters hide every run of the range.
   pub filtered_out: bool,
+  /// The runs of the range, filters aside; counted only when the filters hide them all.
+  pub unfiltered_runs: usize,
   pub now: Timestamp,
 }
 
@@ -107,12 +112,23 @@ impl Dashboard {
     };
     let report = UsageReport::build(&data.projects, query);
     let limits = LimitHistory::of(&data.snapshots, (range.start(), range.end()), now, &controls.filter);
+    let filtered_out = report.summary.runs == 0 && UsageReport::hidden_by(&data.projects, query);
+    let unfiltered_runs = if filtered_out {
+      let unfiltered = UsageQuery {
+        filter: &UsageFilter::default(),
+        ..query
+      };
+      UsageReport::build(&data.projects, unfiltered).summary.runs
+    } else {
+      report.summary.runs
+    };
     Self {
       scope,
       range,
       grouping,
       filter: controls.filter.clone(),
-      filtered_out: report.summary.runs == 0 && UsageReport::hidden_by(&data.projects, query),
+      filtered_out,
+      unfiltered_runs,
       report: Arc::new(report),
       limits: Arc::new(limits),
       options: Arc::new(FilterOptions::of(&data.projects)),
@@ -136,6 +152,11 @@ impl Dashboard {
   /// The range is today alone.
   pub fn is_today(&self) -> bool {
     self.range.days() == 1 && self.range.first() == orchester_core::usage::local_date(self.now)
+  }
+
+  /// Whether the range ends with today, which counts up to now.
+  pub fn has_today(&self) -> bool {
+    self.range.last() == orchester_core::usage::local_date(self.now)
   }
 
   /// The project shown, or every project's name when the scope is all of them.

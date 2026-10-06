@@ -21,7 +21,7 @@ use super::ExtraColor;
 /// Plot heights of *Tokens over time*, *Plan limits* and the cache share line.
 pub const TOKENS_PLOT_HEIGHT: f32 = 200.0;
 pub const LIMITS_PLOT_HEIGHT: f32 = 180.0;
-pub const SMALL_PLOT_HEIGHT: f32 = 96.0;
+pub const SMALL_PLOT_HEIGHT: f32 = 120.0;
 /// Room for the y axis labels at the left and the x axis labels below the plot.
 pub const AXIS_GUTTER: f32 = 44.0;
 pub const AXIS_BAND: f32 = 20.0;
@@ -45,6 +45,10 @@ pub const TOOLTIP_WIDTH: f32 = 220.0;
 pub const TOOLTIP_OFFSET: f32 = 12.0;
 /// A legend's color swatch, and the height of a *Where tokens go* bar.
 pub const SWATCH_SIZE: f32 = 8.0;
+/// A window's line in the *Plan limits* legend: 14 by 2, dashed in three pieces for 5-hour windows.
+pub const LINE_SWATCH_WIDTH: f32 = 14.0;
+pub const LINE_SWATCH_HEIGHT: f32 = 2.0;
+pub const DASH_PIECES: usize = 3;
 pub const BREAKDOWN_BAR_HEIGHT: f32 = 8.0;
 /// The share of the plot's height the tallest value takes, so a bar never touches the top.
 pub const HEADROOM: f32 = 0.9;

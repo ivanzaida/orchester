@@ -53,6 +53,57 @@ pub fn weekday(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
   )
 }
 
+/// `Wed, Sep 24`, as a table names a day.
+pub fn long_day(ctx: &Ctx, date: NaiveDate) -> Arc<str> {
+  ctx.t_args(
+    "usage.date.longDay",
+    [
+      (
+        "weekday",
+        &*ctx.t(WEEKDAY_KEYS[date.weekday().num_days_from_monday() as usize]),
+      ),
+      ("day", &*day(ctx, date)),
+    ],
+  )
+}
+
+/// The period a change is against: *yesterday* before today, `Sep 17 – 23` within a month.
+pub fn previous_name(ctx: &Ctx, previous: DayRange, today: NaiveDate) -> Arc<str> {
+  if previous.days() == 1 && previous.first().succ_opt() == Some(today) {
+    return ctx.t("usage.date.yesterday");
+  }
+  let (first, last) = (previous.first(), previous.last());
+  if first != last && first.month() == last.month() && first.year() == last.year() {
+    return ctx.t_args(
+      "usage.date.rangeInMonth",
+      [("from", &*day(ctx, first)), ("to", last.day().to_string().as_str())],
+    );
+  }
+  range(ctx, previous)
+}
+
+/// When a report came, near now: `today 15:58`, `yesterday 19:42`, else `Oct 4, 09:00`.
+pub fn reported(ctx: &Ctx, at: Timestamp, now: Timestamp) -> Arc<str> {
+  let (date, today) = (local_date(at), local_date(now));
+  let time = crate::display::clock(at);
+  if date == today {
+    ctx.t_args("usage.date.todayAt", [("time", time.as_str())])
+  } else if date.succ_opt() == Some(today) {
+    ctx.t_args("usage.date.yesterdayAt", [("time", time.as_str())])
+  } else {
+    date_time(ctx, at)
+  }
+}
+
+/// A reset time: the clock alone today (`17:40`), else with its day (`Oct 4, 09:00`).
+pub fn reset_time(ctx: &Ctx, at: Timestamp, now: Timestamp) -> Arc<str> {
+  if local_date(at) == local_date(now) {
+    crate::display::clock(at).into()
+  } else {
+    date_time(ctx, at)
+  }
+}
+
 /// `Sep 24 – Sep 30`, or one day.
 pub fn range(ctx: &Ctx, range: DayRange) -> Arc<str> {
   if range.first() == range.last() {
@@ -107,15 +158,22 @@ pub fn duration(ctx: &Ctx, millis: u64) -> Arc<str> {
   }
 }
 
-/// A change against `previous`, in percent or in points: words and the direction's icon, never a
-/// color.
-pub fn change(ctx: &Ctx, change: Option<Change>, previous: DayRange, points: bool) -> (Option<bool>, Arc<str>) {
-  let range = range(ctx, previous);
-  let range = range.as_ref();
-  let (more, less) = if points {
-    ("usage.change.points.more", "usage.change.points.less")
-  } else {
-    ("usage.change.percent.more", "usage.change.percent.less")
+/// What a change counts in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChangeUnit {
+  Percent,
+  Points,
+  Count,
+}
+
+/// A change against the period named `range`: words and the direction's icon, never a color.
+pub fn change(ctx: &Ctx, change: Option<Change>, range: &str, unit: ChangeUnit) -> (Option<bool>, Arc<str>) {
+  let one = matches!(change, Some(Change::More(1) | Change::Less(1)));
+  let (more, less) = match unit {
+    ChangeUnit::Percent => ("usage.change.percent.more", "usage.change.percent.less"),
+    ChangeUnit::Points if one => ("usage.change.points.oneMore", "usage.change.points.oneLess"),
+    ChangeUnit::Points => ("usage.change.points.more", "usage.change.points.less"),
+    ChangeUnit::Count => ("usage.change.count.more", "usage.change.count.less"),
   };
   match change {
     Some(Change::More(amount)) => (

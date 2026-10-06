@@ -1,8 +1,8 @@
-//! *Efficiency* (`C2pTYF`): the cache share per day; *Tokens before first edit*, the median per
-//! invocation that changed a file, with and without the code index (single-series bars in
-//! `$subtle` with invocation counts; invocations without an edit are left out and counted); and
-//! *Failed runs* — count and share, the tokens spent on them and their share of spent as a bar, the
-//! largest failed run and *Show failed tasks →*, which opens the Overview's *Failed* filter.
+//! *Efficiency* (`C2pTYF`): a section heading over three cards, each with its own chart / table
+//! switch. *Cache share*: the period's share against the previous one and one line per day.
+//! *Tokens before first edit*: the median per invocation that changed a file, with and without the
+//! code index (single-series bars in `$subtle` with invocation counts; invocations without an edit
+//! are left out and counted). *Failed runs* is in [`super::failed`].
 
 use std::sync::Arc;
 
@@ -16,56 +16,88 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::usage::{EditTokens, percent};
+use orchester_core::usage::{Change, EditTokens};
 
 use super::{
-  card::{Card, view_switch},
-  format,
+  card::{Card, card_row, footnote, push_down, view_switch},
+  failed, format,
   line_draw::{CacheLine, Day, LineProps},
-  load::Scope,
   plot::label_every,
   state::{Dashboard, Views},
-  table::{Cell, Width, column, row, table},
+  table::{Cell, Width, column, data_row, table},
 };
 use crate::{
-  navigation::route::Page,
-  screens::project::ProjectNav,
-  tasks::overview::OverviewTab,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, chart::BREAKDOWN_BAR_HEIGHT},
-  ui::button::ActionButton,
+  ui::icon::Icon,
 };
 
 /// Day labels a cache share line keeps, at most.
 const DAY_LABELS: usize = 7;
 
 pub fn efficiency(ctx: &mut Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element {
-  let table_shown = views.get().efficiency_table;
-  let views = views.clone();
-  let switch = view_switch(ctx, "usage-efficiency-view", table_shown, move |table| {
-    views.update(|views| views.efficiency_table = table);
-  });
-  let card = Card::new("usage-efficiency", ctx.t("usage.efficiency.title")).trailing(switch);
-  if table_shown {
-    return card.body([efficiency_table(ctx, dashboard)]);
-  }
-  let cache = cache_line(ctx, dashboard);
-  let nav = ctx.use_context::<ProjectNav>();
-  let columns = Row::new()
+  let cards = vec![
+    cache(ctx, dashboard, views),
+    edits(ctx, dashboard, views),
+    failed::failed(ctx, dashboard, views),
+  ];
+  Column::new()
+    .id("usage-efficiency")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .child(section(ctx, "usage.efficiency.cache", vec![cache]))
-    .child(section(ctx, "usage.efficiency.beforeEdit", edits(ctx, dashboard)))
-    .child(section(ctx, "usage.efficiency.failed", failed(ctx, dashboard, nav)));
-  card.body([columns.into()])
+    .spacing(SpacingSize::Md)
+    .child(Text::new(&ctx.t("usage.efficiency.title")).variant(ExtraTypography::SectionHeading.role()))
+    .child(card_row(ctx, cards))
+    .into()
 }
 
-fn section(ctx: &Ctx, key: &str, children: Vec<Element>) -> Element {
-  Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
+/// A card's *Chart* / *Table* glyphs, flipping `field` of the views.
+pub fn switch(
+  ctx: &Ctx,
+  (id, chart): (&'static str, Icon),
+  views: &Signal<Views>,
+  field: fn(&mut Views) -> &mut bool,
+) -> Element {
+  let table = *field(&mut views.get());
+  let views = views.clone();
+  view_switch(ctx, (id, chart), table, true, move |table| {
+    views.update(|views| *field(views) = table);
+  })
+}
+
+fn cache(ctx: &mut Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element {
+  let card = Card::new("usage-cache", ctx.t("usage.efficiency.cache"))
+    .subtitle(ctx.t("usage.efficiency.cacheSubtitle"))
+    .trailing(switch(ctx, ("usage-cache-view", Icon::ChartColumn), views, |views| {
+      &mut views.cache_table
+    }))
+    .fill();
+  if views.get().cache_table {
+    return card.body([cache_table(ctx, dashboard)]);
+  }
+  card.body([cache_figure(ctx, dashboard), cache_line(ctx, dashboard)])
+}
+
+/// *71%* and *in the period · up from 67%*.
+fn cache_figure(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+  let (now, before) = (
+    dashboard.report.summary.cache_share(),
+    dashboard.report.previous.cache_share(),
+  );
+  let before_text = before.map(|before| format::share(ctx, Some(before)));
+  let caption = match (Change::points(now, before), before_text) {
+    (Some(Change::More(_)), Some(before)) => ctx.t_args("usage.efficiency.cameUp", [("before", &*before)]),
+    (Some(Change::Less(_)), Some(before)) => ctx.t_args("usage.efficiency.cameDown", [("before", &*before)]),
+    (Some(Change::Same), _) => ctx.t("usage.efficiency.sameAsBefore"),
+    _ => ctx.t("usage.efficiency.inPeriod"),
+  };
+  Row::new()
     .spacing(SpacingSize::Sm)
-    .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Label))
-    .with_children(children)
+    .align_items(Alignment::End)
+    .child(
+      Text::new(&format::share(ctx, now))
+        .variant(ExtraTypography::Metric.role())
+        .nowrap(),
+    )
+    .child(Text::new(&caption).variant(TypographyStyle::Caption))
     .into()
 }
 
@@ -92,27 +124,60 @@ fn cache_line(ctx: &mut Ctx, dashboard: &Dashboard) -> Element {
   )
 }
 
-/// With and without the code index, each a bar scaled to the larger median.
-fn edits(ctx: &Ctx, dashboard: &Dashboard) -> Vec<Element> {
+fn cache_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+  let columns = [
+    column(ctx.t("usage.table.day"), Width::Flex(1.4), false),
+    column(ctx.t("usage.efficiency.cache"), Width::Flex(1.0), true),
+  ];
+  let rows = dashboard
+    .report
+    .efficiency
+    .cache_by_day
+    .iter()
+    .map(|(date, share)| {
+      data_row(
+        &columns,
+        vec![
+          Cell::Text(format::long_day(ctx, *date)),
+          Cell::Text(format::share(ctx, *share)),
+        ],
+      )
+    })
+    .collect();
+  table("usage-cache-table", &columns, rows)
+}
+
+fn edits(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element {
+  let card = Card::new("usage-edits", ctx.t("usage.efficiency.beforeEdit"))
+    .subtitle(ctx.t("usage.efficiency.beforeEditSubtitle"))
+    .trailing(switch(ctx, ("usage-edits-view", Icon::ChartColumn), views, |views| {
+      &mut views.edits_table
+    }))
+    .fill();
   let efficiency = &dashboard.report.efficiency;
+  let without_edit = efficiency.with_index.without_edit + efficiency.without_index.without_edit;
+  let note = footnote(
+    "usage-edits-footnote",
+    &ctx.t_args(
+      "usage.efficiency.beforeEditNote",
+      [("count", without_edit.to_string().as_str())],
+    ),
+  );
+  if views.get().edits_table {
+    return card.body([edits_table(ctx, dashboard), push_down(), note]);
+  }
   let largest = efficiency
     .with_index
     .median
     .max(efficiency.without_index.median)
     .unwrap_or(0)
     .max(1);
-  let without_edit = efficiency.with_index.without_edit + efficiency.without_index.without_edit;
-  vec![
+  card.body([
     edit_bar(ctx, "usage.efficiency.withIndex", efficiency.with_index, largest),
     edit_bar(ctx, "usage.efficiency.withoutIndex", efficiency.without_index, largest),
-    Text::new(&ctx.t_args(
-      "usage.efficiency.withoutEdit",
-      [("count", without_edit.to_string().as_str())],
-    ))
-    .variant(TypographyStyle::Caption)
-    .color(PaletteColor::TextMuted)
-    .into(),
-  ]
+    push_down(),
+    note,
+  ])
 }
 
 fn edit_bar(ctx: &Ctx, key: &str, tokens: EditTokens, largest: u64) -> Element {
@@ -128,7 +193,7 @@ fn edit_bar(ctx: &Ctx, key: &str, tokens: EditTokens, largest: u64) -> Element {
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).nowrap())
+        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Body).nowrap())
         .child(Spacer::new().flex(1.0))
         .child(Text::new(&value).variant(ExtraTypography::MonoValue.role()).nowrap())
         .child(
@@ -144,7 +209,8 @@ fn edit_bar(ctx: &Ctx, key: &str, tokens: EditTokens, largest: u64) -> Element {
     .into()
 }
 
-fn bar(width: f32, color: PaletteColor) -> Element {
+/// A single-series bar `width` percent of its row wide.
+pub fn bar(width: f32, color: PaletteColor) -> Element {
   Row::new()
     .width(Dimension::Pct(width))
     .height(Dimension::Px(BREAKDOWN_BAR_HEIGHT))
@@ -153,105 +219,31 @@ fn bar(width: f32, color: PaletteColor) -> Element {
     .into()
 }
 
-fn failed(ctx: &Ctx, dashboard: &Dashboard, nav: Option<ProjectNav>) -> Vec<Element> {
-  let failed = &dashboard.report.efficiency.failed;
-  let share = percent(failed.spent, failed.of_spent);
-  let mut children: Vec<Element> = vec![
-    Text::new(&ctx.t_args(
-      "usage.efficiency.failedRuns",
-      [
-        ("count", failed.runs.to_string().as_str()),
-        (
-          "share",
-          &*format::share(ctx, percent(failed.runs as u64, failed.of_runs as u64)),
-        ),
-      ],
-    ))
-    .variant(TypographyStyle::Body)
-    .into(),
-    Text::new(&ctx.t_args(
-      "usage.efficiency.failedTokens",
-      [
-        ("tokens", &*format::tokens(failed.spent)),
-        ("share", &*format::share(ctx, share)),
-      ],
-    ))
-    .variant(TypographyStyle::Caption)
-    .into(),
-    bar(share.unwrap_or(0) as f32, PaletteColor::TextMuted),
-  ];
-  if let Some(largest) = &failed.largest {
-    children.push(
-      Text::new(&ctx.t_args(
-        "usage.efficiency.largest",
-        [
-          ("task", &*largest.key),
-          ("run", largest.number.get().to_string().as_str()),
-          ("tokens", &*format::tokens(largest.usage.counted())),
-        ],
-      ))
-      .variant(TypographyStyle::Caption)
-      .color(PaletteColor::TextMuted)
-      .into(),
-    );
-  }
-  if let (Scope::Project(_), Some(nav), true) = (&dashboard.scope, nav, failed.runs > 0) {
-    children.push(
-      ActionButton::new(ctx.t("usage.efficiency.showFailed"))
-        .id("usage-show-failed")
-        .compact()
-        .link(nav.link(Page::Overview(OverviewTab::Failed)))
-        .render(ctx),
-    );
-  }
-  children
-}
-
-/// The section's figures with exact numbers.
-fn efficiency_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+fn edits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
   let efficiency = &dashboard.report.efficiency;
   let columns = [
-    column(ctx.t("usage.table.measure"), Width::Flex(1.6), false),
-    column(ctx.t("usage.table.value"), Width::Flex(1.0), true),
-    column(ctx.t("usage.table.count"), Width::Flex(0.8), true),
+    column(ctx.t("usage.table.name"), Width::Flex(1.4), false),
+    column(ctx.t("usage.table.median"), Width::Flex(1.0), true),
+    column(ctx.t("usage.table.invocations"), Width::Flex(0.8), true),
   ];
-  let exact = |value: Option<u64>| value.map_or_else(|| ctx.t("usage.unknown"), |value| format::exact(ctx, value));
-  let mut rows: Vec<Row> = efficiency
-    .cache_by_day
-    .iter()
-    .map(|(date, share)| {
-      let name = ctx.t_args("usage.efficiency.cacheOn", [("day", &*format::weekday(ctx, *date))]);
-      row(
-        &columns,
-        vec![
-          Cell::Text(name),
-          Cell::Text(format::share(ctx, *share)),
-          Cell::Text(Arc::from("")),
-        ],
-      )
-    })
-    .collect();
-  for (key, tokens) in [
+  let rows = [
     ("usage.efficiency.withIndex", efficiency.with_index),
     ("usage.efficiency.withoutIndex", efficiency.without_index),
-  ] {
-    rows.push(row(
+  ]
+  .into_iter()
+  .map(|(key, tokens)| {
+    let median = tokens
+      .median
+      .map_or_else(|| ctx.t("usage.unknown"), |median| format::exact(ctx, median));
+    data_row(
       &columns,
       vec![
         Cell::Text(ctx.t(key)),
-        Cell::Text(exact(tokens.median)),
+        Cell::Text(median),
         Cell::Text(tokens.edited.to_string().into()),
       ],
-    ));
-  }
-  let failed = &efficiency.failed;
-  rows.push(row(
-    &columns,
-    vec![
-      Cell::Text(ctx.t("usage.efficiency.failed")),
-      Cell::Text(format::exact(ctx, failed.spent)),
-      Cell::Text(failed.runs.to_string().into()),
-    ],
-  ));
-  table("usage-efficiency-table", &columns, rows)
+    )
+  })
+  .collect();
+  table("usage-edits-table", &columns, rows)
 }

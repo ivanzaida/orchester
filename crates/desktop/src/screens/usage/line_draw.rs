@@ -6,14 +6,14 @@ use std::{f32::consts::TAU, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  canvas::{ArcDirection, CanvasHandle, CanvasItem, CanvasObserver, TextAlign, TextBaseline},
+  canvas::{ArcDirection, CanvasHandle, CanvasItem, TextAlign, TextBaseline},
   components::Canvas,
   core::ElementRef,
   node::{Element, dimension::Dimension},
 };
 use parking_lot::Mutex;
 
-use super::plot::{self, Frame};
+use super::plot::{self, Frame, Redraw};
 use crate::theme::chart::{ChartStyle, LABEL_GAP, LINE_WIDTH, POINT_RADIUS, SMALL_PLOT_HEIGHT};
 
 /// One day: its axis label, its share in percent if known, and its name and value for its canvas
@@ -44,7 +44,7 @@ struct LinePlot {
 pub struct CacheLine {
   reference: ElementRef,
   plot: Arc<Mutex<Option<LinePlot>>>,
-  observer: Mutex<Option<CanvasObserver>>,
+  redraw: Redraw,
 }
 
 impl Component for CacheLine {
@@ -54,7 +54,7 @@ impl Component for CacheLine {
     Self {
       reference: ctx.element_ref(),
       plot: Arc::new(Mutex::new(None)),
-      observer: Mutex::new(None),
+      redraw: Redraw::default(),
     }
   }
 
@@ -75,16 +75,8 @@ impl Component for CacheLine {
   }
 
   fn after_layout(&self) {
-    let mut observer = self.observer.lock();
-    if observer.is_none()
-      && let Some(canvas) = self.reference.as_canvas()
-    {
-      let (target, plot) = (canvas.clone(), Arc::clone(&self.plot));
-      *observer = Some(canvas.observe_metrics(move |_| {
-        if let Some(plot) = plot.lock().as_ref() {
-          draw(&target, plot);
-        }
-      }));
+    if let Some(canvas) = self.reference.as_canvas() {
+      self.redraw.bind(&canvas, &self.plot, draw);
     }
   }
 }

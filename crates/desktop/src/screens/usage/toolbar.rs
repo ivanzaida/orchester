@@ -10,11 +10,11 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, OutsidePress, Placement},
-    theme::{BorderSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, Select, Spacer, Text},
+  components::{Column, Popup, Row, Select, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -33,6 +33,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     field::select_style,
+    icon::{Icon, IconSize, icon},
     segments::{SegmentSize, segments},
   },
 };
@@ -104,49 +105,60 @@ impl Component for UsageToolbar {
       .align_items(Alignment::Center)
       .child(self.period(ctx, &props))
       .child(self.group_by(ctx, props.range));
-    let first = match &props.scope {
-      Scope::Project(_) => Row::new()
+    let filters = Row::new()
+      .spacing(ExtraSpacing::Inline.role())
+      .align_items(Alignment::Center)
+      .child(icon(Icon::ListFilter, IconSize::Button, PaletteColor::TextMuted))
+      .child(ctx.mount_keyed::<FilterChips>(
+        "usage-filters",
+        FilterProps {
+          controls: props.controls.clone(),
+          dashboard: props.dashboard.clone(),
+        },
+      ));
+    // The first part at the left, the second at the right; a narrow window wraps the second to a
+    // line of its own instead of clipping it.
+    let line = || {
+      Row::new()
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Md)
         .align_items(Alignment::Center)
-        .child(
-          Column::new()
-            .flex(1.0)
-            .spacing(ExtraSpacing::Inline.role())
-            .child(Text::new(&ctx.t("usage.title")).variant(ExtraTypography::ScreenTitle.role()))
-            .child(Text::new(&ctx.t("usage.description")).variant(TypographyStyle::Description)),
-        )
-        .child(controls_row),
-      Scope::All => Row::new().width(Dimension::Pct(100.0)).child(controls_row),
+        .justify(Justify::SpaceBetween)
+        .wrap()
     };
-    let filters = ctx.mount_keyed::<FilterChips>(
-      "usage-filters",
-      FilterProps {
-        controls: props.controls.clone(),
-        dashboard: props.dashboard.clone(),
-      },
-    );
+    let rows: Vec<Element> = match &props.scope {
+      Scope::Project(open) => {
+        let heading = Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Inline.role())
+          .child(Text::new(&ctx.t("usage.title")).variant(ExtraTypography::ScreenTitle.role()))
+          .child(
+            Text::new(&ctx.t_args("usage.description", [("project", open.project.name().as_str())]))
+              .variant(TypographyStyle::Description),
+          );
+        let first = Row::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(SpacingSize::Md)
+          .align_items(Alignment::Center)
+          .child(heading)
+          .child(controls_row);
+        vec![first.into(), line().child(filters).child(readback(ctx, &props)).into()]
+      }
+      Scope::All => vec![line().child(filters).child(controls_row).into(), readback(ctx, &props)],
+    };
     Column::new()
       .id("usage-toolbar")
       .width(Dimension::Pct(100.0))
       .padding_top(match props.scope {
         Scope::Project(_) => ExtraSpacing::HeadingTop.role(),
-        Scope::All => SpacingSize::Md,
+        Scope::All => SpacingSize::Lg,
       })
       .padding_horizontal(props.scope.inset())
       .padding_bottom(SpacingSize::Md)
       .spacing(SpacingSize::Md)
       .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-      .child(first)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Md)
-          .align_items(Alignment::Center)
-          .child(filters)
-          .child(Spacer::new().flex(1.0))
-          .child(readback(ctx, &props)),
-      )
+      .with_children(rows)
       .with_children(self.custom_popup(ctx, &props))
   }
 }
@@ -222,8 +234,25 @@ impl UsageToolbar {
 
 /// *Sep 24 – Sep 30 · compared with Sep 17 – Sep 23*, with the number of projects across them.
 fn readback(ctx: &Ctx, props: &ToolbarProps) -> Element {
-  let range = format::range(ctx, props.range);
-  let previous = format::range(ctx, props.range.previous());
+  let now = Timestamp::now();
+  let today = local_date(now);
+  let (range, previous) = if props.range.days() == 1 && props.range.first() == today {
+    (
+      ctx.t_args(
+        "usage.readback.today",
+        [
+          ("day", &*format::day(ctx, today)),
+          ("time", crate::display::clock(now).as_str()),
+        ],
+      ),
+      format::previous_name(ctx, props.range.previous(), today),
+    )
+  } else {
+    (
+      format::range(ctx, props.range),
+      format::range(ctx, props.range.previous()),
+    )
+  };
   let mut text = match (&props.scope, &props.dashboard) {
     (Scope::All, Some(dashboard)) => ctx.t_args(
       "usage.readback.projects",

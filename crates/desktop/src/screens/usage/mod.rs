@@ -1,19 +1,21 @@
 //! The Usage dashboard (`docs/design/orchester-workspace.md`, "Usage dashboard"): a project's page
 //! (`C2pTYF`, sidebar item after Pull requests) and All projects › Usage (`p4eVV6`). A pinned
 //! toolbar with the period, the grouping, the filters and the range read-back; then *Summary*,
-//! *Tokens over time*, *Plan limits*, *Where tokens go*, *Most expensive* and *Efficiency*, which
-//! scroll beside the gutter. Tokens only, never money; every figure from stored runs.
+//! *Tokens over time* beside *Plan limits*, *Where tokens go*, *Most expensive* and *Efficiency*,
+//! which scroll beside the gutter. Tokens only, never money; every figure from stored runs.
 
 mod breakdown;
 mod card;
 mod custom_range;
 mod efficiency;
 mod expensive;
+mod failed;
 mod filters;
 mod format;
 mod limits;
 mod limits_chart;
 mod limits_draw;
+mod limits_legend;
 mod line_draw;
 pub mod load;
 mod plot;
@@ -39,7 +41,7 @@ use orchester_core::{
 };
 
 use self::{
-  card::{Card, nothing, reading},
+  card::{Card, card_row, empty_card, reading, state},
   load::{Scope, UsageData},
   state::{Controls, Dashboard, Views},
   tokens_chart::{TokensChart, TokensProps},
@@ -129,7 +131,8 @@ impl Component for UsageScreen {
         &ctx.t("usage.loadFailed"),
         &message_text(ctx, &error),
       ))),
-      (dashboard, _) => self.sections(ctx, &props.scope, dashboard, &workspace),
+      (Some(dashboard), _) => self.sections(ctx, &dashboard, &workspace),
+      (None, None) => self.loading(ctx, &props.scope, &workspace),
     };
     Column::new()
       .id("usage")
@@ -145,7 +148,6 @@ impl Component for UsageScreen {
             .padding_horizontal(props.scope.inset())
             .padding_right(beside_gutter(ctx, props.scope.inset()))
             .padding_bottom(SpacingSize::Section)
-            .spacing(SpacingSize::Md)
             .child(content),
         )
         .width(Dimension::Pct(100.0))
@@ -155,81 +157,101 @@ impl Component for UsageScreen {
   }
 }
 
+fn page(sections: Vec<Element>) -> Element {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .with_children(sections)
+    .into()
+}
+
 impl UsageScreen {
-  /// The six sections; while reading each says so (`qQOKw`).
-  fn sections(
-    &self,
-    ctx: &mut Ctx,
-    scope: &Scope,
-    dashboard: Option<Arc<Dashboard>>,
-    workspace: &Workspace,
-  ) -> Element {
-    let scope_name = match scope {
-      Scope::Project(open) => Some(open.project.name().as_str().to_owned()),
-      Scope::All => None,
+  /// While reading: dashes in the summary and a loader in each card, no skeletons (`qQOKw`).
+  fn loading(&self, ctx: &mut Ctx, scope: &Scope, workspace: &Workspace) -> Element {
+    let tokens_text = match scope {
+      Scope::Project(open) => ctx.t_args("usage.loading.project", [("project", open.project.name().as_str())]),
+      Scope::All => ctx.t("usage.loading.all"),
     };
-    let Some(dashboard) = dashboard else {
-      let loading = |id, key: &str| Card::new(id, ctx.t(key)).body([reading(ctx, scope_name.as_deref())]);
-      return Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Md)
-        .child(summary::summary(ctx, None))
-        .child(loading("usage-tokens", "usage.tokens.title"))
-        .child(loading("usage-limits", "usage.limits.title"))
-        .child(loading("usage-breakdown", "usage.breakdown.title"))
-        .child(loading("usage-expensive", "usage.expensive.title"))
-        .child(loading("usage-efficiency", "usage.efficiency.title"))
-        .into();
-    };
-    let tokens = self.tokens(ctx, &dashboard);
-    let limits = limits::limits_card(ctx, &dashboard, &self.views, (workspace, &self.saved));
-    let (breakdown, expensive, efficiency) = if dashboard.no_runs() || dashboard.filtered_out {
-      (None, None, None)
-    } else {
-      (
-        Some(breakdown::breakdown(ctx, &dashboard, &self.views, &self.controls)),
-        Some(expensive::expensive(ctx, &dashboard, &self.views)),
-        Some(efficiency::efficiency(ctx, &dashboard, &self.views)),
-      )
-    };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .child(summary::summary(ctx, Some(&dashboard)))
-      .child(tokens)
-      .child(limits)
-      .with_children(breakdown)
-      .with_children(expensive)
-      .with_children(efficiency)
-      .into()
+    let loading = |ctx: &Ctx, id, key: &str| Card::new(id, ctx.t(key)).fill().body([reading(&tokens_text)]);
+    let tokens = loading(ctx, "usage-tokens", "usage.tokens.title");
+    let limits =
+      limits::header(ctx, None, &self.views, (workspace, &self.saved)).body([reading(&ctx.t("usage.loading.limits"))]);
+    page(vec![
+      summary::summary(ctx, None),
+      card_row(ctx, vec![tokens, limits]),
+      loading(ctx, "usage-breakdown", "usage.breakdown.title"),
+      loading(ctx, "usage-expensive", "usage.expensive.title"),
+    ])
   }
 
-  /// *Tokens over time*, or why it has nothing to draw: no runs in the period (`AY6FM`), or filters
-  /// that match nothing (`YxAed`).
-  fn tokens(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>) -> Element {
-    if dashboard.filtered_out {
-      let controls = self.controls.clone();
-      let clear = ActionButton::new(ctx.t("usage.filters.clear"))
-        .icon(Icon::X)
-        .id("usage-filters-clear-empty")
-        .on_click(move || controls.update(|controls| controls.filter = Default::default()))
-        .render(ctx);
-      let detail = filters::active_filters(ctx, dashboard);
-      return Card::new("usage-tokens", ctx.t("usage.tokens.title")).body([nothing(
-        &ctx.t("usage.filters.nothing"),
-        Some(&detail),
-        Some(clear),
-      )]);
+  /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
+  fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, workspace: &Workspace) -> Element {
+    let summary = summary::summary(ctx, Some(dashboard));
+    if dashboard.filtered_out || dashboard.no_runs() {
+      let empty = if dashboard.filtered_out {
+        self.unmatched(ctx, dashboard)
+      } else {
+        self.no_runs(ctx, dashboard)
+      };
+      let menu = limits::menu(ctx, dashboard, (workspace, &self.saved));
+      return page(vec![summary, empty, limits_legend::compact(ctx, dashboard, menu)]);
     }
-    if dashboard.no_runs() {
-      return Card::new("usage-tokens", ctx.t("usage.tokens.title")).body([self.no_runs(ctx, dashboard)]);
-    }
-    ctx.mount_keyed::<TokensChart>(
+    let tokens = ctx.mount_keyed::<TokensChart>(
       "usage-tokens-chart",
       TokensProps {
         dashboard: Arc::clone(dashboard),
         views: self.views.clone(),
       },
+    );
+    let limits = limits::header(ctx, Some(dashboard), &self.views, (workspace, &self.saved));
+    let limits = limits::limits_card(ctx, dashboard, &self.views, limits);
+    page(vec![
+      summary,
+      card_row(ctx, vec![tokens, limits]),
+      breakdown::breakdown(ctx, dashboard, &self.views, &self.controls),
+      expensive::expensive(ctx, dashboard, &self.views),
+      efficiency::efficiency(ctx, dashboard, &self.views),
+    ])
+  }
+
+  /// *No usage matches these filters*, naming them and what the period has without them (`YxAed`).
+  fn unmatched(&self, ctx: &Ctx, dashboard: &Dashboard) -> Element {
+    let controls = self.controls.clone();
+    let clear = ActionButton::new(ctx.t("usage.filters.clear"))
+      .icon(Icon::X)
+      .id("usage-filters-clear-empty")
+      .on_click(move || controls.update(|controls| controls.filter = Default::default()))
+      .render(ctx);
+    let filters = filters::active_filters(ctx, dashboard);
+    let range = format::range(ctx, dashboard.range);
+    let count = dashboard.unfiltered_runs.to_string();
+    let detail = match dashboard.project_name() {
+      Some(project) => ctx.t_args(
+        "usage.filters.nothingDetailProject",
+        [
+          ("filters", filters.as_str()),
+          ("range", &*range),
+          ("project", &*project),
+          ("count", count.as_str()),
+        ],
+      ),
+      None => ctx.t_args(
+        "usage.filters.nothingDetailAll",
+        [
+          ("filters", filters.as_str()),
+          ("range", &*range),
+          ("count", count.as_str()),
+        ],
+      ),
+    };
+    empty_card(
+      "usage-empty",
+      state(
+        Icon::SearchX,
+        &ctx.t("usage.filters.noUsage"),
+        Some(&detail),
+        Some(clear),
+      ),
     )
   }
 
@@ -241,10 +263,20 @@ impl UsageScreen {
       (None, true) => ctx.t("usage.noRuns.allToday"),
       (None, false) => ctx.t("usage.noRuns.all"),
     };
-    let last = dashboard.report.last_turn.map_or_else(
-      || ctx.t("usage.noRuns.never"),
-      |at| ctx.t_args("usage.noRuns.last", [("time", &*format::date_time(ctx, at))]),
-    );
+    let last = match (dashboard.report.last_turn, dashboard.project_name()) {
+      (None, _) => ctx.t("usage.noRuns.never"),
+      (Some(at), Some(project)) => ctx.t_args(
+        "usage.noRuns.lastProject",
+        [
+          ("project", &*project),
+          ("time", &*format::reported(ctx, at, dashboard.now)),
+        ],
+      ),
+      (Some(at), None) => ctx.t_args(
+        "usage.noRuns.lastAll",
+        [("time", &*format::reported(ctx, at, dashboard.now))],
+      ),
+    };
     let (controls, today) = (self.controls.clone(), local_date(dashboard.now));
     let week = (dashboard.range.days() < 7).then(|| {
       ActionButton::new(ctx.t("usage.noRuns.showWeek"))
@@ -252,6 +284,6 @@ impl UsageScreen {
         .on_click(move || controls.update(|controls| *controls = controls.with_period(Period::Week, today)))
         .render(ctx)
     });
-    nothing(&title, Some(&last), week)
+    empty_card("usage-empty", state(Icon::ChartColumn, &title, Some(&last), week))
   }
 }

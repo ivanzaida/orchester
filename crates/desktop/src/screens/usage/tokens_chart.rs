@@ -11,7 +11,6 @@ use lurq::{
     events::MouseEvent,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  canvas::CanvasObserver,
   components::{Canvas, Column, Row, Spacer, Stack, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -21,11 +20,11 @@ use orchester_core::usage::{CliSeries, Grouping, Measure, SeriesBar, local_date}
 use parking_lot::Mutex;
 
 use super::{
-  card::{Card, legend, legend_item, series_color, swatch, view_switch},
+  card::{Card, footnote, legend, legend_item, push_down, series_color, swatch, view_switch},
   format,
-  plot::{Frame, label_every},
+  plot::{Frame, Redraw, label_every},
   state::{Dashboard, Views},
-  table::{Cell, TableColumn, Width, column, row, table},
+  table::{Cell, TableColumn, Width, column, data_row, table},
   tokens_draw::{TokenPlot, draw},
 };
 use crate::{
@@ -33,7 +32,10 @@ use crate::{
     ExtraRadius, ExtraShadow, ExtraSpacing,
     chart::{ChartStyle, TOKENS_PLOT_HEIGHT, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
   },
-  ui::segments::{SegmentSize, segments},
+  ui::{
+    icon::Icon,
+    segments::{SegmentSize, segments},
+  },
 };
 
 /// About how wide an x axis label is, to leave out labels that would crowd.
@@ -63,7 +65,7 @@ pub struct TokensChart {
   hovered: Signal<Hovered>,
   /// What the canvas shows, for the redraws its size changes ask for.
   plot: Arc<Mutex<Option<TokenPlot>>>,
-  observer: Mutex<Option<CanvasObserver>>,
+  redraw: Redraw,
 }
 
 impl Component for TokensChart {
@@ -74,7 +76,7 @@ impl Component for TokensChart {
       reference: ctx.element_ref(),
       hovered: ctx.signal(Hovered::default()),
       plot: Arc::new(Mutex::new(None)),
-      observer: Mutex::new(None),
+      redraw: Redraw::default(),
     }
   }
 
@@ -93,33 +95,36 @@ impl Component for TokensChart {
       SegmentSize::Compact,
       move |measure| measures.update(|views| views.measure = measure),
     );
-    let switch = view_switch(ctx, "usage-tokens-view", views.tokens_table, move |table| {
-      tables.update(|views| views.tokens_table = table);
-    });
+    let switch = view_switch(
+      ctx,
+      ("usage-tokens-view", Icon::ChartColumn),
+      views.tokens_table,
+      false,
+      move |table| tables.update(|views| views.tokens_table = table),
+    );
     let card = Card::new("usage-tokens", ctx.t("usage.tokens.title"))
       .trailing(measure)
-      .trailing(switch);
+      .trailing(switch)
+      .fill();
     let dashboard = &props.dashboard;
     if views.tokens_table {
-      return card.body([tokens_table(ctx, dashboard, views.measure)]);
+      return card.body([
+        tokens_table(ctx, dashboard, views.measure),
+        push_down(),
+        footnote("usage-tokens-footnote", &ctx.t("usage.tokens.tableFootnote")),
+      ]);
     }
     card.body([
-      self.chart(ctx, dashboard, views.measure),
       totals(ctx, dashboard, views.measure),
+      self.chart(ctx, dashboard, views.measure),
+      push_down(),
+      footnote("usage-tokens-footnote", &chart_footnote(ctx, dashboard)),
     ])
   }
 
   fn after_layout(&self) {
-    let mut observer = self.observer.lock();
-    if observer.is_none()
-      && let Some(canvas) = self.reference.as_canvas()
-    {
-      let (target, plot) = (canvas.clone(), Arc::clone(&self.plot));
-      *observer = Some(canvas.observe_metrics(move |_| {
-        if let Some(plot) = plot.lock().as_ref() {
-          draw(&target, plot);
-        }
-      }));
+    if let Some(canvas) = self.reference.as_canvas() {
+      self.redraw.bind(&canvas, &self.plot, draw);
     }
   }
 }
@@ -235,6 +240,14 @@ fn bar_name(ctx: &Ctx, bar: &SeriesBar) -> Arc<str> {
   }
 }
 
+/// The tooltip's title: `Mon, Sep 29`, or the hour.
+fn tooltip_name(ctx: &Ctx, bar: &SeriesBar) -> Arc<str> {
+  match bar.bucket.hour {
+    Some(_) => bar_name(ctx, bar),
+    None => format::long_day(ctx, bar.bucket.date),
+  }
+}
+
 /// The x axis labels: days, *Today* for today's bar, or hours of one day; every few where many.
 fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Arc<str>>> {
   let bars = &dashboard.report.series;
@@ -291,11 +304,22 @@ fn tooltip(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar) -> Column {
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(ExtraRadius::Notice.role())
     .box_shadow(ExtraShadow::Popover.role())
-    .child(Text::new(&bar_name(ctx, bar)).variant(TypographyStyle::Label))
+    .child(Text::new(&tooltip_name(ctx, bar)).variant(TypographyStyle::Label))
     .with_children(clis)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .border_bottom(lurq::node::border::Border::inside(
+          BorderSize::Sm,
+          crate::theme::ExtraColor::Hairline.role(),
+        )),
+    )
     .child(line(
       caption(ctx.t("usage.measure.spent")),
-      format::exact(ctx, bar.total().counted()),
+      ctx.t_args(
+        "usage.tokens.count",
+        [("count", &*format::exact(ctx, bar.total().counted()))],
+      ),
     ))
     .child(line(caption(ctx.t("usage.summary.runs")), bar.runs.to_string().into()))
 }
@@ -307,6 +331,30 @@ fn shown(dashboard: &Dashboard, series: CliSeries) -> bool {
     .series
     .iter()
     .any(|bar| bar.by_cli[series.index()] != Default::default())
+}
+
+/// What *Spent* counts, and how far today counts when the range has it.
+fn chart_footnote(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
+  if dashboard.has_today() {
+    ctx.t_args(
+      "usage.tokens.footnoteToday",
+      [("time", crate::display::clock(dashboard.now).as_str())],
+    )
+  } else {
+    ctx.t("usage.tokens.footnote")
+  }
+}
+
+/// What the bars count, per day or per hour.
+fn caption(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Arc<str> {
+  ctx.t(match (measure, dashboard.grouping) {
+    (Measure::Spent, Grouping::Day) => "usage.tokens.perDay.spent",
+    (Measure::Cached, Grouping::Day) => "usage.tokens.perDay.cached",
+    (Measure::Output, Grouping::Day) => "usage.tokens.perDay.output",
+    (Measure::Spent, Grouping::Hour) => "usage.tokens.perHour.spent",
+    (Measure::Cached, Grouping::Hour) => "usage.tokens.perHour.cached",
+    (Measure::Output, Grouping::Hour) => "usage.tokens.perHour.output",
+  })
 }
 
 /// The legend: each CLI with its total for the measure.
@@ -324,12 +372,25 @@ fn totals(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
       legend_item(
         series_color(series),
         &format::series_name(ctx, series),
-        &format::tokens(total),
-        false,
+        Some(&format::tokens(total)),
       )
     })
     .collect();
-  legend(items, None)
+  legend(items, Some(caption(ctx, dashboard, measure)))
+}
+
+/// A row's name in the table: `Wed, Sep 24`, `Today, until 16:00`, or an hour.
+fn row_name(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar) -> Arc<str> {
+  if bar.bucket.hour.is_some() {
+    return bar_name(ctx, bar);
+  }
+  if bar.bucket.date == local_date(dashboard.now) {
+    return ctx.t_args(
+      "usage.tokens.todayUntil",
+      [("time", crate::display::clock(dashboard.now).as_str())],
+    );
+  }
+  format::long_day(ctx, bar.bucket.date)
 }
 
 /// The bars as a table with exact numbers (`CDcij`).
@@ -343,7 +404,9 @@ fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
     Measure::Cached => "usage.measure.cached",
     Measure::Output => "usage.measure.output",
   };
-  let mut columns: Vec<TableColumn> = vec![column(ctx.t("usage.table.when"), Width::Flex(1.0), false)];
+  let hourly = dashboard.grouping == Grouping::Hour;
+  let when = if hourly { "usage.table.hour" } else { "usage.table.day" };
+  let mut columns: Vec<TableColumn> = vec![column(ctx.t(when), Width::Flex(1.2), false)];
   columns.extend(
     series
       .iter()
@@ -351,14 +414,12 @@ fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
   );
   columns.push(column(ctx.t(measure_key), Width::Flex(1.0), true));
   columns.push(column(ctx.t("usage.summary.runs"), Width::Flex(0.6), true));
-  let hourly = dashboard.grouping == Grouping::Hour;
-  let rows = dashboard
-    .report
-    .series
+  let bars = &dashboard.report.series;
+  let mut rows: Vec<Row> = bars
     .iter()
     .filter(|bar| !hourly || bar.total() != Default::default())
     .map(|bar| {
-      let mut cells = vec![Cell::Text(bar_name(ctx, bar))];
+      let mut cells = vec![Cell::Text(row_name(ctx, dashboard, bar))];
       cells.extend(
         series
           .iter()
@@ -366,8 +427,20 @@ fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
       );
       cells.push(Cell::Text(format::exact(ctx, measure.of(bar.total()))));
       cells.push(Cell::Text(bar.runs.to_string().into()));
-      row(&columns, cells)
+      data_row(&columns, cells)
     })
     .collect();
+  let mut total = vec![Cell::Strong(ctx.t("usage.table.total"))];
+  total.extend(series.iter().map(|series| {
+    let sum = bars.iter().map(|bar| measure.of(bar.by_cli[series.index()])).sum();
+    Cell::Strong(format::exact(ctx, sum))
+  }));
+  total.push(Cell::Strong(format::exact(
+    ctx,
+    bars.iter().map(|bar| measure.of(bar.total())).sum(),
+  )));
+  // A run can report in several hours or days, so the total is the period's, not the rows' sum.
+  total.push(Cell::Strong(dashboard.report.summary.runs.to_string().into()));
+  rows.push(data_row(&columns, total));
   table("usage-tokens-table", &columns, rows)
 }

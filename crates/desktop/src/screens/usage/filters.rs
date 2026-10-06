@@ -25,15 +25,16 @@ use orchester_core::{
 };
 
 use super::{
+  card::text_link,
   format,
   state::{Controls, Dashboard},
 };
 use crate::{
   theme::{ExtraRadius, ExtraShadow, ExtraSpacing},
   ui::{
-    button::ActionButton,
     field::text_input,
     icon::{Icon, IconSize, icon},
+    link::Press,
     menu_option::menu_option,
     pressable::{pressable, surface},
   },
@@ -154,12 +155,11 @@ impl Component for FilterChips {
       .map(|(index, facet)| self.chip(ctx, (facet, index), &filter, &options, &props.controls));
     let controls = props.controls.clone();
     let clear = (!filter.is_empty()).then(|| {
-      ActionButton::new(ctx.t("usage.filters.clear"))
-        .icon(Icon::X)
-        .id("usage-filters-clear")
-        .height(Dimension::Px(CHIP_HEIGHT))
-        .on_click(move || controls.update(|controls| controls.filter = UsageFilter::default()))
-        .render(ctx)
+      text_link(
+        "usage-filters-clear",
+        &ctx.t("usage.filters.clear"),
+        Press::action(move || controls.update(|controls| controls.filter = UsageFilter::default())),
+      )
     });
     let mut row = Row::new()
       .spacing(SpacingSize::Sm)
@@ -394,8 +394,9 @@ fn toggle_value(filter: &mut UsageFilter, value: Value) {
   }
 }
 
-/// The active filters named, for *No usage matches these filters* (`YxAed`).
-pub fn active_filters(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
+/// The active filters named (*CLI: Claude, Pipeline: Docs update*), for *No usage matches these
+/// filters* (`YxAed`).
+pub fn active_filters(ctx: &Ctx, dashboard: &Dashboard) -> String {
   let separator = ctx.t("usage.listSeparator");
   let named: Vec<String> = [
     Facet::Project,
@@ -425,8 +426,5 @@ pub fn active_filters(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
     })
   })
   .collect();
-  ctx.t_args(
-    "usage.filters.nothingDetail",
-    [("filters", named.join(&separator).as_str())],
-  )
+  named.join(&separator)
 }

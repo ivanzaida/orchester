@@ -58,7 +58,7 @@ fn usage_without_runs_says_so_offers_seven_days_and_no_plan_limits() {
   desktop.wait_for("nav-usage");
   desktop.press("nav-usage");
   desktop.wait_until("the empty week", |desktop| {
-    shows_text(desktop, "usage-tokens", "No runs in Kontur in this period")
+    shows_text(desktop, "usage-empty", "No runs in Kontur in this period")
   });
   assert!(shows(&mut desktop, "usage-limits", "No plan limits recorded yet"));
   assert!(
@@ -67,11 +67,11 @@ fn usage_without_runs_says_so_offers_seven_days_and_no_plan_limits() {
   );
   desktop.press("usage-period-0");
   desktop.wait_until("the empty day", |desktop| {
-    shows_text(desktop, "usage-tokens", "No runs in Kontur today")
+    shows_text(desktop, "usage-empty", "No runs in Kontur today")
   });
   desktop.press("usage-show-week");
   desktop.wait_until("the week again", |desktop| {
-    shows_text(desktop, "usage-tokens", "in this period") && !has(desktop, "usage-show-week")
+    shows_text(desktop, "usage-empty", "in this period") && !has(desktop, "usage-show-week")
   });
 }
 

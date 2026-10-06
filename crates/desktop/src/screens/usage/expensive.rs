@@ -23,7 +23,7 @@ use orchester_core::{
 };
 
 use super::{
-  card::Card,
+  card::{Card, text_link},
   format,
   state::{Dashboard, Views},
   table::{Cell, TableColumn, Width, column, row, table},
@@ -36,9 +36,8 @@ use crate::{
   tabs::OpenIn,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
-    button::ActionButton,
     icon::{Icon, IconSize, icon},
-    link::Link,
+    link::{Link, Press},
     segments::{SegmentSize, segments},
     status_label::compact_status_label,
   },
@@ -122,8 +121,13 @@ impl Component for ExpensiveTable {
     } else {
       props.dashboard.report.tasks.len()
     };
+    let note = Text::new(&ctx.t("usage.expensive.note"))
+      .variant(TypographyStyle::Caption)
+      .color(PaletteColor::TextMuted)
+      .nowrap();
     Card::new("usage-expensive", ctx.t("usage.expensive.title"))
-      .trailing(switch)
+      .lead(switch)
+      .trailing(note.into())
       .body([body, footer(ctx, &props.views, views, shown)])
   }
 }
@@ -207,14 +211,20 @@ fn chevron() -> Cell {
   Cell::Element(icon(Icon::ChevronRight, IconSize::Small, PaletteColor::TextMuted).into())
 }
 
-/// The project column across projects, then `rest`.
-fn columns(ctx: &Ctx, dashboard: &Dashboard, rest: Vec<TableColumn>) -> Vec<TableColumn> {
-  let mut columns = Vec::new();
+/// `columns`, with the project's after the first across projects (`p4eVV6`).
+fn columns(ctx: &Ctx, dashboard: &Dashboard, mut columns: Vec<TableColumn>) -> Vec<TableColumn> {
   if dashboard.all_projects() {
-    columns.push(column(ctx.t("usage.table.project"), Width::Flex(1.0), false));
+    columns.insert(1, column(ctx.t("usage.table.project"), Width::Flex(0.8), false));
   }
-  columns.extend(rest);
   columns
+}
+
+/// `cells`, with the project's after the first across projects.
+fn cells(dashboard: &Dashboard, project: &Arc<str>, mut cells: Vec<Cell>) -> Vec<Cell> {
+  if dashboard.all_projects() {
+    cells.insert(1, Cell::Muted(project.clone()));
+  }
+  cells
 }
 
 fn tasks(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element {
@@ -237,24 +247,24 @@ fn tasks(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Elemen
     .iter()
     .take(if all { usize::MAX } else { FIRST_ROWS })
     .map(|task| {
-      let mut cells = Vec::new();
-      if dashboard.all_projects() {
-        cells.push(Cell::Muted(task.project_name.clone()));
-      }
-      cells.extend([
-        Cell::Element(named(&task.key, &task.title)),
-        Cell::Muted(
-          task
-            .pipeline
-            .clone()
-            .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
-        ),
-        Cell::Text(task.runs.to_string().into()),
-        Cell::Text(format::tokens(task.usage.counted())),
-        Cell::Text(format::tokens(task.usage.cached_input)),
-        Cell::Element(outcome(ctx, task.outcome)),
-        chevron(),
-      ]);
+      let cells = cells(
+        dashboard,
+        &task.project_name,
+        vec![
+          Cell::Element(named(&task.key, &task.title)),
+          Cell::Muted(
+            task
+              .pipeline
+              .clone()
+              .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
+          ),
+          Cell::Text(task.runs.to_string().into()),
+          Cell::Text(format::tokens(task.usage.counted())),
+          Cell::Text(format::tokens(task.usage.cached_input)),
+          Cell::Element(outcome(ctx, task.outcome)),
+          chevron(),
+        ],
+      );
       pressed(row(&columns, cells), opener.link(task.project, task.task))
     })
     .collect();
@@ -286,25 +296,25 @@ fn runs(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element
         "usage.expensive.runLabel",
         [("task", &*run.key), ("run", run.number.get().to_string().as_str())],
       );
-      let mut cells = Vec::new();
-      if dashboard.all_projects() {
-        cells.push(Cell::Muted(run.project_name.clone()));
-      }
-      cells.extend([
-        Cell::Element(named(&label, &run.title)),
-        Cell::Muted(
-          run
-            .pipeline
-            .clone()
-            .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
-        ),
-        Cell::Muted(format::date_time(ctx, run.started)),
-        Cell::Text(format::duration(ctx, run.agent_ms)),
-        Cell::Text(format::tokens(run.usage.counted())),
-        Cell::Text(format::tokens(run.usage.cached_input)),
-        Cell::Element(outcome(ctx, run.outcome)),
-        chevron(),
-      ]);
+      let cells = cells(
+        dashboard,
+        &run.project_name,
+        vec![
+          Cell::Element(named(&label, &run.title)),
+          Cell::Muted(
+            run
+              .pipeline
+              .clone()
+              .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
+          ),
+          Cell::Muted(format::date_time(ctx, run.started)),
+          Cell::Text(format::duration(ctx, run.agent_ms)),
+          Cell::Text(format::tokens(run.usage.counted())),
+          Cell::Text(format::tokens(run.usage.cached_input)),
+          Cell::Element(outcome(ctx, run.outcome)),
+          chevron(),
+        ],
+      );
       pressed(row(&columns, cells), opener.link(run.project, run.task))
     })
     .collect();
@@ -350,11 +360,11 @@ fn footer(ctx: &Ctx, signal: &Signal<Views>, views: Views, count: usize) -> Elem
     } else {
       ctx.t_args("usage.expensive.showAll", [("count", count.to_string().as_str())])
     };
-    ActionButton::new(label)
-      .id("usage-expensive-all")
-      .compact()
-      .on_click(move || signal.update(|views| views.all_rows = !views.all_rows))
-      .render(ctx)
+    text_link(
+      "usage-expensive-all",
+      &label,
+      Press::action(move || signal.update(|views| views.all_rows = !views.all_rows)),
+    )
   });
   Row::new()
     .width(Dimension::Pct(100.0))

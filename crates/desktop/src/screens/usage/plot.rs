@@ -1,12 +1,48 @@
 //! What the dashboard's canvas charts share: the plot's frame inside the canvas, a scale with round
-//! steps, the grid with its axis labels, and the bars of the x axis.
+//! steps, the grid with its axis labels, the bars of the x axis, and the redraw when a canvas
+//! changes size.
 
-use lurq::canvas::{CanvasHandle, Context2D, TextAlign, TextBaseline};
+use std::sync::Arc;
+
+use lurq::canvas::{CanvasHandle, CanvasId, CanvasObserver, Context2D, TextAlign, TextBaseline};
+use parking_lot::Mutex;
 
 use crate::theme::chart::{AXIS_BAND, AXIS_GUTTER, ChartStyle, HEADROOM, LABEL_GAP, PLOT_TOP as TOP, RULE_WIDTH};
 
 /// Grid lines above the baseline.
 const TICKS: u64 = 4;
+
+/// Redraws a chart whenever its canvas changes size. When the page moves the chart (beside another
+/// card on a wide window, under it on a narrow one) lurq gives it a new canvas: that one is bound in
+/// turn and drawn at once.
+#[derive(Default)]
+pub struct Redraw(Mutex<Option<(CanvasId, CanvasObserver)>>);
+
+impl Redraw {
+  pub fn bind<P: Send + 'static>(
+    &self,
+    canvas: &CanvasHandle,
+    plot: &Arc<Mutex<Option<P>>>,
+    draw: fn(&CanvasHandle, &P),
+  ) {
+    let mut bound = self.0.lock();
+    if bound.as_ref().is_some_and(|(id, _)| *id == canvas.surface_id()) {
+      return;
+    }
+    let (target, shared) = (canvas.clone(), Arc::clone(plot));
+    let observer = canvas.observe_metrics(move |_| {
+      if let Some(plot) = shared.lock().as_ref() {
+        draw(&target, plot);
+      }
+    });
+    if canvas.is_attached()
+      && let Some(plot) = plot.lock().as_ref()
+    {
+      draw(canvas, plot);
+    }
+    *bound = Some((canvas.surface_id(), observer));
+  }
+}
 
 /// The plot's rectangle inside its canvas: the y axis labels at the left, the x axis labels below.
 #[derive(Clone, Copy, Debug, PartialEq)]
