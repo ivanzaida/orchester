@@ -90,6 +90,12 @@ impl InvocationTiming {
     }
   }
 
+  /// Active time of a launch at `started_at` that ended at `ended_at`, or still runs at `now`.
+  pub fn active_millis(&self, started_at: Timestamp, ended_at: Option<Timestamp>, now: Timestamp) -> i64 {
+    let end = ended_at.unwrap_or(now);
+    (end.unix_millis() - started_at.unix_millis() - self.inactive_millis(end)).max(0)
+  }
+
   fn inactive_millis(&self, end: Timestamp) -> i64 {
     let waiting = self
       .waiting_since
@@ -111,8 +117,7 @@ impl Invocation {
 
   /// Active agent time: from the launch to its end, or to `now` while it runs.
   pub fn active_millis(&self, now: Timestamp) -> i64 {
-    let end = self.ended_at.unwrap_or(now);
-    (end.unix_millis() - self.started_at.unix_millis() - self.timing.inactive_millis(end)).max(0)
+    self.timing.active_millis(self.started_at, self.ended_at, now)
   }
 }
 

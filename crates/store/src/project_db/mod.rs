@@ -20,6 +20,7 @@ mod messages;
 mod organization;
 mod organized_drafts;
 mod phases;
+mod plan_limits;
 mod plans;
 mod pull_request_diffs;
 mod pull_requests;
@@ -38,6 +39,7 @@ mod tags;
 mod task_groups;
 mod tasks;
 mod tool_approvals;
+mod usage;
 mod worktree_removals;
 
 use std::{

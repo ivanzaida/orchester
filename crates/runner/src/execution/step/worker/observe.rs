@@ -1,6 +1,7 @@
 //! What a worker does with each event of its agent, whatever drives it: the event is redacted,
 //! followed for the invocation's session, usage and first edit, recorded in batches, and a turn's
-//! usage is handed to the run. Plan limits are not part of the transcript: they go to the desktop only.
+//! usage is handed to the run. Plan limits are not part of the transcript: they go to the desktop and to
+//! the plan limits history.
 
 use orchester_core::{
   connection::{
@@ -21,7 +22,7 @@ impl Worker {
   /// ends the agent.
   pub(in super::super) fn observe(&self, watch: &mut Watch, mut event: AgentEvent) -> Result<(), StoreError> {
     if let AgentEvent::PlanLimits { limits } = event {
-      self.publish_limits(limits);
+      self.publish_limits(watch, limits);
       return Ok(());
     }
     if self.app_server().is_some() || !self.mcp_secrets.is_empty() {
@@ -63,17 +64,23 @@ impl Worker {
     Ok(())
   }
 
-  /// Hands the account's limits the CLI reported to the desktop, as of now; never stored.
-  fn publish_limits(&self, limits: PlanLimits) {
+  /// Stores the account's limits the CLI reported in the plan limits history and hands them to the
+  /// desktop, as of now.
+  fn publish_limits(&self, watch: &mut Watch, limits: PlanLimits) {
     let provider = match self.transport {
       Transport::AppServer(_) => AgentProvider::CodexCli,
       Transport::Claude(_) => AgentProvider::ClaudeCodeCli,
     };
-    self.notifier.send(Event::PlanLimits(LimitReading {
+    let reading = LimitReading {
       provider,
       at: Timestamp::now(),
       limits,
-    }));
+    };
+    // The history only lacks this report, which its chart shows as a gap; the agent works on.
+    if let Err(error) = watch.db.save_limit_snapshot(watch.invocation.run, &reading) {
+      tracing::warn!(%error, "cannot store the plan limits the agent's CLI reported");
+    }
+    self.notifier.send(Event::PlanLimits(reading));
   }
 
   pub(super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {

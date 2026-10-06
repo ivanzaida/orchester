@@ -315,7 +315,7 @@ impl StoredRow {
 /// Kind, endpoint and last check of a stored connection.
 type Parts = (ConnectionKind, AgentEndpoint, Option<LastCheck>);
 
-const fn provider_text(provider: AgentProvider) -> &'static str {
+pub(super) const fn provider_text(provider: AgentProvider) -> &'static str {
   match provider {
     AgentProvider::CodexCli => "codex_cli",
     AgentProvider::ClaudeCodeCli => "claude_code_cli",
@@ -324,7 +324,7 @@ const fn provider_text(provider: AgentProvider) -> &'static str {
   }
 }
 
-fn parse_provider(value: &str) -> Result<AgentProvider, StoreError> {
+pub(super) fn parse_provider(value: &str) -> Result<AgentProvider, StoreError> {
   match value {
     "codex_cli" => Ok(AgentProvider::CodexCli),
     "claude_code_cli" => Ok(AgentProvider::ClaudeCodeCli),

@@ -16,6 +16,7 @@ mod memory;
 mod native_commands;
 mod organization;
 mod permitted_decisions;
+mod plan_limits;
 mod recovery;
 mod sharing;
 mod steering;
@@ -516,4 +517,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   auto_mode::REVIEWER_MIGRATION,
   auto_mode::ORIGIN_MIGRATION,
   auto_mode::REVIEWING_MIGRATION,
+  plan_limits::MIGRATION,
 ];

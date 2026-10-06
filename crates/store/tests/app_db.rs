@@ -5,6 +5,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   time::Timestamp,
+  usage::limits::WarningThreshold,
 };
 use orchester_store::{AppDb, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredServer};
 
@@ -292,4 +293,23 @@ fn automation_answers_approvals_is_off_until_turned_on_and_kept() {
   assert!(db.automation_answers_approvals().expect("read"));
   db.set_automation_answers_approvals(false).expect("turn off");
   assert!(!db.automation_answers_approvals().expect("read"));
+}
+
+#[test]
+fn usage_warning_threshold_is_80_until_changed_and_kept_through_the_migration() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, 4).expect("schema 4, before the threshold");
+  raw
+    .execute("UPDATE app_settings SET automation_answers_approvals = 1", [])
+    .expect("a setting of schema 4");
+  drop(raw);
+  let mut db = AppDb::open(&path).expect("migrate");
+  assert!(db.automation_answers_approvals().expect("kept"));
+  assert_eq!(db.usage_warning_threshold().expect("read"), WarningThreshold::DEFAULT);
+  db.set_usage_warning_threshold(WarningThreshold::new(70).expect("valid"))
+    .expect("save");
+  drop(db);
+  let db = AppDb::open(&path).expect("reopen");
+  assert_eq!(db.usage_warning_threshold().expect("read").percent(), 70);
 }
