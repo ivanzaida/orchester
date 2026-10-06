@@ -1,23 +1,32 @@
 //! The code index and the tokens before the first edit in the Conversation tab's Details (ORC-38 `BbGhA`,
 //! `rd1Vo`, `F3XhQ`), headlessly: the real runner runs the step on `orchester-fake-codex`, which
-//! reports a file change, with the project's code index on (the default) or off.
+//! reports a file change, with the project's code index on (the default) or off, relative to the
+//! worktree or at its absolute path there.
 
-use std::process::Command;
+use std::{path::Path, process::Command};
 
-use orchester_core::{code_index::CodeIndexSetting, store::SettingsStore};
+use orchester_core::{
+  code_index::CodeIndexSetting,
+  store::{ActivityStore, SettingsStore},
+};
 use orchester_store::ProjectDb;
 
 use crate::{
   github::shows,
   harness::Desktop,
-  task_run::{create_and_run, finished_on_page, has, init_repository, programs, seed},
+  task_run::{create_and_run, finished_on_page, has, init_repository, latest_run, programs, seed},
 };
 
 const PANEL: &str = "activity-invocation";
 
 /// The finished run's Conversation tab with its Details pane open.
 fn activity(desktop: &mut Desktop) {
-  create_and_run(desktop, "Append one line to README.md.", "1400000");
+  activity_of(desktop, "Append one line to README.md.");
+}
+
+/// [`activity`] of a run whose agent was told `brief`.
+fn activity_of(desktop: &mut Desktop, brief: &str) {
+  create_and_run(desktop, brief, "1400000");
   finished_on_page(desktop);
   desktop.click("task-tab-conversation");
   desktop.wait_until("the timeline", |desktop| has(desktop, "activity-step-header"));
@@ -75,6 +84,33 @@ fn activity_shows_the_code_index_and_the_tokens_before_the_first_edit() {
   });
   assert!(shows(&mut desktop, PANEL, "Ran"));
   assert!(shows(&mut desktop, PANEL, "Tokens before first edit"));
+}
+
+/// The first edit's path as the runner recorded it.
+fn recorded_first_edit(repo: &Path) -> String {
+  let run = latest_run(repo).expect("the run");
+  let db = ProjectDb::open(repo).expect("open the project");
+  db.invocations(run.id())
+    .expect("invocations")
+    .iter()
+    .find_map(|invocation| db.edit_progress(invocation.id).expect("edit progress")?.first_edit)
+    .expect("a first edit")
+    .path
+}
+
+/// Codex and Claude Code report a changed file at its absolute path in the worktree
+/// (`H:\…\.orchester/worktrees\<run>\README.md` on Windows): the row names it as the repository does.
+#[test]
+fn activity_shows_the_first_edit_relative_to_the_worktree() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  activity_of(&mut desktop, "Report the absolute path. Append one line to README.md.");
+
+  let recorded = recorded_first_edit(desktop.repo());
+  assert!(Path::new(&recorded).is_absolute(), "{recorded}");
+  assert!(recorded.contains("worktrees"), "{recorded}");
+  assert!(shows(&mut desktop, PANEL, " · README.md"));
+  assert!(!shows(&mut desktop, PANEL, &recorded));
 }
 
 #[test]
