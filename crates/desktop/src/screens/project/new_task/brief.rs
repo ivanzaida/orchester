@@ -18,7 +18,7 @@ use orchester_core::{repository::RepositoryLink, task::MissingDetail};
 use super::{FOCUS_ROOM, FormState, NewTaskForm, missing_note};
 use crate::{
   display,
-  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   ui::{
     button::ActionButton,
     field::{locked_input, styled_input, text_input, wrapping_field_error},
@@ -98,8 +98,8 @@ pub fn brief_form(
         .height(Dimension::Px(CONTEXT_BUTTON_HEIGHT))
         .render(ctx),
     ));
-  // The footer stays at the column's foot under the fields, which scroll (`MoDET` after the
-  // flexible space `i2EEy`).
+  // The footer stays at the column's foot under the fields, which scroll beside their gutter
+  // (`MoDET` after the flexible space `i2EEy`).
   Column::new()
     .flex(1.0)
     .height(Dimension::Pct(100.0))
@@ -108,7 +108,8 @@ pub fn brief_form(
       ScrollVertical::new(fields)
         .id("new-task-brief")
         .width(Dimension::Pct(100.0))
-        .flex(1.0),
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
     )
     .child(preview_footer(ctx))
     .into()
@@ -134,8 +135,10 @@ fn preview_footer(ctx: &Ctx) -> Element {
   Row::new()
     .id("new-task-preview-footer")
     .width(Dimension::Pct(100.0))
-    // In line with the fields, which keep this room for focus rings (see `brief_form`).
+    // In line with the fields, which keep this room for focus rings (see `brief_form`) and end
+    // before their scroll gutter.
     .padding_left(FOCUS_ROOM)
+    .padding_right(Dimension::Px(gutter_width()))
     .spacing(ExtraSpacing::Stack.role())
     .align_items(Alignment::Center)
     .child(
@@ -245,6 +248,7 @@ fn brief_field(ctx: &Ctx, form: &NewTaskForm, state: &FormState) -> Element {
     .placeholder(&ctx.t("tasks.new.briefPlaceholder"));
   let input = locked_input(input, state.queued || state.starting);
   let area = Column::new()
+    .id("task-brief-area")
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
     .spacing(ExtraSpacing::HeadingBottom.role())

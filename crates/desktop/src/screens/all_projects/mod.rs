@@ -40,9 +40,10 @@ use crate::{
   runner::Runners,
   screens::welcome,
   tabs::{OpenIn, OpenedProject, feed::WindowFeed},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     notice::ownership_note,
@@ -114,14 +115,14 @@ impl Component for AllProjects {
     let failure = [(opened.is_pending(), opened.error), (picked.is_pending(), picked.error)]
       .into_iter()
       .find_map(|(pending, error)| error.filter(|_| !pending));
+    // The list scrolls beside its gutter in the page's right padding; the rest keeps out of it.
     let content = match (&state.data, &state.error) {
-      (_, Some(error)) => RecoveryPanel::new(
+      (_, Some(error)) => clear_of_gutter(RecoveryPanel::new(
         Icon::AlertCircle,
         &ctx.t("projects.loadFailed"),
         &message_text(ctx, error),
-      )
-      .into(),
-      (Some(entries), None) if entries.is_empty() => empty(ctx),
+      )),
+      (Some(entries), None) if entries.is_empty() => clear_of_gutter(empty(ctx)),
       (Some(entries), None) => self.list(
         ctx,
         entries,
@@ -145,9 +146,10 @@ impl Component for AllProjects {
           .flex(1.0)
           .padding_vertical(ExtraSpacing::Indent.role())
           .padding_horizontal(ExtraSpacing::Page.role())
+          .padding_right(beside_gutter(ctx, ExtraSpacing::Page.role()))
           .spacing(SpacingSize::Lg)
-          .child(heading(ctx, &navigation, &pick))
-          .with_children(failure.map(|failure| open_error(ctx, &failure)))
+          .child(clear_of_gutter(heading(ctx, &navigation, &pick)))
+          .with_children(failure.map(|failure| clear_of_gutter(open_error(ctx, &failure))))
           .child(content),
       )
       .child(self.remove_dialog(ctx, &runners))
@@ -173,8 +175,12 @@ impl AllProjects {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .spacing(SpacingSize::Lg)
-      .child(ScrollVertical::new(list).width(Dimension::Pct(100.0)))
-      .child(ownership_note(&ctx.t("projects.removal.note")))
+      .child(
+        ScrollVertical::new(list)
+          .width(Dimension::Pct(100.0))
+          .scrollbar(gutter_scrollbar()),
+      )
+      .child(clear_of_gutter(ownership_note(&ctx.t("projects.removal.note"))))
       .into()
   }
 

@@ -19,12 +19,13 @@ use crate::{
     import::ImportTab,
     route::{Page, PipelineView, ToolSelection},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width},
   tools::data::ProjectTools,
   ui::{
     button::ActionButton,
     check_row::check_row,
     field::{ValueTone, value_box_sized},
+    gutter::{beside_gutter, clear_of_gutter},
     icon::Icon,
     notice::ownership_note,
     panel::RecoveryPanel,
@@ -48,18 +49,23 @@ pub(super) fn library(
   (nav, scroll): (&ProjectNav, &ScrollState),
 ) -> Element {
   let project = open.project.name().as_str();
-  let content = if tools.tools.is_empty() {
-    empty(ctx, nav)
+  // The inventory's scroll gutter sits in the gap before the side panel; what does not scroll keeps
+  // out of it.
+  let column = Column::new().flex(1.0).height(Dimension::Pct(100.0));
+  let column = if tools.tools.is_empty() {
+    column
+      .padding_right(Dimension::Px(gutter_width()))
+      .child(empty(ctx, nav))
   } else {
-    inventory(ctx, project, tools, (nav, scroll))
+    column.child(inventory(ctx, project, tools, (nav, scroll)))
   };
   let body = Row::new()
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .padding_horizontal(SpacingSize::Section)
     .padding_bottom(SpacingSize::Section)
-    .spacing(SpacingSize::Section)
-    .child(Column::new().flex(1.0).height(Dimension::Pct(100.0)).child(content))
+    .spacing(beside_gutter(ctx, SpacingSize::Section))
+    .child(column)
     .child(create_panel(ctx, nav));
   Column::new()
     .id("tools-library")
@@ -162,12 +168,13 @@ fn inventory(ctx: &Ctx, project: &str, tools: &ProjectTools, (nav, scroll): (&Pr
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .spacing(SpacingSize::Md)
-    .child(filters)
+    .child(clear_of_gutter(filters))
     .child(
       ScrollVertical::new(list)
         .with_scroll_state(scroll.clone())
         .width(Dimension::Pct(100.0))
-        .flex(1.0),
+        .flex(1.0)
+        .scrollbar(gutter_scrollbar()),
     )
     .into()
 }

@@ -28,11 +28,12 @@ use super::{
 };
 use crate::{
   screens::project::connections::status::short_key,
-  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
     button::ActionButton,
     field::field_error,
     form::{Submit, form},
+    gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
     pressable::{Ring, keyboard_stop, pressable, surface},
@@ -115,24 +116,28 @@ impl RunPermissionsRow {
       }))
       .with_children(props.live.then(|| self.save_to_profile(ctx, props)))
       .with_children(failure);
+    // The settings scroll beside the gutter in the right padding; the header and the footer keep
+    // out of it.
     let content = Column::new()
       .id("task-permissions-popover")
       .width(Dimension::Px(POPOVER_WIDTH))
       .max_height(Dimension::Px(cap))
       .padding(SpacingSize::Md)
+      .padding_right(beside_gutter(ctx, SpacingSize::Md))
       .spacing(ExtraSpacing::Group.role())
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .box_shadow(ExtraShadow::Popover.role())
-      .child(self.header(ctx, props))
+      .child(clear_of_gutter(self.header(ctx, props)))
       .child(
         ScrollVertical::new(body)
           .id("task-permissions-scroll")
           .width(Dimension::Pct(100.0))
-          .flex_shrink(1.0),
+          .flex_shrink(1.0)
+          .scrollbar(gutter_scrollbar()),
       )
-      .child(self.footer(ctx, props, apply.as_ref(), pending));
+      .child(clear_of_gutter(self.footer(ctx, props, apply.as_ref(), pending)));
     let submit: Submit = apply.map(|apply| Arc::new(move || apply(PermissionsApply::NextInvocation)) as _);
     form(submit, content)
   }
