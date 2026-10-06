@@ -108,6 +108,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
 | permission option that cannot be chosen at 50 % (`BNliD` in `T1rjv`) | `theme::UNAVAILABLE_OPTION_OPACITY` |
 | switch whose value is fixed: track and label faded together at 45 % (`lW7Sp` in 04.B `W0Owo`) | `theme::LOCKED_SWITCH_OPACITY`, applied by `ui::switch::Switch::locked` |
+| loader (`lucide/loader`) turning while shown, one turn a second (the design draws it still) | `theme::LOADER_TURN`, applied by `ui::icon::icon` through `ui::loader`; each window tree calls `loader::install` |
 | switch on: `accent` track and stroke, `inverse-text` knob at the right (`E1Y9KK`) | `Accent` / `TextInverse`, in `ui::switch` |
 | switch state label 12 `text`, 10 from the track (`q43RMP` in `lW7Sp`, `q4Nelz`); with a detail after it, track, label and detail 12 apart (`k1QWD`) | `ui::switch::Switch::emphasized` (`ExtraSpacing::Inline`), `Switch::detail` (`ExtraSpacing::Stack`) |
 | why an option cannot be chosen: indented 22 past a compact radio and its gap, an 11px lock (`J5RohL`, `L1B0m`, `OoLYh` in 04.B `W0Owo`) | `ExtraSpacing::ReasonIndent.role()` / `IconSize::Reason` (`ExtraTypography::IconReason`), in `ui::option_card::unavailable_reason` |

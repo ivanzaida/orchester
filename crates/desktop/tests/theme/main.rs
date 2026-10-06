@@ -75,6 +75,12 @@ fn disabled_buttons_follow_pencil() {
 }
 
 #[test]
+fn loaders_turn_once_a_second() {
+  // The design draws `lucide/loader` still; it turns at lucide's own speed.
+  assert_eq!(theme::LOADER_TURN, std::time::Duration::from_secs(1));
+}
+
+#[test]
 fn typography_and_radii_follow_pencil() {
   let app = themed_app();
   let theme = app.theme();
