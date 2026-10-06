@@ -2,7 +2,9 @@
 //! `EFY7I`), the heading with New task, the project pulse (`C95Z93`), the newest tasks by tab
 //! (`BPSF0`) and, beside them, what needs the user and the recent run activity (`EKUWS`). While
 //! the project has no tasks it says what the project is. Every figure is counted from the
-//! project's tasks and runs; the pipeline filter is not available yet.
+//! project's tasks and runs; the pipeline filter is not available yet. Below the project bar the
+//! page scrolls as one column beside its scroll gutter, so the list's last row, View all tasks
+//! and Insights are reachable in any window.
 
 mod attention;
 mod pulse;
@@ -31,7 +33,7 @@ use crate::{
     overview::{OverviewTab, Pulse},
     usage::ProjectUsage,
   },
-  theme::{ExtraColor, ExtraSpacing},
+  theme::{ExtraColor, ExtraSpacing, gutter_scrollbar},
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
@@ -96,10 +98,14 @@ impl Component for OverviewScreen {
     } else {
       ExtraSpacing::Rail.role()
     };
+    // The scroll gutter takes 12 of the right padding, so the sections still end 32 from the edge.
     let mut body = Column::new()
+      .id("overview-body")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
-      .padding(SpacingSize::Section)
+      .padding_vertical(SpacingSize::Section)
+      .padding_left(SpacingSize::Section)
+      .padding_right(ExtraSpacing::BesideGutter.role())
       .spacing(spacing)
       .with_children(notice)
       .child(heading(ctx, &props.open, &self.nav));
@@ -147,7 +153,13 @@ impl Component for OverviewScreen {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(project_bar(ctx, &props.open))
-      .child(ScrollVertical::new(body).flex(1.0))
+      .child(
+        ScrollVertical::new(body)
+          .id("overview-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar()),
+      )
   }
 }
 
