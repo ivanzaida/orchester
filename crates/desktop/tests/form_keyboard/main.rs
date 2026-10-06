@@ -41,6 +41,7 @@ mod live_time;
 mod mcp_agent;
 mod mcp_exempt_tools;
 mod mcp_servers;
+mod memory_vault;
 mod modal_layer;
 mod multiline_command;
 mod narrow_answers;

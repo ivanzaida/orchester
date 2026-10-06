@@ -3,7 +3,6 @@
 //! inspectors and dialogs are all reachable, and the focus is read from the tree.
 
 use std::{
-  collections::HashMap,
   fs,
   path::{Path, PathBuf},
   sync::Arc,
@@ -18,10 +17,7 @@ use lurq::{
   mcp::McpConfig,
   node::color::Color,
 };
-use orchester_core::{
-  command::{Command, CommandError, CommandOutput, CommandRunner},
-  secret::{SecretValue, SecretVault, VaultError, VaultKey},
-};
+use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 use orchester_desktop::{
   activity::Activity,
   app_mcp::{AppMcpSetup, DiscoveryFolder},
@@ -37,11 +33,10 @@ use orchester_desktop::{
   session::AppSession,
   theme,
 };
-use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use crate::{mcp_agent::McpAgent, test_clock::TestClock};
+use crate::{mcp_agent::McpAgent, memory_vault::MemoryVault, test_clock::TestClock};
 
 /// How long a wait may take before the test fails. A wait ends as soon as what it waits for is
 /// shown, so this only bounds a broken test. It is generous because the tests run side by side,
@@ -50,6 +45,8 @@ use crate::{mcp_agent::McpAgent, test_clock::TestClock};
 const PATIENCE: Duration = Duration::from_secs(120);
 /// Between two looks at the tree, background work runs.
 const POLL_PAUSE: Duration = Duration::from_millis(10);
+/// Folder of the project's repository, unless a test names another.
+const REPO: &str = "kontur";
 /// Folder of the other project of [`Desktop::with_other_project`].
 const OTHER_REPO: &str = "personal-website";
 /// The design's window size (`ZBoBm` and the other 1440 screens).
@@ -127,6 +124,23 @@ impl Desktop {
     Self::with_runner_and_programs(runner, Programs::processes(), init, seed)
   }
 
+  /// [`Desktop::with_runner`], with the repository at `folder` in the test's temporary folder.
+  pub fn with_runner_at(folder: &str, runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
+    let launch = Launch {
+      programs: Programs::processes(),
+      runner,
+      app_mcp: false,
+    };
+    Self::start_with(
+      folder,
+      Some(Box::new(init)),
+      launch,
+      Some(Box::new(seed)),
+      None,
+      "Kontur",
+    )
+  }
+
   pub fn with_runner_and_programs(
     runner: PathBuf,
     programs: Programs,
@@ -138,7 +152,7 @@ impl Desktop {
       runner,
       app_mcp: false,
     };
-    Self::start_with(Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
   }
 
   /// [`Desktop::with_runner`], with Orchester's own MCP server started by the window, its discovery
@@ -149,7 +163,7 @@ impl Desktop {
       runner,
       app_mcp: true,
     };
-    Self::start_with(Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
   }
 
   /// [`Desktop::with_seeded_project`], with Orchester's own MCP server started by the window.
@@ -160,7 +174,7 @@ impl Desktop {
       runner: PathBuf::from("no-runner.exe"),
       app_mcp: true,
     };
-    Self::start_with(Some(init), launch, Some(Box::new(seed)), None, "Kontur")
+    Self::start_with(REPO, Some(init), launch, Some(Box::new(seed)), None, "Kontur")
   }
 
   /// Where the window's MCP server, when started, writes its discovery file.
@@ -173,6 +187,7 @@ impl Desktop {
   pub fn with_other_project(seed_other: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
     let init: RepoStep<'_> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
+      REPO,
       Some(init),
       Launch::without_runner(),
       Some(Box::new(seed)),
@@ -186,6 +201,7 @@ impl Desktop {
   pub fn with_seeded_project(seed: impl FnOnce(&Path)) -> Self {
     let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));
     Self::start_with(
+      REPO,
       Some(init),
       Launch::without_runner(),
       Some(Box::new(seed)),
@@ -207,10 +223,11 @@ impl Desktop {
       programs,
       ..Launch::without_runner()
     };
-    Self::start_with(init, launch, None, None, project_name)
+    Self::start_with(REPO, init, launch, None, None, project_name)
   }
 
   fn start_with<'a>(
+    folder: &str,
     init: Option<RepoStep<'a>>,
     launch: Launch,
     seed: Option<RepoStep<'a>>,
@@ -219,7 +236,7 @@ impl Desktop {
   ) -> Self {
     let with_project = init.is_some();
     let dir = TempDir::new().expect("temporary directory");
-    let repo = dir.path().join("kontur");
+    let repo = dir.path().join(folder);
     fs::create_dir_all(&repo).expect("create the repository folder");
     match init {
       Some(init) => init(&repo),
@@ -547,34 +564,6 @@ fn covers(quad: &Quad, x: f32, y: f32) -> bool {
     |left: f32, top: f32, width: f32, height: f32| x >= left && x <= left + width && y >= top && y <= top + height;
   let clip = &quad.clip;
   inside(quad.x, quad.y, quad.width, quad.height) && (!clip.active || inside(clip.x, clip.y, clip.width, clip.height))
-}
-
-/// A keychain in memory. It keeps what it is given, so tests can check the value arrived.
-#[derive(Default)]
-pub struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
-
-impl MemoryVault {
-  /// The stored values, in no particular order.
-  pub fn values(&self) -> Vec<String> {
-    self.0.lock().values().cloned().collect()
-  }
-}
-
-impl SecretVault for MemoryVault {
-  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
-    self.0.lock().insert(key.clone(), value.expose().to_owned());
-    Ok(())
-  }
-
-  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
-    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
-    SecretValue::new(value).map_err(|_| VaultError::Failed("blank".to_owned()))
-  }
-
-  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
-    self.0.lock().remove(key);
-    Ok(())
-  }
 }
 
 /// Programs for screens that are not expected to run any: a run fails the test.
