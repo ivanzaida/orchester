@@ -62,7 +62,7 @@ fn command_categories_by_program_and_subcommand() {
     ("git branch -D old", CommandCategory::HistoryDestructive),
     ("git commit --amend --no-edit", CommandCategory::HistoryDestructive),
     ("./scripts/regen.sh", CommandCategory::Unknown),
-    ("echo $HOME", CommandCategory::Unknown),
+    ("echo $PATH", CommandCategory::Unknown),
     ("cat $(git ls-files)", CommandCategory::Unknown),
     ("python build.py", CommandCategory::Unknown),
   ];

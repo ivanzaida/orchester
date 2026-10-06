@@ -13,13 +13,12 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::run::{AlwaysUnavailable, ApprovalAnswer, SimilarUnavailable};
 
-use super::{super::activity::category_key, Pressed, View};
+use super::{super::activity::category_key, Pressed, View, scope::ScopeState};
 use crate::{
   tasks::approvals::{AlwaysBlocked, AlwaysShown, CommandAlways, ShownApproval, SimilarShown},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography},
@@ -43,7 +42,7 @@ struct Tile {
   covers: Arc<str>,
   offer: Offer,
   /// Shows the scope of Approve similar while it has the pointer or the focus.
-  scope: Option<Signal<bool>>,
+  scope: Option<ScopeState>,
 }
 
 pub(super) fn answers(ctx: &Ctx, view: &View<'_>) -> Element {
@@ -104,7 +103,7 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
     title: pressed_title(ctx, view, Pressed::Similar, "runs.toolApproval.wider.similar"),
     covers,
     offer,
-    scope: Some(view.scope_open.clone()),
+    scope: Some(view.scope.clone()),
   }
 }
 
@@ -253,13 +252,13 @@ fn tile(view: &View<'_>, tile: Tile) -> Element {
     .cursor(CursorIcon::Pointer)
     .describe("state", if view.busy { "busy" } else { "enabled" })
     .on_click(move |_| press());
-  if let Some(open) = tile.scope {
-    let (entered, left, focused, blurred) = (open.clone(), open.clone(), open.clone(), open);
+  if let Some(scope) = tile.scope {
+    let (entered, left, focused, blurred) = (scope.clone(), scope.clone(), scope.clone(), scope);
     button = button
-      .on_mouse_enter(move || entered.set(true))
-      .on_mouse_leave(move || left.set(false))
-      .on_focus(move || focused.set(true))
-      .on_blur(move || blurred.set(false));
+      .on_mouse_enter(move || entered.show())
+      .on_mouse_leave(move || left.hide())
+      .on_focus(move || focused.show())
+      .on_blur(move || blurred.hide());
   }
   button.into()
 }

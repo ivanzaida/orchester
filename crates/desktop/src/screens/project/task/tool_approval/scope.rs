@@ -1,7 +1,9 @@
 //! The scope of *Approve similar in this run* (`DdyA7` in `XKja4`, after `k4cz1C`), under the request
 //! while the tile has the pointer or the focus: what the rule names and until when, then side by side
 //! what runs without asking and what still asks you, each with why, and how the later requests are
-//! answered and revoked.
+//! answered and revoked. The dialog grows upward to make room for it, so the answers stay under the
+//! pointer ([`super::stage`]); grown centred, it moved the tile away from the pointer, which then
+//! closed it again (seen 2026-10-06).
 
 use std::sync::Arc;
 
@@ -11,7 +13,8 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
+  core::Signal,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, border::Border, dimension::Dimension},
 };
 
@@ -38,7 +41,53 @@ struct Scope {
   note: Arc<str>,
 }
 
-/// The panel of `shown`'s Approve similar; `None` when the request does not offer it.
+/// Whether the scope is shown, and the details it is shown in. A dialog already as tall as the window
+/// cannot grow, so opening scrolls the details to their end, where the scope is, and closing scrolls
+/// them back.
+#[derive(Clone)]
+pub(super) struct ScopeState {
+  open: Signal<bool>,
+  details: ScrollState,
+  scrolled: Signal<f32>,
+}
+
+impl ScopeState {
+  pub(super) fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      open: ctx.signal(false),
+      details: ScrollState::new(),
+      scrolled: ctx.signal(0.0),
+    }
+  }
+
+  pub(super) fn is_open(&self) -> bool {
+    self.open.get()
+  }
+
+  pub(super) fn details(&self) -> &ScrollState {
+    &self.details
+  }
+
+  pub(super) fn show(&self) {
+    if self.open.get_untracked() {
+      return;
+    }
+    self.scrolled.set(self.details.scroll_y());
+    self.details.scroll_to_bottom_pending();
+    self.open.set(true);
+  }
+
+  pub(super) fn hide(&self) {
+    if !self.open.get_untracked() {
+      return;
+    }
+    self.open.set(false);
+    self.details.set_scroll_pending(0.0, self.scrolled.get_untracked());
+  }
+}
+
+/// The panel of `shown`'s Approve similar, the last of the details, right above the tile it explains;
+/// `None` when the request does not offer it.
 pub(super) fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
   let scope = match shown.choices.similar.as_ref().ok()? {
