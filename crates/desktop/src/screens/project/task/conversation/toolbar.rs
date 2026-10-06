@@ -15,7 +15,7 @@ use lurq::{
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 
-use super::{ShowChoice, details::DetailsPane, live_state::live_state, segments::segments};
+use super::{ShowChoice, details::DetailsPane, live_state::live_state};
 use crate::{
   tasks::{conversation::PanelState, timeline::view::Show},
   theme::{
@@ -27,6 +27,7 @@ use crate::{
     field::styled_input,
     icon::{Icon, IconSize, icon},
     pressable::{pressable, surface},
+    segments::{SegmentSize, segments},
     switch::Switch,
   },
 };
@@ -140,8 +141,16 @@ fn controls(ctx: &Ctx, state: &ToolbarState, (window, one_line): (f32, bool)) ->
     (true, true) => Dimension::Px(SEARCH_WIDTH_NARROW),
     (true, false) => Dimension::Px(SEARCH_WIDTH),
   };
+  let show = state.show.clone();
+  let show = segments(
+    "conversation-show",
+    &state.show.get(),
+    show_options,
+    SegmentSize::Compact,
+    move |choice| show.set(choice),
+  );
   Controls {
-    show: usable(segments("conversation-show", &state.show, show_options)),
+    show: usable(show),
     search: usable(search(ctx, (&state.query, &state.searching), search_width)),
     raw,
     state: live_state(ctx, state.state, state.asks, state.following),

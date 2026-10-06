@@ -20,7 +20,6 @@ mod message;
 mod rail;
 mod readback;
 mod row;
-mod segments;
 mod send;
 mod side;
 mod strip;

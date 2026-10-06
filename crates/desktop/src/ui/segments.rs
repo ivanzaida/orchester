@@ -1,12 +1,12 @@
 //! A segmented control in the usage dashboard's period style: segments on the `$sidebar` fill
-//! inside a `$border` stroke, the chosen one on `$hover` (the *Show* control of `RrScB`).
+//! inside a `$border` stroke, the chosen one on `$hover`. The Usage dashboard's period control is 36
+//! high (`C2pTYF`); its switches and the conversation's *Show* control (`RrScB`) are compact.
 
 use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   components::{Row, Text},
-  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -16,18 +16,35 @@ use crate::{
   ui::pressable::{pressable, surface},
 };
 
-/// Segment height (`RrScB`).
-const SEGMENT_HEIGHT: f32 = 26.0;
+/// Segment heights: the compact switches (`RrScB`) and the period control, 36 with its padding and
+/// stroke (`C2pTYF`).
+const COMPACT_HEIGHT: f32 = 26.0;
+const LARGE_HEIGHT: f32 = 30.0;
 
-/// The segments `options` of `value`, the chosen one marked; `id` names the control and, with each
-/// option's index, its segments.
-pub(super) fn segments<T>(id: &'static str, value: &Signal<T>, options: Vec<(T, Arc<str>)>) -> Element
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SegmentSize {
+  Compact,
+  Large,
+}
+
+/// The segments `options`, `chosen` marked; a press on another one hands it to `choose`. `id` names
+/// the control and, with each option's index, its segments.
+pub fn segments<T>(
+  id: &'static str,
+  chosen: &T,
+  options: Vec<(T, Arc<str>)>,
+  size: SegmentSize,
+  choose: impl Fn(T) + Clone + Send + Sync + 'static,
+) -> Element
 where
-  T: Clone + PartialEq + Send + Sync + 'static + lurq::core::signal::SignalValue,
+  T: Clone + PartialEq + Send + Sync + 'static,
 {
-  let chosen = value.get();
+  let height = match size {
+    SegmentSize::Compact => COMPACT_HEIGHT,
+    SegmentSize::Large => LARGE_HEIGHT,
+  };
   let segments = options.into_iter().enumerate().map(|(index, (option, label))| {
-    let selected = option == chosen;
+    let selected = option == *chosen;
     let text = Text::new(&label)
       .variant(TypographyStyle::Button)
       .nowrap()
@@ -37,7 +54,7 @@ where
         PaletteColor::TextSecondary
       });
     let segment = Row::new()
-      .height(Dimension::Px(SEGMENT_HEIGHT))
+      .height(Dimension::Px(height))
       .padding_horizontal(ExtraSpacing::Inline.role())
       .align_items(Alignment::Center)
       .justify(Justify::Center)
@@ -49,8 +66,8 @@ where
     } else {
       segment
     };
-    let value = value.clone();
-    Element::from(pressable(surface().id(format!("{id}-{index}")), move || value.set(option.clone())).child(segment))
+    let choose = choose.clone();
+    Element::from(pressable(surface().id(format!("{id}-{index}")), move || choose(option.clone())).child(segment))
   });
   Row::new()
     .id(id)
