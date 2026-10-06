@@ -2472,14 +2472,15 @@
         "asked": "Auto mode asked you:",
         "held": {
           "secrets": "Auto mode left this to you: it reads a credential location.",
-          "unreadable": "Auto mode left this to you: Orchester could not read all of it, so nothing tells what it does.",
+          "unreadable": "Auto mode left this to you: Orchester could not read all of it, and the step’s network is off or it only reads.",
           "destructive": "Auto mode left this to you: it rewrites history or deletes outside the worktree.",
+          "push": "Auto mode left this to you: it pushes something other than the run’s branch to origin, or forces the push.",
           "readOnlyStep": "Auto mode left this to you: the step only reads the repository, and this may write.",
           "networkOff": "Auto mode left this to you: the step’s network is off, and this may reach it.",
           "outsideFolders": "Auto mode left this to you: it writes outside the worktree and the step’s writable folders.",
           "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded.",
           "tooLong": "Auto mode left this to you: the request is too long to review.",
-          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox.",
+          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox, and the step’s network is off or it only reads.",
           "projectProgram": "Auto mode left this to you: it runs a project program outside every sandbox."
         },
         "failed": {

@@ -1,7 +1,7 @@
 //! What auto mode did with a request, on a line of its own under the request: the auto mode glyph, a label
 //! the app words (*Auto mode:*, *Auto mode asked you:*) and the reviewer's reason in quotation marks, muted
-//! and on one line, cut with an ellipsis when it is too long. The reason is the reviewer's own text, so it
-//! never reads as the app's words or as a decision: it is never put into a mark or a chip. A hard rule that
+//! and whole (wrapped; it is stored as one plain line of at most 200 characters). The reason is the reviewer's own
+//! text, so it never reads as the app's words or as a decision: it is never put into a mark or a chip. A hard rule that
 //! left the request to the person, or a review that gave no verdict, is the app's own sentence. The approval
 //! dialog, the conversation's card and the activity's rows show it the same way.
 
@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
-  components::{Row, Text, TextOverflow},
+  components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -44,6 +44,7 @@ const fn held_key(hold: ReviewHold) -> &'static str {
     ReviewHold::Secrets => "runs.autoMode.note.held.secrets",
     ReviewHold::Unreadable => "runs.autoMode.note.held.unreadable",
     ReviewHold::Destructive => "runs.autoMode.note.held.destructive",
+    ReviewHold::Push => "runs.autoMode.note.held.push",
     ReviewHold::ReadOnlyStep => "runs.autoMode.note.held.readOnlyStep",
     ReviewHold::NetworkOff => "runs.autoMode.note.held.networkOff",
     ReviewHold::OutsideFolders => "runs.autoMode.note.held.outsideFolders",
@@ -73,7 +74,7 @@ pub(in crate::screens::project) fn review_line(ctx: &Ctx, id: String, review: &R
     .id(id)
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Tight.role())
-    .align_items(if quoted { Alignment::Center } else { Alignment::Start })
+    .align_items(Alignment::Start)
     .child(icon(Icon::Bot, IconSize::Small, PaletteColor::TextMuted).flex_shrink(0.0))
     .child(label)
     .with_children(reason.map(|reason| {
@@ -81,10 +82,9 @@ pub(in crate::screens::project) fn review_line(ctx: &Ctx, id: String, review: &R
         .id(reason_id)
         .variant(ExtraTypography::CellLabel.role())
         .color(PaletteColor::TextMuted)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex_shrink(1.0)
+        .flex(1.0)
         .min_width(Dimension::Px(0.0))
+        .selectable(true)
     }))
     .into()
 }

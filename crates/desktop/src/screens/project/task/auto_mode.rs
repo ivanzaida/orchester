@@ -77,7 +77,9 @@ impl Component for AutoModeSwitch {
       AutoModePlace::Popover => column
         .id(format!("{}-section", props.id))
         .spacing(SpacingSize::Sm)
-        .child(Text::new(&ctx.t("runs.autoMode.switch")).variant(TypographyStyle::Caption)),
+        .child(Text::new(&ctx.t("runs.autoMode.switch")).variant(TypographyStyle::Caption))
+        // Said first: the section is no part of Apply.
+        .child(hint(&ctx.t("runs.autoMode.savesAtOnce")).id(format!("{}-saves-at-once", props.id))),
     };
     let Some(AutoModeState { on, reviewer }) = read.data else {
       return column.with_children(read.error.map(|error| wrapping_field_error(&message_text(ctx, &error))));
@@ -116,8 +118,7 @@ impl Component for AutoModeSwitch {
       column = column
         .with_children(unavailable.map(|reason| locked_reason(reason_id, &reason)))
         .child(hint(&ctx.t("runs.autoMode.popoverExplanation")))
-        .with_children(reviewed.map(|reviewed| hint(&reviewed).id(format!("{}-reviewer", props.id))))
-        .child(hint(&ctx.t("runs.autoMode.savesAtOnce")));
+        .with_children(reviewed.map(|reviewed| hint(&reviewed).id(format!("{}-reviewer", props.id))));
     }
     column.with_children(
       changing

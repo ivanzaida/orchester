@@ -190,26 +190,31 @@ fn auto_mode_run_switch_saves_at_once_and_says_when_it_is_unavailable() {
 
 /// A signed-in Codex connection named `Codex · Review` listing `gpt-5.5-codex` with two efforts.
 fn codex_connection(repo: &Path) -> ConnectionId {
+  let listed = CatalogModel::new(
+    ModelId::new("gpt-5.5-codex").expect("model"),
+    vec!["low".to_owned(), "high".to_owned()],
+  );
+  codex_named(repo, "Codex · Review", vec![listed])
+}
+
+/// A signed-in Codex connection named `name` listing `listed`.
+fn codex_named(repo: &Path, name: &str, listed: Vec<CatalogModel>) -> ConnectionId {
   let now = Timestamp::now();
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
-    Name::new("Codex · Review").expect("name"),
+    Name::new(name).expect("name"),
     AgentProvider::CodexCli,
     repo.join("orchester-fake-codex"),
     now,
   )
   .expect("absolute path");
-  let listed = CatalogModel::new(
-    ModelId::new("gpt-5.5-codex").expect("model"),
-    vec!["low".to_owned(), "high".to_owned()],
-  );
   connection
     .record_check(ConnectionCheck {
       at: now,
       result: CheckResult::Available {
         version: "0.159.2".into(),
         sign_in: SignIn::SignedIn,
-        catalog: ModelCatalog::new(CatalogSource::Provider, vec![listed]),
+        catalog: ModelCatalog::new(CatalogSource::Provider, listed),
       },
     })
     .expect("an agent check fits a CLI connection");
@@ -283,6 +288,9 @@ fn auto_mode_project_setting_turns_new_runs_on_and_chooses_the_reviewer() {
       "Reviewed by gpt-5.5-codex (high effort) on Codex · Review.",
     )
   });
+  for label in ["Project connection", "Model", "Reasoning effort"] {
+    assert!(shows(&mut desktop, "settings-auto-mode-section", label), "{label}");
+  }
   choose(&mut desktop, "settings-auto-mode-connection", "Default");
   desktop.wait_until("back to the default reviewer", |_| settings(&repo).reviewer.is_none());
   assert!(settings(&repo).new_runs);
@@ -477,6 +485,61 @@ fn auto_mode_activity_keeps_the_mark_and_quotes_the_reason_on_its_own_line() {
     }
     let reason = desktop.bounds(&format!("activity-entry-review-{tool}-reason"));
     let label = desktop.bounds(&format!("activity-entry-review-{tool}-label"));
-    assert!((reason.y - label.y).abs() < 4.0, "a long reason stays on one line, cut");
+    assert!(
+      (reason.y - label.y).abs() < 4.0,
+      "the reason starts on the label's line"
+    );
+    assert!(
+      shows(
+        &mut desktop,
+        &format!("activity-entry-review-{tool}-reason"),
+        "the frame belongs to the design the task names."
+      ),
+      "the reason is shown whole"
+    );
+    assert!(reason.height > label.height * 1.5, "and wraps");
   }
+}
+
+#[test]
+fn auto_mode_offers_a_connection_that_cannot_review_disabled_with_its_reason() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    seed_claude(repo, &repo.join("orchester-fake-codex"));
+    codex_named(repo, "Codex · Unlisted", Vec::new());
+  });
+  desktop.wait_for("nav-settings");
+  desktop.click("nav-settings");
+  desktop.wait_for("settings-auto-mode-connection");
+  let repo = desktop.repo().to_path_buf();
+  {
+    let select = desktop
+      .tree
+      .get_element_by_id_mut("settings-auto-mode-connection")
+      .and_then(|element| element.as_select())
+      .expect("the connection select");
+    let labels = select.labels();
+    assert!(
+      labels.iter().any(|label| label.contains("Codex · Unlisted")),
+      "{labels:?}"
+    );
+  }
+  // It cannot be chosen: nothing is saved, and the select keeps the saved reviewer.
+  choose(&mut desktop, "settings-auto-mode-connection", "Codex · Unlisted");
+  for _ in 0..5 {
+    desktop.pass();
+  }
+  assert_eq!(settings(&repo), AutoModeSettings::default());
+  let selected = desktop
+    .tree
+    .get_element_by_id_mut("settings-auto-mode-connection")
+    .and_then(|element| element.as_select())
+    .expect("the connection select")
+    .selected_labels();
+  assert_eq!(selected.len(), 1);
+  assert!(selected[0].starts_with("Default"), "{selected:?}");
+  assert!(shows(
+    &mut desktop,
+    "settings-auto-mode-reviewer",
+    "Reviewed by claude-haiku-4-5-20251001 on Claude · Kontur."
+  ));
 }
