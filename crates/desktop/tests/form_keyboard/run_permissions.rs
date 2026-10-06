@@ -4,7 +4,8 @@
 //! change to the profile's draft, Keep for next invocation instead cancels the restart, the row
 //! shows what the running agent launched with while a change waits for the next invocation, and
 //! Escape or Cancel close the popover without changes. On `orchester-fake-claude` the popover says
-//! what Claude Code runs besides the allowed commands.
+//! what Claude Code runs besides the allowed commands. The run's auto mode is a section of its own after
+//! the settings Apply changes, its text clear of the scroll gutter.
 
 use std::{fs, path::Path};
 
@@ -113,7 +114,29 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
       let cancel = desktop.bounds("task-permissions-cancel");
       assert!(cancel.y + cancel.height <= status.y, "the footer stays visible");
     }
+    // The body's text ends where the scroll gutter starts, the run's auto mode last, apart from Apply.
+    let gutter = orchester_desktop::theme::gutter_width();
+    let section = desktop.bounds("task-permissions-auto-mode-switch-section");
+    assert!(
+      section.x + section.width <= viewport.x + viewport.width - gutter + 0.5,
+      "{section:?} {viewport:?}"
+    );
   }
+  for text in [
+    "Use auto mode in this run",
+    "Saves at once for the whole run; Apply and Cancel do not change it.",
+  ] {
+    assert!(
+      shows(&mut desktop, "task-permissions-auto-mode-switch-section", text),
+      "{text}"
+    );
+  }
+  // The project has no Claude Code connection to review with: fixed, and why after the lock.
+  assert!(shows(
+    &mut desktop,
+    "task-permissions-auto-mode-switch-unavailable",
+    "Auto mode needs a Claude Code connection"
+  ));
   desktop.click("task-permissions-cancel");
 }
 

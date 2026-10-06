@@ -1,12 +1,18 @@
 //! A run's *Auto mode* switch (`orchester_core::run::review`), in its Approvals panel and its permissions
-//! popover (no frame yet; the switch and its note follow *Approve everything in this run*). It saves at
-//! once, for the whole run, and applies from the next request. It is fixed while the run has ended, while
-//! a change is saved, and while the project has no Claude Code connection to review with, which it says.
+//! popover (no frame yet). In Approvals it follows *Approve everything in this run*: an option with its
+//! explanation. In the popover it is a setting of its own, labelled like the others, with a plain switch:
+//! it is the run's, not the profile's, so it saves at once and is not part of Apply, which it says. It
+//! applies from the next request. It is fixed while the run has ended, while a change is saved, and while
+//! the project has no Claude Code connection to review with, which it says after the lock glyph.
 
 use std::path::PathBuf;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
+  },
   components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
@@ -18,8 +24,21 @@ use crate::{
   screens::project::run_approval_action::{RunApprovalChanges, reload_after, run_approval_action},
   tasks::run_approvals::{AutoModeState, RunApprovalChange, auto_mode_in},
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{field::wrapping_field_error, message_text, switch::Switch},
+  ui::{
+    field::wrapping_field_error,
+    message_text,
+    switch::{Switch, locked_reason},
+  },
 };
+
+/// Where the switch shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::screens::project::task) enum AutoModePlace {
+  /// The run's Approvals panel: an option with its explanation.
+  Approvals,
+  /// The run permissions popover: a labelled setting apart from Apply.
+  Popover,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::screens::project::task) struct AutoModeProps {
@@ -29,6 +48,7 @@ pub(in crate::screens::project::task) struct AutoModeProps {
   pub live: bool,
   /// The switch's id, for tooling: one per place it shows.
   pub id: &'static str,
+  pub place: AutoModePlace,
 }
 
 impl lurq::app::component::DevtoolsInspectable for AutoModeProps {}
@@ -50,15 +70,31 @@ impl Component for AutoModeSwitch {
     let change = run_approval_action(ctx);
     let changing = change.state().get();
     let read = read(ctx, (&props, changing.is_pending()));
-    let mut column = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Stack.role());
+    let column = Column::new().width(Dimension::Pct(100.0)).overflow_visible();
+    let column = match props.place {
+      AutoModePlace::Approvals => column.spacing(ExtraSpacing::Stack.role()),
+      AutoModePlace::Popover => column
+        .id(format!("{}-section", props.id))
+        .spacing(SpacingSize::Sm)
+        .child(Text::new(&ctx.t("runs.autoMode.switch")).variant(TypographyStyle::Caption)),
+    };
     let Some(AutoModeState { on, reviewer }) = read.data else {
       return column.with_children(read.error.map(|error| wrapping_field_error(&message_text(ctx, &error))));
     };
-    let switch = Switch::new(props.id, ctx.t("runs.autoMode.switch"), on)
-      .note(ctx.t("runs.autoMode.explanation"))
-      .inset_ring();
+    let unavailable = (!reviewer).then(|| ctx.t("runs.autoMode.unavailable"));
+    let reason_id = format!("{}-unavailable", props.id);
+    let switch = match props.place {
+      AutoModePlace::Approvals => {
+        let switch = Switch::new(props.id, ctx.t("runs.autoMode.switch"), on)
+          .note(ctx.t("runs.autoMode.explanation"))
+          .inset_ring();
+        match unavailable.clone() {
+          Some(reason) => switch.reason(reason_id.clone(), reason),
+          None => switch,
+        }
+      }
+      AutoModePlace::Popover => Switch::new(props.id, ctx.t("runs.autoMode.popoverSwitch"), on),
+    };
     let element = if props.live && reviewer && !changing.is_pending() {
       let request = RunApprovalChanges {
         repo_root: props.repo_root.clone(),
@@ -68,13 +104,12 @@ impl Component for AutoModeSwitch {
     } else {
       switch.locked()
     };
-    column = column.child(element);
-    if !reviewer {
-      column = column.child(
-        Text::new(&ctx.t("runs.autoMode.unavailable"))
-          .id(format!("{}-unavailable", props.id))
-          .variant(ExtraTypography::Hint.role()),
-      );
+    let mut column = column.child(element);
+    if props.place == AutoModePlace::Popover {
+      column = column
+        .with_children(unavailable.map(|reason| locked_reason(reason_id, &reason)))
+        .child(hint(&ctx.t("runs.autoMode.popoverExplanation")))
+        .child(hint(&ctx.t("runs.autoMode.savesAtOnce")));
     }
     column.with_children(
       changing
@@ -82,6 +117,14 @@ impl Component for AutoModeSwitch {
         .map(|error| wrapping_field_error(&message_text(ctx, &error))),
     )
   }
+}
+
+/// A muted hint under the popover's switch, as its other settings have.
+fn hint(text: &str) -> Text {
+  Text::new(text)
+    .variant(ExtraTypography::Hint.role())
+    .color(PaletteColor::TextMuted)
+    .width(Dimension::Pct(100.0))
 }
 
 /// The run's auto mode and whether the project can review, read again after each change.

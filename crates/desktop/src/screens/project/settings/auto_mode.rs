@@ -35,7 +35,7 @@ use crate::{
   ui::{
     field::{field_error, select_style},
     message_text,
-    switch::Switch,
+    switch::{Switch, locked_reason},
   },
   workspace::OpenProject,
 };
@@ -147,7 +147,7 @@ impl Component for AutoModeSection {
     let save = save_action(ctx);
     let read_error = self.load(ctx, &open);
     let heading = Text::new(&ctx.t("settings.autoMode.section")).variant(ExtraTypography::SectionHeading.role());
-    let mut column = Column::new()
+    let column = Column::new()
       .id("settings-auto-mode-section")
       .width(Dimension::Pct(100.0))
       .padding_top(SpacingSize::Md)
@@ -156,15 +156,12 @@ impl Component for AutoModeSection {
     let Some(stored) = self.stored.get() else {
       return column.with_children(read_error.map(|error| field_error(&message_text(ctx, &error))));
     };
-    column = column.child(new_runs_row(ctx, (&open, &stored), &save));
-    match &stored.reviewer {
-      Some(reviewer) => column.child(self.model_row(ctx, reviewer, &stored.settings.model)),
-      None => column.child(
-        Text::new(&ctx.t("settings.autoMode.unavailable"))
-          .id("settings-auto-mode-unavailable")
-          .variant(ExtraTypography::Hint.role()),
-      ),
-    }
+    column.child(new_runs_row(ctx, (&open, &stored), &save)).with_children(
+      stored
+        .reviewer
+        .as_ref()
+        .map(|reviewer| self.model_row(ctx, reviewer, &stored.settings.model)),
+    )
   }
 }
 
@@ -242,11 +239,18 @@ fn new_runs_row(ctx: &Ctx, (open, stored): (&OpenProject, &Stored), save: &SaveA
   } else {
     switch.locked()
   };
+  // Without a reviewer the switch is fixed, and says why in its own row.
+  let unavailable = stored.reviewer.is_none().then(|| {
+    locked_reason(
+      "settings-auto-mode-unavailable".to_owned(),
+      &ctx.t("settings.autoMode.unavailable"),
+    )
+  });
   sized_setting_row(
     VALUE_WIDTH,
     &ctx.t("settings.autoMode.newRunsName"),
     &ctx.t("settings.autoMode.newRunsDescription"),
-    vec![switch],
+    std::iter::once(switch).chain(unavailable).collect(),
   )
 }
 

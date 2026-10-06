@@ -42,7 +42,7 @@ use self::{
   settings::{Draft, Edit},
 };
 use super::{
-  auto_mode::{AutoModeProps, AutoModeSwitch},
+  auto_mode::{AutoModePlace, AutoModeProps, AutoModeSwitch},
   heading::agent_of,
 };
 use crate::{
@@ -167,6 +167,7 @@ impl Component for RunPermissionsRow {
         run: props.run,
         live: props.live,
         id: "task-permissions-auto-mode-switch",
+        place: AutoModePlace::Popover,
       },
     );
     let content = Column::new()

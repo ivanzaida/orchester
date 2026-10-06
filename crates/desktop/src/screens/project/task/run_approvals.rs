@@ -23,7 +23,7 @@ use orchester_core::{
 
 use super::{
   activity::category_key,
-  auto_mode::{AutoModeProps, AutoModeSwitch},
+  auto_mode::{AutoModePlace, AutoModeProps, AutoModeSwitch},
 };
 use crate::{
   display,
@@ -83,6 +83,7 @@ impl Component for RunApprovalsPanel {
         run: props.run,
         live: props.live,
         id: "task-auto-mode",
+        place: AutoModePlace::Approvals,
       },
     );
     let counts = approvals.counts;
@@ -92,9 +93,9 @@ impl Component for RunApprovalsPanel {
       ("runs.summary.approvals.alwaysAllowed", counts.always_allowed),
       ("runs.summary.approvals.autoApproved", counts.auto_approved),
       ("runs.summary.approvals.denied", counts.denied_by_you),
-      ("runs.summary.approvals.waiting", counts.waiting),
     ]
     .map(|(key, count)| property(&ctx.t(key), &count.to_string()));
+    let waiting = property(&ctx.t("runs.summary.approvals.waiting"), &counts.waiting.to_string());
     // The profile answers only lines whose parts it runs alone, and automation only where a person let
     // it; their rows show once they have answered.
     let occasional = [
@@ -128,6 +129,7 @@ impl Component for RunApprovalsPanel {
       .child(auto_mode)
       .with_children(rows)
       .with_children(occasional)
+      .child(waiting)
       .with_children(section(ctx, "runs.summary.approvals.similarTitle", similar))
       .with_children(section(ctx, "runs.summary.approvals.alwaysTitle", always))
   }

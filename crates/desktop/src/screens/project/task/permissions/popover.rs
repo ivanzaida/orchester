@@ -28,7 +28,10 @@ use super::{
 };
 use crate::{
   screens::project::connections::status::short_key,
-  theme::{ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography},
+  theme::{
+    ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, gutter_scrollbar, gutter_width,
+    padding_beside_gutter,
+  },
   ui::{
     button::ActionButton,
     field::field_error,
@@ -63,6 +66,22 @@ fn mcp_servers(ctx: &Ctx, props: &RunPermissionsProps) -> Element {
         .color(PaletteColor::TextPrimary),
     )
     .child(Text::new(&ctx.t("runs.permissions.mcp.fromProfile")).variant(ExtraTypography::Hint.role()))
+    .into()
+}
+
+/// A line between the popover's groups.
+fn divider() -> Element {
+  Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT))
+    .background(ExtraColor::Hairline.role())
+    .into()
+}
+
+/// `part` (the header or the footer) ending where the scrolling body's gutter starts.
+fn beside_gutter(part: Element) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding_right(Dimension::Px(gutter_width()))
+    .child(part)
     .into()
 }
 
@@ -116,30 +135,32 @@ impl RunPermissionsRow {
       .child(takes_effect(ctx, props))
       .with_children(settings(ctx, &self.edit, props, &draft))
       .child(mcp_servers(ctx, props))
-      .child(auto_mode)
-      .with_children(props.live.then(|| {
-        Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role())
-      }))
+      .with_children(props.live.then(divider))
       .with_children(props.live.then(|| self.save_to_profile(ctx, props)))
-      .with_children(failure);
+      .with_children(failure)
+      // The run's auto mode saves at once: apart from the settings Apply and Cancel are about.
+      .child(divider())
+      .child(auto_mode);
     let content = Column::new()
       .id("task-permissions-popover")
       .width(Dimension::Px(POPOVER_WIDTH))
       .max_height(Dimension::Px(cap))
       .padding(SpacingSize::Md)
+      .padding_right(padding_beside_gutter())
       .spacing(ExtraSpacing::Group.role())
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .box_shadow(ExtraShadow::Popover.role())
-      .child(self.header(ctx, props))
+      .child(beside_gutter(self.header(ctx, props)))
       .child(
         ScrollVertical::new(body)
           .id("task-permissions-scroll")
           .width(Dimension::Pct(100.0))
-          .flex_shrink(1.0),
+          .flex_shrink(1.0)
+          .scrollbar(gutter_scrollbar()),
       )
-      .child(self.footer(ctx, props, apply.as_ref(), pending));
+      .child(beside_gutter(self.footer(ctx, props, apply.as_ref(), pending)));
     let submit: Submit = apply.map(|apply| Arc::new(move || apply(PermissionsApply::NextInvocation)) as _);
     form(submit, content)
   }

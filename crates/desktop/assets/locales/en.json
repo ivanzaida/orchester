@@ -1543,7 +1543,6 @@
         "approvedByAutomation": "approved by automation · {{subject}}",
         "deniedByAutomation": "denied by automation · the agent continued",
         "approvedByAutoMode": "approved by auto mode · {{subject}}",
-        "withReview": "{{mark}} · {{review}}",
         "bySimilarRule": "approved by similar rule · {{subject}}",
         "alwaysAllowed": "always allowed · {{subject}}",
         "autoApproved": "auto-approved · {{subject}}",
@@ -2458,22 +2457,31 @@
       "switch": "Auto mode",
       "explanation": "A separate reviewer model answers the requests the rules leave to you, and approves only those that clearly serve the task and step. Credential reads, anything outside the step’s permissions, and whatever the reviewer is unsure of still ask you, with its reason. It is not “approve everything”.",
       "unavailable": "Auto mode needs a Claude Code connection in this project to review with.",
+      "popoverSwitch": "Use auto mode in this run",
+      "popoverExplanation": "A separate reviewer model answers the requests the rules leave to you. Whatever it is unsure of, and anything outside the step’s permissions, still asks you.",
+      "savesAtOnce": "Saves at once for the whole run; Apply and Cancel do not change it.",
       "note": {
-        "approved": "Approved by auto mode: {{reason}}",
-        "asked": "Auto mode asked you: {{reason}}",
+        "approved": "Auto mode:",
+        "asked": "Auto mode asked you:",
         "held": {
           "secrets": "Auto mode left this to you: it reads a credential location.",
+          "unreadable": "Auto mode left this to you: Orchester could not read all of it, so nothing tells what it does.",
+          "destructive": "Auto mode left this to you: it rewrites history or deletes outside the worktree.",
           "readOnlyStep": "Auto mode left this to you: the step only reads the repository, and this may write.",
-          "networkOff": "Auto mode left this to you: the step’s network is off, and this reaches it.",
+          "networkOff": "Auto mode left this to you: the step’s network is off, and this may reach it.",
           "outsideFolders": "Auto mode left this to you: it writes outside the worktree and the step’s writable folders.",
-          "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded."
+          "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded.",
+          "tooLong": "Auto mode left this to you: the request is too long to review.",
+          "escalation": "Auto mode left this to you: Codex asks to run it outside its sandbox.",
+          "projectProgram": "Auto mode left this to you: it runs a project program outside every sandbox."
         },
         "failed": {
           "timedOut": "Auto mode asked you: its reviewer did not answer in time.",
           "unreadable": "Auto mode asked you: its reviewer’s answer could not be read.",
           "couldNotRun": "Auto mode asked you: its reviewer could not run.",
           "noReviewer": "Auto mode asked you: the project has no Claude Code connection to review with."
-        }
+        },
+        "quoted": "“{{reason}}”"
       }
     }
   },

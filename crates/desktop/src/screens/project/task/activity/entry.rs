@@ -22,7 +22,7 @@ use orchester_core::{
 };
 
 use super::{
-  super::super::ProjectNav,
+  super::{super::ProjectNav, review_note::review_line},
   header::header,
   mcp::mcp_server_text,
   mcp_call,
@@ -186,6 +186,10 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Tight.role())
     .child(entry_header(ctx, &shown, (open, !row.time_column), entry.sequence))
+    .with_children(
+      mcp_call::review_of(entry)
+        .map(|review| review_line(ctx, format!("activity-entry-review-{}", entry.sequence), review)),
+    )
     .with_children(
       open
         .then(|| entry_details(ctx, (entry, command_box, row.request.as_ref()), &shown, copied))
