@@ -333,3 +333,20 @@ fn auto_mode_final_message_must_be_the_verdict_alone() {
     );
   }
 }
+
+#[test]
+fn auto_mode_claude_reviewer_starts_without_nonessential_traffic() {
+  let reviewer = orchester_core::connection::reviewer::ClaudeReviewer::new(
+    Path::new("/bin/claude"),
+    (model("claude-haiku-4-5-20251001"), None),
+    (folder(), vec![("PATH".to_owned(), "/bin".to_owned())]),
+    Cli(Err(CommandError::TimedOut)),
+  );
+  let command = reviewer.command(&input());
+  let (key, value) = orchester_core::connection::reviewer::QUIET;
+  assert!(
+    command.env().iter().any(|(name, set)| name == key && set == value),
+    "{:?}",
+    command.env()
+  );
+}
