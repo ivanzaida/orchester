@@ -7,7 +7,8 @@
 //! their box, and where it runs. What the request offers is the dialog's too: an answer it does not
 //! offer stays at 0.4, and why is said on one line under the row in the dialog's words. A request whose
 //! agent can no longer receive an answer reads *Ended without an answer* and has no answers, as soon as
-//! the runner says so.
+//! the runner says so. A card never shrinks while it is shown: once answered, it keeps the room its
+//! answers took, so the chat around it does not move (ORC-71).
 
 use std::sync::Arc;
 
@@ -18,7 +19,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Spacer, Text, TextOverflow},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, dimension::Dimension},
 };
@@ -65,6 +66,8 @@ use crate::{
 
 /// The answers' height (`KpZxA`).
 const ANSWER_HEIGHT: f32 = 30.0;
+/// How far a card's width or height may move before it counts as another.
+const SIZE_EPSILON: f32 = 0.5;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ApprovalCardProps {
@@ -120,10 +123,19 @@ impl CardAnswer {
   }
 }
 
+/// The tallest a shown card was at the width it is laid out at; no height before it was laid out.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Held {
+  width: f32,
+  height: f32,
+}
+
 pub(super) struct ApprovalCardView {
   requested: Signal<Option<CardAnswer>>,
   copy: CopyState,
   arguments: ArgumentsCache,
+  frame: ElementRef,
+  held: Signal<Held>,
 }
 
 impl Component for ApprovalCardView {
@@ -138,7 +150,28 @@ impl Component for ApprovalCardView {
         hovered: ctx.signal(None),
       },
       arguments: ArgumentsCache::default(),
+      frame: ElementRef::new(),
+      held: ctx.signal(Held::default()),
     }
+  }
+
+  /// Keeps the tallest height the card was laid out at. At another width (a resized window, Details
+  /// opened) the answers wrap otherwise, so the card measures its own height again first.
+  fn after_layout(&self) {
+    if !self.frame.is_attached() {
+      return;
+    }
+    let (width, height) = (self.frame.width(), self.frame.height());
+    let held = self.held.get_untracked();
+    let next = if (width - held.width).abs() > SIZE_EPSILON {
+      let height = if held.height > 0.0 { 0.0 } else { height };
+      Held { width, height }
+    } else if height > held.height + SIZE_EPSILON {
+      Held { width, height }
+    } else {
+      return;
+    };
+    self.held.set(next);
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -195,7 +228,10 @@ impl Component for ApprovalCardView {
       waiting,
       header(Icon::Hand, &title, state),
       body,
-    );
+    )
+    .ref_element(self.frame.clone())
+    .min_height(Dimension::Px(self.held.get().height * 0.0))
+    .into();
     chat_row(
       format!("conversation-request-{}", request.id),
       Avatar::Request,

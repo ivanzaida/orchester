@@ -2,12 +2,16 @@
 //! `orchester-fake-codex`, frame by frame: while it follows live, every frame shows the end, and no row
 //! in view moves back down as rows arrive, chips gain calls and steps fold and start; scrolled up in a
 //! chat longer than the list lays out at first, the rows in view stay where they are while what the
-//! agent does arrives under them.
+//! agent does arrives under them. A request card at the end of a following chat keeps its room once
+//! answered, so nothing in view moves as its answers go.
 
 use std::{cell::RefCell, collections::HashMap};
 
 use lurq::{core::ElementRect, node::element::ElementRef};
-use orchester_core::{connection::stream::AgentEvent, store::ActivityStore};
+use orchester_core::{
+  connection::{AgentProvider, stream::AgentEvent},
+  store::ActivityStore,
+};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -15,8 +19,8 @@ use crate::{
   github::shows,
   harness::Desktop,
   task_run::{
-    agent_started, agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed,
-    seed_steps,
+    agent_started, agent_step, create_and_run, fake_claude, has, init_repository, latest_run, programs, run_finished,
+    seed, seed_agent, seed_steps,
   },
 };
 
@@ -37,11 +41,12 @@ fn rows(desktop: &mut Desktop) -> HashMap<String, ElementRect> {
   if let Some(root) = desktop.tree.root() {
     walk(root, &mut ids);
   }
+  // A row the list mounted in this pass, for a row whose key changed, is laid out in the next.
   ids
     .into_iter()
-    .map(|id| {
-      let bounds = desktop.bounds(&id);
-      (id, bounds)
+    .filter_map(|id| {
+      let bounds = desktop.tree.get_element_by_id_mut(&id)?.bounds()?;
+      Some((id, bounds))
     })
     .collect()
 }
@@ -68,7 +73,7 @@ fn view(desktop: &mut Desktop) -> (f32, f32) {
   (toolbar.y + toolbar.height, bottom)
 }
 
-/// One frame of a following list: its rows, where the list starts and ends, and whether the rows fill it.
+/// One frame of the list: its rows, where the list starts and ends, and whether the rows fill it.
 struct Frame {
   rows: HashMap<String, ElementRect>,
   top: f32,
@@ -77,12 +82,29 @@ struct Frame {
 }
 
 impl Frame {
-  /// The frame shown now; its last row ends where the list does once the rows fill it.
-  fn following(desktop: &mut Desktop) -> Self {
+  /// The frame shown now.
+  fn now(desktop: &mut Desktop) -> Self {
     let rows = rows(desktop);
     let (top, bottom) = view(desktop);
-    let last = rows.values().map(|row| row.y + row.height).fold(f32::MIN, f32::max);
     let fills = rows.values().any(|row| row.y < top - 0.5);
+    Self {
+      rows,
+      top,
+      bottom,
+      fills,
+    }
+  }
+
+  /// The frame shown now while the list follows: its last row ends where the list does once the rows
+  /// fill it.
+  fn following(desktop: &mut Desktop) -> Self {
+    let Self {
+      rows,
+      top,
+      bottom,
+      fills,
+    } = Self::now(desktop);
+    let last = rows.values().map(|row| row.y + row.height).fold(f32::MIN, f32::max);
     assert!(
       last <= bottom + 0.5,
       "the last row ends under the list: {last} > {bottom}"
@@ -231,5 +253,83 @@ fn conversation_steady_scrolled_up_rows_stay_as_the_agent_goes_on() {
       *after += 1;
     }
     *after > 20
+  });
+}
+
+/// The card of the request the chat shows, by its row: `conversation-row:approval-<id>`.
+fn request_card(desktop: &mut Desktop) -> Option<String> {
+  let prefix = format!("{ROW}approval-");
+  rows(desktop)
+    .into_keys()
+    .find_map(|row| row.strip_prefix(&prefix).map(|id| format!("conversation-approval-{id}")))
+}
+
+#[test]
+fn conversation_steady_an_answered_card_keeps_its_room() {
+  let (runner, fake) = programs();
+  let fake = fake_claude(&fake);
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed_agent(repo, &fake, AgentProvider::ClaudeCodeCli, |builder| {
+      vec![agent_step(
+        builder,
+        "implement",
+        "Implement",
+        "Do what the task asks.",
+        &[],
+      )]
+    });
+  });
+  // A short window: the card at the chat's end, under the rows before it. The tab opens on the card
+  // that waits rather than following the end.
+  desktop.tree.resize(1440, 760);
+  desktop.pass();
+  create_and_run(&mut desktop, "Run `cargo test -p core`.", "1400000");
+  desktop.wait_for("tool-approval-dialog");
+  desktop.press("tool-approval-decide-later");
+  desktop.wait_until("the dialog closes", |desktop| !has(desktop, "tool-approval-dialog"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-approval-approve");
+  for _ in 0..5 {
+    desktop.pass();
+  }
+  let card = request_card(&mut desktop).expect("the request's card");
+  let first = Frame::now(&mut desktop);
+  assert!(first.fills, "the chat fills the list: {}", listed(&first.rows));
+  let waiting = desktop.bounds(&card);
+
+  // The person approves it in the card: the card loses its answers but not its room, and while the
+  // agent goes on, no row moves down.
+  desktop.click("conversation-approval-approve");
+  let before = RefCell::new(first);
+  let answered = RefCell::new(0_usize);
+  desktop.wait_until("the answer, and a while after", |desktop| {
+    let now = Frame::now(desktop);
+    if has(desktop, &card) {
+      let height = desktop.bounds(&card).height;
+      assert!(
+        height >= waiting.height - 0.5,
+        "the card shrank from {} to {height}",
+        waiting.height
+      );
+    }
+    let mut before = before.borrow_mut();
+    for (id, is) in &now.rows {
+      if let Some(was) = before.rows.get(id).filter(|_| now.shows(id) || before.shows(id)) {
+        assert!(
+          is.y <= was.y + 0.5,
+          "{id} moved down from {} to {}\nbefore: {}\nnow: {}",
+          was.y,
+          is.y,
+          listed(&before.rows),
+          listed(&now.rows)
+        );
+      }
+    }
+    *before = now;
+    let mut answered = answered.borrow_mut();
+    if !has(desktop, "conversation-approval-approve") {
+      *answered += 1;
+    }
+    *answered > 30
   });
 }
