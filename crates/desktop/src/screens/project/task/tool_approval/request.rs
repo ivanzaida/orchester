@@ -40,6 +40,7 @@ pub(super) fn sections(ctx: &mut Ctx, view: &View<'_>) -> (Vec<Element>, Submit)
   // answers and the footer stay in view however long the values are.
   let details = ScrollVertical::new(details(&ValueRows::new(ctx, view.copy, view.arguments), view))
     .id("tool-approval-details-scroll")
+    .with_scroll_state(view.scope.details().clone())
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0)
     .scrollbar(select_menu_scrollbar());
@@ -200,14 +201,14 @@ fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
     None => cli_details(values, column, shown),
   };
   column
+    .child(denial(values.ctx(), shown))
     .with_children(
       view
-        .scope_open
-        .get()
+        .scope
+        .is_open()
         .then(|| scope::panel(values.ctx(), shown))
         .flatten(),
     )
-    .child(denial(values.ctx(), shown))
     .into()
 }
 
