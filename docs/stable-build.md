@@ -151,13 +151,15 @@ auto-approval answer first) in its context: the request as the approval card sho
 removed), the step's permissions, the task and the agent's last few messages. It approves only what
 clearly serves the task and is not destructive, exfiltrating or escaping, and not an install of
 anything persistent; everything else still asks the person, with its reason. Hard rules come first, on
-every part of a command line, and the reviewer cannot override them: a credential read; a part Orchester
-could not read to the end (an unknown program or form, a script whose content it does not read); a
-rewrite of history or a delete outside the worktree (a force-push, `git reset --hard`, `rm -rf ~/…`);
-anything outside the step's permissions (a write in a read-only step, the network or an install while it
-is off, a write outside the worktree and its writable folders); a Codex escalation (a command outside its
-sandbox); Orchester's `run_project_tool`; and a request longer than a review reads whole (8,000
-characters; it is never cut) all ask the person. A reviewer that fails, takes longer than 60 seconds or
+every part of a command line Orchester can read, and the reviewer cannot override them: a credential
+read; a rewrite of history or a delete outside the worktree; a push other than the run's own branch to
+`origin` without force (a force push, another branch, tags, another remote); anything outside the step's
+permissions (a write in a read-only step, the network or an install while it is off, a write outside the
+worktree and its writable folders); Orchester's `run_project_tool`; and a request longer than a review
+reads whole (8,000 characters; it is never cut) all ask the person. A part Orchester cannot read to the
+end (an unknown program, a script) goes to the reviewer, which is told so, except in a step whose
+network is off or that only reads; a Codex escalation is reviewed under the same rules, except there.
+A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
 project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
 list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
