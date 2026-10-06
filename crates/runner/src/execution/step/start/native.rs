@@ -31,7 +31,7 @@ use orchester_core::{
   resource::{AgentProfile, ModelId},
   run::{InvocationEngine, InvocationPrompt, NativeSetting, ResultDelivery},
   secret::SecretValue,
-  store::{ActivityStore, McpServerStore, SecretStore, SettingsStore},
+  store::{ActivityStore, McpServerStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_exec::ripgrep;
@@ -39,7 +39,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   super::{
-    super::{codebase_index::IndexTold, run::RunTask},
+    super::{codebase_index::IndexTold, connection_check, run::RunTask},
     Continuation, Occasion,
     native::{CommandHost, NativeSession},
     skills::{PlacedSkill, repository_skills},
@@ -157,22 +157,9 @@ impl RunTask {
   }
 
   /// The connection's API key, read from the keychain now; an archived or missing secret, or one the
-  /// keychain does not give, keeps the agent from starting. The message names the secret, never its value.
+  /// keychain does not give, keeps the agent from starting.
   fn api_key(&self, api: &ApiEndpoint) -> Result<Arc<SecretValue>, RunnerProblem> {
-    let secret = self
-      .db
-      .secret(api.key())
-      .map_err(|error| problem(error.to_string()))?
-      .filter(|secret| !secret.is_archived())
-      .ok_or_else(|| problem("the connection's API key secret is missing or archived".to_owned()))?;
-    self
-      .vault
-      .read(&secret.vault_key(self.project.id()))
-      .map(Arc::new)
-      .map_err(|error| {
-        tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a native agent's API key");
-        problem(format!("the keychain did not give the API key {}", secret.name()))
-      })
+    connection_check::api_key(&self.db, self.vault.as_ref(), api).map_err(problem)
   }
 
   /// The file scope, command policy and command host of the agent's permissions, and what it works

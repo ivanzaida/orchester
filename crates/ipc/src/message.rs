@@ -7,6 +7,7 @@
 use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
+  connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   permission::{AgentPermissions, capability::PermissionProblem},
@@ -159,6 +160,12 @@ pub enum Command {
   /// [`ShutdownMode::FinishAtCheckpoints`] does with nothing to finish, ending with
   /// [`Event::Stopped`]; with work it answers [`Rejection::Busy`] and goes on.
   StopIfIdle,
+  /// Tests the model API `api` of a native connection to `provider` (*Test connection*, *Fetch
+  /// models*): the runner reads the key from the keychain and lists the API's models, which spends no
+  /// tokens (`docs/architecture/native-agent.md` §7). The desktop never reads the key. Answered with
+  /// [`Reply::ConnectionChecked`], or [`Rejection::Failed`] when the key cannot be read or the provider
+  /// runs no agent in this version.
+  CheckConnection { provider: AgentProvider, api: ApiEndpoint },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -305,6 +312,12 @@ pub enum Reply {
   /// The answer to [`Command::StopIfIdle`] when the runner had no work: [`Event::Stopped`]
   /// follows.
   Stopping,
+  /// The answer to [`Command::CheckConnection`]: what the test found, and the models the API listed
+  /// when it answered, each as fetched now.
+  ConnectionChecked {
+    result: CheckResult,
+    models: Vec<NativeModel>,
+  },
   Rejected(Rejection),
 }
 

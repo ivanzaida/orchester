@@ -1,7 +1,7 @@
 //! What the task page shows of an agent Orchester runs itself (04.H9 `wvh5j`, H10 `IcGvI`, H11 `ZvWcK`):
 //! the approval of a shell command, the invocation panel of the Activity tab and the note of what could
-//! not be enforced. Native agents do not run in this version, so the run, its invocation, its transcript
-//! and its pending approval are seeded into the project database as the runner would record them.
+//! not be enforced. The run, its invocation, its transcript and its pending approval are seeded into the
+//! project database as the runner records them, on a DeepSeek connection, which runs no agent yet.
 
 use std::{
   collections::BTreeMap,

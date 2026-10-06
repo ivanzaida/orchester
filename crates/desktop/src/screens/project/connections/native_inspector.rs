@@ -113,8 +113,8 @@ fn data_line(glyph: Icon, text: &str) -> Element {
 }
 
 /// The models (`o5BqGF`), each with its default label and what is known of it, then editing them by
-/// hand and fetching them from the endpoint, which needs a test this version cannot run.
-pub fn models(ctx: &Ctx, api: &ApiEndpoint, edit_models: Option<Handler>) -> Element {
+/// hand and fetching them from the endpoint (`fetch`, a test through the runner, which lists them).
+pub fn models(ctx: &Ctx, api: &ApiEndpoint, edit_models: Option<Handler>, fetch: Option<Handler>) -> Element {
   let models = api.models();
   let column = Column::new()
     .id("native-models")
@@ -144,7 +144,7 @@ pub fn models(ctx: &Ctx, api: &ApiEndpoint, edit_models: Option<Handler>) -> Ele
       "fetch-models",
       "connections.models.fetch",
       Icon::RefreshCw,
-      None,
+      fetch,
     ))
     .into()
 }

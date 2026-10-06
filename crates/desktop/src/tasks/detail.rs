@@ -6,7 +6,7 @@
 use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, EngineVendor},
+  connection::{AgentConnection, AgentProvider, Effort, EngineVendor},
   conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -28,6 +28,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
+  engines,
   history::{self, RunRecord},
   index_use::IndexUses,
   permissions::run_permissions,
@@ -49,12 +50,17 @@ pub struct StepView {
   pub tool_step: bool,
   /// The agent CLI of the profile version's connection, while that connection exists.
   pub provider: Option<AgentProvider>,
-  /// The base URL of that connection's model API, as the connection is now, when it is a native one:
-  /// an invocation does not record the endpoint it reached.
+  /// The base URL of a native agent's model API: as its latest invocation recorded it, else as the
+  /// connection is now.
   pub endpoint: Option<Arc<str>>,
   /// Who receives the agent's prompts, as its engine is named (core's
-  /// [`orchester_core::connection::AgentConnection::vendor`]), by that connection as it is now.
+  /// [`orchester_core::connection::AgentConnection::vendor`]): as a native agent's latest invocation
+  /// recorded it, else by that connection as it is now.
   pub vendor: Option<EngineVendor>,
+  /// Whether `endpoint` and `vendor` are what the latest invocation used, rather than the connection now.
+  pub engine_recorded: bool,
+  /// The effort a native agent's latest invocation ran with.
+  pub effort: Option<Effort>,
   pub model: Option<Arc<str>>,
   /// What the step's agent may do in this run; `None` for a tool step, or when its profile version
   /// is gone.
@@ -370,6 +376,8 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       provider,
       endpoint,
       vendor,
+      engine_recorded: false,
+      effort: None,
       model,
       permissions,
       execution: latest.map(|execution| execution.id()),
@@ -379,6 +387,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       stage: stage_of(&step.key),
     });
   }
+  engines::apply_recorded(db, &mut steps, &invocations)?;
   let (paused_at, saved_at_pause) = paused_at(db, &run)?;
   let finished_at = finished_at(db, &run)?;
   let worktree_removed = db.worktree_removal(run.id())?;

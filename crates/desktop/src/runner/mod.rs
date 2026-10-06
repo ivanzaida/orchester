@@ -8,6 +8,7 @@
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
 //! object) exists only on Windows.
 
+mod check;
 mod connection;
 mod lifetime;
 mod report;

@@ -127,15 +127,16 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
   }
   assert!(shows(&mut desktop, "native-url", "https://api.anthropic.com"));
   assert!(shows(&mut desktop, "native-test", "Not checked"));
+  // The runner tests the connection once it names a key.
   assert!(shows(
     &mut desktop,
     "native-test",
-    "Testing a native connection comes with native agent runs in a later version."
+    "Choose or create the API key’s secret."
   ));
   for text in [
     "API key · project secret",
     "Models",
-    "Fetching models needs a test of the connection",
+    "Fetching tests the connection and adds the models the endpoint lists",
     "Add a model by hand",
     "Default model",
     "Default effort",
@@ -332,9 +333,11 @@ fn native_form_says_why_it_cannot_save() {
   assert!(shows(&mut desktop, "model-editor", "lab-mini-8b is listed already."));
   desktop.click("model-cancel");
   assert!(!has_reason(&mut desktop));
-  // Testing and fetching stay unavailable whatever is entered.
-  desktop.press("native-test-again");
-  desktop.click("native-fetch-models");
+  // The test goes to the project's runner, which this desktop has none of: the row says so.
+  desktop.click("native-test-again");
+  desktop.wait_until("the test's answer", |desktop| {
+    shows(desktop, "native-test", "The project’s runner is not connected")
+  });
   assert!(shows(&mut desktop, "native-test", "Not checked"));
 }
 

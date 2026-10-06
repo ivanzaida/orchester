@@ -297,6 +297,52 @@ async fn frames_round_trip_every_message() {
   assert_eq!(reader.read::<Event>().await.expect("clean end"), None);
 }
 
+/// *Test connection* of a native connection (protocol 17): the model API asked about, and what the runner
+/// found with the models it listed.
+#[tokio::test]
+async fn frames_round_trip_a_connection_check() {
+  use orchester_core::{
+    connection::{ApiEndpoint, BaseUrl, CheckResult, Effort, EndpointPreset, ModelSource, NativeModel},
+    id::SecretId,
+    resource::ModelId,
+    time::Timestamp,
+  };
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let api = ApiEndpoint::new(
+    EndpointPreset::Official,
+    BaseUrl::new("https://api.anthropic.com").expect("base URL"),
+    SecretId::generate(),
+  );
+  let request = Request {
+    id: RequestId::new(3),
+    command: Command::CheckConnection {
+      provider: AgentProvider::AnthropicApi,
+      api,
+    },
+  };
+  let model = NativeModel::new(
+    ModelId::new("claude-opus-5-5").expect("model"),
+    NonZeroU32::new(1_000_000),
+    NonZeroU32::new(128_000),
+    vec![Effort::Low, Effort::Max],
+    ModelSource::Endpoint {
+      at: Timestamp::from_unix_millis(1_000),
+    },
+  );
+  let reply = Event::Reply {
+    id: RequestId::new(3),
+    reply: Reply::ConnectionChecked {
+      result: CheckResult::Api { balance: None },
+      models: vec![model],
+    },
+  };
+  writer.write(&request).await.expect("write request");
+  writer.write(&reply).await.expect("write reply");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
+  assert_eq!(reader.read::<Event>().await.expect("read reply"), Some(reply));
+}
+
 /// Run again with what a person saw the run before leave, a worktree folder git forgot among it
 /// (protocol 15), listed only in part (protocol 16); a peer that sends no `forgotten` sends a
 /// worktree git lists, with all of its files.

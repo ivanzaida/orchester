@@ -1,6 +1,7 @@
 //! Native agent connections (`docs/architecture/native-agent.md` §5.4, §7; 04.H4, H5, H8): the inspector
 //! shows the endpoint, where data goes, the key secret and the models, each status says what to do, the
-//! profile's permissions read *Enforced by Orchester*, and nothing tests or runs them yet.
+//! profile's permissions read *Enforced by Orchester*; an Anthropic API connection runs agents, an OpenAI
+//! API one is neither tested nor run yet.
 
 use std::{num::NonZeroU32, path::Path};
 
@@ -139,18 +140,22 @@ fn read_only() -> AgentPermissions {
   )
 }
 
-/// A native Anthropic connection with its key and models, a published Builder profile on it and a
+/// A native connection to `provider` with its key and models, a published Builder profile on it and a
 /// published pipeline whose one step runs the Builder.
-fn seed_native(repo: &Path) -> (ConnectionId, ResourceId) {
+fn seed_native(repo: &Path, provider: AgentProvider) -> (ConnectionId, ResourceId) {
   let mut db = ProjectDb::open(repo).expect("open the project");
   let key = key_secret(&mut db, "ANTHROPIC_API_KEY", Environment::Development, false);
+  let (name, url) = match provider {
+    AgentProvider::OpenAiApi => ("OpenAI API · Kontur", "https://api.openai.com/v1"),
+    _ => ("Claude API · Kontur", "https://api.anthropic.com"),
+  };
   let connection = native_connection(
     &mut db,
     NativeSeed {
-      name: "Claude API · Kontur",
-      provider: AgentProvider::AnthropicApi,
+      name,
+      provider,
       preset: EndpointPreset::Official,
-      url: "https://api.anthropic.com",
+      url,
       key,
       models: official_models(),
       check: None,
@@ -185,9 +190,9 @@ fn seed_native(repo: &Path) -> (ConnectionId, ResourceId) {
   (connection, builder)
 }
 
-fn seeded() -> (Desktop, ConnectionId, ResourceId) {
+fn seeded(provider: AgentProvider) -> (Desktop, ConnectionId, ResourceId) {
   let mut seeded = None;
-  let desktop = Desktop::with_seeded_project(|repo| seeded = Some(seed_native(repo)));
+  let desktop = Desktop::with_seeded_project(|repo| seeded = Some(seed_native(repo, provider)));
   let (connection, builder) = seeded.expect("the project was seeded");
   (desktop, connection, builder)
 }
@@ -264,7 +269,7 @@ fn native_inspector_shows_endpoint_data_location_key_and_models() {
   ] {
     assert!(shows(&mut desktop, INSPECTOR, text), "{text}");
   }
-  // Nothing tests it or fetches its models in this version: the buttons are there, unavailable.
+  // An OpenAI API connection is not tested in this version: the buttons are there, unavailable.
   desktop.press("test-connection");
   desktop.press("fetch-models");
   desktop.pass();
@@ -425,18 +430,14 @@ fn native_missing_key_leads_to_the_connection_form_and_to_secrets() {
 /// 04.H8 `yh0Xe`: the Permissions tab of Builder on a native connection.
 #[test]
 fn native_profile_permissions_read_enforced_by_orchester() {
-  let (mut desktop, _, builder) = seeded();
+  let (mut desktop, _, builder) = seeded(AgentProvider::AnthropicApi);
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   let item = format!("agent-{builder}");
   desktop.wait_for(&item);
   desktop.click(&item);
-  desktop.wait_for(BLOCKED);
-  assert!(shows(
-    &mut desktop,
-    BLOCKED,
-    "This profile can’t run yet: its connection is a native agent"
-  ));
+  desktop.wait_for("agent-tab-permissions");
+  assert!(!has(&mut desktop, BLOCKED), "an Anthropic API profile runs");
   desktop.press("agent-tab-permissions");
   desktop.wait_for(ENFORCEMENT);
   for text in [
@@ -481,7 +482,7 @@ fn native_profile_permissions_read_enforced_by_orchester() {
 
 #[test]
 fn native_connection_reads_not_available_in_the_profile_select_and_the_pipeline_step() {
-  let (mut desktop, _, builder) = seeded();
+  let (mut desktop, _, builder) = seeded(AgentProvider::OpenAiApi);
   desktop.wait_for("nav-agents");
   desktop.click("nav-agents");
   let item = format!("agent-{builder}");
@@ -500,7 +501,7 @@ fn native_connection_reads_not_available_in_the_profile_select_and_the_pipeline_
   assert!(
     labels
       .iter()
-      .any(|label| &**label == "Claude API · Kontur · not available yet")
+      .any(|label| &**label == "OpenAI API · Kontur · not available yet")
   );
   desktop.click("nav-pipelines");
   desktop.wait_for("pipeline-row");
@@ -519,7 +520,7 @@ fn native_connection_reads_not_available_in_the_profile_select_and_the_pipeline_
 fn native_connection_keeps_a_run_from_starting() {
   let (runner, _) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed_native(repo);
+    seed_native(repo, AgentProvider::OpenAiApi);
   });
   fill_new_task(&mut desktop, "Append hello to README.md.", "200000");
   let problem = "Step “implement” runs on a native agent connection.";
@@ -564,7 +565,7 @@ fn native_profile_with_no_listed_command_says_every_command_asks() {
   let item = format!("agent-{reviewer}");
   desktop.wait_for(&item);
   desktop.click(&item);
-  desktop.wait_for(BLOCKED);
+  desktop.wait_for("agent-tab-permissions");
   desktop.press("agent-tab-permissions");
   desktop.wait_for(ENFORCEMENT);
   assert!(shows(
