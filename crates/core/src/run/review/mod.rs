@@ -13,21 +13,28 @@
 //! ([`Review::of`]). What it reads holds no secret value: the request as the approval card shows it,
 //! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
 
+mod choice;
 mod hold;
 mod input;
+mod prompt;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use self::{
+  choice::{
+    AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
+    default_review_model, resolve_reviewer, reviewer_kind,
+  },
   hold::{ReviewHold, review_hold},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
+  prompt::{
+    DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
+  },
 };
 use super::answer::ApprovalSubject;
 use crate::{permission::AgentPermissions, resource::ModelId};
 
-/// The reviewer's model unless a project names another: small and quick, as one review holds the agent.
-pub const DEFAULT_REVIEW_MODEL: &str = "claude-haiku-4-5-20251001";
 /// The longest a reason is kept; a longer one is cut.
 const REASON_MAX_CHARS: usize = 200;
 /// The quotation marks a reason may not hold, as the app quotes it.
@@ -167,21 +174,5 @@ pub fn review_request(
       failure: ReviewFailure::NoReviewer,
       model: None,
     },
-  }
-}
-
-/// The settings of auto mode in a project: whether new runs use it, and the reviewer's model.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AutoModeSettings {
-  pub new_runs: bool,
-  pub model: ModelId,
-}
-
-impl Default for AutoModeSettings {
-  fn default() -> Self {
-    Self {
-      new_runs: false,
-      model: ModelId::new(DEFAULT_REVIEW_MODEL).expect("the default review model is a valid id"),
-    }
   }
 }

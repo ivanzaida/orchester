@@ -9,10 +9,7 @@ use std::{cell::Cell, path::Path};
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
-  connection::reviewer::{
-    ClaudeReviewer, DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_review, review_prompt,
-    reviewer_args,
-  },
+  connection::reviewer::{ClaudeReviewer, ReviewFolder, parse_review, reviewer_args},
   id::{InvocationId, RunId, StepExecutionId},
   orchester_tools::SERVER,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, category::CommandScope},
@@ -20,8 +17,9 @@ use orchester_core::{
   run::{
     ApprovalSubject, PendingToolApproval,
     review::{
-      RequestReviewer, Review, ReviewError, ReviewFailure, ReviewHold, ReviewInput, ReviewVerdict, ReviewedRequest,
-      ReviewedStep, ReviewedTask, review_hold, review_request,
+      DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, RequestReviewer, Review, ReviewError, ReviewFailure,
+      ReviewHold, ReviewInput, ReviewVerdict, ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt,
+      review_request,
     },
   },
   time::Timestamp,
@@ -476,16 +474,24 @@ fn printed(stdout: &str) -> Result<CommandOutput, CommandError> {
   })
 }
 
+/// The folder a CLI reviewer runs in.
+fn folder() -> ReviewFolder {
+  ReviewFolder {
+    work: "/tmp/review/work".into(),
+    instructions: "/tmp/review/instructions.md".into(),
+    schema: "/tmp/review/schema.json".into(),
+  }
+}
+
 #[test]
 fn auto_mode_claude_reviewer_reads_the_structured_verdict() {
   let worktree = Path::new("/tmp/review/work");
-  let instructions = Path::new("/tmp/review/instructions.md");
   let answered = r#"{"type":"result","subtype":"success","is_error":false,"result":"","structured_output":{"verdict":"approve","reason":"It regenerates the fixtures."}}"#;
   let runner = cli(printed(answered));
   let reviewer = ClaudeReviewer::new(
     Path::new("/bin/claude"),
     model(),
-    (worktree, instructions, vec![("PATH".to_owned(), "/bin".to_owned())]),
+    (folder(), vec![("PATH".to_owned(), "/bin".to_owned())]),
     runner,
   );
   assert_eq!(
@@ -504,7 +510,7 @@ fn auto_mode_claude_reviewer_reads_the_structured_verdict() {
   let timed_out = ClaudeReviewer::new(
     Path::new("/bin/claude"),
     model(),
-    (worktree, instructions, Vec::new()),
+    (folder(), Vec::new()),
     cli(Err(CommandError::TimedOut)),
   );
   assert_eq!(timed_out.review(&input(&[])), Err(ReviewError::TimedOut));
