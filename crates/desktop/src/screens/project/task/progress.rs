@@ -11,7 +11,10 @@ use lurq::{
 };
 use orchester_core::{run::StepFailure, time::Timestamp, tokens::compact_tokens};
 
-use super::approval_card::waiting_on;
+use super::{
+  approval_card::waiting_on,
+  live_time::{LiveSteps, LiveStepsProps, clock},
+};
 use crate::{
   display,
   tasks::{
@@ -22,11 +25,30 @@ use crate::{
   ui::{check_row::check_row, icon::Icon, message_text},
 };
 
-/// Every step of `run`. `lost`: the run is recorded as running but has no runner. A step whose agent
-/// waits on one of `waiting`, the requests of the run, says what it waits on and since when (`G0rzJy`),
-/// whatever its recorded state: a tool request does not change the step's state, its agent is at work.
-pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool, waiting: &[ShownApproval]) -> Element {
-  let rows = progress(run, lost, Timestamp::now());
+/// Every step of `run`, their active agent time going on while their agents work. `lost`: the run is
+/// recorded as running but has no runner. A step whose agent waits on one of `waiting`, the requests
+/// of the run, says what it waits on and since when (`G0rzJy`), whatever its recorded state: a tool
+/// request does not change the step's state, its agent is at work.
+pub(super) fn progress_list(ctx: &mut Ctx, run: &RunView, lost: bool, waiting: &[ShownApproval]) -> Element {
+  let rows = progress(run, lost, clock(ctx).now());
+  let waiting_on = rows.iter().map(|row| waiting_on(ctx, waiting, &row.id)).collect();
+  ctx.mount_keyed::<LiveSteps>("task-progress-steps", LiveStepsProps { rows, waiting_on })
+}
+
+/// Every step of `run`, which has ended, as the progress list shows them.
+pub(super) fn ended_progress_list(ctx: &Ctx, run: &RunView) -> Element {
+  let now = Timestamp::now();
+  let rows = progress(run, false, now);
+  steps_column(ctx, &rows, &vec![None; rows.len()], now)
+}
+
+/// The progress list (`qB7mj`): `rows` with what each row's agent waits on, their times at `now`.
+pub(super) fn steps_column(
+  ctx: &Ctx,
+  rows: &[ProgressRow],
+  waiting_on: &[Option<Arc<str>>],
+  now: Timestamp,
+) -> Element {
   Column::new()
     .id("task-progress-steps")
     .width(Dimension::Pct(100.0))
@@ -34,27 +56,28 @@ pub(super) fn progress_list(ctx: &Ctx, run: &RunView, lost: bool, waiting: &[Sho
     .with_children(
       rows
         .iter()
-        .map(|row| progress_row(ctx, row, waiting_on(ctx, waiting, &row.id))),
+        .zip(waiting_on)
+        .map(|(row, waiting_on)| progress_row(ctx, row, waiting_on.clone(), now)),
     )
     .into()
 }
 
 /// `rows` as check rows, one below the other, `gap` apart: 8 in the progress list (`qB7mj`), 22 in
-/// the retry limit's evidence (`yYFkk`).
-pub(super) fn rows(ctx: &Ctx, rows: &[ProgressRow], gap: SpacingSize) -> Column {
+/// the retry limit's evidence (`yYFkk`); their times at `now`.
+pub(super) fn rows(ctx: &Ctx, rows: &[ProgressRow], gap: SpacingSize, now: Timestamp) -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(gap)
-    .with_children(rows.iter().map(|row| progress_row(ctx, row, None)))
+    .with_children(rows.iter().map(|row| progress_row(ctx, row, None, now)))
 }
 
 /// A step's check row; `waiting_on` replaces its detail while it waits on a request.
-fn progress_row(ctx: &Ctx, row: &ProgressRow, waiting_on: Option<Arc<str>>) -> Element {
+fn progress_row(ctx: &Ctx, row: &ProgressRow, waiting_on: Option<Arc<str>>, now: Timestamp) -> Element {
   let title = title(ctx, row);
   let (glyph, state) = state(ctx, row.state);
   let (glyph, result) = match waiting_on {
     Some(waiting_on) => (Icon::Hand, waiting_on),
-    None => (glyph, detail(ctx, row, state)),
+    None => (glyph, detail(ctx, row, state, now)),
   };
   check_row(glyph, &title, &result)
     .describe("step", row.id.to_string())
@@ -62,12 +85,12 @@ fn progress_row(ctx: &Ctx, row: &ProgressRow, waiting_on: Option<Arc<str>>) -> E
     .into()
 }
 
-/// Where a step stands, with its attempt, tokens and active agent time when it ran.
-fn detail(ctx: &Ctx, row: &ProgressRow, state: Arc<str>) -> Arc<str> {
+/// Where a step stands, with its attempt, tokens and active agent time at `now` when it ran.
+fn detail(ctx: &Ctx, row: &ProgressRow, state: Arc<str>, now: Timestamp) -> Arc<str> {
   match row.usage {
     Some(usage) => {
       let attempt = usage.attempt.to_string();
-      let duration = message_text(ctx, &display::duration(usage.active));
+      let duration = message_text(ctx, &display::duration(usage.active.at(now)));
       match usage.tokens {
         Some(tokens) => ctx.t_args(
           "runs.progress.detail",

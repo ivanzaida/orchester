@@ -2,10 +2,10 @@
 //! per step in stage order, with where its latest execution stands, its attempt, the tokens it
 //! used and its active agent time. Parallel steps each retain their own row while waiting.
 
-use std::{num::NonZeroU32, sync::Arc, time::Duration};
+use std::{num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
-  run::{PauseReason, RunStatus, StepFailure, StepStatus},
+  run::{ActiveClock, PauseReason, RunStatus, StepFailure, StepStatus},
   time::Timestamp,
 };
 
@@ -39,8 +39,8 @@ pub struct ExecutionUsage {
   pub attempt: NonZeroU32,
   /// Counted tokens of all its invocations; `None` for a tool step, whose command uses none.
   pub tokens: Option<u64>,
-  /// Active agent time of all its invocations.
-  pub active: Duration,
+  /// Active agent time of all its invocations, going on while its agent works.
+  pub active: ActiveClock,
 }
 
 /// One row of the progress list.
@@ -65,7 +65,7 @@ pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
       step: step.name.clone(),
       agent: step.agent.clone(),
       state: state(run, step, lost),
-      usage: usage(run, step, now),
+      usage: usage(run, step, now, lost),
     })
     .collect()
 }
@@ -91,16 +91,15 @@ fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
   }
 }
 
-fn usage(run: &RunView, step: &StepView, now: Timestamp) -> Option<ExecutionUsage> {
+fn usage(run: &RunView, step: &StepView, now: Timestamp, lost: bool) -> Option<ExecutionUsage> {
   let execution = step.execution?;
   let invocations: Vec<_> = run.invocations_of(execution).collect();
   if invocations.is_empty() {
     return None;
   }
-  let millis: i64 = invocations.iter().map(|invocation| invocation.active_millis(now)).sum();
   Some(ExecutionUsage {
     attempt: step.attempt?,
     tokens: (!step.tool_step).then(|| invocations.iter().map(|invocation| invocation.usage.counted()).sum()),
-    active: Duration::from_millis(u64::try_from(millis).unwrap_or_default()),
+    active: run.active_clock(invocations, now, lost),
   })
 }

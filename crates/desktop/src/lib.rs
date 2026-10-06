@@ -9,6 +9,7 @@ pub mod app_mcp;
 pub mod app_paths;
 mod background;
 pub mod budget;
+pub mod clock;
 pub mod close;
 pub mod code_index;
 pub mod connections;

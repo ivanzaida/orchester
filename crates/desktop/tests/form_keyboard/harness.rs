@@ -25,6 +25,7 @@ use orchester_core::{
 use orchester_desktop::{
   activity::Activity,
   app_mcp::{AppMcpSetup, DiscoveryFolder},
+  clock::Clock,
   close::Lifecycle,
   embedded_mcp::McpStatus,
   i18n,
@@ -40,7 +41,7 @@ use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use crate::mcp_agent::McpAgent;
+use crate::{mcp_agent::McpAgent, test_clock::TestClock};
 
 /// How long a wait may take before the test fails. A wait ends as soon as what it waits for is
 /// shown, so this only bounds a broken test. It is generous because the tests run side by side,
@@ -89,6 +90,8 @@ pub struct Desktop {
   pub runners: Runners,
   /// The keychain secret values go to: in memory, never the keychain of the user running tests.
   pub vault: Arc<MemoryVault>,
+  /// The time live values are shown at.
+  pub clock: Arc<TestClock>,
   runner: PathBuf,
   app: App,
   _session: AppSession,
@@ -276,6 +279,7 @@ impl Desktop {
       session.previous_end(),
     );
     let vault = Arc::new(MemoryVault::default());
+    let clock = Arc::new(TestClock::default());
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
       lifecycle: Lifecycle::new(runners.clone(), runtime.handle().clone()),
@@ -284,6 +288,7 @@ impl Desktop {
       vault: Vault::with(vault.clone()),
       previous_end: session.previous_end(),
       session_start: session.started_at(),
+      clock: Clock::with(clock.clone()),
     };
     let mut tree = Tree::new();
     tree.resize(WIDTH, HEIGHT);
@@ -302,6 +307,7 @@ impl Desktop {
       activity,
       runners,
       vault,
+      clock,
       runner,
       app,
       _session: session,
