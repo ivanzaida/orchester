@@ -2,29 +2,31 @@
 //! shown and waits as always, and meanwhile, when the run uses auto mode, the reviewer judges it on the
 //! blocking pool, so the worker keeps following its agent. An approval answers the request as the
 //! reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
-//! first wins, and the review that comes later is dropped.
+//! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
+//! result is then dropped. A Codex escalation (a command outside its sandbox) never reaches the reviewer.
 
-use std::time::Duration;
+mod process;
+
+use std::{path::PathBuf, time::Duration};
 
 use orchester_core::{
-  connection::{
-    invocation::agent_environment,
-    reviewer::{ClaudeReviewer, reviewer_connection},
-  },
+  connection::{invocation::agent_environment, reviewer::reviewer_connection},
   permission::AgentPermissions,
+  resource::ModelId,
   run::{
     ApprovalSubject, DecidedBy, PendingToolApproval,
     review::{
-      RequestReviewer, Review, ReviewFailure, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, review_request,
+      RequestReviewer, Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask,
+      review_request,
     },
   },
   store::{ConnectionStore, RunStore, SettingsStore, TaskStore},
 };
-use orchester_exec::ProcessRunner;
 use orchester_ipc::Event;
 use orchester_store::StoreError;
-use tokio::task::JoinHandle;
+use tokio::{runtime::Handle, task::JoinHandle};
 
+use self::process::{ReviewPlace, StopReview, SupervisedRunner, stop_review};
 use super::{super::answer::Settled, Watch, Worker};
 
 /// The longest a review may take; the reviewer is stopped then, and the person decides.
@@ -32,10 +34,11 @@ const REVIEW_TIMEOUT: Duration = Duration::from_secs(60);
 /// How many of the agent's last messages the reviewer reads.
 const MESSAGES_READ: usize = 3;
 
-/// A review under way: the request it is about, and the work that reviews it.
+/// A review under way: the request it is about, and the work that reviews it, stopped when dropped.
 pub(in super::super) struct Reviewing {
   approval: String,
   work: JoinHandle<Review>,
+  _stop: StopReview,
 }
 
 /// Ready once the review under way in `slot` ends: the request, and what auto mode did with it.
@@ -54,14 +57,30 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
   (reviewing.approval, review)
 }
 
+/// The project's reviewer, before the folder of one review is made.
+struct ReviewerSetup {
+  executable: PathBuf,
+  model: ModelId,
+  environment: Vec<(String, String)>,
+}
+
 impl Worker {
-  /// Starts auto mode's review of `approval`, which waits for the person, when its run uses auto mode.
+  /// Starts auto mode's review of `approval`, which waits for the person, when its run uses auto mode. A
+  /// Codex `escalation` is left to the person without a review.
   pub(in super::super) fn start_review(
     &mut self,
     watch: &mut Watch,
     approval: &PendingToolApproval,
+    escalation: bool,
   ) -> Result<Option<Reviewing>, StoreError> {
     if !watch.db.run_auto_mode(approval.run)? {
+      return Ok(None);
+    }
+    if escalation {
+      let held = Review::Held {
+        hold: ReviewHold::Escalation,
+      };
+      watch.db.record_review(approval.run, &approval.id, &held)?;
       return Ok(None);
     }
     // The agent's last messages may still wait to be written.
@@ -73,29 +92,50 @@ impl Worker {
       .as_ref()
       .map(|launch| launch.permissions().clone());
     let input = self.review_input(watch, approval, permissions.as_ref())?;
-    let reviewer = self.reviewer(watch)?;
+    let setup = self.reviewer(watch)?;
+    let (stop, stopped) = stop_review();
+    let runtime = Handle::current();
     let work = tokio::task::spawn_blocking(move || {
+      let place = match setup.as_ref().map(|_| ReviewPlace::new()).transpose() {
+        Ok(place) => place,
+        Err(error) => {
+          tracing::warn!(%error, "cannot make the folder a review runs in");
+          return Review::Failed {
+            failure: ReviewFailure::CouldNotRun,
+            model: None,
+          };
+        }
+      };
+      let runner = SupervisedRunner {
+        runtime,
+        timeout: REVIEW_TIMEOUT,
+        stop: stopped,
+      };
+      let reviewer = setup
+        .zip(place.as_ref())
+        .map(|(setup, place)| place.reviewer(&setup.executable, setup.model, setup.environment, runner));
       let reviewer = reviewer.as_ref().map(|reviewer| reviewer as &dyn RequestReviewer);
-      review_request(reviewer, (&subject, permissions.as_ref()), &input)
+      review_request(reviewer, (&subject, permissions.as_ref()), input)
     });
     Ok(Some(Reviewing {
       approval: approval.id.clone(),
       work,
+      _stop: stop,
     }))
   }
 
   /// Records what auto mode did with request `id`, and answers it when the reviewer approved, unless the
-  /// person answered first.
+  /// person answered first or the run no longer uses auto mode.
   pub(in super::super) async fn apply_review(
     &mut self,
     watch: &mut Watch,
     (id, review): (String, Review),
   ) -> Result<(), StoreError> {
     let waiting = watch.approval.as_ref().is_some_and(|(approval, _)| approval.id == id);
-    if !waiting || watch.stop.is_some() {
+    let run = watch.invocation.run;
+    if !waiting || watch.stop.is_some() || !watch.db.run_auto_mode(run)? {
       return Ok(());
     }
-    let run = watch.invocation.run;
     watch.db.record_review(run, &id, &review)?;
     if !review.approves() {
       // The person decides, and now reads why auto mode left it to them.
@@ -112,28 +152,14 @@ impl Worker {
   }
 
   /// What the reviewer reads about `approval`: the request as recorded (already redacted), the step,
-  /// the task and the agent's last messages, redacted as the request is.
+  /// the task and the agent's last messages, redacted as the request is; a hold when the request is too
+  /// long to be reviewed whole.
   fn review_input(
     &self,
     watch: &Watch,
     approval: &PendingToolApproval,
     permissions: Option<&AgentPermissions>,
-  ) -> Result<ReviewInput, StoreError> {
-    let run = watch.db.run(approval.run).map_err(|error| StoreError::Corrupt {
-      what: "run",
-      detail: error.to_string(),
-    })?;
-    let step_name = run
-      .as_ref()
-      .and_then(|run| {
-        let key = run.execution(approval.execution)?.step().clone();
-        run
-          .snapshot()
-          .body()
-          .step(&key)
-          .map(|step| step.name.as_str().to_owned())
-      })
-      .unwrap_or_else(|| self.agent.clone());
+  ) -> Result<Result<ReviewInput, ReviewHold>, StoreError> {
     let task = watch.db.task(self.task)?;
     let messages: Vec<String> = watch
       .db
@@ -141,22 +167,12 @@ impl Worker {
       .iter()
       .map(|message| self.redact(message))
       .collect();
-    let writable_folders = permissions
-      .and_then(AgentPermissions::granted_folders)
-      .map(|folders| {
-        folders
-          .entries()
-          .iter()
-          .map(|folder| folder.lexical_path(&self.root).display().to_string())
-          .collect()
-      })
-      .unwrap_or_default();
     let defaults = AgentPermissions::before_permissions();
     let step = ReviewedStep {
-      name: step_name,
+      name: self.step_name(watch, approval)?,
       repository: permissions.unwrap_or(&defaults).repository(),
       network: permissions.unwrap_or(&defaults).network(),
-      writable_folders,
+      writable_folders: self.writable_folders(permissions),
     };
     let task = ReviewedTask {
       title: task
@@ -181,9 +197,44 @@ impl Worker {
     Ok(ReviewInput::new(request, step, task, &messages))
   }
 
-  /// The project's reviewer: its Claude Code connection with auto mode's model, run in the repository
-  /// with the agent environment; `None` when the project has no Claude Code connection.
-  fn reviewer(&self, watch: &Watch) -> Result<Option<ClaudeReviewer<ProcessRunner>>, StoreError> {
+  /// The name of the step that asks, from the run's pipeline; the agent's when it is not found.
+  fn step_name(&self, watch: &Watch, approval: &PendingToolApproval) -> Result<String, StoreError> {
+    let run = watch.db.run(approval.run).map_err(|error| StoreError::Corrupt {
+      what: "run",
+      detail: error.to_string(),
+    })?;
+    Ok(
+      run
+        .as_ref()
+        .and_then(|run| {
+          let key = run.execution(approval.execution)?.step().clone();
+          run
+            .snapshot()
+            .body()
+            .step(&key)
+            .map(|step| step.name.as_str().to_owned())
+        })
+        .unwrap_or_else(|| self.agent.clone()),
+    )
+  }
+
+  /// The folders outside the worktree the step may write to, as paths.
+  fn writable_folders(&self, permissions: Option<&AgentPermissions>) -> Vec<String> {
+    permissions
+      .and_then(AgentPermissions::granted_folders)
+      .map(|folders| {
+        folders
+          .entries()
+          .iter()
+          .map(|folder| folder.lexical_path(&self.root).display().to_string())
+          .collect()
+      })
+      .unwrap_or_default()
+  }
+
+  /// The project's reviewer: its Claude Code connection with auto mode's model and the agent environment;
+  /// `None` when the project has no Claude Code connection.
+  fn reviewer(&self, watch: &Watch) -> Result<Option<ReviewerSetup>, StoreError> {
     let connections = watch.db.connections()?;
     let Some(executable) = reviewer_connection(&connections).and_then(|connection| connection.executable()) else {
       return Ok(None);
@@ -191,12 +242,11 @@ impl Worker {
     let model = watch.db.auto_mode_settings()?.model;
     let mut environment = agent_environment(std::env::vars_os());
     watch.db.project_environment()?.add_to(&mut environment);
-    Ok(Some(ClaudeReviewer::new(
-      executable,
+    Ok(Some(ReviewerSetup {
+      executable: executable.to_path_buf(),
       model,
-      (&self.root, environment),
-      ProcessRunner::new(REVIEW_TIMEOUT),
-    )))
+      environment,
+    }))
   }
 }
 

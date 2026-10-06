@@ -216,6 +216,8 @@ impl Worker {
     settled: Settled,
   ) -> Result<Result<(), Rejection>, StoreError> {
     let run = approval.run;
+    // A review still under way is no longer wanted: dropping it stops the reviewer.
+    self.reviewing = None;
     if !watch
       .db
       .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?

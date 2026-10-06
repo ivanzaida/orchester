@@ -1,51 +1,46 @@
 //! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
-//! rules leave to a person (an unreadable script) is approved by the reviewer without the person, a
-//! credential read still asks the person without a review, a question of the reviewer and an answer it
-//! cannot read leave the request to the person with what auto mode said. Needs `git`. Run with
+//! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
+//! with its system prompt; a credential read, an unreadable script and a Codex escalation still ask the
+//! person without a review; a question of the reviewer and an answer it cannot read leave the request to
+//! the person with what auto mode said; a review whose run turned auto mode off meanwhile is dropped; and
+//! a reviewer still at work when the person answers is stopped. Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
 
 mod support;
+
+use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use orchester_core::{
   connection::{AgentProvider, stream::AgentEvent},
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
+  resource::{CommandEnvironment, VariableName},
   run::{
     Answerer, ApprovalAnswer, DecidedBy, PendingToolApproval, Run,
     review::{AutoModeSettings, Review, ReviewFailure, ReviewHold},
   },
-  store::ActivityStore,
+  store::{ActivityStore, SettingsStore},
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
+use tempfile::TempDir;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, scheduler_with, wait_for};
+use self::support::{PATIENCE, Setup, TestProject, is_running, pending_approval, project, scheduler_with, wait_for};
 
-/// A Claude Code Builder that runs `git` and asks about every other command, in a project whose new runs
-/// use auto mode.
-fn builder(brief: &'static str) -> TestProject {
+/// A Claude Code Builder that runs `git` and asks about every other command.
+fn claude(brief: &'static str) -> Setup {
   let listed = AllowedCommands::new(vec![CommandPrefix::new("git").expect("prefix")]).expect("list");
-  let permissions = AgentPermissions::new(
-    RepositoryAccess::Write,
-    CommandPermission::Allowed(listed),
-    NetworkAccess::On,
-  );
-  let project = project(&Setup {
+  Setup {
     provider: AgentProvider::ClaudeCodeCli,
-    permissions: Some(permissions),
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::Allowed(listed),
+      NetworkAccess::On,
+    )),
     ..Setup::new(brief)
-  });
-  let settings = AutoModeSettings {
-    new_runs: true,
-    ..AutoModeSettings::default()
-  };
-  ProjectDb::open(project.repo.path())
-    .expect("open")
-    .save_auto_mode_settings(&settings)
-    .expect("auto mode for new runs");
-  project
+  }
 }
 
 struct Started {
@@ -53,11 +48,25 @@ struct Started {
   scheduler: Scheduler,
   events: mpsc::UnboundedReceiver<Event>,
   id: RunId,
+  /// Where the fake reviewer writes where it ran.
+  log: TempDir,
 }
 
 impl Started {
-  async fn new(brief: &'static str) -> Self {
-    let project = builder(brief);
+  /// A run of `setup` in a project whose new runs use auto mode.
+  async fn new(setup: &Setup) -> Self {
+    let project = project(setup);
+    let log = tempfile::tempdir().expect("a folder for the review log");
+    let mut db = ProjectDb::open(project.repo.path()).expect("open");
+    let settings = AutoModeSettings {
+      new_runs: true,
+      ..AutoModeSettings::default()
+    };
+    db.save_auto_mode_settings(&settings).expect("auto mode for new runs");
+    let variable = VariableName::new("FAKE_REVIEW_LOG").expect("name");
+    let path = log.path().join("review.log").display().to_string();
+    let environment = CommandEnvironment::new(BTreeMap::from([(variable, path)])).expect("environment");
+    db.save_project_environment(&environment).expect("project environment");
     let (scheduler, events) = scheduler_with(project.repo.path(), project.vault.clone());
     let id = scheduler
       .start_run(IdempotencyKey::generate(), project.task)
@@ -68,6 +77,7 @@ impl Started {
       scheduler,
       events,
       id,
+      log,
     }
   }
 
@@ -92,6 +102,10 @@ impl Started {
     })
     .await
     .expect("auto mode leaves a request to the person")
+  }
+
+  async fn pending(&mut self) -> PendingToolApproval {
+    pending_approval(self.project.repo.path(), &mut self.events, self.id).await
   }
 
   async fn ended(&mut self) -> Run {
@@ -122,11 +136,34 @@ impl Started {
       .await
       .expect("denied");
   }
+
+  /// What the fake reviewer wrote about where it ran: `key value` lines.
+  fn logged(&self, key: &str) -> Vec<String> {
+    std::fs::read_to_string(self.log.path().join("review.log"))
+      .unwrap_or_default()
+      .lines()
+      .filter_map(|line| line.strip_prefix(&format!("{key} ")).map(str::to_owned))
+      .collect()
+  }
+
+  /// Waits until the fake reviewer has written about where it runs.
+  async fn reviewer_started(&self) -> String {
+    tokio::time::timeout(PATIENCE, async {
+      loop {
+        if let Some(pid) = self.logged("pid").first() {
+          return pid.clone();
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+      }
+    })
+    .await
+    .expect("the reviewer starts")
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_approves_an_unreadable_script_that_serves_the_task() {
-  let mut started = Started::new("Run `./regen.sh`.").await;
+async fn auto_mode_approves_a_command_that_serves_the_task_in_a_folder_of_its_own() {
+  let mut started = Started::new(&claude("Run `cargo build`.")).await;
   assert!(started.db().run_auto_mode(started.id).expect("read"));
   let run = started.ended().await;
   assert!(run.status().is_terminal());
@@ -139,31 +176,62 @@ async fn auto_mode_approves_an_unreadable_script_that_serves_the_task() {
   );
   let counts = started.db().decision_counts(started.id).expect("counts");
   assert_eq!((counts.by_reviewer, counts.asked_by_reviewer, counts.by_you), (1, 0, 0));
+  // It ran in an empty folder outside the project, removed after the review, with its system prompt.
+  let cwd = PathBuf::from(started.logged("cwd").first().expect("logged"));
+  assert!(!cwd.starts_with(started.project.repo.path()), "{}", cwd.display());
+  assert_eq!(started.logged("empty"), ["true"]);
+  assert_eq!(started.logged("instructions"), ["true"]);
+  assert!(!cwd.exists(), "the review's folder is removed");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_leaves_a_credential_read_to_the_person_without_a_review() {
-  let mut started = Started::new("Run `cp ~/.orchester-test-token token.txt`.").await;
+async fn auto_mode_leaves_a_credential_read_and_a_script_to_the_person_without_a_review() {
+  for (brief, hold) in [
+    ("Run `cp ~/.orchester-test-token token.txt`.", ReviewHold::Secrets),
+    ("Run `./regen.sh`.", ReviewHold::Unreadable),
+  ] {
+    let mut started = Started::new(&claude(brief)).await;
+    let (request, review) = started.left_to_person().await;
+    assert_eq!(review, Review::Held { hold }, "{brief}");
+    started.deny(request).await;
+    started.ended().await;
+    let decisions = started.decisions();
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].0, DecidedBy::PersonDeny);
+    assert_eq!(decisions[0].1, Some(review));
+    let counts = started.db().decision_counts(started.id).expect("counts");
+    assert_eq!((counts.by_reviewer, counts.asked_by_reviewer), (0, 1));
+    assert!(started.logged("pid").is_empty(), "{brief}: no reviewer ran");
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_leaves_a_codex_escalation_to_the_person() {
+  let setup = Setup {
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::Off,
+    )),
+    ..Setup::new("Escalate `cargo build`.")
+  };
+  let mut started = Started::new(&setup).await;
   let (request, review) = started.left_to_person().await;
+  assert!(request.command);
   assert_eq!(
     review,
     Review::Held {
-      hold: ReviewHold::Secrets
+      hold: ReviewHold::Escalation
     }
   );
   started.deny(request).await;
   started.ended().await;
-  let decisions = started.decisions();
-  assert_eq!(decisions.len(), 1);
-  assert_eq!(decisions[0].0, DecidedBy::PersonDeny);
-  assert_eq!(decisions[0].1, Some(review));
-  let counts = started.db().decision_counts(started.id).expect("counts");
-  assert_eq!((counts.by_reviewer, counts.asked_by_reviewer), (0, 1));
+  assert!(started.logged("pid").is_empty(), "no reviewer ran");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_mode_asks_the_person_when_the_reviewer_asks_or_babbles() {
-  let mut asked = Started::new("Run `./regen.sh`. Reviewer asks.").await;
+  let mut asked = Started::new(&claude("Run `cargo build`. Reviewer asks.")).await;
   let (request, review) = asked.left_to_person().await;
   assert!(
     matches!(&review, Review::Asked { reason, model } if reason == "The fake reviewer leaves it to the person."
@@ -173,7 +241,7 @@ async fn auto_mode_asks_the_person_when_the_reviewer_asks_or_babbles() {
   asked.deny(request).await;
   asked.ended().await;
 
-  let mut babbled = Started::new("Run `./regen.sh`. Reviewer babbles.").await;
+  let mut babbled = Started::new(&claude("Run `cargo build`. Reviewer babbles.")).await;
   let (request, review) = babbled.left_to_person().await;
   assert!(
     matches!(
@@ -187,4 +255,43 @@ async fn auto_mode_asks_the_person_when_the_reviewer_asks_or_babbles() {
   );
   babbled.deny(request).await;
   babbled.ended().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_turned_off_during_a_review_drops_its_approval() {
+  let mut started = Started::new(&claude("Run `cargo build`. Reviewer waits.")).await;
+  let request = started.pending().await;
+  started.reviewer_started().await;
+  started
+    .db()
+    .set_run_auto_mode(started.id, false)
+    .expect("a person turns auto mode off");
+  // The reviewer approves after three seconds; its approval must not answer the request.
+  tokio::time::sleep(Duration::from_secs(6)).await;
+  let db = started.db();
+  assert_eq!(db.pending_tool_approvals(started.id).expect("requests").len(), 1);
+  assert_eq!(db.tool_approval_review(started.id, &request.id).expect("review"), None);
+  started.deny(request).await;
+  started.ended().await;
+  let decisions = started.decisions();
+  assert_eq!(decisions, [(DecidedBy::PersonDeny, None)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_stops_the_reviewer_when_the_person_answers_first() {
+  let mut started = Started::new(&claude("Run `cargo build`. Reviewer hangs.")).await;
+  let request = started.pending().await;
+  let pid = started.reviewer_started().await;
+  assert!(is_running(&pid));
+  started.deny(request).await;
+  started.ended().await;
+  let cwd = PathBuf::from(started.logged("cwd").first().expect("logged"));
+  tokio::time::timeout(PATIENCE, async {
+    while is_running(&pid) || cwd.exists() {
+      tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+  })
+  .await
+  .expect("the reviewer is stopped and its folder removed");
+  assert_eq!(started.decisions(), [(DecidedBy::PersonDeny, None)]);
 }

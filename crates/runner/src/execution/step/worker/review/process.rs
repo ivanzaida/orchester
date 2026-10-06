@@ -1,0 +1,123 @@
+//! Where and how the reviewer's CLI runs. It runs in an empty folder the runner owns, removed after the
+//! review ([`ReviewPlace`]), never in the project's repository, so nothing of the project (its CLAUDE.md,
+//! its git status) reaches it. It is supervised like an agent ([`Supervised`]): contained with everything
+//! it starts, stopped after the review's time, and stopped at once when the review is no longer wanted
+//! (the person answered, the step or run ended, the runner exits), as the worker then drops the review's
+//! [`StopReview`].
+
+use std::{io, path::Path, time::Duration};
+
+use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
+  connection::{
+    reviewer::{ClaudeReviewer, REVIEW_INSTRUCTIONS},
+    stream::OutputStream,
+  },
+  resource::ModelId,
+};
+use tempfile::TempDir;
+use tokio::{runtime::Handle, sync::watch};
+
+use crate::supervisor::{ProcessEvent, ProcessExit, Supervised};
+
+/// The most output of the reviewer that is kept; its answer is one short JSON line.
+const OUTPUT_MAX_BYTES: usize = 256 * 1024;
+
+/// Dropped, it stops the review it was made with.
+pub(super) struct StopReview(#[expect(dead_code, reason = "held only to be dropped")] watch::Sender<()>);
+
+/// What the review's process watches for being stopped.
+pub(super) fn stop_review() -> (StopReview, watch::Receiver<()>) {
+  let (sender, receiver) = watch::channel(());
+  (StopReview(sender), receiver)
+}
+
+/// An empty folder for one review, with the reviewer's system prompt beside it; removed when dropped.
+pub(super) struct ReviewPlace {
+  root: TempDir,
+}
+
+impl ReviewPlace {
+  pub(super) fn new() -> io::Result<Self> {
+    let root = tempfile::Builder::new().prefix("orchester-review-").tempdir()?;
+    std::fs::create_dir(root.path().join("work"))?;
+    std::fs::write(root.path().join("instructions.md"), REVIEW_INSTRUCTIONS)?;
+    Ok(Self { root })
+  }
+
+  /// The reviewer on this place's folder, with `executable`, `model` and `environment`, run through
+  /// `runner`.
+  pub(super) fn reviewer(
+    &self,
+    executable: &Path,
+    model: ModelId,
+    environment: Vec<(String, String)>,
+    runner: SupervisedRunner,
+  ) -> ClaudeReviewer<SupervisedRunner> {
+    let folder = self.root.path().join("work");
+    let instructions = self.root.path().join("instructions.md");
+    ClaudeReviewer::new(executable, model, (&folder, &instructions, environment), runner)
+  }
+}
+
+/// Runs the reviewer's CLI from the blocking pool on the runner's runtime, supervised.
+pub(super) struct SupervisedRunner {
+  pub(super) runtime: Handle,
+  pub(super) timeout: Duration,
+  pub(super) stop: watch::Receiver<()>,
+}
+
+impl CommandRunner for SupervisedRunner {
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    self.runtime.block_on(async {
+      let mut process = Supervised::start(command).map_err(|error| CommandError::Failed(error.to_string()))?;
+      let mut stop = self.stop.clone();
+      let error = tokio::select! {
+        output = tokio::time::timeout(self.timeout, collect(&mut process)) => match output {
+          Ok(output) => return output,
+          Err(_) => CommandError::TimedOut,
+        },
+        // The worker dropped the review.
+        _ = stop.changed() => CommandError::Failed("the review is no longer wanted".to_owned()),
+      };
+      end(&mut process).await;
+      Err(error)
+    })
+  }
+}
+
+/// Ends `process` and everything it started, and waits until it has exited, so its folder can be removed.
+async fn end(process: &mut Supervised) {
+  process.terminate();
+  while let Some(event) = process.next().await {
+    if matches!(event, ProcessEvent::Exited(_)) {
+      return;
+    }
+  }
+}
+
+/// The process's output and exit code, once it exits.
+async fn collect(process: &mut Supervised) -> Result<CommandOutput, CommandError> {
+  let mut stdout = String::new();
+  let mut stderr = String::new();
+  while let Some(event) = process.next().await {
+    match event {
+      ProcessEvent::Output { stream, line } => {
+        let kept = match stream {
+          OutputStream::Stdout => &mut stdout,
+          OutputStream::Stderr => &mut stderr,
+        };
+        if kept.len() + line.len() < OUTPUT_MAX_BYTES {
+          kept.push_str(&line);
+          kept.push('\n');
+        }
+      }
+      ProcessEvent::Exited(ProcessExit::Exited { code }) => return Ok(CommandOutput { code, stdout, stderr }),
+      ProcessEvent::Exited(ProcessExit::Terminated) => {
+        return Err(CommandError::Failed("the reviewer was ended".to_owned()));
+      }
+      ProcessEvent::Exited(ProcessExit::WaitFailed { reason }) => return Err(CommandError::Failed(reason)),
+    }
+  }
+  Err(CommandError::Failed("the reviewer's exit was not reported".to_owned()))
+}

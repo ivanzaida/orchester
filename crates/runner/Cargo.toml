@@ -220,6 +220,8 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 serde_json.workspace = true
+# The empty folder auto mode's reviewer runs in, removed after the review; already a test dependency.
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
