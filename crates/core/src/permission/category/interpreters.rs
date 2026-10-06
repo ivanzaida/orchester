@@ -36,6 +36,37 @@ pub(super) fn script(program: &str, args: &[String]) -> Option<usize> {
   }
 }
 
+/// Where among `args` the inline code `program` runs is (`python -c code`, `node -e code`, `node -p
+/// code`); `None` for any other form. The code is the agent's own, as a script it writes would be.
+pub(super) fn inline(program: &str, args: &[String]) -> Option<usize> {
+  let at = match program {
+    "python" | "python3" | "py" => python_flags(args)?,
+    "node" => 0,
+    _ => return None,
+  };
+  let option = args.get(at)?.as_str();
+  let code = match program {
+    "node" => matches!(option, "-e" | "-p" | "--eval" | "--print"),
+    _ => option == "-c",
+  };
+  (code && args.len() > at + 1).then_some(at + 1)
+}
+
+/// How many of `args` are Python flags that change neither what runs nor where code is loaded from.
+fn python_flags(args: &[String]) -> Option<usize> {
+  let mut at = 0;
+  while let Some(arg) = args.get(at) {
+    at += match arg.as_str() {
+      "-X" if args.get(at + 1).is_some_and(|value| PYTHON_X.contains(&value.as_str())) => 2,
+      flag if PYTHON_FLAGS.contains(&flag) => 1,
+      flag if flag.strip_prefix("-X").is_some_and(|value| PYTHON_X.contains(&value)) => 1,
+      version if version.len() > 1 && version[1..].chars().all(|c| c.is_ascii_digit() || c == '.') => 1,
+      _ => return Some(at),
+    };
+  }
+  Some(at)
+}
+
 /// `python [flags] script …`; `-X name` (attached or not, one of [`PYTHON_X`]) sets an implementation
 /// option, `py -3` or `py -3.12` chooses the version.
 fn python(args: &[String]) -> Option<usize> {

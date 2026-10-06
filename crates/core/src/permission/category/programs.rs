@@ -9,7 +9,7 @@
 //! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
 //! credential location asks.
 
-use super::{files, gh, git, install::InstallSource, interpreters, network, packages, powershell, scripts};
+use super::{files, gh, git, install::InstallSource, interpreters, network, packages, powershell, processes, scripts};
 use crate::permission::known_safe;
 
 /// What a command is by its words.
@@ -66,6 +66,10 @@ pub(super) struct Judged {
   pub(super) sources: Vec<String>,
   /// The argument that is a script file an interpreter runs ([`interpreters`]).
   pub(super) runs: Option<usize>,
+  /// It runs inline code (`python -c`, `node -e`), whose argument is [`Self::script`].
+  pub(super) inline: bool,
+  /// Its arguments name no file (`tasklist /FI …`): none is placed.
+  pub(super) no_paths: bool,
   /// The repository `git -C <folder>` works in.
   pub(super) repository: Option<String>,
 }
@@ -89,6 +93,8 @@ impl Judged {
       edits: false,
       sources: Vec::new(),
       runs: None,
+      inline: false,
+      no_paths: false,
       repository: None,
     }
   }
@@ -161,6 +167,12 @@ impl Judged {
   /// A command that edits the files it names, as [`Self::edits`] says.
   pub(super) const fn editing(mut self) -> Self {
     self.edits = true;
+    self
+  }
+
+  /// A command whose arguments name no file.
+  pub(super) const fn naming_no_file(mut self) -> Self {
+    self.no_paths = true;
     self
   }
 
@@ -264,6 +276,13 @@ pub(super) fn judge(program: &str, args: &[String]) -> Judged {
   if SECRET_STORES.contains(&program) {
     return Judged::unknown().secret();
   }
+  if let Some(at) = interpreters::inline(program, args) {
+    return Judged {
+      inline: true,
+      script: Some(at),
+      ..Judged::of(Kind::Worktree)
+    };
+  }
   if let Some(at) = interpreters::script(program, args) {
     return Judged {
       runs: Some(at),
@@ -273,6 +292,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Judged {
   if let Some(judged) = packages::judge(program, args)
     .or_else(|| files::judge(program, args))
     .or_else(|| scripts::judge(program, args))
+    .or_else(|| processes::judge(program, args))
     .or_else(|| network::judge(program, args))
     .or_else(|| powershell::judge(program, args))
   {

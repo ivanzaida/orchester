@@ -725,6 +725,43 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Quick rules for Verify steps · branch `claude/quick-rules` (done 2026-10-06)
+
+In 15 minutes after an install, 44 of 218 requests still asked; the user decided these rules, each no wider than
+what ran before (`crates/core/tests/quick_rules.rs`, with refusals):
+
+1. Benign environment prefixes (`category::prefixes`): `PYTHONIOENCODING`, `PYTHONUTF8`, `PYTHONUNBUFFERED`,
+   `NO_COLOR`, `FORCE_COLOR`, `TERM`, `LANG`, `LC_ALL`, `RUST_LOG`, `RUST_BACKTRACE`, `CARGO_TERM_COLOR` set to a
+   plain literal before a program are dropped; any other variable keeps the part Unknown.
+2. An executable built in the worktree (`.tmp/…/target/debug/seed.exe …`) runs like a worktree script
+   (`worktree_program`: a regular file there, no link on its way, not in `.git`/`.orchester`), in a writing step.
+3. Process listings are known-safe reads in every step (`category::processes`): `tasklist` with `/FI`, `/FO`, `/V`,
+   `/NH` (also `//FI`), `ps` without `e`/`-E` (environments), and `pwsh -NoProfile -Command` whose script is only
+   `Get-Process` / `Get-CimInstance Win32_Process` / `Get-WmiObject Win32_Process` piped into `Select-Object`,
+   `Format-Table`, `Format-List`, `Sort-Object`, `Out-String` or a one-comparison `Where-Object`, parsed strictly
+   (no `;`, `&`, `$(`, `@`, script blocks but `{ $_.X -eq Y }`). `taskkill` and everything else ask.
+4. `for NAME in <literals>; do BODY; done` as the whole line reads as `NAME=v; BODY` per value (`category::loops`, at
+   most 64); other loops ask.
+5. Inline code (`python -c`, `py -c`, `node -e`/`-p`) runs like a worktree script in a writing step. A script,
+   executable or inline code runs unasked only when every other part of the line that may change files is itself
+   such a run (`sh m.sh … | python -c …` runs; `echo > a.py; python -c 'import a'` asks).
+
+| real lines of the 44 | before | now (writing step) |
+| --- | --- | --- |
+| `PYTHONIOENCODING=utf-8 python .tmp/verify/orc50b/drive.py …` | asks | runs |
+| `.tmp/verify/seed/target/debug/seed.exe …`, `…/orc50-seeder.exe …` | asks | runs |
+| `tasklist //FI …` (2 forms) | asks | runs (any step) |
+| `powershell -NoProfile -Command "Get-Process … \| Select-Object …"`, `Get-CimInstance Win32_Process …` | asks | runs (any step) |
+| `for i in 1 … 12; do sh .tmp/verify/m.sh … \| grep -o … \| head -1; done` | asks | runs |
+| `sh .tmp/verify/m.sh … \| python -c "import sys,json; …"` and other `python -c` | asks (reviewer) | runs |
+
+Fixture of runs 22–25: read-only step 5 / 41 / 2 / 11, writing step 33 / 24 / 2 / 0 (the `python -c` line runs).
+Still as before: `bash -c`/`sh -c` scripts are read part by part (their parts must run on their own);
+`-EncodedCommand` and other `pwsh -Command` scripts go to the reviewer. Tests: `core` `quick_rules`,
+`worktree_scripts`, `worktree_writes`, `command_probes`, `command_sequences`, `command_categories`,
+`command_fail_closed`, `approval_answers`, `approval_fixtures`; `runner --features test-agent` `claude_unlisted`,
+`approval_choices`, `command_approvals`, `auto_mode`, `send_now`. Nothing on macOS.
+
 Worktree scripts and nested fixture repositories run like edits · branch `claude/worktree-scripts` (done 2026-10-06)
 
 User decision: in a step that edits files, running a script file of the worktree adds nothing an agent cannot do by

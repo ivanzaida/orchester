@@ -21,6 +21,7 @@ mod glob;
 mod heredoc;
 mod install;
 mod interpreters;
+mod loops;
 mod network;
 mod network_tables;
 mod options;
@@ -29,6 +30,8 @@ mod part;
 mod paths;
 mod place;
 mod powershell;
+mod prefixes;
+mod processes;
 mod programs;
 mod reason;
 mod scripts;
@@ -123,12 +126,12 @@ impl ClassifiedCommand {
       parts.retain(|part| !part.moves_inside());
     }
     // Another part that may change files, before, after or beside it in a pipeline, may change the
-    // script before it runs: the file there now is not what runs.
+    // script before it runs: the file there now is not what runs. Another script run changes nothing a
+    // script could not: its code is the agent's too.
     let changing = parts
       .iter()
-      .filter(|part| part.category() != CommandCategory::ReadOnly)
-      .count();
-    if changing > 1 {
+      .any(|part| part.category() != CommandCategory::ReadOnly && !part.runs_script);
+    if changing {
       for part in parts.iter_mut().filter(|part| part.runs_script) {
         part.edits = false;
         part.at_least(CommandCategory::Unknown);
@@ -183,6 +186,17 @@ fn classify_line(
   line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
+  if quoting == Quoting::Bash
+    && let Some(rounds) = loops::rounds(text)
+  {
+    let Some(rounds) = rounds else {
+      return vec![CommandPart::unknown(vec![text.to_owned()])];
+    };
+    return rounds
+      .iter()
+      .flat_map(|round| classify_line(round, quoting, scope, line, depth))
+      .collect();
+  }
   let mut parts = Vec::new();
   for raw in words::split(text, quoting) {
     parts.extend(classify_part(&raw, quoting, scope, line, depth));
@@ -198,11 +212,11 @@ fn classify_part(
   line: &mut Line,
   depth: usize,
 ) -> Vec<CommandPart> {
-  let words = raw.words.clone();
   // Its value was read into the parts after it.
   if raw.assigns {
     return Vec::new();
   }
+  let words = prefixes::without_benign(&raw.words, raw.quoted_name).to_vec();
   // A variable set before a program (or for the commands after it) can change what any program does,
   // and a command in the background goes on after the line.
   if raw.unread || raw.background || words.first().is_some_and(|word| is_assignment(word)) {
@@ -225,7 +239,7 @@ fn classify_part(
     return shell_parts(raw, script, scope, line, depth);
   }
   let Some(program) = program else {
-    return vec![unknown(words, raw, placing)];
+    return vec![worktree_program(words, raw, placing)];
   };
   // An interpreter given with a folder could be any program.
   if first.contains(['/', '\\']) && interpreters::script(&program, args).is_some() {
@@ -259,6 +273,11 @@ fn classify_part(
 /// script that is no regular file of the worktree is code from elsewhere, not read.
 fn judge_edits(part: &mut CommandPart, judged: &Judged, args: &[String], placing: Placing<'_>) {
   part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
+  // Inline code is the agent's own, as a script it writes would be.
+  if judged.inline {
+    part.runs_script = true;
+    part.edits = true;
+  }
   if let Some(at) = judged.runs {
     part.runs_script = true;
     part.edits = placing.plain_file(&args[at]);
@@ -287,6 +306,20 @@ fn shell_parts(
   let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH && installed) else {
     return vec![unknown(words, raw, line.placing(scope))];
   };
+  // `pwsh -NoProfile -Command` that only lists processes; a profile is the user's code.
+  let no_profile = words
+    .iter()
+    .any(|word| matches!(word.to_lowercase().as_str(), "-noprofile" | "-nop"));
+  if inner == Quoting::PowerShell && no_profile && processes::listing(&script) {
+    let program = words.first().map(|first| first.to_lowercase());
+    let mut part = CommandPart::new(
+      words,
+      program,
+      &Judged::of(Kind::ReadOnly).known_safe().naming_no_file(),
+    );
+    part.through_path = by_path;
+    return vec![redirected(part, raw, line.placing(scope))];
+  }
   // The script runs in a shell of its own: a `cd` in it changes nothing after it, what it makes stays.
   let mut inner_line = line.clone();
   let mut parts = classify_line(&script, inner, scope, &mut inner_line, depth + 1);
@@ -316,7 +349,7 @@ fn place_arguments(
   let named: Vec<String> = args
     .iter()
     .enumerate()
-    .filter(|(at, _)| judged.script != Some(*at))
+    .filter(|(at, _)| !judged.no_paths && judged.script != Some(*at))
     .map(|(_, arg)| arg.clone())
     .collect();
   let shifted: Option<Vec<PathBuf>> = judged.repository.as_ref().and_then(|repository| {
@@ -345,6 +378,27 @@ fn enters_plainly(args: &[String]) -> bool {
 
 /// A part Orchester could not read, with where its redirections go placed all the same: what it writes
 /// outside the worktree, or a credential location it names, still counts.
+/// A program written with a folder that is no shell: an executable built in the worktree runs like a
+/// script of it (a regular file there, no link on its way, not in `.git` or `.orchester/`); any other is
+/// Unknown.
+fn worktree_program(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
+  let built = words
+    .first()
+    .is_some_and(|first| first.contains(['/', '\\']) && placing.plain_file(first));
+  if !built {
+    return unknown(words, raw, placing);
+  }
+  let args = words[1..].to_vec();
+  let mut part = CommandPart::new(words.clone(), words.first().cloned(), &Judged::of(Kind::Worktree));
+  part.runs_script = true;
+  part.edits = true;
+  placing.read(&mut part, ".");
+  for word in place::named(&args) {
+    placing.read(&mut part, word);
+  }
+  redirected(part, raw, placing)
+}
+
 fn unknown(words: Vec<String>, raw: &RawPart, placing: Placing<'_>) -> CommandPart {
   redirected(CommandPart::unknown(words), raw, placing)
 }
