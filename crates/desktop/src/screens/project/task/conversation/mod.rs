@@ -4,8 +4,8 @@
 //! filter or search leaves out ([`readback`]), the working line as the chat's last row, following it
 //! live and *Jump to latest* while it does not ([`follow`]), the composer ([`composer`]); at the right
 //! the step rail, which filters the chat by step ([`rail`], collapsed to [`strip`]), or Details in its
-//! place ([`details`], [`side`]). The transcript and the run's tool requests are read again whenever
-//! the runner reports a change.
+//! place ([`details`], [`side`]). The transcript is read again whenever the runner reports a change;
+//! the run's tool requests apart from it, as the project's waiting requests change ([`requests`]).
 
 mod approval_card;
 mod cards;
@@ -19,6 +19,7 @@ mod live_state;
 mod message;
 mod rail;
 mod readback;
+mod requests;
 mod row;
 mod segments;
 mod send;
@@ -63,9 +64,10 @@ use crate::{
     detail::{RunView, TaskDetail},
     timeline::{
       self, Sources,
-      load::{Loaded, load_in},
+      load::{Loaded, transcript_in},
       view::Show,
     },
+    transcript::Entry,
   },
   theme::gutter_scrollbar,
   ui::{button::ActionButton, icon::Icon},
@@ -178,9 +180,9 @@ impl Timeline {
   }
 }
 
-/// The run's transcript and requests, as read.
+/// The run's transcript, as read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Read(Loaded);
+struct Read(Arc<Vec<Entry>>);
 
 impl lurq::app::component::DevtoolsInspectable for Read {}
 
@@ -251,17 +253,14 @@ impl Component for ConversationTab {
     let props = ctx.props::<ConversationProps>().clone();
     save_action(ctx);
     let details_open = self.details.is_open(remembered(ctx));
-    let deps = (
-      props.repo_root.clone(),
-      props.detail.run.as_ref().map(RunView::id),
-      props.revision,
-      self.retry.get(),
-    );
+    let run_id = props.detail.run.as_ref().map(RunView::id);
+    let retry = self.retry.get();
+    let deps = (props.repo_root.clone(), run_id, props.revision, retry);
     let load = ctx.future(deps, |(repo_root, run, ..)| async move {
       let Some(run) = run else {
-        return Ok(Read(Loaded::default()));
+        return Ok(Read(Arc::default()));
       };
-      background::run(move || load_in(&repo_root, run))
+      background::run(move || transcript_in(&repo_root, run))
         .await?
         .map(Read)
         .map_err(|error| {
@@ -269,14 +268,16 @@ impl Component for ConversationTab {
           messages::store_error(&error)
         })
     });
+    let state = load.state().get();
+    let read = state.data.as_ref().map_or(0, |Read(entries)| entries.len());
+    let requests = requests::requests(ctx, (props.repo_root.clone(), run_id), (read, retry));
     let Some(run) = props.detail.run.as_ref() else {
       let waiting = without_run(ctx, &props.conversation);
       return self.layout(ctx, &props, None, waiting);
     };
     ctx.provide(self.timeline(&props, run));
-    let state = load.state().get();
-    let loaded = match (state.data, state.error) {
-      (Some(Read(loaded)), _) => loaded,
+    let loaded = match (state.data.zip(requests.data), state.error.or(requests.error)) {
+      (Some((Read(entries), requests)), _) => Loaded::of(entries, requests),
       (None, Some(error)) => {
         let failed = self.failed(ctx, &error);
         return self.layout(ctx, &props, None, failed);

@@ -111,7 +111,7 @@ fn app_mcp_answers_while_the_approval_dialog_is_open() {
 }
 
 /// `decide_approval`'s arguments.
-pub(super) fn answer(approval: &str, decision: &str) -> Value {
+pub(crate) fn answer(approval: &str, decision: &str) -> Value {
   json!({"project": "Kontur", "approval": approval, "decision": decision})
 }
 
@@ -226,7 +226,7 @@ fn allowed(desktop: &Desktop) -> bool {
 
 /// Flips *Let automation answer approvals* in the MCP item's popover until it is `on`. The switch can
 /// be flipped once the setting is read; until then, and while it saves, it is fixed.
-pub(super) fn let_automation_answer(desktop: &mut Desktop, on: bool) {
+pub(crate) fn let_automation_answer(desktop: &mut Desktop, on: bool) {
   if !has(desktop, "status-mcp-answer-approvals") {
     desktop.click("status-mcp");
   }
