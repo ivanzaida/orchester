@@ -2944,6 +2944,8 @@
         "rule": "Options a connection can’t enforce are disabled with the reason, never offered as a warning. To use them, assign a connection that can enforce them.",
         "mcp": {
           "codexChosen": "Only the chosen MCP servers run",
+          "codexChosenHow": "App Server · user’s own servers off",
+          "codexCallsAskHow": "App Server · each call",
           "codexDenied": "not asked · the call fails",
           "none": "No MCP servers",
           "noneHow": "none chosen · user’s own ignored",
@@ -2953,17 +2955,17 @@
           "claudeCalls": "Only their tools are allowed",
           "claudeCallsHow": "--allowedTools mcp__* · unverified",
           "claudeCallsAsk": "Each tool call waits for your decision",
-          "claudeCallsAskHow": "--permission-prompt-tool · one call each",
+          "claudeCallsAskHow": "--permission-prompt-tool · each call",
           "exempt": {
             "one": "{{server}}: 1 tool runs without asking",
             "other": "{{server}}: {{count}} tools run without asking"
           },
-          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool> · other tools ask",
-          "exemptCodexHow": "tools.<tool>.approval_mode = approve · other tools ask",
+          "exemptClaudeHow": "--allowedTools mcp__{{server}}__<tool>",
+          "exemptCodexHow": "tools.<tool>.approval_mode = approve",
           "outside": "Servers work outside these limits",
           "outsideHow": "own processes · network on",
           "noneLoad": "No MCP servers load",
-          "noneLoadHow": "none can start here · user’s own ignored"
+          "noneLoadHow": "none starts here · user’s own ignored"
         },
         "repositoryFiles": {
           "off": "Repository agent files off · enforced",
@@ -2995,9 +2997,9 @@
           "other": "allowed tools · {{count}} rules · others ask"
         },
         "claudeWebTools": "web tools allowed",
-        "claudeWebToolsRemoved": "web tools removed · commands keep network",
-        "claudeAddDir": "--add-dir for edit tools · commands not confined",
-        "claudePermissionPrompt": "--permission-prompt-tool · asks each command",
+        "claudeWebToolsRemoved": "web tools off · commands keep network",
+        "claudeAddDir": "--add-dir · edit tools, not commands",
+        "claudePermissionPrompt": "--permission-prompt-tool · each command",
         "nativeWriteToolsWithheld": "write tools withheld · reads stay in the worktree",
         "nativeFileScope": "file tools · worktree only, .git protected",
         "nativeFileScopeFolders": "file tools · also these folders · commands not confined",
