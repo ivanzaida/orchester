@@ -11,6 +11,7 @@ mod runs;
 mod task_write;
 mod tasks;
 mod wire;
+mod worktree;
 
 use std::sync::Arc;
 
@@ -129,6 +130,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "remove_worktree",
+    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already.",
+    schema: schema_for_type::<worktree::RemoveWorktree>,
+    read_only: false,
+  },
+  Spec {
     name: "list_approvals",
     description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when.",
     schema: schema_for_type::<approvals::ListApprovals>,
@@ -202,6 +209,7 @@ async fn dispatch(
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
+    "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,

@@ -55,7 +55,7 @@ impl TaskLeftovers {
 /// What was read, with what the person had changed when it was read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Read {
-  read_at: (u64, bool),
+  read_at: (u64, u64, bool),
   left: LeftBehind,
 }
 
@@ -86,7 +86,10 @@ pub(in crate::screens::project::task) fn task_leftovers(
   // not show beside the new merge or reappear after the removal. Runner events change nothing of a
   // run without live work; a run that ends, or a new run (Run again removes worktrees first),
   // changes the runs read.
-  let changed_by_person = (props.revision.0, detail.merge.is_some());
+  let removed_outside = ctx
+    .use_context::<crate::screens::project::ProjectNav>()
+    .map_or(0, |nav| nav.feed.integration.removed_outside().get());
+  let changed_by_person = (props.revision.0, removed_outside, detail.merge.is_some());
   let deps = (
     props.project.repo_root.clone(),
     runs,

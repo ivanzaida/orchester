@@ -166,6 +166,21 @@ impl Desktop {
     Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
   }
 
+  /// [`Desktop::with_runner_and_app_mcp`], running other programs with `programs`.
+  pub fn with_runner_programs_and_app_mcp(
+    runner: PathBuf,
+    programs: Programs,
+    init: impl FnOnce(&Path),
+    seed: impl FnOnce(&Path),
+  ) -> Self {
+    let launch = Launch {
+      programs,
+      runner,
+      app_mcp: true,
+    };
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
   /// [`Desktop::with_seeded_project`], with Orchester's own MCP server started by the window.
   pub fn with_seeded_project_and_app_mcp(seed: impl FnOnce(&Path)) -> Self {
     let init: RepoStep<'static> = Box::new(|repo: &Path| fs::create_dir_all(repo.join(".git")).expect("create .git"));

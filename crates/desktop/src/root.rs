@@ -29,7 +29,7 @@ use crate::{
     restore::{self, Opening},
     window::{LEADING_WIDTH, Window, WindowProps, chrome, leading},
   },
-  tasks::outside::OutsideChanges,
+  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   theme::ExtraColor,
   ui::{icon::Icon, message_text, panel::RecoveryPanel},
   workspace::Workspace,
@@ -80,6 +80,8 @@ pub struct Root {
   background: Vec<tokio::task::JoinHandle<()>>,
   /// Orchester's own MCP server, when it started; held so it stops with the window.
   _app_mcp: Option<AppMcp>,
+  /// The projects' merge and removal operations, shared by the tabs and the MCP server.
+  jobs: ProjectJobs,
 }
 
 impl Drop for Root {
@@ -104,6 +106,7 @@ impl Component for Root {
       Startup::Failed { .. } => Activity::new(),
     };
     ctx.provide(WindowFeed::new(&activity));
+    let activity_for_tools = activity.clone();
     ctx.provide(activity);
     let Startup::Ready {
       workspace,
@@ -119,6 +122,7 @@ impl Component for Root {
         places: None,
         background: Vec::new(),
         _app_mcp: None,
+        jobs: ProjectJobs::default(),
       };
     };
     let servers = Servers::new(workspace.clone(), vault.clone());
@@ -129,12 +133,13 @@ impl Component for Root {
         lifecycle.runners().run_changes(),
       )),
     ];
+    let jobs = ProjectJobs::default();
     let services = Services::new(
       workspace.clone(),
       lifecycle.runners().clone(),
       servers.clone(),
       programs.clone(),
-      changes,
+      (changes, activity_for_tools, jobs.clone()),
     );
     let app_mcp = match app_mcp {
       AppMcpSetup::On(folder) => AppMcp::start(&folder, services, (lifecycle.runtime(), ctx.i18n().clone())),
@@ -157,6 +162,7 @@ impl Component for Root {
       places: Some(Places::default()),
       background,
       _app_mcp: app_mcp,
+      jobs,
     }
   }
 
@@ -234,6 +240,7 @@ impl Root {
       programs,
       previous_end,
       session_start,
+      jobs: self.jobs.clone(),
     };
     ctx.mount_keyed::<Window>("window", props)
   }

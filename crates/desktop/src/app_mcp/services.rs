@@ -5,11 +5,12 @@ use orchester_store::ProjectDb;
 
 use super::error::{Missing, ToolError};
 use crate::{
+  activity::Activity,
   messages::Message,
   programs::Programs,
   runner::Runners,
   sharing::Servers,
-  tasks::outside::OutsideChanges,
+  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::{OpenProject, Workspace},
 };
 
@@ -21,6 +22,10 @@ pub struct Services {
   pub(super) programs: Programs,
   /// Told about every task a tool saves, so the screens read the tasks again.
   pub(super) changes: OutsideChanges,
+  /// The status bar's operations, which list a tool's git work as they list a person's.
+  pub(super) activity: Activity,
+  /// The projects' merge and removal operations, shared with the task pages.
+  pub(super) jobs: ProjectJobs,
 }
 
 impl Services {
@@ -29,7 +34,7 @@ impl Services {
     runners: Runners,
     servers: Servers,
     programs: Programs,
-    changes: OutsideChanges,
+    (changes, activity, jobs): (OutsideChanges, Activity, ProjectJobs),
   ) -> Self {
     Self {
       workspace,
@@ -37,6 +42,8 @@ impl Services {
       servers,
       programs,
       changes,
+      activity,
+      jobs,
     }
   }
 

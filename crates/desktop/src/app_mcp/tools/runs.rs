@@ -14,7 +14,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{approvals::approval, wire};
+use super::{approvals::approval, wire, worktree::worktree_state};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -62,6 +62,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       .map(approval)
       .collect();
     let auto_mode = db.run_auto_mode(run.id())?;
+    let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
     let usage = view.usage();
     let run = &view.run;
@@ -85,6 +86,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       },
       "steps": steps,
       "auto_mode": auto_mode,
+      "worktree": worktree,
       "awaiting": {
         "plan_decisions": run.awaiting_plan().len(),
         "answers": run.awaiting_answer().len(),
