@@ -15,6 +15,7 @@ mod auto_mode_waiting;
 mod canvas_zoom;
 mod changes;
 mod claude_run;
+mod close_flow;
 mod code_index;
 mod command_approvals;
 mod conversation;
