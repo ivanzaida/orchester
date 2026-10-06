@@ -27,6 +27,7 @@ const NEW: &str = "new";
 const EDIT: &str = "edit";
 const RETRY: &str = "retry";
 const PULL_REQUESTS: &str = "pull-requests";
+const USAGE: &str = "usage";
 const PIPELINES: &str = "pipelines";
 const INSTRUCTIONS: &str = "instructions";
 const AGENT_ROLES: &str = "agent-roles";
@@ -78,6 +79,8 @@ pub enum Route {
   Setup,
   /// All projects (01.06 `Z7IZZ`): the projects of the workspace, to open, add or remove.
   AllProjects,
+  /// All projects on its *Usage* tab (`p4eVV6`): the Usage dashboard of every project.
+  AllUsage,
   /// A screen of an open project.
   Project(ProjectId, Page),
 }
@@ -102,6 +105,8 @@ pub enum Page {
   PullRequests,
   /// One pull request of the linked repository, by number (`Rrmhf`).
   PullRequest(u64),
+  /// The Usage dashboard (`C2pTYF`).
+  Usage,
   /// The library (`LRMQW`).
   Pipelines,
   /// One pipeline in its editor (`Q21HOA`), on its draft or a published version.
@@ -207,6 +212,7 @@ pub enum SidebarItem {
   Overview,
   Tasks,
   PullRequests,
+  Usage,
   Pipelines,
   Instructions,
   Skills,
@@ -230,7 +236,7 @@ impl Route {
   pub fn current_page(ctx: &mut Ctx) -> Option<Page> {
     match Self::current(ctx)? {
       Self::Project(_, page) => Some(page),
-      Self::Start | Self::Welcome | Self::Setup | Self::AllProjects => None,
+      Self::Start | Self::Welcome | Self::Setup | Self::AllProjects | Self::AllUsage => None,
     }
   }
 
@@ -241,6 +247,7 @@ impl Route {
       [] => Some(Self::Start),
       [WELCOME] => Some(Self::Welcome),
       [SETUP] => Some(Self::Setup),
+      [ALL_PROJECTS] if tab_query(query) == Some(USAGE) => Some(Self::AllUsage),
       [ALL_PROJECTS] => Some(Self::AllProjects),
       [PROJECT, project, rest @ ..] => Some(Self::Project(project.parse().ok()?, Page::parse(rest, query)?)),
       _ => None,
@@ -266,6 +273,7 @@ impl Route {
       Self::Welcome => format!("/{WELCOME}"),
       Self::Setup => format!("/{SETUP}"),
       Self::AllProjects => format!("/{ALL_PROJECTS}"),
+      Self::AllUsage => with_tab(format!("/{ALL_PROJECTS}"), Some(USAGE)),
       Self::Project(project, page) => page.path(*project),
     }
   }
@@ -308,6 +316,7 @@ impl Page {
       [TASKS, task, RETRY] => Self::RetryTask(task.parse().ok()?),
       [PULL_REQUESTS] => Self::PullRequests,
       [PULL_REQUESTS, number] => Self::PullRequest(number.parse().ok()?),
+      [USAGE] => Self::Usage,
       [PIPELINES] => Self::Pipelines,
       [PIPELINES, pipeline] => Self::Pipeline(pipeline.parse().ok()?, PipelineView::named(query)),
       [INSTRUCTIONS] => Self::Instructions(InstructionsTab::named(tab), None),
@@ -349,6 +358,7 @@ impl Page {
       Self::RetryTask(task) => format!("{root}/{TASKS}/{task}/{RETRY}"),
       Self::PullRequests => format!("{root}/{PULL_REQUESTS}"),
       Self::PullRequest(number) => format!("{root}/{PULL_REQUESTS}/{number}"),
+      Self::Usage => format!("{root}/{USAGE}"),
       Self::Pipelines => format!("{root}/{PIPELINES}"),
       Self::Pipeline(pipeline, view) => format!("{root}/{PIPELINES}/{pipeline}{}", view.query()),
       Self::Instructions(tab, selected) => {
@@ -395,6 +405,7 @@ impl Page {
         SidebarItem::Tasks
       }
       Self::PullRequests | Self::PullRequest(_) => SidebarItem::PullRequests,
+      Self::Usage => SidebarItem::Usage,
       Self::Pipelines | Self::Pipeline(..) => SidebarItem::Pipelines,
       Self::Instructions(..) => SidebarItem::Instructions,
       Self::Skills(_) => SidebarItem::Skills,

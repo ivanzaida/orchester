@@ -86,7 +86,7 @@ const fn outside_key(route: Route) -> &'static str {
   match route {
     Route::Welcome => "tabs.welcome",
     Route::Setup => "projects.add",
-    Route::Start | Route::AllProjects | Route::Project(..) => "nav.allProjects",
+    Route::Start | Route::AllProjects | Route::AllUsage | Route::Project(..) => "nav.allProjects",
   }
 }
 
@@ -122,6 +122,7 @@ const fn section_key(page: Page) -> &'static str {
       "nav.tasks"
     }
     Page::PullRequests | Page::PullRequest(_) => "nav.pullRequests",
+    Page::Usage => "nav.usage",
     Page::Pipelines | Page::Pipeline(..) => "nav.pipelines",
     Page::Instructions(..) => "nav.instructions",
     Page::Skills(_) => "nav.skills",

@@ -53,6 +53,7 @@ fn project_pages(routes: Routes) -> Routes {
     .route("/tasks/:task/retry", project::page)
     .route("/pull-requests", project::page)
     .route("/pull-requests/:number", project::page)
+    .route("/usage", project::page)
     .layout("/pipelines", project::page, |routes| selection(routes, "/:pipeline"))
     .layout("/instructions", project::page, |routes| {
       selection(routes, "/:instruction")

@@ -5,7 +5,8 @@
 //! project folder…* adds the project a folder already keeps (one removed from the list); the ×
 //! removes a project from the list after a confirmation (01.06 A `EtMXj`, see [`remove`]), which
 //! never touches its folder or its data. A project whose folder is gone, or whose data cannot be
-//! read, is listed with why and cannot be opened.
+//! read, is listed with why and cannot be opened. The *Usage* tab (`p4eVV6`) shows the Usage
+//! dashboard of every project.
 
 mod remove;
 mod row;
@@ -38,7 +39,10 @@ use crate::{
   messages::{self, Message},
   navigation::{Navigation, route::Route},
   runner::Runners,
-  screens::welcome,
+  screens::{
+    usage::{UsageProps, UsageScreen, load::Scope},
+    welcome,
+  },
   tabs::{OpenIn, OpenedProject, feed::WindowFeed},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
   ui::{
@@ -48,12 +52,15 @@ use crate::{
     message_text,
     notice::ownership_note,
     panel::RecoveryPanel,
+    tab::{Tab, tab_row},
   },
   workspace::{ListedData, OpenProject, ProjectEntry},
 };
 
 /// Width of the empty state's explanation and size of its icon surface (`pbFut`, `cwLjd`).
 const EMPTY_WIDTH: f32 = 640.0;
+/// Height of the *Projects* | *Usage* tabs (`p4eVV6`).
+const TAB_HEIGHT: f32 = 40.0;
 const EMPTY_ICON_SIZE: f32 = 48.0;
 
 /// Opens a project's folder where the click asked, with what to say when it cannot be opened.
@@ -109,6 +116,9 @@ impl Component for AllProjects {
         messages::store_error(&error)
       })
     });
+    if Route::current(ctx) == Some(Route::AllUsage) {
+      return usage_tab(ctx, &navigation, &pick, work);
+    }
     let state = load.state().get();
     let data = self.data(ctx, state.data.clone().unwrap_or_default(), work);
     let (opened, picked) = (open.state().get(), pick.state().get());
@@ -149,11 +159,58 @@ impl Component for AllProjects {
           .padding_right(beside_gutter(ctx, ExtraSpacing::Page.role()))
           .spacing(SpacingSize::Lg)
           .child(clear_of_gutter(heading(ctx, &navigation, &pick)))
+          .child(clear_of_gutter(tabs(ctx, &navigation, false)))
           .with_children(failure.map(|failure| clear_of_gutter(open_error(ctx, &failure))))
           .child(content),
       )
       .child(self.remove_dialog(ctx, &runners))
+      .into()
   }
+}
+
+/// The *Usage* tab (`p4eVV6`): the dashboard of every project under the heading and the tabs.
+fn usage_tab(ctx: &mut Ctx, navigation: &Navigation, pick: &PickAction, work: u64) -> Element {
+  let usage = ctx.mount_keyed::<UsageScreen>(
+    "all-projects-usage",
+    UsageProps {
+      scope: Scope::All,
+      revision: work,
+    },
+  );
+  Column::new()
+    .id("all-projects")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(welcome::topbar(ctx))
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_top(ExtraSpacing::Indent.role())
+        .padding_horizontal(ExtraSpacing::Page.role())
+        .spacing(SpacingSize::Lg)
+        .child(heading(ctx, navigation, pick))
+        .child(tabs(ctx, navigation, true)),
+    )
+    .child(usage)
+    .into()
+}
+
+/// *Projects* | *Usage* (`p4eVV6`).
+fn tabs(ctx: &Ctx, navigation: &Navigation, usage: bool) -> Element {
+  let height = Dimension::Px(TAB_HEIGHT);
+  tab_row(
+    height,
+    SpacingSize::Md,
+    None,
+    [
+      Tab::new("all-projects-tab-projects", ctx.t("projects.tabs.projects"), height)
+        .selected(!usage)
+        .link(navigation.link(Route::AllProjects)),
+      Tab::new("all-projects-tab-usage", ctx.t("projects.tabs.usage"), height)
+        .selected(usage)
+        .link(navigation.link(Route::AllUsage)),
+    ],
+  )
 }
 
 impl AllProjects {

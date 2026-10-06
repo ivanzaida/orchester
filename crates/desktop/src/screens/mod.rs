@@ -6,4 +6,5 @@ pub mod recovery_dialog;
 pub mod setup;
 pub mod startup_recovery;
 pub mod status_bar;
+pub mod usage;
 pub mod welcome;

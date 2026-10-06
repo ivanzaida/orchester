@@ -12,6 +12,7 @@ use orchester_core::{
   project::Project,
   run::TaskPhase,
   time::Timestamp,
+  usage::limits::WarningThreshold,
 };
 use orchester_store::{
   AppDb, PreviousSession, ProjectDb, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoreError, StoredServer,
@@ -236,6 +237,15 @@ impl Workspace {
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
     self.db.lock().set_automation_answers_approvals(allowed)
+  }
+
+  /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
+  pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
+    self.db.lock().usage_warning_threshold()
+  }
+
+  pub fn set_usage_warning_threshold(&self, threshold: WarningThreshold) -> Result<(), StoreError> {
+    self.db.lock().set_usage_warning_threshold(threshold)
   }
 
   /// The shared servers, in the order they were added.

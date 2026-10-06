@@ -121,7 +121,7 @@ impl Places {
   /// while no project was opened.
   pub fn applies(&self, route: Route) -> bool {
     match route {
-      Route::Setup | Route::AllProjects => true,
+      Route::Setup | Route::AllProjects | Route::AllUsage => true,
       Route::Welcome => self.start() == Some(Route::Welcome),
       Route::Start | Route::Project(..) => false,
     }
@@ -217,7 +217,13 @@ impl Navigation {
 
   /// Opens `project`'s overview where `open` says: this tab, or a new tab.
   pub fn open_project(&self, project: OpenProject, open: OpenIn) {
-    let route = Route::Project(project.project.id(), Page::OVERVIEW);
+    self.open_project_page(project, Page::OVERVIEW, open);
+  }
+
+  /// Opens `page` of `project`, just opened, where `open` says, e.g. a task the Usage dashboard of
+  /// every project lists.
+  pub fn open_project_page(&self, project: OpenProject, page: Page, open: OpenIn) {
+    let route = Route::Project(project.project.id(), page);
     self.places.add_project(project);
     match open {
       OpenIn::Current => self.push(route.path()),

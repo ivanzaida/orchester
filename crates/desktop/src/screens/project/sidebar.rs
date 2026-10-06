@@ -1,5 +1,5 @@
 //! Shell sidebar (`zo9Py`). The project selector opens the project switcher (see `switcher`).
-//! Overview, Tasks, Pull requests, Pipelines, Instructions, Skills, Agents, Tools, Secrets,
+//! Overview, Tasks, Pull requests, Usage, Pipelines, Instructions, Skills, Agents, Tools, Secrets,
 //! Connections and Project settings open their screens, All projects opens the projects of the
 //! workspace, Import resources opens over the screen shown and Settings (`s9zzPC`) the
 //! application's settings; every other entry is shown but unavailable. The runner card
@@ -99,6 +99,10 @@ fn primary_navigation(ctx: &Ctx, shown: Option<Page>, tasks: &TasksState, nav: &
     item(
       NavItem::new("nav-pull-requests", Icon::GitPullRequest, ctx.t("nav.pullRequests")),
       Page::PullRequests,
+    ),
+    item(
+      NavItem::new("nav-usage", Icon::ChartColumn, ctx.t("nav.usage")),
+      Page::Usage,
     ),
     item(
       NavItem::new("nav-pipelines", Icon::Workflow, ctx.t("nav.pipelines")),

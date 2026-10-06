@@ -41,6 +41,14 @@ pub const DIFF_ADD_TEXT: &str = "#7EE787";
 pub const DIFF_REMOVE_BG: &str = "#301C20";
 pub const DIFF_REMOVE_TEXT: &str = "#FFA198";
 
+/// Chart series of the Usage dashboard (Pencil `chart-series-1/2/3`, "Chart colors"), validated for
+/// colour-vision deficiency on `surface` and `raised`: the color follows the CLI, never its rank.
+pub const CHART_SERIES_1: &str = "#3987E5";
+pub const CHART_SERIES_2: &str = "#D95926";
+pub const CHART_SERIES_3: &str = "#199E70";
+/// The 45° hatching of a plan limits chart before a CLI's first report (`C2pTYF`, `e5PbG`).
+pub const CHART_HATCH: &str = "#FFFFFF0F";
+
 pub const FONT: &str = "Inter";
 /// Pencil's `mono`, bundled from `assets/fonts/GeistMono-Regular.ttf` (SIL OFL 1.1).
 pub const MONO: &str = "Geist Mono";

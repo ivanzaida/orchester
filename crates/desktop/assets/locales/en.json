@@ -24,6 +24,10 @@
   "projects": {
     "title": "All projects",
     "description": "The projects Orchester knows on this computer. Each one keeps its tasks, pipelines and settings in its own .orchester folder.",
+    "tabs": {
+      "projects": "Projects",
+      "usage": "Usage"
+    },
     "openFolder": "Open project folder…",
     "openFolderTitle": "Choose a folder with an Orchester project",
     "add": "Add project",
@@ -128,6 +132,7 @@
     "orchestrator": "Orchestrator",
     "tasks": "Tasks",
     "pullRequests": "Pull requests",
+    "usage": "Usage",
     "pipelines": "Pipelines",
     "instructions": "Instructions",
     "skills": "Skills",
@@ -2697,6 +2702,226 @@
       "unified": "Unified",
       "viewed": "Viewed",
       "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
+    }
+  },
+  "usage": {
+    "title": "Usage",
+    "description": "Where the tokens of this project's runs go, as the CLIs reported them.",
+    "breadcrumb": "{{project}} / Usage",
+    "loadFailed": "Usage could not be read",
+    "unknown": "—",
+    "percent": "{{value}}%",
+    "listSeparator": ", ",
+    "period": {
+      "today": "Today",
+      "week": "7 days",
+      "month": "30 days",
+      "custom": "Custom…"
+    },
+    "groupBy": {
+      "hour": "By hour",
+      "day": "By day"
+    },
+    "custom": {
+      "title": "Custom range",
+      "from": "From",
+      "to": "To",
+      "hint": "Dates as 2026-09-01.",
+      "unreadable": "Enter both dates as 2026-09-01.",
+      "reversed": "The range ends before it starts.",
+      "show": "Show {{range}}",
+      "showNothing": "Show range"
+    },
+    "readback": {
+      "compared": "{{range}} · compared with {{previous}}",
+      "projects": "{{range}} · compared with {{previous}} · {{count}} projects",
+      "unread": "{{readback}} · not read: {{names}}"
+    },
+    "date": {
+      "day": "{{month}} {{day}}",
+      "weekday": "{{weekday}} {{day}}",
+      "range": "{{from}} – {{to}}",
+      "dateTime": "{{day}}, {{time}}"
+    },
+    "duration": {
+      "hours": "{{hours}} h {{minutes}} min",
+      "minutes": "{{minutes}} min",
+      "underMinute": "under 1 min"
+    },
+    "change": {
+      "percent": {
+        "more": "{{amount}}% more than {{range}}",
+        "less": "{{amount}}% less than {{range}}"
+      },
+      "points": {
+        "more": "{{amount}} points more than {{range}}",
+        "less": "{{amount}} points less than {{range}}"
+      },
+      "same": "Same as {{range}}",
+      "noBaseline": "None in {{range}}",
+      "unknown": "Not known for {{range}}"
+    },
+    "cli": {
+      "codex": "Codex",
+      "claude": "Claude",
+      "anthropic": "Anthropic API",
+      "openai": "OpenAI API",
+      "other": "Other"
+    },
+    "outcome": {
+      "pending": "Pending",
+      "running": "Running",
+      "paused": "Paused",
+      "waiting": "Waiting",
+      "interrupted": "Interrupted",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "filters": {
+      "project": "Project",
+      "cli": "CLI",
+      "model": "Model",
+      "profile": "Agent profile",
+      "pipeline": "Pipeline",
+      "tag": "Tag",
+      "all": "All",
+      "someOf": "{{count}} of {{total}}",
+      "clear": "Clear filters",
+      "search": "Search…",
+      "tagRuns": "{{tag}} · {{count}} runs",
+      "noTags": "No tags yet",
+      "noMatch": "Nothing matches the search",
+      "nothing": "Nothing in this period",
+      "named": "{{facet}}: {{values}}",
+      "nothingDetail": "No run in the period matches {{filters}}."
+    },
+    "loading": {
+      "project": "Reading token usage from {{project}}’s runs…",
+      "all": "Reading token usage from every project’s runs…"
+    },
+    "noRuns": {
+      "projectToday": "No runs in {{project}} today",
+      "project": "No runs in {{project}} in this period",
+      "allToday": "No runs in any project today",
+      "all": "No runs in any project in this period",
+      "last": "The last run reported usage on {{time}}.",
+      "never": "No run has reported usage yet.",
+      "showWeek": "Show last 7 days"
+    },
+    "view": {
+      "chart": "Chart",
+      "table": "Table"
+    },
+    "measure": {
+      "spent": "Spent",
+      "cached": "Cached",
+      "output": "Output"
+    },
+    "summary": {
+      "spent": "Spent tokens",
+      "spentDetail": "input − cached + output",
+      "runs": "Runs",
+      "runsDetail": "{{finished}} finished · {{failed}} failed",
+      "agentTime": "Agent time",
+      "agentTimeDetail": "active time only",
+      "cacheShare": "Cache share",
+      "cacheDetail": "{{cached}} of {{input}} input tokens cached",
+      "failed": "Failed runs",
+      "failedDetail": "{{failed}} of {{runs}} runs · {{tokens}} tokens",
+      "reading": "Reading…"
+    },
+    "tokens": {
+      "title": "Tokens over time",
+      "today": "Today",
+      "count": "{{count}} tokens"
+    },
+    "limits": {
+      "title": "Plan limits",
+      "noteProject": "shared by all projects · account-wide",
+      "noteAll": "account-wide",
+      "weekly": "weekly",
+      "fiveHour": "5-hour",
+      "minutes": "{{minutes}}-minute",
+      "legendName": "{{cli}} · {{window}}",
+      "current": "{{percent}} resets {{time}}",
+      "wasReset": "reset {{time}} · read again with the next turn",
+      "pointName": "{{cli}} · {{window}} · {{time}}",
+      "resetName": "{{cli}} {{window}} window reset · {{time}}",
+      "tooltipWindow": "{{cli}} · {{window}} window",
+      "tooltipReported": "Reported {{time}}",
+      "tooltipUsed": "{{percent}} used",
+      "tooltipResets": "Resets {{time}}",
+      "tooltipRun": "From {{project}} · {{task}} · Run {{run}}",
+      "source": "{{project}} · {{task}} · Run {{run}}",
+      "footnote": "Recorded whenever a CLI reports its limits during a run, and kept 90 days. Use outside Orchester is not seen between reports.",
+      "footnoteGaps": "Recorded whenever a CLI reports its limits during a run, and kept 90 days. {{gaps}}.",
+      "noDataBefore": "No {{cli}} data before {{time}}",
+      "none": "No plan limits recorded yet",
+      "noneDetail": "A CLI reports its limits with its turns; each report is kept 90 days and drawn here. They appear after the next agent turn in any project."
+    },
+    "threshold": {
+      "title": "Warning threshold",
+      "unit": "% of a window used",
+      "hint": "Draws the dashed line in Plan limits. Limits belong to your accounts, so it is saved for Orchester and every project shows the same line. 1–100.",
+      "saved": "Saved for all projects",
+      "invalid": "Enter a whole number from 1 to 100."
+    },
+    "breakdown": {
+      "title": "Where tokens go",
+      "note": "Spent tokens · select a row to filter by it",
+      "byProject": "By project",
+      "byProfile": "By agent profile · step",
+      "byModel": "By model",
+      "byPipeline": "By pipeline",
+      "profileStep": "{{profile}} · {{step}}",
+      "pipelineGone": "Pipeline no longer exists",
+      "idle": "{{names}} had no runs in the period."
+    },
+    "expensive": {
+      "title": "Most expensive",
+      "tasks": "Tasks",
+      "runs": "Runs",
+      "runLabel": "{{task}} · Run {{run}}",
+      "tasksShown": "{{shown}} of {{count}} tasks with runs in the period",
+      "runsShown": "{{shown}} of {{count}} runs in the period · a row opens the run",
+      "showAll": "Show all {{count}} →",
+      "showFirst": "Show the first {{count}}"
+    },
+    "efficiency": {
+      "title": "Efficiency",
+      "cache": "Cache share",
+      "cacheOn": "Cache share · {{day}}",
+      "beforeEdit": "Tokens before first edit",
+      "withIndex": "With code index",
+      "withoutIndex": "Without code index",
+      "invocations": "{{count}} invocations",
+      "withoutEdit": "{{count}} invocations without an edit are left out.",
+      "failed": "Failed runs",
+      "failedRuns": "{{count}} failed · {{share}} of runs",
+      "failedTokens": "{{tokens}} tokens · {{share}} of spent",
+      "largest": "Largest: {{task}} · Run {{run}} · {{tokens}}",
+      "showFailed": "Show failed tasks →"
+    },
+    "table": {
+      "when": "When",
+      "window": "Window",
+      "used": "Used",
+      "resets": "Resets",
+      "reportedBy": "Reported by",
+      "name": "Name",
+      "share": "Share",
+      "project": "Project",
+      "task": "Task",
+      "run": "Run",
+      "pipeline": "Pipeline",
+      "started": "Started",
+      "spent": "Spent tokens",
+      "cached": "Cached input",
+      "outcome": "Outcome",
+      "measure": "Measure",
+      "value": "Value",
+      "count": "Count"
     }
   },
   "diff": {
