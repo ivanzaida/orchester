@@ -100,10 +100,7 @@ fn recorded_first_edit(repo: &Path) -> String {
 
 /// Codex and Claude Code report a changed file at its absolute path in the worktree
 /// (`H:\…\.orchester/worktrees\<run>\README.md` on Windows): the row names it as the repository does.
-#[test]
-fn activity_shows_the_first_edit_relative_to_the_worktree() {
-  let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+fn shows_the_first_edit_relative_to_the_worktree(mut desktop: Desktop) {
   activity_of(&mut desktop, "Report the absolute path. Append one line to README.md.");
 
   let recorded = recorded_first_edit(desktop.repo());
@@ -111,6 +108,22 @@ fn activity_shows_the_first_edit_relative_to_the_worktree() {
   assert!(recorded.contains("worktrees"), "{recorded}");
   assert!(shows(&mut desktop, PANEL, " · README.md"));
   assert!(!shows(&mut desktop, PANEL, &recorded));
+}
+
+#[test]
+fn activity_shows_the_first_edit_relative_to_the_worktree() {
+  let (runner, fake) = programs();
+  let desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  shows_the_first_edit_relative_to_the_worktree(desktop);
+}
+
+/// A repository inside another project's run worktree: the path is relative to the run's own.
+#[test]
+fn activity_shows_the_first_edit_relative_to_the_innermost_worktree() {
+  let (runner, fake) = programs();
+  let folder = "outer/.orchester/worktrees/01a0f437-outer/kontur";
+  let desktop = Desktop::with_runner_at(folder, runner, init_repository, |repo| seed(repo, &fake, false));
+  shows_the_first_edit_relative_to_the_worktree(desktop);
 }
 
 #[test]

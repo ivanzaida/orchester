@@ -561,11 +561,12 @@ fn tenths_of_seconds(millis: i64) -> String {
 
 /// A path the CLI reported inside the run's worktree, relative to the worktree
 /// (`<repo>/.orchester/worktrees/<run>/src/a.rs` reads `src/a.rs`); `None` for other paths. On
-/// Windows the worktree's path mixes separators (`H:\repo\.orchester/worktrees\<run>`).
+/// Windows the worktree's path mixes separators (`H:\repo\.orchester/worktrees\<run>`). The run's
+/// worktree is the innermost one: the repository itself may lie in another project's worktree.
 pub(super) fn in_worktree(path: &str) -> Option<&str> {
   const WORKTREES: &str = ".orchester/worktrees/";
   // Both separators are one byte: the offsets in the copy are the path's.
-  let start = path.replace('\\', "/").find(WORKTREES)? + WORKTREES.len();
+  let start = path.replace('\\', "/").rfind(WORKTREES)? + WORKTREES.len();
   let rest = &path[start..];
   rest.find(['\\', '/']).map(|separator| &rest[separator + 1..])
 }
