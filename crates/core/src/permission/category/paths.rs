@@ -167,18 +167,40 @@ impl CommandScope {
   /// depth, or `.orchester/` at the top of the worktree; or, for a delete, the worktree or a writable
   /// folder itself.
   pub(super) fn write_refused(&self, path: &Path, delete: bool) -> bool {
-    let root = if path.starts_with(&self.worktree) {
-      Some((&self.worktree, true))
-    } else {
-      self
-        .writable
-        .iter()
-        .find(|folder| path.starts_with(folder))
-        .map(|folder| (folder, false))
-    };
-    root.is_some_and(|(root, in_worktree)| {
-      protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+    // As written and resolved: a short name (`GIT~1`) or a stream spelling opens `.git` only resolved.
+    [path.to_path_buf(), resolved(path)].iter().any(|path| {
+      let root = if path.starts_with(&self.worktree) {
+        Some((&self.worktree, true))
+      } else {
+        self
+          .writable
+          .iter()
+          .find(|folder| path.starts_with(folder))
+          .map(|folder| (folder, false))
+      };
+      root.is_some_and(|(root, in_worktree)| {
+        protected(path, root, in_worktree) || (delete && path.components().count() == root.components().count())
+      })
     })
+  }
+
+  /// Whether a program written with a folder is installed where the agent cannot have written it: an
+  /// absolute path, resolved, outside the worktree, the writable and temporary folders and the credential
+  /// locations (`C:\Program Files\PowerShell\7\pwsh.exe`, not `../x/bash`).
+  pub(super) fn installed(&self, word: &str) -> bool {
+    host_path(word).is_some_and(|path| path.is_absolute() && self.place(&resolved(&path)) == Place::Outside)
+  }
+
+  /// Whether `path` lies in the worktree, as written and resolved.
+  pub(super) fn in_worktree(&self, path: &Path) -> bool {
+    path.starts_with(&self.worktree) && resolved(path).starts_with(&self.worktree)
+  }
+
+  /// Whether `path` is the worktree or a writable folder itself.
+  pub(super) fn is_root(&self, path: &Path) -> bool {
+    std::iter::once(&self.worktree)
+      .chain(&self.writable)
+      .any(|root| root == path)
   }
 
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it

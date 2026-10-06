@@ -89,6 +89,15 @@ fn subcommand(args: &[String]) -> Option<(usize, &str, Vec<String>)> {
         folders.push(args.get(index + 1)?.clone());
         index += 2;
       }
+      // Who a commit names; every other setting can name a program git starts (`core.hooksPath`,
+      // `core.sshCommand`, an alias) or where it reads and writes.
+      "-c"
+        if args
+          .get(index + 1)
+          .is_some_and(|setting| setting.starts_with("user.name=") || setting.starts_with("user.email=")) =>
+      {
+        index += 2;
+      }
       "--no-pager" | "-P" | "--no-optional-locks" | "--paginate" | "-p" => index += 1,
       arg if arg.starts_with('-') => return None,
       arg => return Some((index, arg, folders)),
@@ -120,6 +129,9 @@ pub(super) fn judge(args: &[String]) -> Judged {
   } else {
     judge_subcommand(sub, &args[at..])
   };
+  if let [repository] = folders.as_slice() {
+    judged.repository = Some(repository.clone());
+  }
   judged.inside.extend(folders);
   if PREFIX_STAYS.contains(&sub) {
     judged = judged.prefix_stays();
@@ -132,6 +144,11 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
   let rest = &with_sub[1..];
   match sub {
     "status" | "log" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" | "grep" => known_read(with_sub),
+    // Signing runs gpg or ssh-keygen with the user's key.
+    "commit" | "merge" | "revert" | "cherry-pick" | "am" | "rebase" if has_option(rest, &["-S", "--gpg-sign"]) => {
+      Judged::unknown()
+    }
+    "tag" if has_option(rest, &["-s", "-u", "--sign", "--local-user"]) => Judged::unknown(),
     "branch" | "tag" if has_option(rest, &["-d", "-D", "--delete", "-f", "--force", "-m", "-M", "-c", "-C"]) => {
       Judged::of(Kind::Destructive)
     }
