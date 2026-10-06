@@ -63,6 +63,14 @@ fn auto_mode_new_runs_take_the_projects_setting() {
   assert!(!db.run_auto_mode(second.id()).expect("read"));
   db.set_run_auto_mode(run.id(), true).expect("turn on");
   assert!(db.run_auto_mode(run.id()).expect("read"));
+  // Where origin pushed as the run started.
+  assert_eq!(db.run_origin(run.id()).expect("read"), None);
+  db.record_run_origin(run.id(), Some("https://example.invalid/kontur.git"))
+    .expect("record");
+  assert_eq!(
+    db.run_origin(run.id()).expect("read").as_deref(),
+    Some("https://example.invalid/kontur.git")
+  );
 }
 
 #[test]

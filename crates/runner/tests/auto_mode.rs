@@ -1,12 +1,12 @@
 //! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
 //! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
-//! with its system prompt, an unknown command too while the step's network is on, a Codex escalation while
-//! it is on, and a plain push of the run's branch; a credential read, a force push, and an unknown command
-//! or an escalation in a step that only reads still ask the person without a review; a question of the reviewer and an
-//! answer it cannot read leave the request to the person with what auto mode said; a review whose run turned auto mode
-//! off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex connection
-//! reviews through `codex exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs `git`. Run
-//! with `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
+//! with its system prompt, an unknown command too while the step's network is on, and a plain push of the
+//! run's branch to the origin recorded at its start; a credential read, a force push, and an unknown command
+//! in a step that only reads, and every Codex escalation still ask the person without a review; a question of the
+//! reviewer and an answer it cannot read leave the request to the person with what auto mode said; a review whose run
+//! turned auto mode off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex
+//! connection reviews through `codex exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs
+//! `git`. Run with `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
 
 mod support;
 
@@ -258,11 +258,16 @@ async fn auto_mode_reviews_an_unknown_command_unless_the_step_only_reads() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_mode_reviews_a_plain_push_of_the_runs_branch_and_holds_a_force_push() {
-  let mut plain = Started::new(&asking(
+  // The run records where origin pushes as it starts; the push must still go there.
+  let project = project(&asking(
     "Run `git push origin orchester/orc-1-run-1`.",
     NetworkAccess::On,
-  ))
-  .await;
+  ));
+  support::git(
+    project.repo.path(),
+    &["remote", "add", "origin", "https://example.invalid/kontur.git"],
+  );
+  let mut plain = Started::of(project, None).await;
   plain.ended().await;
   let decisions = plain.decisions();
   assert_eq!(decisions.len(), 1, "{decisions:?}");
@@ -306,25 +311,22 @@ async fn codex_escalating(repository: RepositoryAccess) -> Started {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_reviews_a_codex_escalation_unless_the_step_is_confined() {
-  let mut on = codex_escalating(RepositoryAccess::Write).await;
-  on.ended().await;
-  let decisions = on.decisions();
-  assert_eq!(decisions.len(), 1, "{decisions:?}");
-  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
-
-  let mut off = codex_escalating(RepositoryAccess::ReadOnly).await;
-  let (request, review) = off.left_to_person().await;
-  assert!(request.command);
-  assert_eq!(
-    review,
-    Review::Held {
-      hold: ReviewHold::Escalation
-    }
-  );
-  off.deny(request).await;
-  off.ended().await;
-  assert!(off.logged("pid").is_empty(), "no reviewer ran");
+async fn auto_mode_leaves_every_codex_escalation_to_the_person() {
+  for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
+    let mut started = codex_escalating(repository).await;
+    let (request, review) = started.left_to_person().await;
+    assert!(request.command);
+    assert_eq!(
+      review,
+      Review::Held {
+        hold: ReviewHold::Escalation
+      },
+      "{repository:?}"
+    );
+    started.deny(request).await;
+    started.ended().await;
+    assert!(started.logged("pid").is_empty(), "no reviewer ran");
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]

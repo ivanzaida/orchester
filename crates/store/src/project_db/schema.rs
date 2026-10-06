@@ -514,4 +514,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   automation_answers::MIGRATION,
   auto_mode::MIGRATION,
   auto_mode::REVIEWER_MIGRATION,
+  auto_mode::ORIGIN_MIGRATION,
 ];

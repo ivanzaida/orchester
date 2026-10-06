@@ -69,3 +69,8 @@ pub(super) const REVIEWER_MIGRATION: &str = r"
 ALTER TABLE project_auto_mode ADD COLUMN connection TEXT;
 ALTER TABLE project_auto_mode ADD COLUMN effort TEXT CHECK (effort IS NULL OR connection IS NOT NULL);
 ";
+
+/// The push URL of `origin` when a run started, which a push auto mode reviews must still go to.
+pub(super) const ORIGIN_MIGRATION: &str = r"
+ALTER TABLE runs ADD COLUMN origin_url TEXT;
+";

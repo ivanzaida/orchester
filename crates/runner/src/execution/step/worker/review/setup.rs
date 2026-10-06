@@ -18,8 +18,8 @@ use orchester_core::{
   run::{
     ApprovalSubject,
     review::{
-      HoldRules, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict,
-      ReviewerKind, resolve_reviewer, review_request,
+      HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput,
+      ReviewVerdict, ReviewerKind, resolve_reviewer, review_request,
     },
   },
   secret::{SecretValue, SecretVault},
@@ -33,6 +33,7 @@ use super::{
   native::{NativeReviewer, client},
   process::{ReviewPlace, SupervisedRunner},
 };
+use crate::git::Git;
 
 /// The project's reviewer, before one review runs.
 pub(super) enum ReviewerSetup {
@@ -56,12 +57,40 @@ pub(super) enum ReviewerSetup {
   Missing,
 }
 
+/// Where a push of the run would go: its branch, its worktree, and the push URL of `origin` recorded as it
+/// started.
+pub(super) struct PushPlace {
+  pub(super) branch: Option<String>,
+  pub(super) worktree: PathBuf,
+  pub(super) origin: Option<String>,
+}
+
+impl PushPlace {
+  /// The branch checked out in the worktree now, and whether `origin` still pushes where it did as the
+  /// run started; what git cannot tell counts against the push.
+  fn read(&self) -> (Option<String>, bool) {
+    let git = Git::new(&self.worktree);
+    let answer = |args: &[&str]| match git.attempt(args) {
+      Ok(Ok(out)) => Some(out),
+      Ok(Err(_)) => None,
+      Err(error) => {
+        tracing::warn!(%error, "cannot ask git where a push would go");
+        None
+      }
+    };
+    let head = answer(&["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    let origin = answer(&["remote", "get-url", "--push", "origin"]);
+    let kept = matches!((&origin, &self.origin), (Some(now), Some(then)) if now == then);
+    (head, kept)
+  }
+}
+
 /// What a review of one request needs besides the reviewer.
 pub(super) struct ReviewJob {
   pub(super) subject: ApprovalSubject,
   pub(super) permissions: Option<AgentPermissions>,
-  /// The run's branch, which a push may send to `origin` without the person.
-  pub(super) branch: Option<String>,
+  /// What tells where a push of the run would go.
+  pub(super) push: PushPlace,
   /// Codex asks to run the command outside its sandbox.
   pub(super) escalation: bool,
   pub(super) input: Result<ReviewInput, ReviewHold>,
@@ -76,16 +105,21 @@ impl ReviewerSetup {
     let ReviewJob {
       subject,
       permissions,
-      branch,
+      push,
       escalation,
       input,
       runtime,
       timeout,
       stop,
     } = job;
+    let (head, origin_kept) = push.read();
     let hold_rules = HoldRules {
       permissions: permissions.as_ref(),
-      branch: branch.as_deref(),
+      push: PushFacts {
+        branch: push.branch.as_deref(),
+        head: head.as_deref(),
+        origin_kept,
+      },
       escalation,
     };
     let rules = (&subject, &hold_rules);

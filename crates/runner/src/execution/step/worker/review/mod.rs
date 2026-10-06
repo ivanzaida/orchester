@@ -27,7 +27,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 pub(in crate::execution::step) use self::setup::ReviewerKeys;
 use self::{
   process::{StopReview, stop_review},
-  setup::ReviewJob,
+  setup::{PushPlace, ReviewJob},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -82,18 +82,22 @@ impl Worker {
     let input = self.review_input(watch, approval, permissions.as_ref())?;
     let setup = self.reviewer(watch)?;
     let (stop, stopped) = stop_review();
-    let branch = watch
-      .db
-      .run(approval.run)
-      .map_err(|error| StoreError::Corrupt {
-        what: "run",
-        detail: error.to_string(),
-      })?
-      .map(|run| run.branch().as_str().to_owned());
+    let push = PushPlace {
+      branch: watch
+        .db
+        .run(approval.run)
+        .map_err(|error| StoreError::Corrupt {
+          what: "run",
+          detail: error.to_string(),
+        })?
+        .map(|run| run.branch().as_str().to_owned()),
+      worktree: self.scope.worktree().to_path_buf(),
+      origin: watch.db.run_origin(approval.run)?,
+    };
     let job = ReviewJob {
       subject,
       permissions,
-      branch,
+      push,
       escalation,
       input,
       runtime: Handle::current(),

@@ -60,6 +60,28 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Records the push URL of `origin` as `run` starts; `None` when the repository has no `origin`.
+  pub fn record_run_origin(&mut self, run: RunId, url: Option<&str>) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE runs SET origin_url = ?2 WHERE id = ?1",
+      params![run.to_string(), url],
+    )?;
+    Ok(())
+  }
+
+  /// The push URL of `origin` recorded as `run` started.
+  pub fn run_origin(&self, run: RunId) -> Result<Option<String>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT origin_url FROM runs WHERE id = ?1", [run.to_string()], |row| {
+          row.get::<_, Option<String>>(0)
+        })
+        .optional()?
+        .flatten(),
+    )
+  }
+
   /// Whether `run` uses auto mode.
   pub fn run_auto_mode(&self, run: RunId) -> Result<bool, StoreError> {
     self
