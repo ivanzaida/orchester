@@ -75,6 +75,8 @@ fn header(ctx: &Ctx, view: &View<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Inline.role())
     .align_items(Alignment::Center)
+    // ‹ and › are as tall as the row and end at its right edge; their focus rings reach past it.
+    .overflow_visible()
     .child(Text::new(&title).variant(ExtraTypography::DialogTitle.role()).flex(1.0))
     .child(
       Text::new(&position)

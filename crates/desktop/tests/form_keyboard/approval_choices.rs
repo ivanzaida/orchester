@@ -6,7 +6,11 @@
 //! similar rule's Revoke, and auto-approval's switch, indicator and Stop. This harness has no runner, so its status
 //! bar shows that problem in place of the waiting requests (`tests/status_bar/approvals.rs` shows them).
 
-use lurq::{app::events::MouseButton, core::ElementRect, layout::quad::QuadContent};
+use lurq::{
+  app::events::MouseButton,
+  core::ElementRect,
+  layout::quad::{Quad, QuadContent},
+};
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
@@ -247,6 +251,50 @@ fn painted_text_in(desktop: &Desktop, bounds: &ElementRect) -> Option<ElementRec
       height: quad.height,
       ..ElementRect::default()
     })
+}
+
+/// A focused ‹ or › shows its whole focus ring (`xURvJ`): the header row ends at › and is taller
+/// than the buttons by less than the ring reaches, so it must not clip them.
+#[test]
+fn approval_choices_queue_buttons_show_their_whole_focus_ring() {
+  let (mut desktop, _) = open(3);
+  desktop.press("tool-approval-next");
+  desktop.wait_until("the middle request", |desktop| {
+    shows(desktop, "tool-approval-position", "2 of 3 waiting")
+  });
+  for id in ["tool-approval-previous", "tool-approval-next"] {
+    desktop.tab_to(id, 12);
+    let button = desktop.bounds(id);
+    let rings: Vec<_> = desktop
+      .tree
+      .painted_quads()
+      .into_iter()
+      .filter_map(|quad| match &quad.content {
+        QuadContent::BoxShadow(shadow) if !shadow.inset && same_box(&quad, &button) => {
+          Some((shadow.outset(), quad.clip))
+        }
+        _ => None,
+      })
+      .collect();
+    assert!(!rings.is_empty(), "{id} paints its focus ring");
+    for (outset, clip) in rings {
+      let (left, top) = (button.x - outset, button.y - outset);
+      let (right, bottom) = (button.x + button.width + outset, button.y + button.height + outset);
+      let whole = !clip.active
+        || (clip.x <= left && clip.y <= top && clip.x + clip.width >= right && clip.y + clip.height >= bottom);
+      let clipped = (clip.x, clip.y, clip.width, clip.height);
+      assert!(
+        whole,
+        "{id}'s ring reaching {outset} past {button:?} is clipped to {clipped:?}"
+      );
+    }
+  }
+}
+
+/// Whether `quad` is painted on `bounds`, to within a layout rounding.
+fn same_box(quad: &Quad, bounds: &ElementRect) -> bool {
+  let near = |a: f32, b: f32| (a - b).abs() <= 0.5;
+  near(quad.x, bounds.x) && near(quad.y, bounds.y) && near(quad.width, bounds.width) && near(quad.height, bounds.height)
 }
 
 #[test]
