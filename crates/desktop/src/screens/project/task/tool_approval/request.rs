@@ -10,7 +10,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, ScrollVertical, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{connection::AgentProvider, permission::category::CommandCategory, run::PendingToolApproval};
@@ -30,7 +30,8 @@ use crate::{
   },
 };
 
-/// The ‹ and › buttons beside the queue position (`YLfbU`, `H4ip59`): 26 square.
+/// The ‹ and › buttons beside the queue position (`YLfbU`, `H4ip59`): 26 square, the chevron in the
+/// middle.
 const QUEUE_BUTTON_SIZE: f32 = 26.0;
 
 /// The request step's sections, and what Enter does: Approve once.
@@ -110,7 +111,9 @@ fn queue_button(view: &View<'_>, glyph: Icon, id: &'static str, target: Option<&
     .id(id)
     .width(Dimension::Px(QUEUE_BUTTON_SIZE))
     .height(Dimension::Px(QUEUE_BUTTON_SIZE))
+    // A lurq button lays its children out as a row from the start; the glyph is centred both ways.
     .align_items(Alignment::Center)
+    .justify(Justify::Center)
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)

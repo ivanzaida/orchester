@@ -6,6 +6,7 @@
 //! similar rule's Revoke, and auto-approval's switch, indicator and Stop. This harness has no runner, so its status
 //! bar shows that problem in place of the waiting requests (`tests/status_bar/approvals.rs` shows them).
 
+use lurq::{app::events::MouseButton, core::ElementRect, layout::quad::QuadContent};
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
   resource::ModelId,
@@ -165,6 +166,87 @@ fn approval_choices_one_request_at_a_time_oldest_first() {
   desktop.wait_until("the first request again", |desktop| {
     shows(desktop, "tool-approval-position", "1 of 3 waiting")
   });
+}
+
+/// ‹ and › hold their chevron in the middle of their 26 square (`YLfbU`, `H4ip59`) whether they can be
+/// pressed or not, under the pointer and with the focus, at 1x and at 1.5x. The chevron is a lucide glyph
+/// whose ink is centred in its one-em box, so its text box centred in the button centres the ink.
+#[test]
+fn approval_choices_queue_chevrons_are_centred_in_their_buttons() {
+  let (mut desktop, _) = open(3);
+  // The design's 1440 × 960 window in physical pixels at each scale.
+  for (scale, width, height) in [(1.0, 1440, 960), (1.5, 2160, 1440)] {
+    desktop.tree.set_scale_factor(scale);
+    desktop.tree.resize(width, height);
+    desktop.pass();
+    // The first request: ‹ cannot be pressed, › can.
+    assert_chevrons_centred(&mut desktop, scale, "first request");
+    pointer(&mut desktop, "tool-approval-next", scale, false);
+    assert_chevrons_centred(&mut desktop, scale, "› under the pointer");
+    desktop.tab_to("tool-approval-next", 12);
+    assert_chevrons_centred(&mut desktop, scale, "› focused");
+    pointer(&mut desktop, "tool-approval-next", scale, true);
+    desktop.wait_until("the second request", |desktop| {
+      shows(desktop, "tool-approval-position", "2 of 3 waiting")
+    });
+    // The middle request: both can be pressed.
+    assert_chevrons_centred(&mut desktop, scale, "middle request");
+    pointer(&mut desktop, "tool-approval-previous", scale, true);
+    desktop.wait_until("the first request again", |desktop| {
+      shows(desktop, "tool-approval-position", "1 of 3 waiting")
+    });
+  }
+}
+
+/// The pointer over the middle of `id`, and a press there if `press`. lurq takes the pointer in the
+/// window's physical pixels, which `Desktop::hover` and `Desktop::press` assume are logical ones.
+fn pointer(desktop: &mut Desktop, id: &str, scale: f32, press: bool) {
+  let bounds = desktop.bounds(id);
+  let (x, y) = (
+    (bounds.x + bounds.width / 2.0) * scale,
+    (bounds.y + bounds.height / 2.0) * scale,
+  );
+  desktop.tree.mouse_move(x, y);
+  if press {
+    desktop.tree.mouse_down(x, y, MouseButton::Left);
+    desktop.tree.mouse_up(x, y, MouseButton::Left);
+  }
+  desktop.pass();
+}
+
+fn assert_chevrons_centred(desktop: &mut Desktop, scale: f32, state: &str) {
+  for id in ["tool-approval-previous", "tool-approval-next"] {
+    let button = desktop.bounds(id);
+    let glyph = painted_text_in(desktop, &button).unwrap_or_else(|| panic!("{id} paints its chevron"));
+    let what = format!("{id} at {scale}x, {state}: chevron {glyph:?} in {button:?}");
+    assert_eq!(glyph.width, glyph.height, "{what}: the chevron's box is its square em");
+    let centre = |rect: &ElementRect| (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let ((glyph_x, glyph_y), (button_x, button_y)) = (centre(&glyph), centre(&button));
+    // Within a quarter of a physical pixel, so a rounding of the layout passes and an offset does not.
+    let tolerance = 0.25 / scale;
+    assert!((glyph_x - button_x).abs() <= tolerance, "{what}: centred across");
+    assert!((glyph_y - button_y).abs() <= tolerance, "{what}: centred down");
+  }
+}
+
+/// The box of the one text painted inside `bounds` in the last pass.
+fn painted_text_in(desktop: &Desktop, bounds: &ElementRect) -> Option<ElementRect> {
+  let inside = |x: f32, y: f32, width: f32, height: f32| {
+    x >= bounds.x && y >= bounds.y && x + width <= bounds.x + bounds.width && y + height <= bounds.y + bounds.height
+  };
+  desktop
+    .tree
+    .painted_quads()
+    .into_iter()
+    .filter(|quad| matches!(quad.content, QuadContent::Text { .. }))
+    .find(|quad| inside(quad.x, quad.y, quad.width, quad.height))
+    .map(|quad| ElementRect {
+      x: quad.x,
+      y: quad.y,
+      width: quad.width,
+      height: quad.height,
+      ..ElementRect::default()
+    })
 }
 
 #[test]
