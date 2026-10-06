@@ -107,10 +107,31 @@ impl ProjectDb {
   /// Records what auto mode did with request `id` of `run`, while it waits.
   pub fn record_review(&mut self, run: RunId, id: &str, review: &Review) -> Result<(), StoreError> {
     self.connection.execute(
-      "UPDATE tool_approvals SET review = ?3 WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
+      "UPDATE tool_approvals SET review = ?3, reviewing = 0 WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
       params![run.to_string(), id, encode_json(REVIEW, REVIEW_SCHEMA, review)?],
     )?;
     Ok(())
+  }
+
+  /// Marks request `id` of `run` as under review (`on`): it waits without asking the person until the
+  /// review ends, which [`Self::record_review`] or this with `false` says.
+  pub fn set_reviewing(&mut self, run: RunId, id: &str, on: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE tool_approvals SET reviewing = ?3 WHERE run_id = ?1 AND id = ?2 AND state = 'pending'",
+      params![run.to_string(), id, on],
+    )?;
+    Ok(())
+  }
+
+  /// The ids of the waiting requests auto mode's reviewer is judging, in the whole project.
+  pub fn reviewing_tool_approvals(&self) -> Result<Vec<String>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT id FROM tool_approvals WHERE state = 'pending' AND reviewing = 1")?;
+    let ids = statement
+      .query_map([], |row| row.get(0))?
+      .collect::<Result<Vec<String>, _>>()?;
+    Ok(ids)
   }
 
   /// What auto mode did with request `id` of `run`; `None` when it did not look at it.
