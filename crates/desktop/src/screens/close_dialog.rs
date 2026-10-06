@@ -14,6 +14,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
+use orchester_core::id::RunId;
 
 use crate::{
   close::{ClosePhase, Lifecycle},
@@ -29,7 +30,9 @@ use crate::{
 };
 
 /// Action bar and task row heights (`anyo4`, `uHX7b`), status label
-/// height (`JIbWj`) and the fixed row cells (`F4NwB`, `c2rkx`, `VizsW`, `S2kP9L`).
+/// height (`JIbWj`) and the row cells' design widths (`F4NwB`, `c2rkx`, `VizsW`, `S2kP9L`): the
+/// least the key, step and status take, so the columns line up, while longer words widen their cell
+/// instead of being cut; the last cell keeps its width and ends in an ellipsis.
 const ACTIONS_HEIGHT: f32 = 76.0;
 const ROW_HEIGHT: f32 = 48.0;
 const STATUS_HEIGHT: f32 = 26.0;
@@ -38,6 +41,17 @@ const STEP_WIDTH: f32 = 140.0;
 const STATUS_WIDTH: f32 = 112.0;
 const SAVING_STATUS_WIDTH: f32 = 200.0;
 const MODEL_WIDTH: f32 = 110.0;
+/// The least a task title keeps before the last cell gives way: a few words of it.
+const TITLE_MIN: f32 = 120.0;
+
+/// The order in which a row's cells give way when the dialog is too narrow for all of them (lurq
+/// `shrink_order`, as the status bar does): first the title, down to [`TITLE_MIN`], then the last cell
+/// (provider · model, or where the run paused); both end in an ellipsis. The key, the step label and
+/// the status badge never give way.
+mod give_way {
+  pub const TITLE: i32 = 0;
+  pub const LAST: i32 = 1;
+}
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -213,16 +227,30 @@ fn project_group(
   ]
 }
 
-/// A task row (`clVjO` as in `uHX7b`): key, title, step · agent, status, provider · model. While
-/// waiting (`EjBmm`, `x0H09A`) the status says whether the run is saved and the last cell where it
-/// paused.
-fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveState>) -> Element {
-  let (status_icon, status, status_width) = match (stage, save) {
+/// The status label (`JIbWj`): *Running*, *Saving at next checkpoint…* or *Saved*, never cut.
+fn status_cell(ctx: &Ctx, stage: CloseStage, save: Option<&SaveState>, run: RunId) -> Row {
+  let (glyph, status, width) = match (stage, save) {
     (CloseStage::Confirm, _) => (Icon::Loader, "lifecycle.close.running", STATUS_WIDTH),
     (CloseStage::Waiting, Some(SaveState::Saved { .. })) => (Icon::Check, "lifecycle.close.saved", SAVING_STATUS_WIDTH),
     (CloseStage::Waiting, _) => (Icon::Loader, "lifecycle.close.saving", SAVING_STATUS_WIDTH),
   };
-  let last = match (stage, save) {
+  let label = Row::new()
+    .id(format!("close-status-{run}"))
+    .height(Dimension::Px(STATUS_HEIGHT))
+    .padding_horizontal(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Tight.role())
+    .align_items(Alignment::Center)
+    .background(PaletteColor::AccentMuted)
+    .rounded(RadiusSize::Sm)
+    .flex_shrink(0.0)
+    .child(icon(glyph, IconSize::Small, PaletteColor::TextPrimary))
+    .child(Text::new(&ctx.t(status)).variant(TypographyStyle::Link).nowrap());
+  Row::new().min_width(Dimension::Px(width)).flex_shrink(0.0).child(label)
+}
+
+/// The last cell: provider · model, or while waiting where the run paused.
+fn last_words(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveState>) -> Arc<str> {
+  match (stage, save) {
     (CloseStage::Confirm, _) => ctx.t_args(
       "lifecycle.close.providerModel",
       [
@@ -241,21 +269,21 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
     ),
     (CloseStage::Waiting, Some(SaveState::Saved { checkpoint: None })) => ctx.t("lifecycle.close.paused"),
     (CloseStage::Waiting, _) => ctx.t("lifecycle.close.stepStillRunning"),
-  };
+  }
+}
+
+/// A task row (`clVjO` as in `uHX7b`): key, title, step · agent, status, provider · model. While
+/// waiting (`EjBmm`, `x0H09A`) the status says whether the run is saved and the last cell where it
+/// paused.
+fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveState>) -> Element {
   let step = ctx.t_args(
     "lifecycle.close.stepAgent",
     [("step", work.step()), ("agent", work.agent())],
   );
-  let status = Row::new()
-    .height(Dimension::Px(STATUS_HEIGHT))
-    .padding_horizontal(SpacingSize::Sm)
-    .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::AccentMuted)
-    .rounded(RadiusSize::Sm)
-    .child(icon(status_icon, IconSize::Small, PaletteColor::TextPrimary))
-    .child(Text::new(&ctx.t(status)).variant(TypographyStyle::Link).nowrap());
+  let last = last_words(ctx, stage, work, save);
+  let run = work.run();
   Row::new()
+    .id(format!("close-row-{run}"))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))
     .padding_horizontal(ExtraSpacing::Stack.role())
@@ -265,28 +293,40 @@ fn work_row(ctx: &Ctx, stage: CloseStage, work: &ActiveWork, save: Option<&SaveS
     .child(
       Text::new(work.task_key())
         .variant(TypographyStyle::Mono)
-        .width(Dimension::Px(KEY_WIDTH)),
+        .nowrap()
+        .min_width(Dimension::Px(KEY_WIDTH))
+        .flex_shrink(0.0),
     )
     .child(
       Text::new(work.task_title())
+        .id(format!("close-title-{run}"))
         .variant(TypographyStyle::FieldLabel)
         .color(PaletteColor::TextPrimary)
         .nowrap()
-        .flex(1.0),
+        .text_overflow(TextOverflow::Elipsis)
+        // From nothing, so every row's title takes the same free space and the columns line up.
+        .flex_full(1.0, 1.0, Some(0.0))
+        .min_width(Dimension::Px(TITLE_MIN))
+        .shrink_order(give_way::TITLE),
     )
     .child(
       Text::new(&step)
+        .id(format!("close-step-{run}"))
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
-        .width(Dimension::Px(STEP_WIDTH)),
+        .min_width(Dimension::Px(STEP_WIDTH))
+        .flex_shrink(0.0),
     )
-    .child(Row::new().width(Dimension::Px(status_width)).child(status))
+    .child(status_cell(ctx, stage, save, run))
     .child(
       Text::new(&last)
+        .id(format!("close-last-{run}"))
         .variant(ExtraTypography::Footnote.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
-        .width(Dimension::Px(MODEL_WIDTH)),
+        .width(Dimension::Px(MODEL_WIDTH))
+        .flex_shrink(1.0)
+        .shrink_order(give_way::LAST),
     )
     .into()
 }
