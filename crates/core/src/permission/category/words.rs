@@ -17,6 +17,13 @@ fn is_descriptor(word: &str) -> bool {
   word == "-" || (!number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 }
 
+/// The values of the shell's `HOME` and `USERPROFILE`; `None` when unset there.
+#[derive(Clone, Debug, Default)]
+pub(super) struct ShellHomes {
+  pub(super) home: Option<String>,
+  pub(super) profile: Option<String>,
+}
+
 /// The names of the home folder's variables.
 const HOME_NAMES: [&str; 2] = ["HOME", "USERPROFILE"];
 
@@ -94,7 +101,7 @@ enum Joiner {
 /// The parts being collected.
 struct Splitter {
   /// What `$HOME` and `$USERPROFILE` are read as, when the line sets neither.
-  home: Option<String>,
+  homes: ShellHomes,
   quoting: Quoting,
   parts: Vec<RawPart>,
   part: RawPart,
@@ -116,9 +123,14 @@ type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
 /// `home` is the home folder the agent's CLI was started with, which `$HOME` and `$USERPROFILE` (also
 /// braced) are read as, unless the line may set either: any `HOME` or `USERPROFILE` in it that is not
 /// such a use (`HOME=/x`, `export HOME`, `read HOME`) leaves them unread.
-pub(super) fn split(command: &str, quoting: Quoting, home: Option<&str>) -> Vec<RawPart> {
+pub(super) fn split(command: &str, quoting: Quoting, homes: ShellHomes) -> Vec<RawPart> {
+  let homes = if sets_home(command) {
+    ShellHomes::default()
+  } else {
+    homes
+  };
   let mut splitter = Splitter {
-    home: home.filter(|_| !sets_home(command)).map(str::to_owned),
+    homes,
     quoting,
     parts: Vec::new(),
     part: RawPart::default(),
@@ -396,10 +408,12 @@ impl Splitter {
     if braced && ahead.next_if_eq(&'}').is_none() {
       return false;
     }
-    let home = self
-      .home
-      .clone()
-      .filter(|home| HOME_NAMES.contains(&name.as_str()) && (quoted || !home.contains([' ', '\t', '*', '?', '['])));
+    let home = match name.as_str() {
+      "HOME" => self.homes.home.clone(),
+      "USERPROFILE" => self.homes.profile.clone(),
+      _ => None,
+    }
+    .filter(|home| quoted || !home.contains([' ', '\t', '*', '?', '[']));
     let Some(value) = self.variables.value(&name).map(str::to_owned).or(home) else {
       return false;
     };

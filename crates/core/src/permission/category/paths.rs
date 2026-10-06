@@ -40,31 +40,61 @@ const PUBLISHED_SOURCES: [&[&str]; 2] = [
 pub struct CommandScope {
   worktree: PathBuf,
   writable: Vec<PathBuf>,
-  home: Option<PathBuf>,
+  /// The home folders whose dot files are credential locations, resolved: the user's, and the shell's
+  /// `HOME` and `USERPROFILE` where they differ.
+  homes: Vec<PathBuf>,
+  /// The shell's `HOME` (also `~`) and `USERPROFILE`, as its environment holds them.
+  shell_home: Option<PathBuf>,
+  profile: Option<PathBuf>,
   temp: Option<PathBuf>,
 }
 
 impl CommandScope {
   /// Commands that run in `worktree` and may also write to `writable`, for a user whose home folder is
   /// `home` and whose temporary folder is `temp`. Each is resolved as far as it exists.
+  /// The shell's `HOME` and `USERPROFILE` are `home` too; [`Self::with_shell_homes`] sets them apart.
   pub fn new(worktree: &Path, writable: &[PathBuf], home: Option<&Path>, temp: Option<&Path>) -> Self {
     Self {
       worktree: resolved(worktree),
       writable: writable.iter().map(|folder| resolved(folder)).collect(),
-      home: home.map(resolved),
+      homes: home.map(resolved).into_iter().collect(),
+      shell_home: home.map(Path::to_path_buf),
+      profile: home.map(Path::to_path_buf),
       temp: temp.map(resolved),
     }
   }
 
-  /// The scope of the host's user: their home folder and the system's temporary folder.
-  pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
-    Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
+  /// This scope for a shell whose environment holds `HOME` as `home` and `USERPROFILE` as `profile`
+  /// (`None` when unset): `$HOME` and `~` name the first, `$USERPROFILE` the second, and the dot files
+  /// of each are credential locations too.
+  #[must_use]
+  pub fn with_shell_homes(mut self, home: Option<&Path>, profile: Option<&Path>) -> Self {
+    self.shell_home = home.map(Path::to_path_buf);
+    self.profile = profile.map(Path::to_path_buf);
+    for folder in [home, profile].into_iter().flatten().map(resolved) {
+      if !self.homes.contains(&folder) {
+        self.homes.push(folder);
+      }
+    }
+    self
   }
 
-  /// The home folder, resolved, which `~`, `$HOME` and `$USERPROFILE` name.
-  pub(super) fn home(&self) -> Option<&Path> {
-    self.home.as_deref()
+  /// The scope of the host's user: their home folder and the system's temporary folder, for a shell
+  /// with the host's `HOME` and `USERPROFILE`, which the agent's CLI inherits.
+  pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
+    let variable = |name: &str| std::env::var_os(name).map(PathBuf::from);
+    let home = variable(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
+    Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
+      .with_shell_homes(variable("HOME").as_deref(), variable("USERPROFILE").as_deref())
+  }
+
+  /// The value of the shell's `HOME` or `USERPROFILE` (`name`); `None` for another name or when unset.
+  pub(super) fn home_variable(&self, name: &str) -> Option<&Path> {
+    match name {
+      "HOME" => self.shell_home.as_deref(),
+      "USERPROFILE" => self.profile.as_deref(),
+      _ => None,
+    }
   }
 
   pub fn worktree(&self) -> &Path {
@@ -119,9 +149,9 @@ impl CommandScope {
   /// (`~bob`) and the folders `~+` and `~-`.
   fn absolute(&self, cwd: &Path, word: &str) -> Option<PathBuf> {
     Some(if word == "~" {
-      self.home.clone()?
+      self.shell_home.clone()?
     } else if let Some(rest) = word.strip_prefix("~/").or_else(|| word.strip_prefix("~\\")) {
-      self.home.as_ref()?.join(rest)
+      self.shell_home.as_ref()?.join(rest)
     } else if word.starts_with('~') {
       return None;
     } else {
@@ -158,7 +188,7 @@ impl CommandScope {
     if path.starts_with(&self.worktree) || self.writable.iter().any(|folder| path.starts_with(folder)) {
       return Place::Granted;
     }
-    if self.secret(path) || self.home.as_ref().is_some_and(|home| home.starts_with(path)) || unmapped(path) {
+    if self.secret(path) || self.homes.iter().any(|home| home.starts_with(path)) || unmapped(path) {
       return Place::Secret;
     }
     if self.temp.as_ref().is_some_and(|temp| path.starts_with(temp)) {
@@ -211,7 +241,7 @@ impl CommandScope {
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it
   /// (the folders in it are [`Self::secret`] themselves).
   fn may_hold_secrets(&self, folder: &Path) -> bool {
-    self.home.as_ref().is_some_and(|home| home.starts_with(folder))
+    self.homes.iter().any(|home| home.starts_with(folder))
   }
 
   /// Whether `path` is a credential location of the home folder: a dot file or folder in it (the agent
@@ -219,9 +249,15 @@ impl CommandScope {
   /// …), or anything in the applications' data ([`APPLICATION_DATA`]) but the temporary folder, which
   /// Windows keeps in `AppData/Local/Temp`.
   fn secret(&self, path: &Path) -> bool {
-    let Some(rest) = self.home.as_ref().and_then(|home| path.strip_prefix(home).ok()) else {
-      return false;
-    };
+    self
+      .homes
+      .iter()
+      .filter_map(|home| path.strip_prefix(home).ok())
+      .any(|rest| self.secret_in_home(path, rest))
+  }
+
+  /// Whether `path`, which is `rest` inside a home folder, is a credential location of it.
+  fn secret_in_home(&self, path: &Path, rest: &Path) -> bool {
     let names: Vec<String> = rest
       .components()
       .map(|part| part.as_os_str().to_string_lossy().to_lowercase())

@@ -198,8 +198,16 @@ fn classify_line(
       .collect();
   }
   let mut parts = Vec::new();
-  let home = scope.home().map(|home| home.to_string_lossy());
-  for raw in words::split(text, quoting, home.as_deref()) {
+  let home = |name| {
+    scope
+      .home_variable(name)
+      .map(|home| home.to_string_lossy().into_owned())
+  };
+  let homes = words::ShellHomes {
+    home: home("HOME"),
+    profile: home("USERPROFILE"),
+  };
+  for raw in words::split(text, quoting, homes) {
     parts.extend(classify_part(&raw, quoting, scope, line, depth));
     line.made(scope, &raw.writes);
   }

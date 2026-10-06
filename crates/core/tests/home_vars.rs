@@ -97,3 +97,48 @@ fn home_vars_keep_credentials_and_lines_that_set_them_asking() {
     assert!(!fixture.runs(line), "{line} must ask");
   }
 }
+
+/// Git Bash takes `$HOME` (and `~`) from the environment's `HOME`, which may differ from `USERPROFILE`:
+/// each is read as its own value, and one that is not set leaves the path unknown.
+#[test]
+fn home_vars_read_each_variable_as_its_own_value() {
+  let root = tempfile::tempdir().expect("temporary folder");
+  let profile = root.path().join("profile");
+  let other = root.path().join("other");
+  let worktree = profile.join("proj").join("w");
+  for folder in [worktree.join("x"), other.join("proj/w/x"), other.join(".ssh")] {
+    std::fs::create_dir_all(folder).expect("folder");
+  }
+  let scope = CommandScope::new(&worktree, &[], Some(&profile), Some(&root.path().join("temp")))
+    .with_shell_homes(Some(&other), Some(&profile));
+  let write = |line: &str| {
+    let entry = CommandPrefix::new("cargo test").expect("prefix");
+    let list = CommandPermission::Allowed(AllowedCommands::new(vec![entry]).expect("list"));
+    let permissions = AgentPermissions::new(RepositoryAccess::Write, list, NetworkAccess::Off);
+    let command = ClassifiedCommand::classify(line, &scope);
+    (
+      permitted(&ApprovalSubject::Command(command.clone()), &permissions).is_some(),
+      command,
+    )
+  };
+  let (runs, command) = write("rm -rf $HOME/proj/w/x");
+  assert!(!runs, "$HOME is not the profile");
+  assert_eq!(command.category(), CommandCategory::HistoryDestructive);
+  assert!(
+    write("rm -rf $USERPROFILE/proj/w/x").0,
+    "$USERPROFILE holds the worktree"
+  );
+  assert!(!write("rm -rf ~/proj/w/x").0, "~ is $HOME");
+  assert!(
+    write("cat ~/.ssh/id_rsa").1.reads_secrets(),
+    "the shell's home holds credentials too"
+  );
+  let unset = CommandScope::new(&worktree, &[], Some(&profile), None).with_shell_homes(None, Some(&profile));
+  for line in ["ls $HOME/proj", "ls ~/proj"] {
+    assert_eq!(
+      ClassifiedCommand::classify(line, &unset).category(),
+      CommandCategory::Unknown,
+      "{line} with HOME unset"
+    );
+  }
+}
