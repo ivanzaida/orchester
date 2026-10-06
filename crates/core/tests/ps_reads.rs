@@ -64,6 +64,25 @@ const ASKS: &[&str] = &[
   "pwsh -NoProfile -Command 'Get-NetTCPConnection -LocalPort 1 | Stop-Process'",
   "pwsh -NoProfile -Command 'Get-NetTCPConnection -LocalPort $(1)'",
   "pwsh -NoProfile -Command 'Get-NetTCPConnection -CimSession x'",
+  // Provider paths, shares, wildcards and credentials (review of c8b5c784).
+  r#"pwsh -NoProfile -Command "Get-Content 'Microsoft.PowerShell.Core\FileSystem::C:\Users\x\.ssh\id_rsa'""#,
+  r"pwsh -NoProfile -Command 'Get-ChildItem Microsoft.PowerShell.Core\Environment::'",
+  r"pwsh -NoProfile -Command 'Get-Content FileSystem::src/a.txt'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem HKLM:\SOFTWARE'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem Env:'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem Cert:\CurrentUser'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem Variable:'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem Function:'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem Alias:'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem WSMan:\localhost'",
+  r"pwsh -NoProfile -Command 'Get-Content -Path:Env:PATH'",
+  r"pwsh -NoProfile -Command 'Get-Content \\server\share\x.txt'",
+  r"pwsh -NoProfile -Command 'Get-Content //server/share/x.txt'",
+  r"pwsh -NoProfile -Command 'Get-Content src/*'",
+  r"pwsh -NoProfile -Command 'Get-ChildItem -Path ../*'",
+  r"pwsh -NoProfile -Command 'Get-Content -Path:src/a*'",
+  r"pwsh -NoProfile -Command 'Get-Content -LiteralPath src/a[1].txt'",
+  r"pwsh -NoProfile -Command 'Get-Content src/a.txt -Credential x'",
 ];
 
 #[test]

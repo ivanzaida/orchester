@@ -146,7 +146,8 @@ fn read(program: &str, args: &[String]) -> Judged {
   let known = KNOWN_READS.contains(&program)
     && args
       .iter()
-      .all(|arg| parameter(arg).is_none_or(|(name, _)| KNOWN_READ_PARAMETERS.contains(&name.to_lowercase().as_str())));
+      .all(|arg| parameter(arg).is_none_or(|(name, _)| KNOWN_READ_PARAMETERS.contains(&name.to_lowercase().as_str())))
+    && !paths_globbed(args);
   if known {
     Judged::of(Kind::ReadOnly).known_safe()
   } else {
@@ -265,15 +266,51 @@ fn parameter(arg: &str) -> Option<(&str, Option<&str>)> {
   })
 }
 
+/// Whether a path argument of a file reader (not `-Filter`'s value, which only picks names in its folder)
+/// holds a wildcard, which PowerShell expands by rules of its own.
+fn paths_globbed(args: &[String]) -> bool {
+  const VALUED: [&str; 7] = [
+    "path",
+    "literalpath",
+    "filter",
+    "depth",
+    "totalcount",
+    "tail",
+    "encoding",
+  ];
+  let globbed = |value: &str| value.contains(['*', '?', '[']);
+  let mut previous: Option<String> = None;
+  args.iter().any(|arg| match parameter(arg) {
+    Some((name, attached)) => {
+      let name = name.to_lowercase();
+      let found = attached.is_some_and(|value| name != "filter" && globbed(value));
+      previous = (attached.is_none() && VALUED.contains(&name.as_str())).then_some(name);
+      found
+    }
+    None => {
+      let found = previous.as_deref() != Some("filter") && globbed(arg);
+      previous = None;
+      found
+    }
+  })
+}
+
 /// Whether `arg` cannot be read: a comma makes it an array of values (the quotes that would keep it one
-/// value are gone by now), or it (or the value attached to a parameter) is a path on a provider other
-/// than a drive letter: `env:PATH`, `HKCU:\…`, `Cert:\…`. A URL is not.
+/// value are gone by now), or it (or the value attached to a parameter) names a path on a provider: any
+/// `::` (`Microsoft.PowerShell.Core\FileSystem::C:\…`, `…\Environment::`), a drive other than one
+/// letter (`env:PATH`, `HKCU:\…`, `Cert:\…`, `Variable:`, `Function:`, `WSMan:`), or a share (`\\host`,
+/// `//host`). A URL (`https://…`) is not.
 fn unread(arg: &str) -> bool {
   let value = parameter(arg).map_or(Some(arg), |(_, attached)| attached);
   arg.contains(',')
     || value.is_some_and(|value| {
-      value.split_once(':').is_some_and(|(provider, rest)| {
-        provider.len() > 1 && provider.chars().all(|c| c.is_ascii_alphanumeric()) && !rest.starts_with("//")
-      })
+      value.contains("::")
+        || value.starts_with("\\\\")
+        || value.starts_with("//")
+        || value.split_once(':').is_some_and(|(provider, rest)| {
+          let url = provider.chars().all(|c| c.is_ascii_alphanumeric()) && rest.starts_with("//");
+          let drive = provider.len() == 1 && provider.chars().all(|c| c.is_ascii_alphabetic());
+          !(url || drive)
+        })
     })
 }
