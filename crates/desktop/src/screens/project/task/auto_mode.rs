@@ -2,10 +2,11 @@
 //! popover (no frame yet). In Approvals it follows *Approve everything in this run*: an option with its
 //! explanation. In the popover it is a setting of its own, labelled like the others, with a plain switch:
 //! it is the run's, not the profile's, so it saves at once and is not part of Apply, which it says. It
-//! applies from the next request. It is fixed while the run has ended, while a change is saved, and while
-//! the project has no Claude Code connection to review with, which it says after the lock glyph.
+//! applies from the next request. Both say which connection and model review. It is fixed while the run
+//! has ended, while a change is saved, and while the project has no reviewer, which it says after the lock
+//! glyph.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -22,7 +23,7 @@ use crate::{
   background,
   messages::{self, Message},
   screens::project::run_approval_action::{RunApprovalChanges, reload_after, run_approval_action},
-  tasks::run_approvals::{AutoModeState, RunApprovalChange, auto_mode_in},
+  tasks::run_approvals::{AutoModeState, ReviewerShown, RunApprovalChange, auto_mode_in, unavailable_key},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     field::wrapping_field_error,
@@ -81,12 +82,18 @@ impl Component for AutoModeSwitch {
     let Some(AutoModeState { on, reviewer }) = read.data else {
       return column.with_children(read.error.map(|error| wrapping_field_error(&message_text(ctx, &error))));
     };
-    let unavailable = (!reviewer).then(|| ctx.t("runs.autoMode.unavailable"));
+    let unavailable = reviewer.as_ref().err().map(|why| ctx.t(unavailable_key(*why)));
+    let reviewed = reviewer.as_ref().ok().map(|shown| reviewed_by(ctx, shown));
     let reason_id = format!("{}-unavailable", props.id);
     let switch = match props.place {
       AutoModePlace::Approvals => {
+        let explanation = ctx.t("runs.autoMode.explanation");
+        let note = match &reviewed {
+          Some(reviewed) => format!("{explanation} {reviewed}").into(),
+          None => explanation,
+        };
         let switch = Switch::new(props.id, ctx.t("runs.autoMode.switch"), on)
-          .note(ctx.t("runs.autoMode.explanation"))
+          .note(note)
           .inset_ring();
         match unavailable.clone() {
           Some(reason) => switch.reason(reason_id.clone(), reason),
@@ -95,7 +102,7 @@ impl Component for AutoModeSwitch {
       }
       AutoModePlace::Popover => Switch::new(props.id, ctx.t("runs.autoMode.popoverSwitch"), on),
     };
-    let element = if props.live && reviewer && !changing.is_pending() {
+    let element = if props.live && reviewer.is_ok() && !changing.is_pending() {
       let request = RunApprovalChanges {
         repo_root: props.repo_root.clone(),
         changes: vec![(props.run, RunApprovalChange::AutoMode(!on))],
@@ -109,6 +116,7 @@ impl Component for AutoModeSwitch {
       column = column
         .with_children(unavailable.map(|reason| locked_reason(reason_id, &reason)))
         .child(hint(&ctx.t("runs.autoMode.popoverExplanation")))
+        .with_children(reviewed.map(|reviewed| hint(&reviewed).id(format!("{}-reviewer", props.id))))
         .child(hint(&ctx.t("runs.autoMode.savesAtOnce")));
     }
     column.with_children(
@@ -116,6 +124,24 @@ impl Component for AutoModeSwitch {
         .error
         .map(|error| wrapping_field_error(&message_text(ctx, &error))),
     )
+  }
+}
+
+/// *Reviewed by claude-haiku-4-5 on Claude · Kontur* (with the effort, when one is chosen).
+pub(in crate::screens::project) fn reviewed_by(ctx: &Ctx, shown: &ReviewerShown) -> Arc<str> {
+  match &shown.effort {
+    Some(effort) => ctx.t_args(
+      "runs.autoMode.reviewedByWithEffort",
+      [
+        ("model", shown.model.as_str()),
+        ("effort", effort.as_str()),
+        ("connection", &*shown.connection),
+      ],
+    ),
+    None => ctx.t_args(
+      "runs.autoMode.reviewedBy",
+      [("model", shown.model.as_str()), ("connection", &*shown.connection)],
+    ),
   }
 }
 

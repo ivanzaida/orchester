@@ -5,13 +5,15 @@
 //! requests were answered. The desktop writes the run's choice and revokes rules; the runner reads both
 //! at each request, so a change applies from the next one.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::reviewer::reviewer_connection,
   id::RunId,
-  resource::AgentProfile,
-  run::{ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves},
+  resource::{AgentProfile, ModelId},
+  run::{
+    ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves,
+    review::{ReviewerUnavailable, resolve_reviewer},
+  },
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
@@ -60,11 +62,40 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
   }
 }
 
-/// A run's auto mode, and whether its project can review: it has a Claude Code connection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The reviewer of a project's auto mode, as the app names it: the connection and the model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReviewerShown {
+  pub connection: Arc<str>,
+  pub model: ModelId,
+  pub effort: Option<String>,
+}
+
+/// The project's reviewer, or why auto mode has none.
+pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnavailable>, StoreError> {
+  let settings = db.auto_mode_settings()?;
+  let connections = db.connections()?;
+  Ok(resolve_reviewer(&settings, &connections).map(|resolved| ReviewerShown {
+    connection: resolved.connection.name().as_str().into(),
+    model: resolved.model,
+    effort: resolved.effort,
+  }))
+}
+
+/// Why auto mode has no reviewer, as the app says it.
+pub const fn unavailable_key(why: ReviewerUnavailable) -> &'static str {
+  match why {
+    ReviewerUnavailable::NoConnection => "runs.autoMode.unavailable.noConnection",
+    ReviewerUnavailable::ConnectionGone => "runs.autoMode.unavailable.connectionGone",
+    ReviewerUnavailable::Unsupported => "runs.autoMode.unavailable.unsupported",
+    ReviewerUnavailable::NoModel => "runs.autoMode.unavailable.noModel",
+  }
+}
+
+/// A run's auto mode, and the project's reviewer or why it has none.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AutoModeState {
   pub on: bool,
-  pub reviewer: bool,
+  pub reviewer: Result<ReviewerShown, ReviewerUnavailable>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for AutoModeState {}
@@ -74,7 +105,7 @@ pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, Store
   let db = ProjectDb::open(repo_root)?;
   Ok(AutoModeState {
     on: db.run_auto_mode(run)?,
-    reviewer: reviewer_connection(&db.connections()?).is_some(),
+    reviewer: reviewer_of(&db)?,
   })
 }
 

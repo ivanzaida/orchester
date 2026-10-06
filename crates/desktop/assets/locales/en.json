@@ -2456,7 +2456,14 @@
     "autoMode": {
       "switch": "Auto mode",
       "explanation": "A separate reviewer model answers the requests the rules leave to you, and approves only those that clearly serve the task and step. Credential reads, anything outside the step’s permissions, and whatever the reviewer is unsure of still ask you, with its reason. It is not “approve everything”.",
-      "unavailable": "Auto mode needs a Claude Code connection in this project to review with.",
+      "unavailable": {
+        "noConnection": "Auto mode needs an agent connection in this project to review with: Claude Code, Codex or the Anthropic API.",
+        "connectionGone": "The reviewer connection chosen in Project settings is gone. Choose another there.",
+        "unsupported": "The reviewer connection chosen in Project settings cannot review yet (the OpenAI API). Choose another there.",
+        "noModel": "The reviewer connection lists no model. Check it under Connections, or choose a model in Project settings."
+      },
+      "reviewedBy": "Reviewed by {{model}} on {{connection}}.",
+      "reviewedByWithEffort": "Reviewed by {{model}} ({{effort}} effort) on {{connection}}.",
       "popoverSwitch": "Use auto mode in this run",
       "popoverExplanation": "A separate reviewer model answers the requests the rules leave to you. Whatever it is unsure of, and anything outside the step’s permissions, still asks you.",
       "savesAtOnce": "Saves at once for the whole run; Apply and Cancel do not change it.",
@@ -2479,7 +2486,7 @@
           "timedOut": "Auto mode asked you: its reviewer did not answer in time.",
           "unreadable": "Auto mode asked you: its reviewer’s answer could not be read.",
           "couldNotRun": "Auto mode asked you: its reviewer could not run.",
-          "noReviewer": "Auto mode asked you: the project has no Claude Code connection to review with."
+          "noReviewer": "Auto mode asked you: the project has no reviewer to review with."
         },
         "quoted": "“{{reason}}”"
       }
@@ -3875,10 +3882,12 @@
       "newRunsDescription": "A separate reviewer model answers the requests the rules leave to you, approving only those that clearly serve the task; the rest still ask you, with its reason. Each run can turn it on or off in its Approvals.",
       "on": "On",
       "off": "Off",
-      "modelName": "Reviewer model",
-      "modelDescription": "The model of the project’s Claude Code connection that reviews. A small model keeps the agents’ wait short.",
-      "connection": "Reviews with {{connection}}",
-      "unavailable": "Auto mode needs a Claude Code connection in this project to review with."
+      "reviewerName": "Reviewer",
+      "reviewerDescription": "The agent connection, model and effort that review requests. Until you choose, the first Claude Code connection reviews with Haiku 4.5.",
+      "defaultConnection": "Default · {{connection}}",
+      "defaultNone": "Default · no connection can review",
+      "cannotReview": "{{connection}} · cannot review yet",
+      "removedConnection": "A removed connection"
     }
   },
   "servers": {

@@ -131,11 +131,12 @@ fn run_permissions_popover_fits_the_workspace_when_the_window_is_resized() {
       "{text}"
     );
   }
-  // The project has no Claude Code connection to review with: fixed, and why after the lock.
+  // The project's only connection, Codex, would review, but its check listed no model: fixed, and why
+  // after the lock.
   assert!(shows(
     &mut desktop,
     "task-permissions-auto-mode-switch-unavailable",
-    "Auto mode needs a Claude Code connection"
+    "The reviewer connection lists no model"
   ));
   desktop.click("task-permissions-cancel");
 }

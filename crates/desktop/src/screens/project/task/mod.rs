@@ -13,7 +13,7 @@ mod activity;
 mod approval_arguments;
 mod approval_card;
 mod approval_value;
-mod auto_mode;
+pub(in crate::screens::project) mod auto_mode;
 mod brief;
 mod changes;
 mod controls;
