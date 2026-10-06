@@ -283,6 +283,11 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       run.base_branch().map(BranchName::as_str),
     ],
   )?;
+  // A new run uses auto mode as the project's setting for new runs says now.
+  transaction.execute(
+    "UPDATE runs SET auto_mode = COALESCE((SELECT new_runs FROM project_auto_mode WHERE id = 1), 0) WHERE id = ?1",
+    [run.id().to_string()],
+  )?;
   Ok(())
 }
 

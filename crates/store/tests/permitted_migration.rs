@@ -1,8 +1,9 @@
 //! The migrations that rebuild `tool_approvals` for `decided_by = 'permissions'`, then for automation's
-//! answers (`'automation'`, `'automation_deny'`): a populated database of the schema before either opens
-//! with every request as it was (each state, each answer of that schema, a rule's answer, native
-//! commands, a pending request), its index and triggers in place and no dangling reference; one between
-//! them keeps its `permissions` answers.
+//! answers (`'automation'`, `'automation_deny'`), then for auto mode (`'reviewer'` and the `review`
+//! column): a populated database of the schema before any of them opens with every request as it was
+//! (each state, each answer of that schema, a rule's answer, native commands, a pending request), its
+//! index and triggers in place and no dangling reference; one between them keeps its `permissions` or
+//! automation answers.
 //! `cargo test -p orchester-store --test permitted_migration permitted_migration`.
 mod support;
 
@@ -22,8 +23,13 @@ use tempfile::TempDir;
 type Rows = (Vec<String>, Vec<Vec<Value>>);
 
 fn rows(database: &Connection) -> Rows {
+  rows_of(database, "*")
+}
+
+/// The columns `columns` (`*` for all) of every request, by id.
+fn rows_of(database: &Connection, columns: &str) -> Rows {
   let mut query = database
-    .prepare("SELECT * FROM tool_approvals ORDER BY id")
+    .prepare(&format!("SELECT {columns} FROM tool_approvals ORDER BY id"))
     .expect("query");
   let columns = query.column_names().into_iter().map(str::to_owned).collect();
   let count = query.column_count();
@@ -148,10 +154,10 @@ fn populated() -> (TempDir, Asked) {
   (repo, asked)
 }
 
-/// The schema versions before the `permissions` rebuild and before the automation rebuild, which
-/// follows it, of a database at `current`.
-const fn before_rebuilds(current: u32) -> (u32, u32) {
-  (current - 2, current - 1)
+/// The schema versions before the `permissions` rebuild, before the automation rebuild, which follows
+/// it, and before the auto mode rebuild, which follows that, of a database at `current`.
+const fn before_rebuilds(current: u32) -> (u32, u32, u32) {
+  (current - 3, current - 2, current - 1)
 }
 
 /// Upgrades `old` and checks that its requests, index and triggers are as `old` had them.
@@ -162,7 +168,16 @@ fn upgraded(old: &Path, current: u32) -> Connection {
   ProjectDb::open(old).expect("migrate");
   let after = database(old);
   assert_eq!(version(&after), current);
-  assert_eq!(rows(&after), before);
+  // Every column it had keeps its values; auto mode's `review` comes empty.
+  assert_eq!(rows_of(&after, &before.0.join(", ")), before);
+  let reviewed: i64 = after
+    .query_row(
+      "SELECT COUNT(*) FROM tool_approvals WHERE review IS NOT NULL",
+      [],
+      |row| row.get(0),
+    )
+    .expect("reviews");
+  assert_eq!(reviewed, 0);
   assert_eq!(schema_of(&after, "index"), indexes);
   assert_eq!(schema_of(&after, "trigger"), triggers);
   let dangling: i64 = after
@@ -179,6 +194,7 @@ fn takes_the_new_answers(old: &Path, asked: Asked) {
     ("permitted", DecidedBy::Permissions),
     ("automation", DecidedBy::Automation),
     ("automation-deny", DecidedBy::AutomationDeny),
+    ("reviewer", DecidedBy::Reviewer),
   ] {
     let request = asked.request(id, true, None);
     db.request_tool_approval(&request).expect("request");
@@ -205,6 +221,31 @@ fn permitted_migration_then_automation_keeps_permissions_answers() {
   let old = copied_at_version(
     &repo.path().join(".orchester").join("orchester.db"),
     before_rebuilds(current).1,
+  );
+  upgraded(old.path(), current);
+  takes_the_new_answers(old.path(), asked);
+}
+
+#[test]
+fn permitted_migration_then_auto_mode_keeps_automation_answers() {
+  let (repo, asked) = populated();
+  let mut db = ProjectDb::open(repo.path()).expect("open");
+  for (id, answer) in [
+    ("by-automation", DecidedBy::Automation),
+    ("denied-by-automation", DecidedBy::AutomationDeny),
+  ] {
+    let request = asked.request(id, true, None);
+    db.request_tool_approval(&request).expect("request");
+    assert!(
+      db.claim_tool_approval(asked.run, &request.id, answer, at(12))
+        .expect("claim")
+    );
+  }
+  drop(db);
+  let current = version(&database(repo.path()));
+  let old = copied_at_version(
+    &repo.path().join(".orchester").join("orchester.db"),
+    before_rebuilds(current).2,
   );
   upgraded(old.path(), current);
   takes_the_new_answers(old.path(), asked);
