@@ -125,27 +125,36 @@ MCP server").
 
 ### M10 · Auto mode for approvals · branch `claude/auto-mode` (from master `6d44bdfe`, UI)
 
-Implemented 2026-10-06, **waiting for review and an independent design verification** (no Pencil frame; judge
-consistency with *Approve everything in this run*, the approval dialog and Project settings › General). A reviewer
-model judges the requests the rules leave to the person (`orchester_core::run::review`, `RequestReviewer`; Claude
-Code in print mode without tools, `connection::reviewer`); hard rules first (credential reads, read-only step,
-network off, outside folders, unrecorded permissions), fail closed (error, 60 s timeout, unreadable answer). Recorded
-as `decided_by = 'reviewer'` and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs,
-model); the activity, the dialog, the conversation card and the run's Approvals say what auto mode did.
-`set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*.
-Tests: `cargo test -p orchester-core --test auto_mode`, `-p orchester-store --test auto_mode`, `--test
-permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode`,
-`-p orchester-desktop --test form_keyboard auto_mode`, `app_mcp`.
+Implemented 2026-10-06; the security review (`B1`, `B2`, `M1`–`M4` and the minors) and the design verification
+findings of the same day are fixed, **waiting for a second review and design verification** (no Pencil frame; judge
+consistency with *Approve everything in this run*, the approval dialog, the permissions popover's sections and
+Project settings › General). A reviewer model judges the requests the rules leave to the person
+(`orchester_core::run::review`, `RequestReviewer`; Claude Code in print mode without tools, `connection::reviewer`);
+hard rules first on every part of a line (`review::hold`: credential reads, unreadable parts and scripts,
+destructive parts, read-only step, network off, outside folders, unrecorded permissions, Codex escalations,
+`run_project_tool`, requests too long to review whole), fail closed (error, 60 s timeout, unreadable answer). The
+reviewer runs supervised in an empty temporary folder with its instructions as the system prompt and the agent's
+text as JSON data; it is stopped when the person answers or the worker ends. Recorded as `decided_by = 'reviewer'`
+and `tool_approvals.review` (JSON), the run's `auto_mode`, `project_auto_mode` (new runs, model).
+`set_run_auto_mode` on Orchester's MCP server, gated by *Let automation answer approvals*. Open: turning auto mode on
+while a request waits does not review that request.
+Tests: `cargo test -p orchester-core --test auto_mode auto_mode`, `-p orchester-store --test auto_mode auto_mode`,
+`--test permitted_migration`, `--test approval_rules`, `-p orchester-runner --features test-agent --test auto_mode
+auto_mode`, `-p orchester-desktop --test form_keyboard auto_mode`, `run_permissions_popover_fits`, `app_mcp`.
 
-UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: *Auto mode* switch under
-*Approve everything in this run*; without a Claude Code connection it is fixed with *Auto mode needs a Claude Code
-connection…*; (2) the run permissions popover (the run's permissions row › link): the same switch under the MCP
-servers; (3) Project settings › General › *Auto mode*: *New runs use auto mode* and *Reviewer model* with *Reviews
-with <connection>*, or the unavailable line; (4) the approval dialog of a request auto mode left to the person: the
-line under the explanation (*Auto mode asked you: …*, *Auto mode left this to you: …*); (5) the conversation's
-request card: the same line; (6) the activity mark *approved by auto mode · <subject>* and, for a person's answer,
-*· Auto mode asked you: …*; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once
-non-zero. States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review`.
+UI states for the verifier (dev build, debug lurq MCP): (1) task page › This run › Approvals: the *Auto mode* option
+under *Approve everything in this run*; without a Claude Code connection it is fixed, keeps its explanation and says
+why after the lock glyph inside its row; (2) the run permissions popover (the run's permissions row › link): the
+*Auto mode* section last, after a divider, a plain switch *Use auto mode in this run* with its hints and *Saves at
+once…* (it is not part of Apply), at 960 × 700 scrolled with the text clear of the gutter; (3) Project settings ›
+General › *Auto mode*: *New runs use auto mode* (fixed with the lock line in its row without a connection) and
+*Reviewer model* with *Reviews with <connection>*; (4) the approval dialog of a request auto mode left to the person:
+the line under the explanation (auto mode glyph, *Auto mode asked you:* and the quoted reason, or *Auto mode left this
+to you: …*); (5) the conversation's request card: the same line, not repeating the chip; (6) the activity rows: the
+mark *approved by auto mode · <subject>* (or *approved by you · …*) and the review line under the row, at 1440 and
+960; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once non-zero, before *Waiting*.
+States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review` and
+`ToolDecided` activity.
 
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
