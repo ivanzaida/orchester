@@ -679,7 +679,10 @@ independent review and design verification pending)
   `Orchester`; a retried model request is a `ModelRetrying` problem row and a dropped response's tokens a *Usage
   reported* row (`TurnCompleted`), which budgets count; a command's time limit is not shortened to the remaining
   active time; the conversation stores its system prompt as text and its repository access (which decides its tools)
-  instead of blob hashes; read stamps live per invocation, so a resumed agent reads a file again before it edits it;
+  instead of blob hashes; conversation items are stored as the model was sent them, not passed through the key's
+  redaction (§5.3 asks for it; redacting them would change the bytes a resumed request sends again, and the key
+  reaches no command, prompt or tool output Orchester makes, only a file in the worktree could hold it), while
+  Activity and approvals are redacted with the key; read stamps live per invocation, so a resumed agent reads a file again before it edits it;
   sizes read KiB as everywhere in the app, not *KB* as 04.H10 draws them; *Test again* and *Fetch models* both test
   and merge the listed models. The title/meta split of the approval and denial entries follows the design text, not
   the frame, which this step could not open (no Pencil access): the design verifier decides.
