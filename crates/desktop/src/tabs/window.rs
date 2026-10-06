@@ -23,6 +23,7 @@ use crate::{
     close_dialog::CloseConfirmation,
     startup_recovery::{StartupRecovery, StartupRecoveryProps},
   },
+  tasks::integration_jobs::ProjectJobs,
   theme::{ExtraColor, TITLE_BAR_HEIGHT},
   workspace::Workspace,
 };
@@ -37,6 +38,8 @@ pub struct WindowProps {
   /// How the previous session ended, and when this one started, for the start-up recovery.
   pub previous_end: SessionEnd,
   pub session_start: Timestamp,
+  /// The projects' merge and removal operations, shared with Orchester's MCP server.
+  pub jobs: ProjectJobs,
 }
 
 impl lurq::app::component::DevtoolsInspectable for WindowProps {}
@@ -59,7 +62,7 @@ impl Component for Window {
     );
     Self {
       tabs,
-      feeds: ProjectFeeds::default(),
+      feeds: ProjectFeeds::new(props.jobs),
     }
   }
 

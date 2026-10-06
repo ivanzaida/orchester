@@ -1,5 +1,7 @@
 //! `list_tasks` and `get_task`: a project's tasks as the task list finds them (its search and its
-//! workflow status filter), and one task as its page shows it, with its runs.
+//! workflow status filter), and one task as its page shows it, with its runs and their worktrees.
+
+use std::collections::HashMap;
 
 use orchester_core::{
   store::TaskStore,
@@ -13,6 +15,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   wire::{self, Rank, Workflow},
+  worktree::worktree_state,
 };
 use crate::{
   app_mcp::{
@@ -91,15 +94,20 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (detail, tags, pipeline) = blocking(move || {
+  let (detail, tags, pipeline, worktrees) = blocking(move || {
     let root = services.project(&args.project)?.repo_root;
     let db = ProjectDb::open(&root)?;
     let task = find_task(&db, &args.key)?;
     let tags = db.project_tags()?;
     let published = crate::tasks::data::published_pipelines(&db)?;
     let pipeline = PipelineLabel::of(task.details().pipeline, &published);
-    drop(db);
-    Ok((TaskDetail::load_in(&root, task.id())?, tags, pipeline))
+    let detail = TaskDetail::load_in(&root, task.id())?;
+    let worktrees = detail
+      .history
+      .iter()
+      .map(|record| Ok((record.id, worktree_state(&db, &root, record.id)?)))
+      .collect::<Result<HashMap<_, _>, ToolError>>()?;
+    Ok((detail, tags, pipeline, worktrees))
   })
   .await?;
   let task = &detail.task;
@@ -111,7 +119,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
   let runs: Vec<Value> = detail
     .history
     .iter()
-    .map(|record| run_record(record, translate))
+    .map(|record| run_record(record, worktrees.get(&record.id).copied(), translate))
     .collect();
   Ok(json!({
     "key": task.key().to_string(),
@@ -148,9 +156,10 @@ pub fn find_task(db: &ProjectDb, named: &str) -> Result<Task, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Task, named))
 }
 
-fn run_record(record: &RunRecord, translate: &Translate) -> Value {
+fn run_record(record: &RunRecord, worktree: Option<&str>, translate: &Translate) -> Value {
   json!({
     "id": record.id.to_string(),
+    "worktree": worktree,
     "number": record.number.map(|number| number.get()),
     "phase": record.phase.map(wire::phase),
     "detail": translate.text(&record.detail),

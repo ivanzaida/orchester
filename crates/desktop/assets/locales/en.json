@@ -5428,7 +5428,12 @@
     "answerApprovalsNote": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
     "errors": {
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
-      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "runNotEnded": "The run still works; its worktree is removed once it ended.",
+      "worktreeRemoved": "The run’s worktree was removed already.",
+      "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
+      "noWorktree": "The run left no worktree to remove.",
+      "uncommittedChanges": "The worktree holds uncommitted changes. A person decides on the task page whether to discard them."
     }
   },
   "statusBar": {

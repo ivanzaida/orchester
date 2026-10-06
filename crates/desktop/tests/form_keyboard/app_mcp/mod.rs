@@ -8,6 +8,7 @@ mod pipelines;
 mod runs;
 mod server;
 mod tasks;
+mod worktree;
 
 use std::{fs, path::PathBuf};
 
