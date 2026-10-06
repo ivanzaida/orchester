@@ -62,6 +62,11 @@ impl CommandScope {
     Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
   }
 
+  /// The home folder, resolved, which `~`, `$HOME` and `$USERPROFILE` name.
+  pub(super) fn home(&self) -> Option<&Path> {
+    self.home.as_deref()
+  }
+
   pub fn worktree(&self) -> &Path {
     &self.worktree
   }

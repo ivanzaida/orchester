@@ -198,7 +198,8 @@ fn classify_line(
       .collect();
   }
   let mut parts = Vec::new();
-  for raw in words::split(text, quoting) {
+  let home = scope.home().map(|home| home.to_string_lossy());
+  for raw in words::split(text, quoting, home.as_deref()) {
     parts.extend(classify_part(&raw, quoting, scope, line, depth));
     line.made(scope, &raw.writes);
   }
