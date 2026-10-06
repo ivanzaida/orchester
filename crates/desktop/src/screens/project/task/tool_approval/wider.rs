@@ -3,8 +3,7 @@
 //! Apart from them, *Approve everything in this run* turns on the run's auto-approval (user decision of
 //! 2026-10-02; no frame yet). A tile that a request does not offer stays in place at 0.4 with a lock and
 //! the reason, so the dialog keeps its shape between requests. While *Approve similar* has the pointer
-//! or the focus, its scope floats above these answers, over the foot of the request (`XKja4`,
-//! [`super::scope`]).
+//! or the focus, its scope opens under the request (`XKja4`, [`super::scope`]).
 
 use std::sync::Arc;
 
@@ -14,13 +13,12 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 use orchester_core::run::{AlwaysUnavailable, ApprovalAnswer, SimilarUnavailable};
 
-use super::{super::activity::category_key, Pressed, View, scope};
+use super::{super::activity::category_key, Pressed, View, scope::ScopeState};
 use crate::{
   tasks::approvals::{AlwaysBlocked, AlwaysShown, CommandAlways, ShownApproval, SimilarShown},
   theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography},
@@ -44,7 +42,7 @@ struct Tile {
   covers: Arc<str>,
   offer: Offer,
   /// Shows the scope of Approve similar while it has the pointer or the focus.
-  scope: Option<Signal<bool>>,
+  scope: Option<ScopeState>,
 }
 
 pub(super) fn answers(ctx: &Ctx, view: &View<'_>) -> Element {
@@ -55,14 +53,8 @@ pub(super) fn answers(ctx: &Ctx, view: &View<'_>) -> Element {
     .align_items(Alignment::Stretch)
     .child(tile(view, similar(ctx, view, shown)))
     .child(tile(view, always(ctx, view, shown)));
-  let scope = view
-    .scope_open
-    .get()
-    .then(|| scope::floating(ctx, shown, view.wider))
-    .flatten();
   Column::new()
     .id("tool-approval-wider")
-    .ref_element(view.wider.clone())
     .width(Dimension::Pct(100.0))
     .padding_top(ExtraSpacing::Group.role())
     .padding_bottom(SpacingSize::Md)
@@ -73,7 +65,6 @@ pub(super) fn answers(ctx: &Ctx, view: &View<'_>) -> Element {
     .child(tiles)
     .child(heading(ctx, "runs.toolApproval.wider.runHeading"))
     .child(tile(view, approve_run(ctx, view, shown)))
-    .with_children(scope)
     .into()
 }
 
@@ -112,7 +103,7 @@ fn similar(ctx: &Ctx, view: &View<'_>, shown: &ShownApproval) -> Tile {
     title: pressed_title(ctx, view, Pressed::Similar, "runs.toolApproval.wider.similar"),
     covers,
     offer,
-    scope: Some(view.scope_open.clone()),
+    scope: Some(view.scope.clone()),
   }
 }
 
@@ -261,13 +252,13 @@ fn tile(view: &View<'_>, tile: Tile) -> Element {
     .cursor(CursorIcon::Pointer)
     .describe("state", if view.busy { "busy" } else { "enabled" })
     .on_click(move |_| press());
-  if let Some(open) = tile.scope {
-    let (entered, left, focused, blurred) = (open.clone(), open.clone(), open.clone(), open);
+  if let Some(scope) = tile.scope {
+    let (entered, left, focused, blurred) = (scope.clone(), scope.clone(), scope.clone(), scope);
     button = button
-      .on_mouse_enter(move || entered.set(true))
-      .on_mouse_leave(move || left.set(false))
-      .on_focus(move || focused.set(true))
-      .on_blur(move || blurred.set(false));
+      .on_mouse_enter(move || entered.show())
+      .on_mouse_leave(move || left.hide())
+      .on_focus(move || focused.show())
+      .on_blur(move || blurred.hide());
   }
   button.into()
 }

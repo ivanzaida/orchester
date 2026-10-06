@@ -1,21 +1,21 @@
 //! The scope of *Approve similar in this run* (`DdyA7` in `XKja4`, after `k4cz1C`), under the request
 //! while the tile has the pointer or the focus: what the rule names and until when, then side by side
 //! what runs without asking and what still asks you, each with why, and how the later requests are
-//! answered and revoked. It floats over the foot of the request, ending where the details end, so
-//! opening it moves nothing: laid out in the details, it made the dialog taller and moved the tile
-//! away from the pointer, which then closed it again (seen 2026-10-06).
+//! answered and revoked. The dialog grows upward to make room for it, so the answers stay under the
+//! pointer ([`super::stage`]); grown centred, it moved the tile away from the pointer, which then
+//! closed it again (seen 2026-10-06).
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::{CollisionStrategy, Ctx, Placement},
+    ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Row, Text, TextOverflow},
-  core::ElementRef,
-  layout::Alignment,
-  node::{Element, HitTestBehavior, border::Border, dimension::Dimension},
+  components::{Column, Row, Text, TextOverflow},
+  core::Signal,
+  layout::{Alignment, layout_kind::ScrollState},
+  node::{Element, border::Border, dimension::Dimension},
 };
 
 use super::super::activity::category_key;
@@ -41,28 +41,54 @@ struct Scope {
   note: Arc<str>,
 }
 
-/// The panel of `shown`'s Approve similar right above `wider`, the wider answers, as wide as the
-/// details' content; `None` when the request does not offer it. The pointer passes through it.
-pub(super) fn floating(ctx: &Ctx, shown: &ShownApproval, wider: &ElementRef) -> Option<Element> {
-  let content = Column::new()
-    .padding_horizontal(ExtraSpacing::Rail.role())
-    .padding_bottom(ExtraSpacing::Step.role())
-    .child(panel(ctx, shown)?);
-  Some(
-    Popup::new(wider.clone(), content)
-      .open_when(true)
-      .placement(Placement::TopStart)
-      .match_anchor_width(true)
-      // Never flipped onto the answers under the pointer; held in the window instead.
-      .collision(CollisionStrategy::Clamp)
-      .hit_test(HitTestBehavior::None)
-      .dismiss_on_outside_click(false)
-      .dismiss_on_escape(false)
-      .into(),
-  )
+/// Whether the scope is shown, and the details it is shown in. A dialog already as tall as the window
+/// cannot grow, so opening scrolls the details to their end, where the scope is, and closing scrolls
+/// them back.
+#[derive(Clone)]
+pub(super) struct ScopeState {
+  open: Signal<bool>,
+  details: ScrollState,
+  scrolled: Signal<f32>,
 }
 
-fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
+impl ScopeState {
+  pub(super) fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      open: ctx.signal(false),
+      details: ScrollState::new(),
+      scrolled: ctx.signal(0.0),
+    }
+  }
+
+  pub(super) fn is_open(&self) -> bool {
+    self.open.get()
+  }
+
+  pub(super) fn details(&self) -> &ScrollState {
+    &self.details
+  }
+
+  pub(super) fn show(&self) {
+    if self.open.get_untracked() {
+      return;
+    }
+    self.scrolled.set(self.details.scroll_y());
+    self.details.scroll_to_bottom_pending();
+    self.open.set(true);
+  }
+
+  pub(super) fn hide(&self) {
+    if !self.open.get_untracked() {
+      return;
+    }
+    self.open.set(false);
+    self.details.set_scroll_pending(0.0, self.scrolled.get_untracked());
+  }
+}
+
+/// The panel of `shown`'s Approve similar, the last of the details, right above the tile it explains;
+/// `None` when the request does not offer it.
+pub(super) fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
   let scope = match shown.choices.similar.as_ref().ok()? {
     SimilarShown::Tool { server, tool } => tool_scope(ctx, (server, tool), &run),

@@ -1,6 +1,7 @@
 //! The scope of *Approve similar in this run* in the approval dialog: hovering or focusing the tile
-//! shows it above the wider answers and moves nothing in the dialog, at 1440 and 960 wide and with a
-//! command long enough to fill the details.
+//! opens it under the request, with the header and the scope in view, and moves none of the answers,
+//! at 1440 and 960 wide, in a window tall enough for the dialog to grow and with a command long
+//! enough to fill the details.
 
 use lurq::core::ElementRect;
 use orchester_core::run::PendingToolApproval;
@@ -9,18 +10,17 @@ use orchester_store::ProjectDb;
 use crate::{harness::Desktop, native_run::native_run, task_run::has, unreadable_run::at};
 
 const DIALOG: &str = "tool-approval-dialog";
+const DETAILS: &str = "tool-approval-details-scroll";
 const SIMILAR: &str = "tool-approval-similar";
 const SCOPE: &str = "tool-approval-similar-scope";
 
-/// What the dialog is made of, whose place hovering or focusing an answer must not change.
-const LAID_OUT: [&str; 9] = [
-  DIALOG,
-  "tool-approval-details-scroll",
-  "tool-approval-details",
+/// The answers, whose place hovering or focusing one of them must not change.
+const ANSWERS: [&str; 7] = [
   "tool-approval-wider",
   SIMILAR,
   "tool-approval-always",
   "tool-approval-approve-run",
+  "tool-approval-decide-later",
   "tool-approval-deny",
   "tool-approval-approve-once",
 ];
@@ -59,67 +59,75 @@ fn dialog(command: Option<&'static str>) -> Desktop {
   desktop
 }
 
-fn layout(desktop: &mut Desktop) -> Vec<ElementRect> {
-  LAID_OUT.iter().map(|id| desktop.bounds(id)).collect()
+fn same(now: &ElementRect, was: &ElementRect) -> bool {
+  (now.x - was.x).abs() < 0.5
+    && (now.y - was.y).abs() < 0.5
+    && (now.width - was.width).abs() < 0.5
+    && (now.height - was.height).abs() < 0.5
 }
 
-fn assert_unmoved(desktop: &mut Desktop, before: &[ElementRect], when: &str) {
-  for (id, (now, was)) in LAID_OUT.iter().zip(layout(desktop).iter().zip(before)) {
-    assert!(
-      (now.x - was.x).abs() < 0.5
-        && (now.y - was.y).abs() < 0.5
-        && (now.width - was.width).abs() < 0.5
-        && (now.height - was.height).abs() < 0.5,
-      "{id} keeps its place {when}: {was:?} became {now:?}"
-    );
+fn answers(desktop: &mut Desktop) -> Vec<ElementRect> {
+  ANSWERS.iter().map(|id| desktop.bounds(id)).collect()
+}
+
+fn assert_answers_unmoved(desktop: &mut Desktop, before: &[ElementRect], when: &str) {
+  for (id, (now, was)) in ANSWERS.iter().zip(answers(desktop).iter().zip(before)) {
+    assert!(same(now, was), "{id} keeps its place {when}: {was:?} became {now:?}");
   }
 }
 
-/// The scope is shown, inside the window and above the wider answers, so it covers none of them.
-fn assert_scope_above_the_answers(desktop: &mut Desktop, when: &str) {
+/// The scope is shown whole in the details, under the header and above the answers, with the dialog
+/// inside the window.
+fn assert_scope_in_view(desktop: &mut Desktop, when: &str) {
   assert!(has(desktop, SCOPE), "the scope is shown {when}");
   let scope = desktop.bounds(SCOPE);
-  let wider = desktop.bounds("tool-approval-wider");
-  let details = desktop.bounds("tool-approval-details");
-  assert!(scope.y >= 0.0, "the scope starts in the window {when}: {scope:?}");
+  let details = desktop.bounds(DETAILS);
+  let dialog = desktop.bounds(DIALOG);
+  assert!(dialog.y >= 0.0, "the dialog starts in the window {when}: {dialog:?}");
   assert!(
-    scope.y + scope.height <= wider.y + 0.5,
-    "the scope ends above the wider answers {when}: {scope:?} over {wider:?}"
+    scope.y >= details.y - 0.5 && scope.y + scope.height <= details.y + details.height + 0.5,
+    "the scope is in view in the details, under the header {when}: {scope:?} in {details:?}"
   );
   assert!(
-    (scope.x - details.x).abs() > 0.5 && scope.x + scope.width < details.x + details.width,
+    scope.x > details.x + 0.5 && scope.x + scope.width < details.x + details.width,
     "the scope is inset like the details' content {when}: {scope:?} in {details:?}"
   );
 }
 
-fn assert_hover_and_focus_move_nothing(mut desktop: Desktop, width: u32) {
-  desktop.tree.resize(width, 960);
+fn assert_hover_and_focus_move_no_answer(mut desktop: Desktop, (width, height): (u32, u32)) {
+  desktop.tree.resize(width, height);
   desktop.pass();
   assert!(!has(&mut desktop, SCOPE), "the scope is closed at first");
-  let before = layout(&mut desktop);
-  let when = format!("at {width} under the pointer");
+  let before = answers(&mut desktop);
+  let closed = desktop.bounds(DIALOG);
+  let when = format!("at {width}x{height} under the pointer");
   desktop.hover(SIMILAR);
   desktop.pass();
-  assert_scope_above_the_answers(&mut desktop, &when);
-  assert_unmoved(&mut desktop, &before, &when);
+  assert_scope_in_view(&mut desktop, &when);
+  assert_answers_unmoved(&mut desktop, &before, &when);
   // The pointer stays put: the tile under it stays hovered, and its scope open.
   desktop.pass();
   assert!(has(&mut desktop, SCOPE), "the scope stays open {when}");
-  assert_unmoved(&mut desktop, &before, &when);
+  assert_answers_unmoved(&mut desktop, &before, &when);
   desktop.hover("tool-approval-deny");
   desktop.pass();
   assert!(!has(&mut desktop, SCOPE), "the scope closes when the pointer leaves");
-  let when = format!("at {width} with the focus");
+  let now = desktop.bounds(DIALOG);
+  assert!(
+    same(&now, &closed),
+    "the dialog is as before {when}: {closed:?} became {now:?}"
+  );
+  let when = format!("at {width}x{height} with the focus");
   desktop.tab_to(SIMILAR, 12);
   desktop.pass();
-  assert_scope_above_the_answers(&mut desktop, &when);
-  assert_unmoved(&mut desktop, &before, &when);
+  assert_scope_in_view(&mut desktop, &when);
+  assert_answers_unmoved(&mut desktop, &before, &when);
 }
 
 #[test]
-fn tool_approval_scope_hover_and_focus_move_nothing() {
-  for width in [1440, 960] {
-    assert_hover_and_focus_move_nothing(dialog(None), width);
-    assert_hover_and_focus_move_nothing(dialog(Some(LONG_COMMAND)), width);
+fn tool_approval_scope_hover_and_focus_move_no_answer() {
+  for size in [(1440, 960), (960, 960), (1440, 1400)] {
+    assert_hover_and_focus_move_no_answer(dialog(None), size);
+    assert_hover_and_focus_move_no_answer(dialog(Some(LONG_COMMAND)), size);
   }
 }
