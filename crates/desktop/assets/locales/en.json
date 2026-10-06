@@ -2334,6 +2334,8 @@
         "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
         "steerMac": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Cmd+Enter sends after this turn.",
         "steerUnavailable": "{{agent}}’s connection takes no message while its turn runs, so Send now is unavailable. Send after this turn waits until {{agent}} finishes its turn.",
+        "quietSteer": "{{agent}} gets your message at its next tool call.",
+        "quietSteerAfterTurn": "{{agent}} gets your message after this turn.",
         "toolStep": "A command tool runs this step, not an agent. Your message waits for the next agent’s turn.",
         "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
         "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",

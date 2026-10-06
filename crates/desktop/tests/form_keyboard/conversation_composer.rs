@@ -124,12 +124,17 @@ fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
   assert!(shows(&mut desktop, "conversation-recipient", "Builder"));
   assert!(shows(&mut desktop, "conversation-recipient", "working"));
   assert_eq!(placeholder(&mut desktop), "Message Builder…");
-  // What sending does is the send button's tooltip; no line under the box says it.
+  // What sending does is the send button's tooltip; the line under the box says when Builder gets it,
+  // and stays between steps (ORC-71).
   assert!(tip_says(
     &mut desktop,
     "Send now · Enter. Builder gets it at its next tool call. Ctrl+Enter sends after this turn."
   ));
-  assert!(!has(&mut desktop, "conversation-explanation"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-explanation",
+    "Builder gets your message at its next tool call."
+  ));
   // Nothing to send yet.
   desktop.click("conversation-send");
   assert!(deliveries(&desktop).is_empty());
