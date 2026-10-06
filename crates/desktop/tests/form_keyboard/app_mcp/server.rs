@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use super::{agent, discovered, refused};
 use crate::{harness::Desktop, mcp_agent::McpAgent};
 
-const TOOLS: [&str; 15] = [
+const TOOLS: [&str; 16] = [
   "list_projects",
   "list_tasks",
   "get_task",
@@ -27,6 +27,7 @@ const TOOLS: [&str; 15] = [
   "pause_run",
   "resume_run",
   "cancel_run",
+  "set_run_auto_mode",
   "list_approvals",
   "decide_approval",
   "set_code_index",

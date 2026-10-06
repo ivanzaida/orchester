@@ -77,7 +77,13 @@ type Apply = Arc<dyn Fn(PermissionsApply) + Send + Sync>;
 impl RunPermissionsRow {
   /// The popover at most `cap` tall: its header and footer stay whole and the body between them
   /// scrolls when the room above the row is too short (`ecCTw`).
-  pub(super) fn popover(&self, ctx: &Ctx, props: &RunPermissionsProps, action: &ApplyAction, cap: f32) -> Element {
+  pub(super) fn popover(
+    &self,
+    ctx: &Ctx,
+    props: &RunPermissionsProps,
+    action: &ApplyAction,
+    (cap, auto_mode): (f32, Element),
+  ) -> Element {
     let Some(draft) = self.edit.draft.get().0 else {
       return Column::new().id("task-permissions-popover").into();
     };
@@ -110,6 +116,7 @@ impl RunPermissionsRow {
       .child(takes_effect(ctx, props))
       .with_children(settings(ctx, &self.edit, props, &draft))
       .child(mcp_servers(ctx, props))
+      .child(auto_mode)
       .with_children(props.live.then(|| {
         Rect::new(Dimension::Pct(100.0), Dimension::Px(DIVIDER_HEIGHT)).background(ExtraColor::Hairline.role())
       }))

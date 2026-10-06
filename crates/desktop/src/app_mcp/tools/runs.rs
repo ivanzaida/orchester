@@ -61,6 +61,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       .filter(|shown| shown.approval.run == run.id())
       .map(approval)
       .collect();
+    let auto_mode = db.run_auto_mode(run.id())?;
     let view = run_view(&db, run)?;
     let usage = view.usage();
     let run = &view.run;
@@ -83,6 +84,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
         "limit_seconds": run.max_duration().as_secs(),
       },
       "steps": steps,
+      "auto_mode": auto_mode,
       "awaiting": {
         "plan_decisions": run.awaiting_plan().len(),
         "answers": run.awaiting_answer().len(),

@@ -21,7 +21,10 @@ use orchester_core::{
   run::{ApprovalRule, RuleScope, RunNumber},
 };
 
-use super::activity::category_key;
+use super::{
+  activity::category_key,
+  auto_mode::{AutoModeProps, AutoModeSwitch},
+};
 use crate::{
   display,
   screens::project::run_approval_action::{RunApprovalAction, RunApprovalChanges, reload_after, run_approval_action},
@@ -73,6 +76,15 @@ impl Component for RunApprovalsPanel {
     } else {
       switch.locked()
     };
+    let auto_mode = ctx.mount_keyed::<AutoModeSwitch>(
+      "task-auto-mode-switch",
+      AutoModeProps {
+        repo_root: props.repo_root.clone(),
+        run: props.run,
+        live: props.live,
+        id: "task-auto-mode",
+      },
+    );
     let counts = approvals.counts;
     let rows = [
       ("runs.summary.approvals.byYou", counts.by_you),
@@ -89,6 +101,8 @@ impl Component for RunApprovalsPanel {
       ("runs.summary.approvals.byProfile", counts.by_profile),
       ("runs.summary.approvals.byAutomation", counts.by_automation),
       ("runs.summary.approvals.deniedByAutomation", counts.denied_by_automation),
+      ("runs.summary.approvals.byReviewer", counts.by_reviewer),
+      ("runs.summary.approvals.askedByReviewer", counts.asked_by_reviewer),
     ]
     .into_iter()
     .filter(|(_, count)| *count > 0)
@@ -111,6 +125,7 @@ impl Component for RunApprovalsPanel {
       .spacing(ExtraSpacing::Step.role())
       .child(Text::new(&ctx.t("runs.summary.approvals.title")).variant(ExtraTypography::CardTitle.role()))
       .child(switch)
+      .child(auto_mode)
       .with_children(rows)
       .with_children(occasional)
       .with_children(section(ctx, "runs.summary.approvals.similarTitle", similar))

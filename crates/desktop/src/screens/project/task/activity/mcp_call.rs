@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{connection::stream::CommandStatus, permission::category::CommandCategory, run::DecidedBy};
 
-use super::entry::Shown;
+use super::{super::review_note::review_note, entry::Shown};
 use crate::{
   tasks::transcript::{CommandMark, DecidedMark, McpToolEntry},
   ui::icon::Icon,
@@ -85,8 +85,16 @@ fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
     DecidedBy::Permissions => "runs.activity.decision.permissions",
     DecidedBy::Automation => "runs.activity.decision.approvedByAutomation",
     DecidedBy::AutomationDeny => "runs.activity.decision.deniedByAutomation",
+    DecidedBy::Reviewer => "runs.activity.decision.approvedByAutoMode",
   };
-  ctx.t_args(key, [("subject", &*subject)])
+  let decided = ctx.t_args(key, [("subject", &*subject)]);
+  match &mark.decision.review {
+    Some(review) => ctx.t_args(
+      "runs.activity.decision.withReview",
+      [("mark", &*decided), ("review", &*review_note(ctx, review))],
+    ),
+    None => decided,
+  }
 }
 
 /// A command category's name in a mark.

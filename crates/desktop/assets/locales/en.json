@@ -1294,6 +1294,8 @@
         "byProfile": "Allowed by the profile",
         "byAutomation": "Approved by automation",
         "deniedByAutomation": "Denied by automation",
+        "byReviewer": "Approved by auto mode",
+        "askedByReviewer": "Auto mode asked you",
         "waiting": "Waiting",
         "similarTitle": "Approved as similar in this run",
         "alwaysTitle": "Always allowed during this run",
@@ -1540,6 +1542,8 @@
         "deniedByYou": "denied by you · the agent continued",
         "approvedByAutomation": "approved by automation · {{subject}}",
         "deniedByAutomation": "denied by automation · the agent continued",
+        "approvedByAutoMode": "approved by auto mode · {{subject}}",
+        "withReview": "{{mark}} · {{review}}",
         "bySimilarRule": "approved by similar rule · {{subject}}",
         "alwaysAllowed": "always allowed · {{subject}}",
         "autoApproved": "auto-approved · {{subject}}",
@@ -2448,6 +2452,28 @@
         "cmdEnter": "Cmd+Enter",
         "nowMeta": "{{agent}} gets it at its next tool call",
         "afterTurnMeta": "Waits until {{agent}} finishes its turn"
+      }
+    },
+    "autoMode": {
+      "switch": "Auto mode",
+      "explanation": "A separate reviewer model answers the requests the rules leave to you, and approves only those that clearly serve the task and step. Credential reads, anything outside the step’s permissions, and whatever the reviewer is unsure of still ask you, with its reason. It is not “approve everything”.",
+      "unavailable": "Auto mode needs a Claude Code connection in this project to review with.",
+      "note": {
+        "approved": "Approved by auto mode: {{reason}}",
+        "asked": "Auto mode asked you: {{reason}}",
+        "held": {
+          "secrets": "Auto mode left this to you: it reads a credential location.",
+          "readOnlyStep": "Auto mode left this to you: the step only reads the repository, and this may write.",
+          "networkOff": "Auto mode left this to you: the step’s network is off, and this reaches it.",
+          "outsideFolders": "Auto mode left this to you: it writes outside the worktree and the step’s writable folders.",
+          "permissionsUnknown": "Auto mode left this to you: the step’s permissions were not recorded."
+        },
+        "failed": {
+          "timedOut": "Auto mode asked you: its reviewer did not answer in time.",
+          "unreadable": "Auto mode asked you: its reviewer’s answer could not be read.",
+          "couldNotRun": "Auto mode asked you: its reviewer could not run.",
+          "noReviewer": "Auto mode asked you: the project has no Claude Code connection to review with."
+        }
       }
     }
   },
@@ -3834,6 +3860,17 @@
     },
     "sharing": {
       "description": "Name, folder, limits, environment, and where the task list lives."
+    },
+    "autoMode": {
+      "section": "Auto mode",
+      "newRunsName": "New runs use auto mode",
+      "newRunsDescription": "A separate reviewer model answers the requests the rules leave to you, approving only those that clearly serve the task; the rest still ask you, with its reason. Each run can turn it on or off in its Approvals.",
+      "on": "On",
+      "off": "Off",
+      "modelName": "Reviewer model",
+      "modelDescription": "The model of the project’s Claude Code connection that reviews. A small model keeps the agents’ wait short.",
+      "connection": "Reviews with {{connection}}",
+      "unavailable": "Auto mode needs a Claude Code connection in this project to review with."
     }
   },
   "servers": {

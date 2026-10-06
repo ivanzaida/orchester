@@ -3,6 +3,7 @@
 //! services the screens use; none of them holds a rule of its own.
 
 mod approvals;
+mod auto_mode;
 mod pipeline_copy;
 mod projects;
 mod run_task;
@@ -110,6 +111,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "set_run_auto_mode",
+    description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
+    schema: schema_for_type::<auto_mode::SetRunAutoMode>,
+    read_only: false,
+  },
+  Spec {
     name: "list_approvals",
     description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when.",
     schema: schema_for_type::<approvals::ListApprovals>,
@@ -183,6 +190,7 @@ async fn dispatch(
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
+    "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,

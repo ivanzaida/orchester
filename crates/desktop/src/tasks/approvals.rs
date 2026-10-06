@@ -16,7 +16,7 @@ use orchester_core::{
   integration::WORKTREES_DIR,
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId, VersionNumber},
-  run::{PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves},
+  run::{PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves, review::Review},
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
   task::Task,
 };
@@ -85,6 +85,8 @@ pub struct ShownApproval {
   pub asking: Option<AskingPolicy>,
   /// The run already answers its requests itself; this one asks as auto-approval leaves it to a person.
   pub auto_approving: bool,
+  /// What auto mode did with it, when the run uses auto mode: why it is left to the person.
+  pub review: Option<Review>,
 }
 
 impl ShownApproval {
@@ -170,7 +172,10 @@ fn shown(db: &ProjectDb, repo_root: &Path, approval: PendingToolApproval) -> Sho
     ),
   );
   let task = run.as_ref().and_then(|run| db.task(run.task()).ok().flatten());
+  // `.ok()`: an unreadable review only loses why auto mode left the request to the person.
+  let review = db.tool_approval_review(approval.run, &approval.id).ok().flatten();
   ShownApproval {
+    review,
     provider,
     vendor: connection.as_ref().map(AgentConnection::vendor),
     model,

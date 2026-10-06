@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{connection::AgentProvider, permission::category::CommandCategory, run::PendingToolApproval};
 
 use super::{
-  super::{approval_value::ValueRows, native_approval},
+  super::{approval_value::ValueRows, native_approval, review_note::review_line},
   View, footer, scope, subject_line, wider,
 };
 use crate::{
@@ -100,6 +100,12 @@ fn header(ctx: &Ctx, view: &View<'_>) -> Element {
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .child(title_row)
     .child(Text::new(&explanation(ctx, shown)).variant(ExtraTypography::Explanation.role()))
+    .with_children(
+      shown
+        .review
+        .as_ref()
+        .map(|review| review_line(ctx, "tool-approval-review".to_owned(), review)),
+    )
     .into()
 }
 

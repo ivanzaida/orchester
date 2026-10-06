@@ -387,6 +387,7 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
       step: "Implement".into(),
       decided: None,
       decided_by: None,
+      review: None,
     }),
   };
   assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);

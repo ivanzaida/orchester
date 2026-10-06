@@ -8,10 +8,11 @@
 use std::path::Path;
 
 use orchester_core::{
+  connection::reviewer::reviewer_connection,
   id::RunId,
   resource::AgentProfile,
   run::{ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves},
-  store::ResourceStore,
+  store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
@@ -42,6 +43,8 @@ pub enum RunApprovalChange {
   AutoApprove(bool),
   /// Revoke a rule of Approve similar: its requests ask again from the next one.
   Revoke(ApprovalRuleId),
+  /// Use auto mode for the run's requests, or stop.
+  AutoMode(bool),
 }
 
 impl lurq::app::component::DevtoolsInspectable for RunApprovalChange {}
@@ -53,7 +56,26 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
     RunApprovalChange::AutoApprove(chosen) => db.set_run_auto_approve(run, Some(chosen)),
     // A rule revoked already, or one of Always allow, stays as it is.
     RunApprovalChange::Revoke(rule) => db.revoke_approval_rule(run, rule, Timestamp::now()).map(|_| ()),
+    RunApprovalChange::AutoMode(on) => db.set_run_auto_mode(run, on),
   }
+}
+
+/// A run's auto mode, and whether its project can review: it has a Claude Code connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoModeState {
+  pub on: bool,
+  pub reviewer: bool,
+}
+
+impl lurq::app::component::DevtoolsInspectable for AutoModeState {}
+
+/// [`AutoModeState`] of run `run` of the project at `repo_root`.
+pub fn auto_mode_in(repo_root: &Path, run: RunId) -> Result<AutoModeState, StoreError> {
+  let db = ProjectDb::open(repo_root)?;
+  Ok(AutoModeState {
+    on: db.run_auto_mode(run)?,
+    reviewer: reviewer_connection(&db.connections()?).is_some(),
+  })
 }
 
 /// What a run keeps of its approvals.

@@ -263,7 +263,7 @@ fn first_review(desktop: &Desktop) -> Option<String> {
   Some(format!("overview-request-review-{}", oldest.id))
 }
 
-fn open_task(desktop: &mut Desktop) {
+pub(crate) fn open_task(desktop: &mut Desktop) {
   desktop.wait_for("nav-tasks");
   desktop.press("nav-tasks");
   desktop.wait_for("task-row-KON-1");
