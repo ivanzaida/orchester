@@ -180,7 +180,11 @@ removed or not supported) auto mode is unavailable and the app says why. The App
 popover and Project settings say which model on which connection reviews, and each recorded review keeps
 the model that gave it. A person who answers first stops the review (its process and what it started); so
 do the end of the step or run and the runner's exit, and a run whose auto mode is turned off meanwhile
-drops the review's result. Each run has its own *Auto mode* switch, in its Approvals and, as a section of
+drops the review's result. While the reviewer judges a request, the request waits without asking the person: no approval dialog,
+no *Needs you*, and the agent's time keeps counting; only its card in the conversation says *Auto mode is
+reviewing* and keeps the answers, so a person may decide before. It asks the person once the reviewer
+asks, fails or times out; a hard rule asks at once. Unreadable parts alone are no reason for the reviewer
+to ask, and Claude Code reviews without its nonessential startup traffic. Each run has its own *Auto mode* switch, in its Approvals and, as a section of
 its own that saves at once apart from Apply, in its permissions popover; *New runs use auto mode* in
 Project settings (off by default) turns it on for runs created from then on. The run records each review
 with the request: the activity marks *approved by auto mode*, and under the row, the dialog's explanation
