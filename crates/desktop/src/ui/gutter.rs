@@ -18,11 +18,12 @@ pub fn beside_gutter(ctx: &Ctx, space: impl Into<SpacingSize>) -> Dimension {
 }
 
 /// `element`, which does not scroll, kept out of the gutter's column, so it ends where the scrolled
-/// content does.
+/// content does. It does not clip, so the focus ring of a control in it reaches into the padding.
 pub fn clear_of_gutter(element: impl Into<Element>) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_right(Dimension::Px(gutter_width()))
+    .overflow_visible()
     .child(element)
     .into()
 }
