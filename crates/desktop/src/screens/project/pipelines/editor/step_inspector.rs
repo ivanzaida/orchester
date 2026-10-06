@@ -26,6 +26,7 @@ use crate::{
     },
   },
   screens::project::ProjectNav,
+  theme::{gutter_scrollbar, gutter_width},
   ui::unit_input::FocusedInput,
 };
 
@@ -163,19 +164,28 @@ impl Component for StepInspector {
       .child(step_fields::approval(ctx, &props, &self.handle));
     // The scroll viewport starts `FOCUS_ROOM` early on both sides and its content is padded by
     // the same amount, so the fields stay at the designed inset and keep room for focus rings.
-    let inset =
-      ctx.theme().spacing_value(SpacingSize::Lg).resolve(0.0) - ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
+    // Its scroll gutter sits in the panel's right padding; the actions keep out of it.
+    let focus_room = ctx.theme().spacing_value(FOCUS_ROOM).resolve(0.0);
+    let inset = ctx.theme().spacing_value(SpacingSize::Lg).resolve(0.0) - focus_room;
+    let gutter = gutter_width();
     Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .padding_vertical(SpacingSize::Lg)
-      .padding_horizontal(Dimension::Px(inset))
+      .padding_left(Dimension::Px(inset))
+      .padding_right(Dimension::Px(inset - gutter))
       .spacing(SpacingSize::Md)
-      .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
+      .child(
+        ScrollVertical::new(content)
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .scrollbar(gutter_scrollbar()),
+      )
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .padding_horizontal(FOCUS_ROOM)
+          .padding_left(FOCUS_ROOM)
+          .padding_right(Dimension::Px(focus_room + gutter))
           .overflow_visible()
           .child(step_fields::actions(ctx, &props, &self.fields, &self.handle)),
       )

@@ -21,8 +21,13 @@ use crate::{
     import::ImportTab,
     route::{AgentSelection, Page},
   },
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{button::ActionButton, icon::Icon, pressable::surface},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  ui::{
+    button::ActionButton,
+    gutter::{beside_gutter, clear_of_gutter},
+    icon::Icon,
+    pressable::surface,
+  },
 };
 
 /// List and item sizes (`ORWrW`, `mmKpE`).
@@ -71,15 +76,17 @@ pub fn profile_list(
       .describe("state", "selected");
     items.push(placeholder.into());
   }
+  // The profiles scroll beside the gutter; the buttons keep out of it.
   Column::new()
     .id("agent-profiles")
     .width(Dimension::Px(LIST_WIDTH))
     .height(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Step.role())
+    .padding_right(beside_gutter(ctx, ExtraSpacing::Step.role()))
     .spacing(ExtraSpacing::Stack.role())
     .background(PaletteColor::SurfacePanel)
     .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .child(new_agent.render(ctx))
+    .child(clear_of_gutter(new_agent.render(ctx)))
     .child(
       ScrollVertical::new(
         Column::new()
@@ -89,9 +96,10 @@ pub fn profile_list(
       )
       .with_scroll_state(scroll.clone())
       .width(Dimension::Pct(100.0))
-      .flex(1.0),
+      .flex(1.0)
+      .scrollbar(gutter_scrollbar()),
     )
-    .child(
+    .child(clear_of_gutter(
       ActionButton::new(ctx.t("agents.import"))
         .icon(Icon::Download)
         .id("import-agents")
@@ -102,7 +110,7 @@ pub fn profile_list(
         .fill_width()
         .height(Dimension::Px(TOPBAR_BUTTON_HEIGHT))
         .render(ctx),
-    )
+    ))
     .into()
 }
 

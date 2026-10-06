@@ -83,6 +83,7 @@ mod tabs_drag;
 mod tabs_live;
 mod tabs_window;
 mod task_bulk;
+mod task_form_scrollbar;
 mod task_graph;
 mod task_run;
 mod test_clock;

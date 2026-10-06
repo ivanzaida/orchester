@@ -12,6 +12,7 @@ pub mod diff;
 pub mod field;
 pub mod form;
 pub mod github_mark;
+pub mod gutter;
 pub mod icon;
 pub mod link;
 pub mod menu_option;

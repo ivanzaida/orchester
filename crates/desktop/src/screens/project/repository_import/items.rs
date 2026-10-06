@@ -21,7 +21,7 @@ use orchester_core::{
 use super::{Chosen, Opened, RepositoryImportDialog, copy};
 use crate::{
   skills::repository::RepositoryScan,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, UNAVAILABLE_OPTION_OPACITY, gutter_scrollbar, gutter_width},
   ui::{
     icon::{Icon, IconSize, icon},
     pressable::{Ring, keyboard_stop, pressable, surface},
@@ -74,9 +74,11 @@ impl RepositoryImportDialog {
         self.row(ctx, item, state)
       }));
     }
+    // The rows keep the list's width; the scroll gutter is beside them.
     ScrollVertical::new(Column::new().width(Dimension::Pct(100.0)).with_children(rows))
       .id("repository-import-items")
-      .width(Dimension::Px(LIST_WIDTH))
+      .width(Dimension::Px(LIST_WIDTH + gutter_width()))
+      .scrollbar(gutter_scrollbar())
       .height(Dimension::Pct(100.0))
       .padding_vertical(SpacingSize::Sm)
       .border_right(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
