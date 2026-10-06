@@ -91,6 +91,7 @@ mod task_run;
 mod test_clock;
 mod tool_approval;
 mod tool_approval_layout;
+mod tool_approval_scope;
 mod tool_run;
 mod tools;
 mod unreadable_run;

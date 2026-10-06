@@ -1,18 +1,21 @@
 //! The scope of *Approve similar in this run* (`DdyA7` in `XKja4`, after `k4cz1C`), under the request
 //! while the tile has the pointer or the focus: what the rule names and until when, then side by side
 //! what runs without asking and what still asks you, each with why, and how the later requests are
-//! answered and revoked.
+//! answered and revoked. It floats over the foot of the request, ending where the details end, so
+//! opening it moves nothing: laid out in the details, it made the dialog taller and moved the tile
+//! away from the pointer, which then closed it again (seen 2026-10-06).
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::Ctx,
+    ctx::{CollisionStrategy, Ctx, Placement},
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Popup, Row, Text, TextOverflow},
+  core::ElementRef,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, HitTestBehavior, border::Border, dimension::Dimension},
 };
 
 use super::super::activity::category_key;
@@ -38,8 +41,28 @@ struct Scope {
   note: Arc<str>,
 }
 
-/// The panel of `shown`'s Approve similar; `None` when the request does not offer it.
-pub(super) fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
+/// The panel of `shown`'s Approve similar right above `wider`, the wider answers, as wide as the
+/// details' content; `None` when the request does not offer it. The pointer passes through it.
+pub(super) fn floating(ctx: &Ctx, shown: &ShownApproval, wider: &ElementRef) -> Option<Element> {
+  let content = Column::new()
+    .padding_horizontal(ExtraSpacing::Rail.role())
+    .padding_bottom(ExtraSpacing::Step.role())
+    .child(panel(ctx, shown)?);
+  Some(
+    Popup::new(wider.clone(), content)
+      .open_when(true)
+      .placement(Placement::TopStart)
+      .match_anchor_width(true)
+      // Never flipped onto the answers under the pointer; held in the window instead.
+      .collision(CollisionStrategy::Clamp)
+      .hit_test(HitTestBehavior::None)
+      .dismiss_on_outside_click(false)
+      .dismiss_on_escape(false)
+      .into(),
+  )
+}
+
+fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
   let scope = match shown.choices.similar.as_ref().ok()? {
     SimilarShown::Tool { server, tool } => tool_scope(ctx, (server, tool), &run),

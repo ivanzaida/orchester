@@ -17,7 +17,7 @@ use orchester_core::{connection::AgentProvider, permission::category::CommandCat
 
 use super::{
   super::{approval_value::ValueRows, native_approval, review_note::review_line},
-  View, footer, scope, subject_line, wider,
+  View, footer, subject_line, wider,
 };
 use crate::{
   tasks::approvals::ShownApproval,
@@ -199,16 +199,7 @@ fn details(values: &ValueRows<'_>, view: &View<'_>) -> Element {
     )),
     None => cli_details(values, column, shown),
   };
-  column
-    .with_children(
-      view
-        .scope_open
-        .get()
-        .then(|| scope::panel(values.ctx(), shown))
-        .flatten(),
-    )
-    .child(denial(values.ctx(), shown))
-    .into()
+  column.child(denial(values.ctx(), shown)).into()
 }
 
 /// A CLI's request under its subject line: the agent, then a command's working directory, what the agent

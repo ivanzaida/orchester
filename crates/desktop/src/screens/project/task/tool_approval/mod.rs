@@ -174,6 +174,8 @@ struct ToolApprovalPanel {
   prefix: Signal<usize>,
   /// The scope of *Approve similar* is shown while its tile has the pointer or the focus.
   scope_open: Signal<bool>,
+  /// The wider answers, above which the scope of *Approve similar* floats.
+  wider: ElementRef,
   /// The step's primary answer, which has the focus when the step opens.
   primary: ElementRef,
 }
@@ -195,6 +197,7 @@ impl Component for ToolApprovalPanel {
       arguments: ArgumentsCache::default(),
       prefix: ctx.signal(0),
       scope_open: ctx.signal(false),
+      wider: ElementRef::new(),
       primary,
     }
   }
@@ -225,6 +228,7 @@ impl Component for ToolApprovalPanel {
       arguments: &self.arguments,
       prefix: &self.prefix,
       scope_open: &self.scope_open,
+      wider: &self.wider,
       primary: &self.primary,
     };
     let (sections, submit) = if props.place.always {
@@ -280,6 +284,7 @@ struct View<'a> {
   arguments: &'a ArgumentsCache,
   prefix: &'a Signal<usize>,
   scope_open: &'a Signal<bool>,
+  wider: &'a ElementRef,
   primary: &'a ElementRef,
 }
 
