@@ -17,6 +17,26 @@ fn is_descriptor(word: &str) -> bool {
   word == "-" || (!number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 }
 
+/// The values of the shell's `HOME` and `USERPROFILE`; `None` when unset there.
+#[derive(Clone, Debug, Default)]
+pub(super) struct ShellHomes {
+  pub(super) home: Option<String>,
+  pub(super) profile: Option<String>,
+}
+
+/// The names of the home folder's variables.
+const HOME_NAMES: [&str; 2] = ["HOME", "USERPROFILE"];
+
+/// Whether `command` names a home variable other than to use it (`$HOME`, `${HOME}`).
+fn sets_home(command: &str) -> bool {
+  HOME_NAMES.iter().any(|name| {
+    command.match_indices(name).any(|(at, _)| {
+      let before = &command[..at];
+      !(before.ends_with('$') || before.ends_with("${"))
+    })
+  })
+}
+
 /// Whose quoting rules a command line follows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Quoting {
@@ -80,6 +100,8 @@ enum Joiner {
 
 /// The parts being collected.
 struct Splitter {
+  /// What `$HOME` and `$USERPROFILE` are read as, when the line sets neither.
+  homes: ShellHomes,
   quoting: Quoting,
   parts: Vec<RawPart>,
   part: RawPart,
@@ -97,8 +119,18 @@ struct Splitter {
 type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
 
 /// The simple commands of `command`, in order.
-pub(super) fn split(command: &str, quoting: Quoting) -> Vec<RawPart> {
+///
+/// `home` is the home folder the agent's CLI was started with, which `$HOME` and `$USERPROFILE` (also
+/// braced) are read as, unless the line may set either: any `HOME` or `USERPROFILE` in it that is not
+/// such a use (`HOME=/x`, `export HOME`, `read HOME`) leaves them unread.
+pub(super) fn split(command: &str, quoting: Quoting, homes: ShellHomes) -> Vec<RawPart> {
+  let homes = if sets_home(command) {
+    ShellHomes::default()
+  } else {
+    homes
+  };
   let mut splitter = Splitter {
+    homes,
     quoting,
     parts: Vec::new(),
     part: RawPart::default(),
@@ -348,7 +380,7 @@ impl Splitter {
   /// that closes a double-quoted string. Anything else may expand (`$x`, `$(…)`, `$'…'`, `$"…"`,
   /// `$[…]`) and leaves the part unread; PowerShell's `$null` is kept as a word, the null device.
   fn dollar(&mut self, chars: &mut Chars<'_>, quoted: bool) {
-    if self.quoting == Quoting::Bash && self.literal_variable(chars) {
+    if self.quoting == Quoting::Bash && self.literal_variable(chars, quoted) {
       return;
     }
     let plain = match chars.peek() {
@@ -366,7 +398,7 @@ impl Splitter {
   }
 
   /// Whether a variable set to a literal follows (`name` or `{name}`); its value is taken in its place.
-  fn literal_variable(&mut self, chars: &mut Chars<'_>) -> bool {
+  fn literal_variable(&mut self, chars: &mut Chars<'_>, quoted: bool) -> bool {
     let mut ahead = chars.clone();
     let braced = ahead.next_if_eq(&'{').is_some();
     let mut name = String::new();
@@ -376,7 +408,13 @@ impl Splitter {
     if braced && ahead.next_if_eq(&'}').is_none() {
       return false;
     }
-    let Some(value) = self.variables.value(&name).map(str::to_owned) else {
+    let home = match name.as_str() {
+      "HOME" => self.homes.home.clone(),
+      "USERPROFILE" => self.homes.profile.clone(),
+      _ => None,
+    }
+    .filter(|home| quoted || !home.contains([' ', '\t', '*', '?', '[']));
+    let Some(value) = self.variables.value(&name).map(str::to_owned).or(home) else {
       return false;
     };
     *chars = ahead;
