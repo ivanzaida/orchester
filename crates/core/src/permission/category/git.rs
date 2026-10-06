@@ -89,6 +89,15 @@ fn subcommand(args: &[String]) -> Option<(usize, &str, Vec<String>)> {
         folders.push(args.get(index + 1)?.clone());
         index += 2;
       }
+      // Who a commit names; every other setting can name a program git starts (`core.hooksPath`,
+      // `core.sshCommand`, an alias) or where it reads and writes.
+      "-c"
+        if args
+          .get(index + 1)
+          .is_some_and(|setting| setting.starts_with("user.name=") || setting.starts_with("user.email=")) =>
+      {
+        index += 2;
+      }
       "--no-pager" | "-P" | "--no-optional-locks" | "--paginate" | "-p" => index += 1,
       arg if arg.starts_with('-') => return None,
       arg => return Some((index, arg, folders)),
@@ -120,6 +129,9 @@ pub(super) fn judge(args: &[String]) -> Judged {
   } else {
     judge_subcommand(sub, &args[at..])
   };
+  if let [repository] = folders.as_slice() {
+    judged.repository = Some(repository.clone());
+  }
   judged.inside.extend(folders);
   if PREFIX_STAYS.contains(&sub) {
     judged = judged.prefix_stays();

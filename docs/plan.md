@@ -641,6 +641,32 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Worktree scripts and nested fixture repositories run like edits · branch `claude/worktree-scripts` (done 2026-10-06)
+
+User decision: in a step that edits files, running a script file of the worktree adds nothing an agent cannot do by
+writing a test and running an allowed `cargo test`. Verify steps asked about `python .tmp/verify/start.py`,
+`python .tmp/verify/tree.py 39684 …`, `powershell -NoProfile -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1`
+and `git -C .tmp/verify/kontur -c user.name=… -c user.email=… commit -q …`; they now run.
+
+- `category::interpreters`: `python`/`python3`/`py` (flags `-u -B -E -s -I -O -OO`, `-X …`, `py -3`), `node`, `bash`/`sh`/
+  `zsh` (`-e -u -x -v`), `pwsh`/`powershell` (`-NoProfile`, `-NonInteractive`, `-NoLogo`, `-ExecutionPolicy
+  Bypass|RemoteSigned`, `-File`) running a file. The part is Worktree and an edit when the script is a regular file
+  in the worktree or a writable folder, no link on its way, not in `.git` or `.orchester/` (`Placing::plain_file`,
+  the same placing and `write_refused` as edits); any other script is Unknown. Inline code (`-c`, `-e`, `-Command`,
+  `-EncodedCommand`), `-m`, `node -r`, `bash --rcfile`, `PYTHONPATH=`/`NODE_OPTIONS=` prefixes still ask; the
+  script's arguments are placed like any other.
+- git: `-c user.name=…` and `-c user.email=…` are read (every other `-c` is Unknown); `git -C <folder>` with a
+  Worktree subcommand is an edit when the folder is a plain folder below the worktree (not the worktree itself)
+  holding its own `.git` folder (`Placing::nested_repository`): the agent's fixture. In the run's own worktree, a
+  git change still asks.
+- Read-only steps are unchanged. The fixture table of runs 22–25 is unchanged (its scripts are `python -` and
+  `python -c`).
+- Tests: `core` `worktree_scripts` (new: the six real lines, more forms, every refusal above, a script through a link,
+  outside, in `.git/hooks` and `.orchester`, a read-only step), `worktree_writes`, `command_probes`,
+  `command_sequences`, `command_categories`, `command_fail_closed`, `approval_answers`, `approval_fixtures`, `native`;
+  `runner --features test-agent` `claude_unlisted`, `approval_choices`, `claude`, `command_approvals`,
+  `orchester_tools`. Nothing on macOS.
+
 Shell writes in the worktree run like edits · branch `claude/worktree-writes` (done 2026-10-05)
 
 User decision: in a step that edits files, a command line whose only effects are writes to files in the worktree

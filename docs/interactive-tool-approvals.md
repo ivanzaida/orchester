@@ -452,7 +452,10 @@ unless every folder down to it is there as a plain folder; on Windows a path roo
 resolved with its links followed and refused where the native agent's file tools refuse a write
 (`native::scope::protected`: any `.git` entry, `.orchester/` at the top of the worktree), and so is removing the
 worktree or a writable folder itself; a read outside (`cp ~/x src/`) follows the rules for reads outside. In a
-read-only step every write asks. An allowed `cargo fmt` also allows `cargo +nightly fmt`. The classifier reads such
+read-only step every write asks. In such a step a script file of the worktree run by an interpreter
+(`python x.py`, `node`, `bash`, `pwsh -File`; no inline code, module or code loaded from elsewhere) runs too
+(decision 2026-10-06), and so does git in a repository nested in the worktree (`git -C <fixture>`, with only
+`-c user.name`/`user.email`). An allowed `cargo fmt` also allows `cargo +nightly fmt`. The classifier reads such
 lines to their end: a `cd` to one folder named plainly in the worktree (written `/h/…`, `H:/…` or `H:\…`) is
 dropped and the rest placed from that folder; a `cd` with an option, `-`, a second operand (zsh's `cd old new`) or a
 target that cannot be told leaves where later parts run unknown, and every part reads the folder it runs in. A

@@ -139,6 +139,41 @@ impl Placing<'_> {
     })
   }
 
+  /// Whether `word` names a regular file in the worktree or a writable folder, no folder on its way and
+  /// not the file a link or junction, where an edit may write (no `.git`, no `.orchester/`).
+  pub(super) fn plain_file(&self, word: &str) -> bool {
+    self.plain(word, |path| {
+      std::fs::symlink_metadata(path).is_ok_and(|found| found.is_file() && !found.file_type().is_symlink())
+    })
+  }
+
+  /// Whether `word` names a repository nested in the worktree or a writable folder: a plain folder below
+  /// it that holds its own `.git` folder (not a file that points elsewhere, not a link), where an edit may
+  /// write.
+  pub(super) fn nested_repository(&self, word: &str) -> bool {
+    self.plain(word, |path| {
+      std::fs::symlink_metadata(path).is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink())
+        && !self.scope.is_root(path)
+        && std::fs::symlink_metadata(path.join(".git"))
+          .is_ok_and(|found| found.is_dir() && !found.file_type().is_symlink())
+    })
+  }
+
+  /// Whether `word`, from every folder the part may run in, is a path whose folders are plain folders in
+  /// the worktree or a writable folder, where an edit may write, and that `is` says it is.
+  fn plain(&self, word: &str, is: impl Fn(&Path) -> bool) -> bool {
+    !word.contains(['*', '?', '['])
+      && self.folders.is_some_and(|folders| {
+        folders.iter().all(|folder| {
+          self.scope.written(folder, word).is_some_and(|path| {
+            path.parent().is_some_and(|parent| self.scope.plain_folders(parent))
+              && !self.scope.write_refused(&path, false)
+              && is(&path)
+          })
+        })
+      })
+  }
+
   /// Whether `cp` or `mv` of `source` copies or moves a folder or a link (or what cannot be told), whose
   /// tree can bring links to the target.
   pub(super) fn moves_tree(&self, source: &str) -> bool {

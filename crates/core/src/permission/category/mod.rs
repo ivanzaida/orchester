@@ -20,6 +20,7 @@ mod git;
 mod glob;
 mod heredoc;
 mod install;
+mod interpreters;
 mod network;
 mod network_tables;
 mod options;
@@ -195,7 +196,10 @@ fn classify_part(
     )];
   };
   let program = program_key(first, quoting);
-  if let Some(script) = program.as_deref().and_then(|program| shell_script(program, args)) {
+  let inline = program
+    .as_deref()
+    .filter(|program| interpreters::script(program, args).is_none());
+  if let Some(script) = inline.and_then(|program| shell_script(program, args)) {
     let Some((script, inner)) = script.filter(|_| depth < SHELL_DEPTH) else {
       return vec![CommandPart::unknown(words)];
     };
@@ -219,6 +223,17 @@ fn classify_part(
   let judged = programs::judge(&program, args);
   let mut part = CommandPart::new(words.clone(), Some(program.clone()), &judged);
   part.edits &= !judged.sources.iter().any(|source| placing.moves_tree(source));
+  // A script in the worktree, or git in a repository nested in it, changes no more than an edit could.
+  // A script that is no regular file of the worktree is code from elsewhere, not read.
+  if let Some(at) = judged.runs {
+    part.edits = placing.plain_file(&args[at]);
+    if !part.edits {
+      part.at_least(CommandCategory::Unknown);
+    }
+  }
+  if let Some(repository) = &judged.repository {
+    part.edits = placing.nested_repository(repository);
+  }
   // A program may read the folder it runs in (`ls`, `rg ''`, `find`), wherever an earlier `cd` left it.
   placing.read(&mut part, ".");
   let named: Vec<String> = args

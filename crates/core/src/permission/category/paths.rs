@@ -181,6 +181,13 @@ impl CommandScope {
     })
   }
 
+  /// Whether `path` is the worktree or a writable folder itself.
+  pub(super) fn is_root(&self, path: &Path) -> bool {
+    std::iter::once(&self.worktree)
+      .chain(&self.writable)
+      .any(|root| root == path)
+  }
+
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it
   /// (the folders in it are [`Self::secret`] themselves).
   fn may_hold_secrets(&self, folder: &Path) -> bool {

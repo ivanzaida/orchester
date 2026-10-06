@@ -9,7 +9,7 @@
 //! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
 //! credential location asks.
 
-use super::{files, gh, git, install::InstallSource, network, packages, powershell, scripts};
+use super::{files, gh, git, install::InstallSource, interpreters, network, packages, powershell, scripts};
 use crate::permission::known_safe;
 
 /// What a command is by its words.
@@ -64,6 +64,10 @@ pub(super) struct Judged {
   pub(super) edits: bool,
   /// What `cp` and `mv` copy or move.
   pub(super) sources: Vec<String>,
+  /// The argument that is a script file an interpreter runs ([`interpreters`]).
+  pub(super) runs: Option<usize>,
+  /// The repository `git -C <folder>` works in.
+  pub(super) repository: Option<String>,
 }
 
 impl Judged {
@@ -84,6 +88,8 @@ impl Judged {
       script: None,
       edits: false,
       sources: Vec::new(),
+      runs: None,
+      repository: None,
     }
   }
 
@@ -257,6 +263,12 @@ const SECRET_STORES: [&str; 6] = [
 pub(super) fn judge(program: &str, args: &[String]) -> Judged {
   if SECRET_STORES.contains(&program) {
     return Judged::unknown().secret();
+  }
+  if let Some(at) = interpreters::script(program, args) {
+    return Judged {
+      runs: Some(at),
+      ..Judged::of(Kind::Worktree)
+    };
   }
   if let Some(judged) = packages::judge(program, args)
     .or_else(|| files::judge(program, args))
