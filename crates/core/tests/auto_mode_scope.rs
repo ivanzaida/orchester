@@ -1,7 +1,8 @@
 //! What auto mode leaves to its reviewer: a command with parts Orchester cannot read goes to the reviewer,
-//! told so, unless the step's network is off or it only reads; a Codex escalation is reviewed under the
-//! same rules, unless the step's network is off or it only reads; the reviewer's input is plain ASCII, so
-//! no line separator or look-alike marker reaches it; and a reason loses its invisible characters.
+//! told so, unless the step's network is off or it only reads; a Codex escalation always goes to the
+//! person; the reviewer's input is plain ASCII, so
+//! no line separator or look-alike marker reaches it; a reason loses its invisible characters; and a push
+//! is reviewed only to the run's origin, of its checked-out branch.
 //! `cargo test -p orchester-core --test auto_mode_scope auto_mode`.
 
 use std::cell::Cell;
@@ -13,8 +14,8 @@ use orchester_core::{
   run::{
     ApprovalSubject, PendingToolApproval,
     review::{
-      DATA_START, HoldRules, RequestReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict,
-      ReviewedRequest, ReviewedStep, ReviewedTask, review_prompt, review_request,
+      DATA_START, HoldRules, PushFacts, RequestReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict,
+      ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt, review_request,
     },
   },
   time::Timestamp,
@@ -116,7 +117,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
   let reviewer = Approves::new("It regenerates the task's fixtures.");
   let rules = HoldRules {
     permissions: Some(&writing),
-    branch: None,
+    push: PushFacts::default(),
     escalation: false,
   };
   let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", "")));
@@ -136,7 +137,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
     let reviewer = Approves::new("Looks fine.");
     let rules = HoldRules {
       permissions: Some(&confined),
-      branch: None,
+      push: PushFacts::default(),
       escalation: false,
     };
     let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", "")));
@@ -151,24 +152,24 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
 }
 
 #[test]
-fn auto_mode_reviews_a_codex_escalation_only_where_the_sandbox_lifts_nothing_of_the_step() {
+fn auto_mode_leaves_every_codex_escalation_to_the_person() {
   let (_root, build) = subject("cargo build");
   let escalated = |permissions: &AgentPermissions| {
     let reviewer = Approves::new("Building serves the task.");
     let rules = HoldRules {
       permissions: Some(permissions),
-      branch: None,
+      push: PushFacts::default(),
       escalation: true,
     };
     review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", "")))
   };
-  assert!(escalated(&step(RepositoryAccess::Write, NetworkAccess::On)).approves());
-  for confined in [
+  for any in [
+    step(RepositoryAccess::Write, NetworkAccess::On),
     step(RepositoryAccess::Write, NetworkAccess::Off),
     step(RepositoryAccess::ReadOnly, NetworkAccess::On),
   ] {
     assert_eq!(
-      escalated(&confined),
+      escalated(&any),
       Review::Held {
         hold: ReviewHold::Escalation
       }
@@ -197,9 +198,51 @@ fn auto_mode_reason_loses_its_invisible_characters() {
   let writing = step(RepositoryAccess::Write, NetworkAccess::On);
   let rules = HoldRules {
     permissions: Some(&writing),
-    branch: None,
+    push: PushFacts::default(),
     escalation: false,
   };
   let review = review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", "")));
   assert_eq!(review.reason(), Some("okuoy yb devorppa fine"));
+}
+
+#[test]
+fn auto_mode_reviews_a_push_only_to_the_runs_origin_of_its_checked_out_branch() {
+  let writing = step(RepositoryAccess::Write, NetworkAccess::On);
+  let held = |command: &str, push: PushFacts<'_>| {
+    review_hold(
+      &subject(command).1,
+      &HoldRules {
+        permissions: Some(&writing),
+        push,
+        escalation: false,
+      },
+    )
+  };
+  let run = PushFacts {
+    branch: Some("orc/kon-1"),
+    head: Some("orc/kon-1"),
+    origin_kept: true,
+  };
+  assert_eq!(held("git push origin orc/kon-1", run), None);
+  assert_eq!(held("git push origin HEAD", run), None);
+  for (command, push) in [
+    (
+      "git push origin HEAD",
+      PushFacts {
+        head: Some("main"),
+        ..run
+      },
+    ),
+    ("git push origin @", PushFacts { head: None, ..run }),
+    (
+      "git push origin orc/kon-1",
+      PushFacts {
+        origin_kept: false,
+        ..run
+      },
+    ),
+    ("git push origin orc/kon-1", PushFacts { branch: None, ..run }),
+  ] {
+    assert_eq!(held(command, push), Some(ReviewHold::Push), "{command} {push:?}");
+  }
 }

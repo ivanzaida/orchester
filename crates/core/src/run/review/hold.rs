@@ -1,20 +1,21 @@
 //! The hard rules of auto mode: what goes to the person without a review, whatever a reviewer would say.
 //! Every part of a command line Orchester can read is checked on its own, so one harmless part never hides
 //! another: a part that reads a credential, rewrites history or deletes outside the worktree, pushes
-//! anything but the run's own branch to `origin` without force, writes in a read-only step, may reach the
+//! anything but the run's own branch to its `origin` ([`super::push`]), writes in a read-only step, may reach the
 //! network while it is off, or writes outside the worktree and the step's writable folders sends the
 //! whole line to the person.
 //!
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
 //! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is
-//! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides. A
-//! Codex escalation (a command outside its sandbox) goes to the reviewer under the same rules, except
-//! where the step's network is off or it only reads, which the escalation would lift. Orchester's
+//! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
+//! Where its output goes is checked all the same. A Codex escalation (a command outside its sandbox)
+//! always goes to the person. Orchester's
 //! `run_project_tool` (a project program outside every sandbox) and a request too long to be reviewed
 //! whole go to the person too.
 
 use serde::{Deserialize, Serialize};
 
+use super::push::{PushFacts, is_push, reviewable_push};
 use crate::{
   orchester_tools::auto_approvable,
   permission::{
@@ -23,9 +24,6 @@ use crate::{
   },
   run::answer::ApprovalSubject,
 };
-
-/// The only remote a push may go to without the person.
-const OWN_REMOTE: &str = "origin";
 
 /// A hard rule that sends a request to the person without a review.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -49,18 +47,18 @@ pub enum ReviewHold {
   PermissionsUnknown,
   /// The request is longer than a review reads whole.
   TooLong,
-  /// Codex asks to run it outside its sandbox in a step whose network is off or that only reads.
+  /// Codex asks to run it outside its sandbox.
   Escalation,
   /// It runs one of the project's programs, outside every sandbox.
   ProjectProgram,
 }
 
-/// What the hard rules know besides the request: the step's recorded permissions, the run's branch, and
-/// whether the request is a Codex escalation.
+/// What the hard rules know besides the request: the step's recorded permissions, where a push of the
+/// run would go, and whether the request is a Codex escalation.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HoldRules<'a> {
   pub permissions: Option<&'a AgentPermissions>,
-  pub branch: Option<&'a str>,
+  pub push: PushFacts<'a>,
   pub escalation: bool,
 }
 
@@ -73,21 +71,19 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   if command.reads_secrets() {
     return Some(ReviewHold::Secrets);
   }
+  // Approved, an escalation runs the command outside Codex's sandbox, beyond any step's permissions.
+  if rules.escalation {
+    return Some(ReviewHold::Escalation);
+  }
   let Some(permissions) = rules.permissions else {
     return Some(ReviewHold::PermissionsUnknown);
   };
   let confined = permissions.network() == NetworkAccess::Off || permissions.repository() == RepositoryAccess::ReadOnly;
-  if rules.escalation && confined {
-    return Some(ReviewHold::Escalation);
-  }
   let parts = command.parts();
   if parts.is_empty() || (confined && parts.iter().any(unread)) {
     return Some(ReviewHold::Unreadable);
   }
-  if parts
-    .iter()
-    .any(|part| is_push(part) && !own_branch_push(part, rules.branch))
-  {
+  if (0..parts.len()).any(|at| is_push(&parts[at]) && !reviewable_push(parts, at, &rules.push)) {
     return Some(ReviewHold::Push);
   }
   if parts
@@ -131,32 +127,6 @@ pub fn unread_parts(subject: &ApprovalSubject) -> usize {
     ApprovalSubject::Command(command) => command.parts().iter().filter(|part| unread(part)).count(),
     ApprovalSubject::McpTool { .. } => 0,
   }
-}
-
-fn is_push(part: &CommandPart) -> bool {
-  part.program() == Some("git") && part.subcommand() == Some("push")
-}
-
-/// Whether `part` pushes the run's `branch` to `origin` without force: `git push [-u] origin <branch>`,
-/// with `HEAD`, `HEAD:<branch>` or `<branch>:<branch>` for the branch. Any other option, remote or
-/// refspec (a tag, another branch, a deletion, `+` to force) is not.
-fn own_branch_push(part: &CommandPart, branch: Option<&str>) -> bool {
-  let Some(branch) = branch else {
-    return false;
-  };
-  let operands: Vec<&str> = part
-    .after_subcommand()
-    .iter()
-    .map(String::as_str)
-    .filter(|word| !matches!(*word, "-u" | "--set-upstream"))
-    .collect();
-  let own = |refspec: &str| {
-    refspec == branch
-      || refspec == "HEAD"
-      || refspec.strip_prefix("HEAD:") == Some(branch)
-      || refspec.split_once(':') == Some((branch, branch))
-  };
-  matches!(operands.as_slice(), [remote, refspec] if *remote == OWN_REMOTE && own(refspec))
 }
 
 /// The hard rule for a call of an MCP tool: Orchester's `run_project_tool` never goes to the reviewer.
