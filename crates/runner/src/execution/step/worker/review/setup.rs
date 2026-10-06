@@ -18,8 +18,8 @@ use orchester_core::{
   run::{
     ApprovalSubject,
     review::{
-      RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict, ReviewerKind,
-      resolve_reviewer, review_request,
+      HoldRules, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput, ReviewVerdict,
+      ReviewerKind, resolve_reviewer, review_request,
     },
   },
   secret::{SecretValue, SecretVault},
@@ -60,6 +60,10 @@ pub(super) enum ReviewerSetup {
 pub(super) struct ReviewJob {
   pub(super) subject: ApprovalSubject,
   pub(super) permissions: Option<AgentPermissions>,
+  /// The run's branch, which a push may send to `origin` without the person.
+  pub(super) branch: Option<String>,
+  /// Codex asks to run the command outside its sandbox.
+  pub(super) escalation: bool,
   pub(super) input: Result<ReviewInput, ReviewHold>,
   pub(super) runtime: Handle,
   pub(super) timeout: Duration,
@@ -72,12 +76,19 @@ impl ReviewerSetup {
     let ReviewJob {
       subject,
       permissions,
+      branch,
+      escalation,
       input,
       runtime,
       timeout,
       stop,
     } = job;
-    let rules = (&subject, permissions.as_ref());
+    let hold_rules = HoldRules {
+      permissions: permissions.as_ref(),
+      branch: branch.as_deref(),
+      escalation,
+    };
+    let rules = (&subject, &hold_rules);
     match self {
       Self::Missing => review_request(None, rules, input),
       Self::Unreachable { model } => review_request(Some(&Unreachable { model }), rules, input),
@@ -110,7 +121,7 @@ impl ReviewerSetup {
         let folder = (place.folder(), environment);
         let reviewer: Box<dyn RequestReviewer> = match kind {
           ReviewerKind::Codex => Box::new(CodexReviewer::new(&executable, (model, effort), folder, runner)),
-          _ => Box::new(ClaudeReviewer::new(&executable, model, folder, runner)),
+          _ => Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner)),
         };
         let review = review_request(Some(reviewer.as_ref()), rules, input);
         // The folder goes only after the reviewer, which runs in it, has ended.

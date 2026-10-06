@@ -1,11 +1,12 @@
 //! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
 //! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
-//! with its system prompt; a credential read, an unreadable script and a Codex escalation still ask the
-//! person without a review; a question of the reviewer and an answer it cannot read leave the request to
-//! the person with what auto mode said; a review whose run turned auto mode off meanwhile is dropped; and
-//! a reviewer still at work when the person answers is stopped. A Codex connection reviews through `codex
-//! exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs `git`. Run with
-//! `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
+//! with its system prompt, an unknown command too while the step's network is on, a Codex escalation while
+//! it is on, and a plain push of the run's branch; a credential read, a force push, and an unknown command
+//! or an escalation in a step that only reads still ask the person without a review; a question of the reviewer and an
+//! answer it cannot read leave the request to the person with what auto mode said; a review whose run turned auto mode
+//! off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex connection
+//! reviews through `codex exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs `git`. Run
+//! with `cargo test -p orchester-runner --features test-agent --test auto_mode auto_mode`.
 
 mod support;
 
@@ -29,6 +30,31 @@ use tempfile::TempDir;
 use tokio::sync::mpsc;
 
 use self::support::{PATIENCE, Setup, TestProject, is_running, pending_approval, project, scheduler_with, wait_for};
+
+/// A Claude Code Builder that asks about every command, in a writing step with `network`.
+fn asking(brief: &'static str, network: NetworkAccess) -> Setup {
+  Setup {
+    permissions: Some(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::AskBefore,
+      network,
+    )),
+    ..asking_in(brief, RepositoryAccess::Write)
+  }
+}
+
+/// A Claude Code Builder that asks about every command, in a step with `repository` access.
+fn asking_in(brief: &'static str, repository: RepositoryAccess) -> Setup {
+  Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(AgentPermissions::new(
+      repository,
+      CommandPermission::AskBefore,
+      NetworkAccess::On,
+    )),
+    ..Setup::new(brief)
+  }
+}
 
 /// A Claude Code Builder that runs `git` and asks about every other command.
 fn claude(brief: &'static str) -> Setup {
@@ -190,38 +216,105 @@ async fn auto_mode_approves_a_command_that_serves_the_task_in_a_folder_of_its_ow
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_leaves_a_credential_read_and_a_script_to_the_person_without_a_review() {
-  for (brief, hold) in [
-    ("Run `cp ~/.orchester-test-token token.txt`.", ReviewHold::Secrets),
-    ("Run `./regen.sh`.", ReviewHold::Unreadable),
-  ] {
-    let mut started = Started::new(&claude(brief)).await;
-    let (request, review) = started.left_to_person().await;
-    assert_eq!(review, Review::Held { hold }, "{brief}");
-    started.deny(request).await;
-    started.ended().await;
-    let decisions = started.decisions();
-    assert_eq!(decisions.len(), 1);
-    assert_eq!(decisions[0].0, DecidedBy::PersonDeny);
-    assert_eq!(decisions[0].1, Some(review));
-    let counts = started.db().decision_counts(started.id).expect("counts");
-    assert_eq!((counts.by_reviewer, counts.asked_by_reviewer), (0, 1));
-    assert!(started.logged("pid").is_empty(), "{brief}: no reviewer ran");
-  }
+async fn auto_mode_leaves_a_credential_read_to_the_person_without_a_review() {
+  let mut started = Started::new(&claude("Run `cp ~/.orchester-test-token token.txt`.")).await;
+  let (request, review) = started.left_to_person().await;
+  assert_eq!(
+    review,
+    Review::Held {
+      hold: ReviewHold::Secrets
+    }
+  );
+  started.deny(request).await;
+  started.ended().await;
+  let decisions = started.decisions();
+  assert_eq!(decisions, [(DecidedBy::PersonDeny, Some(review))]);
+  let counts = started.db().decision_counts(started.id).expect("counts");
+  assert_eq!((counts.by_reviewer, counts.asked_by_reviewer), (0, 1));
+  assert!(started.logged("pid").is_empty(), "no reviewer ran");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn auto_mode_leaves_a_codex_escalation_to_the_person() {
+async fn auto_mode_reviews_an_unknown_command_unless_the_step_only_reads() {
+  let mut on = Started::new(&claude("Run `./regen.sh`.")).await;
+  on.ended().await;
+  let decisions = on.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+  assert_eq!(on.logged("pid").len(), 1, "the reviewer judged it");
+
+  let mut off = Started::new(&asking_in("Run `./regen.sh`.", RepositoryAccess::ReadOnly)).await;
+  let (request, review) = off.left_to_person().await;
+  assert_eq!(
+    review,
+    Review::Held {
+      hold: ReviewHold::Unreadable
+    }
+  );
+  off.deny(request).await;
+  off.ended().await;
+  assert!(off.logged("pid").is_empty(), "no reviewer ran");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_reviews_a_plain_push_of_the_runs_branch_and_holds_a_force_push() {
+  let mut plain = Started::new(&asking(
+    "Run `git push origin orchester/orc-1-run-1`.",
+    NetworkAccess::On,
+  ))
+  .await;
+  plain.ended().await;
+  let decisions = plain.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+
+  let mut forced = Started::new(&asking(
+    "Run `git push --force origin orchester/orc-1-run-1`.",
+    NetworkAccess::On,
+  ))
+  .await;
+  let (request, review) = forced.left_to_person().await;
+  assert_eq!(review, Review::Held { hold: ReviewHold::Push });
+  forced.deny(request).await;
+  forced.ended().await;
+  assert!(forced.logged("pid").is_empty(), "no reviewer ran");
+}
+
+/// A Codex Builder with any command in the worktree in a step with `repository` access, reviewed by its
+/// own connection. (Network off is no confined step here: where Codex cannot enforce it, it stays on.)
+async fn codex_escalating(repository: RepositoryAccess) -> Started {
   let setup = Setup {
     permissions: Some(AgentPermissions::new(
-      RepositoryAccess::Write,
+      repository,
       CommandPermission::AnyInWorktree,
-      NetworkAccess::Off,
+      NetworkAccess::On,
     )),
     ..Setup::new("Escalate `cargo build`.")
   };
-  let mut started = Started::new(&setup).await;
-  let (request, review) = started.left_to_person().await;
+  let project = project(&setup);
+  let codex = ProjectDb::open(project.repo.path())
+    .expect("open")
+    .connections()
+    .expect("connections")
+    .remove(0);
+  let choice = ReviewerChoice {
+    connection: codex.id(),
+    model: ModelId::new("gpt-5.5-codex").expect("model"),
+    effort: None,
+  };
+  Started::of(project, Some(choice)).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_reviews_a_codex_escalation_unless_the_step_is_confined() {
+  let mut on = codex_escalating(RepositoryAccess::Write).await;
+  on.ended().await;
+  let decisions = on.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+
+  let mut off = codex_escalating(RepositoryAccess::ReadOnly).await;
+  let (request, review) = off.left_to_person().await;
   assert!(request.command);
   assert_eq!(
     review,
@@ -229,9 +322,9 @@ async fn auto_mode_leaves_a_codex_escalation_to_the_person() {
       hold: ReviewHold::Escalation
     }
   );
-  started.deny(request).await;
-  started.ended().await;
-  assert!(started.logged("pid").is_empty(), "no reviewer ran");
+  off.deny(request).await;
+  off.ended().await;
+  assert!(off.logged("pid").is_empty(), "no reviewer ran");
 }
 
 #[tokio::test(flavor = "multi_thread")]

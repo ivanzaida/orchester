@@ -3,7 +3,8 @@
 //! blocking pool, so the worker keeps following its agent. An approval answers the request as the
 //! reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
 //! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
-//! result is then dropped. A Codex escalation (a command outside its sandbox) never reaches the reviewer.
+//! result is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
+//! hard rules, which keep it from the reviewer where the step's network is off or it only reads.
 
 mod native;
 mod process;
@@ -59,8 +60,8 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> (String, Review) {
 }
 
 impl Worker {
-  /// Starts auto mode's review of `approval`, which waits for the person, when its run uses auto mode. A
-  /// Codex `escalation` is left to the person without a review.
+  /// Starts auto mode's review of `approval`, which waits for the person, when its run uses auto mode;
+  /// `escalation`: Codex asks to run it outside its sandbox.
   pub(in super::super) fn start_review(
     &mut self,
     watch: &mut Watch,
@@ -68,13 +69,6 @@ impl Worker {
     escalation: bool,
   ) -> Result<Option<Reviewing>, StoreError> {
     if !watch.db.run_auto_mode(approval.run)? {
-      return Ok(None);
-    }
-    if escalation {
-      let held = Review::Held {
-        hold: ReviewHold::Escalation,
-      };
-      watch.db.record_review(approval.run, &approval.id, &held)?;
       return Ok(None);
     }
     // The agent's last messages may still wait to be written.
@@ -88,9 +82,19 @@ impl Worker {
     let input = self.review_input(watch, approval, permissions.as_ref())?;
     let setup = self.reviewer(watch)?;
     let (stop, stopped) = stop_review();
+    let branch = watch
+      .db
+      .run(approval.run)
+      .map_err(|error| StoreError::Corrupt {
+        what: "run",
+        detail: error.to_string(),
+      })?
+      .map(|run| run.branch().as_str().to_owned());
     let job = ReviewJob {
       subject,
       permissions,
+      branch,
+      escalation,
       input,
       runtime: Handle::current(),
       timeout: REVIEW_TIMEOUT,
