@@ -422,6 +422,12 @@ fn plan_review_roles_follow_pencil() {
   assert_eq!(markdown.link.text.color, Some(Color::from_hex("#EEEEEE")));
   assert_eq!(markdown.list_marker.text.color, Some(Color::from_hex("#A3A3A3")));
   assert_eq!(markdown.code_block.text.font_family.as_deref(), Some("Geist Mono"));
+  // Its tables' columns share the text's width, however narrow (a chat message, ORC-78).
+  assert_eq!(markdown.table_cell_min_width, 0.0);
+  // A table's header reads in the text color: unfilled, as lurq turns text in the body's color on
+  // a filled header dark slate.
+  assert_eq!(markdown.table_header.text.color, Some(Color::from_hex("#EEEEEE")));
+  assert_eq!(markdown.table_header_box.background, None);
 }
 
 /// Title bar tabs (`nAKyb`, states `UZF1Q`): the avatar's initial is Inter 9 semibold in `text`,

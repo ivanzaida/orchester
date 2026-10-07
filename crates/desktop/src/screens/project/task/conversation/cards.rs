@@ -4,7 +4,8 @@
 //! *Approve plan & continue*; a tool request with the approval dialog's answers
 //! ([`super::approval_card`]). After the decision a card loses the raised fill and reads *Answered*,
 //! *Approved* or *Denied*. The step the run ended on closes with its result card: border only, its
-//! title and time, what was reported, and the ways to the Changes and the Summary.
+//! title and time, what was reported, and the ways to the Changes and the Summary. What an agent wrote
+//! reads as Markdown ([`MarkdownText`]).
 
 use std::sync::Arc;
 
@@ -42,6 +43,7 @@ use crate::{
     button::ActionButton,
     field::field_error,
     icon::{Icon, IconSize, icon},
+    markdown::MarkdownText,
     message_text,
     pressable::{pressable, surface},
     status_label::compact_status_label,
@@ -91,7 +93,7 @@ pub(super) fn header(glyph: Icon, title: &str, (state_glyph, state): (Icon, Arc<
 
 /// *Builder asks you* (`YKutc` in `BRx5g`) in the agent's message: the question and, while it waits,
 /// that the composer answers it; pressing that line puts the focus there.
-pub(super) fn question(ctx: &Ctx, (entry, _step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
+pub(super) fn question(ctx: &mut Ctx, (entry, _step): (&Entry, Option<&Arc<str>>), timeline: &Timeline) -> Element {
   let open = entry.state == EntryState::Question { open: true };
   let agent = match &entry.author {
     Author::Agent(agent) | Author::YouTo(agent) => agent.clone(),
@@ -117,15 +119,8 @@ pub(super) fn question(ctx: &Ctx, (entry, _step): (&Entry, Option<&Arc<str>>), t
         ),
     )
   });
-  let body = std::iter::once(
-    Text::new(&entry.body)
-      .variant(ExtraTypography::TimelineMessage.role())
-      .width(Dimension::Pct(100.0))
-      .selectable(true)
-      .into(),
-  )
-  .chain(hint)
-  .collect();
+  let question = MarkdownText::message(format!("conversation-question-text-{}", entry.id), entry.body.clone());
+  let body = std::iter::once(question.mount(ctx)).chain(hint).collect();
   let card = frame(
     format!("conversation-question-{}", entry.id),
     open,
@@ -187,21 +182,13 @@ impl Component for PlanCardView {
     };
     let lines: Vec<&str> = plan.text.lines().collect();
     let whole = self.whole.get() || lines.len() <= PLAN_LINES;
-    let shown = if whole { &lines[..] } else { &lines[..PLAN_LINES] };
-    // One text a line, 2 apart (`s0XDoI`).
-    let mut body: Vec<Element> = vec![
-      Column::new()
-        .id("conversation-plan-lines")
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Hair.role())
-        .with_children(shown.iter().map(|line| {
-          Text::new(line)
-            .variant(ExtraTypography::AgentText.role())
-            .width(Dimension::Pct(100.0))
-            .selectable(true)
-        }))
-        .into(),
-    ];
+    let shown: Arc<str> = if whole {
+      plan.text.as_str().into()
+    } else {
+      lines[..PLAN_LINES].join("\n").into()
+    };
+    // The plan's first lines, or all of it, as Markdown (`s0XDoI` drew them as lines of text).
+    let mut body: Vec<Element> = vec![MarkdownText::agent_text("conversation-plan-lines", shown).mount(ctx)];
     if !whole {
       let open = self.whole.clone();
       body.push(
@@ -394,12 +381,10 @@ pub(super) fn result(ctx: &mut Ctx, card: &ResultCard, timeline: &Timeline) -> E
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Notice.role())
     .child(head)
-    .with_children(card.reported.as_deref().map(|reported| {
-      Text::new(reported)
-        .variant(ExtraTypography::AgentText.role())
+    .with_children(card.reported.as_ref().map(|reported| {
+      MarkdownText::agent_text("conversation-reported", reported.clone())
         .color(PaletteColor::TextSecondary)
-        .width(Dimension::Pct(100.0))
-        .selectable(true)
+        .mount(ctx)
     }))
     .child(
       Row::new()

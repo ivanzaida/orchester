@@ -1,16 +1,21 @@
 //! What a search matches (`docs/design/orchester-workspace.md`, "Filters and search"): message text,
-//! commands, paths and output, in lower case.
+//! commands, paths and output, in lower case. What agents and the person write is found as written
+//! and as the chat shows it, its Markdown rendered.
 
 use super::super::{Item, ItemKind, mark::MarkKind};
-use crate::tasks::transcript::{Entry, EntryKind};
+use crate::{
+  tasks::transcript::{Entry, EntryKind},
+  ui::markdown::plain::{has_markup, plain_text},
+};
 
 /// Whether what `item` says contains `needle`, in lower case.
 pub(super) fn matches(item: &Item, needle: &str) -> bool {
   let found = |text: &str| text.to_lowercase().contains(needle);
+  let written = |text: &str| found(text) || (has_markup(text) && found(&plain_text(text)));
   match &item.kind {
-    ItemKind::AgentMessage { text, .. } => found(text),
-    ItemKind::Message(entry) | ItemKind::Question { entry, .. } => found(&entry.body),
-    ItemKind::Plan(card) => found(&card.plan.text),
+    ItemKind::AgentMessage { text, .. } => written(text),
+    ItemKind::Message(entry) | ItemKind::Question { entry, .. } => written(&entry.body),
+    ItemKind::Plan(card) => written(&card.plan.text),
     ItemKind::Approval(card) => [
       Some(card.request.action.as_str()),
       Some(card.request.server.as_str()),
@@ -20,10 +25,10 @@ pub(super) fn matches(item: &Item, needle: &str) -> bool {
     .flatten()
     .any(found),
     ItemKind::Problem(entry) => entry_matches(entry, needle),
-    ItemKind::Result(card) => card.reported.as_deref().is_some_and(found),
+    ItemKind::Result(card) => card.reported.as_deref().is_some_and(written),
     ItemKind::Tools(group) => group.entries.iter().any(|entry| entry_matches(entry, needle)),
     ItemKind::Mark(mark) => match &mark.kind {
-      MarkKind::ReturnedWithNote { note, .. } => found(note),
+      MarkKind::ReturnedWithNote { note, .. } => written(note),
       MarkKind::Returned { .. } | MarkKind::Restarted { .. } => false,
     },
     ItemKind::Step(_) | ItemKind::End(_) => false,

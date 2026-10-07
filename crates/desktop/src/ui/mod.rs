@@ -16,6 +16,7 @@ pub mod gutter;
 pub mod icon;
 pub mod link;
 pub mod loader;
+pub mod markdown;
 pub mod menu_option;
 pub mod nav_item;
 pub mod notice;

@@ -40,6 +40,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::{Icon, IconSize, icon},
+    markdown::plain::plain_text,
     pressable::{pressable, surface},
   },
 };
@@ -346,7 +347,11 @@ pub(super) fn result(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard, at: 
     let text = match card.reported.as_deref() {
       Some(reported) => ctx.t_args(
         "runs.conversation.divider.failed",
-        [("title", &*title), ("time", time.as_str()), ("reported", reported)],
+        [
+          ("title", &*title),
+          ("time", time.as_str()),
+          ("reported", plain_text(reported).as_str()),
+        ],
       ),
       None => ctx.t_args(
         "runs.conversation.divider.ended",
@@ -415,7 +420,7 @@ pub(super) fn link(
 
 /// A return or restart (`j0qLQz`): a divider that says what failed and where the work goes, what
 /// follows from it under the line, or the person's note as their message.
-pub(super) fn mark(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> Element {
+pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
   let (glyph, text) = mark_text(ctx, timeline, mark);
   let line = divider(
     format!("activity-mark-{}", mark.attempt),
@@ -429,7 +434,7 @@ pub(super) fn mark(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> Element {
         format!("activity-mark-detail-{}", mark.attempt),
         Avatar::Person,
         (&ctx.t("runs.conversation.you"), &meta),
-        vec![chat_text(note)],
+        vec![chat_text(ctx, "activity-mark-note", note)],
       )
     }
     _ => Text::new(&mark_detail(ctx, mark))

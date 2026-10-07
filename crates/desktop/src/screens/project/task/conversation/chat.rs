@@ -1,9 +1,14 @@
 //! A chat row of the conversation (`kpnmP`): a 28 round avatar, then who wrote it (12/500) with its
-//! meta (11 `$subtle`) on one line, and what the row says under it: the text at 13 / 1.6, a card, the
-//! chips of an agent's tool activity, a person's delivery line.
+//! meta (11 `$subtle`) on one line, and what the row says under it: the text at 13 / 1.6, read as
+//! Markdown, a card, the chips of an agent's tool activity, a person's delivery line.
+
+use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  },
   components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
@@ -11,7 +16,10 @@ use lurq::{
 
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
-  ui::icon::{Icon, IconSize, icon},
+  ui::{
+    icon::{Icon, IconSize, icon},
+    markdown::MarkdownText,
+  },
 };
 
 /// The avatar's box (`qU0XW`).
@@ -89,11 +97,8 @@ pub(super) fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), b
     .into()
 }
 
-/// What a message says (`V17jfc`): 13 at 1.6, wrapping, selectable.
-pub(super) fn chat_text(text: &str) -> Element {
-  Text::new(text)
-    .variant(ExtraTypography::TimelineMessage.role())
-    .width(Dimension::Pct(100.0))
-    .selectable(true)
-    .into()
+/// What a message says (`V17jfc`): 13 at 1.6, wrapping, selectable, its Markdown rendered; `id` names
+/// it among the parent's children.
+pub(super) fn chat_text(ctx: &mut Ctx, id: &str, text: &Arc<str>) -> Element {
+  MarkdownText::message(id, text.clone()).mount(ctx)
 }

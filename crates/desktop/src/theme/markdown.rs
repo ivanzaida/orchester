@@ -2,7 +2,8 @@
 //! grayscale: the design draws no Markdown, so every value comes from an existing variable. The
 //! body is the caller's text style (agent text, 12/1.6, `FP6BD`); headings stay within the plan's
 //! type scale below its 19px title (`J7irj`): 14, 13 and 12, medium; code keeps the code colors of
-//! the diff (`vEZ42`); rules and quotes use the chrome's borders.
+//! the diff (`vEZ42`); rules and quotes use the chrome's borders. A table's columns share the text's
+//! width, however narrow: in a chat message as in a plan, a table never runs past its text.
 
 use std::sync::Arc;
 
@@ -85,14 +86,15 @@ pub fn markdown() -> ThemeMarkdown {
     code_block_label: marker(SUBTLE),
     list_marker: marker(MUTED),
     blockquote_marker: marker(SUBTLE),
-    table_header: inline(|style| style.text.weight = Some(FontWeight::Medium)),
+    table_header: inline(|style| style.text.color = Some(Color::from_hex(TEXT))),
     table_cell: MarkdownInlineStyle::new(),
     table_marker: marker(SUBTLE),
     code_block_box: block(Some(CODE_BG), BORDER, 1.0, Some(SPACE_STACK)),
     blockquote_box: block(Some(RAISED), HAIRLINE, 2.0, Some(SPACE_STACK)),
     table_box: block(None, BORDER, 1.0, None),
+    // No fill: on a filled header lurq swaps text in the body's color for its light theme's dark
+    // slate, unreadable on the dark chrome. lurq sets a header in bold itself.
     table_header_box: MarkdownBlockStyle {
-      background: Some(Color::from_hex(RAISED)),
       padding: Some(SPACE_SM),
       ..MarkdownBlockStyle::new()
     },
@@ -100,6 +102,8 @@ pub fn markdown() -> ThemeMarkdown {
       padding: Some(SPACE_SM),
       ..MarkdownBlockStyle::new()
     },
+    // lurq keeps a cell 120 wide at least, so five columns would run past a chat message.
+    table_cell_min_width: 0.0,
     ..ThemeMarkdown::default()
   }
 }
