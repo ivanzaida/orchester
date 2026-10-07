@@ -44,7 +44,7 @@ use super::{
 };
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
-/// was freed by another run in a way it was not woken for.
+/// was freed by another run in a way it was not woken for. More slots wake it at once.
 const SLOT_RETRY: Duration = Duration::from_secs(1);
 /// The time limit is checked at least this often while agents work.
 const TIME_CHECK_FLOOR: Duration = Duration::from_millis(50);
@@ -234,6 +234,7 @@ impl RunTask {
         }
         Ok(())
       }
+      () = self.board.resized(), if waiting_for_slot => Ok(()),
       state = codebase_index::built(&mut self.index_build) => {
         self.code_index_built(state);
         Ok(())

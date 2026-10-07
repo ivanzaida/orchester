@@ -25,6 +25,11 @@ impl WorkSummary {
       .filter(|run| !matches!(run.state, WorkState::Saved { .. }))
       .count()
   }
+
+  /// Agents at work, and the slots they share.
+  pub fn agents(&self) -> (usize, NonZeroU32) {
+    (self.agents_working(), self.agent_slots)
+  }
 }
 
 /// A run with an agent at work, with what a person needs to recognize it. The display values
