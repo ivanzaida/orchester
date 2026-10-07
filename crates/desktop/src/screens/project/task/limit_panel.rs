@@ -25,15 +25,18 @@ use orchester_core::{
   limits::ProjectLimits,
   run::{RaisedLimits, RunLimit},
   time::Timestamp,
-  tokens::{BudgetInputError, TokenBudget, TokensUsed, compact_tokens, grouped, parse_budget},
+  tokens::{TokenBudget, TokensUsed, compact_tokens, grouped},
 };
-use orchester_ipc::Command;
 
 use crate::{
-  budget::{budget_error, minutes_text, read_budget, read_minutes, whole_minutes},
+  budget::{minutes_text, whole_minutes},
   messages::Message,
   runner::Runners,
-  tasks::{detail::RunView, run::control_message},
+  tasks::{
+    detail::RunView,
+    raise::{self, Raise},
+    run::control_message,
+  },
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::ActionButton,
@@ -76,15 +79,7 @@ impl lurq::app::component::DevtoolsInspectable for RaiseLimitProps {}
 impl RaiseLimitProps {
   /// `None` for a stop at a step's budget when the step has none, which no runner records.
   pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits, blocked: bool) -> Option<Self> {
-    if limit == RunLimit::GroupBudget {
-      return None;
-    }
-    let (used, budget) = match limit {
-      RunLimit::StepBudget { execution } => run.step_budget_use(execution)?,
-      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::Time | RunLimit::DailyBudget => {
-        (run.run.used(), run.run.budget())
-      }
-    };
+    let (used, budget) = raise::budget_use(run, limit)?;
     Some(Self {
       run: run.id(),
       number: run.run.number().get(),
@@ -136,13 +131,6 @@ impl RaiseLimitProps {
       .max(whole_minutes(self.active) + 1);
     MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX)
   }
-}
-
-/// What continuing raises: the run's own limits, or the budget of the step it stopped at.
-#[derive(Clone, Copy, Debug)]
-enum Raise {
-  Limits(RaisedLimits),
-  StepBudget(TokenBudget),
 }
 
 type RaiseAction = FutureAction<(RunId, Raise), (), Message>;
@@ -244,47 +232,16 @@ impl RaiseLimitPanel {
   }
 
   fn read_budget(&self, props: &RaiseLimitProps, separator: &str) -> Result<TokenBudget, Message> {
-    let used = compact_tokens(props.used.get());
+    let (text, limits) = (self.budget.get(), (props.used, props.max_budget));
     if !props.raises_step_budget() {
-      let budget = read_budget(&self.budget.get(), separator, props.max_budget)?;
-      if props.used.reached(budget) {
-        return Err(Message::new("tokens.errors.notAboveUsed").with("used", used));
-      }
-      return Ok(budget);
+      return raise::run_budget(&text, separator, limits);
     }
-    let budget = parse_budget(&self.budget.get(), separator, props.max_budget).map_err(|error| match error {
-      BudgetInputError::AboveMaximum { max } => {
-        Message::new("tokens.errors.stepAboveMax").with("max", compact_tokens(max.get()))
-      }
-      other => budget_error(other, separator),
-    })?;
-    if props.used.reached(budget) {
-      let step = props
-        .stopped
-        .as_ref()
-        .map(|(step, _)| step.to_string())
-        .unwrap_or_default();
-      return Err(
-        Message::new("tokens.errors.stepNotAboveUsed")
-          .with("used", used)
-          .with("step", step),
-      );
-    }
-    Ok(budget)
+    let step = props.stopped.as_ref().map(|(step, _)| &**step).unwrap_or_default();
+    raise::step_budget(&text, separator, limits, step)
   }
 
   fn read_time(&self, props: &RaiseLimitProps) -> Result<Duration, Message> {
-    let limit = read_minutes(&self.minutes.get())?;
-    if limit <= props.active {
-      let used = whole_minutes(props.active);
-      let key = if used == 1 {
-        "errors.timeLimitNotAboveUsed.one"
-      } else {
-        "errors.timeLimitNotAboveUsed.other"
-      };
-      return Err(Message::new(key).with("used", used.to_string()));
-    }
-    Ok(limit)
+    raise::time_limit(&self.minutes.get(), props.active)
   }
 
   /// "Token budget · Used 1.4M of 1.4M · Implement stopped mid-step" beside its input.
@@ -505,16 +462,7 @@ fn raise_action(ctx: &mut Ctx) -> RaiseAction {
   ctx.future_action(move |(run, raise): (RunId, Raise)| {
     let runners = runners.clone();
     async move {
-      let command = match raise {
-        Raise::Limits(limits) => Command::RaiseLimit {
-          run,
-          budget: limits.budget,
-          // Limits are whole minutes; one beyond u64 milliseconds is as good as no limit.
-          max_duration_ms: u64::try_from(limits.max_duration.as_millis()).unwrap_or(u64::MAX),
-        },
-        Raise::StepBudget(budget) => Command::RaiseStepBudget { run, budget },
-      };
-      runners.control_run(command).await.map_err(|error| {
+      runners.control_run(raise.command(run)).await.map_err(|error| {
         tracing::warn!(%error, "the runner did not raise the run's limits");
         control_message(&error)
       })

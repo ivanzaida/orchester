@@ -25,6 +25,7 @@ pub mod overview;
 pub mod permissions;
 pub mod plan;
 pub mod progress;
+pub mod raise;
 pub mod run;
 pub mod run_again;
 pub mod run_approvals;

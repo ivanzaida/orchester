@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Zulu and Alpha queued in a group a failed task holds; Incomplete stays a draft.
-fn held_group(repo: &Path) {
+pub(crate) fn held_group(repo: &Path) {
   let (_, fake) = programs();
   seed(repo, &fake, false);
   super::drafts(repo);

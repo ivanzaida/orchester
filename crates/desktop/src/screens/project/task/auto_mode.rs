@@ -22,7 +22,10 @@ use orchester_core::id::RunId;
 use crate::{
   background,
   messages::{self, Message},
-  screens::project::run_approval_action::{RunApprovalChanges, reload_after, run_approval_action},
+  screens::project::{
+    ProjectNav,
+    run_approval_action::{RunApprovalChanges, reload_after, run_approval_action},
+  },
   tasks::run_approvals::{AutoModeState, ReviewerShown, RunApprovalChange, auto_mode_in, unavailable_key},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -154,13 +157,18 @@ fn hint(text: &str) -> Text {
     .width(Dimension::Pct(100.0))
 }
 
-/// The run's auto mode and whether the project can review, read again after each change.
+/// The run's auto mode and whether the project can review, read again after each change, including
+/// those automation made to the run or to the project's auto mode settings.
 fn read(
   ctx: &mut Ctx,
   (props, changing): (&AutoModeProps, bool),
 ) -> lurq::app::ctx::FutureState<AutoModeState, Message> {
-  let deps = (props.repo_root.clone(), props.run, changing);
-  let read = ctx.future(deps, |(repo_root, run, _)| async move {
+  let outside = ctx
+    .use_context::<ProjectNav>()
+    .map(|nav| nav.feed.outside.get())
+    .map(|outside| (outside.runs, outside.auto_mode));
+  let deps = (props.repo_root.clone(), props.run, changing, outside);
+  let read = ctx.future(deps, |(repo_root, run, ..)| async move {
     background::run(move || auto_mode_in(&repo_root, run))
       .await?
       .map_err(|error| {

@@ -346,7 +346,7 @@ fn mark_agent_connection_unusable(repo: &Path) {
 
 /// Saves the project's limits with the defaults of Project settings and a daily budget of `daily`
 /// tokens.
-fn save_daily_budget(repo: &Path, daily: u64) {
+pub(crate) fn save_daily_budget(repo: &Path, daily: u64) {
   let limits = ProjectLimits::new(
     TokenBudget::new(10_000_000).expect("above zero"),
     TokenBudget::new(1_400_000).expect("above zero"),

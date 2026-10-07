@@ -31,6 +31,7 @@ mod servers;
 mod settings;
 mod sidebar;
 mod skills;
+mod stale;
 mod switcher;
 mod tag_manager;
 mod tag_picker;
@@ -44,7 +45,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::{Column, Outlet, Row},
+  components::{Column, Row},
   core::Signal,
   node::{Element, dimension::Dimension},
   router::Navigator,
@@ -282,6 +283,16 @@ impl ProjectNav {
     self.feed.revision.update(|revision| *revision += 1);
   }
 
+  /// This window's New task form queued `task` (see [`ProjectFeed::queued_by_form`]).
+  pub fn queued_by_form(&self, task: TaskId) {
+    self.feed.queued_by_form.lock().insert(task);
+  }
+
+  /// Whether this window's New task form queued `task` in this session.
+  pub fn was_queued_by_form(&self, task: TaskId) -> bool {
+    self.feed.queued_by_form.lock().contains(&task)
+  }
+
   /// The current operation for a run, shared across every tab of this project.
   pub fn integration(&self, run: RunId) -> RunIntegration {
     self.feed.integration.of(run)
@@ -406,7 +417,8 @@ impl Component for ProjectShell {
       open: open.clone(),
       status: status.clone(),
       runner,
-      revision: (feed.revision.get(), feed.changes.get()),
+      // Tasks automation saved count as this window's own saves: the pages read them again in place.
+      revision: (feed.revision.get() + feed.outside.get().tasks, feed.changes.get()),
       resources: feed.resources.get(),
       tasks: tasks.clone(),
       usage,
@@ -448,12 +460,7 @@ impl Component for ProjectShell {
             },
             &self.nav,
           ))
-          .child(
-            Column::new()
-              .flex(1.0)
-              .height(Dimension::Pct(100.0))
-              .child(Outlet::mount(ctx)),
-          ),
+          .child(stale::page(ctx, &self.nav, feed.stale.get().as_ref())),
       )
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))
