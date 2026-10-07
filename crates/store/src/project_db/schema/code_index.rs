@@ -2,7 +2,8 @@
 //! and used before its first edit.
 
 pub(super) const MIGRATION: &str = r"
--- Project settings › Code index › Use code index; without a row the project has it on.
+-- Project settings › Code index › Use code index, written when a person sets it; without a row the
+-- project has it off (on before 2026-10-07).
 CREATE TABLE project_code_index (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   setting TEXT NOT NULL CHECK (setting IN ('on', 'off'))

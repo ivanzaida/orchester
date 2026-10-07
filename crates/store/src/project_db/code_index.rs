@@ -1,6 +1,8 @@
-//! The code index (ORC-38): `project_code_index`, Project settings › Code index, one row (a project
-//! that never changed it has it on); `invocation_code_index` and `invocation_edit_progress`, what
-//! each agent invocation got of the index and used before its first edit.
+//! The code index (ORC-38): `project_code_index`, Project settings › Code index, one row, written
+//! only when a person sets it; a project without the row has it off (ORC-69 made off the default; a
+//! project turned on before keeps its `on` row, so nobody's choice changes). `invocation_code_index`
+//! and `invocation_edit_progress`, what each agent invocation got of the index and used before its
+//! first edit.
 
 use orchester_core::{
   code_index::{CodeIndexSetting, CodeIndexUse},
@@ -24,8 +26,8 @@ pub(super) fn load_setting(connection: &Connection) -> Result<CodeIndexSetting, 
     .query_row("SELECT setting FROM project_code_index", [], |row| row.get(0))
     .optional()?;
   match setting.as_deref() {
-    None | Some("on") => Ok(CodeIndexSetting::On),
-    Some("off") => Ok(CodeIndexSetting::Off),
+    Some("on") => Ok(CodeIndexSetting::On),
+    None | Some("off") => Ok(CodeIndexSetting::Off),
     Some(other) => Err(corrupt("code index setting", other)),
   }
 }
