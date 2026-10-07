@@ -26,7 +26,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
   core::ElementRef,
@@ -49,11 +49,12 @@ use crate::{
     detail::{RunView, TaskDetail},
     integration_jobs::{JobState, RunIntegration},
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, gutter_scrollbar, input_line_height},
   ui::{
     button::ActionButton,
     icon::{Icon, IconSize, icon},
     link::Link,
+    markdown::MarkdownText,
   },
   workspace::OpenProject,
 };
@@ -246,9 +247,10 @@ fn stages(run: &RunView) -> Element {
     .into()
 }
 
-/// What the agent steps reported when they finished (`Wegul`); nothing when none did. A tool step's
-/// output says how its command ended, which is not a change.
-fn what_changed(ctx: &Ctx, run: &RunView) -> Option<Element> {
+/// What the agent steps reported when they finished (`Wegul`), as Markdown in the design's 12 at 1.6
+/// muted; nothing when none did. A tool step's output says how its command ended, which is not a
+/// change.
+fn what_changed(ctx: &mut Ctx, run: &RunView) -> Option<Element> {
   let reported: Vec<&str> = run
     .steps
     .iter()
@@ -260,31 +262,50 @@ fn what_changed(ctx: &Ctx, run: &RunView) -> Option<Element> {
   if reported.is_empty() {
     return None;
   }
-  let bullet = |text: &str| {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Inline.role())
-      .align_items(Alignment::Center)
-      .child(
-        Column::new()
-          .size(Dimension::Px(BULLET), Dimension::Px(BULLET))
-          .rounded(ExtraRadius::Pill.role())
-          .background(PaletteColor::TextSecondary),
-      )
-      .child(
-        Text::new(text)
-          .variant(ExtraTypography::Explanation.role())
-          .flex(1.0)
-          .selectable(true),
-      )
+  // A report can run over several lines: its bullet centers on the first.
+  let first_line = {
+    let theme = ctx.theme();
+    input_line_height(
+      &FormTextRole {
+        typography: ExtraTypography::AgentText.role(),
+        color: PaletteColor::TextSecondary,
+      }
+      .resolve(&theme.typography(), &theme.palette()),
+    )
   };
+  let bullets: Vec<Element> = reported
+    .into_iter()
+    .enumerate()
+    .map(|(index, text)| {
+      let report = MarkdownText::agent_text(format!("task-ready-change-{index}"), text)
+        .color(PaletteColor::TextSecondary)
+        .mount(ctx);
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Inline.role())
+        .align_items(Alignment::Start)
+        .child(
+          Row::new()
+            .height(Dimension::Px(first_line))
+            .align_items(Alignment::Center)
+            .child(
+              Column::new()
+                .size(Dimension::Px(BULLET), Dimension::Px(BULLET))
+                .rounded(ExtraRadius::Pill.role())
+                .background(PaletteColor::TextSecondary),
+            ),
+        )
+        .child(Column::new().flex(1.0).child(report))
+        .into()
+    })
+    .collect();
   Some(
     Column::new()
       .id("task-ready-changes")
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Inline.role())
       .child(Text::new(&ctx.t("runs.ready.whatChanged")).variant(ExtraTypography::SectionHeading.role()))
-      .with_children(reported.into_iter().map(bullet))
+      .with_children(bullets)
       .into(),
   )
 }
