@@ -52,16 +52,22 @@ pub enum Cell {
 
 /// The table: headings over `rows`, each row optionally a press target.
 pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Element {
+  spaced_table(id, columns, rows, SpacingSize::Md)
+}
+
+/// [`table`] with `gap` between its columns, as its rows were built with.
+pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, gap: SpacingSize) -> Element {
   let headings = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADING_HEIGHT))
-    .spacing(SpacingSize::Md)
+    .spacing(gap)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(columns.iter().map(|column| {
+    .with_children(columns.iter().enumerate().map(|(index, column)| {
       sized(
         Row::new().child(fit(
           Text::new(&column.heading)
+            .id(format!("{id}-heading-{index}"))
             .variant(TypographyStyle::Caption)
             .color(PaletteColor::TextMuted),
         )),
@@ -76,21 +82,21 @@ pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Eleme
     .into()
 }
 
-/// One row of `cells` under `columns`, as *Most expensive* lists them.
-pub fn row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
-  sized_row(columns, cells, ROW_HEIGHT)
+/// One row of `cells` under `columns`, `gap` apart, as *Most expensive* lists them.
+pub fn row(columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
+  sized_row(columns, cells, (ROW_HEIGHT, gap))
 }
 
 /// One row of a chart's data: denser than a list of tasks.
 pub fn data_row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
-  sized_row(columns, cells, DATA_ROW_HEIGHT)
+  sized_row(columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
 }
 
-fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, height: f32) -> Row {
+fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(height))
-    .spacing(SpacingSize::Md)
+    .spacing(gap)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .with_children(
