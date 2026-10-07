@@ -3775,12 +3775,12 @@
     "codeIndex": {
       "description": "How agents find their way around {{project}}’s code.",
       "heading": "Code index",
-      "explanation": "Orchester indexes the repository’s tracked files at the revision a run starts from: languages and line counts, symbols, file outlines, Markdown headings and a package map. Agents get a built-in skill that searches the index with ripgrep, so they find code without reading whole files.",
+      "explanation": "Orchester indexes the repository’s tracked files at the revision a run starts from: languages and line counts, symbols, file outlines, Markdown headings and a package map. Agents get a built-in skill that searches the index with ripgrep.",
       "name": "Use code index",
       "detail": "Agents that start after a change follow it. An agent already working keeps what it started with.",
       "on": "On · agents search the index",
       "off": "Off · agents get no index",
-      "offReadback": "Agents find code by listing and reading files",
+      "offReadback": "Agents read and search the repository directly",
       "noneReadback": "No index yet",
       "kept": {
         "one": "1 index kept",
@@ -3790,7 +3790,7 @@
       "building": "{{count}} building",
       "failedCount": "{{count}} failed",
       "offTitle": "Agents get no index and no index skill",
-      "offDetail": "They find code by listing and reading files, which takes longer and uses more tokens in a large repository. No index is built while this is off.",
+      "offDetail": "They read and search the repository directly. No index is built while this is off; turn it on to try the index.",
       "listTitle": "Indexes",
       "total": {
         "one": "1 index · {{size}} in total",
@@ -3848,7 +3848,7 @@
       "notFound": "Not found",
       "notFoundDetail": "Not on PATH, not bundled with Codex CLI or Claude Code",
       "slowTitle": "Agents fall back to slower search",
-      "slowDetail": "Without ripgrep the index skill can’t run, so agents list and read files with the shell instead. That takes longer and uses more tokens.",
+      "slowDetail": "Without ripgrep the index skill can’t run, so agents search with git grep or their own tools instead.",
       "commandLabel": "Install ripgrep runs",
       "hint": "Nothing runs until you click. Afterwards Orchester looks for rg again and copies it into .orchester/tools.",
       "install": "Install ripgrep",

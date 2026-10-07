@@ -201,6 +201,12 @@ fn code_index_switch_is_off_until_turned_on_and_saves_on_and_off() {
   desktop.wait_for(OFF);
   assert!(shows(&mut desktop, SWITCH, "Off · agents get no index"));
   assert!(shows(&mut desktop, OFF, "Agents get no index and no index skill"));
+  assert!(shows(&mut desktop, OFF, "turn it on to try the index"));
+  assert!(shows(
+    &mut desktop,
+    "settings-code-index",
+    "Agents read and search the repository directly"
+  ));
   assert!(desktop.tree.get_element_by_id(LIST).is_none());
   assert!(desktop.tree.get_element_by_id(NOTICE).is_none());
 
