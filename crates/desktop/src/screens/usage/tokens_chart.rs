@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 use super::{
   card::{Card, footnote, legend, legend_item, push_down, series_color, swatch, view_switch},
   format,
-  plot::{Frame, Redraw, label_every},
+  plot::{AxisText, Frame, Redraw, label_every},
   state::{Dashboard, Views},
   table::{Cell, TableColumn, Width, column, data_row, table},
   tokens_draw::{TokenPlot, draw},
@@ -139,6 +139,11 @@ impl TokensChart {
         .map(|bar| bar.by_cli.map(|usage| measure.of(usage)))
         .collect(),
       labels: labels(ctx, dashboard, width),
+      label_kind: if dashboard.grouping == Grouping::Hour && dashboard.range.days() == 1 {
+        AxisText::Clock
+      } else {
+        AxisText::Day
+      },
       items: bars
         .iter()
         .map(|bar| {

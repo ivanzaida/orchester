@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::canvas::{CanvasHandle, CanvasItem, Context2D};
 use orchester_core::tokens::compact_tokens;
 
-use super::plot::{self, Frame};
+use super::plot::{self, AxisText, Frame, XLabel};
 use crate::theme::chart::{BAR_FILL, BAR_GAP, BAR_RADIUS, ChartStyle};
 
 /// What the chart draws.
@@ -18,6 +18,8 @@ pub struct TokenPlot {
   pub bars: Vec<[u64; 3]>,
   /// Each bar's x axis label; `None` where labels would crowd.
   pub labels: Vec<Option<Arc<str>>>,
+  /// What the labels name: hours of one day, or days.
+  pub label_kind: AxisText,
   /// Each bar's name and exact total, for its canvas item.
   pub items: Vec<(Arc<str>, Arc<str>)>,
   pub hovered: Option<usize>,
@@ -42,8 +44,13 @@ pub fn draw(canvas: &CanvasHandle, plot: &TokenPlot) {
     let bar_width = (width * BAR_FILL).max(1.0);
     let x = slot + (width - bar_width) / 2.0;
     let top = stacked(&context, (x, bar_width), frame, bar, (scale.0, &plot.style));
-    if let Some(label) = &plot.labels[index] {
-      plot::x_label(&context, frame, &plot.style, label, slot + width / 2.0);
+    if let Some(text) = &plot.labels[index] {
+      let label = XLabel {
+        text,
+        kind: plot.label_kind,
+        x: slot + width / 2.0,
+      };
+      items.extend(plot::x_label(&context, frame, &plot.style, &label, index));
     }
     let (name, value) = &plot.items[index];
     items.push(

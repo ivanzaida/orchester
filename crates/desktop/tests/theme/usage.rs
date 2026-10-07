@@ -1,6 +1,6 @@
 //! The Usage dashboard's chart roles ("Chart colors"): the series colors follow the CLI, the grid,
-//! rules, axis text, threshold and single-series marks come from the chrome's roles, and the
-//! hatching before a CLI's first report is `#FFFFFF0F`.
+//! rules, axis text (days proportional, figures and clock times mono), threshold and single-series
+//! marks come from the chrome's roles, and the hatching before a CLI's first report is `#FFFFFF0F`.
 
 use lurq::{
   app::{
@@ -11,7 +11,7 @@ use lurq::{
   },
   node::{Element, color::Color},
 };
-use orchester_desktop::theme::{ExtraColor, chart::ChartStyle};
+use orchester_desktop::theme::{ExtraColor, ExtraTypography, chart::ChartStyle};
 use parking_lot::Mutex;
 
 use super::themed_app;
@@ -65,4 +65,13 @@ fn usage_chart_style_draws_with_the_chrome_roles() {
   assert_eq!(style.threshold, color(PaletteColor::TextSecondary));
   let axis = theme.typography_style(TypographyStyle::Mono);
   assert_eq!((&*style.font.family, style.font.size), (&*axis.font_family, 10.0));
+  // Days on the x axis are Inter 10 `subtle` (`X label` in `C2pTYF`); clock times stay mono (`e5PbG`).
+  let days = theme.typography_style(ExtraTypography::AxisLabel.role());
+  let body = theme.typography_style(TypographyStyle::Body);
+  assert_eq!((&*days.font_family, days.font_size), (&*body.font_family, 10.0));
+  assert_eq!(days.color, Color::from_hex("#8F8F8F"));
+  assert_eq!(
+    (&*style.day_font.family, style.day_font.size),
+    (&*body.font_family, 10.0)
+  );
 }

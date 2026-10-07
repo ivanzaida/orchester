@@ -152,6 +152,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | `ExtraTypography::SectionHeading.role()` | 15/500 | content section heading ("What changed") |
 | `ExtraTypography::CardTitle.role()` | 14/500 | card and panel titles ("Needs you") |
 | `ExtraTypography::ReadBack.role()` | 10 subtle | a value read back on one line under a field ("≈ 14M tokens", `n5Wrl` in `W1Dq6`) |
+| `ExtraTypography::AxisLabel.role()` | 10 subtle | a day on a chart's x axis ("Wed 24", `X label` in `C2pTYF`); figures and clock times keep `Mono` (`e5PbG`) |
 | `ExtraTypography::ReviewHeading.role()` | 14 | column heading of the scheduling review ("Task priority", `Y68u8` in `W1Dq6`) |
 | `ExtraTypography::Overline.role()` | 9/600 subtle | uppercase category label ("REVIEW PULL REQUEST") |
 | `ExtraTypography::Metric.role()` | mono 23 | large metric figure |

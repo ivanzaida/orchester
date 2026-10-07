@@ -1674,7 +1674,7 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 
 **All projects** (`p4eVV6`, full page 1440 × 2031). The All projects topbar, heading and actions, the tabs with *Usage* selected, then the controls with a *Project* filter first and the read-back *… · 4 projects*. Same sections at 1344 wide; *Where tokens go* adds *By project* first (a project without runs is named under it: *Atlas had no runs in the period.*), and the table adds a *Project* column.
 
-**Chart colors** (new variables, validated for color-vision deficiency on `$surface` and `$raised`, all pairs: worst CVD ΔE 9.4, normal-vision ΔE 20.9, each ≥ 3:1): `chart-series-1` `#3987E5` (Codex), `chart-series-2` `#D95926` (Claude), `chart-series-3` `#199E70` (reserved for a third CLI). Color follows the CLI, never its rank. Grid `$hairline`, baseline and reset rules `$border`, axis text `$subtle` mono 10, threshold `$muted` dashed; single-series marks use `$muted` / `$subtle`. Text never takes a series color.
+**Chart colors** (new variables, validated for color-vision deficiency on `$surface` and `$raised`, all pairs: worst CVD ΔE 9.4, normal-vision ΔE 20.9, each ≥ 3:1): `chart-series-1` `#3987E5` (Codex), `chart-series-2` `#D95926` (Claude), `chart-series-3` `#199E70` (reserved for a third CLI). Color follows the CLI, never its rank. Grid `$hairline`, baseline and reset rules `$border`, axis text `$subtle` 10 (figures and clock times in mono, days in Inter, as the frames draw them; a label at the plot's right end ends there, `24:00` in `e5PbG`), threshold `$muted` dashed; single-series marks use `$muted` / `$subtle`. Text never takes a series color.
 
 **States.**
 

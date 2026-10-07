@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use lurq::canvas::{CanvasHandle, CanvasId, CanvasObserver, Context2D, TextAlign, TextBaseline};
+use lurq::canvas::{CanvasHandle, CanvasId, CanvasItem, CanvasObserver, Context2D, TextAlign, TextBaseline};
 use parking_lot::Mutex;
 
 use crate::theme::chart::{AXIS_BAND, AXIS_GUTTER, ChartStyle, LABEL_GAP, PLOT_TOP as TOP, RULE_WIDTH};
@@ -139,13 +139,61 @@ pub fn grid(
   }
 }
 
-/// An x axis label centered under `x`.
-pub fn x_label(context: &Context2D, frame: Frame, style: &ChartStyle, label: &str, x: f32) {
-  context.set_font(style.font.clone());
-  context.set_text_align(TextAlign::Center);
+/// What an x axis label names, which picks its font: a clock time in the mono axis font (`e5PbG`),
+/// a day in the proportional one (`C2pTYF`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxisText {
+  Clock,
+  Day,
+}
+
+/// An x axis label to draw: its text, what it names, and the x it is centered under.
+pub struct XLabel<'a> {
+  pub text: &'a str,
+  pub kind: AxisText,
+  pub x: f32,
+}
+
+/// Draws an x axis label centered under its x, kept whole inside the canvas: a label that would run
+/// past the plot's right end ends there instead (`24:00` in `e5PbG`), and one past the canvas's
+/// left edge starts there. Its canvas item, `x-label-{index}`, names it where it was drawn. A label
+/// the canvas cannot measure yet (its text service is not attached) waits for the next frame.
+pub fn x_label(
+  context: &Context2D,
+  frame: Frame,
+  style: &ChartStyle,
+  label: &XLabel,
+  index: usize,
+) -> Option<CanvasItem> {
+  let font = match label.kind {
+    AxisText::Clock => style.font.clone(),
+    AxisText::Day => style.day_font.clone(),
+  };
+  context.set_font(font);
+  context.set_text_align(TextAlign::Left);
   context.set_text_baseline(TextBaseline::Top);
   context.set_fill_style(style.axis);
-  text(context, label, x, frame.bottom + LABEL_GAP);
+  let width = match context.measure_text(label.text) {
+    Ok(metrics) => metrics.width,
+    Err(error) => {
+      tracing::debug!(%error, "a chart label waits for the canvas text service");
+      return None;
+    }
+  };
+  let left = (label.x - width / 2.0).min(frame.right - width).max(0.0);
+  let top = frame.bottom + LABEL_GAP;
+  text(context, label.text, left, top);
+  Some(
+    CanvasItem::rect(
+      format!("x-label-{index}"),
+      "label",
+      left,
+      top,
+      width,
+      AXIS_BAND - LABEL_GAP,
+    )
+    .label(label.text),
+  )
 }
 
 /// Draws `label`; text that the canvas cannot draw yet (its text service is not attached) is left

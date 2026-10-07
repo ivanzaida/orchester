@@ -147,7 +147,7 @@ impl ExtraTypography {
       Self::Explanation => leading(1.6, style(12.0, FontWeight::Normal, MUTED)),
       Self::Instructions => leading(1.65, style(12.0, FontWeight::Normal, TEXT)),
       Self::Hint => leading(1.5, style(10.0, FontWeight::Normal, MUTED)),
-      Self::ReadBack => style(10.0, FontWeight::Normal, SUBTLE),
+      Self::ReadBack | Self::AxisLabel => style(10.0, FontWeight::Normal, SUBTLE),
       Self::VersionFigure => style(18.0, FontWeight::Medium, TEXT),
       Self::Summary => leading(1.6, style(13.0, FontWeight::Normal, MUTED)),
       Self::CompactStatusLabel => style(10.0, FontWeight::Medium, TEXT),

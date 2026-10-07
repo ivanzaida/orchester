@@ -9,7 +9,7 @@ use std::{f32::consts::TAU, sync::Arc};
 use lurq::canvas::{ArcDirection, CanvasHandle, CanvasItem, Context2D, TextAlign, TextBaseline};
 use orchester_core::usage::limits::Join;
 
-use super::plot::{self, Frame};
+use super::plot::{self, AxisText, Frame, XLabel};
 use crate::theme::chart::{ChartStyle, DASH, DOT, GAP_LINE_WIDTH, HATCH_PITCH, LINE_WIDTH, POINT_RADIUS, RULE_WIDTH};
 
 /// One reading on a line: its time (ms) and percent, with its name and value for its canvas item.
@@ -43,8 +43,9 @@ pub struct LimitPlot {
   pub threshold_label: Arc<str>,
   /// The y axis labels at 0, 25, 50, 75 and 100 %.
   pub percents: [Arc<str>; 5],
-  /// x axis labels at their times.
+  /// x axis labels at their times, and what they name: hours of one day, or days.
   pub labels: Vec<(i64, Arc<str>)>,
+  pub label_kind: AxisText,
   /// The hovered point: its line and index.
   pub hovered: Option<(usize, usize)>,
   pub style: ChartStyle,
@@ -65,10 +66,15 @@ pub fn draw(canvas: &CanvasHandle, plot: &LimitPlot) {
   plot::grid(&context, frame, &plot.style, (100, 25), |value| {
     plot.percents[usize::try_from(value / 25).unwrap_or(0).min(4)].to_string()
   });
-  for (at, label) in &plot.labels {
-    plot::x_label(&context, frame, &plot.style, label, plot.x(frame, *at));
-  }
   let mut items = Vec::new();
+  for (index, (at, text)) in plot.labels.iter().enumerate() {
+    let label = XLabel {
+      text,
+      kind: plot.label_kind,
+      x: plot.x(frame, *at),
+    };
+    items.extend(plot::x_label(&context, frame, &plot.style, &label, index));
+  }
   for (index, (at, name)) in plot.resets.iter().enumerate() {
     let x = plot.x(frame, *at).round() + 0.5;
     context.set_stroke_style(plot.style.rule);

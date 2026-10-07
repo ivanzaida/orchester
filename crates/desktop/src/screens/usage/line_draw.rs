@@ -13,7 +13,7 @@ use lurq::{
 };
 use parking_lot::Mutex;
 
-use super::plot::{self, Frame, Redraw};
+use super::plot::{self, AxisText, Frame, Redraw, XLabel};
 use crate::theme::chart::{ChartStyle, HEADROOM, LABEL_GAP, LINE_WIDTH, POINT_RADIUS, SMALL_PLOT_HEIGHT};
 
 /// One day: its axis label, its share in percent if known, and its name and value for its canvas
@@ -103,9 +103,14 @@ fn draw(canvas: &CanvasHandle, plot: &LinePlot) {
   let mut items = Vec::new();
   let mut previous: Option<(f32, f32)> = None;
   for (index, day) in days.iter().enumerate() {
-    if let Some(label) = &day.label {
+    if let Some(text) = &day.label {
       let (slot, width) = frame.slot(index, days.len());
-      plot::x_label(&context, frame, &plot.style, label, slot + width / 2.0);
+      let label = XLabel {
+        text,
+        kind: AxisText::Day,
+        x: slot + width / 2.0,
+      };
+      items.extend(plot::x_label(&context, frame, &plot.style, &label, index));
     }
     let Some(share) = day.share else {
       previous = None;

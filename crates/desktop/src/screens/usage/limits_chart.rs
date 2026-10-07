@@ -25,7 +25,7 @@ use parking_lot::Mutex;
 use super::{
   format,
   limits_draw::{DrawnLine, DrawnPoint, LimitPlot, draw},
-  plot::{Frame, Redraw},
+  plot::{AxisText, Frame, Redraw},
   state::Dashboard,
 };
 use crate::theme::{
@@ -241,6 +241,11 @@ fn plot(ctx: &Ctx, dashboard: &Dashboard, hovered: Hovered) -> LimitPlot {
     threshold_label: percent(u64::from(dashboard.threshold.percent())),
     percents: [percent(0), percent(25), percent(50), percent(75), percent(100)],
     labels: labels(ctx, dashboard),
+    label_kind: if dashboard.range.days() == 1 {
+      AxisText::Clock
+    } else {
+      AxisText::Day
+    },
     hovered: match hovered {
       Hovered::Point(line, point) => Some((line, point)),
       _ => None,
@@ -261,7 +266,8 @@ fn reset_name(ctx: &Ctx, line: &LimitLine, at: orchester_core::time::Timestamp) 
 }
 
 /// The x axis: one day's hours at every fourth hour from 00:00 to 24:00 (`e5PbG`), or each day at
-/// its middle, whatever the grouping, so a week by hour still reads by day.
+/// its middle, whatever the grouping, so a week by hour still reads by day; every few days where
+/// many, counted back from the last day so it always has its label, as *Tokens over time* does.
 fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
   let (start, end) = (dashboard.range.start(), dashboard.range.end());
   if dashboard.range.days() == 1 {
@@ -276,12 +282,13 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
   }
   let days = dashboard.range.buckets(Grouping::Day);
   let step = days.len().div_ceil(DAY_LABELS).max(1);
+  let last = days.len().saturating_sub(1);
   days
     .windows(2)
     .map(|pair| (pair[0], pair[1].start))
     .chain(days.last().map(|last| (*last, end)))
     .enumerate()
-    .filter(|(index, _)| index % step == 0)
+    .filter(|(index, _)| (last - index).is_multiple_of(step))
     .map(|(_, (day, next))| {
       let middle = (day.start.unix_millis() + next.unix_millis()) / 2;
       let label = if day.date == orchester_core::usage::local_date(dashboard.now) {

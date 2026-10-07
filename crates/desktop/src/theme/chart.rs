@@ -1,6 +1,7 @@
 //! How the Usage dashboard draws its charts on a lurq canvas (`C2pTYF`, `e5PbG`, "Chart colors"):
 //! the series color follows the CLI, the grid is `hairline`, the baseline and reset rules `border`,
-//! axis text `subtle` mono 10, the warning threshold `muted` dashed, single-series marks `muted` /
+//! axis text `subtle` 10 (figures and clock times mono, days proportional), the warning threshold
+//! `muted` dashed, single-series marks `muted` /
 //! `subtle`; text never takes a series color. Bars are stacked with a 2px gap and a 4px rounded
 //! top; weekly windows are solid lines, 5-hour windows dashed, a stretch without reports dotted
 //! and 1px.
@@ -13,10 +14,11 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   canvas::CanvasFont,
+  layout::text_style::TextStyle,
   node::color::Color,
 };
 
-use super::ExtraColor;
+use super::{ExtraColor, ExtraTypography};
 
 /// Room for the y axis labels at the left and the x axis labels below the plot.
 pub const AXIS_GUTTER: f32 = 44.0;
@@ -68,16 +70,23 @@ pub struct ChartStyle {
   pub single_light: Color,
   pub hatch: Color,
   pub band: Color,
+  /// Figures and clock times on the axes.
   pub font: CanvasFont,
+  /// Days on the x axis.
+  pub day_font: CanvasFont,
 }
 
 impl ChartStyle {
   pub fn of(ctx: &Ctx) -> Self {
     let theme = ctx.theme();
     let color = |role: PaletteColor| theme.palette_color(role);
-    let axis = theme.typography_style(TypographyStyle::Mono);
-    let mut font = CanvasFont::new(Arc::clone(&axis.font_family), axis.font_size);
-    font.weight = axis.weight;
+    let canvas_font = |style: &TextStyle| {
+      let mut font = CanvasFont::new(Arc::clone(&style.font_family), style.font_size);
+      font.weight = style.weight;
+      font
+    };
+    let font = canvas_font(&theme.typography_style(TypographyStyle::Mono));
+    let day_font = canvas_font(&theme.typography_style(ExtraTypography::AxisLabel.role()));
     Self {
       series: [
         color(ExtraColor::ChartSeries1.role()),
@@ -93,6 +102,7 @@ impl ChartStyle {
       hatch: color(ExtraColor::ChartHatch.role()),
       band: color(PaletteColor::AccentMuted),
       font,
+      day_font,
     }
   }
 }
