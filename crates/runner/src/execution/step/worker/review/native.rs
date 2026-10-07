@@ -2,7 +2,8 @@
 //! client, built by core ([`native_request`]), with the connection's API key read from the keychain here
 //! (it never leaves the client: not in the review, its errors or the activity). It is bounded by the
 //! review's time and dropped at once when the review is no longer wanted. A response reports what it
-//! spent; a request that failed, timed out or was dropped spent an unknown amount.
+//! spent, and the client what each response it dropped spent; a request the client gave up on spent only
+//! that ([`NativeSpend::unanswered`]); one cut off by the review's time or its end spent an unknown amount.
 
 use std::{sync::Arc, time::Duration};
 
@@ -10,7 +11,7 @@ use orchester_agent::{AnthropicClient, Endpoint, WireQuirks};
 use orchester_core::{
   connection::{
     ApiEndpoint,
-    reviewer::{native_request, native_review},
+    reviewer::{NativeSpend, native_request},
   },
   native::model::ModelClient,
   resource::ModelId,
@@ -44,8 +45,9 @@ impl RequestReviewer for NativeReviewer {
     let request = native_request(input, &self.model, self.effort.clone());
     self.runtime.block_on(async {
       let mut stop = self.stop.clone();
-      // Nothing of the answer is shown while it streams.
-      let mut streamed = |_| {};
+      let mut spend = NativeSpend::default();
+      // Nothing of the answer is shown while it streams; only what dropped responses spent is kept.
+      let mut streamed = |event| spend.observe(&event);
       let unknown = |error| Reviewed::new(Err(error), ReviewSpend::Unknown);
       let answer = tokio::select! {
         answer = tokio::time::timeout(self.timeout, self.client.respond(&request, &mut streamed)) => answer,
@@ -54,8 +56,8 @@ impl RequestReviewer for NativeReviewer {
         }
       };
       match answer {
-        Ok(Ok(response)) => native_review(&response),
-        Ok(Err(error)) => unknown(ReviewError::CouldNotRun(error.to_string())),
+        Ok(Ok(response)) => spend.answered(&response),
+        Ok(Err(error)) => spend.unanswered(ReviewError::CouldNotRun(error.to_string())),
         Err(_) => unknown(ReviewError::TimedOut),
       }
     })

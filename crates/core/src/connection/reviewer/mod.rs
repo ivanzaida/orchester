@@ -26,7 +26,7 @@ use serde_json::Value;
 
 pub use self::{
   codex::{CodexReviewer, codex_reviewer_args, parse_codex_review, read_codex_review},
-  native::{NATIVE_MAX_OUTPUT, native_request, native_review, native_verdict},
+  native::{NATIVE_MAX_OUTPUT, NativeSpend, native_request, native_verdict},
 };
 use crate::{
   command::{Command, CommandError, CommandRunner},
@@ -106,8 +106,8 @@ impl<R: CommandRunner> RequestReviewer for ClaudeReviewer<R> {
 
 /// `command`'s answer as `read` finds it in its standard output: the verdict once it exited successfully, and
 /// what it spent and the limits it reported also when it failed. A timeout, a failure to start and a failing
-/// exit are errors of the review; a program that never started spent nothing, one that was ended spent an
-/// unknown amount.
+/// exit are errors of the review; a program that never started spent nothing, one that was ended (or that a
+/// runner could not say whether it started) spent an unknown amount.
 fn run_review(runner: &impl CommandRunner, command: &Command, read: fn(&str) -> Reviewed) -> Reviewed {
   match runner.run(command) {
     Ok(output) => {
@@ -121,7 +121,7 @@ fn run_review(runner: &impl CommandRunner, command: &Command, read: fn(&str) -> 
       answer
     }
     Err(CommandError::TimedOut) => Reviewed::new(Err(ReviewError::TimedOut), ReviewSpend::Unknown),
-    Err(error @ (CommandError::NotFound | CommandError::UnsafeScriptArgument { .. })) => {
+    Err(error @ (CommandError::NotFound | CommandError::NotStarted(_) | CommandError::UnsafeScriptArgument { .. })) => {
       Reviewed::new(Err(ReviewError::CouldNotRun(error.to_string())), ReviewSpend::Nothing)
     }
     Err(error @ CommandError::Failed(_)) => {

@@ -14,12 +14,12 @@ use orchester_core::{
   connection::{
     AgentProvider,
     plan_limits::LimitState,
-    reviewer::{ClaudeReviewer, CodexReviewer, ReviewFolder, native_review, read_claude_review, read_codex_review},
+    reviewer::{ClaudeReviewer, CodexReviewer, NativeSpend, ReviewFolder, read_claude_review, read_codex_review},
   },
   id::{InvocationId, RunId, StepExecutionId},
   native::{
     item::Item,
-    model::{ModelResponse, StopReason},
+    model::{ModelResponse, StopReason, StreamEvent},
   },
   permission::{NetworkAccess, RepositoryAccess},
   resource::ModelId,
@@ -150,6 +150,8 @@ fn reviewer_usage_of_a_cli_is_read_whatever_its_exit_and_unknown_when_it_was_end
   let stopped = claude(Err(CommandError::Failed("the review is no longer wanted".to_owned())));
   assert_eq!(stopped.spend, ReviewSpend::Unknown);
   assert_eq!(claude(Err(CommandError::NotFound)).spend, ReviewSpend::Nothing);
+  let not_started = CommandError::NotStarted("cannot start /bin/claude: access denied".to_owned());
+  assert_eq!(claude(Err(not_started)).spend, ReviewSpend::Nothing, "it ran nothing");
   assert_eq!(claude(exited(0, "Sure, approve it.")).spend, ReviewSpend::Unknown);
 }
 
@@ -181,7 +183,7 @@ fn reviewer_usage_of_codex_is_its_turns_usage_without_plan_limits() {
 }
 
 #[test]
-fn reviewer_usage_of_a_native_review_is_its_responses_usage() {
+fn reviewer_usage_of_a_native_review_is_its_responses_usage_with_what_dropped_responses_spent() {
   let response = ModelResponse {
     items: vec![Item::Assistant {
       text: r#"{"verdict":"approve","reason":"It builds."}"#.to_owned(),
@@ -190,14 +192,22 @@ fn reviewer_usage_of_a_native_review_is_its_responses_usage() {
     usage: usage(900, 300, 40),
     served_by: model("claude-haiku-4-5"),
   };
-  let read = native_review(&response);
+  let read = NativeSpend::default().answered(&response);
   assert!(read.verdict.is_ok());
   assert_eq!(read.spend, ReviewSpend::Reported(usage(900, 300, 40)));
+  let mut retried = NativeSpend::default();
+  retried.observe(&StreamEvent::Text("{".to_owned()));
+  retried.observe(&StreamEvent::Spent(usage(100, 0, 3)));
   let cut = ModelResponse {
     stop: StopReason::MaxOutput,
     ..response
   };
-  assert_eq!(native_review(&cut).spend, ReviewSpend::Reported(usage(900, 300, 40)));
+  let read = retried.answered(&cut);
+  assert!(read.verdict.is_err(), "a cut answer is no verdict");
+  assert_eq!(read.spend, ReviewSpend::Reported(usage(1_000, 300, 43)));
+  let unanswered = |spend: NativeSpend| spend.unanswered(ReviewError::CouldNotRun("refused".to_owned())).spend;
+  assert_eq!(unanswered(retried), ReviewSpend::Reported(usage(100, 0, 3)));
+  assert_eq!(unanswered(NativeSpend::default()), ReviewSpend::Nothing);
 }
 
 #[test]

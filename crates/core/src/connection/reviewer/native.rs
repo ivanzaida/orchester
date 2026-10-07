@@ -3,19 +3,22 @@
 //! way. No tools are offered, the instructions are the system prompt, the request and its context are
 //! the one user message, and the answer must be the verdict's JSON object alone: anything else, a
 //! response cut short or a refusal is a review without a verdict, which asks the person. What it spent is
-//! the response's usage, as the client read it from either wire API (Anthropic Messages, OpenAI Responses).
+//! the response's usage with what the client reported of the responses it dropped on the way ([`NativeSpend`]).
 
 use crate::{
   id::ConversationId,
   native::{
     item::{Item, UserOrigin},
-    model::{ModelRequest, ModelResponse, StopReason},
+    model::{ModelRequest, ModelResponse, StopReason, StreamEvent},
     tools::ToolSet,
   },
   resource::ModelId,
-  run::review::{
-    REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict_text,
-    review_prompt,
+  run::{
+    TokenUsage,
+    review::{
+      REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict_text,
+      review_prompt,
+    },
   },
 };
 
@@ -57,7 +60,39 @@ pub fn native_verdict(response: &ModelResponse) -> Result<ReviewVerdict, ReviewE
   parse_verdict_text(&text)
 }
 
-/// The model's answer as a review: its verdict ([`native_verdict`]) and the usage the response reported.
-pub fn native_review(response: &ModelResponse) -> Reviewed {
-  Reviewed::new(native_verdict(response), ReviewSpend::Reported(response.usage))
+/// What a native review spent, followed through its client's stream events: the responses the client
+/// dropped (a broken stream, one asked again) report what they spent as [`StreamEvent::Spent`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NativeSpend {
+  dropped: TokenUsage,
+}
+
+impl NativeSpend {
+  pub fn observe(&mut self, event: &StreamEvent) {
+    if let StreamEvent::Spent(usage) = event {
+      self.dropped += *usage;
+    }
+  }
+
+  /// The model's answer as a review: its verdict ([`native_verdict`]), and its usage with what the dropped
+  /// responses spent.
+  pub fn answered(self, response: &ModelResponse) -> Reviewed {
+    let mut spent = response.usage;
+    spent += self.dropped;
+    Reviewed::new(native_verdict(response), ReviewSpend::Reported(spent))
+  }
+
+  /// A review the client gave up on with `error`: what its dropped responses spent, nothing when there were
+  /// none. That holds for a client that reports what every broken stream spent, as `orchester-agent`'s
+  /// Anthropic client does (the stream's first event carries the usage), so a request the API refused or
+  /// never received spent nothing. Its Responses client reports no usage for a broken stream: a reviewer on
+  /// it would need [`ReviewSpend::Unknown`] instead.
+  pub fn unanswered(self, error: ReviewError) -> Reviewed {
+    let spend = if self.dropped == TokenUsage::default() {
+      ReviewSpend::Nothing
+    } else {
+      ReviewSpend::Reported(self.dropped)
+    };
+    Reviewed::new(Err(error), spend)
+  }
 }

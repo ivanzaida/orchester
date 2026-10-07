@@ -132,9 +132,12 @@ pub fn parse_gh_auth_status(host: &GitHubHost, output: &CommandOutput) -> Option
 pub fn check_github(executable: &Path, host: &GitHubHost, runner: &impl CommandRunner, now: Timestamp) -> GitHubCheck {
   let result = match runner.run(&gh_version_command(executable)) {
     Err(CommandError::NotFound) => GitHubCheckResult::ExecutableMissing,
-    Err(CommandError::TimedOut | CommandError::Failed(_) | CommandError::UnsafeScriptArgument { .. }) => {
-      GitHubCheckResult::CouldNotRun
-    }
+    Err(
+      CommandError::TimedOut
+      | CommandError::Failed(_)
+      | CommandError::NotStarted(_)
+      | CommandError::UnsafeScriptArgument { .. },
+    ) => GitHubCheckResult::CouldNotRun,
     Ok(output) => match parse_gh_version(&output) {
       None => GitHubCheckResult::NotRecognized,
       Some(version) => {

@@ -234,6 +234,10 @@ pub enum CommandError {
   TimedOut,
   #[error("the program could not be run: {0}")]
   Failed(String),
+  /// The program was never started: it could not be prepared or its process not be created, so it ran
+  /// nothing. A runner that cannot tell this apart from a failure reports [`Self::Failed`].
+  #[error("the program could not be started: {0}")]
+  NotStarted(String),
   /// Windows only: the program is a `.cmd`/`.bat` script, which `cmd.exe` runs by reading its
   /// arguments again; argument `position` (from 0) would be split or changed on the way to the
   /// program, so it is not run. Free-form text belongs on standard input instead.

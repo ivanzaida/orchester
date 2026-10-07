@@ -4,7 +4,8 @@
 //! and the review's usage ([`USAGE`]). What it answers depends on the task in the prompt: "Reviewer asks"
 //! asks the person, "Reviewer babbles" prints prose instead of JSON, "Reviewer waits" approves after three
 //! seconds, "Reviewer hangs" never answers, anything else approves; "Reviewer reports limits" adds a
-//! `rate_limit_event` ([`LIMITS`]) and "Reviewer hides usage" leaves the usage out of the result. It
+//! `rate_limit_event` ([`LIMITS`]), "Reviewer hides usage" leaves the usage out of the result, and "Reviewer
+//! rambles" prints more than the runner keeps of its output (320 events of 1 KiB) before its result. It
 //! reports the arguments it got on standard error (`review argv: `). When the variable
 //! `FAKE_REVIEW_LOG` names a file, it appends where it ran to it: `pid <id>`, `cwd <folder>`, `empty
 //! <whether the folder was empty>` and `instructions <whether its system prompt file is the reviewer's>`.
@@ -55,6 +56,15 @@ pub fn review(args: &[String]) -> ExitCode {
     "{}",
     serde_json::json!({"type": "system", "subtype": "init", "session_id": "fake-review"})
   );
+  if prompt.contains("Reviewer rambles") {
+    let thinking = "x".repeat(1024);
+    for _ in 0..320 {
+      println!(
+        "{}",
+        serde_json::json!({"type": "assistant", "message": {"content": [{"type": "thinking", "thinking": thinking}]}})
+      );
+    }
+  }
   if prompt.contains("Reviewer reports limits") {
     println!(r#"{{"type":"rate_limit_event","rate_limit_info":{LIMITS}}}"#);
   }

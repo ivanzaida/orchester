@@ -3,7 +3,7 @@
 //! part, OpenAI-style).
 
 use orchester_core::{
-  connection::reviewer::{native_request, native_review},
+  connection::reviewer::{NativeSpend, native_request},
   permission::{NetworkAccess, RepositoryAccess},
   resource::ModelId,
   run::{
@@ -58,7 +58,7 @@ async fn responses_review_reads_the_verdict_and_what_it_spent() {
   let model = ModelId::new(MODEL).expect("model");
   let request = native_request(&input(), &model, None);
   let (answer, _) = respond(&client(&server), &request).await;
-  let reviewed = native_review(&answer.expect("an answer"));
+  let reviewed = NativeSpend::default().answered(&answer.expect("an answer"));
   assert_eq!(
     reviewed.verdict,
     Ok(ReviewVerdict::AskPerson {

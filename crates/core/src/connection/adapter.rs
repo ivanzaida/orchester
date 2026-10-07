@@ -73,9 +73,12 @@ pub fn check(
   };
   let result = match cli.run(VERSION_ARGS) {
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
-    Err(CommandError::TimedOut | CommandError::Failed(_) | CommandError::UnsafeScriptArgument { .. }) => {
-      CheckResult::CouldNotRun
-    }
+    Err(
+      CommandError::TimedOut
+      | CommandError::Failed(_)
+      | CommandError::NotStarted(_)
+      | CommandError::UnsafeScriptArgument { .. },
+    ) => CheckResult::CouldNotRun,
     Ok(output) => match parse_version(provider, &output) {
       None => CheckResult::NotRecognized,
       Some(version) => CheckResult::Available {

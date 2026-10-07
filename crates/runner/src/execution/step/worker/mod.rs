@@ -15,6 +15,7 @@ mod steer;
 
 use std::{
   collections::HashSet,
+  convert::Infallible,
   path::{Path, PathBuf},
   time::Duration,
 };
@@ -185,6 +186,8 @@ pub(in super::super) struct Worker {
   pub(super) reviewing: Option<review::Reviewing>,
   /// Where a native reviewer's API key is read.
   pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
+  /// Held by each review until it has recorded what it cost; [`Worker::work`] waits for all of them.
+  pub(in crate::execution::step) reviews_held: mpsc::Sender<Infallible>,
 }
 
 pub(super) struct Watch {
@@ -262,8 +265,12 @@ impl Worker {
     matches!(self.driver, Driver::Native(_))
   }
 
-  /// Follows the agent until it ends, then tells the run how it ended.
-  pub(in super::super) async fn work(mut self) {
+  /// Follows the agent until it ends, then tells the run how it ended, once the reviews it started have
+  /// ended: the agent's end stops a review still under way, which then records what it cost and hands its
+  /// tokens to the run before the run hears of the end. So the run, still listening, counts them toward
+  /// its budget and the step's, once, before another invocation of the step reads what the step used.
+  /// `reviews_ended` is the other end of [`Worker::reviews_held`].
+  pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
@@ -272,6 +279,10 @@ impl Worker {
     } else {
       self.follow().await
     };
+    // The worker, its own holder and the review under way are gone; this ends once every review has.
+    if let Some(never) = reviews_ended.recv().await {
+      match never {}
+    }
     // The CLI has ended: the configuration it read, with its secret values, goes before the run hears of it.
     drop(mcp_file);
     // The run's task outlives its agents; if it is gone, the runner is ending anyway.

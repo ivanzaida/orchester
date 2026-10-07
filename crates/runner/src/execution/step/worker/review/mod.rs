@@ -127,6 +127,7 @@ impl Worker {
       approval: approval.id.clone(),
       events: self.events.clone(),
       notifier: self.notifier.clone(),
+      _held: self.reviews_held.clone(),
     };
     let work = tokio::task::spawn_blocking(move || setup.review(job, &ledger));
     Ok(Some(Reviewing {

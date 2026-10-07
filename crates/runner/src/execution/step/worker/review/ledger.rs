@@ -1,10 +1,11 @@
 //! What a review cost, recorded when it ends, from the blocking pool it ran on: whether the worker still
 //! waits for it or not (the person answered first, the agent ended), a reviewer that was asked has spent
-//! its tokens. The record goes to the project's store; known tokens go to the run, which counts them toward
-//! its budget, the step's and the project's daily budget like an agent's turn; the plan limits its CLI
-//! reported go to the plan limits history and the desktop.
+//! its tokens. The worker reports its end only after every ledger is gone (`Worker::work`), so the run
+//! always hears of a review's tokens while its agent's invocation is still the step's. The record goes to the project's
+//! store; known tokens go to the run, which counts them toward its budget, the step's and the project's daily budget
+//! like an agent's turn; the plan limits its CLI reported go to the plan limits history and the desktop.
 
-use std::path::PathBuf;
+use std::{convert::Infallible, path::PathBuf};
 
 use orchester_core::{
   connection::{AgentProvider, plan_limits::LimitReading},
@@ -29,6 +30,8 @@ pub(super) struct ReviewLedger {
   pub(super) approval: String,
   pub(super) events: mpsc::UnboundedSender<WorkerEvent>,
   pub(super) notifier: Notifier,
+  /// Keeps the worker from reporting its end until this review has recorded what it cost.
+  pub(super) _held: mpsc::Sender<Infallible>,
 }
 
 impl ReviewLedger {

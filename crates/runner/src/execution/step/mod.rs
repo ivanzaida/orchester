@@ -314,6 +314,7 @@ impl RunTask {
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
     let (steers, steered) = mpsc::unbounded_channel();
+    let (reviews_held, reviews_ended) = mpsc::channel(1);
     let Driven {
       driver,
       mcp_file,
@@ -344,8 +345,9 @@ impl RunTask {
         vault: self.vault.clone(),
         project: self.project.id(),
       },
+      reviews_held,
     };
-    tokio::spawn(worker.work());
+    tokio::spawn(worker.work(reviews_ended));
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
     // pipeline's.
     let budget = self
