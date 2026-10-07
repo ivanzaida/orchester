@@ -59,18 +59,10 @@ fn limits_migration_gives_saved_limits_the_default_agent_slots() {
   db.save_project_limits(&saved).expect("save");
   drop(db);
   let database = current.path().join(".orchester").join("orchester.db");
-  let before = schema_version(&database) - 1;
+  let before = version_before_agent_slots(schema_version(&database));
   let old = copied_at_version(&database, before);
   let old_database = old.path().join(".orchester").join("orchester.db");
-  let columns: Vec<String> = Connection::open(&old_database)
-    .expect("open")
-    .prepare("SELECT name FROM pragma_table_info('project_limits')")
-    .expect("columns")
-    .query_map([], |row| row.get(0))
-    .expect("columns")
-    .collect::<Result<_, _>>()
-    .expect("columns");
-  assert!(!columns.iter().any(|column| column == "agent_slots"), "{columns:?}");
+  assert!(!has_agent_slots(&Connection::open(&old_database).expect("open")));
 
   let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(upgraded.project_limits().expect("limits"), saved);
@@ -124,6 +116,25 @@ const EXECUTION: &str = "01920000-0000-7000-8000-00000000000c";
 
 fn id<T: FromStr<Err: Debug>>(value: &str) -> T {
   value.parse().expect("fixture id")
+}
+
+fn has_agent_slots(connection: &Connection) -> bool {
+  connection
+    .prepare("SELECT 1 FROM pragma_table_info('project_limits') WHERE name = 'agent_slots'")
+    .expect("columns")
+    .exists([])
+    .expect("columns")
+}
+
+/// The newest schema without the agent slots column, wherever later migrations moved the latest.
+fn version_before_agent_slots(latest: u32) -> u32 {
+  (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      !has_agent_slots(&ProjectDb::create_at_version(repo.path(), version).expect("an old database"))
+    })
+    .expect("a schema before the agent slots")
 }
 
 fn schema_version(database: &Path) -> u32 {
