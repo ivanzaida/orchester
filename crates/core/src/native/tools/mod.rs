@@ -126,16 +126,16 @@ pub fn parse_call(name: &str, input: &serde_json::Value) -> Result<ToolInput, To
     return Err(ToolInputError::NotJson(raw.to_owned()));
   }
   let invalid = |message: String| ToolInputError::Invalid { tool, message };
-  let input = input.clone();
+  // Read in place: a write's whole content is not copied first.
   let parsed = match tool {
-    ToolName::ReadFile => serde_json::from_value(input).map(ToolInput::ReadFile),
-    ToolName::ListFiles => serde_json::from_value(input).map(ToolInput::ListFiles),
-    ToolName::Search => serde_json::from_value(input).map(ToolInput::Search),
-    ToolName::EditFile => serde_json::from_value(input).map(ToolInput::EditFile),
-    ToolName::WriteFile => serde_json::from_value(input).map(ToolInput::WriteFile),
-    ToolName::RunCommand => serde_json::from_value(input).map(ToolInput::RunCommand),
-    ToolName::FinishStep => serde_json::from_value(input).map(ToolInput::FinishStep),
-    ToolName::AskQuestion => serde_json::from_value(input).map(ToolInput::AskQuestion),
+    ToolName::ReadFile => ReadFile::deserialize(input).map(ToolInput::ReadFile),
+    ToolName::ListFiles => ListFiles::deserialize(input).map(ToolInput::ListFiles),
+    ToolName::Search => Search::deserialize(input).map(ToolInput::Search),
+    ToolName::EditFile => EditFile::deserialize(input).map(ToolInput::EditFile),
+    ToolName::WriteFile => WriteFile::deserialize(input).map(ToolInput::WriteFile),
+    ToolName::RunCommand => RunCommand::deserialize(input).map(ToolInput::RunCommand),
+    ToolName::FinishStep => StepResult::deserialize(input).map(ToolInput::FinishStep),
+    ToolName::AskQuestion => AskQuestion::deserialize(input).map(ToolInput::AskQuestion),
   }
   .map_err(|error| invalid(error.to_string()))?;
   input::validate(&parsed).map_err(invalid)?;

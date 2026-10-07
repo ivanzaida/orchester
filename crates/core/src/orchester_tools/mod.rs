@@ -40,7 +40,7 @@ pub use self::{
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 use crate::{
-  connection::stream::{FileChange, FileChangeKind},
+  connection::stream::{CallInput, FileChange, FileChangeKind, NativeCall},
   native::tools::ToolName as NativeTool,
 };
 
@@ -137,6 +137,21 @@ impl OrchesterTool {
       }),
       _ => None,
     }
+  }
+
+  /// How an agent CLI's call of this tool with `input` reads in the transcript: as the native agent's call of the
+  /// same file tool, with what its input asked. `None` for another tool, and for input the tool refuses: that call
+  /// fails with the error its row shows.
+  pub fn shown_call(self, input: &Value) -> Option<NativeCall> {
+    let tool = self.file_tool()?;
+    // The refusal reaches the agent as the call's error result; the row shows that result.
+    let input = crate::native::tools::parse_call(tool.as_str(), input).ok()?;
+    Some(NativeCall {
+      tool,
+      detail: None,
+      declined: None,
+      input: Some(CallInput::of(&input)?),
+    })
   }
 
   /// The native agent's tool this is, for a file tool.

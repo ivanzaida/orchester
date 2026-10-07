@@ -12,7 +12,7 @@ use orchester_core::{
   run::{DecidedBy, review::Review},
 };
 
-use super::entry::Shown;
+use super::{entry::Shown, native_call};
 use crate::{
   tasks::transcript::{CommandMark, DecidedMark, Entry, EntryKind, McpToolEntry},
   ui::icon::Icon,
@@ -20,8 +20,20 @@ use crate::{
 
 /// The row of a Codex MCP call: the tool, and how it was decided or which server it belongs to.
 pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
-  let mark = call.mark.as_ref().map(|mark| mark_text(ctx, mark));
   let failed = matches!(call.status, Some(CommandStatus::Failed | CommandStatus::Declined));
+  let refused = call
+    .mark
+    .as_ref()
+    .is_some_and(|mark| mark.is_denial() || matches!(mark, CommandMark::Declined { .. }));
+  // A successful call of one of Orchester's file tools reads as the native agent's call of the tool.
+  if let Some(native) = &call.native
+    && let Some(input) = &native.input
+    && !failed
+    && !refused
+  {
+    return native_call::requested(ctx, (native.tool, input), (call.status, "", call.mark.as_ref()));
+  }
+  let mark = call.mark.as_ref().map(|mark| mark_text(ctx, mark));
   let (glyph, meta) = match (failed, &mark) {
     (true, _) => (Icon::AlertCircle, ctx.t("runs.activity.mcpCallFailed")),
     (false, Some(_)) => (Icon::Plug, "".into()),

@@ -2,6 +2,14 @@ use super::{AgentEvent, MemoryNotSavedReason, RunnerProblem};
 use crate::connection::mcp::McpServerProblem;
 
 impl AgentEvent {
+  /// Makes what a CLI's call of Orchester's file tools asked the lines its row shows ([`super::CallInput`]): after
+  /// [`Self::redact`], so that a secret is found in the whole texts, and before the event is stored or shown.
+  pub fn settle(&mut self) {
+    if let Self::NativeCall { call, .. } = self {
+      call.settle();
+    }
+  }
+
   /// Redacts displayed and persisted content while preserving protocol correlation identifiers.
   pub fn redact(&mut self, redact: &impl Fn(&str) -> String) {
     match self {

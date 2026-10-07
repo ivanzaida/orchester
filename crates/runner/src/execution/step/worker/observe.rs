@@ -1,4 +1,4 @@
-//! What a worker does with each event of its agent, whatever drives it: the event is redacted,
+//! What a worker does with each event of its agent, whatever drives it: the event is redacted and settled,
 //! followed for the invocation's session, usage and first edit, recorded in batches, and a turn's
 //! usage is handed to the run. Plan limits are not part of the transcript: they go to the desktop and to
 //! the plan limits history.
@@ -28,6 +28,8 @@ impl Worker {
     if self.app_server().is_some() || !self.secrets.is_empty() {
       event.redact(&|text| self.redact(text));
     }
+    // Only now, redacted whole, may an edit's or a write's texts become the lines its row shows.
+    event.settle();
     let now = Timestamp::now();
     watch.tracker.observe(&event);
     watch.edits_changed |= watch

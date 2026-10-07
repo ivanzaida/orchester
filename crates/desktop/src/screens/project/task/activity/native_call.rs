@@ -4,13 +4,15 @@
 //! as a CLI's command row, with *shell · pwsh* when it used a shell; a command a person denied as
 //! *Denied by a person · the agent continues* (*run_command · shell · pwsh*), its string in mono as the body
 //! and the result the agent was given in the output block, told apart from one Orchester refused; and an
-//! approval as a line of its own (*Approved by you · pnpm add …*, *approve once · waited 48 s*).
+//! approval as a line of its own (*Approved by you · pnpm add …*, *approve once · waited 48 s*). A CLI's call of
+//! Orchester's same file tool reads the same way, from what its input asked (*edit_file · M · +3 −1*), and opens to
+//! the change it made rather than to the Changes tab: the change of that one call is known.
 
 use std::{sync::Arc, time::Duration};
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  connection::stream::{CallDetail, CommandStatus, DeclinedBy, NativeCall},
+  connection::stream::{CallChange, CallDetail, CallInput, CommandStatus, DeclinedBy, FileChangeKind, NativeCall},
   native::tools::ToolName,
   run::DecidedBy,
 };
@@ -18,10 +20,11 @@ use orchester_core::{
 use super::{
   command_entry::{self, preview_title},
   entry::{Shown, file_change_kind},
+  mcp_call,
 };
 use crate::{
   display,
-  tasks::transcript::{ApprovalEntry, CommandEntry},
+  tasks::transcript::{ApprovalEntry, CommandEntry, CommandMark},
   ui::{icon::Icon, message_text},
 };
 
@@ -40,7 +43,98 @@ pub(super) fn call(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall) -> Shown 
     }
     return shown;
   }
-  file_tool(ctx, entry, call)
+  match &call.input {
+    // A CLI's failed or refused call shows its error as any command of it does.
+    Some(_) if failed(entry) => command_entry::command(ctx, entry),
+    Some(input) => requested(
+      ctx,
+      (call.tool, input),
+      (entry.status, &entry.output, entry.mark.as_ref()),
+    ),
+    None => file_tool(ctx, entry, call),
+  }
+}
+
+fn failed(entry: &CommandEntry) -> bool {
+  matches!(entry.status, Some(CommandStatus::Failed | CommandStatus::Declined))
+    || entry.mark.as_ref().is_some_and(CommandMark::is_denial)
+}
+
+/// A CLI's call of one of Orchester's file tools, as the native agent's call of the tool: its target as the title,
+/// the tool first in the meta with how much an edit or a write changed, and how a request about it was answered;
+/// open, the change it made, or what a read or a search answered. What the native executors count of a read or a
+/// search the CLI's answer does not say, so the meta names only the tool. `(status, output, mark)` are its row's.
+pub(super) fn requested(
+  ctx: &Ctx,
+  (tool, input): (ToolName, &CallInput),
+  (status, output, mark): (Option<CommandStatus>, &str, Option<&CommandMark>),
+) -> Shown {
+  let name = tool.as_str();
+  let meta = match (status, input.change()) {
+    (None, _) => ctx.t_args("runs.activity.native.running", [("tool", name)]),
+    (Some(_), Some(change)) => change_meta(ctx, tool, change),
+    (Some(_), None) => match input.scope() {
+      Some(scope) => ctx.t_args("runs.activity.native.searchScope", [("tool", name), ("scope", scope)]),
+      None => name.into(),
+    },
+  };
+  let glyph = match tool {
+    ToolName::ReadFile => Icon::FileText,
+    ToolName::ListFiles => Icon::FolderSearch,
+    ToolName::Search => Icon::Search,
+    _ => Icon::FilePenLine,
+  };
+  let title: Arc<str> = match tool {
+    ToolName::Search => ctx.t_args("runs.activity.native.searchTitle", [("pattern", input.target())]),
+    _ => input.target().into(),
+  };
+  // The change shows once the call made it; a read or a search shows what it answered.
+  let change = input
+    .change()
+    .filter(|change| status == Some(CommandStatus::Completed) && !change.is_empty())
+    .cloned();
+  let output: Vec<Arc<str>> = match tool {
+    ToolName::EditFile | ToolName::WriteFile => Vec::new(),
+    _ => output.lines().map(Arc::from).collect(),
+  };
+  Shown {
+    collapsible: change.is_some() || !output.is_empty(),
+    output: Some(output),
+    change,
+    ..Shown::plain(glyph, title, meta, None).marked(mark.map(|mark| mcp_call::mark_text(ctx, mark)))
+  }
+}
+
+/// What an edit or a write changed, after the tool's name: the lines it added and removed, or that it replaced every
+/// occurrence (how many it does not say); a write's lines, or that it wrote an empty file.
+fn change_meta(ctx: &Ctx, tool: ToolName, change: &CallChange) -> Arc<str> {
+  let name = tool.as_str();
+  let status = ctx.t(file_change_kind(FileChangeKind::Modified).1);
+  let added = change.counts().map_or(0, |counts| counts.added);
+  match (tool, change.counts()) {
+    (ToolName::WriteFile, _) if change.is_empty() => ctx.t_args("runs.activity.native.emptyWritten", [("tool", name)]),
+    (ToolName::WriteFile, _) => {
+      let key = if added == 1 {
+        "runs.activity.native.written.one"
+      } else {
+        "runs.activity.native.written.other"
+      };
+      ctx.t_args(key, [("tool", name), ("count", added.to_string().as_str())])
+    }
+    (_, Some(counts)) => ctx.t_args(
+      "runs.activity.native.edited",
+      [
+        ("tool", name),
+        ("status", &*status),
+        ("added", counts.added.to_string().as_str()),
+        ("removed", counts.removed.to_string().as_str()),
+      ],
+    ),
+    (_, None) => ctx.t_args(
+      "runs.activity.native.editedEvery",
+      [("tool", name), ("status", &*status)],
+    ),
+  }
 }
 
 /// A file tool's row: its target, what it read, found or changed, and its output while open.

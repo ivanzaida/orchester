@@ -1,6 +1,7 @@
 //! One transcript entry (`N4SlQq`): time, glyph, a one-line header with right-aligned meta, optional
-//! body text and an optional output block. A file change entry opens its file in the Changes tab
-//! (↗). A problem row has no time column: its time is in the meta, its glyph in `$text`.
+//! body text and an optional output block, or the change of a CLI's edit through Orchester's tools
+//! ([`change`]). A file change entry opens its file in the Changes tab (↗). A problem row has no time column: its time
+//! is in the meta, its glyph in `$text`.
 
 use std::{borrow::Cow, sync::Arc};
 
@@ -16,7 +17,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::stream::{FileChangeKind, OutputStream},
+  connection::stream::{CallChange, FileChangeKind, OutputStream},
   id::TaskId,
   native::tools::ToolName,
   tokens::compact_tokens,
@@ -24,7 +25,7 @@ use orchester_core::{
 
 use super::{
   super::{super::ProjectNav, review_note::review_line},
-  command_entry,
+  change, command_entry,
   header::header,
   mcp::mcp_server_text,
   mcp_call, native_call,
@@ -109,12 +110,15 @@ impl Component for EntryView {
   }
 }
 
-/// Failures start open; commands, reasoning and unparsed lines start closed.
+/// Failures start open; commands (an agent CLI's call of Orchester's file tools too), reasoning and unparsed lines
+/// start closed.
 fn entry_starts_open(entry: &Entry) -> bool {
   match entry.kind {
     EntryKind::Command(_) | EntryKind::ToolCommand(_) | EntryKind::Reasoning(_) | EntryKind::Raw(_) => {
       entry.is_failure()
     }
+    // A Codex call of Orchester's file tools starts closed, as Claude Code's command of it does.
+    EntryKind::McpTool(ref call) if call.native.is_some() => entry.is_failure(),
     _ => true,
   }
 }
@@ -133,6 +137,8 @@ pub(super) struct Shown {
   pub(super) output: Option<Vec<Arc<str>>>,
   /// What the output block leaves out, said above it.
   pub(super) omitted: Option<Arc<str>>,
+  /// The change a CLI's call of Orchester's edit tool made, shown while the entry is open.
+  pub(super) change: Option<Arc<CallChange>>,
   /// Opens and closes on a press.
   pub(super) collapsible: bool,
   /// The repository path a press opens in the Changes tab.
@@ -151,6 +157,7 @@ impl Shown {
       mono_body: false,
       output: None,
       omitted: None,
+      change: None,
       collapsible: false,
       opens: None,
     }
@@ -260,7 +267,11 @@ fn entry_details(
     EntryKind::ToolCommand(command) => Some(&*command.command),
     _ => None,
   };
-  if command.is_none() && shown.body.is_none() && shown.output.as_ref().is_none_or(Vec::is_empty) {
+  if command.is_none()
+    && shown.body.is_none()
+    && shown.change.is_none()
+    && shown.output.as_ref().is_none_or(Vec::is_empty)
+  {
     return None;
   }
   Some(
@@ -287,6 +298,12 @@ fn entry_details(
         Text::new(body).variant(style.role()).selectable(true)
       }))
       .with_children(request.map(|link| request_link(ctx, link, entry.sequence)))
+      .with_children(
+        shown
+          .change
+          .as_ref()
+          .map(|change| change::change_block(ctx, change, entry.sequence)),
+      )
       .with_children(
         shown
           .output
@@ -498,6 +515,7 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)], raw_lines: bool) -> S
     mono_body: false,
     output: Some(text),
     omitted: None,
+    change: None,
     collapsible: !raw_lines,
     opens: None,
   }

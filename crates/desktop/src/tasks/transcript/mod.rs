@@ -6,8 +6,10 @@
 //! of its own (Codex, which reports no command for it), and a failed turn that repeats the error before
 //! it, or comes right after the request a closed permission prompt interrupted, is not shown twice. Session and turn
 //! starts carry no text of their own; the invocation panel shows the session. A native agent's calls read as rows of
-//! their tools ([`native`]). Nothing else is left out.
+//! their tools ([`native`]), and so do a CLI's calls of Orchester's file tools ([`mcp`] for Codex's). Nothing else
+//! is left out.
 
+mod mcp;
 mod native;
 
 use std::sync::Arc;
@@ -22,7 +24,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::native::ApprovalEntry;
+pub use self::{mcp::McpToolEntry, native::ApprovalEntry};
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,19 +94,6 @@ pub struct DecidedMark {
   pub at: Timestamp,
 }
 
-/// An MCP tool call that no command shows.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct McpToolEntry {
-  /// The CLI's id of the call.
-  pub item: Arc<str>,
-  pub server: Arc<str>,
-  pub tool: Arc<str>,
-  /// How it was decided, when the CLI asked or Orchester answered for it.
-  pub mark: Option<CommandMark>,
-  /// `None` until the call ends.
-  pub status: Option<CommandStatus>,
-}
-
 /// A command tool's program that a tool step ran.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToolCommandEntry {
@@ -133,7 +122,8 @@ pub struct CommandEntry {
   pub duration: Option<i64>,
   /// Why nobody was asked about it, when it says.
   pub mark: Option<CommandMark>,
-  /// What a native agent's call did; `None` for a CLI's command.
+  /// What a native agent's call did, or what a CLI's call of one of Orchester's file tools asked; `None` for any
+  /// other command.
   pub native: Option<NativeCall>,
 }
 
@@ -264,8 +254,8 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
         duration: None,
       }))),
       AgentEvent::ToolCommandFinished { .. } => finish_tool_command(&mut entries, stored),
-      AgentEvent::McpToolNotAsked { .. } | AgentEvent::McpToolDeclined { .. } => not_asked(&mut entries, stored),
-      AgentEvent::McpToolFinished { .. } => mcp_tool_finished(&mut entries, stored),
+      AgentEvent::McpToolNotAsked { .. } | AgentEvent::McpToolDeclined { .. } => mcp::not_asked(&mut entries, stored),
+      AgentEvent::McpToolFinished { .. } => mcp::mcp_tool_finished(&mut entries, &mut early.told, stored),
       AgentEvent::McpExemptionNotApplied { server, tool, other } => {
         entries.push(entry(EntryKind::ExemptionNotApplied {
           server: server.as_str().into(),
@@ -296,88 +286,6 @@ fn push_problem(entries: &mut Vec<Entry>, stored: &ActivityEntry, problem: &Runn
 fn repeats(last: Option<&Entry>, stored: &ActivityEntry, message: &str) -> bool {
   matches!(last, Some(Entry { kind: EntryKind::Error(previous), invocation, .. })
     if **previous == *message && *invocation == stored.invocation)
-}
-
-/// Marks the command of a call nobody was asked about, or adds an entry for the call when no command
-/// shows it.
-fn not_asked(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
-  let (item, server, tool, mark) = match &stored.event {
-    AgentEvent::McpToolNotAsked { item, server, tool } => (
-      item,
-      server,
-      tool,
-      CommandMark::ExemptTool {
-        server: server.as_str().into(),
-      },
-    ),
-    AgentEvent::McpToolDeclined { item, server, tool } => (
-      item,
-      server,
-      tool,
-      CommandMark::Declined {
-        server: server.as_str().into(),
-      },
-    ),
-    _ => return,
-  };
-  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
-    EntryKind::Command(shown) if entry.invocation == stored.invocation && *shown.item == **item => Some(shown),
-    _ => None,
-  });
-  match shown {
-    Some(shown) => shown.mark = Some(mark),
-    None => push_mcp_tool(
-      entries,
-      stored,
-      McpToolEntry {
-        item: item.as_str().into(),
-        server: server.as_str().into(),
-        tool: tool.as_str().into(),
-        mark: Some(mark),
-        status: None,
-      },
-    ),
-  }
-}
-
-/// Ends the entry of a Codex MCP call, or adds one: a call nobody was asked about shows only when it ends.
-fn mcp_tool_finished(entries: &mut Vec<Entry>, stored: &ActivityEntry) {
-  let AgentEvent::McpToolFinished {
-    item,
-    server,
-    tool,
-    status,
-    asked,
-  } = &stored.event
-  else {
-    return;
-  };
-  let server: Arc<str> = server.as_str().into();
-  let decided = asked.then(|| match status {
-    CommandStatus::Completed => CommandMark::ApprovedByYou { server: server.clone() },
-    _ => CommandMark::AskedYou { server: server.clone() },
-  });
-  let shown = entries.iter_mut().rev().find_map(|entry| match &mut entry.kind {
-    EntryKind::McpTool(shown) if entry.invocation == stored.invocation && *shown.item == **item => Some(shown),
-    _ => None,
-  });
-  match shown {
-    Some(shown) => {
-      shown.status = Some(*status);
-      shown.mark = shown.mark.take().or(decided);
-    }
-    None => push_mcp_tool(
-      entries,
-      stored,
-      McpToolEntry {
-        item: item.as_str().into(),
-        server,
-        tool: tool.as_str().into(),
-        mark: decided,
-        status: Some(*status),
-      },
-    ),
-  }
 }
 
 /// Marks the entry of the call a request was about with its answer. A command whose start comes later
@@ -413,7 +321,7 @@ fn decided(entries: &mut Vec<Entry>, early: &mut Vec<(InvocationId, Arc<str>, Co
   match shown {
     Some(shown) => *shown = Some(mark),
     None if command => early.push((stored.invocation, item.as_str().into(), mark)),
-    None => push_mcp_tool(
+    None => mcp::push_mcp_tool(
       entries,
       stored,
       McpToolEntry {
@@ -422,20 +330,10 @@ fn decided(entries: &mut Vec<Entry>, early: &mut Vec<(InvocationId, Arc<str>, Co
         tool: action.as_str().into(),
         mark: Some(mark),
         status: None,
+        native: None,
       },
     ),
   }
-}
-
-fn push_mcp_tool(entries: &mut Vec<Entry>, stored: &ActivityEntry, call: McpToolEntry) {
-  entries.push(Entry {
-    sequence: stored.sequence,
-    part: 0,
-    execution: stored.execution,
-    invocation: stored.invocation,
-    at: stored.at,
-    kind: EntryKind::McpTool(call),
-  });
 }
 
 /// Marks the latest entry of `command` in the same invocation as declined, or adds a declined one

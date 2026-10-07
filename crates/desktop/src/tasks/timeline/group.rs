@@ -69,10 +69,12 @@ pub enum ToolKind {
 pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => None,
+    // A CLI's failed call of one of Orchester's file tools is the failed command it shows as.
     EntryKind::Command(command) => Some(
       command
         .native
         .as_ref()
+        .filter(|call| call.input.is_none() || command.status != Some(CommandStatus::Failed))
         .and_then(|call| native_kind(call.tool))
         .unwrap_or_else(|| command_kind(&command.command)),
     ),
@@ -84,8 +86,12 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
     EntryKind::FileChange(_) => Some(ToolKind::Edit),
     // A declined call is a problem row whatever it calls, a memory tool too, and however it ended.
     EntryKind::McpTool(call) if matches!(call.mark, Some(CommandMark::Declined { .. })) => None,
-    EntryKind::McpTool(call) if call.tool.contains("memory") => Some(ToolKind::Memory),
-    EntryKind::McpTool(_) => Some(ToolKind::Mcp),
+    // A call of one of Orchester's file tools counts as the native agent's call of it.
+    EntryKind::McpTool(call) => Some(match call.native.as_ref().and_then(|native| native_kind(native.tool)) {
+      Some(kind) => kind,
+      None if call.tool.contains("memory") => ToolKind::Memory,
+      None => ToolKind::Mcp,
+    }),
     EntryKind::Reasoning(_) | EntryKind::Usage(_) | EntryKind::Raw(_) => Some(ToolKind::Note),
     EntryKind::Message(_)
     | EntryKind::Error(_)
@@ -223,8 +229,8 @@ impl GroupSummary {
         ToolKind::Memory => summary.memory = true,
         ToolKind::Command => summary.command(entry),
         ToolKind::Edit => {
-          if let EntryKind::FileChange(change) = &entry.kind {
-            edited.insert(change.path.clone());
+          if let Some(path) = edited_path(entry) {
+            edited.insert(path.to_owned());
           }
         }
         ToolKind::Mcp => summary.mcp += 1,
@@ -267,6 +273,19 @@ impl GroupSummary {
     }
     kinds
   }
+}
+
+/// The file an edit entry changed: a file change's, or the one a CLI's call of Orchester's edit tool changed once it
+/// succeeded (its change shows in its row).
+fn edited_path(entry: &Entry) -> Option<&str> {
+  let (status, call) = match &entry.kind {
+    EntryKind::FileChange(change) => return Some(&change.path),
+    EntryKind::Command(command) => (command.status, command.native.as_ref()),
+    EntryKind::McpTool(call) => (call.status, call.native.as_ref()),
+    _ => return None,
+  };
+  let input = call?.input.as_ref()?;
+  (status == Some(CommandStatus::Completed) && input.change().is_some()).then_some(input.target())
 }
 
 /// A command entry's command, whether it failed, and its exit code.

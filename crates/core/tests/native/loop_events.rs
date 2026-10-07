@@ -55,6 +55,7 @@ fn native_events_tell_what_a_call_did() {
     tool: ToolName::ReadFile,
     detail: Some(read),
     declined: None,
+    input: None,
   };
   assert_eq!(native_calls(&actions), [("r1".to_owned(), told)]);
   let actions = native.handle(LoopInput::ToolDone(call("c1"), ok("clean"))).expect("c1");
@@ -62,6 +63,7 @@ fn native_events_tell_what_a_call_did() {
     tool: ToolName::RunCommand,
     detail: Some(CallDetail::Command { shell: None }),
     declined: None,
+    input: None,
   };
   assert_eq!(native_calls(&actions), [("c1".to_owned(), told)]);
 }
@@ -97,6 +99,7 @@ fn native_events_tell_a_denial_from_a_refusal() {
       by: DeclinedBy::Person,
       result: DENIED.to_owned(),
     }),
+    input: None,
   };
   assert_eq!(native_calls(&actions), [("c2".to_owned(), denied)]);
 }

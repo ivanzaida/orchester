@@ -3,6 +3,8 @@
 //! [`crate::connection::app_server`]. Lines a parser does not understand are kept as
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
+mod call_change;
+mod call_input;
 mod claude;
 mod native;
 mod redaction;
@@ -11,6 +13,8 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) use self::claude::usage as claude_usage;
 pub use self::{
+  call_change::{Breaks, CallChange, ChangeHunk, ChangeLine, FinalBreak, MAX_CHANGE_LINES},
+  call_input::{CallInput, EditText, Requested},
   claude::ClaudeStream,
   native::{CallDetail, Declined, DeclinedBy, NativeCall},
 };
@@ -103,7 +107,8 @@ pub enum AgentEvent {
     item: String,
     command: String,
   },
-  /// What native tool call `item` did, told right before the event that ends it.
+  /// What native tool call `item` did, told right before the event that ends it; or what an agent CLI's call
+  /// `item` of one of Orchester's file tools asked ([`NativeCall::input`]).
   NativeCall {
     item: String,
     call: NativeCall,

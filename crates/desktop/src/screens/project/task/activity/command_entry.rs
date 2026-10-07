@@ -45,6 +45,7 @@ pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
     mono_body: false,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted: None,
+    change: None,
     collapsible: true,
     opens: None,
   }
@@ -77,6 +78,7 @@ pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
     mono_body: false,
     output: Some(entry.output.lines().map(Arc::from).collect()),
     omitted,
+    change: None,
     collapsible: true,
     opens: None,
   }

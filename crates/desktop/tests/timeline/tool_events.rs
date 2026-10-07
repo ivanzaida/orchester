@@ -1,13 +1,14 @@
 //! Tool events in the timeline: which transcript entries are tool events and which kind, the command
 //! a CLI wrapped in its shell, what a tool group's summary counts, the change of Orchester's edit tool
-//! shown by its call's own row, and a tool step's command, which is a row of its own when it fails and
-//! names its header.
+//! shown by its call's own row (which carries what the call asked), and a tool step's command, which is a row
+//! of its own when it fails and names its header.
 
 use std::sync::Arc;
 
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, ToolCommandResult},
   id::StepExecutionId,
+  orchester_tools::OrchesterTool,
   run::TokenUsage,
 };
 use orchester_desktop::tasks::{
@@ -17,6 +18,7 @@ use orchester_desktop::tasks::{
   },
   transcript::EntryKind,
 };
+use serde_json::json;
 
 use crate::{at, command, edit, transcript};
 
@@ -204,5 +206,82 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
     kinds,
     ["command", "mcp", "src/lib.rs"],
     "Claude Code's own edit stays a change row"
+  );
+}
+
+/// What Claude Code's and Codex's calls of Orchester's `edit_file` asked goes with the call's own row, which counts
+/// as an edit of its file; the change reported after it stays hidden, and a failed call stays the command it was.
+#[test]
+fn timeline_a_cli_s_orchester_edit_carries_its_change_and_counts_as_an_edit() {
+  let execution = StepExecutionId::generate();
+  let input = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
+  // Settled, as the runner stores it.
+  let mut settled = AgentEvent::NativeCall {
+    item: String::new(),
+    call: OrchesterTool::EditFile.shown_call(&input).expect("an edit's input"),
+  };
+  settled.settle();
+  let AgentEvent::NativeCall { call: asked, .. } = settled else {
+    unreachable!("settling keeps the event's kind")
+  };
+  assert!(asked.input.as_ref().and_then(|input| input.change()).is_some());
+  let told = |item: &str| AgentEvent::NativeCall {
+    item: item.into(),
+    call: asked.clone(),
+  };
+  let started = |item: &str| AgentEvent::CommandStarted {
+    item: item.into(),
+    command: "mcp__Orchester__edit_file README.md".into(),
+  };
+  let ended = |item: &str, status| AgentEvent::CommandFinished {
+    item: item.into(),
+    command: "mcp__Orchester__edit_file README.md".into(),
+    output: "README.md has not been read".into(),
+    exit_code: None,
+    status,
+  };
+  let events = vec![
+    started("toolu_edit"),
+    told("toolu_edit"),
+    ended("toolu_edit", CommandStatus::Completed),
+    edit("toolu_edit", "README.md"),
+    started("toolu_unread"),
+    told("toolu_unread"),
+    ended("toolu_unread", CommandStatus::Failed),
+    told("mcp-1"),
+    AgentEvent::McpToolFinished {
+      item: "mcp-1".into(),
+      server: "Orchester".into(),
+      tool: "edit_file".into(),
+      status: CommandStatus::Completed,
+      asked: false,
+    },
+    edit("mcp-1", "docs/a.md"),
+  ];
+  let entries = transcript(execution, events);
+  let shown: Vec<(&str, bool)> = entries
+    .iter()
+    .map(|entry| match &entry.kind {
+      EntryKind::Command(command) => ("command", command.native.as_ref() == Some(&asked)),
+      EntryKind::McpTool(call) => ("mcp", call.native.as_ref() == Some(&asked)),
+      EntryKind::FileChange(_) => ("change", false),
+      _ => ("other", false),
+    })
+    .collect();
+  assert_eq!(
+    shown,
+    [("command", true), ("command", true), ("mcp", true)],
+    "each call's row carries what it asked, and no change shows twice"
+  );
+  let kinds: Vec<Option<ToolKind>> = entries.iter().map(tool_kind).collect();
+  assert_eq!(
+    kinds,
+    [Some(ToolKind::Edit), Some(ToolKind::Command), Some(ToolKind::Edit)]
+  );
+  let summary = GroupSummary::of(&entries);
+  assert_eq!(summary.edits, 1, "README.md, edited by both");
+  assert_eq!(
+    summary.failed,
+    Some(("mcp__Orchester__edit_file README.md".into(), None))
   );
 }
