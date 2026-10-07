@@ -53,25 +53,6 @@ A run row whose id or task id cannot be parsed still fails the whole listing
 whether such a row is reported as a project-level "unreadable rows" error that still lists the others. **needs
 decision**.
 
-### T5 · Re-measure the code index after ORC-48 (non-UI)
-
-ORC-48 changed what agents get of the code index: `symbols.tsv` lists only the code's own definitions
-(`symbols-consts.tsv` holds constants and statics, `symbols-tests.tsv` the definitions in test folders; index format
-6), the prompt's *Codebase index* part carries an excerpt of `map.md` of at most 8 KiB, and the internal skill
-(`crates/runner/assets/codebase-index/SKILL.md`) gives column-anchored `rg` commands for PowerShell and bash. The
-measurement that should show whether this helps was deferred by the user: the stable install does not have the
-change, and a dev build on this repository would share `<repo>/.orchester` with it.
-
-1. **Done 2026-10-01.** Skill commands verified as written in bash, pwsh 7 and Windows PowerShell 5.1 against a
-   format-6 index by the ORC-48 review.
-2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
-   a core/runner change), plus ORC-32 again for comparison with
-   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms; each run builds in its own
-   worktree. Record tokens, time to the first edit and command counts (all, and before the first edit),
-   and which index files the agent used.
-
-**Done when** a new `docs/evidence` file has the table and a conclusion.
-
 ## M · MCP servers
 
 ### M8 · Orchester's own MCP server · branch `claude/app-mcp` (from master `3d76beff`, UI)
@@ -725,6 +706,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+T5 · Re-measure the code index after ORC-48 (ORC-69) (done 2026-10-07)
+
+Two Claude Code tasks, each run once with *Use code index* on and once off, through Orchester's file tools:
+`docs/evidence/code-index-measurement-2026-10-07.md`. The agents called `find_symbol` once per run and opened no
+index file; runs with the index spent about 15% more tokens and took longer, within the noise of n = 2. Decided:
+*Use code index* is off until a person turns it on (a project that turned it on keeps it), and first-edit tracking
+counts edits made through Orchester's `edit_file` and `write_file`, which it missed before (branch
+`claude/index-off`). A new measurement needs 3+ alternated pairs per task, one agent at a time, and a record of
+which `search`/`list_files` answers came from the index.
 
 Quick rules for Verify steps · branch `claude/quick-rules` (done 2026-10-06)
 

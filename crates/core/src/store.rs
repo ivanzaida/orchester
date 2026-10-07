@@ -89,8 +89,8 @@ pub trait SettingsStore {
 
   fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), Self::Error>;
 
-  /// Whether the project's agents get the code index (Project settings › Code index); on until it
-  /// was changed.
+  /// Whether the project's agents get the code index (Project settings › Code index); off until a
+  /// person turned it on.
   fn code_index(&self) -> Result<CodeIndexSetting, Self::Error>;
 
   fn save_code_index(&mut self, setting: CodeIndexSetting) -> Result<(), Self::Error>;

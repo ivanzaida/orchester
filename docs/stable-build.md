@@ -110,7 +110,8 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
-  (*Use code index* in Project settings; `list_projects` shows each project's setting) and
+  (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
+  project's setting) and
   `update_project_limits` (Project settings › Limits: the token budgets, the default time limit and
   *Agents working at once*, which the project's runner applies at once; invalid limits are refused with
   `invalid_limits` and the tab's own words; `list_projects` shows each project's limits). A modal

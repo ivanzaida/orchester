@@ -1,17 +1,21 @@
 //! Tool events in the timeline: which transcript entries are tool events and which kind, the command
-//! a CLI wrapped in its shell, what a tool group's summary counts, and a tool step's command, which
-//! is a row of its own when it fails and names its header.
+//! a CLI wrapped in its shell, what a tool group's summary counts, the change of Orchester's edit tool
+//! shown by its call's own row, and a tool step's command, which is a row of its own when it fails and
+//! names its header.
 
 use std::sync::Arc;
 
 use orchester_core::{
-  connection::stream::{AgentEvent, ToolCommandResult},
+  connection::stream::{AgentEvent, CommandStatus, ToolCommandResult},
   id::StepExecutionId,
   run::TokenUsage,
 };
-use orchester_desktop::tasks::timeline::{
-  ToolRun,
-  group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+use orchester_desktop::tasks::{
+  timeline::{
+    ToolRun,
+    group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+  },
+  transcript::EntryKind,
 };
 
 use crate::{at, command, edit, transcript};
@@ -168,4 +172,37 @@ fn timeline_a_tool_step_s_header_names_its_last_command_and_exit_code() {
     })
   );
   assert_eq!(ToolRun::of(&entries, StepExecutionId::generate()), None);
+}
+
+/// Claude Code's call of Orchester's `edit_file` is a command row, and Codex's an MCP call row; the change each
+/// reports after its end (for first-edit tracking) is not shown again.
+#[test]
+fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
+  let execution = StepExecutionId::generate();
+  let mut events = command("toolu_edit", "mcp__Orchester__edit_file README.md", 0).to_vec();
+  events.push(edit("toolu_edit", "README.md"));
+  events.push(AgentEvent::McpToolFinished {
+    item: "mcp-1".into(),
+    server: "Orchester".into(),
+    tool: "write_file".into(),
+    status: CommandStatus::Completed,
+    asked: false,
+  });
+  events.push(edit("mcp-1", "new.md"));
+  events.push(edit("toolu_own", "src/lib.rs"));
+  let entries = transcript(execution, events);
+  let kinds: Vec<&str> = entries
+    .iter()
+    .map(|entry| match &entry.kind {
+      EntryKind::Command(_) => "command",
+      EntryKind::McpTool(_) => "mcp",
+      EntryKind::FileChange(change) => change.path.as_str(),
+      _ => "other",
+    })
+    .collect();
+  assert_eq!(
+    kinds,
+    ["command", "mcp", "src/lib.rs"],
+    "Claude Code's own edit stays a change row"
+  );
 }

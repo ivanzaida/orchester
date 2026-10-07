@@ -229,7 +229,7 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       AgentEvent::NativeCall { item, call } => early.told.note(&mut entries, stored, item, call),
       AgentEvent::CommandFinished { .. } => finish_command(&mut entries, &mut early, stored),
       AgentEvent::FileChanged { item, changes } => {
-        if !native::shown_by_edit(&entries, stored, item) {
+        if !native::shown_by_call(&entries, stored, item) {
           entries.extend(changes.iter().enumerate().map(|(part, change)| Entry {
             part,
             ..entry(EntryKind::FileChange(change.clone()))
