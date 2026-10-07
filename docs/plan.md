@@ -426,6 +426,11 @@ table's Total row, the empty states with the compact Plan limits card (it keeps 
 reachable), All projects' controls at the right of the filters and *Project* after *Task*, day labels on multi-day
 hourly Plan limits axes, and charts that redraw when the layout moves them to a new canvas.
 
+Second verification (2026-10-07) failed on three majors, fixed the same day: Tokens over time and Plan limits plots are
+190 tall from the top grid line to the baseline (no headroom above the scale's top; only the cache share line keeps
+room for its label) with the footnote right under the chart; day labels of Tokens over time are counted back from the
+last bar so *Today* never overlaps another; table text gives way with an ellipsis in narrow columns (960 wide).
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
