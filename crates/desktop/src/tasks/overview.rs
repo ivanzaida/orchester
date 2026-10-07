@@ -2,7 +2,7 @@
 //! (`i2uFe`) with their rows and footer (`WV44u`), what needs the user (`EKUWS`) and the recent
 //! run activity (`YJ8PV`). Everything is counted from the project's tasks and their latest runs.
 
-use std::sync::Arc;
+use std::{num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
   id::TaskId,
@@ -108,25 +108,30 @@ impl Pulse {
       })
   }
 
-  /// Under Running now: the agents at work while the runner is online (`None` until it
-  /// reported), else the `lost` runs its absence interrupted ("2 runs interrupted" in `Z7Fyr8`).
-  pub fn running_context(online: bool, agents_working: Option<usize>, lost: usize) -> Message {
-    let count = |key_one: &'static str, key_other: &'static str, count: usize| {
-      let key = if count == 1 { key_one } else { key_other };
-      Message::new(key).with("count", count.to_string())
-    };
-    match (online, agents_working) {
-      (true, Some(agents)) => count(
-        "overview.metrics.agentsWorking.one",
-        "overview.metrics.agentsWorking.other",
-        agents,
-      ),
+  /// Under Running now: the agents at work of the agent slots while the runner is online ("2 of 4
+  /// agents working"; `None` until it reported), else the `lost` runs its absence interrupted ("2
+  /// runs interrupted" in `Z7Fyr8`).
+  pub fn running_context(online: bool, agents: Option<(usize, NonZeroU32)>, lost: usize) -> Message {
+    match (online, agents) {
+      (true, Some((working, slots))) => {
+        let key = if slots.get() == 1 {
+          "overview.metrics.agentsWorking.one"
+        } else {
+          "overview.metrics.agentsWorking.other"
+        };
+        Message::new(key)
+          .with("count", working.to_string())
+          .with("slots", slots.to_string())
+      }
       (true, None) => Message::new("overview.metrics.agentsUnknown"),
-      (false, _) => count(
-        "overview.metrics.interrupted.one",
-        "overview.metrics.interrupted.other",
-        lost,
-      ),
+      (false, _) => {
+        let key = if lost == 1 {
+          "overview.metrics.interrupted.one"
+        } else {
+          "overview.metrics.interrupted.other"
+        };
+        Message::new(key).with("count", lost.to_string())
+      }
     }
   }
 }

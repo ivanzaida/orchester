@@ -3,6 +3,7 @@
 
 use std::{
   future::Future,
+  num::NonZeroU32,
   path::Path,
   sync::{
     Arc,
@@ -280,6 +281,7 @@ async fn answer(
       },
       Err(rejection) => Reply::Rejected(rejection),
     },
+    Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
     Command::ContinueRuns { ref runs } => {
       let (continued, refused) = scheduler.continue_runs(runs).await;
       Reply::Continued { continued, refused }
@@ -344,6 +346,14 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// The reply to [`Command::SetAgentSlots`].
+async fn slots_set(scheduler: &Scheduler, agent_slots: NonZeroU32) -> Reply {
+  match scheduler.set_agent_slots(agent_slots).await {
+    Ok(()) => Reply::AgentSlotsSet { agent_slots },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
 }
 
 fn answer_tool_approval(

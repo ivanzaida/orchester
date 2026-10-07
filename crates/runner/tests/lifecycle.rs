@@ -217,6 +217,50 @@ async fn lifecycle_agent_slots_hold_back_new_work() {
   );
 }
 
+/// Fewer agent slots stop no agent: both runs keep working, and new work waits until fewer agents
+/// work than the new count.
+#[tokio::test(flavor = "multi_thread")]
+async fn lifecycle_lowered_agent_slots_let_running_agents_finish_and_hold_new_work() {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  scheduler
+    .attach(fresh(SessionEnd::Clean), slots(2))
+    .await
+    .expect("attached");
+  let (second_task, third_task) = (support::queue_another_task(root), support::queue_another_task(root));
+  let first = start(&scheduler, project.task).await;
+  let second = start(&scheduler, second_task).await;
+  summary_where(&mut events, |summary| summary.agents_working() == 2).await;
+
+  scheduler.set_agent_slots(slots(1)).await.expect("lowered");
+  let lowered = summary_where(&mut events, |summary| summary.agent_slots == slots(1)).await;
+  assert_eq!(lowered.agents_working(), 2, "no agent at work is stopped");
+  let refused = Err(Rejection::NoAgentSlot { slots: slots(1) });
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), third_task).await,
+    refused
+  );
+
+  tokio::time::timeout(PATIENCE, scheduler.cancel_run(first))
+    .await
+    .expect("cancelled in time")
+    .expect("cancelled");
+  summary_where(&mut events, |summary| summary.agents_working() == 1).await;
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), third_task).await,
+    refused,
+    "one agent still works, as many as the slots"
+  );
+  tokio::time::timeout(PATIENCE, scheduler.cancel_run(second))
+    .await
+    .expect("cancelled in time")
+    .expect("cancelled");
+  summary_where(&mut events, |summary| summary.agents_working() == 0).await;
+  start(&scheduler, third_task).await;
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn lifecycle_finish_at_checkpoints_settles_every_run() {
   let project = project(&Setup {

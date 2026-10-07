@@ -61,6 +61,11 @@ pub enum Command {
     session: AttachSession,
     agent_slots: NonZeroU32,
   },
+  /// The project's *Agents working at once* changed to `agent_slots` (protocol 18): it applies at
+  /// once. More slots let queued work start now; fewer stop no agent at work, and new work waits
+  /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
+  /// by an [`Event::WorkSummary`].
+  SetAgentSlots { agent_slots: NonZeroU32 },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -296,6 +301,10 @@ pub enum Reply {
   },
   Pong {
     nonce: u64,
+  },
+  /// The answer to [`Command::SetAgentSlots`]: the runner uses `agent_slots` from now on.
+  AgentSlotsSet {
+    agent_slots: NonZeroU32,
   },
   /// The run of a [`Command::StartRun`], newly created or created by an earlier request with
   /// the same key.
