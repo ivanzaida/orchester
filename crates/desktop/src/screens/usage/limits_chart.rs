@@ -25,7 +25,7 @@ use parking_lot::Mutex;
 use super::{
   format,
   limits_draw::{DrawnLine, DrawnPoint, LimitPlot, draw},
-  plot::{AxisText, Frame, Redraw},
+  plot::{AxisName, AxisText, Frame, Redraw},
   state::Dashboard,
 };
 use crate::theme::{
@@ -268,7 +268,7 @@ fn reset_name(ctx: &Ctx, line: &LimitLine, at: orchester_core::time::Timestamp) 
 /// The x axis: one day's hours at every fourth hour from 00:00 to 24:00 (`e5PbG`), or each day at
 /// its middle, whatever the grouping, so a week by hour still reads by day; every few days where
 /// many, counted back from the last day so it always has its label, as *Tokens over time* does.
-fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
+fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, AxisName)> {
   let (start, end) = (dashboard.range.start(), dashboard.range.end());
   if dashboard.range.days() == 1 {
     let hour = (end.unix_millis() - start.unix_millis()) / 24;
@@ -276,11 +276,12 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
       .step_by(HOUR_LABEL_STEP)
       .map(|index| {
         let at = start.unix_millis() + hour * i64::from(index);
-        (at, format::hour(index).into())
+        (at, AxisName::plain(format::hour(index).into()))
       })
       .collect();
   }
   let days = dashboard.range.buckets(Grouping::Day);
+  let today = orchester_core::usage::local_date(dashboard.now);
   let step = days.len().div_ceil(DAY_LABELS).max(1);
   let last = days.len().saturating_sub(1);
   days
@@ -291,12 +292,7 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard) -> Vec<(i64, Arc<str>)> {
     .filter(|(index, _)| (last - index).is_multiple_of(step))
     .map(|(_, (day, next))| {
       let middle = (day.start.unix_millis() + next.unix_millis()) / 2;
-      let label = if day.date == orchester_core::usage::local_date(dashboard.now) {
-        ctx.t("usage.tokens.today")
-      } else {
-        format::weekday(ctx, day.date)
-      };
-      (middle, label)
+      (middle, AxisName::day(ctx, day.date, today))
     })
     .collect()
 }

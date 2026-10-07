@@ -13,14 +13,14 @@ use lurq::{
 };
 use parking_lot::Mutex;
 
-use super::plot::{self, AxisText, Frame, Redraw, XLabel};
+use super::plot::{self, AxisName, AxisText, Frame, Redraw, XLabel};
 use crate::theme::chart::{ChartStyle, HEADROOM, LABEL_GAP, LINE_WIDTH, POINT_RADIUS, SMALL_PLOT_HEIGHT};
 
 /// One day: its axis label, its share in percent if known, and its name and value for its canvas
 /// item.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Day {
-  pub label: Option<Arc<str>>,
+  pub label: Option<AxisName>,
   pub share: Option<u64>,
   pub name: Arc<str>,
   pub value: Arc<str>,
@@ -103,10 +103,10 @@ fn draw(canvas: &CanvasHandle, plot: &LinePlot) {
   let mut items = Vec::new();
   let mut previous: Option<(f32, f32)> = None;
   for (index, day) in days.iter().enumerate() {
-    if let Some(text) = &day.label {
+    if let Some(name) = &day.label {
       let (slot, width) = frame.slot(index, days.len());
       let label = XLabel {
-        text,
+        name,
         kind: AxisText::Day,
         x: slot + width / 2.0,
       };

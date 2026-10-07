@@ -16,13 +16,13 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::usage::{Change, EditTokens};
+use orchester_core::usage::{Change, EditTokens, local_date};
 
 use super::{
   card::{Card, card_row, footnote, push_down, view_switch},
   failed, format,
   line_draw::{CacheLine, Day, LineProps},
-  plot::label_every,
+  plot::{AxisName, label_every},
   state::{Dashboard, Views},
   table::{Cell, Width, column, data_row, table},
 };
@@ -104,11 +104,15 @@ fn cache_figure(ctx: &Ctx, dashboard: &Dashboard) -> Element {
 fn cache_line(ctx: &mut Ctx, dashboard: &Dashboard) -> Element {
   let days = &dashboard.report.efficiency.cache_by_day;
   let every = label_every(days.len(), DAY_LABELS as f32, 1.0);
+  let (last, today) = (days.len().saturating_sub(1), local_date(dashboard.now));
+  // Counted back from the last day, so it always has its label, as the other charts do.
   let days: Arc<[Day]> = days
     .iter()
     .enumerate()
     .map(|(index, (date, share))| Day {
-      label: (index % every == 0).then(|| format::weekday(ctx, *date)),
+      label: (last - index)
+        .is_multiple_of(every)
+        .then(|| AxisName::day(ctx, *date, today)),
       share: *share,
       name: format::weekday(ctx, *date),
       value: format::share(ctx, *share),

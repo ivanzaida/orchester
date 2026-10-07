@@ -208,6 +208,7 @@ fn usage_axis_labels_stay_inside_the_plot_and_narrow_titles_give_way_with_room()
   });
   // 30 day slots are narrower than "Today": it ends at the plot's right end instead of past it.
   assert_labels_inside(&mut desktop, "usage-tokens-chart", "Today");
+  assert_labels_inside(&mut desktop, "usage-cache-chart", "Today");
 
   desktop.tree.resize(960, 960);
   desktop.pass();
