@@ -494,7 +494,7 @@
       "summarySequential": "{{count}} tasks · one at a time",
       "totalTokens": "≈ {{count}} tokens",
       "eachTokens": "≈ {{count}} tokens",
-      "capacitySlots": "Task runs and agent slots are separate limits. Agents working at once: {{slots}} (Project settings › Limits).",
+      "capacitySlots": "Task runs and agent slots are separate limits. Agents working at once: {{slots}} (Project settings › Limits).",
       "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
       "planApprovalHeading": "Plan approval stays on",
       "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
