@@ -8,7 +8,7 @@
 //! `cargo test -p orchester-desktop --test form_keyboard usage_reviewer`.
 
 use lurq::{
-  app::{App, Tree, component::Component, ctx::Ctx},
+  app::{App, Tree, component::Component, ctx::Ctx, theme::TypographyStyle},
   components::{Column, Text},
   node::Element,
 };
@@ -25,6 +25,7 @@ use orchester_core::{
 };
 use orchester_desktop::theme::{self, ExtraTypography};
 use orchester_store::ProjectDb;
+use parking_lot::Mutex;
 use serde_json::json;
 
 use crate::{
@@ -121,14 +122,10 @@ fn usage_reviewer_has_a_row_of_its_own_and_counts_in_the_totals_and_the_run() {
       .iter()
       .all(|model| has(desktop, &format!("usage-breakdown-reviewer-{model}")))
   });
-  assert!(shows(&mut desktop, "usage-breakdown", "Auto mode reviewer"));
+  assert!(shows(&mut desktop, "usage-breakdown", "auto mode reviewer"));
   assert!(
-    shows(
-      &mut desktop,
-      "usage-breakdown",
-      "the auto mode reviewer’s rows only read"
-    ),
-    "the note does not offer to filter by them"
+    shows(&mut desktop, "usage-breakdown-subtitle", "rows only read"),
+    "the card does not offer to filter by them"
   );
   assert!(
     shows(&mut desktop, "usage-summary-spent", "6.7k"),
@@ -153,8 +150,13 @@ fn usage_reviewer_has_a_row_of_its_own_and_counts_in_the_totals_and_the_run() {
   );
 }
 
-/// How wide each model's name is in mono when nothing constrains it.
-fn natural_widths() -> Vec<f32> {
+/// What a width is measured for: each model in mono, then the words' first glyph and an ellipsis in the
+/// chart's and the table's style.
+const ELLIPSIZED: &str = "a\u{2026}";
+
+/// How wide each of `texts`, in its style, is when nothing constrains it.
+fn natural_widths(texts: &[(&'static str, TypographyStyle)]) -> Vec<f32> {
+  static TEXTS: Mutex<Vec<(&'static str, TypographyStyle)>> = Mutex::new(Vec::new());
   struct Natural;
 
   impl Component for Natural {
@@ -165,22 +167,24 @@ fn natural_widths() -> Vec<f32> {
     }
 
     fn render(&self, _: &mut Ctx) -> impl Into<Element> {
-      Column::new().with_children(MODELS.iter().enumerate().map(|(index, model)| {
-        Text::new(model)
-          .id(format!("natural-{index}"))
-          .variant(ExtraTypography::MonoValue.role())
-          .nowrap()
-      }))
+      Column::new().with_children(
+        TEXTS
+          .lock()
+          .iter()
+          .enumerate()
+          .map(|(index, (text, style))| Text::new(text).id(format!("natural-{index}")).variant(*style).nowrap()),
+      )
     }
   }
 
+  *TEXTS.lock() = texts.to_vec();
   let mut app = App::new();
   theme::install(&mut app);
   let mut tree = Tree::new();
   tree.resize(2000, 400);
   tree.mount_root::<Natural>(&mut app, ());
   tree.pass_headless(&mut app);
-  (0..MODELS.len())
+  (0..texts.len())
     .map(|index| {
       let id = format!("natural-{index}");
       tree
@@ -200,29 +204,60 @@ enum Shown {
   Apart,
 }
 
-fn assert_models(desktop: &mut Desktop, prefix: &str, shown: Shown) {
+/// Each reviewer's name at `prefix`: the model shows as `shown` says, the words after it at least their
+/// first glyph and an ellipsis in `words` when the model is whole, and both end inside the column.
+fn assert_names(desktop: &mut Desktop, prefix: &str, (shown, words): (Shown, TypographyStyle)) {
   let shared = MODELS[0]
     .chars()
     .zip(MODELS[1].chars())
     .take_while(|(left, right)| left == right)
     .count();
+  let mono = ExtraTypography::MonoValue.role();
+  let widths = natural_widths(&[(MODELS[0], mono), (MODELS[1], mono), (ELLIPSIZED, words)]);
   let column = desktop.bounds("usage-breakdown-column-0");
-  for (model, natural) in MODELS.iter().zip(natural_widths()) {
+  let mut lefts = Vec::new();
+  for (model, natural) in MODELS.iter().zip(&widths) {
     let name = desktop.bounds(&format!("{prefix}-{model}"));
     let glyph = natural / model.chars().count() as f32;
     let needed = match shown {
-      Shown::Whole => natural,
+      Shown::Whole => *natural,
       Shown::Apart => glyph * (shared + 2) as f32,
     };
     assert!(
       name.width + SAME >= needed,
       "{prefix} {model} shows {name:?}, {shown:?} needs {needed}"
     );
+    let after = desktop.bounds(&format!("{prefix}-{model}-words"));
+    if matches!(shown, Shown::Whole) {
+      assert!(
+        after.width + SAME >= widths[2],
+        "{prefix} {model}: the words show {after:?}, at least {} needed",
+        widths[2]
+      );
+    }
     assert!(
-      name.x + name.width <= column.x + column.width + SAME,
-      "{prefix} {model} at {name:?} ends past its column {column:?}"
+      after.x + after.width <= column.x + column.width + SAME,
+      "{prefix} {model}: the words at {after:?} end past the column {column:?}"
+    );
+    lefts.push(name.x);
+  }
+  assert!(
+    (lefts[0] - lefts[1]).abs() < SAME,
+    "{prefix}: the models line up: {lefts:?}"
+  );
+}
+
+/// The card's note and the line under its title end before the Chart / Table switch.
+fn assert_header_clear(desktop: &mut Desktop) {
+  let switch = desktop.bounds("usage-breakdown-view-0");
+  for id in ["usage-breakdown-note", "usage-breakdown-subtitle"] {
+    let text = desktop.bounds(id);
+    assert!(
+      text.x + text.width <= switch.x + SAME,
+      "{id} at {text:?} runs under {switch:?}"
     );
   }
+  assert!(shows(&mut *desktop, "usage-breakdown-subtitle", "rows only read"));
 }
 
 #[test]
@@ -235,15 +270,20 @@ fn usage_reviewer_rows_keep_their_model_and_figures_in_a_narrow_window() {
   desktop.wait_until("the reviewers' rows", |desktop| {
     has(desktop, &format!("usage-breakdown-reviewer-{}", MODELS[0]))
   });
-  assert_models(&mut desktop, "usage-breakdown-reviewer", Shown::Whole);
+  assert_names(
+    &mut desktop,
+    "usage-breakdown-reviewer",
+    (Shown::Whole, TypographyStyle::Caption),
+  );
+  assert_header_clear(&mut desktop);
   let column = desktop.bounds("usage-breakdown-column-0");
   for model in MODELS {
-    let name = desktop.bounds(&format!("usage-breakdown-reviewer-{model}"));
+    let words = desktop.bounds(&format!("usage-breakdown-reviewer-{model}-words"));
     let spent = desktop.bounds(&format!("usage-breakdown-reviewer-{model}-spent"));
     let share = desktop.bounds(&format!("usage-breakdown-reviewer-{model}-share"));
     assert!(
-      name.x + name.width <= spent.x + SAME,
-      "{model}: {name:?} runs into {spent:?}"
+      words.x + words.width <= spent.x + SAME,
+      "{model}: {words:?} runs into {spent:?}"
     );
     assert!(
       share.x + share.width <= column.x + column.width + SAME,
@@ -254,8 +294,17 @@ fn usage_reviewer_rows_keep_their_model_and_figures_in_a_narrow_window() {
   // Below the fold: clicked where it is, as the page would be scrolled to it.
   desktop.click("usage-breakdown-view-1");
   desktop.wait_for("usage-breakdown-table");
-  assert_models(&mut desktop, "usage-breakdown-table-reviewer", Shown::Apart);
+  assert_names(
+    &mut desktop,
+    "usage-breakdown-table-reviewer",
+    (Shown::Apart, TypographyStyle::Body),
+  );
   desktop.tree.resize(1440, 960);
   desktop.pass();
-  assert_models(&mut desktop, "usage-breakdown-table-reviewer", Shown::Whole);
+  assert_names(
+    &mut desktop,
+    "usage-breakdown-table-reviewer",
+    (Shown::Whole, TypographyStyle::Body),
+  );
+  assert_header_clear(&mut desktop);
 }

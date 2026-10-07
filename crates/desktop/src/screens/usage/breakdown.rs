@@ -2,9 +2,10 @@
 //! the column's largest row, each with its spent tokens and share — *By agent profile · step*, *By
 //! model* (mono) and *By pipeline*; across projects *By project* comes first and names the projects
 //! without runs. Selecting a row adds it as a filter. Auto mode's reviewer has rows of its own among the
-//! profiles (*Auto mode reviewer* and its model in mono); it is no agent profile, so they only read, and the
-//! note says so while they are shown. A row's name gives way with an ellipsis so its figures keep their
-//! room; the reviewer's words give way before its model, which tells its rows apart.
+//! profiles (its model in mono, then *auto mode reviewer*); it is no agent profile, so they only read, and a
+//! line under the title says so while they are shown. A row's name takes the room its figures leave and
+//! gives way with an ellipsis; the reviewer's model keeps its whole width, which tells its rows apart, and
+//! the words after it take what is left.
 
 use std::sync::Arc;
 
@@ -13,7 +14,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{Element, Style, dimension::Dimension},
@@ -36,9 +37,6 @@ use crate::{
 
 /// Rows a column shows; the rest are in the table.
 const ROWS: usize = 6;
-/// How much sooner the reviewer's words give way than its model, as flex shrink weights: the words go
-/// first, down to nothing, before the model loses a glyph.
-const WORDS_GIVE_WAY: f32 = 1_000.0;
 
 pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, controls: &Signal<Controls>) -> Element {
   let table_shown = views.get().breakdown_table;
@@ -96,21 +94,22 @@ pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, contro
       }
       Element::from(column)
     }));
-  // The reviewer's rows read only: the note does not offer to filter by them.
+  let card = Card::new("usage-breakdown", ctx.t("usage.breakdown.title"))
+    .lead(series_legend(ctx, dashboard))
+    .note(ctx.t("usage.breakdown.note"))
+    .trailing(switch);
+  // The reviewer's rows read only, which a line of its own under the title says, as the note offers to
+  // filter by a row.
   let reviewed = breakdowns
     .profiles
     .iter()
     .any(|row| matches!(row.key, BreakdownKey::Reviewer(_)));
-  let note = if reviewed {
-    "usage.breakdown.noteWithReviewer"
+  let card = if reviewed {
+    card.subtitle(ctx.t("usage.breakdown.reviewerReadOnly"))
   } else {
-    "usage.breakdown.note"
+    card
   };
-  Card::new("usage-breakdown", ctx.t("usage.breakdown.title"))
-    .lead(series_legend(ctx, dashboard))
-    .note(ctx.t(note))
-    .trailing(switch)
-    .body([body.into()])
+  card.body([body.into()])
 }
 
 /// The CLIs the bars are split by, each with its swatch.
@@ -128,7 +127,7 @@ fn series_legend(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     .into()
 }
 
-/// A row's name: *Builder · implement*, *Auto mode reviewer* (its model apart, [`reviewer_name`]), a model
+/// A row's name: *Builder · implement*, *auto mode reviewer* (after its model, [`reviewer_name`]), a model
 /// in mono, a pipeline or a project.
 fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
   match key {
@@ -147,15 +146,17 @@ fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
   }
 }
 
-/// The reviewer's row name: its words in `words`' style, then `model` in mono. Both give way with an
-/// ellipsis, the words long before the model. `id` names the model's text.
+/// The reviewer's row name, filling the room it has: `model` in mono at its whole width (cut only when the
+/// room is narrower than it), then the words in `words`' style, muted, in what is left, giving way with an
+/// ellipsis. `id` names the model's text, and `{id}-words` the words.
 fn reviewer_name(ctx: &Ctx, (words, model): (TypographyStyle, &Arc<str>), id: String) -> Element {
   let words = Text::new(&ctx.t("usage.breakdown.reviewer"))
+    .id(format!("{id}-words"))
     .variant(words)
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::TextSecondary)
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
-    .flex_shrink(WORDS_GIVE_WAY)
+    .flex(1.0)
     .min_width(Dimension::Px(0.0));
   let model = Text::new(model)
     .id(id)
@@ -166,16 +167,16 @@ fn reviewer_name(ctx: &Ctx, (words, model): (TypographyStyle, &Arc<str>), id: St
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0));
   Row::new()
-    .flex_shrink(1.0)
+    .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(words)
     .child(model)
+    .child(words)
     .into()
 }
 
-/// A bar row's name, one line that gives way with an ellipsis.
+/// A bar row's name: the room the figures leave, one line that gives way with an ellipsis.
 fn bar_name(ctx: &Ctx, key: &BreakdownKey) -> Element {
   if let BreakdownKey::Reviewer(model) = key {
     return reviewer_name(
@@ -185,15 +186,19 @@ fn bar_name(ctx: &Ctx, key: &BreakdownKey) -> Element {
     );
   }
   let (name, mono) = label(ctx, key);
-  fit(
-    Text::new(&name)
-      .variant(if mono {
-        ExtraTypography::MonoValue.role()
-      } else {
-        TypographyStyle::Caption
-      })
-      .color(PaletteColor::TextPrimary),
-  )
+  Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .child(fit(
+      Text::new(&name)
+        .variant(if mono {
+          ExtraTypography::MonoValue.role()
+        } else {
+          TypographyStyle::Caption
+        })
+        .color(PaletteColor::TextPrimary),
+    ))
+    .into()
 }
 
 fn bar_row(ctx: &Ctx, row: &BreakdownRow, rows: &[BreakdownRow], spent: u64, controls: &Signal<Controls>) -> Element {
@@ -225,26 +230,30 @@ fn bar_row(ctx: &Ctx, row: &BreakdownRow, rows: &[BreakdownRow], spent: u64, con
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Tight.role())
     .child(
+      // A name that fills its room keeps a snug gap to the figures, which keep theirs apart.
       Row::new()
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
+        .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(name)
-        .child(Spacer::new().flex(1.0))
-        .child(with_id(
-          Text::new(&format::tokens(row.total()))
-            .variant(ExtraTypography::MonoValue.role())
-            .nowrap()
-            .flex_shrink(0.0),
-          figure_id("spent"),
-        ))
-        .child(with_id(
-          Text::new(&format::share(ctx, percent(row.total(), spent)))
-            .variant(TypographyStyle::Caption)
-            .nowrap()
-            .flex_shrink(0.0),
-          figure_id("share"),
-        )),
+        .child(
+          Row::new()
+            .flex_shrink(0.0)
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(with_id(
+              Text::new(&format::tokens(row.total()))
+                .variant(ExtraTypography::MonoValue.role())
+                .nowrap(),
+              figure_id("spent"),
+            ))
+            .child(with_id(
+              Text::new(&format::share(ctx, percent(row.total(), spent)))
+                .variant(TypographyStyle::Caption)
+                .nowrap(),
+              figure_id("share"),
+            )),
+        ),
     )
     .child(bar);
   // Runs whose pipeline is gone cannot be filtered by it, nor the reviewer by a profile: their rows only
