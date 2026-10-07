@@ -431,6 +431,12 @@ Second verification (2026-10-07) failed on three majors, fixed the same day: Tok
 room for its label) with the footnote right under the chart; day labels of Tokens over time are counted back from the
 last bar so *Today* never overlaps another; table text gives way with an ellipsis in narrow columns (960 wide).
 
+Third verification (2026-10-07) found two majors, fixed the same day: an x axis label that would run past the plot's
+right end ends there (*Today* at 30 days and Custom, *24:00* by hour), days in the proportional axis font and Plan
+limits ending on *Today*; *Most expensive* titles shrink with an ellipsis, and under the `Xl` breakpoint its fixed
+columns narrow so titles and pipelines stay readable at 960. Left open: the CDcij footnote's *Select a row to see its
+runs;* (the table's rows do not open anything yet, so the sentence would promise a missing interaction).
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label
