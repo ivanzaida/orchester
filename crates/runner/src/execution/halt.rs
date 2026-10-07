@@ -54,6 +54,12 @@ impl RunTask {
         by,
         ack,
       } => self.decide_tool_approval(approval, (answer, by), ack),
+      Control::AnswerQuestion {
+        request,
+        answers,
+        by,
+        ack,
+      } => self.answer_question(request, (answers, by), ack),
       Control::DeliverMessages(ack) => self.deliver_messages(ack),
       Control::Interrupt(cause) => {
         self.pending.interrupt = Some(cause);

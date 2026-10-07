@@ -493,6 +493,8 @@ fn conversation_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::ComposerEdge.role()),
     Dimension::Px(18.0)
   );
+  // An option's letter key on a question card (`lS9BF`).
+  assert_eq!(theme.radius_value(ExtraRadius::Key.role()), 4.0);
 }
 
 #[test]

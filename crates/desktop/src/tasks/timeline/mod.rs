@@ -11,6 +11,7 @@
 pub mod group;
 pub mod load;
 pub mod mark;
+pub mod question;
 pub mod rail;
 pub mod step;
 pub mod view;
@@ -21,6 +22,7 @@ use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
   integration::RunMerge,
+  question::AskedQuestions,
   run::{DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
   time::Timestamp,
 };
@@ -28,6 +30,7 @@ use orchester_core::{
 pub use self::{
   group::ToolGroup,
   mark::Mark,
+  question::ChoiceCard,
   step::{StepHead, ToolRun},
 };
 use super::{
@@ -68,6 +71,8 @@ pub enum ItemKind {
   },
   Plan(PlanCard),
   Approval(ApprovalCard),
+  /// An agent's question with suggested answers ([`question`]).
+  Choice(ChoiceCard),
   Tools(ToolGroup),
   /// A transcript entry that is never grouped: a denied command, an error, a runner problem.
   Problem(Entry),
@@ -155,6 +160,8 @@ pub struct Sources<'a> {
   /// Its tool requests waiting for a decision, and the ones decided.
   pub pending: &'a [PendingToolApproval],
   pub decided: &'a [DecidedToolApproval],
+  /// Its agents' questions with suggested answers.
+  pub questions: &'a [AskedQuestions],
   pub merge: Option<&'a RunMerge>,
 }
 
@@ -192,11 +199,12 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     at: run.run.created_at(),
     kind: ItemKind::Step(head),
   }));
+  let answers = question::answer_messages(sources.questions);
   let mut waiting: Vec<Item> = sources
     .conversation
     .entries
     .iter()
-    .filter(|entry| entry.execution.is_none())
+    .filter(|entry| entry.execution.is_none() && !answers.contains(&entry.id))
     .map(|entry| message_item(entry, None))
     .collect();
   waiting.sort_by_key(|item| item.at);
@@ -249,14 +257,16 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
   let step = run.step_of(execution);
   let agent: Arc<str> = step.and_then(|step| step.agent.clone()).unwrap_or_else(|| "".into());
   let name: Arc<str> = step.map(|step| step.name.clone()).unwrap_or_else(|| "".into());
-  let mut between: Vec<Item> = sources
-    .conversation
-    .entries
+  let entries = &sources.conversation.entries;
+  let (cards, mut hidden) = question::cards((sources.questions, entries), execution, (&agent, &name));
+  hidden.extend(question::answer_messages(sources.questions));
+  let mut between: Vec<Item> = entries
     .iter()
-    .filter(|entry| entry.execution == Some(execution))
+    .filter(|entry| entry.execution == Some(execution) && !hidden.contains(&entry.id))
     .filter(|entry| !matches!(entry.state, EntryState::Reply { .. }))
     .map(|entry| message_item(entry, step.map(|step| step.name.clone())))
     .collect();
+  between.extend(cards);
   between.extend(
     run
       .plans
@@ -547,6 +557,7 @@ pub fn waits_for_you(item: &Item) -> bool {
     ItemKind::Question { entry, .. } => entry.state == EntryState::Question { open: true },
     ItemKind::Plan(card) => card.waiting,
     ItemKind::Approval(card) => card.decided.is_none(),
+    ItemKind::Choice(card) => card.waiting(),
     _ => false,
   }
 }

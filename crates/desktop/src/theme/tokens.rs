@@ -89,6 +89,8 @@ pub const RADIUS_TAB_CONTROL: f32 = 4.0;
 pub const RADIUS_ROW_ACTION: f32 = 5.0;
 /// Corner radius of a category chip (`EfQuh`).
 pub const RADIUS_CHIP: f32 = 5.0;
+/// Corner radius of an option's letter key on a question card (`lS9BF`).
+pub const RADIUS_KEY: f32 = 4.0;
 /// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
 /// style (toolbar of `RrScB`).
 pub const RADIUS_SEGMENT: f32 = 5.0;

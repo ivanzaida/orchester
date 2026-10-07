@@ -47,7 +47,7 @@ pub struct ToolResult {
 
 impl ToolResult {
   /// The answer of a call that ran and has `text` to show.
-  pub(super) const fn shown(text: String) -> Self {
+  pub const fn shown(text: String) -> Self {
     Self { text, is_error: false }
   }
 

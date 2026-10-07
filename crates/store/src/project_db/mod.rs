@@ -25,6 +25,7 @@ mod plan_limits;
 mod plans;
 mod pull_request_diffs;
 mod pull_requests;
+mod questions;
 mod read_only;
 mod repository;
 mod repository_import;

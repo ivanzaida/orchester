@@ -6,6 +6,7 @@ use std::num::NonZeroU32;
 use serde::Deserialize;
 
 use super::ToolInput;
+use crate::question::{Question, QuestionError, QuestionOption};
 
 /// Lines `read_file` returns when the call gives no `limit` (§4.1).
 pub const DEFAULT_READ_LINES: u32 = 2000;
@@ -179,11 +180,21 @@ impl RunCommand {
   }
 }
 
+/// One answer an `ask_question` call suggests.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AskOption {
+  label: String,
+  description: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AskQuestion {
   question: String,
-  options: Option<Vec<String>>,
+  header: Option<String>,
+  options: Option<Vec<AskOption>>,
+  multi_select: Option<bool>,
 }
 
 impl AskQuestion {
@@ -191,9 +202,26 @@ impl AskQuestion {
     &self.question
   }
 
-  /// Answers the agent suggests; the person may answer anything.
-  pub fn options(&self) -> &[String] {
-    self.options.as_deref().unwrap_or_default()
+  /// The question with the answers it suggests, which the person picks from or answers in their own
+  /// words; `None` for a plain question, which suggests none.
+  pub fn structured(&self) -> Option<Question> {
+    self
+      .structure()
+      .map(|question| question.expect("a call's question is checked when the call is read"))
+  }
+
+  fn structure(&self) -> Option<Result<Question, QuestionError>> {
+    let options = self.options.as_deref().filter(|options| !options.is_empty())?;
+    let options = options
+      .iter()
+      .map(|option| QuestionOption::new(&option.label, option.description.as_deref()))
+      .collect();
+    Some(Question::new(
+      &self.question,
+      self.header.as_deref(),
+      options,
+      self.multi_select.unwrap_or(false),
+    ))
   }
 }
 
@@ -206,7 +234,13 @@ pub(super) fn validate(input: &ToolInput) -> Result<(), String> {
     ToolInput::EditFile(edit) => validate_edit(edit),
     ToolInput::WriteFile(write) => filled("path", &write.path),
     ToolInput::RunCommand(command) => validate_command(command),
-    ToolInput::AskQuestion(ask) => filled("question", &ask.question),
+    ToolInput::AskQuestion(ask) => {
+      filled("question", &ask.question)?;
+      match ask.structure() {
+        Some(Err(error)) => Err(error.to_string()),
+        Some(Ok(_)) | None => Ok(()),
+      }
+    }
   }
 }
 

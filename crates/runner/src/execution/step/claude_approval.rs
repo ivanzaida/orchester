@@ -28,7 +28,7 @@ use super::{
   super::run::RunTask,
   mcp::McpSetup,
   orchester_tools::ToolHost,
-  relay::{Listening, Served, bind},
+  relay::{Listening, Relayed, Served, bind},
 };
 use crate::{approval_relay::RELAY_FLAG, private_file::PrivateFile};
 
@@ -112,8 +112,8 @@ impl ClaudeApprovals {
     self.config.path()
   }
 
-  /// The next call a person decides; never ready without approvals.
-  pub(super) async fn next(approvals: Option<&mut Self>) -> Option<Asked> {
+  /// The next call the relay holds for a person; never ready without approvals.
+  pub(super) async fn next(approvals: Option<&mut Self>) -> Option<Relayed> {
     Listening::next(approvals.map(|approvals| &mut approvals.listening)).await
   }
 

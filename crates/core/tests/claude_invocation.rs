@@ -45,9 +45,9 @@ fn enforced(
     .expect("enforceable on Claude Code")
 }
 
-/// The Orchester tools that run without asking in a step that only reads, each with its allow rule, after
-/// the step's other allowed tools (`orchester_core::orchester_tools`).
-const READ_RULES: [&str; 7] = [
+/// The Orchester tools that run without asking in a step that only reads, and `ask_question` (it waits for an
+/// answer, not an approval), each with its allow rule after the step's other allowed tools.
+const READ_RULES: [&str; 8] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search",
@@ -55,9 +55,10 @@ const READ_RULES: [&str; 7] = [
   "mcp__Orchester__git_diff",
   "mcp__Orchester__git_log",
   "mcp__Orchester__git_show",
+  "mcp__Orchester__ask_question",
 ];
 /// And in a step that may write.
-const WRITE_RULES: [&str; 11] = [
+const WRITE_RULES: [&str; 12] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search",
@@ -69,8 +70,8 @@ const WRITE_RULES: [&str; 11] = [
   "mcp__Orchester__git_show",
   "mcp__Orchester__git_add",
   "mcp__Orchester__git_commit",
+  "mcp__Orchester__ask_question",
 ];
-
 /// The permission prompt's configuration file, for the invocations that ask a person.
 const APPROVALS: &str = "/tmp/approvals.json";
 

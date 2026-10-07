@@ -329,14 +329,14 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       ),
       "{args}"
     );
-    // Only Orchester's own tools that run get a rule; the server's tools all ask.
+    // Only Orchester's own tools that run, and ask_question, get a rule; the server's tools all ask.
     assert!(!args.contains("mcp__docs"), "{args}");
     assert!(
       args.ends_with(
         "--allowedTools mcp__Orchester__read_file mcp__Orchester__list_files mcp__Orchester__search \
          mcp__Orchester__edit_file mcp__Orchester__write_file mcp__Orchester__git_status mcp__Orchester__git_diff \
          mcp__Orchester__git_log mcp__Orchester__git_show mcp__Orchester__git_add mcp__Orchester__git_commit \
-         --resume s"
+         mcp__Orchester__ask_question --resume s"
       ),
       "{args}"
     );

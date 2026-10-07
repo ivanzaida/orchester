@@ -8,6 +8,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
+  question::AskedQuestions,
   run::{DecidedToolApproval, PendingToolApproval},
   store::ActivityStore,
 };
@@ -21,15 +22,17 @@ pub struct Loaded {
   pub entries: Arc<Vec<Entry>>,
   pub pending: Arc<Vec<PendingToolApproval>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
+  pub questions: Arc<Vec<AskedQuestions>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Loaded {}
 
-/// A run's tool requests, as read.
+/// A run's tool requests and its agents' questions with suggested answers, as read.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Requests {
   pub pending: Arc<Vec<PendingToolApproval>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
+  pub questions: Arc<Vec<AskedQuestions>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Requests {}
@@ -41,6 +44,7 @@ impl Loaded {
       entries,
       pending: requests.pending,
       decided: requests.decided,
+      questions: requests.questions,
     }
   }
 }
@@ -57,5 +61,6 @@ pub fn requests_in(repo_root: &Path, run: RunId) -> Result<Requests, StoreError>
   Ok(Requests {
     pending: Arc::new(db.pending_tool_approvals(run)?),
     decided: Arc::new(db.decided_tool_approvals(run)?),
+    questions: Arc::new(db.questions(run)?),
   })
 }

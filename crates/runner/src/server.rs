@@ -15,6 +15,7 @@ use std::{
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
   id::{RunId, StepExecutionId},
+  question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
 use orchester_ipc::{
@@ -327,19 +328,10 @@ async fn answer(
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
-    Command::DecidePlan {
-      run,
-      execution,
-      version,
-      ref decision,
-    } => return answer_plan(&later, handle, (run, execution, version), decision.clone()),
-    Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
-    Command::DecideToolApproval {
-      run,
-      ref approval,
-      ref answer,
-      by,
-    } => return answer_tool_approval(&later, handle, run, approval, (answer.clone(), by)),
+    Command::DecidePlan { .. }
+    | Command::DecideStuckRun { .. }
+    | Command::DecideToolApproval { .. }
+    | Command::AnswerQuestion { .. } => return decide(&later, handle, &request.command),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -366,6 +358,53 @@ fn answer_tool_approval(
   let approval = approval.to_owned();
   later.answer(run, async move {
     scheduler.decide_tool_approval(run, approval, answer, by).await
+  })
+}
+
+/// A person's or automation's decision on what a run waits for: a plan, a stuck run, a tool request, a
+/// question.
+fn decide(later: &Later<'_>, scheduler: Scheduler, command: &Command) -> Answer {
+  match command {
+    Command::DecidePlan {
+      run,
+      execution,
+      version,
+      decision,
+    } => answer_plan(later, scheduler, (*run, *execution, *version), decision.clone()),
+    Command::DecideStuckRun { run, decision } => answer_stuck(later, scheduler, *run, decision.clone()),
+    Command::DecideToolApproval {
+      run,
+      approval,
+      answer,
+      by,
+    } => answer_tool_approval(later, scheduler, *run, approval, (answer.clone(), *by)),
+    Command::AnswerQuestion {
+      run,
+      request,
+      answers,
+      by,
+    } => answer_question(later, scheduler, *run, (request, answers, *by)),
+    other => {
+      tracing::error!(?other, "not a decision");
+      Answer::Reply(Event::Reply {
+        id: later.id,
+        reply: Reply::Rejected(Rejection::Failed {
+          detail: "not a decision".to_owned(),
+        }),
+      })
+    }
+  }
+}
+
+fn answer_question(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  run: RunId,
+  (request, answers, by): (&str, &[GivenAnswer], Answerer),
+) -> Answer {
+  let (request, answers) = (request.to_owned(), answers.to_vec());
+  later.answer(run, async move {
+    scheduler.answer_question(run, request, answers, by).await
   })
 }
 

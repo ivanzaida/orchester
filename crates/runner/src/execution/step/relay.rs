@@ -1,8 +1,9 @@
 //! The runner's end of the relay an invocation's CLI starts (`crate::approval_relay`): a loopback port of
 //! the runner's own, which the relay connects to with the invocation's token. Over that connection the
-//! relay hands over Claude Code's permission prompt calls ([`super::claude_approval`]) and the calls of the
-//! step's Orchester tools ([`super::orchester_tools`]), one [`RelayRequest`] per line, each answered on
-//! one line. The listener and its connection end with the worker.
+//! relay hands over Claude Code's permission prompt calls ([`super::claude_approval`]), the calls of the
+//! step's Orchester tools ([`super::orchester_tools`]) and, for Claude Code, its `ask_question` calls
+//! ([`super::question`]), one [`RelayRequest`] per line, each answered on one line. The listener and its
+//! connection end with the worker.
 //!
 //! Only one relay is served: connections are taken one at a time, each must show the token on a short
 //! first line within [`HANDSHAKE`] (compared in constant time), and after the first that does, or after
@@ -25,6 +26,7 @@ use orchester_core::{
     ApprovalToken, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, refusal, relay::RelayRequest,
   },
   orchester_tools::{OrchesterTool, SERVER, ToolResult},
+  question::tool as ask_question,
 };
 use serde_json::Value;
 use tokio::{
@@ -41,6 +43,7 @@ use tokio::{
 use super::{
   claude_approval::{Asked, AskedBy, PromptAnswer},
   orchester_tools::ToolHost,
+  question::AskedQuestion,
 };
 
 /// How long a connection has to show the token.
@@ -53,6 +56,8 @@ const ATTEMPTS: usize = 8;
 const TOKEN_LINE: u64 = 128;
 /// What the agent is told of a call of Orchester's tools nobody answered.
 const DENIED: &str = "Denied in Orchester.";
+/// What the agent is told of a question nobody answered.
+const UNANSWERED: &str = "The question was not answered: Orchester stopped waiting for it.";
 
 /// What one invocation's relay is served.
 pub(super) struct Served {
@@ -65,6 +70,8 @@ pub(super) struct Served {
 pub(super) struct Listening {
   /// The prompt calls a person decides.
   requests: mpsc::UnboundedReceiver<Asked>,
+  /// The `ask_question` calls the person answers.
+  questions: mpsc::UnboundedReceiver<AskedQuestion>,
   /// Set once the relay showed the token.
   reached: Arc<AtomicBool>,
   listener: JoinHandle<()>,
@@ -76,15 +83,24 @@ impl Drop for Listening {
   }
 }
 
+/// A call the relay holds for a person.
+pub(super) enum Relayed {
+  /// A call a person decides.
+  Approval(Asked),
+  /// An `ask_question` call the person answers.
+  Question(AskedQuestion),
+}
+
 impl Listening {
-  /// The next call a person decides; never ready without a listener.
-  pub(super) async fn next(listening: Option<&mut Self>) -> Option<Asked> {
+  /// The next call the relay holds for a person; never ready without a listener.
+  pub(super) async fn next(listening: Option<&mut Self>) -> Option<Relayed> {
     let Some(listening) = listening else {
       return pending().await;
     };
-    match listening.requests.recv().await {
-      Some(asked) => Some(asked),
-      None => pending().await,
+    tokio::select! {
+      Some(asked) = listening.requests.recv() => Some(Relayed::Approval(asked)),
+      Some(asked) = listening.questions.recv() => Some(Relayed::Question(asked)),
+      else => pending().await,
     }
   }
 
@@ -120,16 +136,19 @@ impl Bound {
   /// Waits for the relay that shows `token`, and serves it `served`.
   pub(super) fn serve(self, served: Served, token: ApprovalToken) -> Listening {
     let (sender, requests) = mpsc::unbounded_channel();
+    let (asking, questions) = mpsc::unbounded_channel();
     let reached = Arc::new(AtomicBool::new(false));
     let relay = Relay {
       token,
       served,
       requests: sender,
+      questions: asking,
       reached: reached.clone(),
       asked: AtomicU64::new(0),
     };
     Listening {
       requests,
+      questions,
       reached,
       listener: tokio::spawn(relay.accept(self.listener)),
     }
@@ -141,8 +160,9 @@ struct Relay {
   token: ApprovalToken,
   served: Served,
   requests: mpsc::UnboundedSender<Asked>,
+  questions: mpsc::UnboundedSender<AskedQuestion>,
   reached: Arc<AtomicBool>,
-  /// Calls of Orchester's tools asked about so far, which name each such request.
+  /// Calls of Orchester's tools asked about, and questions asked, so far, which name each such request.
   asked: AtomicU64,
 }
 
@@ -187,7 +207,11 @@ impl Relay {
     while let Ok(Some(line)) = lines.next_line().await {
       let answer = match serde_json::from_str::<RelayRequest>(&line) {
         Ok(RelayRequest::Ask(arguments)) => self.decide(&arguments, &mut lines).await,
-        Ok(RelayRequest::List) => Some(Value::Array(self.served.tools.listed()).to_string()),
+        Ok(RelayRequest::List) => Some(Value::Array(self.listed()).to_string()),
+        Ok(RelayRequest::Call { name, arguments }) if self.asks_questions() && name == ask_question::NAME => self
+          .ask_question(&arguments, &mut lines)
+          .await
+          .map(|result| result.mcp().to_string()),
         Ok(RelayRequest::Call { name, arguments }) => self
           .call(&name, &arguments, &mut lines)
           .await
@@ -201,6 +225,39 @@ impl Relay {
       if write.write_all(format!("{answer}\n").as_bytes()).await.is_err() {
         return;
       }
+    }
+  }
+
+  /// Claude Code's relay, which serves `ask_question` besides Orchester's tools.
+  const fn asks_questions(&self) -> bool {
+    self.served.prompt.is_some()
+  }
+
+  fn listed(&self) -> Vec<Value> {
+    let mut tools = self.served.tools.listed();
+    if self.asks_questions() {
+      tools.push(ask_question::listed());
+    }
+    tools
+  }
+
+  /// The person's answer to an `ask_question` call with `arguments`, as its result; refused when the call
+  /// is invalid; `None` when the relay closed its connection while the call waited.
+  async fn ask_question(&self, arguments: &Value, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<ToolResult> {
+    let question = match ask_question::parse(arguments) {
+      Ok(question) => question,
+      Err(error) => return Some(ToolResult::unavailable(&error)),
+    };
+    let (reply, answered) = oneshot::channel();
+    let call = format!("orchester-question-{}", self.asked.fetch_add(1, Ordering::Relaxed));
+    if self.questions.send(AskedQuestion { call, question, reply }).is_err() {
+      return Some(ToolResult::unavailable(UNANSWERED));
+    }
+    tokio::select! {
+      // A dropped sender is a worker that ended without an answer.
+      answered = answered => Some(answered.map_or_else(|_| ToolResult::unavailable(UNANSWERED), ToolResult::shown)),
+      // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait.
+      _ = lines.next_line() => None,
     }
   }
 

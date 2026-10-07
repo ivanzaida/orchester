@@ -101,7 +101,7 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
     },
   ]
   .into_iter()
-  .chain(plan_commands(run))
+  .chain(decision_commands(run))
   .chain([Command::DeliverMessages { run }])
   .enumerate()
   .map(|(index, command)| Request {
@@ -111,10 +111,20 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
   .collect()
 }
 
-/// Decisions on plans: an approval, and a request for changes with a note.
-fn plan_commands(run: RunId) -> Vec<Command> {
+/// Decisions on plans: an approval, and a request for changes with a note; and an answer to a question with
+/// suggested answers.
+fn decision_commands(run: RunId) -> Vec<Command> {
   let note = ReviewNote::new("Keep email sign-in.\n\"Quoted\" — é").expect("a note");
   vec![
+    Command::AnswerQuestion {
+      run,
+      request: "invocation:7".to_owned(),
+      answers: vec![orchester_core::question::GivenAnswer {
+        choices: vec!["Under Sign in".to_owned()],
+        text: Some("and the footer — é".to_owned()),
+      }],
+      by: orchester_core::run::Answerer::Automation,
+    },
     Command::DecidePlan {
       run,
       execution: StepExecutionId::generate(),
@@ -151,7 +161,8 @@ fn plan_events(run: RunId, task: TaskId) -> Vec<Event> {
   ]
 }
 
-/// A question an agent asked, and messages to a run that ended.
+/// A question an agent asked, messages to a run that ended, and answers to questions with suggested
+/// answers refused.
 fn conversation_events(run: RunId, task: TaskId) -> Vec<Event> {
   vec![
     Event::QuestionAsked {
@@ -168,6 +179,23 @@ fn conversation_events(run: RunId, task: TaskId) -> Vec<Event> {
     Event::Reply {
       id: RequestId::new(10),
       reply: Reply::Rejected(Rejection::RunEnded),
+    },
+    Event::QuestionChanged { run, task },
+    Event::Reply {
+      id: RequestId::new(11),
+      reply: Reply::Rejected(Rejection::InvalidAnswer {
+        error: orchester_core::question::AnswerError::UnknownChoice {
+          label: "Nowhere".to_owned(),
+        },
+      }),
+    },
+    Event::Reply {
+      id: RequestId::new(12),
+      reply: Reply::Rejected(Rejection::QuestionAnswered),
+    },
+    Event::Reply {
+      id: RequestId::new(13),
+      reply: Reply::Rejected(Rejection::QuestionNotAwaited),
     },
   ]
 }

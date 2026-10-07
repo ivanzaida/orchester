@@ -7,6 +7,9 @@
 //! rules, only commands are asked about) and a command approval for a host of Codex's managed
 //! network proxy (`networkApprovalContext`, whose grant may outlast the one command). A command
 //! that needs more than the sandbox reaches a person as an ordinary command approval.
+//!
+//! A user input request about an MCP call this stream follows is that call's approval; any other is one of
+//! Codex's own questions ([`questions`]).
 
 use std::{collections::HashMap, fmt};
 
@@ -14,9 +17,10 @@ use serde_json::{Value, json};
 use thiserror::Error;
 
 use self::items::{command_finished, file_changed, mcp_tool_finished};
+pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, FileChange},
+  stream::{AgentEvent, FileChange, QuestionRefusal},
 };
 use crate::{
   orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
@@ -24,6 +28,7 @@ use crate::{
 };
 
 mod items;
+mod questions;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ProtocolError {
@@ -130,8 +135,17 @@ impl PendingApproval {
 pub enum Update {
   Activity(AgentEvent),
   Approval(PendingApproval),
+  /// Codex asks the person questions with suggested answers.
+  Question(PendingQuestion),
   /// A request declined at once: this JSON-RPC response answers it.
   Declined(String),
+  /// A question Orchester does not put to the person, `question` (its header or text), for `reason`:
+  /// `response` answers it with why.
+  QuestionRefused {
+    response: String,
+    question: String,
+    reason: QuestionRefusal,
+  },
   /// The running turn took a person's message: a `userMessage` item with this text completed.
   InputTaken(String),
   /// The turn ended; `input_kept`: Codex kept in the thread any `turn/steer` input it had accepted but
@@ -208,7 +222,10 @@ impl AppServerStream {
 
   fn request(&self, method: &str, id: &Value, params: &Value) -> Result<Update, ProtocolError> {
     match method {
-      "item/tool/requestUserInput" | "tool/requestUserInput" => self.user_input(id, params).map(Update::Approval),
+      "item/tool/requestUserInput" | "tool/requestUserInput" => match self.user_input(id, params)? {
+        Some(approval) => Ok(Update::Approval(approval)),
+        None => questions::asked(id, params),
+      },
       "mcpServer/elicitation/request" => self.elicitation(id, params).map(Update::Approval),
       "item/commandExecution/requestApproval"
         if params
@@ -259,7 +276,13 @@ impl AppServerStream {
     })
   }
 
-  fn user_input(&self, id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {
+  /// The approval a user input request asks for an MCP tool call this stream follows, which must be a single
+  /// blocking question with an accept and a decline answer; `None` for a request that is about no such call,
+  /// which is one of Codex's own questions.
+  fn user_input(&self, id: &Value, params: &Value) -> Result<Option<PendingApproval>, ProtocolError> {
+    if string(params, "itemId").is_none_or(|item| !self.tools.contains_key(&item)) {
+      return Ok(None);
+    }
     if params.get("isBlocking").and_then(Value::as_bool) != Some(true) {
       return Err(ProtocolError::InvalidApproval);
     }
@@ -300,7 +323,7 @@ impl AppServerStream {
     if context.thread != thread || context.turn != turn {
       return Err(ProtocolError::InvalidApproval);
     }
-    Ok(PendingApproval {
+    Ok(Some(PendingApproval {
       id: id.clone(),
       item,
       kind: ApprovalKind::UserInput {
@@ -314,7 +337,7 @@ impl AppServerStream {
       action: context.action.clone(),
       target: context.target.clone(),
       scope: None,
-    })
+    }))
   }
 
   fn elicitation(&self, id: &Value, params: &Value) -> Result<PendingApproval, ProtocolError> {

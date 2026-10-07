@@ -17,7 +17,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{approvals::approval, wire, worktree::worktree_state};
+use super::{approvals::approval, questions, wire, worktree::worktree_state};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -64,6 +64,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       .filter(|shown| shown.approval.run == run.id())
       .map(approval)
       .collect();
+    let questions = questions::waiting(&db.questions(run.id())?);
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
@@ -96,6 +97,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
         "plan_decisions": run.awaiting_plan().len(),
         "answers": run.awaiting_answer().len(),
         "approvals": waiting,
+        "questions": questions,
       },
       "created_at": wire::time(run.created_at()),
       "finished_at": view.finished_at.map(wire::time),

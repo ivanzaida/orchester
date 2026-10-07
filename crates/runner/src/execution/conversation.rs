@@ -30,6 +30,7 @@ use super::{
   control::{Ack, Control, answer},
   failed, idle,
   prepare::{self, Prepared},
+  question::held_by_question,
   run::{ExecutionError, RunTask},
   step::Active,
 };
@@ -93,7 +94,7 @@ impl Scheduler {
   pub(super) fn wake_answered(&self, db: &ProjectDb, waiting: Vec<Run>) -> Result<(), Rejection> {
     for run in waiting {
       let id = run.id();
-      if self.is_active(run.id()) || run.awaiting_answer().is_empty() {
+      if self.is_active(run.id()) || !answerable(db, &run)? {
         continue;
       }
       let messages = db
@@ -158,9 +159,20 @@ fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Pr
     // Its work was merged into its base branch: the task is done.
     RunStatus::Succeeded if merged(db, run)? => Err(Rejection::RunEnded),
     RunStatus::Succeeded => follow_up(db, root, stored),
-    RunStatus::Running if !stored.awaiting_answer().is_empty() => Prepared::continuing(db, root, stored).map(Some),
+    RunStatus::Running if answerable(db, &stored)? => Prepared::continuing(db, root, stored).map(Some),
     _ => Ok(None),
   }
+}
+
+/// Whether a step of `run` waits for an answer that a message can give: one that no question with suggested
+/// answers holds.
+fn answerable(db: &ProjectDb, run: &Run) -> Result<bool, Rejection> {
+  for execution in run.awaiting_answer() {
+    if !held_by_question(db, run.id(), execution).map_err(|error| failed("cannot read the run's questions", &error))? {
+      return Ok(true);
+    }
+  }
+  Ok(false)
 }
 
 /// What attaching does to `run`, for which people's messages are queued: one that succeeded and was
@@ -388,13 +400,14 @@ impl RunTask {
   }
 
   /// Resumes the steps whose agent asked a question that people's messages now answer, unless the
-  /// run is to pause.
+  /// run is to pause. A question with suggested answers that still waits holds its step: the messages
+  /// reach the agent with its answer.
   pub(super) fn answer_questions(&mut self) -> Result<(), ExecutionError> {
     if self.run.pause_requested() {
       return Ok(());
     }
     for execution in self.run.awaiting_answer() {
-      if !self.queued_for(execution)?.is_empty() {
+      if !self.queued_for(execution)?.is_empty() && !held_by_question(&self.db, self.run.id(), execution)? {
         self.transition(|run, now| run.resume_step(execution, now))?;
       }
     }

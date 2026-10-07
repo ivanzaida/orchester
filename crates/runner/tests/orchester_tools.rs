@@ -85,7 +85,7 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
     reported(&db, id, "orchester-tools: "),
     [
       "approve,read_file,list_files,search,edit_file,write_file,git_status,git_diff,git_log,git_show,git_add,\
-       git_commit,read_outside_file"
+       git_commit,read_outside_file,ask_question"
     ]
   );
   assert_eq!(

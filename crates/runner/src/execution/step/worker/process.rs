@@ -21,9 +21,9 @@ use super::{
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
-    relay::Listening,
+    relay::{Listening, Relayed},
   },
-  Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
+  Driver, FLUSH_INTERVAL, Finished, RelayClosed, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
 
@@ -49,14 +49,7 @@ impl Worker {
     loop {
       tokio::select! {
         event = next_event(&mut self.driver) => match event {
-          Some(ProcessEvent::Output { stream, line }) => {
-            self.receive_output(&mut watch, stream, &line).await?;
-            self.steer_early(&mut watch).await?;
-            self.stop_at_checkpoint(&mut watch);
-            if watch.stop.is_some() {
-              self.driver.end();
-            }
-          }
+          Some(ProcessEvent::Output { stream, line }) => self.output(&mut watch, stream, &line).await?,
           Some(ProcessEvent::Exited(exit)) => return self.finish(watch, &exit),
           None => return self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() }),
         },
@@ -65,23 +58,19 @@ impl Worker {
           Some(decision) => self.decide(&mut watch, decision).await?,
           None => deciding = false,
         },
+        // A closed channel reads `None`, which leaves the branch out.
+        Some(given) = self.answers.recv() => self.answer_question(&mut watch, given).await?,
         messages = self.steers.recv(), if steering => match messages {
           Some(messages) => self.steer(&mut watch, messages).await?,
           None => steering = false,
         },
-        Some(asked) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => {
-          self.request_claude_approval(&mut watch, asked).await?;
-          self.stop_at_checkpoint(&mut watch);
-        },
-        Some(asked) = Listening::next(self.tool_relay.as_mut()) => {
-          self.request_claude_approval(&mut watch, asked).await?;
-          self.stop_at_checkpoint(&mut watch);
-        },
+        Some(relayed) = ClaudeApprovals::next(self.claude_approvals.as_mut()) => self.relayed(&mut watch, relayed).await?,
+        Some(relayed) = Listening::next(self.tool_relay.as_mut()) => self.relayed(&mut watch, relayed).await?,
         reviewed = review::next(&mut self.reviewing), if self.reviewing.is_some() => {
           self.apply_review(&mut watch, reviewed).await?;
         },
         // Ending the agent ends its prompt too: once it is stopping, a closed prompt is expected.
-        () = watch.prompt_closed(), if watch.stop.is_none() => self.prompt_closed(&mut watch)?,
+        closed = watch.relay_closed(), if watch.stop.is_none() => self.relay_closed(&mut watch, closed)?,
         stop = self.stops.recv(), if listening => match stop {
           Some(stop) => {
             if self.receive_stop(&mut watch, stop) {
@@ -96,6 +85,35 @@ impl Worker {
           self.driver.end();
         }
       }
+    }
+  }
+
+  /// A line the CLI wrote: what it says, the messages sent now it can take, and a stop that waited for it.
+  async fn output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+    self.receive_output(watch, stream, line).await?;
+    self.steer_early(watch).await?;
+    self.stop_at_checkpoint(watch);
+    if watch.stop.is_some() {
+      self.driver.end();
+    }
+    Ok(())
+  }
+
+  /// A call the relay holds for a person: a decision, or an answer to `ask_question`.
+  async fn relayed(&mut self, watch: &mut Watch, relayed: Relayed) -> Result<(), StoreError> {
+    match relayed {
+      Relayed::Approval(asked) => self.request_claude_approval(watch, asked).await?,
+      Relayed::Question(asked) => self.request_relay_question(watch, asked)?,
+    }
+    self.stop_at_checkpoint(watch);
+    Ok(())
+  }
+
+  /// The relay closed while `closed`, a call it held for a person, waited.
+  fn relay_closed(&mut self, watch: &mut Watch, closed: RelayClosed) -> Result<(), StoreError> {
+    match closed {
+      RelayClosed::Decision => self.prompt_closed(watch),
+      RelayClosed::Question => self.question_closed(watch),
     }
   }
 
@@ -164,10 +182,12 @@ impl Worker {
     if watch.stop.is_some() || watch.over.is_some() {
       return;
     }
-    let pending_safe = watch.approval.as_ref().is_some_and(|(_, awaiting)| {
+    let approval_safe = watch.approval.as_ref().is_some_and(|(_, awaiting)| {
       watch.commands.iter().all(|item| item == awaiting.item())
         && !matches!((awaiting, self.app_server()), (Awaiting::Codex(request), Some(app)) if app.has_other_active_tools(request))
     });
+    // A question waits like a tool decision: the agent can stop there once nothing else runs.
+    let pending_safe = approval_safe || (watch.question.is_some() && self.checkpoint_safe(watch));
     if watch.after_command.is_some() && (self.checkpoint_safe(watch) || pending_safe) {
       watch.stop = watch.after_command.take();
     } else if watch.pause_requested && pending_safe {
@@ -232,6 +252,12 @@ impl Worker {
     match update {
       Update::Activity(event) => self.observe(watch, event),
       Update::Approval(request) => self.request_approval(watch, request).await,
+      Update::Question(pending) => self.request_codex_question(watch, pending),
+      Update::QuestionRefused {
+        response,
+        question,
+        reason,
+      } => self.refuse_question(watch, response, (question, reason)).await,
       Update::Declined(response) => {
         // A process that cannot take the answer is ending; its exit says how.
         if let Some(process) = self.driver.process()
@@ -269,6 +295,7 @@ impl Worker {
     let mut approval_interrupted = false;
     self.check_prompt_reached(&mut watch)?;
     self.note_stderr_left_out(&mut watch)?;
+    self.interrupt_questions(&mut watch)?;
     let waiting = watch.approval.take();
     // A request the run's own stop ended (a pause at the decision, a cancel) needs no naming.
     if let Some((approval, _)) = waiting.as_ref().filter(|_| watch.stop.is_none()) {

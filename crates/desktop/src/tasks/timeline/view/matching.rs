@@ -24,6 +24,13 @@ pub(super) fn matches(item: &Item, needle: &str) -> bool {
     .into_iter()
     .flatten()
     .any(found),
+    ItemKind::Choice(card) => card.asked.request.questions().iter().any(|question| {
+      found(question.text())
+        || question
+          .options()
+          .iter()
+          .any(|option| found(option.label()) || option.description().is_some_and(found))
+    }),
     ItemKind::Problem(entry) => entry_matches(entry, needle),
     ItemKind::Result(card) => card.reported.as_deref().is_some_and(written),
     ItemKind::Tools(group) => group.entries.iter().any(|entry| entry_matches(entry, needle)),

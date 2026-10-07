@@ -4,8 +4,8 @@ use lurq::{
 };
 
 use super::tokens::{
-  FOCUS_STROKE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_MARK, RADIUS_NOTICE, RADIUS_PANEL,
-  RADIUS_PILL, RADIUS_ROUND, RADIUS_ROW_ACTION, RADIUS_SEGMENT, RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL,
+  FOCUS_STROKE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_CONTROL, RADIUS_ITEM, RADIUS_KEY, RADIUS_MARK, RADIUS_NOTICE,
+  RADIUS_PANEL, RADIUS_PILL, RADIUS_ROUND, RADIUS_ROW_ACTION, RADIUS_SEGMENT, RADIUS_SELECT_MENU, RADIUS_TAB_CONTROL,
   SPACE_BESIDE_GUTTER, SPACE_CHECK_INDENT, SPACE_CHIP, SPACE_COLUMNS, SPACE_COMMAND_LINES, SPACE_COMPOSER_EDGE,
   SPACE_COMPOSER_TOP, SPACE_DIALOG_MARGIN, SPACE_DIVIDER, SPACE_FIELD, SPACE_FOOTER, SPACE_FORM, SPACE_GROUP,
   SPACE_HAIR, SPACE_HEADING_BOTTOM, SPACE_HEADING_TOP, SPACE_HERO, SPACE_INDENT, SPACE_INDICATOR, SPACE_INLINE,
@@ -251,10 +251,12 @@ pub enum ExtraRadius {
   Round,
   /// The composer's box (`n0wdPC` in `BRMpj`).
   Composer,
+  /// An option's letter key on a question card (`lS9BF`).
+  Key,
 }
 
 impl ExtraRadius {
-  const ALL: [Self; 10] = [
+  const ALL: [Self; 11] = [
     Self::Notice,
     Self::Mark,
     Self::SelectMenu,
@@ -265,6 +267,7 @@ impl ExtraRadius {
     Self::Segment,
     Self::Round,
     Self::Composer,
+    Self::Key,
   ];
 
   fn name(self) -> &'static str {
@@ -279,6 +282,7 @@ impl ExtraRadius {
       Self::Segment => "segment",
       Self::Round => "round",
       Self::Composer => "composer",
+      Self::Key => "key",
     }
   }
 
@@ -294,6 +298,7 @@ impl ExtraRadius {
       Self::Segment => RADIUS_SEGMENT,
       Self::Round => RADIUS_ROUND,
       Self::Composer => RADIUS_COMPOSER,
+      Self::Key => RADIUS_KEY,
     }
   }
 

@@ -82,6 +82,7 @@ impl RunnerProblem {
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } => *program = redact(program),
+      Self::QuestionRefused { question, .. } => *question = redact(question),
       Self::MergeConflict { branch, files } => {
         *branch = redact(branch);
         for path in files {

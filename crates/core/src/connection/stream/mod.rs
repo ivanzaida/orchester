@@ -277,6 +277,19 @@ pub enum RunnerProblem {
   /// The model API refused a native conversation's earlier reasoning as bound to another history; the
   /// conversation goes on without it.
   ThinkingStripped,
+  /// The agent asked `question` in a way Orchester does not put to the person, for `reason`: the request
+  /// was answered with why, and the agent went on.
+  QuestionRefused { question: String, reason: QuestionRefusal },
+}
+
+/// Why Orchester did not put an agent's question to the person.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QuestionRefusal {
+  /// It asks for a secret value, which never passes through a question.
+  Secret,
+  /// It does not suggest at least two different answers, which a question card needs.
+  NoOptions,
 }
 
 /// Why a step's handoff was not kept as task memory. It names a secret, never its value.

@@ -11,6 +11,7 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   permission::{AgentPermissions, capability::PermissionProblem},
+  question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
     Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion, PreflightProblem,
@@ -150,6 +151,18 @@ pub enum Command {
     answer: ApprovalAnswer,
     by: Answerer,
   },
+  /// `by`'s `answers` to waiting question request `request` of run `run`, one per question in order: the
+  /// option labels picked and the person's own text (protocol 19). An agent whose turn waits gets them as
+  /// the result of the call or request that asked and goes on; a step that ended with the question resumes
+  /// with them. Answered with [`Reply::Accepted`] once they are recorded and on their way;
+  /// [`Rejection::InvalidAnswer`] for answers the questions do not take, [`Rejection::QuestionAnswered`]
+  /// when it was answered already, [`Rejection::QuestionNotAwaited`] when no agent can take an answer.
+  AnswerQuestion {
+    run: RunId,
+    request: String,
+    answers: Vec<GivenAnswer>,
+    by: Answerer,
+  },
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
@@ -287,6 +300,9 @@ pub enum Event {
   },
   /// A pending tool decision was created, resolved, or interrupted; reread the project's record.
   ToolApprovalChanged { run: RunId, task: TaskId },
+  /// An agent's question with suggested answers was asked, answered, or interrupted; reread the run's
+  /// questions.
+  QuestionChanged { run: RunId, task: TaskId },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,6 +449,15 @@ pub enum Rejection {
   ToolApprovalAnswered,
   /// Automation gave a wider answer than approving once or denying, which only a person gives.
   AutomationWider,
+  /// The question request does not wait any more: its agent can no longer take an answer, or there is no
+  /// such request.
+  QuestionNotAwaited,
+  /// The question request was answered already.
+  QuestionAnswered,
+  /// The answers do not fit the request's questions, as `error` says.
+  InvalidAnswer {
+    error: AnswerError,
+  },
   /// Automation tried to approve a request that auto-approval leaves to a person, for reason `ask`:
   /// only a person approves it (automation may deny it).
   PersonOnly {

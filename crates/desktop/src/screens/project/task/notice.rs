@@ -105,7 +105,9 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
       "runs.summary.notice.pausingTitle",
       "runs.summary.notice.pausingDetail",
     ),
-    RunStatus::Running if !run.run.awaiting_answer().is_empty() => asking(ctx, run),
+    RunStatus::Running if !run.run.awaiting_answer().is_empty() || !run.waiting_questions.is_empty() => {
+      asking(ctx, run)
+    }
     RunStatus::Running if run.working_steps().count() > 1 => {
       let steps: Vec<&str> = run.working_steps().map(|step| &*step.name).collect();
       let steps = steps.join(&ctx.t("runs.progress.together"));
@@ -160,13 +162,16 @@ fn run_notice(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
   }
 }
 
-/// An agent asked a question and its step waits for the answer, which the conversation takes.
+/// An agent asked a question and its step, or its turn, waits for the answer, which the conversation
+/// takes.
 fn asking(ctx: &Ctx, run: &RunView) -> (Icon, Arc<str>, Arc<str>) {
-  let step = run
+  let asked = run
     .run
     .awaiting_answer()
     .first()
-    .and_then(|execution| run.step_of(*execution));
+    .copied()
+    .or_else(|| run.waiting_questions.first().map(|asked| asked.request.execution()));
+  let step = asked.and_then(|execution| run.step_of(execution));
   let name = step.map(|step| step.name.clone()).unwrap_or_default();
   let agent = step
     .and_then(|step| step.agent.clone())

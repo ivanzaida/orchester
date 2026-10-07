@@ -445,7 +445,7 @@ impl Session {
         reporter.run_changed();
         true
       }
-      Some(Ok(Some(Event::ToolApprovalChanged { .. }))) => {
+      Some(Ok(Some(Event::ToolApprovalChanged { .. } | Event::QuestionChanged { .. }))) => {
         reporter.run_changed();
         true
       }
