@@ -163,6 +163,24 @@ mark *approved by auto mode · <subject>* (or *approved by you · …*) and the 
 States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review` and
 `ToolDecided` activity.
 
+### M11 · Orchester's MCP server works without disturbing the window · branch `claude/mcp-quiet` (UI)
+
+Implemented 2026-10-07, **waiting for review and design verification**; moves to *Done* once merged. Tools change
+data while a person uses the window: changes are counted per project and per kind (`tasks::outside`: tasks, runs,
+auto mode, code index, limits, pipelines), so only the changed project's data is read again and only the screens
+showing it read it, in place. A failed reading of the tasks keeps the tasks last read on every page; the project shell
+says so above the page with *Retry*. Edit task keeps a person's edits and says the task changed elsewhere (*Reload*),
+and saves on the version its fields came from (merged or a conflict, never a silent revert). Project settings ›
+Auto mode, Code index and Limits show a tool's change in place, or hold it behind *Changed outside this screen* while
+the person has a change under way; their saves and the tools' are one store transaction each
+(`update_auto_mode_settings`, `update_project_limits`) and save only what the person changed. The run's auto mode
+switch, Pipelines and the status bar's budget follow too. A tool's worktree removal shows *Removing…* in the
+person's open dialog, which stays open and says the worktree is removed; a tool's failure is only in its result. A
+queued task without a run that this window's form did not queue opens on its page with *Retry run* (design doc, "A
+queued task without a run that the person's form did not queue"). New tools `return_to_draft` and `continue_run`
+(`docs/stable-build.md`). Tests: `cargo test -p orchester-desktop --test form_keyboard app_mcp` (`app_mcp_quiet`,
+`app_mcp_continue_run`, `app_mcp_return_to_draft`).
+
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
 Confirm with model turns whether Codex under `-a never` lets the agent call an MCP tool, whether
