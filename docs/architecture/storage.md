@@ -169,8 +169,13 @@ at work takes one.
   session resumes to read them, as with *Apply now* without a change of permissions. The turn that
   ends after a delivery *acknowledges* the messages, and its final message (its summary, when it is
   a structured result) is the agent's reply in the conversation. A paused, stopped or interrupted
-  run keeps messages queued until it continues; a failed run needs an explicit recovery message (below), while a
-  cancelled run takes none.
+  run keeps messages queued until it continues; a failed run, or one that waits for a person's decision,
+  needs an explicit recovery message (below), while a cancelled run takes none. The desktop never leaves a
+  message without a reader (ORC-79): its composer resumes a paused run (`ResumeRun`) or continues an
+  interrupted one (`ContinueRuns`) right after storing the message, keeps the message of a run stopped at
+  its own limit until the person raises it, and for a run whose agents read no more messages stores it with
+  no run (the next run's first invocation takes it) and runs the task again (`RunAgain`, the message's
+  idempotency key as the request's).
   *DeliverMessages* only wakes a run; what is queued is read from the database.
 - **Send now (ORC-61).** A person's message is sent after the turn (`timing = 'after_turn'`, as above)
   or now (`'now'`). The runner gives each message sent now and still queued, once, to the first agent at
@@ -229,6 +234,10 @@ at work takes one.
   the latest `Failed` event through the current last sequence: old queued messages, stale composers from an
   earlier failure, and duplicate notifications cannot create repeated automatic attempts. This works across
   runner reconnects and equal message/failure timestamps. An old run cannot resume after the task started another.
+  A run that waits for a person after its retries ran out or its step broke again is continued the same way
+  (ORC-79): the marker counts from its latest `WaitingForPerson` event, the failed step is the one it waits on,
+  and a `RetryAllowed` event (the person let it go on) takes the place of `RecoveryRequested`; the attempt it
+  kept open is routed back.
   A `RecoveryRequested` event and an attempt with reason `recovery` retain the same run ID, branch, worktree,
   checkpoints and previous attempts. Orchestrator routes to the failed agent, or its latest executed upstream
   agent if a command failed; a direct recipient can return to its own executed agent step. That step, its

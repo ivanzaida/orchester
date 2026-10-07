@@ -7,12 +7,15 @@
 //!
 //! Send and Enter send now while the agent the message is for works mid-turn, and press the state's
 //! action otherwise; the chevron beside Send, shown only then, offers *Send after this turn* for that
-//! message, as Ctrl+Enter (Cmd+Enter on macOS) does; nothing is remembered. Shift+Enter adds a line.
+//! message, as Ctrl+Enter (Cmd+Enter on macOS) does; nothing is remembered. A paused or interrupted
+//! run offers *Resume and send* the same way, with the message kept until the run goes on as the
+//! other choice. Shift+Enter adds a line.
 //! While an input method composes, Enter only confirms the composition.
 //! When it first shows a question that waits, as the tab opens on it or once it arrives, the field
 //! takes the focus, unless the person is in the tab's search field. The draft stays until the message
 //! is stored, once per draft.
 
+mod context;
 mod controls;
 mod text;
 
@@ -37,15 +40,22 @@ use orchester_core::{
 };
 use parking_lot::Mutex;
 
-use self::text::{context_line, hint, placeholder, quiet};
+use self::{
+  context::context_line,
+  text::{hint, placeholder, quiet},
+};
 use super::{
   super::plan_review::{Decision as PlanRequest, DecisionAction, decision_action as plan_decision},
   column,
   send::{Outgoing, SendAction, Sent, send_action},
 };
 use crate::{
+  navigation::route::{Page, TaskPageTab},
   tasks::{
-    conversation::{Conversation, composer::ComposerMode},
+    conversation::{
+      Conversation,
+      composer::{ComposerMode, Then},
+    },
     detail::TaskDetail,
     plan::PlanReview,
   },
@@ -136,7 +146,8 @@ impl lurq::app::component::DevtoolsInspectable for Left {}
 struct Presses {
   /// Send and Enter: now while the agent works mid-turn, else the state's action.
   send: Option<Press>,
-  /// *Send after this turn* and Ctrl/Cmd+Enter, while the agent works mid-turn.
+  /// *Send after this turn* and Ctrl/Cmd+Enter, while the agent works mid-turn; *Send without
+  /// resuming* while the run is paused or interrupted.
   after_turn: Option<Press>,
   /// Leaves the mode's context: its line's × and Esc.
   leave: Option<Press>,
@@ -165,12 +176,20 @@ impl Component for ComposerDock {
     plan_decision(ctx);
     let key = ctx.signal(DraftKey(IdempotencyKey::generate()));
     let (cleared, renewed, reload, sent) = (props.draft.clone(), key.clone(), props.reload.clone(), props.sent);
+    let (nav, task) = (super::nav(ctx), props.detail.task.id());
     ctx.watch(&action.state(), move |state| {
-      if !state.is_pending() && state.data.is_some() {
+      if state.is_pending() {
+        return;
+      }
+      if let Some(stored) = &state.data {
         cleared.set(String::new());
         renewed.set(DraftKey(IdempotencyKey::generate()));
         reload.update(|revision| *revision += 1);
         sent();
+        // The message waits for the raised limit, which the person sets on the Summary.
+        if *stored == Sent::AwaitsLimit {
+          nav.show(Page::Task(task, TaskPageTab::Summary));
+        }
       }
     });
     Self {
@@ -230,7 +249,7 @@ impl Component for ComposerDock {
         ..self.presses(&props, (&mode, recipient), (&action, &plan), sending)
       };
       let composer = self.composer(ctx, &props, (&mode, recipient), &presses, sending);
-      context_line(ctx, (&mode, &props.detail), presses.leave.clone())
+      context_line(ctx, (&mode, &props.detail, recipient), presses.leave.clone())
         .into_iter()
         .chain(std::iter::once(composer))
         .chain(feedback.map(|message| field_error(&message_text(ctx, &message))))
@@ -298,8 +317,7 @@ impl ComposerDock {
     sending: bool,
   ) -> Presses {
     let text = props.draft.get();
-    let open = props.conversation.state.takes_messages() && *mode != ComposerMode::Closed;
-    if sending || text.trim().is_empty() || !open {
+    if sending || text.trim().is_empty() || *mode == ComposerMode::Closed {
       return Presses {
         send: None,
         after_turn: None,
@@ -313,31 +331,35 @@ impl ComposerDock {
         leave: None,
       };
     }
-    let send = |timing: Timing| -> Press {
+    let run = props.detail.run.as_ref();
+    let send = |timing: Timing, then: Then| -> Press {
       let outgoing = Outgoing {
         repo_root: props.repo_root.clone(),
         key: self.key.get().0,
         task: props.detail.task.id(),
-        run: props.detail.run.as_ref().map(crate::tasks::detail::RunView::id),
-        recovery_after: props.conversation.recovery_after,
+        run: run.map(crate::tasks::detail::RunView::id),
+        // Only a message that continues the run carries the failure it continues after.
+        recovery_after: props
+          .conversation
+          .recovery_after
+          .filter(|_| *mode == ComposerMode::Continue),
         recipient,
         timing,
+        then,
+        pipeline: run.map(|run| run.pipeline.clone()).unwrap_or_default(),
         text: text.clone(),
       };
       let action = action.clone();
       Arc::new(move || action.run(outgoing.clone()))
     };
-    match mode {
-      ComposerMode::Steer(working) if working.mid_turn => Presses {
-        send: Some(send(Timing::Now)),
-        after_turn: Some(send(Timing::AfterTurn)),
-        leave: None,
-      },
-      _ => Presses {
-        send: Some(send(Timing::AfterTurn)),
-        after_turn: None,
-        leave: None,
-      },
+    let now = match mode {
+      ComposerMode::Steer(working) if working.mid_turn => Timing::Now,
+      _ => Timing::AfterTurn,
+    };
+    Presses {
+      send: mode.then().map(|then| send(now, then)),
+      after_turn: mode.then_later().map(|then| send(Timing::AfterTurn, then)),
+      leave: None,
     }
   }
 

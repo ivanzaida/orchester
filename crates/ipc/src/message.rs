@@ -148,9 +148,10 @@ pub enum Command {
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
-  /// agent); an agent at work reads them once its turn is over; a paused or stopped run keeps them
-  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged,
-  /// [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
+  /// agent); a run that failed or waits for a person's decision continues from the step it stopped
+  /// at with a message written to continue it; an agent at work reads them once its turn is over; a
+  /// paused or stopped run keeps them queued until it continues. Answered with [`Reply::Accepted`] once that is
+  /// arranged, [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
   /// [`Rejection::WorktreeRemoved`] when the run's worktree is gone; the messages then stay queued.
   DeliverMessages { run: RunId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes

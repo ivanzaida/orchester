@@ -113,6 +113,56 @@ async fn failed_recovery_preserves_work_session_history_and_delivers_once() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn failed_recovery_a_message_continues_a_run_that_waits_for_the_person() {
+  let project = project(&Setup {
+    steps: vec![
+      StepSpec::new("implement", "Implement", "Append a line.", &[]),
+      StepSpec::new("review", "Review", "Report failure.", &["implement"]).retry("implement", 1),
+    ],
+    ..Setup::new("Say hello.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  let waiting = wait_for(root, &mut events, id, |run| {
+    matches!(run.status(), RunStatus::WaitingForPerson(_))
+  })
+  .await;
+  wait_for_idle(&scheduler).await;
+  // A message queued without the choice to continue keeps waiting with the run.
+  send(root, &waiting, "An ordinary queued message.", None);
+  scheduler.deliver_messages(id).await.expect("stays queued");
+  assert_eq!(read(root, id), waiting);
+  let message = send(root, &waiting, "So what do you suggest?", Some(waiting.last_sequence()));
+  scheduler.deliver_messages(id).await.expect("continue");
+  let done = wait_for(root, &mut events, id, |run| run.status() == &RunStatus::Succeeded).await;
+  wait_for_idle(&scheduler).await;
+  assert_eq!(done.attempts().len(), 3);
+  assert!(matches!(
+    done.current_attempt().expect("attempt").reason(),
+    AttemptReason::Recovery { .. }
+  ));
+  let db = ProjectDb::open(root).expect("open");
+  let invocations = db.invocations(id).expect("invocations");
+  // The step that failed continues its own session: implement, review, both again, then review.
+  assert_eq!(invocations.len(), 5);
+  assert_eq!(invocations[4].session, invocations[3].session);
+  let delivered = db.messages(project.task).expect("messages");
+  assert!(matches!(
+    delivered
+      .iter()
+      .find(|stored| stored.id() == message.id())
+      .expect("message")
+      .delivery(),
+    Some(Delivery::Acknowledged { .. })
+  ));
+  assert_eq!(Run::replay(&db.events(id).expect("events")).expect("replay"), done);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn failed_recovery_stale_messages_cannot_retry_a_new_failure() {
   let project = project(&Setup::new("Report failure."));
   let root = project.repo.path();

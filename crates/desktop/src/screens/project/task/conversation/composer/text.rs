@@ -1,40 +1,23 @@
 //! What the composer says in each state of the run (`docs/design/orchester-workspace.md`, "Composer
-//! (approved …)", `YJfPo`): what it answers or changes, above the box; its placeholder (*Message
-//! Builder…*); each recipient as its name and what it does with a message (*Builder · working*,
-//! *Planner · resumes its session*); the send button's tooltip, which carries what sending does; and
-//! the quiet line under the box, only while it changes the outcome (the message queues, a follow-up
-//! resumes the session, a failed run continues, the run has not started).
+//! (approved …)", `YJfPo`, and "The chat always answers"): its placeholder (*Message Builder…*);
+//! each recipient as its name and what it does with a message (*Builder · working*, *Planner ·
+//! resumes its session*); the send button's tooltip, which carries what sending does; the send
+//! menu's two choices; and the quiet line under the box, only while it changes the outcome (the
+//! message queues, a follow-up resumes the session, a run continues, resumes or runs again, the run
+//! has not started). What a mode answers or changes, above the box, is in [`super::context`].
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Row, Spacer, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
-};
-use orchester_core::{conversation::Recipient, id::TaskId};
+use lurq::app::ctx::Ctx;
+use orchester_core::run::RunLimit;
 
-use super::super::{divider::step_label, nav};
-use crate::{
-  display,
-  navigation::route::{Page, TaskPageTab},
-  tasks::{
-    conversation::{
-      Author, Conversation, PanelState, RecipientChoice,
-      composer::{ComposerMode, Queued},
-    },
-    detail::TaskDetail,
-  },
-  theme::ExtraSpacing,
-  ui::{
-    icon::{Icon, IconSize, icon},
-    pressable::{pressable, surface},
-  },
+use crate::tasks::conversation::{
+  Author, Conversation, RecipientChoice,
+  composer::{ComposerMode, Queued},
 };
+
+/// One choice of the send menu: what it does, and when its agent gets the message.
+pub(super) type MenuChoice = (Arc<str>, Arc<str>);
 
 /// What the field says while it is empty: whom the message is for, or what it is.
 pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Arc<str> {
@@ -42,7 +25,13 @@ pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Convers
   match mode {
     ComposerMode::Steer(working) => to_agent(&working.agent),
     ComposerMode::Queue(Queued::NextTurn(Some(agent))) => to_agent(agent),
-    ComposerMode::Queue(Queued::ToolStep | Queued::NextTurn(None) | Queued::Suspended | Queued::Decision) => {
+    ComposerMode::Queue(Queued::SharedBudget(_)) | ComposerMode::Resume { .. } | ComposerMode::RaiseLimit => {
+      match conversation.next_agent.as_deref() {
+        Some(agent) => to_agent(agent),
+        None => ctx.t("runs.conversation.placeholder.run"),
+      }
+    }
+    ComposerMode::Queue(Queued::ToolStep | Queued::NextTurn(None) | Queued::Decision) => {
       ctx.t("runs.conversation.placeholder.run")
     }
     ComposerMode::Answer { agent, .. } => ctx.t_args("runs.conversation.placeholder.answer", [("agent", &**agent)]),
@@ -56,6 +45,7 @@ pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Convers
       Some(first) => ctx.t_args("runs.conversation.placeholder.firstAgent", [("agent", first)]),
       None => ctx.t("conversation.composer.placeholder"),
     },
+    ComposerMode::RunAgain => ctx.t("runs.conversation.placeholder.nextRun"),
     ComposerMode::Queue(Queued::Checkpoint) | ComposerMode::Closed => ctx.t("conversation.composer.placeholder"),
   }
 }
@@ -70,8 +60,51 @@ pub(super) fn primary_label(ctx: &Ctx, mode: &ComposerMode) -> Arc<str> {
     ComposerMode::PlanChanges { .. } => "runs.plan.requestChanges",
     ComposerMode::FollowUp => "runs.conversation.composer.sendFollowUp",
     ComposerMode::Continue => "runs.conversation.composer.continue",
+    ComposerMode::Resume { interrupted: false } => "runs.conversation.composer.resumeAndSend",
+    ComposerMode::Resume { interrupted: true } => "runs.conversation.composer.continueAndSend",
+    ComposerMode::RaiseLimit => "runs.conversation.composer.raiseLimit",
     ComposerMode::NotStarted => "runs.conversation.composer.sendWhenStarts",
+    ComposerMode::RunAgain => "runs.conversation.composer.runAgain",
   })
+}
+
+/// The send menu's two choices in `mode`, the default first: *Send now* and *Send after this turn*
+/// while the agent works mid-turn, *Resume and send* and *Send without resuming* while the run is
+/// paused or interrupted; `None` where sending has one way only.
+pub(super) fn menu_words(ctx: &Ctx, mode: &ComposerMode) -> Option<(MenuChoice, MenuChoice)> {
+  match mode {
+    ComposerMode::Steer(working) if working.mid_turn => {
+      let agent = [("agent", &*working.agent)];
+      Some((
+        (
+          ctx.t("runs.conversation.composer.sendNow"),
+          ctx.t_args("runs.conversation.menu.nowMeta", agent),
+        ),
+        (
+          ctx.t("runs.conversation.composer.sendAfterTurn"),
+          ctx.t_args("runs.conversation.menu.afterTurnMeta", agent),
+        ),
+      ))
+    }
+    ComposerMode::Resume { interrupted } => {
+      let (later, later_meta) = if *interrupted {
+        (
+          "runs.conversation.composer.sendWithoutContinuing",
+          "runs.conversation.menu.continueLaterMeta",
+        )
+      } else {
+        (
+          "runs.conversation.composer.sendWithoutResuming",
+          "runs.conversation.menu.resumeLaterMeta",
+        )
+      };
+      Some((
+        (primary_label(ctx, mode), ctx.t("runs.conversation.menu.resumeMeta")),
+        (ctx.t(later), ctx.t(later_meta)),
+      ))
+    }
+    _ => None,
+  }
 }
 
 /// One recipient as the selector shows it in `mode`: its name, and what it does with a message
@@ -91,7 +124,7 @@ pub(super) fn recipient_words(
       ),
     };
   };
-  let working = matches!(choice.recipient, Recipient::Agent(profile)
+  let working = matches!(choice.recipient, orchester_core::conversation::Recipient::Agent(profile)
     if conversation.working.iter().any(|working| working.profile == profile));
   let key = match mode {
     _ if working => "runs.conversation.recipient.working",
@@ -99,12 +132,11 @@ pub(super) fn recipient_words(
     ComposerMode::PlanChanges { .. } => "runs.conversation.recipient.planWaits",
     ComposerMode::FollowUp => "runs.conversation.recipient.resumes",
     ComposerMode::Continue => "runs.conversation.recipient.continues",
-    ComposerMode::Queue(Queued::Suspended) => match conversation.state {
-      PanelState::Stopped => "runs.conversation.recipient.stopped",
-      PanelState::Interrupted => "runs.conversation.recipient.interrupted",
-      _ => "runs.conversation.recipient.paused",
-    },
+    ComposerMode::Resume { interrupted: false } => "runs.conversation.recipient.paused",
+    ComposerMode::Resume { interrupted: true } => "runs.conversation.recipient.interrupted",
+    ComposerMode::RaiseLimit | ComposerMode::Queue(Queued::SharedBudget(_)) => "runs.conversation.recipient.stopped",
     ComposerMode::Queue(Queued::Decision) => "runs.conversation.recipient.deciding",
+    ComposerMode::RunAgain => "runs.conversation.recipient.nextRun",
     _ => "runs.conversation.recipient.notRunning",
   };
   (agent, ctx.t(key))
@@ -133,14 +165,18 @@ pub(super) fn tip(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -
 }
 
 /// The quiet line under the box (`okcPt` in `l7cEtA`, `Alok8` in `cHDF1`): the message queues, a
-/// follow-up resumes the session, a failed run continues, the run has not started; and while an agent
-/// works, when it gets the message, in one line. The line stays as the run goes from one step to the
-/// next and back to work, so the chat above the box does not move (ORC-71).
+/// follow-up resumes the session, a run continues, resumes or runs again, the run has not started;
+/// and while an agent works, when it gets the message, in one line. The line stays as the run goes
+/// from one step to the next and back to work, so the chat above the box does not move (ORC-71).
 pub(super) fn quiet(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) -> Option<Arc<str>> {
   match mode {
-    ComposerMode::Queue(_) | ComposerMode::FollowUp | ComposerMode::Continue | ComposerMode::NotStarted => {
-      Some(hint(ctx, mode, conversation))
-    }
+    ComposerMode::Queue(_)
+    | ComposerMode::FollowUp
+    | ComposerMode::Continue
+    | ComposerMode::Resume { .. }
+    | ComposerMode::RaiseLimit
+    | ComposerMode::NotStarted
+    | ComposerMode::RunAgain => Some(hint(ctx, mode, conversation)),
     ComposerMode::Steer(working) => {
       let key = if working.mid_turn {
         "runs.conversation.hint.quietSteer"
@@ -165,7 +201,7 @@ pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) 
       ctx.t_args(key, [("agent", &*working.agent)])
     }
     ComposerMode::Queue(queued) => {
-      taken_as_answer(ctx, queued, conversation).unwrap_or_else(|| queue_hint(ctx, queued, conversation.state))
+      taken_as_answer(ctx, queued, conversation).unwrap_or_else(|| queue_hint(ctx, queued))
     }
     ComposerMode::Answer { agent, .. } => ctx.t_args("conversation.explanation.answer", [("agent", &**agent)]),
     ComposerMode::PlanChanges { agent, .. } => ctx.t_args("runs.conversation.hint.planChanges", [("agent", &**agent)]),
@@ -174,13 +210,12 @@ pub(super) fn hint(ctx: &Ctx, mode: &ComposerMode, conversation: &Conversation) 
       None => ctx.t("conversation.explanation.readyNoAgent"),
     },
     ComposerMode::Continue => ctx.t("conversation.explanation.failed"),
+    ComposerMode::Resume { interrupted: false } => ctx.t("runs.conversation.hint.resume"),
+    ComposerMode::Resume { interrupted: true } => ctx.t("runs.conversation.hint.continueInterrupted"),
+    ComposerMode::RaiseLimit => ctx.t("runs.conversation.hint.raiseLimit"),
     ComposerMode::NotStarted => ctx.t("conversation.explanation.notStarted"),
-    ComposerMode::Closed => ctx.t(match conversation.state {
-      PanelState::Merged => "conversation.explanation.merged",
-      PanelState::WorktreeRemoved | PanelState::FailedWorktreeRemoved => "conversation.explanation.worktreeRemoved",
-      PanelState::FailedNoAgent => "conversation.explanation.failedNoAgent",
-      _ => "conversation.explanation.ended",
-    }),
+    ComposerMode::RunAgain => ctx.t("runs.conversation.hint.runAgain"),
+    ComposerMode::Closed => ctx.t(conversation.state.closed_reason()),
   }
 }
 
@@ -195,111 +230,19 @@ fn taken_as_answer(ctx: &Ctx, queued: &Queued, conversation: &Conversation) -> O
   let reaches = match queued {
     Queued::NextTurn(Some(agent)) => agent == asker,
     Queued::Checkpoint => true,
-    Queued::NextTurn(None) | Queued::ToolStep | Queued::Suspended | Queued::Decision => false,
+    Queued::NextTurn(None) | Queued::ToolStep | Queued::SharedBudget(_) | Queued::Decision => false,
   };
   reaches.then(|| ctx.t_args("runs.conversation.hint.takenAsAnswer", [("agent", &**asker)]))
 }
 
-fn queue_hint(ctx: &Ctx, queued: &Queued, state: PanelState) -> Arc<str> {
+fn queue_hint(ctx: &Ctx, queued: &Queued) -> Arc<str> {
   match queued {
     Queued::ToolStep => ctx.t("runs.conversation.hint.toolStep"),
     Queued::NextTurn(Some(agent)) => ctx.t_args("runs.conversation.hint.nextTurn", [("agent", &**agent)]),
     Queued::NextTurn(None) => ctx.t("runs.conversation.hint.nextTurnUnnamed"),
     Queued::Checkpoint => ctx.t("conversation.explanation.checkpoint"),
     Queued::Decision => ctx.t("conversation.explanation.deciding"),
-    Queued::Suspended => ctx.t(match state {
-      PanelState::Paused => "conversation.explanation.paused",
-      PanelState::Stopped => "conversation.explanation.stopped",
-      _ => "conversation.explanation.queued",
-    }),
+    Queued::SharedBudget(RunLimit::GroupBudget) => ctx.t("runs.conversation.hint.groupBudget"),
+    Queued::SharedBudget(_) => ctx.t("runs.conversation.hint.dailyBudget"),
   }
-}
-
-/// Above the box (`po1Yr` in `K1oNwn`, `l7cEtA`): *Answering Builder's question from 12:09*,
-/// *Changes to plan v1 · sent to Planner* with × to `leave` that mode, *Continue 03 Implement with
-/// your instructions · attempt 3*; *Waiting for your decision* with the way to it, on the task's
-/// Summary.
-pub(super) fn context_line(
-  ctx: &mut Ctx,
-  (mode, detail): (&ComposerMode, &TaskDetail),
-  leave: Option<Arc<dyn Fn() + Send + Sync>>,
-) -> Option<Element> {
-  let (glyph, text) = match mode {
-    ComposerMode::Queue(Queued::Decision) => return Some(decision_line(ctx, detail.task.id())),
-    ComposerMode::Answer { agent, asked_at, .. } => (
-      Icon::CornerDownRight,
-      ctx.t_args(
-        "runs.conversation.composer.answering",
-        [("agent", &**agent), ("time", display::clock(*asked_at).as_str())],
-      ),
-    ),
-    ComposerMode::PlanChanges { agent, version } => (
-      Icon::Pencil,
-      ctx.t_args(
-        "runs.conversation.composer.planChanges",
-        [("version", version.to_string().as_str()), ("agent", &**agent)],
-      ),
-    ),
-    ComposerMode::Continue => (Icon::Play, continue_text(ctx, detail)?),
-    _ => return None,
-  };
-  let leave = leave.map(|leave| {
-    pressable(surface().id("conversation-composer-leave"), move || leave()).child(icon(
-      Icon::X,
-      IconSize::Small,
-      PaletteColor::TextMuted,
-    ))
-  });
-  Some(
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding_horizontal(SpacingSize::Md)
-      .spacing(ExtraSpacing::Tight.role())
-      .align_items(Alignment::Center)
-      .child(icon(glyph, IconSize::Small, PaletteColor::TextSecondary))
-      .child(
-        Text::new(&text)
-          .id("conversation-composer-context")
-          .variant(TypographyStyle::Caption),
-      )
-      .child(Spacer::new().flex(1.0))
-      .with_children(leave)
-      .into(),
-  )
-}
-
-/// *Continue 03 Implement with your instructions · attempt 3*: the step the failed run stopped at
-/// and the attempt the message starts.
-fn continue_text(ctx: &Ctx, detail: &TaskDetail) -> Option<Arc<str>> {
-  let run = detail.run.as_ref()?;
-  let step = run.current_step()?;
-  let attempt = run.run.attempts().len() + 1;
-  Some(ctx.t_args(
-    "runs.conversation.composer.continueContext",
-    [
-      ("step", &*step_label(ctx, step.number, &step.name)),
-      ("attempt", attempt.to_string().as_str()),
-    ],
-  ))
-}
-
-/// The run waits for the person's decision after its retries: what the composer's messages wait for,
-/// and *Open the decision →*, which opens the Summary with the decision panel.
-fn decision_line(ctx: &mut Ctx, task: TaskId) -> Element {
-  let link = nav(ctx)
-    .link(Page::Task(task, TaskPageTab::Summary))
-    .on(surface().id("conversation-open-decision"))
-    .child(Text::new(&ctx.t("conversation.openDecision")).variant(TypographyStyle::Link));
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Md)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t("runs.conversation.composer.deciding"))
-        .id("conversation-status")
-        .variant(TypographyStyle::Caption),
-    )
-    .child(link)
-    .into()
 }

@@ -13,7 +13,7 @@ use orchester_core::{
   id::{MessageId, ResourceId, StepExecutionId},
   integration::Leftovers,
   resource::StepKey,
-  run::{EventSequence, PauseReason, RunStatus, StepExecutor, TaskPhase},
+  run::{EventSequence, PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, can_run_again_after},
   time::Timestamp,
 };
 
@@ -21,6 +21,7 @@ pub use self::send::{SendError, send_after_turn_in, send_in};
 use super::detail::{RunView, TaskDetail};
 
 pub mod composer;
+pub mod follow;
 mod send;
 
 /// Where the task's conversation stands, for the panel's status label.
@@ -35,8 +36,8 @@ pub enum PanelState {
   Paused,
   /// Stopped at a limit.
   Stopped,
-  /// The run waits for the person's decision after its retries ran out or a step broke again;
-  /// messages wait until it continues.
+  /// The run waits for the person's decision after its retries ran out or a step broke again; a
+  /// new message continues it from an agent's work, as after a failure.
   Deciding,
   Interrupted,
   /// Ready for review: a message asks the agent again.
@@ -73,12 +74,22 @@ impl PanelState {
     }
   }
 
-  /// Whether a message written now can reach an agent of the task.
+  /// Whether a message written now can reach an agent of the task's latest run.
   pub const fn takes_messages(self) -> bool {
     !matches!(
       self,
       Self::Merged | Self::WorktreeRemoved | Self::FailedWorktreeRemoved | Self::FailedNoAgent | Self::Ended
     )
+  }
+
+  /// Why no agent of the run reads a message written now, as the closed composer says it.
+  pub const fn closed_reason(self) -> &'static str {
+    match self {
+      Self::Merged => "conversation.explanation.merged",
+      Self::WorktreeRemoved | Self::FailedWorktreeRemoved => "conversation.explanation.worktreeRemoved",
+      Self::FailedNoAgent => "conversation.explanation.failedNoAgent",
+      _ => "conversation.explanation.ended",
+    }
   }
 }
 
@@ -124,14 +135,16 @@ pub enum Queue {
   NextCheckpoint,
   /// Once the task's run starts.
   RunStarts,
-  /// Before the next action after a person resumes a paused run.
-  RunResumes,
-  /// Once the paused, stopped or interrupted run continues.
-  RunContinues,
+  /// Before the next action after a person resumes a paused run, by `0` when it is known.
+  RunResumes(Option<Arc<str>>),
+  /// Once the stopped, interrupted, failed or waiting run continues, by `0` when it is known.
+  RunContinues(Option<Arc<str>>),
   /// At the next turn of `0`, a direct recipient that does not work now.
   AgentNextTurn(Arc<str>),
   /// Never: the run it was written for has ended.
   RunEnded,
+  /// Once the task's next run starts: it was written for it, after the latest run ended.
+  NextRun,
   /// Never: the run's worktree was removed, so its agent cannot continue.
   WorktreeRemoved,
 }
@@ -222,7 +235,9 @@ impl Conversation {
     Self {
       state,
       recovery_after: run
-        .filter(|_| state == PanelState::Failed)
+        .filter(|run| {
+          state == PanelState::Failed || (state == PanelState::Deciding && run.run.recovery_step(None).is_some())
+        })
         .map(|run| run.run.last_sequence()),
       entries,
       recipients: run.map(recipients).unwrap_or_else(|| vec![orchestrator()]),
@@ -287,8 +302,9 @@ fn recipients(run: &RunView) -> Vec<RecipientChoice> {
     let (Some(profile), Some(agent)) = (profile_of(run, &step.key), step.agent.clone()) else {
       continue;
     };
+    let continued = matches!(run.run.status(), RunStatus::Failed(_) | RunStatus::WaitingForPerson(_));
     if step.tool_step
-      || (matches!(run.run.status(), RunStatus::Failed(_)) && run.run.recovery_step(Some(profile)).is_none())
+      || (continued && run.run.recovery_step(Some(profile)).is_none())
       || choices
         .iter()
         .any(|choice| choice.recipient == Recipient::Agent(profile))
@@ -311,7 +327,8 @@ fn profile_of(run: &RunView, step: &StepKey) -> Option<ResourceId> {
   }
 }
 
-/// The agent a message reaches next: the one that asked, or the one a follow-up would ask.
+/// The agent a message reaches next: the one that asked, the one a follow-up would ask, the one a
+/// continuation resumes, or the one that reads it first once a suspended run goes on.
 fn next_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
   let execution = match state {
     PanelState::Waiting => *run.run.awaiting_answer().first()?,
@@ -319,13 +336,31 @@ fn next_agent(run: &RunView, state: PanelState) -> Option<Arc<str>> {
       let step = run.run.follow_up_step(None)?;
       run.run.latest_execution(&step)?.id()
     }
-    PanelState::Failed => {
+    PanelState::Failed | PanelState::Deciding => {
       let step = run.run.recovery_step(None)?;
       run.run.latest_execution(&step)?.id()
     }
+    PanelState::Paused | PanelState::Stopped | PanelState::Interrupted => return next_reader(run),
     _ => return None,
   };
   run.step_of(execution).and_then(|step| step.agent.clone())
+}
+
+/// The agent that takes a message to Orchestrator first once the suspended `run` goes on: the one
+/// of the step it stopped in, else of the first agent step still to start.
+fn next_reader(run: &RunView) -> Option<Arc<str>> {
+  run
+    .stopped_step()
+    .or_else(|| run.working_steps().next())
+    .filter(|step| !step.tool_step)
+    .or_else(|| {
+      run
+        .steps
+        .iter()
+        .filter(|step| !step.tool_step)
+        .find(|step| matches!(step.status, None | Some(StepStatus::Pending)))
+    })
+    .and_then(|step| step.agent.clone())
 }
 
 fn entry(
@@ -434,29 +469,42 @@ fn queue(message: &Message, (run, working): (Option<&RunView>, &[WorkingAgent]),
       Timing::AfterTurn => Queue::AfterTurn(working.agent.clone()),
     };
   }
+  // Written to run the task again after a run that never continues: the next run's first agent
+  // reads it.
+  if message.run().is_none()
+    && state != PanelState::Failed
+    && can_run_again_after(&run.run, run.worktree_removed.is_some())
+  {
+    return Queue::NextRun;
+  }
   let later_agent = direct_recipient_waits_for_later_turn(message, run, state);
   let next_turn = || match recipient {
     Recipient::Agent(profile) => Queue::AgentNextTurn(role_of(Some(run), profile)),
     Recipient::Orchestrator => Queue::NextCheckpoint,
   };
+  // Who reads it once the run goes on: its own recipient, or the agent that reads first.
+  let reader = || match recipient {
+    Recipient::Agent(profile) => Some(role_of(Some(run), profile)).filter(|role| !role.is_empty()),
+    Recipient::Orchestrator => next_agent(run, state),
+  };
   match run.run.status() {
     RunStatus::Pending => Queue::RunStarts,
     RunStatus::Paused(PauseReason::Requested) if later_agent => next_turn(),
-    RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes,
+    RunStatus::Paused(PauseReason::Requested) => Queue::RunResumes(reader()),
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_)
       if later_agent =>
     {
       next_turn()
     }
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) | RunStatus::WaitingForPerson(_) => {
-      Queue::RunContinues
+      Queue::RunContinues(reader())
     }
     RunStatus::Failed(_) if state == PanelState::FailedWorktreeRemoved => Queue::WorktreeRemoved,
-    RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues,
+    RunStatus::Failed(_) if state == PanelState::Failed => Queue::RunContinues(reader()),
     RunStatus::Failed(_) | RunStatus::Cancelled => Queue::RunEnded,
     // A run recorded as running without a runner is interrupted until one is back.
     RunStatus::Running if state == PanelState::Interrupted && later_agent => next_turn(),
-    RunStatus::Running if state == PanelState::Interrupted => Queue::RunContinues,
+    RunStatus::Running if state == PanelState::Interrupted => Queue::RunContinues(reader()),
     RunStatus::Succeeded if state == PanelState::WorktreeRemoved => Queue::WorktreeRemoved,
     RunStatus::Running | RunStatus::Succeeded if later_agent => next_turn(),
     RunStatus::Running | RunStatus::Succeeded => Queue::NextCheckpoint,

@@ -1,4 +1,5 @@
-//! Only a new message after failure can recover a run; old queued messages never auto-retry it.
+//! Only a new message after failure, or after the run began to wait for the person, can recover a
+//! run; old queued messages never auto-retry it.
 
 use std::path::Path;
 
@@ -26,11 +27,12 @@ pub(super) fn recover(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<O
   let events = db
     .events(run.id())
     .map_err(|error| failed("cannot read failure event", &error))?;
-  let Some(ended) = events
-    .iter()
-    .rev()
-    .find(|event| matches!(event.kind(), RunEventKind::Failed { .. }))
-  else {
+  let Some(ended) = events.iter().rev().find(|event| {
+    matches!(
+      event.kind(),
+      RunEventKind::Failed { .. } | RunEventKind::WaitingForPerson { .. }
+    )
+  }) else {
     return Err(Rejection::RunEnded);
   };
   let messages = db

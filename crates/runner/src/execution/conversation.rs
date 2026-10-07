@@ -37,8 +37,9 @@ use super::{
 impl Scheduler {
   /// Delivers the messages queued for `run` at its next invocation boundary: a task executing the
   /// run takes them as its agents reach one; an idle run whose agent waits for an answer resumes,
-  /// and one that succeeded is followed up. Returns once that is arranged; a paused or stopped run
-  /// keeps them queued until it continues.
+  /// one that succeeded is followed up, and one that failed or waits for the person's decision
+  /// continues with a message written to continue it. Returns once that is arranged; a paused or
+  /// stopped run keeps them queued until it continues.
   pub async fn deliver_messages(&self, run: RunId) -> Result<(), Rejection> {
     loop {
       let one_at_a_time = self.inner.continuing.lock().await;
@@ -147,11 +148,12 @@ impl Scheduler {
 
 /// What delivering messages does to `run` while no task executes it: an ended or merged run takes
 /// none, a succeeded one is followed up and executes again, one whose agent waits for an answer executes
-/// again to resume it; anything else keeps them queued.
+/// again to resume it, a failed one or one that waits for the person's decision continues; anything
+/// else keeps them queued.
 fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Prepared>, Rejection> {
   let stored = idle::load(db, run)?;
   match stored.status() {
-    RunStatus::Failed(_) => super::recovery::recover(db, root, stored),
+    RunStatus::Failed(_) | RunStatus::WaitingForPerson(_) => super::recovery::recover(db, root, stored),
     RunStatus::Cancelled => Err(Rejection::RunEnded),
     // Its work was merged into its base branch: the task is done.
     RunStatus::Succeeded if merged(db, run)? => Err(Rejection::RunEnded),
@@ -162,10 +164,11 @@ fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Pr
 }
 
 /// What attaching does to `run`, for which people's messages are queued: one that succeeded and was
-/// not merged is followed up; anything else keeps them queued.
+/// not merged is followed up, one that failed or waits for the person's decision continues with a
+/// message written to continue it; anything else keeps them queued.
 fn follow_up_after_attach(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Prepared>, Rejection> {
   let stored = idle::load(db, run)?;
-  if matches!(stored.status(), RunStatus::Failed(_)) {
+  if matches!(stored.status(), RunStatus::Failed(_) | RunStatus::WaitingForPerson(_)) {
     return super::recovery::recover(db, root, stored);
   }
   if stored.status() != &RunStatus::Succeeded || merged(db, run)? {
