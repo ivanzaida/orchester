@@ -6,6 +6,7 @@
 //! and forward through the screens.
 
 mod agent_permissions;
+mod agent_slots;
 mod agents;
 mod all_projects;
 mod app_mcp;

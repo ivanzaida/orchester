@@ -2,9 +2,12 @@
 
 use std::time::Duration;
 
-use orchester_core::{limits::ProjectLimits, tokens::TokenBudget};
+use orchester_core::{
+  limits::{AgentSlots, ProjectLimits},
+  tokens::TokenBudget,
+};
 use orchester_desktop::budget::{
-  LimitsForm, TIME_LIMIT_CHOICES, budget_error, read_budget, read_minutes, time_limit_choices,
+  LimitsForm, TIME_LIMIT_CHOICES, budget_error, read_agent_slots, read_budget, read_minutes, time_limit_choices,
 };
 
 fn limits<'a>(max: &'a str, default: &'a str, daily: &'a str, time: &'a str) -> LimitsForm<'a> {
@@ -13,6 +16,7 @@ fn limits<'a>(max: &'a str, default: &'a str, daily: &'a str, time: &'a str) -> 
     default_run_budget: default,
     daily_budget: daily,
     default_time_limit: time,
+    agent_slots: "4",
     separator: ",",
   }
 }
@@ -65,6 +69,35 @@ fn budget_limits_form_reads_every_setting() {
     limits("10,000,000", "1,400,000", "20,000,000", "30").limits(),
     Ok(ProjectLimits::DEFAULT)
   );
+}
+
+#[test]
+fn budget_agent_slots_are_a_whole_number_from_one_to_sixteen() {
+  assert_eq!(read_agent_slots(" 16 "), Ok(AgentSlots::new(16).expect("in range")));
+  assert_eq!(read_agent_slots("1"), Ok(AgentSlots::new(1).expect("in range")));
+  for text in ["", "0", "17", "2.5", "-1", "four"] {
+    let error = read_agent_slots(text).expect_err("outside 1 to 16");
+    assert_eq!(error.key, "settings.limits.agentSlotsInvalid");
+    assert_eq!(error.args, [("min", "1".to_owned()), ("max", "16".to_owned())]);
+  }
+  let form = LimitsForm {
+    agent_slots: "2",
+    ..limits("10,000,000", "1,400,000", "20,000,000", "30")
+  };
+  assert_eq!(
+    form.limits().map(ProjectLimits::agent_slots),
+    Ok(AgentSlots::new(2).expect("in range"))
+  );
+  let form = LimitsForm {
+    agent_slots: "20",
+    ..limits("10,000,000", "1,400,000", "20,000,000", "30")
+  };
+  let errors = form.limits().expect_err("too many agents");
+  assert_eq!(
+    errors.agent_slots.map(|error| error.key),
+    Some("settings.limits.agentSlotsInvalid")
+  );
+  assert_eq!(errors.max_run_budget, None);
 }
 
 #[test]

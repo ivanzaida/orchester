@@ -290,8 +290,8 @@
     "metrics": {
       "running": "Running now",
       "agentsWorking": {
-        "one": "{{count}} agent working",
-        "other": "{{count}} agents working"
+        "one": "{{count}} of {{slots}} agent working",
+        "other": "{{count}} of {{slots}} agents working"
       },
       "agentsUnknown": "Waiting for the runner to report",
       "interrupted": {
@@ -494,7 +494,7 @@
       "summarySequential": "{{count}} tasks · one at a time",
       "totalTokens": "≈ {{count}} tokens",
       "eachTokens": "≈ {{count}} tokens",
-      "capacitySlots": "Task runs and agent slots are separate limits. Runner: {{slots}} agent slots.",
+      "capacitySlots": "Task runs and agent slots are separate limits. Agents working at once: {{slots}} (Project settings › Limits).",
       "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
       "planApprovalHeading": "Plan approval stays on",
       "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
@@ -3870,8 +3870,14 @@
         "one": "{{count}} minute",
         "other": "{{count}} minutes"
       },
+      "agents": "Agents",
+      "agentSlots": "Agents working at once",
+      "agentSlotsDetail": "Each agent at work in any run of this project takes one slot; command steps use slots of their own. Runs beyond it wait in the queue with the reason. A change applies at once: lowering it stops no agent, and new work waits until fewer agents work.",
+      "agentsUnit": "agents",
+      "agentSlotsRange": "{{min}} to {{max}} · default {{default}}",
+      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
       "changesTitle": "Changes apply to new runs",
-      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum. Agents working at once applies at once."
     },
     "environment": {
       "description": "Variables {{project}} adds for its agents and command tools.",

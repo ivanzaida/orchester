@@ -7,6 +7,7 @@ use std::{path::Path, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
+  limits::AgentSlots,
 };
 use orchester_ipc::{Command, Reply};
 
@@ -110,6 +111,26 @@ impl Runners {
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => unexpected(&other, "ContinueRuns"),
     }
+  }
+
+  /// Hands project `root`'s stored agent slots to its runner, which applies them at once, without
+  /// waiting for the answer. A runner that is not connected now, or that drops or stops before it
+  /// takes them, misses nothing: every runner reads the stored slots when it attaches.
+  pub fn apply_agent_slots(&self, root: &Path, slots: AgentSlots) {
+    let (runners, root) = (self.clone(), root.to_path_buf());
+    self.inner.runtime.spawn(async move {
+      let command = Command::SetAgentSlots {
+        agent_slots: slots.get(),
+      };
+      match runners.ask(Some(&root), command).await {
+        Ok(Reply::AgentSlotsSet { .. }) => {}
+        Ok(Reply::Rejected(rejection)) => {
+          tracing::info!(project = %root.display(), ?rejection, "the runner left the agent slots to the next one");
+        }
+        Ok(other) => tracing::error!(?other, "unexpected reply to SetAgentSlots"),
+        Err(error) => tracing::info!(project = %root.display(), %error, "no runner took the agent slots now"),
+      }
+    });
   }
 
   /// Asks `project`'s runner, starting it if needed and waiting for it to attach. A project no tab

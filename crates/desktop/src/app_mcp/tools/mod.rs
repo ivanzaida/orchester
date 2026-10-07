@@ -4,6 +4,7 @@
 
 mod approvals;
 mod auto_mode;
+mod limits;
 mod pipeline_copy;
 mod projects;
 mod run_task;
@@ -53,7 +54,7 @@ struct Spec {
 const SPECS: &[Spec] = &[
   Spec {
     name: "list_projects",
-    description: "The projects of the workspace, most recently opened first: id, name, folder.",
+    description: "The projects of the workspace, most recently opened first: id, name, folder, whether each uses the code index, and its limits (token budgets, default time limit, agents working at once).",
     schema: schema_for_type::<projects::ListProjects>,
     read_only: true,
   },
@@ -154,6 +155,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "update_project_limits",
+    description: "Changes a project's limits as Project settings › Limits does: maximum, default and daily token budgets, the default time limit in minutes and how many agents work at once (1 to 16, applied at once by the project's runner). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved.",
+    schema: schema_for_type::<limits::UpdateProjectLimits>,
+    read_only: false,
+  },
+  Spec {
     name: "duplicate_pipeline",
     description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. Refusals name why.",
     schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
@@ -216,6 +223,7 @@ async fn dispatch(
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
+    "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }

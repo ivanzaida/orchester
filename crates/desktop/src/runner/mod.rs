@@ -20,7 +20,6 @@ mod work;
 use std::{
   collections::{HashMap, HashSet},
   io,
-  num::NonZeroU32,
   path::{Path, PathBuf},
   sync::{
     Arc,
@@ -50,11 +49,6 @@ use crate::{activity::Activity, workspace::OpenProject};
 /// How long a close without active work waits for the runner to stop and exit before
 /// terminating it.
 pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
-
-/// How many agents a project's runner lets work at once. Each run executes one agent step at a
-/// time, so this is also how many runs execute at once. There is no setting for it yet (the
-/// application `settings` in `docs/architecture/storage.md`); this is the default until there is.
-pub const AGENT_SLOTS: NonZeroU32 = NonZeroU32::new(4).expect("four is above zero");
 
 /// How asking the runners to stop ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -103,6 +103,7 @@ const MAX_BUDGET: &str = "limits-max-run-budget";
 const DEFAULT_BUDGET: &str = "limits-default-run-budget";
 const DAILY_BUDGET: &str = "limits-daily-budget";
 const TIME_LIMIT: &str = "limits-default-time-limit";
+const AGENT_SLOTS: &str = "limits-agent-slots";
 
 fn limits_tab(desktop: &mut Desktop) {
   settings(desktop);
@@ -148,13 +149,15 @@ fn project_settings_limits_show_the_defaults_and_their_fields_in_order() {
   assert!(shows(&mut desktop, "settings-limits", "= 10M tokens · default"));
   assert!(shows(&mut desktop, "settings-save-status", "All changes saved"));
   assert!(desktop.tree.get_element_by_id("settings-limits-notice").is_some());
+  assert_eq!(desktop.value(AGENT_SLOTS), "4");
   assert_eq!(
-    desktop.stops(5, false),
+    desktop.stops(6, false),
     expected(&[
       Some(MAX_BUDGET),
       Some(DEFAULT_BUDGET),
       Some(DAILY_BUDGET),
       Some(TIME_LIMIT),
+      Some(AGENT_SLOTS),
       Some(MAX_BUDGET)
     ])
   );

@@ -1,11 +1,11 @@
 //! Token budgets and time limits as people enter and read them (`docs/design/orchester-workspace.md`,
-//! "Token budgets", "Stopped at limit"): field errors, the Project settings › Limits form and
-//! whole-minute time limits of active agent time.
+//! "Token budgets", "Stopped at limit"): field errors, the Project settings › Limits form,
+//! whole-minute time limits of active agent time and how many agents work at once.
 
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{ProjectLimits, ProjectLimitsError},
+  limits::{AgentSlots, ProjectLimits, ProjectLimitsError},
   tokens::{BudgetInputError, TokenBudget, compact_tokens, grouped, parse_budget},
 };
 
@@ -46,6 +46,11 @@ pub fn read_minutes(text: &str) -> Result<Duration, Message> {
     return Err(Message::new("errors.timeLimitEmpty"));
   }
   let minutes: u64 = text.parse().map_err(|_| Message::new("errors.timeLimitInvalid"))?;
+  time_limit(minutes)
+}
+
+/// A time limit of `minutes` whole minutes, above zero.
+pub fn time_limit(minutes: u64) -> Result<Duration, Message> {
   if minutes == 0 {
     return Err(Message::new("errors.timeLimitZero"));
   }
@@ -53,6 +58,23 @@ pub fn read_minutes(text: &str) -> Result<Duration, Message> {
     .checked_mul(SECONDS_PER_MINUTE)
     .map(Duration::from_secs)
     .ok_or_else(|| Message::new("errors.timeLimitInvalid"))
+}
+
+/// An agent slots field's text: a whole number from [`AgentSlots::MIN`] to [`AgentSlots::MAX`].
+pub fn read_agent_slots(text: &str) -> Result<AgentSlots, Message> {
+  let count: u64 = text.trim().parse().map_err(|_| agent_slots_error())?;
+  agent_slots(count)
+}
+
+/// `count` agents at once, from [`AgentSlots::MIN`] to [`AgentSlots::MAX`].
+pub fn agent_slots(count: u64) -> Result<AgentSlots, Message> {
+  AgentSlots::new(count).map_err(|_| agent_slots_error())
+}
+
+fn agent_slots_error() -> Message {
+  Message::new("settings.limits.agentSlotsInvalid")
+    .with("min", AgentSlots::MIN.to_string())
+    .with("max", AgentSlots::MAX.to_string())
 }
 
 /// A time limit in a field: its whole minutes.
@@ -87,6 +109,7 @@ pub struct LimitsForm<'a> {
   pub default_run_budget: &'a str,
   pub daily_budget: &'a str,
   pub default_time_limit: &'a str,
+  pub agent_slots: &'a str,
   /// The locale's group separator.
   pub separator: &'a str,
 }
@@ -98,24 +121,52 @@ pub struct LimitsErrors {
   pub default_run_budget: Option<Message>,
   pub daily_budget: Option<Message>,
   pub default_time_limit: Option<Message>,
+  pub agent_slots: Option<Message>,
 }
 
 impl LimitsForm<'_> {
   pub fn limits(&self) -> Result<ProjectLimits, Box<LimitsErrors>> {
     let budget = |text| read_budget(text, self.separator, unbounded());
-    let max = budget(self.max_run_budget);
-    let default = budget(self.default_run_budget);
-    let daily = budget(self.daily_budget);
-    let time = read_minutes(self.default_time_limit);
-    let (Ok(max), Ok(default), Ok(daily), Ok(time)) = (&max, &default, &daily, &time) else {
+    ReadLimits {
+      max_run_budget: budget(self.max_run_budget),
+      default_run_budget: budget(self.default_run_budget),
+      daily_budget: budget(self.daily_budget),
+      default_time_limit: read_minutes(self.default_time_limit),
+      agent_slots: read_agent_slots(self.agent_slots),
+    }
+    .limits()
+  }
+}
+
+/// Each limit as read, from the Limits tab's fields or from Orchester's MCP server's arguments.
+pub struct ReadLimits {
+  pub max_run_budget: Result<TokenBudget, Message>,
+  pub default_run_budget: Result<TokenBudget, Message>,
+  pub daily_budget: Result<TokenBudget, Message>,
+  pub default_time_limit: Result<Duration, Message>,
+  pub agent_slots: Result<AgentSlots, Message>,
+}
+
+impl ReadLimits {
+  /// The limits, or why they cannot be saved: each limit's own error, else the checks between them.
+  pub fn limits(self) -> Result<ProjectLimits, Box<LimitsErrors>> {
+    let (Ok(max), Ok(default), Ok(daily), Ok(time), Ok(slots)) = (
+      &self.max_run_budget,
+      &self.default_run_budget,
+      &self.daily_budget,
+      &self.default_time_limit,
+      &self.agent_slots,
+    ) else {
       return Err(Box::new(LimitsErrors {
-        max_run_budget: max.err(),
-        default_run_budget: default.err(),
-        daily_budget: daily.err(),
-        default_time_limit: time.err(),
+        max_run_budget: self.max_run_budget.err(),
+        default_run_budget: self.default_run_budget.err(),
+        daily_budget: self.daily_budget.err(),
+        default_time_limit: self.default_time_limit.err(),
+        agent_slots: self.agent_slots.err(),
       }));
     };
-    ProjectLimits::new(*max, *default, *daily, *time).map_err(|error| {
+    let slots = *slots;
+    let limits = ProjectLimits::new(*max, *default, *daily, *time).map_err(|error| {
       Box::new(match error {
         ProjectLimitsError::DefaultAboveMaximum { max, .. } => LimitsErrors {
           default_run_budget: Some(
@@ -128,6 +179,7 @@ impl LimitsForm<'_> {
           ..LimitsErrors::default()
         },
       })
-    })
+    })?;
+    Ok(limits.with_agent_slots(slots))
   }
 }

@@ -87,8 +87,10 @@ dialog (`on_close_requested` / `CloseRequest`), which is what the wait path need
 ### Step graphs
 
 The runner starts every step execution whose dependencies have passed, as far as the agent slots
-allow; the slots (an application setting, 4 by default) are shared by all runs of the runner, and each agent
-at work takes one.
+allow; the slots (the project setting *Agents working at once* in Project settings › Limits, 1 to 16, 4 by
+default) are shared by all runs of the runner, and each agent at work takes one. The desktop sends them when
+the runner attaches and again whenever they change (`SetAgentSlots`): more slots start waiting work at once;
+fewer stop no agent, and new work waits until fewer agents work than the slots.
 
 - **Where a step works.** A step that starts alone — no other step of the run is running or ready —
   works in the run's worktree on the run's branch, as a sequential pipeline always has; nothing else
@@ -363,7 +365,7 @@ when a Windows installer exists.
 | --- | --- |
 | `meta` | schema version |
 | `projects` | id, name, repository path, added / last opened |
-| `settings` | application settings (locale, runner limits, agent slots) as key → JSON |
+| `settings` | application settings (locale, runner limits) as key → JSON |
 | `sessions` | id, pid, started / ended, `end_kind`: clean, runs_paused, quit_now; still open means crash |
 | `ui_state` | key → text: the window's tabs (`tabs`: their locations in order and the active one, without history); later window placement and drafts not tied to a project |
 | `servers` | the shared servers (`server.md`, "Desktop data"): id, normalized address (unique), the server's name, plain HTTP allowed, added at, and the account signed in from this computer (user id, username, display name, admin, signed in at). The token is in the OS keychain under `orchester-server:<server id>` / `token` |
