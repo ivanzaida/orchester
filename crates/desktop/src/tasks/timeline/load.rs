@@ -1,8 +1,8 @@
 //! What a run's timeline is read from besides the task: its transcript and its tool requests,
-//! pending and decided, read apart. The requests are read again as soon as the project's waiting
-//! requests change, so a decision reaches the chat as it reaches the dialog and the status bar, while
-//! the transcript, much longer, follows the run's output. Blocks on SQLite, so the UI calls it off the
-//! UI thread.
+//! pending and decided, read apart. The requests are read again after each read of the transcript, so
+//! they are never older than it, and as soon as the project's waiting requests change, so a decision
+//! reaches the chat as it reaches the dialog and the status bar, while the transcript, much longer,
+//! follows the run's output. Blocks on SQLite, so the UI calls it off the UI thread.
 
 use std::{path::Path, sync::Arc};
 
