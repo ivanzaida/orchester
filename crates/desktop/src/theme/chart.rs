@@ -1,10 +1,9 @@
 //! How the Usage dashboard draws its charts on a lurq canvas (`C2pTYF`, `e5PbG`, "Chart colors"):
 //! the series color follows the CLI, the grid is `hairline`, the baseline and reset rules `border`,
-//! axis text `subtle` 10 (figures and clock times mono, days proportional), the warning threshold
-//! `muted` dashed, single-series marks `muted` /
-//! `subtle`; text never takes a series color. Bars are stacked with a 2px gap and a 4px rounded
-//! top; weekly windows are solid lines, 5-hour windows dashed, a stretch without reports dotted
-//! and 1px.
+//! axis text `subtle` 10 (figures and clock times mono, days proportional, *Today* `muted`), the
+//! warning threshold `muted` dashed, single-series marks `muted` / `subtle`; text never takes a
+//! series color. Bars are stacked with a 2px gap and a 4px rounded top; weekly windows are solid
+//! lines, 5-hour windows dashed, a stretch without reports dotted and 1px.
 
 use std::sync::Arc;
 
@@ -57,6 +56,17 @@ pub const BREAKDOWN_BAR_HEIGHT: f32 = 8.0;
 /// in the canvas.
 pub const HEADROOM: f32 = 0.9;
 
+/// `style` as a canvas draws and measures it: family, size, weight, slant, letter spacing and
+/// OpenType features.
+pub fn canvas_font(style: &TextStyle) -> CanvasFont {
+  let mut font = CanvasFont::new(Arc::clone(&style.font_family), style.font_size);
+  font.weight = style.weight;
+  font.style = style.style;
+  font.letter_spacing = style.letter_spacing;
+  font.font_features = style.font_features.clone();
+  font
+}
+
 /// The chart colors and the axis font, resolved from the theme for drawing.
 #[derive(Clone)]
 pub struct ChartStyle {
@@ -65,6 +75,8 @@ pub struct ChartStyle {
   pub grid: Color,
   pub rule: Color,
   pub axis: Color,
+  /// The x axis label naming today (`X label Today` in `C2pTYF`).
+  pub today: Color,
   pub threshold: Color,
   pub single: Color,
   pub single_light: Color,
@@ -80,11 +92,6 @@ impl ChartStyle {
   pub fn of(ctx: &Ctx) -> Self {
     let theme = ctx.theme();
     let color = |role: PaletteColor| theme.palette_color(role);
-    let canvas_font = |style: &TextStyle| {
-      let mut font = CanvasFont::new(Arc::clone(&style.font_family), style.font_size);
-      font.weight = style.weight;
-      font
-    };
     let font = canvas_font(&theme.typography_style(TypographyStyle::Mono));
     let day_font = canvas_font(&theme.typography_style(ExtraTypography::AxisLabel.role()));
     Self {
@@ -96,6 +103,7 @@ impl ChartStyle {
       grid: color(ExtraColor::Hairline.role()),
       rule: color(PaletteColor::Border),
       axis: color(PaletteColor::TextMuted),
+      today: color(PaletteColor::TextSecondary),
       threshold: color(PaletteColor::TextSecondary),
       single: color(PaletteColor::TextSecondary),
       single_light: color(PaletteColor::TextMuted),

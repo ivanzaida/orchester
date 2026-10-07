@@ -14,6 +14,7 @@ mod conflict;
 mod criteria;
 mod edit;
 mod header;
+mod outside;
 mod persistence;
 mod plan;
 mod start;
@@ -54,7 +55,6 @@ use super::{ProjectNav, organization_fields::OrganizationDraft};
 use crate::{
   budget::minutes_text,
   messages::Message,
-  navigation::route::Page,
   tabs::dirty::EditMark,
   tasks::{
     conflict::EditConflict,
@@ -263,6 +263,8 @@ pub struct NewTaskForm {
   reseed: Signal<Option<Reseed>>,
   /// The versions the person chose in a conflict.
   choices: Signal<conflict::Choices>,
+  /// The version of the task the form edits, and whether a newer one came meanwhile.
+  followed: outside::Followed,
 }
 
 impl Component for NewTaskForm {
@@ -281,6 +283,8 @@ impl Component for NewTaskForm {
     let loaded = organization.loaded.clone();
     let reseed = ctx.signal(None);
     let merged = reseed.clone();
+    let followed = outside::Followed::new(ctx, reseed.clone());
+    let based = followed.clone();
     ctx.watch(&save.state(), move |state| {
       if state.is_rejected() {
         if state.error.as_ref().is_some_and(persistence::needs_cancel_confirmation) {
@@ -294,6 +298,7 @@ impl Component for NewTaskForm {
         return;
       };
       confirm.set(false);
+      based.saved(draft.revision, draft.details.clone());
       // The next save writes what the person changes from here.
       loaded.set(crate::tasks::organization::OrganizationValue(
         draft.organization.clone(),
@@ -313,21 +318,7 @@ impl Component for NewTaskForm {
     let retrying = ctx.signal(false);
     let starting_pipeline = ctx.signal(None);
     let run = run_action(ctx, queued_task.clone());
-    let queued_on_failure = queued_task.clone();
-    let started = nav.clone();
-    ctx.watch(&run.state(), move |state| {
-      if state.is_pending() {
-        return;
-      }
-      if let Some(task) = state.error.as_ref().and_then(|problems| problems.queued.clone()) {
-        queued_on_failure.set(Some(task));
-      }
-      // The task may have been saved and queued even when the start outcome is unknown.
-      started.tasks_changed();
-      if let Some(StartedTask(task)) = state.data {
-        started.finish(Page::task(task));
-      }
-    });
+    start::follow_run(ctx, &run, queued_task.clone(), nav.clone());
     Self {
       organization,
       cancel_confirmation,
@@ -348,6 +339,7 @@ impl Component for NewTaskForm {
       conflict,
       reseed,
       choices: ctx.signal(conflict::Choices::default()),
+      followed,
     }
   }
 
@@ -364,6 +356,7 @@ impl Component for NewTaskForm {
     let recovered = props.recovering.as_ref().map(|recovering| &*recovering.task);
     let separator = ctx.t("number.groupSeparator");
     let state = self.state(&save, &run, &separator, (limits, edited), recovered.is_some());
+    self.follow_outside(edited, &state);
     self.mark_unsaved(&state, editing);
     let (target, base) = self.target(editing.or(recovered), &save);
     let conflict = self.conflict.get();
@@ -424,6 +417,7 @@ impl Component for NewTaskForm {
         (&state, still_editing, retried),
       ))
       .child(header::heading(ctx, still_editing, &state))
+      .with_children(self.outside_notice(ctx, edited))
       .child(form(submit, content))
       .child(cancellation::confirmation(
         ctx,
@@ -470,20 +464,19 @@ impl NewTaskForm {
     }
   }
 
-  /// Where the form saves: over the draft it edits, as read when the form opened or as its last
-  /// save stored it, or as a new draft under the form's key; and the details as read then.
+  /// Where the form saves: over the task it edits, on the version its fields were filled from or its
+  /// last save stored (not a newer one read meanwhile, which the store then merges or reports as a
+  /// conflict), or as a new draft under the form's key; and the details of that version.
   fn target(&self, editing: Option<&Task>, save: &SaveAction) -> (SaveTarget, Option<TaskDetails>) {
-    let saved = save.state().get().data;
+    let base = self.followed.base.get();
     let target = editing.map_or(SaveTarget::New(self.batch), |task| {
-      SaveTarget::Task(
-        task.id(),
-        saved.as_ref().map_or(task.revision(), |saved| saved.revision),
-      )
+      SaveTarget::Task(task.id(), base.as_ref().map_or(task.revision(), |base| base.revision))
     });
-    let base = saved
-      .map(|saved| saved.details)
+    let details = base
+      .map(|base| base.details)
+      .or_else(|| save.state().get().data.map(|saved| saved.details))
       .or_else(|| editing.map(|task| task.details().clone()));
-    (target, base)
+    (target, details)
   }
 
   /// After a save merged the person's change with someone else's, or the person chose the versions

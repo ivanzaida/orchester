@@ -10,21 +10,23 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction},
-    theme::{Breakpoint, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Spacer, Text},
+  components::{Column, Row, Spacer, Stack, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, Style, dimension::Dimension},
 };
 use orchester_core::{
   id::{ProjectId, TaskId},
-  usage::RunOutcome,
+  usage::{RunCost, RunOutcome},
 };
 
 use super::{
   card::{Card, text_link},
+  expensive_columns::{COUNT_WIDTH, Fixed, Layout, TIME_WIDTH, TOKENS_WIDTH, columns, outcome_glyph},
   format,
+  measure::Measurer,
   state::{Dashboard, Views},
   table::{Cell, TableColumn, Width, column, fit, row, spaced_table},
 };
@@ -46,49 +48,6 @@ use crate::{
 
 /// Rows before *Show all*.
 const FIRST_ROWS: usize = 5;
-/// The fixed columns' widths and the gap between columns.
-struct Widths {
-  count: f32,
-  tokens: f32,
-  started: f32,
-  agent_time: f32,
-  outcome: f32,
-  chevron: f32,
-  gap: SpacingSize,
-}
-
-impl Widths {
-  /// As `sOQmy` draws them: a count, a token figure, a time, the outcome label, the chevron.
-  const WIDE: Self = Self {
-    count: 56.0,
-    tokens: 108.0,
-    started: 104.0,
-    agent_time: 104.0,
-    outcome: 132.0,
-    chevron: 16.0,
-    gap: SpacingSize::Md,
-  };
-  /// Narrower than lurq's `Xl` breakpoint, which the design does not draw: each fixed column as
-  /// wide as its heading and figures, so the titles and pipelines keep readable room.
-  const NARROW: Self = Self {
-    count: 40.0,
-    tokens: 64.0,
-    started: 80.0,
-    agent_time: 56.0,
-    outcome: 112.0,
-    chevron: 16.0,
-    gap: SpacingSize::Sm,
-  };
-
-  fn of(ctx: &Ctx) -> &'static Self {
-    if matches!(ctx.breakpoint(), Some(Breakpoint::Xl)) {
-      &Self::WIDE
-    } else {
-      &Self::NARROW
-    }
-  }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Opened(OpenProject, Page, OpenIn);
 
@@ -110,7 +69,9 @@ impl PartialEq for ExpensiveProps {
 
 impl lurq::app::component::DevtoolsInspectable for ExpensiveProps {}
 
-pub struct ExpensiveTable;
+pub struct ExpensiveTable {
+  measurer: Measurer,
+}
 
 impl Component for ExpensiveTable {
   type Props = ExpensiveProps;
@@ -123,7 +84,9 @@ impl Component for ExpensiveTable {
         navigation.open_project_page(project, page, open);
       }
     });
-    Self
+    Self {
+      measurer: Measurer::new(ctx),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -147,11 +110,16 @@ impl Component for ExpensiveTable {
       dashboard: Arc::clone(&props.dashboard),
       action,
     };
-    let body = if views.runs {
-      runs(ctx, &props.dashboard, &opener, views.all_rows)
+    let table = if views.runs {
+      runs(ctx, &props.dashboard, (&opener, &self.measurer), views.all_rows)
     } else {
-      tasks(ctx, &props.dashboard, &opener, views.all_rows)
+      tasks(ctx, &props.dashboard, (&opener, &self.measurer), views.all_rows)
     };
+    let body = Stack::new()
+      .width(Dimension::Pct(100.0))
+      .child(table)
+      .child(self.measurer.canvas())
+      .into();
     let shown = if views.runs {
       props.dashboard.report.runs.len()
     } else {
@@ -165,6 +133,10 @@ impl Component for ExpensiveTable {
       .lead(switch)
       .trailing(note.into())
       .body([body, footer(ctx, &props.views, views, shown)])
+  }
+
+  fn after_layout(&self) {
+    self.measurer.after_layout();
   }
 }
 
@@ -214,38 +186,37 @@ impl Opener {
 }
 
 fn outcome(ctx: &Ctx, outcome: RunOutcome) -> Element {
-  let glyph = match outcome {
-    RunOutcome::Pending => Icon::Clock3,
-    RunOutcome::Running => Icon::Loader,
-    RunOutcome::Paused | RunOutcome::Interrupted => Icon::CirclePause,
-    RunOutcome::Waiting => Icon::MessageCircle,
-    RunOutcome::Succeeded => Icon::CircleCheck,
-    RunOutcome::Failed => Icon::CircleX,
-    RunOutcome::Cancelled => Icon::CircleSlash,
-  };
-  compact_status_label(glyph, &ctx.t(format::outcome_key(outcome)))
+  status(outcome, &ctx.t(format::outcome_key(outcome)))
 }
 
-/// The key in mono and the title beside it; the title gives way with an ellipsis, the key keeps
-/// its width.
-fn named(id: String, key: &str, title: &str) -> Element {
+fn status(outcome: RunOutcome, label: &str) -> Element {
+  compact_status_label(outcome_glyph(outcome), label)
+}
+
+/// The key in mono and `muted`, and the title beside it, or under it in the narrow layout
+/// (`sOQmy`); the title gives way with an ellipsis, the key keeps its width beside it.
+fn named(id: String, key: &str, title: &str, stacked: bool) -> Element {
+  let title = fit(Text::new(title).id(id).variant(TypographyStyle::Body));
+  let key = Text::new(key)
+    .variant(ExtraTypography::MonoValue.role())
+    .color(PaletteColor::TextSecondary)
+    .nowrap();
+  if stacked {
+    return Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Hair.role())
+      .child(fit(key))
+      .child(title)
+      .into();
+  }
   Row::new()
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(
-      Text::new(key)
-        .variant(ExtraTypography::MonoValue.role())
-        .nowrap()
-        .flex_shrink(0.0),
-    )
-    .child(fit(
-      Text::new(title)
-        .id(id)
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary),
-    ))
+    .child(key.flex_shrink(0.0))
+    .child(title)
     .into()
 }
 
@@ -254,7 +225,7 @@ fn chevron() -> Cell {
 }
 
 /// `columns`, with the project's after the first across projects (`p4eVV6`).
-fn columns(ctx: &Ctx, dashboard: &Dashboard, mut columns: Vec<TableColumn>) -> Vec<TableColumn> {
+fn with_project(ctx: &Ctx, dashboard: &Dashboard, mut columns: Vec<TableColumn>) -> Vec<TableColumn> {
   if dashboard.all_projects() {
     columns.insert(1, column(ctx.t("usage.table.project"), Width::Flex(0.8), false));
   }
@@ -269,39 +240,51 @@ fn cells(dashboard: &Dashboard, project: &Arc<str>, mut cells: Vec<Cell>) -> Vec
   cells
 }
 
-fn tasks(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element {
-  let widths = Widths::of(ctx);
-  let columns = columns(
-    ctx,
-    dashboard,
-    vec![
-      column(ctx.t("usage.table.task"), Width::Flex(2.4), false),
-      column(ctx.t("usage.table.pipeline"), Width::Flex(1.2), false),
-      column(ctx.t("usage.summary.runs"), Width::Px(widths.count), true),
-      column(ctx.t("usage.table.spent"), Width::Px(widths.tokens), true),
-      column(ctx.t("usage.table.cached"), Width::Px(widths.tokens), true),
-      column(ctx.t("usage.table.outcome"), Width::Px(widths.outcome), false),
-      column(Arc::from(""), Width::Px(widths.chevron), false),
-    ],
-  );
-  let rows = dashboard
+fn tasks(ctx: &Ctx, dashboard: &Dashboard, (opener, measurer): (&Opener, &Measurer), all: bool) -> Element {
+  let layout = Layout::of(ctx);
+  let shown = &dashboard.report.tasks[..dashboard
     .report
     .tasks
+    .len()
+    .min(if all { usize::MAX } else { FIRST_ROWS })];
+  let flexible = vec![
+    column(ctx.t("usage.table.task"), Width::Flex(2.4), false),
+    column(ctx.t("usage.table.pipeline"), Width::Flex(1.2), false),
+  ];
+  let fixed = vec![
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.summary.runs"),
+      COUNT_WIDTH,
+      shown.iter().map(|task| task.runs.to_string().into()),
+    ),
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.table.spent"),
+      TOKENS_WIDTH,
+      shown.iter().map(|task| format::tokens(task.usage.counted())),
+    ),
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.table.cached"),
+      TOKENS_WIDTH,
+      shown.iter().map(|task| format::tokens(task.usage.cached_input)),
+    ),
+    Fixed::outcome(ctx, shown.iter().map(|task| task.outcome)),
+    Fixed::chevron(ctx),
+  ];
+  let columns = columns(ctx, (layout, measurer), with_project(ctx, dashboard, flexible), fixed);
+  let rows = shown
     .iter()
-    .take(if all { usize::MAX } else { FIRST_ROWS })
     .enumerate()
     .map(|(index, task)| {
+      let title = format!("usage-expensive-title-{index}");
       let cells = cells(
         dashboard,
         &task.project_name,
         vec![
-          Cell::Element(named(format!("usage-expensive-title-{index}"), &task.key, &task.title)),
-          Cell::Muted(
-            task
-              .pipeline
-              .clone()
-              .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
-          ),
+          Cell::Element(named(title, &task.key, &task.title, false)),
+          pipeline(ctx, task.pipeline.as_ref()),
           Cell::Text(task.runs.to_string().into()),
           Cell::Text(format::tokens(task.usage.counted())),
           Cell::Text(format::tokens(task.usage.cached_input)),
@@ -309,50 +292,50 @@ fn tasks(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Elemen
           chevron(),
         ],
       );
-      pressed(row(&columns, cells, widths.gap), opener.link(task.project, task.task))
+      let id = format!("usage-expensive-tasks-row-{index}");
+      pressed(
+        row(&id, &columns, cells, layout.gap()),
+        opener.link(task.project, task.task),
+      )
     })
     .collect();
-  spaced_table("usage-expensive-tasks", &columns, rows, widths.gap)
+  spaced_table("usage-expensive-tasks", &columns, rows, layout.gap())
 }
 
-fn runs(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element {
-  let widths = Widths::of(ctx);
-  let columns = columns(
-    ctx,
-    dashboard,
-    vec![
-      column(ctx.t("usage.table.run"), Width::Flex(2.4), false),
-      column(ctx.t("usage.table.pipeline"), Width::Flex(1.1), false),
-      column(ctx.t("usage.table.started"), Width::Px(widths.started), false),
-      column(ctx.t("usage.summary.agentTime"), Width::Px(widths.agent_time), true),
-      column(ctx.t("usage.table.spent"), Width::Px(widths.tokens), true),
-      column(ctx.t("usage.table.cached"), Width::Px(widths.tokens), true),
-      column(ctx.t("usage.table.outcome"), Width::Px(widths.outcome), false),
-      column(Arc::from(""), Width::Px(widths.chevron), false),
-    ],
-  );
-  let rows = dashboard
+fn runs(ctx: &Ctx, dashboard: &Dashboard, (opener, measurer): (&Opener, &Measurer), all: bool) -> Element {
+  let layout = Layout::of(ctx);
+  let shown = &dashboard.report.runs[..dashboard
     .report
     .runs
+    .len()
+    .min(if all { usize::MAX } else { FIRST_ROWS })];
+  // Narrow, the title sits under its key, so the pipeline can take a little more of the room.
+  let (run_share, pipeline_share) = if layout.stacked() { (2.1, 1.2) } else { (2.4, 1.1) };
+  let flexible = vec![
+    column(ctx.t("usage.table.run"), Width::Flex(run_share), false),
+    column(ctx.t("usage.table.pipeline"), Width::Flex(pipeline_share), false),
+  ];
+  let columns = columns(
+    ctx,
+    (layout, measurer),
+    with_project(ctx, dashboard, flexible),
+    run_columns(ctx, shown),
+  );
+  let rows = shown
     .iter()
-    .take(if all { usize::MAX } else { FIRST_ROWS })
     .enumerate()
     .map(|(index, run)| {
       let label = ctx.t_args(
         "usage.expensive.runLabel",
         [("task", &*run.key), ("run", run.number.get().to_string().as_str())],
       );
+      let title = format!("usage-expensive-title-{index}");
       let cells = cells(
         dashboard,
         &run.project_name,
         vec![
-          Cell::Element(named(format!("usage-expensive-title-{index}"), &label, &run.title)),
-          Cell::Muted(
-            run
-              .pipeline
-              .clone()
-              .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
-          ),
+          Cell::Element(named(title, &label, &run.title, layout.stacked())),
+          pipeline(ctx, run.pipeline.as_ref()),
           Cell::Muted(format::date_time(ctx, run.started)),
           Cell::Text(format::duration(ctx, run.agent_ms)),
           Cell::Text(format::tokens(run.usage.counted())),
@@ -361,10 +344,55 @@ fn runs(ctx: &Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Element
           chevron(),
         ],
       );
-      pressed(row(&columns, cells, widths.gap), opener.link(run.project, run.task))
+      let id = format!("usage-expensive-runs-row-{index}");
+      pressed(
+        row(&id, &columns, cells, layout.gap()),
+        opener.link(run.project, run.task),
+      )
     })
     .collect();
-  spaced_table("usage-expensive-runs", &columns, rows, widths.gap)
+  spaced_table("usage-expensive-runs", &columns, rows, layout.gap())
+}
+
+/// The fixed columns of *Runs*: started, agent time, spent tokens, cached input, outcome, chevron.
+fn run_columns(ctx: &Ctx, shown: &[RunCost]) -> Vec<Fixed> {
+  vec![
+    Fixed::text(
+      ctx,
+      ctx.t("usage.table.started"),
+      TIME_WIDTH,
+      shown.iter().map(|run| format::date_time(ctx, run.started)),
+    ),
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.summary.agentTime"),
+      TIME_WIDTH,
+      shown.iter().map(|run| format::duration(ctx, run.agent_ms)),
+    ),
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.table.spent"),
+      TOKENS_WIDTH,
+      shown.iter().map(|run| format::tokens(run.usage.counted())),
+    ),
+    Fixed::figures(
+      ctx,
+      ctx.t("usage.table.cached"),
+      TOKENS_WIDTH,
+      shown.iter().map(|run| format::tokens(run.usage.cached_input)),
+    ),
+    Fixed::outcome(ctx, shown.iter().map(|run| run.outcome)),
+    Fixed::chevron(ctx),
+  ]
+}
+
+/// The pipeline a task or run ran on, or that it is gone.
+fn pipeline(ctx: &Ctx, pipeline: Option<&Arc<str>>) -> Cell {
+  Cell::Muted(
+    pipeline
+      .cloned()
+      .unwrap_or_else(|| ctx.t("usage.breakdown.pipelineGone")),
+  )
 }
 
 /// A row that opens its task, with the hover fill.

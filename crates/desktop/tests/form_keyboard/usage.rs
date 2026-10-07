@@ -2,7 +2,7 @@
 //! open it; a finished run shows in the summary, the chart, its table and *Most expensive*; a
 //! project without runs says so and offers the last seven days; plan limits without reports say
 //! so; the warning threshold saves for every project; All projects shows every project's usage;
-//! axis labels stay whole inside their charts and narrow tables keep readable titles.
+//! axis labels stay whole inside their charts.
 //! `cargo test -p orchester-desktop --test form_keyboard usage`.
 
 use lurq::canvas::CanvasItemShape;
@@ -127,27 +127,35 @@ fn usage_tab_of_all_projects_reads_every_project() {
 }
 
 /// A task title too long for the Task column of a narrow window.
-const LONG_TITLE: &str = "Migrate the settings to the project database";
+pub(crate) const LONG_TITLE: &str = "Migrate the settings to the project database";
 
 /// Runs a task named [`LONG_TITLE`] to its end and opens Usage.
-fn usage_after_a_long_titled_run() -> Desktop {
+pub(crate) fn usage_after_a_long_titled_run() -> Desktop {
+  usage_after_runs(&[LONG_TITLE])
+}
+
+/// Runs a task named after each of `titles` to its end, one after the other, and opens Usage.
+pub(crate) fn usage_after_runs(titles: &[&str]) -> Desktop {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
-  fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
-  set_text(&mut desktop, "task-title", LONG_TITLE);
-  desktop.wait_until("the task page", |desktop| {
-    // Pressing before the runner is online fails visibly; pressing again retries the same run.
-    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
-      desktop.click("create-and-run");
-    }
-    has(desktop, "task-page")
-  });
-  desktop.wait_until("the run to finish", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| run.status().is_terminal())
-  });
+  for title in titles {
+    fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
+    set_text(&mut desktop, "task-title", title);
+    desktop.wait_until("the task page", |desktop| {
+      // Pressing before the runner is online fails visibly; pressing again retries the same run.
+      if !has(desktop, "task-page") && has(desktop, "create-and-run") {
+        desktop.click("create-and-run");
+      }
+      has(desktop, "task-page")
+    });
+    desktop.wait_until("the run to finish", |desktop| {
+      latest_run(desktop.repo()).is_some_and(|run| run.status().is_terminal())
+    });
+  }
   desktop.press("nav-usage");
-  desktop.wait_until("the run in the summary", |desktop| {
-    shows_text(desktop, "usage-summary-runs", "1 finished")
+  let finished = format!("{} finished", titles.len());
+  desktop.wait_until("the runs in the summary", |desktop| {
+    shows_text(desktop, "usage-summary-runs", &finished)
   });
   desktop
 }
@@ -200,7 +208,7 @@ fn assert_labels_inside(desktop: &mut Desktop, id: &str, last: &str) {
 }
 
 #[test]
-fn usage_axis_labels_stay_inside_the_plot_and_narrow_titles_give_way_with_room() {
+fn usage_axis_labels_stay_inside_the_plot() {
   let mut desktop = usage_after_a_long_titled_run();
   desktop.press("usage-period-2");
   desktop.wait_until("30 days", |desktop| {
@@ -208,20 +216,5 @@ fn usage_axis_labels_stay_inside_the_plot_and_narrow_titles_give_way_with_room()
   });
   // 30 day slots are narrower than "Today": it ends at the plot's right end instead of past it.
   assert_labels_inside(&mut desktop, "usage-tokens-chart", "Today");
-
-  desktop.tree.resize(960, 960);
-  desktop.pass();
-  desktop.wait_for("usage-expensive-title-0");
-  let title = desktop.bounds("usage-expensive-title-0");
-  let pipeline = desktop.bounds("usage-expensive-tasks-heading-1");
-  let runs = desktop.bounds("usage-expensive-tasks-heading-2");
-  assert!(
-    title.x + title.width <= pipeline.x,
-    "the title ends in its own column: {title:?} before {pipeline:?}"
-  );
-  assert!(title.width >= 120.0, "the title keeps readable room: {title:?}");
-  assert!(
-    runs.x - pipeline.x >= 80.0,
-    "the pipeline keeps readable room: {pipeline:?} to {runs:?}"
-  );
+  assert_labels_inside(&mut desktop, "usage-cache-chart", "Today");
 }

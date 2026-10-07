@@ -62,6 +62,8 @@ fn usage_chart_style_draws_with_the_chrome_roles() {
   assert_eq!(style.grid, color(ExtraColor::Hairline.role()));
   assert_eq!(style.rule, color(PaletteColor::Border));
   assert_eq!(style.axis, color(PaletteColor::TextMuted));
+  // *Today* on the x axis reads `muted`, brighter than the other days (`X label Today` in `C2pTYF`).
+  assert_eq!(style.today, color(PaletteColor::TextSecondary));
   assert_eq!(style.threshold, color(PaletteColor::TextSecondary));
   let axis = theme.typography_style(TypographyStyle::Mono);
   assert_eq!((&*style.font.family, style.font.size), (&*axis.font_family, 10.0));

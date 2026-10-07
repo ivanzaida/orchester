@@ -337,7 +337,7 @@ fn create_and_run_opens_the_task_page_with_the_run_and_its_conversation() {
 
 /// Points `HEAD` at a branch with no commit, so the runner refuses to start a run (no commit to
 /// start from) after the task is queued.
-fn unborn_head(repo: &Path) {
+pub(crate) fn unborn_head(repo: &Path) {
   git(repo, &["symbolic-ref", "HEAD", "refs/heads/unborn"]);
 }
 

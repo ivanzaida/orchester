@@ -30,7 +30,9 @@ impl Worker {
     }
     let now = Timestamp::now();
     watch.tracker.observe(&event);
-    watch.edits_changed |= watch.edits.observe(&event, now);
+    watch.edits_changed |= watch
+      .edits
+      .observe(&event, now, |path| self.scope.is_worktree_file(path));
     let usage = match &event {
       AgentEvent::TurnCompleted { usage } => Some(*usage),
       _ => None,

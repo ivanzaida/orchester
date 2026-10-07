@@ -60,6 +60,9 @@ pub(super) struct Dialog<'a> {
 pub(super) fn dialog(ctx: &mut Ctx, dialog: &Dialog) -> Element {
   let run = &*dialog.props.run;
   let leftovers = &dialog.props.leftovers;
+  if leftovers.worktrees.is_empty() {
+    return removed(ctx, dialog);
+  }
   let number = run.number().get().to_string();
   let (title_key, explanation_key) = if leftovers.worktrees.len() == 1 {
     ("runs.worktree.title.one", "runs.worktree.explanation.one")
@@ -247,6 +250,56 @@ fn branch_row(ctx: &Ctx, branch: &LeftBranch) -> Element {
     (Icon::Pin, ctx.t("runs.worktree.branch.kept"))
   };
   check_row(glyph, branch.name.as_str(), &state).into()
+}
+
+/// The run's worktrees were removed while the dialog was open, by automation through Orchester's MCP
+/// server: the dialog stays and says so, with Close.
+fn removed(ctx: &mut Ctx, dialog: &Dialog) -> Element {
+  let number = dialog.props.run.number().get().to_string();
+  let close = dialog.cancel.clone();
+  let content = Column::new()
+    .id("remove-worktree-dialog")
+    .width(Dimension::Px(DIALOG_WIDTH))
+    .background(ExtraColor::Surface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_vertical(SpacingSize::Lg)
+        .padding_horizontal(ExtraSpacing::Rail.role())
+        .spacing(SpacingSize::Sm)
+        .child(
+          Text::new(&ctx.t_args("runs.worktree.removedTitle", [("run", number.as_str())]))
+            .variant(ExtraTypography::DialogTitle.role()),
+        )
+        .child(
+          Text::new(&ctx.t("runs.worktree.removedOutside"))
+            .id("remove-worktree-removed")
+            .variant(ExtraTypography::Explanation.role()),
+        ),
+    )
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .min_height(Dimension::Px(ACTIONS_HEIGHT))
+        .padding_vertical(ExtraSpacing::Step.role())
+        .padding_horizontal(ExtraSpacing::Rail.role())
+        .align_items(Alignment::Center)
+        .border_top(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+        .child(Spacer::new().flex(1.0))
+        .child(
+          ActionButton::new(ctx.t("common.close"))
+            .primary()
+            .id("remove-worktree-close")
+            .in_form()
+            .height(Dimension::Px(BUTTON_HEIGHT))
+            .on_click(move || close())
+            .render(ctx),
+        ),
+    );
+  let close = dialog.cancel.clone();
+  backdrop(ctx, form(Some(Arc::new(move || close())), content))
 }
 
 fn actions(ctx: &Ctx, dialog: &Dialog) -> Element {

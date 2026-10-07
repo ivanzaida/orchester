@@ -4,7 +4,8 @@
 //! — the send menu's, or Ctrl+Enter — queues the message until its turn ends; a message its CLI
 //! refuses is kept with *Send after this turn* and *Edit in composer*; a question is answered, a
 //! plan's changes requested, a run ready for review followed up, a failed run continued with
-//! instructions, a paused run's message queued and a draft task's message kept for its run's start.
+//! instructions and a draft task's message kept for its run's start (runs that wait for the person
+//! are in `conversation_composer_waiting`).
 //! Shift+Enter adds a line. The field's placeholder says whom it writes to in each state, what it
 //! answers or changes stands above it, the send button's tooltip says what sending does and its icon
 //! whether the message queues, and the run's permissions chip opens their popover.
@@ -37,7 +38,7 @@ pub(crate) fn holds(desktop: &mut Desktop, id: &str, text: &str) -> bool {
 
 /// Where the person's messages to the project's only task stand, as stored; an agent's message has
 /// no delivery and is left out.
-fn deliveries(desktop: &Desktop) -> Vec<Option<Delivery>> {
+pub(crate) fn deliveries(desktop: &Desktop) -> Vec<Option<Delivery>> {
   let db = ProjectDb::open(desktop.repo()).expect("open the project");
   let task = db.tasks().expect("tasks").remove(0);
   db.messages(task.id())
@@ -49,7 +50,7 @@ fn deliveries(desktop: &Desktop) -> Vec<Option<Delivery>> {
 }
 
 /// What the empty composer field says.
-fn placeholder(desktop: &mut Desktop) -> String {
+pub(crate) fn placeholder(desktop: &mut Desktop) -> String {
   desktop
     .tree
     .get_element_by_id_mut("conversation-input")
@@ -75,7 +76,7 @@ fn says(desktop: &mut Desktop, prefix: &str, text: &str) -> bool {
 }
 
 /// Writes `text` into the composer: the focus in its field, then the keys.
-fn write(desktop: &mut Desktop, text: &str) {
+pub(crate) fn write(desktop: &mut Desktop, text: &str) {
   desktop.click("conversation-input");
   desktop.type_text(text);
 }
@@ -95,7 +96,7 @@ fn new_line(desktop: &mut Desktop) {
 }
 
 /// Ctrl+Enter in the focused field.
-fn send_with_keyboard(desktop: &mut Desktop) {
+pub(crate) fn send_with_keyboard(desktop: &mut Desktop) {
   desktop
     .tree
     .key_down("Enter".into(), "Enter".into(), false, true, false);
@@ -459,34 +460,6 @@ fn composer_continues_a_failed_run_with_instructions() {
   send_with_keyboard(&mut desktop);
   desktop.wait_until("the recovered run", |desktop| {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Succeeded && run.attempts().len() == 2)
-  });
-}
-
-#[test]
-fn composer_queues_a_message_while_the_run_is_paused() {
-  // Two steps: the pause lands at the checkpoint between them.
-  let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, true));
-  create_and_run(&mut desktop, "Work slowly.", "1400000");
-  desktop.wait_until("Pause run while the agent works", |desktop| {
-    has(desktop, "task-pause-run") && agent_started(desktop.repo())
-  });
-  desktop.click("task-pause-run");
-  desktop.wait_until("Resume run", |desktop| has(desktop, "task-resume-run"));
-  desktop.click("task-tab-conversation");
-  desktop.wait_until("the composer of the paused run", |desktop| {
-    holds(desktop, "conversation-explanation", "You can write while paused.")
-  });
-  assert!(!has(&mut desktop, "conversation-send-options"), "no agent works");
-  assert!(tip_says(&mut desktop, "Send · Enter."));
-  write(&mut desktop, "Check the OAuth dialog.");
-  desktop.click("conversation-send");
-  desktop.wait_until("queued for the resume", |desktop| {
-    holds(
-      desktop,
-      "conversation",
-      "Queued · delivered before the next action on resume",
-    )
   });
 }
 

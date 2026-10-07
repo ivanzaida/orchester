@@ -4,7 +4,10 @@
 //! discard uncommitted changes, the tool refuses instead; it offers no way to force it. Also each run's
 //! worktree as `get_task` and `get_run` show it.
 
-use std::{path::Path, sync::Arc, thread, time::Duration};
+use std::{
+  path::Path,
+  sync::{Arc, mpsc},
+};
 
 use orchester_core::{
   id::RunId,
@@ -26,12 +29,10 @@ use crate::{
     changes::run_worktree,
     detail::run_store_error,
     integration::leftovers_in,
-    integration_jobs::{JobState, RemoveArgs, RunIntegration},
+    integration_jobs::{RemoveArgs, Remover},
+    outside::Outside,
   },
 };
-
-/// How often the tool looks whether the removal it started has ended.
-const POLL: Duration = Duration::from_millis(50);
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -102,10 +103,9 @@ pub async fn remove_worktree(
       .task(run.task())?
       .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
     let count = left.worktrees.len();
-    let job = jobs.of(run.id());
-    job.clear_failed_remove();
-    let (changes, removed) = (services.changes.clone(), jobs.removed_outside());
-    job.start_remove(RemoveArgs {
+    let (answer, outcome) = mpsc::channel();
+    let (changes, removed, project) = (services.changes.clone(), jobs.removed_outside(), open.project.id());
+    jobs.of(run.id()).start_remove(RemoveArgs {
       open: open.clone(),
       task: task.id(),
       key: task.key().to_string(),
@@ -116,11 +116,17 @@ pub async fn remove_worktree(
       activity: services.activity.clone(),
       separator,
       changed: Arc::new(move || {
-        changes.record();
+        changes.record(project, Outside::Tasks);
         removed.update(|count| *count += 1);
       }),
+      by: Remover::Automation(answer),
     });
-    finished(&job)?;
+    // The removal drops the channel unanswered when it did not start: another operation took the run.
+    match outcome.recv() {
+      Ok(Ok(())) => {}
+      Ok(Err(reason)) => return Err(ToolError::refused("removal_failed", vec![reason])),
+      Err(_) => return Err(refused("merge_running", "appMcp.errors.integrationRunning")),
+    }
     Ok(json!({
       "run": {
         "id": run.id().to_string(),
@@ -131,17 +137,4 @@ pub async fn remove_worktree(
     }))
   })
   .await
-}
-
-/// Waits for the removal `job` started; refused when it did not start (another operation took the run
-/// first) or failed, with the reason the task page shows.
-fn finished(job: &RunIntegration) -> Result<(), ToolError> {
-  loop {
-    match job.remove().get_untracked() {
-      JobState::Running => thread::sleep(POLL),
-      JobState::Succeeded => return Ok(()),
-      JobState::Failed(reason) => return Err(ToolError::refused("removal_failed", vec![reason])),
-      JobState::Idle => return Err(refused("merge_running", "appMcp.errors.integrationRunning")),
-    }
-  }
 }

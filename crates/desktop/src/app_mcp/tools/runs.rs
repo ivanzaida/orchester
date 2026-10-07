@@ -150,7 +150,7 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
 }
 
 /// The run's status as stored once the runner carried out the request.
-async fn status_now(project: &OpenProject, id: RunId) -> Result<Value, ToolError> {
+pub(super) async fn status_now(project: &OpenProject, id: RunId) -> Result<Value, ToolError> {
   let root = project.repo_root.clone();
   blocking(move || {
     let db = ProjectDb::open(&root)?;

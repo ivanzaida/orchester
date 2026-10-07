@@ -275,7 +275,11 @@ fn edited(path: &str) -> AgentEvent {
 fn follow(events: &[AgentEvent]) -> FirstEditTracker {
   let mut tracker = FirstEditTracker::default();
   for (at, event) in events.iter().enumerate() {
-    tracker.observe(event, Timestamp::from_unix_millis(i64::try_from(at).expect("small")));
+    tracker.observe(
+      event,
+      Timestamp::from_unix_millis(i64::try_from(at).expect("small")),
+      |_| true,
+    );
   }
   tracker
 }

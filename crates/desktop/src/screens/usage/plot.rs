@@ -4,9 +4,14 @@
 
 use std::sync::Arc;
 
-use lurq::canvas::{CanvasHandle, CanvasId, CanvasItem, CanvasObserver, Context2D, TextAlign, TextBaseline};
+use chrono::NaiveDate;
+use lurq::{
+  app::ctx::Ctx,
+  canvas::{CanvasHandle, CanvasId, CanvasItem, CanvasObserver, Context2D, TextAlign, TextBaseline},
+};
 use parking_lot::Mutex;
 
+use super::format;
 use crate::theme::chart::{AXIS_BAND, AXIS_GUTTER, ChartStyle, LABEL_GAP, PLOT_TOP as TOP, RULE_WIDTH};
 
 /// Grid lines above the baseline.
@@ -147,9 +152,35 @@ pub enum AxisText {
   Day,
 }
 
-/// An x axis label to draw: its text, what it names, and the x it is centered under.
+/// An x axis label's text, and whether it names today, which reads brighter than the other days
+/// (`X label Today` in `C2pTYF`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AxisName {
+  pub text: Arc<str>,
+  pub today: bool,
+}
+
+impl AxisName {
+  pub fn plain(text: Arc<str>) -> Self {
+    Self { text, today: false }
+  }
+
+  /// `date` by its weekday, or *Today*.
+  pub fn day(ctx: &Ctx, date: NaiveDate, today: NaiveDate) -> Self {
+    if date == today {
+      Self {
+        text: ctx.t("usage.tokens.today"),
+        today: true,
+      }
+    } else {
+      Self::plain(format::weekday(ctx, date))
+    }
+  }
+}
+
+/// An x axis label to draw: its name, what it names, and the x it is centered under.
 pub struct XLabel<'a> {
-  pub text: &'a str,
+  pub name: &'a AxisName,
   pub kind: AxisText,
   pub x: f32,
 }
@@ -172,8 +203,9 @@ pub fn x_label(
   context.set_font(font);
   context.set_text_align(TextAlign::Left);
   context.set_text_baseline(TextBaseline::Top);
-  context.set_fill_style(style.axis);
-  let width = match context.measure_text(label.text) {
+  context.set_fill_style(if label.name.today { style.today } else { style.axis });
+  let words = &*label.name.text;
+  let width = match context.measure_text(words) {
     Ok(metrics) => metrics.width,
     Err(error) => {
       tracing::debug!(%error, "a chart label waits for the canvas text service");
@@ -182,7 +214,7 @@ pub fn x_label(
   };
   let left = (label.x - width / 2.0).min(frame.right - width).max(0.0);
   let top = frame.bottom + LABEL_GAP;
-  text(context, label.text, left, top);
+  text(context, words, left, top);
   Some(
     CanvasItem::rect(
       format!("x-label-{index}"),
@@ -192,7 +224,7 @@ pub fn x_label(
       width,
       AXIS_BAND - LABEL_GAP,
     )
-    .label(label.text),
+    .label(words),
   )
 }
 

@@ -46,20 +46,25 @@ impl Component for OrganizationHistory {
         .map_err(|error| messages::store_error(&error))
     });
     let state = load.state().get();
-    let mut column = Column::new()
+    let column = Column::new()
       .id("task-organization-history")
       .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .child(Text::new(&ctx.t("tasks.history.title")).variant(TypographyStyle::Label));
+      .spacing(SpacingSize::Lg);
+    let heading = Text::new(&ctx.t("tasks.history.title")).variant(TypographyStyle::Label);
     if let Some(error) = state.error {
-      return column.child(field_error(&message_text(ctx, &error)));
+      return column.child(heading).child(field_error(&message_text(ctx, &error)));
     }
-    if let Some(History(history)) = state.data {
-      for change in history.iter().rev() {
-        column = column.with_children(change_lines(ctx, change));
-      }
+    let lines: Vec<Element> = state
+      .data
+      .iter()
+      .flat_map(|History(history)| history.iter().rev())
+      .flat_map(|change| change_lines(ctx, change))
+      .collect();
+    // A task nothing changed yet, e.g. one just queued, has no history to head.
+    if lines.is_empty() {
+      return column;
     }
-    column
+    column.child(heading).with_children(lines)
   }
 }
 

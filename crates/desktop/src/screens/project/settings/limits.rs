@@ -25,13 +25,17 @@ use super::{
   super::ProjectNav,
   SettingsSave,
   general::{CONTENT_WIDTH, readback, sized_setting_row},
+  outside::{OutsideSettings, Reading},
 };
 use crate::{
   background,
   budget::{LimitsErrors, LimitsForm, minutes_text, read_budget, time_limit_choices, unbounded},
   messages::{self, Message},
   runner::Runners,
-  tasks::usage::{ProjectUsage, save_limits},
+  tasks::{
+    outside::Outside,
+    usage::{ProjectUsage, update_limits},
+  },
   theme::ExtraTypography,
   ui::{
     field::{field_error, select_style},
@@ -69,7 +73,24 @@ struct Stored(ProjectLimits);
 
 impl lurq::app::component::DevtoolsInspectable for Stored {}
 
-type SaveAction = FutureAction<(std::path::PathBuf, ProjectLimits), Stored, Message>;
+/// The limits and usage as read at a reading of [`OutsideSettings`].
+#[derive(Clone, Debug, PartialEq)]
+struct Read(ProjectUsage, Reading);
+
+impl lurq::app::component::DevtoolsInspectable for Read {}
+
+/// What a save was asked to store, and what it stored: the person's change put on the limits as
+/// stored then, so a limit automation changed meanwhile keeps its change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Done {
+  asked: ProjectLimits,
+  stored: ProjectLimits,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Done {}
+
+/// Where to save, the limits the change was made on, and the limits it makes.
+type SaveAction = FutureAction<(std::path::PathBuf, ProjectLimits, ProjectLimits), Done, Message>;
 
 /// Cloned by the save it commits, which reads the fields when it runs.
 #[derive(Clone)]
@@ -86,6 +107,7 @@ pub struct LimitsTab {
   nav: ProjectNav,
   /// Takes a changed agent count to the project's runner.
   runners: Runners,
+  outside: OutsideSettings,
 }
 
 impl Component for LimitsTab {
@@ -106,6 +128,7 @@ impl Component for LimitsTab {
       stored: ctx.signal(None),
       nav,
       runners,
+      outside: OutsideSettings::new(ctx, Outside::Limits),
     };
     let save = save_action(ctx, &tab.runners);
     // A chosen time limit saves at once, as a text field does when it is left.
@@ -116,7 +139,7 @@ impl Component for LimitsTab {
     );
     ctx.watch(&tab.time, move |_| commit());
     let status = ctx.props::<LimitsProps>().status.clone();
-    let (stored, nav) = (tab.stored.clone(), tab.nav.clone());
+    let (after, separator) = (tab.clone(), ctx.t("number.groupSeparator"));
     ctx.watch(&save.state(), move |state| {
       if state.is_pending() {
         status.set(SettingsSave::Saving);
@@ -124,11 +147,9 @@ impl Component for LimitsTab {
       }
       match (&state.data, &state.error) {
         (_, Some(error)) => status.set(SettingsSave::Failed(error.clone())),
-        (Some(saved), None) => {
-          stored.set(Some(*saved));
+        (Some(done), None) => {
+          after.saved(*done, &separator);
           status.set(SettingsSave::Saved);
-          // New task and the status bar read the limits again.
-          nav.tasks_changed();
         }
         (None, None) => {}
       }
@@ -140,7 +161,8 @@ impl Component for LimitsTab {
     let props = ctx.props::<LimitsProps>().clone();
     let save = save_action(ctx, &self.runners);
     let separator = ctx.t("number.groupSeparator");
-    self.load(ctx, &props.open, &separator);
+    let saving = save.state().get().is_pending();
+    self.load(ctx, (&props.open, &props.status), &separator, saving);
     let errors = self
       .entered(&separator, Signal::get)
       .err()
@@ -174,6 +196,13 @@ impl Component for LimitsTab {
       .padding_vertical(SpacingSize::Lg)
       .padding_horizontal(SpacingSize::Section)
       .spacing(SpacingSize::Sm)
+      // The section's rhythm (24, `c7e729`) below the notice, the column's 8 included.
+      .with_children(
+        self
+          .outside
+          .notice(ctx, "settings-limits-changed-outside")
+          .map(|notice| Column::new().width(Dimension::Pct(100.0)).padding_bottom(SpacingSize::Md).child(notice)),
+      )
       .child(Text::new(&ctx.t("settings.limits.tokenBudgets")).variant(ExtraTypography::SectionHeading.role()))
       .with_children(rows)
       .child(Text::new(&ctx.t("settings.limits.time")).variant(ExtraTypography::SectionHeading.role()))
@@ -221,12 +250,11 @@ impl LimitsTab {
       let Ok(limits) = fields.entered(&separator, Signal::get_untracked) else {
         return;
       };
-      let changed = fields
-        .stored
-        .get_untracked()
-        .is_some_and(|Stored(stored)| stored != limits);
-      if changed && !save.state().get_untracked().is_pending() {
-        save.run((repo_root.clone(), limits));
+      let Some(Stored(base)) = fields.stored.get_untracked() else {
+        return;
+      };
+      if base != limits && !save.state().get_untracked().is_pending() {
+        save.run((repo_root.clone(), base, limits));
       }
     })
   }
@@ -258,29 +286,61 @@ impl LimitsTab {
     ]
   }
 
-  /// Reads the stored limits and fills the fields with them once.
-  fn load(&self, ctx: &mut Ctx, open: &OpenProject, separator: &str) {
-    let load = ctx.future(open.repo_root.clone(), |repo_root| async move {
+  /// Reads the stored limits and fills the fields with them; again after automation changed them,
+  /// unless the person has a change under way: one being saved (`saving`), or fields that differ from
+  /// what is stored (see [`OutsideSettings`]).
+  fn load(&self, ctx: &mut Ctx, (open, status): (&OpenProject, &Signal<SettingsSave>), separator: &str, saving: bool) {
+    let current = self.outside.reading(ctx);
+    let load = ctx.future((open.repo_root.clone(), current), |(repo_root, reading)| async move {
       background::run(move || ProjectUsage::load(&repo_root, orchester_core::time::Timestamp::now()))
         .await?
+        .map(|usage| Read(usage, reading))
         .map_err(|error| {
           tracing::error!(%error, "cannot read the project's limits");
           messages::store_error(&error)
         })
     });
-    let Some(usage) = load.state().get().data else {
+    let state = load.state().get();
+    let pending = state.is_pending();
+    let Some(Read(usage, reading)) = state.data.filter(|_| !pending) else {
       return;
     };
-    if self.stored.get_untracked().is_some() {
-      return;
+    let edited = self
+      .stored
+      .get_untracked()
+      .is_some_and(|Stored(stored)| self.entered(separator, Signal::get_untracked).ok() != Some(stored));
+    if self.outside.take(reading, current, saving || edited) {
+      self.fill(usage.limits, separator);
+      // A save refused earlier is settled: the fields show what is stored, which it left as it was.
+      if matches!(status.get_untracked(), SettingsSave::Failed(_)) {
+        status.set(SettingsSave::Saved);
+      }
     }
-    let limits = usage.limits;
+  }
+
+  /// After a save: the fields show what it stored when they still hold what it was asked to store,
+  /// and the limits are read again.
+  fn saved(&self, done: Done, separator: &str) {
+    self.stored.set(Some(Stored(done.stored)));
+    if done.stored != done.asked && self.entered(separator, Signal::get_untracked).ok() == Some(done.asked) {
+      self.fill(done.stored, separator);
+    }
+    self.outside.saved();
+    // New task and the status bar read the limits again.
+    self.nav.tasks_changed();
+  }
+
+  /// Shows `limits`, as stored, in the fields.
+  fn fill(&self, limits: ProjectLimits, separator: &str) {
     self.stored.set(Some(Stored(limits)));
     self.max.set(grouped(limits.max_run_budget().get(), separator));
     self.default.set(grouped(limits.default_run_budget().get(), separator));
     self.daily.set(grouped(limits.daily_budget().get(), separator));
-    self.time.set(minutes_text(limits.default_time_limit()));
     self.slots.set(limits.agent_slots().get().to_string());
+    // Last: setting the time limit saves what the fields hold, as a person's choice does. With every
+    // other field filled first they hold what is stored, so nothing is saved; filled earlier, the old
+    // agent count would be saved over the new one.
+    self.time.set(minutes_text(limits.default_time_limit()));
   }
 }
 
@@ -386,16 +446,46 @@ fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
 
 fn save_action(ctx: &mut Ctx, runners: &Runners) -> SaveAction {
   let runners = runners.clone();
-  ctx.future_action(move |(repo_root, limits): (std::path::PathBuf, ProjectLimits)| {
-    let runners = runners.clone();
-    async move {
-      background::run(move || save_limits(&runners, &repo_root, &limits))
-        .await?
-        .map(|()| Stored(limits))
-        .map_err(|error| {
-          tracing::error!(%error, "cannot save the project's limits");
-          messages::store_error(&error)
-        })
-    }
-  })
+  ctx.future_action(
+    move |(repo_root, base, asked): (std::path::PathBuf, ProjectLimits, ProjectLimits)| {
+      let runners = runners.clone();
+      async move {
+        let saved = background::run(move || update_limits(&runners, &repo_root, |stored| rebased(base, asked, stored)))
+          .await?
+          .map_err(|error| {
+            tracing::error!(%error, "cannot save the project's limits");
+            messages::store_error(&error)
+          })?;
+        // The person's change and one made elsewhere meanwhile do not fit together: nothing is saved.
+        saved
+          .map(|stored| Done { asked, stored })
+          .ok_or_else(|| Message::new("settings.limits.changedOutsideConflict"))
+      }
+    },
+  )
+}
+
+/// The person's change from `base` to `asked`, put on the limits as stored now (`stored`): a limit they
+/// did not change keeps what automation may have changed meanwhile. `None` when the result breaks the
+/// rules of the limits, e.g. a default above a maximum lowered elsewhere.
+fn rebased(base: ProjectLimits, asked: ProjectLimits, stored: ProjectLimits) -> Option<ProjectLimits> {
+  fn pick<T: PartialEq + Copy>(base: T, asked: T, stored: T) -> T {
+    if asked == base { stored } else { asked }
+  }
+  let limits = ProjectLimits::new(
+    pick(base.max_run_budget(), asked.max_run_budget(), stored.max_run_budget()),
+    pick(
+      base.default_run_budget(),
+      asked.default_run_budget(),
+      stored.default_run_budget(),
+    ),
+    pick(base.daily_budget(), asked.daily_budget(), stored.daily_budget()),
+    pick(
+      base.default_time_limit(),
+      asked.default_time_limit(),
+      stored.default_time_limit(),
+    ),
+  )
+  .ok()?;
+  Some(limits.with_agent_slots(pick(base.agent_slots(), asked.agent_slots(), stored.agent_slots())))
 }

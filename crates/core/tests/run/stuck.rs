@@ -6,7 +6,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   run::{
     AttemptReason, AttemptStatus, Run, RunCounts, RunError, RunFailure, RunStatus, StepFailure, StepOutcome,
-    StepOutput, StepStatus, Stuck, StuckDecision, TaskPhase,
+    StepOutput, StepStatus, Stuck, StuckDecision, TaskPhase, attempt_starts,
   },
 };
 
@@ -208,6 +208,27 @@ fn stuck_stopping_fails_the_run_as_before() {
   // A failed run is still recovered by a person's message.
   assert!(logged.run.recovery_step(None).is_some());
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
+fn stuck_a_persons_message_continues_the_step_it_stopped_at_in_its_session() {
+  let mut logged = exhausted();
+  assert_eq!(logged.run.recovery_step(None), Some(key("checks")));
+  let failed = logged.exec("checks");
+  logged.apply(|run| run.recover(&key("checks"), at(50)));
+  assert_eq!(logged.run.status(), &RunStatus::Running);
+  let attempt = logged.run.current_attempt().expect("the continued attempt");
+  assert_eq!(attempt.reason(), &AttemptReason::Recovery { step: key("checks") });
+  let steps: Vec<_> = attempt.executions().iter().map(|e| e.step().as_str()).collect();
+  assert_eq!(steps, ["checks", "review", "pr"]);
+  assert_eq!(logged.run.attempts()[2].status(), AttemptStatus::RoutedBack);
+  // The agent continues the session of the execution that failed.
+  assert_eq!(logged.run.recovered_execution(logged.exec("checks")), Some(failed));
+  assert!(attempt_starts(&logged.log).last().is_some_and(|start| start.by_person));
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run.clone()));
+  assert_eq!(Run::restore(stored(&logged.run)), Ok(logged.run.clone()));
+  // Running again, it is no longer continued by a message.
+  assert_eq!(logged.run.recovery_step(None), None);
 }
 
 #[test]

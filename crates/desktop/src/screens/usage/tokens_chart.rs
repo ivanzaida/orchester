@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 use super::{
   card::{Card, footnote, legend, legend_item, push_down, series_color, swatch, view_switch},
   format,
-  plot::{AxisText, Frame, Redraw, label_every},
+  plot::{AxisName, AxisText, Frame, Redraw, label_every},
   state::{Dashboard, Views},
   table::{Cell, TableColumn, Width, column, data_row, table},
   tokens_draw::{TokenPlot, draw},
@@ -254,7 +254,7 @@ fn tooltip_name(ctx: &Ctx, bar: &SeriesBar) -> Arc<str> {
 
 /// The x axis labels: days, *Today* for today's bar, or hours of one day; every few where many,
 /// counted back from the last bar so it always has its label and none crowds it.
-fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Arc<str>>> {
+fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<AxisName>> {
   let bars = &dashboard.report.series;
   let today = local_date(dashboard.now);
   let plot_width = width.map_or(f32::MAX, |width| width - crate::theme::chart::AXIS_GUTTER);
@@ -264,11 +264,10 @@ fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Ar
     .iter()
     .enumerate()
     .map(|(index, bar)| match (dashboard.grouping, bar.bucket.hour) {
-      (Grouping::Hour, Some(hour)) if days == 1 => (hour % 3 == 0).then(|| format::hour(hour).into()),
-      (Grouping::Hour, Some(hour)) => (hour == 0).then(|| format::weekday(ctx, bar.bucket.date)),
+      (Grouping::Hour, Some(hour)) if days == 1 => (hour % 3 == 0).then(|| AxisName::plain(format::hour(hour).into())),
+      (Grouping::Hour, Some(hour)) => (hour == 0).then(|| AxisName::day(ctx, bar.bucket.date, today)),
       _ if !(bars.len() - 1 - index).is_multiple_of(every) => None,
-      _ if bar.bucket.date == today => Some(ctx.t("usage.tokens.today")),
-      _ => Some(format::weekday(ctx, bar.bucket.date)),
+      _ => Some(AxisName::day(ctx, bar.bucket.date, today)),
     })
     .collect()
 }

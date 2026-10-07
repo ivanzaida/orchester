@@ -53,25 +53,6 @@ A run row whose id or task id cannot be parsed still fails the whole listing
 whether such a row is reported as a project-level "unreadable rows" error that still lists the others. **needs
 decision**.
 
-### T5 · Re-measure the code index after ORC-48 (non-UI)
-
-ORC-48 changed what agents get of the code index: `symbols.tsv` lists only the code's own definitions
-(`symbols-consts.tsv` holds constants and statics, `symbols-tests.tsv` the definitions in test folders; index format
-6), the prompt's *Codebase index* part carries an excerpt of `map.md` of at most 8 KiB, and the internal skill
-(`crates/runner/assets/codebase-index/SKILL.md`) gives column-anchored `rg` commands for PowerShell and bash. The
-measurement that should show whether this helps was deferred by the user: the stable install does not have the
-change, and a dev build on this repository would share `<repo>/.orchester` with it.
-
-1. **Done 2026-10-01.** Skill commands verified as written in bash, pwsh 7 and Windows PowerShell 5.1 against a
-   format-6 index by the ORC-48 review.
-2. Measure index on vs off on 2–3 tasks of different kinds, at least one that needs navigating this repository (e.g.
-   a core/runner change), plus ORC-32 again for comparison with
-   `docs/evidence/code-index-effect-2026-10-01.md`. Alternate the order of the arms; each run builds in its own
-   worktree. Record tokens, time to the first edit and command counts (all, and before the first edit),
-   and which index files the agent used.
-
-**Done when** a new `docs/evidence` file has the table and a conclusion.
-
 ## M · MCP servers
 
 ### M8 · Orchester's own MCP server · branch `claude/app-mcp` (from master `3d76beff`, UI)
@@ -162,6 +143,24 @@ mark *approved by auto mode · <subject>* (or *approved by you · …*) and the 
 960; (7) the run's Approvals counts *Approved by auto mode* / *Auto mode asked you* once non-zero, before *Waiting*.
 States 4–7 need a run with auto mode on and a Claude Code connection, or seeded `tool_approvals.review` and
 `ToolDecided` activity.
+
+### M11 · Orchester's MCP server works without disturbing the window · branch `claude/mcp-quiet` (UI)
+
+Implemented 2026-10-07, **waiting for review and design verification**; moves to *Done* once merged. Tools change
+data while a person uses the window: changes are counted per project and per kind (`tasks::outside`: tasks, runs,
+auto mode, code index, limits, pipelines), so only the changed project's data is read again and only the screens
+showing it read it, in place. A failed reading of the tasks keeps the tasks last read on every page; the project shell
+says so above the page with *Retry*. Edit task keeps a person's edits and says the task changed elsewhere (*Reload*),
+and saves on the version its fields came from (merged or a conflict, never a silent revert). Project settings ›
+Auto mode, Code index and Limits show a tool's change in place, or hold it behind *Changed outside this screen* while
+the person has a change under way; their saves and the tools' are one store transaction each
+(`update_auto_mode_settings`, `update_project_limits`) and save only what the person changed. The run's auto mode
+switch, Pipelines and the status bar's budget follow too. A tool's worktree removal shows *Removing…* in the
+person's open dialog, which stays open and says the worktree is removed; a tool's failure is only in its result. A
+queued task without a run that this window's form did not queue opens on its page with *Retry run* (design doc, "A
+queued task without a run that the person's form did not queue"). New tools `return_to_draft` and `continue_run`
+(`docs/stable-build.md`). Tests: `cargo test -p orchester-desktop --test form_keyboard app_mcp` (`app_mcp_quiet`,
+`app_mcp_continue_run`, `app_mcp_return_to_draft`).
 
 ### M1 · Confirm MCP behaviour in a real run (non-UI)
 
@@ -787,6 +786,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+T5 · Re-measure the code index after ORC-48 (ORC-69) (done 2026-10-07)
+
+Two Claude Code tasks, each run once with *Use code index* on and once off, through Orchester's file tools:
+`docs/evidence/code-index-measurement-2026-10-07.md`. The agents called `find_symbol` once per run and opened no
+index file; runs with the index spent about 15% more tokens and took longer, within the noise of n = 2. Decided:
+*Use code index* is off until a person turns it on (a project that turned it on keeps it), and first-edit tracking
+counts edits made through Orchester's `edit_file` and `write_file`, which it missed before (branch
+`claude/index-off`). A new measurement needs 3+ alternated pairs per task, one agent at a time, and a record of
+which `search`/`list_files` answers came from the index.
 
 Quick rules for Verify steps · branch `claude/quick-rules` (done 2026-10-06)
 

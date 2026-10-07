@@ -1,4 +1,5 @@
-//! A message can resume a failed run without discarding its executions, branch or sessions.
+//! A message can resume a failed run, or one that waits for the person after its retries ran out or
+//! its step broke again, without discarding its executions, branch or sessions.
 
 use super::{
   AttemptReason, AttemptStatus, PlannedExecution, Run, RunError, RunEvent, RunEventKind, RunFailure, RunStatus,
@@ -11,12 +12,15 @@ use crate::{
 };
 
 impl Run {
-  /// The agent a message can resume after failure. Orchestrator selects the failed agent, or
-  /// the latest executed upstream agent when a command step failed. An explicit profile may
-  /// instead revisit its own executed step; its downstream results are then invalidated.
+  /// The agent a message can resume after failure, or while the run waits for the person after one.
+  /// Orchestrator selects the failed agent, or the latest executed upstream agent when a command
+  /// step failed. An explicit profile may instead revisit its own executed step; its downstream
+  /// results are then invalidated.
   pub fn recovery_step(&self, profile: Option<ResourceId>) -> Option<StepKey> {
-    let RunStatus::Failed(RunFailure::StepFailed(failed) | RunFailure::RetriesExhausted(failed)) = self.status() else {
-      return None;
+    let failed = match self.status() {
+      RunStatus::Failed(RunFailure::StepFailed(failed) | RunFailure::RetriesExhausted(failed)) => failed,
+      RunStatus::WaitingForPerson(stuck) => stuck.step(),
+      _ => return None,
     };
     self.snapshot().steps().iter().rev().find_map(|step| {
       let StepExecutor::Agent { profile: pinned, .. } = step.executor() else {
@@ -39,11 +43,17 @@ impl Run {
       .is_some_and(|execution| matches!(execution.status(), StepStatus::Passed | StepStatus::Failed))
   }
 
-  /// Resumes the selected agent in a new attempt of the same failed run. Completed upstream
-  /// steps remain passed; selected, dependent and unfinished steps execute again.
+  /// Resumes the selected agent in a new attempt of the same failed run, or of a run that waits for
+  /// the person, who lets it go on with their message. Completed upstream steps remain passed;
+  /// selected, dependent and unfinished steps execute again.
   pub fn recover(&mut self, step: &StepKey, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    let requested = if matches!(self.status(), RunStatus::WaitingForPerson(_)) {
+      RunEventKind::RetryAllowed
+    } else {
+      RunEventKind::RecoveryRequested
+    };
     self.transition(now, |transition| {
-      transition.record(RunEventKind::RecoveryRequested)?;
+      transition.record(requested)?;
       transition.record(RunEventKind::AttemptStarted {
         attempt: AttemptId::generate(),
         number: transition.run.next_attempt_number(),
@@ -54,11 +64,16 @@ impl Run {
   }
 
   pub(super) fn check_recovery(&self, step: &StepKey, executions: &[PlannedExecution]) -> Result<(), RunError> {
-    if !self
-      .current_attempt()
-      .is_some_and(|attempt| attempt.status() == AttemptStatus::Failed)
-      || !self.recoverable_step(step)
-    {
+    // A run that waited for the person kept its attempt open, with the execution that failed.
+    let ended = self.current_attempt().is_some_and(|attempt| match attempt.status() {
+      AttemptStatus::Failed => true,
+      AttemptStatus::Active => attempt
+        .executions()
+        .iter()
+        .any(|execution| execution.status() == StepStatus::Failed),
+      _ => false,
+    });
+    if !ended || !self.recoverable_step(step) {
       return Err(RunError::InvalidAttempt(
         "recovery resumes an executed agent of a failed attempt",
       ));

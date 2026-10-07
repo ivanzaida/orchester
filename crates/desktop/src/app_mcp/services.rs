@@ -20,7 +20,7 @@ pub struct Services {
   pub(super) runners: Runners,
   pub(super) servers: Servers,
   pub(super) programs: Programs,
-  /// Told about every task a tool saves, so the screens read the tasks again.
+  /// Told what each tool changed in which project, so only the screens showing it read it again.
   pub(super) changes: OutsideChanges,
   /// The status bar's operations, which list a tool's git work as they list a person's.
   pub(super) activity: Activity,

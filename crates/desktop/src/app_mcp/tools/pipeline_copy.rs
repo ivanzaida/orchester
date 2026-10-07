@@ -30,7 +30,10 @@ use crate::{
     library::{CreateError, create_with},
     problems::{problem_view, publish_error, rule_message},
   },
-  tasks::data::{pinned_pipeline, published_pipelines},
+  tasks::{
+    data::{pinned_pipeline, published_pipelines},
+    outside::Outside,
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -57,15 +60,20 @@ pub async fn duplicate_pipeline(
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
   let copy = blocking(move || {
-    let root = services.project(&args.project)?.repo_root;
+    let open = services.project(&args.project)?;
+    let root = open.repo_root;
     let mut db = ProjectDb::open(&root)?;
     let body = copied(&db, &args, &then)?;
     let name =
       Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
     let id = create_with(&mut db, name, &body, Timestamp::now()).map_err(|error| create_error(&error))?;
     drop(db);
-    let (version, _) =
-      publish_in(&root, id).map_err(|error| ToolError::refused("not_published", vec![publish_error(&error)]))?;
+    let published = publish_in(&root, id);
+    // The pipeline was made either way: the library lists it, published or as a draft.
+    services.changes.record(open.project.id(), Outside::Pipelines);
+    let (version, _) = published.map_err(|error| ToolError::refused("not_published", vec![publish_error(&error)]))?;
+    // The task form offers the published version.
+    services.changes.record(open.project.id(), Outside::Tasks);
     pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
       .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))
   })

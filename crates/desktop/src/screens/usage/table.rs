@@ -17,7 +17,8 @@ const ROW_HEIGHT: f32 = 40.0;
 const DATA_ROW_HEIGHT: f32 = 30.0;
 const HEADING_HEIGHT: f32 = 28.0;
 
-/// How a column takes its width: a share of what is left, or a fixed width.
+/// How a column takes its width: a share of what the fixed columns leave, whatever its cells hold,
+/// so a column starts at the same x in every row; or a fixed width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Width {
   Flex(f32),
@@ -65,12 +66,9 @@ pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, g
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .with_children(columns.iter().enumerate().map(|(index, column)| {
       sized(
-        Row::new().child(fit(
-          Text::new(&column.heading)
-            .id(format!("{id}-heading-{index}"))
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted),
-        )),
+        Row::new()
+          .id(format!("{id}-heading-cell-{index}"))
+          .child(fit(heading(column).id(format!("{id}-heading-{index}")))),
         column,
       )
     }));
@@ -82,29 +80,36 @@ pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, g
     .into()
 }
 
-/// One row of `cells` under `columns`, `gap` apart, as *Most expensive* lists them.
-pub fn row(columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
-  sized_row(columns, cells, (ROW_HEIGHT, gap))
+/// Row `id` of `cells` under `columns`, `gap` apart, as *Most expensive* lists them; its cells
+/// are `{id}-cell-{column}`.
+pub fn row(id: &str, columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
+  sized_row(Some(id), columns, cells, (ROW_HEIGHT, gap))
 }
 
 /// One row of a chart's data: denser than a list of tasks.
 pub fn data_row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
-  sized_row(columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
+  sized_row(None, columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
 }
 
-fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
-  Row::new()
+fn sized_row(id: Option<&str>, columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
+  let row = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(height))
     .spacing(gap)
     .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(
-      columns
-        .iter()
-        .zip(cells)
-        .map(|(column, cell)| sized(Row::new().child(content(column, cell)), column)),
-    )
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()));
+  let row = match id {
+    Some(id) => row.id(id.to_owned()),
+    None => row,
+  };
+  row.with_children(columns.iter().zip(cells).enumerate().map(|(index, (column, cell))| {
+    let wrapper = Row::new().child(content(column, cell));
+    let wrapper = match id {
+      Some(id) => wrapper.id(format!("{id}-cell-{index}")),
+      None => wrapper,
+    };
+    sized(wrapper, column)
+  }))
 }
 
 fn content(column: &TableColumn, cell: Cell) -> Element {
@@ -132,13 +137,20 @@ pub fn fit(text: Text) -> Element {
     .into()
 }
 
+fn heading(column: &TableColumn) -> Text {
+  Text::new(&column.heading)
+    .variant(TypographyStyle::Caption)
+    .color(PaletteColor::TextMuted)
+}
+
 fn sized(cell: Row, column: &TableColumn) -> Element {
   let cell = cell
     .min_width(Dimension::Px(0.0))
     .align_items(Alignment::Center)
     .justify(if column.figures { Justify::End } else { Justify::Start });
   match column.width {
-    Width::Flex(share) => cell.flex(share),
+    // From nothing, not from its content, so long and short titles leave later columns in place.
+    Width::Flex(share) => cell.flex_full(share, 1.0, Some(0.0)),
     Width::Px(width) => cell.width(Dimension::Px(width)).flex_shrink(0.0),
   }
   .into()

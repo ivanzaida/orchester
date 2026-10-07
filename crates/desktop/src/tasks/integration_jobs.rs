@@ -4,7 +4,7 @@
 use std::{
   collections::HashMap,
   panic::{AssertUnwindSafe, catch_unwind},
-  sync::Arc,
+  sync::{Arc, mpsc},
   thread,
 };
 
@@ -99,6 +99,11 @@ impl RunIntegration {
     self.0.active.get() != Active::Idle
   }
 
+  /// Git removes the run's worktrees, whoever asked: a person, or automation.
+  pub fn removing(&self) -> bool {
+    self.0.active.get() == Active::Remove
+  }
+
   fn begin(&self, operation: Active) -> bool {
     let mut started = false;
     // Notify readers even when a stale click is refused: the rendered control catches up with
@@ -170,56 +175,98 @@ impl RunIntegration {
     }
   }
 
+  /// Removes what `args` lists on a thread of its own. A person's removal shows in the run's dialog
+  /// and row: it closes the dialog when it is done, and a failure stays under the row and in the status
+  /// bar. A removal automation asked for ([`Remover::Automation`]) answers only its caller: the
+  /// person's dialog stays open and shows the worktree removed, and a failure touches neither what
+  /// the person sees nor the status bar's failures.
   pub fn start_remove(&self, args: RemoveArgs) {
     if !self.begin(Active::Remove) {
       return;
     }
-    self.0.remove.set(JobState::Running);
+    let automation = match &args.by {
+      Remover::Person => {
+        self.0.remove.set(JobState::Running);
+        None
+      }
+      Remover::Automation(answer) => Some(answer.clone()),
+    };
     let job = self.clone();
-    if let Err(error) = thread::Builder::new().name("run-cleanup".into()).spawn(move || {
-      let RemoveArgs {
-        open,
-        task,
-        key,
-        number,
-        run,
-        confirmed,
-        programs,
-        activity,
-        separator,
-        changed,
-      } = args;
-      let running = activity.start(operations::run_cleanup(&open, task, (&key, number)));
-      let not_done = Message::new("statusBar.operations.runCleanup.notDone")
-        .with("task", key)
-        .with("run", number.to_string());
-      let result = catch_unwind(AssertUnwindSafe(|| {
-        remove_in(&open.repo_root, &programs, &run, &confirmed)
-      }));
-      let state = match result {
-        Ok(Ok(())) => {
-          running.finish();
-          job.0.dialog_open.set(false);
-          JobState::Succeeded
-        }
-        Ok(Err(problem)) => {
-          let message = problem.message(&separator);
-          problem.end(running, not_done);
-          JobState::Failed(message)
-        }
-        Err(_) => {
-          tracing::error!("run cleanup thread panicked");
-          running.fail(messages::interrupted());
-          JobState::Failed(messages::interrupted())
-        }
-      };
-      job.0.remove.set(state);
-      job.finish();
-      changed();
-    }) {
+    if let Err(error) = thread::Builder::new()
+      .name("run-cleanup".into())
+      .spawn(move || job.remove_now(args))
+    {
       tracing::error!(%error, "cannot start run cleanup thread");
-      self.0.remove.set(JobState::Failed(messages::interrupted()));
+      match automation {
+        Some(answer) => answer_automation(&answer, Err(messages::interrupted())),
+        None => self.0.remove.set(JobState::Failed(messages::interrupted())),
+      }
       self.finish();
+    }
+  }
+
+  fn remove_now(&self, args: RemoveArgs) {
+    let RemoveArgs {
+      open,
+      task,
+      key,
+      number,
+      run,
+      confirmed,
+      programs,
+      activity,
+      separator,
+      changed,
+      by,
+    } = args;
+    let running = activity.start(operations::run_cleanup(&open, task, (&key, number)));
+    let not_done = Message::new("statusBar.operations.runCleanup.notDone")
+      .with("task", key)
+      .with("run", number.to_string());
+    let result = catch_unwind(AssertUnwindSafe(|| {
+      remove_in(&open.repo_root, &programs, &run, &confirmed)
+    }));
+    let outcome = match (result, &by) {
+      (Ok(Ok(())), _) => {
+        running.finish();
+        Ok(())
+      }
+      (Ok(Err(problem)), Remover::Person) => {
+        let message = problem.message(&separator);
+        problem.end(running, not_done);
+        Err(message)
+      }
+      // A tool's failure is only in its result: the operation leaves the status bar without an event.
+      (Ok(Err(problem)), Remover::Automation(_)) => {
+        drop(running);
+        Err(problem.message(&separator))
+      }
+      (Err(_), remover) => {
+        tracing::error!(
+          automation = matches!(remover, Remover::Automation(_)),
+          "run cleanup thread panicked"
+        );
+        match remover {
+          Remover::Person => running.fail(messages::interrupted()),
+          Remover::Automation(_) => drop(running),
+        }
+        Err(messages::interrupted())
+      }
+    };
+    match (&outcome, &by) {
+      (Ok(()), Remover::Person) => {
+        self.0.dialog_open.set(false);
+        self.0.remove.set(JobState::Succeeded);
+      }
+      // The person's dialog, if open, now shows the worktree removed.
+      (Ok(()), Remover::Automation(_)) => self.0.remove.set(JobState::Succeeded),
+      (Err(message), Remover::Person) => self.0.remove.set(JobState::Failed(message.clone())),
+      (Err(_), Remover::Automation(_)) => {}
+    }
+    self.finish();
+    changed();
+    if let Remover::Automation(answer) = by {
+      answer_automation(&answer, outcome);
     }
   }
 
@@ -231,14 +278,6 @@ impl RunIntegration {
     }
     self.0.discard.set(false);
     self.0.dialog_open.set(true);
-  }
-
-  /// Clears an earlier failure of the removal without opening the confirmation: Orchester's MCP server
-  /// removes without one.
-  pub fn clear_failed_remove(&self) {
-    if matches!(self.0.remove.get_untracked(), JobState::Failed(_)) {
-      self.0.remove.set(JobState::Idle);
-    }
   }
 
   /// Closes the confirmation unless git is removing; a failure stays to be shown under the run's
@@ -277,6 +316,24 @@ pub struct RemoveArgs {
   pub activity: Activity,
   pub separator: Arc<str>,
   pub changed: Arc<dyn Fn() + Send + Sync>,
+  pub by: Remover,
+}
+
+/// Tells the automation that asked for a removal how it ended. A caller that stopped waiting no longer
+/// needs it: the removal stands either way, as the status bar and the run's page show.
+fn answer_automation(answer: &mpsc::Sender<Result<(), Message>>, outcome: Result<(), Message>) {
+  if answer.send(outcome).is_err() {
+    tracing::debug!("the automation that asked for a worktree removal stopped waiting for it");
+  }
+}
+
+/// Who asked for a removal.
+#[derive(Clone)]
+pub enum Remover {
+  /// A person, in the run's dialog.
+  Person,
+  /// Automation through Orchester's MCP server, which waits for the outcome on this channel.
+  Automation(mpsc::Sender<Result<(), Message>>),
 }
 
 /// Project-scoped registry retained while any tab still names the project.

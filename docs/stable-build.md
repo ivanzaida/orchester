@@ -99,19 +99,36 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   develops Orchester through Orchester included. Its tools work on data and go through the same
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
-  after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
+  after its latest run ended, as the app allows), `return_to_draft` (a queued task whose run never
+  started, as the task list's *Return to drafts* takes it back: only one its group holds for good;
+  refused with `not_queued`, `run_recorded` or `not_held`), `get_run`, `pause_run`, `resume_run`
+  (continues an interrupted run), `cancel_run`, `send_message` (a message to the agents of a task's
+  latest run, as the Conversation composer sends it in the run's state: it answers, follows up,
+  continues a failed or stuck run, resumes a paused one or runs an ended task again; it waits for a
+  limit the run stopped at to be raised, answering `awaits_limit`; refused with `no_agent_reads` or
+  `not_latest_run`), `continue_run` (a run stopped at a limit, with a
+  `choice` its task page offers for how it stopped: `raise_limits` with `budget_tokens` and
+  `time_limit_minutes` after its token budget or time limit, `raise_step_budget` with `budget_tokens`
+  after a step's budget, `resume` after the daily budget, `allow_retry` or `return_to` with `step` and
+  `note` after a step used up its retries or broke again; every value is given, read with the page's
+  rules; refused with `not_stopped_at_limit`, `choice_not_offered`, `invalid_limit`, `group_budget`,
+  `step_not_offered` or `task_blocked`), `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
   see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
   `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
-  (*Use code index* in Project settings; `list_projects` shows each project's setting) and
+  (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
+  project's setting) and
   `update_project_limits` (Project settings › Limits: the token budgets, the default time limit and
   *Agents working at once*, which the project's runner applies at once; invalid limits are refused with
   `invalid_limits` and the tab's own words; `list_projects` shows each project's limits). A modal
-  open in the window does not stand in their way. A refusal comes back as a tool error with a stable
+  open in the window does not stand in their way, and they work in the background without disturbing
+  whoever uses the window: only the changed project's data is read again, the screens showing it
+  update in place (no page switches, no form is reset; an Edit task form or a settings section with a
+  change of the person's keeps it and says quietly that the data changed elsewhere, with *Reload*),
+  and a tool's failure is only in its result, never a failure in the status bar or a mark on a tab. A refusal comes back as a tool error with a stable
   `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
   `run_not_running`…) and the app's own explanation. Its discovery file is
   `%LOCALAPPDATA%\orchester-mcp\<pid>.json` on Windows and

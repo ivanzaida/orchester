@@ -29,6 +29,7 @@ use crate::{
     conflict::{Edit, EditSaved, save_edit},
     data::{PipelineChoice, SaveTarget, published_pipelines},
     form::TaskForm,
+    outside::Outside,
     writer::{TaskWriter, WriteError},
   },
 };
@@ -136,7 +137,8 @@ pub async fn update_task(services: &Services, args: UpdateTask) -> Result<Value,
 }
 
 fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
-  let root = services.project(&args.project)?.repo_root;
+  let open = services.project(&args.project)?;
+  let root = open.repo_root;
   let db = ProjectDb::open(&root)?;
   let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
@@ -169,12 +171,13 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .map_err(write_error)?
     .saved()
     .ok_or_else(changed)?;
-  services.changes.record();
+  services.changes.record(open.project.id(), Outside::Tasks);
   Ok(task)
 }
 
 fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
-  let root = services.project(&args.project)?.repo_root;
+  let open = services.project(&args.project)?;
+  let root = open.repo_root;
   let db = ProjectDb::open(&root)?;
   let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
@@ -221,7 +224,7 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     EditSaved::Saved { task, .. } => task,
     EditSaved::Conflict(_) => return Err(changed()),
   };
-  services.changes.record();
+  services.changes.record(open.project.id(), Outside::Tasks);
   Ok(saved)
 }
 
