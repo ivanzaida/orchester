@@ -4,8 +4,9 @@
 //! filter or search leaves out ([`readback`]), the working line as the chat's last row, following it
 //! live and *Jump to latest* while it does not ([`follow`]), the composer ([`composer`]); at the right
 //! the step rail, which filters the chat by step ([`rail`], collapsed to [`strip`]), or Details in its
-//! place ([`details`], [`side`]). The transcript is read again whenever the runner reports a change;
-//! the run's tool requests apart from it, as the project's waiting requests change ([`requests`]).
+//! place ([`details`], [`side`]). The transcript is read again as the runner reports changes
+//! ([`transcript_read`]); the run's tool requests after each read of it and as the project's waiting
+//! requests change ([`requests`]).
 
 mod approval_card;
 mod cards;
@@ -26,6 +27,7 @@ mod send;
 mod side;
 mod strip;
 mod toolbar;
+mod transcript_read;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -48,6 +50,7 @@ use self::{
   divider::step_label,
   follow::{LeftAt, Reveal},
   rail::RailToggle,
+  transcript_read::{Read, TranscriptRead},
 };
 use super::{
   activity::{OpenRows, RevealRow, Toggles},
@@ -55,19 +58,13 @@ use super::{
   tab_state,
 };
 use crate::{
-  background, messages,
   messages::Message,
   runner::Runners,
   screens::project::ProjectNav,
   tasks::{
     conversation::Conversation,
     detail::{RunView, TaskDetail},
-    timeline::{
-      self, Sources,
-      load::{Loaded, transcript_in},
-      view::Show,
-    },
-    transcript::Entry,
+    timeline::{self, Sources, view::Show},
   },
   theme::gutter_scrollbar,
   ui::{button::ActionButton, icon::Icon},
@@ -180,12 +177,6 @@ impl Timeline {
   }
 }
 
-/// The run's transcript, as read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read(Arc<Vec<Entry>>);
-
-impl lurq::app::component::DevtoolsInspectable for Read {}
-
 pub(super) struct ConversationTab {
   show: Signal<ShowChoice>,
   step: Signal<StepFilter>,
@@ -207,6 +198,7 @@ pub(super) struct ConversationTab {
   toggles: Toggles,
   scroll: lurq::layout::layout_kind::ScrollState,
   retry: Signal<u64>,
+  transcript: TranscriptRead,
   draft: Signal<String>,
   details: DetailsPane,
   rail: RailToggle,
@@ -238,6 +230,7 @@ impl Component for ConversationTab {
       toggles: Toggles(ctx.signal(OpenRows::default())),
       scroll: lurq::layout::layout_kind::ScrollState::new(),
       retry: ctx.signal(0),
+      transcript: TranscriptRead::default(),
       draft: ctx.signal(String::new()),
       details,
       rail: RailToggle {
@@ -257,29 +250,18 @@ impl Component for ConversationTab {
     let details_open = self.details.is_open(remembered(ctx));
     let run_id = props.detail.run.as_ref().map(RunView::id);
     let retry = self.retry.get();
-    let deps = (props.repo_root.clone(), run_id, props.revision, retry);
-    let load = ctx.future(deps, |(repo_root, run, ..)| async move {
-      let Some(run) = run else {
-        return Ok(Read(Arc::default()));
-      };
-      background::run(move || transcript_in(&repo_root, run))
-        .await?
-        .map(Read)
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the run's transcript");
-          messages::store_error(&error)
-        })
-    });
-    let state = load.state().get();
-    let read = state.data.as_ref().map_or(0, |Read(entries)| entries.len());
-    let requests = requests::requests(ctx, (props.repo_root.clone(), run_id), (read, retry));
+    let state = self
+      .transcript
+      .read(ctx, (props.repo_root.clone(), run_id), (props.revision, retry));
+    let transcript = state.data.map(|Read(entries)| entries);
+    let sources = requests::with_requests(ctx, (props.repo_root.clone(), run_id), (transcript, retry));
     let Some(run) = props.detail.run.as_ref() else {
       let waiting = without_run(ctx, &props.conversation);
       return self.layout(ctx, &props, None, waiting);
     };
     ctx.provide(self.timeline(&props, run));
-    let loaded = match (state.data.zip(requests.data), state.error.or(requests.error)) {
-      (Some((Read(entries), requests)), _) => Loaded::of(entries, requests),
+    let loaded = match (sources.data.flatten(), state.error.or(sources.error)) {
+      (Some(loaded), _) => loaded,
       (None, Some(error)) => {
         let failed = self.failed(ctx, &error);
         return self.layout(ctx, &props, None, failed);
