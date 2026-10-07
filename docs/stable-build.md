@@ -99,8 +99,16 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   develops Orchester through Orchester included. Its tools work on data and go through the same
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
-  after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
+  after its latest run ended, as the app allows), `return_to_draft` (a queued task whose run never
+  started, as the task list's *Return to drafts* takes it back: only one its group holds for good;
+  refused with `not_queued`, `run_recorded` or `not_held`), `get_run`, `pause_run`, `resume_run`
+  (continues an interrupted run), `cancel_run`, `continue_run` (a run stopped at a limit, with a
+  `choice` its task page offers for how it stopped: `raise_limits` with `budget_tokens` and
+  `time_limit_minutes` after its token budget or time limit, `raise_step_budget` with `budget_tokens`
+  after a step's budget, `resume` after the daily budget, `allow_retry` or `return_to` with `step` and
+  `note` after a step used up its retries or broke again; every value is given, read with the page's
+  rules; refused with `not_stopped_at_limit`, `choice_not_offered`, `invalid_limit`, `group_budget`,
+  `step_not_offered` or `task_blocked`), `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
   see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,

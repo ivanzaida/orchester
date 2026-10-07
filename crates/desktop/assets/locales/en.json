@@ -5446,7 +5446,12 @@
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
       "noWorktree": "The run left no worktree to remove.",
-      "uncommittedChanges": "The worktree holds uncommitted changes. A person decides on the task page whether to discard them."
+      "uncommittedChanges": "The worktree holds uncommitted changes. A person decides on the task page whether to discard them.",
+      "notStoppedAtLimit": "Run #{{run}} is not stopped at a limit, so nothing waits to continue.",
+      "choiceNotOffered": "The task page does not offer this choice for how run #{{run}} stopped. get_run says how it stopped.",
+      "returnStepNotOffered": "Run #{{run}} cannot return to that step: only an earlier agent step that ran before the stuck step can take a note.",
+      "notQueued": "{{task}} is not queued, so it is not returned to the drafts.",
+      "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts."
     }
   },
   "statusBar": {
