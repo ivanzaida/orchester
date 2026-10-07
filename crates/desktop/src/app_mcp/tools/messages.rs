@@ -34,6 +34,7 @@ use crate::{
       send_in,
     },
     detail::TaskDetail,
+    outside::Outside,
     plan::PlanReview,
     run::control_message,
   },
@@ -94,6 +95,8 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
   let then = prepared.mode.then().ok_or_else(|| closed(&prepared.conversation))?;
   let key = IdempotencyKey::generate();
   store(&project, &prepared, (key, then), args.text).await?;
+  // An open Conversation of the task reads the stored message in place.
+  services.changes.record(project.project.id(), Outside::Tasks);
   let pipeline = prepared
     .detail
     .run

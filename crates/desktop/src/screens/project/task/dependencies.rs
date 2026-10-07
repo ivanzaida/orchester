@@ -9,7 +9,10 @@ use lurq::{
   components::{Column, Text},
   node::Element,
 };
-use orchester_core::{id::TaskId, task::Task};
+use orchester_core::{
+  id::TaskId,
+  task::{Task, TaskStatus},
+};
 
 use super::super::ProjectNav;
 use crate::{
@@ -65,6 +68,11 @@ impl Component for TaskDependencies {
         .map_err(|error| crate::messages::store_error(&error))
     });
     let nav = ctx.use_context::<ProjectNav>().expect("shell provides navigation");
+    // A queued task is past readiness and Run (its topbar has Retry run): only its links remain.
+    let draft = props.task.status() == TaskStatus::Draft;
+    if !draft && props.task.organization().dependencies().is_empty() {
+      return Column::new();
+    }
     let state = load.state().get();
     let mut column = Column::new()
       .id("task-dependency-readiness")
@@ -76,7 +84,10 @@ impl Component for TaskDependencies {
     let Some(tasks) = state.data else {
       return column.child(Text::new(&ctx.t("tasks.tags.loading")).variant(TypographyStyle::Caption));
     };
-    column = column.child(dependency_links(ctx, &props.task, &tasks, &nav));
+    column = column.child(dependency_links(ctx, (&props.task, draft), &tasks, &nav));
+    if !draft {
+      return column;
+    }
     let blocking = tasks
       .blocking
       .get(&props.task.id())
@@ -162,7 +173,8 @@ fn action(ctx: &mut Ctx, props: &DependencyProps) -> lurq::app::ctx::FutureActio
   })
 }
 
-fn dependency_links(ctx: &Ctx, task: &Task, tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
+/// The task's blocking links and, for a `draft`, why Run is or is not available.
+fn dependency_links(ctx: &Ctx, (task, draft): (&Task, bool), tasks: &ProjectTasks, nav: &ProjectNav) -> Element {
   let mut column = Column::new().spacing(SpacingSize::Sm);
   let unfinished = tasks.blocking.get(&task.id()).map(Vec::as_slice).unwrap_or_default();
   for link in task.organization().dependencies() {
@@ -182,6 +194,9 @@ fn dependency_links(ctx: &Ctx, task: &Task, tasks: &ProjectTasks, nav: &ProjectN
         )
         .child(workflow_label(ctx, blocker.organization().status()));
     }
+  }
+  if !draft {
+    return column.into();
   }
   if !unfinished.is_empty() {
     let keys = unfinished

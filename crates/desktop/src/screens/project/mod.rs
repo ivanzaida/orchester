@@ -45,7 +45,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::{Column, Outlet, Row},
+  components::{Column, Row},
   core::Signal,
   node::{Element, dimension::Dimension},
   router::Navigator,
@@ -460,13 +460,7 @@ impl Component for ProjectShell {
             },
             &self.nav,
           ))
-          .child(
-            Column::new()
-              .flex(1.0)
-              .height(Dimension::Pct(100.0))
-              .with_children(stale::notice(ctx, &self.nav, feed.stale.get().as_ref()))
-              .child(Outlet::mount(ctx)),
-          ),
+          .child(stale::page(ctx, &self.nav, feed.stale.get().as_ref())),
       )
       .child(ctx.mount_keyed::<StatusBar>("status-bar", StatusBarProps { project: Some(bar) }))
       .child(import::dialog(ctx, &open))

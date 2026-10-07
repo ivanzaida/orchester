@@ -162,7 +162,7 @@ impl Component for LimitsTab {
     let save = save_action(ctx, &self.runners);
     let separator = ctx.t("number.groupSeparator");
     let saving = save.state().get().is_pending();
-    self.load(ctx, &props.open, &separator, saving);
+    self.load(ctx, (&props.open, &props.status), &separator, saving);
     let errors = self
       .entered(&separator, Signal::get)
       .err()
@@ -196,7 +196,13 @@ impl Component for LimitsTab {
       .padding_vertical(SpacingSize::Lg)
       .padding_horizontal(SpacingSize::Section)
       .spacing(SpacingSize::Sm)
-      .with_children(self.outside.notice(ctx, "settings-limits-changed-outside"))
+      // The section's rhythm (24, `c7e729`) below the notice, the column's 8 included.
+      .with_children(
+        self
+          .outside
+          .notice(ctx, "settings-limits-changed-outside")
+          .map(|notice| Column::new().width(Dimension::Pct(100.0)).padding_bottom(SpacingSize::Md).child(notice)),
+      )
       .child(Text::new(&ctx.t("settings.limits.tokenBudgets")).variant(ExtraTypography::SectionHeading.role()))
       .with_children(rows)
       .child(Text::new(&ctx.t("settings.limits.time")).variant(ExtraTypography::SectionHeading.role()))
@@ -283,7 +289,7 @@ impl LimitsTab {
   /// Reads the stored limits and fills the fields with them; again after automation changed them,
   /// unless the person has a change under way: one being saved (`saving`), or fields that differ from
   /// what is stored (see [`OutsideSettings`]).
-  fn load(&self, ctx: &mut Ctx, open: &OpenProject, separator: &str, saving: bool) {
+  fn load(&self, ctx: &mut Ctx, (open, status): (&OpenProject, &Signal<SettingsSave>), separator: &str, saving: bool) {
     let current = self.outside.reading(ctx);
     let load = ctx.future((open.repo_root.clone(), current), |(repo_root, reading)| async move {
       background::run(move || ProjectUsage::load(&repo_root, orchester_core::time::Timestamp::now()))
@@ -305,6 +311,10 @@ impl LimitsTab {
       .is_some_and(|Stored(stored)| self.entered(separator, Signal::get_untracked).ok() != Some(stored));
     if self.outside.take(reading, current, saving || edited) {
       self.fill(usage.limits, separator);
+      // A save refused earlier is settled: the fields show what is stored, which it left as it was.
+      if matches!(status.get_untracked(), SettingsSave::Failed(_)) {
+        status.set(SettingsSave::Saved);
+      }
     }
   }
 
@@ -326,8 +336,11 @@ impl LimitsTab {
     self.max.set(grouped(limits.max_run_budget().get(), separator));
     self.default.set(grouped(limits.default_run_budget().get(), separator));
     self.daily.set(grouped(limits.daily_budget().get(), separator));
-    self.time.set(minutes_text(limits.default_time_limit()));
     self.slots.set(limits.agent_slots().get().to_string());
+    // Last: setting the time limit saves what the fields hold, as a person's choice does. With every
+    // other field filled first they hold what is stored, so nothing is saved; filled earlier, the old
+    // agent count would be saved over the new one.
+    self.time.set(minutes_text(limits.default_time_limit()));
   }
 }
 

@@ -29,7 +29,7 @@ use crate::{
   github::{contains_text, shows},
   harness::Desktop,
   integration::blocked_git,
-  project_settings::{DAILY_BUDGET, DEFAULT_BUDGET, limits_tab, stored_limits},
+  project_settings::{AGENT_SLOTS, DAILY_BUDGET, DEFAULT_BUDGET, limits_tab, stored_limits},
   run_history::refusing_git,
   task_run::{has, seed_claude, set_text},
 };
@@ -278,4 +278,26 @@ fn app_mcp_quiet_limits_tab_follows_the_tool_and_keeps_a_persons_edit() {
   desktop.wait_until("the fields show what is stored", |desktop| {
     desktop.value(DAILY_BUDGET) == "40,000,000" && !has(desktop, "settings-limits-changed-outside")
   });
+}
+
+#[test]
+fn app_mcp_quiet_limits_tab_keeps_the_tools_agent_count() {
+  let mut desktop = Desktop::with_seeded_project_and_app_mcp(|_| {});
+  limits_tab(&mut desktop);
+  let mut client = agent(&desktop);
+  ok(
+    &mut client,
+    "update_project_limits",
+    &json!({"project": "Kontur", "agent_slots": 8}),
+  );
+  desktop.wait_until("the field shows the tool's count", |desktop| {
+    desktop.value(AGENT_SLOTS) == "8"
+  });
+  settle_for(&mut desktop, Duration::from_secs(1));
+  assert_eq!(
+    stored_limits(desktop.repo()).agent_slots().get().get(),
+    8,
+    "the open tab does not save its earlier count over it"
+  );
+  assert_eq!(desktop.value(AGENT_SLOTS), "8");
 }

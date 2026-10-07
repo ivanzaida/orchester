@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  task::{TaskDetails, TaskLimits, TaskStatus},
+  task::{TaskDetails, TaskLimits},
   tokens::compact_tokens,
 };
 
@@ -143,24 +143,21 @@ pub(super) fn this_task(
   let shown = ctx
     .use_context::<super::super::pages::Shown>()
     .expect("shell provides project data");
-  // A queued task is past readiness and Run: its page offers Retry run in the topbar instead.
-  let dependencies = (detail.task.status() == TaskStatus::Draft).then(|| {
-    ctx.mount_keyed::<super::dependencies::TaskDependencies>(
-      "task-dependencies",
-      super::dependencies::DependencyProps {
-        root: shown.open.repo_root.clone(),
-        task: detail.task.clone(),
-        revision: shown.revision,
-      },
-    )
-  });
+  let dependencies = ctx.mount_keyed::<super::dependencies::TaskDependencies>(
+    "task-dependencies",
+    super::dependencies::DependencyProps {
+      root: shown.open.repo_root.clone(),
+      task: detail.task.clone(),
+      revision: shown.revision,
+    },
+  );
   let rows = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Step.role())
     .child(Text::new(&ctx.t("runs.summary.thisTask")).variant(ExtraTypography::CardTitle.role()))
     .child(pipeline)
     .with_children(limit_rows(ctx, details.limits))
-    .with_children(dependencies)
+    .child(dependencies)
     .with_children(shared);
   this_run_panel(rows, scroll, &ctx.t("runs.summary.taskNote"))
 }

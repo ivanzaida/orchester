@@ -14,7 +14,7 @@ use crate::{
   github::shows,
   harness::Desktop,
   mcp_agent::McpAgent,
-  task_run::{has, seed, set_text},
+  task_run::{create_and_run, has, init_repository, programs, seed, seed_claude, set_text},
 };
 
 const ROW: &str = "task-row-KON-1";
@@ -166,4 +166,47 @@ fn app_mcp_quiet_outside_changes_count_only_for_the_changed_project() {
     None,
     "another project's feed has nothing to read again"
   );
+}
+
+#[test]
+fn app_mcp_quiet_stale_tasks_notice_leaves_the_page_inside_the_window() {
+  let (mut desktop, mut client) = task_page();
+  edit(&mut desktop);
+  desktop.wait_for("save-draft");
+  // A task the store cannot read makes every later reading of the tasks fail.
+  rusqlite::Connection::open(desktop.repo().join(".orchester").join("orchester.db"))
+    .expect("open the database")
+    .execute("UPDATE tasks SET status = 'unknown'", [])
+    .expect("an unreadable task");
+  ok(
+    &mut client,
+    "create_task",
+    &json!({"project": "Kontur", "title": "Read the tasks again"}),
+  );
+  desktop.wait_until("the shell's notice", |desktop| has(desktop, "tasks-read-again-failed"));
+  assert!(has(&mut desktop, "task-form"), "the form stays");
+  let (save, bar) = (desktop.bounds("save-draft"), desktop.bounds("status-bar"));
+  assert!(
+    save.y + save.height <= bar.y + 0.5,
+    "Save changes {save:?} stays above the status bar {bar:?}"
+  );
+}
+
+#[test]
+fn app_mcp_quiet_open_conversation_shows_a_tools_message() {
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner_and_app_mcp(runner, init_repository, |repo| seed_claude(repo, &fake));
+  create_and_run(&mut desktop, "Work in turns.", "5000");
+  desktop.wait_until("the run stopped at its limit", |desktop| has(desktop, "raise-limit"));
+  desktop.click("task-tab-conversation");
+  desktop.wait_for("conversation-composer");
+  let mut client = agent(&desktop);
+  ok(
+    &mut client,
+    "send_message",
+    &json!({"project": "Kontur", "run": "#1", "text": "Then add a test."}),
+  );
+  desktop.wait_until("the message in the open conversation", |desktop| {
+    shows(desktop, "task-page", "Then add a test.")
+  });
 }

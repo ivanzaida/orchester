@@ -5,7 +5,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::Column,
+  components::{Column, Outlet},
   node::{Element, dimension::Dimension},
 };
 
@@ -15,9 +15,26 @@ use crate::{
   ui::{button::ActionButton, icon::Icon, message_text, notice::Notice},
 };
 
+/// The shown page under the notice, when there is one; the page takes the height the notice leaves,
+/// so its bottom stays above the status bar.
+pub(super) fn page(ctx: &mut Ctx, nav: &ProjectNav, error: Option<&Message>) -> Element {
+  Column::new()
+    .flex(1.0)
+    .height(Dimension::Pct(100.0))
+    .with_children(notice(ctx, nav, error))
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(Outlet::mount(ctx)),
+    )
+    .into()
+}
+
 /// The notice above the page while the tasks shown are the ones last read; `None` while they are
 /// current.
-pub(super) fn notice(ctx: &Ctx, nav: &ProjectNav, error: Option<&Message>) -> Option<Element> {
+fn notice(ctx: &Ctx, nav: &ProjectNav, error: Option<&Message>) -> Option<Element> {
   let error = error?;
   let nav = nav.clone();
   let retry = ActionButton::new(ctx.t("common.retry"))

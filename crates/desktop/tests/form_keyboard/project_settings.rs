@@ -103,7 +103,7 @@ const MAX_BUDGET: &str = "limits-max-run-budget";
 pub(crate) const DEFAULT_BUDGET: &str = "limits-default-run-budget";
 pub(crate) const DAILY_BUDGET: &str = "limits-daily-budget";
 const TIME_LIMIT: &str = "limits-default-time-limit";
-const AGENT_SLOTS: &str = "limits-agent-slots";
+pub(crate) const AGENT_SLOTS: &str = "limits-agent-slots";
 
 pub(crate) fn limits_tab(desktop: &mut Desktop) {
   settings(desktop);
