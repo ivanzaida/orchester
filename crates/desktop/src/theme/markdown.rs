@@ -86,14 +86,15 @@ pub fn markdown() -> ThemeMarkdown {
     code_block_label: marker(SUBTLE),
     list_marker: marker(MUTED),
     blockquote_marker: marker(SUBTLE),
-    table_header: inline(|style| style.text.weight = Some(FontWeight::Medium)),
+    table_header: inline(|style| style.text.color = Some(Color::from_hex(TEXT))),
     table_cell: MarkdownInlineStyle::new(),
     table_marker: marker(SUBTLE),
     code_block_box: block(Some(CODE_BG), BORDER, 1.0, Some(SPACE_STACK)),
     blockquote_box: block(Some(RAISED), HAIRLINE, 2.0, Some(SPACE_STACK)),
     table_box: block(None, BORDER, 1.0, None),
+    // No fill: on a filled header lurq swaps text in the body's color for its light theme's dark
+    // slate, unreadable on the dark chrome. lurq sets a header in bold itself.
     table_header_box: MarkdownBlockStyle {
-      background: Some(Color::from_hex(RAISED)),
       padding: Some(SPACE_SM),
       ..MarkdownBlockStyle::new()
     },
