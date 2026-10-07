@@ -451,7 +451,8 @@ A CLI that never started (`CommandError::NotStarted`) and a native request refus
 nothing; a native attempt that may have been billed for more than it reported makes the spend unknown. The reviewer's
 output keeps its last 256 KiB, so Claude Code's result line survives a long stream; a Codex output cut at its start
 fails closed with unknown spend. An ended reviewer gets 10 s to report its exit, so a review never holds up the run.
-Desktop: *Where tokens go* rows *Auto mode reviewer · <model>*, the invocation panel's *Auto mode reviewer* line,
+Desktop: *Where tokens go* rows *Auto mode reviewer* with the model in mono (names give way with an ellipsis, the
+reviewer's words before its model), the invocation panel's *Auto mode reviewer* line,
 `get_run`'s `tokens.reviewer`. Tests: `cargo test -p orchester-core --test reviewer_usage reviewer_usage`, `--test usage
 usage`, `--test auto_mode auto_mode` (and `auto_mode_scope`, `auto_mode_reviewers`), `-p orchester-agent --test
 anthropic_wire anthropic_review`, `--test responses_wire responses_review`, `-p orchester-store --test reviewer_usage
