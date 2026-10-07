@@ -126,6 +126,7 @@ pub(super) fn finished(shown: &Shown, outcome: &ToolOutcome) -> Vec<AgentEvent> 
         tool: shown.tool,
         detail,
         declined: None,
+        input: None,
       },
     },
     AgentEvent::CommandFinished {
@@ -153,6 +154,7 @@ pub(super) fn invalid(call: &ToolCallId, name: &str, error: &str) -> Vec<AgentEv
       tool,
       detail: None,
       declined: None,
+      input: None,
     },
   });
   told
@@ -184,6 +186,7 @@ pub(super) fn declined(
           by,
           result: result.to_owned(),
         }),
+        input: None,
       },
     },
     AgentEvent::PermissionDenied {

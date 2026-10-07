@@ -32,13 +32,7 @@ impl LineChanges {
   pub fn between(old: &str, new: &str) -> Self {
     let old: Vec<&str> = old.split_inclusive('\n').collect();
     let new: Vec<&str> = new.split_inclusive('\n').collect();
-    let start = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
-    let end = old[start..]
-      .iter()
-      .rev()
-      .zip(new[start..].iter().rev())
-      .take_while(|(a, b)| a == b)
-      .count();
+    let (start, end) = shared_ends(&old, &new);
     let count = |lines: usize| u64::try_from(lines).unwrap_or(u64::MAX);
     Self {
       added: count(new.len() - start - end),
@@ -60,6 +54,18 @@ impl LineChanges {
       removed: self.removed.saturating_add(other.removed),
     }
   }
+}
+
+/// How many lines `old` and `new` share at their start, and then at their end: what lies between changed.
+pub fn shared_ends(old: &[&str], new: &[&str]) -> (usize, usize) {
+  let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
+  let end = old[start..]
+    .iter()
+    .rev()
+    .zip(new[start..].iter().rev())
+    .take_while(|(a, b)| a == b)
+    .count();
+  (start, end)
 }
 
 /// A text with edits applied, and the lines they changed.

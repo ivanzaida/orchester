@@ -90,7 +90,13 @@ fn claude_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end
   let write = "mcp__Orchester__write_file notes/new.md";
   let calls: Vec<&AgentEvent> = events
     .iter()
-    .filter(|event| !matches!(event, AgentEvent::TurnStarted | AgentEvent::TurnCompleted { .. }))
+    // What a call asked for its row is told in `tests/cli_file_calls.rs`.
+    .filter(|event| {
+      !matches!(
+        event,
+        AgentEvent::TurnStarted | AgentEvent::TurnCompleted { .. } | AgentEvent::NativeCall { .. }
+      )
+    })
     .collect();
   assert_eq!(
     calls,
@@ -303,8 +309,12 @@ fn codex_stream_reports_the_change_of_a_successful_orchester_edit_after_its_end(
     status: CommandStatus::Completed,
     asked: false,
   };
+  let events: Vec<AgentEvent> = codex(&lines)
+    .into_iter()
+    .filter(|event| !matches!(event, AgentEvent::NativeCall { .. }))
+    .collect();
   assert_eq!(
-    codex(&lines),
+    events,
     [
       finished("mcp-1", "edit_file"),
       changed("mcp-1", "README.md"),

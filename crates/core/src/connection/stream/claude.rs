@@ -27,7 +27,8 @@
 //! An edit with Claude Code's own tools ([`EDIT_TOOLS`]) is reported as the change it made once its result says
 //! it happened. A call of Orchester's `edit_file` or `write_file` (`mcp__Orchester__edit_file`, served over the
 //! runner's relay) is a command like any MCP call, and its change follows its successful end, so that the first
-//! edit is seen whichever tools the agent edits with.
+//! edit is seen whichever tools the agent edits with. What a call of Orchester's file tools asked follows its start
+//! ([`AgentEvent::NativeCall`]): its row reads as the native agent's call of the tool, an edit's with its diff.
 //!
 //! A result before the CLI took the prompt, saying nothing, ends no turn of the agent's: Claude Code resuming a
 //! session whose background command the previous process left reports that command stopped, ends a turn of its own
@@ -162,6 +163,7 @@ impl ClaudeStream {
         events.push(event);
       }
       if kind == "tool_use" {
+        events.extend(orchester_call(block));
         events.extend(self.not_asked(block));
       }
     }
@@ -388,6 +390,16 @@ fn failed_server(server: &Value) -> Option<AgentEvent> {
     problem: McpServerProblem::FailedToStart {
       detail: (status != "failed").then(|| status.to_owned()),
     },
+  })
+}
+
+/// What a call of one of Orchester's file tools asked, told right after its start so that its row reads as the native
+/// agent's call of the tool.
+fn orchester_call(block: &Value) -> Option<AgentEvent> {
+  let tool = OrchesterTool::from_claude_name(block.get("name")?.as_str()?)?;
+  Some(AgentEvent::NativeCall {
+    item: text(block, "id")?,
+    call: tool.shown_call(block.get("input").unwrap_or(&Value::Null))?,
   })
 }
 

@@ -285,6 +285,7 @@ fn mcp_call(item: &str, tool: &str, mark: Option<CommandMark>, status: Option<Co
     tool: tool.into(),
     mark,
     status,
+    native: None,
   })
 }
 

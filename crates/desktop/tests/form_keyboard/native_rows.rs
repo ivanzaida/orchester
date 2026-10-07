@@ -27,6 +27,7 @@ fn call(item: &str, tool: ToolName, detail: CallDetail, declined: Option<Decline
       tool,
       detail: Some(detail),
       declined,
+      input: None,
     },
   }
 }

@@ -16,7 +16,7 @@ use thiserror::Error;
 use self::items::{command_finished, file_changed, mcp_tool_finished};
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, FileChange},
+  stream::{AgentEvent, FileChange, NativeCall},
 };
 use crate::{
   orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
@@ -152,6 +152,8 @@ struct ToolContext {
   asked: bool,
   /// The file the call changes when it succeeds: a call of Orchester's `edit_file` or `write_file`.
   changes: Option<FileChange>,
+  /// What a call of one of Orchester's file tools asked, for its row.
+  call: Option<NativeCall>,
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
@@ -401,9 +403,11 @@ impl AppServerStream {
               tool: action.clone(),
             });
           let arguments = item.get("arguments").unwrap_or(&Value::Null);
-          let changes = (server == ORCHESTER)
-            .then(|| OrchesterTool::from_name(&action)?.changed_file(arguments))
+          let own = (server == ORCHESTER)
+            .then(|| OrchesterTool::from_name(&action))
             .flatten();
+          let changes = own.and_then(|tool| tool.changed_file(arguments));
+          let call = own.and_then(|tool| tool.shown_call(arguments));
           let context = ToolContext {
             thread,
             turn,
@@ -412,6 +416,7 @@ impl AppServerStream {
             target: string(arguments, "filePath"),
             asked: false,
             changes,
+            call,
           };
           self.tools.insert(id, context);
           return not_asked.map(Update::Activity).into_iter().collect();

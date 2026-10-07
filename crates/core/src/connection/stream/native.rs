@@ -1,16 +1,18 @@
 //! What a native agent's tool call did, as its transcript row shows it (04.H10,
 //! `docs/architecture/native-agent.md` §2.2, decision 11): the tool, what a file tool read, found or
 //! changed, the shell a command ran in, and for a command that did not run who declined it and the
-//! result the agent was given instead.
+//! result the agent was given instead. An agent CLI's call of the same file tool among Orchester's tools is told
+//! the same way, with what its input asked ([`CallInput`]), so that its row reads as the native agent's.
 
 use serde::{Deserialize, Serialize};
 
-use super::FileChangeKind;
+use super::{FileChangeKind, call_input::CallInput};
 use crate::{native::tools::ToolName, run::CommandShell};
 
 /// One native tool call, told by [`super::AgentEvent::NativeCall`] right before the event that ends
 /// the call: its [`super::AgentEvent::CommandFinished`], or the [`super::AgentEvent::PermissionDenied`]
-/// of a command that did not run.
+/// of a command that did not run. A CLI's call of Orchester's file tool is told after Claude Code's start of
+/// the call, and before Codex's end of a call that succeeded.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativeCall {
   pub tool: ToolName,
@@ -20,6 +22,10 @@ pub struct NativeCall {
   /// The command did not run: who declined it, and what the agent was told.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub declined: Option<Declined>,
+  /// What a CLI's call asked, which its row shows; `None` for the native agent's own call, whose label and
+  /// detail say it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub input: Option<CallInput>,
 }
 
 /// What one call did, by its tool.
@@ -74,6 +80,9 @@ impl NativeCall {
     }
     if let Some(declined) = &mut self.declined {
       declined.result = redact(&declined.result);
+    }
+    if let Some(input) = &mut self.input {
+      input.redact(redact);
     }
   }
 }

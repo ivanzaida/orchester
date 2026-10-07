@@ -3,6 +3,7 @@
 //! step's tokens before its first edit and the working line (`kpnmP`). The tab itself is
 //! `super::conversation`.
 
+mod change;
 mod command_entry;
 mod entry;
 mod first_edit;
