@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) use self::claude::usage as claude_usage;
 pub use self::{
-  call_change::{CallChange, ChangeHunk, ChangeLine, MAX_CHANGE_LINES},
+  call_change::{Breaks, CallChange, ChangeHunk, ChangeLine, FinalBreak, MAX_CHANGE_LINES},
   call_input::{CallInput, EditText, Requested},
   claude::ClaudeStream,
   native::{CallDetail, Declined, DeclinedBy, NativeCall},

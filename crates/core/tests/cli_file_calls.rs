@@ -7,7 +7,10 @@
 use orchester_core::{
   connection::{
     app_server::{AppServerStream, Update},
-    stream::{AgentEvent, CallChange, ClaudeStream, CommandStatus, MAX_CHANGE_LINES, NativeCall, OutputStream},
+    stream::{
+      AgentEvent, Breaks, CallChange, ClaudeStream, CommandStatus, FinalBreak, MAX_CHANGE_LINES, NativeCall,
+      OutputStream,
+    },
   },
   diff::{LineKind, MAX_LINE_CHARS},
   native::{edit::LineChanges, tools::ToolName},
@@ -141,7 +144,7 @@ fn cli_file_calls_an_edit_shows_shared_lines_as_context_and_a_line_ending_change
   let change = only_call(&events).2.expect("change");
   assert_eq!(lines(change), [vec![(Context, "a"), (Context, "b"), (Added, "c")]]);
   assert_eq!(change.counts(), Some(LineChanges { added: 1, removed: 0 }));
-  assert!(!change.hunks()[0].line_endings());
+  assert_eq!(change.hunks()[0].breaks(), Breaks::default());
 
   let events = claude(&[edit(
     "a.txt",
@@ -150,9 +153,32 @@ fn cli_file_calls_an_edit_shows_shared_lines_as_context_and_a_line_ending_change
   let change = only_call(&events).2.expect("change");
   assert_eq!(lines(change), [vec![(Context, "a"), (Context, "b")]]);
   assert!(
-    change.hunks()[0].line_endings(),
+    change.hunks()[0].breaks().line_endings,
     "CRLF to LF is said, not shown as the same lines"
   );
+  assert_eq!(
+    change.counts(),
+    Some(LineChanges { added: 2, removed: 2 }),
+    "each line changes, as git counts it"
+  );
+}
+
+#[test]
+fn cli_file_calls_an_edit_says_it_adds_or_removes_the_final_line_break() {
+  for (old, new, final_break) in [("x\n", "x", FinalBreak::Removed), ("a\nx", "a\nx\n", FinalBreak::Added)] {
+    let events = claude(&[edit("a.txt", &json!([{"old": old, "new": new, "replace_all": null}]))]);
+    let change = only_call(&events).2.expect("change");
+    assert!(
+      lines(change)[0].iter().all(|(kind, _)| *kind == LineKind::Context),
+      "{old:?}"
+    );
+    assert_eq!(change.hunks()[0].breaks().final_break, Some(final_break), "{old:?}");
+    assert_eq!(
+      change.counts(),
+      Some(LineChanges { added: 1, removed: 1 }),
+      "{old:?}: not +0 −0"
+    );
+  }
 }
 
 #[test]
@@ -209,6 +235,11 @@ fn cli_file_calls_claude_tells_a_write_s_content_and_what_a_read_or_search_is_ab
       ("toolu_list", ToolName::ListFiles, ".", false),
     ]
   );
+  let scopes: Vec<Option<&str>> = told(&events)
+    .into_iter()
+    .map(|(_, call)| call.input.as_ref().and_then(|input| input.scope()))
+    .collect();
+  assert_eq!(scopes, [None, None, Some("src"), None], "a search names where it looks");
   let written = told(&events)[0]
     .1
     .input

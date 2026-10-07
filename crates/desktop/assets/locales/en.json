@@ -1414,6 +1414,7 @@
         "searched": "{{tool}} · {{matches}} matches in {{files}} files",
         "searchedIn": "{{tool}} · {{scope}} · {{matches}} matches in {{files}} files",
         "searchTitle": "“{{pattern}}”",
+        "searchScope": "{{tool}} · {{scope}}",
         "changed": "{{tool}} · {{status}} · +{{added}} −{{removed}} · open in Changes",
         "edited": "{{tool}} · {{status}} · +{{added}} −{{removed}}",
         "editedEvery": "{{tool}} · {{status}} · replaces every occurrence",
@@ -1503,10 +1504,15 @@
       "rawOutput": "raw output",
       "stderrLine": "stderr  {{line}}",
       "outputTrimmed": "{{count}} earlier lines are not shown",
-      "changeTrimmed": "{{count}} more lines of the change are not shown",
+      "changeTrimmed": {
+        "one": "1 more line of the change is not shown",
+        "other": "{{count}} more lines of the change are not shown"
+      },
       "change": {
         "every": "Replaces every occurrence; the lines show one",
-        "lineEndings": "Line endings change in the lines it keeps"
+        "lineEndings": "Line endings change in the lines it keeps",
+        "finalBreakAdded": "Adds the final line break",
+        "finalBreakRemoved": "Removes the final line break"
       },
       "outputOmitted": "{{size}} of earlier output was not kept",
       "jump": "Jump to latest",

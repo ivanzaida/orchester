@@ -19,6 +19,9 @@ use crate::native::tools::ToolInput;
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallInput {
   target: String,
+  /// Where a search looks: its path, else its glob; `None` for the whole worktree and for other tools.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  scope: Option<String>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   change: Option<Arc<CallChange>>,
   /// The whole texts of an edit or a write, until [`Self::settle`] makes them the change.
@@ -67,7 +70,15 @@ impl CallInput {
           .join(" ");
         (if target.is_empty() { ".".to_owned() } else { target }, None)
       }
-      ToolInput::Search(search) => (search.pattern().to_owned(), None),
+      ToolInput::Search(search) => {
+        let scope = search.path().or(search.glob()).map(str::to_owned);
+        return Some(Self {
+          target: search.pattern().to_owned(),
+          scope,
+          change: None,
+          requested: None,
+        });
+      }
       ToolInput::EditFile(edit) => {
         let edits = edit
           .edits()
@@ -84,6 +95,7 @@ impl CallInput {
     };
     Some(Self {
       target,
+      scope: None,
       change: None,
       requested,
     })
@@ -93,6 +105,11 @@ impl CallInput {
   /// it searches for.
   pub fn target(&self) -> &str {
     &self.target
+  }
+
+  /// Where a search looks, when it names a path or a glob.
+  pub fn scope(&self) -> Option<&str> {
+    self.scope.as_deref()
   }
 
   /// The change an `edit_file` or `write_file` call asked for, once settled.
@@ -110,6 +127,9 @@ impl CallInput {
   /// Redacts the target and the whole texts, or the lines of a change already settled.
   pub(super) fn redact(&mut self, redact: &impl Fn(&str) -> String) {
     self.target = redact(&self.target);
+    if let Some(scope) = &mut self.scope {
+      *scope = redact(scope);
+    }
     match &mut self.requested {
       Some(Requested::Edits(edits)) => {
         for edit in edits {
@@ -131,6 +151,7 @@ impl fmt::Debug for CallInput {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("CallInput")
       .field("target", &self.target)
+      .field("scope", &self.scope)
       .field("change", &self.change)
       .field("requested", &self.requested)
       .finish()

@@ -73,7 +73,10 @@ pub(super) fn requested(
   let meta = match (status, input.change()) {
     (None, _) => ctx.t_args("runs.activity.native.running", [("tool", name)]),
     (Some(_), Some(change)) => change_meta(ctx, tool, change),
-    (Some(_), None) => name.into(),
+    (Some(_), None) => match input.scope() {
+      Some(scope) => ctx.t_args("runs.activity.native.searchScope", [("tool", name), ("scope", scope)]),
+      None => name.into(),
+    },
   };
   let glyph = match tool {
     ToolName::ReadFile => Icon::FileText,
