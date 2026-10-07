@@ -2989,12 +2989,13 @@
     "breakdown": {
       "title": "Where tokens go",
       "note": "Spent tokens · select a row to filter by it",
+      "noteWithReviewer": "Spent tokens · select a row to filter by it; the auto mode reviewer’s rows only read",
       "byProject": "By project",
       "byProfile": "By agent profile · step",
       "byModel": "By model",
       "byPipeline": "By pipeline",
       "profileStep": "{{profile}} · {{step}}",
-      "reviewer": "Auto mode reviewer · {{model}}",
+      "reviewer": "Auto mode reviewer",
       "pipelineGone": "Pipeline no longer exists",
       "idle": "{{names}} had no runs in the period."
     },
