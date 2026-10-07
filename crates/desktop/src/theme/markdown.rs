@@ -2,7 +2,8 @@
 //! grayscale: the design draws no Markdown, so every value comes from an existing variable. The
 //! body is the caller's text style (agent text, 12/1.6, `FP6BD`); headings stay within the plan's
 //! type scale below its 19px title (`J7irj`): 14, 13 and 12, medium; code keeps the code colors of
-//! the diff (`vEZ42`); rules and quotes use the chrome's borders.
+//! the diff (`vEZ42`); rules and quotes use the chrome's borders. A table's columns share the text's
+//! width, however narrow: in a chat message as in a plan, a table never runs past its text.
 
 use std::sync::Arc;
 
@@ -100,6 +101,8 @@ pub fn markdown() -> ThemeMarkdown {
       padding: Some(SPACE_SM),
       ..MarkdownBlockStyle::new()
     },
+    // lurq keeps a cell 120 wide at least, so five columns would run past a chat message.
+    table_cell_min_width: 0.0,
     ..ThemeMarkdown::default()
   }
 }

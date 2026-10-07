@@ -40,6 +40,7 @@ use crate::{
     button::ActionButton,
     field::field_error,
     icon::{Icon, IconSize, icon},
+    markdown::plain::plain_text,
     message_text,
   },
 };
@@ -60,13 +61,11 @@ pub(super) fn agent_row(ctx: &mut Ctx, row: &AgentRow, timeline: &Timeline, raw:
     (None, false) => time.as_str().into(),
   };
   let avatar = if row.tool_step { Avatar::Tool } else { Avatar::Agent };
-  let body = row
+  let text = row
     .text
-    .as_deref()
-    .map(chat_text)
-    .into_iter()
-    .chain(chips(ctx, timeline, &row.chips, raw))
-    .collect();
+    .as_ref()
+    .map(|text| chat_text(ctx, "conversation-message-text", text));
+  let body = text.into_iter().chain(chips(ctx, timeline, &row.chips, raw)).collect();
   // A row of tool activity alone is told apart from a message.
   let id = if row.text.is_some() {
     "conversation-agent-message"
@@ -164,7 +163,7 @@ impl Component for PersonMessageView {
 
 /// A person's message (`mjkqh` in `kpnmP`): *You*, whom it is to and when, what it says, its
 /// delivery line and `below` it.
-pub(super) fn person_message(ctx: &Ctx, entry: &Entry, below: Vec<Element>) -> Element {
+pub(super) fn person_message(ctx: &mut Ctx, entry: &Entry, below: Vec<Element>) -> Element {
   let time = display::clock(entry.at);
   let meta = match &entry.author {
     Author::YouTo(agent) => ctx.t_args(
@@ -173,7 +172,8 @@ pub(super) fn person_message(ctx: &Ctx, entry: &Entry, below: Vec<Element>) -> E
     ),
     Author::You | Author::Agent(_) => ctx.t_args("runs.conversation.toOrchestrator", [("time", time.as_str())]),
   };
-  let body = vec![chat_text(&entry.body), delivery_line(ctx, &entry.state)]
+  let text = chat_text(ctx, &format!("conversation-text-{}", entry.id), &entry.body);
+  let body = vec![text, delivery_line(ctx, &entry.state)]
     .into_iter()
     .chain(below)
     .collect();
@@ -331,7 +331,7 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
       Icon::MessageSquare,
       ctx.t_args(
         "runs.conversation.line.agent",
-        [("agent", &**agent), ("text", first_line(text))],
+        [("agent", &**agent), ("text", first_line(text).as_str())],
       ),
       ctx.t("runs.conversation.line.message"),
     ),
@@ -339,7 +339,10 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
       Icon::MessageCircle,
       ctx.t_args(
         "runs.conversation.line.agent",
-        [("agent", author_name(&entry.author)), ("text", first_line(&entry.body))],
+        [
+          ("agent", author_name(&entry.author)),
+          ("text", first_line(&entry.body).as_str()),
+        ],
       ),
       delivery(ctx, &entry.state).1,
     ),
@@ -347,9 +350,12 @@ pub(super) fn one_line(ctx: &Ctx, item: &Item) -> Element {
       let title = match &entry.author {
         Author::YouTo(agent) => ctx.t_args(
           "runs.conversation.line.youTo",
-          [("agent", &**agent), ("text", first_line(&entry.body))],
+          [("agent", &**agent), ("text", first_line(&entry.body).as_str())],
         ),
-        Author::You | Author::Agent(_) => ctx.t_args("runs.conversation.line.you", [("text", first_line(&entry.body))]),
+        Author::You | Author::Agent(_) => ctx.t_args(
+          "runs.conversation.line.you",
+          [("text", first_line(&entry.body).as_str())],
+        ),
       };
       (Icon::User, title, delivery(ctx, &entry.state).1)
     }
@@ -405,6 +411,7 @@ fn author_name(author: &Author) -> &str {
   }
 }
 
-fn first_line(text: &str) -> &str {
-  text.lines().next().unwrap_or_default()
+/// The first line `text` shows, its Markdown rendered.
+fn first_line(text: &str) -> String {
+  plain_text(text).lines().next().unwrap_or_default().to_owned()
 }
