@@ -94,6 +94,9 @@ struct Inner {
   tabbed: Mutex<HashSet<PathBuf>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
+  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
+  /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
+  slot_updates: Mutex<()>,
 }
 
 /// One project's runner.
@@ -138,6 +141,7 @@ impl Runners {
         projects: Mutex::new(HashMap::new()),
         tabbed: Mutex::new(HashSet::new()),
         closing: AtomicBool::new(false),
+        slot_updates: Mutex::new(()),
       }),
     }
   }
