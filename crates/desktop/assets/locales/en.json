@@ -2995,7 +2995,7 @@
       "byPipeline": "By pipeline",
       "profileStep": "{{profile}} · {{step}}",
       "reviewer": "auto mode reviewer",
-      "reviewerReadOnly": "The auto mode reviewer’s rows only read: it is no agent profile to filter by.",
+      "reviewerReadOnly": "Auto mode reviewer rows can't be selected as a filter.",
       "pipelineGone": "Pipeline no longer exists",
       "idle": "{{names}} had no runs in the period."
     },

@@ -124,7 +124,11 @@ fn usage_reviewer_has_a_row_of_its_own_and_counts_in_the_totals_and_the_run() {
   });
   assert!(shows(&mut desktop, "usage-breakdown", "auto mode reviewer"));
   assert!(
-    shows(&mut desktop, "usage-breakdown-subtitle", "rows only read"),
+    shows(
+      &mut desktop,
+      "usage-breakdown-subtitle",
+      "can't be selected as a filter"
+    ),
     "the card does not offer to filter by them"
   );
   assert!(
@@ -257,7 +261,11 @@ fn assert_header_clear(desktop: &mut Desktop) {
       "{id} at {text:?} runs under {switch:?}"
     );
   }
-  assert!(shows(&mut *desktop, "usage-breakdown-subtitle", "rows only read"));
+  assert!(shows(
+    &mut *desktop,
+    "usage-breakdown-subtitle",
+    "can't be selected as a filter"
+  ));
 }
 
 #[test]
