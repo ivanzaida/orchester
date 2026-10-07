@@ -30,7 +30,7 @@ use super::{
 use crate::{
   theme::{
     ExtraRadius, ExtraShadow, ExtraSpacing,
-    chart::{ChartStyle, TOKENS_PLOT_HEIGHT, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
+    chart::{CHART_HEIGHT, ChartStyle, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
   },
   ui::{
     icon::Icon,
@@ -117,7 +117,6 @@ impl Component for TokensChart {
     card.body([
       totals(ctx, dashboard, views.measure),
       self.chart(ctx, dashboard, views.measure),
-      push_down(),
       footnote("usage-tokens-footnote", &chart_footnote(ctx, dashboard)),
     ])
   }
@@ -178,13 +177,13 @@ impl TokensChart {
       .ref_element(self.reference.clone())
       .id("usage-tokens-chart")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(TOKENS_PLOT_HEIGHT))
+      .height(Dimension::Px(CHART_HEIGHT))
       .on_mouse_move(point)
       .on_mouse_leave(leave);
     let tip = hovered.and_then(|index| Some((index, bars.get(index)?)));
     Stack::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(TOKENS_PLOT_HEIGHT))
+      .height(Dimension::Px(CHART_HEIGHT))
       .child(canvas)
       .with_children(tip.map(|(index, bar)| {
         let x = tooltip_x(width.unwrap_or(0.0), index, count);
@@ -248,22 +247,23 @@ fn tooltip_name(ctx: &Ctx, bar: &SeriesBar) -> Arc<str> {
   }
 }
 
-/// The x axis labels: days, *Today* for today's bar, or hours of one day; every few where many.
+/// The x axis labels: days, *Today* for today's bar, or hours of one day; every few where many,
+/// counted back from the last bar so it always has its label and none crowds it.
 fn labels(ctx: &Ctx, dashboard: &Dashboard, width: Option<f32>) -> Vec<Option<Arc<str>>> {
   let bars = &dashboard.report.series;
   let today = local_date(dashboard.now);
   let plot_width = width.map_or(f32::MAX, |width| width - crate::theme::chart::AXIS_GUTTER);
   let days = dashboard.range.days();
+  let every = label_every(bars.len(), plot_width, LABEL_ROOM);
   bars
     .iter()
     .enumerate()
     .map(|(index, bar)| match (dashboard.grouping, bar.bucket.hour) {
       (Grouping::Hour, Some(hour)) if days == 1 => (hour % 3 == 0).then(|| format::hour(hour).into()),
       (Grouping::Hour, Some(hour)) => (hour == 0).then(|| format::weekday(ctx, bar.bucket.date)),
+      _ if !(bars.len() - 1 - index).is_multiple_of(every) => None,
       _ if bar.bucket.date == today => Some(ctx.t("usage.tokens.today")),
-      _ => {
-        (index % label_every(bars.len(), plot_width, LABEL_ROOM) == 0).then(|| format::weekday(ctx, bar.bucket.date))
-      }
+      _ => Some(format::weekday(ctx, bar.bucket.date)),
     })
     .collect()
 }

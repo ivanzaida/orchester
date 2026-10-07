@@ -26,7 +26,7 @@ use super::{
   card::{Card, text_link},
   format,
   state::{Dashboard, Views},
-  table::{Cell, TableColumn, Width, column, row, table},
+  table::{Cell, TableColumn, Width, column, fit, row, table},
 };
 use crate::{
   background,
@@ -197,13 +197,11 @@ fn named(key: &str, title: &str) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(Text::new(key).variant(ExtraTypography::MonoValue.role()).nowrap())
-    .child(
+    .child(fit(
       Text::new(title)
         .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary)
-        .nowrap()
-        .flex_shrink(1.0),
-    )
+        .color(PaletteColor::TextSecondary),
+    ))
     .into()
 }
 

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::canvas::{CanvasHandle, CanvasId, CanvasObserver, Context2D, TextAlign, TextBaseline};
 use parking_lot::Mutex;
 
-use crate::theme::chart::{AXIS_BAND, AXIS_GUTTER, ChartStyle, HEADROOM, LABEL_GAP, PLOT_TOP as TOP, RULE_WIDTH};
+use crate::theme::chart::{AXIS_BAND, AXIS_GUTTER, ChartStyle, LABEL_GAP, PLOT_TOP as TOP, RULE_WIDTH};
 
 /// Grid lines above the baseline.
 const TICKS: u64 = 4;
@@ -72,12 +72,12 @@ impl Frame {
     self.bottom - self.top
   }
 
-  /// The y of `value` on a scale up to `top`.
+  /// The y of `value` on a scale up to `top`, which is the plot's top.
   pub fn y(&self, value: f64, top: f64) -> f32 {
     if top <= 0.0 {
       return self.bottom;
     }
-    self.bottom - (value / top) as f32 * self.height() * HEADROOM
+    self.bottom - (value / top) as f32 * self.height()
   }
 
   /// The left edge and width of slot `index` of `count`, as bars and hover bands use them.

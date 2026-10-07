@@ -14,7 +14,7 @@ use lurq::{
 use parking_lot::Mutex;
 
 use super::plot::{self, Frame, Redraw};
-use crate::theme::chart::{ChartStyle, LABEL_GAP, LINE_WIDTH, POINT_RADIUS, SMALL_PLOT_HEIGHT};
+use crate::theme::chart::{ChartStyle, HEADROOM, LABEL_GAP, LINE_WIDTH, POINT_RADIUS, SMALL_PLOT_HEIGHT};
 
 /// One day: its axis label, its share in percent if known, and its name and value for its canvas
 /// item.
@@ -85,6 +85,10 @@ fn draw(canvas: &CanvasHandle, plot: &LinePlot) {
   let context = canvas.context_2d();
   context.reset();
   let frame = Frame::of(canvas);
+  let frame = Frame {
+    top: frame.bottom - frame.height() * HEADROOM,
+    ..frame
+  };
   let days = &plot.props.days;
   plot::grid(&context, frame, &plot.style, (100, 50), |value| {
     plot.props.percents[usize::try_from(value / 25).unwrap_or(0).min(4)].to_string()

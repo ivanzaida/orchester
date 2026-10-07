@@ -18,16 +18,17 @@ use lurq::{
 
 use super::ExtraColor;
 
-/// Plot heights of *Tokens over time*, *Plan limits* and the cache share line.
-pub const TOKENS_PLOT_HEIGHT: f32 = 200.0;
-pub const LIMITS_PLOT_HEIGHT: f32 = 180.0;
-pub const SMALL_PLOT_HEIGHT: f32 = 120.0;
 /// Room for the y axis labels at the left and the x axis labels below the plot.
 pub const AXIS_GUTTER: f32 = 44.0;
 pub const AXIS_BAND: f32 = 20.0;
 /// Room above the plot for its top label, and between an axis label and the plot.
 pub const PLOT_TOP: f32 = 8.0;
 pub const LABEL_GAP: f32 = 6.0;
+/// The canvas of *Tokens over time* and *Plan limits*: a plot 190 tall from its top grid line to
+/// the baseline (`C2pTYF`), with the room for its labels above and below.
+pub const CHART_HEIGHT: f32 = 190.0 + PLOT_TOP + AXIS_BAND;
+/// The canvas of the cache share line.
+pub const SMALL_PLOT_HEIGHT: f32 = 120.0;
 /// Between the stacked parts of a bar, and the rounding of its top.
 pub const BAR_GAP: f32 = 2.0;
 pub const BAR_RADIUS: f32 = 4.0;
@@ -50,7 +51,8 @@ pub const LINE_SWATCH_WIDTH: f32 = 14.0;
 pub const LINE_SWATCH_HEIGHT: f32 = 2.0;
 pub const DASH_PIECES: usize = 3;
 pub const BREAKDOWN_BAR_HEIGHT: f32 = 8.0;
-/// The share of the plot's height the tallest value takes, so a bar never touches the top.
+/// The share of the cache share plot's height 100 % takes, so the label over a point near it stays
+/// in the canvas.
 pub const HEADROOM: f32 = 0.9;
 
 /// The chart colors and the axis font, resolved from the theme for drawing.

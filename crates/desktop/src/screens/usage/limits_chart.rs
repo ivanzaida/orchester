@@ -30,7 +30,7 @@ use super::{
 };
 use crate::theme::{
   ExtraRadius, ExtraShadow, ExtraSpacing,
-  chart::{ChartStyle, LIMITS_PLOT_HEIGHT, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
+  chart::{CHART_HEIGHT, ChartStyle, TOOLTIP_OFFSET, TOOLTIP_WIDTH},
 };
 
 /// Hours between the labels of one day, and the most day labels the axis keeps.
@@ -140,13 +140,13 @@ impl Component for LimitsChart {
     };
     Stack::new()
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(LIMITS_PLOT_HEIGHT))
+      .height(Dimension::Px(CHART_HEIGHT))
       .child(
         Canvas::new()
           .ref_element(self.reference.clone())
           .id("usage-limits-chart")
           .width(Dimension::Pct(100.0))
-          .height(Dimension::Px(LIMITS_PLOT_HEIGHT))
+          .height(Dimension::Px(CHART_HEIGHT))
           .on_mouse_move(point)
           .on_mouse_leave(leave),
       )

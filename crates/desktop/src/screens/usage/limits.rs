@@ -77,7 +77,7 @@ pub fn limits_card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Vie
       dashboard: Arc::clone(dashboard),
     },
   );
-  card.body([legend(ctx, dashboard), chart, push_down(), note])
+  card.body([legend(ctx, dashboard), chart, note])
 }
 
 /// What a point is, what the dotted, hatched and dashed marks mean, and when 5-hour windows show.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -60,12 +60,11 @@ pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Eleme
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .with_children(columns.iter().map(|column| {
       sized(
-        Row::new().child(
+        Row::new().child(fit(
           Text::new(&column.heading)
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
-            .nowrap(),
-        ),
+            .color(PaletteColor::TextMuted),
+        )),
         column,
       )
     }));
@@ -104,23 +103,27 @@ fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, height: f32) -> Row {
 
 fn content(column: &TableColumn, cell: Cell) -> Element {
   match cell {
-    Cell::Text(text) if column.figures => Text::new(&text)
-      .variant(ExtraTypography::MonoValue.role())
-      .nowrap()
-      .into(),
-    Cell::Text(text) => Text::new(&text).variant(TypographyStyle::Body).nowrap().into(),
-    Cell::Muted(text) => Text::new(&text)
-      .variant(TypographyStyle::Body)
-      .color(PaletteColor::TextSecondary)
-      .nowrap()
-      .into(),
-    Cell::Strong(text) if column.figures => Text::new(&text)
-      .variant(ExtraTypography::MonoTitle.role())
-      .nowrap()
-      .into(),
-    Cell::Strong(text) => Text::new(&text).variant(TypographyStyle::Label).nowrap().into(),
+    Cell::Text(text) if column.figures => fit(Text::new(&text).variant(ExtraTypography::MonoValue.role())),
+    Cell::Text(text) => fit(Text::new(&text).variant(TypographyStyle::Body)),
+    Cell::Muted(text) => fit(
+      Text::new(&text)
+        .variant(TypographyStyle::Body)
+        .color(PaletteColor::TextSecondary),
+    ),
+    Cell::Strong(text) if column.figures => fit(Text::new(&text).variant(ExtraTypography::MonoTitle.role())),
+    Cell::Strong(text) => fit(Text::new(&text).variant(TypographyStyle::Label)),
     Cell::Element(element) => element,
   }
+}
+
+/// One line that gives way with an ellipsis when its column is narrower than the text.
+pub fn fit(text: Text) -> Element {
+  text
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
+    .into()
 }
 
 fn sized(cell: Row, column: &TableColumn) -> Element {
