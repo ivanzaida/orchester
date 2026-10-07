@@ -31,13 +31,14 @@ use orchester_core::{code_index::CodeIndexSetting, revision::Revision};
 use super::{
   SettingsSave,
   general::{CONTENT_WIDTH, readback, sized_setting_row},
-  outside::OutsideSettings,
+  outside::{OutsideSettings, Reading},
 };
 use crate::{
   activity::{Activity, OperationSpec, code_index_operations},
   background,
   code_index::{self, IndexList, RipgrepCheck},
   messages::{self, Message},
+  tasks::outside::Outside,
   theme::ExtraTypography,
   ui::{
     field::{field_error, wrapping_field_error},
@@ -78,7 +79,7 @@ impl lurq::app::component::DevtoolsInspectable for Stored {}
 
 /// The setting as stored at a reading of [`OutsideSettings`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Read(Stored, u64);
+struct Read(Stored, Reading);
 
 impl lurq::app::component::DevtoolsInspectable for Read {}
 
@@ -108,7 +109,7 @@ impl Component for CodeIndexTab {
       check_revision: ctx.signal(0),
       tick: ctx.signal(0),
       watching: Arc::new(AtomicBool::new(false)),
-      outside: OutsideSettings::new(ctx),
+      outside: OutsideSettings::new(ctx, Outside::CodeIndex),
     };
     let (save, rebuild) = (save_action(ctx), rebuild_action(ctx));
     tab.watch_save(ctx, &save);
@@ -218,7 +219,7 @@ impl Component for CodeIndexTab {
 impl CodeIndexTab {
   fn watch_save(&self, ctx: &mut Ctx, save: &SaveAction) {
     let status = ctx.props::<CodeIndexProps>().status.clone();
-    let stored = self.stored.clone();
+    let (stored, outside) = (self.stored.clone(), self.outside.clone());
     ctx.watch(&save.state(), move |state| {
       if state.is_pending() {
         status.set(SettingsSave::Saving);
@@ -229,6 +230,7 @@ impl CodeIndexTab {
         (Some(saved), None) => {
           stored.set(Some(*saved));
           status.set(SettingsSave::Saved);
+          outside.saved();
         }
         (None, None) => {}
       }
@@ -238,7 +240,8 @@ impl CodeIndexTab {
   /// Reads the stored setting, again after automation changed it (unless the person's change is
   /// `saving`, see [`OutsideSettings`]); why it cannot be read.
   fn load_setting(&self, ctx: &mut Ctx, open: &OpenProject, saving: bool) -> Option<Message> {
-    let deps = (open.repo_root.clone(), self.outside.reading(ctx));
+    let current = self.outside.reading(ctx);
+    let deps = (open.repo_root.clone(), current);
     let setting = ctx.future(deps, |(repo_root, reading)| async move {
       background::run(move || code_index::setting_in(&repo_root))
         .await?
@@ -251,7 +254,7 @@ impl CodeIndexTab {
     let read = setting.state().get();
     if !read.is_pending()
       && let Some(Read(stored, reading)) = read.data
-      && self.outside.take(reading, saving)
+      && self.outside.take(reading, current, saving)
       && self.stored.get_untracked() != Some(stored)
     {
       self.stored.set(Some(stored));

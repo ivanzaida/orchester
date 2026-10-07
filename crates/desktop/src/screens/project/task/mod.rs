@@ -495,6 +495,7 @@ fn control_error_row(text: &str) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding_horizontal(SpacingSize::Section)
+    .padding_top(SpacingSize::Md)
     .padding_bottom(SpacingSize::Md)
     .child(field_error(text))
     .into()

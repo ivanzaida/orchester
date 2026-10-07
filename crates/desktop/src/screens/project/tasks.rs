@@ -50,7 +50,6 @@ use crate::{
     button::ActionButton,
     icon::Icon,
     message_text,
-    notice::Notice,
     panel::RecoveryPanel,
     tab::{Tab, tab_row},
   },
@@ -78,8 +77,6 @@ pub struct TasksProps {
   pub agent_slots: Option<std::num::NonZeroU32>,
   pub tab: TaskTab,
   pub tasks: TasksState,
-  /// Why the tasks could not be read again; the list shows the ones last read.
-  pub stale: Option<Message>,
   /// How the task list stands with its server; `None` while the project is local.
   pub sharing: Option<ProjectSharing>,
 }
@@ -189,10 +186,7 @@ impl Component for TasksScreen {
         )
         .child(empty(ctx, &nav))
         .into(),
-      TasksState::Ready(tasks) => {
-        let stale = props.stale.as_ref().map(|error| stale_notice(ctx, &nav, error));
-        library(ctx, self, (&props.root, props.sharing.as_ref()), (tasks, stale), tab)
-      }
+      TasksState::Ready(tasks) => library(ctx, self, (&props.root, props.sharing.as_ref()), tasks, tab),
     };
     let sharing = props.sharing.as_ref();
     let read_only = access(sharing).read_only();
@@ -336,25 +330,6 @@ fn load_failed(ctx: &Ctx, nav: &ProjectNav, error: &Message) -> Element {
   )
 }
 
-/// The tasks could not be read again: the list shows the ones last read, says why, and Retry reads
-/// them again.
-fn stale_notice(ctx: &Ctx, nav: &ProjectNav, error: &Message) -> Element {
-  let nav = nav.clone();
-  Notice::new(
-    Icon::AlertCircle,
-    ctx.t("tasks.readAgainFailed"),
-    message_text(ctx, error),
-  )
-  .id("tasks-read-again-failed")
-  .action(
-    ActionButton::new(ctx.t("common.retry"))
-      .id("tasks-read-again")
-      .on_click(move || nav.tasks_changed())
-      .render(ctx),
-  )
-  .into()
-}
-
 /// No tasks in the project yet.
 fn empty(ctx: &Ctx, nav: &ProjectNav) -> Element {
   let action = ActionButton::new(ctx.t("overview.newTask"))
@@ -380,7 +355,7 @@ fn library(
   ctx: &mut Ctx,
   screen: &TasksScreen,
   (root, sharing): (&Path, Option<&ProjectSharing>),
-  (tasks, stale): (&ProjectTasks, Option<Element>),
+  tasks: &ProjectTasks,
   tab: TaskTab,
 ) -> Element {
   let kept = screen.not_shared.get() && !tasks.not_shared.is_empty();
@@ -426,7 +401,6 @@ fn library(
     .then(|| controls::selection_bar(ctx, screen, root, tasks, visible.clone()))
     .flatten();
   let content = body()
-    .with_children(stale)
     .with_children(notice)
     .child(controls::filters(ctx, screen, tasks))
     .child(organization_filters(ctx, screen, tasks, read_only))

@@ -17,7 +17,7 @@ use crate::{
   },
 };
 
-fn retry(to: &str) -> Option<FailureRoute> {
+pub(crate) fn retry(to: &str) -> Option<FailureRoute> {
   Some(FailureRoute {
     return_to: StepKey::new(to).expect("key"),
     max_retries: std::num::NonZeroU32::MIN,

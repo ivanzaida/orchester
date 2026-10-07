@@ -117,12 +117,19 @@ impl Component for Library {
       // A failed reading after a change keeps the pipelines last read and says why.
       (Some(entries), error) if !entries.is_empty() => column
         .with_children(error.as_ref().map(|error| {
-          Notice::new(
-            Icon::AlertCircle,
-            ctx.t("pipelines.library.readAgainFailed"),
-            message_text(ctx, error),
-          )
-          .id("pipelines-read-again-failed")
+          // Clear of the rows' scroll gutter, as the rows are, and apart from the filters below.
+          Column::new()
+            .width(Dimension::Pct(100.0))
+            .padding_right(Dimension::Px(gutter_width()))
+            .padding_bottom(SpacingSize::Md)
+            .child(
+              Notice::new(
+                Icon::AlertCircle,
+                ctx.t("pipelines.library.readAgainFailed"),
+                message_text(ctx, error),
+              )
+              .id("pipelines-read-again-failed"),
+            )
         }))
         .child(self.list(ctx, entries, project)),
       (_, Some(error)) => column

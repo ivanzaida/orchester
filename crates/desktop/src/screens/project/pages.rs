@@ -60,8 +60,6 @@ pub struct Shown {
   /// Changes when resources were imported; the screens listing them are mounted again.
   pub resources: u64,
   pub tasks: TasksState,
-  /// Why the tasks could not be read again; `tasks` are the ones last read.
-  pub stale: Option<Message>,
   pub usage: Option<ProjectUsage>,
   /// How the task list stands with its server; `None` while the project is local.
   pub sharing: Option<crate::sharing::project::state::ProjectSharing>,
@@ -103,7 +101,6 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         agent_slots: shown.status.work().map(|work| work.agent_slots),
         tab,
         tasks: shown.tasks,
-        stale: shown.stale,
         sharing: shown.sharing,
       },
     ),

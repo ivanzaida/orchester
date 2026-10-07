@@ -151,7 +151,8 @@ impl Component for RemoveWorktree {
       return Row::new().with_children(shows_dialog.then(|| modal(ctx, &props, &job)));
     }
     let waits = self.waits(&props.others);
-    let removing = matches!(job.remove().get(), JobState::Running);
+    // Whoever removes, a person or automation, the button says so.
+    let removing = job.removing();
     let busy = job.busy()
       || waits
       || matches!(job.merge().get(), JobState::Running)
@@ -207,7 +208,8 @@ fn modal(ctx: &mut Ctx, props: &RemoveWorktreeProps, job: &RunIntegration) -> El
     return Modal::new(Column::new()).open_when(false).into();
   }
   let state = job.remove().get();
-  let pending = matches!(state, JobState::Running);
+  // A removal automation runs shows here too, as a person's does.
+  let pending = job.removing();
   let busy = job.busy() || matches!(job.merge().get(), JobState::Running);
   let loses_files = props.leftovers.loses_files();
   let confirm = (!busy && !pending && (!loses_files || job.discard().get())).then(|| {

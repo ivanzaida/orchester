@@ -100,12 +100,12 @@ fn project_settings_without_a_link_offer_detection() {
 }
 
 const MAX_BUDGET: &str = "limits-max-run-budget";
-const DEFAULT_BUDGET: &str = "limits-default-run-budget";
-const DAILY_BUDGET: &str = "limits-daily-budget";
+pub(crate) const DEFAULT_BUDGET: &str = "limits-default-run-budget";
+pub(crate) const DAILY_BUDGET: &str = "limits-daily-budget";
 const TIME_LIMIT: &str = "limits-default-time-limit";
 const AGENT_SLOTS: &str = "limits-agent-slots";
 
-fn limits_tab(desktop: &mut Desktop) {
+pub(crate) fn limits_tab(desktop: &mut Desktop) {
   settings(desktop);
   desktop.click("settings-tab-limits");
   desktop.settle("the stored limits", |tree| {
@@ -127,7 +127,7 @@ fn time_limit(desktop: &mut Desktop) -> (Vec<String>, Vec<String>) {
   (strings(select.labels()), strings(select.selected_labels()))
 }
 
-fn stored_limits(repo: &Path) -> ProjectLimits {
+pub(crate) fn stored_limits(repo: &Path) -> ProjectLimits {
   ProjectDb::open(repo)
     .expect("open the project")
     .project_limits()

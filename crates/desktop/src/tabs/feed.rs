@@ -11,7 +11,7 @@
 //! their own.
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   path::{Path, PathBuf},
   sync::Arc,
 };
@@ -24,7 +24,10 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::{ProjectId, TaskId},
+  time::Timestamp,
+};
 use parking_lot::Mutex;
 
 use crate::{
@@ -70,7 +73,7 @@ pub struct ProjectFeed {
   pub integration: IntegrationJobs,
   /// Tasks this window's New task form queued in this session: until a run of one is recorded, its
   /// page gives way to the locked form with *Retry run* (02.09F).
-  pub queued_by_form: Arc<Mutex<std::collections::HashSet<orchester_core::id::TaskId>>>,
+  pub queued_by_form: Arc<Mutex<HashSet<TaskId>>>,
 }
 
 /// The feeds of the projects the tabs show, by project, and the projects' merge and removal operations.
@@ -180,7 +183,8 @@ impl Component for FeedLoader {
     publish(&self.feed.tasks, tasks);
     publish(&self.feed.stale, stale);
     let day_start = Timestamp::now().local_day_start();
-    if let Some(usage) = usage(ctx, (root, saved, (states, changes), day_start)) {
+    // Limits automation changed count too: the status bar and New task show them.
+    if let Some(usage) = usage(ctx, (root, saved + outside.limits, (states, changes), day_start)) {
       publish(&self.feed.usage, Some(usage));
     }
     Element::new()

@@ -166,7 +166,7 @@ fn read(
   let outside = ctx
     .use_context::<ProjectNav>()
     .map(|nav| nav.feed.outside.get())
-    .map(|outside| (outside.runs, outside.settings));
+    .map(|outside| (outside.runs, outside.auto_mode));
   let deps = (props.repo_root.clone(), props.run, changing, outside);
   let read = ctx.future(deps, |(repo_root, run, ..)| async move {
     background::run(move || auto_mode_in(&repo_root, run))

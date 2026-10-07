@@ -124,15 +124,16 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
     gate(&services)?;
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let mut settings = db.auto_mode_settings()?;
-    if let Some(new_runs) = args.new_runs {
-      settings.new_runs = new_runs;
-    }
-    if let Some(reviewer) = &args.reviewer {
-      settings.reviewer = chosen(&db.connections()?, reviewer)?;
-    }
-    db.save_auto_mode_settings(&settings)?;
-    services.changes.record(open.project.id(), Outside::Settings);
+    let reviewer = match &args.reviewer {
+      Some(reviewer) => Some(chosen(&db.connections()?, reviewer)?),
+      None => None,
+    };
+    // Read and written in one transaction: a person's save in the window cannot slip in between.
+    db.update_auto_mode_settings(|current| AutoModeSettings {
+      new_runs: args.new_runs.unwrap_or(current.new_runs),
+      reviewer: reviewer.unwrap_or(current.reviewer),
+    })?;
+    services.changes.record(open.project.id(), Outside::AutoMode);
     settings_json(&db)
   })
   .await

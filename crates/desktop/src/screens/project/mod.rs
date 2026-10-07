@@ -31,6 +31,7 @@ mod servers;
 mod settings;
 mod sidebar;
 mod skills;
+mod stale;
 mod switcher;
 mod tag_manager;
 mod tag_picker;
@@ -420,7 +421,6 @@ impl Component for ProjectShell {
       revision: (feed.revision.get() + feed.outside.get().tasks, feed.changes.get()),
       resources: feed.resources.get(),
       tasks: tasks.clone(),
-      stale: feed.stale.get(),
       usage,
       sharing: feed.sharing.get(),
     });
@@ -464,6 +464,7 @@ impl Component for ProjectShell {
             Column::new()
               .flex(1.0)
               .height(Dimension::Pct(100.0))
+              .with_children(stale::notice(ctx, &self.nav, feed.stale.get().as_ref()))
               .child(Outlet::mount(ctx)),
           ),
       )

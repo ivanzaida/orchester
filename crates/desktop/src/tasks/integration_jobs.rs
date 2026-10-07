@@ -99,6 +99,11 @@ impl RunIntegration {
     self.0.active.get() != Active::Idle
   }
 
+  /// Git removes the run's worktrees, whoever asked: a person, or automation.
+  pub fn removing(&self) -> bool {
+    self.0.active.get() == Active::Remove
+  }
+
   fn begin(&self, operation: Active) -> bool {
     let mut started = false;
     // Notify readers even when a stale click is refused: the rendered control catches up with
@@ -231,15 +236,19 @@ impl RunIntegration {
         problem.end(running, not_done);
         Err(message)
       }
+      // A tool's failure is only in its result: the operation leaves the status bar without an event.
       (Ok(Err(problem)), Remover::Automation(_)) => {
-        running.finish_as(not_done);
+        drop(running);
         Err(problem.message(&separator))
       }
       (Err(_), remover) => {
-        tracing::error!("run cleanup thread panicked");
+        tracing::error!(
+          automation = matches!(remover, Remover::Automation(_)),
+          "run cleanup thread panicked"
+        );
         match remover {
           Remover::Person => running.fail(messages::interrupted()),
-          Remover::Automation(_) => running.finish_as(not_done),
+          Remover::Automation(_) => drop(running),
         }
         Err(messages::interrupted())
       }

@@ -14,8 +14,12 @@ pub enum Outside {
   Tasks,
   /// A run's own settings changed, such as its auto mode.
   Runs,
-  /// A project setting changed: auto mode, code index.
-  Settings,
+  /// The project's auto mode settings changed.
+  AutoMode,
+  /// Whether the project uses the code index changed.
+  CodeIndex,
+  /// The project's limits changed.
+  Limits,
   /// A pipeline was added or published.
   Pipelines,
 }
@@ -25,18 +29,34 @@ pub enum Outside {
 pub struct OutsideCounts {
   pub tasks: u64,
   pub runs: u64,
-  pub settings: u64,
+  pub auto_mode: u64,
+  pub code_index: u64,
+  pub limits: u64,
   pub pipelines: u64,
 }
 
 impl lurq::app::component::DevtoolsInspectable for OutsideCounts {}
 
 impl OutsideCounts {
+  /// How often `change` was made.
+  pub const fn of(self, change: Outside) -> u64 {
+    match change {
+      Outside::Tasks => self.tasks,
+      Outside::Runs => self.runs,
+      Outside::AutoMode => self.auto_mode,
+      Outside::CodeIndex => self.code_index,
+      Outside::Limits => self.limits,
+      Outside::Pipelines => self.pipelines,
+    }
+  }
+
   fn count(&mut self, change: Outside) {
     let count = match change {
       Outside::Tasks => &mut self.tasks,
       Outside::Runs => &mut self.runs,
-      Outside::Settings => &mut self.settings,
+      Outside::AutoMode => &mut self.auto_mode,
+      Outside::CodeIndex => &mut self.code_index,
+      Outside::Limits => &mut self.limits,
       Outside::Pipelines => &mut self.pipelines,
     };
     *count += 1;
@@ -67,11 +87,6 @@ impl OutsideChanges {
     self
       .0
       .send_modify(|counts| counts.entry(project).or_default().count(change));
-  }
-
-  /// The counts of `project` so far.
-  pub fn of(&self, project: ProjectId) -> OutsideCounts {
-    self.0.borrow().get(&project).copied().unwrap_or_default()
   }
 
   pub fn subscribe(&self) -> watch::Receiver<HashMap<ProjectId, OutsideCounts>> {

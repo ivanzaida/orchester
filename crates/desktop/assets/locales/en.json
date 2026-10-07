@@ -1249,6 +1249,7 @@
         "pendingHeldDetail": "Scheduling is held after reopening. Start run continues this existing first run and releases its group’s scheduling hold, keeping its reviewed pipeline and saved snapshot.",
         "queuedTitle": "The run has not started",
         "queuedDetail": "The task is queued. Its run starts when the runner accepts it; Create & run on the new task form retries without starting a second run.",
+        "queuedNoRunDetail": "The task is queued, and no run is recorded for it. Retry run in the topbar asks the runner to start it with the saved settings; it cannot start a second run.",
         "runningTitle": "{{step}} is running",
         "runningParallelTitle": "{{steps}} are running",
         "runningDetail": "The agent works in the run’s own worktree and branch; your checkout is not touched.",
@@ -3773,7 +3774,7 @@
     "saving": "Saving…",
     "changedOutside": {
       "title": "Changed outside this screen",
-      "detail": "These settings were changed elsewhere, for example by automation, while your change was being saved. Reload shows the settings as they are stored now."
+      "detail": "These settings were changed elsewhere, for example by automation, while you were changing them. Saving your change keeps theirs. Reload shows the settings as they are stored now."
     },
     "tabs": {
       "general": "General",
@@ -3887,6 +3888,7 @@
     },
     "limits": {
       "description": "Defaults and limits for {{project}}. They apply to new tasks and runs in this project.",
+      "changedOutsideConflict": "Not saved: the limits were changed elsewhere meanwhile, and together with your change they no longer fit. Reload shows them as stored.",
       "tokenBudgets": "Token budgets",
       "max": "Maximum run budget",
       "maxDetail": "The largest token budget a task, a run or a raised limit may have. Budget fields reject larger values and name this maximum. There is no minimum beyond more than 0.",

@@ -151,17 +151,19 @@ fn app_mcp_quiet_outside_changes_count_only_for_the_changed_project() {
   let (changed, other) = (ProjectId::generate(), ProjectId::generate());
   let mut updates = changes.subscribe();
   changes.record(changed, Outside::Tasks);
-  changes.record(changed, Outside::Settings);
+  changes.record(changed, Outside::AutoMode);
   assert!(updates.has_changed().expect("the sender lives"));
   let counts = updates.borrow_and_update().clone();
   assert_eq!(
-    counts.get(&changed).map(|counts| (counts.tasks, counts.settings)),
-    Some((1, 1))
+    counts
+      .get(&changed)
+      .map(|counts| (counts.tasks, counts.auto_mode, counts.code_index)),
+    Some((1, 1, 0)),
+    "each setting counts apart"
   );
   assert_eq!(
     counts.get(&other),
     None,
     "another project's feed has nothing to read again"
   );
-  assert_eq!(changes.of(other).tasks, 0);
 }

@@ -31,10 +31,14 @@ use self::{
   choice::{Change, Stored, with_connection, with_effort, with_model},
   rows::new_runs_row,
 };
-use super::{SettingsSave, outside::OutsideSettings};
+use super::{
+  SettingsSave,
+  outside::{OutsideSettings, Reading},
+};
 use crate::{
   background,
   messages::{self, Message},
+  tasks::outside::Outside,
   theme::ExtraTypography,
   ui::{field::field_error, message_text},
   workspace::OpenProject,
@@ -73,7 +77,7 @@ impl lurq::app::component::DevtoolsInspectable for Done {}
 
 /// The stored settings at a reading of [`OutsideSettings`].
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Read(Stored, u64);
+struct Read(Stored, Reading);
 
 impl lurq::app::component::DevtoolsInspectable for Read {}
 
@@ -230,6 +234,8 @@ impl Component for AutoModeSection {
       root: ctx.props::<AutoModeSettingsProps>().open.repo_root.clone(),
     };
     let after = commit.clone();
+    let outside = OutsideSettings::new(ctx, Outside::AutoMode);
+    let read_again = outside.clone();
     ctx.watch(&save.state(), move |state| {
       if state.is_pending() {
         after.status.set(SettingsSave::Saving);
@@ -237,7 +243,10 @@ impl Component for AutoModeSection {
       }
       match (&state.data, &state.error) {
         (_, Some(error)) => after.failed(error),
-        (Some(done), None) => after.saved(done),
+        (Some(done), None) => {
+          after.saved(done);
+          read_again.saved();
+        }
         (None, None) => {}
       }
     });
@@ -260,7 +269,7 @@ impl Component for AutoModeSection {
       stored,
       picks,
       commit,
-      outside: OutsideSettings::new(ctx),
+      outside,
     }
   }
 
@@ -293,7 +302,8 @@ impl AutoModeSection {
   /// Reads the stored settings and the connections, again after automation changed them (unless the
   /// person's change is saving, see [`OutsideSettings`]); why they cannot be read, if so.
   fn load(&self, ctx: &mut Ctx, open: &OpenProject) -> Option<Message> {
-    let deps = (open.repo_root.clone(), self.outside.reading(ctx));
+    let current = self.outside.reading(ctx);
+    let deps = (open.repo_root.clone(), current);
     let read = ctx.future(deps, |(repo_root, reading)| async move {
       background::run(move || stored_in(&repo_root))
         .await?
@@ -307,7 +317,7 @@ impl AutoModeSection {
     let saving = self.commit.save.state().get().is_pending();
     if !state.is_pending()
       && let Some(Read(read, reading)) = state.data
-      && self.outside.take(reading, saving)
+      && self.outside.take(reading, current, saving)
     {
       self.picks.show(&read);
       self.commit.saved.set(Some(Saved(read.settings.clone())));
@@ -321,9 +331,8 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   ctx.future_action(
     |(repo_root, base, asked): (PathBuf, AutoModeSettings, AutoModeSettings)| async move {
       background::run(move || {
-        let mut db = ProjectDb::open(&repo_root)?;
-        let stored = rebased(&base, &asked, db.auto_mode_settings()?);
-        db.save_auto_mode_settings(&stored)?;
+        let stored =
+          ProjectDb::open(&repo_root)?.update_auto_mode_settings(|current| rebased(&base, &asked, current))?;
         Ok::<_, StoreError>(Done { asked, stored })
       })
       .await?

@@ -7,9 +7,11 @@
 //! unfinished blocking tasks hold the task, nothing continues, as on the page.
 
 use orchester_core::{
-  run::{PauseReason, ReviewNote, RunLimit, RunStatus, StuckDecision},
+  id::{RunId, TaskId},
+  run::{PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   store::SettingsStore,
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
@@ -108,8 +110,8 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 
 /// The run the tool continues.
 struct Named {
-  id: orchester_core::id::RunId,
-  task: orchester_core::id::TaskId,
+  id: RunId,
+  task: TaskId,
 }
 
 /// The run `args` names and what continuing it asks of the runner; a refusal when its task page
@@ -160,7 +162,7 @@ fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request)
 fn at_limit(
   view: &RunView,
   (limit, choice): (RunLimit, &Choice),
-  max_budget: orchester_core::tokens::TokenBudget,
+  max_budget: TokenBudget,
   number: &str,
 ) -> Result<Request, ToolError> {
   let not_offered = || refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number);
@@ -178,7 +180,7 @@ fn at_limit(
       let budget = raise::run_budget(&budget_tokens.to_string(), GROUP_SEPARATOR, (used, max_budget));
       let time = raise::time_limit(&time_limit_minutes.to_string(), view.active_time(Timestamp::now()));
       match (budget, time) {
-        (Ok(budget), Ok(max_duration)) => Raise::Limits(orchester_core::run::RaisedLimits { budget, max_duration }),
+        (Ok(budget), Ok(max_duration)) => Raise::Limits(RaisedLimits { budget, max_duration }),
         (budget, time) => {
           let reasons = budget.err().into_iter().chain(time.err()).collect();
           return Err(ToolError::refused("invalid_limit", reasons));

@@ -24,7 +24,7 @@ use crate::{
   budget::{LimitsErrors, ReadLimits, agent_slots, budget_error, time_limit, whole_minutes},
   tasks::{
     outside::Outside,
-    usage::{limits_in, save_limits},
+    usage::{limits_in, update_limits},
   },
 };
 
@@ -52,9 +52,16 @@ pub async fn update_project_limits(services: &Services, args: UpdateProjectLimit
   blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
-    let limits = changed(limits_in(&root)?, &args).map_err(|errors| refused(*errors))?;
-    save_limits(&services.runners, &root, &limits)?;
-    services.changes.record(open.project.id(), Outside::Settings);
+    // Read and written in one transaction: a person's save in the window cannot slip in between.
+    // A refusal saves nothing; why is kept for the result.
+    let mut refusal = None;
+    update_limits(&services.runners, &root, |stored| {
+      changed(stored, &args).map_err(|errors| refusal = Some(errors)).ok()
+    })?;
+    if let Some(errors) = refusal {
+      return Err(refused(*errors));
+    }
+    services.changes.record(open.project.id(), Outside::Limits);
     Ok(json!({ "limits": limits_json(limits_in(&root)?) }))
   })
   .await

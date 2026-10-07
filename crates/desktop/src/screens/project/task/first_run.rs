@@ -54,7 +54,7 @@ pub(super) fn retry_button(ctx: &Ctx, detail: &TaskDetail, action: &FirstRunActi
     return None;
   }
   let button = if action.state().get().is_pending() {
-    ActionButton::new(ctx.t("runs.page.starting"))
+    ActionButton::new(ctx.t("tasks.new.starting"))
       .icon(Icon::Loader)
       .primary()
       .disabled()

@@ -6,7 +6,11 @@
 //! `cargo test -p orchester-desktop --test form_keyboard app_mcp_quiet`.
 
 use std::{
-  sync::{Arc, atomic::AtomicBool},
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  thread,
   time::{Duration, Instant},
 };
 
@@ -24,6 +28,8 @@ use crate::{
   code_index::{OFF, code_index_tab},
   github::{contains_text, shows},
   harness::Desktop,
+  integration::blocked_git,
+  project_settings::{DAILY_BUDGET, DEFAULT_BUDGET, limits_tab, stored_limits},
   run_history::refusing_git,
   task_run::{has, seed_claude, set_text},
 };
@@ -182,9 +188,94 @@ fn app_mcp_quiet_failed_removal_shows_only_in_the_tools_result() {
       .all(|event| !event.is_unresolved()),
     "no failure in the status bar"
   );
+  assert!(
+    desktop
+      .activity
+      .snapshot()
+      .recent()
+      .iter()
+      .all(|event| event.title().key != "statusBar.operations.runCleanup.notDone"),
+    "no event of the removal in the status bar"
+  );
   assert!(!has(&mut desktop, "window-tab-attention-1"), "no dot on the tab");
   assert!(
     !has(&mut desktop, &format!("run-remove-error-{}", run.id())),
     "nothing under the run's row"
   );
+}
+
+#[test]
+fn app_mcp_quiet_open_dialog_shows_a_tools_removal_under_way() {
+  let (program_set, gate) = blocked_git(&["worktree", "remove"]);
+  let (mut desktop, _) = failed_run(program_set);
+  desktop.click("task-remove-worktree");
+  desktop.wait_for("remove-worktree-dialog");
+  let mut client = agent(&desktop);
+  let tool = thread::spawn(move || {
+    ok(
+      &mut client,
+      "remove_worktree",
+      &json!({"project": "Kontur", "run": "#1"}),
+    )
+  });
+  desktop.wait_until("git removing the worktree", |_| gate.entered.load(Ordering::SeqCst));
+  desktop.wait_until("the dialog says it removes", |desktop| {
+    shows(desktop, "remove-worktree-confirm", "Removing")
+  });
+  gate.release();
+  tool.join().expect("the tool's call ends");
+  desktop.wait_until("the dialog says it was removed", |desktop| {
+    has(desktop, "remove-worktree-removed")
+  });
+}
+
+#[test]
+fn app_mcp_quiet_limits_tab_follows_the_tool_and_keeps_a_persons_edit() {
+  let mut desktop = Desktop::with_seeded_project_and_app_mcp(|_| {});
+  limits_tab(&mut desktop);
+  let mut client = agent(&desktop);
+  let limits = |change: serde_json::Value| {
+    let mut arguments = json!({"project": "Kontur"});
+    arguments
+      .as_object_mut()
+      .expect("an object")
+      .extend(change.as_object().expect("an object").clone());
+    arguments
+  };
+  ok(
+    &mut client,
+    "update_project_limits",
+    &limits(json!({"daily_budget": 30_000_000})),
+  );
+  desktop.wait_until("the field shows the tool's budget", |desktop| {
+    desktop.value(DAILY_BUDGET) == "30,000,000"
+  });
+  desktop.wait_until("the status bar's figure", |desktop| {
+    shows(desktop, "status-tokens", "/ 30M")
+  });
+  assert!(!has(&mut desktop, "settings-limits-changed-outside"));
+
+  // The person types a default budget and has not left the field yet.
+  desktop.tab_to(DEFAULT_BUDGET, 10);
+  for _ in 0.."1,400,000".len() {
+    desktop.key("Backspace", "Backspace");
+  }
+  desktop.type_text("1200000");
+  ok(
+    &mut client,
+    "update_project_limits",
+    &limits(json!({"daily_budget": 40_000_000})),
+  );
+  desktop.wait_until("the notice", |desktop| has(desktop, "settings-limits-changed-outside"));
+  assert_eq!(desktop.value(DEFAULT_BUDGET), "1,200,000", "the person's edit is kept");
+  // Leaving the field saves the person's change on what is stored: the tool's budget stays.
+  desktop.tab();
+  let repo = desktop.repo().to_path_buf();
+  desktop.wait_until("the person's default saved", |_| {
+    stored_limits(&repo).default_run_budget().get() == 1_200_000
+  });
+  assert_eq!(stored_limits(&repo).daily_budget().get(), 40_000_000);
+  desktop.wait_until("the fields show what is stored", |desktop| {
+    desktop.value(DAILY_BUDGET) == "40,000,000" && !has(desktop, "settings-limits-changed-outside")
+  });
 }
