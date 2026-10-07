@@ -135,17 +135,12 @@ fn reviewer_usage_is_added_to_a_database_of_the_schema_before_and_its_runs_are_k
   drop(db);
   let current = repo.path().join(".orchester/orchester.db");
   let latest = schema_version(&current);
-  let old = copied_at_version(&current, latest - 1);
+  let old = copied_at_version(&current, version_before_reviewer_usage(latest));
   let old_database = old.path().join(".orchester/orchester.db");
-  let has_table = |path: &std::path::Path| {
-    rusqlite::Connection::open(path)
-      .expect("open")
-      .prepare("SELECT 1 FROM sqlite_master WHERE name = 'reviewer_usage'")
-      .expect("schema")
-      .exists([])
-      .expect("schema")
-  };
-  assert!(!has_table(&old_database), "the schema before has no reviewer usage");
+  assert!(
+    !has_reviewer_usage(&rusqlite::Connection::open(&old_database).expect("open")),
+    "the schema before has no reviewer usage"
+  );
   let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(schema_version(&old_database), latest);
   assert!(upgraded.reviewer_usage(run.id()).expect("none yet").is_empty());
@@ -154,4 +149,23 @@ fn reviewer_usage_is_added_to_a_database_of_the_schema_before_and_its_runs_are_k
     .record_reviewer_usage(&record)
     .expect("a review of the kept run's request");
   assert_eq!(upgraded.reviewer_usage(run.id()).expect("reviews"), [record]);
+}
+
+fn has_reviewer_usage(connection: &rusqlite::Connection) -> bool {
+  connection
+    .prepare("SELECT 1 FROM sqlite_master WHERE name = 'reviewer_usage'")
+    .expect("schema")
+    .exists([])
+    .expect("schema")
+}
+
+/// The newest schema without the reviewer's usage, wherever later migrations moved the latest.
+fn version_before_reviewer_usage(latest: u32) -> u32 {
+  (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      !has_reviewer_usage(&ProjectDb::create_at_version(repo.path(), version).expect("an old database"))
+    })
+    .expect("a schema before the reviewer's usage")
 }
