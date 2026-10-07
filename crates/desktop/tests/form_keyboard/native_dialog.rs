@@ -1,8 +1,8 @@
 //! Adding and editing a native connection (04.H1 `Byo8K`, H1B `h2OUr`, H3 `KGciR`) and its models
 //! (04.H6 `zHowy`): the four kinds, the Official preset with the others unavailable on both APIs, the key secret
 //! picked or created with the connection, models added by hand with their default model and effort,
-//! provider fallback, why the form cannot save, and the models dialog. Key values here are fake, and
-//! the keychain is the harness's one in memory.
+//! provider fallback, why the form cannot save, and the models dialog; the OpenAI kind in
+//! [`super::native_openai_dialog`]. Key values here are fake, and the keychain is the harness's one in memory.
 
 use std::path::Path;
 
@@ -25,9 +25,9 @@ use crate::{
   task_run::has,
 };
 
-const DIALOG: &str = "connection-dialog";
+pub(crate) const DIALOG: &str = "connection-dialog";
 const REASON: &str = "connection-save-reason";
-const KEY_VALUE: &str = "fake-key-Q7x2";
+pub(crate) const KEY_VALUE: &str = "fake-key-Q7x2";
 
 pub(crate) fn add_native(desktop: &mut Desktop) {
   desktop.wait_for("nav-connections");
@@ -66,11 +66,11 @@ pub(crate) fn choose(desktop: &mut Desktop, id: &str, label: &str) {
 }
 
 /// Whether the action bar says why the connection cannot be saved.
-fn has_reason(desktop: &mut Desktop) -> bool {
+pub(crate) fn has_reason(desktop: &mut Desktop) -> bool {
   desktop.tree.get_element_by_id(REASON).is_some()
 }
 
-fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&str]) {
+pub(crate) fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&str]) {
   desktop.click("model-add");
   desktop.wait_for("model-editor");
   set(desktop, "model-id", id);
@@ -83,7 +83,7 @@ fn add_model(desktop: &mut Desktop, id: &str, limits: (&str, &str), efforts: &[&
   desktop.wait_for(&format!("model-row-{id}"));
 }
 
-fn whole_screen_shows(desktop: &mut Desktop, text: &str) -> bool {
+pub(crate) fn whole_screen_shows(desktop: &mut Desktop, text: &str) -> bool {
   desktop.tree.root().is_some_and(|root| contains_text(root, text))
 }
 
@@ -124,15 +124,16 @@ fn add_connection_offers_four_kinds_and_the_official_anthropic_preset() {
   }
   assert!(shows(&mut desktop, "native-url", "https://api.anthropic.com"));
   assert!(shows(&mut desktop, "native-test", "Not checked"));
+  // The runner tests the connection once it names a key.
   assert!(shows(
     &mut desktop,
     "native-test",
-    "Testing a native connection comes with native agent runs in a later version."
+    "Choose or create the API key’s secret."
   ));
   for text in [
     "API key · project secret",
     "Models",
-    "Fetching models needs a test of the connection",
+    "Fetching tests the connection and adds the models the endpoint lists",
     "Add a model by hand",
     "Default model",
     "Default effort",
@@ -268,79 +269,6 @@ fn native_connection_saves_a_new_key_secret_and_models_added_by_hand() {
   ));
 }
 
-/// The OpenAI kind is added as the Anthropic one is: the Official preset at OpenAI's base URL, the
-/// Responses wire format, a key secret and models by hand; testing and fetching models stay
-/// unavailable until native runs, and provider fallback is Anthropic's only.
-#[test]
-fn native_openai_connection_is_added_like_the_anthropic_one() {
-  let mut desktop = Desktop::with_project_named("Kontur");
-  desktop.wait_for("nav-connections");
-  desktop.click("nav-connections");
-  desktop.wait_for("add-connection");
-  desktop.click("add-connection");
-  desktop.wait_for(DIALOG);
-  desktop.press("connection-kind-openai");
-  desktop.wait_for("native-preset");
-  assert_eq!(desktop.value("connection-name"), "OpenAI API · Kontur");
-  assert!(shows(&mut desktop, "native-url", "https://api.openai.com/v1"));
-  assert!(shows(
-    &mut desktop,
-    "native-preset",
-    "Compatible endpoints come in a later version of Orchester."
-  ));
-  for text in [
-    "Set by the preset. Prompts, repository content and command output are sent to api.openai.com.",
-    "Testing a native connection comes with native agent runs in a later version.",
-    "Fetching models needs a test of the connection",
-    "Not offered on this endpoint: only the official Anthropic API retries on another model.",
-  ] {
-    assert!(shows(&mut desktop, DIALOG, text), "{text}");
-  }
-  assert!(!whole_screen_shows(&mut desktop, "Anthropic may answer"));
-  desktop.press("native-url-advanced");
-  assert!(shows(
-    &mut desktop,
-    DIALOG,
-    "Wire format · OpenAI Responses · stateless, store off"
-  ));
-  desktop.click("native-key-new");
-  desktop.wait_for("native-key-name");
-  let placeholder = desktop
-    .tree
-    .get_element_by_id_mut("native-key-name")
-    .and_then(|element| element.as_text_input())
-    .and_then(|input| input.placeholder());
-  assert_eq!(placeholder.as_deref(), Some("OPENAI_API_KEY"));
-  set(&mut desktop, "native-key-name", "OPENAI_API_KEY");
-  set(&mut desktop, "native-key-value", KEY_VALUE);
-  add_model(
-    &mut desktop,
-    "gpt-6.1-sol",
-    ("1050000", "128000"),
-    &["low", "medium", "high"],
-  );
-  choose(&mut desktop, "native-default-model-select", "gpt-6.1-sol");
-  choose(&mut desktop, "native-default-effort-select", "medium");
-  assert!(!has_reason(&mut desktop), "nothing keeps it from saving");
-  desktop.press("connection-save");
-  desktop.wait_until("the dialog closes", |desktop| !has(desktop, DIALOG));
-  let db = ProjectDb::open(desktop.repo()).expect("open the project");
-  let connection = db
-    .connections()
-    .expect("connections")
-    .into_iter()
-    .find_map(|connection| AgentConnection::try_from(connection).ok())
-    .expect("the native connection");
-  assert_eq!(connection.provider(), AgentProvider::OpenAiApi);
-  let api = connection.api().expect("an API endpoint");
-  assert_eq!(api.preset(), EndpointPreset::Official);
-  assert_eq!(api.base_url().as_str(), "https://api.openai.com/v1");
-  assert!(!api.provider_fallback());
-  assert_eq!(api.models().default_effort(), Some(Effort::Medium));
-  assert_eq!(desktop.vault.values(), [KEY_VALUE.to_owned()]);
-  assert!(!whole_screen_shows(&mut desktop, KEY_VALUE));
-}
-
 /// 04.H3: values the form cannot save say why, under their field and at the left of the actions.
 #[test]
 fn native_form_says_why_it_cannot_save() {
@@ -402,9 +330,11 @@ fn native_form_says_why_it_cannot_save() {
   assert!(shows(&mut desktop, "model-editor", "lab-mini-8b is listed already."));
   desktop.click("model-cancel");
   assert!(!has_reason(&mut desktop));
-  // Testing and fetching stay unavailable whatever is entered.
-  desktop.press("native-test-again");
-  desktop.click("native-fetch-models");
+  // The test goes to the project's runner, which this desktop has none of: the row says so.
+  desktop.click("native-test-again");
+  desktop.wait_until("the test's answer", |desktop| {
+    shows(desktop, "native-test", "The project’s runner is not connected")
+  });
   assert!(shows(&mut desktop, "native-test", "Not checked"));
 }
 
@@ -546,4 +476,36 @@ fn editing_a_native_connection_keeps_its_key_models_and_last_test() {
     .expect("stored");
   assert_eq!(stored.name().as_str(), "Claude API · Main");
   assert_eq!(stored.status(), ConnectionStatus::KeyRejected);
+}
+
+#[test]
+fn native_dialog_says_what_a_passed_test_found() {
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    let mut db = ProjectDb::open(repo).expect("open the project");
+    let key = key_secret(&mut db, "ANTHROPIC_API_KEY", Environment::Staging, false);
+    let models = NativeModels::new(
+      vec![model("claude-opus-5-5", None, &[Effort::Medium], ModelSource::Manual)],
+      None,
+      None,
+    )
+    .expect("models");
+    native_connection(
+      &mut db,
+      NativeSeed {
+        name: "Claude API · Kontur",
+        provider: AgentProvider::AnthropicApi,
+        preset: EndpointPreset::Official,
+        url: "https://api.anthropic.com",
+        key,
+        models,
+        check: Some(CheckResult::Api { balance: None }),
+      },
+    );
+  });
+  open_connections(&mut desktop);
+  desktop.click("edit-connection");
+  desktop.wait_for("native-test");
+  assert!(shows(&mut desktop, "native-test", "Key accepted"));
+  assert!(shows(&mut desktop, "native-test", "api.anthropic.com answered · "));
+  assert!(!shows(&mut desktop, "native-test", "Connected"));
 }

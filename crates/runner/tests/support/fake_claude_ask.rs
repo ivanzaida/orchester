@@ -1,8 +1,9 @@
 //! How `orchester-fake-claude` asks its permission prompt about a tool call (`fake_permission_prompt`), and takes up
 //! a call its session was ended while waiting on. A denied call is answered with the prompt's message, which the
 //! fake reports (`told: <message>`), and the fake goes on (`went on` in `README.md`), as Claude Code's agent does.
-//! A prompt with "twice" makes a second call of the same tool after the first is approved (`toolu_…_second`, its
-//! command's last word replaced by `tokio` for a command), which appends `approved` again when it is approved.
+//! A prompt with "Hold after the answer" goes on with a decided call only once no `fake-hold` lies next to the
+//! worktrees. A prompt with "twice" makes a second call of the same tool after the first is approved (`toolu_…_second`,
+//! its command's last word replaced by `tokio` for a command), which appends `approved` again when it is approved.
 
 use std::{fs, path::Path, process::ExitCode};
 
@@ -129,6 +130,9 @@ impl Fake {
       eprintln!("the pending call was not kept");
     }
     eprintln!("permission: {} {decision}", &ask.call);
+    if self.prompt.contains("Hold after the answer") {
+      wait_while_held(worktree);
+    }
     if decision != "allow" {
       self.denied(worktree, &ask.call, &told);
       flush();

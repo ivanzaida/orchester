@@ -54,8 +54,8 @@ const PATH_CHARS: usize = 36;
 pub(super) type Handler = Arc<dyn Fn() + Send + Sync>;
 
 pub struct InspectorActions {
-  /// Checks the CLI again; `None` while a check runs, and for a native connection, which this version
-  /// cannot test.
+  /// Checks the CLI again, or tests a native connection's model API through the runner; `None` while a
+  /// check runs.
   pub check: Option<Handler>,
   pub edit: Option<Handler>,
   /// Opens the models of a native connection.
@@ -93,7 +93,12 @@ pub fn inspector(
   let details = match (connection.api(), connection.executable()) {
     (Some(api), _) => details
       .with_children(native_inspector::properties(ctx, connection, api, state.secrets))
-      .child(native_inspector::models(ctx, api, actions.edit_models.clone())),
+      .child(native_inspector::models(
+        ctx,
+        api,
+        actions.edit_models.clone(),
+        actions.check.clone(),
+      )),
     (None, Some(executable)) => details
       .with_children(properties(ctx, connection, executable, state.launch))
       .child(models(ctx, connection))

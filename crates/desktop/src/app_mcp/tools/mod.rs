@@ -4,6 +4,7 @@
 
 mod approvals;
 mod auto_mode;
+mod limits;
 mod pipeline_copy;
 mod projects;
 mod run_task;
@@ -11,6 +12,7 @@ mod runs;
 mod task_write;
 mod tasks;
 mod wire;
+mod worktree;
 
 use std::sync::Arc;
 
@@ -52,7 +54,7 @@ struct Spec {
 const SPECS: &[Spec] = &[
   Spec {
     name: "list_projects",
-    description: "The projects of the workspace, most recently opened first: id, name, folder.",
+    description: "The projects of the workspace, most recently opened first: id, name, folder, whether each uses the code index, and its limits (token budgets, default time limit, agents working at once).",
     schema: schema_for_type::<projects::ListProjects>,
     read_only: true,
   },
@@ -129,6 +131,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "remove_worktree",
+    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already.",
+    schema: schema_for_type::<worktree::RemoveWorktree>,
+    read_only: false,
+  },
+  Spec {
     name: "list_approvals",
     description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when.",
     schema: schema_for_type::<approvals::ListApprovals>,
@@ -144,6 +152,12 @@ const SPECS: &[Spec] = &[
     name: "set_code_index",
     description: "Turns the project's code index on or off for agents that start from now on, as Project settings does. Returns the new state.",
     schema: schema_for_type::<projects::SetCodeIndex>,
+    read_only: false,
+  },
+  Spec {
+    name: "update_project_limits",
+    description: "Changes a project's limits as Project settings › Limits does: maximum, default and daily token budgets, the default time limit in minutes and how many agents work at once (1 to 16, applied at once by the project's runner). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved.",
+    schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },
   Spec {
@@ -202,12 +216,14 @@ async fn dispatch(
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
+    "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
+    "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }

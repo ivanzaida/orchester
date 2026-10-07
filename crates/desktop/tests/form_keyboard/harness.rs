@@ -10,12 +10,12 @@ use std::{
   time::{Duration, Instant},
 };
 
+mod paint;
+
 use lurq::{
-  app::{App, Tree, events::MouseButton, theme::PaletteColor},
+  app::{App, Tree, events::MouseButton},
   core::ElementRect,
-  layout::quad::{Quad, QuadContent},
   mcp::McpConfig,
-  node::color::Color,
 };
 use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 use orchester_desktop::{
@@ -85,6 +85,8 @@ pub struct Desktop {
   pub activity: Activity,
   /// The application's runners, as the root has them.
   pub runners: Runners,
+  /// The close flow, as the window's close handler has it.
+  pub lifecycle: Lifecycle,
   /// The keychain secret values go to: in memory, never the keychain of the user running tests.
   pub vault: Arc<MemoryVault>,
   /// The time live values are shown at.
@@ -160,6 +162,21 @@ impl Desktop {
   pub fn with_runner_and_app_mcp(runner: PathBuf, init: impl FnOnce(&Path), seed: impl FnOnce(&Path)) -> Self {
     let launch = Launch {
       programs: Programs::processes(),
+      runner,
+      app_mcp: true,
+    };
+    Self::start_with(REPO, Some(Box::new(init)), launch, Some(Box::new(seed)), None, "Kontur")
+  }
+
+  /// [`Desktop::with_runner_and_app_mcp`], running other programs with `programs`.
+  pub fn with_runner_programs_and_app_mcp(
+    runner: PathBuf,
+    programs: Programs,
+    init: impl FnOnce(&Path),
+    seed: impl FnOnce(&Path),
+  ) -> Self {
+    let launch = Launch {
+      programs,
       runner,
       app_mcp: true,
     };
@@ -297,9 +314,10 @@ impl Desktop {
     );
     let vault = Arc::new(MemoryVault::default());
     let clock = Arc::new(TestClock::default());
+    let lifecycle = Lifecycle::new(runners.clone(), runtime.handle().clone());
     let startup = Startup::Ready {
       workspace: session.workspace().clone(),
-      lifecycle: Lifecycle::new(runners.clone(), runtime.handle().clone()),
+      lifecycle: lifecycle.clone(),
       activity: activity.clone(),
       programs,
       vault: Vault::with(vault.clone()),
@@ -324,6 +342,7 @@ impl Desktop {
       repo,
       activity,
       runners,
+      lifecycle,
       vault,
       clock,
       runner,
@@ -501,28 +520,6 @@ impl Desktop {
     self.pass();
   }
 
-  /// The fill painted topmost at the middle of `id` in the last pass, text and strokes aside: its
-  /// own fill, or what shows through where it paints none.
-  pub fn fill_at(&mut self, id: &str) -> Option<Color> {
-    let bounds = self.bounds(id);
-    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
-    self
-      .tree
-      .painted_quads()
-      .into_iter()
-      .filter(|quad| covers(quad, x, y))
-      .filter_map(|quad| match quad.content {
-        QuadContent::Rect { color, .. } if color.a() > 0 => Some(color),
-        _ => None,
-      })
-      .last()
-  }
-
-  /// `role` as the desktop's theme resolves it.
-  pub fn color(&self, role: impl Into<PaletteColor>) -> Color {
-    self.app.theme().palette_color(role)
-  }
-
   /// A key press, then a pass so the next step sees what it changed.
   pub fn key(&mut self, key: &str, code: &str) {
     self.tree.key_down(key.into(), code.into(), false, false, false);
@@ -557,14 +554,6 @@ impl Desktop {
       self.key(&key, &key);
     }
   }
-}
-
-/// Whether `quad` paints the point (`x`, `y`): inside its frame and its clip.
-fn covers(quad: &Quad, x: f32, y: f32) -> bool {
-  let inside =
-    |left: f32, top: f32, width: f32, height: f32| x >= left && x <= left + width && y >= top && y <= top + height;
-  let clip = &quad.clip;
-  inside(quad.x, quad.y, quad.width, quad.height) && (!clip.active || inside(clip.x, clip.y, clip.width, clip.height))
 }
 
 /// Programs for screens that are not expected to run any: a run fails the test.

@@ -175,6 +175,24 @@ async fn claude_result_after_prose_fails_the_step_it_reports_failed() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_turn_of_its_own_before_the_prompt_leaves_a_done_result_passing() {
+  // Run 22: resuming a session whose background command was left, the CLI ended a turn of its own with an empty
+  // result before it took the prompt; the agent's `StructuredOutput` "done" must still pass the step.
+  let (project, run) = finished("Find a stopped background task.").await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(implement(&run).0, StepStatus::Passed);
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  assert_eq!(
+    db.invocations(run.id()).expect("invocations")[0].outcome,
+    Some(InvocationOutcome::Completed)
+  );
+  assert_eq!(
+    db.step_outputs(run.id()).expect("outputs")[0].text,
+    "Finished Implement"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn claude_prose_without_a_result_never_passes_the_step() {
   let (project, run) = finished("Answer without JSON.").await;
   assert!(

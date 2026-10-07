@@ -407,6 +407,7 @@ fn reviewed_rows(repo: &Path) -> u64 {
       category: (server == "command").then_some(CommandCategory::Worktree),
       secrets: false,
       told: None,
+      waited_ms: None,
       review: Some(review),
     },
   };

@@ -1,14 +1,17 @@
 //! The desktop's own log file: one file per UTC day, appended to across starts, the next day's
-//! file begun at midnight, and only the files of the last `KEPT_DAYS` days kept.
+//! file begun at midnight, and only the files of the last `KEPT_DAYS` days kept; by default it keeps
+//! Orchester's INFO lines and only lurq's warnings and errors.
 
 use std::{
   fs,
   path::{Path, PathBuf},
+  sync::Arc,
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use orchester_desktop::app_log::{AppLog, KEPT_DAYS, log_path, prune};
+use orchester_desktop::app_log::{AppLog, DEFAULT_FILTER, KEPT_DAYS, log_path, prune};
 use tempfile::TempDir;
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 
 const DAY: Duration = Duration::from_secs(86_400);
 
@@ -82,6 +85,28 @@ fn app_log_keeps_the_last_days_and_deletes_only_older_log_files() {
   assert!(!much_older.exists());
   for file in &not_logs {
     assert!(file.exists(), "{} is not a log file", file.display());
+  }
+}
+
+#[test]
+fn app_log_default_filter_keeps_orchesters_info_and_drops_lurqs_reactivity_lines() {
+  let (_app, logs) = logs();
+  let now = SystemTime::now();
+  let log = Arc::new(AppLog::open(&logs, now).expect("open the log"));
+  let subscriber = tracing_subscriber::registry()
+    .with(EnvFilter::new(DEFAULT_FILTER))
+    .with(fmt::layer().with_ansi(false).with_writer(Arc::clone(&log)));
+  tracing::subscriber::with_default(subscriber, || {
+    tracing::info!(target: "lurq::reactivity", "[lurq:reactivity] future_poll completed=true");
+    tracing::warn!(target: "lurq::vlist", "items changed in place");
+    tracing::info!(target: "orchester_desktop::close", "closing the application");
+    tracing::info!(target: "orchester_runner", "run executing");
+  });
+
+  let written = read(&log_path(&logs, now));
+  assert!(!written.contains("future_poll"), "{written}");
+  for line in ["items changed in place", "closing the application", "run executing"] {
+    assert!(written.contains(line), "{line} in {written}");
   }
 }
 

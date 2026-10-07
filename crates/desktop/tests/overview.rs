@@ -112,9 +112,15 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
 #[test]
 fn overview_pulse_without_a_runner_counts_interrupted_runs() {
   let (_fixture, tasks) = project();
-  let context = Pulse::running_context(true, Some(2), 0);
+  let four = std::num::NonZeroU32::new(4).expect("above zero");
+  let context = Pulse::running_context(true, Some((2, four)), 0);
   assert_eq!(context.key, "overview.metrics.agentsWorking.other");
-  assert_eq!(context.args, vec![("count", "2".to_owned())]);
+  assert_eq!(context.args, vec![("count", "2".to_owned()), ("slots", "4".to_owned())]);
+  let one = std::num::NonZeroU32::MIN;
+  assert_eq!(
+    Pulse::running_context(true, Some((0, one)), 0).key,
+    "overview.metrics.agentsWorking.one"
+  );
   assert_eq!(
     Pulse::running_context(true, None, 0).key,
     "overview.metrics.agentsUnknown"

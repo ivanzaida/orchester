@@ -52,7 +52,9 @@ pub use self::{
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
   first_edit::{EditProgress, FirstEdit, FirstEditTracker},
-  invocation::{ActivityEntry, Invocation, InvocationKind, InvocationTiming, active_time, execution_tokens},
+  invocation::{
+    ActivityEntry, Invocation, InvocationEngine, InvocationKind, InvocationTiming, active_time, execution_tokens,
+  },
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
@@ -61,8 +63,8 @@ pub use self::{
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
-    PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource,
-    RetryReport, RunContext, SkillListing, WorkingTools,
+    NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
+    PromptSection, PromptSource, ResultDelivery, RetryReport, RunContext, SkillListing, WorkingTools,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},

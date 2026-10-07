@@ -4,11 +4,13 @@
 //! published through the reporter.
 
 use std::{
+  num::NonZeroU32,
   path::{Path, PathBuf},
   pin::pin,
   time::Duration,
 };
 
+use orchester_core::limits::AgentSlots;
 use orchester_ipc::{
   AttachSession, Command, CommandSender, Event, IpcError, LaunchError, Reply, RunnerClient, RunnerProcess, ShutdownMode,
 };
@@ -19,7 +21,7 @@ use tokio::{
 };
 
 use super::{
-  AGENT_SLOTS, ShutdownOutcome,
+  ShutdownOutcome,
   report::Reporter,
   requests::{Pending, ReplySender, RequestError},
   state::{RunnerEvent, RunnerFailure},
@@ -169,8 +171,9 @@ impl Supervisor {
       let session = self.session;
       // Whatever happens to this runner, the next one replaces it after a drop.
       self.session = AttachSession::Reconnect;
+      let agent_slots = attach_slots(&self.project).await;
       match Session::start(client)
-        .serve(session, &mut self.requests, &self.reporter)
+        .serve((session, agent_slots), &mut self.requests, &self.reporter)
         .await
       {
         Served::Dropped(failure) => {
@@ -249,6 +252,26 @@ impl Supervisor {
   }
 }
 
+/// The project's *Agents working at once*, read each time a runner attaches, so a change made while
+/// no runner was connected applies too. Unreadable limits leave the runner the default: it still
+/// serves the project, and Project settings › Limits shows why they cannot be read.
+async fn attach_slots(project: &Path) -> NonZeroU32 {
+  let root = project.to_path_buf();
+  let read = tokio::task::spawn_blocking(move || crate::tasks::usage::limits_in(&root)).await;
+  let default = AgentSlots::DEFAULT.get();
+  match read {
+    Ok(Ok(limits)) => limits.agent_slots().get(),
+    Ok(Err(error)) => {
+      tracing::error!(project = %project.display(), %error, "cannot read the agent slots; the runner uses {default}");
+      default
+    }
+    Err(error) => {
+      tracing::error!(project = %project.display(), %error, "reading the agent slots did not finish; the runner uses {default}");
+      default
+    }
+  }
+}
+
 fn launch_failure(error: &LaunchError, runner_exe: &Path) -> RunnerFailure {
   match error {
     LaunchError::Spawn { source, .. } if source.kind() == std::io::ErrorKind::NotFound => {
@@ -321,15 +344,12 @@ impl Session {
 
   async fn serve(
     mut self,
-    session: AttachSession,
+    (session, agent_slots): (AttachSession, NonZeroU32),
     requests: &mut mpsc::UnboundedReceiver<Control>,
     reporter: &Reporter,
   ) -> Served {
     let (reply, mut attached) = oneshot::channel();
-    let attach = Command::Attach {
-      session,
-      agent_slots: AGENT_SLOTS,
-    };
+    let attach = Command::Attach { session, agent_slots };
     if !self.send(attach, Some(reply)).await {
       return Served::Dropped(RunnerFailure::Lost);
     }

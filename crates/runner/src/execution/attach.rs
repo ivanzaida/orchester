@@ -70,6 +70,24 @@ impl Scheduler {
     Ok(attached)
   }
 
+  /// The desktop changed how many agents may work at once to `slots`: it applies now. Runs waiting
+  /// for a slot look again, and queued task groups try to start their tasks; agents already at work
+  /// above a lowered count finish, and no new one starts until fewer work than `slots`.
+  pub async fn set_agent_slots(&self, slots: NonZeroU32) -> Result<(), Rejection> {
+    if self.inner.board.is_stopping() {
+      return Err(Rejection::ShuttingDown);
+    }
+    self.inner.board.set_slots(slots);
+    // The slots are set either way; groups that cannot advance now go on at the next pass.
+    if let Err(error) = self.advance_task_groups().await {
+      tracing::error!(
+        ?error,
+        "cannot advance reviewed task groups after the agent slots changed"
+      );
+    }
+    Ok(())
+  }
+
   /// Continues interrupted runs `runs` from their last checkpoints because a person asked to.
   pub async fn continue_runs(&self, runs: &[RunId]) -> (Vec<RunId>, Vec<RefusedRun>) {
     let _one_at_a_time = self.inner.continuing.lock().await;

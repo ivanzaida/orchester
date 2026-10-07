@@ -266,17 +266,13 @@ pub fn icon(icon: Icon, size: IconSize, color: PaletteColor) -> Text {
   }
 }
 
-/// A Windows title-bar window control drawn with a lucide glyph in the color lurq passes for the
-/// control's state.
+/// The lucide glyph of a Windows title-bar window control, in the muted text color (`QQmsI`).
 #[cfg(not(target_os = "macos"))]
-pub fn window_control(icon: Icon) -> lurq::components::WindowControlContent {
-  lurq::components::WindowControlContent::element(move |color| {
-    Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
-      .variant(ExtraTypography::IconWindowControl.role())
-      .color(color)
-      .nowrap()
-      .into()
-  })
+pub fn window_control(icon: Icon) -> Text {
+  Text::new(icon.glyph().encode_utf8(&mut [0; 4]))
+    .variant(ExtraTypography::IconWindowControl.role())
+    .color(PaletteColor::TextSecondary)
+    .nowrap()
 }
 
 /// A select's chevron or option check (`eASPF`, `ClxwV`), in the color the select passes.

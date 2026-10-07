@@ -34,7 +34,7 @@ use orchester_store::StoreError;
 
 use super::{
   super::app_server::{AppServerSession, STEER_REQUEST, SteerAnswer},
-  Transport, Watch, Worker,
+  Driver, Transport, Watch, Worker,
 };
 
 /// What Codex 0.159.2 answers to `turn/steer` while no turn runs.
@@ -136,15 +136,18 @@ impl Worker {
   /// when no turn runs that could take it.
   async fn write(&self, message: &Message) -> Option<(io::Result<()>, usize)> {
     let text = message.body().as_str();
-    match &self.transport {
+    let Driver::Process { transport, process } = &self.driver else {
+      return None;
+    };
+    match transport {
       Transport::AppServer(app) if app.turn_working() => {
         let id = format!("{STEER_REQUEST}{}", message.id());
-        let written = tokio::time::timeout(WRITE_TIME, app.steer(&self.process, &id, text)).await;
+        let written = tokio::time::timeout(WRITE_TIME, app.steer(process, &id, text)).await;
         Some((in_time(written), 0))
       }
-      Transport::Claude(claude) if self.process.takes_input() => {
+      Transport::Claude(claude) if process.takes_input() => {
         let results = claude.results();
-        let written = tokio::time::timeout(WRITE_TIME, self.process.send_line(input_line(text))).await;
+        let written = tokio::time::timeout(WRITE_TIME, process.send_line(input_line(text))).await;
         Some((in_time(written), results))
       }
       Transport::AppServer(_) | Transport::Claude(_) => None,

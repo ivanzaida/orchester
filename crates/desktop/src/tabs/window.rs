@@ -23,6 +23,7 @@ use crate::{
     close_dialog::CloseConfirmation,
     startup_recovery::{StartupRecovery, StartupRecoveryProps},
   },
+  tasks::integration_jobs::ProjectJobs,
   theme::{ExtraColor, TITLE_BAR_HEIGHT},
   workspace::Workspace,
 };
@@ -37,6 +38,8 @@ pub struct WindowProps {
   /// How the previous session ended, and when this one started, for the start-up recovery.
   pub previous_end: SessionEnd,
   pub session_start: Timestamp,
+  /// The projects' merge and removal operations, shared with Orchester's MCP server.
+  pub jobs: ProjectJobs,
 }
 
 impl lurq::app::component::DevtoolsInspectable for WindowProps {}
@@ -59,7 +62,7 @@ impl Component for Window {
     );
     Self {
       tabs,
-      feeds: ProjectFeeds::default(),
+      feeds: ProjectFeeds::new(props.jobs),
     }
   }
 
@@ -102,6 +105,7 @@ pub fn chrome(ctx: &mut Ctx, title_bar: Element, screen: Element) -> Element {
         .macos_height(TITLE_BAR_HEIGHT),
     )
     .title_bar(platform::title_bar(
+      ctx,
       ChromeTitleBar::new()
         .background(PaletteColor::SurfaceBase)
         .border_bottom(None)
@@ -133,9 +137,10 @@ pub const fn controls_width() -> f32 {
 #[cfg(not(target_os = "macos"))]
 mod platform {
   use lurq::{
-    app::{ctx::Ctx, theme::PaletteColor},
-    components::{ChromeTitleBar, Row, WindowControlKind, WindowControls},
-    node::Element,
+    app::{ctx::Ctx, events::MouseEvent, theme::PaletteColor},
+    components::{ChromeTitleBar, Row},
+    layout::{Alignment, layout_kind::Justify},
+    node::{CursorIcon, Element, Style, dimension::Dimension},
   };
 
   use crate::{
@@ -145,8 +150,8 @@ mod platform {
 
   pub(super) const CONTROLS_WIDTH: f32 = 3.0 * WINDOW_CONTROL_WIDTH;
 
-  pub(super) fn title_bar(bar: ChromeTitleBar) -> ChromeTitleBar {
-    bar.controls(window_controls())
+  pub(super) fn title_bar(ctx: &mut Ctx, bar: ChromeTitleBar) -> ChromeTitleBar {
+    bar.without_controls().trailing(window_controls(ctx))
   }
 
   pub(super) fn leading(_ctx: &mut Ctx, area: Row) -> Element {
@@ -154,18 +159,46 @@ mod platform {
   }
 
   /// Windows controls as in `QQmsI`: lucide icons in the muted text color and one shared hover
-  /// background.
-  fn window_controls() -> WindowControls {
-    WindowControls::new()
-      .button_size(WINDOW_CONTROL_WIDTH, TITLE_BAR_HEIGHT)
-      .content(WindowControlKind::Minimize, window_control(Icon::Minus))
-      .content(WindowControlKind::Maximize, window_control(Icon::Square))
-      .content(WindowControlKind::Restore, window_control(Icon::Copy))
-      .content(WindowControlKind::Close, window_control(Icon::X))
-      .foreground(PaletteColor::TextSecondary)
+  /// background. Drawn here rather than with lurq's `WindowControls`, whose close control closes
+  /// the window without asking its close handler, which would skip the close confirmation.
+  fn window_controls(ctx: &mut Ctx) -> Element {
+    let window = ctx.window();
+    let maximized = window.is_maximized;
+    let (minimize, maximize, close) = (window.clone(), window.clone(), window);
+    let middle = if maximized { Icon::Copy } else { Icon::Square };
+    Row::new()
+      .height(Dimension::Px(TITLE_BAR_HEIGHT))
+      .align_items(Alignment::Center)
+      .child(control("window-minimize", Icon::Minus, move || {
+        minimize.set_minimized(true);
+      }))
+      .child(control("window-maximize", middle, move || {
+        maximize.set_maximized(!maximized);
+      }))
+      .child(control("window-close", Icon::X, move || close.request_close()))
+      .into()
+  }
+
+  fn control(id: &'static str, icon: Icon, press: impl Fn() + Send + Sync + 'static) -> Row {
+    Row::new()
+      .id(id)
+      .size(Dimension::Px(WINDOW_CONTROL_WIDTH), Dimension::Px(TITLE_BAR_HEIGHT))
+      .align_items(Alignment::Center)
+      .justify(Justify::Center)
       .background(PaletteColor::SurfaceBase)
-      .hover_background(PaletteColor::AccentMuted)
-      .active_background(PaletteColor::AccentMuted)
+      .cursor(CursorIcon::Pointer)
+      .hovered_style(Style::new().background(PaletteColor::AccentMuted))
+      .active_style(Style::new().background(PaletteColor::AccentMuted))
+      .on_mouse_down(|event: MouseEvent| {
+        event.prevent_default();
+        event.stop_immediate_propagation();
+      })
+      .on_click(move |event: MouseEvent| {
+        press();
+        event.prevent_default();
+        event.stop_immediate_propagation();
+      })
+      .child(window_control(icon))
   }
 }
 
@@ -190,7 +223,7 @@ mod platform {
   /// A traffic light's diameter (`lenEp`).
   const LIGHT_SIZE: f32 = 12.0;
 
-  pub(super) fn title_bar(bar: ChromeTitleBar) -> ChromeTitleBar {
+  pub(super) fn title_bar(_ctx: &mut Ctx, bar: ChromeTitleBar) -> ChromeTitleBar {
     bar.without_controls()
   }
 
@@ -201,8 +234,9 @@ mod platform {
     area
       .padding_horizontal(ExtraSpacing::Stack.role())
       .spacing(SpacingSize::Sm)
+      // Asks the close handler, which confirms the close while agents work.
       .child(light("window-close", ExtraColor::TrafficClose.role(), move || {
-        close.close()
+        close.request_close()
       }))
       .child(light(
         "window-minimize",

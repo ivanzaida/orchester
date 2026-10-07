@@ -204,15 +204,20 @@ required-features = ["test-agent"]
 name = "task_organization"
 required-features = ["test-agent"]
 
+[[test]]
+name = "native"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
 [dependencies]
+# Native agents (`docs/architecture/native-agent.md` §2.2): the model API clients (`http`) their loop and
+# auto mode's reviewer on a native connection ask, and the file tools their loop runs, which Orchester's
+# tools serve to Claude Code and Codex too.
+orchester-agent = { workspace = true, features = ["http"] }
 orchester-core.workspace = true
 orchester-exec.workspace = true
-# The native agent's file tools, which Orchester's tools serve to Claude Code and Codex too; and its
-# Anthropic Messages client (`http`), which auto mode's reviewer on a native connection asks.
-orchester-agent = { workspace = true, features = ["http"] }
 # The codebase index of each run's base revision, built before its first step.
 orchester-index.workspace = true
 orchester-ipc.workspace = true

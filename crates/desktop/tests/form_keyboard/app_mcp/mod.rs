@@ -3,11 +3,13 @@
 //! Run with `cargo test -p orchester-desktop --test form_keyboard app_mcp`.
 
 mod answered;
-mod approvals;
+pub(crate) mod approvals;
+mod limits;
 mod pipelines;
 mod runs;
 mod server;
 mod tasks;
+mod worktree;
 
 use std::{fs, path::PathBuf};
 

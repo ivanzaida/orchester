@@ -295,8 +295,8 @@
     "metrics": {
       "running": "Running now",
       "agentsWorking": {
-        "one": "{{count}} agent working",
-        "other": "{{count}} agents working"
+        "one": "{{count}} of {{slots}} agent working",
+        "other": "{{count}} of {{slots}} agents working"
       },
       "agentsUnknown": "Waiting for the runner to report",
       "interrupted": {
@@ -499,7 +499,7 @@
       "summarySequential": "{{count}} tasks · one at a time",
       "totalTokens": "≈ {{count}} tokens",
       "eachTokens": "≈ {{count}} tokens",
-      "capacitySlots": "Task runs and agent slots are separate limits. Runner: {{slots}} agent slots.",
+      "capacitySlots": "Task runs and agent slots are separate limits. Agents working at once: {{slots}} (Project settings › Limits).",
       "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
       "planApprovalHeading": "Plan approval stays on",
       "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
@@ -1400,6 +1400,34 @@
       "fileModified": "M",
       "fileDeleted": "D",
       "fileMeta": "{{status}} · open in Changes",
+      "native": {
+        "running": "{{tool}} · running",
+        "failed": "{{tool}} · failed",
+        "readLines": "{{tool}} · lines {{first}}–{{last}} · {{size}}",
+        "readSize": "{{tool}} · {{size}}",
+        "listed": "{{tool}} · {{count}} files",
+        "searched": "{{tool}} · {{matches}} matches in {{files}} files",
+        "searchedIn": "{{tool}} · {{scope}} · {{matches}} matches in {{files}} files",
+        "searchTitle": "“{{pattern}}”",
+        "changed": "{{tool}} · {{status}} · +{{added}} −{{removed}} · open in Changes",
+        "withShell": "{{meta}} · shell · {{shell}}",
+        "denied": "Denied by a person · the agent continues",
+        "given": "Given to the agent as the command’s result:",
+        "refused": "refused by Orchester · the agent continues",
+        "approvedByYou": "Approved by you · {{command}}",
+        "bySimilarRule": "Approved by a similar rule · {{command}}",
+        "alwaysAllowed": "Always allowed · {{command}}",
+        "autoApproved": "Auto-approved · {{command}}",
+        "allowedByProfile": "Allowed by the profile · {{command}}",
+        "approvedByAutomation": "Approved by automation · {{command}}",
+        "deniedByAutomation": "Denied by automation · the agent continues",
+        "approvedByAutoMode": "Approved by auto mode · {{command}}",
+        "once": "approve once",
+        "similar": "approve similar",
+        "always": "always allow",
+        "run": "approve everything in this run",
+        "waited": "{{how}} · waited {{duration}}"
+      },
       "usage": "Usage reported",
       "usageMeta": "in {{input}} · out {{output}} · cached {{cached}} not counted",
       "error": "The agent CLI reported an error",
@@ -1449,7 +1477,12 @@
         },
         "stderrLeftOutDetail": "The activity keeps the first 1000 lines (256 KiB) of each agent start.",
         "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
-        "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are."
+        "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are.",
+        "contextCompacted": "The conversation was shortened to fit the model’s context window",
+        "contextCompactedDetail": "A summary replaced the earlier turns: about {{before}} tokens became about {{after}}. The agent reads files again before it changes them.",
+        "modelRetrying": "The model request failed; Orchester sends it again in {{seconds}} s (attempt {{attempt}})",
+        "thinkingStripped": "The model API refused the agent’s earlier reasoning",
+        "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results."
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -1517,6 +1550,8 @@
         "runs": "Runs",
         "runsHere": "This computer (Orchester)",
         "endpointNow": "Endpoint now",
+        "endpoint": "Endpoint",
+        "effort": "Effort",
         "network": "Network",
         "networkStaysOn": "Stays on · off not enforceable",
         "networkOn": "On",
@@ -1578,7 +1613,8 @@
         "secretUnreadable": "The system keychain did not give the value of {{secret}}. The runner log says why.",
         "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
         "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
-        "failedToStart": "The agent’s CLI reported that the server did not start."
+        "failedToStart": "The agent’s CLI reported that the server did not start.",
+        "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it."
       }
     },
     "changes": {
@@ -2339,6 +2375,8 @@
         "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
         "steerMac": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Cmd+Enter sends after this turn.",
         "steerUnavailable": "{{agent}}’s connection takes no message while its turn runs, so Send now is unavailable. Send after this turn waits until {{agent}} finishes its turn.",
+        "quietSteer": "{{agent}} gets your message at its next tool call.",
+        "quietSteerAfterTurn": "{{agent}} gets your message after this turn.",
         "toolStep": "A command tool runs this step, not an agent. Your message waits for the next agent’s turn.",
         "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
         "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
@@ -3550,7 +3588,17 @@
         "notOffered": "Not offered on this endpoint: only the official Anthropic API retries on another model."
       },
       "testAgain": "Test again",
-      "testUnavailable": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches the API nor reads the key.",
+      "testAfterSaving": "A new key reaches the keychain when you save the connection; test it then.",
+      "testBalance": "Balance {{balance}}",
+      "keyAccepted": "Key accepted",
+      "testListed": {
+        "one": "{{host}} answered · {{count}} model listed · {{time}}",
+        "other": "{{host}} answered · {{count}} models listed · {{time}}"
+      },
+      "testAnswered": "{{host}} answered · {{time}}",
+      "testFailed": "The runner could not test the connection. The runner log says why.",
+      "testNoRunner": "The project’s runner is not connected, so the connection can’t be tested now.",
+      "testUnavailable": "Testing an OpenAI API connection comes with its agent runs in a later version. Until then Orchester neither reaches its API nor reads its key.",
       "execution": "This computer (Orchester runs the agent)",
       "modelTraffic": "Orchester’s own HTTPS",
       "property": {
@@ -3575,7 +3623,9 @@
       "noEfforts": "no effort",
       "edit": "Edit models",
       "fetch": "Fetch models",
-      "fetchUnavailable": "Fetching models needs a test of the connection, which comes in a later version. Add models by hand meanwhile.",
+      "fetchHint": "Fetching tests the connection and adds the models the endpoint lists; a model already here is updated, none is removed.",
+      "fetchUnavailable": "Fetching models from an OpenAI API endpoint comes with its agent runs in a later version. Add models by hand meanwhile.",
+      "fetchInvalid": "The endpoint listed models that can’t be kept as they are; add them by hand.",
       "addByHand": "Add a model by hand",
       "add": "Add a model",
       "editModel": "Edit",
@@ -3655,8 +3705,10 @@
       "executableMissing": "The program file does not exist. Edit the connection to choose it again, then check again.",
       "notRecognized": "The program answered, but not as the expected CLI. Edit the connection to choose the right file.",
       "couldNotRun": "The program could not be started or did not answer in time. Check again, or edit the connection.",
-      "nativeConnected": "The API accepted the key when it was last tested. Orchester runs agents with it once native agents are available.",
-      "nativeNotChecked": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run.",
+      "nativeConnected": "The API accepted the key when it was last tested. Orchester runs agents with it.",
+      "nativeNotChecked": "Test the connection: the runner lists the API’s models with the key, which spends no tokens. Profiles that use it run once a test passes.",
+      "nativeConnectedLater": "The API accepted the key when it was last tested. Orchester runs agents with it once native agents are available.",
+      "nativeNotCheckedLater": "Testing a native connection comes with native agent runs in a later version. Until then Orchester neither reaches its API nor reads its key, and profiles that use it cannot run.",
       "keyMissing": "The key’s secret is archived or gone. Choose another secret, or add one in Secrets.",
       "keyRejected": "The API refused the key (401). Replace its value in Secrets, then test again.",
       "billingProblem": "The API accepted the key but refuses to serve it (402): the balance is empty or billing is not set up.",
@@ -4108,8 +4160,14 @@
         "one": "{{count}} minute",
         "other": "{{count}} minutes"
       },
+      "agents": "Agents",
+      "agentSlots": "Agents working at once",
+      "agentSlotsDetail": "Each agent at work in any run of this project takes one slot; command steps use slots of their own. Runs beyond it wait in the queue with the reason. A change applies at once: lowering it stops no agent, and new work waits until fewer agents work.",
+      "agentsUnit": "agents",
+      "agentSlotsRange": "{{min}} to {{max}} · default {{default}}",
+      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
       "changesTitle": "Changes apply to new runs",
-      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum. Agents working at once applies at once."
     },
     "environment": {
       "description": "Variables {{project}} adds for its agents and command tools.",
@@ -5668,7 +5726,12 @@
     "answerApprovalsNote": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
     "errors": {
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
-      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "runNotEnded": "The run still works; its worktree is removed once it ended.",
+      "worktreeRemoved": "The run’s worktree was removed already.",
+      "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
+      "noWorktree": "The run left no worktree to remove.",
+      "uncommittedChanges": "The worktree holds uncommitted changes. A person decides on the task page whether to discard them."
     }
   },
   "statusBar": {

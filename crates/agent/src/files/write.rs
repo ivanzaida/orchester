@@ -11,15 +11,24 @@ use std::{
 };
 
 use orchester_core::{
-  connection::stream::{FileChange, FileChangeKind},
+  connection::stream::{CallDetail, FileChange, FileChangeKind},
   native::{
-    edit::apply_edits,
+    edit::{Edited, LineChanges, apply_edits},
     session::ToolOutcome,
     tools::{EditFile, WriteFile},
   },
 };
 
 use super::{FileError, FileTools, done, outcome, stamp::ReadStamp};
+
+/// What a transcript row says of a change.
+const fn changed_lines(change: FileChangeKind, lines: LineChanges) -> CallDetail {
+  CallDetail::Changed {
+    change,
+    added: lines.added,
+    removed: lines.removed,
+  }
+}
 
 impl FileTools {
   pub fn edit_file(&self, input: &EditFile) -> ToolOutcome {
@@ -40,7 +49,7 @@ impl FileTools {
       action: "edited as text",
       kind: io::ErrorKind::InvalidData,
     })?;
-    let changed = apply_edits(&text, input.edits())?;
+    let Edited { text: changed, lines } = apply_edits(&text, input.edits())?;
     self.replace(&path, input.path(), changed.as_bytes(), Some(&metadata))?;
     let count = input.edits().len();
     let summary = format!("edited {shown}: {count} edit(s) applied");
@@ -48,29 +57,35 @@ impl FileTools {
       path: shown,
       kind: FileChangeKind::Modified,
     };
-    Ok(done(summary.clone(), summary, vec![change]))
+    Ok(done(
+      summary.clone(),
+      summary,
+      vec![change],
+      changed_lines(FileChangeKind::Modified, lines),
+    ))
   }
 
   fn write(&self, input: &WriteFile) -> Result<ToolOutcome, FileError> {
     let path = self.scope.writable(input.path())?;
     let shown = self.shown(&path);
     let existing = self.existing(&path)?;
-    let kind = match &existing {
+    let (kind, before) = match &existing {
       Some(metadata) => {
-        self.checked_content(&path, metadata)?;
-        FileChangeKind::Modified
+        let bytes = self.checked_content(&path, metadata)?;
+        (FileChangeKind::Modified, String::from_utf8_lossy(&bytes).into_owned())
       }
       None => {
         if let Some(parent) = path.parent() {
           fs::create_dir_all(parent).map_err(|error| self.io_error(parent, "created", &error))?;
         }
-        FileChangeKind::Added
+        (FileChangeKind::Added, String::new())
       }
     };
     self.replace(&path, input.path(), input.content().as_bytes(), existing.as_ref())?;
     let summary = format!("wrote {shown}: {} bytes", input.content().len());
     let change = FileChange { path: shown, kind };
-    Ok(done(summary.clone(), summary, vec![change]))
+    let lines = LineChanges::between(&before, input.content());
+    Ok(done(summary.clone(), summary, vec![change], changed_lines(kind, lines)))
   }
 
   /// The metadata of the file at `path`; `None` when there is none.

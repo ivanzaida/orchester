@@ -54,6 +54,7 @@ pub(super) fn mcp_server_text(
       ctx.t("runs.activity.mcp.failedToStart"),
       detail.as_deref().map(Arc::from),
     ),
+    McpServerProblem::NotSupportedByConnection => (ctx.t("runs.activity.mcp.notSupportedByConnection"), None),
   };
   (title, body, said)
 }

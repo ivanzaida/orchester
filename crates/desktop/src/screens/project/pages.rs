@@ -90,7 +90,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
         usage: shown.usage,
         runner: shown.runner,
         runner_since: shown.status.trouble_since(),
-        agents_working: shown.status.work().map(WorkSummary::agents_working),
+        agents_working: shown.status.work().map(WorkSummary::agents),
       },
     ),
     Page::Tasks(tab) => ctx.mount_keyed::<TasksScreen>(

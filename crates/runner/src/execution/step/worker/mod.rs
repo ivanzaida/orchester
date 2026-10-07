@@ -4,8 +4,10 @@
 //! a step budget lets the turn that used it end: the agent has [`TURN_GRACE`] to exit on its own,
 //! and starting another turn ends it at once. What the agent used before its first file edit is
 //! followed from the same events and stored with the invocation ([`FirstEditTracker`]). A person's
-//! messages sent now reach the agent while its turn runs ([`steer`]).
+//! messages sent now reach the agent while its turn runs ([`steer`]). A native agent's loop runs in a
+//! task of its own and reports to the worker as a CLI's output would ([`native`]).
 
+mod native;
 mod observe;
 mod process;
 mod review;
@@ -22,6 +24,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   conversation::Message,
   id::{ResourceId, StepExecutionId, TaskId},
+  native::session::StopMode,
   permission::category::CommandScope,
   run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   time::Timestamp,
@@ -36,6 +39,7 @@ use super::{
   app_server::AppServerSession,
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
+  native::NativeHandle,
   relay::Listening,
 };
 use crate::{private_file::PrivateFile, supervisor::Supervised};
@@ -126,12 +130,36 @@ pub(super) enum Transport {
   AppServer(Box<AppServerSession>),
 }
 
-/// One running agent CLI and where its news goes.
+/// What does the agent's work (`docs/architecture/native-agent.md` §2.2): a CLI's process, followed
+/// through its transport, or the task that runs a native agent's loop.
+pub(super) enum Driver {
+  Process { transport: Transport, process: Supervised },
+  Native(NativeHandle),
+}
+
+impl Driver {
+  /// The CLI's process; a native agent has none.
+  pub(super) const fn process(&self) -> Option<&Supervised> {
+    match self {
+      Self::Process { process, .. } => Some(process),
+      Self::Native(_) => None,
+    }
+  }
+
+  /// Ends the agent now: the CLI's process tree, or the native loop with what it runs.
+  pub(super) fn end(&mut self) {
+    match self {
+      Self::Process { process, .. } => process.terminate(),
+      Self::Native(handle) => handle.stop(StopMode::Now),
+    }
+  }
+}
+
+/// One agent at work and where its news goes.
 pub(in super::super) struct Worker {
   pub(in super::super) root: PathBuf,
   pub(in super::super) invocation: Invocation,
-  pub(super) transport: Transport,
-  pub(in super::super) process: Supervised,
+  pub(super) driver: Driver,
   pub(in super::super) notifier: Notifier,
   pub(in super::super) events: mpsc::UnboundedSender<WorkerEvent>,
   pub(in super::super) stops: mpsc::UnboundedReceiver<Stop>,
@@ -141,8 +169,9 @@ pub(in super::super) struct Worker {
   pub(super) claude_approvals: Option<ClaudeApprovals>,
   /// The runner's end of Codex's relay of Orchester's tools, which asks about their calls.
   pub(super) tool_relay: Option<Listening>,
-  /// Secret values of a Claude Code invocation's MCP servers, kept out of its activity and approvals.
-  pub(super) mcp_secrets: Vec<SecretVariable>,
+  /// Secret values kept out of the invocation's activity and approvals: those of a Claude Code
+  /// invocation's MCP servers, a native agent's API key.
+  pub(in super::super) secrets: Vec<SecretVariable>,
   pub(in super::super) agent: String,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
@@ -219,18 +248,30 @@ impl Watch {
 impl Worker {
   /// The App Server conversation, for Codex.
   pub(super) const fn app_server(&self) -> Option<&AppServerSession> {
-    match &self.transport {
-      Transport::AppServer(app) => Some(&**app),
-      Transport::Claude(_) => None,
+    match &self.driver {
+      Driver::Process {
+        transport: Transport::AppServer(app),
+        ..
+      } => Some(&**app),
+      Driver::Process { .. } | Driver::Native(_) => None,
     }
   }
 
-  /// Follows the CLI until it exits, then tells the run how it ended.
+  /// Whether a native agent does the work.
+  pub(super) const fn is_native(&self) -> bool {
+    matches!(self.driver, Driver::Native(_))
+  }
+
+  /// Follows the agent until it ends, then tells the run how it ended.
   pub(in super::super) async fn work(mut self) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
-    let end = self.follow().await;
+    let end = if self.is_native() {
+      self.follow_native().await
+    } else {
+      self.follow().await
+    };
     // The CLI has ended: the configuration it read, with its secret values, goes before the run hears of it.
     drop(mcp_file);
     // The run's task outlives its agents; if it is gone, the runner is ending anyway.

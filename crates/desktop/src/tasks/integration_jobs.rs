@@ -9,7 +9,10 @@ use std::{
 };
 
 use lurq::core::Signal;
-use orchester_core::{id::RunId, integration::Leftovers};
+use orchester_core::{
+  id::{ProjectId, RunId},
+  integration::Leftovers,
+};
 use parking_lot::Mutex;
 
 use super::integration::{merge_in, remove_in};
@@ -230,6 +233,14 @@ impl RunIntegration {
     self.0.dialog_open.set(true);
   }
 
+  /// Clears an earlier failure of the removal without opening the confirmation: Orchester's MCP server
+  /// removes without one.
+  pub fn clear_failed_remove(&self) {
+    if matches!(self.0.remove.get_untracked(), JobState::Failed(_)) {
+      self.0.remove.set(JobState::Idle);
+    }
+  }
+
   /// Closes the confirmation unless git is removing; a failure stays to be shown under the run's
   /// row in *Runs of this task* (63.06 `VBR27`).
   pub fn dismiss_remove(&self) {
@@ -269,10 +280,41 @@ pub struct RemoveArgs {
 }
 
 /// Project-scoped registry retained while any tab still names the project.
+#[derive(Clone)]
+pub struct IntegrationJobs(Arc<Mutex<HashMap<RunId, RunIntegration>>>, Signal<u64>);
+
+impl Default for IntegrationJobs {
+  fn default() -> Self {
+    Self(Arc::default(), Signal::new(0))
+  }
+}
+
+/// Every project's merge and removal operations, shared by the window's tabs and Orchester's MCP server,
+/// so a removal a tool starts guards the task page's buttons and the other way round.
 #[derive(Clone, Default)]
-pub struct IntegrationJobs(Arc<Mutex<HashMap<RunId, RunIntegration>>>);
+pub struct ProjectJobs(Arc<Mutex<HashMap<ProjectId, IntegrationJobs>>>);
+
+impl PartialEq for ProjectJobs {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for ProjectJobs {}
+
+impl ProjectJobs {
+  /// The operations of `project`, made the first time they are asked for.
+  pub fn of(&self, project: ProjectId) -> IntegrationJobs {
+    self.0.lock().entry(project).or_default().clone()
+  }
+}
 
 impl IntegrationJobs {
+  /// Counts the removals Orchester's MCP server made: the task pages read what the runs left again.
+  pub fn removed_outside(&self) -> Signal<u64> {
+    self.1.clone()
+  }
+
   pub fn of(&self, run: RunId) -> RunIntegration {
     self.0.lock().entry(run).or_insert_with(RunIntegration::new).clone()
   }

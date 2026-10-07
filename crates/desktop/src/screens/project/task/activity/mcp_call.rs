@@ -100,6 +100,7 @@ pub(super) fn review_of(entry: &Entry) -> Option<&Review> {
   let mark = match &entry.kind {
     EntryKind::Command(command) => command.mark.as_ref(),
     EntryKind::McpTool(call) => call.mark.as_ref(),
+    EntryKind::Approval(approval) => return approval.mark.decision.review.as_ref(),
     _ => None,
   };
   match mark? {

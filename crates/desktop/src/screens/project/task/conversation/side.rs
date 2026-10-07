@@ -160,17 +160,19 @@ impl ConversationTab {
       last: view.loaded.entries.last().map(|entry| entry.at),
     });
     // The working line is the chat's last row; with nothing else to show, it follows what says why.
-    let (body, working): (Element, _) = if view.shown.rows.is_empty() {
+    let (body, end, working): (Element, _, _) = if view.shown.rows.is_empty() {
+      // Without rows there is no list; the next one measures its rows again.
+      if self.measured.get_untracked() {
+        self.measured.set(false);
+      }
       let below = working.map(|working| column(ctx.mount_keyed::<LiveFooter>("conversation-working", working)));
-      (self.empty(ctx, view), below)
+      (self.empty(ctx, view), None, below)
     } else {
       // The chat column is the window less the project sidebar and the panel beside the chat.
       let chat = view.window - PROJECT_SIDEBAR_WIDTH - view.beside.width();
       let answers = AnswersLayout::for_chat(chat);
-      (
-        self.list(ctx, (&view.shown, view.items), reveal, (working, answers)),
-        None,
-      )
+      let list = self.list(ctx, (&view.shown, view.items), reveal, (working, answers));
+      (list, Some(self.follow_end(ctx)), None)
     };
     let readback = readback(
       ctx,
@@ -202,6 +204,7 @@ impl ConversationTab {
       .child(toolbar(ctx, &state))
       .with_children(readback)
       .child(body)
+      .with_children(end)
       .with_children(jump)
       .with_children(working)
       .into()

@@ -128,33 +128,51 @@ fn preflight_allows_approval_gates_and_reports_unusable_connections() {
 }
 
 #[test]
-fn preflight_refuses_steps_on_a_native_connection() {
-  let endpoint = ApiEndpoint::new(
-    EndpointPreset::Official,
-    BaseUrl::new("https://api.anthropic.com").expect("valid base URL"),
-    SecretId::generate(),
-  );
-  let native = AgentConnection::native(
-    ConnectionId::generate(),
-    Name::new("Claude API").expect("valid name"),
-    AgentProvider::AnthropicApi,
-    endpoint,
-    at(1),
-  )
-  .expect("native connection")
-  .into_connection();
+fn preflight_runs_anthropic_native_steps_once_checked() {
+  let native = |provider, url: &str| {
+    let endpoint = ApiEndpoint::new(
+      EndpointPreset::Official,
+      BaseUrl::new(url).expect("valid base URL"),
+      SecretId::generate(),
+    );
+    AgentConnection::native(
+      ConnectionId::generate(),
+      Name::new("Native API").expect("valid name"),
+      provider,
+      endpoint,
+      at(1),
+    )
+    .expect("native connection")
+  };
   let permissions = AgentPermissions::new(
     RepositoryAccess::ReadOnly,
     CommandPermission::Allowed(AllowedCommands::default()),
     NetworkAccess::On,
   );
-  let problems = problems_with(&native, &permissions);
+  let openai = native(AgentProvider::OpenAiApi, "https://api.openai.com/v1").into_connection();
+  let problems = problems_with(&openai, &permissions);
   assert!(problems.contains(&PreflightProblem::NativeNotAvailable { step: key("review") }));
   assert!(
     problems
       .iter()
       .all(|problem| matches!(problem, PreflightProblem::NativeNotAvailable { .. }))
   );
+  let mut anthropic = native(AgentProvider::AnthropicApi, "https://api.anthropic.com");
+  assert!(
+    problems_with(&anthropic.clone().into_connection(), &permissions).contains(
+      &PreflightProblem::ConnectionNotUsable {
+        step: key("review"),
+        status: ConnectionStatus::NotChecked,
+      }
+    )
+  );
+  anthropic
+    .record_check(ConnectionCheck {
+      at: at(2),
+      result: CheckResult::Api { balance: None },
+    })
+    .expect("an API check fits a native connection");
+  assert_eq!(problems_with(&anthropic.into_connection(), &permissions), []);
 }
 
 #[test]

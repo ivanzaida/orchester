@@ -70,10 +70,13 @@ impl Component for TimelineRowView {
     let timeline = ctx
       .use_context::<Timeline>()
       .expect("the tab provides its timeline before its rows");
+    // Named by its key in the list, which stays the same while the row changes.
+    let id = format!("conversation-row:{}", props.key());
     let row = match &props.line {
       Line::Row(row) => &**row,
       Line::Working(working) => {
-        return column(ctx.mount_keyed::<LiveFooter>("conversation-working", working.clone()));
+        let footer = ctx.mount_keyed::<LiveFooter>("conversation-working", working.clone());
+        return named(id, column(footer));
       }
     };
     let content = match row {
@@ -112,8 +115,12 @@ impl Component for TimelineRowView {
       ),
       Row::Line(item) => message::one_line(ctx, item),
     };
-    column(content)
+    named(id, column(content))
   }
+}
+
+fn named(id: String, row: Element) -> Element {
+  Column::new().id(id).width(Dimension::Pct(100.0)).child(row).into()
 }
 
 /// A person's message, a card, a problem, a return or restart, a step's end or the run's; `request`, the

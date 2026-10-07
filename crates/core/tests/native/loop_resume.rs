@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use orchester_core::{
-  connection::stream::{FileChange, FileChangeKind},
+  connection::stream::{AgentEvent, FileChange, FileChangeKind, RunnerProblem},
   native::{
     command::CommandPolicy,
     item::{Item, UserOrigin},
@@ -235,6 +235,17 @@ fn native_compaction_near_the_window() {
     request(&actions).expect("next request").items,
     [vec![task()], stored].concat()
   );
+  let compacted = actions.iter().find_map(|action| match action {
+    LoopAction::Emit(events) => events.iter().find_map(|event| match event {
+      AgentEvent::RunnerProblem {
+        problem: RunnerProblem::ContextCompacted { before, after },
+      } => Some((*before, *after)),
+      _ => None,
+    }),
+    _ => None,
+  });
+  let (before, after) = compacted.expect("Activity tells of the compaction");
+  assert!(before >= 2900 && after < before, "{before} → {after}");
 }
 
 #[test]

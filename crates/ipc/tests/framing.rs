@@ -46,6 +46,9 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       session: AttachSession::Reconnect,
       agent_slots: NonZeroU32::new(1).expect("above zero"),
     },
+    Command::SetAgentSlots {
+      agent_slots: NonZeroU32::new(16).expect("above zero"),
+    },
     Command::ContinueRuns { runs: vec![run] },
     Command::Ping { nonce: 42 },
     Command::StartRun {
@@ -212,6 +215,9 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     reply(Reply::Rejected(Rejection::RunNotInterrupted)),
     reply(Reply::Rejected(Rejection::ShuttingDown)),
     reply(Reply::Pong { nonce: 42 }),
+    reply(Reply::AgentSlotsSet {
+      agent_slots: NonZeroU32::new(16).expect("above zero"),
+    }),
     reply(Reply::RunStarted { run }),
     reply(Reply::Accepted { run }),
     reply(Reply::Rejected(Rejection::RunNotFound)),
@@ -295,6 +301,52 @@ async fn frames_round_trip_every_message() {
     assert_eq!(reader.read::<Event>().await.expect("read event"), Some(event));
   }
   assert_eq!(reader.read::<Event>().await.expect("clean end"), None);
+}
+
+/// *Test connection* of a native connection (protocol 17): the model API asked about, and what the runner
+/// found with the models it listed.
+#[tokio::test]
+async fn frames_round_trip_a_connection_check() {
+  use orchester_core::{
+    connection::{ApiEndpoint, BaseUrl, CheckResult, Effort, EndpointPreset, ModelSource, NativeModel},
+    id::SecretId,
+    resource::ModelId,
+    time::Timestamp,
+  };
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let api = ApiEndpoint::new(
+    EndpointPreset::Official,
+    BaseUrl::new("https://api.anthropic.com").expect("base URL"),
+    SecretId::generate(),
+  );
+  let request = Request {
+    id: RequestId::new(3),
+    command: Command::CheckConnection {
+      provider: AgentProvider::AnthropicApi,
+      api,
+    },
+  };
+  let model = NativeModel::new(
+    ModelId::new("claude-opus-5-5").expect("model"),
+    NonZeroU32::new(1_000_000),
+    NonZeroU32::new(128_000),
+    vec![Effort::Low, Effort::Max],
+    ModelSource::Endpoint {
+      at: Timestamp::from_unix_millis(1_000),
+    },
+  );
+  let reply = Event::Reply {
+    id: RequestId::new(3),
+    reply: Reply::ConnectionChecked {
+      result: CheckResult::Api { balance: None },
+      models: vec![model],
+    },
+  };
+  writer.write(&request).await.expect("write request");
+  writer.write(&reply).await.expect("write reply");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(request));
+  assert_eq!(reader.read::<Event>().await.expect("read reply"), Some(reply));
 }
 
 /// Run again with what a person saw the run before leave, a worktree folder git forgot among it

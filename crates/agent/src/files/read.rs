@@ -7,10 +7,13 @@ use std::{
   path::Path,
 };
 
-use orchester_core::native::{session::ToolOutcome, tools::ReadFile};
+use orchester_core::{
+  connection::stream::CallDetail,
+  native::{session::ToolOutcome, tools::ReadFile},
+};
 
 use super::{
-  FileError, FileTools, done,
+  FileError, FileTools, count, done,
   limits::{RESULT_CAP, cut_line},
   outcome,
   stamp::ReadStamp,
@@ -39,14 +42,39 @@ impl FileTools {
     }
     let bytes = self.content(&path, &metadata)?;
     self.stamps.record(&path, ReadStamp::of(&bytes, &metadata));
+    let size = count(bytes.len());
     if bytes.iter().take(BINARY_PROBE).any(|byte| *byte == 0) {
       let text = format!("binary file, {} bytes", bytes.len());
-      return Ok(done(text.clone(), text, Vec::new()));
+      let none = CallDetail::Read {
+        first: 0,
+        last: 0,
+        bytes: size,
+      };
+      return Ok(done(text.clone(), text, Vec::new(), none));
     }
     let text = String::from_utf8_lossy(&bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-    Ok(numbered(text, input.offset(), input.limit()))
+    let Numbered {
+      content,
+      activity,
+      first,
+      last,
+    } = numbered(text, input.offset(), input.limit());
+    let detail = CallDetail::Read {
+      first,
+      last,
+      bytes: size,
+    };
+    Ok(done(content, activity, Vec::new(), detail))
   }
+}
+
+/// The lines a read shows, and which they are: none when both are 0.
+struct Numbered {
+  content: String,
+  activity: String,
+  first: u64,
+  last: u64,
 }
 
 impl FileTools {
@@ -81,16 +109,22 @@ impl FileTools {
 }
 
 /// Lines `offset..offset + limit` of `text`, numbered, with a note when more follow.
-fn numbered(text: &str, offset: u32, limit: u32) -> ToolOutcome {
+fn numbered(text: &str, offset: u32, limit: u32) -> Numbered {
+  let none = |content: String, activity: String| Numbered {
+    content,
+    activity,
+    first: 0,
+    last: 0,
+  };
   let lines: Vec<&str> = text.lines().collect();
   let total = lines.len();
   if total == 0 {
-    return done("(empty file)".to_owned(), "empty file".to_owned(), Vec::new());
+    return none("(empty file)".to_owned(), "empty file".to_owned());
   }
   let first = usize::try_from(offset).unwrap_or(usize::MAX);
   if first > total {
     let text = format!("the file has {total} lines; offset {offset} is past its end");
-    return done(text.clone(), text, Vec::new());
+    return none(text.clone(), text);
   }
   let wanted = usize::try_from(limit).unwrap_or(usize::MAX);
   let mut out = String::new();
@@ -109,5 +143,10 @@ fn numbered(text: &str, offset: u32, limit: u32) -> ToolOutcome {
       last + 1
     ));
   }
-  done(out, format!("lines {first}–{last} of {total}"), Vec::new())
+  Numbered {
+    content: out,
+    activity: format!("lines {first}–{last} of {total}"),
+    first: count(first),
+    last: count(last),
+  }
 }

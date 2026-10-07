@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{ProjectLimits, ProjectLimitsError},
+  limits::{AgentSlots, AgentSlotsError, ProjectLimits, ProjectLimitsError},
   run::TokenUsage,
   time::Timestamp,
   tokens::{BudgetInputError, TokenBudget, TokensUsed, grouped, parse_budget, regroup},
@@ -81,6 +81,24 @@ fn tokens_project_limits_default_to_the_design_values() {
   assert_eq!(limits.default_run_budget().get(), 1_400_000);
   assert_eq!(limits.daily_budget().get(), 20_000_000);
   assert_eq!(limits.default_time_limit(), Duration::from_secs(30 * 60));
+  assert_eq!(limits.agent_slots().get().get(), 4);
+}
+
+#[test]
+fn tokens_agent_slots_are_one_to_sixteen() {
+  for count in [1, 4, 16] {
+    assert_eq!(
+      AgentSlots::new(count).map(|slots| u64::from(slots.get().get())),
+      Ok(count)
+    );
+  }
+  for count in [0, 17, u64::from(u32::MAX) + 1] {
+    assert_eq!(AgentSlots::new(count), Err(AgentSlotsError { count }));
+  }
+  let two = AgentSlots::new(2).expect("in range");
+  let limits = ProjectLimits::DEFAULT.with_agent_slots(two);
+  assert_eq!(limits.agent_slots(), two);
+  assert_eq!(limits.max_run_budget(), ProjectLimits::DEFAULT.max_run_budget());
 }
 
 #[test]

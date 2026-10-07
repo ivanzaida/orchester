@@ -17,6 +17,7 @@ mod mcp_servers;
 mod memory;
 mod merges;
 mod messages;
+mod native;
 mod organization;
 mod organized_drafts;
 mod phases;

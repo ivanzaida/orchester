@@ -23,6 +23,11 @@
 //! the conversation. Claude Code 2.1.286 (probe 2026-10-02) takes a message written during a tool
 //! call right after that call's result, and one written after its last tool call as the next turn,
 //! after the result ([`ClaudeStream::take_replayed`], [`ClaudeStream::results`]).
+//!
+//! A result before the CLI took the prompt, saying nothing, ends no turn of the agent's: Claude Code resuming a
+//! session whose background command the previous process left reports that command stopped, ends a turn of its own
+//! with such a result, then starts again and takes the prompt (run 22, 2026-10-06). It neither fails the step nor
+//! counts as a turn the CLI ended.
 
 use std::collections::HashMap;
 
@@ -62,6 +67,8 @@ pub struct ClaudeStream {
   replayed: Vec<String>,
   /// Results seen: each ends a turn.
   results: usize,
+  /// The CLI printed back a user message: it took the prompt.
+  prompt_taken: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -214,6 +221,7 @@ impl ClaudeStream {
   /// Tool results, or input the CLI printed back; a user message without either is not understood.
   fn user(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {
     if value.get("isReplay").and_then(Value::as_bool) == Some(true) {
+      self.prompt_taken = true;
       self.replayed.push(result_text(value.get("message")?.get("content")));
       return Some(Vec::new());
     }
@@ -268,7 +276,8 @@ impl ClaudeStream {
 
   fn result(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {
     let is_error = value.get("is_error")?.as_bool()?;
-    self.results += 1;
+    let said = text(value, "result").filter(|result| !result.trim().is_empty());
+    let own_turn = !is_error && !self.prompt_taken && said.is_none() && value.get("structured_output").is_none();
     let mut events = Vec::new();
     let total = value.get("usage").and_then(usage).unwrap_or_default();
     if let Some(grown) = growth(total, self.counted) {
@@ -287,7 +296,10 @@ impl ClaudeStream {
       let command = describe(&tool, denial.get("tool_input").unwrap_or(&Value::Null));
       events.push(AgentEvent::PermissionDenied { item, command });
     }
-    let said = text(value, "result").filter(|result| !result.trim().is_empty());
+    if own_turn {
+      return Some(events);
+    }
+    self.results += 1;
     if is_error {
       // A CLI that is not signed in already said so.
       if !self.signed_out {

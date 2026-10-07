@@ -22,6 +22,7 @@ mod heredoc;
 mod install;
 mod interpreters;
 mod loops;
+mod native;
 mod network;
 mod network_tables;
 mod options;
@@ -118,8 +119,20 @@ impl ClassifiedCommand {
 
   /// `command` run in `folder` (the working folder the agent's CLI reported), placed in `scope`.
   pub fn classify_in(command: &str, folder: &Path, scope: &CommandScope) -> Self {
+    Self::read_in(command, folder, scope, |line| {
+      classify_line(command, Quoting::Bash, scope, line, 0)
+    })
+  }
+
+  /// `command` as `split` reads it into parts from `folder`, placed in `scope`.
+  fn read_in(
+    command: &str,
+    folder: &Path,
+    scope: &CommandScope,
+    split: impl FnOnce(&mut Line) -> Vec<CommandPart>,
+  ) -> Self {
     let mut line = Line::new(Some(vec![scope.worktree().join(folder)]));
-    let mut parts = classify_line(command, Quoting::Bash, scope, &mut line, 0);
+    let mut parts = split(&mut line);
     // A `cd` into the worktree or a writable folder does nothing a person decides about; where the
     // parts after it run is followed all the same.
     if parts.iter().any(|part| !part.moves_inside()) {
@@ -198,7 +211,16 @@ fn classify_line(
       .collect();
   }
   let mut parts = Vec::new();
-  for raw in words::split(text, quoting) {
+  let home = |name| {
+    scope
+      .home_variable(name)
+      .map(|home| home.to_string_lossy().into_owned())
+  };
+  let homes = words::ShellHomes {
+    home: home("HOME"),
+    profile: home("USERPROFILE"),
+  };
+  for raw in words::split(text, quoting, homes) {
     parts.extend(classify_part(&raw, quoting, scope, line, depth));
     line.made(scope, &raw.writes);
   }

@@ -11,6 +11,8 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use crate::runner::Runners;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProjectUsage {
   pub limits: ProjectLimits,
@@ -31,7 +33,19 @@ impl ProjectUsage {
   }
 }
 
-/// Stores the project's limits; they apply to new tasks and runs.
-pub fn save_limits_in(repo_root: &Path, limits: &ProjectLimits) -> Result<(), StoreError> {
-  ProjectDb::open(repo_root)?.save_project_limits(limits)
+/// The project's limits as stored.
+pub fn limits_in(repo_root: &Path) -> Result<ProjectLimits, StoreError> {
+  ProjectDb::open(repo_root)?.project_limits()
+}
+
+/// Stores the project's limits, as Project settings › Limits and Orchester's MCP server change them.
+/// The budgets and the time limit apply to new tasks and runs; changed agent slots apply at once,
+/// handed to the project's runner once they are stored.
+pub fn save_limits(runners: &Runners, repo_root: &Path, limits: &ProjectLimits) -> Result<(), StoreError> {
+  runners.store_agent_slots(repo_root, || {
+    let mut db = ProjectDb::open(repo_root)?;
+    let before = db.project_limits()?.agent_slots();
+    db.save_project_limits(limits)?;
+    Ok((limits.agent_slots() != before).then_some(limits.agent_slots()))
+  })
 }

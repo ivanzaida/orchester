@@ -3,6 +3,7 @@
 
 use std::{
   future::Future,
+  num::NonZeroU32,
   path::Path,
   sync::{
     Arc,
@@ -12,6 +13,7 @@ use std::{
 };
 
 use orchester_core::{
+  connection::{AgentProvider, ApiEndpoint},
   id::{RunId, StepExecutionId},
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
 };
@@ -279,6 +281,7 @@ async fn answer(
       },
       Err(rejection) => Reply::Rejected(rejection),
     },
+    Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
     Command::ContinueRuns { ref runs } => {
       let (continued, refused) = scheduler.continue_runs(runs).await;
       Reply::Continued { continued, refused }
@@ -340,8 +343,17 @@ async fn answer(
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
+    Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// The reply to [`Command::SetAgentSlots`].
+async fn slots_set(scheduler: &Scheduler, agent_slots: NonZeroU32) -> Reply {
+  match scheduler.set_agent_slots(agent_slots).await {
+    Ok(()) => Reply::AgentSlotsSet { agent_slots },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
 }
 
 fn answer_tool_approval(
@@ -354,6 +366,15 @@ fn answer_tool_approval(
   let approval = approval.to_owned();
   later.answer(run, async move {
     scheduler.decide_tool_approval(run, approval, answer, by).await
+  })
+}
+
+fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
+  later.reply(async move {
+    match scheduler.check_connection(provider, api).await {
+      Ok((result, models)) => Reply::ConnectionChecked { result, models },
+      Err(rejection) => Reply::Rejected(rejection),
+    }
   })
 }
 
@@ -389,10 +410,15 @@ struct Later<'a> {
 
 impl Later<'_> {
   fn answer(&self, run: RunId, work: impl Future<Output = Result<(), Rejection>> + Send + 'static) -> Answer {
+    self.reply(async move { accepted(run, work.await) })
+  }
+
+  /// Answers with what `work` replies.
+  fn reply(&self, work: impl Future<Output = Reply> + Send + 'static) -> Answer {
     let (replies, id) = (self.replies.clone(), self.id);
     let request = self.in_flight.start();
     tokio::spawn(async move {
-      let reply = accepted(run, work.await);
+      let reply = work.await;
       drop(request);
       if replies.send(Event::Reply { id, reply }).is_err() {
         tracing::debug!(%id, "the desktop left before the reply");

@@ -15,7 +15,7 @@ use orchester_core::{
 use orchester_ipc::Event;
 use orchester_store::StoreError;
 
-use super::{FLUSH_BATCH, Transport, Watch, Worker, WorkerEvent};
+use super::{Driver, FLUSH_BATCH, Transport, Watch, Worker, WorkerEvent};
 
 impl Worker {
   /// Takes in one event: a turn's usage goes to the run, and a new turn after a used-up budget
@@ -25,7 +25,7 @@ impl Worker {
       self.publish_limits(watch, limits);
       return Ok(());
     }
-    if self.app_server().is_some() || !self.mcp_secrets.is_empty() {
+    if self.app_server().is_some() || !self.secrets.is_empty() {
       event.redact(&|text| self.redact(text));
     }
     let now = Timestamp::now();
@@ -67,9 +67,17 @@ impl Worker {
   /// Stores the account's limits the CLI reported in the plan limits history and hands them to the
   /// desktop, as of now.
   fn publish_limits(&self, watch: &mut Watch, limits: PlanLimits) {
-    let provider = match self.transport {
-      Transport::AppServer(_) => AgentProvider::CodexCli,
-      Transport::Claude(_) => AgentProvider::ClaudeCodeCli,
+    let provider = match &self.driver {
+      Driver::Process {
+        transport: Transport::AppServer(_),
+        ..
+      } => AgentProvider::CodexCli,
+      Driver::Process {
+        transport: Transport::Claude(_),
+        ..
+      } => AgentProvider::ClaudeCodeCli,
+      // A model API reports no account limits.
+      Driver::Native(_) => return,
     };
     let reading = LimitReading {
       provider,

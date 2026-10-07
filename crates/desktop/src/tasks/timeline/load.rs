@@ -1,5 +1,8 @@
 //! What a run's timeline is read from besides the task: its transcript and its tool requests,
-//! pending and decided. Blocks on SQLite, so the UI calls it off the UI thread.
+//! pending and decided, read apart. The requests are read again after each read of the transcript, so
+//! they are never older than it, and as soon as the project's waiting requests change, so a decision
+//! reaches the chat as it reaches the dialog and the status bar, while the transcript, much longer,
+//! follows the run's output. Blocks on SQLite, so the UI calls it off the UI thread.
 
 use std::{path::Path, sync::Arc};
 
@@ -22,11 +25,36 @@ pub struct Loaded {
 
 impl lurq::app::component::DevtoolsInspectable for Loaded {}
 
-/// Reads `run`'s transcript and tool requests.
-pub fn load_in(repo_root: &Path, run: RunId) -> Result<Loaded, StoreError> {
+/// A run's tool requests, as read.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Requests {
+  pub pending: Arc<Vec<PendingToolApproval>>,
+  pub decided: Arc<Vec<DecidedToolApproval>>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Requests {}
+
+impl Loaded {
+  /// The timeline's sources: `entries`, the transcript, with `requests`.
+  pub fn of(entries: Arc<Vec<Entry>>, requests: Requests) -> Self {
+    Self {
+      entries,
+      pending: requests.pending,
+      decided: requests.decided,
+    }
+  }
+}
+
+/// Reads `run`'s transcript.
+pub fn transcript_in(repo_root: &Path, run: RunId) -> Result<Arc<Vec<Entry>>, StoreError> {
   let db = ProjectDb::open(repo_root)?;
-  Ok(Loaded {
-    entries: Arc::new(entries(&db.activity(run, 0)?)),
+  Ok(Arc::new(entries(&db.activity(run, 0)?)))
+}
+
+/// Reads `run`'s tool requests.
+pub fn requests_in(repo_root: &Path, run: RunId) -> Result<Requests, StoreError> {
+  let db = ProjectDb::open(repo_root)?;
+  Ok(Requests {
     pending: Arc::new(db.pending_tool_approvals(run)?),
     decided: Arc::new(db.decided_tool_approvals(run)?),
   })

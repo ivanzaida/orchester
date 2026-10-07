@@ -49,7 +49,7 @@ impl CommandRunner for NothingRuns {
 }
 
 #[test]
-fn native_providers_run_over_a_wire_format_and_run_no_agent_yet() {
+fn native_providers_run_over_a_wire_format_and_only_openai_runs_no_agent_yet() {
   assert_eq!(
     AgentProvider::AnthropicApi.runtime(),
     AgentRuntime::Native(WireApi::AnthropicMessages)
@@ -70,7 +70,7 @@ fn native_providers_run_over_a_wire_format_and_run_no_agent_yet() {
     AgentProvider::AnthropicApi,
     AgentProvider::OpenAiApi,
   ] {
-    assert_eq!(provider.runs_agents(), !provider.is_native());
+    assert_eq!(provider.runs_agents(), provider != AgentProvider::OpenAiApi);
     assert_eq!(AgentProvider::CLI.contains(&provider), !provider.is_native());
   }
   assert_eq!(

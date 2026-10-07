@@ -30,6 +30,7 @@ use lurq::{
   },
   components::{Column, Modal, ModalTarget},
   core::{ElementRef, Signal},
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
@@ -38,12 +39,12 @@ use orchester_core::{
 };
 use orchester_ipc::{Command, Rejection};
 
-use self::ended::drop_when_ended;
 pub(in crate::screens::project::task) use self::{
   ended::Unanswered,
   subject_line::{chip, quiet_reason},
   wider::{always_blocked, similar_unavailable},
 };
+use self::{ended::drop_when_ended, scope::ScopeState};
 use super::{approval_arguments::ArgumentsCache, native_approval};
 use crate::{
   messages::Message,
@@ -173,9 +174,12 @@ struct ToolApprovalPanel {
   /// The prefix chosen in the *Always allow* step of a command, by its place among those offered.
   prefix: Signal<usize>,
   /// The scope of *Approve similar* is shown while its tile has the pointer or the focus.
-  scope_open: Signal<bool>,
+  scope: ScopeState,
   /// The step's primary answer, which has the focus when the step opens.
   primary: ElementRef,
+  /// Where the dialog is laid out, and the dialog, whose bottom stays put while the scope is open.
+  stage: ElementRef,
+  dialog: ElementRef,
 }
 
 impl Component for ToolApprovalPanel {
@@ -194,8 +198,10 @@ impl Component for ToolApprovalPanel {
       },
       arguments: ArgumentsCache::default(),
       prefix: ctx.signal(0),
-      scope_open: ctx.signal(false),
+      scope: ScopeState::new(ctx),
       primary,
+      stage: ElementRef::new(),
+      dialog: ElementRef::new(),
     }
   }
 
@@ -224,7 +230,7 @@ impl Component for ToolApprovalPanel {
       copy: &self.copy,
       arguments: &self.arguments,
       prefix: &self.prefix,
-      scope_open: &self.scope_open,
+      scope: &self.scope,
       primary: &self.primary,
     };
     let (sections, submit) = if props.place.always {
@@ -239,6 +245,7 @@ impl Component for ToolApprovalPanel {
     };
     let panel = Column::new()
       .id("tool-approval-dialog")
+      .ref_element(self.dialog.clone())
       .width(Dimension::Px(width))
       .max_height(Dimension::Pct(100.0))
       .background(ExtraColor::Surface.role())
@@ -246,7 +253,28 @@ impl Component for ToolApprovalPanel {
       .rounded(RadiusSize::Lg)
       .on_key_down(escape(&props))
       .with_children(sections);
-    form(submit, panel)
+    self.stage(form(submit, panel))
+  }
+}
+
+impl ToolApprovalPanel {
+  /// The dialog, centred. While the scope of *Approve similar* is open the dialog's bottom stays where
+  /// it was, so it grows upward and the answers stay under the pointer; as tall as the window, it
+  /// grows no more and its details scroll ([`ScopeState`]).
+  fn stage(&self, dialog: Element) -> Element {
+    let stage = Column::new()
+      .ref_element(self.stage.clone())
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .align_items(Alignment::Center)
+      .child(dialog);
+    if !self.scope.is_open() {
+      return stage.justify(Justify::Center).into();
+    }
+    // As laid out last: with the scope closed, or open with this same room below.
+    let (laid_out, shown) = (self.stage.bounds(), self.dialog.bounds());
+    let below = (laid_out.y + laid_out.height - shown.y - shown.height).max(0.0);
+    stage.justify(Justify::End).padding_bottom(Dimension::Px(below)).into()
   }
 }
 
@@ -279,7 +307,7 @@ struct View<'a> {
   copy: &'a CopyState,
   arguments: &'a ArgumentsCache,
   prefix: &'a Signal<usize>,
-  scope_open: &'a Signal<bool>,
+  scope: &'a ScopeState,
   primary: &'a ElementRef,
 }
 

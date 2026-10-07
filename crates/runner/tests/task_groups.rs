@@ -1,3 +1,5 @@
+#[path = "task_groups/agent_slots.rs"]
+mod agent_slots;
 #[path = "task_groups/blocked.rs"]
 mod blocked;
 #[path = "task_groups/canceled.rs"]

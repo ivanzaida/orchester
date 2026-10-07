@@ -8,10 +8,13 @@
 
 use std::{collections::BTreeSet, fs, path::Path, time::Instant};
 
-use orchester_core::native::{session::ToolOutcome, tools::Search};
+use orchester_core::{
+  connection::stream::CallDetail,
+  native::{session::ToolOutcome, tools::Search},
+};
 
 use super::{
-  FileError, FileTools, done,
+  FileError, FileTools, count, done,
   glob::Glob,
   limits::cut_line,
   listing::relative,
@@ -117,7 +120,13 @@ impl FileTools {
       text.push_str(NO_RIPGREP);
     }
     let activity = format!("{} matches in {} files", hits.matches, hits.files.len());
-    Ok(done(text, activity, Vec::new()))
+    let scope = [input.path(), input.glob()].into_iter().flatten().collect::<Vec<_>>();
+    let detail = CallDetail::Searched {
+      scope: (!scope.is_empty()).then(|| scope.join(" ")),
+      matches: count(hits.matches),
+      files: count(hits.files.len()),
+    };
+    Ok(done(text, activity, Vec::new(), detail))
   }
 
   fn with_ripgrep(&self, program: &Path, target: &Path, input: &Search, hits: &mut Hits) -> Result<(), FileError> {

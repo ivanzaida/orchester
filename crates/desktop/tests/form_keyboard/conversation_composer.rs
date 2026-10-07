@@ -124,12 +124,17 @@ fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
   assert!(shows(&mut desktop, "conversation-recipient", "Builder"));
   assert!(shows(&mut desktop, "conversation-recipient", "working"));
   assert_eq!(placeholder(&mut desktop), "Message Builder…");
-  // What sending does is the send button's tooltip; no line under the box says it.
+  // What sending does is the send button's tooltip; the line under the box says when Builder gets it,
+  // and stays between steps (ORC-71).
   assert!(tip_says(
     &mut desktop,
     "Send now · Enter. Builder gets it at its next tool call. Ctrl+Enter sends after this turn."
   ));
-  assert!(!has(&mut desktop, "conversation-explanation"));
+  assert!(holds(
+    &mut desktop,
+    "conversation-explanation",
+    "Builder gets your message at its next tool call."
+  ));
   // Nothing to send yet.
   desktop.click("conversation-send");
   assert!(deliveries(&desktop).is_empty());
@@ -150,17 +155,14 @@ fn composer_sends_now_to_the_agent_at_work_after_its_running_tool_call() {
     "{stored:?}"
   );
   // The finished step folds; opened, it shows the message delivered mid-turn and the agent's note
-  // on it, from the turn it was sent in.
+  // on it, from the turn it was sent in. The message's delivery and the agent's note come from two
+  // reads (the task's messages, the run's transcript), so each may show a moment after the other.
   open_finished_step(&mut desktop);
-  desktop.wait_until("delivered mid-turn", |desktop| {
+  desktop.wait_until("delivered mid-turn, and the agent's note", |desktop| {
     holds(desktop, "conversation", "Delivered mid-turn to Builder")
+      && shows(desktop, "conversation", "Noted: Also cover the cancelled dialog.")
   });
   assert!(shows(&mut desktop, "conversation", "at its next tool call"));
-  assert!(shows(
-    &mut desktop,
-    "conversation",
-    "Noted: Also cover the cancelled dialog."
-  ));
 }
 
 /// Waits until the timeline shows the run ended, the step it ended on open.

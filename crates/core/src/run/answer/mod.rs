@@ -217,6 +217,9 @@ pub struct ToolDecision {
   /// What the agent was told, for a denial.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub told: Option<String>,
+  /// How long the request waited for a person, in milliseconds; `None` when Orchester answered it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub waited_ms: Option<u64>,
   /// What auto mode did with the request before it was answered: its approval, or why it asked.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub review: Option<super::review::Review>,

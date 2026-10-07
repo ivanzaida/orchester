@@ -220,12 +220,23 @@ impl ConnectionsScreen {
     let key = connection.api().map(ApiEndpoint::key);
     let profile = Arc::new(move |profile| nav.link(Page::Agents(AgentSelection::Profile(profile))));
     let secrets = Arc::new(move || secrets_nav.link(Page::Secrets(key)));
-    // This version cannot test a native connection; the inspector says why.
+    // A native connection's model API is tested by the runner, which lists its models too.
     if connection.provider().is_native() {
       let (edit, models, editing) = (self.dialog.clone(), self.dialog.clone(), connection.clone());
       let models_of = connection.clone();
+      let check = (connection.provider().runs_agents() && !busy).then(|| {
+        let spec = operations::connection_check(open, connection.name().as_str());
+        actions::start(
+          work,
+          &self.working,
+          &open.repo_root,
+          connection.id(),
+          Work::TestNative,
+          spec,
+        )
+      });
       return InspectorActions {
-        check: None,
+        check,
         edit: Some(Arc::new(move || edit.set(DialogMode::EditNative(editing.clone())))),
         edit_models: Some(Arc::new(move || {
           models.set(DialogMode::NativeModels(models_of.clone()))

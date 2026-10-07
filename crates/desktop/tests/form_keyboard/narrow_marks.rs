@@ -40,6 +40,7 @@ fn decided_rows(repo: &std::path::Path) -> u64 {
       secrets: false,
       told: (decided_by == DecidedBy::AutomationDeny)
         .then(|| "Denied by automation through Orchester's MCP server. Continue without it.".to_owned()),
+      waited_ms: None,
       review: None,
     },
   };

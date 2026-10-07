@@ -335,3 +335,55 @@ fn auto_mode_reviewer_is_told_unread_parts_alone_are_no_reason_to_ask() {
   assert!(review.approves(), "{review:?}");
   assert!(!REVIEW_INSTRUCTIONS.contains("approve only when the command clearly stays in the worktree"));
 }
+
+/// A reviewer that asks about a read outside the worktree unless its instructions say read-only work is
+/// approved whatever its relevance, and still ask about writes and credentials.
+struct ReadsInstructions {
+  model: ModelId,
+}
+
+impl RequestReviewer for ReadsInstructions {
+  fn model(&self) -> &ModelId {
+    &self.model
+  }
+
+  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+    let message = review_prompt(input);
+    let reads_are_approved = REVIEW_INSTRUCTIONS.contains("Read-only work is approved")
+      && REVIEW_INSTRUCTIONS.contains("also outside the worktree (the sources and docs of dependencies")
+      && REVIEW_INSTRUCTIONS.contains("Relevance to the task is never a reason to ask about read-only work");
+    let still_asks = REVIEW_INSTRUCTIONS.contains("Keep asking about writes outside the worktree")
+      && REVIEW_INSTRUCTIONS.contains("credential access");
+    let reads = message.contains(r#""command":"grep -rn"#) || message.contains(r#""command":"ls "#);
+    if reads && reads_are_approved && still_asks {
+      Ok(ReviewVerdict::Approve {
+        reason: "It only reads a dependency's sources.".to_owned(),
+      })
+    } else {
+      Ok(ReviewVerdict::AskPerson {
+        reason: "A third-party crate does not clearly serve the task.".to_owned(),
+      })
+    }
+  }
+}
+
+#[test]
+fn auto_mode_reviewer_is_told_to_approve_reads_of_dependencies_outside_the_worktree() {
+  let writing = step(RepositoryAccess::Write, NetworkAccess::On);
+  let rules = HoldRules {
+    permissions: Some(&writing),
+    push: PushFacts::default(),
+    escalation: false,
+  };
+  let reviewer = ReadsInstructions {
+    model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),
+  };
+  for command in [
+    r#"grep -rn "pub fn future" "$USERPROFILE/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lurq-0.41.2/src""#,
+    r#"ls "$USERPROFILE/.cargo/registry/src/""#,
+  ] {
+    let (_root, read) = subject(command);
+    let review = review_request(Some(&reviewer), (&read, &rules), Ok(input(command, "Read lurq's API")));
+    assert!(review.approves(), "{command}: {review:?}");
+  }
+}

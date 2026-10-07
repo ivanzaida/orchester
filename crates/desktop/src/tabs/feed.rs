@@ -33,7 +33,12 @@ use crate::{
   messages::{self, Message},
   runner::{RunnerStatus, Runners},
   screens::project::TasksState,
-  tasks::{data::ProjectTasks, integration_jobs::IntegrationJobs, outside::OutsideChanges, usage::ProjectUsage},
+  tasks::{
+    data::ProjectTasks,
+    integration_jobs::{IntegrationJobs, ProjectJobs},
+    outside::OutsideChanges,
+    usage::ProjectUsage,
+  },
   workspace::OpenProject,
 };
 
@@ -60,9 +65,9 @@ pub struct ProjectFeed {
   pub integration: IntegrationJobs,
 }
 
-/// The feeds of the projects the tabs show, by project.
+/// The feeds of the projects the tabs show, by project, and the projects' merge and removal operations.
 #[derive(Clone, Default)]
-pub struct ProjectFeeds(Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>);
+pub struct ProjectFeeds(Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>, ProjectJobs);
 
 impl PartialEq for ProjectFeeds {
   fn eq(&self, other: &Self) -> bool {
@@ -73,6 +78,11 @@ impl PartialEq for ProjectFeeds {
 impl lurq::app::component::DevtoolsInspectable for ProjectFeeds {}
 
 impl ProjectFeeds {
+  /// Feeds whose merge and removal operations are `jobs`, which Orchester's MCP server shares.
+  pub fn new(jobs: ProjectJobs) -> Self {
+    Self(Arc::default(), jobs)
+  }
+
   /// How the shared projects among those the window read stand with their servers, for the status
   /// bar's server item; reading it follows their changes.
   pub fn sharing(&self) -> Vec<crate::sharing::project::state::ProjectSharing> {
@@ -95,7 +105,7 @@ impl ProjectFeeds {
         revision: Signal::new(0),
         resources: Signal::new(0),
         sharing: Signal::new(None),
-        integration: IntegrationJobs::default(),
+        integration: self.1.of(project),
       })
       .clone()
   }

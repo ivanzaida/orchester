@@ -4,8 +4,9 @@
 //! filter or search leaves out ([`readback`]), the working line as the chat's last row, following it
 //! live and *Jump to latest* while it does not ([`follow`]), the composer ([`composer`]); at the right
 //! the step rail, which filters the chat by step ([`rail`], collapsed to [`strip`]), or Details in its
-//! place ([`details`], [`side`]). The transcript and the run's tool requests are read again whenever
-//! the runner reports a change.
+//! place ([`details`], [`side`]). The transcript is read again as the runner reports changes
+//! ([`transcript_read`]); the run's tool requests after each read of it and as the project's waiting
+//! requests change ([`requests`]).
 
 mod approval_card;
 mod cards;
@@ -19,11 +20,13 @@ mod live_state;
 mod message;
 mod rail;
 mod readback;
+mod requests;
 mod row;
 mod send;
 mod side;
 mod strip;
 mod toolbar;
+mod transcript_read;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -46,6 +49,7 @@ use self::{
   divider::step_label,
   follow::{LeftAt, Reveal},
   rail::RailToggle,
+  transcript_read::{Read, TranscriptRead},
 };
 use super::{
   activity::{OpenRows, RevealRow, Toggles},
@@ -53,18 +57,13 @@ use super::{
   tab_state,
 };
 use crate::{
-  background, messages,
   messages::Message,
   runner::Runners,
   screens::project::ProjectNav,
   tasks::{
     conversation::Conversation,
     detail::{RunView, TaskDetail},
-    timeline::{
-      self, Sources,
-      load::{Loaded, load_in},
-      view::Show,
-    },
+    timeline::{self, Sources, view::Show},
   },
   theme::gutter_scrollbar,
   ui::{button::ActionButton, icon::Icon},
@@ -177,12 +176,6 @@ impl Timeline {
   }
 }
 
-/// The run's transcript and requests, as read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read(Loaded);
-
-impl lurq::app::component::DevtoolsInspectable for Read {}
-
 pub(super) struct ConversationTab {
   show: Signal<ShowChoice>,
   step: Signal<StepFilter>,
@@ -195,6 +188,8 @@ pub(super) struct ConversationTab {
   left_at: Arc<Mutex<LeftAt>>,
   /// Whether the list has shown rows yet: the first time, it starts at the end.
   started: Arc<Mutex<bool>>,
+  /// Whether the list has laid out every one of its rows since it showed rows.
+  measured: Signal<bool>,
   /// The card that waits for the person, which the chat shows until the person scrolls.
   reveal: Arc<Mutex<Reveal>>,
   /// Bumped when a row asks the chat to reveal another, so the chat renders and reveals it.
@@ -202,6 +197,7 @@ pub(super) struct ConversationTab {
   toggles: Toggles,
   scroll: lurq::layout::layout_kind::ScrollState,
   retry: Signal<u64>,
+  transcript: TranscriptRead,
   draft: Signal<String>,
   details: DetailsPane,
   rail: RailToggle,
@@ -227,11 +223,13 @@ impl Component for ConversationTab {
       following: ctx.signal(true),
       left_at: Arc::new(Mutex::new(LeftAt::default())),
       started: Arc::new(Mutex::new(false)),
+      measured: ctx.signal(false),
       reveal: Arc::new(Mutex::new(Reveal::default())),
       revealed: ctx.signal(0),
       toggles: Toggles(ctx.signal(OpenRows::default())),
       scroll: lurq::layout::layout_kind::ScrollState::new(),
       retry: ctx.signal(0),
+      transcript: TranscriptRead::default(),
       draft: ctx.signal(String::new()),
       details,
       rail: RailToggle {
@@ -242,7 +240,6 @@ impl Component for ConversationTab {
   }
 
   fn after_layout(&self) {
-    self.keep_at_end();
     self.reveal_asked();
   }
 
@@ -250,32 +247,20 @@ impl Component for ConversationTab {
     let props = ctx.props::<ConversationProps>().clone();
     save_action(ctx);
     let details_open = self.details.is_open(remembered(ctx));
-    let deps = (
-      props.repo_root.clone(),
-      props.detail.run.as_ref().map(RunView::id),
-      props.revision,
-      self.retry.get(),
-    );
-    let load = ctx.future(deps, |(repo_root, run, ..)| async move {
-      let Some(run) = run else {
-        return Ok(Read(Loaded::default()));
-      };
-      background::run(move || load_in(&repo_root, run))
-        .await?
-        .map(Read)
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the run's transcript");
-          messages::store_error(&error)
-        })
-    });
+    let run_id = props.detail.run.as_ref().map(RunView::id);
+    let retry = self.retry.get();
+    let state = self
+      .transcript
+      .read(ctx, (props.repo_root.clone(), run_id), (props.revision, retry));
+    let transcript = state.data.map(|Read(entries)| entries);
+    let sources = requests::with_requests(ctx, (props.repo_root.clone(), run_id), (transcript, retry));
     let Some(run) = props.detail.run.as_ref() else {
       let waiting = without_run(ctx, &props.conversation);
       return self.layout(ctx, &props, None, waiting);
     };
     ctx.provide(self.timeline(&props, run));
-    let state = load.state().get();
-    let loaded = match (state.data, state.error) {
-      (Some(Read(loaded)), _) => loaded,
+    let loaded = match (sources.data.flatten(), state.error.or(sources.error)) {
+      (Some(loaded), _) => loaded,
       (None, Some(error)) => {
         let failed = self.failed(ctx, &error);
         return self.layout(ctx, &props, None, failed);

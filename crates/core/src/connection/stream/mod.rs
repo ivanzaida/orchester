@@ -4,11 +4,15 @@
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
 mod claude;
+mod native;
 mod redaction;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::claude::ClaudeStream;
+pub use self::{
+  claude::ClaudeStream,
+  native::{CallDetail, Declined, DeclinedBy, NativeCall},
+};
 use crate::{code_index::RipgrepFallback, connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// Which output of the CLI a line came from.
@@ -97,6 +101,11 @@ pub enum AgentEvent {
   PermissionDenied {
     item: String,
     command: String,
+  },
+  /// What native tool call `item` did, told right before the event that ends it.
+  NativeCall {
+    item: String,
+    call: NativeCall,
   },
   /// The CLI is not signed in, so it could do nothing; `message` is what it said.
   NotSignedIn {
@@ -254,6 +263,19 @@ pub enum RunnerProblem {
   CodexSettingsIgnored { folder: String },
   /// The CLI wrote `lines` more lines to standard error than the activity keeps; they were left out.
   StderrLeftOut { lines: u64 },
+  /// A native conversation neared its model's context window and was replaced by a summary
+  /// (`docs/architecture/native-agent.md` §6.3): about `before` tokens became about `after`.
+  ContextCompacted { before: u64, after: u64 },
+  /// A native agent's model request failed with `error` on attempt `attempt`; it is sent again after
+  /// `wait_seconds`.
+  ModelRetrying {
+    attempt: u32,
+    wait_seconds: u64,
+    error: String,
+  },
+  /// The model API refused a native conversation's earlier reasoning as bound to another history; the
+  /// conversation goes on without it.
+  ThinkingStripped,
 }
 
 /// Why a step's handoff was not kept as task memory. It names a secret, never its value.
@@ -285,6 +307,7 @@ impl AgentEvent {
       Self::Error { .. } => "error",
       Self::TurnFailed { .. } => "turn_failed",
       Self::PermissionDenied { .. } => "permission_denied",
+      Self::NativeCall { .. } => "native_call",
       Self::NotSignedIn { .. } => "not_signed_in",
       Self::Raw { .. } => "raw",
       Self::RunnerProblem { .. } => "runner_problem",

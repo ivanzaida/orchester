@@ -556,7 +556,8 @@ P1 is split into five tasks. P1a (ORC-56) and P1b (ORC-57) are done, P1c (ORC-58
 
 - **P1c · ORC-58 (done 2026-10-05, branch `claude/orc58`, see *Done*):** the
   `orchester-agent` crate: Anthropic client (§3.1), file and search tools, fake model server (§8).
-- **P1d · ORC-59:** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
+- **P1d · ORC-59 (implemented 2026-10-06 as ORC-64 run #22, branch `orchester/orc-64-run-1`; waits for an
+  independent review and design verification, see *Done*):** runner integration: `Driver::Native`, approvals, persistence, resume (§2.2, §6). Native steps
   start here (`AgentProvider::runs_agents`). Also left here by P1e, because only the runner's model client produces
   what they show: *Test connection* and *Fetch models* through the runner (`Command::CheckConnection`, §7; it records
   `CheckResult::Api`/`KeyRejected`/`BillingProblem`/`EndpointUnreachable` and fetched models with
@@ -1027,6 +1028,102 @@ first runner; a missing program, a held project or a version mismatch is not ret
 meanwhile; the last attempt's error is shown. Tested against `orchester-fake-runner` (feature `test-runner`):
 `cargo test -p orchester-ipc --features test-runner --test runner_start runner_start_` (late, exit once, exit twice,
 held project, missing program; `runner_start_slow` takes 11 s).
+
+ORC-59 · Native agent P1d: runner integration · branch `orchester/orc-64-run-1` (implemented 2026-10-06 as ORC-64;
+independent review and design verification pending)
+
+- **Runs.** `AgentProvider::runs_agents` is true for the Anthropic API (OpenAI API waits for its client, P2). The
+  worker drives a `Driver` (a CLI's process, or `Driver::Native` with a `NativeHandle`); `step/start/native.rs` builds
+  the session (key read from the keychain for the invocation, `FileScope`, `CommandPolicy`, the shell, ripgrep, the
+  prompt), `step/native/` runs core's loop in a task of its own: items stored before what follows them, model
+  requests, tool calls (reads together, commands under `Supervised` with their time limit, 32 KiB head and tail to the
+  model, 1 MiB to Activity), approvals, and the run's stops (`Now` drops the request or command in flight). The end
+  becomes the invocation's outcome; a result or a question is the agent's last message, read by `end.rs` as for a CLI.
+- **Persistence and resume.** Store migration `native_conversations` (`native_conversations`, append-only gapless
+  `native_items` with segments, `invocation_engine`); core `native::store::NativeConversationStore`. The invocation's
+  session is the conversation id; a resumed invocation continues the stored conversation (calls left unanswered get
+  `NOT_RUN`, then the resume prompt, or the person's answer as the `ask_question` result).
+- **Prompt (§6.1).** `PromptInput::assemble_native`: a preamble (tools, computer, shell), the repository's `AGENTS.md`
+  while `AgentFilesMechanism::OrchesterLoads`, role, rules, pipeline, step in the system prompt; code index, skills
+  (the repository's `.agents/skills` and `.codex/skills` added while it loads them), memory and task in the first
+  user item; `ResultDelivery::Tool` names `finish_step`. With `OrchesterLeftOut` neither is added.
+- **Approvals.** A command that asks is recorded with `PendingToolApproval::native` (shell, time limit), its action
+  and target redacted with the key as a secret; rules, Always allow and auto-approval answer it as for the CLIs;
+  Deny gives the agent `DENIED` and the step goes on. `ToolDecision::waited_ms` records the wait of a person's answer.
+- **Models and effort.** `NativeModels::effort_for` (the profile's effort when the model takes it, else the
+  connection's default effort), `context_window` (`DEFAULT_CONTEXT_WINDOW` when unknown), `NativeModel::listed`
+  (unknown efforts and limits that do not fit dropped), `with_fetched` (fetched models replace those with their id,
+  none is removed).
+- **Test connection / Fetch models.** `Command::CheckConnection` (protocol 17) → `Reply::ConnectionChecked`; the
+  runner reads the key and runs `check_anthropic`. The inspector records the result and merges the models
+  (`record_check_in`); the dialog shows the result and merges the models into the form; a new key typed in the dialog
+  is tested after saving. Both buttons are enabled for Anthropic API connections; for OpenAI API ones they stay
+  unavailable in the inspector and the dialog, whose test row and models hint say why (fixed after the first review).
+- **What the run used.** `InvocationEngine` (endpoint, vendor, effort) recorded before a native invocation starts;
+  the task page's step view takes it for the 04.H10 header and panel (*Endpoint* instead of *Endpoint now*, the
+  *Effort* row) and the 04.H9 agent row.
+- **04.H10 rows.** `AgentEvent::NativeCall` (tool, `CallDetail`: lines read and size, entries, search scope with
+  match and file counts, +/− lines, the shell; `Declined` by a person or by Orchester with the result the agent got),
+  told before the call's end. Rows: file tools with their own glyph, the target as title, the tool first in the meta
+  (*read_file · lines 1–140 · 4.7 KiB*, *search · src/\*\* · 9 matches in 4 files*, *edit_file · M · +38 −6 · open in
+  Changes*, the separate file-change row folded in; a search titled by its quoted pattern, *“registerShortcut”*);
+  `run_command` as a CLI command row plus *shell · pwsh*; an approval as one line of its own (hand glyph, *Approved by
+  you · pnpm add @kontur/keymap*, meta *approve once · waited 48 s*); a denial *Denied by a person · the agent
+  continues* (circle-x, meta *run_command · shell · pwsh*, the command in mono as body, the output block opening with
+  *Given to the agent as the command’s result:*); Orchester's refusal (*refused by Orchester · the agent continues*).
+  The *Tools* view leaves a native step's per-request *Usage reported* rows out (its header and panel carry the
+  totals); the panel lists *Effort* after *Started*. The dialog's test row after a passed test reads *Key accepted* and
+  *api.anthropic.com answered · 4 models listed · 14:02* (a test recorded before the dialog opened: *… answered ·
+  14:02*). These follow the first design verification (four major findings, fixed). `RunnerProblem::ContextCompacted` (emitted by the loop with the
+  tokens before and after), `ModelRetrying` and `ThinkingStripped` have Activity texts; a profile's MCP servers are left
+  out with `McpServerProblem::NotSupportedByConnection`.
+- **Tests run (all pass):** `cargo test -p orchester-runner --features test-agent --test native native_` (5: a step
+  with read, edit and `finish_step`, the key in no activity, the engine and conversation stored; approve once and a
+  denial that continues; pause at an approval and resume of the same conversation, append-only checked by the fake
+  server; *Test connection* listing models, a rejected key, a missing secret); `cargo test -p orchester-core --test
+  native native_` (76), `--test run native_prompt`, `--test run preflight`, `--test run prompt`, `--test
+  native_setup native_setup`, `--test native_connection native`, `--test activity_redaction redact`; `cargo test -p
+  orchester-store --test native_conversations native_` (2), `--test activity activity`, `--test tool_approvals tool`;
+  `cargo test -p orchester-agent --test file_tools files_` (23); `cargo test -p orchester-ipc --test framing
+  frames_round_trip`; `cargo test -p orchester-desktop --test form_keyboard native_` (33, with the new
+  `native_rows`, `native_rows_leave_usage_out_of_the_tools_list`, `native_dialog_says_what_a_passed_test_found` and
+  `native_dialog_keeps_testing_an_openai_connection_unavailable`), `connection`, `conversation`, `approval`, `activity`, `agent`; `--test transcript transcript`,
+  `--test timeline timeline`, `--test i18n locales`/`every_key`. CLI regressions: runner `claude_approvals`, `claude`,
+  `execution`, `codex_resume`, `send_now`, `command_approvals`, `approval_choices`. `tools/check.ps1`: OK.
+- **Not run:** a live API run (P1's acceptance needs one with a key a person supplies); runner tests for a budget
+  `AfterTurn`, the time limit, cancel and an `ask_question` round trip (the loop's own core tests cover them); `cargo
+  clippy --target aarch64-apple-darwin` beyond `orchester-core` (ring and SQLite need a macOS C compiler this machine
+  lacks).
+- **Differs from the design:** a native command's approval names server `command`, as the CLIs' do, not
+  `Orchester`; a retried model request is a `ModelRetrying` problem row and a dropped response's tokens a *Usage
+  reported* row (`TurnCompleted`), which budgets count; a command's time limit is not shortened to the remaining
+  active time; the conversation stores its system prompt as text and its repository access (which decides its tools)
+  instead of blob hashes; conversation items are stored as the model was sent them, not passed through the key's
+  redaction (§5.3 asks for it; redacting them would change the bytes a resumed request sends again, and the key
+  reaches no command, prompt or tool output Orchester makes, only a file in the worktree could hold it), while
+  Activity and approvals are redacted with the key; read stamps live per invocation, so a resumed agent reads a file again before it edits it;
+  sizes read KiB as everywhere in the app, not *KB* as 04.H10 draws them; *Test again* and *Fetch models* both test
+  and merge the listed models; a search's scope is the path or glob the agent passed (*src* when it named a folder,
+  not the frame's *src/\*\**); the *All* view's open tool groups still list a native step's usage rows (the
+  verification flagged only *Tools*). Not changed after the design verification (minor, follow-ups): the agent
+  message line in *Tools* (one line *Builder: …* · *message*, as for the CLIs), and 04.H4's *Last checked* (relative
+  time) and footer copy.
+- **How to reach each state (design verifier):**
+  - 04.H10 rows, header and panel with *Endpoint* and *Effort*: the headless harness seeds them in
+    `crates/desktop/tests/form_keyboard/native_rows.rs` (`seeded`: a DeepSeek run, an `InvocationEngine` on
+    `gateway.kontur.lan` with effort high, and the transcript). In the app: write the same records into a scratch
+    project's `.orchester/orchester.db` (as `native_run` plus `save_invocation_engine` and `append_activity` do), open
+    KON-1 › Conversation, open the tool group, then *Details*.
+  - A live native run in the app: an *Anthropic API (native)* connection whose Advanced base URL is
+    `http://127.0.0.1:<port>` of a local Messages API (the fake server of `crates/agent/tests/anthropic_wire/server.rs`
+    scripted as in `crates/runner/tests/native/`), a key secret with any value, *Test again* in its inspector (lists
+    the server's models), a profile on it, then *Create and run*. Its approvals show in 04.H9 when the profile asks
+    before commands.
+  - 04.H1/H4 test row and *Fetch models*: open Connections, select or edit an Anthropic API connection; without a
+    reachable runner the row says the runner is not connected. *Key accepted* with *host answered · N models listed ·
+    time*: press *Test again* against the fake Messages API (or edit a connection whose last check passed:
+    *host answered · time*, seeded in `native_dialog::native_dialog_says_what_a_passed_test_found`). The unavailable state: edit an OpenAI API connection
+    (seeded as in `native_connections::seed_native`; the dialog cannot add one).
 
 ORC-58 · Native agent P1c: the `orchester-agent` crate · branch `claude/orc58` (done 2026-10-05: independent code and security
 review, second round PASS)

@@ -101,11 +101,16 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
   interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
-  see below), `list_approvals`,
+  see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
+  refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
+  `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
   `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
-  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
-  (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
+  agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
+  (*Use code index* in Project settings; `list_projects` shows each project's setting) and
+  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit and
+  *Agents working at once*, which the project's runner applies at once; invalid limits are refused with
+  `invalid_limits` and the tab's own words; `list_projects` shows each project's limits). A modal
   open in the window does not stand in their way. A refusal comes back as a tool error with a stable
   `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
   `run_not_running`…) and the app's own explanation. Its discovery file is

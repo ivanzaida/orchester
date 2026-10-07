@@ -132,19 +132,24 @@ pub const fn status_label(status: ConnectionStatus) -> (Icon, &'static str) {
 }
 
 /// What the status means and what to do about it. Signing in names the CLI's own command,
-/// which Orchester never runs itself. A native connection that was never tested says that testing it
-/// is not available in this version.
+/// which Orchester never runs itself. A native connection that was never tested says how its test works;
+/// one whose provider runs no agent yet (OpenAI API) that testing it is not available in this version.
 pub const fn status_detail_key(status: ConnectionStatus, provider: AgentProvider) -> &'static str {
   const CLI: (&str, &str) = ("connections.detail.notChecked", "connections.detail.connected");
   const NATIVE: (&str, &str) = (
     "connections.detail.nativeNotChecked",
     "connections.detail.nativeConnected",
   );
+  const NATIVE_LATER: (&str, &str) = (
+    "connections.detail.nativeNotCheckedLater",
+    "connections.detail.nativeConnectedLater",
+  );
+  // A native connection signs in with its key, so no sign-in status describes it.
   let (sign_in, (not_checked, connected)) = match provider {
     AgentProvider::CodexCli => ("connections.detail.signInCodex", CLI),
     AgentProvider::ClaudeCodeCli => ("connections.detail.signInClaude", CLI),
-    // A native connection signs in with its key, so no sign-in status describes it.
-    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => ("connections.detail.notChecked", NATIVE),
+    AgentProvider::AnthropicApi => ("connections.detail.notChecked", NATIVE),
+    AgentProvider::OpenAiApi => ("connections.detail.notChecked", NATIVE_LATER),
   };
   match status {
     ConnectionStatus::NotChecked => not_checked,
