@@ -235,6 +235,42 @@ async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
   assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
 }
 
+/// Codex refusing the thread stops the step with Codex's reason and code on one line, the secrets of the
+/// invocation redacted; the step restarts once, then waits for a person.
+#[tokio::test(flavor = "multi_thread")]
+async fn execution_says_why_codex_refused_the_thread() {
+  let project = project(&Setup {
+    model: Some("fake-refused-model"),
+    ..Setup::new("Append one line.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, |run| {
+    matches!(run.status(), RunStatus::WaitingForPerson(_))
+  })
+  .await;
+  let invocations = ProjectDb::open(root)
+    .expect("open")
+    .invocations(id)
+    .expect("invocations");
+  assert_eq!(invocations.len(), 2, "one fresh restart");
+  let expected = "Codex App Server rejected thread/start or resume (code -32600): model fake-refused-model is \
+    refused for the token <redacted>";
+  for invocation in invocations {
+    assert_eq!(
+      invocation.outcome,
+      Some(InvocationOutcome::TurnFailed {
+        message: expected.to_owned()
+      })
+    );
+  }
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
 async fn run_to_the_end(root: &std::path::Path, task: TaskId) -> orchester_core::run::Run {
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler

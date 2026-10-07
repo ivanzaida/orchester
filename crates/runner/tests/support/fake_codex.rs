@@ -14,6 +14,9 @@
 //! The thread's configuration may approve MCP tools (`mcp_servers.<server>.tools.<tool>.approval_mode =
 //! "approve"`); such a tool runs without an approval request, as in Codex 0.159.2.
 //!
+//! A model with `-refused-` in its name is refused with a two-line reason that echoes the token of
+//! Orchester's server (`ORCHESTER_APPROVAL_TOKEN`), so tests can check how the runner reports a refusal.
+//!
 //! A new session is `fake-thread-1`; `thread/resume` continues the thread it names in the worktree, unless
 //! its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
@@ -179,6 +182,12 @@ impl Session {
     eprintln!("thread: {params}");
     if let Some(gone) = params["threadId"].as_str().filter(|id| id.contains("-gone-")) {
       emit(&json!({"id": 3, "error": {"code": -32600, "message": format!("no rollout found for thread id {gone}")}}));
+      return;
+    }
+    if let Some(model) = params["model"].as_str().filter(|model| model.contains("-refused-")) {
+      let token = std::env::var("ORCHESTER_APPROVAL_TOKEN").unwrap_or_default();
+      let message = format!("model {model} is refused\nfor the token {token}\n");
+      emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
       return;
     }
     self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
