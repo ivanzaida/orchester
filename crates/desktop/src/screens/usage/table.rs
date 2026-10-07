@@ -17,41 +17,20 @@ const ROW_HEIGHT: f32 = 40.0;
 const DATA_ROW_HEIGHT: f32 = 30.0;
 const HEADING_HEIGHT: f32 = 28.0;
 
-/// How a column takes its width: a share of what is left, a fixed width, or as wide as its heading
-/// and its widest cell, so neither is cut.
+/// How a column takes its width: a share of what the fixed columns leave, whatever its cells hold,
+/// so a column starts at the same x in every row; or a fixed width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Width {
   Flex(f32),
   Px(f32),
-  Fit,
 }
 
-/// Builds a [`Width::Fit`] column's widest cell again, for every row to take its width from: rows
-/// are laid out one by one, so each holds the column's heading and widest cell, invisible and
-/// without height.
-#[derive(Clone)]
-pub struct Sizer(Arc<dyn Fn() -> Element + Send + Sync>);
-
-impl Sizer {
-  pub fn new(widest: impl Fn() -> Element + Send + Sync + 'static) -> Self {
-    Self(Arc::new(widest))
-  }
-}
-
-impl std::fmt::Debug for Sizer {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    formatter.write_str("Sizer")
-  }
-}
-
-/// A column: its heading, width, whether it holds figures (right-aligned, mono), and for a
-/// [`Width::Fit`] column its widest cell.
+/// A column: its heading, width, and whether it holds figures (right-aligned, mono).
 #[derive(Clone, Debug)]
 pub struct TableColumn {
   pub heading: Arc<str>,
   pub width: Width,
   pub figures: bool,
-  pub sizer: Option<Sizer>,
 }
 
 pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
@@ -59,7 +38,6 @@ pub fn column(heading: Arc<str>, width: Width, figures: bool) -> TableColumn {
     heading,
     width,
     figures,
-    sizer: None,
   }
 }
 
@@ -71,34 +49,6 @@ pub enum Cell {
   /// A total: the label and figures stand out from the rows above.
   Strong(Arc<str>),
   Element(Element),
-}
-
-/// Gives each [`Width::Fit`] column that has no sizer yet the longest text of its cells in `rows`,
-/// in the style the column draws it with.
-pub fn size_to(columns: &mut [TableColumn], rows: &[Vec<Cell>]) {
-  for (index, column) in columns.iter_mut().enumerate() {
-    if column.width != Width::Fit || column.sizer.is_some() {
-      continue;
-    }
-    let longest = rows
-      .iter()
-      .filter_map(|cells| match cells.get(index)? {
-        Cell::Text(text) | Cell::Muted(text) | Cell::Strong(text) => Some(text.clone()),
-        Cell::Element(_) => None,
-      })
-      .max_by_key(|text| text.chars().count());
-    let figures = column.figures;
-    column.sizer = longest.map(|text| {
-      Sizer::new(move || {
-        let variant = if figures {
-          ExtraTypography::MonoValue.role()
-        } else {
-          TypographyStyle::Body
-        };
-        Text::new(&text).variant(variant).nowrap().into()
-      })
-    });
-  }
 }
 
 /// The table: headings over `rows`, each row optionally a press target.
@@ -116,7 +66,9 @@ pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, g
     .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
     .with_children(columns.iter().enumerate().map(|(index, column)| {
       sized(
-        Row::new().child(fit(heading(column).id(format!("{id}-heading-{index}")))),
+        Row::new()
+          .id(format!("{id}-heading-cell-{index}"))
+          .child(fit(heading(column).id(format!("{id}-heading-{index}")))),
         column,
       )
     }));
@@ -128,29 +80,36 @@ pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, g
     .into()
 }
 
-/// One row of `cells` under `columns`, `gap` apart, as *Most expensive* lists them.
-pub fn row(columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
-  sized_row(columns, cells, (ROW_HEIGHT, gap))
+/// Row `id` of `cells` under `columns`, `gap` apart, as *Most expensive* lists them; its cells
+/// are `{id}-cell-{column}`.
+pub fn row(id: &str, columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
+  sized_row(Some(id), columns, cells, (ROW_HEIGHT, gap))
 }
 
 /// One row of a chart's data: denser than a list of tasks.
 pub fn data_row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
-  sized_row(columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
+  sized_row(None, columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
 }
 
-fn sized_row(columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
-  Row::new()
+fn sized_row(id: Option<&str>, columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
+  let row = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(height))
     .spacing(gap)
     .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
-    .with_children(
-      columns
-        .iter()
-        .zip(cells)
-        .map(|(column, cell)| sized(Row::new().child(content(column, cell)), column)),
-    )
+    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()));
+  let row = match id {
+    Some(id) => row.id(id.to_owned()),
+    None => row,
+  };
+  row.with_children(columns.iter().zip(cells).enumerate().map(|(index, (column, cell))| {
+    let wrapper = Row::new().child(content(column, cell));
+    let wrapper = match id {
+      Some(id) => wrapper.id(format!("{id}-cell-{index}")),
+      None => wrapper,
+    };
+    sized(wrapper, column)
+  }))
 }
 
 fn content(column: &TableColumn, cell: Cell) -> Element {
@@ -190,28 +149,9 @@ fn sized(cell: Row, column: &TableColumn) -> Element {
     .align_items(Alignment::Center)
     .justify(if column.figures { Justify::End } else { Justify::Start });
   match column.width {
-    Width::Flex(share) => cell.flex(share).into(),
-    Width::Px(width) => cell.width(Dimension::Px(width)).flex_shrink(0.0).into(),
-    Width::Fit => fitted(cell, column),
+    // From nothing, not from its content, so long and short titles leave later columns in place.
+    Width::Flex(share) => cell.flex_full(share, 1.0, Some(0.0)),
+    Width::Px(width) => cell.width(Dimension::Px(width)).flex_shrink(0.0),
   }
-}
-
-/// `cell` over the column's heading and widest cell, which give it their width and are not seen.
-fn fitted(cell: Row, column: &TableColumn) -> Element {
-  let room = Column::new()
-    .height(Dimension::Px(0.0))
-    .clip()
-    .opacity(0.0)
-    .child(heading(column).nowrap())
-    .with_children(column.sizer.as_ref().map(|sizer| (sizer.0)()));
-  Column::new()
-    .flex_shrink(0.0)
-    .align_items(if column.figures {
-      Alignment::End
-    } else {
-      Alignment::Start
-    })
-    .child(cell)
-    .child(room)
-    .into()
+  .into()
 }

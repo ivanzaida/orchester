@@ -17,7 +17,7 @@ macro_rules! icons {
     }
 
     impl Icon {
-      const fn glyph(self) -> char {
+      pub(crate) const fn glyph(self) -> char {
         match self {
           $(Self::$name => $glyph,)*
         }
@@ -232,7 +232,7 @@ pub enum IconSize {
 }
 
 impl IconSize {
-  fn role(self) -> ExtraTypography {
+  pub(crate) fn role(self) -> ExtraTypography {
     match self {
       Self::Tag => ExtraTypography::IconTag,
       Self::Small => ExtraTypography::IconSmall,

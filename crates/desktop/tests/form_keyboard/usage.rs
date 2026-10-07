@@ -127,27 +127,35 @@ fn usage_tab_of_all_projects_reads_every_project() {
 }
 
 /// A task title too long for the Task column of a narrow window.
-const LONG_TITLE: &str = "Migrate the settings to the project database";
+pub(crate) const LONG_TITLE: &str = "Migrate the settings to the project database";
 
 /// Runs a task named [`LONG_TITLE`] to its end and opens Usage.
 pub(crate) fn usage_after_a_long_titled_run() -> Desktop {
+  usage_after_runs(&[LONG_TITLE])
+}
+
+/// Runs a task named after each of `titles` to its end, one after the other, and opens Usage.
+pub(crate) fn usage_after_runs(titles: &[&str]) -> Desktop {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
-  fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
-  set_text(&mut desktop, "task-title", LONG_TITLE);
-  desktop.wait_until("the task page", |desktop| {
-    // Pressing before the runner is online fails visibly; pressing again retries the same run.
-    if !has(desktop, "task-page") && has(desktop, "create-and-run") {
-      desktop.click("create-and-run");
-    }
-    has(desktop, "task-page")
-  });
-  desktop.wait_until("the run to finish", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| run.status().is_terminal())
-  });
+  for title in titles {
+    fill_new_task(&mut desktop, "Append one line to README.md.", "1400000");
+    set_text(&mut desktop, "task-title", title);
+    desktop.wait_until("the task page", |desktop| {
+      // Pressing before the runner is online fails visibly; pressing again retries the same run.
+      if !has(desktop, "task-page") && has(desktop, "create-and-run") {
+        desktop.click("create-and-run");
+      }
+      has(desktop, "task-page")
+    });
+    desktop.wait_until("the run to finish", |desktop| {
+      latest_run(desktop.repo()).is_some_and(|run| run.status().is_terminal())
+    });
+  }
   desktop.press("nav-usage");
-  desktop.wait_until("the run in the summary", |desktop| {
-    shows_text(desktop, "usage-summary-runs", "1 finished")
+  let finished = format!("{} finished", titles.len());
+  desktop.wait_until("the runs in the summary", |desktop| {
+    shows_text(desktop, "usage-summary-runs", &finished)
   });
   desktop
 }

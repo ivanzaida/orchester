@@ -2,7 +2,10 @@
 //! only *Unreadable* is in colour ([`danger_status_label`]).
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, RadiusSize, SpacingSize},
+  },
   components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -28,6 +31,13 @@ pub fn danger_status_label(glyph: Icon, label: &str) -> Element {
 /// The label as list rows use it, with smaller text (`v7McTX` in `d9bo3`).
 pub fn compact_status_label(glyph: Icon, label: &str) -> Element {
   labelled(glyph, label, ExtraTypography::CompactStatusLabel, None)
+}
+
+/// The room a compact label takes beside its icon and word: its padding at each end and the gap
+/// between them, for a column that must fit the label whole.
+pub fn compact_room(ctx: &Ctx) -> f32 {
+  let theme = ctx.theme();
+  2.0 * theme.spacing_value(SpacingSize::Sm).to_px() + theme.spacing_value(ExtraSpacing::Tight.role()).to_px()
 }
 
 /// The label without its word, where a narrow row needs the room for a name beside it (a server

@@ -56,6 +56,17 @@ pub const BREAKDOWN_BAR_HEIGHT: f32 = 8.0;
 /// in the canvas.
 pub const HEADROOM: f32 = 0.9;
 
+/// `style` as a canvas draws and measures it: family, size, weight, slant, letter spacing and
+/// OpenType features.
+pub fn canvas_font(style: &TextStyle) -> CanvasFont {
+  let mut font = CanvasFont::new(Arc::clone(&style.font_family), style.font_size);
+  font.weight = style.weight;
+  font.style = style.style;
+  font.letter_spacing = style.letter_spacing;
+  font.font_features = style.font_features.clone();
+  font
+}
+
 /// The chart colors and the axis font, resolved from the theme for drawing.
 #[derive(Clone)]
 pub struct ChartStyle {
@@ -81,11 +92,6 @@ impl ChartStyle {
   pub fn of(ctx: &Ctx) -> Self {
     let theme = ctx.theme();
     let color = |role: PaletteColor| theme.palette_color(role);
-    let canvas_font = |style: &TextStyle| {
-      let mut font = CanvasFont::new(Arc::clone(&style.font_family), style.font_size);
-      font.weight = style.weight;
-      font
-    };
     let font = canvas_font(&theme.typography_style(TypographyStyle::Mono));
     let day_font = canvas_font(&theme.typography_style(ExtraTypography::AxisLabel.role()));
     Self {
