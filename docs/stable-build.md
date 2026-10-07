@@ -100,7 +100,10 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   rules as the screens: `list_projects`, `list_tasks`, `get_task`, `create_task` (saves a draft),
   `update_task`, `run_task` (queues and starts a draft, starts a queued task, or runs a task again
   after its latest run ended, as the app allows), `get_run`, `pause_run`, `resume_run` (continues an
-  interrupted run), `cancel_run`, `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
+  interrupted run), `cancel_run`, `send_message` (a message to the agents of a task's latest run, as the
+  Conversation composer sends it in the run's state: it answers, follows up, continues a failed or stuck
+  run, resumes a paused one or runs an ended task again; it waits for a person to raise a limit the run
+  stopped at, answering `awaits_limit`; refused with `no_agent_reads` or `not_latest_run`), `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode` (auto mode,
   see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,

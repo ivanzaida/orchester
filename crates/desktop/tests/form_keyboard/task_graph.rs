@@ -213,20 +213,24 @@ fn waiting_page_states(desktop: &mut Desktop) {
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));
   desktop.tree.resize(1440, 960);
   desktop.pass();
-  // The conversation says the run waits for a decision, not that it stopped at a limit or ended,
-  // and its composer leads to the decision.
+  // The conversation says the run waits for a decision, not that it stopped at a limit or ended;
+  // its composer continues the step that failed, and leads to the other decisions.
   desktop.click("task-tab-conversation");
   desktop.wait_until("the conversation", |desktop| {
-    has(desktop, "conversation-status") && has(desktop, "conversation-live-state")
+    has(desktop, "conversation-composer-context") && has(desktop, "conversation-live-state")
   });
-  assert!(shows(desktop, "conversation-status", "Waiting for your decision"));
+  assert!(shows(
+    desktop,
+    "conversation-composer-context",
+    "Continue 02 Review with your instructions"
+  ));
   assert!(shows(desktop, "conversation-live-state", "Waits for your decision"));
 
   assert!(!shows(desktop, "conversation", "Run ended"));
   assert!(shows(
     desktop,
     "conversation-explanation",
-    "The run waits for your decision on its Summary."
+    "Your message continues this run from its saved work."
   ));
   desktop.click("conversation-open-decision");
   desktop.wait_until("the decisions", |desktop| has(desktop, "task-retry-settings"));

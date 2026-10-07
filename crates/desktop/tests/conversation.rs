@@ -2,8 +2,8 @@
 //! it stands (sending now, queued, delivered mid-turn or at the end of a turn, not delivered), whom a
 //! new message can go to, which agents work now, what the composer offers in the run's state, what a
 //! message written now does (none once a ready run's worktree was removed), and the question a run
-//! waits on in Needs you. Sending stores a message once per key; one its agent's CLI did not take is
-//! sent after the turn on request.
+//! waits on in Needs you. Runs that wait for the person are in `conversation_waiting`. Sending stores a message once
+//! per key; one its agent's CLI did not take is sent after the turn on request.
 
 mod support;
 
@@ -13,14 +13,14 @@ use orchester_core::{
   id::{IdempotencyKey, InvocationId, ResourceId, StepExecutionId, TaskId},
   integration::{FolderListing, LeftWorktree, Leftovers, WorktreeOwner},
   resource::ModelId,
-  run::{InterruptCause, Run, RunLimit, WaitReason},
+  run::{Run, WaitReason},
   store::{ActivityStore, ConversationStore},
   time::Timestamp,
 };
 use orchester_desktop::tasks::{
   conversation::{
     Author, Conversation, EntryState, PanelState, Queue,
-    composer::{ComposerMode, Queued},
+    composer::{ComposerMode, Queued, Then},
     send_after_turn_in, send_in,
   },
   data::ProjectTasks,
@@ -304,9 +304,12 @@ fn conversation_the_composer_offers_what_the_run_state_allows() {
 
   let events = run.pause(at(24)).expect("paused");
   fixture.record(&run, &events);
+  let paused = mode(&fixture, task, Recipient::Orchestrator);
+  assert_eq!(paused, ComposerMode::Resume { interrupted: false });
+  // Resume and send, or the message waits until the run resumes.
   assert_eq!(
-    mode(&fixture, task, Recipient::Orchestrator),
-    ComposerMode::Queue(Queued::Suspended)
+    (paused.then(), paused.then_later()),
+    (Some(Then::Resume), Some(Then::Deliver))
   );
 }
 
@@ -385,54 +388,16 @@ fn conversation_what_a_message_written_now_does_follows_the_run() {
   assert_eq!(ended.state, PanelState::Ended);
   assert!(!ended.state.takes_messages());
   assert_eq!(ended.entries[0].state, EntryState::Queued(Queue::RunEnded));
-  assert_eq!(mode(&fixture, other, Recipient::Orchestrator), ComposerMode::Closed);
-}
-
-#[test]
-fn conversation_suspended_runs_keep_direct_messages_queued_for_the_right_agent_turn() {
-  for state in [PanelState::Paused, PanelState::Stopped, PanelState::Interrupted] {
-    let mut fixture = Fixture::reviewed();
-    let task = fixture.task("Add login", at(10));
-    let mut run = fixture.started_run(task, at(20));
-    invocation(&mut fixture, &run, at(20));
-    let events = match state {
-      PanelState::Paused => run.pause(at(21)).expect("paused"),
-      PanelState::Stopped => run.stop_at_limit(RunLimit::Tokens, at(21)).expect("stopped"),
-      PanelState::Interrupted => run.interrupt(InterruptCause::Crashed, at(21)).expect("interrupted"),
-      _ => unreachable!("the test lists only suspended states"),
-    };
-    fixture.record(&run, &events);
-    let recipients = read(&fixture, task).recipients;
-    for (recipient, text) in [
-      (recipients[1].recipient, "Please check the OAuth dialog."),
-      (recipients[2].recipient, "Review this after implementation."),
-    ] {
-      send_in(
-        fixture.repo.path(),
-        IdempotencyKey::generate(),
-        (task, Some(run.id()), None),
-        (recipient, Timing::AfterTurn),
-        text,
-      )
-      .expect("direct message stored");
-    }
-
-    let conversation = read(&fixture, task);
-    assert_eq!(conversation.state, state);
-    assert!(conversation.working.is_empty());
-    assert_eq!(conversation.entries[0].author, Author::YouTo("Builder".into()));
-    let queue = if state == PanelState::Paused {
-      Queue::RunResumes
-    } else {
-      Queue::RunContinues
-    };
-    assert_eq!(conversation.entries[0].state, EntryState::Queued(queue));
-    assert_eq!(conversation.entries[1].author, Author::YouTo("Reviewer".into()));
-    assert_eq!(
-      conversation.entries[1].state,
-      EntryState::Queued(Queue::AgentNextTurn("Reviewer".into()))
-    );
-  }
+  // No agent of the run reads it: the task runs again with the message, for its next run.
+  let again = mode(&fixture, other, Recipient::Orchestrator);
+  assert_eq!(again, ComposerMode::RunAgain);
+  assert_eq!(again.then(), Some(Then::RunAgain));
+  assert!(Then::RunAgain.for_next_run());
+  send(&mut fixture, other, None, "Start over with the new API.", at(44));
+  assert_eq!(
+    read(&fixture, other).entries[1].state,
+    EntryState::Queued(Queue::NextRun)
+  );
 }
 
 #[test]

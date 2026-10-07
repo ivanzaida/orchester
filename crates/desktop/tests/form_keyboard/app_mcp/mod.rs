@@ -5,6 +5,7 @@
 mod answered;
 pub(crate) mod approvals;
 mod limits;
+mod messages;
 mod pipelines;
 mod runs;
 mod server;

@@ -23,6 +23,7 @@ mod conversation;
 mod conversation_composer;
 mod conversation_composer_box;
 mod conversation_composer_ime;
+mod conversation_composer_waiting;
 mod conversation_queued;
 mod conversation_rail;
 mod conversation_steady;

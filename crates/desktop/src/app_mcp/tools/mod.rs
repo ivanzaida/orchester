@@ -5,6 +5,7 @@
 mod approvals;
 mod auto_mode;
 mod limits;
+mod messages;
 mod pipeline_copy;
 mod projects;
 mod run_task;
@@ -113,6 +114,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "send_message",
+    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again.",
+    schema: schema_for_type::<messages::SendMessage>,
+    read_only: false,
+  },
+  Spec {
     name: "set_run_auto_mode",
     description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
     schema: schema_for_type::<auto_mode::SetRunAutoMode>,
@@ -215,6 +222,7 @@ async fn dispatch(
     "pause_run" => runs::control_run(services, parse(arguments)?, Control::Pause).await,
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
