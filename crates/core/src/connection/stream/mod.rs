@@ -3,6 +3,7 @@
 //! [`crate::connection::app_server`]. Lines a parser does not understand are kept as
 //! [`AgentEvent::Raw`], so nothing the CLI prints is dropped silently (design: "Activity tab").
 
+mod call_change;
 mod call_input;
 mod claude;
 mod native;
@@ -12,7 +13,8 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) use self::claude::usage as claude_usage;
 pub use self::{
-  call_input::{CallChange, CallInput, ChangeLine, MAX_CHANGE_LINES},
+  call_change::{CallChange, ChangeHunk, ChangeLine, MAX_CHANGE_LINES},
+  call_input::{CallInput, EditText, Requested},
   claude::ClaudeStream,
   native::{CallDetail, Declined, DeclinedBy, NativeCall},
 };

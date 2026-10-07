@@ -12,7 +12,7 @@ use std::{sync::Arc, time::Duration};
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  connection::stream::{CallDetail, CallInput, CommandStatus, DeclinedBy, FileChangeKind, NativeCall},
+  connection::stream::{CallChange, CallDetail, CallInput, CommandStatus, DeclinedBy, FileChangeKind, NativeCall},
   native::tools::ToolName,
   run::DecidedBy,
 };
@@ -70,22 +70,9 @@ pub(super) fn requested(
   (status, output, mark): (Option<CommandStatus>, &str, Option<&CommandMark>),
 ) -> Shown {
   let name = tool.as_str();
-  let number = |value: u64| value.to_string();
-  let meta = match (status, &input.change) {
+  let meta = match (status, input.change()) {
     (None, _) => ctx.t_args("runs.activity.native.running", [("tool", name)]),
-    (Some(_), Some(change)) if tool == ToolName::EditFile => ctx.t_args(
-      "runs.activity.native.edited",
-      [
-        ("tool", name),
-        ("status", &*ctx.t(file_change_kind(FileChangeKind::Modified).1)),
-        ("added", number(change.added).as_str()),
-        ("removed", number(change.removed).as_str()),
-      ],
-    ),
-    (Some(_), Some(change)) => ctx.t_args(
-      "runs.activity.native.written",
-      [("tool", name), ("count", number(change.added).as_str())],
-    ),
+    (Some(_), Some(change)) => change_meta(ctx, tool, change),
     (Some(_), None) => name.into(),
   };
   let glyph = match tool {
@@ -95,23 +82,55 @@ pub(super) fn requested(
     _ => Icon::FilePenLine,
   };
   let title: Arc<str> = match tool {
-    ToolName::Search => ctx.t_args("runs.activity.native.searchTitle", [("pattern", input.target.as_str())]),
-    _ => input.target.as_str().into(),
+    ToolName::Search => ctx.t_args("runs.activity.native.searchTitle", [("pattern", input.target())]),
+    _ => input.target().into(),
   };
   // The change shows once the call made it; a read or a search shows what it answered.
   let change = input
-    .change
-    .clone()
-    .filter(|_| status == Some(CommandStatus::Completed));
-  let output: Vec<Arc<str>> = match &input.change {
-    Some(_) => Vec::new(),
-    None => output.lines().map(Arc::from).collect(),
+    .change()
+    .filter(|change| status == Some(CommandStatus::Completed) && !change.is_empty())
+    .cloned();
+  let output: Vec<Arc<str>> = match tool {
+    ToolName::EditFile | ToolName::WriteFile => Vec::new(),
+    _ => output.lines().map(Arc::from).collect(),
   };
   Shown {
     collapsible: change.is_some() || !output.is_empty(),
     output: Some(output),
     change,
     ..Shown::plain(glyph, title, meta, None).marked(mark.map(|mark| mcp_call::mark_text(ctx, mark)))
+  }
+}
+
+/// What an edit or a write changed, after the tool's name: the lines it added and removed, or that it replaced every
+/// occurrence (how many it does not say); a write's lines, or that it wrote an empty file.
+fn change_meta(ctx: &Ctx, tool: ToolName, change: &CallChange) -> Arc<str> {
+  let name = tool.as_str();
+  let status = ctx.t(file_change_kind(FileChangeKind::Modified).1);
+  let added = change.counts().map_or(0, |counts| counts.added);
+  match (tool, change.counts()) {
+    (ToolName::WriteFile, _) if change.is_empty() => ctx.t_args("runs.activity.native.emptyWritten", [("tool", name)]),
+    (ToolName::WriteFile, _) => {
+      let key = if added == 1 {
+        "runs.activity.native.written.one"
+      } else {
+        "runs.activity.native.written.other"
+      };
+      ctx.t_args(key, [("tool", name), ("count", added.to_string().as_str())])
+    }
+    (_, Some(counts)) => ctx.t_args(
+      "runs.activity.native.edited",
+      [
+        ("tool", name),
+        ("status", &*status),
+        ("added", counts.added.to_string().as_str()),
+        ("removed", counts.removed.to_string().as_str()),
+      ],
+    ),
+    (_, None) => ctx.t_args(
+      "runs.activity.native.editedEvery",
+      [("tool", name), ("status", &*status)],
+    ),
   }
 }
 

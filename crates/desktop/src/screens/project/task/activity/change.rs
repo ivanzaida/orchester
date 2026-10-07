@@ -1,7 +1,8 @@
 //! The change of a CLI's call of Orchester's `edit_file` or `write_file`, under its open row: in the output block's
 //! frame (`bjcu3`), the lines of each edit on the diff's backgrounds with their change mark (`vEZ42`: `code-bg`,
-//! `diff-add-*`, `diff-remove-*`), a hairline between edits, and above them how many lines are left out. Lines wrap:
-//! a row has no room to scroll sideways.
+//! `diff-add-*`, `diff-remove-*`), a hairline between edits, a note on an edit that replaces every occurrence or
+//! changes line endings, and above them how many lines are left out. Lines wrap: a row has no room to scroll
+//! sideways. The lines are the call's own text, not the file's: they carry no line numbers.
 
 use lurq::{
   app::{
@@ -23,17 +24,22 @@ const MARK_WIDTH: f32 = 10.0;
 
 /// The change's block, named after the entry `sequence`.
 pub(super) fn change_block(ctx: &Ctx, change: &CallChange, sequence: u64) -> Element {
-  let omitted = (change.omitted > 0).then(|| {
+  let omitted = (change.omitted() > 0).then(|| {
     Text::new(&ctx.t_args(
       "runs.activity.changeTrimmed",
-      [("count", change.omitted.to_string().as_str())],
+      [("count", change.omitted().to_string().as_str())],
     ))
     .variant(TypographyStyle::Caption)
   });
-  let hunks = change.hunks.iter().enumerate().map(|(index, lines)| {
+  let hunks = change.hunks().iter().enumerate().map(|(index, hunk)| {
+    let notes = [
+      hunk.every().then_some("runs.activity.change.every"),
+      hunk.line_endings().then_some("runs.activity.change.lineEndings"),
+    ];
     let hunk = Column::new()
       .width(Dimension::Pct(100.0))
-      .with_children(lines.iter().map(|line| change_line(ctx, line)));
+      .with_children(notes.into_iter().flatten().map(|key| note(ctx, key)))
+      .with_children(hunk.lines().iter().map(|line| change_line(ctx, line)));
     if index == 0 {
       hunk
     } else {
@@ -58,7 +64,7 @@ pub(super) fn change_block(ctx: &Ctx, change: &CallChange, sequence: u64) -> Ele
 }
 
 fn change_line(ctx: &Ctx, line: &ChangeLine) -> Element {
-  let (background, mark, mark_color, kind) = match line.kind {
+  let (background, mark, mark_color, kind) = match line.kind() {
     LineKind::Context => (ExtraColor::CodeBackground, None, ExtraColor::CodeComment, "context"),
     LineKind::Added => (
       ExtraColor::DiffAddedBackground,
@@ -83,11 +89,11 @@ fn change_line(ctx: &Ctx, line: &ChangeLine) -> Element {
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .child(
-      Text::new(&line.text)
+      Text::new(line.text())
         .variant(ExtraTypography::Code.role())
         .selectable(true),
     )
-    .with_children(line.cut.then(|| {
+    .with_children(line.cut().then(|| {
       Text::new(&ctx.t("diff.lineCut"))
         .variant(TypographyStyle::Caption)
         .color(ExtraColor::CodeComment.role())
@@ -101,5 +107,18 @@ fn change_line(ctx: &Ctx, line: &ChangeLine) -> Element {
     .background(background.role())
     .child(mark)
     .child(code)
+    .into()
+}
+
+/// What a hunk's lines do not show: that the edit replaces every occurrence, or changes line endings.
+fn note(ctx: &Ctx, key: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding_horizontal(ExtraSpacing::Stack.role())
+    .child(
+      Text::new(&ctx.t(key))
+        .variant(TypographyStyle::Caption)
+        .color(ExtraColor::CodeComment.role()),
+    )
     .into()
 }

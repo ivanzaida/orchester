@@ -138,7 +138,7 @@ pub(super) struct Shown {
   /// What the output block leaves out, said above it.
   pub(super) omitted: Option<Arc<str>>,
   /// The change a CLI's call of Orchester's edit tool made, shown while the entry is open.
-  pub(super) change: Option<CallChange>,
+  pub(super) change: Option<Arc<CallChange>>,
   /// Opens and closes on a press.
   pub(super) collapsible: bool,
   /// The repository path a press opens in the Changes tab.

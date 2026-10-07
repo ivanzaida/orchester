@@ -215,7 +215,16 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
 fn timeline_a_cli_s_orchester_edit_carries_its_change_and_counts_as_an_edit() {
   let execution = StepExecutionId::generate();
   let input = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
-  let asked = OrchesterTool::EditFile.shown_call(&input).expect("an edit's input");
+  // Settled, as the runner stores it.
+  let mut settled = AgentEvent::NativeCall {
+    item: String::new(),
+    call: OrchesterTool::EditFile.shown_call(&input).expect("an edit's input"),
+  };
+  settled.settle();
+  let AgentEvent::NativeCall { call: asked, .. } = settled else {
+    unreachable!("settling keeps the event's kind")
+  };
+  assert!(asked.input.as_ref().and_then(|input| input.change()).is_some());
   let told = |item: &str| AgentEvent::NativeCall {
     item: item.into(),
     call: asked.clone(),

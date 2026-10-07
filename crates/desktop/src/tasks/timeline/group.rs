@@ -285,7 +285,7 @@ fn edited_path(entry: &Entry) -> Option<&str> {
     _ => return None,
   };
   let input = call?.input.as_ref()?;
-  (status == Some(CommandStatus::Completed) && input.change.is_some()).then_some(input.target.as_str())
+  (status == Some(CommandStatus::Completed) && input.change().is_some()).then_some(input.target())
 }
 
 /// A command entry's command, whether it failed, and its exit code.

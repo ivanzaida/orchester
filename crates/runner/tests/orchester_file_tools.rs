@@ -11,7 +11,8 @@ use std::fs;
 
 use orchester_core::{
   code_index::CodeIndexSetting,
-  connection::AgentProvider,
+  connection::{AgentProvider, stream::AgentEvent},
+  diff::LineKind,
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{Run, RunStatus, TokenUsage},
@@ -106,6 +107,23 @@ async fn orchester_file_tools_serve_claude_code_in_a_writing_step() {
       output: 4 * 27,
     }
   );
+  // The edit's row shows its change: settled after redaction, as it is stored.
+  let edited = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .find_map(|stored| match stored.event {
+      AgentEvent::NativeCall { item, call } if item == "toolu_edit" => call.input,
+      _ => None,
+    })
+    .expect("what the edit asked");
+  let change = edited.change().expect("the edit's change");
+  let shown: Vec<(LineKind, &str)> = change.hunks()[0]
+    .lines()
+    .iter()
+    .map(|line| (line.kind(), line.text()))
+    .collect();
+  assert_eq!(shown, [(LineKind::Removed, "hi"), (LineKind::Added, "hi there")]);
   let told = reported(&db, id, "prompt| ").join("\n");
   assert!(
     told.contains("mcp__Orchester__edit_file (after reading the file)"),

@@ -1416,7 +1416,12 @@
         "searchTitle": "“{{pattern}}”",
         "changed": "{{tool}} · {{status}} · +{{added}} −{{removed}} · open in Changes",
         "edited": "{{tool}} · {{status}} · +{{added}} −{{removed}}",
-        "written": "{{tool}} · {{count}} lines written",
+        "editedEvery": "{{tool}} · {{status}} · replaces every occurrence",
+        "written": {
+          "one": "{{tool}} · 1 line written",
+          "other": "{{tool}} · {{count}} lines written"
+        },
+        "emptyWritten": "{{tool}} · empty file written",
         "withShell": "{{meta}} · shell · {{shell}}",
         "denied": "Denied by a person · the agent continues",
         "given": "Given to the agent as the command’s result:",
@@ -1499,6 +1504,10 @@
       "stderrLine": "stderr  {{line}}",
       "outputTrimmed": "{{count}} earlier lines are not shown",
       "changeTrimmed": "{{count}} more lines of the change are not shown",
+      "change": {
+        "every": "Replaces every occurrence; the lines show one",
+        "lineEndings": "Line endings change in the lines it keeps"
+      },
       "outputOmitted": "{{size}} of earlier output was not kept",
       "jump": "Jump to latest",
       "jumpNew": "Jump to latest · {{count}} new",

@@ -85,4 +85,10 @@ impl NativeCall {
       input.redact(redact);
     }
   }
+
+  pub(super) fn settle(&mut self) {
+    if let Some(input) = &mut self.input {
+      input.settle();
+    }
+  }
 }

@@ -20,7 +20,7 @@ pub enum EditError {
 }
 
 /// Lines a change added and removed.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LineChanges {
   pub added: u64,
   pub removed: u64,
@@ -57,7 +57,7 @@ impl LineChanges {
 }
 
 /// How many lines `old` and `new` share at their start, and then at their end: what lies between changed.
-pub fn shared_ends(old: &[&str], new: &[&str]) -> (usize, usize) {
+pub fn shared_ends<T: PartialEq>(old: &[T], new: &[T]) -> (usize, usize) {
   let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
   let end = old[start..]
     .iter()
