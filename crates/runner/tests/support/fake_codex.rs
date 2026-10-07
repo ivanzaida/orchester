@@ -11,8 +11,10 @@
 //! `turn/start` without the prompt (`turn: `); and the prompt (its first line, then each line). The
 //! runner keeps standard error in the activity, so tests can check how it was started.
 //!
-//! The thread's configuration may approve MCP tools (`mcp_servers.<server>.tools.<tool>.approval_mode =
-//! "approve"`); such a tool runs without an approval request, as in Codex 0.159.2.
+//! Its arguments may approve MCP tools (`-c mcp_servers.<server>.tools={"<tool>"={approval_mode="approve"},…}`);
+//! such a tool runs without an approval request, as in Codex 0.159.2. Like 0.159.2, it refuses a thread
+//! whose configuration has a table for a server without a transport (`command` or `url`) that is not the
+//! user's own: the arguments' servers cannot be changed there.
 //!
 //! A model with `-refused-` in its name is refused with a two-line reason that echoes the token of
 //! Orchester's server (`ORCHESTER_APPROVAL_TOKEN`), so tests can check how the runner reports a refusal.
@@ -190,8 +192,13 @@ impl Session {
       emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
       return;
     }
+    if let Some(server) = without_transport(&params["config"]["mcp_servers"]) {
+      let message = format!("failed to load configuration: invalid transport\nin `mcp_servers.{server}`\n");
+      emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
+      return;
+    }
     self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
-    self.approved_tools = approved_tools(&params["config"]["mcp_servers"]);
+    self.approved_tools = approved_tools(&self.args);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
     self.thread = params["threadId"].as_str().unwrap_or("fake-thread-1").to_owned();
@@ -332,12 +339,33 @@ impl Session {
   }
 }
 
-/// The tools of `servers` (a thread's `mcp_servers` configuration) whose approval mode is `approve`.
-fn approved_tools(servers: &Value) -> BTreeSet<String> {
+/// A server of `servers` (a thread's `mcp_servers` configuration) Codex 0.159.2 refuses: one with
+/// neither a `command` nor a `url` that the user's configuration does not define.
+fn without_transport(servers: &Value) -> Option<&str> {
+  servers
+    .as_object()
+    .into_iter()
+    .flatten()
+    .find(|(name, table)| *name != "user-global" && table.get("command").is_none() && table.get("url").is_none())
+    .map(|(name, _)| name.as_str())
+}
+
+/// The tools the arguments approve (`<server>/<tool>`), which run without a request: each
+/// `mcp_servers.<server>.tools={"<tool>"={approval_mode="approve"},…}`.
+fn approved_tools(args: &[String]) -> BTreeSet<String> {
+  const APPROVE: &str = "={approval_mode=\"approve\"}";
   let mut approved = BTreeSet::new();
-  for (server, settings) in servers.as_object().into_iter().flatten() {
-    for (tool, settings) in settings["tools"].as_object().into_iter().flatten() {
-      if settings["approval_mode"] == "approve" {
+  for arg in args {
+    let Some((server, tools)) = arg
+      .strip_prefix("mcp_servers.")
+      .and_then(|rest| rest.split_once(".tools={"))
+    else {
+      continue;
+    };
+    let tools = tools.strip_suffix('}').unwrap_or(tools);
+    for entry in tools.split(APPROVE) {
+      let quoted = entry.trim_start_matches(',');
+      if let Ok(tool) = serde_json::from_str::<String>(quoted) {
         approved.insert(format!("{server}/{tool}"));
       }
     }

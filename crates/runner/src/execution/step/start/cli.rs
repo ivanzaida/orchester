@@ -15,7 +15,6 @@ use orchester_core::{
     invocation::{
       ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform,
     },
-    mcp::InvocationExemptions,
     stream::RunnerProblem,
   },
   orchester_tools::SERVER,
@@ -106,13 +105,14 @@ impl RunTask {
   ) -> Result<CliCommand, RunnerProblem> {
     match setup {
       McpSetup::Codex(mcp) => {
-        let CodexTools {
-          server,
-          table,
-          listening,
-        } = self.codex_tools(tools)?;
+        let CodexTools { server, listening } = self.codex_tools(tools)?;
         let mcp = mcp.with_orchester(server);
-        let (command, app) = self.app_server_command(cli, &mcp, prompt, table)?;
+        let mcp = if cli.enforced.permissions().interactive_tool_approvals() {
+          mcp
+        } else {
+          mcp.without_exemptions()
+        };
+        let (command, app) = self.app_server_command(cli, &mcp, prompt)?;
         Ok(CliCommand {
           command,
           mcp_file: None,
@@ -132,15 +132,13 @@ impl RunTask {
     }
   }
 
-  /// Codex App Server with the MCP servers `mcp` and Orchester's server, whose tools' table in the thread's
-  /// configuration is `orchester`, and what the runner tells it once it runs: the prompt, the thread's
-  /// settings and the approvals it may ask a person for.
+  /// Codex App Server with the MCP servers `mcp`, Orchester's among them, and what the runner tells it
+  /// once it runs: the prompt, the thread's settings and the approvals it may ask a person for.
   fn app_server_command(
     &self,
     cli: &Cli<'_>,
     mcp: &CodexMcp,
     prompt: String,
-    orchester: serde_json::Value,
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
     let mut expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     expected_servers.insert(SERVER.to_owned());
@@ -179,14 +177,9 @@ impl RunTask {
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
         expected_servers,
-        exemptions: if cli.enforced.permissions().interactive_tool_approvals() {
-          mcp.exemptions().clone()
-        } else {
-          InvocationExemptions::default()
-        },
+        exemptions: mcp.exemptions().clone(),
         output_schema: schema,
         secrets: mcp.secrets().to_vec(),
-        orchester,
       },
     ))
   }

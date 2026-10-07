@@ -117,8 +117,11 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
   share a name. A listed tool whose name another server of the invocation could have gets no rule, since that rule
   would let the other server's tool run unasked: it asks, the activity says so (*… asks after all*, naming the other
   server; `McpExemptionNotApplied`), and its calls are never marked as the listed tool's.
-- **Codex App Server** gets `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"` for each listed tool in the
-  thread's configuration (`config` of `thread/start` and `thread/resume`, next to the user's servers turned off).
+- **Codex App Server** gets `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"` for each listed tool as an
+  override of its process (`-c mcp_servers.<server>.tools={"<tool>"={approval_mode="approve"},…}`), next to the
+  server's own. Not in the thread's configuration (`config` of `thread/start` and `thread/resume`), which holds the
+  user's servers turned off only: 0.159.2 refuses a thread whose configuration has a table for a server only
+  overrides define, with *invalid transport in `mcp_servers.<server>`* (checked 2026-10-07).
   0.159.2 then runs that tool without `mcpServer/elicitation/request`, while another tool of the same server still
   sends one; the runner never answers a request on a tool's behalf. Checked 2026-10-02 with turns against a local mock
   of the Responses API (no model): one tool set to `approve` ran unasked, another asked; `config/read` lists the
@@ -162,7 +165,7 @@ invocation; a native agent can later declare the same schemas in its own request
   approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
   arguments the person saw, and a call that arrives
   without one is asked about by the runner itself before it runs (`orchester-call-<n>` requests). Codex is told to
-  run every tool (`approval_mode = "approve"` in the thread's configuration), so the runner asks for each call that
+  run every tool (`approval_mode = "approve"`, an override of its process), so the runner asks for each call that
   asks; whether Codex 0.159.2 would send its own request for a `prompt` tool while `mcp_elicitations` is off is not
   relied on. A call that asks reaches a person whether or not the step asks before MCP actions; rules of the run and
   auto-approval answer it as they answer an MCP call, but auto-approval never runs a project's program. *Approve

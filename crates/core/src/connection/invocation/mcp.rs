@@ -25,7 +25,7 @@ use zeroize::Zeroizing;
 use super::{CodexOrchester, is_agent_variable};
 use crate::{
   command::SecretVariable,
-  connection::mcp::{ExemptTools, InvocationExemptions, McpServerName, McpServerProblem, McpUrl},
+  connection::mcp::{ExemptTools, InvocationExemptions, McpServerName, McpServerProblem, McpToolName, McpUrl},
   resource::VariableName,
   secret::SecretValue,
 };
@@ -174,10 +174,23 @@ impl CodexMcp {
     self.orchester.is_some()
   }
 
-  /// Arguments after the sandbox settings, in order: the servers, then the secret variables kept out of the
-  /// agent's shell commands.
+  /// These servers in a step that does not ask before MCP actions: no tool of theirs is approved.
+  #[must_use]
+  pub fn without_exemptions(mut self) -> Self {
+    self.exemptions = InvocationExemptions::default();
+    self
+  }
+
+  /// Arguments after the sandbox settings, in order: the servers, the approval of their exempt tools
+  /// ([`approved_tools`]), then the secret variables kept out of the agent's shell commands.
   pub fn args(&self) -> Vec<String> {
     let mut args = self.args.clone();
+    for (server, tools) in self.exemptions.servers() {
+      args.extend(approved_tools(
+        server.as_str(),
+        tools.tools().iter().map(McpToolName::as_str),
+      ));
+    }
     if let Some(orchester) = &self.orchester {
       args.extend(orchester.args());
     }
@@ -201,7 +214,7 @@ impl CodexMcp {
     &self.servers
   }
 
-  /// The tools of these servers that run without asking when the step asks before MCP actions.
+  /// The tools of these servers that run without asking: none after [`Self::without_exemptions`].
   pub const fn exemptions(&self) -> &InvocationExemptions {
     &self.exemptions
   }
@@ -427,6 +440,25 @@ pub(super) fn toml_string(value: &str) -> String {
   }
   quoted.push('"');
   quoted
+}
+
+/// The overrides that approve `tools` of `server` (`approval_mode = "approve"`), so that Codex runs them
+/// without an approval request; none for no tools. They must be overrides of the process, next to the
+/// server's own: Codex 0.159.2 refuses a thread whose configuration (`thread/start`'s `config`) has a
+/// table for a server that only overrides define, with *invalid transport in `mcp_servers.<server>`*
+/// (checked 2026-10-07; `config/read` lists the approved tools).
+pub(super) fn approved_tools<'a>(server: &str, tools: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+  let entries: Vec<String> = tools
+    .into_iter()
+    .map(|tool| format!("{}={{approval_mode=\"approve\"}}", toml_string(tool)))
+    .collect();
+  if entries.is_empty() {
+    return Vec::new();
+  }
+  vec![
+    "-c".to_owned(),
+    format!("mcp_servers.{server}.tools={{{}}}", entries.join(",")),
+  ]
 }
 
 pub(super) fn toml_array(values: &[impl AsRef<str>]) -> String {

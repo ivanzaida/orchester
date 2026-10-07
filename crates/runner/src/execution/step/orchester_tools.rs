@@ -187,11 +187,9 @@ fn called_with(arguments: &Value) -> Value {
   }
 }
 
-/// The relay Codex starts as Orchester's server, its tools' approval modes, and the listener it reaches.
+/// The relay Codex starts as Orchester's server, with its tools approved, and the listener it reaches.
 pub(in super::super) struct CodexTools {
   pub(in super::super) server: CodexOrchester,
-  /// The server's table in the thread's `mcp_servers` configuration.
-  pub(in super::super) table: Value,
   pub(in super::super) listening: Listening,
 }
 
@@ -289,13 +287,14 @@ impl RunTask {
       .ok_or_else(|| problem("the runner's path is not valid Unicode".to_owned()))?;
     let bound = bind().map_err(|error: io::Error| problem(format!("cannot open Orchester's tools: {error}")))?;
     let token = ApprovalToken::generate();
-    let server = CodexOrchester::new(program, &[TOOLS_FLAG], bound.address(), token.variable());
-    let table = tools.tools().codex_tools();
+    let server = CodexOrchester::new(
+      program,
+      &[TOOLS_FLAG],
+      bound.address(),
+      token.variable(),
+      &tools.tools().codex_approved(),
+    );
     let listening = bound.serve(Served { prompt: None, tools }, token);
-    Ok(CodexTools {
-      server,
-      table,
-      listening,
-    })
+    Ok(CodexTools { server, listening })
   }
 }

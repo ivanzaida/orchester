@@ -175,7 +175,7 @@ confirmed or fixed, with the observed CLI output saved as a fixture and parser t
 An MCP server lists tools that run without asking when a profile asks before MCP actions (first use: Pencil's
 `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`, `get_screenshot`, `get_variables`; not
 `export_nodes`, which writes files). Claude Code: `mcp__<server>__<tool>` allow rules; Codex App Server: the tool's
-`approval_mode = "approve"` in the thread configuration (`docs/interactive-tool-approvals.md`). **Done when** an
+`approval_mode = "approve"` as an override of its process (`docs/interactive-tool-approvals.md`). **Done when** an
 independent design verifier (no frame exists; closest patterns) reports no blocking or major mismatch for the MCP
 server dialog's *Tools that run without asking* area, the inspector's list, the profile enforcement row, the step
 inspector line and the activity mark.

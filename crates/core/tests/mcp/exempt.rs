@@ -132,33 +132,41 @@ fn mcp_exempt_tools_get_one_claude_allow_rule_each_when_the_step_asks() {
   assert_eq!(allowed(&claude_args(false, &config)), ["mcp__pencil", "mcp__docs"]);
 }
 
-/// Codex gets no argument for them: the thread's configuration approves each listed tool, and only in a
-/// step that asks (the runner passes no exemptions otherwise).
+/// Codex approves each listed tool by an override of its process, next to the server's own, and only in
+/// a step that asks ([`CodexMcp::without_exemptions`] otherwise). The thread's configuration turns off the
+/// user's own servers and holds nothing else: Codex 0.159.2 refuses a thread whose configuration has a
+/// table for a server only overrides define (*invalid transport in `mcp_servers.<server>`*).
 #[test]
-fn mcp_exempt_tools_are_approved_in_the_codex_thread_configuration() {
+fn mcp_exempt_tools_are_approved_by_codex_overrides_not_the_thread() {
   let (codex, _) = CodexMcp::new(&launches());
-  assert!(
-    !codex.args().iter().any(|arg| arg.contains("approval_mode")),
-    "{:?}",
-    codex.args()
+  let args = codex.args();
+  let at = args
+    .iter()
+    .position(|arg| arg.contains("approval_mode"))
+    .expect("an approval");
+  assert_eq!(
+    &args[at - 1..],
+    [
+      "-c",
+      r#"mcp_servers.pencil.tools={"get_screenshot"={approval_mode="approve"},"batch_get"={approval_mode="approve"}}"#,
+    ],
+    "{args:?}"
   );
   assert!(codex.exemptions().exempts("pencil", "batch_get"));
   assert!(!codex.exemptions().exempts("pencil", "batch_design"));
   assert!(!codex.exemptions().exempts("docs", "batch_get"));
-  assert_eq!(
-    serde_json::Value::Object(thread_servers(&["user-notes".to_owned()], codex.exemptions())),
-    json!({
-      "user-notes": {"enabled": false},
-      "pencil": {"tools": {
-        "get_screenshot": {"approval_mode": "approve"},
-        "batch_get": {"approval_mode": "approve"},
-      }},
-    })
+  let not_asking = codex.without_exemptions();
+  assert!(
+    !not_asking.args().iter().any(|arg| arg.contains("approval_mode")),
+    "{:?}",
+    not_asking.args()
   );
+  assert!(not_asking.exemptions().is_empty());
   assert_eq!(
-    serde_json::Value::Object(thread_servers(&[], &InvocationExemptions::default())),
-    json!({})
+    serde_json::Value::Object(thread_servers(&["user-notes".to_owned()])),
+    json!({"user-notes": {"enabled": false}})
   );
+  assert_eq!(serde_json::Value::Object(thread_servers(&[])), json!({}));
 }
 
 fn exemptions() -> InvocationExemptions {
