@@ -193,16 +193,14 @@ fn status(outcome: RunOutcome, label: &str) -> Element {
   compact_status_label(outcome_glyph(outcome), label)
 }
 
-/// The key in mono and the title beside it, or under it in the narrow layout; the title gives way
-/// with an ellipsis, the key keeps its width beside it.
+/// The key in mono and `muted`, and the title beside it, or under it in the narrow layout
+/// (`sOQmy`); the title gives way with an ellipsis, the key keeps its width beside it.
 fn named(id: String, key: &str, title: &str, stacked: bool) -> Element {
-  let title = fit(
-    Text::new(title)
-      .id(id)
-      .variant(TypographyStyle::Body)
-      .color(PaletteColor::TextSecondary),
-  );
-  let key = Text::new(key).variant(ExtraTypography::MonoValue.role()).nowrap();
+  let title = fit(Text::new(title).id(id).variant(TypographyStyle::Body));
+  let key = Text::new(key)
+    .variant(ExtraTypography::MonoValue.role())
+    .color(PaletteColor::TextSecondary)
+    .nowrap();
   if stacked {
     return Column::new()
       .flex(1.0)
