@@ -26,7 +26,7 @@ use orchester_core::{
 use super::{
   super::{
     super::{ProjectNav, task_rows::row_status_label},
-    worktree::{Place, RemoveWorktree, RemoveWorktreeProps},
+    worktree::{self, Place, RemoveWorktree, RemoveWorktreeProps},
   },
   line::{Line, day_and_clock, line},
 };
@@ -265,7 +265,10 @@ fn when(ctx: &Ctx, record: &RunRecord) -> Element {
 /// *Remove worktree*, while the run has worktrees and no live work.
 fn action(ctx: &mut Ctx, props: &RunRowProps) -> Option<Element> {
   let run = props.record.without_live_work()?;
-  let leftovers = props.left.clone()?.ok().filter(|left| !left.worktrees.is_empty())?;
+  let nav = ctx
+    .use_context::<crate::screens::project::ProjectNav>()
+    .expect("the project shell provides ProjectNav");
+  let leftovers = worktree::listed(&nav, props.record.id, props.left.clone()?.ok()?)?;
   let removal = RemoveWorktreeProps {
     open: props.open.clone(),
     task: props.task,

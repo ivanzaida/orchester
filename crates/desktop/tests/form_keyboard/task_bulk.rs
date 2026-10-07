@@ -4,7 +4,7 @@ mod narrow;
 #[path = "task_bulk_recovery.rs"]
 mod recovery;
 #[path = "task_bulk_release.rs"]
-mod release;
+pub(crate) mod release;
 use std::{path::Path, time::Duration};
 
 use lurq::app::events::MouseButton;

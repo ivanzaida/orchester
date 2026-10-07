@@ -7,7 +7,7 @@ use std::{path::Path, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   name::Name,
-  resource::{ResourceKind, VersionNumber},
+  resource::ResourceKind,
   store::{ResourceStore, TaskStore},
   task::{
     TaskDetails, TaskLimits,
@@ -20,7 +20,7 @@ use orchester_store::ProjectDb;
 use crate::{
   harness::Desktop,
   organization::{choose, tasks},
-  task_run::set_text,
+  task_run::{init_repository, programs, seed, set_text, unborn_head},
   unreadable_run::{at, delivery, started},
 };
 
@@ -240,10 +240,9 @@ fn organization_header_follows_the_run_ending() {
   assert_eq!(stored_status(&desktop), WorkflowStatus::Canceled);
 }
 
-/// KON-1, queued for its first run with no run recorded, In progress and High.
-fn seed_queued(repo: &Path) {
+/// KON-1, a complete draft of the seeded Delivery, In progress and High.
+fn organized_draft(repo: &Path) {
   let mut db = ProjectDb::open(repo).expect("open");
-  delivery(&mut db);
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
   let id = db
     .create_tasks(IdempotencyKey::generate(), vec![complete(pipeline)], at(10))
@@ -254,16 +253,34 @@ fn seed_queued(repo: &Path) {
     .with_priority(Priority::High);
   db.set_task_organization(id, &organization, ChangeActor::Person, at(11))
     .expect("organized");
-  let mut task = db.task(id).expect("read").expect("task");
-  task.queue(VersionNumber::FIRST).expect("a complete task");
-  db.save_task(&task).expect("queued").saved().expect("saved as read");
 }
 
 /// R3: Retry run starts the task as stored, so the locked form offers no organization change.
 #[test]
 fn organization_locked_retry_form_keeps_the_stored_organization() {
-  let mut desktop = Desktop::with_seeded_project(seed_queued);
+  let (runner, fake) = programs();
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed(repo, &fake, false);
+    organized_draft(repo);
+    unborn_head(repo);
+  });
   desktop.wait_for("nav-tasks");
+  desktop.wait_until("the runner online", |desktop| {
+    crate::task_run::has(desktop, "status-runner") && crate::github::shows(desktop, "status-runner", "Runner online")
+  });
+  desktop.click("nav-tasks");
+  desktop.wait_for("task-row-KON-1");
+  desktop.click("task-row-KON-1");
+  // The form queues the draft; the runner refuses its run (no commit to start from), so it stays
+  // queued without one.
+  desktop.wait_for("task-edit");
+  desktop.click("task-edit");
+  desktop.wait_for("create-and-run");
+  desktop.click("create-and-run");
+  desktop.wait_until("the queued task", |desktop| {
+    crate::github::shows(desktop, "create-and-run", "Retry run")
+  });
+  // Opened again in this session, the task this form queued opens in the locked form (02.09F).
   desktop.click("nav-tasks");
   desktop.wait_for("task-row-KON-1");
   desktop.click("task-row-KON-1");

@@ -13,11 +13,17 @@ use std::{collections::HashMap, fmt};
 use serde_json::{Value, json};
 use thiserror::Error;
 
+use self::items::{command_finished, file_changed, mcp_tool_finished};
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind},
+  stream::{AgentEvent, FileChange},
 };
-use crate::run::TokenUsage;
+use crate::{
+  orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
+  run::TokenUsage,
+};
+
+mod items;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ProtocolError {
@@ -144,6 +150,8 @@ struct ToolContext {
   target: Option<String>,
   /// Codex asked for approval of the call.
   asked: bool,
+  /// The file the call changes when it succeeds: a call of Orchester's `edit_file` or `write_file`.
+  changes: Option<FileChange>,
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
@@ -392,13 +400,18 @@ impl AppServerStream {
               server: server.clone(),
               tool: action.clone(),
             });
+          let arguments = item.get("arguments").unwrap_or(&Value::Null);
+          let changes = (server == ORCHESTER)
+            .then(|| OrchesterTool::from_name(&action)?.changed_file(arguments))
+            .flatten();
           let context = ToolContext {
             thread,
             turn,
             server,
             action,
-            target: item.get("arguments").and_then(|args| string(args, "filePath")),
+            target: string(arguments, "filePath"),
             asked: false,
+            changes,
           };
           self.tools.insert(id, context);
           return not_asked.map(Update::Activity).into_iter().collect();
@@ -501,87 +514,6 @@ fn command_denial(params: &Value) -> Result<CommandDenial, ProtocolError> {
     Ok(CommandDenial::Cancel)
   } else {
     Err(ProtocolError::InvalidApproval)
-  }
-}
-
-/// The end of the MCP call `item`, started as `started`, as its activity: what it called and whether
-/// Codex asked first.
-fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> Vec<Update> {
-  let (Some(id), Some(server), Some(tool)) = (
-    string(item, "id"),
-    started
-      .as_ref()
-      .map(|tool| tool.server.clone())
-      .or_else(|| string(item, "server")),
-    started
-      .as_ref()
-      .map(|tool| tool.action.clone())
-      .or_else(|| string(item, "tool")),
-  ) else {
-    return Vec::new();
-  };
-  let status = if item.get("status").and_then(Value::as_str) == Some("completed") {
-    CommandStatus::Completed
-  } else {
-    CommandStatus::Failed
-  };
-  vec![Update::Activity(AgentEvent::McpToolFinished {
-    item: id,
-    server,
-    tool,
-    status,
-    asked: started.is_some_and(|tool| tool.asked),
-  })]
-}
-
-fn command_finished(item: &Value) -> Vec<Update> {
-  let status = match item.get("status").and_then(Value::as_str) {
-    Some("completed") => CommandStatus::Completed,
-    Some("failed") => CommandStatus::Failed,
-    Some("declined") => CommandStatus::Declined,
-    _ => return Vec::new(),
-  };
-  match (string(item, "id"), string(item, "command")) {
-    (Some(item_id), Some(command)) => vec![Update::Activity(AgentEvent::CommandFinished {
-      item: item_id,
-      command,
-      output: string(item, "aggregatedOutput").unwrap_or_default(),
-      exit_code: item.get("exitCode").and_then(Value::as_i64),
-      status,
-    })],
-    _ => Vec::new(),
-  }
-}
-
-/// The files a completed patch changed. The kind is a word (`"update"`) or, as the protocol writes
-/// a patch's change, an object naming it (`{"type": "update"}`).
-fn file_changed(item: &Value) -> Vec<Update> {
-  if item.get("status").and_then(Value::as_str) != Some("completed") {
-    return Vec::new();
-  }
-  let changes: Vec<FileChange> = item
-    .get("changes")
-    .and_then(Value::as_array)
-    .into_iter()
-    .flatten()
-    .filter_map(|change| {
-      let kind = change.get("kind")?;
-      let kind = kind.as_str().or_else(|| kind.get("type")?.as_str())?;
-      let kind = match kind {
-        "add" => FileChangeKind::Added,
-        "update" => FileChangeKind::Modified,
-        "delete" => FileChangeKind::Deleted,
-        _ => return None,
-      };
-      Some(FileChange {
-        path: string(change, "path")?,
-        kind,
-      })
-    })
-    .collect();
-  match (string(item, "id"), changes.is_empty()) {
-    (Some(item), false) => vec![Update::Activity(AgentEvent::FileChanged { item, changes })],
-    _ => Vec::new(),
   }
 }
 

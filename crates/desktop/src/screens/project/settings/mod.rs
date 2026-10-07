@@ -11,6 +11,7 @@ mod code_index;
 mod environment;
 mod general;
 mod limits;
+mod outside;
 mod sharing;
 mod work;
 

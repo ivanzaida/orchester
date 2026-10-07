@@ -27,6 +27,7 @@ mod outside;
 mod policy;
 mod work;
 
+use serde_json::Value;
 use thiserror::Error;
 
 pub use self::{
@@ -38,7 +39,10 @@ pub use self::{
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
-use crate::native::tools::ToolName as NativeTool;
+use crate::{
+  connection::stream::{FileChange, FileChangeKind},
+  native::tools::ToolName as NativeTool,
+};
 
 /// The MCP server that serves the tools, the one that serves Claude Code's permission prompt.
 pub const SERVER: &str = crate::connection::claude_approval::SERVER;
@@ -114,6 +118,25 @@ impl OrchesterTool {
 
   pub fn from_name(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|tool| tool.as_str() == name)
+  }
+
+  /// The tool Claude Code calls `name`: it names the tools of [`SERVER`] `mcp__Orchester__<tool>`.
+  pub fn from_claude_name(name: &str) -> Option<Self> {
+    Self::from_name(name.strip_prefix("mcp__")?.strip_prefix(SERVER)?.strip_prefix("__")?)
+  }
+
+  /// The file a call with `input` changed once it succeeded, at the path the agent gave: `edit_file` and
+  /// `write_file` change the file at their `path`. Their answer does not say whether `write_file` made the
+  /// file, so the change reads as modified; first-edit tracking reads only the path
+  /// (`crate::run::FirstEditTracker`), and the transcript shows the call's own row.
+  pub fn changed_file(self, input: &Value) -> Option<FileChange> {
+    match self {
+      Self::EditFile | Self::WriteFile => Some(FileChange {
+        path: input.get("path")?.as_str()?.to_owned(),
+        kind: FileChangeKind::Modified,
+      }),
+      _ => None,
+    }
   }
 
   /// The native agent's tool this is, for a file tool.

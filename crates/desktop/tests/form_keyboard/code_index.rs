@@ -1,5 +1,5 @@
-//! Project settings › Code index (ORC-38 `i220W`, `LC2V0`, `RkMap`, `h6yMk`): the setting saves
-//! when its switch flips and the list goes while it is off; the kept indexes with their state,
+//! Project settings › Code index (ORC-38 `i220W`, `LC2V0`, `RkMap`, `h6yMk`): the setting is off until
+//! turned on, saves when its switch flips and the list goes while it is off; the kept indexes with their state,
 //! *Rebuild* and *Retry*; ripgrep not found with *Check again*. The project's agents get a `PATH`
 //! and a `%LOCALAPPDATA%` of an empty folder, so no ripgrep of the machine is found; *Install
 //! ripgrep* is never pressed.
@@ -32,7 +32,7 @@ const SWITCH: &str = "settings-code-index-switch";
 const LIST: &str = "settings-code-index-list";
 const CHECK: &str = "settings-code-index-check";
 const NOTICE: &str = "settings-code-index-ripgrep-notice";
-const OFF: &str = "settings-code-index-off";
+pub(crate) const OFF: &str = "settings-code-index-off";
 /// A revision the repository does not have: its build fails.
 const MISSING: &str = "1111111111111111111111111111111111111111";
 
@@ -52,6 +52,14 @@ fn without_ripgrep(repo: &Path) {
     .expect("save the project's environment");
 }
 
+/// The project's agents get the code index, as a person who turned it on chose.
+fn turned_on(repo: &Path) {
+  ProjectDb::open(repo)
+    .expect("open")
+    .save_code_index(CodeIndexSetting::On)
+    .expect("turn the code index on");
+}
+
 fn head(repo: &Path) -> Revision {
   let output = Command::new("git")
     .arg("-C")
@@ -62,7 +70,7 @@ fn head(repo: &Path) -> Revision {
   Revision::new(String::from_utf8_lossy(&output.stdout).trim()).expect("a revision")
 }
 
-fn code_index_tab(desktop: &mut Desktop) {
+pub(crate) fn code_index_tab(desktop: &mut Desktop) {
   desktop.wait_for("nav-settings");
   desktop.click("nav-settings");
   desktop.wait_for(TAB);
@@ -82,6 +90,7 @@ fn manifest(repo: &Path, revision: &Revision) -> PathBuf {
 fn code_index_tab_lists_a_ready_and_a_failed_index_and_rebuilds_them() {
   let mut desktop = Desktop::with_runner(PathBuf::from("no-runner.exe"), init_repository, |repo| {
     without_ripgrep(repo);
+    turned_on(repo);
     let indexes = CodebaseIndexes::new(repo);
     indexes.rebuild(&head(repo)).expect("the index of HEAD builds");
     let missing = Revision::new(MISSING).expect("a revision");
@@ -126,7 +135,10 @@ fn code_index_tab_lists_a_ready_and_a_failed_index_and_rebuilds_them() {
 
 #[test]
 fn code_index_tab_without_an_index_or_ripgrep_says_what_agents_do() {
-  let mut desktop = Desktop::with_seeded_project(without_ripgrep);
+  let mut desktop = Desktop::with_seeded_project(|repo| {
+    without_ripgrep(repo);
+    turned_on(repo);
+  });
   code_index_tab(&mut desktop);
   desktop.wait_for("settings-code-index-empty");
   desktop.wait_for(NOTICE);
@@ -151,6 +163,7 @@ fn code_index_tab_without_an_index_or_ripgrep_says_what_agents_do() {
 fn code_index_tab_finds_ripgrep_without_copying_it() {
   let mut desktop = Desktop::with_seeded_project(|repo| {
     without_ripgrep(repo);
+    turned_on(repo);
     // Not really ripgrep: its version cannot be read, but it is where agents would find it.
     let empty = repo.join(".orchester").join("empty");
     fs::write(empty.join(ripgrep::PROGRAM), "not really ripgrep").expect("a ripgrep");
@@ -173,34 +186,38 @@ fn code_index_tab_finds_ripgrep_without_copying_it() {
   assert!(!desktop.repo().join(".orchester").join("tools").exists());
 }
 
+fn stored(desktop: &Desktop) -> CodeIndexSetting {
+  ProjectDb::open(desktop.repo())
+    .expect("open")
+    .code_index()
+    .expect("read")
+}
+
+/// Off until a person turns it on (ORC-69); each flip saves.
 #[test]
-fn code_index_switch_saves_off_and_on() {
+fn code_index_switch_is_off_until_turned_on_and_saves_on_and_off() {
   let mut desktop = Desktop::with_seeded_project(without_ripgrep);
   code_index_tab(&mut desktop);
+  desktop.wait_for(OFF);
+  assert!(shows(&mut desktop, SWITCH, "Off · agents get no index"));
+  assert!(shows(&mut desktop, OFF, "Agents get no index and no index skill"));
+  assert!(shows(&mut desktop, OFF, "turn it on to try the index"));
+  assert!(shows(
+    &mut desktop,
+    "settings-code-index",
+    "Agents read and search the repository directly"
+  ));
+  assert!(desktop.tree.get_element_by_id(LIST).is_none());
+  assert!(desktop.tree.get_element_by_id(NOTICE).is_none());
+
+  desktop.click(SWITCH);
   desktop.wait_for(LIST);
+  assert_eq!(stored(&desktop), CodeIndexSetting::On);
+  assert!(shows(&mut desktop, SWITCH, "On · agents search the index"));
 
   desktop.click(SWITCH);
   desktop.wait_for(OFF);
-  assert_eq!(
-    ProjectDb::open(desktop.repo())
-      .expect("open")
-      .code_index()
-      .expect("read"),
-    CodeIndexSetting::Off
-  );
-  assert!(shows(&mut desktop, SWITCH, "Off · agents get no index"));
-  assert!(shows(&mut desktop, OFF, "Agents get no index and no index skill"));
+  assert_eq!(stored(&desktop), CodeIndexSetting::Off);
   assert!(desktop.tree.get_element_by_id(LIST).is_none());
-  assert!(desktop.tree.get_element_by_id(NOTICE).is_none());
   assert!(shows(&mut desktop, "settings-save-status", "All changes saved"));
-
-  desktop.click(SWITCH);
-  desktop.wait_for(LIST);
-  assert_eq!(
-    ProjectDb::open(desktop.repo())
-      .expect("open")
-      .code_index()
-      .expect("read"),
-    CodeIndexSetting::On
-  );
 }

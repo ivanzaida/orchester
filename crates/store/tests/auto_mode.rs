@@ -96,3 +96,28 @@ fn auto_mode_reads_the_agents_last_messages_oldest_first() {
     ["message 2", "message 3", "message 4"]
   );
 }
+
+#[test]
+fn auto_mode_update_changes_what_is_stored() {
+  let (_repo, mut db, ..) = started_run();
+  let reviewer = ReviewerChoice {
+    connection: ConnectionId::generate(),
+    model: ModelId::new("claude-sonnet-5-5").expect("model"),
+    effort: Some("high".to_owned()),
+  };
+  db.save_auto_mode_settings(&AutoModeSettings {
+    new_runs: false,
+    reviewer: Some(reviewer.clone()),
+  })
+  .expect("save");
+  // A change of one setting keeps the other as stored.
+  let saved = db
+    .update_auto_mode_settings(|stored| AutoModeSettings {
+      new_runs: true,
+      ..stored
+    })
+    .expect("update");
+  assert_eq!(saved.reviewer, Some(reviewer));
+  assert!(saved.new_runs);
+  assert_eq!(db.auto_mode_settings().expect("read"), saved);
+}

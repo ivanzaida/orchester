@@ -101,6 +101,14 @@ impl CommandScope {
     &self.worktree
   }
 
+  /// Whether `path`, as an agent named a file it changed (absolute, or relative to the worktree), names a
+  /// file in the worktree once resolved.
+  pub fn is_worktree_file(&self, path: &str) -> bool {
+    self
+      .absolute(&self.worktree, path)
+      .is_some_and(|path| resolved(&path).starts_with(&self.worktree))
+  }
+
   /// The paths `word` names from `cwd`, resolved, and where each lies. A word without a glob names one;
   /// a word with a glob names the folder before its first glob component (`src/*.rs` is `src`, `*/x`
   /// the folder `cwd`), a credential location when what the glob matches in it may be one (`~/.s*`),

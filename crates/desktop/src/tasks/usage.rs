@@ -42,10 +42,24 @@ pub fn limits_in(repo_root: &Path) -> Result<ProjectLimits, StoreError> {
 /// The budgets and the time limit apply to new tasks and runs; changed agent slots apply at once,
 /// handed to the project's runner once they are stored.
 pub fn save_limits(runners: &Runners, repo_root: &Path, limits: &ProjectLimits) -> Result<(), StoreError> {
+  update_limits(runners, repo_root, |_| Some(*limits)).map(|_| ())
+}
+
+/// Stores what `change` makes of the stored limits, read and written in one transaction so no other
+/// writer changes them in between, as [`save_limits`] stores them. The limits saved; `None` when
+/// `change` saved nothing.
+pub fn update_limits(
+  runners: &Runners,
+  repo_root: &Path,
+  change: impl FnOnce(ProjectLimits) -> Option<ProjectLimits>,
+) -> Result<Option<ProjectLimits>, StoreError> {
+  let mut saved = None;
   runners.store_agent_slots(repo_root, || {
-    let mut db = ProjectDb::open(repo_root)?;
-    let before = db.project_limits()?.agent_slots();
-    db.save_project_limits(limits)?;
-    Ok((limits.agent_slots() != before).then_some(limits.agent_slots()))
-  })
+    let Some((before, after)) = ProjectDb::open(repo_root)?.update_project_limits(change)? else {
+      return Ok(None);
+    };
+    saved = Some(after);
+    Ok((after.agent_slots() != before.agent_slots()).then_some(after.agent_slots()))
+  })?;
+  Ok(saved)
 }

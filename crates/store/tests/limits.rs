@@ -209,3 +209,27 @@ fn limits_migration_converts_money_budgets_to_tokens_and_keeps_the_money_amounts
     schema_version(&fresh.path().join(".orchester").join("orchester.db"))
   );
 }
+
+#[test]
+fn limits_update_changes_what_is_stored_in_one_transaction() {
+  let (repo, mut db, ..) = started_run();
+  let changed = db
+    .update_project_limits(|stored| {
+      assert_eq!(stored, ProjectLimits::DEFAULT);
+      ProjectLimits::new(
+        stored.max_run_budget(),
+        stored.default_run_budget(),
+        budget(30_000_000),
+        stored.default_time_limit(),
+      )
+      .ok()
+    })
+    .expect("update")
+    .expect("saved");
+  assert_eq!(changed.0, ProjectLimits::DEFAULT, "the limits before");
+  assert_eq!(changed.1.daily_budget(), budget(30_000_000));
+  // A change that saves nothing leaves the limits as they are.
+  assert_eq!(db.update_project_limits(|_| None).expect("update"), None);
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.project_limits().expect("limits"), changed.1);
+}

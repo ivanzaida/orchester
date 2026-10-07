@@ -1,5 +1,5 @@
-//! The code index: the project's setting, on until changed, and what each agent invocation got of
-//! the index and used before its first edit.
+//! The code index: the project's setting, off until a person turns it on, and what each agent
+//! invocation got of the index and used before its first edit.
 
 mod support;
 
@@ -10,18 +10,29 @@ use orchester_core::{
   run::{EditProgress, FirstEdit, TokenUsage},
   store::{ActivityStore, SettingsStore},
 };
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 
 use self::support::{at, model, started_run};
 
 #[test]
-fn code_index_setting_is_on_until_turned_off() {
+fn code_index_setting_is_off_until_turned_on() {
   let (_repo, mut db, _run, _execution) = started_run();
-  assert_eq!(db.code_index().expect("read"), CodeIndexSetting::On);
-  db.save_code_index(CodeIndexSetting::Off).expect("save");
   assert_eq!(db.code_index().expect("read"), CodeIndexSetting::Off);
   db.save_code_index(CodeIndexSetting::On).expect("save");
   assert_eq!(db.code_index().expect("read"), CodeIndexSetting::On);
+  db.save_code_index(CodeIndexSetting::Off).expect("save");
+  assert_eq!(db.code_index().expect("read"), CodeIndexSetting::Off);
+}
+
+/// A project a person turned on keeps it on when its database is opened again: only a project that
+/// never stored the setting has the default.
+#[test]
+fn code_index_setting_turned_on_stays_on() {
+  let (repo, mut db, _run, _execution) = started_run();
+  db.save_code_index(CodeIndexSetting::On).expect("save");
+  drop(db);
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.code_index().expect("read"), CodeIndexSetting::On);
 }
 
 #[test]

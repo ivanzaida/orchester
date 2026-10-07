@@ -4,7 +4,7 @@ use orchester_desktop::{
   tabs::feed::ProjectFeeds,
   tasks::{
     integration::leftovers_in,
-    integration_jobs::{JobState, MergeArgs, RemoveArgs},
+    integration_jobs::{JobState, MergeArgs, RemoveArgs, Remover},
   },
   workspace::OpenProject,
 };
@@ -101,6 +101,7 @@ fn removing_worktree_stays_pending_after_its_control_unmounts() {
     activity: desktop.activity.clone(),
     separator: Arc::from(", "),
     changed: Arc::new(|| {}),
+    by: Remover::Person,
   };
   job.start_remove(args.clone());
   desktop.wait_until("worktree removal starts", |_| gate.entered.load(Ordering::SeqCst));

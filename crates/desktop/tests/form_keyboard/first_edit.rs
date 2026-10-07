@@ -1,6 +1,6 @@
 //! The code index and the tokens before the first edit in the Conversation tab's Details (ORC-38 `BbGhA`,
 //! `rd1Vo`, `F3XhQ`), headlessly: the real runner runs the step on `orchester-fake-codex`, which
-//! reports a file change, with the project's code index on (the default) or off, relative to the
+//! reports a file change, with the project's code index turned on or off (the default), relative to the
 //! worktree or at its absolute path there.
 
 use std::{path::Path, process::Command};
@@ -47,7 +47,13 @@ fn short_head(desktop: &Desktop) -> String {
 #[test]
 fn activity_shows_the_code_index_and_the_tokens_before_the_first_edit() {
   let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
+    seed(repo, &fake, false);
+    ProjectDb::open(repo)
+      .expect("open")
+      .save_code_index(CodeIndexSetting::On)
+      .expect("turn the code index on");
+  });
   activity(&mut desktop);
 
   assert!(shows(&mut desktop, "activity-step-header", " before first edit"));
@@ -129,13 +135,7 @@ fn activity_shows_the_first_edit_relative_to_the_innermost_worktree() {
 #[test]
 fn activity_says_the_code_index_was_off() {
   let (runner, fake) = programs();
-  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| {
-    seed(repo, &fake, false);
-    ProjectDb::open(repo)
-      .expect("open")
-      .save_code_index(CodeIndexSetting::Off)
-      .expect("turn the code index off");
-  });
+  let mut desktop = Desktop::with_runner(runner, init_repository, |repo| seed(repo, &fake, false));
   activity(&mut desktop);
 
   assert!(shows(&mut desktop, PANEL, "Off · project setting"));

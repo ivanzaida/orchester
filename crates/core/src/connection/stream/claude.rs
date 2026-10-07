@@ -24,6 +24,11 @@
 //! call right after that call's result, and one written after its last tool call as the next turn,
 //! after the result ([`ClaudeStream::take_replayed`], [`ClaudeStream::results`]).
 //!
+//! An edit with Claude Code's own tools ([`EDIT_TOOLS`]) is reported as the change it made once its result says
+//! it happened. A call of Orchester's `edit_file` or `write_file` (`mcp__Orchester__edit_file`, served over the
+//! runner's relay) is a command like any MCP call, and its change follows its successful end, so that the first
+//! edit is seen whichever tools the agent edits with.
+//!
 //! A result before the CLI took the prompt, saying nothing, ends no turn of the agent's: Claude Code resuming a
 //! session whose background command the previous process left reports that command stopped, ends a turn of its own
 //! with such a result, then starts again and takes the prompt (run 22, 2026-10-06). It neither fails the step nor
@@ -36,6 +41,7 @@ use serde_json::Value;
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
 use crate::{
   connection::mcp::{InvocationExemptions, McpServerProblem},
+  orchester_tools::OrchesterTool,
   run::{StepResult, TokenUsage},
 };
 
@@ -46,7 +52,7 @@ const AUTHENTICATION_FAILED: &str = "authentication_failed";
 const KNOWN_BLOCKS: [&str; 4] = ["text", "thinking", "redacted_thinking", "tool_use"];
 /// Why a turn that ended without a step result failed.
 const NO_RESULT: &str = "Claude Code ended its turn without the step result: a JSON object with outcome and summary";
-/// Tools that change the file named in their input.
+/// Claude Code's tools that change the file named in their input.
 const EDIT_TOOLS: [&str; 4] = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
 /// Follows one invocation's output: tool calls wait for their results, and usage is counted once.
@@ -77,6 +83,8 @@ struct Call {
   command: String,
   /// The file an edit tool changes.
   file: Option<String>,
+  /// The file Orchester's edit tool changes, reported after the call's end.
+  changes: Option<FileChange>,
 }
 
 impl ClaudeStream {
@@ -200,11 +208,20 @@ impl ClaudeStream {
     let input = block.get("input").unwrap_or(&Value::Null);
     let command = describe(&tool, input);
     let file = EDIT_TOOLS.contains(&tool.as_str()).then(|| file_path(input)).flatten();
+    let changes = OrchesterTool::from_claude_name(&tool).and_then(|own| own.changed_file(input));
     let started = file.is_none().then(|| AgentEvent::CommandStarted {
       item: item.clone(),
       command: command.clone(),
     });
-    self.calls.insert(item, Call { tool, command, file });
+    self.calls.insert(
+      item,
+      Call {
+        tool,
+        command,
+        file,
+        changes,
+      },
+    );
     started
   }
 
@@ -240,13 +257,16 @@ impl ClaudeStream {
       .and_then(|result| result.get("type"))
       .and_then(Value::as_str)
       == Some("create");
-    results
+    let events: Option<Vec<Vec<AgentEvent>>> = results
       .into_iter()
       .map(|block| self.tool_result(block, created))
-      .collect()
+      .collect();
+    events.map(|events| events.into_iter().flatten().collect())
   }
 
-  fn tool_result(&mut self, block: &Value, created: bool) -> Option<AgentEvent> {
+  /// The end of a tool call: the change an edit made, or the end of its command, followed by the change
+  /// of Orchester's edit tool when it succeeded.
+  fn tool_result(&mut self, block: &Value, created: bool) -> Option<Vec<AgentEvent>> {
     let item = text(block, "tool_use_id")?;
     let call = self.calls.remove(&item)?;
     let failed = block.get("is_error").and_then(Value::as_bool).unwrap_or(false);
@@ -256,12 +276,16 @@ impl ClaudeStream {
       } else {
         FileChangeKind::Modified
       };
-      return Some(AgentEvent::FileChanged {
+      return Some(vec![AgentEvent::FileChanged {
         item,
         changes: vec![FileChange { path, kind }],
-      });
+      }]);
     }
-    Some(AgentEvent::CommandFinished {
+    let changed = call.changes.filter(|_| !failed).map(|change| AgentEvent::FileChanged {
+      item: item.clone(),
+      changes: vec![change],
+    });
+    let finished = AgentEvent::CommandFinished {
       item,
       command: call.command,
       output: result_text(block.get("content")),
@@ -271,7 +295,8 @@ impl ClaudeStream {
       } else {
         CommandStatus::Completed
       },
-    })
+    };
+    Some(std::iter::once(finished).chain(changed).collect())
   }
 
   fn result(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {

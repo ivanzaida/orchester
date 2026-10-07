@@ -57,7 +57,7 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: Option<&RunView>) -> (Icon, Arc<
     None => (
       Icon::Clock3,
       ctx.t("runs.summary.notice.queuedTitle"),
-      ctx.t("runs.summary.notice.queuedDetail"),
+      ctx.t("runs.summary.notice.queuedNoRunDetail"),
     ),
     Some(run) if run.first_run && run.run.status() == &RunStatus::Pending => (
       Icon::Clock3,

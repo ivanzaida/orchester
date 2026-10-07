@@ -45,6 +45,7 @@ pub(super) fn open(ctx: &Ctx, form: &NewTaskForm, editing: &Editing) {
 /// Fills the form with `task`'s saved details; an empty criteria list keeps one empty row to type
 /// in, as a new form has.
 pub(super) fn seed(ctx: &Ctx, form: &NewTaskForm, task: &Task) {
+  form.followed.base.set(Some(super::outside::EditBase::of(task)));
   fill(ctx, form, task.details(), task.organization());
 }
 

@@ -1,15 +1,12 @@
 //! A native agent's tool calls in the transcript (04.H10): what a call did ([`NativeCall`]) marks the
-//! entry of its command, which then reads as a file tool's row; a file change that a native edit's own row
-//! shows is not shown again; and a command a person or a rule approved gets an entry of its own for the
-//! approval, before the command's.
+//! entry of its command, which then reads as a file tool's row; a file change that the row of the call
+//! that made it shows (a native edit's, or one of Orchester's edit tools a CLI called) is not shown again;
+//! and a command a person or a rule approved gets an entry of its own for the approval, before the
+//! command's.
 
 use std::sync::Arc;
 
-use orchester_core::{
-  connection::stream::{CallDetail, NativeCall},
-  id::InvocationId,
-  run::ActivityEntry,
-};
+use orchester_core::{connection::stream::NativeCall, id::InvocationId, run::ActivityEntry};
 
 use super::{CommandMark, DecidedMark, Entry, EntryKind};
 
@@ -45,21 +42,17 @@ impl Told {
   }
 }
 
-/// Whether the file change of call `item` is shown by the row of the native edit that made it.
-pub(super) fn shown_by_edit(entries: &[Entry], stored: &ActivityEntry, item: &str) -> bool {
-  entries.iter().rev().any(|entry| match &entry.kind {
-    EntryKind::Command(command) => {
-      entry.invocation == stored.invocation
-        && *command.item == *item
-        && matches!(
-          command.native,
-          Some(NativeCall {
-            detail: Some(CallDetail::Changed { .. }),
-            ..
-          })
-        )
-    }
-    _ => false,
+/// Whether the file change of call `item` is shown by the row of the call that made it: a native edit's,
+/// or that of Orchester's `edit_file` or `write_file`, a command for Claude Code and an MCP call for Codex.
+/// Only those calls report a change after a row of their own.
+pub(super) fn shown_by_call(entries: &[Entry], stored: &ActivityEntry, item: &str) -> bool {
+  entries.iter().rev().any(|entry| {
+    entry.invocation == stored.invocation
+      && match &entry.kind {
+        EntryKind::Command(command) => *command.item == *item,
+        EntryKind::McpTool(call) => *call.item == *item,
+        _ => false,
+      }
   })
 }
 

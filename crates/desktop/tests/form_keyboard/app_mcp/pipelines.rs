@@ -141,7 +141,7 @@ fn app_mcp_refuses_a_copy_the_app_would_not_make() {
 }
 
 #[test]
-fn app_mcp_turns_the_code_index_off_and_on() {
+fn app_mcp_turns_the_code_index_on_and_off() {
   let desktop = seeded();
   let mut agent = agent(&desktop);
   let setting = || {
@@ -152,18 +152,9 @@ fn app_mcp_turns_the_code_index_off_and_on() {
   };
   let listed = ok(&mut agent, "list_projects", &json!({}));
   assert_eq!(
-    listed["projects"][0]["code_index"], true,
-    "on until a person turns it off"
+    listed["projects"][0]["code_index"], false,
+    "off until a person turns it on"
   );
-  let off = ok(
-    &mut agent,
-    "set_code_index",
-    &json!({"project": "Kontur", "enabled": false}),
-  );
-  assert_eq!(off["code_index"], false);
-  assert_eq!(setting(), CodeIndexSetting::Off);
-  let listed = ok(&mut agent, "list_projects", &json!({}));
-  assert_eq!(listed["projects"][0]["code_index"], false);
   let on = ok(
     &mut agent,
     "set_code_index",
@@ -171,6 +162,15 @@ fn app_mcp_turns_the_code_index_off_and_on() {
   );
   assert_eq!(on["code_index"], true);
   assert_eq!(setting(), CodeIndexSetting::On);
+  let listed = ok(&mut agent, "list_projects", &json!({}));
+  assert_eq!(listed["projects"][0]["code_index"], true);
+  let off = ok(
+    &mut agent,
+    "set_code_index",
+    &json!({"project": "Kontur", "enabled": false}),
+  );
+  assert_eq!(off["code_index"], false);
+  assert_eq!(setting(), CodeIndexSetting::Off);
   let error = refused(&mut agent, "set_code_index", &json!({"project": "Kontur"}));
   assert_eq!(error["code"], "invalid_arguments");
 }

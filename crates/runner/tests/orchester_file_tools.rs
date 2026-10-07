@@ -1,8 +1,8 @@
 //! Orchester's file tools end to end through the relay, with the fake CLIs: the native agent's executors
 //! confined to the worktree, an edit only after a read in the same invocation, no edit in a read-only step,
-//! answers within their cap; and, with the code index of the run's base revision, `find_symbol`, a search
-//! that lists a name's definitions first and a listing from the index, a changed file marked. Needs `git`.
-//! Run with `cargo test -p orchester-runner --features test-agent --test orchester_file_tools
+//! answers within their cap; the first edit is the first successful `edit_file`; and, with the code index of the run's
+//! base revision, `find_symbol`, a search that lists a name's definitions first and a listing from the index, a changed
+//! file marked. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test orchester_file_tools
 //! orchester_file_tools`.
 
 mod support;
@@ -14,7 +14,8 @@ use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{Run, RunStatus},
+  run::{Run, RunStatus, TokenUsage},
+  store::ActivityStore,
 };
 use orchester_store::ProjectDb;
 
@@ -42,7 +43,8 @@ async fn finished(project: &TestProject) -> (Run, ProjectDb) {
 
 /// Claude Code reads, lists, searches, edits and writes through Orchester's tools, each by its allow rule:
 /// an edit before a read is refused, paths out of the worktree and into `.git` or `.orchester` are refused,
-/// and a large file's answer is cut.
+/// and a large file's answer is cut. Its first edit is the successful `edit_file`, not the refused one before
+/// it nor Claude Code's own `Edit` at the end.
 #[tokio::test(flavor = "multi_thread")]
 async fn orchester_file_tools_serve_claude_code_in_a_writing_step() {
   let project = project(&Setup {
@@ -91,6 +93,19 @@ async fn orchester_file_tools_serve_claude_code_in_a_writing_step() {
   assert!(readme.starts_with("hi there"), "{readme}");
   let argv = reported(&db, id, "argv: ").pop().expect("argv");
   assert!(argv.contains("mcp__Orchester__edit_file"), "{argv}");
+  let invocation = db.invocations(id).expect("invocations").remove(0);
+  let progress = db.edit_progress(invocation.id).expect("read").expect("recorded");
+  let edit = progress.first_edit.expect("the agent changed a file");
+  assert_eq!(edit.path, "README.md");
+  // The fake's four messages up to that edit: list, the refused edit, read, edit.
+  assert_eq!(
+    progress.before,
+    TokenUsage {
+      input: 4 * 12_144,
+      cached_input: 4 * 2_432,
+      output: 4 * 27,
+    }
+  );
   let told = reported(&db, id, "prompt| ").join("\n");
   assert!(
     told.contains("mcp__Orchester__edit_file (after reading the file)"),

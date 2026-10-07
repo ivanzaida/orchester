@@ -3,7 +3,8 @@
 //! (*Builder* · *working*, chevron; a lock when it is fixed) and the round send button, whose icon
 //! says what happens (arrow-up sends now, clock-3 queues) and whose tooltip says what sending does.
 //! While the agent works mid-turn a chevron beside Send opens the send menu (`ru504`): *Send now ·
-//! Enter* and *Send after this turn · Ctrl+Enter*, for this message only.
+//! Enter* and *Send after this turn · Ctrl+Enter*, for this message only; while the run is paused or
+//! interrupted, *Resume and send · Enter* and *Send without resuming · Ctrl+Enter* the same way.
 
 use std::sync::Arc;
 
@@ -22,7 +23,7 @@ use orchester_core::{conversation::Recipient, run::StepStatus};
 use super::{
   super::super::permissions::{Look, RunPermissionsProps, RunPermissionsRow},
   ComposerProps, Presses, To,
-  text::{primary_label, recipient_words, tip},
+  text::{menu_words, primary_label, recipient_words, tip},
 };
 use crate::{
   tasks::conversation::composer::{ComposerMode, Queued},
@@ -129,10 +130,10 @@ impl Controls {
       .into()
   }
 
-  /// The chevron while the agent works mid-turn, and the send button; pointed at, its tooltip.
+  /// The chevron while the mode offers two ways of sending, and the send button; pointed at, its
+  /// tooltip.
   fn send(&self, ctx: &Ctx, row: &RowProps<'_>) -> Element {
-    let mid_turn = matches!(row.mode, ComposerMode::Steer(working) if working.mid_turn);
-    let chevron = mid_turn.then(|| {
+    let chevron = menu_words(ctx, row.mode).is_some().then(|| {
       let menu = self.menu.clone();
       Element::from(
         pressable(surface().id("conversation-send-options"), move || {
@@ -196,38 +197,25 @@ impl Controls {
   }
 
   /// The send menu (`ru504`) while it is open: *Send now* (the default, checked) and *Send after this
-  /// turn*, each for this message only.
+  /// turn*, or *Resume and send* and *Send without resuming*, each for this message only.
   fn send_menu(&self, ctx: &Ctx, row: &RowProps<'_>) -> Option<Element> {
-    let ComposerMode::Steer(working) = row.mode else {
-      return None;
-    };
-    if !working.mid_turn {
-      return None;
-    }
-    let agent = &*working.agent;
+    let words = menu_words(ctx, row.mode)?;
     let enter = ctx.t("runs.conversation.menu.enter");
     let ctrl_enter = ctx.t(if cfg!(target_os = "macos") {
       "runs.conversation.menu.cmdEnter"
     } else {
       "runs.conversation.menu.ctrlEnter"
     });
+    let (now, later) = words;
     let options = vec![
       self.option(
         ("conversation-send-now", true),
-        (
-          ctx.t("runs.conversation.composer.sendNow"),
-          ctx.t_args("runs.conversation.menu.nowMeta", [("agent", agent)]),
-          enter,
-        ),
+        (now.0, now.1, enter),
         row.presses.send.clone(),
       ),
       self.option(
         ("conversation-send-after-turn", false),
-        (
-          ctx.t("runs.conversation.composer.sendAfterTurn"),
-          ctx.t_args("runs.conversation.menu.afterTurnMeta", [("agent", agent)]),
-          ctrl_enter,
-        ),
+        (later.0, later.1, ctrl_enter),
         row.presses.after_turn.clone(),
       ),
     ];
@@ -316,11 +304,13 @@ fn queues(mode: &ComposerMode) -> bool {
   match mode {
     ComposerMode::Steer(working) => !working.mid_turn,
     ComposerMode::Queue(Queued::Checkpoint) => false,
-    ComposerMode::Queue(_) | ComposerMode::NotStarted => true,
+    ComposerMode::Queue(_) | ComposerMode::NotStarted | ComposerMode::RaiseLimit => true,
     ComposerMode::Answer { .. }
     | ComposerMode::PlanChanges { .. }
     | ComposerMode::FollowUp
     | ComposerMode::Continue
+    | ComposerMode::Resume { .. }
+    | ComposerMode::RunAgain
     | ComposerMode::Closed => false,
   }
 }

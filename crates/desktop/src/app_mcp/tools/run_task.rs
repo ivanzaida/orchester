@@ -27,6 +27,7 @@ use crate::{
     data::SaveTarget,
     detail::run_store_error,
     list::Readiness,
+    outside::Outside,
     run::{QueueFailure, preflight_message, queue_in, start_messages},
     run_again::{RunAgainCheck, block_message, request_messages},
   },
@@ -113,7 +114,7 @@ fn prepare(services: &Services, project: &OpenProject, key: &str) -> Result<Star
         version,
       )
       .map_err(queue_failure)?;
-      services.changes.record();
+      services.changes.record(project.project.id(), Outside::Tasks);
       Ok(Start::First {
         task: task.id(),
         claim: queued.claim,

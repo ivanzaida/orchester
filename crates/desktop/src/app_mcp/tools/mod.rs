@@ -4,9 +4,12 @@
 
 mod approvals;
 mod auto_mode;
+mod continue_run;
 mod limits;
+mod messages;
 mod pipeline_copy;
 mod projects;
+mod return_to_draft;
 mod run_task;
 mod runs;
 mod task_write;
@@ -113,6 +116,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "send_message",
+    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again.",
+    schema: schema_for_type::<messages::SendMessage>,
+    read_only: false,
+  },
+  Spec {
     name: "set_run_auto_mode",
     description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
     schema: schema_for_type::<auto_mode::SetRunAutoMode>,
@@ -134,6 +143,18 @@ const SPECS: &[Spec] = &[
     name: "remove_worktree",
     description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already.",
     schema: schema_for_type::<worktree::RemoveWorktree>,
+    read_only: false,
+  },
+  Spec {
+    name: "return_to_draft",
+    description: "Returns a queued task whose run never started to Draft, as the task list's Return to drafts does: only a task its group holds for good (after a task of the group failed, at the group's cap, refused by preflight or the runner, blocked or canceled). Refusals name why.",
+    schema: schema_for_type::<return_to_draft::ReturnToDraft>,
+    read_only: false,
+  },
+  Spec {
+    name: "continue_run",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry or return_to (a step that used up its retries or broke again). Every value is given; nothing raises a limit by itself. Refusals name why.",
+    schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },
   Spec {
@@ -215,6 +236,9 @@ async fn dispatch(
     "pause_run" => runs::control_run(services, parse(arguments)?, Control::Pause).await,
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
+    "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
+    "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
