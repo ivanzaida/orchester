@@ -83,7 +83,9 @@ fn restored_path(workspace: &Workspace, places: &Places, projects: &[RegisteredP
       }
       Some(path.to_owned())
     }
-    route @ (Route::AllProjects | Route::Setup | Route::Welcome) if places.applies(route) => Some(path.to_owned()),
-    Route::Start | Route::AllProjects | Route::Setup | Route::Welcome => None,
+    route @ (Route::AllProjects | Route::AllUsage | Route::Setup | Route::Welcome) if places.applies(route) => {
+      Some(path.to_owned())
+    }
+    Route::Start | Route::AllProjects | Route::AllUsage | Route::Setup | Route::Welcome => None,
   }
 }

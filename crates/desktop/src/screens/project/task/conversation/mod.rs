@@ -22,7 +22,6 @@ mod rail;
 mod readback;
 mod requests;
 mod row;
-mod segments;
 mod send;
 mod side;
 mod strip;

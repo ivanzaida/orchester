@@ -21,7 +21,7 @@ use orchester_desktop::{
     repository_import,
     route::{
       AgentSelection, ChangedFile, ConnectionTab, InstructionsTab, Page, PipelineView, Route, ServerTab, SettingsTab,
-      TaskPageTab, ToolSelection, changed_file, changes_path,
+      SidebarItem, TaskPageTab, ToolSelection, changed_file, changes_path,
     },
     routes,
   },
@@ -165,6 +165,7 @@ fn pages() -> Vec<Page> {
     Page::RetryTask(TaskId::generate()),
     Page::PullRequests,
     Page::PullRequest(42),
+    Page::Usage,
     Page::Pipelines,
     Page::Pipeline(ResourceId::generate(), PipelineView::Draft),
     Page::Pipeline(ResourceId::generate(), PipelineView::Version(version(2))),
@@ -201,7 +202,13 @@ fn pages() -> Vec<Page> {
 fn route_every_page_resolves_and_reads_back() {
   let project = ProjectId::generate();
   let table = routes(&Places::default());
-  let outside = [Route::Start, Route::Welcome, Route::Setup, Route::AllProjects];
+  let outside = [
+    Route::Start,
+    Route::Welcome,
+    Route::Setup,
+    Route::AllProjects,
+    Route::AllUsage,
+  ];
   let inside = pages().into_iter().map(|page| Route::Project(project, page));
   for route in outside.into_iter().chain(inside) {
     let path = route.path();
@@ -255,6 +262,18 @@ fn route_defaults_are_left_out_of_the_path() {
     Route::Project(project, Page::task(task)).path(),
     format!("/project/{project}/tasks/{task}")
   );
+}
+
+#[test]
+fn route_usage_is_a_project_page_and_a_tab_of_all_projects() {
+  let project = ProjectId::generate();
+  assert_eq!(
+    Route::Project(project, Page::Usage).path(),
+    format!("/project/{project}/usage")
+  );
+  assert_eq!(Page::Usage.sidebar_item(), SidebarItem::Usage);
+  assert_eq!(Route::AllUsage.path(), "/projects?tab=usage");
+  assert_eq!(Route::parse("/projects?tab=unknown"), Some(Route::AllProjects));
 }
 
 #[test]

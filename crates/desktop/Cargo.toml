@@ -45,6 +45,8 @@ lurq = { workspace = true, features = [
   "markdown",
   "clipboard",
   "tokio",
+  # The Usage dashboard's charts; tiny-skia and lyon are already built for `svg`, so it adds no crate.
+  "canvas",
   # The embedded MCP server, in every build: agents drive and inspect the running app through it
   # (loopback only, bearer token from a per-user discovery file; see `embedded_mcp`).
   "mcp",

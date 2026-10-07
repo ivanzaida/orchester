@@ -1,7 +1,7 @@
 //! Right side of the bar (`doeZn`): the project's counts, today's tokens against the daily
 //! project budget (`Kzi83`), the embedded MCP server's address and the application version. Counts are plain numbers;
-//! zero stays visible in `$subtle`, and a count that is not known yet shows a dash. The tokens item is not
-//! interactive: a usage screen does not exist, so its hint says what it counts.
+//! zero stays visible in `$subtle`, and a count that is not known yet shows a dash. The tokens item opens the
+//! project's Usage dashboard; its hint says what it counts.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -62,7 +62,11 @@ pub fn counts(
     items.push(opens(agents, opener, Page::TASKS));
     items.push(opens(queued, opener, Page::TASKS));
     items.push(opens(needs_you, opener, Page::Overview(OverviewTab::NeedsYou)));
-    items.push(tokens(ctx, project.usage.as_ref(), &unknown, hints));
+    items.push(opens(
+      tokens(ctx, project.usage.as_ref(), &unknown, hints),
+      opener,
+      Page::Usage,
+    ));
     if plan_limits::shown(limits) {
       items.push(ctx.mount_keyed::<plan_limits::PlanLimits>("status-plan-limits-component", limits.clone()));
     }
@@ -122,7 +126,7 @@ fn agents(ctx: &Ctx, project: &ProjectBar, unknown: &str, hints: &Hints) -> Butt
 }
 
 /// Agents and Queued open the task list, whose Queue tab does not exist yet; Needs you opens the
-/// Overview on its Needs you tab.
+/// Overview on its Needs you tab; Tokens today opens Usage.
 fn opens(row: Button, opener: &Opener, page: Page) -> Element {
   match opener.page(page) {
     Some(link) => pressed(row, Press::Link(link)).into(),
@@ -146,7 +150,7 @@ fn count(count: Option<usize>, unknown: &str) -> Element {
 
 /// `Kzi83`: counted tokens of all runs today against the daily project budget, compact
 /// (`3.8M / 20M`).
-fn tokens(ctx: &Ctx, usage: Option<&ProjectUsage>, unknown: &str, hints: &Hints) -> Element {
+fn tokens(ctx: &Ctx, usage: Option<&ProjectUsage>, unknown: &str, hints: &Hints) -> Button {
   let value = match usage {
     Some(usage) => value(
       &ctx.t_args(
@@ -184,7 +188,7 @@ fn tokens(ctx: &Ctx, usage: Option<&ProjectUsage>, unknown: &str, hints: &Hints)
       )
     },
   );
-  hints.attach(row, HintAnchor::Tokens, exact).into()
+  hints.attach(row, HintAnchor::Tokens, exact)
 }
 
 /// `jyUjc`: the crate version; the hint names the build.

@@ -4,10 +4,10 @@ use lurq::{
 };
 
 use super::tokens::{
-  ACCENT, BORDER, CANVAS, CANVAS_CLEAR, CODE_BG, CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING,
-  CODE_TEXT, CODE_VARIABLE, DANGER, DIFF_ADD_BG, DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP,
-  FOCUS_RING, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED, SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT, TRAFFIC_CLOSE,
-  TRAFFIC_MINIMIZE, TRAFFIC_ZOOM,
+  ACCENT, BORDER, CANVAS, CANVAS_CLEAR, CHART_HATCH, CHART_SERIES_1, CHART_SERIES_2, CHART_SERIES_3, CODE_BG,
+  CODE_COMMENT, CODE_CONSTANT, CODE_FUNCTION, CODE_KEYWORD, CODE_STRING, CODE_TEXT, CODE_VARIABLE, DANGER, DIFF_ADD_BG,
+  DIFF_ADD_TEXT, DIFF_REMOVE_BG, DIFF_REMOVE_TEXT, FOCUS_GAP, FOCUS_RING, HAIRLINE, HOVER, INVERSE_TEXT, MUTED, RAISED,
+  SCRIM, SIDEBAR, SUBTLE, SURFACE, TEXT, TRAFFIC_CLOSE, TRAFFIC_MINIMIZE, TRAFFIC_ZOOM,
 };
 
 /// Pencil colors without a built-in lurq role, registered as `PaletteColor::Extra`.
@@ -54,10 +54,16 @@ pub enum ExtraColor {
   TrafficClose,
   TrafficMinimize,
   TrafficZoom,
+  /// The Usage dashboard's chart series: Codex, Claude Code and a third CLI (`chart-series-1/2/3`).
+  ChartSeries1,
+  ChartSeries2,
+  ChartSeries3,
+  /// The hatching before a CLI's first plan limits report.
+  ChartHatch,
 }
 
 impl ExtraColor {
-  const ALL: [Self; 21] = [
+  const ALL: [Self; 25] = [
     Self::Surface,
     Self::Hairline,
     Self::Scrim,
@@ -79,6 +85,10 @@ impl ExtraColor {
     Self::TrafficClose,
     Self::TrafficMinimize,
     Self::TrafficZoom,
+    Self::ChartSeries1,
+    Self::ChartSeries2,
+    Self::ChartSeries3,
+    Self::ChartHatch,
   ];
 
   fn name(self) -> &'static str {
@@ -104,6 +114,10 @@ impl ExtraColor {
       Self::TrafficClose => "traffic-close",
       Self::TrafficMinimize => "traffic-minimize",
       Self::TrafficZoom => "traffic-zoom",
+      Self::ChartSeries1 => "chart-series-1",
+      Self::ChartSeries2 => "chart-series-2",
+      Self::ChartSeries3 => "chart-series-3",
+      Self::ChartHatch => "chart-hatch",
     }
   }
 
@@ -130,6 +144,10 @@ impl ExtraColor {
       Self::TrafficClose => TRAFFIC_CLOSE,
       Self::TrafficMinimize => TRAFFIC_MINIMIZE,
       Self::TrafficZoom => TRAFFIC_ZOOM,
+      Self::ChartSeries1 => CHART_SERIES_1,
+      Self::ChartSeries2 => CHART_SERIES_2,
+      Self::ChartSeries3 => CHART_SERIES_3,
+      Self::ChartHatch => CHART_HATCH,
     })
   }
 

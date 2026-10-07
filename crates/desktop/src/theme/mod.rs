@@ -4,6 +4,7 @@
 //! `RadiusSize`, `BorderSize`, `ShadowStyle`); design values live only in `tokens`.
 
 mod canvas_grid;
+pub mod chart;
 mod form;
 mod markdown;
 mod metrics;

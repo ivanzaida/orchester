@@ -535,7 +535,7 @@ that is not measured.
 | Agents | bot · *Agents* `2/4` | agent slots in use / configured (Project settings › Limits › *Agents working at once*, as the runner reports it) | Tasks › Queue (`Z22wg`) |
 | Queued | clock · *Queued* `2` | queued task runs in the project | Tasks › Queue (`Z22wg`) |
 | Needs you | message · *Needs you* `2` | runs waiting for the user: plan approvals, questions, reviews — exactly the count of the Overview metric *Need your input* and the Overview *Needs you* heading (decided 2026-09-27). The plain number; `0` in `$subtle`, never `00` or a dash | Overview › Needs you panel |
-| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | **Not built:** usage accounting and a usage screen do not exist; until then the item is non-interactive with a tooltip |
+| Tokens | gauge · *Tokens today* `3.8M / 20M` | counted tokens (input + output, see [Token budgets](#token-budgets)) of all runs in the project today vs. the project daily token budget | The project's [Usage dashboard](#usage-dashboard) (built 2026-10-06, ORC-72); the tooltip names the exact counts |
 | Plan limits (`XCXvw`, proposed 2026-09-29, hidden until approved) | hourglass · *Codex* `65%` · *Claude* `42%` | the `account/rateLimits/updated` / `rate_limit_event` data each agent CLI reports with its turns, for the account it is signed in to (see [Plan limits in the status bar](#status-bar)) | Non-interactive (pointer only, no focus); the hint lists each window, its reset, and the turn the numbers came from |
 | MCP (`JaMJ7`, added 2026-09-29) | radio · *MCP* `127.0.0.1:52341` | the port the embedded MCP server bound at start (every build; loopback, a free port the OS picks) | Non-interactive (pointer only, no focus); the hint names the endpoint `http://127.0.0.1:<port>/mcp` and says clients read the access token from this process's discovery file (`lurq/mcp/<pid>.json` in the local app data folder). The token is never shown, copied or logged. Shown with and without a project |
 | Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
@@ -1691,7 +1691,7 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 
 **All projects** (`p4eVV6`, full page 1440 × 2031). The All projects topbar, heading and actions, the tabs with *Usage* selected, then the controls with a *Project* filter first and the read-back *… · 4 projects*. Same sections at 1344 wide; *Where tokens go* adds *By project* first (a project without runs is named under it: *Atlas had no runs in the period.*), and the table adds a *Project* column.
 
-**Chart colors** (new variables, validated for color-vision deficiency on `$surface` and `$raised`, all pairs: worst CVD ΔE 9.4, normal-vision ΔE 20.9, each ≥ 3:1): `chart-series-1` `#3987E5` (Codex), `chart-series-2` `#D95926` (Claude), `chart-series-3` `#199E70` (reserved for a third CLI). Color follows the CLI, never its rank. Grid `$hairline`, baseline and reset rules `$border`, axis text `$subtle` mono 10, threshold `$muted` dashed; single-series marks use `$muted` / `$subtle`. Text never takes a series color.
+**Chart colors** (new variables, validated for color-vision deficiency on `$surface` and `$raised`, all pairs: worst CVD ΔE 9.4, normal-vision ΔE 20.9, each ≥ 3:1): `chart-series-1` `#3987E5` (Codex), `chart-series-2` `#D95926` (Claude), `chart-series-3` `#199E70` (reserved for a third CLI). Color follows the CLI, never its rank. Grid `$hairline`, baseline and reset rules `$border`, axis text `$subtle` 10 (figures and clock times in mono, days in Inter, as the frames draw them; a label at the plot's right end ends there, `24:00` in `e5PbG`), threshold `$muted` dashed; single-series marks use `$muted` / `$subtle`. Text never takes a series color.
 
 **States.**
 
@@ -1709,6 +1709,8 @@ Drawn 2026-09-30, group `b9V39h` ("Screens · Usage dashboard", last in 02 / Tas
 | Plan limits without history: *No plan limits recorded yet* in the chart's place | `T6i75` (x 3088, row 3) |
 
 Decided 2026-09-30 (user): plan limits stay in the project view as the shared account-wide chart; the threshold is an app-wide setting in the card menu; snapshots are kept 90 days; *Usage* follows *Pull requests*; All projects has the *Projects* | *Usage* tabs; the table's *Runs* mode has its own frame.
+
+Built 2026-10-06 (ORC-72). Each project's runner stores the reports of its runs in that project's database; the dashboard reads every listed project's for the account-wide chart. Two consecutive reports of a window more than an hour apart are joined dotted (a gap); a report whose reset passed before the next is not joined to it. A *profile · step* row of *Where tokens go* adds its profile to the *Agent profile* filter. *Custom…* takes dates as `2026-09-01`. Narrower than 1280 (lurq's `Xl` breakpoint) the cards that sit side by side stack. The compact Plan limits card of the no-runs and filters-match-nothing states keeps the … menu, leaves out windows that reset since their last report (unless nothing else is known), and *Tokens before first edit* counts spent tokens (input − cached + output) up to the first edit.
 
 ## Memory screens
 

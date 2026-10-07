@@ -104,6 +104,9 @@ pub enum ExtraTypography {
   /// A value read back on one line under a field, e.g. "≈ 14M tokens" under the scheduling review's
   /// token cap (`n5Wrl`, `xPwNl` in `W1Dq6`): 10 subtle.
   ReadBack,
+  /// A chart's x axis label naming a day, e.g. "Wed 24" or "Today" (`X label` in `C2pTYF`): 10
+  /// subtle, proportional; clock times stay in the mono axis font (`e5PbG`).
+  AxisLabel,
   /// Version figure in the publish confirmation, e.g. "v4" (`p8L552`).
   VersionFigure,
   /// Explanation under an empty state title (`xIG73`).
@@ -199,7 +202,7 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 87] = [
+  const ALL: [Self; 88] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::ReviewHeading,
@@ -244,6 +247,7 @@ impl ExtraTypography {
     Self::Instructions,
     Self::Hint,
     Self::ReadBack,
+    Self::AxisLabel,
     Self::VersionFigure,
     Self::Summary,
     Self::IconLarge,
@@ -351,6 +355,7 @@ impl ExtraTypography {
       Self::Instructions => "instructions",
       Self::Hint => "hint",
       Self::ReadBack => "read-back",
+      Self::AxisLabel => "axis-label",
       Self::VersionFigure => "version-figure",
       Self::Summary => "summary",
       Self::CompactStatusLabel => "compact-status-label",

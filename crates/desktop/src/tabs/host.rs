@@ -152,7 +152,7 @@ impl TabHosts {
 fn project_of(path: &str) -> Option<ProjectId> {
   match Route::parse(path)? {
     Route::Project(project, _) => Some(project),
-    Route::Start | Route::Welcome | Route::Setup | Route::AllProjects => None,
+    Route::Start | Route::Welcome | Route::Setup | Route::AllProjects | Route::AllUsage => None,
   }
 }
 

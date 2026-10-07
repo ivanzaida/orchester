@@ -40,6 +40,7 @@ use crate::{
   messages::{self, Message},
   navigation::route::{self, Page, PipelineView, Route},
   runner::{RunnerStatus, state::RunnerState},
+  screens::usage::{UsageProps, UsageScreen, load::Scope},
   tasks::{
     data::{PipelineChoice, pinned_pipeline},
     usage::ProjectUsage,
@@ -136,6 +137,7 @@ pub(crate) fn page(ctx: &mut Ctx) -> Element {
       &format!("pull-request-{number}"),
       PullRequestProps { project: open, number },
     ),
+    Page::Usage => usage(ctx, open, shown.revision),
     Page::Pipelines => pipelines(ctx, open, None, shown.resources),
     Page::Pipeline(pipeline, view) => pipelines(ctx, open, Some((pipeline, view)), shown.resources),
     Page::Instructions(..) => ctx.mount_keyed::<InstructionsScreen>(&format!("instructions-{}", shown.resources), open),
@@ -271,6 +273,25 @@ fn retry_task(
       }),
     },
   )
+}
+
+/// The Usage dashboard (`C2pTYF`) under the project's topbar, read again when the runner changes a
+/// run.
+fn usage(ctx: &mut Ctx, open: OpenProject, (tasks, runs): (u64, u64)) -> Element {
+  let breadcrumb = ctx.t_args("usage.breadcrumb", [("project", open.project.name().as_str())]);
+  let dashboard = ctx.mount_keyed::<UsageScreen>(
+    "usage",
+    UsageProps {
+      scope: Scope::Project(open),
+      revision: tasks.wrapping_add(runs),
+    },
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(super::page::topbar(&breadcrumb, []))
+    .child(dashboard)
+    .into()
 }
 
 fn redirect_to_task(ctx: &mut Ctx, task: TaskId) -> Element {

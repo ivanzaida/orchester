@@ -82,6 +82,16 @@ pub(super) fn save_progress(
   Ok(())
 }
 
+/// A stored code index use, read in a listing.
+pub(super) fn decode_use(body: &str) -> Result<CodeIndexUse, StoreError> {
+  decode_json(CODE_INDEX_USE, SCHEMA, body)
+}
+
+/// A stored edit progress, read in a listing.
+pub(super) fn decode_progress(body: &str) -> Result<EditProgress, StoreError> {
+  decode_json(EDIT_PROGRESS, SCHEMA, body)
+}
+
 pub(super) fn load_progress(
   connection: &Connection,
   invocation: InvocationId,

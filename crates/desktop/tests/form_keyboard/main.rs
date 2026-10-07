@@ -102,5 +102,7 @@ mod tool_approval_scope;
 mod tool_run;
 mod tools;
 mod unreadable_run;
+mod usage;
+mod usage_narrow;
 mod window;
 mod writable_folders;

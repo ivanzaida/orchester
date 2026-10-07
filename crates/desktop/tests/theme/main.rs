@@ -9,6 +9,7 @@ use lurq::{
 use orchester_desktop::theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography};
 
 mod screens;
+mod usage;
 
 fn themed_app() -> App {
   let mut app = App::new();
