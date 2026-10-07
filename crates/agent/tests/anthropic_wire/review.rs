@@ -1,14 +1,18 @@
 //! Auto mode's review on a native connection against the fake model server: one Messages request
 //! without tools, the reviewer's instructions as the system prompt, the agent's text as data in the one
 //! user message, and only the verdict's JSON object read as an answer; prose or a refusal is no verdict.
+//! What a review spent is the response's usage.
 
 use orchester_core::{
-  connection::reviewer::{native_request, native_verdict},
+  connection::reviewer::{native_request, native_review, native_verdict},
   permission::{NetworkAccess, RepositoryAccess},
   resource::ModelId,
-  run::review::{
-    DATA_START, REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewVerdict, ReviewedRequest, ReviewedStep,
-    ReviewedTask,
+  run::{
+    TokenUsage,
+    review::{
+      DATA_START, REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, ReviewedRequest,
+      ReviewedStep, ReviewedTask,
+    },
   },
 };
 use serde_json::json;
@@ -81,6 +85,12 @@ async fn anthropic_review_asks_once_without_tools_and_reads_the_verdict() {
       reason: "Building serves the task.".to_owned()
     })
   );
+  let spent = TokenUsage {
+    input: 10,
+    cached_input: 0,
+    output: 5,
+  };
+  assert_eq!(native_review(&response).spend, ReviewSpend::Reported(spent));
   // Prose around the JSON is no verdict: the person decides.
   let request = native_request(&input(), &model, None);
   let (answer, _) = respond(&client, &request).await;

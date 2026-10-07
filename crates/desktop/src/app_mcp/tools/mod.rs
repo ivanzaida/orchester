@@ -90,7 +90,8 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_run",
-    description: "A run: its steps, state, tokens, active time and what it waits for.",
+    description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
+                  what it waits for.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },

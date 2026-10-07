@@ -1,6 +1,7 @@
 //! The dashboard's filters (*CLI*, *Model*, *Agent profile*, *Pipeline*, *Tag*, and *Project* across
 //! projects): each is a set of chosen values, empty for all; a turn counts when every filter admits
-//! it. *Tag* matches a run whose task has any chosen tag. Plan limits follow the CLI filter only.
+//! it. *Tag* matches a run whose task has any chosen tag. Plan limits follow the CLI filter only. A review
+//! of auto mode's reviewer is matched by the reviewer's CLI and model; it has no agent profile.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -29,10 +30,23 @@ impl UsageFilter {
 
   /// Whether `invocation` of `run` in `project` counts.
   pub fn admits(&self, project: ProjectId, run: &RunFacts, invocation: &InvocationFacts) -> bool {
-    chosen(&self.projects, Some(&project))
+    self.admits_run(project, run)
       && chosen(&self.clis, invocation.cli.as_ref())
       && chosen(&self.models, invocation.model.as_ref())
       && chosen(&self.profiles, invocation.profile.as_ref())
+  }
+
+  /// Whether a review by auto mode's reviewer on `cli` with `model` of a request of `run` in `project`
+  /// counts.
+  pub fn admits_review(&self, project: ProjectId, run: &RunFacts, (cli, model): (AgentProvider, &Arc<str>)) -> bool {
+    self.admits_run(project, run)
+      && chosen(&self.clis, Some(&cli))
+      && chosen(&self.models, Some(model))
+      && chosen(&self.profiles, None)
+  }
+
+  fn admits_run(&self, project: ProjectId, run: &RunFacts) -> bool {
+    chosen(&self.projects, Some(&project))
       && chosen(&self.pipelines, run.pipeline.as_ref())
       && (self.tags.is_empty() || run.tags.iter().any(|tag| self.tags.contains(tag)))
   }
@@ -84,6 +98,12 @@ impl FilterOptions {
         }
         add(&mut options.models, invocation.model.as_ref());
         add(&mut options.profiles, invocation.profile.as_ref());
+      }
+      for review in &project.facts.reviews {
+        if !options.clis.contains(&review.cli) {
+          options.clis.push(review.cli);
+        }
+        add(&mut options.models, Some(&review.model));
       }
       for run in &project.facts.runs {
         add(&mut options.pipelines, run.pipeline.as_ref());

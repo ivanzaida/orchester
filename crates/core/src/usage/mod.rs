@@ -2,7 +2,9 @@
 //! a project's runs, or of every project's, go over a range of days, against the same number of days
 //! before. Token counts are what the CLIs reported ("Token budgets"): *spent* = input − cached input +
 //! output, *cached* = cached input, *output* includes reasoning; no money anywhere. A turn counts in
-//! the hour it completed, so a run that spans the range's edge counts on both sides.
+//! the hour it completed, so a run that spans the range's edge counts on both sides. A review of auto
+//! mode's reviewer counts as a turn of its run, in the hour it ended, on the reviewer's CLI and model
+//! and under no agent profile.
 
 mod breakdown;
 mod efficiency;
@@ -18,7 +20,7 @@ pub use self::{
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},
-  facts::{IndexGiven, InvocationFacts, ProjectFacts, RunFacts, RunOutcome, TurnUsage, UsageFacts},
+  facts::{IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts},
   filter::{FilterOptions, UsageFilter, toggle},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},
   report::{Summary, UsageQuery, UsageReport},

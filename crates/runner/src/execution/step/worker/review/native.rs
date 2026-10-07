@@ -1,7 +1,8 @@
 //! Auto mode's reviewer on a native connection: one request of `orchester-agent`'s Anthropic Messages
 //! client, built by core ([`native_request`]), with the connection's API key read from the keychain here
 //! (it never leaves the client: not in the review, its errors or the activity). It is bounded by the
-//! review's time and dropped at once when the review is no longer wanted.
+//! review's time and dropped at once when the review is no longer wanted. A response reports what it
+//! spent; a request that failed, timed out or was dropped spent an unknown amount.
 
 use std::{sync::Arc, time::Duration};
 
@@ -9,11 +10,11 @@ use orchester_agent::{AnthropicClient, Endpoint, WireQuirks};
 use orchester_core::{
   connection::{
     ApiEndpoint,
-    reviewer::{native_request, native_verdict},
+    reviewer::{native_request, native_review},
   },
   native::model::ModelClient,
   resource::ModelId,
-  run::review::{RequestReviewer, ReviewError, ReviewInput, ReviewVerdict},
+  run::review::{RequestReviewer, ReviewError, ReviewInput, ReviewSpend, Reviewed},
   secret::SecretValue,
 };
 use tokio::{runtime::Handle, sync::watch};
@@ -39,20 +40,24 @@ impl RequestReviewer for NativeReviewer {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+  fn review(&self, input: &ReviewInput) -> Reviewed {
     let request = native_request(input, &self.model, self.effort.clone());
     self.runtime.block_on(async {
       let mut stop = self.stop.clone();
       // Nothing of the answer is shown while it streams.
       let mut streamed = |_| {};
+      let unknown = |error| Reviewed::new(Err(error), ReviewSpend::Unknown);
       let answer = tokio::select! {
         answer = tokio::time::timeout(self.timeout, self.client.respond(&request, &mut streamed)) => answer,
-        _ = stop.changed() => return Err(ReviewError::CouldNotRun("the review is no longer wanted".to_owned())),
+        _ = stop.changed() => {
+          return unknown(ReviewError::CouldNotRun("the review is no longer wanted".to_owned()));
+        }
       };
-      let response = answer
-        .map_err(|_| ReviewError::TimedOut)?
-        .map_err(|error| ReviewError::CouldNotRun(error.to_string()))?;
-      native_verdict(&response)
+      match answer {
+        Ok(Ok(response)) => native_review(&response),
+        Ok(Err(error)) => unknown(ReviewError::CouldNotRun(error.to_string())),
+        Err(_) => unknown(ReviewError::TimedOut),
+      }
     })
   }
 }

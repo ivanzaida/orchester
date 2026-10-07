@@ -1518,6 +1518,8 @@
         "input": "Input tokens",
         "output": "Output tokens",
         "counted": "Counted",
+        "reviewer": "Auto mode reviewer",
+        "reviewerUnknown": "{{count}} tokens · {{unknown}} of {{reviews}} not reported",
         "runTotal": "Run total",
         "note": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget.",
         "noteFirstEdit": "Token counts come from the usage the CLI reports after each turn: input + output. Cached input is shown but not counted toward the budget. Before first edit adds up the turns until the agent first changed a file.",
@@ -2963,6 +2965,7 @@
       "byModel": "By model",
       "byPipeline": "By pipeline",
       "profileStep": "{{profile}} · {{step}}",
+      "reviewer": "Auto mode reviewer · {{model}}",
       "pipelineGone": "Pipeline no longer exists",
       "idle": "{{names}} had no runs in the period."
     },

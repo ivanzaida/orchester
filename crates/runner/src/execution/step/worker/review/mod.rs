@@ -5,8 +5,11 @@
 //! request as the reviewer's; anything else leaves it to the person with what auto mode said. A person who answers
 //! first wins, and the review is stopped; so is a review whose run turned auto mode off meanwhile, whose
 //! result is then dropped. A Codex escalation (a command outside its sandbox) is reviewed under the same
-//! hard rules, which keep it from the reviewer where the step's network is off or it only reads.
+//! hard rules, which keep it from the reviewer where the step's network is off or it only reads. What a
+//! review that asked a model cost is recorded when it ends, dropped or not, and counts like a turn of the
+//! agent's ([`ledger`]).
 
+mod ledger;
 mod native;
 mod process;
 mod setup;
@@ -28,6 +31,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 pub(in crate::execution::step) use self::setup::ReviewerKeys;
 use self::{
+  ledger::ReviewLedger,
   process::{StopReview, stop_review},
   setup::{PushPlace, ReviewJob, hold_now},
 };
@@ -115,7 +119,16 @@ impl Worker {
       timeout: REVIEW_TIMEOUT,
       stop: stopped,
     };
-    let work = tokio::task::spawn_blocking(move || setup.review(job));
+    let ledger = ReviewLedger {
+      root: self.root.clone(),
+      run: approval.run,
+      execution: approval.execution,
+      invocation: approval.invocation,
+      approval: approval.id.clone(),
+      events: self.events.clone(),
+      notifier: self.notifier.clone(),
+    };
+    let work = tokio::task::spawn_blocking(move || setup.review(job, &ledger));
     Ok(Some(Reviewing {
       approval: approval.id.clone(),
       work,

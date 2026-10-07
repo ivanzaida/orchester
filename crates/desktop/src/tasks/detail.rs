@@ -15,6 +15,7 @@ use orchester_core::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent,
     RunEventKind, RunLimit, RunStatus, StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage,
     active_time, attempt_starts, execution_tokens,
+    review::{ReviewRecord, reviews_usage},
   },
   store::{
     ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
@@ -86,6 +87,8 @@ pub struct RunView {
   pub version: VersionNumber,
   pub steps: Vec<StepView>,
   pub invocations: Vec<Invocation>,
+  /// What auto mode's reviews of its requests cost, in the order they ended.
+  pub reviews: Vec<ReviewRecord>,
   /// When a paused run paused or stopped at its limit.
   pub paused_at: Option<Timestamp>,
   /// The run's work was committed as a checkpoint right before it paused.
@@ -141,9 +144,19 @@ impl RunView {
     self.invocations.iter().find(|invocation| invocation.id == id)
   }
 
-  /// Tokens the CLIs reported for the whole run.
+  /// Tokens the CLIs and auto mode's reviewer reported for the whole run.
   pub fn usage(&self) -> TokenUsage {
-    self.invocations.iter().map(|invocation| invocation.usage).sum()
+    let mut usage: TokenUsage = self.invocations.iter().map(|invocation| invocation.usage).sum();
+    usage += reviews_usage(&self.reviews);
+    usage
+  }
+
+  /// The reviews of `invocation`'s requests.
+  pub fn reviews_of(&self, invocation: InvocationId) -> impl Iterator<Item = &ReviewRecord> {
+    self
+      .reviews
+      .iter()
+      .filter(move |review| review.invocation == invocation)
   }
 
   /// Active agent time of the run so far: pauses and waits for a person do not count.
@@ -180,11 +193,11 @@ impl RunView {
     }
   }
 
-  /// What `execution` used of its step's budget in force for the run, over all its invocations;
-  /// `None` when its step has no budget.
+  /// What `execution` used of its step's budget in force for the run, over all its invocations and
+  /// the reviews of their requests; `None` when its step has no budget.
   pub fn step_budget_use(&self, execution: StepExecutionId) -> Option<(TokensUsed, TokenBudget)> {
     let budget = self.run.step_budget(self.run.execution(execution)?.step())?;
-    Some((execution_tokens(&self.invocations, execution), budget))
+    Some((execution_tokens(&self.invocations, &self.reviews, execution), budget))
   }
 
   /// Steps an agent works on now, in pipeline order.
@@ -411,6 +424,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     approvals: RunApprovals::read(db, &run)?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
+    reviews: db.reviewer_usage(run.id())?,
     outputs: db.step_outputs(run.id())?,
     plans: db.plans(run.id()).map_err(run_store_error)?,
     paused_at,

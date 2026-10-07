@@ -14,18 +14,26 @@
 //!   the `--json` events, and a failed turn or an error event is a review that did not run. Which of these flags the
 //!   installed Codex takes was not checked against a live CLI (by instruction): one it refuses makes every review fail,
 //!   which asks the person.
+//! - What the review spent is the `usage` of its `turn.completed` events, OpenAI-style: `input_tokens` holds the
+//!   `cached_input_tokens`. `codex exec --json` reports no plan limits (Codex 0.159.2 has no such event in it; App
+//!   Server's `account/rateLimits/updated` is not part of `exec`), so a Codex review adds nothing to the plan limits
+//!   history.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{ReviewFolder, plain_word, run};
+use super::{ReviewFolder, events, kind, plain_word, run_review};
 use crate::{
   command::{Command, CommandRunner},
   connection::invocation::CODEX_ISOLATION as ISOLATION,
   resource::ModelId,
-  run::review::{
-    REVIEW_INSTRUCTIONS, RequestReviewer, ReviewError, ReviewInput, ReviewVerdict, parse_verdict_text, review_prompt,
+  run::{
+    TokenUsage,
+    review::{
+      REVIEW_INSTRUCTIONS, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed,
+      parse_verdict_text, review_prompt,
+    },
   },
 };
 
@@ -73,9 +81,8 @@ impl<R: CommandRunner> RequestReviewer for CodexReviewer<R> {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
-    let stdout = run(&self.runner, &self.command(input))?;
-    parse_codex_review(&stdout)
+  fn review(&self, input: &ReviewInput) -> Reviewed {
+    run_review(&self.runner, &self.command(input), read_codex_review)
   }
 }
 
@@ -121,14 +128,10 @@ pub fn codex_reviewer_args((model, effort): (&ModelId, Option<&str>), folder: &R
 /// The verdict in `codex exec --json`'s events: the text of its last `agent_message`, strictly the JSON
 /// object alone. A failed turn or an error event is a review that did not run.
 pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
-  let events: Vec<Value> = stdout
-    .lines()
-    .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
-    .collect();
-  let kind = |event: &Value| event.get("type").and_then(Value::as_str).map(str::to_owned);
+  let events: Vec<Value> = events(stdout).collect();
   if let Some(failed) = events
     .iter()
-    .find(|event| matches!(kind(event).as_deref(), Some("turn.failed" | "error")))
+    .find(|event| matches!(kind(event), Some("turn.failed" | "error")))
   {
     return Err(ReviewError::CouldNotRun(format!(
       "Codex reported {}",
@@ -138,10 +141,34 @@ pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
   let text = events
     .iter()
     .rev()
-    .filter(|event| kind(event).as_deref() == Some("item.completed"))
+    .filter(|event| kind(event) == Some("item.completed"))
     .filter_map(|event| event.get("item"))
     .find(|item| item.get("type").and_then(Value::as_str) == Some("agent_message"))
     .and_then(|item| item.get("text").and_then(Value::as_str))
     .ok_or_else(|| ReviewError::Unparseable("no final message".to_owned()))?;
   parse_verdict_text(text)
+}
+
+/// Codex's answer in `codex exec --json`'s events: the verdict ([`parse_codex_review`]) and what the review
+/// spent, the `usage` of its `turn.completed` events summed; unknown when none of them reports it readably.
+pub fn read_codex_review(stdout: &str) -> Reviewed {
+  let turns: Option<Vec<TokenUsage>> = events(stdout)
+    .filter(|event| kind(event) == Some("turn.completed"))
+    .map(|event| event.get("usage").and_then(codex_usage))
+    .collect();
+  let spend = match turns {
+    Some(turns) if !turns.is_empty() => ReviewSpend::Reported(turns.into_iter().sum()),
+    _ => ReviewSpend::Unknown,
+  };
+  Reviewed::new(parse_codex_review(stdout), spend)
+}
+
+/// The `usage` of a `turn.completed` event: input with its cached part, and output with reasoning.
+fn codex_usage(usage: &Value) -> Option<TokenUsage> {
+  let count = |name: &str| usage.get(name).and_then(Value::as_u64);
+  Some(TokenUsage {
+    input: count("input_tokens")?,
+    cached_input: usage.get("cached_input_tokens").map_or(Some(0), Value::as_u64)?,
+    output: count("output_tokens")?,
+  })
 }

@@ -1,7 +1,7 @@
-//! The dashboard's figures for a range and the filters: the turns that count are matched to their
-//! invocation and run once, then each section reads them.
+//! The dashboard's figures for a range and the filters: the turns that count, the reviews of auto mode's
+//! reviewer among them, are matched to their invocation and run once, then each section reads them.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use super::{
   Breakdowns, Efficiency, Grouping, RunCost, SeriesBar, TaskCost, UsageFilter,
@@ -9,6 +9,7 @@ use super::{
   period::DayRange,
 };
 use crate::{
+  connection::AgentProvider,
   id::{InvocationId, ProjectId, RunId},
   run::TokenUsage,
   time::Timestamp,
@@ -105,17 +106,43 @@ pub(super) struct Launch<'a> {
   pub invocation: &'a InvocationFacts,
 }
 
-/// One turn that counts.
+/// Who spent a turn's tokens.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Spender<'a> {
+  /// The invocation's agent.
+  Agent,
+  /// Auto mode's reviewer of the invocation's requests.
+  Reviewer { cli: AgentProvider, model: &'a Arc<str> },
+}
+
+/// One turn that counts: an agent's, or a review of its requests.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Turn<'a> {
   pub launch: Launch<'a>,
   pub at: Timestamp,
   pub usage: TokenUsage,
+  pub by: Spender<'a>,
 }
 
-impl Turn<'_> {
-  pub const fn run(&self) -> &RunFacts {
+impl<'a> Turn<'a> {
+  pub const fn run(&self) -> &'a RunFacts {
     self.launch.run
+  }
+
+  /// The CLI whose tokens these are.
+  pub const fn cli(&self) -> Option<AgentProvider> {
+    match self.by {
+      Spender::Agent => self.launch.invocation.cli,
+      Spender::Reviewer { cli, .. } => Some(cli),
+    }
+  }
+
+  /// The model that spent them.
+  pub fn model(&self) -> Option<&'a Arc<str>> {
+    match self.by {
+      Spender::Agent => self.launch.invocation.model.as_ref(),
+      Spender::Reviewer { model, .. } => Some(model),
+    }
   }
 }
 
@@ -133,27 +160,46 @@ impl<'a> Matched<'a> {
     };
     for project in projects {
       let runs: HashMap<RunId, &RunFacts> = project.facts.runs.iter().map(|run| (run.id, run)).collect();
-      let mut launches: HashMap<InvocationId, Launch<'a>> = HashMap::new();
+      // Every invocation with its run: a review counts by its reviewer, whether its invocation's agent does or not.
+      let mut launches: HashMap<InvocationId, (Launch<'a>, bool)> = HashMap::new();
       for invocation in &project.facts.invocations {
         let Some(run) = runs.get(&invocation.run) else {
           continue;
         };
-        if filter.admits(project.project, run, invocation) {
-          let launch = Launch {
-            project,
-            run,
-            invocation,
-          };
-          launches.insert(invocation.id, launch);
+        let launch = Launch {
+          project,
+          run,
+          invocation,
+        };
+        let admitted = filter.admits(project.project, run, invocation);
+        if admitted {
           matched.launches.push(launch);
         }
+        launches.insert(invocation.id, (launch, admitted));
       }
       matched.turns.extend(project.facts.turns.iter().filter_map(|turn| {
-        Some(Turn {
-          launch: *launches.get(&turn.invocation)?,
+        let (launch, admitted) = launches.get(&turn.invocation)?;
+        admitted.then_some(Turn {
+          launch: *launch,
           at: turn.at,
           usage: turn.usage,
+          by: Spender::Agent,
         })
+      }));
+      matched.turns.extend(project.facts.reviews.iter().filter_map(|review| {
+        let (launch, _) = launches.get(&review.invocation)?;
+        let reviewer = (review.cli, &review.model);
+        filter
+          .admits_review(project.project, launch.run, reviewer)
+          .then_some(Turn {
+            launch: *launch,
+            at: review.at,
+            usage: review.usage,
+            by: Spender::Reviewer {
+              cli: review.cli,
+              model: &review.model,
+            },
+          })
       }));
     }
     matched

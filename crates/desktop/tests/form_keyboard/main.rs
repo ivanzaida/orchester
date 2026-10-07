@@ -102,5 +102,6 @@ mod tool_run;
 mod tools;
 mod unreadable_run;
 mod usage;
+mod usage_reviewer;
 mod window;
 mod writable_folders;

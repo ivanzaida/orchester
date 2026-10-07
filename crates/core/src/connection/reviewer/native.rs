@@ -2,7 +2,8 @@
 //! (`orchester-agent`'s Anthropic Messages client), built here so every native reviewer asks the same
 //! way. No tools are offered, the instructions are the system prompt, the request and its context are
 //! the one user message, and the answer must be the verdict's JSON object alone: anything else, a
-//! response cut short or a refusal is a review without a verdict, which asks the person.
+//! response cut short or a refusal is a review without a verdict, which asks the person. What it spent is
+//! the response's usage, as the client read it from either wire API (Anthropic Messages, OpenAI Responses).
 
 use crate::{
   id::ConversationId,
@@ -12,7 +13,10 @@ use crate::{
     tools::ToolSet,
   },
   resource::ModelId,
-  run::review::{REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewVerdict, parse_verdict_text, review_prompt},
+  run::review::{
+    REVIEW_INSTRUCTIONS, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict_text,
+    review_prompt,
+  },
 };
 
 /// The most a reviewer may write: one short JSON object, with room for the model's reasoning.
@@ -51,4 +55,9 @@ pub fn native_verdict(response: &ModelResponse) -> Result<ReviewVerdict, ReviewE
     })
     .collect();
   parse_verdict_text(&text)
+}
+
+/// The model's answer as a review: its verdict ([`native_verdict`]) and the usage the response reported.
+pub fn native_review(response: &ModelResponse) -> Reviewed {
+  Reviewed::new(native_verdict(response), ReviewSpend::Reported(response.usage))
 }

@@ -15,7 +15,7 @@ use crate::{
   id::{InvocationId, RunId, StepExecutionId},
   permission::LaunchPermissions,
   resource::ModelId,
-  run::TokenUsage,
+  run::{TokenUsage, review::ReviewRecord},
   time::Timestamp,
   tokens::TokensUsed,
 };
@@ -147,14 +147,22 @@ pub fn active_time(invocations: &[Invocation], now: Timestamp) -> Duration {
   Duration::from_millis(u64::try_from(millis).expect("active times are never negative"))
 }
 
-/// Tokens `execution` used over all its invocations, as far as they count toward its step's
-/// budget.
-pub fn execution_tokens(invocations: &[Invocation], execution: StepExecutionId) -> TokensUsed {
-  invocations
+/// Tokens `execution` used over all its invocations and the reviews of their requests, as far as they
+/// count toward its step's budget.
+pub fn execution_tokens(
+  invocations: &[Invocation],
+  reviews: &[ReviewRecord],
+  execution: StepExecutionId,
+) -> TokensUsed {
+  let agents = invocations
     .iter()
     .filter(|invocation| invocation.execution == execution)
-    .map(|invocation| invocation.usage.counted_tokens())
-    .sum()
+    .map(|invocation| invocation.usage.counted_tokens());
+  let reviewers = reviews
+    .iter()
+    .filter(|review| review.execution == execution)
+    .map(ReviewRecord::counted_tokens);
+  agents.chain(reviewers).sum()
 }
 
 /// One stored transcript entry of a run.

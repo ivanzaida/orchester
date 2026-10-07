@@ -18,6 +18,7 @@ mod hold;
 mod input;
 mod prompt;
 mod push;
+mod spend;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -33,6 +34,7 @@ pub use self::{
     DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
   },
   push::PushFacts,
+  spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
 };
 use super::answer::ApprovalSubject;
 use crate::resource::ModelId;
@@ -71,7 +73,8 @@ pub enum ReviewError {
 pub trait RequestReviewer {
   /// The model that reviews.
   fn model(&self) -> &ModelId;
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError>;
+  /// The verdict on `input`, with what the review spent and the plan limits it reported.
+  fn review(&self, input: &ReviewInput) -> Reviewed;
 }
 
 /// Why a review that ran gave no verdict, as it is recorded.
@@ -164,24 +167,36 @@ fn kept(reason: &str) -> String {
 
 /// Auto mode's handling of a request about `subject`: a hard rule first, under `rules`; then a request
 /// too long to be reviewed whole (`input`'s hold); then `reviewer`'s verdict on `input`, told how many
-/// parts Orchester could not read, or a failure when the project has none.
+/// parts Orchester could not read, with what asking it cost; or a failure when the project has none.
 pub fn review_request(
   reviewer: Option<&dyn RequestReviewer>,
   (subject, rules): (&ApprovalSubject, &HoldRules<'_>),
   input: Result<ReviewInput, ReviewHold>,
-) -> Review {
+) -> AutoReview {
+  let held = |hold| AutoReview {
+    review: Review::Held { hold },
+    cost: None,
+  };
   if let Some(hold) = review_hold(subject, rules) {
-    return Review::Held { hold };
+    return held(hold);
   }
   let input = match input {
     Ok(input) => input.with_unread(unread_parts(subject)),
-    Err(hold) => return Review::Held { hold },
+    Err(hold) => return held(hold),
   };
-  match reviewer {
-    Some(reviewer) => Review::of(reviewer.review(&input), reviewer.model()),
-    None => Review::Failed {
-      failure: ReviewFailure::NoReviewer,
-      model: None,
-    },
+  let Some(reviewer) = reviewer else {
+    return AutoReview {
+      review: Review::Failed {
+        failure: ReviewFailure::NoReviewer,
+        model: None,
+      },
+      cost: None,
+    };
+  };
+  let reviewed = reviewer.review(&input);
+  let cost = ReviewCost::of(&reviewed, reviewer.model());
+  AutoReview {
+    review: Review::of(reviewed.verdict, reviewer.model()),
+    cost,
   }
 }

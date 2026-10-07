@@ -9,6 +9,7 @@ mod redaction;
 
 use serde::{Deserialize, Serialize};
 
+pub(crate) use self::claude::usage as claude_usage;
 pub use self::{
   claude::ClaudeStream,
   native::{CallDetail, Declined, DeclinedBy, NativeCall},

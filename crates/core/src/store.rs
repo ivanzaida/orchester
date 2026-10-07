@@ -518,7 +518,7 @@ pub trait ActivityStore {
   fn last_command_finished(&self, run: RunId, execution: StepExecutionId) -> Result<Option<AgentEvent>, Self::Error>;
 
   /// Tokens that counted toward budgets in every run of the project since `since`, from the
-  /// usage each completed turn reported.
+  /// usage each completed turn and each review of auto mode's reviewer reported.
   fn tokens_used_since(&self, since: Timestamp) -> Result<TokensUsed, Self::Error>;
 
   /// Stores what a step execution left for the steps after it; an execution has at most one

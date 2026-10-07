@@ -306,7 +306,11 @@ impl RunTask {
     (driven, (permissions, secrets, agent)): (Driven, (LaunchPermissions, Vec<SecretVariable>, String)),
     workspace: Workspace,
   ) -> Result<(), ExecutionError> {
-    let used = execution_tokens(&self.db.invocations(self.run.id())?, execution);
+    let (invocations, reviews) = (
+      self.db.invocations(self.run.id())?,
+      self.db.reviewer_usage(self.run.id())?,
+    );
+    let used = execution_tokens(&invocations, &reviews, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
     let (steers, steered) = mpsc::unbounded_channel();

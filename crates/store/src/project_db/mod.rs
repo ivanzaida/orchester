@@ -29,6 +29,7 @@ mod read_only;
 mod repository;
 mod repository_import;
 mod resources;
+mod reviewer_usage;
 mod revision_diffs;
 mod runs;
 mod schema;

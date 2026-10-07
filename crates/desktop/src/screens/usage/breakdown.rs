@@ -1,7 +1,8 @@
 //! *Where tokens go* (`C2pTYF`, `p4eVV6`): columns of horizontal bars, stacked by CLI and scaled to
 //! the column's largest row, each with its spent tokens and share — *By agent profile · step*, *By
 //! model* (mono) and *By pipeline*; across projects *By project* comes first and names the projects
-//! without runs. Selecting a row adds it as a filter.
+//! without runs. Selecting a row adds it as a filter. Auto mode's reviewer has rows of its own among the
+//! profiles (*Auto mode reviewer · claude-haiku-4-5*); it is no agent profile, so they only read.
 
 use std::sync::Arc;
 
@@ -111,7 +112,8 @@ fn series_legend(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     .into()
 }
 
-/// A row's name: *Builder · implement*, a model in mono, a pipeline or a project.
+/// A row's name: *Builder · implement*, *Auto mode reviewer · claude-haiku-4-5*, a model in mono, a
+/// pipeline or a project.
 fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
   match key {
     BreakdownKey::ProfileStep { profile, step } => (
@@ -121,6 +123,7 @@ fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
       ),
       false,
     ),
+    BreakdownKey::Reviewer(model) => (ctx.t_args("usage.breakdown.reviewer", [("model", &**model)]), false),
     BreakdownKey::Model(model) => (model.clone(), true),
     BreakdownKey::Pipeline(Some(pipeline)) => (pipeline.clone(), false),
     BreakdownKey::Pipeline(None) => (ctx.t("usage.breakdown.pipelineGone"), false),
@@ -179,8 +182,8 @@ fn bar_row(ctx: &Ctx, row: &BreakdownRow, rows: &[BreakdownRow], spent: u64, con
         ),
     )
     .child(bar);
-  // Runs whose pipeline is gone cannot be filtered by it: their row only reads.
-  if row.key == BreakdownKey::Pipeline(None) {
+  // Runs whose pipeline is gone cannot be filtered by it, nor the reviewer by a profile: their rows only read.
+  if matches!(row.key, BreakdownKey::Pipeline(None) | BreakdownKey::Reviewer(_)) {
     return content.into();
   }
   let (controls, key) = (controls.clone(), row.key.clone());
@@ -205,8 +208,8 @@ fn add_filter(filter: &mut orchester_core::usage::UsageFilter, key: &BreakdownKe
     BreakdownKey::ProfileStep { profile, .. } => add(&mut filter.profiles, profile),
     BreakdownKey::Model(model) => add(&mut filter.models, model),
     BreakdownKey::Pipeline(Some(pipeline)) => add(&mut filter.pipelines, pipeline),
-    // Not pressable (see `bar_row`): there is no pipeline to choose.
-    BreakdownKey::Pipeline(None) => {}
+    // Not pressable (see `bar_row`): there is no pipeline or profile to choose.
+    BreakdownKey::Pipeline(None) | BreakdownKey::Reviewer(_) => {}
     BreakdownKey::Project(id, _) => {
       if !filter.projects.contains(id) {
         filter.projects.push(*id);

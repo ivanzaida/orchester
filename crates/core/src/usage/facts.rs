@@ -15,6 +15,8 @@ use crate::{
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UsageFacts {
   pub turns: Vec<TurnUsage>,
+  /// The reviews of auto mode's reviewer whose usage is known.
+  pub reviews: Vec<ReviewUsage>,
   pub invocations: Vec<InvocationFacts>,
   pub runs: Vec<RunFacts>,
   /// When the project's latest turn completed, at any time: the no-runs state names it.
@@ -26,6 +28,20 @@ pub struct UsageFacts {
 pub struct TurnUsage {
   pub at: Timestamp,
   pub invocation: InvocationId,
+  pub usage: TokenUsage,
+}
+
+/// What one review of auto mode's reviewer reported it spent, with the invocation whose request it
+/// judged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReviewUsage {
+  /// When the review ended.
+  pub at: Timestamp,
+  pub invocation: InvocationId,
+  /// The reviewer's provider.
+  pub cli: AgentProvider,
+  /// The reviewer's model.
+  pub model: Arc<str>,
   pub usage: TokenUsage,
 }
 
