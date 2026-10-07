@@ -33,7 +33,6 @@ use orchester_core::{
     mcp::{InvocationExemptions, McpServerProblem},
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
-  orchester_tools::SERVER,
   permission::NetworkAccess,
   resource::RepositoryAccess,
 };
@@ -43,7 +42,7 @@ use thiserror::Error;
 use super::stderr::StderrLog;
 use crate::supervisor::Supervised;
 
-/// Characters kept of Codex's reason for refusing to resume a session.
+/// Characters kept of Codex's reason for refusing a request.
 const REASON_CHARS: usize = 300;
 /// How the ids of the runner's `turn/steer` requests start; the rest names the message.
 pub(super) const STEER_REQUEST: &str = "steer-";
@@ -88,8 +87,6 @@ pub(super) struct AppServerSetup {
   pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
-  /// Orchester's server's table in the thread's `mcp_servers` configuration: its tools' approval modes.
-  pub orchester: Value,
 }
 
 impl AppServerSetup {
@@ -227,15 +224,7 @@ impl AppServerSession {
       .and_then(Value::as_str)
       .filter(|id| id.starts_with(STEER_REQUEST))
     {
-      let refused = value.get("error").map(|error| {
-        error
-          .get("message")
-          .and_then(Value::as_str)
-          .unwrap_or("no reason given")
-          .chars()
-          .take(REASON_CHARS)
-          .collect()
-      });
+      let refused = value.get("error").map(|error| self.reason(error));
       self.steer_answers.push(SteerAnswer {
         id: id.to_owned(),
         refused,
@@ -366,22 +355,34 @@ impl AppServerSession {
     }
   }
 
-  /// Why the step stops after Codex answered its request with `error`. A session Codex cannot resume
-  /// (its history is not in this Codex home, for one) is named with Codex's reason, cut to a line.
+  /// Why the step stops after Codex answered its request with `error`, with Codex's reason
+  /// ([`Self::reason`]) and error code; a session Codex cannot resume (its history is not in this Codex
+  /// home, for one) is named. Also logged, as the failure is the only trace of what Codex refused.
   fn rejected(&self, error: &Value) -> String {
-    match (&self.setup.resume, self.phase) {
-      (Some(session), Phase::Thread) => {
-        let reason: String = error
-          .get("message")
-          .and_then(Value::as_str)
-          .unwrap_or("no reason given")
-          .chars()
-          .take(REASON_CHARS)
-          .collect();
-        format!("Codex could not resume the earlier session {session}: {reason}")
+    let reason = self.reason(error);
+    let failure = match (&self.setup.resume, self.phase) {
+      (Some(session), Phase::Thread) => format!("Codex could not resume the earlier session {session}: {reason}"),
+      _ => {
+        let code = error
+          .get("code")
+          .and_then(Value::as_i64)
+          .map_or_else(String::new, |code| format!(" (code {code})"));
+        format!("Codex App Server rejected {}{code}: {reason}", phase_name(self.phase))
       }
-      _ => format!("Codex App Server rejected {}", phase_name(self.phase)),
-    }
+    };
+    tracing::warn!(%failure, "Codex App Server refused a request");
+    failure
+  }
+
+  /// Codex's message in `error`, its secrets redacted, on one line, cut to [`REASON_CHARS`].
+  fn reason(&self, error: &Value) -> String {
+    let message = error
+      .get("message")
+      .and_then(Value::as_str)
+      .unwrap_or("no reason given");
+    let redacted = self.redact(message);
+    let line = redacted.split_whitespace().collect::<Vec<_>>().join(" ");
+    line.chars().take(REASON_CHARS).collect()
   }
 
   /// Checks the configuration Codex read (`config/read` with its layers), then starts the thread
@@ -527,9 +528,7 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
-    let mut servers = thread_servers(&self.turned_off, &self.setup.exemptions);
-    servers.insert(SERVER.to_owned(), self.setup.orchester.clone());
-    let config = json!({ "mcp_servers": servers });
+    let config = json!({ "mcp_servers": thread_servers(&self.turned_off) });
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),

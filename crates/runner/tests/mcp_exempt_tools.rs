@@ -183,15 +183,10 @@ async fn mcp_exempt_codex_tool_runs_without_asking_and_another_asks() {
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(reported(&db, id, "unasked: "), ["pencil/get_screenshot"]);
-  let thread = reported(&db, id, "thread: ").pop().expect("thread parameters");
-  let thread: serde_json::Value = serde_json::from_str(&thread).expect("JSON");
-  assert_eq!(
-    thread["config"]["mcp_servers"]["pencil"],
-    serde_json::json!({"tools": {
-      "get_editor_state": {"approval_mode": "approve"},
-      "get_screenshot": {"approval_mode": "approve"},
-    }})
-  );
+  assert!(reported(&db, id, "mcp-arg: ").contains(&approved_pencil()));
+  for servers in thread_servers(root, id) {
+    assert!(servers.get("pencil").is_none(), "{servers}");
+  }
   assert_eq!(not_asked(&db, id), listed());
 }
 
@@ -203,14 +198,14 @@ fn thread_servers(root: &Path, run: RunId) -> Vec<serde_json::Value> {
     .collect()
 }
 
-fn approved_pencil() -> serde_json::Value {
-  serde_json::json!({"tools": {
-    "get_editor_state": {"approval_mode": "approve"},
-    "get_screenshot": {"approval_mode": "approve"},
-  }})
+/// The override that approves `pencil`'s listed tools: Codex refuses a thread whose configuration has a
+/// table for a server only overrides define, so the approval is one of them.
+fn approved_pencil() -> String {
+  r#"mcp_servers.pencil.tools={"get_editor_state"={approval_mode="approve"},"get_screenshot"={approval_mode="approve"}}"#
+    .to_owned()
 }
 
-/// A thread continued after its runner was killed (`thread/resume`) approves the listed tools again.
+/// A Codex started again after its runner was killed (`thread/resume`) approves the listed tools again.
 #[tokio::test(flavor = "multi_thread")]
 async fn mcp_exempt_codex_resumed_thread_keeps_the_exemption() {
   let project = asking(AgentProvider::CodexCli, "Keep working.");
@@ -225,12 +220,14 @@ async fn mcp_exempt_codex_resumed_thread_keeps_the_exemption() {
   let started = threads(&ProjectDb::open(root).expect("open"), run);
   assert_eq!(started.len(), 2, "a new thread, then the resumed one");
   assert!(started[1]["threadId"].is_string(), "{}", started[1]);
-  for servers in thread_servers(root, run) {
-    assert_eq!(servers["pencil"], approved_pencil());
-  }
+  let approvals = reported(&ProjectDb::open(root).expect("open"), run, "mcp-arg: ")
+    .into_iter()
+    .filter(|arg| *arg == approved_pencil())
+    .count();
+  assert_eq!(approvals, 2, "each Codex start approves them");
 }
 
-/// A step that does not ask before MCP actions approves nothing by configuration.
+/// A step that does not ask before MCP actions approves nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn mcp_exempt_codex_step_that_does_not_ask_gets_no_exemption() {
   let project = builder(AgentProvider::CodexCli, "Say hello.", false, vec![pencil()]);
@@ -245,6 +242,11 @@ async fn mcp_exempt_codex_step_that_does_not_ask_gets_no_exemption() {
   let servers = thread_servers(root, id);
   assert_eq!(servers.len(), 1);
   assert!(servers[0].get("pencil").is_none(), "{}", servers[0]);
+  let args = reported(&ProjectDb::open(root).expect("open"), id, "mcp-arg: ");
+  assert!(
+    !args.iter().any(|arg| arg.starts_with("mcp_servers.pencil.tools=")),
+    "{args:#?}"
+  );
 }
 
 /// `a` lists `b__c`, which Claude Code would name as `c` of `a__b` too: it gets no rule, still asks, and

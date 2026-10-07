@@ -67,14 +67,12 @@ fn assert_thread_and_turn(stderr: &[&str]) {
   };
   let thread = reported("thread: ");
   assert_eq!(thread["model"], "gpt-5.5");
-  // The user's own MCP server, read from `config/read`, is turned off for the thread; Orchester's own tools
-  // have their approval modes (`orchester_tools`).
+  // The user's own MCP server, read from `config/read`, is turned off for the thread, and nothing else is
+  // there: Codex refuses a table of a server only its arguments define, such as Orchester's.
   assert_eq!(
-    thread["config"]["mcp_servers"]["user-global"],
-    serde_json::json!({"enabled": false})
+    thread["config"]["mcp_servers"],
+    serde_json::json!({"user-global": {"enabled": false}})
   );
-  let servers = thread["config"]["mcp_servers"].as_object().expect("servers");
-  assert_eq!(servers.keys().collect::<Vec<_>>(), ["Orchester", "user-global"]);
   assert_eq!(thread["sandbox"], "workspace-write");
   // Commands that need more than the sandbox ask a person; nothing else does.
   assert_eq!(
@@ -233,6 +231,42 @@ async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
   let run = run_to_the_end(detached.repo.path(), detached.task).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
+}
+
+/// Codex refusing the thread stops the step with Codex's reason and code on one line, the secrets of the
+/// invocation redacted; the step restarts once, then waits for a person.
+#[tokio::test(flavor = "multi_thread")]
+async fn execution_says_why_codex_refused_the_thread() {
+  let project = project(&Setup {
+    model: Some("fake-refused-model"),
+    ..Setup::new("Append one line.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, |run| {
+    matches!(run.status(), RunStatus::WaitingForPerson(_))
+  })
+  .await;
+  let invocations = ProjectDb::open(root)
+    .expect("open")
+    .invocations(id)
+    .expect("invocations");
+  assert_eq!(invocations.len(), 2, "one fresh restart");
+  let expected = "Codex App Server rejected thread/start or resume (code -32600): model fake-refused-model is \
+    refused for the token <redacted>";
+  for invocation in invocations {
+    assert_eq!(
+      invocation.outcome,
+      Some(InvocationOutcome::TurnFailed {
+        message: expected.to_owned()
+      })
+    );
+  }
+  scheduler.stop_all(InterruptCause::QuitNow).await;
 }
 
 async fn run_to_the_end(root: &std::path::Path, task: TaskId) -> orchester_core::run::Run {

@@ -90,22 +90,23 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       "mcp__Orchester__git_show"
     ]
   );
+  let approved = writing().codex_approved();
   assert_eq!(
-    writing().codex_tools(),
-    json!({"tools": {
-      "read_file": {"approval_mode": "approve"},
-      "list_files": {"approval_mode": "approve"},
-      "search": {"approval_mode": "approve"},
-      "edit_file": {"approval_mode": "approve"},
-      "write_file": {"approval_mode": "approve"},
-      "git_status": {"approval_mode": "approve"},
-      "git_diff": {"approval_mode": "approve"},
-      "git_log": {"approval_mode": "approve"},
-      "git_show": {"approval_mode": "approve"},
-      "git_add": {"approval_mode": "approve"},
-      "git_commit": {"approval_mode": "approve"},
-      "read_outside_file": {"approval_mode": "approve"},
-    }})
+    approved,
+    [
+      "read_file",
+      "list_files",
+      "search",
+      "edit_file",
+      "write_file",
+      "git_status",
+      "git_diff",
+      "git_log",
+      "git_show",
+      "git_add",
+      "git_commit",
+      "read_outside_file",
+    ]
   );
   let token = ApprovalToken::generate();
   let server = CodexOrchester::new(
@@ -113,6 +114,7 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
     &["--orchester-tools"],
     "127.0.0.1:4000",
     token.variable(),
+    &approved[..2],
   );
   let mcp = CodexMcp::new(&[]).0.with_orchester(server);
   assert_eq!(
@@ -128,6 +130,8 @@ fn orchester_tools_tell_each_cli_what_runs_and_what_asks() {
       r#"mcp_servers.Orchester.env_vars=["ORCHESTER_APPROVAL_TOKEN"]"#,
       "-c",
       "mcp_servers.Orchester.tool_timeout_sec=86460",
+      "-c",
+      r#"mcp_servers.Orchester.tools={"read_file"={approval_mode="approve"},"list_files"={approval_mode="approve"}}"#,
       "-c",
       r#"shell_environment_policy.exclude=["ORCHESTER_APPROVAL_TOKEN"]"#,
     ]

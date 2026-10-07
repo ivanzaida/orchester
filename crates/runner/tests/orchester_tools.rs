@@ -154,10 +154,18 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
     "{args:#?}"
   );
   assert_eq!(reported(&db, id, "mcp-env: "), ["ORCHESTER_APPROVAL_TOKEN=<redacted>"]);
+  let approved = args
+    .iter()
+    .find_map(|arg| arg.strip_prefix("mcp_servers.Orchester.tools="))
+    .expect("Orchester's tools approved");
+  for tool in ["read_outside_file", "git_status"] {
+    assert!(
+      approved.contains(&format!(r#""{tool}"={{approval_mode="approve"}}"#)),
+      "{approved}"
+    );
+  }
   let thread = threads(&db, id).pop().expect("a thread");
-  let modes = &thread["config"]["mcp_servers"]["Orchester"]["tools"];
-  assert_eq!(modes["read_outside_file"], json!({"approval_mode": "approve"}));
-  assert_eq!(modes["git_status"], json!({"approval_mode": "approve"}));
+  assert!(thread["config"]["mcp_servers"].get("Orchester").is_none(), "{thread}");
 }
 
 /// A CLI that runs a call it should have asked about gets no answer unasked: the runner asks itself, and a

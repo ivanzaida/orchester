@@ -17,9 +17,9 @@
 //! asks runs only with a person's or a rule's approval of it, given through the CLI's own prompt or asked by
 //! the runner when the call arrives. Claude Code gets an allow rule for each tool that runs
 //! ([`StepTools::claude_allow_rules`]), so the others reach its permission prompt; Codex runs every tool
-//! without asking ([`StepTools::codex_tools`]), and the runner asks.
+//! without asking ([`StepTools::codex_approved`]), and the runner asks.
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, catalog::input_schema};
 use crate::{
@@ -126,16 +126,11 @@ impl StepTools {
       .collect()
   }
 
-  /// The server's table in a Codex thread's `mcp_servers` configuration: `approve` for every tool, so Codex
-  /// sends no approval request of its own. The runner asks about a tool that asks when its call arrives;
-  /// whether Codex 0.159.2 honours `prompt` while the step's `mcp_elicitations` is off is not verified.
-  pub fn codex_tools(&self) -> Value {
-    let tools: Map<String, Value> = self
-      .offered
-      .iter()
-      .map(|(tool, _)| (tool.as_str().to_owned(), json!({"approval_mode": "approve"})))
-      .collect();
-    json!({"tools": tools})
+  /// The tools a Codex agent's process approves (`approval_mode = "approve"`): every one, so Codex sends no
+  /// approval request of its own. The runner asks about a tool that asks when its call arrives; whether
+  /// Codex 0.159.2 honours `prompt` while the step's `mcp_elicitations` is off is not verified.
+  pub fn codex_approved(&self) -> Vec<&'static str> {
+    self.offered.iter().map(|(tool, _)| tool.as_str()).collect()
   }
 
   /// The `tools` of the server's MCP `tools/list` result.

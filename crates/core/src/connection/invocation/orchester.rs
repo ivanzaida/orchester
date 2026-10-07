@@ -2,10 +2,11 @@
 //! (`orchester-runner --orchester-tools`), which reaches the runner at a loopback address with the
 //! invocation's token. The address is a configuration value; the token is a variable of the Codex process,
 //! handed to the relay by name (`env_vars`) and kept out of the agent's shell commands like every MCP
-//! secret ([`super::CodexMcp`]). The tools' approval modes are set in the thread's configuration
-//! (`crate::orchester_tools::StepTools::codex_tools`).
+//! secret ([`super::CodexMcp`]). Its tools are approved by overrides of the same process
+//! (`crate::orchester_tools::StepTools::codex_approved`), not in the thread's configuration, which
+//! Codex refuses for a server only overrides define ([`super::mcp::approved_tools`]).
 
-use super::mcp::{toml_array, toml_string};
+use super::mcp::{approved_tools, toml_array, toml_string};
 use crate::{
   command::SecretVariable,
   connection::claude_approval::{ADDRESS_VARIABLE, TOKEN_VARIABLE},
@@ -24,17 +25,20 @@ pub struct CodexOrchester {
   args: Vec<String>,
   address: String,
   token: SecretVariable,
+  /// The tools Codex runs without an approval request of its own.
+  approved: Vec<String>,
 }
 
 impl CodexOrchester {
   /// `program` with `args`, reaching the runner at `address` with `token` (the variable
-  /// [`TOKEN_VARIABLE`]).
-  pub fn new(program: &str, args: &[&str], address: &str, token: SecretVariable) -> Self {
+  /// [`TOKEN_VARIABLE`]); Codex runs its tools `approved` without asking.
+  pub fn new(program: &str, args: &[&str], address: &str, token: SecretVariable, approved: &[&str]) -> Self {
     Self {
       program: program.to_owned(),
       args: args.iter().map(|arg| (*arg).to_owned()).collect(),
       address: address.to_owned(),
       token,
+      approved: approved.iter().map(|tool| (*tool).to_owned()).collect(),
     }
   }
 
@@ -43,7 +47,7 @@ impl CodexOrchester {
     &self.token
   }
 
-  /// The configuration overrides that add the server.
+  /// The configuration overrides that add the server and approve its tools.
   pub(super) fn args(&self) -> Vec<String> {
     let key = format!("mcp_servers.{SERVER}");
     [
@@ -55,6 +59,7 @@ impl CodexOrchester {
     ]
     .into_iter()
     .flat_map(|setting| ["-c".to_owned(), setting])
+    .chain(approved_tools(SERVER, self.approved.iter().map(String::as_str)))
     .collect()
   }
 }

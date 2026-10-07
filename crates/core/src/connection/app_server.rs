@@ -169,8 +169,8 @@ pub struct AppServerStream {
 
 impl AppServerStream {
   /// A stream whose calls of the tools `exemptions` names are reported as not asked
-  /// ([`AgentEvent::McpToolNotAsked`]): the thread's configuration approves them
-  /// (`crate::connection::app_server_mcp::thread_servers`), so Codex runs them without a request.
+  /// ([`AgentEvent::McpToolNotAsked`]): the Codex process's overrides approve them
+  /// (`crate::connection::invocation::CodexMcp::args`), so Codex runs them without a request.
   pub fn with_exemptions(exemptions: InvocationExemptions) -> Self {
     Self {
       exemptions,
