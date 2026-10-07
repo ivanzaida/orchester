@@ -2,7 +2,8 @@
 //! instructions and the review message from standard input and answers with `codex exec --json`'s events,
 //! the verdict's JSON as the text of the final `agent_message`, as Codex does with `--output-schema`. What
 //! it answers depends on the message: "Reviewer asks" asks the person, "Reviewer babbles" ends with prose,
-//! "Reviewer fails" reports a failed turn, anything else approves. When the variable `FAKE_REVIEW_LOG`
+//! "Reviewer fails" reports a failed turn, anything else approves. Its turn reports what it spent
+//! ([`USAGE`]). When the variable `FAKE_REVIEW_LOG`
 //! names a file, it appends how it ran to it: `argv <arguments>`, `pid <id>`, `cwd <folder>`, `empty
 //! <whether the folder was empty>`, `schema <whether its --output-schema file is the verdict's schema>`
 //! and `instructions <whether the message starts with the reviewer's instructions>`.
@@ -13,6 +14,10 @@ use std::{
 };
 
 use serde_json::{Value, json};
+
+/// What a review's turn reports it spent, OpenAI-style: the input holds the cached part. Counted:
+/// 1,200 − 1,000 + 30 = 230.
+const USAGE: &str = r#"{"input_tokens":1200,"cached_input_tokens":1000,"output_tokens":30}"#;
 
 /// Whether `args` start the reviewer rather than App Server.
 pub fn is_review(args: &[String]) -> bool {
@@ -41,7 +46,8 @@ pub fn review(args: &[String]) -> ExitCode {
     json!({"verdict": "approve", "reason": "The fake Codex reviewer finds it serves the task."}).to_string()
   };
   event(json!({"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": text}}));
-  event(json!({"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}}));
+  let usage: Value = serde_json::from_str(USAGE).expect("the usage is JSON");
+  event(json!({"type": "turn.completed", "usage": usage}));
   ExitCode::SUCCESS
 }
 

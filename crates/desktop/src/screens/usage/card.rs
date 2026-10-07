@@ -93,6 +93,7 @@ impl Card {
     let note = self.note.map(|note| {
       Element::from(
         Text::new(&note)
+          .id(format!("{}-note", self.id))
           .variant(TypographyStyle::Caption)
           .color(PaletteColor::TextMuted)
           .nowrap(),
@@ -113,11 +114,13 @@ impl Card {
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Mark.role())
       .child(title_line)
-      .with_children(
-        self
-          .subtitle
-          .map(|subtitle| Element::from(Text::new(&subtitle).variant(TypographyStyle::Caption))),
-      );
+      .with_children(self.subtitle.map(|subtitle| {
+        Element::from(
+          Text::new(&subtitle)
+            .id(format!("{}-subtitle", self.id))
+            .variant(TypographyStyle::Caption),
+        )
+      }));
     let header = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

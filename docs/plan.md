@@ -436,6 +436,32 @@ limits ending on *Today*; *Most expensive* titles shrink with an ellipsis, and u
 columns narrow so titles and pipelines stay readable at 960. Left open: the CDcij footnote's *Select a row to see its
 runs;* (the table's rows do not open anything yet, so the sentence would promise a missing interaction).
 
+### Auto mode reviewer's usage · branch `claude/reviewer-usage` (from `claude/usage-finish`, implemented 2026-10-07, waiting for review and design verification)
+
+What auto mode's reviewer spends is recorded and counted (`docs/design/orchester-workspace.md`, "Token budgets" ›
+*Auto mode's reviewer*, and the Usage dashboard's decision of 2026-10-07). Core: `RequestReviewer::review` gives a
+`Reviewed` (verdict, `ReviewSpend` reported / unknown / nothing, plan limits); `review_request` gives an `AutoReview`
+with the `ReviewCost`; Claude Code's reviewer prints `--output-format stream-json --verbose` (its result's `usage`,
+its `rate_limit_event`s), Codex's `turn.completed` usage, a native response's usage; `execution_tokens` counts the
+reviews of a step. Store: `reviewer_usage` (migration after `plan_limits`), read by `tokens_used_since`, the step budget
+checks, `usage_facts` and the run view. Runner: the review's blocking job records its cost (`review::ledger`), sends
+its tokens to the run as a turn's usage and stores its plan limits, also when the worker no longer waits for it;
+the worker reports its end only once its reviews have (so late tokens count once, toward the run that still listens).
+A CLI that never started (`CommandError::NotStarted`) and a native request refused with an HTTP status spend
+nothing; a native attempt that may have been billed for more than it reported makes the spend unknown. The reviewer's
+output keeps its last 256 KiB, so Claude Code's result line survives a long stream; a Codex output cut at its start
+fails closed with unknown spend. An ended reviewer gets 10 s to report its exit, so a review never holds up the run.
+Desktop: *Where tokens go* reviewer rows with the model first in mono and *auto mode reviewer* after it (names give
+way with an ellipsis, the model kept whole), a line under the card's title saying they only read, the invocation panel's *Auto mode reviewer* line,
+`get_run`'s `tokens.reviewer`. Tests: `cargo test -p orchester-core --test reviewer_usage reviewer_usage`, `--test usage
+usage`, `--test auto_mode auto_mode` (and `auto_mode_scope`, `auto_mode_reviewers`), `-p orchester-agent --test
+anthropic_wire anthropic_review`, `--test responses_wire responses_review`, `-p orchester-store --test reviewer_usage
+reviewer_usage`, `--test usage usage`, `-p orchester-runner --features test-agent --test reviewer_usage reviewer_usage`,
+`--test auto_mode auto_mode`, `-p orchester-desktop --test form_keyboard usage_`. Not verified against a live CLI: the
+Claude Code reviewer's stream-json output and Codex's `turn.completed` usage were read from fixtures and the installed
+binaries' event names only. **Done when** a separate review passes and a design verifier accepts the reviewer row of
+*Where tokens go* (`C2pTYF` has none; judge it against the profile rows) and the invocation panel's line (`n0cEOG`).
+
 ### ORC-17 · Plan limits in the status bar · branch `claude/orc17` (done 2026-10-02)
 
 Independent review and design verification passed (all states, widths 960–1600). Known: a truncated activity label

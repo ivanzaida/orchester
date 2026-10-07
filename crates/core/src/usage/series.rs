@@ -58,7 +58,7 @@ pub(super) fn bars(within: &Within<'_>, range: DayRange, grouping: Grouping) -> 
     let Some(index) = bucket_of(&buckets, within.end, turn.at) else {
       continue;
     };
-    let series = CliSeries::of(turn.launch.invocation.cli);
+    let series = CliSeries::of(turn.cli());
     bars[index].by_cli[series.index()] += turn.usage;
     runs[index].insert(turn.run().id);
   }

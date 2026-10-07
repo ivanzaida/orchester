@@ -6,13 +6,16 @@
 //! - Claude Code ([`ClaudeReviewer`]) in print mode, isolated from everything an agent gets: no tools (`--tools ""`),
 //!   no MCP server (`--strict-mcp-config` without a configuration), no settings, skills or slash commands, no session
 //!   kept; the instructions as the system prompt (`--system-prompt-file`), the message on standard input, and the
-//!   verdict as structured output (`--json-schema`, read from the `structured_output` of the `--output-format json`
-//!   result).
+//!   verdict as structured output (`--json-schema`, read from the `structured_output` of the result that ends its
+//!   `--output-format stream-json` output). The same output carries what the review spent (the result's `usage`) and
+//!   the account's plan limits (`rate_limit_event`), which `--output-format json` would leave out.
 //! - Codex ([`CodexReviewer`]): `codex exec` in its read-only sandbox, see [`codex`].
 //! - A native connection on the Anthropic API: one Messages request without tools, see [`native`].
 //!
 //! The CLIs run in an empty folder the runner owns, which the runner removes afterwards, and the runner
-//! bounds how long a review may take.
+//! bounds how long a review may take. What a review spent is read from whatever the CLI printed, also when it
+//! failed; a CLI that was stopped, timed out or printed no usage it could read spent an unknown amount
+//! ([`ReviewSpend::Unknown`]), and one that could not be started spent nothing.
 
 mod codex;
 mod native;
@@ -22,14 +25,16 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 pub use self::{
-  codex::{CodexReviewer, codex_reviewer_args, parse_codex_review},
-  native::{NATIVE_MAX_OUTPUT, native_request, native_verdict},
+  codex::{CodexReviewer, codex_reviewer_args, parse_codex_review, read_codex_review},
+  native::{NATIVE_MAX_OUTPUT, NativeSpend, native_request, native_verdict},
 };
 use crate::{
   command::{Command, CommandError, CommandRunner},
+  connection::{plan_limits::claude_limits, stream::claude_usage},
   resource::ModelId,
   run::review::{
-    REVIEW_SCHEMA, RequestReviewer, ReviewError, ReviewInput, ReviewVerdict, parse_verdict, review_prompt,
+    REVIEW_SCHEMA, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict,
+    review_prompt,
   },
 };
 
@@ -94,26 +99,35 @@ impl<R: CommandRunner> RequestReviewer for ClaudeReviewer<R> {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
-    let output = run(&self.runner, &self.command(input))?;
-    parse_review(&output)
+  fn review(&self, input: &ReviewInput) -> Reviewed {
+    run_review(&self.runner, &self.command(input), read_claude_review)
   }
 }
 
-/// `command`'s standard output once it exited successfully; a timeout, a failure to start and a failing
-/// exit are errors of the review.
-fn run(runner: &impl CommandRunner, command: &Command) -> Result<String, ReviewError> {
-  let output = runner.run(command).map_err(|error| match error {
-    CommandError::TimedOut => ReviewError::TimedOut,
-    other => ReviewError::CouldNotRun(other.to_string()),
-  })?;
-  if !output.success() {
-    return Err(ReviewError::CouldNotRun(format!(
-      "the CLI exited with {:?}",
-      output.code
-    )));
+/// `command`'s answer as `read` finds it in its standard output: the verdict once it exited successfully, and
+/// what it spent and the limits it reported also when it failed. A timeout, a failure to start and a failing
+/// exit are errors of the review; a program that never started spent nothing, one that was ended (or that a
+/// runner could not say whether it started) spent an unknown amount.
+fn run_review(runner: &impl CommandRunner, command: &Command, read: fn(&str) -> Reviewed) -> Reviewed {
+  match runner.run(command) {
+    Ok(output) => {
+      let mut answer = read(&output.stdout);
+      if !output.success() {
+        answer.verdict = Err(ReviewError::CouldNotRun(format!(
+          "the CLI exited with {:?}",
+          output.code
+        )));
+      }
+      answer
+    }
+    Err(CommandError::TimedOut) => Reviewed::new(Err(ReviewError::TimedOut), ReviewSpend::Unknown),
+    Err(error @ (CommandError::NotFound | CommandError::NotStarted(_) | CommandError::UnsafeScriptArgument { .. })) => {
+      Reviewed::new(Err(ReviewError::CouldNotRun(error.to_string())), ReviewSpend::Nothing)
+    }
+    Err(error @ CommandError::Failed(_)) => {
+      Reviewed::new(Err(ReviewError::CouldNotRun(error.to_string())), ReviewSpend::Unknown)
+    }
   }
-  Ok(output.stdout)
 }
 
 /// Whether `word` may be passed as an effort: a plain word, nothing a CLI could read as more.
@@ -121,14 +135,15 @@ fn plain_word(word: &str) -> bool {
   !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Claude Code's arguments after the program: print mode, the model and its effort (only a plain word is
-/// passed), nothing of the user's or an agent's setup, no tools, the system prompt in `instructions`, and
-/// the verdict's schema.
+/// Claude Code's arguments after the program: print mode with its stream of events (which needs `--verbose`), the
+/// model and its effort (only a plain word is passed), nothing of the user's or an agent's setup, no tools, the
+/// system prompt in `instructions`, and the verdict's schema.
 pub fn reviewer_args((model, effort): (&ModelId, Option<&str>), instructions: &Path) -> Vec<String> {
   let mut args: Vec<String> = [
     "-p",
     "--output-format",
-    "json",
+    "stream-json",
+    "--verbose",
     "--model",
     model.as_str(),
     "--strict-mcp-config",
@@ -149,15 +164,10 @@ pub fn reviewer_args((model, effort): (&ModelId, Option<&str>), instructions: &P
   args
 }
 
-/// The verdict in Claude Code's `--output-format json` result: its last `result` line.
+/// The verdict in Claude Code's output: the structured output of its last `result` line.
 pub fn parse_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
   let unreadable = |detail: &str| ReviewError::Unparseable(detail.to_owned());
-  let result: Value = stdout
-    .lines()
-    .rev()
-    .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
-    .find(|value| value.get("type").and_then(Value::as_str) == Some("result"))
-    .ok_or_else(|| unreadable("no JSON result"))?;
+  let result = claude_result(stdout).ok_or_else(|| unreadable("no JSON result"))?;
   if result.get("is_error").and_then(Value::as_bool) != Some(false) {
     return Err(unreadable("the result is an error"));
   }
@@ -166,4 +176,38 @@ pub fn parse_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
     .cloned()
     .ok_or_else(|| unreadable("no structured output"))?;
   parse_verdict(structured)
+}
+
+/// Claude Code's answer in its output: the verdict ([`parse_review`]), what the review spent as its last
+/// `result` line reports it (for the whole review), and the plan limits of every `rate_limit_event`.
+pub fn read_claude_review(stdout: &str) -> Reviewed {
+  let spend = claude_result(stdout)
+    .and_then(|result| result.get("usage").and_then(claude_usage))
+    .map_or(ReviewSpend::Unknown, ReviewSpend::Reported);
+  let limits = events(stdout)
+    .filter(|event| kind(event) == Some("rate_limit_event"))
+    .filter_map(|event| event.get("rate_limit_info").and_then(claude_limits))
+    .collect();
+  Reviewed {
+    verdict: parse_review(stdout),
+    spend,
+    limits,
+  }
+}
+
+/// The last `result` line of Claude Code's output.
+fn claude_result(stdout: &str) -> Option<Value> {
+  events(stdout).filter(|event| kind(event) == Some("result")).last()
+}
+
+/// The JSON objects of a CLI's output, one per line; other lines are left out.
+fn events(stdout: &str) -> impl Iterator<Item = Value> + '_ {
+  stdout
+    .lines()
+    .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
+}
+
+/// An event's `type`.
+fn kind(event: &Value) -> Option<&str> {
+  event.get("type").and_then(Value::as_str)
 }

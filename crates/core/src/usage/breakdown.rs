@@ -1,9 +1,14 @@
 //! *Where tokens go*: spent tokens by agent profile · step, by model, by pipeline and, across
-//! projects, by project; each row split by CLI.
+//! projects, by project; each row split by CLI. Auto mode's reviewer is no agent profile: its reviews
+//! have a row per model of their own among the profiles (*Auto mode reviewer · claude-haiku-4-5*).
 
 use std::{collections::HashMap, sync::Arc};
 
-use super::{CliSeries, facts::ProjectFacts, report::Within};
+use super::{
+  CliSeries,
+  facts::ProjectFacts,
+  report::{Spender, Within},
+};
 use crate::id::ProjectId;
 
 /// What a row groups by.
@@ -13,6 +18,8 @@ pub enum BreakdownKey {
     profile: Arc<str>,
     step: Arc<str>,
   },
+  /// Auto mode's reviewer with this model, in the profiles' column.
+  Reviewer(Arc<str>),
   Model(Arc<str>),
   /// `None` for runs whose pipeline is gone.
   Pipeline(Option<Arc<str>>),
@@ -50,15 +57,18 @@ impl Breakdowns {
     let mut by_project = Rows::default();
     for turn in &within.turns {
       let invocation = turn.launch.invocation;
-      let (series, spent) = (CliSeries::of(invocation.cli), turn.usage.counted());
-      if let Some(profile) = &invocation.profile {
-        let key = BreakdownKey::ProfileStep {
+      let (series, spent) = (CliSeries::of(turn.cli()), turn.usage.counted());
+      let profile = match turn.by {
+        Spender::Agent => invocation.profile.as_ref().map(|profile| BreakdownKey::ProfileStep {
           profile: profile.clone(),
           step: invocation.step.clone(),
-        };
+        }),
+        Spender::Reviewer { model, .. } => Some(BreakdownKey::Reviewer(model.clone())),
+      };
+      if let Some(key) = profile {
         profiles.add(key, series, spent);
       }
-      if let Some(model) = &invocation.model {
+      if let Some(model) = turn.model() {
         models.add(BreakdownKey::Model(model.clone()), series, spent);
       }
       pipelines.add(BreakdownKey::Pipeline(turn.run().pipeline.clone()), series, spent);
@@ -118,6 +128,7 @@ impl Rows {
 fn label(key: &BreakdownKey) -> (&str, &str) {
   match key {
     BreakdownKey::ProfileStep { profile, step } => (profile, step),
+    BreakdownKey::Reviewer(model) => ("", model),
     BreakdownKey::Model(name) | BreakdownKey::Project(_, name) => (name, ""),
     BreakdownKey::Pipeline(name) => (name.as_deref().unwrap_or(""), ""),
   }

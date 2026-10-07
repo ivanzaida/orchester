@@ -1,5 +1,6 @@
-//! What the Usage dashboard reads of a project: the usage of every completed turn from a time on,
-//! with the invocations and runs those turns belong to, in a few queries.
+//! What the Usage dashboard reads of a project: the usage of every completed turn and of every review
+//! of auto mode's reviewer from a time on, with the invocations and runs they belong to, in a few
+//! queries.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -18,8 +19,10 @@ use crate::{
   rows::{corrupt, decode_json, parse},
 };
 
-/// Invocations that ran at or after `?1`: started then, ended then, or still running.
-const RAN_SINCE: &str = "invocations.started_at >= ?1 OR invocations.ended_at >= ?1 OR invocations.ended_at IS NULL";
+/// Invocations that ran at or after `?1`: started then, ended then, or still running; or whose request a
+/// review judged then.
+const RAN_SINCE: &str = "invocations.started_at >= ?1 OR invocations.ended_at >= ?1 OR invocations.ended_at IS NULL \
+                         OR invocations.id IN (SELECT invocation_id FROM reviewer_usage WHERE ended_at >= ?1)";
 
 impl ProjectDb {
   /// The usage of the turns that completed from `since` on, the invocations that ran from then on
@@ -27,6 +30,7 @@ impl ProjectDb {
   pub fn usage_facts(&self, since: Timestamp, now: Timestamp) -> Result<UsageFacts, StoreError> {
     Ok(UsageFacts {
       turns: self.turns_since(since)?,
+      reviews: self.reviews_since(since)?,
       invocations: self.invocations_since(since, now)?,
       runs: self.runs_since(since)?,
       last_turn: self

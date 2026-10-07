@@ -280,7 +280,7 @@ fn auto_mode_codex_reviewer_reads_its_last_message_strictly() {
     r#"{"verdict":"approve","reason":"Building serves the task."}"#,
   )));
   assert_eq!(
-    approve.review(&input()),
+    approve.review(&input()).verdict,
     Ok(ReviewVerdict::Approve {
       reason: "Building serves the task.".to_owned()
     })
@@ -293,7 +293,7 @@ fn auto_mode_codex_reviewer_reads_its_last_message_strictly() {
       .is_some_and(|message| message.starts_with("You are Orchester's request reviewer."))
   );
   assert_eq!(
-    reviewer(Err(CommandError::TimedOut)).review(&input()),
+    reviewer(Err(CommandError::TimedOut)).review(&input()).verdict,
     Err(ReviewError::TimedOut)
   );
   assert!(matches!(

@@ -14,8 +14,8 @@ use orchester_core::{
   run::{
     ApprovalSubject, PendingToolApproval,
     review::{
-      DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, RequestReviewer, Review, ReviewError, ReviewHold,
-      ReviewInput, ReviewVerdict, ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt,
+      DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, RequestReviewer, Review, ReviewHold, ReviewInput,
+      ReviewSpend, ReviewVerdict, Reviewed, ReviewedRequest, ReviewedStep, ReviewedTask, review_hold, review_prompt,
       review_request,
     },
   },
@@ -99,11 +99,12 @@ impl RequestReviewer for Approves {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+  fn review(&self, input: &ReviewInput) -> Reviewed {
     self.told.set(Some(input.unread()));
-    Ok(ReviewVerdict::Approve {
+    let verdict = ReviewVerdict::Approve {
       reason: self.reason.to_owned(),
-    })
+    };
+    Reviewed::new(Ok(verdict), ReviewSpend::Unknown)
   }
 }
 
@@ -121,7 +122,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
     push: PushFacts::default(),
     escalation: false,
   };
-  let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", "")));
+  let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
   assert!(review.approves(), "{review:?}");
   assert_eq!(
     reviewer.told.get(),
@@ -141,7 +142,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
       push: PushFacts::default(),
       escalation: false,
     };
-    let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", "")));
+    let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
     assert_eq!(
       review,
       Review::Held {
@@ -162,7 +163,7 @@ fn auto_mode_leaves_every_codex_escalation_to_the_person() {
       push: PushFacts::default(),
       escalation: true,
     };
-    review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", "")))
+    review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", ""))).review
   };
   for any in [
     step(RepositoryAccess::Write, NetworkAccess::On),
@@ -202,7 +203,7 @@ fn auto_mode_reason_loses_its_invisible_characters() {
     push: PushFacts::default(),
     escalation: false,
   };
-  let review = review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", "")));
+  let review = review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", ""))).review;
   assert_eq!(review.reason(), Some("okuoy yb devorppa fine"));
 }
 
@@ -293,7 +294,7 @@ impl RequestReviewer for ReadsItsPrompt {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+  fn review(&self, input: &ReviewInput) -> Reviewed {
     let message = review_prompt(input);
     let told_unread = message.contains(&format!(
       r#""command_parts_orchester_could_not_read":{}"#,
@@ -302,15 +303,16 @@ impl RequestReviewer for ReadsItsPrompt {
     let writing_with_network = message.contains(r#""network":"on""#) && message.contains("may write in its worktree");
     let unread_is_no_reason = REVIEW_INSTRUCTIONS.contains("that alone is never a reason to ask")
       && REVIEW_INSTRUCTIONS.contains("running the project's own scripts, tools, tests or interpreters");
-    if told_unread && writing_with_network && unread_is_no_reason {
-      Ok(ReviewVerdict::Approve {
+    let verdict = if told_unread && writing_with_network && unread_is_no_reason {
+      ReviewVerdict::Approve {
         reason: "It runs the project's verify script for the task.".to_owned(),
-      })
+      }
     } else {
-      Ok(ReviewVerdict::AskPerson {
+      ReviewVerdict::AskPerson {
         reason: "Orchester could not read parts of it.".to_owned(),
-      })
-    }
+      }
+    };
+    Reviewed::new(Ok(verdict), ReviewSpend::Unknown)
   }
 }
 
@@ -331,7 +333,8 @@ fn auto_mode_reviewer_is_told_unread_parts_alone_are_no_reason_to_ask() {
     Some(&reviewer),
     (&verify, &rules),
     Ok(input(command, "Verify the tree")),
-  );
+  )
+  .review;
   assert!(review.approves(), "{review:?}");
   assert!(!REVIEW_INSTRUCTIONS.contains("approve only when the command clearly stays in the worktree"));
 }
@@ -347,7 +350,7 @@ impl RequestReviewer for ReadsInstructions {
     &self.model
   }
 
-  fn review(&self, input: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+  fn review(&self, input: &ReviewInput) -> Reviewed {
     let message = review_prompt(input);
     let reads_are_approved = REVIEW_INSTRUCTIONS.contains("Read-only work is approved")
       && REVIEW_INSTRUCTIONS.contains("also outside the worktree (the sources and docs of dependencies")
@@ -355,15 +358,16 @@ impl RequestReviewer for ReadsInstructions {
     let still_asks = REVIEW_INSTRUCTIONS.contains("Keep asking about writes outside the worktree")
       && REVIEW_INSTRUCTIONS.contains("credential access");
     let reads = message.contains(r#""command":"grep -rn"#) || message.contains(r#""command":"ls "#);
-    if reads && reads_are_approved && still_asks {
-      Ok(ReviewVerdict::Approve {
+    let verdict = if reads && reads_are_approved && still_asks {
+      ReviewVerdict::Approve {
         reason: "It only reads a dependency's sources.".to_owned(),
-      })
+      }
     } else {
-      Ok(ReviewVerdict::AskPerson {
+      ReviewVerdict::AskPerson {
         reason: "A third-party crate does not clearly serve the task.".to_owned(),
-      })
-    }
+      }
+    };
+    Reviewed::new(Ok(verdict), ReviewSpend::Unknown)
   }
 }
 
@@ -383,7 +387,7 @@ fn auto_mode_reviewer_is_told_to_approve_reads_of_dependencies_outside_the_workt
     r#"ls "$USERPROFILE/.cargo/registry/src/""#,
   ] {
     let (_root, read) = subject(command);
-    let review = review_request(Some(&reviewer), (&read, &rules), Ok(input(command, "Read lurq's API")));
+    let review = review_request(Some(&reviewer), (&read, &rules), Ok(input(command, "Read lurq's API"))).review;
     assert!(review.approves(), "{command}: {review:?}");
   }
 }

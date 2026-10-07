@@ -1,6 +1,7 @@
 //! The Usage dashboard's figures: spent, cached and output tokens, runs, agent time, cache share and
 //! failed runs by hour and day and by CLI, model, profile · step, pipeline, tag and project, against
-//! the previous period; and the plan limits history with its gaps.
+//! the previous period, auto mode's reviews counted as turns of their runs on the reviewer's CLI and
+//! model; and the plan limits history with its gaps.
 //! `cargo test -p orchester-core --test usage usage`.
 
 use std::{num::NonZeroU32, sync::Arc};
@@ -16,8 +17,8 @@ use orchester_core::{
   time::Timestamp,
   usage::{
     BreakdownKey, Change, CliSeries, DayRange, FilterOptions, Grouping, IndexGiven, InvocationFacts, Period,
-    ProjectFacts, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport,
-    day_start,
+    ProjectFacts, ReviewUsage, RunFacts, RunOutcome, Summary, TurnUsage, UsageFacts, UsageFilter, UsageQuery,
+    UsageReport, day_start,
     limits::{Join, LimitHistory, LimitSnapshot, WarningThreshold},
   },
 };
@@ -127,6 +128,7 @@ fn kontur() -> ProjectFacts {
     name: "Kontur".into(),
     facts: UsageFacts {
       turns,
+      reviews: Vec::new(),
       invocations: vec![codex, claude, earlier],
       runs: vec![ok, failed, before],
       last_turn: Some(on(29, 15)),
@@ -316,6 +318,67 @@ fn usage_most_expensive_lists_tasks_and_runs_by_spent_tokens() {
   assert_eq!(report.runs[0].started, on(25, 9));
   assert_eq!(report.runs[0].agent_ms, u64::try_from(2 * HOUR).expect("positive"));
   assert_eq!(report.runs[1].outcome, RunOutcome::Failed);
+}
+
+/// [`kontur`] with a review by Claude Code's Haiku of a request of its Codex Builder (ORC-1): 700 spent.
+fn kontur_reviewed() -> ProjectFacts {
+  let mut kontur = kontur();
+  let builder = kontur.facts.invocations[0].id;
+  kontur.facts.reviews.push(ReviewUsage {
+    at: later(on(25, 10), HOUR / 2),
+    invocation: builder,
+    cli: AgentProvider::ClaudeCodeCli,
+    model: "claude-haiku-4-5".into(),
+    usage: usage(1_000, 400, 100),
+  });
+  kontur
+}
+
+#[test]
+fn usage_counts_auto_mode_reviews_with_their_run_on_the_reviewers_cli_and_model() {
+  let projects = [kontur_reviewed()];
+  let dashboard = report(&projects, Grouping::Day, &UsageFilter::default());
+  assert_eq!(dashboard.summary.spent(), 23_000 + 700, "totals include the reviewer");
+  assert_eq!(dashboard.summary.runs, 2, "a review is no run of its own");
+  let reviewer = BreakdownKey::Reviewer("claude-haiku-4-5".into());
+  let row = dashboard.breakdowns.profiles.iter().find(|row| row.key == reviewer);
+  assert_eq!(
+    row.map(|row| row.by_cli),
+    Some([0, 700, 0]),
+    "a row of its own, on Claude Code"
+  );
+  let model = BreakdownKey::Model("claude-haiku-4-5".into());
+  assert!(dashboard.breakdowns.models.iter().any(|row| row.key == model));
+  assert_eq!(
+    dashboard.series[1].by_cli[CliSeries::Claude.index()],
+    usage(1_000, 400, 100)
+  );
+  let tasks: Vec<_> = dashboard
+    .tasks
+    .iter()
+    .map(|task| (&*task.key, task.usage.counted()))
+    .collect();
+  assert_eq!(
+    tasks,
+    [("ORC-1", 16_700), ("ORC-2", 7_000)],
+    "its run's figures include it"
+  );
+  assert_eq!(dashboard.runs[0].usage.counted(), 16_700);
+
+  let spent = |filter: UsageFilter| report(&projects, Grouping::Day, &filter).summary.spent();
+  let clis = |cli| UsageFilter {
+    clis: vec![cli],
+    ..UsageFilter::default()
+  };
+  assert_eq!(spent(clis(AgentProvider::ClaudeCodeCli)), 7_000 + 700);
+  assert_eq!(spent(clis(AgentProvider::CodexCli)), 16_000);
+  let builder = UsageFilter {
+    profiles: vec!["Builder".into()],
+    ..UsageFilter::default()
+  };
+  assert_eq!(spent(builder), 16_000, "the reviewer is no agent profile");
+  let options = FilterOptions::of(&projects);
+  assert!(options.models.contains(&"claude-haiku-4-5".into()));
 }
 
 #[test]

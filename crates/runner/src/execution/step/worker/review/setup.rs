@@ -1,14 +1,15 @@
 //! The project's reviewer, resolved when a review starts (`orchester_core::run::review::resolve_reviewer`):
 //! a CLI (Claude Code or Codex) run in an empty folder of its own, or a native connection's client with
 //! the key read from the keychain. Without a reviewer, or with one that cannot be reached, the review
-//! fails closed and the person decides; the hard rules still come first either way.
+//! fails closed and the person decides; the hard rules still come first either way. A review that asked a
+//! model records what it cost ([`ReviewLedger`]).
 
 use std::{path::PathBuf, time::Duration};
 
 use orchester_agent::AnthropicClient;
 use orchester_core::{
   connection::{
-    ApiEndpoint,
+    AgentProvider, ApiEndpoint,
     invocation::agent_environment,
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
@@ -18,18 +19,20 @@ use orchester_core::{
   run::{
     ApprovalSubject,
     review::{
-      HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold, ReviewInput,
-      ReviewVerdict, ReviewerKind, resolve_reviewer, review_hold, review_request,
+      AutoReview, HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold,
+      ReviewInput, ReviewSpend, Reviewed, ReviewerKind, resolve_reviewer, review_hold, review_request,
     },
   },
   secret::{SecretValue, SecretVault},
   store::{ConnectionStore, SecretStore, SettingsStore},
+  time::Timestamp,
 };
 use orchester_store::StoreError;
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
   super::{Watch, Worker},
+  ledger::ReviewLedger,
   native::{NativeReviewer, client},
   process::{ReviewPlace, SupervisedRunner},
 };
@@ -120,8 +123,29 @@ pub(super) fn hold_now(
 }
 
 impl ReviewerSetup {
-  /// Auto mode's handling of `job`'s request with this reviewer, from the blocking pool.
-  pub(super) fn review(self, job: ReviewJob) -> Review {
+  /// Auto mode's handling of `job`'s request with this reviewer, from the blocking pool; what it cost goes
+  /// to `ledger` once it ends.
+  pub(super) fn review(self, job: ReviewJob, ledger: &ReviewLedger) -> Review {
+    let started_at = Timestamp::now();
+    let provider = self.provider();
+    let done = self.judge(job);
+    if let Some(provider) = provider {
+      ledger.record(provider, started_at, &done);
+    }
+    done.review
+  }
+
+  /// The provider a review with this reviewer is spent on; `None` when it asks no model.
+  const fn provider(&self) -> Option<AgentProvider> {
+    match self {
+      Self::Cli { kind, .. } => Some(kind.provider()),
+      Self::Native { .. } => Some(AgentProvider::AnthropicApi),
+      Self::Unreachable { .. } | Self::Missing => None,
+    }
+  }
+
+  /// The review itself, and what it cost when it asked a model.
+  fn judge(self, job: ReviewJob) -> AutoReview {
     let ReviewJob {
       subject,
       permissions,
@@ -177,10 +201,10 @@ impl ReviewerSetup {
           ReviewerKind::Codex => Box::new(CodexReviewer::new(&executable, (model, effort), folder, runner)),
           _ => Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner)),
         };
-        let review = review_request(Some(reviewer.as_ref()), rules, input);
+        let done = review_request(Some(reviewer.as_ref()), rules, input);
         // The folder goes only after the reviewer, which runs in it, has ended.
         drop(place);
-        review
+        done
       }
     }
   }
@@ -196,8 +220,9 @@ impl RequestReviewer for Unreachable {
     &self.model
   }
 
-  fn review(&self, _: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
-    Err(ReviewError::CouldNotRun("the reviewer cannot be reached".to_owned()))
+  fn review(&self, _: &ReviewInput) -> Reviewed {
+    let unreachable = ReviewError::CouldNotRun("the reviewer cannot be reached".to_owned());
+    Reviewed::new(Err(unreachable), ReviewSpend::Nothing)
   }
 }
 

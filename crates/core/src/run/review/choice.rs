@@ -46,6 +46,17 @@ pub enum ReviewerKind {
   AnthropicApi,
 }
 
+impl ReviewerKind {
+  /// The provider a review of this kind is spent on.
+  pub const fn provider(self) -> AgentProvider {
+    match self {
+      Self::ClaudeCode => AgentProvider::ClaudeCodeCli,
+      Self::Codex => AgentProvider::CodexCli,
+      Self::AnthropicApi => AgentProvider::AnthropicApi,
+    }
+  }
+}
+
 /// Why auto mode has no reviewer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

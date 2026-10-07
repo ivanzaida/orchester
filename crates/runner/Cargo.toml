@@ -201,6 +201,10 @@ name = "plan_limits"
 required-features = ["test-agent"]
 
 [[test]]
+name = "reviewer_usage"
+required-features = ["test-agent"]
+
+[[test]]
 name = "task_organization"
 required-features = ["test-agent"]
 

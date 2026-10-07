@@ -213,11 +213,27 @@ fn usage_history_is_added_to_a_database_of_the_schema_before_and_its_runs_are_ke
   drop(db);
   let current = repo.path().join(".orchester/orchester.db");
   let latest = schema_version(&current);
-  let old = copied_at_version(&current, latest - 1);
+  let old = copied_at_version(&current, version_before_plan_limits(latest));
   let mut db = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(schema_version(&old.path().join(".orchester/orchester.db")), latest);
   assert!(db.limit_snapshots(at(0)).expect("an empty history").is_empty());
   db.save_limit_snapshot(run.id(), &reading(AgentProvider::CodexCli, at(DAY), 30.0))
     .expect("store a report on the kept run");
   assert_eq!(db.limit_snapshots(at(0)).expect("history").len(), 1);
+}
+
+/// The newest schema without the plan limits history, wherever later migrations moved the latest.
+fn version_before_plan_limits(latest: u32) -> u32 {
+  (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      let old = ProjectDb::create_at_version(repo.path(), version).expect("an old database");
+      !old
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'plan_limit_snapshots'")
+        .expect("schema")
+        .exists([])
+        .expect("schema")
+    })
+    .expect("a schema before the plan limits history")
 }

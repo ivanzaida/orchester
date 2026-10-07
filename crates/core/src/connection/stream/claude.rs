@@ -425,7 +425,8 @@ fn result_text(content: Option<&Value>) -> String {
   }
 }
 
-fn usage(usage: &Value) -> Option<TokenUsage> {
+/// A `usage` object of Claude Code's output: cache reads are cached input, cache writes count as input.
+pub(crate) fn usage(usage: &Value) -> Option<TokenUsage> {
   let count = |name| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
   let input = usage.get("input_tokens")?.as_u64()?;
   let cache_read = count("cache_read_input_tokens");

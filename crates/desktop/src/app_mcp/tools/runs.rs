@@ -4,7 +4,10 @@
 
 use orchester_core::{
   id::RunId,
-  run::{Run, RunStatus},
+  run::{
+    Run, RunStatus,
+    review::{ReviewRecord, reviews_usage},
+  },
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
@@ -65,6 +68,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
     let usage = view.usage();
+    let reviewer = reviewer_tokens(&view.reviews);
     let run = &view.run;
     let steps: Vec<Value> = view.steps.iter().map(step).collect();
     Ok(json!({
@@ -79,6 +83,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
         "input": usage.input,
         "cached_input": usage.cached_input,
         "output": usage.output,
+        "reviewer": reviewer,
       },
       "time": {
         "active_seconds": view.active_time(Timestamp::now()).as_secs(),
@@ -97,6 +102,19 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     }))
   })
   .await
+}
+
+/// The part of a run's tokens auto mode's reviewer spent: how many reviews asked it, how many of them
+/// reported no usage it could read (they count nothing), and what the others reported.
+fn reviewer_tokens(reviews: &[ReviewRecord]) -> Value {
+  let usage = reviews_usage(reviews);
+  json!({
+    "reviews": reviews.len(),
+    "unknown": reviews.iter().filter(|review| review.usage.is_none()).count(),
+    "input": usage.input,
+    "cached_input": usage.cached_input,
+    "output": usage.output,
+  })
 }
 
 pub async fn control_run(services: &Services, args: InRun, control: Control) -> Result<Value, ToolError> {

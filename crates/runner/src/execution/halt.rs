@@ -134,11 +134,12 @@ impl RunTask {
   /// A running execution of the current attempt that has used its step's budget.
   fn used_step_budget(&self) -> Result<Option<StepExecutionId>, ExecutionError> {
     let invocations = self.db.invocations(self.run.id())?;
+    let reviews = self.db.reviewer_usage(self.run.id())?;
     Ok(self.run.running_executions().into_iter().find(|execution| {
       let step = self.run.execution(*execution).map(|execution| execution.step());
       step
         .and_then(|step| self.run.step_budget(step))
-        .is_some_and(|budget| execution_tokens(&invocations, *execution).reached(budget))
+        .is_some_and(|budget| execution_tokens(&invocations, &reviews, *execution).reached(budget))
     }))
   }
 

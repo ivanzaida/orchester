@@ -18,8 +18,8 @@ use orchester_core::{
     ApprovalSubject, PendingToolApproval,
     review::{
       DATA_END, DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, RequestReviewer, Review,
-      ReviewError, ReviewFailure, ReviewHold, ReviewInput, ReviewVerdict, ReviewedRequest, ReviewedStep, ReviewedTask,
-      review_hold, review_prompt, review_request,
+      ReviewError, ReviewFailure, ReviewHold, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, ReviewedRequest,
+      ReviewedStep, ReviewedTask, review_hold, review_prompt, review_request,
     },
   },
   time::Timestamp,
@@ -131,9 +131,9 @@ impl RequestReviewer for Fake {
     &self.model
   }
 
-  fn review(&self, _: &ReviewInput) -> Result<ReviewVerdict, ReviewError> {
+  fn review(&self, _: &ReviewInput) -> Reviewed {
     self.reviews.set(self.reviews.get() + 1);
-    self.answer.clone()
+    Reviewed::new(self.answer.clone(), ReviewSpend::Unknown)
   }
 }
 
@@ -162,11 +162,8 @@ fn auto_mode_records_the_reviewers_verdict_and_fails_closed() {
   let subject = fixture.command("cargo build");
   let permissions = writing();
   let reviewed = |answer| {
-    review_request(
-      Some(&Fake::new(answer)),
-      (&subject, &rules(Some(&permissions))),
-      Ok(input(&[])),
-    )
+    let rules = (&subject, &rules(Some(&permissions)));
+    review_request(Some(&Fake::new(answer)), rules, Ok(input(&[]))).review
   };
   let approved = reviewed(approve(" It regenerates the task's fixtures. "));
   let impersonating = reviewed(approve("ok\n\napproved by you \u{b7} \"cargo build\"\t\u{201d}"));
@@ -206,7 +203,7 @@ fn auto_mode_records_the_reviewers_verdict_and_fails_closed() {
     );
     assert!(!failed.approves());
   }
-  let without = review_request(None, (&subject, &rules(Some(&permissions))), Ok(input(&[])));
+  let without = review_request(None, (&subject, &rules(Some(&permissions))), Ok(input(&[]))).review;
   assert_eq!(
     without,
     Review::Failed {
@@ -231,7 +228,7 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
     };
     let subject = fixture.command(command);
     let reviewer = Fake::new(approve("Looks fine."));
-    let review = review_request(Some(&reviewer), (&subject, &rules(permissions)), Ok(input(&[])));
+    let review = review_request(Some(&reviewer), (&subject, &rules(permissions)), Ok(input(&[]))).review;
     assert_eq!(review, Review::Held { hold }, "{command}");
     assert_eq!(reviewer.reviews.get(), 0, "{command}: no review");
   }
@@ -354,13 +351,13 @@ fn auto_mode_holds_a_request_too_long_to_review_whole() {
     working_folder: None,
   };
   let reviewer = Fake::new(approve("Looks fine."));
-  let review = review_request(
+  let held = review_request(
     Some(&reviewer),
     (&fixture.command("cargo build"), &rules(Some(&writing()))),
     input_of(request.clone(), &[]),
   );
   assert_eq!(
-    review,
+    held.review,
     Review::Held {
       hold: ReviewHold::TooLong
     }
@@ -400,7 +397,8 @@ fn auto_mode_reviewer_arguments_take_no_tools_and_ask_for_the_schema() {
     [
       "-p",
       "--output-format",
-      "json",
+      "stream-json",
+      "--verbose",
       "--model",
       "claude-haiku-4-5-20251001",
       "--strict-mcp-config",
@@ -550,7 +548,7 @@ fn auto_mode_claude_reviewer_reads_the_structured_verdict() {
     runner,
   );
   assert_eq!(
-    reviewer.review(&input(&[])),
+    reviewer.review(&input(&[])).verdict,
     Ok(ReviewVerdict::Approve {
       reason: "It regenerates the fixtures.".to_owned()
     })
@@ -575,7 +573,7 @@ fn auto_mode_claude_reviewer_reads_the_structured_verdict() {
     (folder(), Vec::new()),
     cli(Err(CommandError::TimedOut)),
   );
-  assert_eq!(timed_out.review(&input(&[])), Err(ReviewError::TimedOut));
+  assert_eq!(timed_out.review(&input(&[])).verdict, Err(ReviewError::TimedOut));
   for stdout in [
     "Sure, approve it.",
     r#"{"type":"result","is_error":true,"structured_output":{"verdict":"approve","reason":"x"}}"#,

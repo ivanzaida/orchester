@@ -57,7 +57,7 @@
 //! continued session at work with it), it appends `continued` to `README.md` and ends the same way. A new
 //! session takes its id from `--session-id`.
 //!
-//! Started with `--output-format json`, it is auto mode's reviewer instead (`fake_claude_review`).
+//! Started with `--system-prompt-file`, it is auto mode's reviewer instead (`fake_claude_review`).
 //!
 //! On standard error it reports its arguments, the `--json-schema` value on its own line (`json-schema: `), the names
 //! of its environment variables and its `PATH`, the prompt (its first line, then each line), its process id and its MCP

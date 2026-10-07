@@ -7,6 +7,7 @@
 mod events;
 mod failures;
 mod models;
+mod review;
 #[path = "../fake_server/mod.rs"]
 mod server;
 mod stream;

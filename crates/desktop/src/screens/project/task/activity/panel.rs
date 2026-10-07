@@ -1,6 +1,7 @@
 //! The invocation panel beside the transcript (`n0cEOG`): the step and attempt, agent, provider,
-//! model and start of the latest agent launch, the code index it got, its reported tokens, the
-//! run's total, the tokens before its step's first edit, and the permissions it launched with. While the
+//! model and start of the latest agent launch, the code index it got, its reported tokens, what auto
+//! mode's reviewer spent on its requests, the run's total, the tokens before its step's first edit, and
+//! the permissions it launched with. While the
 //! transcript is narrowed to a step (`F3XhQ`) the panel is about that step's latest launch, named
 //! after the step, with when it ran once it ended. Token counts are what the CLI reported; cached
 //! input is not counted.
@@ -15,7 +16,12 @@ use lurq::{
   components::{Column, Row, ScrollVertical, Spacer, Text},
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_core::{id::StepExecutionId, run::Invocation, time::Timestamp, tokens::compact_tokens};
+use orchester_core::{
+  id::StepExecutionId,
+  run::{Invocation, review::reviews_usage},
+  time::Timestamp,
+  tokens::compact_tokens,
+};
 
 use super::{
   super::{
@@ -270,13 +276,39 @@ fn tokens(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Vec<Element> {
     Some(step) if native::is_native(step) => native::budget_row(ctx, run),
     _ => property(&ctx.t("runs.activity.panel.runTotal"), &total),
   };
-  vec![
+  let mut rows = vec![
     property(&ctx.t("runs.activity.panel.input"), &count(usage.counted_input())),
     property(&ctx.t("runs.activity.panel.output"), &count(usage.output)),
     property(&ctx.t("runs.cached"), &cached),
     property(&ctx.t("runs.activity.panel.counted"), &counted),
-    run_row,
-  ]
+  ];
+  rows.extend(reviewer_row(ctx, run, invocation));
+  rows.push(run_row);
+  rows
+}
+
+/// *Auto mode reviewer*: the counted tokens of the reviews of `invocation`'s requests, and how many of
+/// them reported no usage that could be read; none while no reviewer was asked.
+fn reviewer_row(ctx: &Ctx, run: &RunView, invocation: &Invocation) -> Option<Element> {
+  let reviews: Vec<_> = run.reviews_of(invocation.id).collect();
+  if reviews.is_empty() {
+    return None;
+  }
+  let tokens = compact_tokens(reviews_usage(reviews.iter().copied()).counted());
+  let unknown = reviews.iter().filter(|review| review.usage.is_none()).count();
+  let value = if unknown == 0 {
+    ctx.t_args("runs.tokens", [("count", tokens.as_str())])
+  } else {
+    ctx.t_args(
+      "runs.activity.panel.reviewerUnknown",
+      [
+        ("count", tokens.as_str()),
+        ("unknown", unknown.to_string().as_str()),
+        ("reviews", reviews.len().to_string().as_str()),
+      ],
+    )
+  };
+  Some(property(&ctx.t("runs.activity.panel.reviewer"), &value))
 }
 
 /// A 1px hairline between groups (`ZR50O`, `TTt5s`).

@@ -96,7 +96,10 @@ pub(super) fn raise_step_budget(
     .project_limits()
     .map_err(|error| failed("cannot read the project's limits", &error))?
     .max_run_budget();
-  let used = execution_tokens(&invocations, execution);
+  let reviews = db
+    .reviewer_usage(run.id())
+    .map_err(|error| failed("cannot read what the run's reviews cost", &error))?;
+  let used = execution_tokens(&invocations, &reviews, execution);
   let events = run
     .raise_step_budget(budget, used, max, Timestamp::now())
     .map_err(rejection)?;
