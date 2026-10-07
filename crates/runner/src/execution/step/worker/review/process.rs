@@ -21,6 +21,11 @@ use crate::supervisor::{ProcessEvent, ProcessExit, Supervised, SupervisorError};
 /// Code's `result` line, Codex's final message and `turn.completed`), however many events came before.
 const OUTPUT_MAX_BYTES: usize = 256 * 1024;
 
+/// How long an ended reviewer may take to report its exit. Something it started that left its process group
+/// (macOS) may hold its output open past its end; the review then stops waiting, so the step and the run are
+/// never held up by it, and the review counts as stopped, its spend unknown.
+const END_WAIT: Duration = Duration::from_secs(10);
+
 /// Dropped, it stops the review it was made with.
 pub(super) struct StopReview(#[expect(dead_code, reason = "held only to be dropped")] watch::Sender<()>);
 
@@ -92,13 +97,22 @@ fn start_error(error: &SupervisorError) -> CommandError {
   }
 }
 
-/// Ends `process` and everything it started, and waits until it has exited, so its folder can be removed.
+/// Ends `process` and everything it started, and waits until it has exited, so its folder can be removed; at
+/// most [`END_WAIT`].
 async fn end(process: &mut Supervised) {
   process.terminate();
-  while let Some(event) = process.next().await {
-    if matches!(event, ProcessEvent::Exited(_)) {
-      return;
+  let exited = async {
+    while let Some(event) = process.next().await {
+      if matches!(event, ProcessEvent::Exited(_)) {
+        return;
+      }
     }
+  };
+  if tokio::time::timeout(END_WAIT, exited).await.is_err() {
+    tracing::warn!(
+      wait = ?END_WAIT,
+      "the ended reviewer did not report its exit; the review goes on without it"
+    );
   }
 }
 

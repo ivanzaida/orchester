@@ -15,9 +15,12 @@
 //!   installed Codex takes was not checked against a live CLI (by instruction): one it refuses makes every review fail,
 //!   which asks the person.
 //! - What the review spent is the `usage` of its `turn.completed` events, OpenAI-style: `input_tokens` holds the
-//!   `cached_input_tokens`. `codex exec --json` reports no plan limits (Codex 0.159.2 has no such event in it; App
-//!   Server's `account/rateLimits/updated` is not part of `exec`), so a Codex review adds nothing to the plan limits
-//!   history.
+//!   `cached_input_tokens`.
+//! - The runner keeps the last part of a long output. `codex exec --json` opens with `thread.started`; output that does
+//!   not was cut at its start, and what it left out (a `turn.failed`, an `error`, a turn's usage) is not known: the
+//!   review did not run, and its spend is unknown. `codex exec --json` reports no plan limits (Codex 0.159.2 has no
+//!   such event in it; App Server's `account/rateLimits/updated` is not part of `exec`), so a Codex review adds nothing
+//!   to the plan limits history.
 
 use std::path::{Path, PathBuf};
 
@@ -129,6 +132,11 @@ pub fn codex_reviewer_args((model, effort): (&ModelId, Option<&str>), folder: &R
 /// object alone. A failed turn or an error event is a review that did not run.
 pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
   let events: Vec<Value> = events(stdout).collect();
+  if cut(&events) {
+    return Err(ReviewError::CouldNotRun(
+      "Codex's output was cut at its start".to_owned(),
+    ));
+  }
   if let Some(failed) = events
     .iter()
     .find(|event| matches!(kind(event), Some("turn.failed" | "error")))
@@ -152,15 +160,24 @@ pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
 /// Codex's answer in `codex exec --json`'s events: the verdict ([`parse_codex_review`]) and what the review
 /// spent, the `usage` of its `turn.completed` events summed; unknown when none of them reports it readably.
 pub fn read_codex_review(stdout: &str) -> Reviewed {
-  let turns: Option<Vec<TokenUsage>> = events(stdout)
+  let events: Vec<Value> = events(stdout).collect();
+  let turns: Option<Vec<TokenUsage>> = events
+    .iter()
     .filter(|event| kind(event) == Some("turn.completed"))
     .map(|event| event.get("usage").and_then(codex_usage))
     .collect();
   let spend = match turns {
-    Some(turns) if !turns.is_empty() => ReviewSpend::Reported(turns.into_iter().sum()),
+    Some(turns) if !turns.is_empty() && !cut(&events) => ReviewSpend::Reported(turns.into_iter().sum()),
     _ => ReviewSpend::Unknown,
   };
   Reviewed::new(parse_codex_review(stdout), spend)
+}
+
+/// Whether `events` lost their start: they do not open with `thread.started`.
+fn cut(events: &[Value]) -> bool {
+  events
+    .first()
+    .is_some_and(|first| kind(first) != Some("thread.started"))
 }
 
 /// The `usage` of a `turn.completed` event: input with its cached part, and output with reasoning.

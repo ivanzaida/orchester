@@ -19,7 +19,7 @@ use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
   native::{
     item::Item,
-    model::{ModelResponse, StopReason, StreamEvent},
+    model::{ModelError, ModelResponse, StopReason, StreamEvent},
   },
   permission::{NetworkAccess, RepositoryAccess},
   resource::ModelId,
@@ -180,6 +180,15 @@ fn reviewer_usage_of_codex_is_its_turns_usage_without_plan_limits() {
     reviewer.review(&input()).spend,
     ReviewSpend::Reported(usage(9_182, 6_912, 214))
   );
+
+  // The runner kept the end of a longer output: its start, with whatever it held, is gone.
+  let cut: String = CODEX.lines().skip(1).map(|line| format!("{line}\n")).collect();
+  let read = read_codex_review(&cut);
+  assert!(
+    matches!(read.verdict, Err(ReviewError::CouldNotRun(_))),
+    "a failure may have been cut: {read:?}"
+  );
+  assert_eq!(read.spend, ReviewSpend::Unknown, "a turn's usage may have been cut");
 }
 
 #[test]
@@ -195,19 +204,53 @@ fn reviewer_usage_of_a_native_review_is_its_responses_usage_with_what_dropped_re
   let read = NativeSpend::default().answered(&response);
   assert!(read.verdict.is_ok());
   assert_eq!(read.spend, ReviewSpend::Reported(usage(900, 300, 40)));
-  let mut retried = NativeSpend::default();
-  retried.observe(&StreamEvent::Text("{".to_owned()));
-  retried.observe(&StreamEvent::Spent(usage(100, 0, 3)));
+  // A complete response asked again with more room counts whole.
+  let mut asked_again = NativeSpend::default();
+  asked_again.observe(&StreamEvent::Text("{".to_owned()));
+  asked_again.observe(&StreamEvent::Spent(usage(100, 0, 3)));
   let cut = ModelResponse {
     stop: StopReason::MaxOutput,
     ..response
   };
-  let read = retried.answered(&cut);
+  let read = asked_again.answered(&cut);
   assert!(read.verdict.is_err(), "a cut answer is no verdict");
   assert_eq!(read.spend, ReviewSpend::Reported(usage(1_000, 300, 43)));
-  let unanswered = |spend: NativeSpend| spend.unanswered(ReviewError::CouldNotRun("refused".to_owned())).spend;
-  assert_eq!(unanswered(retried), ReviewSpend::Reported(usage(100, 0, 3)));
-  assert_eq!(unanswered(NativeSpend::default()), ReviewSpend::Nothing);
+
+  let retrying = |error: ModelError| StreamEvent::Retrying {
+    attempt: 1,
+    wait: std::time::Duration::ZERO,
+    error,
+  };
+  let after = |events: &[StreamEvent]| {
+    let mut spend = NativeSpend::default();
+    for event in events {
+      spend.observe(event);
+    }
+    spend
+  };
+  // Refused with a status before its stream: nothing billed; the answer counts alone.
+  let refused = after(&[retrying(ModelError::Overloaded)]);
+  assert_eq!(refused.answered(&cut).spend, ReviewSpend::Reported(usage(900, 300, 40)));
+  // A stream that broke after it began, or a request lost on the way, may have been billed for more.
+  let broken = after(&[StreamEvent::Spent(usage(100, 0, 1)), retrying(ModelError::Server(500))]);
+  assert_eq!(broken.answered(&cut).spend, ReviewSpend::Unknown);
+  let lost = after(&[retrying(ModelError::Transport("connection reset".to_owned()))]);
+  assert_eq!(lost.answered(&cut).spend, ReviewSpend::Unknown);
+
+  let unanswered = |spend: NativeSpend, error: ModelError| spend.unanswered(&error).spend;
+  assert_eq!(
+    unanswered(NativeSpend::default(), ModelError::KeyRejected),
+    ReviewSpend::Nothing
+  );
+  assert_eq!(
+    unanswered(
+      NativeSpend::default(),
+      ModelError::Transport("connection refused".to_owned())
+    ),
+    ReviewSpend::Unknown,
+    "a transport error does not say whether the request was sent"
+  );
+  assert_eq!(unanswered(broken, ModelError::KeyRejected), ReviewSpend::Unknown);
 }
 
 #[test]

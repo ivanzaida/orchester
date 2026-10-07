@@ -1,7 +1,7 @@
 //! Auto mode's review on a native connection against the fake model server: one Messages request
 //! without tools, the reviewer's instructions as the system prompt, the agent's text as data in the one
 //! user message, and only the verdict's JSON object read as an answer; prose or a refusal is no verdict.
-//! What a review spent is the response's usage with what the client reported of the responses it dropped; a
+//! What a review spent is the response's usage; after a stream that broke once it began it is unknown, and a
 //! request the API refused spent nothing.
 
 use orchester_core::{
@@ -115,7 +115,7 @@ fn spend(events: &[StreamEvent]) -> NativeSpend {
 }
 
 #[tokio::test]
-async fn anthropic_review_spends_what_dropped_responses_reported_and_nothing_when_refused() {
+async fn anthropic_review_spend_is_unknown_after_a_broken_stream_and_nothing_when_refused() {
   let mut broken = vec![events::message_start(10, 0, &json!(0))];
   broken.extend(events::text(0, "{\"verdict\"").into_iter().take(2));
   broken.push(Part::Drop);
@@ -132,20 +132,15 @@ async fn anthropic_review_spends_what_dropped_responses_reported_and_nothing_whe
   let (answer, seen) = respond(&client, &request).await;
   let reviewed = spend(&seen).answered(&answer.expect("an answer after the retry"));
   assert!(reviewed.verdict.is_ok(), "{reviewed:?}");
-  let both = TokenUsage {
-    input: 20,
-    cached_input: 0,
-    output: 5 + 1,
-  };
   assert_eq!(
     reviewed.spend,
-    ReviewSpend::Reported(both),
-    "the broken stream's usage counts too"
+    ReviewSpend::Unknown,
+    "the broken stream reported its output only in part"
   );
 
   let (answer, seen) = respond(&client, &request).await;
   let error = answer.expect_err("the key is refused");
-  let reviewed = spend(&seen).unanswered(ReviewError::CouldNotRun(error.to_string()));
+  let reviewed = spend(&seen).unanswered(&error);
   assert_eq!(reviewed.spend, ReviewSpend::Nothing, "a refused request spent nothing");
   server.finish();
 }

@@ -9,7 +9,7 @@ use crate::{
   id::ConversationId,
   native::{
     item::{Item, UserOrigin},
-    model::{ModelRequest, ModelResponse, StopReason, StreamEvent},
+    model::{ModelError, ModelRequest, ModelResponse, StopReason, StreamEvent},
     tools::ToolSet,
   },
   resource::ModelId,
@@ -60,39 +60,66 @@ pub fn native_verdict(response: &ModelResponse) -> Result<ReviewVerdict, ReviewE
   parse_verdict_text(&text)
 }
 
-/// What a native review spent, followed through its client's stream events: the responses the client
-/// dropped (a broken stream, one asked again) report what they spent as [`StreamEvent::Spent`].
+/// What a native review spent, followed through its client's stream events. A complete response the client
+/// dropped (cut at a tool call and asked again) reports what it spent as [`StreamEvent::Spent`]. An attempt
+/// that failed leaves the review's spend unknown when the API may have billed it: its stream broke after it
+/// began (the usage it reported misses the rest of its output), or the request was lost on the way (a
+/// transport error, which does not tell a connection that never opened from a request sent and then lost, or an
+/// answer in an unexpected form). A request refused with an HTTP status, or an error event that opened its
+/// stream, spent nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NativeSpend {
   dropped: TokenUsage,
+  /// The attempt under way reported what it had spent.
+  attempt_spent: bool,
+  /// An earlier attempt may have been billed for more than was reported.
+  uncertain: bool,
 }
 
 impl NativeSpend {
   pub fn observe(&mut self, event: &StreamEvent) {
-    if let StreamEvent::Spent(usage) = event {
-      self.dropped += *usage;
+    match event {
+      StreamEvent::Spent(usage) => {
+        self.dropped += *usage;
+        self.attempt_spent = true;
+      }
+      StreamEvent::Retrying { error, .. } => {
+        self.uncertain |= self.attempt_spent || may_have_billed(error);
+        self.attempt_spent = false;
+      }
+      _ => {}
     }
   }
 
   /// The model's answer as a review: its verdict ([`native_verdict`]), and its usage with what the dropped
-  /// responses spent.
+  /// responses spent; unknown when an earlier attempt may have been billed for more.
   pub fn answered(self, response: &ModelResponse) -> Reviewed {
     let mut spent = response.usage;
     spent += self.dropped;
-    Reviewed::new(native_verdict(response), ReviewSpend::Reported(spent))
+    let spend = if self.uncertain {
+      ReviewSpend::Unknown
+    } else {
+      ReviewSpend::Reported(spent)
+    };
+    Reviewed::new(native_verdict(response), spend)
   }
 
-  /// A review the client gave up on with `error`: what its dropped responses spent, nothing when there were
-  /// none. That holds for a client that reports what every broken stream spent, as `orchester-agent`'s
-  /// Anthropic client does (the stream's first event carries the usage), so a request the API refused or
-  /// never received spent nothing. Its Responses client reports no usage for a broken stream: a reviewer on
-  /// it would need [`ReviewSpend::Unknown`] instead.
-  pub fn unanswered(self, error: ReviewError) -> Reviewed {
-    let spend = if self.dropped == TokenUsage::default() {
+  /// A review the client gave up on with `error`: what its complete dropped responses spent, nothing when
+  /// there were none, and unknown when any attempt, the last one included, may have been billed.
+  pub fn unanswered(self, error: &ModelError) -> Reviewed {
+    let spend = if self.uncertain || self.attempt_spent || may_have_billed(error) {
+      ReviewSpend::Unknown
+    } else if self.dropped == TokenUsage::default() {
       ReviewSpend::Nothing
     } else {
       ReviewSpend::Reported(self.dropped)
     };
-    Reviewed::new(Err(error), spend)
+    Reviewed::new(Err(ReviewError::CouldNotRun(error.to_string())), spend)
   }
+}
+
+/// Whether a request that failed with `error` may have reached the model: an answer cut off or in an
+/// unexpected form, not a refusal with an HTTP status.
+const fn may_have_billed(error: &ModelError) -> bool {
+  matches!(error, ModelError::Transport(_) | ModelError::Protocol(_))
 }

@@ -2,8 +2,8 @@
 //! client, built by core ([`native_request`]), with the connection's API key read from the keychain here
 //! (it never leaves the client: not in the review, its errors or the activity). It is bounded by the
 //! review's time and dropped at once when the review is no longer wanted. A response reports what it
-//! spent, and the client what each response it dropped spent; a request the client gave up on spent only
-//! that ([`NativeSpend::unanswered`]); one cut off by the review's time or its end spent an unknown amount.
+//! spent, and the client what each response it dropped spent; a request the client gave up on spent what
+//! [`NativeSpend::unanswered`] says; one cut off by the review's time or its end spent an unknown amount.
 
 use std::{sync::Arc, time::Duration};
 
@@ -57,7 +57,7 @@ impl RequestReviewer for NativeReviewer {
       };
       match answer {
         Ok(Ok(response)) => spend.answered(&response),
-        Ok(Err(error)) => spend.unanswered(ReviewError::CouldNotRun(error.to_string())),
+        Ok(Err(error)) => spend.unanswered(&error),
         Err(_) => unknown(ReviewError::TimedOut),
       }
     })
