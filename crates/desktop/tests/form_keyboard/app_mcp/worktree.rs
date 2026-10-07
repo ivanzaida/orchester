@@ -17,7 +17,7 @@ use crate::{
   task_run::{create_and_run, has, init_repository, latest_run, programs, seed},
 };
 
-fn worktree_of(desktop: &Desktop, run: &Run) -> PathBuf {
+pub(super) fn worktree_of(desktop: &Desktop, run: &Run) -> PathBuf {
   desktop
     .repo()
     .join(".orchester")
@@ -26,7 +26,7 @@ fn worktree_of(desktop: &Desktop, run: &Run) -> PathBuf {
 }
 
 /// A task whose run #1 failed on the fake Codex and kept its worktree, its page open.
-fn failed_run(program_set: Programs) -> (Desktop, Run) {
+pub(super) fn failed_run(program_set: Programs) -> (Desktop, Run) {
   let (runner, fake) = programs();
   let mut desktop = Desktop::with_runner_programs_and_app_mcp(runner, program_set, init_repository, |repo| {
     seed(repo, &fake, false);

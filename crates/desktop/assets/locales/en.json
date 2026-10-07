@@ -16,6 +16,7 @@
     "copyFailed": "The command could not be copied. Select it and copy it by hand.",
     "confirm": "Confirm",
     "retry": "Retry",
+    "reload": "Reload",
     "done": "Done"
   },
   "workspace": {
@@ -514,6 +515,7 @@
     "createMultiple": "Create multiple",
     "editingHint": "Open a task to edit its brief, pipeline and limits.",
     "loadFailed": "Tasks cannot be read",
+    "readAgainFailed": "The tasks could not be read again. The list shows them as they were last read.",
     "emptyTitle": "No tasks yet",
     "emptyDetail": "Describe what agents should build as a task. Drafts can be saved before every detail is known.",
     "emptyTab": "No tasks in this tab.",
@@ -734,6 +736,8 @@
       "savingChanges": "Saving changes…",
       "leave": "Your edits to {{task}} are not saved yet. Leaving discards them; the saved task stays as it was.",
       "notStarted": "This task is queued. Its details can be edited after the first run is recorded.",
+      "changedOutside": "Changed outside this form",
+      "changedOutsideDetail": "{{task}} was saved elsewhere, for example by automation, while you edited it. Your edits are kept: saving them keeps the other changes, or shows where both changed the same field. Reload shows the task as stored and discards your edits.",
       "incomplete": "A task that has started must keep a brief, acceptance criteria, pipeline and limits."
     },
     "workflow": {
@@ -1991,6 +1995,8 @@
         "detailNoCheckpoint": "Continue run picks the run up in this worktree. Without it the run stays interrupted for good; Run again starts a new run instead."
       },
       "otherWorking": "Run #{{run}} keeps working; its worktree is not touched.",
+      "removedTitle": "The worktree of run #{{run}} is removed",
+      "removedOutside": "It was removed elsewhere, for example by automation, while this dialog was open. Committed work stays on its branches; there is nothing left to remove.",
       "failure": {
         "notFinished": "Only a run that ended or was interrupted can have its worktrees removed.",
         "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
@@ -3743,6 +3749,10 @@
     "loadFailed": "Couldn’t read the project’s settings",
     "saved": "All changes saved",
     "saving": "Saving…",
+    "changedOutside": {
+      "title": "Changed outside this screen",
+      "detail": "These settings were changed elsewhere, for example by automation, while your change was being saved. Reload shows the settings as they are stored now."
+    },
     "tabs": {
       "general": "General",
       "limits": "Limits",
@@ -4295,7 +4305,8 @@
       "noSteps": "No steps yet",
       "never": "Never",
       "ownership": "Pipelines belong to {{project}}. Steps use this project’s agent profiles, tools and instructions. Select a pipeline to open it in the editor.",
-      "loadFailed": "Pipelines could not be read"
+      "loadFailed": "Pipelines could not be read",
+      "readAgainFailed": "The pipelines could not be read again. The list shows them as they were last read."
     },
     "version": {
       "published": "Published {{version}}",

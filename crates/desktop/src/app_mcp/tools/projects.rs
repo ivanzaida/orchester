@@ -18,7 +18,10 @@ use crate::{
     services::{Services, blocking},
   },
   code_index,
-  tasks::data::{PipelineChoice, published_pipelines},
+  tasks::{
+    data::{PipelineChoice, published_pipelines},
+    outside::Outside,
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -99,8 +102,10 @@ pub async fn set_code_index(services: &Services, args: SetCodeIndex) -> Result<V
     CodeIndexSetting::Off
   };
   blocking(move || {
-    let root = services.project(&args.project)?.repo_root;
+    let open = services.project(&args.project)?;
+    let root = open.repo_root;
     code_index::save_setting_in(&root, setting)?;
+    services.changes.record(open.project.id(), Outside::Settings);
     Ok(json!({ "code_index": code_index::setting_in(&root)?.is_on() }))
   })
   .await

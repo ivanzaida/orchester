@@ -31,7 +31,7 @@ use self::{
   choice::{Change, Stored, with_connection, with_effort, with_model},
   rows::new_runs_row,
 };
-use super::SettingsSave;
+use super::{SettingsSave, outside::OutsideSettings};
 use crate::{
   background,
   messages::{self, Message},
@@ -55,11 +55,27 @@ impl PartialEq for AutoModeSettingsProps {
 
 impl lurq::app::component::DevtoolsInspectable for AutoModeSettingsProps {}
 
-/// The settings a save stored.
+/// The settings as last read or saved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Saved(AutoModeSettings);
 
 impl lurq::app::component::DevtoolsInspectable for Saved {}
+
+/// What a save was asked to store, and what it stored: the person's change put on the settings as
+/// they were stored then, so a setting automation changed meanwhile keeps its change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Done {
+  asked: AutoModeSettings,
+  stored: AutoModeSettings,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Done {}
+
+/// The stored settings at a reading of [`OutsideSettings`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Read(Stored, u64);
+
+impl lurq::app::component::DevtoolsInspectable for Read {}
 
 /// The connection chosen in its select: `None` for the default reviewer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -79,7 +95,8 @@ struct EffortPick(Option<String>);
 
 impl lurq::app::component::DevtoolsInspectable for EffortPick {}
 
-type SaveAction = FutureAction<(PathBuf, AutoModeSettings), Saved, Message>;
+/// Where to save, the settings the change was made on, and the settings it makes.
+type SaveAction = FutureAction<(PathBuf, AutoModeSettings, AutoModeSettings), Done, Message>;
 
 /// The selects' values: each saves when a person changes it.
 #[derive(Clone)]
@@ -133,6 +150,9 @@ impl Commit {
     let Some(mut current) = self.stored.get_untracked() else {
       return;
     };
+    let Some(Saved(base)) = self.saved.get_untracked() else {
+      return;
+    };
     let settings = match next(&current) {
       Ok(Some(settings)) if settings != current.settings => settings,
       Ok(_) => {
@@ -149,20 +169,26 @@ impl Commit {
     self.stored.set(Some(current.clone()));
     self.picks.show(&current);
     if !self.save.state().get_untracked().is_pending() {
-      self.save.run((self.root.clone(), settings));
+      self.save.run((self.root.clone(), base, settings));
     }
   }
 
-  /// After a save of `saved`: saves the settings shown again when a change came meanwhile.
-  fn saved(&self, saved: &AutoModeSettings) {
-    self.saved.set(Some(Saved(saved.clone())));
-    let Some(current) = self.stored.get_untracked() else {
+  /// After a save: shows what it stored, or saves the settings shown again when a change came
+  /// meanwhile.
+  fn saved(&self, done: &Done) {
+    self.saved.set(Some(Saved(done.stored.clone())));
+    let Some(mut current) = self.stored.get_untracked() else {
       return;
     };
-    if current.settings == *saved {
+    if current.settings == done.asked {
+      if current.settings != done.stored {
+        current.settings = done.stored.clone();
+        self.stored.set(Some(current.clone()));
+        self.picks.show(&current);
+      }
       self.status.set(SettingsSave::Saved);
     } else {
-      self.save.run((self.root.clone(), current.settings));
+      self.save.run((self.root.clone(), done.asked.clone(), current.settings));
     }
   }
 
@@ -181,6 +207,7 @@ pub struct AutoModeSection {
   stored: Signal<Option<Stored>>,
   picks: Picks,
   commit: Commit,
+  outside: OutsideSettings,
 }
 
 impl Component for AutoModeSection {
@@ -210,7 +237,7 @@ impl Component for AutoModeSection {
       }
       match (&state.data, &state.error) {
         (_, Some(error)) => after.failed(error),
-        (Some(Saved(saved)), None) => after.saved(saved),
+        (Some(done), None) => after.saved(done),
         (None, None) => {}
       }
     });
@@ -229,7 +256,12 @@ impl Component for AutoModeSection {
     ctx.watch(&picks.effort, move |pick| {
       on_effort.change(&|current| with_effort(current, pick.0.clone()));
     });
-    Self { stored, picks, commit }
+    Self {
+      stored,
+      picks,
+      commit,
+      outside: OutsideSettings::new(ctx),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -243,27 +275,40 @@ impl Component for AutoModeSection {
       .width(Dimension::Pct(100.0))
       .padding_top(SpacingSize::Md)
       .spacing(SpacingSize::Sm)
-      .child(heading);
+      .child(heading)
+      .with_children(self.outside.notice(ctx, "settings-auto-mode-changed-outside"));
+    let read_error = read_error.map(|error| field_error(&message_text(ctx, &error)));
     let Some(stored) = self.stored.get() else {
-      return column.with_children(read_error.map(|error| field_error(&message_text(ctx, &error))));
+      return column.with_children(read_error);
     };
+    // A failed reading after a change keeps the settings as last read, and says why.
     column
+      .with_children(read_error)
       .child(new_runs_row(ctx, &stored, &self.commit))
       .child(self.reviewer_row(ctx, &stored))
   }
 }
 
 impl AutoModeSection {
-  /// Reads the stored settings and the connections once; why they cannot be read, if so.
+  /// Reads the stored settings and the connections, again after automation changed them (unless the
+  /// person's change is saving, see [`OutsideSettings`]); why they cannot be read, if so.
   fn load(&self, ctx: &mut Ctx, open: &OpenProject) -> Option<Message> {
-    let read = ctx.future(open.repo_root.clone(), |repo_root| async move {
-      background::run(move || stored_in(&repo_root)).await?.map_err(|error| {
-        tracing::error!(%error, "cannot read the auto mode settings");
-        messages::store_error(&error)
-      })
+    let deps = (open.repo_root.clone(), self.outside.reading(ctx));
+    let read = ctx.future(deps, |(repo_root, reading)| async move {
+      background::run(move || stored_in(&repo_root))
+        .await?
+        .map(|stored| Read(stored, reading))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the auto mode settings");
+          messages::store_error(&error)
+        })
     });
     let state = read.state().get();
-    if let (Some(read), None) = (state.data, self.stored.get_untracked()) {
+    let saving = self.commit.save.state().get().is_pending();
+    if !state.is_pending()
+      && let Some(Read(read, reading)) = state.data
+      && self.outside.take(reading, saving)
+    {
       self.picks.show(&read);
       self.commit.saved.set(Some(Saved(read.settings.clone())));
       self.stored.set(Some(read));
@@ -273,16 +318,38 @@ impl AutoModeSection {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  ctx.future_action(|(repo_root, settings): (PathBuf, AutoModeSettings)| async move {
-    let saved = settings.clone();
-    background::run(move || ProjectDb::open(&repo_root)?.save_auto_mode_settings(&settings))
+  ctx.future_action(
+    |(repo_root, base, asked): (PathBuf, AutoModeSettings, AutoModeSettings)| async move {
+      background::run(move || {
+        let mut db = ProjectDb::open(&repo_root)?;
+        let stored = rebased(&base, &asked, db.auto_mode_settings()?);
+        db.save_auto_mode_settings(&stored)?;
+        Ok::<_, StoreError>(Done { asked, stored })
+      })
       .await?
-      .map(|()| Saved(saved))
       .map_err(|error| {
         tracing::error!(%error, "cannot save the auto mode settings");
         messages::store_error(&error)
       })
-  })
+    },
+  )
+}
+
+/// The person's change from `base` to `asked`, put on the settings as stored now (`current`): what
+/// they did not change keeps what automation may have changed meanwhile.
+fn rebased(base: &AutoModeSettings, asked: &AutoModeSettings, current: AutoModeSettings) -> AutoModeSettings {
+  AutoModeSettings {
+    new_runs: if asked.new_runs == base.new_runs {
+      current.new_runs
+    } else {
+      asked.new_runs
+    },
+    reviewer: if asked.reviewer == base.reviewer {
+      current.reviewer
+    } else {
+      asked.reviewer.clone()
+    },
+  }
 }
 
 /// The settings of the project at `repo_root`, and its agent connections.

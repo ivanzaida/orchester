@@ -32,7 +32,7 @@ const SWITCH: &str = "settings-code-index-switch";
 const LIST: &str = "settings-code-index-list";
 const CHECK: &str = "settings-code-index-check";
 const NOTICE: &str = "settings-code-index-ripgrep-notice";
-const OFF: &str = "settings-code-index-off";
+pub(crate) const OFF: &str = "settings-code-index-off";
 /// A revision the repository does not have: its build fails.
 const MISSING: &str = "1111111111111111111111111111111111111111";
 
@@ -62,7 +62,7 @@ fn head(repo: &Path) -> Revision {
   Revision::new(String::from_utf8_lossy(&output.stdout).trim()).expect("a revision")
 }
 
-fn code_index_tab(desktop: &mut Desktop) {
+pub(crate) fn code_index_tab(desktop: &mut Desktop) {
   desktop.wait_for("nav-settings");
   desktop.click("nav-settings");
   desktop.wait_for(TAB);

@@ -8,7 +8,9 @@ use orchester_core::task::TaskDetails;
 use super::{NewTaskForm, QueuedTask, RunAction, RunArgs, RunProblems, StartedTask, StartingPipeline};
 use crate::{
   background,
+  navigation::route::Page,
   runner::Runners,
+  screens::project::ProjectNav,
   sharing::feed::ServerFeed,
   tasks::{
     data::{PipelineChoice, SaveTarget},
@@ -57,6 +59,25 @@ impl NewTaskForm {
       run.run(args.clone());
     }))
   }
+}
+
+/// After a Create & run or a Retry run: a task queued whose run did not start stays on the form, which
+/// queued it (02.09F opens it again in this session); a started one opens its page.
+pub(super) fn follow_run(ctx: &mut Ctx, run: &RunAction, queued_task: Signal<Option<QueuedTask>>, nav: ProjectNav) {
+  ctx.watch(&run.state(), move |state| {
+    if state.is_pending() {
+      return;
+    }
+    if let Some(task) = state.error.as_ref().and_then(|problems| problems.queued.clone()) {
+      nav.queued_by_form(task.task);
+      queued_task.set(Some(task));
+    }
+    // The task may have been saved and queued even when the start outcome is unknown.
+    nav.tasks_changed();
+    if let Some(StartedTask(task)) = state.data {
+      nav.finish(Page::task(task));
+    }
+  });
 }
 
 pub(super) fn run_action(ctx: &mut Ctx, queued_task: Signal<Option<QueuedTask>>) -> RunAction {

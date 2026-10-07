@@ -329,13 +329,18 @@ impl CommandRunner for RefusingGit {
   }
 }
 
+/// Programs whose git refuses `git worktree remove` while `refuse` holds.
+pub(crate) fn refusing_git(refuse: Arc<AtomicBool>) -> Programs {
+  Programs::with_runner(Arc::new(RefusingGit {
+    refuse,
+    process: ProcessRunner::new(Duration::from_secs(90)),
+  }))
+}
+
 #[test]
 fn run_history_keeps_a_worktree_git_refused_to_remove_and_offers_it_again() {
   let refuse = Arc::new(AtomicBool::new(true));
-  let program_set = Programs::with_runner(Arc::new(RefusingGit {
-    refuse: refuse.clone(),
-    process: ProcessRunner::new(Duration::from_secs(90)),
-  }));
+  let program_set = refusing_git(refuse.clone());
   let (mut desktop, first) = failed_twice(program_set);
   let first_row = row(&first);
   let error = format!("run-remove-error-{}", first.id());

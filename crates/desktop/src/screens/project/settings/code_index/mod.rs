@@ -31,6 +31,7 @@ use orchester_core::{code_index::CodeIndexSetting, revision::Revision};
 use super::{
   SettingsSave,
   general::{CONTENT_WIDTH, readback, sized_setting_row},
+  outside::OutsideSettings,
 };
 use crate::{
   activity::{Activity, OperationSpec, code_index_operations},
@@ -75,6 +76,12 @@ struct Stored(CodeIndexSetting);
 
 impl lurq::app::component::DevtoolsInspectable for Stored {}
 
+/// The setting as stored at a reading of [`OutsideSettings`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Read(Stored, u64);
+
+impl lurq::app::component::DevtoolsInspectable for Read {}
+
 type SaveAction = FutureAction<(PathBuf, CodeIndexSetting, OperationSpec), Stored, Message>;
 type RebuildAction = FutureAction<(PathBuf, Revision, OperationSpec), (), Message>;
 
@@ -88,6 +95,7 @@ pub struct CodeIndexTab {
   tick: Signal<u64>,
   /// Something runs that the tab follows: set while rendering, read by the interval.
   watching: Arc<AtomicBool>,
+  outside: OutsideSettings,
 }
 
 impl Component for CodeIndexTab {
@@ -100,6 +108,7 @@ impl Component for CodeIndexTab {
       check_revision: ctx.signal(0),
       tick: ctx.signal(0),
       watching: Arc::new(AtomicBool::new(false)),
+      outside: OutsideSettings::new(ctx),
     };
     let (save, rebuild) = (save_action(ctx), rebuild_action(ctx));
     tab.watch_save(ctx, &save);
@@ -133,7 +142,7 @@ impl Component for CodeIndexTab {
     // Futures are matched by call order: the actions come first, as in `create`.
     let (save, rebuild) = (save_action(ctx), rebuild_action(ctx));
     self.tick.get();
-    let setting_error = self.load_setting(ctx, &open);
+    let setting_error = self.load_setting(ctx, &open, save.state().get().is_pending());
     let list = self.load_list(ctx, &open);
     let check = self.load_check(ctx, &open);
     let install = code_index::install_state();
@@ -146,9 +155,10 @@ impl Component for CodeIndexTab {
       .padding_vertical(SpacingSize::Lg)
       .padding_horizontal(SpacingSize::Section)
       .spacing(SpacingSize::Sm)
-      .child(heading(ctx));
+      .child(heading(ctx))
+      .with_children(self.outside.notice(ctx, "settings-code-index-changed-outside"));
+    let error = setting_error.map(|error| field_error(&message_text(ctx, &error)));
     let Some(Stored(setting)) = self.stored.get() else {
-      let error = setting_error.map(|error| field_error(&message_text(ctx, &error)));
       return form(
         None,
         ScrollVertical::new(content.with_children(error))
@@ -156,7 +166,10 @@ impl Component for CodeIndexTab {
           .flex(1.0),
       );
     };
-    content = content.child(self.setting_row(ctx, (&open, setting), list.as_ref(), &save));
+    // A failed reading after a change keeps the setting as last read, and says why.
+    content = content
+      .with_children(error)
+      .child(self.setting_row(ctx, (&open, setting), list.as_ref(), &save));
     content = if setting.is_on() {
       let rebuild_error = rebuild.state().get().error;
       let rebuild = self.rebuild_handler(&open, &rebuild);
@@ -222,20 +235,26 @@ impl CodeIndexTab {
     });
   }
 
-  /// Reads the stored setting once; why it cannot be read.
-  fn load_setting(&self, ctx: &mut Ctx, open: &OpenProject) -> Option<Message> {
-    let setting = ctx.future(open.repo_root.clone(), |repo_root| async move {
+  /// Reads the stored setting, again after automation changed it (unless the person's change is
+  /// `saving`, see [`OutsideSettings`]); why it cannot be read.
+  fn load_setting(&self, ctx: &mut Ctx, open: &OpenProject, saving: bool) -> Option<Message> {
+    let deps = (open.repo_root.clone(), self.outside.reading(ctx));
+    let setting = ctx.future(deps, |(repo_root, reading)| async move {
       background::run(move || code_index::setting_in(&repo_root))
         .await?
-        .map(Stored)
+        .map(|setting| Read(Stored(setting), reading))
         .map_err(|error| {
           tracing::error!(%error, "cannot read the code index setting");
           messages::store_error(&error)
         })
     });
     let read = setting.state().get();
-    if let (Some(read), None) = (read.data, self.stored.get_untracked()) {
-      self.stored.set(Some(read));
+    if !read.is_pending()
+      && let Some(Read(stored, reading)) = read.data
+      && self.outside.take(reading, saving)
+      && self.stored.get_untracked() != Some(stored)
+    {
+      self.stored.set(Some(stored));
     }
     read.error
   }

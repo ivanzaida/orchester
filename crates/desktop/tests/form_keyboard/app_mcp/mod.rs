@@ -5,6 +5,8 @@
 mod answered;
 pub(crate) mod approvals;
 mod pipelines;
+mod quiet;
+mod quiet_screens;
 mod runs;
 mod server;
 mod tasks;

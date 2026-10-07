@@ -282,6 +282,16 @@ impl ProjectNav {
     self.feed.revision.update(|revision| *revision += 1);
   }
 
+  /// This window's New task form queued `task` (see [`ProjectFeed::queued_by_form`]).
+  pub fn queued_by_form(&self, task: TaskId) {
+    self.feed.queued_by_form.lock().insert(task);
+  }
+
+  /// Whether this window's New task form queued `task` in this session.
+  pub fn was_queued_by_form(&self, task: TaskId) -> bool {
+    self.feed.queued_by_form.lock().contains(&task)
+  }
+
   /// The current operation for a run, shared across every tab of this project.
   pub fn integration(&self, run: RunId) -> RunIntegration {
     self.feed.integration.of(run)
@@ -406,9 +416,11 @@ impl Component for ProjectShell {
       open: open.clone(),
       status: status.clone(),
       runner,
-      revision: (feed.revision.get(), feed.changes.get()),
+      // Tasks automation saved count as this window's own saves: the pages read them again in place.
+      revision: (feed.revision.get() + feed.outside.get().tasks, feed.changes.get()),
       resources: feed.resources.get(),
       tasks: tasks.clone(),
+      stale: feed.stale.get(),
       usage,
       sharing: feed.sharing.get(),
     });

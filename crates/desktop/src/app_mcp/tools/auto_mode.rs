@@ -23,7 +23,10 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  tasks::run_approvals::{RunApprovalChange, apply_in, auto_mode_in, reviewer_of, unavailable_key},
+  tasks::{
+    outside::Outside,
+    run_approvals::{RunApprovalChange, apply_in, auto_mode_in, reviewer_of, unavailable_key},
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -86,7 +89,8 @@ pub async fn set_run_auto_mode(services: &Services, args: SetRunAutoMode) -> Res
   let services = services.clone();
   blocking(move || {
     gate(&services)?;
-    let root = services.project(&args.project)?.repo_root;
+    let open = services.project(&args.project)?;
+    let root = open.repo_root;
     let run = find_run(&ProjectDb::open(&root)?, &args.run)?;
     if run.status().is_terminal() {
       return Err(ToolError::refused(
@@ -98,7 +102,7 @@ pub async fn set_run_auto_mode(services: &Services, args: SetRunAutoMode) -> Res
       return Err(unavailable(why));
     }
     apply_in(&root, run.id(), RunApprovalChange::AutoMode(args.enabled))?;
-    services.changes.record();
+    services.changes.record(open.project.id(), Outside::Runs);
     let state = auto_mode_in(&root, run.id())?;
     Ok(json!({ "run": { "id": run.id().to_string(), "auto_mode": state.on } }))
   })
@@ -118,7 +122,8 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
   let services = services.clone();
   blocking(move || {
     gate(&services)?;
-    let mut db = ProjectDb::open(&services.project(&args.project)?.repo_root)?;
+    let open = services.project(&args.project)?;
+    let mut db = ProjectDb::open(&open.repo_root)?;
     let mut settings = db.auto_mode_settings()?;
     if let Some(new_runs) = args.new_runs {
       settings.new_runs = new_runs;
@@ -127,7 +132,7 @@ pub async fn set_auto_mode(services: &Services, args: SetAutoMode) -> Result<Val
       settings.reviewer = chosen(&db.connections()?, reviewer)?;
     }
     db.save_auto_mode_settings(&settings)?;
-    services.changes.record();
+    services.changes.record(open.project.id(), Outside::Settings);
     settings_json(&db)
   })
   .await

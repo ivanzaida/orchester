@@ -19,6 +19,7 @@ mod changes;
 mod controls;
 mod conversation;
 mod dependencies;
+mod first_run;
 mod heading;
 mod history;
 mod interrupted;
@@ -154,6 +155,7 @@ impl Component for TaskScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     control_action(ctx);
+    first_run::first_run_action(ctx);
     let focus_composer = ctx.signal(false);
     ctx.provide(conversation::ComposerFocus(focus_composer.clone()));
     let nav = ctx
@@ -184,6 +186,7 @@ impl Component for TaskScreen {
       self.refused_edit.set(Some(reason));
     }
     let control = control_action(ctx);
+    let first_run = first_run::first_run_action(ctx);
     let deps = (
       props.project.repo_root.clone(),
       props.task,
@@ -229,10 +232,15 @@ impl Component for TaskScreen {
     );
     let body = self.body(ctx, &props, &detail, (lost, reason), (changes, leftovers, left.clone()));
     let runner_notice = connection_notice(ctx, &props.runner, props.runner_since, &self.runners).map(padded);
-    let control_error = self.error_rows(ctx, &control);
-    let removal = RemoveWorktreeProps::topbar(&props.project, &detail, left.as_ref())
+    // A failed reading after a change keeps the task as last read on the page, and says why.
+    let control_error = self.error_rows(ctx, (&control, &first_run), state.error);
+    let removal = RemoveWorktreeProps::topbar((&props.project, &self.nav), &detail, left.as_ref())
       .map(|removal| ctx.mount_keyed::<RemoveWorktree>(&format!("task-remove-worktree-{}", removal.run.id()), removal));
-    let ended = (removal, again.action);
+    // A task without a run has nothing to run again; a queued one may retry its first run.
+    let ended = (
+      removal,
+      again.action.or(first_run::retry_button(ctx, &detail, &first_run)),
+    );
     let mut heading = heading::with_notices(ctx, &detail, lost.is_some(), &props.project.repo_root);
     let earlier_unreadable = heading.split_off(1);
     // A task kept Not shared is read-only: its organization shows as plain labels.
@@ -259,8 +267,14 @@ impl Component for TaskScreen {
 }
 
 impl TaskScreen {
+  /// A queued task without a run that this window's New task form queued opens in the locked form
+  /// (02.09F); any other, e.g. one automation queued, stays on its page, which offers Retry run.
   fn redirect_queued_retry(&self, detail: &TaskDetail) -> bool {
-    if detail.task.status() != TaskStatus::Queued || detail.run.is_some() || detail.latest_unreadable.is_some() {
+    if detail.task.status() != TaskStatus::Queued
+      || detail.run.is_some()
+      || detail.latest_unreadable.is_some()
+      || !self.nav.was_queued_by_form(detail.task.id())
+    {
       return false;
     }
     self.nav.replace(Page::RetryTask(detail.task.id()));
@@ -363,14 +377,24 @@ impl TaskScreen {
 }
 
 impl TaskScreen {
-  /// Why the runner did not carry out the last run control, and why Edit task, opened for this
-  /// task, was refused (`field-error` below the heading).
-  fn error_rows(&self, ctx: &Ctx, control: &ControlAction) -> Vec<Element> {
+  /// Why the runner did not carry out the last run control or Retry run, why Edit task, opened for
+  /// this task, was refused, and why the task could not be read again (`reread`) (`field-error`
+  /// below the heading).
+  fn error_rows(
+    &self,
+    ctx: &Ctx,
+    (control, first_run): (&ControlAction, &first_run::FirstRunAction),
+    reread: Option<Message>,
+  ) -> Vec<Element> {
     let state = control.state().get();
     let control_error = if state.is_pending() { None } else { state.error };
+    let first_run = first_run.state().get();
+    let first_run_error = if first_run.is_pending() { None } else { first_run.error };
     control_error
       .into_iter()
+      .chain(first_run_error)
       .chain(self.refused_edit.get())
+      .chain(reread)
       .map(|error| control_error_row(&message_text(ctx, &error)))
       .collect()
   }

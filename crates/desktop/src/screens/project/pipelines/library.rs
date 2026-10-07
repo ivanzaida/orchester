@@ -40,7 +40,7 @@ use crate::{
     gutter::{beside_gutter, clear_of_gutter},
     icon::{Icon, IconSize, icon},
     message_text,
-    notice::ownership_note,
+    notice::{Notice, ownership_note},
     panel::RecoveryPanel,
     summary_step::summary_step,
   },
@@ -114,7 +114,17 @@ impl Component for Library {
     // of it.
     let column = Column::new().flex(1.0).height(Dimension::Pct(100.0));
     let column = match (&state.data, &state.error) {
-      (Some(entries), None) if !entries.is_empty() => column.child(self.list(ctx, entries, project)),
+      // A failed reading after a change keeps the pipelines last read and says why.
+      (Some(entries), error) if !entries.is_empty() => column
+        .with_children(error.as_ref().map(|error| {
+          Notice::new(
+            Icon::AlertCircle,
+            ctx.t("pipelines.library.readAgainFailed"),
+            message_text(ctx, error),
+          )
+          .id("pipelines-read-again-failed")
+        }))
+        .child(self.list(ctx, entries, project)),
       (_, Some(error)) => column
         .padding_right(Dimension::Px(gutter_width()))
         .child(RecoveryPanel::new(

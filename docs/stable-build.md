@@ -108,7 +108,11 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do) and `set_code_index`
   (*Use code index* in Project settings; `list_projects` shows each project's setting). A modal
-  open in the window does not stand in their way. A refusal comes back as a tool error with a stable
+  open in the window does not stand in their way, and they work in the background without disturbing
+  whoever uses the window: only the changed project's data is read again, the screens showing it
+  update in place (no page switches, no form is reset; an Edit task form or a settings section with a
+  change of the person's keeps it and says quietly that the data changed elsewhere, with *Reload*),
+  and a tool's failure is only in its result, never a failure in the status bar or a mark on a tab. A refusal comes back as a tool error with a stable
   `code` (`run_active`, `task_incomplete`, `automation_not_allowed`, a runner rejection such as
   `run_not_running`…) and the app's own explanation. Its discovery file is
   `%LOCALAPPDATA%\orchester-mcp\<pid>.json` on Windows and

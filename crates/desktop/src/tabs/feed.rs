@@ -36,7 +36,7 @@ use crate::{
   tasks::{
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobs},
-    outside::OutsideChanges,
+    outside::{OutsideChanges, OutsideCounts},
     usage::ProjectUsage,
   },
   workspace::OpenProject,
@@ -56,6 +56,11 @@ pub struct ProjectFeed {
   pub changes: Signal<u64>,
   /// Counts saves of the project's tasks; the tasks are read again after each.
   pub revision: Signal<u64>,
+  /// Counts the changes automation made to the project through Orchester's MCP server, by kind: the
+  /// screens showing what changed read it again in place.
+  pub outside: Signal<OutsideCounts>,
+  /// Why the tasks shown could not be read again; they are the ones last read.
+  pub stale: Signal<Option<Message>>,
   /// Counts imports: screens listing resources are mounted again after one.
   pub resources: Signal<u64>,
   /// Whether the project's task list is shared, and how it stands with its server; `None` while
@@ -63,6 +68,9 @@ pub struct ProjectFeed {
   pub sharing: Signal<Option<crate::sharing::project::state::ProjectSharing>>,
   /// Merge and cleanup operations that outlive a task page and are shared by its tabs.
   pub integration: IntegrationJobs,
+  /// Tasks this window's New task form queued in this session: until a run of one is recorded, its
+  /// page gives way to the locked form with *Retry run* (02.09F).
+  pub queued_by_form: Arc<Mutex<std::collections::HashSet<orchester_core::id::TaskId>>>,
 }
 
 /// The feeds of the projects the tabs show, by project, and the projects' merge and removal operations.
@@ -103,9 +111,12 @@ impl ProjectFeeds {
         status: Signal::new(None),
         changes: Signal::new(0),
         revision: Signal::new(0),
+        outside: Signal::new(OutsideCounts::default()),
+        stale: Signal::new(None),
         resources: Signal::new(0),
         sharing: Signal::new(None),
         integration: self.1.of(project),
+        queued_by_form: Arc::default(),
       })
       .clone()
   }
@@ -146,6 +157,7 @@ impl Component for FeedLoader {
     let runners = ctx
       .use_context::<Runners>()
       .expect("the root provides Runners before mounting the window");
+    let project = open.project.id();
     let root = open.repo_root;
     let states = counter(ctx, (runners.clone(), root.clone(), Counter::States));
     let changes = counter(ctx, (runners.clone(), root.clone(), Counter::Changes(active)));
@@ -160,9 +172,13 @@ impl Component for FeedLoader {
       super::shared::sharing(ctx, (&root, shared), &self.synced),
     );
     publish(&self.feed.connections, connections(ctx, (root.clone(), resources)));
+    let outside = outside(ctx, project);
+    publish(&self.feed.outside, outside);
     // Tasks automation saved count as the screens' own saves.
-    let saved = revision + outside(ctx);
-    publish(&self.feed.tasks, tasks(ctx, (root.clone(), saved + shared, states)));
+    let saved = revision + outside.tasks;
+    let (tasks, stale) = tasks(ctx, (root.clone(), saved + shared, states));
+    publish(&self.feed.tasks, tasks);
+    publish(&self.feed.stale, stale);
     let day_start = Timestamp::now().local_day_start();
     if let Some(usage) = usage(ctx, (root, saved, (states, changes), day_start)) {
       publish(&self.feed.usage, Some(usage));
@@ -232,21 +248,32 @@ fn counter(ctx: &mut Ctx, deps: (Runners, PathBuf, Counter)) -> u64 {
   count.state().get().data.unwrap_or(0)
 }
 
-/// How often tasks were saved outside the screens, by automation through Orchester's MCP server.
-fn outside(ctx: &mut Ctx) -> u64 {
+/// How often automation changed `project` through Orchester's MCP server. Changes of other projects
+/// wake the stream without a render.
+fn outside(ctx: &mut Ctx, project: ProjectId) -> OutsideCounts {
   let changes = ctx
     .use_context::<OutsideChanges>()
     .expect("the root provides the outside changes before mounting the window");
-  let count = ctx.stream(changes, |changes, emitter: StreamEmitter<u64, ()>| async move {
-    let mut updates = changes.subscribe();
-    loop {
-      let revision = *updates.borrow_and_update();
-      if !emitter.emit(revision) || updates.changed().await.is_err() {
-        return;
+  let count = ctx.stream(
+    (changes, project),
+    |(changes, project), emitter: StreamEmitter<OutsideCounts, ()>| async move {
+      let mut updates = changes.subscribe();
+      let mut last = None;
+      loop {
+        let counts = updates.borrow_and_update().get(&project).copied().unwrap_or_default();
+        if last != Some(counts) {
+          if !emitter.emit(counts) {
+            return;
+          }
+          last = Some(counts);
+        }
+        if updates.changed().await.is_err() {
+          return;
+        }
       }
-    }
-  });
-  count.state().get().data.unwrap_or(0)
+    },
+  );
+  count.state().get().data.unwrap_or_default()
 }
 
 /// The project's runner status whenever it changes; the runners' reports of other projects wake
@@ -276,8 +303,10 @@ fn status(ctx: &mut Ctx, runners: &Runners, root: &Path) -> Option<RunnerStatus>
   status.state().get().data.flatten()
 }
 
-/// The project's tasks, read again whenever tasks were saved or a run changed state.
-fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64)) -> TasksState {
+/// The project's tasks, read again whenever tasks were saved or a run changed state, and why the
+/// last reading failed. A failed reading keeps the tasks last read on screen, so no page or form
+/// showing them is replaced; only a failed first reading leaves no tasks to show.
+fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64)) -> (TasksState, Option<Message>) {
   let load = ctx.future(deps, |(repo_root, ..)| async move {
     background::run(move || ProjectTasks::load(&repo_root))
       .await?
@@ -287,11 +316,10 @@ fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64)) -> TasksState {
       })
   });
   let state = load.state().get();
-  // A failed reload must not leave the previous tasks on screen as if they were current.
   match (state.data, state.error) {
-    (_, Some(error)) => TasksState::Failed(error),
-    (Some(tasks), None) => TasksState::Ready(tasks),
-    (None, None) => TasksState::Loading,
+    (Some(tasks), stale) => (TasksState::Ready(tasks), stale),
+    (None, Some(error)) => (TasksState::Failed(error), None),
+    (None, None) => (TasksState::Loading, None),
   }
 }
 

@@ -39,11 +39,11 @@ use crate::{
   unreadable_run::at,
 };
 
-const SWITCH: &str = "task-auto-mode";
+pub(crate) const SWITCH: &str = "task-auto-mode";
 
 /// A seeded run with a waiting MCP request that auto mode left to the person with `review`, in a project
 /// with a Claude Code connection when `reviewer`; the run's id.
-fn seeded(reviewer: bool, review: Option<&Review>) -> (Desktop, orchester_core::id::RunId) {
+pub(crate) fn seeded(reviewer: bool, review: Option<&Review>) -> (Desktop, orchester_core::id::RunId) {
   seeded_with((reviewer, review), |_| {})
 }
 
@@ -110,7 +110,7 @@ pub(crate) fn claude_connection(repo: &Path) {
     .expect("connection");
 }
 
-fn run_auto_mode(repo: &Path, run: orchester_core::id::RunId) -> bool {
+pub(crate) fn run_auto_mode(repo: &Path, run: orchester_core::id::RunId) -> bool {
   ProjectDb::open(repo).expect("open").run_auto_mode(run).expect("read")
 }
 
@@ -189,7 +189,7 @@ fn auto_mode_run_switch_saves_at_once_and_says_when_it_is_unavailable() {
 }
 
 /// A signed-in Codex connection named `Codex · Review` listing `gpt-5.5-codex` with two efforts.
-fn codex_connection(repo: &Path) -> ConnectionId {
+pub(crate) fn codex_connection(repo: &Path) -> ConnectionId {
   let listed = CatalogModel::new(
     ModelId::new("gpt-5.5-codex").expect("model"),
     vec!["low".to_owned(), "high".to_owned()],
@@ -226,7 +226,7 @@ fn codex_named(repo: &Path, name: &str, listed: Vec<CatalogModel>) -> Connection
   id
 }
 
-fn settings(repo: &Path) -> AutoModeSettings {
+pub(crate) fn settings(repo: &Path) -> AutoModeSettings {
   ProjectDb::open(repo).expect("open").auto_mode_settings().expect("read")
 }
 

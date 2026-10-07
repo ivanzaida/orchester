@@ -33,7 +33,7 @@ use crate::{
   programs::Programs,
   tasks::{
     detail::TaskDetail,
-    integration_jobs::{JobState, RemoveArgs, RunIntegration},
+    integration_jobs::{JobState, RemoveArgs, Remover, RunIntegration},
   },
   ui::{button::ActionButton, icon::Icon},
   workspace::OpenProject,
@@ -73,12 +73,16 @@ impl lurq::app::component::DevtoolsInspectable for RemoveWorktreeProps {}
 
 impl RemoveWorktreeProps {
   /// The topbar's *Remove worktree* for the latest run of `detail`, when it has no live work and
-  /// still has worktrees as `left` says.
-  pub(super) fn topbar(open: &OpenProject, detail: &TaskDetail, left: Option<&TaskLeftovers>) -> Option<Self> {
+  /// still has worktrees as `left` says, or its dialog shows them removed elsewhere ([`listed`]).
+  pub(super) fn topbar(
+    (open, nav): (&OpenProject, &ProjectNav),
+    detail: &TaskDetail,
+    left: Option<&TaskLeftovers>,
+  ) -> Option<Self> {
     let latest = detail.run.as_ref()?.id();
     let record = detail.history.iter().find(|record| record.id == latest)?;
     let run = record.without_live_work()?;
-    let leftovers = left?.of(latest)?.ok().filter(|left| !left.worktrees.is_empty())?;
+    let leftovers = listed(nav, latest, left?.of(latest)?.ok()?)?;
     Some(Self {
       open: open.clone(),
       task: detail.task.id(),
@@ -90,6 +94,17 @@ impl RemoveWorktreeProps {
       working: working(detail),
     })
   }
+}
+
+/// What the removal of `run` shows: `left` while it has worktrees; once they were removed elsewhere,
+/// e.g. by automation, while the run's dialog was open, nothing, and the dialog stays open and says
+/// so. `None` when there is nothing to show.
+pub(super) fn listed(nav: &ProjectNav, run: RunId, left: Leftovers) -> Option<Leftovers> {
+  if !left.worktrees.is_empty() {
+    return Some(left);
+  }
+  let job = nav.integration(run);
+  (job.dialog_open().get() && job.remove().get() == JobState::Succeeded).then_some(left)
 }
 
 /// The runs of `detail` other than `run`.
@@ -130,6 +145,11 @@ impl Component for RemoveWorktree {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RemoveWorktreeProps>().clone();
     let job = self.nav.integration(props.run.id());
+    let shows_dialog = matches!(props.place, Place::Topbar | Place::Row { dialog: true });
+    // Removed elsewhere while its dialog is open: only the dialog stays, saying so.
+    if props.leftovers.worktrees.is_empty() {
+      return Row::new().with_children(shows_dialog.then(|| modal(ctx, &props, &job)));
+    }
     let waits = self.waits(&props.others);
     let removing = matches!(job.remove().get(), JobState::Running);
     let busy = job.busy()
@@ -161,7 +181,6 @@ impl Component for RemoveWorktree {
       })
       .enabled(!busy)
       .render(ctx);
-    let shows_dialog = matches!(props.place, Place::Topbar | Place::Row { dialog: true });
     Row::new()
       .child(button)
       .with_children(shows_dialog.then(|| modal(ctx, &props, &job)))
@@ -240,5 +259,6 @@ fn remove_args(ctx: &mut Ctx, props: &RemoveWorktreeProps) -> RemoveArgs {
     activity,
     separator,
     changed: Arc::new(move || nav.tasks_changed()),
+    by: Remover::Person,
   }
 }

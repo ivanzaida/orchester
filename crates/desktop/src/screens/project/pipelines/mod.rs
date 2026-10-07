@@ -129,7 +129,8 @@ impl Component for PipelinesScreen {
         "pipelines-library",
         LibraryProps {
           project,
-          revision: self.nav.revision.get(),
+          // A pipeline automation added is listed in place, keeping the selection and the scroll.
+          revision: self.nav.revision.get() + self.nav.project.feed.outside.get().pipelines,
         },
       ),
       Some((id, view)) => {
