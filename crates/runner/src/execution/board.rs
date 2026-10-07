@@ -2,7 +2,9 @@
 //! slots it shares between runs: each agent at work — a step execution of an executing run, with
 //! its task, step, agent and model — takes one slot, so a run's parallel steps and other runs
 //! compete for the same slots. Every change is announced as an [`Event::WorkSummary`] once the
-//! desktop has said how many slots there are.
+//! desktop has said how many slots there are. The desktop may change the count at any time: more
+//! slots wake the runs waiting for one; fewer take none away, so agents at work finish and new ones
+//! wait until fewer work than there are slots.
 //!
 //! Tool steps running a command tool take no agent slot: a command is no agent and uses no
 //! tokens. They take one of [`COMMAND_SLOTS`] command slots instead, shared by all runs, since a
@@ -17,6 +19,7 @@ use orchester_core::{
 };
 use orchester_ipc::{Event, RunWork, WorkState, WorkSummary};
 use parking_lot::Mutex;
+use tokio::sync::Notify;
 
 use super::Notifier;
 
@@ -28,6 +31,8 @@ pub(super) struct Board {
   state: Mutex<State>,
   /// Executions whose command tool runs, each holding a command slot.
   commands: Mutex<Vec<StepExecutionId>>,
+  /// Wakes the runs waiting for an agent slot when the count changes.
+  resized: Notify,
 }
 
 #[derive(Default)]
@@ -60,6 +65,7 @@ impl Board {
       notifier,
       state: Mutex::new(State::default()),
       commands: Mutex::new(Vec::new()),
+      resized: Notify::new(),
     }
   }
 
@@ -69,6 +75,12 @@ impl Board {
 
   pub(super) fn set_slots(&self, slots: NonZeroU32) {
     self.change(|state| state.slots = Some(slots));
+    self.resized.notify_waiters();
+  }
+
+  /// Completes once the slot count changes; a run waiting for a slot then looks again.
+  pub(super) async fn resized(&self) {
+    self.resized.notified().await;
   }
 
   /// Whether an agent slot is free.

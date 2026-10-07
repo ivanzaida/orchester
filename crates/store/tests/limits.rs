@@ -7,7 +7,7 @@ use std::{fmt::Debug, num::NonZeroU32, path::Path, str::FromStr, time::Duration}
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  limits::ProjectLimits,
+  limits::{AgentSlots, ProjectLimits},
   resource::StepKey,
   run::{Attempt, AttemptReason, AttemptStatus, PauseReason, Run, RunStatus, StepExecution, StepStatus, TokenUsage},
   store::{ActivityStore, RunStore, SettingsStore, TaskStore},
@@ -16,7 +16,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use rusqlite::Connection;
 
-use self::support::{at, budget, model, started_run};
+use self::support::{at, budget, copied_at_version, model, started_run};
 
 #[test]
 fn limits_default_until_saved_then_round_trip() {
@@ -33,6 +33,59 @@ fn limits_default_until_saved_then_round_trip() {
   db.save_project_limits(&changed).expect("save again");
   let reopened = ProjectDb::open(repo.path()).expect("open");
   assert_eq!(reopened.project_limits().expect("limits"), changed);
+}
+
+#[test]
+fn limits_agent_slots_persist_with_the_other_limits() {
+  let (repo, mut db, ..) = started_run();
+  let two = AgentSlots::new(2).expect("in range");
+  let changed = ProjectLimits::DEFAULT.with_agent_slots(two);
+  db.save_project_limits(&changed).expect("save");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.project_limits().expect("limits").agent_slots(), two);
+  assert_eq!(reopened.project_limits().expect("limits"), changed);
+}
+
+#[test]
+fn limits_migration_gives_saved_limits_the_default_agent_slots() {
+  let (current, mut db, ..) = started_run();
+  let saved = ProjectLimits::new(
+    budget(8_000_000),
+    budget(2_000_000),
+    budget(30_000_000),
+    Duration::from_secs(45 * 60),
+  )
+  .expect("valid limits");
+  db.save_project_limits(&saved).expect("save");
+  drop(db);
+  let database = current.path().join(".orchester").join("orchester.db");
+  let before = schema_version(&database) - 1;
+  let old = copied_at_version(&database, before);
+  let old_database = old.path().join(".orchester").join("orchester.db");
+  let columns: Vec<String> = Connection::open(&old_database)
+    .expect("open")
+    .prepare("SELECT name FROM pragma_table_info('project_limits')")
+    .expect("columns")
+    .query_map([], |row| row.get(0))
+    .expect("columns")
+    .collect::<Result<_, _>>()
+    .expect("columns");
+  assert!(!columns.iter().any(|column| column == "agent_slots"), "{columns:?}");
+
+  let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(upgraded.project_limits().expect("limits"), saved);
+  assert_eq!(
+    upgraded.project_limits().expect("limits").agent_slots(),
+    AgentSlots::DEFAULT
+  );
+  let sixteen = saved.with_agent_slots(AgentSlots::new(16).expect("in range"));
+  upgraded.save_project_limits(&sixteen).expect("save");
+  assert_eq!(upgraded.project_limits().expect("limits"), sixteen);
+  assert_eq!(schema_version(&old_database), schema_version(&database));
+  let out_of_range = Connection::open(&old_database)
+    .expect("open")
+    .execute("UPDATE project_limits SET agent_slots = 17", []);
+  assert!(out_of_range.is_err(), "the schema keeps agent slots within 1 to 16");
 }
 
 #[test]

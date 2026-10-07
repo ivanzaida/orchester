@@ -311,12 +311,21 @@ fn queued(ctx: &Ctx, queue: &Queue) -> (Icon, Arc<str>, bool) {
     ),
     Queue::NextCheckpoint => (Icon::Clock3, ctx.t("conversation.delivery.queued")),
     Queue::RunStarts => (Icon::Clock3, ctx.t("conversation.delivery.queuedRunStart")),
-    Queue::RunResumes => (Icon::Clock3, ctx.t("conversation.delivery.queuedRunResume")),
-    Queue::RunContinues => (Icon::Clock3, ctx.t("conversation.delivery.queuedRunContinue")),
+    Queue::RunResumes(Some(agent)) => (
+      Icon::Clock3,
+      ctx.t_args("conversation.delivery.queuedRunResumeBy", [("agent", &**agent)]),
+    ),
+    Queue::RunResumes(None) => (Icon::Clock3, ctx.t("conversation.delivery.queuedRunResume")),
+    Queue::RunContinues(Some(agent)) => (
+      Icon::Clock3,
+      ctx.t_args("conversation.delivery.queuedRunContinueBy", [("agent", &**agent)]),
+    ),
+    Queue::RunContinues(None) => (Icon::Clock3, ctx.t("conversation.delivery.queuedRunContinue")),
     Queue::AgentNextTurn(agent) => (
       Icon::Clock3,
       ctx.t_args("conversation.delivery.queuedAgentNextTurn", [("agent", &**agent)]),
     ),
+    Queue::NextRun => (Icon::Clock3, ctx.t("conversation.delivery.queuedNextRun")),
     Queue::RunEnded => (Icon::CircleX, ctx.t("conversation.delivery.notDelivered")),
     Queue::WorktreeRemoved => (Icon::CircleX, ctx.t("conversation.delivery.notDeliveredWorktree")),
   };

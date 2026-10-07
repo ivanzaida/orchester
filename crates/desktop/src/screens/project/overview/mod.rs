@@ -61,8 +61,8 @@ pub struct OverviewProps {
   /// The project's runner, and since when it has had trouble.
   pub runner: RunnerState,
   pub runner_since: Option<SystemTime>,
-  /// Agents at work, as the runner last reported; `None` until it did.
-  pub agents_working: Option<usize>,
+  /// Agents at work and the agent slots, as the runner last reported; `None` until it did.
+  pub agents_working: Option<(usize, std::num::NonZeroU32)>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for OverviewProps {}

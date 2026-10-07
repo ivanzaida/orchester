@@ -6,6 +6,7 @@
 //! and forward through the screens.
 
 mod agent_permissions;
+mod agent_slots;
 mod agents;
 mod all_projects;
 mod app_mcp;
@@ -22,6 +23,7 @@ mod conversation;
 mod conversation_composer;
 mod conversation_composer_box;
 mod conversation_composer_ime;
+mod conversation_composer_waiting;
 mod conversation_queued;
 mod conversation_rail;
 mod conversation_steady;

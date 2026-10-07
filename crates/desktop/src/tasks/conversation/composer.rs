@@ -1,15 +1,18 @@
 //! What the conversation's composer offers in the run's state (`docs/design/orchester-workspace.md`,
-//! "Conversation (merged with Activity)", Composer): while an agent works and the message is for
-//! it, *Send now* and *Send after this turn*; a question answered, a plan's changes requested, a
-//! follow-up asked, a failed run continued with instructions, a message queued for a run that has
-//! not started or does not work now; or nothing, once no agent reads messages.
+//! "Conversation (merged with Activity)", Composer, and "The chat always answers" (ORC-79)): while an
+//! agent works and the message is for it, *Send now* and *Send after this turn*; a question
+//! answered, a plan's changes requested, a follow-up asked, a failed or stuck run continued with
+//! instructions, a paused or interrupted run resumed with the message, a run stopped at its limit
+//! raised, an ended run run again with the message, a message queued for a run that has not started
+//! or does not work now; or nothing, once no agent reads messages and none can again. Every message
+//! the composer stores has an agent that reads it, and the composer says which and when.
 
 use std::sync::Arc;
 
 use orchester_core::{
   conversation::Recipient,
   id::{MessageId, ResourceId},
-  run::PlanVersion,
+  run::{PauseReason, PlanVersion, RunLimit, RunStatus, can_run_again_after},
   time::Timestamp,
 };
 
@@ -22,8 +25,8 @@ pub enum ComposerMode {
   /// `agent` works and the message is for it: *Send now* (when its connection takes a message
   /// mid-turn) and *Send after this turn*.
   Steer(WorkingAgent),
-  /// The message queues: a tool step runs, the recipient does not work now, or the run is paused,
-  /// interrupted, stopped or waits for the person's decision.
+  /// The message queues: a tool step runs, the recipient does not work now, the run stopped at a
+  /// limit the person does not raise here, or it waits for a decision no agent can be continued from.
   Queue(Queued),
   /// `agent` asked a question at `asked_at`: the reply answers it and resumes its session.
   Answer {
@@ -37,11 +40,21 @@ pub enum ComposerMode {
   PlanChanges { agent: Arc<str>, version: PlanVersion },
   /// The run is ready for review: the message follows it up.
   FollowUp,
-  /// The run failed: the message continues it with instructions.
+  /// The run failed, or waits for the person after a step's retries ran out or it broke again: the
+  /// message continues it with instructions, from the step of the agent it is for.
   Continue,
+  /// The run is paused (`interrupted`: it lost its runner): *Resume and send* continues it and its
+  /// agent reads the message before its next action; the message can also wait until it does.
+  Resume { interrupted: bool },
+  /// The run stopped at a limit of its own, which a person raises: the message waits for the run to
+  /// continue, and *Raise the limit and continue* opens where the limit is raised.
+  RaiseLimit,
   /// The run has not started: the message waits for its first step.
   NotStarted,
-  /// No agent reads messages any more.
+  /// The run ended and none of its agents reads messages any more: *Run again with this message*
+  /// starts the task's next run, whose first agent reads it.
+  RunAgain,
+  /// No agent reads messages any more, and the task does not run again.
   Closed,
 }
 
@@ -53,13 +66,30 @@ pub enum Queued {
   /// The agent the message is for does not work now: it reads the message at its next turn. `0`
   /// names it while the run's pipeline still offers it as a recipient.
   NextTurn(Option<Arc<str>>),
-  /// The run is paused, stopped at a limit or interrupted.
-  Suspended,
+  /// The run stopped at a budget it shares with other runs, the project's daily budget or its task
+  /// group's: it continues once that budget has room.
+  SharedBudget(RunLimit),
   /// The run waits for the person's decision on its Summary, after a step's retries ran out or it
-  /// broke again: the message waits until the run continues.
+  /// broke again, with no agent step to continue from: the message waits until the run continues.
   Decision,
   /// Agents work, but none is at a turn yet.
   Checkpoint,
+}
+
+/// What follows once the composer stored the message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Then {
+  /// The runner is told: it delivers the message at the run's next boundary, resumes the step that
+  /// asked, follows the run up or continues it from the step it stopped at.
+  Deliver,
+  /// The paused run resumes; its agent reads the message before its next action.
+  Resume,
+  /// The interrupted run continues from its last checkpoint; its agent reads the message first.
+  ContinueInterrupted,
+  /// The message waits for the run to continue; the person raises the limit on the task's Summary.
+  RaiseLimit,
+  /// The task's next run starts; its first agent reads the message.
+  RunAgain,
 }
 
 impl ComposerMode {
@@ -69,10 +99,24 @@ impl ComposerMode {
       PanelState::NotStarted => Self::NotStarted,
       PanelState::Live => live(conversation, run, recipient),
       PanelState::Waiting => waiting(conversation, run),
-      PanelState::Paused | PanelState::Stopped | PanelState::Interrupted => Self::Queue(Queued::Suspended),
+      PanelState::Paused => Self::Resume { interrupted: false },
+      PanelState::Interrupted if run.is_some_and(|run| run.worktree_removed.is_some()) => Self::RunAgain,
+      PanelState::Interrupted => Self::Resume { interrupted: true },
+      PanelState::Stopped => match run.map(|run| run.run.status()) {
+        Some(RunStatus::Paused(PauseReason::LimitReached(
+          shared @ (RunLimit::DailyBudget | RunLimit::GroupBudget),
+        ))) => Self::Queue(Queued::SharedBudget(*shared)),
+        _ => Self::RaiseLimit,
+      },
+      PanelState::Deciding if conversation.recovery_after.is_some() => Self::Continue,
       PanelState::Deciding => Self::Queue(Queued::Decision),
       PanelState::Ready => Self::FollowUp,
       PanelState::Failed => Self::Continue,
+      PanelState::FailedWorktreeRemoved | PanelState::FailedNoAgent | PanelState::Ended
+        if run.is_some_and(|run| can_run_again_after(&run.run, run.worktree_removed.is_some())) =>
+      {
+        Self::RunAgain
+      }
       PanelState::FailedWorktreeRemoved
       | PanelState::FailedNoAgent
       | PanelState::WorktreeRemoved
@@ -82,7 +126,8 @@ impl ComposerMode {
   }
 
   /// Whom the run's state addresses unless the person chooses another: the agent that asked, whose
-  /// plan waits, that a follow-up or a continuation resumes, or the agent at work; else Orchestrator.
+  /// plan waits, that a follow-up or a continuation resumes, that reads first once a suspended run
+  /// goes on, or the agent at work; else Orchestrator.
   pub fn default_recipient(&self, conversation: &Conversation) -> Recipient {
     let by_agent = |agent: &str| {
       conversation
@@ -95,7 +140,11 @@ impl ComposerMode {
       .fixed_recipient()
       .or_else(|| match self {
         Self::PlanChanges { agent, .. } => by_agent(agent),
-        Self::FollowUp | Self::Continue => conversation.next_agent.as_deref().and_then(by_agent),
+        Self::FollowUp
+        | Self::Continue
+        | Self::Resume { .. }
+        | Self::RaiseLimit
+        | Self::Queue(Queued::SharedBudget(_)) => conversation.next_agent.as_deref().and_then(by_agent),
         _ => None,
       })
       .or_else(|| {
@@ -134,6 +183,41 @@ impl ComposerMode {
       } => Some(Recipient::Agent(*profile)),
       _ => None,
     }
+  }
+
+  /// What follows the stored message when the person presses the primary action; `None` where the
+  /// composer stores nothing: a plan's changes are a decision on the plan, and a closed composer
+  /// sends nothing.
+  pub const fn then(&self) -> Option<Then> {
+    match self {
+      Self::Resume { interrupted: false } => Some(Then::Resume),
+      Self::Resume { interrupted: true } => Some(Then::ContinueInterrupted),
+      Self::RaiseLimit => Some(Then::RaiseLimit),
+      Self::RunAgain => Some(Then::RunAgain),
+      Self::PlanChanges { .. } | Self::Closed => None,
+      Self::Steer(_) | Self::Queue(_) | Self::Answer { .. } | Self::FollowUp | Self::Continue | Self::NotStarted => {
+        Some(Then::Deliver)
+      }
+    }
+  }
+
+  /// What the second way of sending does, where the mode has one: a message for an agent at work
+  /// that takes one mid-turn waits for its turn to end; a paused or interrupted run's message waits
+  /// for it to continue, without continuing it.
+  pub const fn then_later(&self) -> Option<Then> {
+    match self {
+      Self::Steer(working) if working.mid_turn => Some(Then::Deliver),
+      Self::Resume { .. } => Some(Then::Deliver),
+      _ => None,
+    }
+  }
+}
+
+impl Then {
+  /// Whether the message is kept for the task's next run rather than for its latest one, which has
+  /// ended.
+  pub const fn for_next_run(self) -> bool {
+    matches!(self, Self::RunAgain)
   }
 }
 

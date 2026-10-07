@@ -61,6 +61,11 @@ pub enum Command {
     session: AttachSession,
     agent_slots: NonZeroU32,
   },
+  /// The project's *Agents working at once* changed to `agent_slots` (protocol 18): it applies at
+  /// once. More slots let queued work start now; fewer stop no agent at work, and new work waits
+  /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
+  /// by an [`Event::WorkSummary`].
+  SetAgentSlots { agent_slots: NonZeroU32 },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -148,9 +153,10 @@ pub enum Command {
   /// The desktop stored a person's messages to the task of run `run`: the runner delivers them at
   /// the run's next invocation boundary. A step waiting for an answer to its agent's question
   /// resumes now; a run that succeeded works again on a follow-up of its last agent step (Ask
-  /// agent); an agent at work reads them once its turn is over; a paused or stopped run keeps them
-  /// queued until it continues. Answered with [`Reply::Accepted`] once that is arranged,
-  /// [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
+  /// agent); a run that failed or waits for a person's decision continues from the step it stopped
+  /// at with a message written to continue it; an agent at work reads them once its turn is over; a
+  /// paused or stopped run keeps them queued until it continues. Answered with [`Reply::Accepted`] once that is
+  /// arranged, [`Rejection::RunEnded`] for a run that failed, was cancelled or was merged, or
   /// [`Rejection::WorktreeRemoved`] when the run's worktree is gone; the messages then stay queued.
   DeliverMessages { run: RunId },
   /// Stop the runner. It answers with [`Event::Stopped`] and exits once the desktop closes
@@ -296,6 +302,10 @@ pub enum Reply {
   },
   Pong {
     nonce: u64,
+  },
+  /// The answer to [`Command::SetAgentSlots`]: the runner uses `agent_slots` from now on.
+  AgentSlotsSet {
+    agent_slots: NonZeroU32,
   },
   /// The run of a [`Command::StartRun`], newly created or created by an earlier request with
   /// the same key.

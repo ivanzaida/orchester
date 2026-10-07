@@ -87,7 +87,7 @@ fn count_line(ctx: &Ctx, id: &'static str, key: &'static str, count: usize, typo
 /// Runner availability, reported agent count, token usage and budget remain accessible.
 pub(super) fn execution_context(
   ctx: &Ctx,
-  (online, agents_working, lost): (bool, Option<usize>, usize),
+  (online, agents_working, lost): (bool, Option<(usize, std::num::NonZeroU32)>, usize),
   usage: Option<ProjectUsage>,
 ) -> Element {
   let running = message_text(ctx, &Pulse::running_context(online, agents_working, lost));

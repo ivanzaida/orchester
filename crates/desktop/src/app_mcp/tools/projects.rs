@@ -1,5 +1,5 @@
 //! `list_projects`, `set_code_index` and `list_pipelines`: the projects of the workspace with whether
-//! each uses the code index, that setting changed as Project settings › Code index changes it, and the
+//! each uses the code index and its limits, that setting changed as Project settings › Code index changes it, and the
 //! published pipeline versions a project's tasks can run with, as All projects and the task form list
 //! them.
 
@@ -11,7 +11,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::Translate;
+use super::{Translate, limits};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -52,28 +52,32 @@ pub async fn list_projects(services: &Services, _: ListProjects) -> Result<Value
   let workspace = services.workspace.clone();
   let listed = blocking(move || {
     let entries = workspace.entries()?;
-    let indexes = entries
+    let settings = entries
       .iter()
       .map(|entry| {
-        (!entry.folder_missing)
-          .then(|| code_index_of(&entry.project.repo_root))
-          .flatten()
+        let root = &entry.project.repo_root;
+        if entry.folder_missing {
+          (None, None)
+        } else {
+          (code_index_of(root), limits::limits_of(root))
+        }
       })
       .collect::<Vec<_>>();
-    Ok((entries, indexes))
+    Ok((entries, settings))
   })
   .await?;
   let projects: Vec<Value> = listed
     .0
     .iter()
     .zip(listed.1)
-    .map(|(entry, index)| {
+    .map(|(entry, (index, project_limits))| {
       json!({
         "id": entry.project.id.to_string(),
         "name": entry.project.name.as_str(),
         "folder": entry.project.repo_root.display().to_string(),
         "folder_missing": entry.folder_missing,
         "code_index": index.map(CodeIndexSetting::is_on),
+        "limits": project_limits.map(limits::limits_json),
       })
     })
     .collect();

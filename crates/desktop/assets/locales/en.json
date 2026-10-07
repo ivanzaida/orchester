@@ -291,8 +291,8 @@
     "metrics": {
       "running": "Running now",
       "agentsWorking": {
-        "one": "{{count}} agent working",
-        "other": "{{count}} agents working"
+        "one": "{{count}} of {{slots}} agent working",
+        "other": "{{count}} of {{slots}} agents working"
       },
       "agentsUnknown": "Waiting for the runner to report",
       "interrupted": {
@@ -495,7 +495,7 @@
       "summarySequential": "{{count}} tasks · one at a time",
       "totalTokens": "≈ {{count}} tokens",
       "eachTokens": "≈ {{count}} tokens",
-      "capacitySlots": "Task runs and agent slots are separate limits. Runner: {{slots}} agent slots.",
+      "capacitySlots": "Task runs and agent slots are separate limits. Agents working at once: {{slots}} (Project settings › Limits).",
       "sequentialCapacity": "One task at a time. The next task waits until the previous task is ready for review.",
       "planApprovalHeading": "Plan approval stays on",
       "parallelApprovalNote": "Each task waits for your plan approval. Waiting runs still count toward the {{concurrent}}-task limit.",
@@ -2360,7 +2360,17 @@
         "deciding": "Waiting for your decision",
         "attachUnavailable": "Attaching files is not available yet.",
         "closedReason": "No agent of this run reads messages any more · {{reason}}",
-        "continueContext": "Continue {{step}} with your instructions · attempt {{attempt}}"
+        "continueContext": "Continue {{step}} with your instructions · attempt {{attempt}}",
+        "resumeAndSend": "Resume and send",
+        "continueAndSend": "Continue run and send",
+        "sendWithoutResuming": "Send without resuming",
+        "sendWithoutContinuing": "Send without continuing",
+        "raiseLimit": "Raise the limit and continue",
+        "runAgain": "Run again with this message",
+        "noReader": "No agent of this run reads messages any more",
+        "stoppedTokens": "Stopped at the token limit · used {{used}} of {{limit}} tokens",
+        "stoppedTime": "Stopped at the time limit · used {{used}} of {{limit}} min of active agent time",
+        "stoppedStep": "Stopped at the step budget of {{step}} · used {{used}} of {{limit}} tokens"
       },
       "placeholder": {
         "agent": "Message {{agent}}…",
@@ -2370,7 +2380,8 @@
         "followUp": "Ask a question or request a follow-up…",
         "continue": "Tell {{agent}} how to continue the run…",
         "continueUnnamed": "Say how the run should continue…",
-        "firstAgent": "Write to {{agent}} before it starts…"
+        "firstAgent": "Write to {{agent}} before it starts…",
+        "nextRun": "Write to the first agent of the next run…"
       },
       "hint": {
         "steer": "Send now reaches {{agent}} at its next tool call, while it works. Send after this turn waits until {{agent}} finishes its turn. Ctrl+Enter sends after this turn.",
@@ -2382,7 +2393,13 @@
         "nextTurn": "{{agent}} does not work now. Your message waits for {{agent}}’s next turn.",
         "nextTurnUnnamed": "The agent you chose does not work now. Your message waits for its next turn.",
         "planChanges": "Request changes returns the plan to {{agent}} with what you write. Approve plan & continue is on the plan.",
-        "takenAsAnswer": "{{agent}} waits for an answer and takes this message as it."
+        "takenAsAnswer": "{{agent}} waits for an answer and takes this message as it.",
+        "resume": "Resume and send resumes the run, and its agent reads your message before its next action. Send without resuming keeps it queued until you resume.",
+        "continueInterrupted": "Continue run and send continues the run from its last checkpoint, and its agent reads your message before its next action. Send without continuing keeps it queued until the run continues.",
+        "raiseLimit": "Raise the limit and continue keeps your message and opens Summary to set the new limit. The run’s agent reads it when the run continues.",
+        "runAgain": "Run again with this message starts the task’s next run from the first step, in a new worktree. Its first agent reads your message.",
+        "dailyBudget": "The project’s runs used today’s token budget. Your message waits in this task; the run’s agent reads it when the run resumes, once the day has room.",
+        "groupBudget": "The task group used its token budget. Your message waits in this task; the run’s agent reads it when the run continues, once the group’s budget is raised."
       },
       "toolMeta": "tool · {{time}}",
       "asksMeta": "asks you · {{time}}",
@@ -2484,6 +2501,7 @@
         "stopped": "stopped at limit",
         "interrupted": "interrupted",
         "deciding": "waiting for your decision",
+        "nextRun": "next run",
         "notRunning": "not running"
       },
       "tip": {
@@ -2496,7 +2514,10 @@
         "ctrlEnter": "Ctrl+Enter",
         "cmdEnter": "Cmd+Enter",
         "nowMeta": "{{agent}} gets it at its next tool call",
-        "afterTurnMeta": "Waits until {{agent}} finishes its turn"
+        "afterTurnMeta": "Waits until {{agent}} finishes its turn",
+        "resumeMeta": "The run goes on, and its agent reads it first",
+        "resumeLaterMeta": "Waits until you resume the run",
+        "continueLaterMeta": "Waits until the run continues"
       }
     },
     "autoMode": {
@@ -2546,7 +2567,10 @@
       "queuedRunStart": "Queued · waiting for the run to start",
       "queuedRunResume": "Queued · delivered before the next action on resume",
       "queuedRunContinue": "Queued · delivered when the run continues",
+      "queuedRunResumeBy": "Queued · {{agent}} reads it before its next action on resume",
+      "queuedRunContinueBy": "Queued · {{agent}} reads it when the run continues",
       "queuedAgentNextTurn": "Queued · waiting for {{agent}}’s next turn",
+      "queuedNextRun": "Queued · waiting for the task’s next run",
       "notDelivered": "Not delivered · the run has ended",
       "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
       "reply": "Reply · {{step}}",
@@ -2564,9 +2588,6 @@
       "notStarted": "Messages reach the first step when the run starts.",
       "checkpoint": "Messages arrive at a checkpoint. Pause for an urgent change.",
       "answer": "Your reply resumes {{agent}}'s session.",
-      "queued": "Messages stay queued until the run continues.",
-      "paused": "You can write while paused. Resume keeps this run and its saved versions.",
-      "stopped": "You can write while the run is stopped. Continuing keeps this run and its saved versions.",
       "deciding": "The run waits for your decision on its Summary. Messages stay queued until it continues.",
       "ready": "Asking continues {{agent}}'s session in the run's worktree. The run is ready for review again when it is done.",
       "readyNoAgent": "No agent step of this run can be asked again.",
@@ -2579,7 +2600,8 @@
     "errors": {
       "blank": "Write a message first.",
       "invalidRecovery": "This message cannot continue a run. Refresh the task and try again.",
-      "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now."
+      "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now.",
+      "notLatestRun": "Messages go to the task’s latest run, #{{run}}."
     }
   },
   "pullRequests": {
@@ -3880,8 +3902,14 @@
         "one": "{{count}} minute",
         "other": "{{count}} minutes"
       },
+      "agents": "Agents",
+      "agentSlots": "Agents working at once",
+      "agentSlotsDetail": "Each agent at work in any run of this project takes one slot; command steps use slots of their own. Runs beyond it wait in the queue with the reason. A change applies at once: lowering it stops no agent, and new work waits until fewer agents work.",
+      "agentsUnit": "agents",
+      "agentSlotsRange": "{{min}} to {{max}} · default {{default}}",
+      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
       "changesTitle": "Changes apply to new runs",
-      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum."
+      "changesDetail": "Runs already started keep their budget. Lowering the maximum below a run’s budget doesn’t stop it, but its limit can’t be raised above the new maximum. Agents working at once applies at once."
     },
     "environment": {
       "description": "Variables {{project}} adds for its agents and command tools.",

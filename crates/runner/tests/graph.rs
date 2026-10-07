@@ -248,3 +248,54 @@ async fn graph_agent_slots_bound_the_steps_that_run_at_once() {
     assert_eq!(git(root, &["show", &format!("{}:{file}", run.branch())]), "hello");
   }
 }
+
+/// A step waiting for an agent slot starts once the slots are raised, beside the one at work.
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_raised_agent_slots_start_a_step_waiting_for_one() {
+  let project = project(&Setup {
+    steps: vec![
+      StepSpec::new("implement", "Implement", "Write own file.", &[]),
+      StepSpec::new("checks", "Checks", "Keep working.", &["implement"]),
+      StepSpec::new("review", "Review", "Keep working.", &["implement"]),
+    ],
+    ..Setup::new("Say hello.")
+  });
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let slots = |count| std::num::NonZeroU32::new(count).expect("above zero");
+  scheduler
+    .attach(
+      AttachSession::Fresh {
+        previous_end: SessionEnd::Clean,
+      },
+      slots(1),
+    )
+    .await
+    .expect("attached");
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let invocations = |count: usize| {
+    move |_: &Run| {
+      ProjectDb::open(root)
+        .expect("open")
+        .invocations(id)
+        .expect("invocations")
+        .len()
+        == count
+    }
+  };
+  wait_for(root, &mut events, id, invocations(2)).await;
+  scheduler.set_agent_slots(slots(2)).await.expect("raised");
+  wait_for(root, &mut events, id, invocations(3)).await;
+  let db = ProjectDb::open(root).expect("open");
+  let working = db
+    .invocations(id)
+    .expect("invocations")
+    .iter()
+    .filter(|invocation| invocation.ended_at.is_none())
+    .count();
+  assert_eq!(working, 2, "Checks and Review work at once");
+  scheduler.stop_all(orchester_core::run::InterruptCause::QuitNow).await;
+}

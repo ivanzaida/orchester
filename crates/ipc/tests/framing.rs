@@ -46,6 +46,9 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
       session: AttachSession::Reconnect,
       agent_slots: NonZeroU32::new(1).expect("above zero"),
     },
+    Command::SetAgentSlots {
+      agent_slots: NonZeroU32::new(16).expect("above zero"),
+    },
     Command::ContinueRuns { runs: vec![run] },
     Command::Ping { nonce: 42 },
     Command::StartRun {
@@ -212,6 +215,9 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     reply(Reply::Rejected(Rejection::RunNotInterrupted)),
     reply(Reply::Rejected(Rejection::ShuttingDown)),
     reply(Reply::Pong { nonce: 42 }),
+    reply(Reply::AgentSlotsSet {
+      agent_slots: NonZeroU32::new(16).expect("above zero"),
+    }),
     reply(Reply::RunStarted { run }),
     reply(Reply::Accepted { run }),
     reply(Reply::Rejected(Rejection::RunNotFound)),

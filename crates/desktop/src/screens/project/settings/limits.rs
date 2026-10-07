@@ -1,7 +1,8 @@
 //! Project settings / Limits (02.M `c7e729`): the maximum run budget, the default run budget, the
-//! daily project budget and the default time limit of active agent time. A budget saves when its
-//! field is left or Enter is pressed, and a time limit when it is chosen, once every field is
-//! valid; the topbar says whether all changes are saved. Changes apply to new runs.
+//! daily project budget, the default time limit of active agent time and how many agents work at
+//! once. A budget or the agent count saves when its field is left or Enter is pressed, and a time
+//! limit when it is chosen, once every field is valid; the topbar says whether all changes are
+//! saved. Changes apply to new runs, except the agent count, which the runner applies at once.
 
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  limits::ProjectLimits,
+  limits::{AgentSlots, ProjectLimits},
   tokens::{compact_tokens, grouped},
 };
 
@@ -29,7 +30,8 @@ use crate::{
   background,
   budget::{LimitsErrors, LimitsForm, minutes_text, read_budget, time_limit_choices, unbounded},
   messages::{self, Message},
-  tasks::usage::{ProjectUsage, save_limits_in},
+  runner::Runners,
+  tasks::usage::{ProjectUsage, save_limits},
   theme::ExtraTypography,
   ui::{
     field::{field_error, select_style},
@@ -76,11 +78,14 @@ pub struct LimitsTab {
   default: Signal<String>,
   daily: Signal<String>,
   time: Signal<String>,
+  slots: Signal<String>,
   /// Which input has the focus, for its focused stroke.
   focused: FocusedInput,
   /// The limits as stored; `None` until read.
   stored: Signal<Option<Stored>>,
   nav: ProjectNav,
+  /// Takes a changed agent count to the project's runner.
+  runners: Runners,
 }
 
 impl Component for LimitsTab {
@@ -90,16 +95,19 @@ impl Component for LimitsTab {
     let nav = ctx
       .use_context::<ProjectNav>()
       .expect("the project shell provides ProjectNav");
+    let runners = ctx.use_context::<Runners>().expect("the application provides Runners");
     let tab = Self {
       max: ctx.signal(String::new()),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       time: ctx.signal(String::new()),
+      slots: ctx.signal(String::new()),
       focused: ctx.signal(None),
       stored: ctx.signal(None),
       nav,
+      runners,
     };
-    let save = save_action(ctx);
+    let save = save_action(ctx, &tab.runners);
     // A chosen time limit saves at once, as a text field does when it is left.
     let commit = tab.commit(
       save.clone(),
@@ -130,7 +138,7 @@ impl Component for LimitsTab {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<LimitsProps>().clone();
-    let save = save_action(ctx);
+    let save = save_action(ctx, &self.runners);
     let separator = ctx.t("number.groupSeparator");
     self.load(ctx, &props.open, &separator);
     let errors = self
@@ -154,6 +162,12 @@ impl Component for LimitsTab {
       })
       .collect();
     let time = time_select(ctx, &self.time);
+    let slots = field(
+      "limits-agent-slots",
+      &self.slots,
+      ctx.t("settings.limits.agentsUnit"),
+      errors.agent_slots.as_ref(),
+    );
     let content = Column::new()
       .id("settings-limits")
       .width(Dimension::Px(CONTENT_WIDTH))
@@ -164,6 +178,8 @@ impl Component for LimitsTab {
       .with_children(rows)
       .child(Text::new(&ctx.t("settings.limits.time")).variant(ExtraTypography::SectionHeading.role()))
       .child(time_row(ctx, time, errors.default_time_limit.as_ref()))
+      .child(Text::new(&ctx.t("settings.limits.agents")).variant(ExtraTypography::SectionHeading.role()))
+      .child(slots_row(ctx, slots.render(ctx), errors.agent_slots.as_ref()))
       .child(
         Notice::new(
           Icon::History,
@@ -191,6 +207,7 @@ impl LimitsTab {
       default_run_budget: &read(&self.default),
       daily_budget: &read(&self.daily),
       default_time_limit: &read(&self.time),
+      agent_slots: &read(&self.slots),
       separator,
     }
     .limits()
@@ -263,6 +280,7 @@ impl LimitsTab {
     self.default.set(grouped(limits.default_run_budget().get(), separator));
     self.daily.set(grouped(limits.daily_budget().get(), separator));
     self.time.set(minutes_text(limits.default_time_limit()));
+    self.slots.set(limits.agent_slots().get().to_string());
   }
 }
 
@@ -320,6 +338,28 @@ fn time_row(ctx: &Ctx, select: Element, error: Option<&Message>) -> Element {
   )
 }
 
+/// Agents working at once (not drawn; laid out as the budgets are): a whole number of agents with
+/// what it means, its range and default read back under it.
+fn slots_row(ctx: &Ctx, input: Element, error: Option<&Message>) -> Element {
+  let note = match error {
+    Some(error) => field_error(&message_text(ctx, error)),
+    None => readback(&ctx.t_args(
+      "settings.limits.agentSlotsRange",
+      [
+        ("min", AgentSlots::MIN.to_string()),
+        ("max", AgentSlots::MAX.to_string()),
+        ("default", AgentSlots::DEFAULT.get().to_string()),
+      ],
+    )),
+  };
+  sized_setting_row(
+    VALUE_WIDTH,
+    &ctx.t("settings.limits.agentSlots"),
+    &ctx.t("settings.limits.agentSlotsDetail"),
+    vec![input, note],
+  )
+}
+
 /// The time limit select (`bPPG9`): "30 minutes". Its value is the limit's whole minutes as
 /// the Limits form reads them.
 fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
@@ -344,14 +384,18 @@ fn time_select(ctx: &Ctx, time: &Signal<String>) -> Element {
   .id("limits-default-time-limit")
 }
 
-fn save_action(ctx: &mut Ctx) -> SaveAction {
-  ctx.future_action(|(repo_root, limits): (std::path::PathBuf, ProjectLimits)| async move {
-    background::run(move || save_limits_in(&repo_root, &limits))
-      .await?
-      .map(|()| Stored(limits))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot save the project's limits");
-        messages::store_error(&error)
-      })
+fn save_action(ctx: &mut Ctx, runners: &Runners) -> SaveAction {
+  let runners = runners.clone();
+  ctx.future_action(move |(repo_root, limits): (std::path::PathBuf, ProjectLimits)| {
+    let runners = runners.clone();
+    async move {
+      background::run(move || save_limits(&runners, &repo_root, &limits))
+        .await?
+        .map(|()| Stored(limits))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot save the project's limits");
+          messages::store_error(&error)
+        })
+    }
   })
 }

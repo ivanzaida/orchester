@@ -7,8 +7,10 @@ use std::{path::Path, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::Leftovers,
+  limits::AgentSlots,
 };
 use orchester_ipc::{Command, Reply};
+use orchester_store::StoreError;
 
 use super::{Continued, RequestError, RunRequestError, Runners, state::RunnerState};
 use crate::workspace::OpenProject;
@@ -110,6 +112,46 @@ impl Runners {
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => unexpected(&other, "ContinueRuns"),
     }
+  }
+
+  /// Runs `store`, which stores project `root`'s limits and returns the agent slots when they
+  /// changed, then hands changed slots to the project's runner, which applies them at once, without
+  /// waiting for its answer. Storing and queueing happen under one lock, so with saves close
+  /// together the runner gets the slots in the order they were stored and ends with the stored
+  /// ones. A runner that is not connected now, or that drops or stops before it takes them, misses
+  /// nothing: every runner reads the stored slots when it attaches. Blocks on SQLite.
+  pub fn store_agent_slots(
+    &self,
+    root: &Path,
+    store: impl FnOnce() -> Result<Option<AgentSlots>, StoreError>,
+  ) -> Result<(), StoreError> {
+    let answer = {
+      let _in_order = self.inner.slot_updates.lock();
+      let Some(slots) = store()? else {
+        return Ok(());
+      };
+      let command = Command::SetAgentSlots {
+        agent_slots: slots.get(),
+      };
+      let projects = self.inner.projects.lock();
+      match projects.get(root).and_then(|entry| entry.connection.as_ref()) {
+        Some(connection) => connection.request(command),
+        None => return Ok(()),
+      }
+    };
+    let root = root.to_path_buf();
+    self.inner.runtime.spawn(async move {
+      // The task ended without answering, e.g. when the runner stopped meanwhile.
+      match answer.await.unwrap_or(Err(RequestError::Lost)) {
+        Ok(Reply::AgentSlotsSet { .. }) => {}
+        Ok(Reply::Rejected(rejection)) => {
+          tracing::info!(project = %root.display(), ?rejection, "the runner left the agent slots to the next one");
+        }
+        Ok(other) => tracing::error!(?other, "unexpected reply to SetAgentSlots"),
+        Err(error) => tracing::info!(project = %root.display(), %error, "no runner took the agent slots now"),
+      }
+    });
+    Ok(())
   }
 
   /// Asks `project`'s runner, starting it if needed and waiting for it to attach. A project no tab

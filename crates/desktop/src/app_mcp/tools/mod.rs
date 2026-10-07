@@ -5,6 +5,8 @@
 mod approvals;
 mod auto_mode;
 mod continue_run;
+mod limits;
+mod messages;
 mod pipeline_copy;
 mod projects;
 mod return_to_draft;
@@ -55,7 +57,7 @@ struct Spec {
 const SPECS: &[Spec] = &[
   Spec {
     name: "list_projects",
-    description: "The projects of the workspace, most recently opened first: id, name, folder.",
+    description: "The projects of the workspace, most recently opened first: id, name, folder, whether each uses the code index, and its limits (token budgets, default time limit, agents working at once).",
     schema: schema_for_type::<projects::ListProjects>,
     read_only: true,
   },
@@ -114,6 +116,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "send_message",
+    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again.",
+    schema: schema_for_type::<messages::SendMessage>,
+    read_only: false,
+  },
+  Spec {
     name: "set_run_auto_mode",
     description: "Turns a run's auto mode on or off: a reviewer model answers the requests the rules leave to the person, approving only those that clearly serve the task. Refused unless a person turned on Let automation answer approvals in the app.",
     schema: schema_for_type::<auto_mode::SetRunAutoMode>,
@@ -165,6 +173,12 @@ const SPECS: &[Spec] = &[
     name: "set_code_index",
     description: "Turns the project's code index on or off for agents that start from now on, as Project settings does. Returns the new state.",
     schema: schema_for_type::<projects::SetCodeIndex>,
+    read_only: false,
+  },
+  Spec {
+    name: "update_project_limits",
+    description: "Changes a project's limits as Project settings › Limits does: maximum, default and daily token budgets, the default time limit in minutes and how many agents work at once (1 to 16, applied at once by the project's runner). Limits left out stay as they are; invalid ones are refused with why. Returns the limits as saved.",
+    schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },
   Spec {
@@ -224,6 +238,7 @@ async fn dispatch(
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
     "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
@@ -232,6 +247,7 @@ async fn dispatch(
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
+    "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
