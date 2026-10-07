@@ -446,7 +446,10 @@ with the `ReviewCost`; Claude Code's reviewer prints `--output-format stream-jso
 its `rate_limit_event`s), Codex's `turn.completed` usage, a native response's usage; `execution_tokens` counts the
 reviews of a step. Store: `reviewer_usage` (migration after `plan_limits`), read by `tokens_used_since`, the step budget
 checks, `usage_facts` and the run view. Runner: the review's blocking job records its cost (`review::ledger`), sends
-its tokens to the run as a turn's usage and stores its plan limits, also when the worker no longer waits for it.
+its tokens to the run as a turn's usage and stores its plan limits, also when the worker no longer waits for it;
+the worker reports its end only once its reviews have (so late tokens count once, toward the run that still listens).
+A CLI that never started (`CommandError::NotStarted`) and a native request the API refused spend nothing; the
+reviewer's output keeps its last 256 KiB, so the result line survives a long stream.
 Desktop: *Where tokens go* rows *Auto mode reviewer · <model>*, the invocation panel's *Auto mode reviewer* line,
 `get_run`'s `tokens.reviewer`. Tests: `cargo test -p orchester-core --test reviewer_usage reviewer_usage`, `--test usage
 usage`, `--test auto_mode auto_mode` (and `auto_mode_scope`, `auto_mode_reviewers`), `-p orchester-agent --test
