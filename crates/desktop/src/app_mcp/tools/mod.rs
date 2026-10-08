@@ -174,7 +174,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "decide_plan",
-    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) or request_changes with a note (the step's agent resumes with it and proposes a revised plan). get_run shows the waiting plan's version. Refusals name why: no_plan_waiting, plan_already_decided, blank_note, note_not_taken.",
+    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) or request_changes with a note (the step's agent resumes with it and proposes a revised plan). get_run shows the waiting plan's version; given as version, the decision is refused when another version waits now. Refusals name why: no_plan_waiting, plan_already_decided, plan_version_changed, blank_note, note_not_taken.",
     schema: schema_for_type::<plans::DecidePlan>,
     read_only: false,
   },

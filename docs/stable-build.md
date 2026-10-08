@@ -119,8 +119,9 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
   decides it: `approve`, which takes no note, or `request_changes` with a `note` the step's agent resumes
   with; `get_run`'s `awaiting.plan` and `list_approvals`' `plans` show the waiting plan's version, step and
-  the start of its text; refused with `no_plan_waiting`, `plan_already_decided`, `blank_note` or
-  `note_not_taken`), `list_pipelines`, `duplicate_pipeline` (copies a
+  the start of its text, and an optional `version` makes sure the decision is for that version; refused with
+  `no_plan_waiting`, `plan_already_decided`, `plan_version_changed` (another version waits now, named in the
+  reason), `blank_note` or `note_not_taken`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
   (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each

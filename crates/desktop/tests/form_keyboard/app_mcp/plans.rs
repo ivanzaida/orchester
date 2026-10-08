@@ -1,9 +1,9 @@
 //! Plan decisions through Orchester's MCP server, with the real runner and `orchester-fake-codex`: a gated
 //! Plan step, whose agent works until the test releases it, proposes plan v1 and waits. `get_run` and
 //! `list_approvals` show the waiting plan; `decide_plan` refuses what the plan card would not take (no plan
-//! waiting, a blank note, a note with an approval, a plan decided already) and decides through the runner as
-//! the card does: approving continues the run to Implement, requesting changes resumes the Plan step's agent
-//! with the note. An open task page follows the decision in place. Run with
+//! waiting, a blank note, a note with an approval, a plan decided already, a version that no longer waits) and decides
+//! through the runner as the card does: approving continues the run to Implement, requesting changes resumes the Plan
+//! step's agent with the note. An open task page follows the decision in place. Run with
 //! `cargo test -p orchester-desktop --test form_keyboard app_mcp_decide_plan`.
 
 use std::path::Path;
@@ -49,6 +49,13 @@ fn decide(decision: &str, note: Option<&str>) -> Value {
   if let Some(note) = note {
     arguments["note"] = json!(note);
   }
+  arguments
+}
+
+/// [`decide`] for plan `version` only.
+fn decide_version(decision: &str, version: u32) -> Value {
+  let mut arguments = decide(decision, None);
+  arguments["version"] = json!(version);
   arguments
 }
 
@@ -134,7 +141,7 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
   }
   assert_eq!(plans(desktop.repo())[0].review, None, "a refusal decides nothing");
 
-  let decided = ok(&mut client, "decide_plan", &decide("approve", None));
+  let decided = ok(&mut client, "decide_plan", &decide_version("approve", 1));
   assert_eq!(
     decided["plan"],
     json!({"version": 1, "step": {"key": "plan", "name": "Plan"}, "decided": "approved"})
@@ -196,6 +203,14 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
   assert!(prompt.iter().any(|line| line == "Keep email sign-in."), "{prompt:?}");
   assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"]["version"], 2);
 
-  ok(&mut client, "decide_plan", &decide("approve", None));
+  // A decision meant for v1 does not decide v2, which the client has not read.
+  let changed = refused(&mut client, "decide_plan", &decide_version("approve", 1));
+  assert_eq!(changed["code"], "plan_version_changed", "{changed}");
+  assert_eq!(
+    changed["reasons"][0],
+    "Plan v1 no longer waits for a decision; plan v2 of Plan waits now."
+  );
+  assert_eq!(plans(desktop.repo())[1].review, None, "v2 still waits");
+  ok(&mut client, "decide_plan", &decide_version("approve", 2));
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
 }

@@ -52,6 +52,10 @@ pub struct DecidePlan {
   /// plan card approves without one.
   #[serde(default)]
   pub note: Option<String>,
+  /// The plan version the decision is for, as `get_run` shows it waiting; given, the decision is
+  /// refused when another version waits now.
+  #[serde(default)]
+  pub version: Option<u32>,
 }
 
 /// The plan card's decisions.
@@ -73,6 +77,9 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
     let db = ProjectDb::open(&project.repo_root)?;
     let view = run_view(&db, find_run(&db, &args.run)?)?;
     let review = PlanReview::of(&view).ok_or_else(|| not_waiting(&view))?;
+    if let Some(asked) = args.version {
+      same_version(&review, asked)?;
+    }
     Ok((project, review))
   })
   .await?;
@@ -147,6 +154,23 @@ fn not_waiting(view: &RunView) -> ToolError {
         .with("step", step),
     ],
   )
+}
+
+/// Refused unless plan version `asked` is the one `review` waits on.
+fn same_version(review: &PlanReview, asked: u32) -> Result<(), ToolError> {
+  let waiting = review.waiting().version.get();
+  if waiting == asked {
+    return Ok(());
+  }
+  Err(ToolError::refused(
+    "plan_version_changed",
+    vec![
+      Message::new("appMcp.errors.planVersionChanged")
+        .with("asked", asked.to_string())
+        .with("version", waiting.to_string())
+        .with("step", review.step.to_string()),
+    ],
+  ))
 }
 
 const fn decided_name(decision: Decision) -> &'static str {
