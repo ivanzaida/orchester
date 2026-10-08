@@ -316,15 +316,22 @@ impl RunTask {
 }
 
 /// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:
-/// a Claude Code agent through its permission prompt's relay (`prompted`), every Codex agent.
+/// a Claude Code agent through its permission prompt's relay (`prompted`, which every Claude Code step has), which
+/// also serves it `ask_question`, and every Codex agent.
 fn told_of_tools(
   prompt: String,
   tools: &ToolHost,
   (setup, prompted, continuation): (&McpSetup, bool, &Continuation),
 ) -> String {
   let codex = matches!(setup, McpSetup::Codex(_));
-  if continuation.session.is_none() && (prompted || codex) {
-    format!("{prompt}\n\n{}", tools.tools().prompt_paragraph(!codex))
+  if continuation.session.is_none() && codex {
+    format!("{prompt}\n\n{}", tools.tools().prompt_paragraph(false))
+  } else if continuation.session.is_none() && prompted {
+    format!(
+      "{prompt}\n\n{} {}",
+      tools.tools().prompt_paragraph(true),
+      orchester_core::question::tool::CLAUDE_PROMPT
+    )
   } else {
     prompt
   }

@@ -11,6 +11,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use orchester_core::{
   connection::stream::{CommandStatus, ToolCommandResult},
   native::tools::ToolName,
+  question::tool as ask_question,
   time::Timestamp,
 };
 
@@ -100,6 +101,19 @@ pub fn tool_kind(entry: &Entry) -> Option<ToolKind> {
     | EntryKind::McpServer(..)
     | EntryKind::ExemptionNotApplied { .. } => None,
   }
+}
+
+/// Whether `entry` is an agent's call of `ask_question` that its question card stands for (C·15): the card
+/// is the call's record, so the call is no tool event of its own. A call that failed asked nothing and stays.
+pub fn shown_as_card(entry: &Entry) -> bool {
+  let EntryKind::Command(command) = &entry.kind else {
+    return false;
+  };
+  let asks = command.native.as_ref().map_or_else(
+    || ask_question::is_claude_name(&command.command),
+    |call| call.tool == ToolName::AskQuestion,
+  );
+  asks && command.status != Some(CommandStatus::Failed)
 }
 
 /// A native file tool's kind; `None` for `run_command`, whose kind is what it runs.

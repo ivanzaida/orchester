@@ -18,6 +18,7 @@ mod divider;
 mod follow;
 mod live_state;
 mod message;
+mod question_card;
 mod rail;
 mod readback;
 mod requests;
@@ -283,6 +284,7 @@ impl Component for ConversationTab {
       conversation: &props.conversation,
       pending: &loaded.pending,
       decided: &loaded.decided,
+      questions: &loaded.questions,
       merge: props.detail.merge.as_ref(),
     });
     self.with_items(ctx, &props, run, (&items, &loaded), details_open)

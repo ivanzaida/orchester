@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_desktop::tasks::{
   timeline::{
     ToolRun,
-    group::{GroupSummary, ToolKind, tool_kind, unwrapped},
+    group::{GroupSummary, ToolKind, shown_as_card, tool_kind, unwrapped},
   },
   transcript::EntryKind,
 };
@@ -284,4 +284,21 @@ fn timeline_a_cli_s_orchester_edit_carries_its_change_and_counts_as_an_edit() {
     summary.failed,
     Some(("mcp__Orchester__edit_file README.md".into(), None))
   );
+}
+
+/// A Claude Code agent's call of Orchester's `ask_question` is its question card's (C·15), no tool row: while
+/// it waits and once answered. A call that failed asked nothing, so it stays; another server's tool of that
+/// name is no question.
+#[test]
+fn timeline_leaves_a_call_of_ask_question_to_its_card() {
+  let execution = StepExecutionId::generate();
+  let mut events = vec![AgentEvent::CommandStarted {
+    item: "toolu_waits".into(),
+    command: "mcp__Orchester__ask_question".into(),
+  }];
+  events.extend(command("toolu_answered", "mcp__Orchester__ask_question", 0));
+  events.extend(command("toolu_refused", "mcp__Orchester__ask_question", 1));
+  events.extend(command("toolu_other", "mcp__docs__ask_question", 0));
+  let shown: Vec<bool> = transcript(execution, events).iter().map(shown_as_card).collect();
+  assert_eq!(shown, [true, true, false, false]);
 }

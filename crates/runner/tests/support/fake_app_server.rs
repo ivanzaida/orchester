@@ -21,13 +21,14 @@
 //! - "Design twice" calls `batch_design` of `pencil` twice in one turn, each asking; each approved call appends
 //!   `approved` to `README.md`. A declined MCP call (here or in the fixture) ends failed, appends `went on`, and the
 //!   turn works on.
+//! - "Ask Codex with options" asks two questions with suggested answers (`fake_codex_question`).
 
 use std::{fs, process::ExitCode};
 
 use serde_json::{Value, json};
 
 use super::{
-  Session, Step, complete,
+  Session, Step, complete, fake_codex_question,
   fake_codex_work::{append, finish, message, report_of},
   notify, request,
 };
@@ -68,7 +69,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
   let design = prompt.contains("Use the design tools");
   let unasked = prompt.contains("Call a tool unasked");
   let twice = prompt.contains("Design twice");
-  if !fixture && escalation.is_none() && !patch && !design && !unasked && !twice {
+  let question = prompt.contains(fake_codex_question::TRIGGER);
+  if !fixture && escalation.is_none() && !patch && !design && !unasked && !twice && !question {
     return None;
   }
   session.approvals = Some(Approvals {
@@ -93,6 +95,8 @@ pub fn start(session: &mut Session, prompt: &str, structured: bool) -> Option<St
         "command": command, "cwd": cwd, "reason": "Do you want to reach the package registry?",
         "availableDecisions": ["accept", "acceptForSession", "decline"]}),
     );
+  } else if question {
+    fake_codex_question::ask(session);
   } else if design {
     design_calls(session);
   } else if unasked || twice {
@@ -151,6 +155,7 @@ pub fn answered(session: &mut Session, answer: &Value) -> Step {
       eprintln!("file change: {decision}");
       finish(session, "hello", &report_of(&prompt, structured))
     }
+    Some(fake_codex_question::QUESTION) => fake_codex_question::answered(session, answer, (&prompt, structured)),
     _ => {
       eprintln!("an answer to an unknown request: {answer}");
       Step::Exit(ExitCode::from(2))

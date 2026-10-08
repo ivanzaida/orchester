@@ -19,6 +19,7 @@ mod native_conversations;
 mod organization;
 mod permitted_decisions;
 mod plan_limits;
+mod questions;
 mod recovery;
 mod reviewer_usage;
 mod sharing;
@@ -524,4 +525,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   agent_slots::MIGRATION,
   plan_limits::MIGRATION,
   reviewer_usage::MIGRATION,
+  questions::MIGRATION,
 ];

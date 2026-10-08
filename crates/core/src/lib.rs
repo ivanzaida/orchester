@@ -22,6 +22,7 @@ pub mod orchester_tools;
 pub mod permission;
 pub mod project;
 pub mod pull_request;
+pub mod question;
 pub mod repository;
 pub mod resource;
 pub mod revision;

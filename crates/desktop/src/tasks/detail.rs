@@ -10,6 +10,7 @@ use orchester_core::{
   conversation::Message,
   id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
+  question::AskedQuestions,
   resource::{AgentProfile, StepKey, VersionNumber},
   run::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunEvent,
@@ -109,6 +110,8 @@ pub struct RunView {
   pub attempt_starts: Vec<AttemptStart>,
   /// Its auto-approval, its rules from the wider answers and how its requests were answered.
   pub approvals: RunApprovals,
+  /// Its agents' questions with suggested answers that wait for the person.
+  pub waiting_questions: Vec<AskedQuestions>,
 }
 
 impl RunView {
@@ -422,6 +425,11 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     first_run,
     group_hold,
     approvals: RunApprovals::read(db, &run)?,
+    waiting_questions: db
+      .questions(run.id())?
+      .into_iter()
+      .filter(AskedQuestions::waits)
+      .collect(),
     index: IndexUses::read(db, &invocations)?,
     invocations,
     reviews: db.reviewer_usage(run.id())?,

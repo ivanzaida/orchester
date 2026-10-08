@@ -10,6 +10,7 @@ use orchester_core::{
     model::ModelError,
     session::{LoopEnd, LoopFailure, StopMode},
   },
+  question::{Question, QuestionRequest, QuestionTurn, question_as_text},
   run::{StepOutcome, StepResult},
   store::ActivityStore,
   time::Timestamp,
@@ -124,9 +125,12 @@ impl Worker {
   fn loop_end(&self, watch: &mut Watch, end: LoopEnd) -> Result<(InvocationOutcome, Option<StopCause>), StoreError> {
     let result = match end {
       LoopEnd::Result(result) => result,
-      LoopEnd::Question { question, .. } => StepResult {
+      LoopEnd::Question { call, question } => StepResult {
         outcome: StepOutcome::Question,
-        summary: asked(question.question(), question.options()),
+        summary: match question.structured() {
+          Some(structured) => self.record_step_question(watch, call.as_str(), structured)?,
+          None => question.question().to_owned(),
+        },
         completed: Vec::new(),
         decisions: Vec::new(),
         open_questions: Vec::new(),
@@ -171,14 +175,27 @@ impl Worker {
   }
 }
 
-/// What the person reads of an `ask_question` call: the question, then its options, as the agent wrote
-/// them.
-fn asked(question: &str, options: &[String]) -> String {
-  if options.is_empty() {
-    return question.to_owned();
+impl Worker {
+  /// Records the question with suggested answers that `call` ended the step with, which the person answers
+  /// on its card; its text, with the options, is the agent's question message.
+  fn record_step_question(&self, watch: &mut Watch, call: &str, question: Question) -> Result<String, StoreError> {
+    let text = question_as_text(&question);
+    let invocation = &watch.invocation;
+    let request = QuestionRequest::new(
+      format!("{}:{call}", invocation.id),
+      (invocation.run, invocation.execution, invocation.id),
+      self.agent.clone(),
+      vec![question],
+      (Timestamp::now(), QuestionTurn::StepEnd),
+    )
+    .expect("one question is asked");
+    watch.db.ask_questions(&request)?;
+    self.notifier.send(Event::QuestionChanged {
+      run: invocation.run,
+      task: self.task,
+    });
+    Ok(text)
   }
-  let listed: Vec<String> = options.iter().map(|option| format!("- {option}")).collect();
-  format!("{question}\n\n{}", listed.join("\n"))
 }
 
 /// The next news of a native agent's task; a CLI's worker has none.

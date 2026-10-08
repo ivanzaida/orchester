@@ -53,6 +53,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_question.rs"]
+mod fake_codex_question;
 #[path = "fake_codex_relay.rs"]
 mod fake_codex_relay;
 #[path = "fake_codex_review.rs"]

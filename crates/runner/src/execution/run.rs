@@ -161,6 +161,7 @@ impl RunTask {
       self.interrupt_broken(error);
     }
     self.end_waiting_approvals();
+    self.end_waiting_questions();
     self.board.settled(&self.run);
     match result {
       Ok(()) => tracing::info!(%run, status = ?self.run.status(), "run settled"),

@@ -1495,7 +1495,12 @@
         "contextCompactedDetail": "A summary replaced the earlier turns: about {{before}} tokens became about {{after}}. The agent reads files again before it changes them.",
         "modelRetrying": "The model request failed; Orchester sends it again in {{seconds}} s (attempt {{attempt}})",
         "thinkingStripped": "The model API refused the agent’s earlier reasoning",
-        "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results."
+        "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results.",
+        "secretQuestion": "Asked for a secret: {{question}}",
+        "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Secrets and grant it to this run; the agent can then use it without seeing it in the chat.",
+        "questionWithoutOptions": "Asked a question without options: {{question}}",
+        "questionWithoutOptionsDetail": "Orchester shows a question card only with at least two different suggested answers, so the question was declined and the agent was told to ask again with options or to end its turn with the question.",
+        "openSecrets": "Open Secrets ↗"
       },
       "unparsed": {
         "one": "{{count}} unparsed line",
@@ -2250,7 +2255,8 @@
           "permissionDenied": "permission_denied",
           "deniedByYou": "denied by you",
           "deniedByAutomation": "denied by automation",
-          "decisionInterrupted": "decision_interrupted"
+          "decisionInterrupted": "decision_interrupted",
+          "questionRefused": "refused"
         },
         "notAllowed": "{{command}} did not run: this run’s permissions do not allow it. The agent was told and continued without it.",
         "deniedByYou": "{{command}} did not run: you denied it. The agent was told and continued.",
@@ -2425,10 +2431,12 @@
         "raiseLimit": "Raise the limit and continue keeps your message and opens Summary to set the new limit. The run’s agent reads it when the run continues.",
         "runAgain": "Run again with this message starts the task’s next run from the first step, in a new worktree. Its first agent reads your message.",
         "dailyBudget": "The project’s runs used today’s token budget. Your message waits in this task; the run’s agent reads it when the run resumes, once the day has room.",
-        "groupBudget": "The task group used its token budget. Your message waits in this task; the run’s agent reads it when the run continues, once the group’s budget is raised."
+        "groupBudget": "The task group used its token budget. Your message waits in this task; the run’s agent reads it when the run continues, once the group’s budget is raised.",
+        "answerAbove": "{{agent}} is waiting for your answer above; a message here reaches it after you answer."
       },
       "toolMeta": "tool · {{time}}",
       "asksMeta": "asks you · {{time}}",
+      "askedMeta": "asked you · {{time}}",
       "chip": {
         "calls": {
           "one": "1 call",
@@ -2544,6 +2552,35 @@
         "resumeMeta": "The run goes on, and its agent reads it first",
         "resumeLaterMeta": "Waits until you resume the run",
         "continueLaterMeta": "Waits until the run continues"
+      },
+      "question": {
+        "asks": "{{agent}} asks you",
+        "asksSeveral": "{{agent}} asks you {{count}} questions",
+        "asked": "{{agent}} asked you",
+        "number": "{{number}} of {{count}}",
+        "pickOne": "Pick one",
+        "pickSeveral": "Pick one or more",
+        "ownPlaceholder": "Type your own answer…",
+        "hintSingle": "{{first}}–{{last}} or ↑ ↓ to move · Space picks · Enter answers",
+        "hintMulti": "{{first}}–{{last}} or ↑ ↓ to move · Space checks · Enter answers",
+        "hintField": "Enter answers · Esc back to the options",
+        "answer": "Answer",
+        "answering": "Answering…",
+        "missing": "Question {{number}} has no answer yet",
+        "ownAnswer": "“{{text}}”",
+        "answeredByYou": "Answered by you · {{time}} · {{agent}} continued",
+        "answeredByMcp": "Answered through Orchester's MCP server · {{time}} · {{agent}} continued",
+        "showOptions": "Show all options",
+        "hideOptions": "Hide the options",
+        "errors": {
+          "notAwaited": "The question no longer waits: its agent can no longer take an answer.",
+          "answered": "The question was answered already.",
+          "empty": "Pick an option or type your own answer.",
+          "unknownChoice": "The question has no option “{{label}}”.",
+          "repeatedChoice": "“{{label}}” is picked twice.",
+          "severalForSingle": "This question takes one answer: one option, or your own answer.",
+          "answerCount": "Answer each of the {{count}} questions."
+        }
       }
     },
     "autoMode": {
@@ -5793,7 +5830,10 @@
       "choiceNotOffered": "The task page does not offer this choice for how run #{{run}} stopped. get_run says how it stopped.",
       "returnStepNotOffered": "Run #{{run}} cannot return to that step: only an earlier agent step that ran before the stuck step can take a note.",
       "notQueued": "{{task}} is not queued, so it is not returned to the drafts.",
-      "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts."
+      "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts.",
+      "severalQuestions": "This request asks several questions at once; answer it on its card in the task conversation.",
+      "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
+      "noWaitingQuestion": "No question waits for an answer in this run."
     }
   },
   "statusBar": {
