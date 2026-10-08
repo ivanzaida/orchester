@@ -1,9 +1,10 @@
 //! Plan decisions through Orchester's MCP server, with the real runner and `orchester-fake-codex`: a gated
 //! Plan step, whose agent works until the test releases it, proposes plan v1 and waits. `get_run` and
 //! `list_approvals` show the waiting plan; `decide_plan` refuses what the plan card would not take (no plan
-//! waiting, a blank note, a note with an approval, a plan decided already, a version that no longer waits) and decides
-//! through the runner as the card does: approving continues the run to Implement, requesting changes resumes the Plan
-//! step's agent with the note. An open task page follows the decision in place. Run with
+//! waiting, a blank note, a note or no version with an approval, version 0, a plan decided already, a version that
+//! no longer waits) and decides through the runner as the card does: approving continues the run to Implement,
+//! requesting changes resumes the Plan step's agent with the note. An open task page follows the decision in place.
+//! Run with
 //! `cargo test -p orchester-desktop --test form_keyboard app_mcp_decide_plan`.
 
 use std::path::Path;
@@ -102,7 +103,7 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
     latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Running)
   });
   let mut client = agent(&desktop);
-  let none = refused(&mut client, "decide_plan", &decide("approve", None));
+  let none = refused(&mut client, "decide_plan", &decide_version("approve", 1));
   assert_eq!(none["code"], "no_plan_waiting", "{none}");
   assert_eq!(none["reasons"][0], "No plan waits for a decision in run #1.");
   assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"], Value::Null);
@@ -114,6 +115,8 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
   assert_eq!(plan["version"], 1, "{run}");
   assert_eq!(plan["step"], json!({"key": "plan", "name": "Plan"}));
   assert_eq!(plan["agent"], "Builder");
+  let text = plan["text"].as_str().expect("the whole text");
+  assert_eq!(text, plans(desktop.repo())[0].text, "{plan}");
   assert!(
     plan["excerpt"]
       .as_str()
@@ -126,13 +129,25 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
   assert_eq!(waiting["version"], 1, "{listed}");
   assert_eq!(waiting["task"], "KON-1");
   assert_eq!(waiting["run"]["number"], 1);
+  assert_eq!(waiting["text"], Value::Null, "get_run gives the whole text: {waiting}");
+  assert!(
+    waiting["excerpt"]
+      .as_str()
+      .is_some_and(|text| text.contains("Finished Plan"))
+  );
 
   for (arguments, code) in [
     (decide("request_changes", None), "blank_note"),
     (decide("request_changes", Some("   ")), "blank_note"),
     (decide("approve", Some("Looks good.")), "note_not_taken"),
+    (decide("approve", None), "version_required"),
+    (decide_version("approve", 0), "invalid_version"),
     (
-      json!({"project": "Kontur", "run": "#9", "decision": "approve"}),
+      json!({"project": "Kontur", "run": "1", "decision": "request_changes", "note": "Shorter.", "version": 0}),
+      "invalid_version",
+    ),
+    (
+      json!({"project": "Kontur", "run": "#9", "decision": "approve", "version": 1}),
       "run_not_found",
     ),
   ] {
@@ -141,7 +156,10 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
   }
   assert_eq!(plans(desktop.repo())[0].review, None, "a refusal decides nothing");
 
-  let decided = ok(&mut client, "decide_plan", &decide_version("approve", 1));
+  // A blank note counts as none.
+  let mut approval = decide_version("approve", 1);
+  approval["note"] = json!("  ");
+  let decided = ok(&mut client, "decide_plan", &approval);
   assert_eq!(
     decided["plan"],
     json!({"version": 1, "step": {"key": "plan", "name": "Plan"}, "decided": "approved"})
@@ -153,7 +171,7 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
     "Implement ran after the approved plan: {run}"
   );
   assert_eq!(run["awaiting"]["plan"], Value::Null);
-  let twice = refused(&mut client, "decide_plan", &decide("approve", None));
+  let twice = refused(&mut client, "decide_plan", &decide_version("approve", 1));
   assert_eq!(twice["code"], "plan_already_decided", "{twice}");
   assert_eq!(
     twice["reasons"][0],

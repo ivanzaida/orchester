@@ -69,7 +69,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
-    let plan = PlanReview::of(&view).as_ref().map(plans::waiting);
+    let plan = PlanReview::of(&view).map(|review| plans::waiting(&review, true));
     let usage = view.usage();
     let reviewer = reviewer_tokens(&view.reviews);
     let run = &view.run;

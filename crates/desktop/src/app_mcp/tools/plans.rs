@@ -1,11 +1,12 @@
 //! `decide_plan`: a decision on the plan a gated step waits with, as the plan card of the task page
 //! takes it (02.11 `x3lVC`): *Approve plan & continue*, which takes no note, or *Request changes*,
-//! which needs one. The decision names the version that waits, and the runner refuses it once that
+//! which needs one. An approval names the version it is for, so a client approves only a plan it
+//! could read in full (`get_run` gives the whole text); the runner refuses a decision once that
 //! version no longer waits. Also the waiting plan as `get_run` and `list_approvals` show it.
 
 use orchester_core::{
   id::RunId,
-  run::{PlanDecision, ReviewNote},
+  run::{Plan, PlanDecision, ReviewNote, RunStatus},
   store::{RunStore, TaskStore},
 };
 use orchester_ipc::{Command, Rejection};
@@ -49,11 +50,12 @@ pub struct DecidePlan {
   pub run: String,
   pub decision: Decision,
   /// What should change in the plan: needed with `request_changes`. `approve` takes no note, as the
-  /// plan card approves without one.
+  /// plan card approves without one; a blank one counts as none.
   #[serde(default)]
   pub note: Option<String>,
-  /// The plan version the decision is for, as `get_run` shows it waiting; given, the decision is
-  /// refused when another version waits now.
+  /// The plan version the decision is for, as `get_run` shows it waiting with its whole text: needed
+  /// with `approve`, optional with `request_changes`. The decision is refused when another version
+  /// waits now.
   #[serde(default)]
   pub version: Option<u32>,
 }
@@ -71,13 +73,14 @@ pub enum Decision {
 
 pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value, ToolError> {
   let decision = plan_decision(args.decision, args.note.as_deref())?;
+  let asked = asked_version(args.decision, args.version)?;
   let reading = services.clone();
   let (project, review) = blocking(move || {
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let view = run_view(&db, find_run(&db, &args.run)?)?;
     let review = PlanReview::of(&view).ok_or_else(|| not_waiting(&view))?;
-    if let Some(asked) = args.version {
+    if let Some(asked) = asked {
       same_version(&review, asked)?;
     }
     Ok((project, review))
@@ -94,13 +97,12 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
     .runners
     .control_run_in(&project, command)
     .await
-    .map_err(|error| {
-      let reasons = vec![control_message(&error)];
-      match error {
-        // Decided since it was read, by a person on the card or another client.
-        RunRequestError::Rejected(Rejection::PlanNotAwaited) => ToolError::refused(PLAN_DECIDED, reasons),
-        _ => ToolError::runner(&error, reasons),
+    .map_err(|error| match error {
+      // Decided since it was read, by a person on the card or another client.
+      RunRequestError::Rejected(Rejection::PlanNotAwaited) => {
+        ToolError::refused(PLAN_DECIDED, vec![Message::new("appMcp.errors.planNoLongerWaits")])
       }
+      _ => ToolError::runner(&error, vec![control_message(&error)]),
     })?;
   // An open task page reads the decision in place.
   services.changes.record(project.project.id(), Outside::Tasks);
@@ -113,9 +115,10 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
   Ok(result)
 }
 
-/// The decision the card makes of `choice` and `note`: approving takes no note, requesting changes
-/// needs one that is not blank.
+/// The decision the card makes of `choice` and `note`: approving takes no note (a blank one is none),
+/// requesting changes needs one that is not blank.
 fn plan_decision(choice: Decision, note: Option<&str>) -> Result<PlanDecision, ToolError> {
+  let note = note.filter(|note| !note.trim().is_empty());
   match (choice, note) {
     (Decision::Approve, None) => Ok(PlanDecision::Approved),
     (Decision::Approve, Some(_)) => Err(ToolError::refused(
@@ -128,32 +131,44 @@ fn plan_decision(choice: Decision, note: Option<&str>) -> Result<PlanDecision, T
   }
 }
 
-/// Why no plan of `view` takes a decision: its latest plan was decided already, or none waits.
+/// The plan version `version` names, which `approve` needs; versions count from 1.
+fn asked_version(choice: Decision, version: Option<u32>) -> Result<Option<u32>, ToolError> {
+  match (choice, version) {
+    (_, Some(0)) => Err(ToolError::refused(
+      "invalid_version",
+      vec![Message::new("appMcp.errors.planVersionInvalid")],
+    )),
+    (Decision::Approve, None) => Err(ToolError::refused(
+      "version_required",
+      vec![Message::new("appMcp.errors.approveNeedsVersion")],
+    )),
+    (_, version) => Ok(version),
+  }
+}
+
+/// Why no plan of `view` takes a decision: its run is paused with the plan waiting, its latest plan
+/// was decided already, or none waits.
 fn not_waiting(view: &RunView) -> ToolError {
+  let run = view.run.number().get().to_string();
   let latest = view.plans.iter().max_by_key(|plan| (plan.created_at, plan.version));
-  let Some((plan, decision)) = latest.and_then(|plan| plan.decision().map(|decision| (plan, decision))) else {
-    return ToolError::refused(
-      "no_plan_waiting",
-      vec![Message::new("appMcp.errors.noPlanWaiting").with("run", view.run.number().get().to_string())],
-    );
+  let (code, key) = match (latest.map(Plan::decision), view.run.status()) {
+    (Some(Some(PlanDecision::Approved)), _) => (PLAN_DECIDED, "appMcp.errors.planApproved"),
+    (Some(Some(PlanDecision::ChangesRequested { .. })), _) => (PLAN_DECIDED, "appMcp.errors.planChangesRequested"),
+    (Some(None), RunStatus::Paused(_)) => ("run_paused", "appMcp.errors.planRunPaused"),
+    _ => ("no_plan_waiting", "appMcp.errors.noPlanWaiting"),
   };
-  let key = match decision {
-    PlanDecision::Approved => "appMcp.errors.planApproved",
-    PlanDecision::ChangesRequested { .. } => "appMcp.errors.planChangesRequested",
-  };
-  let step = view
-    .steps
-    .iter()
-    .find(|step| step.key == plan.step)
-    .map_or_else(|| plan.step.to_string(), |step| step.name.to_string());
-  ToolError::refused(
-    PLAN_DECIDED,
-    vec![
-      Message::new(key)
-        .with("version", plan.version.get().to_string())
-        .with("step", step),
-    ],
-  )
+  let mut reason = Message::new(key).with("run", run);
+  if let Some(plan) = latest.filter(|_| code != "no_plan_waiting") {
+    let step = view
+      .steps
+      .iter()
+      .find(|step| step.key == plan.step)
+      .map_or_else(|| plan.step.to_string(), |step| step.name.to_string());
+    reason = reason
+      .with("version", plan.version.get().to_string())
+      .with("step", step);
+  }
+  ToolError::refused(code, vec![reason])
 }
 
 /// Refused unless plan version `asked` is the one `review` waits on.
@@ -181,20 +196,25 @@ const fn decided_name(decision: Decision) -> &'static str {
 }
 
 /// The plan `review` waits on: its version, its step, who proposed it and when, and the start of
-/// its text.
-pub fn waiting(review: &PlanReview) -> Value {
+/// its text; its whole text too when `whole`.
+pub fn waiting(review: &PlanReview, whole: bool) -> Value {
   let plan = review.waiting();
-  json!({
+  let mut shown = json!({
     "version": plan.version.get(),
     "step": { "key": plan.step.to_string(), "name": &*review.step },
     "agent": &*review.agent,
     "proposed_at": wire::time(plan.created_at),
     "excerpt": excerpt(&plan.text),
-  })
+  });
+  if whole {
+    shown["text"] = json!(&plan.text);
+  }
+  shown
 }
 
 /// The plans the running runs of project database `db` wait on, in run order; only `run`'s when
-/// one is named.
+/// one is named. Each with its excerpt only: plans can be long, and `get_run` gives a plan's whole
+/// text.
 pub fn waiting_plans(db: &ProjectDb, run: Option<RunId>) -> Result<Vec<Value>, ToolError> {
   let mut plans = Vec::new();
   for listed in db.running_runs().map_err(run_store_error)? {
@@ -206,7 +226,7 @@ pub fn waiting_plans(db: &ProjectDb, run: Option<RunId>) -> Result<Vec<Value>, T
     let task = db.task(found.task())?.map(|task| task.key().to_string());
     let view = run_view(db, found)?;
     if let Some(review) = PlanReview::of(&view) {
-      let mut shown = waiting(&review);
+      let mut shown = waiting(&review, false);
       shown["run"] = json!({ "id": view.id().to_string(), "number": view.run.number().get() });
       shown["task"] = json!(task);
       plans.push(shown);

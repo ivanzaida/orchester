@@ -96,7 +96,8 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "get_run",
     description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
-                  what it waits for, its agents' waiting questions with their options and the plan waiting for a decision                   (version, step, the start of its text) among it.",
+                  what it waits for, its agents' waiting questions with their options and the plan waiting for a decision \
+                  (version, step, its whole text and an excerpt) among it.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -162,7 +163,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_approvals",
-    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and the start of their text.",
+    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and an excerpt of their text (get_run gives a plan's whole text).",
     schema: schema_for_type::<approvals::ListApprovals>,
     read_only: true,
   },
@@ -174,7 +175,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "decide_plan",
-    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) or request_changes with a note (the step's agent resumes with it and proposes a revised plan). get_run shows the waiting plan's version; given as version, the decision is refused when another version waits now. Refusals name why: no_plan_waiting, plan_already_decided, plan_version_changed, blank_note, note_not_taken.",
+    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) with the version it is for, as get_run shows it waiting with its whole text, or request_changes with a note (the step's agent resumes with it and proposes a revised plan; a version is optional). Refusals name why: run_not_found, no_plan_waiting, run_paused, plan_already_decided, plan_version_changed, version_required, invalid_version, blank_note, note_not_taken, and the runner's run_not_running, shutting_down, runner_unavailable or runner_reply_lost.",
     schema: schema_for_type::<plans::DecidePlan>,
     read_only: false,
   },
