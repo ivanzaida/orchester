@@ -1,8 +1,10 @@
 //! `decide_plan`: a decision on the plan a gated step waits with, as the plan card of the task page
 //! takes it (02.11 `x3lVC`): *Approve plan & continue*, which takes no note, or *Request changes*,
-//! which needs one. An approval names the version it is for, so a client approves only a plan it
-//! could read in full (`get_run` gives the whole text); the runner refuses a decision once that
-//! version no longer waits. Also the waiting plan as `get_run` and `list_approvals` show it.
+//! which needs one. Approving is automation's only while a person lets it answer approvals (*Let
+//! automation answer approvals*), as `decide_approval` is; requesting changes is not gated. An approval names the
+//! version it is for, so a client approves only a plan it could read in full (`get_run` gives the whole text); the
+//! runner refuses a decision once that version no longer waits. Also the waiting plan as `get_run` and `list_approvals`
+//! show it.
 
 use orchester_core::{
   id::RunId,
@@ -76,6 +78,14 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
   let asked = asked_version(args.decision, args.version)?;
   let reading = services.clone();
   let (project, review) = blocking(move || {
+    // Approving lets the run go on as a person's approval would: only while a person lets automation
+    // answer, as for tool requests. Requesting changes only sends the work back to the agent.
+    if args.decision == Decision::Approve && !reading.workspace.automation_answers_approvals()? {
+      return Err(ToolError::refused(
+        "automation_not_allowed",
+        vec![Message::new("appMcp.errors.automationNotAllowed")],
+      ));
+    }
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let view = run_view(&db, find_run(&db, &args.run)?)?;

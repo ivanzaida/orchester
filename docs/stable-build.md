@@ -117,8 +117,9 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
-  decides it: `approve` with the `version` it is for and no note, or `request_changes` with a `note` the
-  step's agent resumes with and an optional `version`; `get_run`'s `awaiting.plan` shows the waiting plan's
+  decides it: `approve` with the `version` it is for and no note, only while *Let automation answer
+  approvals* is on (refused with `automation_not_allowed` otherwise), or `request_changes` with a `note` the
+  step's agent resumes with and an optional `version`, which needs no such permission; `get_run`'s `awaiting.plan` shows the waiting plan's
   version, step, whole `text` and an `excerpt`, and `list_approvals`' `plans` the same without the whole
   text, so a client approves only a plan it read in full through `get_run`; refused with `run_not_found`,
   `no_plan_waiting`, `run_paused`, `plan_already_decided`, `plan_version_changed` (another version waits now,

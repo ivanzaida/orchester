@@ -1,6 +1,7 @@
 //! Plan decisions through Orchester's MCP server, with the real runner and `orchester-fake-codex`: a gated
 //! Plan step, whose agent works until the test releases it, proposes plan v1 and waits. `get_run` and
-//! `list_approvals` show the waiting plan; `decide_plan` refuses what the plan card would not take (no plan
+//! `list_approvals` show the waiting plan; `decide_plan` approves only while a person lets automation answer
+//! approvals, and refuses what the plan card would not take (no plan
 //! waiting, a blank note, a note or no version with an approval, version 0, a plan decided already, a version that
 //! no longer waits) and decides through the runner as the card does: approving continues the run to Implement,
 //! requesting changes resumes the Plan step's agent with the note. An open task page follows the decision in place.
@@ -14,7 +15,7 @@ use orchester_core::{
   run::{Plan, PlanDecision, ReviewNote, RunStatus},
   store::{ActivityStore, RunStore},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb};
 use serde_json::{Value, json};
 
 use super::{agent, ok, refused};
@@ -23,6 +24,7 @@ use crate::{
   conversation_composer::write,
   github::shows,
   harness::Desktop,
+  mcp_agent::McpAgent,
   task_run::{agent_step, create_and_run, has, init_repository, latest_run, programs, run_finished, seed_steps},
 };
 
@@ -58,6 +60,14 @@ fn decide_version(decision: &str, version: u32) -> Value {
   let mut arguments = decide(decision, None);
   arguments["version"] = json!(version);
   arguments
+}
+
+/// Lets automation answer approvals, which approving a plan needs, as a person does in the status bar.
+fn let_automation_approve(desktop: &Desktop) {
+  AppDb::open(&desktop.repo().parent().expect("the test folder").join("orchester.db"))
+    .expect("open")
+    .set_automation_answers_approvals(true)
+    .expect("a person lets automation answer");
 }
 
 fn get_run() -> Value {
@@ -96,27 +106,15 @@ fn reported(repo: &Path, prefix: &str) -> Vec<String> {
     .collect()
 }
 
-#[test]
-fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
-  let mut desktop = gated();
-  desktop.wait_until("the Plan agent works", |desktop| {
-    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Running)
-  });
-  let mut client = agent(&desktop);
-  let none = refused(&mut client, "decide_plan", &decide_version("approve", 1));
-  assert_eq!(none["code"], "no_plan_waiting", "{none}");
-  assert_eq!(none["reasons"][0], "No plan waits for a decision in run #1.");
-  assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"], Value::Null);
-
-  release(&desktop);
-  plan_waits(&mut desktop, 1);
-  let run = ok(&mut client, "get_run", &get_run());
+/// `get_run` shows plan v1 waiting with its whole text, `list_approvals` with an excerpt only.
+fn shows_plan_v1(client: &mut McpAgent, repo: &Path) {
+  let run = ok(client, "get_run", &get_run());
   let plan = &run["awaiting"]["plan"];
   assert_eq!(plan["version"], 1, "{run}");
   assert_eq!(plan["step"], json!({"key": "plan", "name": "Plan"}));
   assert_eq!(plan["agent"], "Builder");
   let text = plan["text"].as_str().expect("the whole text");
-  assert_eq!(text, plans(desktop.repo())[0].text, "{plan}");
+  assert_eq!(text, plans(repo)[0].text, "{plan}");
   assert!(
     plan["excerpt"]
       .as_str()
@@ -124,7 +122,7 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
     "{plan}"
   );
   assert_eq!(run["awaiting"]["plan_decisions"], 1);
-  let listed = ok(&mut client, "list_approvals", &json!({"project": "Kontur"}));
+  let listed = ok(client, "list_approvals", &json!({"project": "Kontur"}));
   let waiting = &listed["plans"][0];
   assert_eq!(waiting["version"], 1, "{listed}");
   assert_eq!(waiting["task"], "KON-1");
@@ -135,6 +133,23 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
       .as_str()
       .is_some_and(|text| text.contains("Finished Plan"))
   );
+}
+
+#[test]
+fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
+  let mut desktop = gated();
+  desktop.wait_until("the Plan agent works", |desktop| {
+    latest_run(desktop.repo()).is_some_and(|run| run.status() == &RunStatus::Running)
+  });
+  let mut client = agent(&desktop);
+  let none = refused(&mut client, "decide_plan", &decide("request_changes", Some("Shorter.")));
+  assert_eq!(none["code"], "no_plan_waiting", "{none}");
+  assert_eq!(none["reasons"][0], "No plan waits for a decision in run #1.");
+  assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"], Value::Null);
+
+  release(&desktop);
+  plan_waits(&mut desktop, 1);
+  shows_plan_v1(&mut client, desktop.repo());
 
   for (arguments, code) in [
     (decide("request_changes", None), "blank_note"),
@@ -147,15 +162,23 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
       "invalid_version",
     ),
     (
-      json!({"project": "Kontur", "run": "#9", "decision": "approve", "version": 1}),
+      json!({"project": "Kontur", "run": "#9", "decision": "request_changes", "note": "Shorter."}),
       "run_not_found",
     ),
   ] {
     let error = refused(&mut client, "decide_plan", &arguments);
     assert_eq!(error["code"], code, "{arguments}: {error}");
   }
+  // Approving waits for a person to let automation answer approvals; requesting changes does not.
+  let gated = refused(&mut client, "decide_plan", &decide_version("approve", 1));
+  assert_eq!(gated["code"], "automation_not_allowed", "{gated}");
+  assert_eq!(
+    gated["reasons"][0],
+    "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar."
+  );
   assert_eq!(plans(desktop.repo())[0].review, None, "a refusal decides nothing");
 
+  let_automation_approve(&desktop);
   // A blank note counts as none.
   let mut approval = decide_version("approve", 1);
   approval["note"] = json!("  ");
@@ -222,6 +245,7 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
   assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"]["version"], 2);
 
   // A decision meant for v1 does not decide v2, which the client has not read.
+  let_automation_approve(&desktop);
   let changed = refused(&mut client, "decide_plan", &decide_version("approve", 1));
   assert_eq!(changed["code"], "plan_version_changed", "{changed}");
   assert_eq!(
