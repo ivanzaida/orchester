@@ -22,10 +22,11 @@ use lurq::{
 use orchester_core::usage::{BreakdownKey, BreakdownRow, CliSeries, percent, toggle};
 
 use super::{
+  breakdown_table::{Breakdown, breakdown_table},
   card::{Card, legend_item, series_color, view_switch},
   format,
   state::{Controls, Dashboard, Views},
-  table::{Cell, Width, column, data_row, fit, table},
+  table::fit,
 };
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, chart::BREAKDOWN_BAR_HEIGHT},
@@ -38,7 +39,12 @@ use crate::{
 /// Rows a column shows; the rest are in the table.
 const ROWS: usize = 6;
 
-pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, controls: &Signal<Controls>) -> Element {
+pub fn breakdown(
+  ctx: &mut Ctx,
+  dashboard: &Arc<Dashboard>,
+  views: &Signal<Views>,
+  controls: &Signal<Controls>,
+) -> Element {
   let table_shown = views.get().breakdown_table;
   let views = views.clone();
   let switch = view_switch(
@@ -51,27 +57,24 @@ pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, contro
   let breakdowns = &dashboard.report.breakdowns;
   let mut columns = Vec::new();
   if dashboard.all_projects() {
-    columns.push(("usage.breakdown.byProject", &breakdowns.projects));
+    columns.push(Breakdown::Projects);
   }
-  columns.extend([
-    ("usage.breakdown.byProfile", &breakdowns.profiles),
-    ("usage.breakdown.byModel", &breakdowns.models),
-    ("usage.breakdown.byPipeline", &breakdowns.pipelines),
-  ]);
+  columns.extend([Breakdown::Profiles, Breakdown::Models, Breakdown::Pipelines]);
   let spent = dashboard.report.summary.spent();
   let body = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
-    .with_children(columns.into_iter().enumerate().map(|(index, (key, rows))| {
+    .with_children(columns.into_iter().enumerate().map(|(index, shown)| {
       let mut column = Column::new()
         .id(format!("usage-breakdown-column-{index}"))
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Sm)
-        .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Label));
+        .child(Text::new(&ctx.t(shown.title_key())).variant(TypographyStyle::Label));
       column = if table_shown {
-        column.child(rows_table(ctx, rows, spent))
+        column.child(breakdown_table(ctx, dashboard, shown))
       } else {
+        let rows = shown.rows(breakdowns);
         column.with_children(
           rows
             .iter()
@@ -79,7 +82,7 @@ pub fn breakdown(ctx: &Ctx, dashboard: &Dashboard, views: &Signal<Views>, contro
             .map(|row| bar_row(ctx, row, rows, spent, controls)),
         )
       };
-      if key == "usage.breakdown.byProject" && !breakdowns.idle_projects.is_empty() {
+      if shown == Breakdown::Projects && !breakdowns.idle_projects.is_empty() {
         column = column.child(
           Text::new(&ctx.t_args(
             "usage.breakdown.idle",
@@ -129,7 +132,7 @@ fn series_legend(ctx: &Ctx, dashboard: &Dashboard) -> Element {
 
 /// A row's name: *Builder · implement*, *auto mode reviewer* (after its model, [`reviewer_name`]), a model
 /// in mono, a pipeline or a project.
-fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
+pub(super) fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
   match key {
     BreakdownKey::ProfileStep { profile, step } => (
       ctx.t_args(
@@ -149,7 +152,7 @@ fn label(ctx: &Ctx, key: &BreakdownKey) -> (Arc<str>, bool) {
 /// The reviewer's row name, filling the room it has: `model` in mono at its whole width (cut only when the
 /// room is narrower than it), then the words in `words`' style, muted, in what is left, giving way with an
 /// ellipsis. `id` names the model's text, and `{id}-words` the words.
-fn reviewer_name(ctx: &Ctx, (words, model): (TypographyStyle, &Arc<str>), id: String) -> Element {
+pub(super) fn reviewer_name(ctx: &Ctx, (words, model): (TypographyStyle, &Arc<str>), id: String) -> Element {
   let words = Text::new(&ctx.t("usage.breakdown.reviewer"))
     .id(format!("{id}-words"))
     .variant(words)
@@ -294,41 +297,6 @@ fn add_filter(filter: &mut orchester_core::usage::UsageFilter, key: &BreakdownKe
         filter.projects.push(*id);
       }
     }
-  }
-}
-
-/// A column as a table with exact numbers.
-fn rows_table(ctx: &Ctx, rows: &[BreakdownRow], spent: u64) -> Element {
-  let columns = [
-    column(ctx.t("usage.table.name"), Width::Flex(1.4), false),
-    column(ctx.t("usage.measure.spent"), Width::Flex(1.0), true),
-    column(ctx.t("usage.table.share"), Width::Flex(0.6), true),
-  ];
-  let rows = rows
-    .iter()
-    .map(|entry| {
-      data_row(
-        &columns,
-        vec![
-          table_name(ctx, &entry.key),
-          Cell::Text(format::exact(ctx, entry.total())),
-          Cell::Text(format::share(ctx, percent(entry.total(), spent))),
-        ],
-      )
-    })
-    .collect();
-  table("usage-breakdown-table", &columns, rows)
-}
-
-/// A table row's name: the reviewer's keeps its model in sight.
-fn table_name(ctx: &Ctx, key: &BreakdownKey) -> Cell {
-  match key {
-    BreakdownKey::Reviewer(model) => Cell::Element(reviewer_name(
-      ctx,
-      (TypographyStyle::Body, model),
-      format!("usage-breakdown-table-reviewer-{model}"),
-    )),
-    _ => Cell::Text(label(ctx, key).0),
   }
 }
 

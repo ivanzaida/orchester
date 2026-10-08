@@ -104,6 +104,7 @@ mod tool_run;
 mod tools;
 mod unreadable_run;
 mod usage;
+mod usage_breakdown_table;
 mod usage_narrow;
 mod usage_reviewer;
 mod window;

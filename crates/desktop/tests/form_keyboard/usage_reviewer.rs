@@ -159,8 +159,8 @@ fn usage_reviewer_has_a_row_of_its_own_and_counts_in_the_totals_and_the_run() {
 const ELLIPSIZED: &str = "a\u{2026}";
 
 /// How wide each of `texts`, in its style, is when nothing constrains it.
-fn natural_widths(texts: &[(&'static str, TypographyStyle)]) -> Vec<f32> {
-  static TEXTS: Mutex<Vec<(&'static str, TypographyStyle)>> = Mutex::new(Vec::new());
+pub(crate) fn natural_widths(texts: &[(&str, TypographyStyle)]) -> Vec<f32> {
+  static TEXTS: Mutex<Vec<(String, TypographyStyle)>> = Mutex::new(Vec::new());
   struct Natural;
 
   impl Component for Natural {
@@ -181,7 +181,7 @@ fn natural_widths(texts: &[(&'static str, TypographyStyle)]) -> Vec<f32> {
     }
   }
 
-  *TEXTS.lock() = texts.to_vec();
+  *TEXTS.lock() = texts.iter().map(|(text, style)| ((*text).to_owned(), *style)).collect();
   let mut app = App::new();
   theme::install(&mut app);
   let mut tree = Tree::new();
@@ -301,7 +301,7 @@ fn usage_reviewer_rows_keep_their_model_and_figures_in_a_narrow_window() {
 
   // Below the fold: clicked where it is, as the page would be scrolled to it.
   desktop.click("usage-breakdown-view-1");
-  desktop.wait_for("usage-breakdown-table");
+  desktop.wait_for("usage-breakdown-table-profiles");
   assert_names(
     &mut desktop,
     "usage-breakdown-table-reviewer",

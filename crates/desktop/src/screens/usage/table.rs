@@ -57,7 +57,7 @@ pub fn table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>) -> Eleme
 }
 
 /// [`table`] with `gap` between its columns, as its rows were built with.
-pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, gap: SpacingSize) -> Element {
+pub fn spaced_table(id: &str, columns: &[TableColumn], rows: Vec<Row>, gap: SpacingSize) -> Element {
   let headings = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADING_HEIGHT))
@@ -73,7 +73,7 @@ pub fn spaced_table(id: &'static str, columns: &[TableColumn], rows: Vec<Row>, g
       )
     }));
   Column::new()
-    .id(id)
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .child(headings)
     .with_children(rows)
@@ -89,6 +89,11 @@ pub fn row(id: &str, columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize
 /// One row of a chart's data: denser than a list of tasks.
 pub fn data_row(columns: &[TableColumn], cells: Vec<Cell>) -> Row {
   sized_row(None, columns, cells, (DATA_ROW_HEIGHT, SpacingSize::Md))
+}
+
+/// [`data_row`] `id`, its columns `gap` apart; its cells are `{id}-cell-{column}`.
+pub fn keyed_data_row(id: &str, columns: &[TableColumn], cells: Vec<Cell>, gap: SpacingSize) -> Row {
+  sized_row(Some(id), columns, cells, (DATA_ROW_HEIGHT, gap))
 }
 
 fn sized_row(id: Option<&str>, columns: &[TableColumn], cells: Vec<Cell>, (height, gap): (f32, SpacingSize)) -> Row {
