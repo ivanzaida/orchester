@@ -10,7 +10,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{runs::find_run, wire};
+use super::{plans::waiting_plans, runs::find_run, wire};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -58,21 +58,21 @@ pub struct DecideApproval {
 
 pub async fn list_approvals(services: &Services, args: ListApprovals) -> Result<Value, ToolError> {
   let services = services.clone();
-  let shown = blocking(move || {
+  let (shown, plans) = blocking(move || {
     let root = services.project(&args.project)?.repo_root;
     let db = ProjectDb::open(&root)?;
     let run = args.run.as_deref().map(|named| find_run(&db, named)).transpose()?;
     let waiting = pending(&db, &root)?;
-    Ok(
-      waiting
-        .into_iter()
-        .filter(|shown| run.as_ref().is_none_or(|run| shown.approval.run == run.id()))
-        .collect::<Vec<_>>(),
-    )
+    let plans = waiting_plans(&db, run.as_ref().map(orchester_core::run::Run::id))?;
+    let shown = waiting
+      .into_iter()
+      .filter(|shown| run.as_ref().is_none_or(|run| shown.approval.run == run.id()))
+      .collect::<Vec<_>>();
+    Ok((shown, plans))
   })
   .await?;
   let approvals: Vec<Value> = shown.iter().map(approval).collect();
-  Ok(json!({ "approvals": approvals }))
+  Ok(json!({ "approvals": approvals, "plans": plans }))
 }
 
 pub async fn decide_approval(services: &Services, args: DecideApproval) -> Result<Value, ToolError> {

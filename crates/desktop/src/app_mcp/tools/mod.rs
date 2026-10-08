@@ -8,6 +8,7 @@ mod continue_run;
 mod limits;
 mod messages;
 mod pipeline_copy;
+mod plans;
 mod projects;
 mod questions;
 mod return_to_draft;
@@ -95,7 +96,7 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "get_run",
     description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
-                  what it waits for, its agents' waiting questions with their options among it.",
+                  what it waits for, its agents' waiting questions with their options and the plan waiting for a decision                   (version, step, the start of its text) among it.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -161,7 +162,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_approvals",
-    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when.",
+    description: "Tool requests of a project's agents waiting for a decision, oldest first: kind, command or tool, arguments, agent, run, task and since when; and the plans its runs wait on for a decision (decide_plan), with their version, step and the start of their text.",
     schema: schema_for_type::<approvals::ListApprovals>,
     read_only: true,
   },
@@ -169,6 +170,12 @@ const SPECS: &[Spec] = &[
     name: "decide_approval",
     description: "Approves a waiting request once, or denies it. Refused unless a person turned on Let automation answer approvals in the app.",
     schema: schema_for_type::<approvals::DecideApproval>,
+    read_only: false,
+  },
+  Spec {
+    name: "decide_plan",
+    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) or request_changes with a note (the step's agent resumes with it and proposes a revised plan). get_run shows the waiting plan's version. Refusals name why: no_plan_waiting, plan_already_decided, blank_note, note_not_taken.",
+    schema: schema_for_type::<plans::DecidePlan>,
     read_only: false,
   },
   Spec {
@@ -262,6 +269,7 @@ async fn dispatch_answers(services: &Services, name: &str, arguments: Value) -> 
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "answer_question" => questions::answer_question(services, parse(arguments)?).await,
+    "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,

@@ -8,6 +8,7 @@ mod continue_run;
 mod limits;
 mod messages;
 mod pipelines;
+mod plans;
 mod questions;
 mod quiet;
 mod quiet_screens;
