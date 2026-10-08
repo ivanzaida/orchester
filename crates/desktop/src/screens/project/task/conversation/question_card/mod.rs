@@ -22,10 +22,10 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Rect, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   question::{Question, QuestionRequest, QuestionState},
@@ -66,6 +66,9 @@ pub(super) struct ChoiceCardProps {
 impl lurq::app::component::DevtoolsInspectable for ChoiceCardProps {}
 
 type AnswerAction = FutureAction<Answering, (), Message>;
+
+/// *Answer*'s height (`lS9BF`).
+const ANSWER_HEIGHT: f32 = 30.0;
 
 fn answer_action(ctx: &mut Ctx) -> AnswerAction {
   let runners = ctx
@@ -197,11 +200,12 @@ impl Component for ChoiceCardView {
       }
     };
     let meta = ctx.t_args(
-      "runs.conversation.agentMeta",
-      [
-        ("step", &*props.card.step),
-        ("time", display::clock(asked.request.asked_at()).as_str()),
-      ],
+      if props.card.waiting() {
+        "runs.conversation.asksMeta"
+      } else {
+        "runs.conversation.askedMeta"
+      },
+      [("time", display::clock(asked.request.asked_at()).as_str())],
     );
     chat_row(
       format!("conversation-choice-{}", asked.request.id()),
@@ -253,7 +257,7 @@ fn waiting(ctx: &mut Ctx, card: &ChoiceCard, state: &CardState) -> Element {
   let mut body: Vec<Element> = Vec::new();
   for (index, question) in questions.iter().enumerate() {
     if index > 0 {
-      body.push(hairline());
+      body.push(hairline(ctx));
     }
     body.push(question_block(ctx, state, (index, question)));
   }
@@ -288,11 +292,11 @@ fn head((glyph, title, chip): (Icon, &str, Option<&str>), (state_glyph, state): 
     .into()
 }
 
-/// A rule between two questions of one request.
-fn hairline() -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .border_bottom(Border::inside(BorderSize::Sm, ExtraColor::Hairline.role()))
+/// A `$hairline` rule between two questions of one request, as thick as the theme's thin border.
+fn hairline(ctx: &Ctx) -> Element {
+  let thickness = ctx.theme().border_size_value(BorderSize::Sm);
+  Rect::new(Dimension::Pct(100.0), Dimension::Px(thickness))
+    .background(ExtraColor::Hairline.role())
     .into()
 }
 
@@ -344,8 +348,8 @@ fn question_block(ctx: &mut Ctx, state: &CardState, (index, question): (usize, &
     .into()
 }
 
-/// The keys' hint and *Answer*, which waits until every question has an answer; which question has none
-/// yet, with several; and why the answer did not go.
+/// The keys' hint, or with several questions which one has no answer yet in its place; *Answer*, which waits
+/// until every question has an answer; and why the answer did not go.
 fn footer(ctx: &Ctx, state: &CardState) -> Element {
   let draft = state.draft.get();
   let sending = state.action.state().get();
@@ -360,42 +364,35 @@ fn footer(ctx: &Ctx, state: &CardState) -> Element {
     .id("conversation-question-answer")
     .icon(Icon::CornerDownLeft)
     .primary()
-    .compact()
+    .height(Dimension::Px(ANSWER_HEIGHT))
     .on_click(move || submit.submit())
     .enabled(ready && !sending.is_pending() && sending.data.is_none())
     .render(ctx);
-  let missing: Option<Element> = draft
-    .missing()
-    .filter(|_| state.request.questions().len() > 1)
-    .map(|index| {
-      Row::new()
-        .spacing(ExtraSpacing::Tight.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::Info, IconSize::Small, PaletteColor::TextMuted))
-        .child(
-          Text::new(&ctx.t_args(
-            "runs.conversation.question.missing",
-            [("number", (index + 1).to_string().as_str())],
-          ))
-          .variant(ExtraTypography::Hint.role())
-          .nowrap(),
-        )
-        .into()
-    });
+  let missing = draft.missing().filter(|_| state.request.questions().len() > 1);
+  let (glyph, note, id) = match missing {
+    Some(index) => (
+      Icon::Info,
+      ctx.t_args(
+        "runs.conversation.question.missing",
+        [("number", (index + 1).to_string().as_str())],
+      ),
+      "conversation-question-missing",
+    ),
+    None => (Icon::Keyboard, keys::hint(ctx, state), "conversation-question-hint"),
+  };
   let line = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Keyboard, IconSize::Small, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Small, PaletteColor::TextMuted))
     .child(
-      Text::new(&keys::hint(ctx, state))
-        .id("conversation-question-hint")
+      Text::new(&note)
+        .id(id)
         .variant(ExtraTypography::Hint.role())
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )
     .child(Spacer::new().flex(1.0))
-    .with_children(missing)
     .child(Row::new().flex_shrink(0.0).child(answer));
   Column::new()
     .width(Dimension::Pct(100.0))

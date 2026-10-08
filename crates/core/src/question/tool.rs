@@ -43,6 +43,11 @@ pub fn claude_allow_rule() -> String {
   format!("mcp__{SERVER}__{NAME}")
 }
 
+/// Whether Claude Code's tool `name` is this tool.
+pub fn is_claude_name(name: &str) -> bool {
+  name == claude_allow_rule()
+}
+
 /// The question a call with `arguments` asks; the error result the agent gets when it is invalid or
 /// suggests no options.
 pub fn parse(arguments: &Value) -> Result<Question, String> {

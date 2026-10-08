@@ -305,7 +305,10 @@ pub fn interleaved(
       });
     }
   };
-  for entry in entries.iter().filter(|entry| entry.execution == execution) {
+  for entry in entries
+    .iter()
+    .filter(|entry| entry.execution == execution && !group::shown_as_card(entry))
+  {
     while let Some(item) = between.next_if(|item| item.at <= entry.at) {
       flush(&mut tools, &mut items);
       items.push(item);

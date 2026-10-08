@@ -2418,6 +2418,7 @@
       },
       "toolMeta": "tool · {{time}}",
       "asksMeta": "asks you · {{time}}",
+      "askedMeta": "asked you · {{time}}",
       "chip": {
         "calls": {
           "one": "1 call",

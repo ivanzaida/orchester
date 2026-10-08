@@ -1669,6 +1669,7 @@ step ones; a chip opens its group in place.
 - **Keys**: rows are Tab stops (the own answer's field too); the inset ring shows only after a key, so a pick with the pointer shows none. ↑ ↓ cross into the next question's rows; ↑ or Esc in the field goes back to the last option.
 - **MCP**: `get_run` lists `awaiting.questions` with their options; `answer_question` answers a request of one question (the run's only waiting one when none is named) and refuses `unknown_choice`, `repeated_choice`, `several_choices` (also an option plus own text for one answer), `empty_answer`, `question_not_found`, `no_waiting_question` (none named, none waits) and `question_ambiguous` (none named, several wait); a request of several questions is refused (`several_questions`) and answered on its card.
 - Copy is in `runs.conversation.question.*`, beside the other cards' keys, not the proposed `conversation.question.*`.
+- While an agent waits in its turn for the answer, the page reads as asking, not working: the run line says it asks you, the toolbar's state is *Waiting for you* (message-circle), and there is no working line. The card is the record of the agent's `ask_question` call, so the call has no tool row; a call that failed asked nothing and keeps its row.
 
 ## Code index
 

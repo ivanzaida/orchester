@@ -493,8 +493,16 @@ fn conversation_roles_follow_pencil() {
     theme.spacing_value(ExtraSpacing::ComposerEdge.role()),
     Dimension::Px(18.0)
   );
-  // An option's letter key on a question card (`lS9BF`).
+  // An option's letter key on a question card (`lS9BF`), its label and description, and its checkbox
+  // (`paKFE`).
   assert_eq!(theme.radius_value(ExtraRadius::Key.role()), 4.0);
+  assert_eq!(theme.radius_value(ExtraRadius::Checkbox.role()), 3.0);
+  let label = theme.typography_style(ExtraTypography::OptionLabel.role());
+  assert_eq!((label.font_size, label.line_height), (13.0, 1.5));
+  assert_eq!(label.color, Color::from_hex("#EEEEEE"));
+  let detail = theme.typography_style(ExtraTypography::OptionDetail.role());
+  assert_eq!((detail.font_size, detail.line_height), (12.0, 1.5));
+  assert_eq!(detail.color, Color::from_hex("#A3A3A3"));
 }
 
 #[test]

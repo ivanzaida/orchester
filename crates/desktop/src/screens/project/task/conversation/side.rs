@@ -147,7 +147,10 @@ impl ConversationTab {
   /// line.
   fn chat(&self, ctx: &mut Ctx, view: &View<'_>) -> Element {
     let conversation = &view.props.conversation;
-    let live = conversation.state == PanelState::Live;
+    // An agent that waits in its turn for the answer to its question does not work: the run waits for the
+    // person (C·15), so there is no working line and the toolbar says so.
+    let asking = conversation.state == PanelState::Live && !view.run.waiting_questions.is_empty();
+    let live = conversation.state == PanelState::Live && !asking;
     // Read so that a row's request to reveal another renders the chat again.
     self.revealed.get();
     let reveal = self.follow(&view.shown, view.items);
@@ -194,8 +197,12 @@ impl ConversationTab {
       details: self.details.clone(),
       details_open: matches!(view.beside, Beside::Details),
       beside: view.beside.width(),
-      state: conversation.state,
-      asks: conversation.open_question().is_some(),
+      state: if asking {
+        PanelState::Waiting
+      } else {
+        conversation.state
+      },
+      asks: asking || conversation.open_question().is_some(),
       following: self.following.get(),
     };
     Column::new()

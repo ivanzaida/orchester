@@ -165,6 +165,14 @@ fn question_card_checks_several_and_takes_an_own_answer() {
   let mut desktop = asking("Ask with options, several allowed.");
   let card = card(&mut desktop);
   assert!(shows(&mut desktop, &card, "Pick one or more"));
+  // The agent waits in its turn for the answer: the page says it asks, not that it works, and the card
+  // stands for the call of `ask_question`, which has no tool row of its own.
+  desktop.wait_until("the page says the agent asks", |desktop| {
+    shows(desktop, "task-heading", "Builder asks you")
+  });
+  assert!(shows(&mut desktop, "conversation-live-state", "Waiting for you"));
+  assert!(!has(&mut desktop, "activity-live"), "no working line");
+  assert!(!shows(&mut desktop, "conversation-main", "ask_question"));
   desktop.press(&option(0));
   desktop.press(&option(2));
   assert!(picked(&mut desktop, 0) && picked(&mut desktop, 2), "both checked");

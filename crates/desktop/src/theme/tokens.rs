@@ -91,6 +91,8 @@ pub const RADIUS_ROW_ACTION: f32 = 5.0;
 pub const RADIUS_CHIP: f32 = 5.0;
 /// Corner radius of an option's letter key on a question card (`lS9BF`).
 pub const RADIUS_KEY: f32 = 4.0;
+/// Corner radius of a 14 checkbox on a question card (v2 Checkbox `paKFE` in `UpHyY`).
+pub const RADIUS_CHECKBOX: f32 = 3.0;
 /// Corner radius of a segment of the conversation's *Show* control, in the usage dashboard's period
 /// style (toolbar of `RrScB`).
 pub const RADIUS_SEGMENT: f32 = 5.0;

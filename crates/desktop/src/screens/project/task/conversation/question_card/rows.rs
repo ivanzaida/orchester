@@ -1,7 +1,8 @@
 //! A question's rows on its card (C·15 `lS9BF`): each option as a row (radius 7, padding 8 / 10) with its
-//! control (a 16 radio, or a 14 checkbox with several allowed), its letter in an 18 key, its label and its
-//! description under it; a picked row is `$hover` with its control filled and its key stroked `$muted`. The
-//! own answer's row comes last: its control and letter, then its field. Rows are 2 apart.
+//! control (a 16 radio, or a 14 checkbox with several allowed, as v2 Radio `HOJC6` and v2 Checkbox `paKFE`),
+//! its letter in an 18 key, its label and its description under it; a picked row is `$hover` with its
+//! control filled and its key stroked `$muted`. The own answer's row comes last: its control and letter, then
+//! its 32 field. Rows are 2 apart.
 
 use lurq::{
   app::{
@@ -21,7 +22,7 @@ use super::{
 };
 use crate::{
   tasks::question::{Picks, letter},
-  theme::{ExtraRadius, ExtraShadow, ExtraSpacing},
+  theme::{ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography},
   ui::{
     field::text_input,
     icon::{Icon, IconSize, icon},
@@ -31,6 +32,12 @@ use crate::{
 
 /// The letter key's box (`lS9BF`).
 const KEY_SIZE: f32 = 18.0;
+/// The radio's ring and the picked radio's disc (`HOJC6`), the checkbox (`paKFE`).
+const RADIO_SIZE: f32 = 16.0;
+const RADIO_DOT_SIZE: f32 = 8.0;
+const CHECKBOX_SIZE: f32 = 14.0;
+/// The own answer's field (`lS9BF`).
+const OWN_FIELD_HEIGHT: f32 = 32.0;
 /// The header chip's height (`lS9BF`).
 const CHIP_HEIGHT: f32 = 20.0;
 
@@ -80,18 +87,59 @@ pub(super) fn options(ctx: &Ctx, state: &CardState, (index, question): (usize, &
 
 /// The control of a row: a radio for one answer, a checkbox for several.
 fn control(several: bool, picked: bool) -> Element {
-  let (glyph, size) = match (several, picked) {
-    (false, false) => (Icon::Circle, IconSize::Option),
-    (false, true) => (Icon::CircleDot, IconSize::Option),
-    (true, false) => (Icon::Square, IconSize::Event),
-    (true, true) => (Icon::SquareCheck, IconSize::Event),
-  };
-  let color = if picked {
-    PaletteColor::Accent
+  if several { checkbox(picked) } else { radio(picked) }
+}
+
+/// A `$border` ring; picked, a `$text` ring around a `$text` disc.
+fn radio(picked: bool) -> Element {
+  let ring = if picked {
+    PaletteColor::TextPrimary
   } else {
-    PaletteColor::TextSecondary
+    PaletteColor::Border
   };
-  icon(glyph, size, color).into()
+  Row::new()
+    .size(Dimension::Px(RADIO_SIZE), Dimension::Px(RADIO_SIZE))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .border(Border::inside(BorderSize::Lg, ring))
+    .rounded(ExtraRadius::Round.role())
+    .with_children(picked.then(|| {
+      Row::new()
+        .size(Dimension::Px(RADIO_DOT_SIZE), Dimension::Px(RADIO_DOT_SIZE))
+        .background(PaletteColor::TextPrimary)
+        .rounded(ExtraRadius::Round.role())
+    }))
+    .into()
+}
+
+/// A `$sidebar` box stroked `$border`; checked, an `$accent` box with an `$inverse-text` tick.
+fn checkbox(checked: bool) -> Element {
+  let (fill, stroke) = if checked {
+    (PaletteColor::Accent, PaletteColor::Accent)
+  } else {
+    (PaletteColor::SurfaceInput, PaletteColor::Border)
+  };
+  Row::new()
+    .size(Dimension::Px(CHECKBOX_SIZE), Dimension::Px(CHECKBOX_SIZE))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .background(fill)
+    .border(Border::inside(BorderSize::Sm, stroke))
+    .rounded(ExtraRadius::Checkbox.role())
+    .with_children(checked.then(|| icon(Icon::Check, IconSize::Tag, PaletteColor::TextInverse)))
+    .into()
+}
+
+/// The row's control, in a slot as high as its key, so the two sit on one line at the row's top.
+fn control_slot(several: bool, picked: bool) -> Element {
+  Row::new()
+    .height(Dimension::Px(KEY_SIZE))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .child(control(several, picked))
+    .into()
 }
 
 /// The row's letter in its key: stroked `$muted` with a `$text` letter while picked.
@@ -177,19 +225,16 @@ fn option_row(
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .child(
-      Text::new(option.label())
-        .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextPrimary),
-    )
+    .spacing(ExtraSpacing::Hair.role())
+    .child(Text::new(option.label()).variant(ExtraTypography::OptionLabel.role()))
     .with_children(
       option
         .description()
-        .map(|description| Text::new(description).variant(TypographyStyle::Description)),
+        .map(|description| Text::new(description).variant(ExtraTypography::OptionDetail.role())),
     );
   let button = row_button(state, spot, (picked, ringed))
     .id(format!("conversation-question-option-{}-{index}", spot.question))
-    .child(control(several, picked))
+    .child(control_slot(several, picked))
     .child(key(index, picked))
     .child(text)
     .on_click(move |_| draft.update(|draft| draft.pick(request.questions(), (spot.question, index))));
@@ -219,6 +264,7 @@ fn own_row(ctx: &Ctx, state: &CardState, (spot, question): (Spot, &Question), pi
   let field = text_input(ctx, "conversation-question-own", text, false, TypographyStyle::Body)
     .id(format!("conversation-question-own-{}", spot.question))
     .placeholder(&ctx.t("runs.conversation.question.ownPlaceholder"))
+    .height(Dimension::Px(OWN_FIELD_HEIGHT))
     .flex(1.0)
     .tab_index(TAB_STOP)
     .ref_element(input)

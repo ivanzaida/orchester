@@ -199,7 +199,8 @@ fn description(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
     ("removed", removed.as_str()),
   ];
   let awaiting_plan = run.run.waits_for_a_person() && !run.run.awaiting_plan().is_empty();
-  let asking = run.run.waits_for_a_person() && !run.run.awaiting_answer().is_empty();
+  let asking =
+    (run.run.waits_for_a_person() && !run.run.awaiting_answer().is_empty()) || !run.waiting_questions.is_empty();
   let key = match (run.run.status(), step) {
     (RunStatus::Paused(PauseReason::LimitReached(RunLimit::GroupBudget)), _) => "tasks.bulk.stoppedGroup",
     (RunStatus::Running, _) if lost => "runs.page.describe.interrupted",
