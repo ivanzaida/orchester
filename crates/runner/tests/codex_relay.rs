@@ -92,13 +92,9 @@ async fn codex_relay_takes_the_threads_relay_after_the_inventory_was_answered() 
 async fn codex_relay_that_never_came_is_said_in_the_activity() {
   let (run, db) = finished("fake-no-thread-relay-model").await;
   assert_eq!(reported(&db, run.id(), "orchester-tools: "), ["no server"]);
-  let detail =
-    "Codex reached Orchester's tools 1 of the 2 times it starts them; the agent may have worked without them";
   assert_eq!(
     orchester_problems(&db, &run),
-    [McpServerProblem::FailedToStart {
-      detail: Some(detail.to_owned())
-    }]
+    [McpServerProblem::ToolRelaysMissing { reached: 1, started: 2 }]
   );
 }
 

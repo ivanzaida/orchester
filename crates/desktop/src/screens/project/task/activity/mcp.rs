@@ -54,6 +54,11 @@ pub(super) fn mcp_server_text(
       ctx.t("runs.activity.mcp.failedToStart"),
       detail.as_deref().map(Arc::from),
     ),
+    McpServerProblem::ToolRelaysMissing { reached, started } => {
+      let (reached, started) = (reached.to_string(), started.to_string());
+      let counts = [("reached", reached.as_str()), ("started", started.as_str())];
+      (ctx.t_args("runs.activity.mcp.toolRelaysMissing", counts), None)
+    }
     McpServerProblem::NotSupportedByConnection => (ctx.t("runs.activity.mcp.notSupportedByConnection"), None),
   };
   (title, body, said)

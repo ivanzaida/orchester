@@ -1644,6 +1644,7 @@
         "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
         "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
         "failedToStart": "The agent’s CLI reported that the server did not start.",
+        "toolRelaysMissing": "Codex reached Orchester’s tools {{reached}} of the {{started}} times it starts them; the agent may have worked without them.",
         "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it."
       }
     },
