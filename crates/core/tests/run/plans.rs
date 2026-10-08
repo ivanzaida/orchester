@@ -2,7 +2,7 @@ use orchester_core::{
   id::{InvocationId, RunId},
   resource::InjectionEvent,
   run::{
-    CONTINUE_PROMPT, Invocation, InvocationKind, Plan, PlanDecision, PlanRevision, PlanVersion, PromptInput,
+    Answerer, CONTINUE_PROMPT, Invocation, InvocationKind, Plan, PlanDecision, PlanRevision, PlanVersion, PromptInput,
     ReviewNote, ReviewNoteError, Run, RunError, RunStatus, StepOutput, StepStatus, TokenUsage, WaitReason, active_time,
   },
 };
@@ -51,16 +51,22 @@ fn plans_gated_step_waits_with_plan_v1_and_holds_the_steps_after_it() {
 #[test]
 fn plans_approval_passes_the_step_and_the_graph_continues() {
   let (mut logged, mut plan) = proposed();
-  logged.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, at(30)));
+  logged.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, Answerer::Automation, at(30)));
   assert_eq!(status(&logged, "plan"), StepStatus::Passed);
   assert_eq!(plan.decision(), Some(&PlanDecision::Approved));
-  assert_eq!(plan.review.as_ref().map(|review| review.at), Some(at(30)));
+  // Who decided is kept with the decision.
+  assert_eq!(
+    plan.review.as_ref().map(|review| (review.by, review.at)),
+    Some((Answerer::Automation, at(30)))
+  );
   assert_eq!(logged.run.ready_executions(), [logged.exec("implement")]);
   assert!(!logged.run.waits_for_a_person());
   assert!(logged.run.awaiting_plan().is_empty());
   // A plan is decided once.
   assert_eq!(
-    logged.run.decide_plan(&mut plan, PlanDecision::Approved, at(31)),
+    logged
+      .run
+      .decide_plan(&mut plan, PlanDecision::Approved, Answerer::Person, at(31)),
     Err(RunError::PlanAlreadyDecided(PlanVersion::FIRST))
   );
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
@@ -69,7 +75,7 @@ fn plans_approval_passes_the_step_and_the_graph_continues() {
 #[test]
 fn plans_requested_changes_send_the_step_back_and_its_revision_is_the_next_version() {
   let (mut logged, mut first) = proposed();
-  logged.apply(|run| run.decide_plan(&mut first, changes("  Keep email sign-in.  "), at(30)));
+  logged.apply(|run| run.decide_plan(&mut first, changes("  Keep email sign-in.  "), Answerer::Person, at(30)));
   assert_eq!(status(&logged, "plan"), StepStatus::Running);
   assert_eq!(first.decision(), Some(&changes("Keep email sign-in.")));
   assert!(!logged.run.waits_for_a_person());
@@ -78,7 +84,9 @@ fn plans_requested_changes_send_the_step_back_and_its_revision_is_the_next_versi
   let mut stale = first.clone();
   stale.review = None;
   assert!(matches!(
-    logged.run.decide_plan(&mut stale, PlanDecision::Approved, at(31)),
+    logged
+      .run
+      .decide_plan(&mut stale, PlanDecision::Approved, Answerer::Person, at(31)),
     Err(RunError::InvalidStepTransition {
       status: StepStatus::Running,
       ..
@@ -87,7 +95,7 @@ fn plans_requested_changes_send_the_step_back_and_its_revision_is_the_next_versi
   let mut second = logged.propose("plan", "1. Add the provider.\n2. Keep email sign-in.", &[first.clone()]);
   assert_eq!(second.version.get(), 2);
   assert_eq!(second.execution, first.execution);
-  logged.apply(|run| run.decide_plan(&mut second, PlanDecision::Approved, at(40)));
+  logged.apply(|run| run.decide_plan(&mut second, PlanDecision::Approved, Answerer::Person, at(40)));
   assert_eq!(status(&logged, "plan"), StepStatus::Passed);
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
@@ -96,7 +104,7 @@ fn plans_requested_changes_send_the_step_back_and_its_revision_is_the_next_versi
 fn plans_the_first_invocation_after_requested_changes_revises_the_plan() {
   let (mut logged, mut first) = proposed();
   let execution = first.execution;
-  logged.apply(|run| run.decide_plan(&mut first, changes("Keep email sign-in."), at(30)));
+  logged.apply(|run| run.decide_plan(&mut first, changes("Keep email sign-in."), Answerer::Person, at(30)));
   let plans = [first.clone()];
   // The invocation that proposed v1 started before the decision: the next one revises.
   let (plan, revision) = Plan::awaiting_revision(&plans, execution, Some(at(22))).expect("a revision");
@@ -133,7 +141,9 @@ fn plans_a_waiting_run_pauses_resumes_and_cancels() {
   assert!(!logged.run.waits_for_a_person());
   // A paused run takes no decision until it runs again.
   assert!(matches!(
-    logged.run.decide_plan(&mut plan, PlanDecision::Approved, at(31)),
+    logged
+      .run
+      .decide_plan(&mut plan, PlanDecision::Approved, Answerer::Person, at(31)),
     Err(RunError::InvalidRunTransition { .. })
   ));
   logged.apply(|run| run.resume(at(32)));
@@ -233,9 +243,9 @@ fn plans_a_new_session_gets_its_earlier_plan_and_the_note() {
 #[test]
 fn plans_the_steps_after_a_gate_read_its_latest_plan() {
   let (mut logged, mut first) = proposed();
-  logged.apply(|run| run.decide_plan(&mut first, changes("Keep email sign-in."), at(30)));
+  logged.apply(|run| run.decide_plan(&mut first, changes("Keep email sign-in."), Answerer::Person, at(30)));
   let mut second = logged.propose("plan", "2. Keep email sign-in.", std::slice::from_ref(&first));
-  logged.apply(|run| run.decide_plan(&mut second, PlanDecision::Approved, at(40)));
+  logged.apply(|run| run.decide_plan(&mut second, PlanDecision::Approved, Answerer::Person, at(40)));
   let research = logged.exec("research");
   let research_output = StepOutput::from_final_message(
     logged.run.id(),

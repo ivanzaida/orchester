@@ -42,7 +42,8 @@ pub struct StepHead {
   pub attempt: Option<u32>,
   /// The step the run ended on or stopped at while no agent works: it stays open.
   pub ended_on: bool,
-  /// Its latest plan was approved by the person (`AzKYQ`: *Approved*, *approved by you*).
+  /// Its latest plan was approved, by the person or automation (`AzKYQ`: *Approved*, *approved by you*); the
+  /// rail does not say who.
   pub approved: bool,
   /// A tool step's latest command, as its transcript recorded it.
   pub tool_run: Option<ToolRun>,

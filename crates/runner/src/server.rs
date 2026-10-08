@@ -321,7 +321,8 @@ async fn answer(
       execution,
       version,
       ref decision,
-    } => return answer_plan(&later, handle, (run, execution, version), decision.clone()),
+      by,
+    } => return answer_plan(&later, handle, (run, execution, version), (decision.clone(), by)),
     Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
     Command::DecideToolApproval {
       run,
@@ -414,10 +415,10 @@ fn answer_plan(
   later: &Later<'_>,
   scheduler: Scheduler,
   (run, execution, version): (RunId, StepExecutionId, PlanVersion),
-  decision: PlanDecision,
+  (decision, by): (PlanDecision, Answerer),
 ) -> Answer {
   later.answer(run, async move {
-    scheduler.decide_plan(run, execution, version, decision).await
+    scheduler.decide_plan(run, execution, version, decision, by).await
   })
 }
 

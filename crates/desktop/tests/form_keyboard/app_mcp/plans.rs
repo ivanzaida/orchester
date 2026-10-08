@@ -4,7 +4,9 @@
 //! approvals, and refuses what the plan card would not take (no plan
 //! waiting, a blank note, a note or no version with an approval, version 0, a plan decided already, a version that
 //! no longer waits) and decides through the runner as the card does: approving continues the run to Implement,
-//! requesting changes resumes the Plan step's agent with the note. An open task page follows the decision in place.
+//! requesting changes resumes the Plan step's agent with the note. The decision is recorded as automation's: the plan
+//! card says *Approved by automation* or *Changes requested by automation*, and `get_run` and `list_approvals` show
+//! `decided_by`. An open task page follows the decision in place.
 //! Run with
 //! `cargo test -p orchester-desktop --test form_keyboard app_mcp_decide_plan`.
 
@@ -12,7 +14,7 @@ use std::path::Path;
 
 use orchester_core::{
   resource::Step,
-  run::{Plan, PlanDecision, ReviewNote, RunStatus},
+  run::{Answerer, Plan, PlanDecision, ReviewNote, RunStatus},
   store::{ActivityStore, RunStore},
 };
 use orchester_store::{AppDb, ProjectDb};
@@ -194,6 +196,15 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
     "Implement ran after the approved plan: {run}"
   );
   assert_eq!(run["awaiting"]["plan"], Value::Null);
+  // The run recorded the approval as automation's, and get_run says so.
+  let review = plans(desktop.repo())[0].review.clone().expect("decided");
+  assert_eq!(review.by, Answerer::Automation);
+  let decided = &run["plans"][0];
+  assert_eq!(decided["version"], 1, "{run}");
+  assert_eq!(decided["step"], json!({"key": "plan", "name": "Plan"}));
+  assert_eq!(decided["decision"], "approved");
+  assert_eq!(decided["decided_by"], "automation");
+  assert_eq!(decided["decided_at"], review.at.unix_millis());
   let twice = refused(&mut client, "decide_plan", &decide_version("approve", 1));
   assert_eq!(twice["code"], "plan_already_decided", "{twice}");
   assert_eq!(
@@ -203,6 +214,11 @@ fn app_mcp_decide_plan_approves_the_waiting_plan_and_the_run_continues() {
   // The open task page followed: the review left the Summary, which shows the finished run.
   desktop.wait_until("the page shows the finished run", |desktop| {
     has(desktop, "task-page") && !has(desktop, "plan-review") && has(desktop, "task-ready-notice")
+  });
+  // The plan's card says who approved it.
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the card's automation mark", |desktop| {
+    holds(desktop, "conversation", "Approved by automation")
   });
 }
 
@@ -225,7 +241,8 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
   assert_eq!(decided["plan"]["decided"], "changes_requested");
   plan_waits(&mut desktop, 2);
   desktop.wait_until("the page shows plan v2", |desktop| {
-    holds(desktop, "conversation", "Plan v2 · Say hello") && shows(desktop, "conversation", "Changes requested")
+    holds(desktop, "conversation", "Plan v2 · Say hello")
+      && shows(desktop, "conversation", "Changes requested by automation")
   });
   // In place: the Conversation tab stays, with the person's focus and draft.
   assert_eq!(desktop.focused().as_deref(), Some("conversation-input"));
@@ -234,6 +251,10 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
   let [first, second] = <[Plan; 2]>::try_from(plans(desktop.repo())).expect("two plans");
   let note = ReviewNote::new("Keep email sign-in.").expect("a note");
   assert_eq!(first.decision(), Some(&PlanDecision::ChangesRequested { note }));
+  assert_eq!(
+    first.review.as_ref().map(|review| review.by),
+    Some(Answerer::Automation)
+  );
   assert_eq!((second.execution, second.review), (first.execution, None));
   // The Plan step's agent resumed with the note.
   let prompt = reported(desktop.repo(), "prompt| ");
@@ -242,7 +263,16 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
     "{prompt:?}"
   );
   assert!(prompt.iter().any(|line| line == "Keep email sign-in."), "{prompt:?}");
-  assert_eq!(ok(&mut client, "get_run", &get_run())["awaiting"]["plan"]["version"], 2);
+  // v2 waits; the decision on v1 shows who made it.
+  let waiting = &ok(&mut client, "get_run", &get_run())["awaiting"]["plan"];
+  assert_eq!(waiting["version"], 2, "{waiting}");
+  let earlier = &waiting["earlier"][0];
+  assert_eq!(earlier["version"], 1, "{waiting}");
+  assert_eq!(earlier["decision"], "changes_requested");
+  assert_eq!(earlier["note"], "Keep email sign-in.");
+  assert_eq!(earlier["decided_by"], "automation");
+  let listed = ok(&mut client, "list_approvals", &json!({"project": "Kontur"}));
+  assert_eq!(listed["plans"][0]["earlier"][0]["decided_by"], "automation", "{listed}");
 
   // A decision meant for v1 does not decide v2, which the client has not read.
   let_automation_approve(&desktop);

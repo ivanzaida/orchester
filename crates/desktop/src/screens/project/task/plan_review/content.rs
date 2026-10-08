@@ -15,7 +15,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{Plan, PlanDecision};
+use orchester_core::run::{Answerer, Plan, PlanDecision};
 
 use super::{Choice, Decisions, PlanReviewProps};
 use crate::{
@@ -191,13 +191,20 @@ fn decision(ctx: &Ctx, review: &PlanReview, decisions: &Decisions) -> Vec<Elemen
     .collect()
 }
 
-/// An earlier version reads without a decision: what became of it, and which one waits.
+/// An earlier version reads without a decision: what became of it, who asked for its changes when
+/// automation did, and which one waits.
 fn earlier(ctx: &Ctx, shown: &Plan, waiting: &Plan) -> Vec<Element> {
   let (version, latest) = (shown.version.to_string(), waiting.version.to_string());
   let args = [("version", version.as_str()), ("latest", latest.as_str())];
   let mut lines = vec![ctx.t_args("runs.plan.earlier", args)];
-  if let Some(PlanDecision::ChangesRequested { note }) = shown.decision() {
-    lines.push(ctx.t_args("runs.plan.earlierNote", [("note", note.as_str())]));
+  if let Some(review) = &shown.review
+    && let PlanDecision::ChangesRequested { note } = &review.decision
+  {
+    let key = match review.by {
+      Answerer::Person => "runs.plan.earlierNote",
+      Answerer::Automation => "runs.plan.earlierNoteByAutomation",
+    };
+    lines.push(ctx.t_args(key, [("note", note.as_str())]));
   }
   lines
     .into_iter()

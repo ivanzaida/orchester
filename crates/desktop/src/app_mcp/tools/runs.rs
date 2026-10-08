@@ -1,11 +1,12 @@
-//! `get_run`, `pause_run`, `resume_run` and `cancel_run`: a run as its task page shows it, and the run
-//! controls of its topbar. Resume continues an interrupted run from its last checkpoint, as the page's
-//! Continue does in Resume's place; Resume and Continue take a shared task's claim first.
+//! `get_run`, `pause_run`, `resume_run` and `cancel_run`: a run as its task page shows it, its plan decisions
+//! with who decided them included, and the run controls of its topbar. Resume continues an interrupted run from its
+//! last checkpoint, as the page's Continue does in Resume's place; Resume and Continue take a shared task's claim
+//! first.
 
 use orchester_core::{
   id::RunId,
   run::{
-    Run, RunStatus,
+    Plan, Run, RunStatus,
     review::{ReviewRecord, reviews_usage},
   },
   store::{RunStore, TaskStore},
@@ -26,7 +27,7 @@ use crate::{
   sharing::project::WorkClaim,
   tasks::{
     approvals::pending,
-    detail::{StepView, run_store_error, run_view},
+    detail::{RunView, StepView, run_store_error, run_view},
     plan::PlanReview,
     run::control_message,
   },
@@ -70,6 +71,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
     let plan = PlanReview::of(&view).map(|review| plans::waiting(&review, true));
+    let decided = decided_plans(&view);
     let usage = view.usage();
     let reviewer = reviewer_tokens(&view.reviews);
     let run = &view.run;
@@ -93,6 +95,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
         "limit_seconds": run.max_duration().as_secs(),
       },
       "steps": steps,
+      "plans": decided,
       "auto_mode": auto_mode,
       "worktree": worktree,
       "awaiting": {
@@ -190,6 +193,26 @@ pub fn find_run(db: &ProjectDb, named: &str) -> Result<Run, ToolError> {
     }
   }
   Err(ToolError::not_found(Missing::Run, named))
+}
+
+/// The run's decided plans, oldest first, each with its step and who decided it, as the plan cards
+/// say it.
+fn decided_plans(view: &RunView) -> Vec<Value> {
+  let mut shown: Vec<&Plan> = view.plans.iter().collect();
+  shown.sort_by_key(|plan| (plan.created_at, plan.version));
+  shown
+    .into_iter()
+    .filter_map(|plan| {
+      let mut decided = plans::decided(plan)?;
+      let name = view
+        .steps
+        .iter()
+        .find(|step| step.key == plan.step)
+        .map_or_else(|| plan.step.to_string(), |step| step.name.to_string());
+      decided["step"] = json!({ "key": plan.step.to_string(), "name": name });
+      Some(decided)
+    })
+    .collect()
 }
 
 fn step(step: &StepView) -> Value {

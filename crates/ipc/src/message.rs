@@ -124,15 +124,17 @@ pub enum Command {
   /// Cancels the pending restarts of an Apply now for `profile` in run `run`: the change applies
   /// from the next invocations. Answered with [`Reply::Accepted`].
   KeepPermissionsForNextInvocation { run: RunId, profile: ResourceId },
-  /// A person's `decision` on plan `version` of gated step execution `execution` of run `run`.
-  /// Approval continues the run's graph; requested changes resume the step's agent session with
-  /// the reviewer's note. Answered with [`Reply::Accepted`] once the decision is recorded, or
-  /// [`Rejection::PlanNotAwaited`] when that plan does not wait for one (any more).
+  /// `by`'s `decision` on plan `version` of gated step execution `execution` of run `run`: the person
+  /// in the app, or automation through Orchester's MCP server, which the run records with it
+  /// (protocol 20). Approval continues the run's graph; requested changes resume the step's agent
+  /// session with the reviewer's note. Answered with [`Reply::Accepted`] once the decision is
+  /// recorded, or [`Rejection::PlanNotAwaited`] when that plan does not wait for one (any more).
   DecidePlan {
     run: RunId,
     execution: StepExecutionId,
     version: PlanVersion,
     decision: PlanDecision,
+    by: Answerer,
   },
   /// A person's `decision` on run `run`, which waits for one after its retries ran out or its step
   /// broke again: one more retry or work returned to an agent step continue the run as a new

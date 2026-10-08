@@ -1702,6 +1702,7 @@
       },
       "earlier": "Plan v{{version}} is an earlier version. Plan v{{latest}} waits for your decision.",
       "earlierNote": "You asked: {{note}}",
+      "earlierNoteByAutomation": "Automation asked: {{note}}",
       "criteria": "Acceptance criteria",
       "criterion": "○  {{criterion}}",
       "noCriteria": "The task has no acceptance criteria.",
@@ -1717,7 +1718,9 @@
       "version": {
         "awaiting": "v{{version}} · awaiting approval",
         "approved": "v{{version}} · approved",
-        "changesRequested": "v{{version}} · changes requested"
+        "approvedByAutomation": "v{{version}} · approved by automation",
+        "changesRequested": "v{{version}} · changes requested",
+        "changesRequestedByAutomation": "v{{version}} · changes requested by automation"
       },
       "errors": {
         "notAwaited": "This plan no longer waits for a decision. The page shows where the run stands now."
@@ -2348,7 +2351,9 @@
         "answered": "Answered",
         "waitingApproval": "Waiting for approval",
         "approved": "Approved",
+        "approvedByAutomation": "Approved by automation",
         "changesRequested": "Changes requested",
+        "changesRequestedByAutomation": "Changes requested by automation",
         "superseded": "Earlier version",
         "denied": "Denied",
         "ended": "Ended without an answer",

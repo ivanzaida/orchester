@@ -9,7 +9,7 @@
 use orchester_core::{
   conversation::{Recipient, Timing},
   id::{IdempotencyKey, RunId},
-  run::{PlanDecision, ReviewNote},
+  run::{Answerer, PlanDecision, ReviewNote},
 };
 use orchester_ipc::Command;
 use rmcp::schemars::JsonSchema;
@@ -183,7 +183,8 @@ async fn store(
   .await
 }
 
-/// *Request changes* with the message as the changes the waiting plan needs.
+/// *Request changes* with the message as the changes the waiting plan needs, recorded as automation's:
+/// it came through Orchester's MCP server.
 async fn request_plan_changes(
   services: &Services,
   project: &OpenProject,
@@ -204,6 +205,7 @@ async fn request_plan_changes(
     execution: waiting.execution,
     version: waiting.version,
     decision: PlanDecision::ChangesRequested { note },
+    by: Answerer::Automation,
   };
   services
     .runners

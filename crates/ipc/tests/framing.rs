@@ -111,8 +111,8 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
   .collect()
 }
 
-/// Decisions on plans: an approval, and a request for changes with a note; and an answer to a question with
-/// suggested answers.
+/// Decisions on plans: automation's approval, and a person's request for changes with a note (protocol 20);
+/// and an answer to a question with suggested answers.
 fn decision_commands(run: RunId) -> Vec<Command> {
   let note = ReviewNote::new("Keep email sign-in.\n\"Quoted\" — é").expect("a note");
   vec![
@@ -130,12 +130,14 @@ fn decision_commands(run: RunId) -> Vec<Command> {
       execution: StepExecutionId::generate(),
       version: PlanVersion::FIRST,
       decision: PlanDecision::Approved,
+      by: orchester_core::run::Answerer::Automation,
     },
     Command::DecidePlan {
       run,
       execution: StepExecutionId::generate(),
       version: PlanVersion::FIRST.next(),
       decision: PlanDecision::ChangesRequested { note },
+      by: orchester_core::run::Answerer::Person,
     },
   ]
 }

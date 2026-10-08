@@ -9,7 +9,7 @@ use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{PauseReason, PermissionsApply, PlanDecision, PlanVersion, RaisedLimits, RunLimit, RunStatus},
+  run::{Answerer, PauseReason, PermissionsApply, PlanDecision, PlanVersion, RaisedLimits, RunLimit, RunStatus},
   store::RunStore,
   tokens::TokenBudget,
 };
@@ -65,6 +65,7 @@ async fn assert_other_requests_wait(scheduler: &Scheduler, run: RunId, builder: 
       StepExecutionId::generate(),
       PlanVersion::FIRST,
       PlanDecision::Approved,
+      Answerer::Person,
     ),
     "decide_plan",
   )

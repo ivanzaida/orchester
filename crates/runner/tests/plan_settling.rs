@@ -11,7 +11,7 @@ use std::{future::Future, num::NonZeroU32, task::Poll};
 
 use orchester_core::{
   id::IdempotencyKey,
-  run::{PlanDecision, RunStatus},
+  run::{Answerer, PlanDecision, RunStatus},
   store::RunStore,
 };
 use orchester_ipc::{AttachSession, SessionEnd};
@@ -54,7 +54,13 @@ async fn plan_settling_a_decision_the_ending_task_drops_still_continues_the_run(
     .await
     .expect("the only agent slot is free");
 
-  let decide = scheduler.decide_plan(id, plan.execution, plan.version, PlanDecision::Approved);
+  let decide = scheduler.decide_plan(
+    id,
+    plan.execution,
+    plan.version,
+    PlanDecision::Approved,
+    Answerer::Person,
+  );
   tokio::pin!(decide);
   let first = std::future::poll_fn(|cx| Poll::Ready(decide.as_mut().poll(cx))).await;
   assert!(first.is_pending(), "the decision waits for the task: {first:?}");

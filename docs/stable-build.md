@@ -119,9 +119,14 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
   decides it: `approve` with the `version` it is for and no note, only while *Let automation answer
   approvals* is on (refused with `automation_not_allowed` otherwise), or `request_changes` with a `note` the
-  step's agent resumes with and an optional `version`, which needs no such permission; `get_run`'s `awaiting.plan` shows the waiting plan's
+  step's agent resumes with and an optional `version`, which needs no such permission; the run records the
+  decision as automation's and the plan card says so, *Approved by automation* or *Changes requested by
+  automation*, as does a plan's change requested through `send_message`; `get_run`'s `awaiting.plan` shows the waiting plan's
   version, step, whole `text` and an `excerpt`, and `list_approvals`' `plans` the same without the whole
-  text, so a client approves only a plan it read in full through `get_run`; refused with `run_not_found`,
+  text, so a client approves only a plan it read in full through `get_run`; both show in the waiting plan's
+  `earlier` the decisions on its step's earlier versions, and `get_run`'s `plans` every decided plan of the
+  run with its step: `decision` (`approved` or `changes_requested`), `note`, `decided_by` (`person` or
+  `automation`; decisions recorded before it was kept read `person`) and `decided_at`; refused with `run_not_found`,
   `no_plan_waiting`, `run_paused`, `plan_already_decided`, `plan_version_changed` (another version waits now,
   named in the reason), `version_required`, `invalid_version`, `blank_note`, `note_not_taken` or a runner
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
