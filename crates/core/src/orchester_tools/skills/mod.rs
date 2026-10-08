@@ -14,11 +14,12 @@
 //!   listed as left out, by where it lies in the worktree, never by a path outside it.
 //! - A read answers a regular text file's numbered lines within the limits of `read_outside_file`
 //!   ([`super::MAX_READ_BYTES`]). Listing and reading apply the same rule of what belongs to a skill ([`belongs`]).
+//! - The list keeps within bounds, cuts long descriptions and file lists short, and says what it left out ([`list`]).
 
+mod list;
 mod repository;
 
 use std::{
-  fmt::Write,
   fs, io,
   path::{Path, PathBuf},
 };
@@ -167,38 +168,6 @@ impl StepSkills {
     }
   }
 
-  /// Each skill with its source, description and reference files, then the skills left out.
-  fn list(&self) -> String {
-    let mut text = String::from("Read a skill with read_skill and its name; a reference file with its file too.\n");
-    for skill in &self.skills {
-      let files = match &skill.listed {
-        Some(listed) => listed.iter().map(|file| file.as_str().to_owned()).collect(),
-        None => repository::folder_files(skill),
-      };
-      let files = if files.is_empty() {
-        "none".to_owned()
-      } else {
-        files.join(", ")
-      };
-      // Writing to a String cannot fail.
-      let _ = writeln!(
-        text,
-        "- {} ({}): {}",
-        skill.name,
-        skill.source.as_str(),
-        one_line(&skill.description)
-      );
-      let _ = writeln!(text, "  reference files: {files}");
-    }
-    if !self.left_out.is_empty() {
-      text.push_str("Left out:\n");
-      for line in &self.left_out {
-        let _ = writeln!(text, "- {line}");
-      }
-    }
-    text
-  }
-
   /// Lines `offset` to `offset + limit - 1` of skill `name`'s `SKILL.md`, or of its reference `file`.
   fn read(
     &self,
@@ -263,16 +232,4 @@ fn belongs(path: &Path, skill: &OfferedSkill) -> bool {
 /// Whether `path` is a regular file, as its links lead.
 fn is_regular_file(path: &Path) -> bool {
   fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
-}
-
-/// `text` on one line: its whitespace runs as one space, without control characters, so it cannot start a line of
-/// its own in a list.
-fn one_line(text: &str) -> String {
-  text
-    .split_whitespace()
-    .collect::<Vec<_>>()
-    .join(" ")
-    .chars()
-    .filter(|c| !c.is_control())
-    .collect()
 }
