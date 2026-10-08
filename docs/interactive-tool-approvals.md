@@ -363,6 +363,28 @@ them* to the activity without stopping the step. Codex still loads the skills of
 an untrusted repository; they follow *Repository agent files* like `.agents/skills` (disabled by path
 while it is off).
 
+While *Repository agent files* is off, the runner finds every `SKILL.md` of both folders as Codex does
+(at any depth, through links) to disable it, and the search fails closed, because Codex follows links
+when it loads skills and would load a skill the search missed (`orchester_core::agent_files::skills`,
+added 2026-10-08, branch `claude/skills-off`). The agent does not start, and the step says why by where
+the cause lies in the worktree (never where a link leads), when:
+
+- a folder or `SKILL.md` resolves out of the worktree (a link, or a junction on Windows), which is not
+  walked: *Repository agent files are off, but `.agents/skills/x` leads out of the worktree, so Codex
+  could load skills from it. Remove the link or turn the project's Repository agent files on.*;
+- a folder in the worktree cannot be read: *… but `<path>` cannot be read (<error>), so Orchester
+  cannot disable the skills Codex could load from it. Make it readable or …*;
+- the search passes its bounds, the same as `list_skills` uses: a folder more than 8 folders below its
+  skills folder (*… `<path>` lies more than 8 folders deep in its skills folder, so Codex could load
+  skills there that Orchester does not look for. Make the skills folders smaller or …*), or more than
+  500 folders in both (*… the skills folders hold more than 500 folders, …*).
+
+A link loop within the worktree reads each folder once and does not refuse. The native agent, which
+Orchester gives the repository's skills while the setting is on, uses the same search and does not
+start for the same causes (*cannot load the repository's skills: `.agents/skills/x` leads out of the
+worktree*). The search `list_skills` uses while the setting is on is unchanged: it leaves such skills
+out and never refuses.
+
 The user's model, reasoning effort and service tier defaults still apply where the profile sets none.
 Orchester adds the project-selected MCP servers. A step that asks before MCP actions checks that each
 selected server is connected before starting the turn; any other step works without a selected server
