@@ -316,8 +316,8 @@ impl RunTask {
 }
 
 /// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:
-/// a Claude Code agent through its permission prompt's relay (`prompted`), which also serves it `ask_question`,
-/// and every Codex agent.
+/// a Claude Code agent through its permission prompt's relay (`prompted`, which every Claude Code step has), which
+/// also serves it `ask_question`, and every Codex agent.
 fn told_of_tools(
   prompt: String,
   tools: &ToolHost,

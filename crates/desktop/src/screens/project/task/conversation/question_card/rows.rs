@@ -217,6 +217,7 @@ fn own_row(ctx: &Ctx, state: &CardState, (spot, question): (Spot, &Question), pi
   };
   let (focused, blurred) = (state.focused.clone(), state.focused.clone());
   let field = text_input(ctx, "conversation-question-own", text, false, TypographyStyle::Body)
+    .id(format!("conversation-question-own-{}", spot.question))
     .placeholder(&ctx.t("runs.conversation.question.ownPlaceholder"))
     .flex(1.0)
     .tab_index(TAB_STOP)

@@ -17,9 +17,10 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  tokens::TokenBudget,
 };
 use orchester_ipc::{
-  Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  AttachSession, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -274,14 +275,7 @@ async fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => match scheduler.attach(session, agent_slots).await {
-      Ok(attached) => Reply::Attached {
-        active_runs: scheduler.active_runs(),
-        interrupted: attached.interrupted,
-        continued: attached.continued,
-      },
-      Err(rejection) => Reply::Rejected(rejection),
-    },
+    Command::Attach { session, agent_slots } => attached(scheduler, session, agent_slots).await,
     Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
     Command::ContinueRuns { ref runs } => {
       let (continued, refused) = scheduler.continue_runs(runs).await;
@@ -302,13 +296,7 @@ async fn answer(
       run,
       budget,
       max_duration_ms,
-    } => {
-      let limits = RaisedLimits {
-        budget,
-        max_duration: Duration::from_millis(max_duration_ms),
-      };
-      return later.answer(run, async move { handle.raise_limit(run, limits).await });
-    }
+    } => return raise_limit(&later, handle, run, (budget, max_duration_ms)),
     Command::RaiseStepBudget { run, budget } => {
       return later.answer(run, async move { handle.raise_step_budget(run, budget).await });
     }
@@ -328,16 +316,56 @@ async fn answer(
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
-    Command::DecidePlan { .. }
-    | Command::DecideStuckRun { .. }
-    | Command::DecideToolApproval { .. }
-    | Command::AnswerQuestion { .. } => return decide(&later, handle, &request.command),
+    Command::DecidePlan {
+      run,
+      execution,
+      version,
+      ref decision,
+    } => return answer_plan(&later, handle, (run, execution, version), decision.clone()),
+    Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
+    Command::DecideToolApproval {
+      run,
+      ref approval,
+      ref answer,
+      by,
+    } => return answer_tool_approval(&later, handle, run, approval, (answer.clone(), by)),
+    Command::AnswerQuestion {
+      run,
+      ref request,
+      ref answers,
+      by,
+    } => return answer_question(&later, handle, run, (request, answers, by)),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// The reply to [`Command::Attach`].
+async fn attached(scheduler: &Scheduler, session: AttachSession, agent_slots: NonZeroU32) -> Reply {
+  match scheduler.attach(session, agent_slots).await {
+    Ok(attached) => Reply::Attached {
+      active_runs: scheduler.active_runs(),
+      interrupted: attached.interrupted,
+      continued: attached.continued,
+    },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
+}
+
+fn raise_limit(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  run: RunId,
+  (budget, max_duration_ms): (TokenBudget, u64),
+) -> Answer {
+  let limits = RaisedLimits {
+    budget,
+    max_duration: Duration::from_millis(max_duration_ms),
+  };
+  later.answer(run, async move { scheduler.raise_limit(run, limits).await })
 }
 
 /// The reply to [`Command::SetAgentSlots`].
@@ -359,41 +387,6 @@ fn answer_tool_approval(
   later.answer(run, async move {
     scheduler.decide_tool_approval(run, approval, answer, by).await
   })
-}
-
-/// A person's or automation's decision on what a run waits for: a plan, a stuck run, a tool request, a
-/// question.
-fn decide(later: &Later<'_>, scheduler: Scheduler, command: &Command) -> Answer {
-  match command {
-    Command::DecidePlan {
-      run,
-      execution,
-      version,
-      decision,
-    } => answer_plan(later, scheduler, (*run, *execution, *version), decision.clone()),
-    Command::DecideStuckRun { run, decision } => answer_stuck(later, scheduler, *run, decision.clone()),
-    Command::DecideToolApproval {
-      run,
-      approval,
-      answer,
-      by,
-    } => answer_tool_approval(later, scheduler, *run, approval, (answer.clone(), *by)),
-    Command::AnswerQuestion {
-      run,
-      request,
-      answers,
-      by,
-    } => answer_question(later, scheduler, *run, (request, answers, *by)),
-    other => {
-      tracing::error!(?other, "not a decision");
-      Answer::Reply(Event::Reply {
-        id: later.id,
-        reply: Reply::Rejected(Rejection::Failed {
-          detail: "not a decision".to_owned(),
-        }),
-      })
-    }
-  }
 }
 
 fn answer_question(

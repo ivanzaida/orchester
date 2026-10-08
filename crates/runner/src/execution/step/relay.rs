@@ -228,7 +228,8 @@ impl Relay {
     }
   }
 
-  /// Claude Code's relay, which serves `ask_question` besides Orchester's tools.
+  /// Claude Code's relay, which serves `ask_question` besides Orchester's tools; every Claude Code step has
+  /// the permission prompt, so every one is served it.
   const fn asks_questions(&self) -> bool {
     self.served.prompt.is_some()
   }

@@ -120,20 +120,22 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion) -> Resul
 /// The waiting request named `id`, or the run's only one when none is named.
 fn waiting_request(questions: &[AskedQuestions], id: Option<&str>) -> Result<AskedQuestions, ToolError> {
   let waiting: Vec<&AskedQuestions> = questions.iter().filter(|asked| asked.waits()).collect();
-  let found = match (id, waiting.as_slice()) {
-    (Some(id), _) => waiting.iter().find(|asked| asked.request.id() == id).copied(),
-    (None, [only]) => Some(*only),
-    (None, []) => None,
-    (None, _) => {
-      return Err(ToolError::refused(
-        "question_ambiguous",
-        vec![Message::new("appMcp.errors.questionAmbiguous")],
-      ));
-    }
-  };
-  found
-    .cloned()
-    .ok_or_else(|| ToolError::not_found(Missing::Question, id.unwrap_or_default()))
+  match (id, waiting.as_slice()) {
+    (Some(id), _) => waiting
+      .iter()
+      .find(|asked| asked.request.id() == id)
+      .map(|asked| (*asked).clone())
+      .ok_or_else(|| ToolError::not_found(Missing::Question, id)),
+    (None, [only]) => Ok((*only).clone()),
+    (None, []) => Err(ToolError::refused(
+      "no_waiting_question",
+      vec![Message::new("appMcp.errors.noWaitingQuestion")],
+    )),
+    (None, _) => Err(ToolError::refused(
+      "question_ambiguous",
+      vec![Message::new("appMcp.errors.questionAmbiguous")],
+    )),
+  }
 }
 
 /// An answer the question does not take, with the card's words for why.

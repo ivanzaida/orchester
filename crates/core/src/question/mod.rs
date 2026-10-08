@@ -129,8 +129,9 @@ impl Question {
   }
 
   /// The answer that picks `choices` (option labels, each once) and says `text` in the person's own
-  /// words. Refused: no choice and no text, a label the question does not suggest, a label given twice,
-  /// and more than one answer to a single-choice question, where an own text replaces a pick.
+  /// words; the picks are kept in the options' order, whatever order they were given in. Refused: no
+  /// choice and no text, a label the question does not suggest, a label given twice, and more than one
+  /// answer to a single-choice question, where an own text replaces a pick.
   pub fn answer(&self, choices: &[String], text: Option<&str>) -> Result<Answer, AnswerError> {
     let text = text.map(str::trim).filter(|text| !text.is_empty());
     if choices.is_empty() && text.is_none() {
@@ -139,22 +140,26 @@ impl Question {
     if !self.multi_select && choices.len() + usize::from(text.is_some()) > 1 {
       return Err(AnswerError::SeveralForSingle);
     }
-    let mut picked: Vec<String> = Vec::with_capacity(choices.len());
+    let mut picked: Vec<usize> = Vec::with_capacity(choices.len());
     for choice in choices {
-      let option = self
+      let index = self
         .options
         .iter()
-        .find(|option| option.label == choice.trim())
+        .position(|option| option.label == choice.trim())
         .ok_or_else(|| AnswerError::UnknownChoice { label: choice.clone() })?;
-      if picked.contains(&option.label) {
+      if picked.contains(&index) {
         return Err(AnswerError::RepeatedChoice {
-          label: option.label.clone(),
+          label: self.options[index].label.clone(),
         });
       }
-      picked.push(option.label.clone());
+      picked.push(index);
     }
+    picked.sort_unstable();
     Ok(Answer {
-      choices: picked,
+      choices: picked
+        .into_iter()
+        .map(|index| self.options[index].label.clone())
+        .collect(),
       text: text.map(str::to_owned),
     })
   }
@@ -221,7 +226,7 @@ impl From<&Answer> for GivenAnswer {
   }
 }
 
-/// The person's answer to one question: the labels picked, in the order picked, and their own text.
+/// The person's answer to one question: the labels picked, in the options' order, and their own text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Answer {
   choices: Vec<String>,

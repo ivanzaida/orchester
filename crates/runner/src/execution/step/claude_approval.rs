@@ -134,8 +134,10 @@ impl ClaudeApprovals {
 
 impl RunTask {
   /// The permission prompt of Claude Code invocation `invocation`, working in `worktree` with
-  /// `permissions`, the MCP servers of `setup` and the Orchester tools of `tools`; `None` for Codex, or
-  /// when the step asks a person for nothing (and so gets no Orchester tools either).
+  /// `permissions`, the MCP servers of `setup` and the Orchester tools of `tools`; `None` for Codex.
+  /// Every Claude Code step gets one, and with it Orchester's tools and `ask_question`: its commands
+  /// always ask, since the one choice that would not (*Any command in the worktree*) is refused before
+  /// the step starts (`AgentPermissions::enforced_on`).
   pub(super) fn claude_approvals(
     &self,
     (permissions, setup, tools): (&AgentPermissions, &McpSetup, &Arc<ToolHost>),

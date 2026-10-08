@@ -1,8 +1,9 @@
 //! Questions with suggested answers through Orchester's MCP server (ORC-83), with the real runner and
 //! `orchester-fake-claude`, whose `ask_question` waits in its turn: `get_run` lists the waiting question with
 //! its options; `answer_question` refuses what the card would not take (an option the question does not
-//! suggest, two answers to a single-choice question, an empty answer, an unknown question) and answers
-//! through the runner, as the card does. The card then reads as answered through the MCP server.
+//! suggest, two answers to a single-choice question, an empty answer, an unknown question, none named when
+//! none waits) and answers through the runner, as the card does. The card then reads as answered through the MCP
+//! server.
 
 use orchester_core::connection::AgentProvider;
 use orchester_store::ProjectDb;
@@ -92,6 +93,12 @@ fn app_mcp_lists_a_waiting_question_and_answers_it_with_the_card_s_rules() {
     &answer("1", &json!({"question": id, "choices": ["Under Sign in"]})),
   );
   assert_eq!(again["code"], "question_not_found", "it no longer waits: {again}");
+  let none = refused(
+    &mut agent,
+    "answer_question",
+    &answer("1", &json!({"choices": ["Under Sign in"]})),
+  );
+  assert_eq!(none["code"], "no_waiting_question", "{none}");
 
   let card = format!("conversation-question-card-{id}");
   desktop.wait_until("the card answered", |desktop| {

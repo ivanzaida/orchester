@@ -1,8 +1,9 @@
-//! Claude Code's questions with suggested answers (ORC-83), end to end: the relay lists Orchester's
+//! Questions with suggested answers (ORC-83), end to end. Claude Code: the relay lists Orchester's
 //! `ask_question` beside the step's tools, a call of it waits in the agent's turn as a recorded question
 //! while the agent's time stops counting, a wrong answer is refused, the answer comes back as the call's
-//! result and the run goes on; a second answer is refused. Needs `git`. Run with `cargo test -p
-//! orchester-runner --features test-agent --test questions questions`.
+//! result and the run goes on; a second answer is refused. Codex: one `requestUserInput` with two questions
+//! waits in its turn, answers for only one are refused, and both answers reach it in its response format.
+//! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test questions questions`.
 
 mod support;
 
@@ -120,4 +121,55 @@ async fn questions_from_claude_code_wait_in_its_turn_and_the_answer_reaches_it()
       ..
     }
   ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn questions_from_codex_wait_in_its_turn_and_each_answer_reaches_it() {
+  let project = project(&Setup::new("Ask Codex with options."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let asked = waiting_question(root, &mut events, id).await;
+  assert_eq!(asked.request.turn(), QuestionTurn::InTurn);
+  let [layout, tone] = asked.request.questions() else {
+    panic!("two questions in one request");
+  };
+  assert_eq!(layout.header(), Some("Docs layout"));
+  assert_eq!(layout.options()[1].description(), None);
+  assert_eq!(tone.options()[1].description(), Some("Warmer"));
+  assert!(!layout.multi_select() && !tone.multi_select());
+
+  let one = vec![GivenAnswer {
+    choices: vec!["Top of the page".to_owned()],
+    text: None,
+  }];
+  let refused = scheduler
+    .answer_question(id, asked.request.id().to_owned(), one, Answerer::Person)
+    .await;
+  assert!(matches!(refused, Err(Rejection::InvalidAnswer { .. })), "{refused:?}");
+  let both = vec![
+    GivenAnswer {
+      choices: Vec::new(),
+      text: Some("In the middle".to_owned()),
+    },
+    GivenAnswer {
+      choices: vec!["Friendly".to_owned()],
+      text: None,
+    },
+  ];
+  scheduler
+    .answer_question(id, asked.request.id().to_owned(), both, Answerer::Person)
+    .await
+    .expect("answered");
+
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  assert_eq!(
+    reported(&db, id, "codex-answer: "),
+    [r#"{"layout":{"answers":["In the middle"]},"tone":{"answers":["Friendly"]}}"#]
+  );
 }

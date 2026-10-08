@@ -113,8 +113,9 @@ fn questions_take_one_answer_unless_several_are_allowed() {
   let both = several
     .answer(&choices(&["In the sidebar", "Top of the page"]), Some("both, please"))
     .expect("several and own text");
-  assert_eq!(both.choices(), ["In the sidebar", "Top of the page"]);
-  assert_eq!(both.values(), ["In the sidebar", "Top of the page", "both, please"]);
+  // Kept in the options' order, whatever order they were picked in.
+  assert_eq!(both.choices(), ["Top of the page", "In the sidebar"]);
+  assert_eq!(both.values(), ["Top of the page", "In the sidebar", "both, please"]);
   assert_eq!(
     several.answer(&choices(&["In the sidebar", "In the sidebar"]), None),
     Err(AnswerError::RepeatedChoice {

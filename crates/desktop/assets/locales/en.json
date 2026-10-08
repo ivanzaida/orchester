@@ -5813,7 +5813,8 @@
       "notQueued": "{{task}} is not queued, so it is not returned to the drafts.",
       "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts.",
       "severalQuestions": "This request asks several questions at once; answer it on its card in the task conversation.",
-      "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them."
+      "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
+      "noWaitingQuestion": "No question waits for an answer in this run."
     }
   },
   "statusBar": {

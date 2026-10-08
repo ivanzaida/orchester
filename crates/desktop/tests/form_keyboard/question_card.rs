@@ -56,6 +56,9 @@ fn option(index: usize) -> String {
   format!("conversation-question-option-0-{index}")
 }
 
+/// The first question's own answer field.
+const OWN: &str = "conversation-question-own-0";
+
 /// Whether row `index` reads as picked: `$hover` under it while the pointer is elsewhere.
 fn picked(desktop: &mut Desktop, index: usize) -> bool {
   desktop.hover("conversation-question-hint");
@@ -103,13 +106,13 @@ fn question_card_waits_without_taking_the_focus_and_answers_with_the_keys() {
   ] {
     assert!(shows(&mut desktop, &card, text), "{text}");
   }
-  assert!(has(&mut desktop, "conversation-question-own"));
+  assert!(has(&mut desktop, OWN));
   // The step's row in the rail says it waits for the person, as a step whose agent asked does.
   assert!(shows(&mut desktop, "conversation-rail", "waiting for your answer"));
   // Tab reaches the card on request: back from the composer, its own answer's field, then its last option.
   let stops = desktop.stops(4, true);
   assert!(
-    stops.contains(&Some("conversation-question-own".to_owned())) && stops.contains(&Some(option(2))),
+    stops.contains(&Some(OWN.to_owned())) && stops.contains(&Some(option(2))),
     "{stops:?}"
   );
 
@@ -132,7 +135,7 @@ fn question_card_waits_without_taking_the_focus_and_answers_with_the_keys() {
   // The own answer's letter goes to its field, Esc back to the options.
   desktop.key("d", "KeyD");
   desktop.pass();
-  assert_eq!(desktop.focused().as_deref(), Some("conversation-question-own"));
+  assert_eq!(desktop.focused().as_deref(), Some(OWN));
   desktop.key("Escape", "Escape");
   desktop.pass();
   assert_eq!(desktop.focused().as_deref(), Some(option(2).as_str()));
@@ -168,7 +171,7 @@ fn question_card_checks_several_and_takes_an_own_answer() {
   desktop.press(&option(0));
   assert!(!picked(&mut desktop, 0), "a second press unchecks");
   desktop.press(&option(0));
-  desktop.click("conversation-question-own");
+  desktop.click(OWN);
   desktop.type_text("and the footer");
   desktop.press("conversation-question-answer");
 
