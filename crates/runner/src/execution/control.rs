@@ -3,6 +3,7 @@
 
 use orchester_core::{
   id::ResourceId,
+  question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause},
 };
 use orchester_ipc::Rejection;
@@ -28,6 +29,13 @@ pub(super) enum Control {
   DecideToolApproval {
     approval: String,
     answer: ApprovalAnswer,
+    by: Answerer,
+    ack: Ack,
+  },
+  /// Send answers to the worker whose agent waits on the question request in its turn.
+  AnswerQuestion {
+    request: String,
+    answers: Vec<GivenAnswer>,
     by: Answerer,
     ack: Ack,
   },

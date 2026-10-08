@@ -199,10 +199,14 @@ pub enum ExtraTypography {
   Caution,
   /// A server's name in the status bar's hint over the server item (`e8ZUC` in 10.43 A): 11/500.
   HintHeading,
+  /// An option's label on a question card (`lS9BF`): 13 at 1.5.
+  OptionLabel,
+  /// What an option on a question card does, under its label (`lS9BF`): 12 `$muted` at 1.5.
+  OptionDetail,
 }
 
 impl ExtraTypography {
-  const ALL: [Self; 88] = [
+  const ALL: [Self; 90] = [
     Self::SectionHeading,
     Self::CardTitle,
     Self::ReviewHeading,
@@ -291,6 +295,8 @@ impl ExtraTypography {
     Self::FirstPassword,
     Self::Caution,
     Self::HintHeading,
+    Self::OptionLabel,
+    Self::OptionDetail,
   ];
 
   fn name(self) -> &'static str {
@@ -394,6 +400,8 @@ impl ExtraTypography {
       Self::FirstPassword => "first-password",
       Self::Caution => "caution",
       Self::HintHeading => "hint-heading",
+      Self::OptionLabel => "option-label",
+      Self::OptionDetail => "option-detail",
       icon => icon.icon_name().expect("every role without a text name is an icon"),
     }
   }

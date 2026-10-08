@@ -61,6 +61,7 @@ impl Scheduler {
       attached.interrupted.push(run.id());
     }
     self.end_unheld_approvals(&mut db)?;
+    self.end_unheld_questions(&mut db)?;
     self.wake_answered(&db, waiting)?;
     self.follow_up_queued(&mut db)?;
     if session == AttachSession::Reconnect {

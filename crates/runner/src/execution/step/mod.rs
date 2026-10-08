@@ -13,6 +13,7 @@ mod mcp;
 mod memory;
 mod native;
 mod orchester_tools;
+pub(super) mod question;
 mod relay;
 mod skills;
 mod start;
@@ -99,6 +100,8 @@ impl Occasion {
 pub(super) struct Active {
   stops: mpsc::UnboundedSender<Stop>,
   pub(super) approvals: Option<mpsc::UnboundedSender<worker::ApprovalDecision>>,
+  /// Where answers to a question the agent waits on in its turn go; `None` for a command tool.
+  pub(super) questions: Option<mpsc::UnboundedSender<question::QuestionAnswer>>,
   /// Where people's messages sent now go to the agent; `None` for a command tool.
   pub(super) steers: Option<mpsc::UnboundedSender<Vec<Message>>>,
   pub(super) workspace: Workspace,
@@ -123,6 +126,7 @@ impl Active {
     Self {
       stops,
       approvals: None,
+      questions: None,
       steers: None,
       workspace,
       invocation,
@@ -313,6 +317,7 @@ impl RunTask {
     let used = execution_tokens(&invocations, &reviews, execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
+    let (questions, answers) = mpsc::unbounded_channel();
     let (steers, steered) = mpsc::unbounded_channel();
     let (reviews_held, reviews_ended) = mpsc::channel(1);
     let Driven {
@@ -323,6 +328,8 @@ impl RunTask {
       interactive,
       steered: takes_steers,
     } = driven;
+    // A CLI's agent waits in its turn for an answer; a native agent's question ends its step instead.
+    let asks_in_turn = !matches!(driver, worker::Driver::Native(_));
     let worker = Worker {
       scope: command_scope(&self.root, workspace.path(), &permissions),
       profile: self.profile_of(execution),
@@ -339,6 +346,7 @@ impl RunTask {
       agent,
       task: self.task.id(),
       decisions,
+      answers,
       steers: steered,
       reviewing: None,
       reviewer_keys: worker::ReviewerKeys {
@@ -359,6 +367,7 @@ impl RunTask {
       Active {
         stops,
         approvals: interactive.then_some(approvals),
+        questions: asks_in_turn.then_some(questions),
         steers: takes_steers.then_some(steers),
         workspace,
         invocation,

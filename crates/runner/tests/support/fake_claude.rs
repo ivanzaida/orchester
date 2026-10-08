@@ -28,6 +28,8 @@
 //!   `{"outcome":"question","summary":"Which database should I use?"}`, as the CLI does when given `--json-schema`;
 //!   "Answer in prose, then JSON" ends with prose followed by `{"outcome":"failed","summary":"The build breaks."}` and
 //!   no `structured_output`; "Answer without JSON" ends with prose only;
+//! - "Ask with options": calls Orchester's `ask_question` with three options, one to pick (several with "several
+//!   allowed"), and reports the answer it got (`fake_claude_tools`), then works as below;
 //! - "Find a stopped background task": first ends a turn of its own, before it takes the prompt, then answers with
 //!   prose and the step result through `StructuredOutput` (`fake_claude_background`);
 //! - "Refuse the model": answers as Claude Code 2.1.89 did when the API refused Opus 5.5 to it ("version 2.1.280 or
@@ -196,6 +198,9 @@ impl Fake {
     }
     if prompt.contains("Use Orchester's tools") {
       return self.use_orchester_tools(worktree, (args, permission_prompt), step);
+    }
+    if prompt.contains("Ask with options") {
+      return self.ask_with_options(worktree, (args, permission_prompt), step);
     }
     if let Some(ask) = fake_claude_ask::Ask::of(prompt) {
       return self.ask_prompt(worktree, (args, permission_prompt), &ask, step);

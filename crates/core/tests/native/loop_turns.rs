@@ -204,7 +204,10 @@ fn native_loop_question_ends() {
   let ask = tool_call(
     "q1",
     "ask_question",
-    json!({"question": "Which database?", "options": ["sqlite", "pg"]}),
+    json!({"question": "Which database?", "header": "Storage", "multi_select": true, "options": [
+      {"label": "SQLite", "description": "One file next to the app"},
+      {"label": "Postgres", "description": null}
+    ]}),
   );
   let actions = native
     .handle(LoopInput::Responded(response(vec![ask], StopReason::ToolUse, 10)))
@@ -213,7 +216,38 @@ fn native_loop_question_ends() {
     panic!("question")
   };
   assert_eq!(asked, &call("q1"));
-  assert_eq!((question.question(), question.options().len()), ("Which database?", 2));
+  let structured = question.structured().expect("a question with options");
+  assert_eq!(structured.text(), "Which database?");
+  assert_eq!(structured.header(), Some("Storage"));
+  assert!(structured.multi_select());
+  let options: Vec<(&str, Option<&str>)> = structured
+    .options()
+    .iter()
+    .map(|option| (option.label(), option.description()))
+    .collect();
+  assert_eq!(
+    options,
+    [("SQLite", Some("One file next to the app")), ("Postgres", None)]
+  );
+}
+
+#[test]
+fn native_loop_question_without_options_stays_plain() {
+  let layout = Layout::new();
+  let (mut native, _) = start(&layout, RepositoryAccess::Write, &[]);
+  let ask = tool_call(
+    "q1",
+    "ask_question",
+    json!({"question": "Which database?", "options": null}),
+  );
+  let actions = native
+    .handle(LoopInput::Responded(response(vec![ask], StopReason::ToolUse, 10)))
+    .expect("response");
+  let Some(LoopEnd::Question { question, .. }) = ended(&actions) else {
+    panic!("question")
+  };
+  assert_eq!(question.question(), "Which database?");
+  assert!(question.structured().is_none());
 }
 
 #[test]

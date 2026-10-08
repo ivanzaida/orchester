@@ -108,10 +108,12 @@ pub fn rail(run: &RunView, items: &[Item]) -> Vec<RailStep> {
     .collect()
 }
 
-/// The state of the step whose latest header is `items[index]`.
+/// The state of the step whose latest header is `items[index]`. An agent that waits in its turn for the
+/// answer to its question with suggested answers waits for the person, as one whose step asked does.
 fn state(items: &[Item], index: usize, head: &StepHead) -> RailState {
   match head.status {
     Some(StepStatus::Waiting(reason)) => RailState::Waits(reason),
+    Some(StepStatus::Running) if asks(items, head) => RailState::Waits(WaitReason::Message),
     Some(StepStatus::Passed) => RailState::Passed {
       approved: head.approved,
     },
@@ -124,6 +126,13 @@ fn state(items: &[Item], index: usize, head: &StepHead) -> RailState {
     Some(StepStatus::Skipped) => RailState::Stopped,
     Some(StepStatus::Running | StepStatus::Pending) | None => RailState::Working,
   }
+}
+
+/// Whether a question with suggested answers of the execution of `head` waits among `items`.
+fn asks(items: &[Item], head: &StepHead) -> bool {
+  items
+    .iter()
+    .any(|item| item.execution == head.execution && matches!(&item.kind, ItemKind::Choice(card) if card.waiting()))
 }
 
 /// The step a later attempt's return started from, when the step of `head` failed and returned it.

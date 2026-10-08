@@ -28,7 +28,7 @@ use super::{
   super::run::RunTask,
   mcp::McpSetup,
   orchester_tools::ToolHost,
-  relay::{Listening, Served, bind},
+  relay::{Listening, Relayed, Served, bind},
 };
 use crate::{approval_relay::RELAY_FLAG, private_file::PrivateFile};
 
@@ -112,8 +112,8 @@ impl ClaudeApprovals {
     self.config.path()
   }
 
-  /// The next call a person decides; never ready without approvals.
-  pub(super) async fn next(approvals: Option<&mut Self>) -> Option<Asked> {
+  /// The next call the relay holds for a person; never ready without approvals.
+  pub(super) async fn next(approvals: Option<&mut Self>) -> Option<Relayed> {
     Listening::next(approvals.map(|approvals| &mut approvals.listening)).await
   }
 
@@ -134,8 +134,10 @@ impl ClaudeApprovals {
 
 impl RunTask {
   /// The permission prompt of Claude Code invocation `invocation`, working in `worktree` with
-  /// `permissions`, the MCP servers of `setup` and the Orchester tools of `tools`; `None` for Codex, or
-  /// when the step asks a person for nothing (and so gets no Orchester tools either).
+  /// `permissions`, the MCP servers of `setup` and the Orchester tools of `tools`; `None` for Codex.
+  /// Every Claude Code step gets one, and with it Orchester's tools and `ask_question`: its commands
+  /// always ask, since the one choice that would not (*Any command in the worktree*) is refused before
+  /// the step starts (`AgentPermissions::enforced_on`).
   pub(super) fn claude_approvals(
     &self,
     (permissions, setup, tools): (&AgentPermissions, &McpSetup, &Arc<ToolHost>),

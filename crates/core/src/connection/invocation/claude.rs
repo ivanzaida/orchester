@@ -209,7 +209,8 @@ impl ClaudeInvocation<'_> {
       } else {
         tools
       };
-      let rules = tools.claude_allow_rules();
+      let mut rules = tools.claude_allow_rules();
+      rules.push(crate::question::tool::claude_allow_rule());
       allow_more(&mut permission, rules);
     }
     args.extend(permission);

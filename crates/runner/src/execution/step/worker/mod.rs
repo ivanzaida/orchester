@@ -27,6 +27,7 @@ use orchester_core::{
   id::{ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
   permission::category::CommandScope,
+  question::QuestionRequest,
   run::{Answerer, ApprovalAnswer, FirstEditTracker, Invocation, PendingToolApproval, RunLimit},
   time::Timestamp,
   tokens::TokensUsed,
@@ -41,6 +42,7 @@ use super::{
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
   native::NativeHandle,
+  question::{AwaitingAnswer, QuestionAnswer},
   relay::Listening,
 };
 use crate::{private_file::PrivateFile, supervisor::Supervised};
@@ -176,6 +178,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) agent: String,
   pub(in super::super) task: TaskId,
   pub(in super::super) decisions: mpsc::UnboundedReceiver<ApprovalDecision>,
+  /// Answers to the question the agent waits on in its turn.
+  pub(in super::super) answers: mpsc::UnboundedReceiver<QuestionAnswer>,
   /// Where the agent's commands run and may write, which classifies the commands it asks about.
   pub(in super::super) scope: CommandScope,
   /// The agent profile of the step, which Always allow of a command adds to.
@@ -188,6 +192,13 @@ pub(in super::super) struct Worker {
   pub(in crate::execution::step) reviewer_keys: review::ReviewerKeys,
   /// Held by each review until it has recorded what it cost; [`Worker::work`] waits for all of them.
   pub(in crate::execution::step) reviews_held: mpsc::Sender<Infallible>,
+}
+
+/// Which call the relay held when it closed.
+#[derive(Clone, Copy)]
+enum RelayClosed {
+  Decision,
+  Question,
 }
 
 pub(super) struct Watch {
@@ -208,6 +219,8 @@ pub(super) struct Watch {
   pause_requested: bool,
   /// The approval waiting for a person, and the call it answers.
   pub(super) approval: Option<(PendingToolApproval, Awaiting)>,
+  /// The question the agent waits on in its turn, and the request or call its answers go to.
+  pub(super) question: Option<(QuestionRequest, AwaitingAnswer)>,
 
   /// Claude Code calls a person approved whose results have not arrived: if the agent ends before
   /// they do, the actions may have run, and the run is not resumed on its own.
@@ -233,17 +246,31 @@ impl Watch {
       after_command: None,
       pause_requested: false,
       approval: None,
+      question: None,
       approved_calls: HashSet::new(),
       steering: steer::Steering::default(),
       closed_after_result: None,
     })
   }
 
-  /// Ready once the Claude Code call waiting for a person can no longer be answered.
-  async fn prompt_closed(&mut self) {
-    match &mut self.approval {
-      Some((_, Awaiting::Claude { reply, .. } | Awaiting::Tool { reply, .. })) => reply.closed().await,
-      _ => std::future::pending().await,
+  /// Ready once a call the relay holds for a person can no longer be answered: a Claude Code call waiting
+  /// for a decision, or an `ask_question` call waiting for the answer.
+  async fn relay_closed(&mut self) -> RelayClosed {
+    let approval = async {
+      match &mut self.approval {
+        Some((_, Awaiting::Claude { reply, .. } | Awaiting::Tool { reply, .. })) => reply.closed().await,
+        _ => std::future::pending().await,
+      }
+    };
+    let question = async {
+      match &mut self.question {
+        Some((_, AwaitingAnswer::Relay(reply))) => reply.closed().await,
+        _ => std::future::pending().await,
+      }
+    };
+    tokio::select! {
+      () = approval => RelayClosed::Decision,
+      () = question => RelayClosed::Question,
     }
   }
 }

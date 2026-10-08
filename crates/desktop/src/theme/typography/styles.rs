@@ -175,6 +175,8 @@ impl ExtraTypography {
       Self::ResultHeading => leading(1.5, style(12.0, FontWeight::Normal, TEXT)),
       Self::Caution => leading(1.5, style(11.0, FontWeight::Normal, TEXT)),
       Self::HintHeading => style(11.0, FontWeight::Medium, TEXT),
+      Self::OptionLabel => leading(1.5, style(13.0, FontWeight::Normal, TEXT)),
+      Self::OptionDetail => leading(1.5, style(12.0, FontWeight::Normal, MUTED)),
       icon_role => icon(
         icon_role
           .icon_size()

@@ -47,8 +47,14 @@ const RUN_COMMAND: &str = r#"{"type":"object","properties":{
 
 const ASK_QUESTION: &str = r#"{"type":"object","properties":{
   "question":{"type":"string","description":"The question, with what you need to continue."},
-  "options":{"type":["array","null"],"items":{"type":"string"},"description":"Suggested answers, if any."}
-},"required":["question","options"],"additionalProperties":false}"#;
+  "header":{"type":["string","null"],"description":"A short label for what the question is about, a few words; null for none."},
+  "options":{"type":["array","null"],"maxItems":26,"description":"Suggested answers, at least two with different labels; null for a plain question. The person may also answer in their own words.","items":{
+    "type":"object","properties":{
+      "label":{"type":"string","description":"The answer, short; it comes back as the answer when picked."},
+      "description":{"type":["string","null"],"description":"What picking it means; null for none."}
+    },"required":["label","description"],"additionalProperties":false}},
+  "multi_select":{"type":["boolean","null"],"description":"The person may pick several options; null for one."}
+},"required":["question","header","options","multi_select"],"additionalProperties":false}"#;
 
 impl ToolName {
   /// The tool's input schema, as JSON.

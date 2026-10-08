@@ -74,6 +74,9 @@ pub enum Queued {
   Decision,
   /// Agents work, but none is at a turn yet.
   Checkpoint,
+  /// Agent `0` asked a question with suggested answers, which its card answers: the message reaches it
+  /// after the answer, and does not answer the question.
+  AnswerAbove(Arc<str>),
 }
 
 /// What follows once the composer stored the message.
@@ -95,6 +98,9 @@ pub enum Then {
 impl ComposerMode {
   /// The mode for a message to `recipient` in `conversation` of `run`.
   pub fn of(conversation: &Conversation, run: Option<&RunView>, recipient: Recipient) -> Self {
+    if let Some(asker) = asking(conversation, run, recipient) {
+      return Self::Queue(Queued::AnswerAbove(asker));
+    }
     match conversation.state {
       PanelState::NotStarted => Self::NotStarted,
       PanelState::Live => live(conversation, run, recipient),
@@ -139,7 +145,7 @@ impl ComposerMode {
     self
       .fixed_recipient()
       .or_else(|| match self {
-        Self::PlanChanges { agent, .. } => by_agent(agent),
+        Self::PlanChanges { agent, .. } | Self::Queue(Queued::AnswerAbove(agent)) => by_agent(agent),
         Self::FollowUp
         | Self::Continue
         | Self::Resume { .. }
@@ -219,6 +225,23 @@ impl Then {
   pub const fn for_next_run(self) -> bool {
     matches!(self, Self::RunAgain)
   }
+}
+
+/// The agent whose question with suggested answers waits on its card, while a message to `recipient`
+/// reaches it: written to it or to Orchestrator.
+fn asking(conversation: &Conversation, run: Option<&RunView>, recipient: Recipient) -> Option<Arc<str>> {
+  if !matches!(conversation.state, PanelState::Live | PanelState::Waiting) {
+    return None;
+  }
+  let asker: Arc<str> = run?.waiting_questions.first()?.request.agent().into();
+  let reaches = match recipient {
+    Recipient::Orchestrator => true,
+    Recipient::Agent(profile) => conversation
+      .recipients
+      .iter()
+      .any(|choice| choice.recipient == Recipient::Agent(profile) && choice.agent.as_ref() == Some(&asker)),
+  };
+  reaches.then_some(asker)
 }
 
 fn live(conversation: &Conversation, run: Option<&RunView>, recipient: Recipient) -> ComposerMode {

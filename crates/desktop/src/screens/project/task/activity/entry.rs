@@ -30,7 +30,7 @@ use super::{
   mcp::mcp_server_text,
   mcp_call, native_call,
   problem::{self, problem_text},
-  request_link::{RequestLink, request_link},
+  request_link::{RequestLink, request_link, secrets_link},
   toggles::Toggles,
 };
 use crate::{
@@ -205,7 +205,8 @@ fn entry_row(ctx: &Ctx, row: &EntryProps, open: bool, nav: &ProjectNav, copied: 
       open
         .then(|| entry_details(ctx, (entry, command_box, row.request.as_ref()), &shown, copied))
         .flatten(),
-    );
+    )
+    .with_children((open && problem::asks_for_secret(entry)).then(|| secrets_link(ctx, nav, entry.sequence)));
   let line = Row::new()
     .id("activity-entry")
     .width(Dimension::Pct(100.0))

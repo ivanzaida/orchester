@@ -16,6 +16,7 @@ use super::{
   cards::{self, PlanCardProps, PlanCardView},
   column, divider,
   message::{self, PersonMessageProps, PersonMessageView},
+  question_card::{ChoiceCardProps, ChoiceCardView},
 };
 use crate::{
   tasks::{
@@ -155,6 +156,7 @@ fn item_row(
         answers,
       },
     ),
+    ItemKind::Choice(card) => ctx.mount_keyed::<ChoiceCardView>(&item.key, ChoiceCardProps { card: card.clone() }),
     // A tool step's failing command is the tool step's own message (`FeiRG`).
     ItemKind::Problem(entry) if matches!(entry.kind, EntryKind::ToolCommand(_)) => {
       message::tool_step_failure(ctx, item, entry, timeline)

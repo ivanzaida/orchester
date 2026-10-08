@@ -212,6 +212,10 @@ required-features = ["test-agent"]
 name = "native"
 required-features = ["test-agent"]
 
+[[test]]
+name = "questions"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

@@ -180,16 +180,12 @@ impl ProjectTasks {
     let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(&db, repo_root)?
       .into_iter()
       .partition(|shown| under_review.contains(&shown.approval.id));
-    let mut group_holds = BTreeMap::new();
-    let mut grouped = std::collections::BTreeSet::new();
-    for group in db.task_groups()? {
-      grouped.extend(group.tasks().iter().copied());
-      if let Some(hold) = db.task_group_hold(group.key())? {
-        for task in group.tasks() {
-          group_holds.insert(*task, hold.clone());
-        }
-      }
-    }
+    let asking: Vec<RunId> = db
+      .waiting_questions()?
+      .iter()
+      .map(|asked| asked.request.run())
+      .collect();
+    let (mut group_holds, grouped) = group_holds(&db)?;
     let mut phases = Phases::new();
     let mut counts = BTreeMap::new();
     let mut auto_approving = Vec::new();
@@ -202,8 +198,11 @@ impl ProjectTasks {
             group_holds.remove(&task.id());
           }
           let mut shown = latest_run(&db, task, latest)?;
-          // A run whose agent waits for a tool decision waits for a person, as one at a plan does.
-          if shown.phase == TaskPhase::Running && pending.iter().any(|shown| shown.approval.run == latest.id()) {
+          // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one
+          // at a plan does.
+          if shown.phase == TaskPhase::Running
+            && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
+          {
             shown.phase = TaskPhase::Waiting;
           }
           if shown.phase.is_active() && run_approvals::auto_approving(&db, latest)? {
@@ -295,6 +294,23 @@ impl ProjectTasks {
       ..self.clone()
     }
   }
+}
+
+/// Why each task of a reviewed group that holds its work waits, and every task of a reviewed group.
+fn group_holds(
+  db: &ProjectDb,
+) -> Result<(BTreeMap<TaskId, GroupHold>, std::collections::BTreeSet<TaskId>), StoreError> {
+  let mut holds = BTreeMap::new();
+  let mut grouped = std::collections::BTreeSet::new();
+  for group in db.task_groups()? {
+    grouped.extend(group.tasks().iter().copied());
+    if let Some(hold) = db.task_group_hold(group.key())? {
+      for task in group.tasks() {
+        holds.insert(*task, hold.clone());
+      }
+    }
+  }
+  Ok((holds, grouped))
 }
 
 /// `latest`, a run of `task`, with when it last changed and what it waits for.

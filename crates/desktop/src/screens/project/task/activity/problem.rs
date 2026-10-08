@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
-  connection::stream::{CommandStatus, MemoryNotSavedReason, RunnerProblem},
+  connection::stream::{CommandStatus, MemoryNotSavedReason, QuestionRefusal, RunnerProblem},
   run::DecidedBy,
   tokens::compact_tokens,
 };
@@ -33,8 +33,25 @@ pub(super) fn titled(ctx: &Ctx, entry: &Entry) -> Option<Shown> {
       let kind = ctx.t("runs.conversation.problem.kind.decisionInterrupted");
       Some(Shown::plain(Icon::AlertCircle, title, kind, body))
     }
+    EntryKind::Problem(problem @ RunnerProblem::QuestionRefused { .. }) => {
+      let (title, body) = problem_text(ctx, problem);
+      let kind = ctx.t("runs.conversation.problem.kind.questionRefused");
+      Some(Shown::plain(Icon::AlertCircle, title, kind, body))
+    }
     _ => None,
   }
+}
+
+/// Whether `entry` is an agent's question for a secret that Orchester refused, under which the row offers
+/// the project's Secrets.
+pub(super) fn asks_for_secret(entry: &Entry) -> bool {
+  matches!(
+    &entry.kind,
+    EntryKind::Problem(RunnerProblem::QuestionRefused {
+      reason: QuestionRefusal::Secret,
+      ..
+    })
+  )
 }
 
 /// *Outside write denied* · *permission_denied*: `apply_patch ../shared/auth.ts did not run: …`.
@@ -171,6 +188,7 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::MemoryUnreadable { records } => memory_unreadable(ctx, *records),
     RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::StderrLeftOut { lines } => stderr_left_out(ctx, *lines),
+    RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
     RunnerProblem::ContextCompacted { .. } | RunnerProblem::ModelRetrying { .. } | RunnerProblem::ThinkingStripped => {
       native_problem(ctx, problem)
     }
@@ -243,6 +261,21 @@ fn decision_interrupted(ctx: &Ctx, server: &str, action: &str) -> (Arc<str>, Opt
       [("request", &*request)],
     )),
   )
+}
+
+/// A question Orchester did not put to the person: what it asked, and why it was declined.
+fn question_refused(ctx: &Ctx, question: &str, reason: QuestionRefusal) -> (Arc<str>, Option<Arc<str>>) {
+  let (title, detail) = match reason {
+    QuestionRefusal::Secret => (
+      "runs.activity.problem.secretQuestion",
+      "runs.activity.problem.secretQuestionDetail",
+    ),
+    QuestionRefusal::NoOptions => (
+      "runs.activity.problem.questionWithoutOptions",
+      "runs.activity.problem.questionWithoutOptionsDetail",
+    ),
+  };
+  (ctx.t_args(title, [("question", question)]), Some(ctx.t(detail)))
 }
 
 /// Lines of the CLI's standard error the activity did not keep.

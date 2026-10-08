@@ -24,7 +24,7 @@ pub(super) fn placeholder(ctx: &Ctx, mode: &ComposerMode, conversation: &Convers
   let to_agent = |agent: &str| ctx.t_args("runs.conversation.placeholder.agent", [("agent", agent)]);
   match mode {
     ComposerMode::Steer(working) => to_agent(&working.agent),
-    ComposerMode::Queue(Queued::NextTurn(Some(agent))) => to_agent(agent),
+    ComposerMode::Queue(Queued::NextTurn(Some(agent)) | Queued::AnswerAbove(agent)) => to_agent(agent),
     ComposerMode::Queue(Queued::SharedBudget(_)) | ComposerMode::Resume { .. } | ComposerMode::RaiseLimit => {
       match conversation.next_agent.as_deref() {
         Some(agent) => to_agent(agent),
@@ -127,6 +127,7 @@ pub(super) fn recipient_words(
   let working = matches!(choice.recipient, orchester_core::conversation::Recipient::Agent(profile)
     if conversation.working.iter().any(|working| working.profile == profile));
   let key = match mode {
+    ComposerMode::Queue(Queued::AnswerAbove(asker)) if *asker == agent => "runs.conversation.recipient.asking",
     _ if working => "runs.conversation.recipient.working",
     ComposerMode::Answer { .. } => "runs.conversation.recipient.asking",
     ComposerMode::PlanChanges { .. } => "runs.conversation.recipient.planWaits",
@@ -230,7 +231,9 @@ fn taken_as_answer(ctx: &Ctx, queued: &Queued, conversation: &Conversation) -> O
   let reaches = match queued {
     Queued::NextTurn(Some(agent)) => agent == asker,
     Queued::Checkpoint => true,
-    Queued::NextTurn(None) | Queued::ToolStep | Queued::SharedBudget(_) | Queued::Decision => false,
+    Queued::NextTurn(None) | Queued::ToolStep | Queued::SharedBudget(_) | Queued::Decision | Queued::AnswerAbove(_) => {
+      false
+    }
   };
   reaches.then(|| ctx.t_args("runs.conversation.hint.takenAsAnswer", [("agent", &**asker)]))
 }
@@ -244,5 +247,6 @@ fn queue_hint(ctx: &Ctx, queued: &Queued) -> Arc<str> {
     Queued::Decision => ctx.t("conversation.explanation.deciding"),
     Queued::SharedBudget(RunLimit::GroupBudget) => ctx.t("runs.conversation.hint.groupBudget"),
     Queued::SharedBudget(_) => ctx.t("runs.conversation.hint.dailyBudget"),
+    Queued::AnswerAbove(agent) => ctx.t_args("runs.conversation.hint.answerAbove", [("agent", &**agent)]),
   }
 }

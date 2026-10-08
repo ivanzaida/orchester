@@ -30,6 +30,7 @@ mod idle;
 mod permissions;
 mod plan;
 mod prepare;
+mod question;
 mod record;
 mod recovery;
 mod run;

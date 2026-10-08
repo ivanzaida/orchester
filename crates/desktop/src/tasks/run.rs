@@ -334,6 +334,9 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ToolApprovalAnswered
       | Rejection::AutomationWider
       | Rejection::PersonOnly { .. }
+      | Rejection::QuestionNotAwaited
+      | Rejection::QuestionAnswered
+      | Rejection::InvalidAnswer { .. }
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
@@ -423,6 +426,13 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::ToolApprovalAnswered) => Message::new("runs.toolApproval.answeredAlready"),
     RunRequestError::Rejected(Rejection::AutomationWider) => Message::new("runs.toolApproval.automationWider"),
     RunRequestError::Rejected(Rejection::PersonOnly { ask }) => Message::new(person_only_key(*ask)),
+    RunRequestError::Rejected(Rejection::QuestionNotAwaited) => {
+      Message::new("runs.conversation.question.errors.notAwaited")
+    }
+    RunRequestError::Rejected(Rejection::QuestionAnswered) => {
+      Message::new("runs.conversation.question.errors.answered")
+    }
+    RunRequestError::Rejected(Rejection::InvalidAnswer { error }) => super::question::answer_error(error),
     // Unfinished blocking tasks keep the run from going on; the task page names them.
     RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: orchester_core::run::RunAgainBlock::TaskBlocked,

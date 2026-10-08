@@ -128,6 +128,47 @@ impl Fake {
     self.finish(worktree, "hello", step)
   }
 
+  /// "Ask with options": lists the tools, then calls `ask_question` with three options (several allowed when the
+  /// prompt says "several allowed"; only once `fake-release` exists next to the worktrees when it says "after
+  /// release") and reports the answer it gets back (`orchester-answer: <ok|error> <text, lines joined by ' | '>`),
+  /// as Claude Code would read it as the call's result; then finishes as usual.
+  pub fn ask_with_options(&self, worktree: &Path, (args, opened): (&[String], Option<Prompt>), step: &str) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+    if self.prompt.contains("after release") {
+      let release = worktree
+        .ancestors()
+        .nth(2)
+        .map(|orchester| orchester.join("fake-release"));
+      while !release.as_ref().is_some_and(|release| release.exists()) {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+      }
+    }
+    let several = self.prompt.contains("several allowed");
+    let input = json!({"question": "Where should the sign-in button go?", "header": "Docs layout",
+    "multi_select": several, "options": [
+      {"label": "Top of the page", "description": "Before the first step"},
+      {"label": "Under Sign in", "description": null},
+      {"label": "In the sidebar", "description": "Always visible"}
+    ]});
+    let block = json!({"type": "tool_use", "id": "toolu_ask", "name": "mcp__Orchester__ask_question", "input": input});
+    self.assistant("msg_toolu_ask", &block.to_string());
+    let Some((text, failed)) = server.call("ask_question", &input) else {
+      eprintln!("orchester-answer: none");
+      return ExitCode::from(2);
+    };
+    let status = if failed { "error" } else { "ok" };
+    eprintln!(
+      "orchester-answer: {status} {}",
+      text.lines().collect::<Vec<_>>().join(" | ")
+    );
+    self.tool_result("toolu_ask", &text, failed);
+    self.finish(worktree, "hello", step)
+  }
+
   /// One call of Orchester's `tool`, asked about first when no rule allows it.
   fn use_tool(&self, args: &[String], server: &mut Prompt, (call, tool, input): (&str, &str, &Value)) {
     let name = format!("mcp__Orchester__{tool}");

@@ -485,6 +485,7 @@ Task and project memory (`docs/design/orchester-workspace.md`, "Task and project
 | --- | --- |
 | `conversations` | *not built yet*: project and pull request thread conversations (scope, title); a task's conversation is its messages |
 | `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged, optional immutable recovery event sequence — what a message says never changes, it is never deleted and its delivery only moves forward; attachments are not built yet |
+| `questions` | one request of an agent that asks the person questions with suggested answers (ORC-83): run, step execution, invocation, agent role, the questions as JSON (text, optional header, at least two options with optional descriptions, whether several may be picked), whether the agent's turn waits (`in_turn`) or its step ended with it (`step_end`), asked at, state (waiting, answered, interrupted), the answers (labels picked and own text, checked against the questions when read), who answered (person, automation), ended at, and for a step-end answer the person's message it reached the agent in; written by the runner, answered once |
 | `proposals` | conversation, version, proposed task set (not tasks until created) |
 | `pull_requests` | number, title, state, branches, head revision, linked task, synced at |
 | `pull_request_syncs` | repository (host / owner / name) and when its open pull requests were last read; `pull_requests` rows of a repository are replaced with every sync (a cache of GitHub, desktop-written) |
@@ -518,7 +519,9 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
 - **Runner** writes execution data: runs, attempts, steps, plans, checkpoints, events,
   evidence, artifacts, usage, agent messages, message delivery state, audit events.
 - Neither process edits the other's rows. A user request that changes execution (pause, cancel,
-  continue) is an IPC command; the runner applies it and records the event.
+  continue) is an IPC command; the runner applies it and records the event. An answer to an agent's
+  question with suggested answers is one too (`AnswerQuestion`): the runner records it, and for a
+  question that ended its step it also writes the person's message that carries the answer to the agent.
 
 ## State machines
 

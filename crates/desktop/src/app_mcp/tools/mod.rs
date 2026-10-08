@@ -9,6 +9,7 @@ mod limits;
 mod messages;
 mod pipeline_copy;
 mod projects;
+mod questions;
 mod return_to_draft;
 mod run_task;
 mod runs;
@@ -94,7 +95,7 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "get_run",
     description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
-                  what it waits for.",
+                  what it waits for, its agents' waiting questions with their options among it.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -171,6 +172,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "answer_question",
+    description: "Answers an agent's waiting question with suggested answers, as its card in the task conversation does: the labels of the options picked (one, or several where the question allows it) and/or an answer in your own words. Refused for a label the question does not suggest, more than one answer to a single-choice question, or an empty answer.",
+    schema: schema_for_type::<questions::AnswerQuestion>,
+    read_only: false,
+  },
+  Spec {
     name: "set_code_index",
     description: "Turns the project's code index on or off for agents that start from now on, as Project settings does. Returns the new state.",
     schema: schema_for_type::<projects::SetCodeIndex>,
@@ -240,16 +247,24 @@ async fn dispatch(
     "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
     "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
     "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
-    "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
-    "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
-    "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
-    "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
-    "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
     "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,
+    other => dispatch_answers(services, other, arguments).await,
+  }
+}
+
+/// The tools that answer what agents wait for, and auto mode's settings.
+async fn dispatch_answers(services: &Services, name: &str, arguments: Value) -> Result<Value, ToolError> {
+  match name {
+    "list_approvals" => approvals::list_approvals(services, parse(arguments)?).await,
+    "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
+    "answer_question" => questions::answer_question(services, parse(arguments)?).await,
+    "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
+    "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
+    "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

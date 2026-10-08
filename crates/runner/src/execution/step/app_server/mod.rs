@@ -246,6 +246,15 @@ impl AppServerSession {
   fn screen(&self, updates: Vec<Update>) -> Result<Vec<Update>, AppServerFailure> {
     let mut screened = Vec::with_capacity(updates.len());
     for update in updates {
+      if let Update::Question(question) = &update
+        && self.thread.as_deref() != Some(question.thread.as_str())
+      {
+        return Err(
+          "Codex App Server asked a question outside the active thread"
+            .to_owned()
+            .into(),
+        );
+      }
       let Update::Approval(request) = update else {
         screened.push(update);
         continue;
