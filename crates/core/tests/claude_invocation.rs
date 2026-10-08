@@ -2,8 +2,6 @@
 //! and the environment it sees. Claude Code enforces the same options on Windows and macOS (its own
 //! sandbox, the only platform-specific part, is not used), so every expectation is checked for both.
 
-mod code_index;
-
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use orchester_core::{
@@ -48,9 +46,8 @@ fn enforced(
 }
 
 /// The Orchester tools that run without asking in a step that only reads, each with its allow rule, after
-/// the step's other allowed tools (`orchester_core::orchester_tools`); the skill tools' whether or not the
-/// runner offers them.
-const READ_RULES: [&str; 9] = [
+/// the step's other allowed tools (`orchester_core::orchester_tools`).
+const READ_RULES: [&str; 7] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search",
@@ -58,11 +55,9 @@ const READ_RULES: [&str; 9] = [
   "mcp__Orchester__git_diff",
   "mcp__Orchester__git_log",
   "mcp__Orchester__git_show",
-  "mcp__Orchester__list_skills",
-  "mcp__Orchester__read_skill",
 ];
 /// And in a step that may write.
-const WRITE_RULES: [&str; 13] = [
+const WRITE_RULES: [&str; 11] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search",
@@ -74,8 +69,6 @@ const WRITE_RULES: [&str; 13] = [
   "mcp__Orchester__git_show",
   "mcp__Orchester__git_add",
   "mcp__Orchester__git_commit",
-  "mcp__Orchester__list_skills",
-  "mcp__Orchester__read_skill",
 ];
 
 /// The permission prompt's configuration file, for the invocations that ask a person.
@@ -524,4 +517,82 @@ fn claude_invocation_command_adds_the_project_variables() {
       ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
     ]
   );
+}
+
+#[test]
+fn claude_invocation_reads_the_code_index_but_may_not_edit_it() {
+  let index = [
+    (
+      Path::new("/repo/.orchester/index/4d2b8e0"),
+      "Edit(//repo/.orchester/index/4d2b8e0/**)",
+    ),
+    (
+      Path::new(r"C:\repo\.orchester\index\4d2b8e0"),
+      "Edit(//c/repo/.orchester/index/4d2b8e0/**)",
+    ),
+  ];
+  for (folder, rule) in index {
+    let writing = enforced(
+      RepositoryAccess::Write,
+      allowed(&["git"]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let given = ClaudeInvocation {
+      code_index: Some(folder),
+      ..invocation(&writing)
+    };
+    let given_args = args(&given);
+    let added = given_args
+      .windows(2)
+      .any(|pair| pair[0] == "--add-dir" && pair[1] == folder.to_string_lossy());
+    assert!(added, "{given_args:?}");
+    assert_eq!(
+      given_args
+        .iter()
+        .filter(|arg| arg.as_str() == "--disallowedTools")
+        .count(),
+      1,
+      "{given_args:?}"
+    );
+    assert!(given_args.iter().any(|arg| arg == rule), "{given_args:?}");
+
+    let reading = enforced(
+      RepositoryAccess::ReadOnly,
+      allowed(&["git"]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let read_only = ClaudeInvocation {
+      code_index: Some(folder),
+      ..invocation(&reading)
+    };
+    assert!(
+      !args(&read_only).iter().any(|arg| arg.starts_with("Edit(")),
+      "every edit tool is denied already"
+    );
+  }
+}
+
+#[test]
+fn claude_invocation_gets_no_edit_rule_for_a_code_index_on_a_network_share() {
+  // How Claude Code writes a network path in its patterns is not documented: the index's files
+  // are read-only instead.
+  for folder in [
+    r"\\server\share\repo\.orchester\index\4d2b8e0",
+    r"\\?\UNC\server\share\repo\.orchester\index\4d2b8e0",
+  ] {
+    let writing = enforced(
+      RepositoryAccess::Write,
+      allowed(&[]),
+      NetworkAccess::On,
+      Platform::Windows,
+    );
+    let given = ClaudeInvocation {
+      code_index: Some(Path::new(folder)),
+      ..invocation(&writing)
+    };
+    let given_args = args(&given);
+    assert!(!given_args.iter().any(|arg| arg.starts_with("Edit(")), "{given_args:?}");
+  }
 }

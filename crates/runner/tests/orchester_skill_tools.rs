@@ -1,7 +1,8 @@
 //! Orchester's `list_skills` and `read_skill` end to end through the relay, with the fake CLIs: the skills placed
-//! for the step execution (a pinned skill with a reference file) and, while the project has its repository agent
-//! files on, the repository's `.claude/skills`; a file that leaves the skill is refused; the prompt names the skills
-//! without their paths and points at `read_skill`. `read_file` reaches both kinds of skill as well. Needs `git`. Run
+//! for the step execution (a pinned skill with a reference file) and the repository's skills the CLI itself loads:
+//! Codex's `.agents/skills` while the project has its repository agent files on, none for Claude Code; a file that
+//! leaves the skill is refused; the prompt names the skills without their paths and points at `read_skill`.
+//! `read_file` reaches both kinds of skill as well. Needs `git`. Run
 //! with `cargo test -p orchester-runner --features test-agent --test orchester_skill_tools orchester_skill_tools`.
 
 mod support;
@@ -51,9 +52,9 @@ fn publish_skill(root: &Path) {
   db.publish_draft::<Skill>(id, Timestamp::now()).expect("publish");
 }
 
-/// Commits the repository skill `deploy` under `.claude/skills`, with a reference file.
+/// Commits the repository skill `deploy` under `.agents/skills`, where Codex finds it, with a reference file.
 fn commit_repository_skill(root: &Path) {
-  let folder = root.join(".claude").join("skills").join("deploy");
+  let folder = root.join(".agents").join("skills").join("deploy");
   fs::create_dir_all(folder.join("references")).expect("skill folder");
   fs::write(
     folder.join("SKILL.md"),
@@ -174,7 +175,8 @@ async fn orchester_skill_tools_serve_codex_pinned_and_repository_skills() {
   assert_prompt(&db, id, "read_skill");
 }
 
-/// Claude Code calls both tools by their allow rules, through its permission prompt's relay.
+/// Claude Code calls both tools by their allow rules, through its permission prompt's relay. It gets the pinned
+/// skill only: Claude Code loads no repository skill, whatever the setting says.
 #[tokio::test(flavor = "multi_thread")]
 async fn orchester_skill_tools_serve_claude_code_by_their_allow_rules() {
   let permissions = AgentPermissions::new(
@@ -198,22 +200,23 @@ async fn orchester_skill_tools_serve_claude_code_by_their_allow_rules() {
       "list_skills ok",
       "read_skill ok",
       "read_skill ok",
-      "read_skill ok",
+      "read_skill error",
       "read_skill error",
       "read_skill error",
       "read_file ok",
       "read_file ok",
     ],
   );
+  assert!(
+    calls[0].ends_with("|   reference files: references/checks.md"),
+    "{calls:#?}"
+  );
   assert!(calls[1].ends_with("|      8\tRun them."), "{calls:#?}");
   assert!(
     calls[2].ends_with(":      1\tcargo test |      1\tcargo test"),
     "{calls:#?}"
   );
-  assert!(
-    calls[3].ends_with(":      1\tstep one |      1\tstep one"),
-    "{calls:#?}"
-  );
+  assert!(calls[3].contains("this step has no skill named `deploy`"), "{calls:#?}");
   assert!(calls[4].contains("a reference file path is"), "{calls:#?}");
   assert_prompt(&db, id, "mcp__Orchester__read_skill");
 }

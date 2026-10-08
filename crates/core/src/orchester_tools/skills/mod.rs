@@ -5,18 +5,21 @@
 //!   the agent, and Orchester's internal ones, in `<repo>/.orchester/skills/<execution>/<slug>/`. That folder is
 //!   Orchester's state, which `read_outside_file` never reads, so these tools are how an agent reads them. A skill
 //!   reads its own `SKILL.md` and the reference files its version lists, nothing else.
-//! - The repository's own skills (the `SKILL.md` folders of the worktree's `.agents/skills`, `.codex/skills` and
-//!   `.claude/skills`) are offered only while the project lets agents load the repository's agent files
-//!   (`crate::agent_files::RepositoryAgentFiles`). Their reference files are the files of their folder in the worktree,
-//!   but a folder holding a skill of its own, a `.git` entry and anything a link leads out of the folder.
-//! - Each name is offered once: Orchester's skills first, then the repository's in path order. A later skill with a
-//!   name already offered, or a repository skill whose folder leads out of the worktree, is listed as left out.
-//! - A read answers a text file's numbered lines within the limits of `read_outside_file` ([`super::MAX_READ_BYTES`]).
+//! - The repository's own skills are the ones the agent's CLI itself loads while the project lets it load the
+//!   repository's agent files (`crate::agent_files::RepositoryAgentFiles`): the runner names their folders, and they
+//!   are found within the worktree only ([`repository`]). Their reference files are the files of their folder, but a
+//!   folder holding a skill of its own, a `.git` entry, the worktree's `.orchester` and anything a link leads out of
+//!   the folder or the worktree to.
+//! - Each name is offered once: Orchester's skills first, then the repository's in path order. A skill not offered is
+//!   listed as left out, by where it lies in the worktree, never by a path outside it.
+//! - A read answers a regular text file's numbered lines within the limits of `read_outside_file`
+//!   ([`super::MAX_READ_BYTES`]). Listing and reading apply the same rule of what belongs to a skill ([`belongs`]).
+
+mod repository;
 
 use std::{
   fmt::Write,
-  fs,
-  io::{self, Read},
+  fs, io,
   path::{Path, PathBuf},
 };
 
@@ -24,18 +27,10 @@ use thiserror::Error;
 
 use super::{OutsideReadError, ToolCallError, ToolResult, outside::read_lines};
 use crate::{
-  agent_files::frontmatter,
   native::scope::protected,
   permission::canonical,
   resource::{SKILL_FILE, SkillFilePath},
 };
-
-/// The most reference files `list_skills` names for one repository skill.
-const MAX_LISTED_FILES: usize = 200;
-/// How deep below its folder a repository skill's reference files are looked for.
-const MAX_FILE_DEPTH: usize = 8;
-/// The most bytes of a repository skill's `SKILL.md` read for its name and description.
-const MAX_HEADER_BYTES: u64 = 64 * 1024;
 
 /// Where a skill comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,21 +74,12 @@ pub enum SkillReadError {
   File(#[from] OutsideReadError),
 }
 
-/// Why a skill cannot be offered when the agent starts.
+/// Why a skill Orchester placed cannot be offered when the agent starts.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("cannot read the skill at {}: {kind}", .path.display())]
 pub struct SkillOfferError {
   path: PathBuf,
   kind: io::ErrorKind,
-}
-
-impl SkillOfferError {
-  fn of(path: &Path) -> impl FnOnce(io::Error) -> Self + '_ {
-    move |error| Self {
-      path: path.to_path_buf(),
-      kind: error.kind(),
-    }
-  }
 }
 
 /// A skill one step offers.
@@ -106,6 +92,9 @@ struct OfferedSkill {
   folder: PathBuf,
   /// The reference files its version lists, for Orchester's skill; a repository skill's are its folder's files.
   listed: Option<Vec<SkillFilePath>>,
+  /// The worktree, with links resolved, for a repository skill: nothing of the worktree's `.git` or `.orchester`
+  /// is the skill's, whatever its folder resolves to.
+  worktree: Option<PathBuf>,
 }
 
 /// The skills one step execution offers its agent through `list_skills` and `read_skill`.
@@ -130,10 +119,13 @@ impl StepSkills {
     document: &Path,
     files: &[SkillFilePath],
   ) -> Result<(), SkillOfferError> {
-    let folder = document.parent().unwrap_or(document);
-    let folder = fs::canonicalize(folder)
+    let found = document.parent().unwrap_or(document);
+    let folder = fs::canonicalize(found)
       .map(canonical::plain)
-      .map_err(SkillOfferError::of(folder))?;
+      .map_err(|error| SkillOfferError {
+        path: found.to_path_buf(),
+        kind: error.kind(),
+      })?;
     self.offer(
       OfferedSkill {
         name: name.to_owned(),
@@ -141,52 +133,9 @@ impl StepSkills {
         source: SkillSource::Orchester,
         folder,
         listed: Some(files.to_vec()),
+        worktree: None,
       },
       name,
-    );
-    Ok(())
-  }
-
-  /// Offers the repository skill whose `SKILL.md` is `document`, found in `worktree`: its name and description
-  /// from its front matter, the name of its folder when it has none. One whose folder leads out of the worktree, or
-  /// into a protected folder of it, is left out.
-  pub fn add_repository(&mut self, document: &Path, worktree: &Path) -> Result<(), SkillOfferError> {
-    let shown = document
-      .strip_prefix(worktree)
-      .unwrap_or(document)
-      .to_string_lossy()
-      .replace('\\', "/");
-    let root = fs::canonicalize(worktree)
-      .map(canonical::plain)
-      .map_err(SkillOfferError::of(worktree))?;
-    let found = document.parent().unwrap_or(document);
-    let folder = fs::canonicalize(found)
-      .map(canonical::plain)
-      .map_err(SkillOfferError::of(found))?;
-    if !folder.starts_with(&root) || protected(&folder, &root, true) {
-      self
-        .left_out
-        .push(format!("{shown}: its folder leads out of the worktree"));
-      return Ok(());
-    }
-    let mut header = Vec::new();
-    fs::File::open(document)
-      .and_then(|file| file.take(MAX_HEADER_BYTES).read_to_end(&mut header))
-      .map_err(SkillOfferError::of(document))?;
-    let markdown = frontmatter::parse(&String::from_utf8_lossy(&header));
-    let name = markdown
-      .name
-      .or_else(|| found.file_name().map(|name| name.to_string_lossy().into_owned()))
-      .unwrap_or_default();
-    self.offer(
-      OfferedSkill {
-        name,
-        description: markdown.description.unwrap_or_default(),
-        source: SkillSource::Repository,
-        folder,
-        listed: None,
-      },
-      &shown,
     );
     Ok(())
   }
@@ -222,10 +171,9 @@ impl StepSkills {
   fn list(&self) -> String {
     let mut text = String::from("Read a skill with read_skill and its name; a reference file with its file too.\n");
     for skill in &self.skills {
-      let description = skill.description.split_whitespace().collect::<Vec<_>>().join(" ");
       let files = match &skill.listed {
         Some(listed) => listed.iter().map(|file| file.as_str().to_owned()).collect(),
-        None => folder_files(&skill.folder),
+        None => repository::folder_files(skill),
       };
       let files = if files.is_empty() {
         "none".to_owned()
@@ -233,7 +181,13 @@ impl StepSkills {
         files.join(", ")
       };
       // Writing to a String cannot fail.
-      let _ = writeln!(text, "- {} ({}): {description}", skill.name, skill.source.as_str());
+      let _ = writeln!(
+        text,
+        "- {} ({}): {}",
+        skill.name,
+        skill.source.as_str(),
+        one_line(&skill.description)
+      );
       let _ = writeln!(text, "  reference files: {files}");
     }
     if !self.left_out.is_empty() {
@@ -280,65 +234,45 @@ impl StepSkills {
         }));
       }
     };
-    if !belongs(&resolved, &skill.folder) {
+    // Only a regular file is opened: opening a pipe would wait for a writer.
+    if !belongs(&resolved, skill) || !is_regular_file(&resolved) {
       return Err(not_in_skill());
     }
     Ok(read_lines(resolved, offset, limit)?)
   }
 }
 
-/// Whether `path`, resolved, is a file of the skill in `folder`: inside it, in no `.git` entry and in no folder
-/// below it that holds a skill of its own.
-fn belongs(path: &Path, folder: &Path) -> bool {
-  if !path.starts_with(folder) || protected(path, folder, false) {
+/// Whether `path`, resolved, is a file of `skill`: inside its folder, in no `.git` entry, in no folder below it that
+/// holds a skill of its own, and, for a repository skill, inside the worktree and not in its `.orchester`.
+fn belongs(path: &Path, skill: &OfferedSkill) -> bool {
+  let folder = &skill.folder;
+  let in_worktree = skill
+    .worktree
+    .as_ref()
+    .is_none_or(|worktree| path.starts_with(worktree) && !protected(path, worktree, true));
+  if !in_worktree || !path.starts_with(folder) || protected(path, folder, false) {
     return false;
   }
   path
     .ancestors()
     .skip(1)
-    .take_while(|ancestor| *ancestor != folder)
+    .take_while(|ancestor| *ancestor != folder.as_path())
     .all(|ancestor| !ancestor.join(SKILL_FILE).exists())
 }
 
-/// The reference files of the repository skill in `folder`, as paths from it with `/`: at most
-/// [`MAX_LISTED_FILES`], with a last entry saying when there are more.
-fn folder_files(folder: &Path) -> Vec<String> {
-  let mut found = Vec::new();
-  collect_files(folder, folder, 0, &mut found);
-  found.sort();
-  if found.len() > MAX_LISTED_FILES {
-    let more = found.len() - MAX_LISTED_FILES;
-    found.truncate(MAX_LISTED_FILES);
-    found.push(format!("[{more} more not listed]"));
-  }
-  found
+/// Whether `path` is a regular file, as its links lead.
+fn is_regular_file(path: &Path) -> bool {
+  fs::metadata(path).is_ok_and(|metadata| metadata.is_file())
 }
 
-/// Collects the files of `current`, below the skill's `folder`, that [`belongs`] lets the skill read. An entry that
-/// cannot be read or resolved is left out of the list: the list only helps, and `read_skill` answers for each file
-/// with its own error.
-fn collect_files(folder: &Path, current: &Path, depth: usize, found: &mut Vec<String>) {
-  let Ok(entries) = fs::read_dir(current) else {
-    return;
-  };
-  for entry in entries.flatten() {
-    let path = entry.path();
-    let Ok(resolved) = fs::canonicalize(&path).map(canonical::plain) else {
-      continue;
-    };
-    if resolved.is_dir() {
-      let inside = resolved.starts_with(folder) && !protected(&resolved, folder, false);
-      if inside && depth < MAX_FILE_DEPTH && !resolved.join(SKILL_FILE).exists() {
-        collect_files(folder, &path, depth + 1, found);
-      }
-      continue;
-    }
-    let Ok(relative) = path.strip_prefix(folder) else {
-      continue;
-    };
-    let relative = relative.to_string_lossy().replace('\\', "/");
-    if belongs(&resolved, folder) && SkillFilePath::new(&relative).is_ok() {
-      found.push(relative);
-    }
-  }
+/// `text` on one line: its whitespace runs as one space, without control characters, so it cannot start a line of
+/// its own in a list.
+fn one_line(text: &str) -> String {
+  text
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .chars()
+    .filter(|c| !c.is_control())
+    .collect()
 }

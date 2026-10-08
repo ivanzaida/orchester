@@ -258,7 +258,7 @@ impl RunTask {
     let environment = self.environment()?;
     let repository = self.repository_skills_left_out(provider, worktree)?;
     let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
-    let offered = self.offered_skills(&placed, worktree)?;
+    let offered = self.offered_skills(&placed, (provider, worktree))?;
     let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
     let (tools, claude_approvals) = self.step_tools(
       (enforced.permissions(), &setup, offered),

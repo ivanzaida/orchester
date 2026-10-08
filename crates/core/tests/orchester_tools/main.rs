@@ -8,6 +8,7 @@ mod input;
 mod outside;
 mod policy;
 mod programs;
+mod skill_reads;
 mod skills;
 
 use std::{
