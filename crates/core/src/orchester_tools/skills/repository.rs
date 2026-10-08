@@ -17,7 +17,7 @@ use super::{OfferedSkill, SkillSource, StepSkills, belongs, is_regular_file};
 use crate::{
   agent_files::{
     frontmatter,
-    skills::{MAX_SEARCH_DEPTH, MAX_SEARCHED_FOLDERS, shown_in_worktree},
+    skills::{MAX_HEADER_BYTES, MAX_SEARCH_DEPTH, MAX_SEARCHED_FOLDERS, shown_in_worktree},
   },
   native::scope::protected,
   permission::canonical,
@@ -26,8 +26,6 @@ use crate::{
 
 /// The most repository skills one step offers.
 const MAX_REPOSITORY_SKILLS: usize = 100;
-/// The most bytes of a repository skill's `SKILL.md` read for its name and description.
-const MAX_HEADER_BYTES: u64 = 64 * 1024;
 /// The longest repository skill name offered, in characters.
 const MAX_NAME_CHARS: usize = 200;
 /// The most reference files `list_skills` names for one repository skill.

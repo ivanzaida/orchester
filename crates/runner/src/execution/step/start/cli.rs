@@ -9,7 +9,7 @@ use std::{
 };
 
 use orchester_core::{
-  agent_files::skills::repository_skills,
+  agent_files::skills::RepositorySkills,
   command::Command,
   connection::{
     AgentConnection, AgentProvider,
@@ -90,7 +90,8 @@ impl RunTask {
       .map_err(|error| problem(error.to_string()))?;
     Ok(match (agent_files.is_on(), provider) {
       (false, AgentProvider::CodexCli) => {
-        Some(repository_skills(worktree).map_err(|error| problem(error.refusal_while_off()))?)
+        let skills = RepositorySkills::find(worktree).map_err(|error| problem(error.refusal_while_off()))?;
+        Some(skills.codex_paths())
       }
       _ => None,
     })
