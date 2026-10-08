@@ -120,8 +120,12 @@ For Pencil: `get_editor_state`, `get_guidelines`, `batch_get`, `snapshot_layout`
 - **Codex App Server** gets `mcp_servers.<server>.tools.<tool>.approval_mode = "approve"` for each listed tool as an
   override of its process (`-c mcp_servers.<server>.tools={"<tool>"={approval_mode="approve"},…}`), next to the
   server's own. Not in the thread's configuration (`config` of `thread/start` and `thread/resume`), which holds the
-  user's servers turned off only: 0.159.2 refuses a thread whose configuration has a table for a server only
-  overrides define, with *invalid transport in `mcp_servers.<server>`* (checked 2026-10-07).
+  user's servers turned off only, each by its dotted key (`"mcp_servers.<server>.enabled": false`): in 0.159.2 a
+  thread's `mcp_servers` table, even an empty one, replaces the table of the process's overrides, so the step's
+  servers and Orchester's are gone from the thread (the step then failed with *omitted an MCP server selected by
+  this agent profile*, or its agent worked without Orchester's tools), and a table for a server only overrides
+  define refuses the thread with *invalid transport in `mcp_servers.<server>`* (checked 2026-10-07 and 2026-10-08
+  with `config/read`, `thread/start` and `mcpServerStatus/list`).
   0.159.2 then runs that tool without `mcpServer/elicitation/request`, while another tool of the same server still
   sends one; the runner never answers a request on a tool's behalf. Checked 2026-10-02 with turns against a local mock
   of the Responses API (no model): one tool set to `approve` ran unasked, another asked; `config/read` lists the
@@ -211,7 +215,15 @@ invocation; a native agent can later declare the same schemas in its own request
   server `Orchester` of its configuration, the runner's address in `env`, the token through `env_vars` (kept out of
   the agent's shell commands) and a `tool_timeout_sec` long enough for a person's decision. A user's own server named
   `Orchester` refuses the step. The relay handles one request at a time, so a call waiting for a person holds the
-  invocation's other calls of the relay.
+  invocation's other calls of the relay. Codex 0.159.2 starts the server once for the thread and once more for each
+  `mcpServerStatus/list`, at about the same time (checked 2026-10-08), so the runner serves the two Codex relays that
+  show the token, each on its own connection, and closes the port after them: a later connection, even with the
+  token, is refused. Once Codex's inventory was checked, the port waits at most 10 seconds for a relay still to come
+  (Codex may answer the list before the thread's relay came); a handshake under way when it closes still counts,
+  and when fewer than two came the step's activity says that the agent may have worked without Orchester's tools.
+  Claude Code's permission prompt relay is served alone. Each connection shows the token on its own, at most eight at
+  once (more wait in the port's backlog), so a silent one holds no relay back; a connection without the token never
+  closes the port.
 - **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
   its own (*# Orchester tools*) to use them for git and for files outside the worktree.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
@@ -296,7 +308,7 @@ execpolicy rules, which are the user's choice (user decision 2026-10-01):
 | plugins, their skills and MCP servers (`code-review`, `cua_repl`, …) | `-c features.plugins=false` |
 | apps (`codex_app`) | `-c features.apps=false` |
 | permission overlays that can stay granted (`with_additional_permissions`, `request_permissions`) | `-c features.exec_permission_approvals=false`, `-c features.request_permissions_tool=false` |
-| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: `mcp_servers.<name>.enabled=false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers), so the step stops and says to rename one. |
+| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: the dotted key `"mcp_servers.<name>.enabled": false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them, and it replaces the servers of the process's overrides, the step's own and Orchester's. A dotted key cannot name a server whose name has a dot (Codex splits it at every dot), so such a server of the user's configuration refuses the step before its thread starts and says to rename it. A server the step chooses that is not connected is named in the step's failure (it asks before MCP actions) or its activity, with Codex's state and reason. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers), so the step stops and says to rename one. |
 | hooks | cannot be turned off: a configuration that defines any refuses the step |
 | the user's execpolicy `.rules` (`$CODEX_HOME/rules`) | **kept**, as the user's choice (0.159.2 has no App Server setting for them anyway). A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your own Codex rules still apply · allow rules run unsandboxed, unasked*, and the run permissions popover says it under Commands. |
 

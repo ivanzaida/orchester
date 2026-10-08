@@ -7,8 +7,10 @@ use std::time::Duration;
 use orchester_core::{
   connection::{
     app_server::Update,
+    mcp::McpServerProblem,
     stream::{AgentEvent, InvocationOutcome, OutputStream, RunnerProblem},
   },
+  orchester_tools::SERVER,
   store::ActivityStore,
   time::Timestamp,
 };
@@ -21,7 +23,7 @@ use super::{
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
-    relay::Listening,
+    relay::{CODEX_RELAYS, Listening},
   },
   Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
 };
@@ -141,6 +143,11 @@ impl Worker {
       } => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
       Driver::Native(_) => Ok(Vec::new()),
     };
+    if self.app_server().is_some_and(AppServerSession::servers_checked)
+      && let Some(relay) = self.tool_relay.as_mut()
+    {
+      relay.stop_accepting();
+    }
     self.took_input(watch)?;
     match received {
       Ok(updates) => {
@@ -265,9 +272,30 @@ impl Worker {
     }
   }
 
+  /// Codex's inventory was checked, but fewer relays of Orchester's tools than Codex starts reached the runner:
+  /// the agent may have worked without them, which the activity says.
+  fn note_tool_relays_missing(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    let taken = self.tool_relay.as_ref().map_or(CODEX_RELAYS, Listening::taken);
+    if taken >= CODEX_RELAYS || !self.app_server().is_some_and(AppServerSession::servers_checked) {
+      return Ok(());
+    }
+    let detail = format!(
+      "Codex reached Orchester's tools {taken} of the {CODEX_RELAYS} times it starts them; the agent may have \
+       worked without them"
+    );
+    self.observe(
+      watch,
+      AgentEvent::McpServer {
+        server: Some(SERVER.to_owned()),
+        problem: McpServerProblem::FailedToStart { detail: Some(detail) },
+      },
+    )
+  }
+
   fn finish(&self, mut watch: Watch, exit: &ProcessExit) -> Result<Finished, StoreError> {
     let mut approval_interrupted = false;
     self.check_prompt_reached(&mut watch)?;
+    self.note_tool_relays_missing(&mut watch)?;
     self.note_stderr_left_out(&mut watch)?;
     let waiting = watch.approval.take();
     // A request the run's own stop ended (a pause at the decision, a cancel) needs no naming.

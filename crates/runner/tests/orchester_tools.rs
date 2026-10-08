@@ -165,7 +165,7 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
     );
   }
   let thread = threads(&db, id).pop().expect("a thread");
-  assert!(thread["config"]["mcp_servers"].get("Orchester").is_none(), "{thread}");
+  assert!(thread["config"].get("mcp_servers").is_none(), "{thread}");
 }
 
 /// A CLI that runs a call it should have asked about gets no answer unasked: the runner asks itself, and a

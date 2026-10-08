@@ -131,7 +131,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     .iter()
     .any(|words| prompt.contains(words))
   {
-    fake_codex_tools::report(&session.args, &session.cwd, prompt);
+    fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
   }
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;

@@ -4,18 +4,27 @@
 //! step's Orchester tools ([`super::orchester_tools`]), one [`RelayRequest`] per line, each answered on
 //! one line. The listener and its connection end with the worker.
 //!
-//! Only one relay is served: connections are taken one at a time, each must show the token on a short
-//! first line within [`HANDSHAKE`] (compared in constant time), and after the first that does, or after
-//! [`ATTEMPTS`] that do not, nothing more is accepted. While a prompt call waits for a person, the
-//! connection is watched: a relay that goes away ends the wait, so a later decision cannot be recorded as
-//! delivered.
+//! A connection must show the token on a short first line within [`HANDSHAKE`] (compared in constant time),
+//! each connection on its own, so a silent one holds no other back; at most [`HANDSHAKES`] are read at once,
+//! and connections beyond them wait in the port's backlog. A connection without the token never closes the
+//! port, so none can keep the CLI's relays out. Only the relays the CLI starts are served, each on its own
+//! connection ([`Served::relays`]), and the port closes once they have shown the token: Claude Code starts
+//! its permission prompt once; Codex 0.159.2 starts Orchester's server once for the thread and once more for
+//! the runner's one `mcpServerStatus/list`, which lists its tools and closes it, at about the same time
+//! ([`CODEX_RELAYS`]; checked 2026-10-08 with the real relay and `codex app-server`). A listener that served
+//! only the first would leave the thread's relay, or the list's, waiting until Codex gives up on it (*timed
+//! out awaiting tools/list*). Once Codex's inventory was checked, the port waits at most [`RELAY_WAIT`] for
+//! the relays still to come ([`Listening::stop_accepting`]); a handshake under way when it closes still
+//! counts, and the worker says in the activity when fewer came ([`Listening::taken`]).
+//! While a prompt call waits for a person, its connection is watched: a relay that goes away ends the
+//! wait, so a later decision cannot be recorded as delivered.
 
 use std::{
   future::pending,
   net::{Ipv4Addr, SocketAddr},
   sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicU64, AtomicUsize, Ordering},
   },
   time::Duration,
 };
@@ -30,12 +39,12 @@ use serde_json::Value;
 use tokio::{
   io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
   net::{
-    TcpListener,
+    TcpListener, TcpStream,
     tcp::{OwnedReadHalf, OwnedWriteHalf},
   },
   sync::{mpsc, oneshot},
-  task::JoinHandle,
-  time::timeout,
+  task::{JoinError, JoinHandle, JoinSet},
+  time::{Instant, sleep_until, timeout},
 };
 
 use super::{
@@ -47,12 +56,18 @@ use super::{
 const HANDSHAKE: Duration = Duration::from_secs(10);
 /// How long the listener waits after a failed accept before the next.
 const ACCEPT_RETRY: Duration = Duration::from_millis(100);
-/// Connections without the token before the listener gives up.
-const ATTEMPTS: usize = 8;
+/// Connections read for the token at once.
+const HANDSHAKES: usize = 8;
+/// How long the port stays open for the relays still to come once Codex's inventory was checked.
+const RELAY_WAIT: Duration = Duration::from_secs(10);
 /// The longest first line read: the token is 64 characters.
 const TOKEN_LINE: u64 = 128;
 /// What the agent is told of a call of Orchester's tools nobody answered.
 const DENIED: &str = "Denied in Orchester.";
+
+/// The relays a Codex App Server invocation starts: Orchester's server for the thread, and once more for the
+/// runner's one `mcpServerStatus/list`.
+pub(super) const CODEX_RELAYS: usize = 2;
 
 /// What one invocation's relay is served.
 pub(super) struct Served {
@@ -61,12 +76,22 @@ pub(super) struct Served {
   pub(super) tools: Arc<ToolHost>,
 }
 
+impl Served {
+  /// How many relays show the token: Claude Code starts its permission prompt once, Codex
+  /// [`CODEX_RELAYS`] times.
+  pub(super) const fn relays(&self) -> usize {
+    if self.prompt.is_some() { 1 } else { CODEX_RELAYS }
+  }
+}
+
 /// A listener waiting for its relay, ended when this is dropped.
 pub(super) struct Listening {
   /// The prompt calls a person decides.
   requests: mpsc::UnboundedReceiver<Asked>,
-  /// Set once the relay showed the token.
-  reached: Arc<AtomicBool>,
+  /// The relays that showed the token.
+  taken: Arc<AtomicUsize>,
+  /// Starts the last wait for the relays ([`Self::stop_accepting`]).
+  stop: Option<oneshot::Sender<()>>,
   listener: JoinHandle<()>,
 }
 
@@ -90,7 +115,21 @@ impl Listening {
 
   /// Whether the relay reached the runner.
   pub(super) fn reached(&self) -> bool {
-    self.reached.load(Ordering::Acquire)
+    self.taken() > 0
+  }
+
+  /// How many relays showed the token.
+  pub(super) fn taken(&self) -> usize {
+    self.taken.load(Ordering::Acquire)
+  }
+
+  /// Every relay the CLI starts has been started: the port closes once they have come, or after
+  /// [`RELAY_WAIT`]. The relays taken are still served.
+  pub(super) fn stop_accepting(&mut self) {
+    if let Some(stop) = self.stop.take() {
+      // The listener closes the port on its own once every relay came; then nothing waits for this.
+      stop.send(()).ok();
+    }
   }
 }
 
@@ -117,63 +156,112 @@ impl Bound {
     &self.address
   }
 
-  /// Waits for the relay that shows `token`, and serves it `served`.
+  /// Waits for the relays that show `token` ([`Served::relays`]), and serves them `served`.
   pub(super) fn serve(self, served: Served, token: ApprovalToken) -> Listening {
     let (sender, requests) = mpsc::unbounded_channel();
-    let reached = Arc::new(AtomicBool::new(false));
+    let (stop, stopped) = oneshot::channel();
+    let taken = Arc::new(AtomicUsize::new(0));
     let relay = Relay {
       token,
       served,
       requests: sender,
-      reached: reached.clone(),
+      taken: taken.clone(),
       asked: AtomicU64::new(0),
     };
     Listening {
       requests,
-      reached,
-      listener: tokio::spawn(relay.accept(self.listener)),
+      taken,
+      stop: Some(stop),
+      listener: tokio::spawn(relay.accept(self.listener, stopped)),
     }
   }
 }
+
+/// A relay's connection: its lines, and its writing half.
+type Connection = (Lines<BufReader<OwnedReadHalf>>, OwnedWriteHalf);
 
 /// What one invocation's listener serves.
 struct Relay {
   token: ApprovalToken,
   served: Served,
   requests: mpsc::UnboundedSender<Asked>,
-  reached: Arc<AtomicBool>,
+  taken: Arc<AtomicUsize>,
   /// Calls of Orchester's tools asked about so far, which name each such request.
   asked: AtomicU64,
 }
 
 impl Relay {
-  /// Takes connections one at a time until one shows the token, then serves only that one.
-  async fn accept(self, listener: TcpListener) {
-    for _ in 0..ATTEMPTS {
-      let stream = tokio::select! {
-        accepted = listener.accept() => match accepted {
-          Ok((stream, _)) => stream,
+  /// Takes the relays ([`Self::take_relays`]), then the ones whose handshake was under way when the port
+  /// closed, and serves them until the worker ends; their connections end with this task.
+  async fn accept(self, listener: TcpListener, stop: oneshot::Receiver<()>) {
+    let relay = Arc::new(self);
+    let mut served = JoinSet::new();
+    let mut handshakes = relay.take_relays(listener, stop, &mut served).await;
+    while let Some(shown) = handshakes.join_next().await {
+      relay.take(shown, &mut served);
+    }
+    relay.requests.closed().await;
+  }
+
+  /// Takes connections, each showing the token on its own, and serves each relay that does in `served`,
+  /// until [`Served::relays`] did, [`RELAY_WAIT`] passed after `stop`, or the worker ended; the port closes
+  /// when this returns, with the handshakes still under way.
+  async fn take_relays(
+    self: &Arc<Self>,
+    listener: TcpListener,
+    mut stop: oneshot::Receiver<()>,
+    served: &mut JoinSet<()>,
+  ) -> JoinSet<Option<Connection>> {
+    let mut handshakes = JoinSet::new();
+    let mut deadline: Option<Instant> = None;
+    while self.taken.load(Ordering::Acquire) < self.served.relays() {
+      tokio::select! {
+        accepted = listener.accept(), if handshakes.len() < HANDSHAKES => match accepted {
+          Ok((stream, _)) => {
+            let relay = self.clone();
+            handshakes.spawn(async move { relay.handshake(stream).await });
+          }
           Err(error) => {
             tracing::warn!(%error, "the relay's listener cannot accept its relay");
             // Without a pause, an accept that keeps failing would spin.
             tokio::time::sleep(ACCEPT_RETRY).await;
-            continue;
           }
         },
-        () = self.requests.closed() => return,
-      };
-      let (read, write) = stream.into_split();
-      let mut reader = BufReader::new(read);
-      if !self.shows_token(&mut reader).await {
-        tracing::warn!("a connection to the relay's listener did not show the invocation's token");
-        continue;
+        Some(shown) = handshakes.join_next() => self.take(shown, served),
+        // A dropped sender is a listener that ends with the worker anyway.
+        _ = &mut stop, if deadline.is_none() => deadline = Some(Instant::now() + RELAY_WAIT),
+        () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
+          tracing::warn!("the relay's listener closed before every relay of the CLI came");
+          break;
+        }
+        () = self.requests.closed() => break,
       }
-      self.reached.store(true, Ordering::Release);
-      // No other connection is taken while or after this one is served.
-      drop(listener);
-      return self.serve(reader.lines(), write).await;
     }
-    tracing::warn!("the relay's listener stopped listening after {ATTEMPTS} connections without its token");
+    handshakes
+  }
+
+  /// Serves the relay of a finished handshake, unless it showed no token or every relay the CLI starts
+  /// was taken; a handshake that panicked showed none.
+  fn take(self: &Arc<Self>, shown: Result<Option<Connection>, JoinError>, served: &mut JoinSet<()>) {
+    let Some((lines, write)) = shown.ok().flatten() else {
+      tracing::warn!("a connection to the relay's listener did not show the invocation's token");
+      return;
+    };
+    // Only the listener's task takes relays, one at a time.
+    if self.taken.load(Ordering::Acquire) >= self.served.relays() {
+      tracing::warn!("a relay came after every relay of the CLI; its connection is closed");
+      return;
+    }
+    self.taken.fetch_add(1, Ordering::AcqRel);
+    let relay = self.clone();
+    served.spawn(async move { relay.serve(lines, write).await });
+  }
+
+  /// The connection's lines and its writing half once it showed the token; `None` when it did not.
+  async fn handshake(&self, stream: TcpStream) -> Option<Connection> {
+    let (read, write) = stream.into_split();
+    let mut reader = BufReader::new(read);
+    self.shows_token(&mut reader).await.then(|| (reader.lines(), write))
   }
 
   async fn shows_token(&self, reader: &mut BufReader<OwnedReadHalf>) -> bool {
