@@ -366,8 +366,16 @@ while it is off).
 While *Repository agent files* is off, the runner finds every `SKILL.md` of both folders as Codex does
 (at any depth, through links) to disable it, and the search fails closed, because Codex follows links
 when it loads skills and would load a skill the search missed (`orchester_core::agent_files::skills`,
-added 2026-10-08, branch `claude/skills-off`). The agent does not start, and the step says why by where
-the cause lies in the worktree (never where a link leads), when:
+added 2026-10-08, branch `claude/skills-off`). Every path that reaches a folder is followed, and each
+`SKILL.md` is disabled by each path through the worktree that reaches it and by its resolved path.
+Codex 0.159.2 (checked on Windows on 2026-10-08 with `skills/list` of `codex app-server` under a scratch
+`CODEX_HOME`, without signing in or a model turn) lists a skill reached through a junction by its
+resolved path, lists a folder reached by two paths once, and `skills.config` disables a skill by either
+path; listing both keeps working should another version match only one. The same check showed that
+Codex passes over hidden entries (`.hidden`, `.git`) and looks 6 folders deep. The search still walks
+hidden folders, in case another version loads them, but never a `.git` entry, which Codex skips and
+whose folders (a nested repository's objects) would only use up the bounds. The agent does not start,
+and the step says why by where the cause lies in the worktree (never where a link leads), when:
 
 - a folder or `SKILL.md` resolves out of the worktree (a link, or a junction on Windows), which is not
   walked: *Repository agent files are off, but `.agents/skills/x` leads out of the worktree, so Codex
@@ -377,13 +385,17 @@ the cause lies in the worktree (never where a link leads), when:
 - the search passes its bounds, the same as `list_skills` uses: a folder more than 8 folders below its
   skills folder (*… `<path>` lies more than 8 folders deep in its skills folder, so Codex could load
   skills there that Orchester does not look for. Make the skills folders smaller or …*), or more than
-  500 folders in both (*… the skills folders hold more than 500 folders, …*).
+  500 folders below the skills folders, each path to a folder counted (*… the skills folders lead to
+  more than 500 folders, each path to a folder counted, …*). A link loop within the worktree therefore
+  runs into the depth bound and refuses.
 
-A link loop within the worktree reads each folder once and does not refuse. The native agent, which
-Orchester gives the repository's skills while the setting is on, uses the same search and does not
-start for the same causes (*cannot load the repository's skills: `.agents/skills/x` leads out of the
-worktree*). The search `list_skills` uses while the setting is on is unchanged: it leaves such skills
-out and never refuses.
+The native agent, which Orchester gives the repository's skills while the setting is on, uses the same
+search and does not start for the same causes (*cannot load the repository's skills: `.agents/skills/x`
+leads out of the worktree*). It lists each skill once, by the first path that reaches it, and reads at
+most 64 KiB of its `SKILL.md`, only once it resolves to a regular file (never a pipe or device); a
+`SKILL.md` that resolves into the worktree's `.git` or `.orchester` (*… leads into the worktree's .git or
+.orchester*) or is not a regular file (*… is not a regular file*) refuses its start too. The search
+`list_skills` uses while the setting is on is unchanged: it leaves such skills out and never refuses.
 
 The user's model, reasoning effort and service tier defaults still apply where the profile sets none.
 Orchester adds the project-selected MCP servers. A step that asks before MCP actions checks that each
