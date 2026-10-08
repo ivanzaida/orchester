@@ -1,7 +1,8 @@
 //! The Conversation tab's timeline as data (ORC-61, as a chat since the rail on the right): its tool
-//! events ([`tool_events`]), and what *Show*, the step picked in the rail, a search and the folds
-//! leave of the timeline.
+//! events ([`tool_events`]), how a command's end reads ([`command_end`]), and what *Show*, the step picked in the
+//! rail, a search and the folds leave of the timeline.
 
+mod command_end;
 mod tool_events;
 
 use std::sync::Arc;

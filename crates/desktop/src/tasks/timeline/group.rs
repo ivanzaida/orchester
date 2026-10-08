@@ -4,7 +4,7 @@
 //! reasoning summaries, usage reports and unparsed lines; agent messages and problems never fold
 //! into a group. A group's summary counts by kind: files read, searches, memory, commands run (named
 //! when there are one or two), files edited, MCP calls; a failed command is named with its exit
-//! code, and a group whose command still runs ends with it.
+//! code, or as failed when its CLI reported none, and a group whose command still runs ends with it.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -15,7 +15,10 @@ use orchester_core::{
   time::Timestamp,
 };
 
-use crate::tasks::transcript::{CommandMark, Entry, EntryKind};
+use crate::{
+  messages::Message,
+  tasks::transcript::{CommandMark, Entry, EntryKind},
+};
 
 /// Commands a group names before it only counts them.
 const NAMED_COMMANDS: usize = 2;
@@ -268,6 +271,24 @@ impl GroupSummary {
     if failed && self.failed.is_none() {
       self.failed = Some((named, exit));
     }
+  }
+
+  /// What the summary says of its first failed command, after what it ran: its exit code (*exit 1*), or *failed*
+  /// when the CLI reported none; with the command's name unless the summary already names it alone or beside one
+  /// other (*cargo test · exit 101*).
+  pub fn failure(&self) -> Option<Message> {
+    let (command, code) = self.failed.as_ref()?;
+    let named = self.named.contains(command) && self.commands <= NAMED_COMMANDS;
+    Some(match (code, named) {
+      (Some(code), true) => Message::new("runs.conversation.group.exit").with("code", code.to_string()),
+      (Some(code), false) => Message::new("runs.conversation.group.failedCommand")
+        .with("command", command.to_string())
+        .with("code", code.to_string()),
+      (None, true) => Message::new("runs.conversation.group.failedWithoutCode"),
+      (None, false) => {
+        Message::new("runs.conversation.group.failedCommandWithoutCode").with("command", command.to_string())
+      }
+    })
   }
 
   /// Counts of `entries` by kind, for what a group leaves out: reads, searches, commands, edits and

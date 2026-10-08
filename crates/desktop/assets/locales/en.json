@@ -1399,6 +1399,9 @@
       "timedOut": "timed out · {{seconds}} s",
       "stopped": "stopped",
       "noExitCode": "no exit code · {{seconds}} s",
+      "noExitCodeUntimed": "no exit code",
+      "commandFailed": "failed",
+      "commandFailedDuration": "failed · {{seconds}} s",
       "declined": "denied · not an allowed command",
       "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
       "fileAdded": "A",
@@ -2298,6 +2301,8 @@
         "ranMany": "ran {{count}} commands",
         "exit": "exit {{code}}",
         "failedCommand": "{{command}} · exit {{code}}",
+        "failedWithoutCode": "failed",
+        "failedCommandWithoutCode": "{{command}} · failed",
         "edited": {
           "one": "edited 1 file",
           "other": "edited {{count}} files"

@@ -9,6 +9,7 @@
 //! their tools ([`native`]), and so do a CLI's calls of Orchester's file tools ([`mcp`] for Codex's). Nothing else
 //! is left out.
 
+mod ended;
 mod mcp;
 mod native;
 
@@ -24,7 +25,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::{mcp::McpToolEntry, native::ApprovalEntry};
+pub use self::{ended::tenths_of_seconds, mcp::McpToolEntry, native::ApprovalEntry};
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
