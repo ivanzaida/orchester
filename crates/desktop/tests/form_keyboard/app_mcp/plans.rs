@@ -6,9 +6,11 @@
 //! no longer waits) and decides through the runner as the card does: approving continues the run to Implement,
 //! requesting changes resumes the Plan step's agent with the note. The decision is recorded as automation's: the plan
 //! card says *Approved by automation* or *Changes requested by automation*, and `get_run` and `list_approvals` show
-//! `decided_by`. An open task page follows the decision in place.
+//! `decided_by`; `send_message` while a plan waits requests changes as automation's too. An open task page follows
+//! the decision in place.
 //! Run with
-//! `cargo test -p orchester-desktop --test form_keyboard app_mcp_decide_plan`.
+//! `cargo test -p orchester-desktop --test form_keyboard app_mcp_decide_plan` and
+//! `cargo test -p orchester-desktop --test form_keyboard app_mcp_send_message_requests_plan_changes`.
 
 use std::path::Path;
 
@@ -285,4 +287,35 @@ fn app_mcp_decide_plan_requests_changes_and_the_open_page_follows_in_place() {
   assert_eq!(plans(desktop.repo())[1].review, None, "v2 still waits");
   ok(&mut client, "decide_plan", &decide_version("approve", 2));
   desktop.wait_until("the run to finish", |desktop| run_finished(desktop.repo()));
+}
+
+#[test]
+fn app_mcp_send_message_requests_plan_changes_as_automation() {
+  let mut desktop = gated();
+  release(&desktop);
+  plan_waits(&mut desktop, 1);
+  desktop.click("task-tab-conversation");
+  desktop.wait_until("the plan's card", |desktop| has(desktop, "conversation-approve-plan"));
+  let mut client = agent(&desktop);
+
+  // While a plan waits, a message is the changes it needs, as the composer sends it; it came through
+  // Orchester's MCP server, so the decision is automation's.
+  let sent = ok(
+    &mut client,
+    "send_message",
+    &json!({"project": "Kontur", "run": "1", "text": "Keep email sign-in."}),
+  );
+  assert_eq!(sent["action"], "request_plan_changes", "{sent}");
+  plan_waits(&mut desktop, 2);
+  let first = plans(desktop.repo()).remove(0);
+  let note = ReviewNote::new("Keep email sign-in.").expect("a note");
+  assert_eq!(first.decision(), Some(&PlanDecision::ChangesRequested { note }));
+  assert_eq!(
+    first.review.as_ref().map(|review| review.by),
+    Some(Answerer::Automation)
+  );
+  desktop.wait_until("the card's automation mark", |desktop| {
+    holds(desktop, "conversation", "Plan v2 · Say hello")
+      && shows(desktop, "conversation", "Changes requested by automation")
+  });
 }

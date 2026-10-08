@@ -186,6 +186,23 @@ fn plans_decided_before_who_decided_was_kept_read_as_the_persons() {
     ..first
   };
   assert_eq!(upgraded.plans(run.id()).expect("plans"), [decided, second.clone()]);
+  // The database ties who decided to the decision: a decided plan names someone, a waiting one no one.
+  let raw = Connection::open(&old_database).expect("open raw database");
+  for refused in [
+    "UPDATE plans SET decision = 'approved', decided_at = 12 WHERE version = 2",
+    "UPDATE plans SET decided_by = 'automation' WHERE version = 2",
+    "INSERT INTO plans (run_id, step_key, version, step_execution_id, text, created_at, decision, decided_at) \
+     SELECT run_id, step_key, 3, step_execution_id, text, created_at, 'approved', 12 FROM plans WHERE version = 2",
+    "INSERT INTO plans (run_id, step_key, version, step_execution_id, text, created_at, decided_by) \
+     SELECT run_id, step_key, 3, step_execution_id, text, created_at, 'person' FROM plans WHERE version = 2",
+  ] {
+    assert!(raw.execute(refused, []).is_err(), "{refused}");
+  }
+  assert_eq!(
+    upgraded.plans(run.id()).expect("plans")[1],
+    second,
+    "the refusals changed nothing"
+  );
   // The plan that waits takes a decision with who made it; a decided plan is still never rewritten.
   decide(
     &mut upgraded,
@@ -199,7 +216,6 @@ fn plans_decided_before_who_decided_was_kept_read_as_the_persons() {
     plans[1].review.as_ref().map(|review| review.by),
     Some(Answerer::Automation)
   );
-  let raw = Connection::open(&old_database).expect("open raw database");
   assert!(
     raw
       .execute("UPDATE plans SET decided_by = 'automation' WHERE version = 1", [])
