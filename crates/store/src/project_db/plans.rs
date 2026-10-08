@@ -11,6 +11,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, params};
 
+use super::questions::{answerer, read_answerer};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -19,8 +20,8 @@ use crate::{
 const APPROVED: &str = "approved";
 const CHANGES_REQUESTED: &str = "changes_requested";
 
-/// Stores a proposed plan, or the decision on a stored one. The schema keeps a plan's text and lets
-/// it be decided once.
+/// Stores a proposed plan, or the decision on a stored one and who made it. The schema keeps a plan's
+/// text and lets it be decided once.
 pub(super) fn save(connection: &Connection, plan: &Plan) -> Result<(), StoreError> {
   let (decision, note) = match plan.decision() {
     None => (None, None),
@@ -28,10 +29,10 @@ pub(super) fn save(connection: &Connection, plan: &Plan) -> Result<(), StoreErro
     Some(PlanDecision::ChangesRequested { note }) => (Some(CHANGES_REQUESTED), Some(note.as_str())),
   };
   connection.execute(
-    "INSERT INTO plans (run_id, step_key, version, step_execution_id, text, created_at, decision, note, decided_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+    "INSERT INTO plans (run_id, step_key, version, step_execution_id, text, created_at, decision, note, decided_at, \
+     decided_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
      ON CONFLICT (run_id, step_key, version) DO UPDATE SET decision = excluded.decision, note = excluded.note, \
-     decided_at = excluded.decided_at",
+     decided_at = excluded.decided_at, decided_by = excluded.decided_by",
     params![
       plan.run.to_string(),
       plan.step.as_str(),
@@ -42,6 +43,7 @@ pub(super) fn save(connection: &Connection, plan: &Plan) -> Result<(), StoreErro
       decision,
       note,
       plan.review.as_ref().map(|review| review.at.unix_millis()),
+      plan.review.as_ref().map(|review| answerer(review.by)),
     ],
   )?;
   Ok(())
@@ -57,12 +59,13 @@ struct Row {
   decision: Option<String>,
   note: Option<String>,
   decided_at: Option<i64>,
+  decided_by: Option<String>,
 }
 
 pub(super) fn of_run(connection: &Connection, run: RunId) -> Result<Vec<Plan>, StoreError> {
   let mut statement = connection.prepare(
-    "SELECT step_key, version, step_execution_id, text, created_at, decision, note, decided_at FROM plans \
-     WHERE run_id = ?1 ORDER BY step_key, version",
+    "SELECT step_key, version, step_execution_id, text, created_at, decision, note, decided_at, decided_by \
+     FROM plans WHERE run_id = ?1 ORDER BY step_key, version",
   )?;
   let rows = statement
     .query_map([run.to_string()], |row| {
@@ -75,6 +78,7 @@ pub(super) fn of_run(connection: &Connection, run: RunId) -> Result<Vec<Plan>, S
         decision: row.get(5)?,
         note: row.get(6)?,
         decided_at: row.get(7)?,
+        decided_by: row.get(8)?,
       })
     })?
     .collect::<Result<Vec<_>, _>>()?;
@@ -95,13 +99,18 @@ fn plan(run: RunId, row: Row) -> Result<Plan, StoreError> {
     }),
     (decision, note) => return Err(corrupt("plan decision", format!("{decision:?} / {note:?}"))),
   };
+  // A decision has its time and who made it; a plan that waits has neither.
   let review = match (decision, row.decided_at) {
-    (None, None) => None,
+    (None, None) if row.decided_by.is_none() => None,
     (Some(decision), Some(at)) => Some(PlanReview {
       decision,
+      by: read_answerer("plan decider", row.decided_by.as_deref())?,
       at: Timestamp::from_unix_millis(at),
     }),
-    _ => return Err(corrupt("plan decision time", format!("{:?}", row.decided_at))),
+    _ => {
+      let detail = format!("{:?} / {:?}", row.decided_at, row.decided_by);
+      return Err(corrupt("plan decision time", detail));
+    }
   };
   Ok(Plan {
     run,

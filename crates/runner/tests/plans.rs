@@ -13,7 +13,7 @@ use orchester_core::{
   connection::AgentProvider,
   id::{IdempotencyKey, RunId},
   resource::{InjectionEvent, StepKey},
-  run::{Plan, PlanDecision, PlanVersion, ReviewNote, Run, RunStatus, StepStatus, WaitReason},
+  run::{Answerer, Plan, PlanDecision, PlanVersion, ReviewNote, Run, RunStatus, StepStatus, WaitReason},
   store::{ActivityStore, RunStore},
 };
 use orchester_ipc::{AttachSession, Event, Rejection, SessionEnd};
@@ -111,12 +111,23 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   wait_for_idle(&scheduler).await;
 
   scheduler
-    .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
+    .decide_plan(
+      id,
+      plan.execution,
+      plan.version,
+      PlanDecision::Approved,
+      Answerer::Automation,
+    )
     .await
     .expect("the decision is recorded");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(plans(root, id)[0].decision(), Some(&PlanDecision::Approved));
+  // The run records who decided: automation, through Orchester's MCP server.
+  assert_eq!(
+    plans(root, id)[0].review.as_ref().map(|review| review.by),
+    Some(Answerer::Automation)
+  );
   // Implement read the approved plan as the output of the step it runs after.
   let db = ProjectDb::open(root).expect("open");
   let prompt = reported(&db, id, "prompt| ");
@@ -124,7 +135,13 @@ async fn plans_a_gate_waits_without_a_slot_and_approval_continues_the_graph() {
   // A decided plan takes no second decision.
   assert_eq!(
     scheduler
-      .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
+      .decide_plan(
+        id,
+        plan.execution,
+        plan.version,
+        PlanDecision::Approved,
+        Answerer::Person
+      )
       .await,
     Err(Rejection::PlanNotAwaited)
   );
@@ -137,12 +154,19 @@ async fn requested_changes_resume_the_session(provider: AgentProvider) {
   let (id, first) = proposed(root, &scheduler, &mut events).await;
   wait_for_idle(&scheduler).await;
   scheduler
-    .decide_plan(id, first.execution, first.version, changes("Keep email sign-in."))
+    .decide_plan(
+      id,
+      first.execution,
+      first.version,
+      changes("Keep email sign-in."),
+      Answerer::Person,
+    )
     .await
     .expect("the decision is recorded");
   wait_for(root, &mut events, id, |run| waiting(run) && plans(root, id).len() == 2).await;
   let [first, second] = <[Plan; 2]>::try_from(plans(root, id)).expect("two plans");
   assert_eq!(first.decision(), Some(&changes("Keep email sign-in.")));
+  assert_eq!(first.review.as_ref().map(|review| review.by), Some(Answerer::Person));
   assert_eq!((second.version.get(), second.execution), (2, first.execution));
   assert_eq!(second.review, None);
   let db = ProjectDb::open(root).expect("open");
@@ -164,13 +188,25 @@ async fn requested_changes_resume_the_session(provider: AgentProvider) {
   // v1 is decided; only v2 waits.
   assert_eq!(
     scheduler
-      .decide_plan(id, first.execution, first.version, PlanDecision::Approved)
+      .decide_plan(
+        id,
+        first.execution,
+        first.version,
+        PlanDecision::Approved,
+        Answerer::Person
+      )
       .await,
     Err(Rejection::PlanNotAwaited)
   );
   wait_for_idle(&scheduler).await;
   scheduler
-    .decide_plan(id, second.execution, second.version, PlanDecision::Approved)
+    .decide_plan(
+      id,
+      second.execution,
+      second.version,
+      PlanDecision::Approved,
+      Answerer::Person,
+    )
     .await
     .expect("the decision is recorded");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -201,7 +237,13 @@ async fn plans_a_waiting_run_cancels_and_takes_no_decision_after() {
   assert_eq!(status, Some(StepStatus::Skipped));
   assert_eq!(
     scheduler
-      .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
+      .decide_plan(
+        id,
+        plan.execution,
+        plan.version,
+        PlanDecision::Approved,
+        Answerer::Person
+      )
       .await,
     Err(Rejection::RunNotRunning)
   );
@@ -239,7 +281,13 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
   assert_eq!(status, Some(StepStatus::Waiting(WaitReason::Plan)));
   assert_eq!(
     next
-      .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
+      .decide_plan(
+        id,
+        plan.execution,
+        plan.version,
+        PlanDecision::Approved,
+        Answerer::Person
+      )
       .await,
     Err(Rejection::RunNotRunning)
   );
@@ -247,7 +295,13 @@ async fn plans_a_waiting_run_pauses_and_keeps_waiting_across_a_new_runner() {
   wait_for(root, &mut next_events, id, waiting).await;
   wait_for_idle(&next).await;
   next
-    .decide_plan(id, plan.execution, plan.version, PlanDecision::Approved)
+    .decide_plan(
+      id,
+      plan.execution,
+      plan.version,
+      PlanDecision::Approved,
+      Answerer::Person,
+    )
     .await
     .expect("the decision is recorded");
   let run = wait_for(root, &mut next_events, id, |run| run.status().is_terminal()).await;

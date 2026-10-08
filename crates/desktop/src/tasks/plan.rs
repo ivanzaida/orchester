@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use orchester_core::{
   id::RunId,
-  run::{Plan, PlanDecision, PlanVersion, RunStatus},
+  run::{Answerer, Plan, PlanDecision, PlanVersion, RunStatus},
 };
 
 use super::detail::RunView;
@@ -79,11 +79,16 @@ impl PlanReview {
   }
 }
 
-/// Where a plan stands, as its version reads: "v1 · awaiting approval".
+/// Where a plan stands, as its version reads: "v1 · awaiting approval"; a decision automation made
+/// says so ("v1 · approved by automation"), a person's reads plain.
 pub fn state_key(plan: &Plan) -> &'static str {
-  match plan.decision() {
-    None => "runs.plan.version.awaiting",
-    Some(PlanDecision::Approved) => "runs.plan.version.approved",
-    Some(PlanDecision::ChangesRequested { .. }) => "runs.plan.version.changesRequested",
+  let Some(review) = &plan.review else {
+    return "runs.plan.version.awaiting";
+  };
+  match (&review.decision, review.by) {
+    (PlanDecision::Approved, Answerer::Person) => "runs.plan.version.approved",
+    (PlanDecision::Approved, Answerer::Automation) => "runs.plan.version.approvedByAutomation",
+    (PlanDecision::ChangesRequested { .. }, Answerer::Person) => "runs.plan.version.changesRequested",
+    (PlanDecision::ChangesRequested { .. }, Answerer::Automation) => "runs.plan.version.changesRequestedByAutomation",
   }
 }

@@ -16,8 +16,8 @@ use orchester_core::{
   },
   revision::Revision,
   run::{
-    BranchName, InterruptCause, ListedRun, NewRun, PauseReason, PlanDecision, PublishedVersions, Run, RunEvent,
-    RunLimit, RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
+    Answerer, BranchName, InterruptCause, ListedRun, NewRun, PauseReason, PlanDecision, PublishedVersions, Run,
+    RunEvent, RunLimit, RunSnapshot, RunStatus, StepExecutor, StepFailure, StepStatus,
   },
   store::{ResourceStore, RunStore, TaskStore},
   task::TaskDetails,
@@ -209,7 +209,7 @@ impl Fixture {
     let (events, mut plan) = run.propose_plan(plan, "Plan.".into(), &[], at(13)).expect("proposed");
     self.db.append_events_with_plan(&run, &events, &plan).expect("append");
     let events = run
-      .decide_plan(&mut plan, PlanDecision::Approved, at(14))
+      .decide_plan(&mut plan, PlanDecision::Approved, Answerer::Person, at(14))
       .expect("decided");
     self.db.append_events_with_plan(&run, &events, &plan).expect("append");
     let implement = Self::exec(&run, "implement");

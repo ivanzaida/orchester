@@ -18,7 +18,7 @@ use orchester_core::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
   },
   revision::Revision,
-  run::{BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
+  run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -298,9 +298,9 @@ impl Fixture {
     plan
   }
 
-  /// Records `decision` on `plan` of `run` at `now`.
-  pub fn decide(&mut self, run: &mut Run, plan: &mut Plan, decision: PlanDecision, now: Timestamp) {
-    let events = run.decide_plan(plan, decision, now).expect("decided");
+  /// Records `by`'s `decision` on `plan` of `run` at `now`.
+  pub fn decide(&mut self, run: &mut Run, plan: &mut Plan, (decision, by): (PlanDecision, Answerer), now: Timestamp) {
+    let events = run.decide_plan(plan, decision, by, now).expect("decided");
     self.db.append_events_with_plan(run, &events, plan).expect("append");
   }
 

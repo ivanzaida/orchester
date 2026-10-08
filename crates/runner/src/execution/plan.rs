@@ -8,7 +8,7 @@
 use orchester_core::{
   id::{RunId, StepExecutionId},
   memory::StepFate,
-  run::{Plan, PlanDecision, PlanVersion, Run, RunError},
+  run::{Answerer, Plan, PlanDecision, PlanVersion, Run, RunError},
   store::RunStore,
   time::Timestamp,
 };
@@ -26,18 +26,19 @@ use super::{
   run::{ExecutionError, RunTask},
 };
 
-/// A person's decision on one plan of a run.
+/// A decision on one plan of a run, and who made it.
 #[derive(Clone, Debug)]
 pub(super) struct PlanRequest {
   pub(super) execution: StepExecutionId,
   pub(super) version: PlanVersion,
   pub(super) decision: PlanDecision,
+  pub(super) by: Answerer,
 }
 
 impl Scheduler {
-  /// Records `decision` on plan `version` of `execution` in `run` and lets the run go on. Returns
-  /// once the decision is recorded and a task executes the run: the task at work took it, or the
-  /// run's task, which ended while the run waited, is started again. A decision that is not taken
+  /// Records `by`'s `decision` on plan `version` of `execution` in `run` and lets the run go on.
+  /// Returns once the decision is recorded and a task executes the run: the task at work took it, or
+  /// the run's task, which ended while the run waited, is started again. A decision that is not taken
   /// comes back as the rejection. Needs no free agent slot: the continued run waits for one like
   /// any other.
   pub async fn decide_plan(
@@ -46,11 +47,13 @@ impl Scheduler {
     execution: StepExecutionId,
     version: PlanVersion,
     decision: PlanDecision,
+    by: Answerer,
   ) -> Result<(), Rejection> {
     let request = PlanRequest {
       execution,
       version,
       decision,
+      by,
     };
     loop {
       let one_at_a_time = self.inner.continuing.lock().await;
@@ -137,11 +140,17 @@ fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(),
     .ok_or(Rejection::PlanNotAwaited)?;
   let approved = request.decision == PlanDecision::Approved;
   let events = run
-    .decide_plan(&mut plan, request.decision, Timestamp::now())
+    .decide_plan(&mut plan, request.decision, request.by, Timestamp::now())
     .map_err(rejection)?;
   db.append_events_with_plan(run, &events, &plan)
     .map_err(|error: RunStoreError| failed("cannot record the plan decision", &error))?;
-  tracing::info!(run = %run.id(), execution = %request.execution, version = %plan.version, "plan decided");
+  tracing::info!(
+    run = %run.id(),
+    execution = %request.execution,
+    version = %plan.version,
+    by = ?request.by,
+    "plan decided"
+  );
   if approved {
     // Kept before the decision is announced, so whoever sees it finds the handoff. The decision is
     // recorded and the run goes on; a handoff the database could not take is reported rather than

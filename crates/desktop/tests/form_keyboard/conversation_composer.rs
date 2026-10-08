@@ -13,7 +13,7 @@
 use orchester_core::{
   conversation::{Arrival, Delivery},
   resource::Step,
-  run::RunStatus,
+  run::{Answerer, Plan, RunStatus},
   store::{ConversationStore, RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
@@ -379,22 +379,32 @@ fn composer_requests_changes_to_a_plan_and_its_card_approves_it() {
   desktop.wait_until("the approved plan", |desktop| {
     holds(desktop, "conversation", "Plan done")
   });
+  // The person decided both on the card and in the composer: the cards read plain, with no mark.
+  assert!(holds(&mut desktop, "conversation-plan-2", "Approved"));
+  assert!(!shows(&mut desktop, "conversation", "by automation"));
+  let by: Vec<_> = plans(&desktop)
+    .iter()
+    .map(|plan| plan.review.as_ref().map(|review| review.by))
+    .collect();
+  assert_eq!(by, [Some(Answerer::Person), Some(Answerer::Person)]);
   // Its result card leaves the plan to the plan's cards.
   let plan = plan_text(&desktop);
   assert!(says(&mut desktop, "conversation-result-", "Plan done"));
   assert!(!says(&mut desktop, "conversation-result-", &plan), "{plan}");
 }
 
-/// What the latest plan of the run says, as stored.
-fn plan_text(desktop: &Desktop) -> String {
+/// The plans of the latest run, as stored.
+fn plans(desktop: &Desktop) -> Vec<Plan> {
   let run = latest_run(desktop.repo()).expect("the run");
   ProjectDb::open(desktop.repo())
     .expect("open the project")
     .plans(run.id())
     .expect("plans")
-    .pop()
-    .expect("a plan")
-    .text
+}
+
+/// What the latest plan of the run says, as stored.
+fn plan_text(desktop: &Desktop) -> String {
+  plans(desktop).pop().expect("a plan").text
 }
 
 #[test]

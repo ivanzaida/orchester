@@ -2,6 +2,7 @@
 //! skipped, with the plan approval gate and failure routing to an upstream step.
 
 use super::{
+  answer::Answerer,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   plan::{Plan, PlanDecision, PlanReview},
@@ -80,13 +81,14 @@ impl Run {
     Ok((events, plan))
   }
 
-  /// Records a person's `decision` on `plan`, the latest plan of a gated step that waits for one.
+  /// Records `by`'s `decision` on `plan`, the latest plan of a gated step that waits for one.
   /// Approval passes the step; requested changes send it back to its agent, and its revised result
   /// is a new plan that needs a new decision. `plan` gets the decision on success.
   pub fn decide_plan(
     &mut self,
     plan: &mut Plan,
     decision: PlanDecision,
+    by: Answerer,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
     if plan.run != self.id {
@@ -103,7 +105,7 @@ impl Run {
       })?;
       transition.succeed_if_done()
     })?;
-    plan.review = Some(PlanReview { decision, at: now });
+    plan.review = Some(PlanReview { decision, by, at: now });
     Ok(events)
   }
 

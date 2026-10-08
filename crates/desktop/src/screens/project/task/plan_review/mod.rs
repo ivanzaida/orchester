@@ -23,7 +23,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, StepExecutionId},
-  run::{Plan, PlanDecision, PlanVersion, ReviewNote},
+  run::{Answerer, Plan, PlanDecision, PlanVersion, ReviewNote},
 };
 use orchester_ipc::Command;
 
@@ -70,7 +70,7 @@ enum Choice {
 
 impl lurq::app::component::DevtoolsInspectable for Choice {}
 
-/// A decision on one plan, as the runner takes it.
+/// A person's decision on one plan, as the runner takes it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::screens::project::task) struct Decision {
   pub(in crate::screens::project::task) run: RunId,
@@ -95,6 +95,7 @@ pub(in crate::screens::project::task) fn decision_action(ctx: &mut Ctx) -> Decis
         execution: decision.execution,
         version: decision.version,
         decision: decision.decision,
+        by: Answerer::Person,
       };
       runners.control_run(command).await.map_err(|error| {
         tracing::warn!(%error, "the runner did not take the plan decision");

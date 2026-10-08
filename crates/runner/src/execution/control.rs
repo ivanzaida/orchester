@@ -23,7 +23,7 @@ pub(super) enum Control {
   ChangePermissions(PermissionsChange, Ack),
   /// Keep a pending change of a profile's permissions for the next invocations.
   KeepPermissions(ResourceId, Ack),
-  /// Record a person's decision on a plan; answered once it is recorded.
+  /// Record a decision on a plan, and who made it; answered once it is recorded.
   DecidePlan(PlanRequest, Ack),
   /// Send a person's answer to the worker that owns the pending tool request.
   DecideToolApproval {

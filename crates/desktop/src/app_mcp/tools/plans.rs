@@ -3,12 +3,13 @@
 //! which needs one. Approving is automation's only while a person lets it answer approvals (*Let
 //! automation answer approvals*), as `decide_approval` is; requesting changes is not gated. An approval names the
 //! version it is for, so a client approves only a plan it could read in full (`get_run` gives the whole text); the
-//! runner refuses a decision once that version no longer waits. Also the waiting plan as `get_run` and `list_approvals`
-//! show it.
+//! runner refuses a decision once that version no longer waits. The runner records the decision as automation's, and
+//! the card says so. Also the waiting plan as `get_run` and `list_approvals` show it, and a decided plan with who
+//! decided it.
 
 use orchester_core::{
   id::RunId,
-  run::{Plan, PlanDecision, ReviewNote, RunStatus},
+  run::{Answerer, Plan, PlanDecision, ReviewNote, RunStatus},
   store::{RunStore, TaskStore},
 };
 use orchester_ipc::{Command, Rejection};
@@ -102,6 +103,7 @@ pub async fn decide_plan(services: &Services, args: DecidePlan) -> Result<Value,
     execution: waiting.execution,
     version: waiting.version,
     decision,
+    by: Answerer::Automation,
   };
   services
     .runners
@@ -205,21 +207,40 @@ const fn decided_name(decision: Decision) -> &'static str {
   }
 }
 
-/// The plan `review` waits on: its version, its step, who proposed it and when, and the start of
-/// its text; its whole text too when `whole`.
+/// The plan `review` waits on: its version, its step, who proposed it and when, the start of its
+/// text, and the decisions on the step's earlier versions; its whole text too when `whole`.
 pub fn waiting(review: &PlanReview, whole: bool) -> Value {
   let plan = review.waiting();
+  let earlier: Vec<Value> = review.plans().iter().filter_map(decided).collect();
   let mut shown = json!({
     "version": plan.version.get(),
     "step": { "key": plan.step.to_string(), "name": &*review.step },
     "agent": &*review.agent,
     "proposed_at": wire::time(plan.created_at),
     "excerpt": excerpt(&plan.text),
+    "earlier": earlier,
   });
   if whole {
     shown["text"] = json!(&plan.text);
   }
   shown
+}
+
+/// The decision on `plan`, with its version: `approved`, or `changes_requested` with the note; who
+/// decided, the person in the app or automation through this server; and when. `None` while it waits.
+pub fn decided(plan: &Plan) -> Option<Value> {
+  let review = plan.review.as_ref()?;
+  let (decision, note) = match &review.decision {
+    PlanDecision::Approved => ("approved", None),
+    PlanDecision::ChangesRequested { note } => ("changes_requested", Some(note.as_str())),
+  };
+  Some(json!({
+    "version": plan.version.get(),
+    "decision": decision,
+    "note": note,
+    "decided_by": review.by,
+    "decided_at": wire::time(review.at),
+  }))
 }
 
 /// The plans the running runs of project database `db` wait on, in run order; only `run`'s when

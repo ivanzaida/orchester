@@ -790,8 +790,25 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
-Repository skills fail closed while agent files are off · branch `claude/skills-off` (implemented 2026-10-08, review
-fixes made, waiting for review)
+Who decided a plan · branch `claude/plan-by` (merged 2026-10-08, reviewed, tests
+passed, design-verified)
+
+Plan decisions record who made them, the person or automation through Orchester's MCP server (`Answerer`):
+`PlanReview::by` in core, `Command::DecidePlan { by }` (protocol 20), `plans.decided_by` (migration `plan_decided_by`:
+existing decisions read as the person's; triggers tie it to `decision`), recorded by the runner. `decide_plan` and
+`send_message` while a plan waits decide as automation, the plan card, the plan review and the composer as the person.
+The plan card reads *Approved by automation* / *Changes requested by automation*, the plan review's *Plan version*
+*v1 · … by automation* and an earlier note *Automation asked: …*; a person's decisions read as before. `get_run` lists
+the run's decided plans and the waiting plan's `earlier` (also in `list_approvals`) shows its step's earlier
+decisions, each with `decided_by` (`docs/stable-build.md`; design doc, "Who decided a plan"). Not in scope: the
+`PlanDecided` run event carries no `by`. Tests: `orchester-store --test plans plans`, `orchester-ipc --test framing
+frames`, `orchester-runner --test plans plans`, `orchester-desktop --test plan_review plan_review`,
+`--test form_keyboard app_mcp_decide_plan`, `app_mcp_send_message_requests_plan_changes`,
+`composer_requests_changes_to_a_plan`. Design verification outstanding: the plan card after automation's decision
+and the plan review's version select with a version automation decided (no frame draws them).
+
+Repository skills fail closed while agent files are off · branch `claude/skills-off` (merged 2026-10-08, reviewed;
+tests passed)
 
 A review found that the runner's search for the repository's skills Codex disables while *Repository agent files* is
 off (`.agents/skills`, `.codex/skills`; the native agent uses it while the setting is on) followed links out of the

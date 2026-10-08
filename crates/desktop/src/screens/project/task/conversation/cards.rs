@@ -3,7 +3,8 @@
 //! label, then its body. A question the composer answers (*Answer in the box below*); a plan with
 //! *Approve plan & continue*; a tool request with the approval dialog's answers
 //! ([`super::approval_card`]). After the decision a card loses the raised fill and reads *Answered*,
-//! *Approved* or *Denied*. The step the run ended on closes with its result card: border only, its
+//! *Approved* or *Denied*; a plan automation decided reads *Approved by automation* or *Changes
+//! requested by automation*. The step the run ended on closes with its result card: border only, its
 //! title and time, what was reported, and the ways to the Changes and the Summary. What an agent wrote
 //! reads as Markdown ([`MarkdownText`]).
 
@@ -21,7 +22,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  run::{PlanDecision, StepOutcome},
+  run::{Answerer, PlanDecision, PlanReview, StepOutcome},
   tokens::compact_tokens,
 };
 
@@ -174,11 +175,10 @@ impl Component for PlanCardView {
       "runs.plan.title",
       [("version", version.as_str()), ("task", &*props.task_title)],
     );
-    let state = match plan.decision() {
+    let state = match &plan.review {
       None if props.card.waiting => (Icon::Hand, ctx.t("runs.conversation.card.waitingApproval")),
       None => (Icon::CircleMinus, ctx.t("runs.conversation.card.superseded")),
-      Some(PlanDecision::Approved) => (Icon::Check, ctx.t("runs.conversation.card.approved")),
-      Some(PlanDecision::ChangesRequested { .. }) => (Icon::Undo2, ctx.t("runs.conversation.card.changesRequested")),
+      Some(review) => decided_state(ctx, review),
     };
     let lines: Vec<&str> = plan.text.lines().collect();
     let whole = self.whole.get() || lines.len() <= PLAN_LINES;
@@ -222,6 +222,22 @@ impl Component for PlanCardView {
       vec![card],
     )
   }
+}
+
+/// A decided plan's state: who decided when automation did, as an answered request's card says it; a
+/// person's decision reads plain *Approved* or *Changes requested*.
+fn decided_state(ctx: &Ctx, review: &PlanReview) -> (Icon, Arc<str>) {
+  let (glyph, key) = match (&review.decision, review.by) {
+    (PlanDecision::Approved, Answerer::Person) => (Icon::Check, "runs.conversation.card.approved"),
+    (PlanDecision::Approved, Answerer::Automation) => (Icon::Check, "runs.conversation.card.approvedByAutomation"),
+    (PlanDecision::ChangesRequested { .. }, Answerer::Person) => {
+      (Icon::Undo2, "runs.conversation.card.changesRequested")
+    }
+    (PlanDecision::ChangesRequested { .. }, Answerer::Automation) => {
+      (Icon::Undo2, "runs.conversation.card.changesRequestedByAutomation")
+    }
+  };
+  (glyph, ctx.t(key))
 }
 
 /// *Approve plan & continue* with what approving does beside it (`qjMHX`), and why it was not

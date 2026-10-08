@@ -458,7 +458,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
-| `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
+| `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note), who decided (the person or automation through Orchester's MCP server; decisions recorded before it was kept count as the person's) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
 | `checkpoints` | run, step execution, revision, agent state blob |
 | `run_events` | run, sequence, time, kind, payload — append-only |
 | `evidence` | run, revision, kind (criteria, tests, review, browser), result, blob |

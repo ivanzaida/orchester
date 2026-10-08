@@ -10,7 +10,7 @@ use std::{fmt, num::NonZeroU32};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::result::StepOutput;
+use super::{answer::Answerer, result::StepOutput};
 use crate::{
   id::{RunId, StepExecutionId},
   resource::StepKey,
@@ -85,7 +85,7 @@ impl From<ReviewNote> for String {
   }
 }
 
-/// A person's decision on a plan.
+/// A decision on a plan.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum PlanDecision {
@@ -95,10 +95,12 @@ pub enum PlanDecision {
   ChangesRequested { note: ReviewNote },
 }
 
-/// A decision on a plan and when it was made.
+/// A decision on a plan, who made it and when: the person on the plan card or the plan review, or
+/// automation through Orchester's MCP server (`decide_plan`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlanReview {
   pub decision: PlanDecision,
+  pub by: Answerer,
   pub at: Timestamp,
 }
 

@@ -14,8 +14,8 @@ use orchester_core::{
   },
   revision::Revision,
   run::{
-    BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot, StepStatus,
-    StoredRun,
+    Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunNumber, RunSnapshot,
+    StepStatus, StoredRun,
   },
   task::{Task, TaskDetails},
   time::Timestamp,
@@ -267,6 +267,6 @@ impl Logged {
   pub fn through_plan(&mut self) {
     self.pass("research");
     let mut plan = self.propose("plan", "1. Add the provider.", &[]);
-    self.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, at(24)));
+    self.apply(|run| run.decide_plan(&mut plan, PlanDecision::Approved, Answerer::Person, at(24)));
   }
 }

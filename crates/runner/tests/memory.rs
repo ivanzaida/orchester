@@ -17,7 +17,7 @@ use orchester_core::{
     Delivery, InjectionReason, Memory, MemoryAuthor, MemoryContent, MemoryFilter, MemoryKind, MemoryLimits,
     MemoryScope, MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, SecretScreen, WritePolicy,
   },
-  run::{PlanDecision, Run, RunStatus},
+  run::{Answerer, PlanDecision, Run, RunStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::{ActivityStore, RunStore},
   time::Timestamp,
@@ -456,7 +456,13 @@ async fn memory_an_approved_plan_keeps_its_handoff_only_then() {
   );
   let plan = db.plans(run).expect("plans").pop().expect("a plan");
   scheduler
-    .decide_plan(run, plan.execution, plan.version, PlanDecision::Approved)
+    .decide_plan(
+      run,
+      plan.execution,
+      plan.version,
+      PlanDecision::Approved,
+      Answerer::Person,
+    )
     .await
     .expect("approved");
   wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
@@ -495,7 +501,13 @@ async fn memory_a_plan_approved_while_the_run_works_keeps_its_handoff_before_the
   );
   assert!(task_memory(&db, project.task).is_empty());
   scheduler
-    .decide_plan(run, plan.execution, plan.version, PlanDecision::Approved)
+    .decide_plan(
+      run,
+      plan.execution,
+      plan.version,
+      PlanDecision::Approved,
+      Answerer::Person,
+    )
     .await
     .expect("approved");
   let kept = |memory: &[(MemoryKind, MemoryStatus, String)]| {

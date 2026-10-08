@@ -131,10 +131,20 @@ impl ProjectDb {
   }
 }
 
-const fn answerer(by: Answerer) -> &'static str {
+/// Who answered or decided, as `questions.answered_by` and `plans.decided_by` keep it.
+pub(super) const fn answerer(by: Answerer) -> &'static str {
   match by {
     Answerer::Person => "person",
     Answerer::Automation => "automation",
+  }
+}
+
+/// [`answerer`]'s value `stored` read back; `what` names the column for a value it never writes.
+pub(super) fn read_answerer(what: &'static str, stored: Option<&str>) -> Result<Answerer, StoreError> {
+  match stored {
+    Some("person") => Ok(Answerer::Person),
+    Some("automation") => Ok(Answerer::Automation),
+    other => Err(corrupt(what, format!("{other:?}"))),
   }
 }
 
@@ -201,11 +211,7 @@ impl StoredQuestions {
       "interrupted" => QuestionState::Interrupted { at: ended()? },
       "answered" => QuestionState::Answered {
         answers: read_answers(&request, self.answers.as_deref())?,
-        by: match self.answered_by.as_deref() {
-          Some("person") => Answerer::Person,
-          Some("automation") => Answerer::Automation,
-          other => return Err(corrupt("question answerer", format!("{other:?}"))),
-        },
+        by: read_answerer("question answerer", self.answered_by.as_deref())?,
         at: ended()?,
       },
       other => return Err(corrupt("question state", other)),

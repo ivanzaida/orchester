@@ -80,8 +80,8 @@ impl ApprovalAnswer {
   }
 }
 
-/// Who gives an answer to a waiting request: the person in the app, or automation through
-/// Orchester's own MCP server, which a person allows in the app's settings.
+/// Who gives an answer to a waiting request, or decides a waiting plan: the person in the app, or
+/// automation through Orchester's own MCP server, which a person allows in the app's settings.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Answerer {
