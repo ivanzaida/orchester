@@ -15,8 +15,9 @@ use serde_json::{Value, json};
 use super::fake_permission_prompt::Prompt;
 
 const KEY: &str = "mcp_servers.Orchester.";
-/// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds.
-const LIST_WAIT: Duration = Duration::from_secs(3);
+/// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds. A relay the runner
+/// refuses lists no tools only after its connection failed, which takes Windows about two seconds.
+const LIST_WAIT: Duration = Duration::from_secs(6);
 
 /// The calls of "Use Orchester's tools", "Use the file tools" (in a read-only step: no edit) and "Use the
 /// index tools" (after `src/lib.rs` changed in the worktree, with a file the index does not know).
@@ -98,20 +99,22 @@ pub fn start(args: &[String]) -> Option<Started> {
   Some(Started { server, tools })
 }
 
+/// The setting `name` of Orchester's server in the arguments.
+pub fn setting(args: &[String], name: &str) -> Option<Value> {
+  let value = args
+    .iter()
+    .find_map(|arg| arg.strip_prefix(KEY)?.strip_prefix(name)?.strip_prefix('='))?;
+  // The values the runner writes are TOML basic strings and arrays of them, which read as JSON.
+  serde_json::from_str(value).ok()
+}
+
 /// The command of Orchester's server the arguments configure, with the variables Codex hands it.
 fn command(args: &[String]) -> Option<Command> {
-  let setting = |name: &str| -> Option<serde_json::Value> {
-    let value = args
-      .iter()
-      .find_map(|arg| arg.strip_prefix(KEY)?.strip_prefix(name)?.strip_prefix('='))?;
-    // The values the runner writes are TOML basic strings and arrays of them, which read as JSON.
-    serde_json::from_str(value).ok()
-  };
   let (program, arguments, address, handed) = (
-    setting("command")?,
-    setting("args")?,
-    setting("env.ORCHESTER_APPROVAL_ADDRESS")?,
-    setting("env_vars")?,
+    setting(args, "command")?,
+    setting(args, "args")?,
+    setting(args, "env.ORCHESTER_APPROVAL_ADDRESS")?,
+    setting(args, "env_vars")?,
   );
   let mut command = Command::new(program.as_str().unwrap_or_default());
   for arg in arguments.as_array().into_iter().flatten() {

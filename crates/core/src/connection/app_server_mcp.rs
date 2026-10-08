@@ -22,7 +22,12 @@
 //! `mcp_servers.<server>.enabled`, never by an `mcp_servers` table: in Codex 0.159.2 a thread's
 //! `mcp_servers` table, even an empty one, replaces the table of the process's overrides, so the step's
 //! own servers and Orchester's are gone from the thread, while the user's servers merge with it (checked
-//! 2026-10-08 with `config/read`, `thread/start` and `mcpServerStatus/list`).
+//! 2026-10-08 with `config/read`, `thread/start` and `mcpServerStatus/list`). Codex runs a server whose name
+//! has a dot (`[mcp_servers."a.b"]`), but splits a dotted key at every dot and reads no quotes in it:
+//! `mcp_servers.a.b.enabled` refuses the thread with *invalid transport in `mcp_servers.a`*, and a name
+//! like `<chosen>.x` would add a setting to a chosen server. Such a server cannot be turned off, so it
+//! refuses the step before its thread starts ([`servers_to_turn_off`]); a server Orchester gives an agent
+//! never has a dot in its name (`crate::connection::mcp::McpServerName`).
 
 use std::collections::BTreeSet;
 
@@ -37,6 +42,10 @@ pub enum McpInventoryError {
   MissingInventory,
   #[error("Codex App Server MCP inventory has an unnamed server")]
   UnnamedServer,
+  #[error(
+    "Your own Codex configuration has an MCP server named `{0}`; Orchester cannot keep a server whose name has a      dot from its agents, so rename it"
+  )]
+  DottedName(String),
   #[error("Codex App Server did not load the MCP server `{0}` selected by this agent profile")]
   MissingSelected(String),
   #[error(
@@ -54,20 +63,22 @@ pub enum McpInventoryError {
 }
 
 /// The configured MCP servers of a `config/read` result that `selected` does not name: the user's own
-/// and a project's, which the thread turns off.
+/// and a project's, which the thread turns off; an error for one whose name has a dot, which cannot be.
 pub fn servers_to_turn_off(result: &Value, selected: &BTreeSet<String>) -> Result<Vec<String>, McpInventoryError> {
   let config = result.get("config").ok_or(McpInventoryError::MissingConfiguration)?;
   let servers = match config.get("mcp_servers") {
     None | Some(Value::Null) => return Ok(Vec::new()),
     Some(servers) => servers.as_object().ok_or(McpInventoryError::MissingConfiguration)?,
   };
-  Ok(
-    servers
-      .keys()
-      .filter(|name| !selected.contains(*name))
-      .cloned()
-      .collect(),
-  )
+  let turned_off: Vec<String> = servers
+    .keys()
+    .filter(|name| !selected.contains(*name))
+    .cloned()
+    .collect();
+  if let Some(dotted) = turned_off.iter().find(|name| name.contains('.')) {
+    return Err(McpInventoryError::DottedName(dotted.clone()));
+  }
+  Ok(turned_off)
 }
 
 /// Refuses a `config/read` result whose configuration defines hooks.
@@ -111,8 +122,8 @@ pub struct UnavailableServer {
   /// has no such server or no state.
   pub state: Option<String>,
   /// Codex's reason it has no tools of the server (`toolsError`), such as why the server failed to
-  /// start. It is the server's own diagnostic and may hold what the server was given, so whoever shows
-  /// it removes the invocation's secret values first.
+  /// start, as the caller's `redact` left it: it is the server's own diagnostic and may hold what the
+  /// server was given.
   pub error: Option<String>,
 }
 
@@ -129,9 +140,13 @@ impl UnavailableServer {
 }
 
 /// Every selected server must be connected, or the step does not start; the error names the first
-/// that is not, and why.
-pub fn verify_selected_servers(result: &Value, selected: &BTreeSet<String>) -> Result<(), McpInventoryError> {
-  match unavailable_selected(result, selected)?.into_iter().next() {
+/// that is not, and why, Codex's reason passed through `redact`.
+pub fn verify_selected_servers(
+  result: &Value,
+  selected: &BTreeSet<String>,
+  redact: impl Fn(&str) -> String,
+) -> Result<(), McpInventoryError> {
+  match unavailable_selected(result, selected, redact)?.into_iter().next() {
     None => Ok(()),
     Some(UnavailableServer { name, state: None, .. }) => Err(McpInventoryError::MissingSelected(name)),
     Some(server) => Err(McpInventoryError::UnavailableSelected(server)),
@@ -139,10 +154,12 @@ pub fn verify_selected_servers(result: &Value, selected: &BTreeSet<String>) -> R
 }
 
 /// The selected servers of `result` (an `mcpServerStatus/list` result) that are not connected, the
-/// missing ones first; an error only when the inventory itself cannot be read.
+/// missing ones first, each with Codex's reason passed through `redact`, which removes the invocation's
+/// secret values; an error only when the inventory itself cannot be read.
 pub fn unavailable_selected(
   result: &Value,
   selected: &BTreeSet<String>,
+  redact: impl Fn(&str) -> String,
 ) -> Result<Vec<UnavailableServer>, McpInventoryError> {
   if result.get("nextCursor").is_some_and(|cursor| !cursor.is_null()) {
     return Err(McpInventoryError::TooLarge);
@@ -174,7 +191,7 @@ pub fn unavailable_selected(
       unavailable.push(UnavailableServer {
         name: name.to_owned(),
         state: Some(state.unwrap_or("unknown").to_owned()),
-        error: error.map(|error| error.as_str().map_or_else(|| error.to_string(), str::to_owned)),
+        error: error.map(|error| redact(&error.as_str().map_or_else(|| error.to_string(), str::to_owned))),
       });
     }
   }
@@ -184,8 +201,7 @@ pub fn unavailable_selected(
 /// The thread's configuration: each server of `turned_off` turned off by its dotted key
 /// (`mcp_servers.<server>.enabled = false`), which merges with the user's configuration and leaves the
 /// process's own servers alone. An `mcp_servers` table would replace the process's servers for the
-/// thread (see the module's notes). A name with a dot cannot be named this way; Codex then refuses the
-/// thread or lists the server running, and the step stops ([`verify_only_chosen_run`]).
+/// thread (see the module's notes). No name has a dot ([`servers_to_turn_off`]).
 pub fn thread_config(turned_off: &[String]) -> Map<String, Value> {
   turned_off
     .iter()

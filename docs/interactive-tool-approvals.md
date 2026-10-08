@@ -216,8 +216,11 @@ invocation; a native agent can later declare the same schemas in its own request
   the agent's shell commands) and a `tool_timeout_sec` long enough for a person's decision. A user's own server named
   `Orchester` refuses the step. The relay handles one request at a time, so a call waiting for a person holds the
   invocation's other calls of the relay. Codex 0.159.2 starts the server once for the thread and once more for each
-  `mcpServerStatus/list`, at about the same time, so the runner serves every Codex relay that shows the token, each
-  on its own connection; Claude Code's permission prompt relay is served alone (checked 2026-10-08).
+  `mcpServerStatus/list`, at about the same time (checked 2026-10-08), so the runner serves the two Codex relays that
+  show the token, each on its own connection, and closes the port after them, or once Codex's inventory was checked
+  if fewer came: a later connection, even with the token, is refused. Claude Code's permission prompt relay is
+  served alone. Each connection shows the token on its own, so a silent one holds no relay back; after eight that
+  could not be taken or did not show it, the port closes.
 - **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
   its own (*# Orchester tools*) to use them for git and for files outside the worktree.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
@@ -302,7 +305,7 @@ execpolicy rules, which are the user's choice (user decision 2026-10-01):
 | plugins, their skills and MCP servers (`code-review`, `cua_repl`, …) | `-c features.plugins=false` |
 | apps (`codex_app`) | `-c features.apps=false` |
 | permission overlays that can stay granted (`with_additional_permissions`, `request_permissions`) | `-c features.exec_permission_approvals=false`, `-c features.request_permissions_tool=false` |
-| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: the dotted key `"mcp_servers.<name>.enabled": false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them, and it replaces the servers of the process's overrides, the step's own and Orchester's. A server the step chooses that is not connected is named in the step's failure (it asks before MCP actions) or its activity, with Codex's state and reason. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers), so the step stops and says to rename one. |
+| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: the dotted key `"mcp_servers.<name>.enabled": false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them, and it replaces the servers of the process's overrides, the step's own and Orchester's. A dotted key cannot name a server whose name has a dot (Codex splits it at every dot), so such a server of the user's configuration refuses the step before its thread starts and says to rename it. A server the step chooses that is not connected is named in the step's failure (it asks before MCP actions) or its activity, with Codex's state and reason. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers), so the step stops and says to rename one. |
 | hooks | cannot be turned off: a configuration that defines any refuses the step |
 | the user's execpolicy `.rules` (`$CODEX_HOME/rules`) | **kept**, as the user's choice (0.159.2 has no App Server setting for them anyway). A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your own Codex rules still apply · allow rules run unsandboxed, unasked*, and the run permissions popover says it under Commands. |
 

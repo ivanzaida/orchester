@@ -19,7 +19,8 @@
 //! changes that one server only. Orchester's server is started for `mcpServerStatus/list`, which lists its
 //! tools, or why it has none, and closes it, and for the thread (`fake_codex_tools`). Codex 0.159.2 starts
 //! both at about the same time, in either order; the fake starts the thread's second, so a runner that
-//! served only the first relay would leave the thread without Orchester's tools.
+//! served only the first relay would leave the thread without Orchester's tools. A model may ask it to test
+//! the runner's end of the relay further (`fake_codex_relay`).
 //!
 //! A model with `-refused-` in its name is refused with a two-line reason that echoes the token of
 //! Orchester's server (`ORCHESTER_APPROVAL_TOKEN`), so tests can check how the runner reports a refusal.
@@ -52,6 +53,8 @@ use serde_json::{Value, json};
 
 #[path = "fake_app_server.rs"]
 mod fake_app_server;
+#[path = "fake_codex_relay.rs"]
+mod fake_codex_relay;
 #[path = "fake_codex_review.rs"]
 mod fake_codex_review;
 #[path = "fake_codex_tools.rs"]
@@ -139,6 +142,10 @@ pub struct Session {
   argument_servers: bool,
   /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
   pub orchester: Option<fake_permission_prompt::Prompt>,
+  /// What the thread's model asks of the runner's end of the relay.
+  probe: fake_codex_relay::Probe,
+  /// A connection to it that never shows the token, kept open.
+  silent: Option<std::net::TcpStream>,
   /// The MCP tools the thread's configuration approves (`<server>/<tool>`), which run without a request.
   pub approved_tools: BTreeSet<String>,
   /// The person's decisions the turn waits on, if any.
@@ -160,6 +167,8 @@ impl Session {
       user_server_off: false,
       argument_servers: false,
       orchester: None,
+      probe: fake_codex_relay::Probe::None,
+      silent: None,
       approved_tools: BTreeSet::new(),
       approvals: None,
       awaits_message: None,
@@ -212,6 +221,7 @@ impl Session {
     self.user_server_off = config["mcp_servers"]["user-global"]["enabled"] == json!(false)
       || config["mcp_servers.user-global.enabled"] == json!(false);
     self.argument_servers = config.get("mcp_servers").is_none();
+    self.probe = fake_codex_relay::Probe::of(params["model"].as_str().unwrap_or_default());
     self.approved_tools = approved_tools(&self.args);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
@@ -309,6 +319,13 @@ impl Session {
   /// The project servers the thread kept, of which `broken` did not start and Orchester's is started
   /// to list its tools, then for the thread, and the user's own server.
   fn servers(&mut self) -> Vec<Value> {
+    let one_relay = self.probe == fake_codex_relay::Probe::OneRelay;
+    if self.argument_servers {
+      self.silent = self.probe.before_relays(&self.args);
+      if one_relay {
+        self.start_orchester();
+      }
+    }
     let kept = if self.argument_servers {
       self.project_servers()
     } else {
@@ -317,20 +334,37 @@ impl Session {
     let mut servers: Vec<Value> = kept
       .into_iter()
       .map(|name| match name {
+        "Orchester" if one_relay => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
         "Orchester" => orchester_status(&self.args),
         "broken" if self.broken => json!({"name": name, "runtimeStatus": "failed", "toolsError": null}),
         _ => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
       })
       .collect();
-    if self.argument_servers && self.orchester.is_none() {
-      self.orchester = fake_codex_tools::start(&self.args).and_then(|started| started.server);
+    if self.argument_servers {
+      self.start_orchester();
+      if self.probe == fake_codex_relay::Probe::Knock {
+        eprintln!("knock: {}", fake_codex_relay::knock(&self.args, None));
+      }
     }
     let user = if self.user_server_off { "disabled" } else { "connected" };
     servers.push(json!({"name": "user-global", "runtimeStatus": user, "toolsError": null}));
     servers
   }
 
+  /// Orchester's server for the thread, unless it was started.
+  fn start_orchester(&mut self) {
+    if self.orchester.is_none() {
+      self.orchester = fake_codex_tools::start(&self.args).and_then(|started| started.server);
+    }
+  }
+
   fn turn(&mut self, params: &Value) -> Step {
+    if matches!(
+      self.probe,
+      fake_codex_relay::Probe::Knock | fake_codex_relay::Probe::OneRelay
+    ) {
+      eprintln!("late-knock: {}", fake_codex_relay::knock(&self.args, None));
+    }
     let prompt = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
     let mut shown = params.clone();
     shown["input"] = Value::Null;

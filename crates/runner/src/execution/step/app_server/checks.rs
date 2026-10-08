@@ -114,16 +114,17 @@ impl AppServerSession {
   pub(super) fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
     verify_only_chosen_run(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
     if self.setup.tool_approvals {
-      verify_selected_servers(result, &self.setup.expected_servers)
-        .map_err(|error| self.one_line(&error.to_string()))?;
+      verify_selected_servers(result, &self.setup.expected_servers, |text| self.one_line(text))
+        .map_err(|error| error.to_string())?;
       return Ok(Vec::new());
     }
-    let unavailable = unavailable_selected(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    let unavailable = unavailable_selected(result, &self.setup.expected_servers, |text| self.one_line(text))
+      .map_err(|error| error.to_string())?;
     Ok(
       unavailable
         .into_iter()
         .map(|server| {
-          let detail = server.detail().map(|detail| self.one_line(&detail));
+          let detail = server.detail();
           Update::Activity(AgentEvent::McpServer {
             server: Some(server.name),
             problem: McpServerProblem::FailedToStart { detail },

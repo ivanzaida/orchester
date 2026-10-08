@@ -141,6 +141,11 @@ impl Worker {
       } => Ok(claude.parse(stream, line).into_iter().map(Update::Activity).collect()),
       Driver::Native(_) => Ok(Vec::new()),
     };
+    if self.app_server().is_some_and(AppServerSession::servers_checked)
+      && let Some(relay) = self.tool_relay.as_mut()
+    {
+      relay.stop_accepting();
+    }
     self.took_input(watch)?;
     match received {
       Ok(updates) => {

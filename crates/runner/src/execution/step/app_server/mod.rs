@@ -157,6 +157,12 @@ impl AppServerSession {
     matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()
   }
 
+  /// Whether Codex's MCP inventory was checked: Codex has started every server of the thread and of the
+  /// inventory.
+  pub fn servers_checked(&self) -> bool {
+    matches!(self.phase, Phase::Turn | Phase::Working | Phase::Complete)
+  }
+
   /// Whether the turn has not started yet, but will.
   pub fn awaits_turn(&self) -> bool {
     self.phase != Phase::Complete && !self.turn_working()
