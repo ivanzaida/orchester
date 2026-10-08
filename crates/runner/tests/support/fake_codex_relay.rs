@@ -10,8 +10,8 @@ use std::{
 
 use super::fake_codex_tools::setting;
 
-/// The runner's failed connections before it stops listening.
-const ATTEMPTS: usize = 8;
+/// Knocks with a wrong token: as many as the runner once gave up after.
+const BAD_KNOCKS: usize = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
@@ -19,12 +19,13 @@ pub enum Probe {
   /// `-knock-`: once Codex's two relays came, knocks with the token (`knock: `), and again as the turn
   /// starts (`late-knock: `).
   Knock,
-  /// `-one-relay-`: `mcpServerStatus/list` starts no relay of its own, the thread's lists the tools; knocks
-  /// with the token as the turn starts (`late-knock: `).
-  OneRelay,
+  /// `-late-relay-`: the thread's relay starts only after `mcpServerStatus/list` was answered.
+  LateRelay,
+  /// `-no-thread-relay-`: the thread starts no relay, only `mcpServerStatus/list` does.
+  NoThreadRelay,
   /// `-silent-`: before the relays, opens a connection that never shows the token and keeps it open.
   Silent,
-  /// `-bad-knocks-`: before the relays, knocks as often as the runner allows with a wrong token.
+  /// `-bad-knocks-`: before the relays, knocks [`BAD_KNOCKS`] times with a wrong token.
   BadKnocks,
 }
 
@@ -32,7 +33,8 @@ impl Probe {
   pub fn of(model: &str) -> Self {
     [
       ("-knock-", Self::Knock),
-      ("-one-relay-", Self::OneRelay),
+      ("-late-relay-", Self::LateRelay),
+      ("-no-thread-relay-", Self::NoThreadRelay),
       ("-silent-", Self::Silent),
       ("-bad-knocks-", Self::BadKnocks),
     ]
@@ -41,17 +43,22 @@ impl Probe {
     .unwrap_or(Self::None)
   }
 
+  /// Whether the thread's relay starts while `mcpServerStatus/list` is answered, as it does in Codex.
+  pub fn starts_thread_relay_with_the_list(self) -> bool {
+    !matches!(self, Self::LateRelay | Self::NoThreadRelay)
+  }
+
   /// What the probe does before the relays start: the silent connection it keeps open, if any.
   pub fn before_relays(self, args: &[String]) -> Option<TcpStream> {
     match self {
       Self::Silent => TcpStream::connect(address(args)?).ok(),
       Self::BadKnocks => {
-        for _ in 0..ATTEMPTS {
+        for _ in 0..BAD_KNOCKS {
           eprintln!("bad-knock: {}", knock(args, Some("not-the-token")));
         }
         None
       }
-      Self::None | Self::Knock | Self::OneRelay => None,
+      Self::None | Self::Knock | Self::LateRelay | Self::NoThreadRelay => None,
     }
   }
 }

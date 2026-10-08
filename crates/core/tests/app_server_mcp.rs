@@ -131,7 +131,13 @@ fn a_configured_server_whose_name_has_a_dot_refuses_the_step() {
     let config = json!({"config": {"mcp_servers": {"docs": {"enabled": true}, dotted: {"enabled": true}}}});
     let error = servers_to_turn_off(&config, &selected).expect_err("refused");
     assert_eq!(error, McpInventoryError::DottedName(dotted.to_owned()));
-    assert!(error.to_string().contains("rename it"), "{error}");
+    assert_eq!(
+      error.to_string(),
+      format!(
+        "Your own Codex configuration has an MCP server named `{dotted}`; Orchester cannot keep a server whose \
+         name has a dot from its agents, so rename it"
+      )
+    );
   }
 }
 

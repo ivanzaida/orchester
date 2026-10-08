@@ -217,10 +217,13 @@ invocation; a native agent can later declare the same schemas in its own request
   `Orchester` refuses the step. The relay handles one request at a time, so a call waiting for a person holds the
   invocation's other calls of the relay. Codex 0.159.2 starts the server once for the thread and once more for each
   `mcpServerStatus/list`, at about the same time (checked 2026-10-08), so the runner serves the two Codex relays that
-  show the token, each on its own connection, and closes the port after them, or once Codex's inventory was checked
-  if fewer came: a later connection, even with the token, is refused. Claude Code's permission prompt relay is
-  served alone. Each connection shows the token on its own, so a silent one holds no relay back; after eight that
-  could not be taken or did not show it, the port closes.
+  show the token, each on its own connection, and closes the port after them: a later connection, even with the
+  token, is refused. Once Codex's inventory was checked, the port waits at most 10 seconds for a relay still to come
+  (Codex may answer the list before the thread's relay came); a handshake under way when it closes still counts,
+  and when fewer than two came the step's activity says that the agent may have worked without Orchester's tools.
+  Claude Code's permission prompt relay is served alone. Each connection shows the token on its own, at most eight at
+  once (more wait in the port's backlog), so a silent one holds no relay back; a connection without the token never
+  closes the port.
 - **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
   its own (*# Orchester tools*) to use them for git and for files outside the worktree.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools

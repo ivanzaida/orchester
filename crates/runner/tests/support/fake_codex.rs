@@ -186,7 +186,14 @@ impl Session {
         let cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
         emit(&json!({"id": 6, "result": {"config": self.configuration(), "layers": self.layers(&cwd)}}));
       }
-      Some("mcpServerStatus/list") => emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}})),
+      Some("mcpServerStatus/list") => {
+        emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}}));
+        if self.argument_servers && self.probe == fake_codex_relay::Probe::LateRelay {
+          // The runner has taken the list's answer before the thread's relay comes.
+          thread::sleep(Duration::from_millis(500));
+          self.start_orchester();
+        }
+      }
       Some("turn/start") => return self.turn(params),
       Some("turn/steer") => return fake_codex_work::steered(self, &message["id"], params),
       None => return fake_app_server::answered(self, message),
@@ -319,12 +326,8 @@ impl Session {
   /// The project servers the thread kept, of which `broken` did not start and Orchester's is started
   /// to list its tools, then for the thread, and the user's own server.
   fn servers(&mut self) -> Vec<Value> {
-    let one_relay = self.probe == fake_codex_relay::Probe::OneRelay;
     if self.argument_servers {
       self.silent = self.probe.before_relays(&self.args);
-      if one_relay {
-        self.start_orchester();
-      }
     }
     let kept = if self.argument_servers {
       self.project_servers()
@@ -334,13 +337,12 @@ impl Session {
     let mut servers: Vec<Value> = kept
       .into_iter()
       .map(|name| match name {
-        "Orchester" if one_relay => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
         "Orchester" => orchester_status(&self.args),
         "broken" if self.broken => json!({"name": name, "runtimeStatus": "failed", "toolsError": null}),
         _ => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
       })
       .collect();
-    if self.argument_servers {
+    if self.argument_servers && self.probe.starts_thread_relay_with_the_list() {
       self.start_orchester();
       if self.probe == fake_codex_relay::Probe::Knock {
         eprintln!("knock: {}", fake_codex_relay::knock(&self.args, None));
@@ -359,10 +361,7 @@ impl Session {
   }
 
   fn turn(&mut self, params: &Value) -> Step {
-    if matches!(
-      self.probe,
-      fake_codex_relay::Probe::Knock | fake_codex_relay::Probe::OneRelay
-    ) {
+    if self.probe == fake_codex_relay::Probe::Knock {
       eprintln!("late-knock: {}", fake_codex_relay::knock(&self.args, None));
     }
     let prompt = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();

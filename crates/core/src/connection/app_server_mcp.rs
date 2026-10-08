@@ -43,7 +43,8 @@ pub enum McpInventoryError {
   #[error("Codex App Server MCP inventory has an unnamed server")]
   UnnamedServer,
   #[error(
-    "Your own Codex configuration has an MCP server named `{0}`; Orchester cannot keep a server whose name has a      dot from its agents, so rename it"
+    "Your own Codex configuration has an MCP server named `{0}`; Orchester cannot keep a server whose name has a \
+     dot from its agents, so rename it"
   )]
   DottedName(String),
   #[error("Codex App Server did not load the MCP server `{0}` selected by this agent profile")]
