@@ -10,7 +10,7 @@ use std::{collections::BTreeSet, fs, io, num::NonZeroU32, path::Path, sync::Arc}
 
 use orchester_agent::{AnthropicClient, Endpoint, FileTools, WireQuirks};
 use orchester_core::{
-  agent_files::{AgentFilesMechanism, frontmatter},
+  agent_files::{AgentFilesMechanism, frontmatter, skills::repository_skills},
   code_index::RipgrepFallback,
   command::SecretVariable,
   connection::{
@@ -42,7 +42,7 @@ use super::{
     super::{codebase_index::IndexTold, connection_check, run::RunTask},
     Continuation, Occasion,
     native::{CommandHost, NativeSession},
-    skills::{PlacedSkill, repository_skills},
+    skills::PlacedSkill,
   },
   AgentIndex, AgentStart, Launch, NATIVE_NOT_AVAILABLE, PromptParts, StepAgent, problem, reasoning_effort,
 };
@@ -225,7 +225,9 @@ impl RunTask {
     if setting.mechanism(connection.provider()) != AgentFilesMechanism::OrchesterLoads {
       return Ok(None);
     }
-    for document in repository_skills(worktree)? {
+    let documents =
+      repository_skills(worktree).map_err(|error| problem(format!("cannot load the repository's skills: {error}")))?;
+    for document in documents {
       let text = fs::read_to_string(&document)
         .map_err(|error| problem(format!("cannot read {}: {error}", document.display())))?;
       let markdown = frontmatter::parse(&text);
