@@ -533,7 +533,7 @@ fn organization_add_link_skips_empty_and_cyclic_choices() {
 }
 
 /// KON-1, KON-2 and KON-3, all named Dependency; KON-2 is blocked by KON-1.
-fn seed_dependencies(repo: &Path) {
+pub(crate) fn seed_dependencies(repo: &Path) {
   use orchester_core::task::organization::{BlockingTask, DependencyGate};
   let mut db = ProjectDb::open(repo).expect("open");
   let details = TaskDetails {
