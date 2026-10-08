@@ -116,7 +116,15 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
-  `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
+  decides it: `approve` with the `version` it is for and no note, only while *Let automation answer
+  approvals* is on (refused with `automation_not_allowed` otherwise), or `request_changes` with a `note` the
+  step's agent resumes with and an optional `version`, which needs no such permission; `get_run`'s `awaiting.plan` shows the waiting plan's
+  version, step, whole `text` and an `excerpt`, and `list_approvals`' `plans` the same without the whole
+  text, so a client approves only a plan it read in full through `get_run`; refused with `run_not_found`,
+  `no_plan_waiting`, `run_paused`, `plan_already_decided`, `plan_version_changed` (another version waits now,
+  named in the reason), `version_required`, `invalid_version`, `blank_note`, `note_not_taken` or a runner
+  rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
   (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each

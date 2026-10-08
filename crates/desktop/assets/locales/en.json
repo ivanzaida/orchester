@@ -5833,7 +5833,17 @@
       "runRecorded": "{{task}} has a run, so it stays queued; only a task whose run never started returns to the drafts.",
       "severalQuestions": "This request asks several questions at once; answer it on its card in the task conversation.",
       "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
-      "noWaitingQuestion": "No question waits for an answer in this run."
+      "noWaitingQuestion": "No question waits for an answer in this run.",
+      "noPlanWaiting": "No plan waits for a decision in run #{{run}}.",
+      "planApproved": "Plan v{{version}} of {{step}} was approved already; no plan waits for a decision.",
+      "planChangesRequested": "Changes to plan v{{version}} of {{step}} were requested already; its agent revises it, and the revised plan waits for a decision of its own.",
+      "planRunPaused": "Run #{{run}} is paused; plan v{{version}} of {{step}} takes a decision once the run is resumed (resume_run).",
+      "planNoLongerWaits": "The plan no longer waits for a decision: it was decided since it was read. get_run says where the run stands now.",
+      "planVersionInvalid": "Plan versions count from 1.",
+      "approveNeedsVersion": "Approving names the plan version it is for, as get_run shows it waiting with its whole text, so only a plan read in full is approved.",
+      "planVersionChanged": "Plan v{{asked}} no longer waits for a decision; plan v{{version}} of {{step}} waits now.",
+      "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
+      "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note."
     }
   },
   "statusBar": {
