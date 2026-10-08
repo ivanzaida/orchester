@@ -16,9 +16,11 @@ fn selected_server_is_checked_and_extra_global_servers_remain_available() {
   ],"nextCursor":null});
   assert_eq!(verify_selected_servers(&inventory, &selected), Ok(()));
   let missing = json!({"data":[{"name":"global-docs","runtimeStatus":"connected"}],"nextCursor":null});
+  let error = verify_selected_servers(&missing, &selected).expect_err("missing");
+  assert_eq!(error, McpInventoryError::MissingSelected("project-pencil".to_owned()));
   assert_eq!(
-    verify_selected_servers(&missing, &selected),
-    Err(McpInventoryError::MissingSelected)
+    error.to_string(),
+    "Codex App Server did not load the MCP server `project-pencil` selected by this agent profile"
   );
 }
 
@@ -34,15 +36,34 @@ fn selected_server_must_be_connected() {
     json!({"name":"project-pencil","runtimeStatus":"connected","toolsError":"private diagnostic"}),
   ] {
     let inventory = json!({"data":[server],"nextCursor":null});
-    assert_eq!(
-      verify_selected_servers(&inventory, &selected),
-      Err(McpInventoryError::UnavailableSelected)
+    assert!(
+      matches!(
+        verify_selected_servers(&inventory, &selected),
+        Err(McpInventoryError::UnavailableSelected(UnavailableServer { ref name, .. })) if name == "project-pencil"
+      ),
+      "{inventory}"
     );
   }
 }
 
+/// The step that needs its servers says which one is not connected, and why, as Codex lists it.
+#[test]
+fn a_selected_server_that_is_not_connected_is_named_with_its_reason() {
+  let selected = BTreeSet::from(["design".to_owned(), "Orchester".to_owned()]);
+  let inventory = json!({"data":[
+    {"name":"Orchester","runtimeStatus":"connected","toolsError":null},
+    {"name":"design","runtimeStatus":"failed","toolsError":"MCP startup failed: the Pencil app is not running"}
+  ],"nextCursor":null});
+  let error = verify_selected_servers(&inventory, &selected).expect_err("not connected");
+  assert_eq!(
+    error.to_string(),
+    "The MCP server `design` selected by this agent profile is not connected in Codex App Server: \
+     failed: MCP startup failed: the Pencil app is not running"
+  );
+}
+
 /// A step that does not ask before MCP actions works without the selected servers that are not
-/// connected, each named with its state, never Codex's own diagnostic.
+/// connected, each named with its state and Codex's reason.
 #[test]
 fn selected_servers_that_are_not_connected_are_named_for_the_activity() {
   let selected = BTreeSet::from(["docs".to_owned(), "missing".to_owned(), "pencil".to_owned()]);
@@ -56,11 +77,13 @@ fn selected_servers_that_are_not_connected_are_named_for_the_activity() {
     Ok(vec![
       UnavailableServer {
         name: "missing".to_owned(),
-        state: None
+        state: None,
+        error: None
       },
       UnavailableServer {
         name: "docs".to_owned(),
-        state: Some("failed".to_owned())
+        state: Some("failed".to_owned()),
+        error: Some("private diagnostic".to_owned())
       },
     ])
   );

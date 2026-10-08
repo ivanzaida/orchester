@@ -12,9 +12,14 @@
 //! runner keeps standard error in the activity, so tests can check how it was started.
 //!
 //! Its arguments may approve MCP tools (`-c mcp_servers.<server>.tools={"<tool>"={approval_mode="approve"},…}`);
-//! such a tool runs without an approval request, as in Codex 0.159.2. Like 0.159.2, it refuses a thread
-//! whose configuration has a table for a server without a transport (`command` or `url`) that is not the
-//! user's own: the arguments' servers cannot be changed there.
+//! such a tool runs without an approval request, as in Codex 0.159.2. Like 0.159.2, a thread whose
+//! configuration has an `mcp_servers` table loses the arguments' servers, Orchester's among them: the table
+//! replaces theirs and merges with the user's only, so a table for a server without a transport (`command` or
+//! `url`) that is not the user's own refuses the thread. A dotted key (`mcp_servers.<server>.enabled`)
+//! changes that one server only. Orchester's server is started for `mcpServerStatus/list`, which lists its
+//! tools, or why it has none, and closes it, and for the thread (`fake_codex_tools`). Codex 0.159.2 starts
+//! both at about the same time, in either order; the fake starts the thread's second, so a runner that
+//! served only the first relay would leave the thread without Orchester's tools.
 //!
 //! A model with `-refused-` in its name is refused with a two-line reason that echoes the token of
 //! Orchester's server (`ORCHESTER_APPROVAL_TOKEN`), so tests can check how the runner reports a refusal.
@@ -130,6 +135,10 @@ pub struct Session {
   roots: BTreeSet<String>,
   /// The user's server `user-global` was turned off for the thread.
   user_server_off: bool,
+  /// The thread keeps the servers of the arguments: its configuration has no `mcp_servers` table.
+  argument_servers: bool,
+  /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
+  pub orchester: Option<fake_permission_prompt::Prompt>,
   /// The MCP tools the thread's configuration approves (`<server>/<tool>`), which run without a request.
   pub approved_tools: BTreeSet<String>,
   /// The person's decisions the turn waits on, if any.
@@ -149,6 +158,8 @@ impl Session {
       resumed: false,
       roots: BTreeSet::new(),
       user_server_off: false,
+      argument_servers: false,
+      orchester: None,
       approved_tools: BTreeSet::new(),
       approvals: None,
       awaits_message: None,
@@ -192,12 +203,15 @@ impl Session {
       emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
       return;
     }
-    if let Some(server) = without_transport(&params["config"]["mcp_servers"]) {
+    let config = &params["config"];
+    if let Some(server) = without_transport(&config["mcp_servers"]) {
       let message = format!("failed to load configuration: invalid transport\nin `mcp_servers.{server}`\n");
       emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
       return;
     }
-    self.user_server_off = params["config"]["mcp_servers"]["user-global"]["enabled"] == json!(false);
+    self.user_server_off = config["mcp_servers"]["user-global"]["enabled"] == json!(false)
+      || config["mcp_servers.user-global.enabled"] == json!(false);
+    self.argument_servers = config.get("mcp_servers").is_none();
     self.approved_tools = approved_tools(&self.args);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
     self.resumed = method == "thread/resume";
@@ -292,20 +306,25 @@ impl Session {
     layers
   }
 
-  /// The project servers, of which `broken` did not start, and the user's own server.
-  fn servers(&self) -> Vec<Value> {
-    let mut servers: Vec<Value> = self
-      .project_servers()
+  /// The project servers the thread kept, of which `broken` did not start and Orchester's is started
+  /// to list its tools, then for the thread, and the user's own server.
+  fn servers(&mut self) -> Vec<Value> {
+    let kept = if self.argument_servers {
+      self.project_servers()
+    } else {
+      BTreeSet::new()
+    };
+    let mut servers: Vec<Value> = kept
       .into_iter()
-      .map(|name| {
-        let status = if self.broken && name == "broken" {
-          "failed"
-        } else {
-          "connected"
-        };
-        json!({"name": name, "runtimeStatus": status, "toolsError": null})
+      .map(|name| match name {
+        "Orchester" => orchester_status(&self.args),
+        "broken" if self.broken => json!({"name": name, "runtimeStatus": "failed", "toolsError": null}),
+        _ => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
       })
       .collect();
+    if self.argument_servers && self.orchester.is_none() {
+      self.orchester = fake_codex_tools::start(&self.args).and_then(|started| started.server);
+    }
     let user = if self.user_server_off { "disabled" } else { "connected" };
     servers.push(json!({"name": "user-global", "runtimeStatus": user, "toolsError": null}));
     servers
@@ -336,6 +355,21 @@ impl Session {
     emit(&json!({"method": "turn/started", "params": {"threadId": self.thread, "turn": {"id": TURN}}}));
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
+  }
+}
+
+/// Orchester's server in `mcpServerStatus/list`: started again, its tools listed, then closed.
+fn orchester_status(args: &[String]) -> Value {
+  match fake_codex_tools::start(args).map(|started| started.tools) {
+    Some(Ok(tools)) => {
+      let tools: serde_json::Map<String, Value> = tools
+        .into_iter()
+        .map(|tool| (tool.clone(), json!({"name": tool})))
+        .collect();
+      json!({"name": "Orchester", "runtimeStatus": "connected", "toolsError": null, "tools": tools})
+    }
+    Some(Err(error)) => json!({"name": "Orchester", "runtimeStatus": "connected", "toolsError": error}),
+    None => json!({"name": "Orchester", "runtimeStatus": "failed", "toolsError": "no command"}),
   }
 }
 

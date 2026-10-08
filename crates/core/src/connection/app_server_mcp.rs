@@ -15,8 +15,14 @@
 //! same server sent `mcpServer/elicitation/request`; `config/read` lists the setting, and an unknown mode
 //! is refused with *unknown variant*, expecting `auto`, `prompt`, `writes` or `approve`). A tool not
 //! listed keeps Codex's default mode (`auto`). The approval is an override of the Codex process, next to
-//! the server's own (`crate::connection::invocation::CodexMcp`), never a table of the thread's
-//! configuration ([`thread_servers`]): Codex refuses that thread for a server only overrides define.
+//! the server's own (`crate::connection::invocation::CodexMcp`), never part of the thread's configuration
+//! ([`thread_config`]).
+//!
+//! The thread's configuration names each server it turns off by a dotted key,
+//! `mcp_servers.<server>.enabled`, never by an `mcp_servers` table: in Codex 0.159.2 a thread's
+//! `mcp_servers` table, even an empty one, replaces the table of the process's overrides, so the step's
+//! own servers and Orchester's are gone from the thread, while the user's servers merge with it (checked
+//! 2026-10-08 with `config/read`, `thread/start` and `mcpServerStatus/list`).
 
 use std::collections::BTreeSet;
 
@@ -31,10 +37,14 @@ pub enum McpInventoryError {
   MissingInventory,
   #[error("Codex App Server MCP inventory has an unnamed server")]
   UnnamedServer,
-  #[error("Codex App Server omitted an MCP server selected by this agent profile")]
-  MissingSelected,
-  #[error("A selected MCP server is not connected in Codex App Server")]
-  UnavailableSelected,
+  #[error("Codex App Server did not load the MCP server `{0}` selected by this agent profile")]
+  MissingSelected(String),
+  #[error(
+    "The MCP server `{}` selected by this agent profile is not connected in Codex App Server: {}",
+    .0.name,
+    .0.detail().unwrap_or_default()
+  )]
+  UnavailableSelected(UnavailableServer),
   #[error("Codex App Server did not report its configuration")]
   MissingConfiguration,
   #[error("Codex App Server runs the MCP server `{0}`, which this step does not choose")]
@@ -98,17 +108,33 @@ pub fn verify_only_chosen_run(result: &Value, selected: &BTreeSet<String>) -> Re
 pub struct UnavailableServer {
   pub name: String,
   /// Its connection state as Codex reports it (`failed`, `notStarted`, …); `None` when the inventory
-  /// has no such server or no state. Codex's tool discovery error is left out: it is the server's own
-  /// diagnostic and may hold what the server was given.
+  /// has no such server or no state.
   pub state: Option<String>,
+  /// Codex's reason it has no tools of the server (`toolsError`), such as why the server failed to
+  /// start. It is the server's own diagnostic and may hold what the server was given, so whoever shows
+  /// it removes the invocation's secret values first.
+  pub error: Option<String>,
 }
 
-/// Every selected server must be connected, or the step does not start.
+impl UnavailableServer {
+  /// The state and Codex's reason, as `failed: <reason>`; `None` for a server the inventory does not
+  /// list.
+  pub fn detail(&self) -> Option<String> {
+    let state = self.state.as_deref()?;
+    Some(match &self.error {
+      Some(error) => format!("{state}: {error}"),
+      None => state.to_owned(),
+    })
+  }
+}
+
+/// Every selected server must be connected, or the step does not start; the error names the first
+/// that is not, and why.
 pub fn verify_selected_servers(result: &Value, selected: &BTreeSet<String>) -> Result<(), McpInventoryError> {
-  match unavailable_selected(result, selected)?.first() {
+  match unavailable_selected(result, selected)?.into_iter().next() {
     None => Ok(()),
-    Some(UnavailableServer { state: None, .. }) => Err(McpInventoryError::MissingSelected),
-    Some(_) => Err(McpInventoryError::UnavailableSelected),
+    Some(UnavailableServer { name, state: None, .. }) => Err(McpInventoryError::MissingSelected(name)),
+    Some(server) => Err(McpInventoryError::UnavailableSelected(server)),
   }
 }
 
@@ -135,6 +161,7 @@ pub fn unavailable_selected(
     .map(|name| UnavailableServer {
       name: name.clone(),
       state: None,
+      error: None,
     })
     .collect();
   for server in data {
@@ -142,26 +169,26 @@ pub fn unavailable_selected(
       continue;
     };
     let state = server.get("runtimeStatus").and_then(Value::as_str);
-    if selected.contains(name)
-      && (state != Some("connected") || server.get("toolsError").is_some_and(|error| !error.is_null()))
-    {
+    let error = server.get("toolsError").filter(|error| !error.is_null());
+    if selected.contains(name) && (state != Some("connected") || error.is_some()) {
       unavailable.push(UnavailableServer {
         name: name.to_owned(),
         state: Some(state.unwrap_or("unknown").to_owned()),
+        error: error.map(|error| error.as_str().map_or_else(|| error.to_string(), str::to_owned)),
       });
     }
   }
   Ok(unavailable)
 }
 
-/// The `mcp_servers` table of a thread's configuration: each server of `turned_off` turned off by name
-/// (a table merges with the user's configuration, so `mcp_servers={}` would not remove them). It holds
-/// the user's own servers only: Codex 0.159.2 refuses `thread/start` with *invalid transport in
-/// `mcp_servers.<server>`* for a table of a server that only the process's overrides define, such as the
-/// step's own servers and Orchester's (checked 2026-10-07).
-pub fn thread_servers(turned_off: &[String]) -> Map<String, Value> {
+/// The thread's configuration: each server of `turned_off` turned off by its dotted key
+/// (`mcp_servers.<server>.enabled = false`), which merges with the user's configuration and leaves the
+/// process's own servers alone. An `mcp_servers` table would replace the process's servers for the
+/// thread (see the module's notes). A name with a dot cannot be named this way; Codex then refuses the
+/// thread or lists the server running, and the step stops ([`verify_only_chosen_run`]).
+pub fn thread_config(turned_off: &[String]) -> Map<String, Value> {
   turned_off
     .iter()
-    .map(|name| (name.clone(), json!({"enabled": false})))
+    .map(|name| (format!("mcp_servers.{name}.enabled"), json!(false)))
     .collect()
 }

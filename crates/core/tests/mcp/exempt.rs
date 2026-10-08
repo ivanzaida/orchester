@@ -8,7 +8,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     app_server::{AppServerStream, Update},
-    app_server_mcp::thread_servers,
+    app_server_mcp::thread_config,
     invocation::{ClaudeInvocation, ClaudeMcp, ClaudeMcpConfig, ClaudeSession, CodexMcp, McpLaunch, Platform},
     mcp::{
       ExemptTools, ExemptToolsError, InvocationExemptions, McpServerName, McpToolName, McpToolNameError, McpUrl,
@@ -162,11 +162,12 @@ fn mcp_exempt_tools_are_approved_by_codex_overrides_not_the_thread() {
     not_asking.args()
   );
   assert!(not_asking.exemptions().is_empty());
+  // A dotted key, never an `mcp_servers` table, which would replace the process's servers for the thread.
   assert_eq!(
-    serde_json::Value::Object(thread_servers(&["user-notes".to_owned()])),
-    json!({"user-notes": {"enabled": false}})
+    serde_json::Value::Object(thread_config(&["user-notes".to_owned()])),
+    json!({"mcp_servers.user-notes.enabled": false})
   );
-  assert_eq!(serde_json::Value::Object(thread_servers(&[])), json!({}));
+  assert_eq!(serde_json::Value::Object(thread_config(&[])), json!({}));
 }
 
 fn exemptions() -> InvocationExemptions {

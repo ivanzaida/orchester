@@ -27,7 +27,7 @@ use orchester_core::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, repository_settings},
     app_server_mcp::{
-      refuse_user_hooks, servers_to_turn_off, thread_servers, unavailable_selected, verify_only_chosen_run,
+      refuse_user_hooks, servers_to_turn_off, thread_config, unavailable_selected, verify_only_chosen_run,
       verify_selected_servers,
     },
     mcp::{InvocationExemptions, McpServerProblem},
@@ -380,7 +380,12 @@ impl AppServerSession {
       .get("message")
       .and_then(Value::as_str)
       .unwrap_or("no reason given");
-    let redacted = self.redact(message);
+    self.one_line(message)
+  }
+
+  /// `text`, its secrets redacted, on one line, cut to [`REASON_CHARS`].
+  fn one_line(&self, text: &str) -> String {
+    let redacted = self.redact(text);
     let line = redacted.split_whitespace().collect::<Vec<_>>().join(" ");
     line.chars().take(REASON_CHARS).collect()
   }
@@ -495,12 +500,14 @@ impl AppServerSession {
     Ok(())
   }
 
-  /// The selected MCP servers the agent works without, as activity; an error when the step needs
-  /// them all (it asks before MCP actions) or the inventory cannot be read.
+  /// The selected MCP servers the agent works without, as activity, each with its state and Codex's
+  /// reason; an error naming the server and the reason when the step needs them all (it asks before MCP
+  /// actions), or when the inventory cannot be read.
   fn check_servers(&self, result: &Value) -> Result<Vec<Update>, String> {
     verify_only_chosen_run(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
     if self.setup.tool_approvals {
-      verify_selected_servers(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+      verify_selected_servers(result, &self.setup.expected_servers)
+        .map_err(|error| self.one_line(&error.to_string()))?;
       return Ok(Vec::new());
     }
     let unavailable = unavailable_selected(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
@@ -508,9 +515,10 @@ impl AppServerSession {
       unavailable
         .into_iter()
         .map(|server| {
+          let detail = server.detail().map(|detail| self.one_line(&detail));
           Update::Activity(AgentEvent::McpServer {
             server: Some(server.name),
-            problem: McpServerProblem::FailedToStart { detail: server.state },
+            problem: McpServerProblem::FailedToStart { detail },
           })
         })
         .collect(),
@@ -528,7 +536,7 @@ impl AppServerSession {
       "request_permissions":false,"skill_approval":false
     }});
     let cwd = self.setup.worktree.to_string_lossy();
-    let config = json!({ "mcp_servers": thread_servers(&self.turned_off) });
+    let config = Value::Object(thread_config(&self.turned_off));
     let params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),

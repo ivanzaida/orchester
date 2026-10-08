@@ -4,11 +4,17 @@
 //! step's Orchester tools ([`super::orchester_tools`]), one [`RelayRequest`] per line, each answered on
 //! one line. The listener and its connection end with the worker.
 //!
-//! Only one relay is served: connections are taken one at a time, each must show the token on a short
-//! first line within [`HANDSHAKE`] (compared in constant time), and after the first that does, or after
-//! [`ATTEMPTS`] that do not, nothing more is accepted. While a prompt call waits for a person, the
-//! connection is watched: a relay that goes away ends the wait, so a later decision cannot be recorded as
-//! delivered.
+//! A connection must show the token on a short first line within [`HANDSHAKE`] (compared in constant time);
+//! after [`ATTEMPTS`] that do not, nothing more is accepted. Claude Code starts its permission prompt once,
+//! so only the first relay that shows the token is served, and no connection is taken after it. Codex
+//! 0.159.2 starts Orchester's server once for the thread and once more for each `mcpServerStatus/list`,
+//! which lists its tools and closes it, at about the same time (checked 2026-10-08 with the real relay and
+//! `codex app-server`): a listener that served only the first would leave the thread's relay, or the
+//! list's, waiting until Codex gives up on it (*timed out awaiting tools/list*). So every Codex relay that
+//! shows the token is served, each on its own connection; none of them gets more than another, as the
+//! runner itself asks about every Codex call of a tool that asks.
+//! While a prompt call waits for a person, its connection is watched: a relay that goes away ends the
+//! wait, so a later decision cannot be recorded as delivered.
 
 use std::{
   future::pending,
@@ -34,7 +40,7 @@ use tokio::{
     tcp::{OwnedReadHalf, OwnedWriteHalf},
   },
   sync::{mpsc, oneshot},
-  task::JoinHandle,
+  task::{JoinHandle, JoinSet},
   time::timeout,
 };
 
@@ -47,7 +53,7 @@ use super::{
 const HANDSHAKE: Duration = Duration::from_secs(10);
 /// How long the listener waits after a failed accept before the next.
 const ACCEPT_RETRY: Duration = Duration::from_millis(100);
-/// Connections without the token before the listener gives up.
+/// Connections that could not be taken or did not show the token before the listener gives up.
 const ATTEMPTS: usize = 8;
 /// The longest first line read: the token is 64 characters.
 const TOKEN_LINE: u64 = 128;
@@ -147,33 +153,47 @@ struct Relay {
 }
 
 impl Relay {
-  /// Takes connections one at a time until one shows the token, then serves only that one.
+  /// Serves the connections that show the token (only the first for Claude Code's permission prompt),
+  /// until [`ATTEMPTS`] could not be taken or did not show it, or the worker ended. The
+  /// connections end with this task: aborting it drops `served`, which aborts them.
   async fn accept(self, listener: TcpListener) {
-    for _ in 0..ATTEMPTS {
+    let relay = Arc::new(self);
+    let mut served = JoinSet::new();
+    let mut failed = 0;
+    while failed < ATTEMPTS {
       let stream = tokio::select! {
         accepted = listener.accept() => match accepted {
           Ok((stream, _)) => stream,
           Err(error) => {
             tracing::warn!(%error, "the relay's listener cannot accept its relay");
+            failed += 1;
             // Without a pause, an accept that keeps failing would spin.
             tokio::time::sleep(ACCEPT_RETRY).await;
             continue;
           }
         },
-        () = self.requests.closed() => return,
+        () = relay.requests.closed() => return,
       };
       let (read, write) = stream.into_split();
       let mut reader = BufReader::new(read);
-      if !self.shows_token(&mut reader).await {
+      if !relay.shows_token(&mut reader).await {
         tracing::warn!("a connection to the relay's listener did not show the invocation's token");
+        failed += 1;
         continue;
       }
-      self.reached.store(true, Ordering::Release);
-      // No other connection is taken while or after this one is served.
-      drop(listener);
-      return self.serve(reader.lines(), write).await;
+      relay.reached.store(true, Ordering::Release);
+      if relay.served.prompt.is_some() {
+        // No other connection is taken while or after Claude Code's permission prompt is served.
+        drop(listener);
+        return relay.serve(reader.lines(), write).await;
+      }
+      let relay = relay.clone();
+      served.spawn(async move { relay.serve(reader.lines(), write).await });
+      // Connections that ended are let go of, so a long step does not keep them all.
+      while served.try_join_next().is_some() {}
     }
-    tracing::warn!("the relay's listener stopped listening after {ATTEMPTS} connections without its token");
+    tracing::warn!("the relay's listener stopped listening after {ATTEMPTS} failed connections");
+    relay.requests.closed().await;
   }
 
   async fn shows_token(&self, reader: &mut BufReader<OwnedReadHalf>) -> bool {

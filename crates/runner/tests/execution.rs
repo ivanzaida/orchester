@@ -67,11 +67,12 @@ fn assert_thread_and_turn(stderr: &[&str]) {
   };
   let thread = reported("thread: ");
   assert_eq!(thread["model"], "gpt-5.5");
-  // The user's own MCP server, read from `config/read`, is turned off for the thread, and nothing else is
-  // there: Codex refuses a table of a server only its arguments define, such as Orchester's.
+  // The user's own MCP server, read from `config/read`, is turned off for the thread by its dotted key, and
+  // nothing else is there: an `mcp_servers` table would replace the servers of Codex's arguments,
+  // Orchester's among them.
   assert_eq!(
-    thread["config"]["mcp_servers"],
-    serde_json::json!({"user-global": {"enabled": false}})
+    thread["config"],
+    serde_json::json!({"mcp_servers.user-global.enabled": false})
   );
   assert_eq!(thread["sandbox"], "workspace-write");
   // Commands that need more than the sandbox ask a person; nothing else does.

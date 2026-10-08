@@ -184,18 +184,28 @@ async fn mcp_exempt_codex_tool_runs_without_asking_and_another_asks() {
   let db = ProjectDb::open(root).expect("open");
   assert_eq!(reported(&db, id, "unasked: "), ["pencil/get_screenshot"]);
   assert!(reported(&db, id, "mcp-arg: ").contains(&approved_pencil()));
-  for servers in thread_servers(root, id) {
-    assert!(servers.get("pencil").is_none(), "{servers}");
+  for config in thread_configs(root, id) {
+    assert_keeps_the_step_servers(&config);
   }
   assert_eq!(not_asked(&db, id), listed());
 }
 
-/// The `mcp_servers` configuration of the thread each Codex start of `run` asked for, in order.
-fn thread_servers(root: &Path, run: RunId) -> Vec<serde_json::Value> {
+/// The configuration of the thread each Codex start of `run` asked for, in order.
+fn thread_configs(root: &Path, run: RunId) -> Vec<serde_json::Value> {
   threads(&ProjectDb::open(root).expect("open"), run)
     .into_iter()
-    .map(|thread| thread["config"]["mcp_servers"].clone())
+    .map(|thread| thread["config"].clone())
     .collect()
+}
+
+/// A thread's configuration turns the user's own server off by its dotted key and has no `mcp_servers`
+/// table, which would replace the servers of Codex's arguments, `pencil` and Orchester's, for the thread.
+fn assert_keeps_the_step_servers(config: &serde_json::Value) {
+  assert_eq!(
+    config,
+    &serde_json::json!({"mcp_servers.user-global.enabled": false}),
+    "{config}"
+  );
 }
 
 /// The override that approves `pencil`'s listed tools: Codex refuses a thread whose configuration has a
@@ -239,9 +249,9 @@ async fn mcp_exempt_codex_step_that_does_not_ask_gets_no_exemption() {
     .expect("the run starts");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  let servers = thread_servers(root, id);
-  assert_eq!(servers.len(), 1);
-  assert!(servers[0].get("pencil").is_none(), "{}", servers[0]);
+  let configs = thread_configs(root, id);
+  assert_eq!(configs.len(), 1);
+  assert_keeps_the_step_servers(&configs[0]);
   let args = reported(&ProjectDb::open(root).expect("open"), id, "mcp-arg: ");
   assert!(
     !args.iter().any(|arg| arg.starts_with("mcp_servers.pencil.tools=")),

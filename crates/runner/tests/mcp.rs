@@ -18,6 +18,7 @@ use orchester_core::{
     stream::AgentEvent,
   },
   id::{ConnectionId, IdempotencyKey, SecretId},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, VariableName},
   run::{Run, RunStatus, Stuck},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
@@ -307,4 +308,42 @@ async fn mcp_servers_named_like_one_of_the_users_own_refuse_the_codex_step() {
     "{failures:?}"
   );
   assert!(reported(&db, run.id(), "thread: ").is_empty(), "no thread starts");
+}
+
+/// A step that asks before MCP actions needs every server it chooses: one Codex lists as not connected
+/// stops it, and the failure names that server and Codex's reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_server_codex_lists_not_connected_stops_a_step_that_asks_and_is_named() {
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  );
+  permissions.set_interactive_tool_approvals(true);
+  let project = project(&Setup {
+    mcp: vec![server("broken", stdio(TEST_COMMAND, None), McpEnvironment::default())],
+    permissions: Some(permissions),
+    ..Setup::new("Say hello.")
+  });
+  let run = run_to_the_end(&project).await;
+  assert!(
+    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
+    "{:?}",
+    run.status()
+  );
+  let db = ProjectDb::open(project.repo.path()).expect("open");
+  let failures: Vec<String> = db
+    .activity(run.id(), 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::TurnFailed { message } => Some(message),
+      _ => None,
+    })
+    .collect();
+  let expected = "The MCP server `broken` selected by this agent profile is not connected in Codex App Server: failed";
+  assert!(
+    failures.iter().any(|message| message.contains(expected)),
+    "{failures:?}"
+  );
 }
