@@ -5,6 +5,7 @@
 //! which scroll beside the gutter. Tokens only, never money; every figure from stored runs.
 
 mod breakdown;
+mod breakdown_table;
 mod card;
 mod custom_range;
 mod efficiency;
