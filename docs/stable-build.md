@@ -116,7 +116,11 @@ user profile and removes when the app closes. Orchester never shows, copies or l
   see below), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
   refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
   `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
-  `decide_approval`, `list_pipelines`, `duplicate_pipeline` (copies a
+  `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
+  decides it: `approve`, which takes no note, or `request_changes` with a `note` the step's agent resumes
+  with; `get_run`'s `awaiting.plan` and `list_approvals`' `plans` show the waiting plan's version, step and
+  the start of its text; refused with `no_plan_waiting`, `plan_already_decided`, `blank_note` or
+  `note_not_taken`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
   (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
