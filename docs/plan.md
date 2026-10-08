@@ -790,6 +790,25 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Skill tools for agent CLIs · branch `claude/skill-tools` (implemented 2026-10-08, waiting for review)
+
+Codex agents could not read their skills: the prompt listed each placed `SKILL.md` in
+`<repo>/.orchester/skills/<execution>/`, which `read_outside_file` refuses as Orchester's state. Orchester's tools
+gain `list_skills` and `read_skill {name, file?, offset?, limit?}` (read-only, never ask), served by the relay to
+Claude Code and Codex in a step that has skills: the skills placed for the step execution and the repository's
+skills the CLI itself loads under *Repository agent files* (Codex's `.agents/skills` and `.codex/skills` while it is
+on; Claude Code none), found within the worktree only and within bounds, each read only within its own regular files
+(`docs/interactive-tool-approvals.md`, "Orchester's tools"). The review's three majors and four minors are fixed
+(links out of the worktree, a `SKILL.md` read before its target was checked, the setting widened for both CLIs). The prompt names skills without paths and
+points at `read_skill`. Tests: `cargo test -p orchester-core --test orchester_tools orchester_tools`, `--test run
+skill`, `--test run prompt`, `--test claude_invocation claude_invocation`, `--test claude_approvals claude_approvals`;
+`cargo test -p orchester-runner --features test-agent --test orchester_skill_tools orchester_skill_tools` (and
+`agent_files`, `codebase_index`, `orchester_tools`, `orchester_file_tools`, …). Open: the native agent does not get
+Orchester's tools yet (P1d) and reads skills by path with its own `read_file`; not run with the real CLIs; the
+file-link case is skipped on Windows without the privilege to make one, and the pipe case runs on Unix only. Not
+changed: the runner's search that lists the repository's skills for Codex to disable (agent files off) and for the
+native agent still follows links out of the worktree, as Codex would load what they lead to.
+
 T5 · Re-measure the code index after ORC-48 (ORC-69) (done 2026-10-07)
 
 Two Claude Code tasks, each run once with *Use code index* on and once off, through Orchester's file tools:

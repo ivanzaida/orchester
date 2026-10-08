@@ -179,7 +179,7 @@ fn orchester_tools_git_add_refuses_nested_repositories() {
 }
 
 /// A link to `target` folder at `link`: a junction on Windows, which needs no privilege, a symbolic link on macOS.
-fn link_folder(target: &std::path::Path, link: &std::path::Path) {
+pub(crate) fn link_folder(target: &std::path::Path, link: &std::path::Path) {
   #[cfg(windows)]
   {
     let made = std::process::Command::new("cmd")

@@ -239,6 +239,7 @@ impl RunTask {
         name,
         description: markdown.description.unwrap_or_default(),
         path: path.to_string_lossy().replace('\\', "/"),
+        files: Vec::new(),
       });
     }
     match fs::read_to_string(worktree.join("AGENTS.md")) {

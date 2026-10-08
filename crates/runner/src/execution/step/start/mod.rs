@@ -27,6 +27,7 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
+  orchester_tools::OrchesterTool,
   permission::LaunchPermissions,
   resource::{AgentProfile, ModelId, Step},
   run::{
@@ -252,6 +253,19 @@ impl RunTask {
     let told = IndexTold::new(&index, skill.as_deref(), provider);
     let recalled = self.recall_memory(step, info)?;
     let enforced = self.enforced(key, body, provider)?;
+    let writable = self.writable_folders(&enforced)?;
+    let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
+    let environment = self.environment()?;
+    let repository = self.repository_skills_left_out(provider, worktree)?;
+    let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
+    let offered = self.offered_skills(&placed, (provider, worktree))?;
+    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let (tools, claude_approvals) = self.step_tools(
+      (enforced.permissions(), &setup, offered),
+      (invocation, folders),
+      &environment,
+    )?;
+    placed.read_with = skill_tool(&tools, &setup, claude_approvals.is_some());
     let parts = PromptParts {
       execution,
       step,
@@ -263,14 +277,6 @@ impl RunTask {
       working: WorkingTools::new(provider, enforced.permissions()),
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
-    let writable = self.writable_folders(&enforced)?;
-    let writable_roots: Vec<PathBuf> = writable.iter().map(|folder| folder.path().to_path_buf()).collect();
-    let environment = self.environment()?;
-    let repository = self.repository_skills_left_out(provider, worktree)?;
-    let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
-    let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
-    let (tools, claude_approvals) =
-      self.step_tools((enforced.permissions(), &setup), (invocation, folders), &environment)?;
     let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
     let secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
@@ -335,6 +341,14 @@ fn told_of_tools(
   } else {
     prompt
   }
+}
+
+/// The name the agent calls `read_skill` by, when `tools` offer it and reach the agent: a Claude Code agent's
+/// through its permission prompt's relay (`prompted`), every Codex agent's.
+fn skill_tool(tools: &ToolHost, setup: &McpSetup, prompted: bool) -> Option<String> {
+  let codex = matches!(setup, McpSetup::Codex(_));
+  let offered = tools.tools().policy(OrchesterTool::ReadSkill).is_some();
+  (offered && (prompted || codex)).then(|| OrchesterTool::ReadSkill.called(!codex))
 }
 
 /// The reasoning effort `profile` sets, if any.

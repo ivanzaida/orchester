@@ -14,8 +14,9 @@
 //! answer to its question, a follow-up after the run finished, messages that came in while it
 //! worked), and a new session reads them in the task part.
 //!
-//! A new session is also told the skills it gets ([`SkillListing`]): each one's name, description and
-//! where its `SKILL.md` is, before the task part, so the agent reads a skill when its work needs it.
+//! A new session is also told the skills it gets ([`SkillListing`]): each one's name and description, and the tool
+//! that reads it by name or else where its `SKILL.md` is, before the task part, so the agent reads a skill when its
+//! work needs it.
 //! A resumed session was told them when it started, and the files stay where they were.
 //!
 //! New and resumed sessions alike are told about the code index ([`CodeIndexPrompt`]): where the index of the run's
@@ -101,6 +102,9 @@ pub struct SkillListing<'a> {
   pub name: &'a str,
   pub description: &'a str,
   pub path: &'a str,
+  /// The tool the agent reads it with by name, as its CLI calls Orchester's `read_skill`; `None`: it reads the
+  /// `SKILL.md` at `path`, which the prompt then names.
+  pub tool: Option<&'a str>,
 }
 
 /// What a prompt tells an agent about the code index (`crate::code_index`).

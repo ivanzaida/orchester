@@ -201,17 +201,7 @@ impl ClaudeInvocation<'_> {
     };
     let mut permission = permission_args(self.permissions, servers, exempt, folders);
     if self.approvals.is_some() {
-      // Only the tools that run get a rule; they follow from the permissions and the code index.
-      let tools = StepTools::for_step(self.permissions.permissions(), &[]);
-      // `find_symbol` comes with the code index the agent gets.
-      let tools = if self.code_index.is_some() {
-        tools.with_code_index()
-      } else {
-        tools
-      };
-      let mut rules = tools.claude_allow_rules();
-      rules.push(crate::question::tool::claude_allow_rule());
-      allow_more(&mut permission, rules);
+      allow_more(&mut permission, self.orchester_rules());
     }
     args.extend(permission);
     for root in granted {
@@ -225,6 +215,23 @@ impl ClaudeInvocation<'_> {
       ClaudeSession::Resume(session) => args.extend(["--resume".to_owned(), session.to_owned()]),
     }
     args.into_iter().map(OsString::from).collect()
+  }
+
+  /// The allow rules of the Orchester tools that run: only those get one, so the others reach the permission
+  /// prompt. They follow from the permissions, `find_symbol` from the code index the agent gets, and `list_skills`
+  /// and `read_skill` from its skills folder: Claude Code loads no repository skill, so the skills it is offered are
+  /// the ones placed there.
+  fn orchester_rules(&self) -> Vec<String> {
+    let mut tools = StepTools::for_step(self.permissions.permissions(), &[]);
+    if self.code_index.is_some() {
+      tools = tools.with_code_index();
+    }
+    if self.skills.is_some() {
+      tools = tools.with_skills();
+    }
+    let mut rules = tools.claude_allow_rules();
+    rules.push(crate::question::tool::claude_allow_rule());
+    rules
   }
 
   /// Refuses a step that edits by rule when a folder it may edit gets no rule: every edit there

@@ -162,6 +162,8 @@ invocation; a native agent can later declare the same schemas in its own request
 | `git_commit` | `message` | writes the worktree | runs | not offered |
 | `read_outside_file` | `path` (absolute), `offset?`, `limit?` (≤ 10 000, 2000) | outside | asks | asks |
 | `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
+| `list_skills` (with skills) | none | read-only | runs | runs |
+| `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
 
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
@@ -224,8 +226,38 @@ invocation; a native agent can later declare the same schemas in its own request
   Claude Code's permission prompt relay is served alone. Each connection shows the token on its own, at most eight at
   once (more wait in the port's backlog), so a silent one holds no relay back; a connection without the token never
   closes the port.
+- **`list_skills` and `read_skill`** (added 2026-10-08, branch `claude/skill-tools`): Codex agents could not read
+  their skills. The prompt gave each skill's `SKILL.md` in the folder placed for the step execution,
+  `<repo>/.orchester/skills/<execution>/<slug>/`, which `read_outside_file` refuses as Orchester's state (*… is
+  protected: Orchester's tools never read there*), so each run stopped to ask for a shell read. `read_file` did reach
+  that folder by its absolute path (the file tools read the skills folder, read-only) and the repository's skills as
+  worktree files, but its description says *relative to the worktree root*. Both tools are offered, and run without
+  asking, in a step that has skills; the runner serves exactly what it placed for this step execution (the run's
+  pinned skills that reach the agent and the internal `orchester-codebase-index`), and, under the project's
+  *Repository agent files*, the repository's skills the agent's CLI itself loads (`AgentFilesMechanism`): Codex's of
+  `<worktree>/.agents/skills` and `.codex/skills` while it is on, none while it is off; Claude Code none in either
+  state (`--setting-sources ""`), so the tools never widen what the setting lets a CLI load. The repository's skills
+  are found as Codex finds them (every `SKILL.md` at any depth, through links), but only within the worktree: a
+  folder or `SKILL.md` that resolves out of it or into its `.git` or `.orchester` is left out, a link loop is read
+  once, the search stops at 8 folders deep, 500 folders and 100 skills, a `SKILL.md` is read only once it resolves
+  to a regular file of its folder (by its resolved path; a pipe or device is never opened), and nothing the search
+  meets stops the agent's start. A skill whose name is not one line of plain text (at most 200 characters, no
+  control character or edge whitespace) is left out without its name. `list_skills` names each skill with its source
+  (`orchester` or `repository`), description and reference files; a name is offered once (Orchester's first), and
+  what is left out is listed by where it lies in the worktree, never by a path outside it. `read_skill` reads only the
+  skill's own regular files, by the same rule the list uses: Orchester's skill its `SKILL.md` and the files its
+  version lists, a repository skill its folder's files but those of a nested skill, a `.git` entry, the worktree's
+  `.orchester` or a link that leads out of the folder or the worktree. Its
+  `file` is a skill file path (no `..`, drive, absolute path or `\`); the answer is numbered lines within
+  `read_outside_file`'s caps, redacted like every answer. `.orchester` stays refused for `read_outside_file`. Claude
+  Code gets an allow rule for both when it gets a skills folder, which then holds every skill it is offered. The
+  native agent does not get Orchester's tools yet (P1d) and keeps
+  reading its skills with its own `read_file` by the paths its prompt lists.
 - **Prompt.** After the *Files and commands* part, a new session that gets the tools is told in a short paragraph of
-  its own (*# Orchester tools*) to use them for git and for files outside the worktree.
+  its own (*# Orchester tools*) to use them for git and for files outside the worktree, and, with skills, to read
+  them with `read_skill` by name, never by path. The *# Skills* part then names each skill and its description
+  without a path and says to read it with `read_skill`; an agent without the tools (Claude Code without its
+  permission prompt, the native agent) still gets each `SKILL.md`'s path.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
   orchester_tools`). Not checked with the real CLIs: how large answers fare against Claude Code's MCP output limit
   (`MAX_MCP_OUTPUT_TOKENS`).

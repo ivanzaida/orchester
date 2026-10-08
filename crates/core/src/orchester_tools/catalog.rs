@@ -17,7 +17,7 @@ const FIND_SYMBOL: &str = r#"{"type":"object","properties":{
   "include_consts":{"type":["boolean","null"],"description":"Also constants and statics; null for false."}
 },"required":["name"],"additionalProperties":false}"#;
 
-const GIT_STATUS: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
+const NO_INPUT: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
 
 const GIT_DIFF: &str = r#"{"type":"object","properties":{
   "path":{"type":["string","null"],"description":"File or folder, relative to the worktree root; null for every change."},
@@ -59,6 +59,14 @@ impl OrchesterTool {
         "Run one of the project's command tools by name, with its fixed arguments, in the worktree. A person may \
          be asked first."
       }
+      Self::ListSkills => {
+        "List the skills this step has, Orchester's and the repository's, each with its source, description and \
+         reference files."
+      }
+      Self::ReadSkill => {
+        "Read a skill's SKILL.md, or one of its reference files, by the skill's name. Use this instead of a path to \
+         read a skill."
+      }
     }
   }
 
@@ -75,6 +83,8 @@ impl OrchesterTool {
         | Self::GitLog
         | Self::GitShow
         | Self::ReadOutsideFile
+        | Self::ListSkills
+        | Self::ReadSkill
     )
   }
 }
@@ -90,7 +100,7 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
     OrchesterTool::EditFile => fixed(NativeTool::EditFile.input_schema()),
     OrchesterTool::WriteFile => fixed(NativeTool::WriteFile.input_schema()),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),
-    OrchesterTool::GitStatus => fixed(GIT_STATUS),
+    OrchesterTool::GitStatus | OrchesterTool::ListSkills => fixed(NO_INPUT),
     OrchesterTool::GitDiff => fixed(GIT_DIFF),
     OrchesterTool::GitShow => fixed(GIT_SHOW),
     OrchesterTool::GitCommit => fixed(GIT_COMMIT),
@@ -109,6 +119,14 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
       "limit":{"type":["integer","null"],"minimum":1,"maximum":MAX_READ_LINES,
         "description":format!("Number of lines; null for {DEFAULT_READ_LINES}.")}
     },"required":["path"],"additionalProperties":false}),
+    OrchesterTool::ReadSkill => json!({"type":"object","properties":{
+      "name":{"type":"string","description":"The skill's name, as list_skills or the prompt names it."},
+      "file":{"type":["string","null"],"description":"A reference file, relative to the skill's folder with / \
+        between names, as list_skills lists it; null for the skill's SKILL.md."},
+      "offset":{"type":["integer","null"],"minimum":1,"description":"1-based line to start at; null for line 1."},
+      "limit":{"type":["integer","null"],"minimum":1,"maximum":MAX_READ_LINES,
+        "description":format!("Number of lines; null for {DEFAULT_READ_LINES}.")}
+    },"required":["name"],"additionalProperties":false}),
     OrchesterTool::RunProjectTool => {
       let names: Vec<&str> = projects.iter().map(|(name, _)| name.as_str()).collect();
       json!({"type":"object","properties":{
