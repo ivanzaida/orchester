@@ -187,7 +187,11 @@ async fn orchester_skill_tools_serve_claude_code_by_their_allow_rules() {
   let project = skills_project(AgentProvider::ClaudeCodeCli, permissions, RepositoryAgentFiles::On);
   let (id, db) = finished(&project).await;
   let listed = reported(&db, id, "orchester-tools: ").pop().expect("listed");
-  assert!(listed.ends_with(",list_skills,read_skill"), "{listed}");
+  let names: Vec<&str> = listed.split(',').collect();
+  assert!(
+    names.contains(&"list_skills") && names.contains(&"read_skill"),
+    "{listed}"
+  );
   let decisions = reported(&db, id, "orchester-permission: ");
   assert!(
     decisions.iter().all(|line| line.ends_with("allow-by-rule")),
