@@ -48,6 +48,12 @@ pub struct Repository {
   pub outside: PathBuf,
 }
 
+impl Default for Repository {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl Repository {
   pub fn new() -> Self {
     let root = tempfile::tempdir().expect("a temporary folder");
