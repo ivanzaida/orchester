@@ -97,7 +97,7 @@ impl Component for BreakdownTable {
         ]
       })
       .collect();
-    let headings = [ctx.t("usage.measure.spent"), ctx.t("usage.table.share")];
+    let headings = [ctx.t("usage.table.spent"), ctx.t("usage.table.share")];
     let shapes = (0..headings.len())
       .map(|index| figure_shapes(ctx, &headings[index], figures.iter().map(|row| &row[index])))
       .collect();
