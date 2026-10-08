@@ -203,12 +203,15 @@ impl ClaudeInvocation<'_> {
     if self.approvals.is_some() {
       // Only the tools that run get a rule; they follow from the permissions and the code index.
       let tools = StepTools::for_step(self.permissions.permissions(), &[]);
-      // `find_symbol` comes with the code index the agent gets.
+      // `find_symbol` comes with the code index the agent gets. `list_skills` and `read_skill` come with the skills
+      // the runner offers, which include the repository's this invocation does not know: they always get their
+      // rule, which allows nothing while the relay does not list them.
       let tools = if self.code_index.is_some() {
         tools.with_code_index()
       } else {
         tools
-      };
+      }
+      .with_skills();
       let rules = tools.claude_allow_rules();
       allow_more(&mut permission, rules);
     }

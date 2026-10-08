@@ -127,9 +127,14 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
   }
-  if ["Use Orchester's tools", "Use the file tools", "Use the index tools"]
-    .iter()
-    .any(|words| prompt.contains(words))
+  if [
+    "Use Orchester's tools",
+    "Use the file tools",
+    "Use the index tools",
+    "Use the skill tools",
+  ]
+  .iter()
+  .any(|words| prompt.contains(words))
   {
     fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
   }

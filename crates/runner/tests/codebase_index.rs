@@ -204,10 +204,15 @@ async fn codebase_index_reaches_codex_on_new_and_resumed_sessions_with_ripgrep_o
   assert_eq!(map.len(), 2, "both sessions get the map excerpt: {map:?}");
   let skill = prompt_lines(root, run, "- orchester-codebase-index: ");
   assert_eq!(skill.len(), 1, "the new session lists the skill: {skill:?}");
-  let document = skill[0]
-    .rsplit_once(" (")
-    .and_then(|(_, path)| path.strip_suffix(')'))
-    .map(Path::new)
+  // Codex reads the listed skill with read_skill; the index part still names its path, for a shell.
+  assert!(!skill[0].contains("SKILL.md"), "{skill:?}");
+  let named = "The orchester-codebase-index skill (";
+  let lines = reported(&ProjectDb::open(root).expect("open"), run, "prompt| ");
+  let document = lines
+    .iter()
+    .find_map(|line| line.split_once(named))
+    .and_then(|(_, rest)| rest.split_once(") gives"))
+    .map(|(path, _)| Path::new(path))
     .expect("the skill's path");
   let text = fs::read_to_string(document).expect("the placed skill");
   assert!(text.starts_with("---\nname: orchester-codebase-index\n"), "{text}");

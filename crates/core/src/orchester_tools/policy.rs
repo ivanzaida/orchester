@@ -3,7 +3,7 @@
 //!
 //! | Access class | Step that may write | Read-only step |
 //! | --- | --- | --- |
-//! | read-only (`read_file`, `list_files`, `search`, `find_symbol` with the code index, `git_status`, `git_diff`, `git_log`, `git_show`) | runs | runs |
+//! | read-only (`read_file`, `list_files`, `search`, `find_symbol` with the code index, `git_status`, `git_diff`, `git_log`, `git_show`, `list_skills` and `read_skill` with skills) | runs | runs |
 //! | writes the worktree (`edit_file`, `write_file`, `git_add`, `git_commit`) | runs | not offered |
 //! | outside the worktree (`read_outside_file`) | asks | asks |
 //! | the project's programs (`run_project_tool`), network on | asks | asks |
@@ -70,7 +70,12 @@ impl StepTools {
     let offered = OrchesterTool::ALL
       .into_iter()
       .filter(|tool| *tool != OrchesterTool::RunProjectTool || !projects.is_empty())
-      .filter(|tool| *tool != OrchesterTool::FindSymbol)
+      .filter(|tool| {
+        !matches!(
+          tool,
+          OrchesterTool::FindSymbol | OrchesterTool::ListSkills | OrchesterTool::ReadSkill
+        )
+      })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
       .collect();
     Self {
@@ -91,6 +96,17 @@ impl StepTools {
       .position(|(tool, _)| tool.file_tool().is_none())
       .unwrap_or(self.offered.len());
     self.offered.insert(at, (OrchesterTool::FindSymbol, ToolPolicy::Runs));
+    self
+  }
+
+  /// These tools and `list_skills` and `read_skill`, for a step that offers its agent skills
+  /// ([`super::StepSkills`]).
+  #[must_use]
+  pub fn with_skills(mut self) -> Self {
+    self.offered.extend([
+      (OrchesterTool::ListSkills, ToolPolicy::Runs),
+      (OrchesterTool::ReadSkill, ToolPolicy::Runs),
+    ]);
     self
   }
 
@@ -122,7 +138,7 @@ impl StepTools {
       .offered
       .iter()
       .filter(|(_, policy)| *policy == ToolPolicy::Runs)
-      .map(|(tool, _)| format!("mcp__{SERVER}__{}", tool.as_str()))
+      .map(|(tool, _)| tool.called(true))
       .collect()
   }
 
@@ -154,23 +170,27 @@ impl StepTools {
   }
 
   /// The paragraph of the prompt that points the agent at the tools besides the file tools, which its *Files
-  /// and commands* part names: each by the name its CLI sees, `mcp__Orchester__<tool>` for Claude Code.
+  /// and commands* part names: each by the name its CLI sees ([`OrchesterTool::called`]), and how to read skills when
+  /// it has any.
   pub fn prompt_paragraph(&self, claude: bool) -> String {
     let names: Vec<String> = self
       .offered
       .iter()
       .filter(|(tool, _)| tool.file_tool().is_none())
-      .map(|(tool, _)| {
-        if claude {
-          format!("mcp__{SERVER}__{}", tool.as_str())
-        } else {
-          tool.as_str().to_owned()
-        }
-      })
+      .map(|(tool, _)| tool.called(claude))
       .collect();
+    let skills = if self.policy(OrchesterTool::ReadSkill).is_some() {
+      format!(
+        " Read your skills with {} by name, never by path; {} lists them.",
+        OrchesterTool::ReadSkill.called(claude),
+        OrchesterTool::ListSkills.called(claude)
+      )
+    } else {
+      String::new()
+    };
     format!(
       "# Orchester tools\n\nUse the shell only for builds and tests. For git and for files outside the worktree, \
-       use the tools of the {SERVER} MCP server first: {}.",
+       use the tools of the {SERVER} MCP server first: {}.{skills}",
       names.join(", ")
     )
   }

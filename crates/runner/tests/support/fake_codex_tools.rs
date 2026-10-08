@@ -6,13 +6,16 @@
 //! (`orchester-tools: <names>`), calls `git_status`, then reads `outside-notes.txt` next to the repository's
 //! `.orchester` folder with `read_outside_file` (`orchester-call: <tool> <ok|error>: <first line>`). Codex sends
 //! no approval request for a tool whose approval mode is `approve`, so neither does the fake: the runner asks
-//! about the read before it answers.
+//! about the read before it answers. With "Use the skill tools" it makes the calls of [`fake_skill_calls`].
 
 use std::{path::Path, process::Command, sync::mpsc, thread, time::Duration};
 
 use serde_json::{Value, json};
 
 use super::fake_permission_prompt::Prompt;
+
+#[path = "fake_skill_calls.rs"]
+mod fake_skill_calls;
 
 const KEY: &str = "mcp_servers.Orchester.";
 /// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds. A relay the runner
@@ -22,6 +25,12 @@ const LIST_WAIT: Duration = Duration::from_secs(6);
 /// The calls of "Use Orchester's tools", "Use the file tools" (in a read-only step: no edit) and "Use the
 /// index tools" (after `src/lib.rs` changed in the worktree, with a file the index does not know).
 fn calls(prompt: &str, worktree: &Path) -> Vec<(&'static str, Value)> {
+  if prompt.contains("Use the skill tools") {
+    return fake_skill_calls::calls(worktree)
+      .into_iter()
+      .map(|(_, tool, input)| (tool, input))
+      .collect();
+  }
   if prompt.contains("Use the index tools") {
     let changed = "// moved down
 // moved down

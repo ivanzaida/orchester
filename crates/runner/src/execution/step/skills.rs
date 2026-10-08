@@ -14,6 +14,10 @@
 //!   `<worktree>/.agents/skills` and `<worktree>/.codex/skills` (at any depth, through links, as Codex finds them) is
 //!   listed for Codex to disable; Codex loads the skills of `.codex` even for a project it does not trust. A folder
 //!   that cannot be read stops the agent from starting rather than letting Codex load what it holds.
+//! - Orchester's `list_skills` and `read_skill` ([`StepSkills`]) serve an agent CLI the skills placed for its step
+//!   execution and, while the project has its agent files on, the repository's skills of those folders and of
+//!   `<worktree>/.claude/skills`. The prompt then names each skill without its path: `read_outside_file` refuses the
+//!   placed folder, which lies in Orchester's `.orchester`.
 
 use std::{
   collections::HashSet,
@@ -25,15 +29,18 @@ use orchester_core::{
   agent_files::frontmatter,
   connection::stream::RunnerProblem,
   id::StepExecutionId,
-  resource::{InstructionTarget, SKILL_FILE, Skill, Slug, Step},
+  orchester_tools::StepSkills,
+  resource::{InstructionTarget, SKILL_FILE, Skill, SkillFilePath, Slug, Step},
   run::{ProfileInfo, SkillListing},
-  store::{BlobStore, ResourceStore},
+  store::{BlobStore, ResourceStore, SettingsStore},
 };
 
 use super::super::run::RunTask;
 
 /// The Codex skills folders of a repository.
-const REPOSITORY_SKILLS: [[&str; 2]; 2] = [[".agents", "skills"], [".codex", "skills"]];
+const REPOSITORY_SKILLS: [&[&str]; 2] = [&[".agents", "skills"], &[".codex", "skills"]];
+/// Those and Claude Code's skills folder, whose skills `list_skills` offers.
+const OFFERED_SKILLS: [&[&str]; 3] = [REPOSITORY_SKILLS[0], REPOSITORY_SKILLS[1], &[".claude", "skills"]];
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
 /// The internal skill that explains the code index, as agents get it.
@@ -43,11 +50,12 @@ fn problem(detail: String) -> RunnerProblem {
   RunnerProblem::CouldNotStart { detail }
 }
 
-/// A skill placed for an agent: its name, description and `SKILL.md`.
+/// A skill placed for an agent: its name, description, `SKILL.md` and the reference files beside it.
 pub(super) struct PlacedSkill {
   pub(super) name: String,
   pub(super) description: String,
   pub(super) path: String,
+  pub(super) files: Vec<SkillFilePath>,
 }
 
 /// The skills placed for one agent, and the folder holding them; `None` when it gets none.
@@ -55,6 +63,9 @@ pub(super) struct PlacedSkill {
 pub(super) struct PlacedSkills {
   pub(super) folder: Option<PathBuf>,
   pub(super) skills: Vec<PlacedSkill>,
+  /// The name the agent calls Orchester's `read_skill` by, when it has it: the prompt names the skills without
+  /// their paths.
+  pub(super) read_with: Option<String>,
 }
 
 impl PlacedSkills {
@@ -67,6 +78,7 @@ impl PlacedSkills {
         name: &skill.name,
         description: &skill.description,
         path: &skill.path,
+        tool: self.read_with.as_deref(),
       })
       .collect()
   }
@@ -118,12 +130,37 @@ impl RunTask {
         name: slug.as_str().to_owned(),
         description: skill.description().to_owned(),
         path: path.to_string_lossy().into_owned(),
+        files: skill.files().iter().map(|file| file.path.clone()).collect(),
       });
     }
     Ok(PlacedSkills {
       folder: Some(folder),
       skills,
+      read_with: None,
     })
+  }
+
+  /// The skills `list_skills` and `read_skill` offer an agent CLI working in `worktree`: those `placed` for its
+  /// step execution, then, while the project has its agent files on, the repository's.
+  pub(super) fn offered_skills(&self, placed: &PlacedSkills, worktree: &Path) -> Result<StepSkills, RunnerProblem> {
+    let mut offered = StepSkills::default();
+    for skill in &placed.skills {
+      offered
+        .add_placed((&skill.name, &skill.description), Path::new(&skill.path), &skill.files)
+        .map_err(|error| problem(error.to_string()))?;
+    }
+    let agent_files = self
+      .db
+      .repository_agent_files()
+      .map_err(|error| problem(error.to_string()))?;
+    if agent_files.is_on() {
+      for document in find_skills(worktree, &OFFERED_SKILLS)? {
+        offered
+          .add_repository(&document, worktree)
+          .map_err(|error| problem(error.to_string()))?;
+      }
+    }
+    Ok(offered)
   }
 
   /// The skills folder of `execution`, outside every worktree.
@@ -153,6 +190,7 @@ impl RunTask {
         .description
         .expect("the embedded orchester-codebase-index skill has a description"),
       path: document.to_string_lossy().into_owned(),
+      files: Vec::new(),
     });
     placed.folder = Some(folder);
     Ok(document)
@@ -188,9 +226,15 @@ fn remove_folder(folder: &Path) -> io::Result<()> {
 /// Every `SKILL.md` under `<worktree>/.agents/skills` and `<worktree>/.codex/skills`, for Codex to
 /// disable; none from a folder that does not exist.
 pub(super) fn repository_skills(worktree: &Path) -> Result<Vec<PathBuf>, RunnerProblem> {
+  find_skills(worktree, &REPOSITORY_SKILLS)
+}
+
+/// Every `SKILL.md` under the folders of `worktree` that `roots` name, a folder that links reach more than once
+/// read once; none from a folder that does not exist.
+fn find_skills(worktree: &Path, roots: &[&[&str]]) -> Result<Vec<PathBuf>, RunnerProblem> {
   let mut found = Vec::new();
   let mut visited = HashSet::new();
-  for folder in REPOSITORY_SKILLS {
+  for folder in roots {
     let root = folder.iter().fold(worktree.to_path_buf(), |path, name| path.join(name));
     collect(&root, &mut found, &mut visited).map_err(|error| {
       problem(format!(

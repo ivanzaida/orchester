@@ -416,7 +416,8 @@ const SKILLS_LEAD: &str = "Skills are know-how for this project: each is a folde
                            reference files beside it. When your work needs a skill, read its SKILL.md first, then \
                            the files it points to. Read only the skills you need.";
 
-/// The skills heading, what skills are, and each skill's name, description and `SKILL.md`.
+/// The skills heading, what skills are, and each skill's name and description, with how it is read: the tool that
+/// reads skills by name, or else the skill's `SKILL.md`.
 fn push_skills(text: &mut String, input: &PromptInput<'_>) {
   if input.skills.is_empty() {
     return;
@@ -425,14 +426,28 @@ fn push_skills(text: &mut String, input: &PromptInput<'_>) {
     text.push('\n');
   }
   text.push_str("# Skills\n");
-  push_block(text, SKILLS_LEAD);
+  match input.skills.iter().find_map(|skill| skill.tool) {
+    Some(tool) => push_block(text, &format!("{SKILLS_LEAD} {}", skills_tool(tool))),
+    None => push_block(text, SKILLS_LEAD),
+  }
   text.push('\n');
   for skill in input.skills {
     // One line per skill, however its description is laid out.
     let description = skill.description.split_whitespace().collect::<Vec<_>>().join(" ");
     // Writing to a String cannot fail.
-    let _ = writeln!(text, "- {}: {description} ({})", skill.name, skill.path);
+    let _ = match skill.tool {
+      Some(_) => writeln!(text, "- {}: {description}", skill.name),
+      None => writeln!(text, "- {}: {description} ({})", skill.name, skill.path),
+    };
   }
+}
+
+/// How an agent that has Orchester's `read_skill`, called `tool`, reads its skills.
+fn skills_tool(tool: &str) -> String {
+  format!(
+    "Read a skill with the {tool} tool by its name, and a reference file with its name and the file's path in the \
+     skill; do not read skills by path."
+  )
 }
 
 /// People's messages in a new session's task part, under a heading that says why it reads them.

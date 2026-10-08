@@ -115,45 +115,50 @@ impl OutsideReads {
     named || self.refused.iter().any(|folder| path.starts_with(folder))
   }
 
-  /// Lines `offset` (from 1) to `offset + limit - 1` of `path`, numbered, at most [`MAX_READ_BYTES`] of
-  /// them, with a note when the file goes on. Lines before `offset` are skipped without being kept.
+  /// Lines `offset` (from 1) to `offset + limit - 1` of `path`, numbered, as [`read_lines`] reads them.
   pub fn read(&self, path: &str, offset: u32, limit: u32) -> Result<String, OutsideReadError> {
-    let file = self.check(path)?;
-    let unreadable = |error: io::Error| OutsideReadError::Unreadable {
-      path: file.clone(),
-      kind: error.kind(),
+    read_lines(self.check(path)?, offset, limit)
+  }
+}
+
+/// Lines `offset` (from 1) to `offset + limit - 1` of `file`, a resolved path, numbered, at most
+/// [`MAX_READ_BYTES`] of them, with a note when the file goes on. Lines before `offset` are skipped without
+/// being kept.
+pub(super) fn read_lines(file: PathBuf, offset: u32, limit: u32) -> Result<String, OutsideReadError> {
+  let unreadable = |error: io::Error| OutsideReadError::Unreadable {
+    path: file.clone(),
+    kind: error.kind(),
+  };
+  let opened = File::open(&file).map_err(unreadable)?;
+  // What was opened must still be a file: a folder or a pipe swapped in since the check is refused.
+  if !opened.metadata().map_err(unreadable)?.is_file() {
+    return Err(OutsideReadError::NotAFile(file));
+  }
+  let mut reader = BufReader::new(opened);
+  let (mut text, mut line, mut number, mut bytes) = (String::new(), Vec::new(), 0_u32, 0_usize);
+  let last = offset.saturating_add(limit.saturating_sub(1));
+  loop {
+    let keep = if number + 1 < offset { 0 } else { MAX_LINE_BYTES };
+    let Some(Line { cut, nul }) = next_line(&mut reader, keep, &mut line).map_err(unreadable)? else {
+      return Ok(text);
     };
-    let opened = File::open(&file).map_err(unreadable)?;
-    // What was opened must still be a file: a folder or a pipe swapped in since the check is refused.
-    if !opened.metadata().map_err(unreadable)?.is_file() {
-      return Err(OutsideReadError::NotAFile(file));
+    // A NUL anywhere up to the last line read, skipped lines too, makes it no text file.
+    if nul {
+      return Err(OutsideReadError::Binary(file));
     }
-    let mut reader = BufReader::new(opened);
-    let (mut text, mut line, mut number, mut bytes) = (String::new(), Vec::new(), 0_u32, 0_usize);
-    let last = offset.saturating_add(limit.saturating_sub(1));
-    loop {
-      let keep = if number + 1 < offset { 0 } else { MAX_LINE_BYTES };
-      let Some(Line { cut, nul }) = next_line(&mut reader, keep, &mut line).map_err(unreadable)? else {
-        return Ok(text);
-      };
-      // A NUL anywhere up to the last line read, skipped lines too, makes it no text file.
-      if nul {
-        return Err(OutsideReadError::Binary(file));
-      }
-      number += 1;
-      if number < offset {
-        continue;
-      }
-      // Writing to a String cannot fail.
-      if number > last || bytes + line.len() > MAX_READ_BYTES {
-        let _ = writeln!(text, "[the file goes on: read on from offset {number}]");
-        return Ok(text);
-      }
-      bytes += line.len();
-      let content = String::from_utf8_lossy(&line);
-      let _ = write!(text, "{number:>6}\t{}", content.trim_end_matches(['\n', '\r']));
-      let _ = writeln!(text, "{}", if cut { " [rest of the line left out]" } else { "" });
+    number += 1;
+    if number < offset {
+      continue;
     }
+    // Writing to a String cannot fail.
+    if number > last || bytes + line.len() > MAX_READ_BYTES {
+      let _ = writeln!(text, "[the file goes on: read on from offset {number}]");
+      return Ok(text);
+    }
+    bytes += line.len();
+    let content = String::from_utf8_lossy(&line);
+    let _ = write!(text, "{number:>6}\t{}", content.trim_end_matches(['\n', '\r']));
+    let _ = writeln!(text, "{}", if cut { " [rest of the line left out]" } else { "" });
   }
 }
 

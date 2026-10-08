@@ -99,11 +99,13 @@ fn new_session_prompt_lists_each_skill_before_the_task_and_a_resumed_one_does_no
       name: "run-checks",
       description: "Runs the checks\n  before a pull request.",
       path: "/repo/.orchester/skills/e1/run-checks/SKILL.md",
+      tool: None,
     },
     SkillListing {
       name: "write-migration",
       description: "Writes a migration.",
       path: "/repo/.orchester/skills/e1/write-migration/SKILL.md",
+      tool: None,
     },
   ];
   let mut input = prompt.input(&[], &[], true);
@@ -121,6 +123,29 @@ fn new_session_prompt_lists_each_skill_before_the_task_and_a_resumed_one_does_no
 
   let resumed = input.assemble(InjectionEvent::Resume).expect("assembles").text;
   assert!(!resumed.contains("# Skills"));
+}
+
+/// An agent that has Orchester's `read_skill` is told to read its skills with it by name, and no skill's path:
+/// `read_outside_file` refuses the folder they were placed in.
+#[test]
+fn new_session_prompt_names_skills_for_read_skill_without_their_paths() {
+  let prompt = Prompt::new(builder("Fine."), step_with("Implement it."), task("Brief.", &[]));
+  let listings = [SkillListing {
+    name: "run-checks",
+    description: "Runs the checks.",
+    path: "/repo/.orchester/skills/e1/run-checks/SKILL.md",
+    tool: Some("mcp__Orchester__read_skill"),
+  }];
+  let mut input = prompt.input(&[], &[], true);
+  input.skills = &listings;
+  let text = input.assemble(InjectionEvent::Start).expect("assembles").text;
+  assert!(
+    text.contains("Read a skill with the mcp__Orchester__read_skill tool by its name"),
+    "{text}"
+  );
+  assert!(text.contains("do not read skills by path"), "{text}");
+  assert!(text.contains("- run-checks: Runs the checks.\n"), "{text}");
+  assert!(!text.contains(".orchester/skills"), "{text}");
 }
 
 #[test]

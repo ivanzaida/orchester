@@ -87,6 +87,8 @@ mod fake_claude_tools;
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
 mod fake_permission_prompt;
+#[path = "fake_skill_calls.rs"]
+mod fake_skill_calls;
 
 const NOT_SIGNED_IN: &str = include_str!("../../../core/tests/fixtures/claude/not-signed-in-clean-env.jsonl");
 /// Counted: 12 + 9,700 (cache writes) + 27 = 9,739; the 2,432 cache reads do not count.
@@ -193,6 +195,9 @@ impl Fake {
     }
     if prompt.contains("Use the file tools") {
       return self.use_file_tools(worktree, (args, permission_prompt), step);
+    }
+    if prompt.contains("Use the skill tools") {
+      return self.use_skill_tools(worktree, (args, permission_prompt), step);
     }
     if prompt.contains("Use Orchester's tools") {
       return self.use_orchester_tools(worktree, (args, permission_prompt), step);

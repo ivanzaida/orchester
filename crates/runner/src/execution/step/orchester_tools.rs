@@ -1,8 +1,8 @@
 //! The step's Orchester tools (`orchester_core::orchester_tools`), served over the invocation's relay
 //! ([`super::relay`]) and run by the runner: the native agent's file tools ([`super::tool_files`]), git in
-//! the worktree, pinned to its own git folder, and a read outside it. A call runs off the async workers, in the
-//! worktree, with the environment the agent's own programs get; its output is read as it comes and kept within its cap,
-//! and its answer has the invocation's secret values removed.
+//! the worktree, pinned to its own git folder, a read outside it, and the step's skills ([`StepSkills`]). A call runs
+//! off the async workers, in the worktree, with the environment the agent's own programs get; its output is read as it
+//! comes and kept within its cap, and its answer has the invocation's secret values removed.
 //!
 //! A call of a tool that asks runs only once approved, which the runner holds itself: an approval given
 //! through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
@@ -28,7 +28,7 @@ use orchester_core::{
     stream::RunnerProblem,
   },
   orchester_tools::{
-    OrchesterTool, OutsideReads, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult, ToolWork,
+    OrchesterTool, OutsideReads, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
@@ -88,6 +88,8 @@ pub(in super::super) struct ToolHost {
   outside: OutsideReads,
   /// The file tools, with the read stamps of this invocation.
   files: ToolFiles,
+  /// The skills `list_skills` and `read_skill` serve.
+  skills: StepSkills,
   /// The invocation's secret values, removed from every answer.
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
@@ -172,6 +174,7 @@ impl ToolHost {
       Ok(ToolWork::Done(result)) => result,
       Ok(ToolWork::Files(input)) => self.files.run(&input, &context),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
+      Ok(ToolWork::Skill(call)) => self.skills.run(&call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
     }
@@ -194,27 +197,27 @@ pub(in super::super) struct CodexTools {
 }
 
 impl RunTask {
-  /// The Orchester tools of a step with `permissions` and the MCP servers of `setup`, for invocation
+  /// The Orchester tools of a step with `permissions`, the MCP servers of `setup` and `skills`, for invocation
   /// `invocation` working in `worktree` with the extra writable folders `writable` and the project's
   /// `environment`; and Claude Code's permission prompt, whose relay serves them to a Claude Code agent.
   pub(super) fn step_tools(
     &self,
-    (permissions, setup): (&AgentPermissions, &McpSetup),
+    (permissions, setup, skills): (&AgentPermissions, &McpSetup, StepSkills),
     (invocation, folders): (orchester_core::id::InvocationId, ToolFolders<'_>),
     environment: &CommandEnvironment,
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
-    let host = self.tool_host(permissions, folders, environment)?;
+    let host = self.tool_host((permissions, skills), folders, environment)?;
     let tools = Arc::new(host.with_secrets(setup.secrets()));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }
 
-  /// The Orchester tools of a step with `permissions`, working in `folders` with the project's
-  /// `environment`.
+  /// The Orchester tools of a step with `permissions` that offers `skills`, working in `folders` with the
+  /// project's `environment`.
   fn tool_host(
     &self,
-    permissions: &AgentPermissions,
+    (permissions, skills): (&AgentPermissions, StepSkills),
     folders: ToolFolders<'_>,
     environment: &CommandEnvironment,
   ) -> Result<ToolHost, RunnerProblem> {
@@ -233,13 +236,15 @@ impl RunTask {
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
-    let tools = StepTools::for_step(permissions, &[]);
+    let mut tools = StepTools::for_step(permissions, &[]);
+    if files.indexed() {
+      tools = tools.with_code_index();
+    }
+    if !skills.is_empty() {
+      tools = tools.with_skills();
+    }
     Ok(ToolHost {
-      tools: if files.indexed() {
-        tools.with_code_index()
-      } else {
-        tools
-      },
+      tools,
       worktree: worktree.to_path_buf(),
       git_dir: self.worktree_git_dir(worktree)?,
       hooks,
@@ -247,6 +252,7 @@ impl RunTask {
       project: environment.clone(),
       outside: OutsideReads::new(CommandScope::on_host(worktree, writable), &refused),
       files,
+      skills,
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
     })

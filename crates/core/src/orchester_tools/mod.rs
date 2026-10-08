@@ -16,6 +16,7 @@
 //!   is cut to a size ([`ToolResult`]) and its exit code returned.
 //! - A read outside the worktree never reaches a credential location, a `.git` folder or Orchester's own files, and is
 //!   cut to a size ([`OutsideReads`]).
+//! - The step's skills are listed and read by name, each within its own files ([`StepSkills`]).
 
 mod catalog;
 mod git;
@@ -25,6 +26,7 @@ mod link;
 mod output;
 mod outside;
 mod policy;
+mod skills;
 mod work;
 
 use serde_json::Value;
@@ -37,6 +39,7 @@ pub use self::{
   output::{MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
+  skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   work::{ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 use crate::{
@@ -65,6 +68,8 @@ pub enum OrchesterTool {
   GitCommit,
   ReadOutsideFile,
   RunProjectTool,
+  ListSkills,
+  ReadSkill,
 }
 
 /// What a tool may touch, which decides whether its calls ask ([`decide`]).
@@ -79,7 +84,7 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 14] = [
+  pub const ALL: [Self; 16] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::Search,
@@ -94,6 +99,8 @@ impl OrchesterTool {
     Self::GitCommit,
     Self::ReadOutsideFile,
     Self::RunProjectTool,
+    Self::ListSkills,
+    Self::ReadSkill,
   ];
 
   /// The name the agent calls the tool by.
@@ -113,11 +120,22 @@ impl OrchesterTool {
       Self::GitCommit => "git_commit",
       Self::ReadOutsideFile => "read_outside_file",
       Self::RunProjectTool => "run_project_tool",
+      Self::ListSkills => "list_skills",
+      Self::ReadSkill => "read_skill",
     }
   }
 
   pub fn from_name(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|tool| tool.as_str() == name)
+  }
+
+  /// The name an agent CLI calls the tool by: `mcp__Orchester__<tool>` for Claude Code, its own for Codex.
+  pub fn called(self, claude: bool) -> String {
+    if claude {
+      format!("mcp__{SERVER}__{}", self.as_str())
+    } else {
+      self.as_str().to_owned()
+    }
   }
 
   /// The tool Claude Code calls `name`: it names the tools of [`SERVER`] `mcp__Orchester__<tool>`.
@@ -170,6 +188,7 @@ impl OrchesterTool {
     match self {
       Self::ReadFile | Self::ListFiles | Self::Search | Self::FindSymbol => AccessClass::ReadOnly,
       Self::GitStatus | Self::GitDiff | Self::GitLog | Self::GitShow => AccessClass::ReadOnly,
+      Self::ListSkills | Self::ReadSkill => AccessClass::ReadOnly,
       Self::EditFile | Self::WriteFile | Self::GitAdd | Self::GitCommit => AccessClass::WritesWorktree,
       Self::ReadOutsideFile | Self::RunProjectTool => AccessClass::Outside,
     }
@@ -197,4 +216,6 @@ pub enum ToolCallError {
   Link(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),
+  #[error(transparent)]
+  Skill(#[from] SkillReadError),
 }

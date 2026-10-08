@@ -9,7 +9,7 @@ use std::{
   time::Duration,
 };
 
-use super::{FindSymbol, OutputKept, OutsideReads, ProgramOutput, ToolCall, ToolCallError, ToolResult, git};
+use super::{FindSymbol, OutputKept, OutsideReads, ProgramOutput, SkillCall, ToolCall, ToolCallError, ToolResult, git};
 use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
@@ -130,6 +130,9 @@ pub enum ToolWork {
   Files(Box<ToolInput>),
   /// A lookup in the code index, which the caller makes knowing the files changed since the index.
   Symbols(FindSymbol),
+  /// A call of `list_skills` or `read_skill`, which the caller answers from the skills it offers
+  /// ([`super::StepSkills::run`]).
+  Skill(SkillCall),
 }
 
 impl ToolCall {
@@ -144,6 +147,7 @@ impl ToolCall {
       Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
       Self::File(input) => Ok(ToolWork::Files(input.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
+      Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
       Self::Git(call) => {
         git::refuse_nested(call, context)?;
         Ok(ToolWork::Run(Box::new(git::program(call, context))))

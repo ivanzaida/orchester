@@ -11,7 +11,7 @@ use std::{path::Path, process::ExitCode};
 
 use serde_json::{Value, json};
 
-use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt};
+use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt, fake_skill_calls};
 
 /// The size of the file the fake commits, more than a git answer holds (128 KiB).
 const BIG: usize = 200 * 1024;
@@ -123,6 +123,19 @@ impl Fake {
       ),
     ];
     for (call, tool, input) in calls {
+      self.use_tool(args, &mut server, (call, tool, &input));
+    }
+    self.finish(worktree, "hello", step)
+  }
+
+  /// "Use the skill tools": the calls of [`fake_skill_calls`], each decision and answer reported.
+  pub fn use_skill_tools(&self, worktree: &Path, (args, opened): (&[String], Option<Prompt>), step: &str) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+    for (call, tool, input) in fake_skill_calls::calls(worktree) {
       self.use_tool(args, &mut server, (call, tool, &input));
     }
     self.finish(worktree, "hello", step)

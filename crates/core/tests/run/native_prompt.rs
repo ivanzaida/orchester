@@ -20,6 +20,7 @@ fn native_prompt_splits_system_and_task() {
     name: "run-checks",
     description: "Runs the checks.",
     path: ".agents/skills/run-checks/SKILL.md",
+    tool: None,
   }];
   let mut input = prompt.input(&[], &[], true);
   input.skills = &listings;

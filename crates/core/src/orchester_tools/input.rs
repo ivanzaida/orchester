@@ -8,8 +8,11 @@ use std::{fmt, num::NonZeroU32};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{FindSymbol, OrchesterTool, StepTools, ToolCallError};
-use crate::native::tools::{ToolInput, ToolInputError, parse_call};
+use super::{FindSymbol, OrchesterTool, SkillCall, StepTools, ToolCallError};
+use crate::{
+  native::tools::{ToolInput, ToolInputError, parse_call},
+  resource::{SKILL_FILE, SkillFilePath},
+};
 
 /// Commits `git_log` lists when the call gives no `count`.
 pub(super) const DEFAULT_LOG_COUNT: u32 = 20;
@@ -23,6 +26,8 @@ pub(super) const MAX_READ_LINES: u32 = 10_000;
 const MAX_TEXT_CHARS: usize = 4096;
 const MAX_REVISION_CHARS: usize = 256;
 const MAX_MESSAGE_CHARS: usize = 20_000;
+/// The longest skill name a call may give, in characters.
+const MAX_SKILL_NAME_CHARS: usize = 200;
 
 /// A file or folder relative to the worktree root: not absolute, no `..`, no `:` (a Windows drive or
 /// stream, or git's pathspec magic), no control character.
@@ -116,6 +121,7 @@ pub enum ToolCall {
   RunProjectTool {
     name: String,
   },
+  Skill(SkillCall),
 }
 
 /// A call of one of the git tools.
@@ -187,6 +193,18 @@ struct ProjectInput {
   name: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SkillInput {
+  name: String,
+  #[serde(default)]
+  file: Option<String>,
+  #[serde(default)]
+  offset: Option<NonZeroU32>,
+  #[serde(default)]
+  limit: Option<NonZeroU32>,
+}
+
 impl ToolCall {
   /// The call of tool `name` with `arguments`, if `step` offers that tool and the input is valid. A
   /// call without arguments is a call with none (`{}`).
@@ -223,6 +241,8 @@ impl ToolCall {
       Self::Git(GitCall::Commit { .. }) => OrchesterTool::GitCommit,
       Self::ReadOutsideFile { .. } => OrchesterTool::ReadOutsideFile,
       Self::RunProjectTool { .. } => OrchesterTool::RunProjectTool,
+      Self::Skill(SkillCall::List) => OrchesterTool::ListSkills,
+      Self::Skill(SkillCall::Read { .. }) => OrchesterTool::ReadSkill,
     }
   }
 }
@@ -291,21 +311,50 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     }
     OrchesterTool::ReadOutsideFile => {
       let input: ReadInput = serde_json::from_value(arguments).map_err(invalid)?;
-      let limit = input.limit.map_or(DEFAULT_READ_LINES, NonZeroU32::get);
-      if limit > MAX_READ_LINES {
-        return Err(format!("limit is at most {MAX_READ_LINES}"));
-      }
       ToolCall::ReadOutsideFile {
         path: input.path,
         offset: input.offset.map_or(1, NonZeroU32::get),
-        limit,
+        limit: lines(input.limit)?,
       }
     }
+    OrchesterTool::ListSkills => {
+      serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
+      ToolCall::Skill(SkillCall::List)
+    }
+    OrchesterTool::ReadSkill => read_skill(&serde_json::from_value(arguments).map_err(invalid)?)?,
     OrchesterTool::RunProjectTool => {
       let input: ProjectInput = serde_json::from_value(arguments).map_err(invalid)?;
       ToolCall::RunProjectTool { name: input.name }
     }
   })
+}
+
+/// The lines a read gives, [`DEFAULT_READ_LINES`] when `limit` is none.
+fn lines(limit: Option<NonZeroU32>) -> Result<u32, String> {
+  let limit = limit.map_or(DEFAULT_READ_LINES, NonZeroU32::get);
+  if limit > MAX_READ_LINES {
+    return Err(format!("limit is at most {MAX_READ_LINES}"));
+  }
+  Ok(limit)
+}
+
+/// A `read_skill` call: a skill name, and a reference file as a skill's file path is written, `SKILL.md` being the
+/// skill's own document.
+fn read_skill(input: &SkillInput) -> Result<ToolCall, String> {
+  let name = input.name.trim();
+  if name.is_empty() || name.chars().count() > MAX_SKILL_NAME_CHARS || name.chars().any(char::is_control) {
+    return Err(format!("`{}` is not a skill name", input.name));
+  }
+  let file = match input.file.as_deref() {
+    None | Some(SKILL_FILE) => None,
+    Some(file) => Some(SkillFilePath::new(file).map_err(|error| error.to_string())?),
+  };
+  Ok(ToolCall::Skill(SkillCall::Read {
+    name: name.to_owned(),
+    file,
+    offset: input.offset.map_or(1, NonZeroU32::get),
+    limit: lines(input.limit)?,
+  }))
 }
 
 fn add(input: &AddInput) -> Result<ToolCall, String> {

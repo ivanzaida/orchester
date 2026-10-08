@@ -163,12 +163,17 @@ async fn agent_files_skills_are_placed_outside_the_worktree_and_listed_for_codex
       .exists()
   );
   let prompt = reported(&db, run, "prompt| ").join("\n");
-  let listed = format!(
-    "- run-checks: Use run-checks when checks run. ({})",
-    folder.join("SKILL.md").display()
-  );
   assert!(prompt.contains("# Skills"), "{prompt}");
-  assert!(prompt.contains(&listed), "{prompt}");
+  // Codex reads it with Orchester's read_skill by name: the prompt gives no path in the placed folder.
+  assert!(
+    prompt.contains("- run-checks: Use run-checks when checks run.\n"),
+    "{prompt}"
+  );
+  assert!(
+    prompt.contains("Read a skill with the read_skill tool by its name"),
+    "{prompt}"
+  );
+  assert!(!prompt.contains(&folder.display().to_string()), "{prompt}");
   assert!(!prompt.contains("review-rules"), "{prompt}");
 }
 
@@ -191,7 +196,11 @@ async fn agent_files_claude_reads_the_skills_folder_and_never_loads_project_sett
   assert!(!argv.contains("project_doc_max_bytes"), "{argv}");
   let prompt = reported(&db, run, "prompt| ").join("\n");
   assert!(
-    prompt.contains(&format!("({})", folder.join("run-checks").join("SKILL.md").display())),
+    prompt.contains("Read a skill with the mcp__Orchester__read_skill tool by its name"),
+    "{prompt}"
+  );
+  assert!(
+    prompt.contains("- run-checks: Use run-checks when checks run.\n"),
     "{prompt}"
   );
 }
