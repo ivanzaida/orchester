@@ -34,7 +34,7 @@ impl Piece {
 
 /// What a cell shows: texts side by side, and the room around and between them (an outcome label's
 /// padding and the gap after its icon).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Shape {
   pieces: Vec<Piece>,
   room: f32,
@@ -66,23 +66,15 @@ impl Shape {
   }
 }
 
-/// The widths last measured, with the texts and fonts they were measured for: a theme with other fonts or text
-/// sizes measures again.
+/// The widths last measured, with the shapes they were measured for (texts, fonts and the room around them): a theme
+/// with other fonts, text sizes or spacing measures again.
 #[derive(Clone, Default, PartialEq)]
 struct Measured {
-  pieces: Vec<Piece>,
+  columns: Vec<Vec<Shape>>,
   widths: Vec<f32>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Measured {}
-
-fn pieces(columns: &[Vec<Shape>]) -> Vec<Piece> {
-  columns
-    .iter()
-    .flatten()
-    .flat_map(|shape| shape.pieces.iter().cloned())
-    .collect()
-}
 
 /// Measures the fixed columns of one table.
 pub struct Measurer {
@@ -104,7 +96,7 @@ impl Measurer {
   /// first layout of new texts has none yet, and the one after it does.
   pub fn widths(&self, columns: Vec<Vec<Shape>>) -> Option<Vec<f32>> {
     let measured = self.measured.get();
-    let current = measured.pieces == pieces(&columns) && measured.widths.len() == columns.len();
+    let current = measured.columns == columns;
     *self.wanted.lock() = columns;
     current.then_some(measured.widths)
   }
@@ -125,10 +117,8 @@ impl Measurer {
       return;
     };
     let wanted = self.wanted.lock().clone();
-    // Layout runs on every hover and resize; texts already measured in their fonts keep their widths.
-    let wanted_pieces = pieces(&wanted);
-    let current = self.measured.get_untracked();
-    if current.pieces == wanted_pieces && current.widths.len() == wanted.len() {
+    // Layout runs on every hover and resize; shapes already measured keep their widths.
+    if self.measured.get_untracked().columns == wanted {
       return;
     }
     let widths: Option<Vec<f32>> = wanted
@@ -146,7 +136,7 @@ impl Measurer {
       return;
     };
     self.measured.set(Measured {
-      pieces: wanted_pieces,
+      columns: wanted,
       widths,
     });
   }

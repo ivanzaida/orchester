@@ -17,15 +17,15 @@ impl CommandEntry {
       CommandStatus::Failed => true,
       CommandStatus::Declined => return None,
     };
-    let key = match (self.exit_code.is_some(), failed, self.duration.is_some()) {
-      (true, _, true) => "runs.activity.exitDuration",
-      (true, _, false) => "runs.activity.exit",
-      (false, true, true) => "runs.activity.commandFailedDuration",
-      (false, true, false) => "runs.activity.commandFailed",
-      (false, false, true) => "runs.activity.duration",
-      (false, false, false) => return None,
-    };
-    Some(with_code_and_seconds(key, self.exit_code, self.duration))
+    let (code, millis) = (self.exit_code, self.duration);
+    Some(match (code, failed, millis) {
+      (Some(_), _, Some(_)) => with_values(Message::new("runs.activity.exitDuration"), code, millis),
+      (Some(_), _, None) => with_values(Message::new("runs.activity.exit"), code, None),
+      (None, true, Some(_)) => with_values(Message::new("runs.activity.commandFailedDuration"), None, millis),
+      (None, true, None) => Message::new("runs.activity.commandFailed"),
+      (None, false, Some(_)) => with_values(Message::new("runs.activity.duration"), None, millis),
+      (None, false, None) => return None,
+    })
   }
 }
 
@@ -35,19 +35,18 @@ impl ToolCommandEntry {
     let (code, millis) = (self.exit_code, self.duration);
     Some(match (self.result?, code, millis) {
       (ToolCommandResult::Stopped, ..) => Message::new("runs.activity.stopped"),
-      (ToolCommandResult::TimedOut, _, Some(_)) => with_code_and_seconds("runs.activity.timedOut", None, millis),
+      (ToolCommandResult::TimedOut, _, Some(_)) => with_values(Message::new("runs.activity.timedOut"), None, millis),
       (ToolCommandResult::TimedOut, _, None) => Message::new("runs.activity.timedOutUntimed"),
-      (_, Some(_), Some(_)) => with_code_and_seconds("runs.activity.exitDuration", code, millis),
-      (_, Some(_), None) => with_code_and_seconds("runs.activity.exit", code, None),
-      (_, None, Some(_)) => with_code_and_seconds("runs.activity.noExitCode", None, millis),
+      (_, Some(_), Some(_)) => with_values(Message::new("runs.activity.exitDuration"), code, millis),
+      (_, Some(_), None) => with_values(Message::new("runs.activity.exit"), code, None),
+      (_, None, Some(_)) => with_values(Message::new("runs.activity.noExitCode"), None, millis),
       (_, None, None) => Message::new("runs.activity.noExitCodeUntimed"),
     })
   }
 }
 
-/// `key` with the placeholders `code` and `seconds` its message has.
-fn with_code_and_seconds(key: &'static str, code: Option<i64>, millis: Option<i64>) -> Message {
-  let mut message = Message::new(key);
+/// `message` with the exit code `code` and the duration `millis` it shows, as its placeholders `code` and `seconds`.
+fn with_values(mut message: Message, code: Option<i64>, millis: Option<i64>) -> Message {
   if let Some(code) = code {
     message = message.with("code", code.to_string());
   }
