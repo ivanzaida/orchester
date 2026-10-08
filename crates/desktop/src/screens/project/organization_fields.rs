@@ -142,14 +142,13 @@ impl Component for OrganizationFields {
       let input = text_input(
         ctx,
         "task-blocked-reason",
-        reason.clone(),
+        reason,
         draft.reason.get().trim().is_empty(),
         TypographyStyle::Body,
       )
       .multiline()
       .padding(ExtraSpacing::TextArea.role())
-      .height(Dimension::Px(BLOCKED_REASON_HEIGHT))
-      .on_input(move |event: lurq::app::events::TextInputEvent| reason.set(event.new_value));
+      .height(Dimension::Px(BLOCKED_REASON_HEIGHT));
       let control: Element = locked_input(input, props.locked).into();
       content = content.child(field(&ctx.t("tasks.blocked.reason"), control, note));
     }
@@ -501,12 +500,10 @@ impl DependencyFields {
       .max_width(Dimension::Px(RESULTS_WIDTH))
       .spacing(SpacingSize::Md)
       .child(
-        text_input(ctx, "blocking-task-search", query.clone(), false, TypographyStyle::Body)
+        // The input writes what is typed into `query` itself; setting it here too would type each character twice.
+        text_input(ctx, "blocking-task-search", query, false, TypographyStyle::Body)
           .placeholder(&ctx.t("tasks.blocked.search"))
-          .on_input(move |event: lurq::app::events::TextInputEvent| {
-            query.set(event.new_value);
-            clear_choice.set(DependencyChoice(None));
-          }),
+          .on_input(move |_: lurq::app::events::TextInputEvent| clear_choice.set(DependencyChoice(None))),
       )
       .child(self.results(ctx, props, tasks))
       .child(add)

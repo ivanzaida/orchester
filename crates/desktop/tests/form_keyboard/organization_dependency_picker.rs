@@ -83,9 +83,11 @@ fn organization_dependency_picker_adds_a_task_chosen_with_the_pointer() {
   click_in_view(&mut desktop, "task-blocked-field");
   click_in_view(&mut desktop, "task-blocked-reason");
   desktop.type_text("Waiting");
+  assert_eq!(desktop.value("task-blocked-reason"), "Waiting", "each key types once");
   click_in_view(&mut desktop, "task-open-blocking-picker");
   click_in_view(&mut desktop, "blocking-task-search");
   desktop.type_text("kon-");
+  assert_eq!(desktop.value("blocking-task-search"), "kon-", "each key types once");
   desktop.wait_for("task-blocking-option-KON-3");
   // Nothing is chosen yet: Add selected task adds nothing and the search stays open.
   click_in_view(&mut desktop, "task-add-blocking-link");
@@ -103,11 +105,15 @@ fn organization_dependency_picker_adds_a_task_chosen_with_the_keyboard() {
   desktop.wait_for("task-blocked-reason");
   desktop.tab_to("task-blocked-reason", 40);
   desktop.type_text("Waiting");
+  assert_eq!(desktop.value("task-blocked-reason"), "Waiting", "each key types once");
+  // The search's button shows once the project's tasks are read, as a person waits to see it.
+  desktop.wait_for("task-open-blocking-picker");
   desktop.tab_to("task-open-blocking-picker", 40);
   desktop.enter();
   desktop.wait_for("blocking-task-search");
   desktop.tab_to("blocking-task-search", 40);
   desktop.type_text("kon-");
+  assert_eq!(desktop.value("blocking-task-search"), "kon-", "each key types once");
   desktop.wait_for("task-blocking-option-KON-3");
   desktop.tab_to("task-blocking-option-KON-3", 40);
   desktop.enter();
