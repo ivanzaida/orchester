@@ -176,8 +176,8 @@ fn valid_name(name: &str) -> bool {
 }
 
 /// The reference files of the repository skill `skill`, as paths from its folder with `/`: at most
-/// [`MAX_LISTED_FILES`], with a last entry saying when there are more.
-pub(super) fn folder_files(skill: &OfferedSkill) -> Vec<String> {
+/// [`MAX_LISTED_FILES`], and how many more there are.
+pub(super) fn folder_files(skill: &OfferedSkill) -> (Vec<String>, usize) {
   // The skill's own folder counts as read: a link back to it lists nothing twice.
   let mut walk = FileWalk {
     skill,
@@ -188,12 +188,9 @@ pub(super) fn folder_files(skill: &OfferedSkill) -> Vec<String> {
   walk.folder(&skill.folder, 0);
   let mut found = walk.found;
   found.sort();
-  if found.len() > MAX_LISTED_FILES {
-    let more = found.len() - MAX_LISTED_FILES;
-    found.truncate(MAX_LISTED_FILES);
-    found.push(format!("[{more} more not listed]"));
-  }
-  found
+  let more = found.len().saturating_sub(MAX_LISTED_FILES);
+  found.truncate(MAX_LISTED_FILES);
+  (found, more)
 }
 
 /// One listing of a repository skill's reference files. An entry that cannot be read or resolved is left out of the

@@ -17,7 +17,7 @@ use parking_lot::Mutex;
 use crate::theme::chart::canvas_font;
 
 /// A text in the font it is drawn in.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Piece {
   text: Arc<str>,
   font: CanvasFont,
@@ -34,7 +34,7 @@ impl Piece {
 
 /// What a cell shows: texts side by side, and the room around and between them (an outcome label's
 /// padding and the gap after its icon).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Shape {
   pieces: Vec<Piece>,
   room: f32,
@@ -54,28 +54,27 @@ impl Shape {
     let mut width = self.room;
     for piece in &self.pieces {
       context.set_font(piece.font.clone());
-      width += context.measure_text(&piece.text).ok()?.width;
+      width += match context.measure_text(&piece.text) {
+        Ok(metrics) => metrics.width,
+        Err(error) => {
+          tracing::debug!(%error, "a table column waits for the canvas text service");
+          return None;
+        }
+      };
     }
     Some(width.ceil())
   }
 }
 
-/// The widths last measured, with the texts they were measured for.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// The widths last measured, with the shapes they were measured for (texts, fonts and the room around them): a theme
+/// with other fonts, text sizes or spacing measures again.
+#[derive(Clone, Default, PartialEq)]
 struct Measured {
-  texts: Vec<Arc<str>>,
+  columns: Vec<Vec<Shape>>,
   widths: Vec<f32>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Measured {}
-
-fn texts(columns: &[Vec<Shape>]) -> Vec<Arc<str>> {
-  columns
-    .iter()
-    .flatten()
-    .flat_map(|shape| shape.pieces.iter().map(|piece| piece.text.clone()))
-    .collect()
-}
 
 /// Measures the fixed columns of one table.
 pub struct Measurer {
@@ -97,7 +96,7 @@ impl Measurer {
   /// first layout of new texts has none yet, and the one after it does.
   pub fn widths(&self, columns: Vec<Vec<Shape>>) -> Option<Vec<f32>> {
     let measured = self.measured.get();
-    let current = measured.texts == texts(&columns) && measured.widths.len() == columns.len();
+    let current = measured.columns == columns;
     *self.wanted.lock() = columns;
     current.then_some(measured.widths)
   }
@@ -118,10 +117,8 @@ impl Measurer {
       return;
     };
     let wanted = self.wanted.lock().clone();
-    // Layout runs on every hover and resize; texts already measured keep their widths.
-    let wanted_texts = texts(&wanted);
-    let current = self.measured.get_untracked();
-    if current.texts == wanted_texts && current.widths.len() == wanted.len() {
+    // Layout runs on every hover and resize; shapes already measured keep their widths.
+    if self.measured.get_untracked().columns == wanted {
       return;
     }
     let widths: Option<Vec<f32>> = wanted
@@ -139,7 +136,7 @@ impl Measurer {
       return;
     };
     self.measured.set(Measured {
-      texts: wanted_texts,
+      columns: wanted,
       widths,
     });
   }

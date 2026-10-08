@@ -36,6 +36,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing},
   ui::{
     icon::{Icon, IconSize, icon},
+    message_text,
     pressable::{pressable, surface},
   },
 };
@@ -371,17 +372,7 @@ fn commands(ctx: &Ctx, summary: &GroupSummary) -> Vec<Arc<str>> {
     ),
   };
   let mut parts = vec![ran];
-  if let Some((command, code)) = &summary.failed {
-    let code = code.map(|code| code.to_string()).unwrap_or_default();
-    parts.push(if summary.named.contains(command) && summary.commands <= 2 {
-      ctx.t_args("runs.conversation.group.exit", [("code", code.as_str())])
-    } else {
-      ctx.t_args(
-        "runs.conversation.group.failedCommand",
-        [("command", &**command), ("code", code.as_str())],
-      )
-    });
-  }
+  parts.extend(summary.failure().map(|failure| message_text(ctx, &failure)));
   parts
 }
 

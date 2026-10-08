@@ -1,6 +1,7 @@
 //! *Where tokens go* as tables (`kIsZS`, `v9L3oZ`, `Ncyg7`), at 960 and 1440, in a project and across
 //! projects: every figure and heading of *Spent tokens* and *Share* shows whole, every name ends inside
-//! its column, and every row's columns start and end where their headings do.
+//! its column, and every row's columns start and end where their headings do, measured again when the theme's text
+//! sizes change.
 //! `cargo test -p orchester-desktop --test form_keyboard usage_breakdown_table`.
 
 use lurq::{app::theme::TypographyStyle, node::element::ElementRef};
@@ -19,6 +20,8 @@ const TABLES: [&str; 3] = [
 const PROJECTS_TABLE: &str = "usage-breakdown-table-projects";
 /// The columns: the name, then the figures.
 const COLUMNS: usize = 3;
+/// How much larger a changed theme draws headings and figures.
+const LARGER: f32 = 3.0;
 
 /// The first text `element` or its descendants show.
 fn first_text(element: ElementRef<'_>) -> Option<String> {
@@ -131,4 +134,35 @@ fn usage_breakdown_table_shows_every_figure_whole_and_lines_up_at_960_and_1440()
   desktop.wait_for("usage-breakdown-view-1");
   show_tables(&mut desktop, PROJECTS_TABLE);
   assert_tables(&mut desktop, &[PROJECTS_TABLE, TABLES[0], TABLES[1], TABLES[2]]);
+}
+
+/// A theme with larger text measures the figure columns again: each grows with its heading and figures, and every
+/// row still lines up with its headings.
+#[test]
+fn usage_breakdown_table_measures_again_when_the_theme_s_text_sizes_change() {
+  let mut desktop = usage_after_a_long_titled_run();
+  desktop.tree.resize(1440, 960);
+  desktop.pass();
+  show_tables(&mut desktop, TABLES[2]);
+  let table = TABLES[0];
+  let before: Vec<f32> = (1..COLUMNS)
+    .map(|column| desktop.bounds(&format!("{table}-heading-cell-{column}")).width)
+    .collect();
+  for role in [TypographyStyle::Caption, ExtraTypography::MonoValue.role()] {
+    let mut larger = desktop.theme().typography_style(role);
+    larger.font_size *= LARGER;
+    desktop.theme().set_typography_style(role, larger);
+  }
+  // The theme's change renders the table again; its first layout measures, the next lays out at the new widths.
+  desktop.pass();
+  desktop.pass();
+  for (column, before) in (1..COLUMNS).zip(before) {
+    let after = desktop.bounds(&format!("{table}-heading-cell-{column}")).width;
+    assert!(
+      after > before * (LARGER - 1.0),
+      "{table}: column {column} is {after} wide in the larger text, {before} before"
+    );
+  }
+  let rows = rows(&mut desktop, table);
+  assert_lined_up(&mut desktop, table, rows);
 }

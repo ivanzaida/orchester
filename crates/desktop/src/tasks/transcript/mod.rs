@@ -9,6 +9,7 @@
 //! their tools ([`native`]), and so do a CLI's calls of Orchester's file tools ([`mcp`] for Codex's). Nothing else
 //! is left out.
 
+mod ended;
 mod mcp;
 mod native;
 

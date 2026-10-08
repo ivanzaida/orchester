@@ -1,8 +1,8 @@
-//! What the last headless pass painted: the fill under an element and the theme's colors to compare
-//! it with.
+//! What the last headless pass painted: the fill under an element, and the theme it was painted with to compare it
+//! with or to change.
 
 use lurq::{
-  app::theme::PaletteColor,
+  app::theme::{PaletteColor, Theme},
   layout::quad::{Quad, QuadContent},
   node::color::Color,
 };
@@ -30,6 +30,11 @@ impl Desktop {
   /// `role` as the desktop's theme resolves it.
   pub fn color(&self, role: impl Into<PaletteColor>) -> Color {
     self.app.theme().palette_color(role)
+  }
+
+  /// The desktop's theme; a change to it reaches the window as a theme change does.
+  pub fn theme(&self) -> &Theme {
+    self.app.theme()
   }
 }
 

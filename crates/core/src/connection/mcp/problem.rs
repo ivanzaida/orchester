@@ -34,6 +34,10 @@ pub enum McpServerProblem {
   ReservedVariable { variable: String },
   /// The agent's CLI reported that the server did not start; `detail` is what it said, if anything.
   FailedToStart { detail: Option<String> },
+  /// Codex starts Orchester's tools `started` times (for the thread and for the runner's inventory check), and
+  /// only `reached` of them came to the runner: the agent may have worked without them. Runs recorded before
+  /// this variant say the same as [`Self::FailedToStart`] with an English `detail`.
+  ToolRelaysMissing { reached: usize, started: usize },
   /// A native agent reaches no MCP server yet (`docs/architecture/native-agent.md` §5.4, P4).
   NotSupportedByConnection,
 }

@@ -305,15 +305,14 @@ impl Worker {
     if taken >= CODEX_RELAYS || !self.app_server().is_some_and(AppServerSession::servers_checked) {
       return Ok(());
     }
-    let detail = format!(
-      "Codex reached Orchester's tools {taken} of the {CODEX_RELAYS} times it starts them; the agent may have \
-       worked without them"
-    );
     self.observe(
       watch,
       AgentEvent::McpServer {
         server: Some(SERVER.to_owned()),
-        problem: McpServerProblem::FailedToStart { detail: Some(detail) },
+        problem: McpServerProblem::ToolRelaysMissing {
+          reached: taken,
+          started: CODEX_RELAYS,
+        },
       },
     )
   }

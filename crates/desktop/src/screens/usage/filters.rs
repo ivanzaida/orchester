@@ -10,7 +10,6 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, OutsidePress, Placement},
-    events::TextInputEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Popup, Row, Text},
@@ -285,7 +284,6 @@ impl FilterChips {
       Element::from(Text::new(&ctx.t(key)).variant(TypographyStyle::Caption))
     });
     let search = searchable.then(|| {
-      let input = self.query.clone();
       Element::from(
         text_input(
           ctx,
@@ -294,8 +292,7 @@ impl FilterChips {
           false,
           TypographyStyle::Body,
         )
-        .placeholder(&ctx.t("usage.filters.search"))
-        .on_input(move |event: TextInputEvent| input.set(event.new_value)),
+        .placeholder(&ctx.t("usage.filters.search")),
       )
     });
     Column::new()

@@ -31,6 +31,39 @@ fn mcp_claude_reports_each_server_that_did_not_start() {
   );
 }
 
+/// The relays of Orchester's tools that did not come are stored as counts, which the desktop words; a run
+/// recorded before then, with the runner's English sentence as the detail, still reads.
+#[test]
+fn mcp_missing_tool_relays_are_stored_as_counts_and_old_records_still_read() {
+  let missing = AgentEvent::McpServer {
+    server: Some("orchester".to_owned()),
+    problem: McpServerProblem::ToolRelaysMissing { reached: 1, started: 2 },
+  };
+  let stored = serde_json::to_string(&missing).expect("an event serializes");
+  assert_eq!(
+    stored,
+    r#"{"kind":"mcp_server","server":"orchester","problem":{"problem":"tool_relays_missing","reached":1,"started":2}}"#
+  );
+  assert_eq!(
+    serde_json::from_str::<AgentEvent>(&stored).expect("it reads back"),
+    missing
+  );
+
+  let old = r#"{"kind":"mcp_server","server":"orchester","problem":{"problem":"failed_to_start","detail":"Codex reached Orchester's tools 1 of the 2 times it starts them; the agent may have worked without them"}}"#;
+  assert_eq!(
+    serde_json::from_str::<AgentEvent>(old).expect("an old record reads"),
+    AgentEvent::McpServer {
+      server: Some("orchester".to_owned()),
+      problem: McpServerProblem::FailedToStart {
+        detail: Some(
+          "Codex reached Orchester's tools 1 of the 2 times it starts them; the agent may have worked without them"
+            .to_owned()
+        ),
+      },
+    }
+  );
+}
+
 #[test]
 fn mcp_claude_signed_in_allow_rule_permits_the_probe_call() {
   let fixture = include_str!("fixtures/claude-signed-in-mcp.jsonl");

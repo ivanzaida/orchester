@@ -8,6 +8,7 @@ mod input;
 mod outside;
 mod policy;
 mod programs;
+mod skill_list;
 mod skill_reads;
 mod skills;
 

@@ -72,6 +72,7 @@ impl McpServerProblem {
       | Self::UnsafeScriptArgument { .. }
       | Self::NotUnicode
       | Self::NotSupportedByConnection
+      | Self::ToolRelaysMissing { .. }
       | Self::FailedToStart { detail: None } => {}
     }
   }

@@ -78,7 +78,9 @@ pub fn wrapping_field_error(text: &str) -> Element {
 }
 
 /// A single-line text input bound to `value` in `typography`; an `invalid` input gets a
-/// stronger border. Callers adjust it further, e.g. its height or placeholder.
+/// stronger border. Callers adjust it further, e.g. its height or placeholder. The input writes
+/// what is typed into `value` itself: an `on_input` that sets `value` too would type each key
+/// twice, since lurq calls it before it applies the key.
 pub fn text_input(
   ctx: &Ctx,
   id: &'static str,
@@ -108,7 +110,8 @@ pub fn text_input(
 }
 
 /// A text input without a frame, in `typography`: entered text in the primary color, the
-/// placeholder in the secondary one. Callers give it its frame.
+/// placeholder in the secondary one. Callers give it its frame. Like [`text_input`], it writes
+/// what is typed into `value` itself.
 pub fn styled_input(ctx: &Ctx, value: Signal<String>, typography: TypographyStyle) -> TextInput {
   let theme = ctx.theme();
   let resolve = |color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());

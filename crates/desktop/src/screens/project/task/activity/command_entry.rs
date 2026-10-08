@@ -4,7 +4,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use lurq::app::ctx::Ctx;
-use orchester_core::connection::stream::{CommandStatus, ToolCommandResult};
+use orchester_core::connection::stream::CommandStatus;
 
 use super::{entry::Shown, mcp_call};
 use crate::{
@@ -14,8 +14,6 @@ use crate::{
 };
 
 pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
-  let code = entry.exit_code.map(|code| code.to_string()).unwrap_or_default();
-  let seconds = entry.duration.map(tenths_of_seconds);
   let (glyph, meta, body) = match entry.status {
     None => (Icon::Terminal, ctx.t("runs.activity.commandRunning"), None),
     Some(CommandStatus::Declined) => (
@@ -23,16 +21,14 @@ pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
       ctx.t("runs.activity.declined"),
       Some(ctx.t("runs.activity.declinedDetail")),
     ),
-    Some(CommandStatus::Completed | CommandStatus::Failed) => {
-      let meta = match &seconds {
-        Some(seconds) => ctx.t_args(
-          "runs.activity.exitDuration",
-          [("code", code.as_str()), ("seconds", seconds)],
-        ),
-        None => ctx.t_args("runs.activity.exit", [("code", code.as_str())]),
-      };
-      (Icon::Terminal, meta, None)
-    }
+    // A command that completed with neither an exit code nor a duration has nothing to say of its end.
+    Some(CommandStatus::Completed | CommandStatus::Failed) => (
+      Icon::Terminal,
+      entry
+        .ended()
+        .map_or_else(|| Arc::from(""), |ended| message_text(ctx, &ended)),
+      None,
+    ),
   };
   // A person's Deny: what the agent was told says why the command did not run.
   let body = mcp_call::denial_told(ctx, entry.mark.as_ref()).or(body);
@@ -53,17 +49,9 @@ pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
 
 /// A tool step's command: its command line, how it ended and the output its tool kept.
 pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
-  let seconds = entry.duration.map(tenths_of_seconds).unwrap_or_default();
-  let code = entry.exit_code.map(|code| code.to_string()).unwrap_or_default();
-  let meta = match (entry.result, entry.exit_code) {
-    (None, _) => ctx.t("runs.activity.commandRunning"),
-    (Some(ToolCommandResult::TimedOut), _) => ctx.t_args("runs.activity.timedOut", [("seconds", seconds.as_str())]),
-    (Some(ToolCommandResult::Stopped), _) => ctx.t("runs.activity.stopped"),
-    (Some(_), Some(_)) => ctx.t_args(
-      "runs.activity.exitDuration",
-      [("code", code.as_str()), ("seconds", seconds.as_str())],
-    ),
-    (Some(_), None) => ctx.t_args("runs.activity.noExitCode", [("seconds", seconds.as_str())]),
+  let meta = match entry.ended() {
+    Some(ended) => message_text(ctx, &ended),
+    None => ctx.t("runs.activity.commandRunning"),
   };
   let omitted = (entry.omitted_bytes > 0).then(|| {
     let size = message_text(ctx, &display::byte_size(entry.omitted_bytes));
@@ -90,10 +78,4 @@ pub(super) fn preview_title(command: &Arc<str>) -> Arc<str> {
     Cow::Borrowed(_) => command.clone(),
     Cow::Owned(preview) => preview.into(),
   }
-}
-
-/// `4.2` for 4,213 milliseconds.
-fn tenths_of_seconds(millis: i64) -> String {
-  let tenths = millis.max(0) / 100;
-  format!("{}.{}", tenths / 10, tenths % 10)
 }
