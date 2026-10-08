@@ -1,9 +1,10 @@
-//! How a finished command reads in its row and in its tool group's summary: its exit code when the CLI reported one,
-//! otherwise *failed* or *no exit code* (Claude Code reports none), never an empty exit code.
+//! How a finished command reads in its row and in its tool group's summary: its exit code when the CLI reported one;
+//! otherwise an agent's command reads *failed*, or only how long it took once it completed (Claude Code reports no
+//! exit codes), and a tool step's *no exit code*. Never an empty exit code or duration.
 
 use lurq::app::App;
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus},
+  connection::stream::{AgentEvent, CommandStatus, ToolCommandResult},
   id::StepExecutionId,
 };
 use orchester_desktop::{
@@ -11,7 +12,7 @@ use orchester_desktop::{
   messages::Message,
   tasks::{
     timeline::ToolGroup,
-    transcript::{Entry, EntryKind},
+    transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
   },
 };
 
@@ -79,10 +80,7 @@ fn timeline_command_end_reads_failed_without_an_exit_code() {
     row(&app, ran("cargo test", CommandStatus::Failed, None)),
     "failed · 1.0 s"
   );
-  assert_eq!(
-    row(&app, ran("cargo test", CommandStatus::Completed, None)),
-    "no exit code · 1.0 s"
-  );
+  assert_eq!(row(&app, ran("cargo test", CommandStatus::Completed, None)), "1.0 s");
   assert_eq!(
     row(&app, ran("cargo test", CommandStatus::Failed, Some(101))),
     "exit 101 · 1.0 s"
@@ -115,4 +113,58 @@ fn timeline_command_end_in_a_group_summary_names_a_failure_without_an_exit_code(
     ),
     "cargo test · exit 101"
   );
+}
+
+/// An agent's command without a start seen has no duration: a failed one reads *failed*, a completed one nothing.
+#[test]
+fn timeline_command_end_without_a_duration_shows_no_empty_one() {
+  let app = english();
+  let ended = |status, exit_code| CommandEntry {
+    item: "c".into(),
+    command: "cargo test".into(),
+    output: "".into(),
+    status: Some(status),
+    exit_code,
+    duration: None,
+    mark: None,
+    native: None,
+  };
+  let failed = ended(CommandStatus::Failed, None).ended().expect("it failed");
+  assert_eq!(text(&app, &failed), "failed");
+  assert_eq!(ended(CommandStatus::Completed, None).ended(), None);
+  let exit = ended(CommandStatus::Completed, Some(0))
+    .ended()
+    .expect("it has an exit code");
+  assert_eq!(text(&app, &exit), "exit 0");
+}
+
+/// A tool step's command reads its exit code, *no exit code*, *timed out* or *stopped*, with how long it took only
+/// when that is known.
+#[test]
+fn timeline_command_end_of_a_tool_step_shows_no_empty_duration() {
+  let app = english();
+  let ended = |result, exit_code, duration| {
+    let entry = ToolCommandEntry {
+      command: "pnpm test".into(),
+      result: Some(result),
+      exit_code,
+      output: "".into(),
+      omitted_bytes: 0,
+      duration,
+    };
+    text(&app, &entry.ended().expect("it ended"))
+  };
+  assert_eq!(ended(ToolCommandResult::Failed, Some(3), Some(4_213)), "exit 3 · 4.2 s");
+  assert_eq!(ended(ToolCommandResult::Failed, Some(3), None), "exit 3");
+  assert_eq!(
+    ended(ToolCommandResult::Passed, None, Some(4_213)),
+    "no exit code · 4.2 s"
+  );
+  assert_eq!(ended(ToolCommandResult::Passed, None, None), "no exit code");
+  assert_eq!(
+    ended(ToolCommandResult::TimedOut, None, Some(30_000)),
+    "timed out · 30.0 s"
+  );
+  assert_eq!(ended(ToolCommandResult::TimedOut, None, None), "timed out");
+  assert_eq!(ended(ToolCommandResult::Stopped, None, None), "stopped");
 }

@@ -25,7 +25,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::{ended::tenths_of_seconds, mcp::McpToolEntry, native::ApprovalEntry};
+pub use self::{mcp::McpToolEntry, native::ApprovalEntry};
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
