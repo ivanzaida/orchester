@@ -7,7 +7,6 @@ use lurq::{
   app::{
     component::Component,
     ctx::{Ctx, FutureAction, OutsidePress, Placement},
-    events::TextInputEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Popup, Row, Text},
@@ -133,7 +132,6 @@ impl Component for ThresholdMenu {
 
 impl ThresholdMenu {
   fn popover(&self, ctx: &Ctx, action: &SaveAction) -> Element {
-    let text = self.text.clone();
     let field = text_input(
       ctx,
       "usage-threshold",
@@ -141,8 +139,7 @@ impl ThresholdMenu {
       self.invalid.get(),
       ExtraTypography::MonoField.role(),
     )
-    .width(Dimension::Px(FIELD_WIDTH))
-    .on_input(move |event: TextInputEvent| text.set(event.new_value));
+    .width(Dimension::Px(FIELD_WIDTH));
     let state = action.state().get();
     let outcome = match (&state.error, &state.data) {
       _ if self.invalid.get() => Some(field_error(&ctx.t("usage.threshold.invalid"))),

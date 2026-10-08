@@ -194,19 +194,15 @@ fn menu(ctx: &Ctx, props: &FilterProps, facet: Facet, query: &Signal<String>, ma
       }
     }
     Facet::Tags => {
-      let input = query.clone();
       column = column
         .child(Text::new(&ctx.t("tasks.filters.searchTags")).variant(lurq::app::theme::TypographyStyle::Caption))
-        .child(
-          crate::ui::field::text_input(
-            ctx,
-            "filter-tag-search",
-            input.clone(),
-            false,
-            lurq::app::theme::TypographyStyle::Body,
-          )
-          .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value)),
-        );
+        .child(crate::ui::field::text_input(
+          ctx,
+          "filter-tag-search",
+          query.clone(),
+          false,
+          lurq::app::theme::TypographyStyle::Body,
+        ));
       for tag in props
         .tasks
         .tags

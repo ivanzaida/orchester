@@ -6,7 +6,6 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    events::TextInputEvent,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -115,14 +114,16 @@ impl Component for CustomRange {
 }
 
 fn date_field(ctx: &Ctx, id: &'static str, label: &str, value: &Signal<String>) -> Element {
-  let input = value.clone();
   Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Field.role())
     .child(Text::new(&ctx.t(label)).variant(TypographyStyle::FieldLabel))
-    .child(
-      text_input(ctx, id, value.clone(), false, ExtraTypography::MonoField.role())
-        .on_input(move |event: TextInputEvent| input.set(event.new_value)),
-    )
+    .child(text_input(
+      ctx,
+      id,
+      value.clone(),
+      false,
+      ExtraTypography::MonoField.role(),
+    ))
     .into()
 }

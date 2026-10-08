@@ -106,6 +106,7 @@ mod tool_approval_layout;
 mod tool_approval_scope;
 mod tool_run;
 mod tools;
+mod typing_once;
 mod unreadable_run;
 mod usage;
 mod usage_breakdown_table;

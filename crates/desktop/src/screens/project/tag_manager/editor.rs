@@ -82,13 +82,17 @@ impl TagManager {
 
   fn name_editor(&self, ctx: &Ctx, tags: &[(Tag, usize)], mode: EditingTag) -> (Column, Option<Mutation>) {
     let name = self.name.get();
-    let input = self.name.clone();
     let duplicate = tags.iter().map(|(tag, _)| tag).find(|tag| {
       tag.name().as_str().to_lowercase() == name.trim().to_lowercase() && mode != EditingTag::Rename(tag.id())
     });
     let valid = Name::new(&name).is_ok() && duplicate.is_none();
-    let control = text_input(ctx, "project-tag-name", input.clone(), !valid, TypographyStyle::Body)
-      .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value));
+    let control = text_input(
+      ctx,
+      "project-tag-name",
+      self.name.clone(),
+      !valid,
+      TypographyStyle::Body,
+    );
     let note = if name.trim().is_empty() {
       FieldNote::Error(ctx.t("tasks.tags.nameRequired"))
     } else if let Some(existing) = duplicate {

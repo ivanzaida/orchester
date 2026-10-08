@@ -191,7 +191,6 @@ impl TagPicker {
   fn menu(&self, ctx: &mut Ctx, props: &TagPickerProps, tags: &[Tag], action: &CreateAction) -> Element {
     let query = self.query.get();
     let lower = query.trim().to_lowercase();
-    let input = self.query.clone();
     let selected = props.selected.get().0;
     let mut choices = Column::new().spacing(SpacingSize::Xs);
     for tag in tags
@@ -228,9 +227,8 @@ impl TagPicker {
     .spacing(SpacingSize::Sm)
     .child(Text::new(&ctx.t("tasks.tags.search")).variant(TypographyStyle::Caption))
     .child(
-      text_input(ctx, "tag-search", input.clone(), false, TypographyStyle::Body)
-        .placeholder(&ctx.t("tasks.tags.search"))
-        .on_input(move |event: lurq::app::events::TextInputEvent| input.set(event.new_value)),
+      text_input(ctx, "tag-search", self.query.clone(), false, TypographyStyle::Body)
+        .placeholder(&ctx.t("tasks.tags.search")),
     )
     .child(ScrollVertical::new(choices).max_height(Dimension::Px(MENU_HEIGHT)));
     // Create and what the typed name means come before Manage project tags (`IOWwP`, `yrT73`).
