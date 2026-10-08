@@ -790,6 +790,27 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+Repository skills fail closed while agent files are off · branch `claude/skills-off` (implemented 2026-10-08, review
+fixes made, waiting for review)
+
+A review found that the runner's search for the repository's skills Codex disables while *Repository agent files* is
+off (`.agents/skills`, `.codex/skills`; the native agent uses it while the setting is on) followed links out of the
+worktree without limit (a committed `.agents/skills/x -> ~` walked the home folder) and had no bounds. Confining it
+would let Codex load the skills it missed, since Codex follows links, so it now fails closed in core
+(`orchester_core::agent_files::skills`): a folder or `SKILL.md` that resolves out of the worktree is not walked and
+refuses the agent's start, as does a folder in the worktree that cannot be read or a search past 8 folders deep or 500
+folders below the skills folders. Every path to a folder is followed (a link loop refuses at the depth bound), and each
+skill is disabled by every path through the worktree and by its resolved path; Codex 0.159.2 on Windows names a linked
+skill by its resolved path and disables it by either (`skills/list` of `codex app-server`, scratch `CODEX_HOME`, no
+model turn). `.git` entries are not walked; other hidden folders are. The native agent lists each skill once, reads at
+most 64 KiB of a regular `SKILL.md` and refuses one that resolves into `.git` or `.orchester`. Each refusal names the
+place in the worktree, never the link's target, and says how to fix it. `list_skills`'s search is unchanged
+(`docs/interactive-tool-approvals.md`, "Codex profile"). Tests, not run yet: `cargo test -p orchester-core --test
+repository_skills repository_skills` and `native_skills` (symbolic-link, permission and pipe cases on Unix, the junction
+case on Windows); `cargo test -p orchester-runner --features test-agent --test codex_repository_settings
+codex_repository_settings`, `--test agent_files agent_files`, `--test native native_skills`. Open: Codex's path
+matching and hidden-entry rule were checked on Windows only.
+
 Skill tools for agent CLIs · branch `claude/skill-tools` (implemented 2026-10-08, waiting for review)
 
 Codex agents could not read their skills: the prompt listed each placed `SKILL.md` in
@@ -807,7 +828,8 @@ skill`, `--test run prompt`, `--test claude_invocation claude_invocation`, `--te
 Orchester's tools yet (P1d) and reads skills by path with its own `read_file`; not run with the real CLIs; the
 file-link case is skipped on Windows without the privilege to make one, and the pipe case runs on Unix only. Not
 changed: the runner's search that lists the repository's skills for Codex to disable (agent files off) and for the
-native agent still follows links out of the worktree, as Codex would load what they lead to.
+native agent still follows links out of the worktree, as Codex would load what they lead to (since fixed on
+`claude/skills-off`, above: it now refuses the start).
 
 T5 · Re-measure the code index after ORC-48 (ORC-69) (done 2026-10-07)
 

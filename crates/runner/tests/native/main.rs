@@ -1,6 +1,7 @@
 //! Native agents in the runner against the fake model server (`docs/architecture/native-agent.md` §8,
 //! layer 4): a step run to its result with the file tools, commands that ask a person (approved, denied),
-//! a conversation resumed after a pause, and *Test connection*. No test reaches a real model API. Needs `git`.
+//! a conversation resumed after a pause, *Test connection*, and a start refused for the repository's skills. No
+//! test reaches a real model API. Needs `git`.
 //!
 //! `cargo test -p orchester-runner --features test-agent --test native native_`
 
@@ -17,6 +18,7 @@ mod approvals;
 mod check;
 mod question;
 mod resume;
+mod skills;
 mod step;
 
 use std::path::Path;

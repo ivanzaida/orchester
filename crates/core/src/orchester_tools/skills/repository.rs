@@ -15,20 +15,17 @@ use std::{
 
 use super::{OfferedSkill, SkillSource, StepSkills, belongs, is_regular_file};
 use crate::{
-  agent_files::frontmatter,
+  agent_files::{
+    frontmatter,
+    skills::{MAX_HEADER_BYTES, MAX_SEARCH_DEPTH, MAX_SEARCHED_FOLDERS, shown_in_worktree},
+  },
   native::scope::protected,
   permission::canonical,
   resource::{SKILL_FILE, SkillFilePath},
 };
 
-/// How deep below a skills folder skills are looked for.
-const MAX_SEARCH_DEPTH: usize = 8;
-/// The most folders one search for skills reads.
-const MAX_SEARCHED_FOLDERS: usize = 500;
 /// The most repository skills one step offers.
 const MAX_REPOSITORY_SKILLS: usize = 100;
-/// The most bytes of a repository skill's `SKILL.md` read for its name and description.
-const MAX_HEADER_BYTES: u64 = 64 * 1024;
 /// The longest repository skill name offered, in characters.
 const MAX_NAME_CHARS: usize = 200;
 /// The most reference files `list_skills` names for one repository skill.
@@ -148,7 +145,7 @@ impl Search<'_> {
     }
     skill.description = markdown.description.unwrap_or_default();
     self.offered += 1;
-    let shown = self.shown(found);
+    let shown = shown_in_worktree(found, self.worktree);
     self.skills.offer(skill, &shown);
   }
 
@@ -165,25 +162,8 @@ impl Search<'_> {
   }
 
   fn left_out(&mut self, found: &Path, why: &str) {
-    let shown = self.shown(found);
+    let shown = shown_in_worktree(found, self.worktree);
     self.skills.left_out.push(format!("{shown}: {why}"));
-  }
-
-  /// `found` from the worktree, with `/` and without control characters: where it lies in the worktree, never
-  /// where a link leads.
-  fn shown(&self, found: &Path) -> String {
-    let Ok(relative) = found.strip_prefix(self.worktree) else {
-      return "a skills folder".to_owned();
-    };
-    relative
-      .to_string_lossy()
-      .chars()
-      .map(|c| match c {
-        '\\' => '/',
-        c if c.is_control() => '?',
-        c => c,
-      })
-      .collect()
   }
 }
 

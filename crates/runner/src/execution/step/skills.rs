@@ -12,8 +12,9 @@
 //!   name. It is not a project resource and no screen lists it.
 //! - The repository's own skills: while the project has its agent files off, every `SKILL.md` under
 //!   `<worktree>/.agents/skills` and `<worktree>/.codex/skills` (at any depth, through links, as Codex finds them) is
-//!   listed for Codex to disable; Codex loads the skills of `.codex` even for a project it does not trust. A folder
-//!   that cannot be read stops the agent from starting rather than letting Codex load what it holds.
+//!   listed for Codex to disable; Codex loads the skills of `.codex` even for a project it does not trust. The search
+//!   fails closed (`orchester_core::agent_files::skills`): a link out of the worktree, a folder that cannot be read or
+//!   a search past its bounds stops the agent from starting rather than letting Codex load what it missed.
 //! - Orchester's `list_skills` and `read_skill` ([`StepSkills`]) serve an agent CLI the skills placed for its step
 //!   execution and the repository's skills its CLI itself loads: while the project has its agent files on, Codex's of
 //!   those two folders, found within the worktree only; Claude Code loads none (`--setting-sources ""`). The prompt
@@ -21,13 +22,12 @@
 //!   `.orchester`.
 
 use std::{
-  collections::HashSet,
   fs, io,
   path::{Path, PathBuf},
 };
 
 use orchester_core::{
-  agent_files::{AgentFilesMechanism, frontmatter},
+  agent_files::{AgentFilesMechanism, frontmatter, skills::CODEX_SKILL_FOLDERS},
   connection::{AgentProvider, stream::RunnerProblem},
   id::StepExecutionId,
   orchester_tools::StepSkills,
@@ -38,8 +38,6 @@ use orchester_core::{
 
 use super::super::run::RunTask;
 
-/// The Codex skills folders of a repository.
-const REPOSITORY_SKILLS: [[&str; 2]; 2] = [[".agents", "skills"], [".codex", "skills"]];
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
 /// The internal skill that explains the code index, as agents get it.
@@ -157,7 +155,7 @@ impl RunTask {
       .repository_agent_files()
       .map_err(|error| problem(error.to_string()))?;
     if agent_files.mechanism(provider) == AgentFilesMechanism::CodexLoads {
-      for folder in REPOSITORY_SKILLS {
+      for folder in CODEX_SKILL_FOLDERS {
         let folder = folder.iter().fold(worktree.to_path_buf(), |path, name| path.join(name));
         offered.add_repository(&folder, worktree);
       }
@@ -223,50 +221,4 @@ fn remove_folder(folder: &Path) -> io::Result<()> {
     Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
     _ => Ok(()),
   }
-}
-
-/// Every `SKILL.md` under `<worktree>/.agents/skills` and `<worktree>/.codex/skills`, for Codex to
-/// disable; none from a folder that does not exist.
-pub(super) fn repository_skills(worktree: &Path) -> Result<Vec<PathBuf>, RunnerProblem> {
-  let mut found = Vec::new();
-  let mut visited = HashSet::new();
-  for folder in REPOSITORY_SKILLS {
-    let root = folder.iter().fold(worktree.to_path_buf(), |path, name| path.join(name));
-    collect(&root, &mut found, &mut visited).map_err(|error| {
-      problem(format!(
-        "cannot read the repository's skills in {}: {error}",
-        root.display()
-      ))
-    })?;
-  }
-  found.sort();
-  Ok(found)
-}
-
-/// Collects the `SKILL.md` files under `folder`, following links; a folder reached twice (a link
-/// cycle) is read once.
-fn collect(folder: &Path, found: &mut Vec<PathBuf>, visited: &mut HashSet<PathBuf>) -> io::Result<()> {
-  let entries = match fs::read_dir(folder) {
-    Ok(entries) => entries,
-    Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
-    Err(error) => return Err(error),
-  };
-  if !visited.insert(fs::canonicalize(folder)?) {
-    return Ok(());
-  }
-  for entry in entries {
-    let path = entry?.path();
-    let metadata = match fs::metadata(&path) {
-      Ok(metadata) => metadata,
-      // A link to nothing holds no skill.
-      Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-      Err(error) => return Err(error),
-    };
-    if metadata.is_dir() {
-      collect(&path, found, visited)?;
-    } else if path.file_name().is_some_and(|name| name == SKILL_FILE) {
-      found.push(path);
-    }
-  }
-  Ok(())
 }

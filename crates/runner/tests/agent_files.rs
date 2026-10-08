@@ -117,13 +117,15 @@ async fn agent_files_off_reach_codex_on_new_and_resumed_sessions() {
     .map(Path::new)
     .expect("a new session is started in its worktree");
   let skill = worktree.join(".agents").join("skills").join("deploy").join("SKILL.md");
+  // Disabled by its path in the worktree, and by its resolved path where that differs.
   let disabled = format!(
-    "skills.config=[{{path={},enabled=false}}]",
+    "{{path={},enabled=false}}",
     serde_json::to_string(&skill.to_string_lossy()).expect("quoted")
   );
   for ((argv, thread), resumed) in argv.iter().zip(&threads).zip([false, true]) {
     assert_eq!(thread.get("threadId").is_some(), resumed, "{thread}");
     assert!(argv.contains("-c project_doc_max_bytes=0"), "{argv}");
+    assert!(argv.contains("skills.config=[{path="), "{argv}");
     assert!(argv.contains(&disabled), "{argv}\n{disabled}");
   }
 }

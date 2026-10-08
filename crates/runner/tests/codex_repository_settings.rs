@@ -2,8 +2,9 @@
 //! worktree and its repository are marked untrusted on every start, so Codex leaves the folder's
 //! configuration, hooks, rules and MCP servers out and the activity says the branch has them; a project
 //! layer Codex loaded all the same refuses the step, and the folder's skills are disabled while the
-//! project's agent files are off. Needs `git`. Run with `cargo test -p orchester-runner --features
-//! test-agent --test codex_repository_settings codex_repository_settings`.
+//! project's agent files are off, or the agent does not start when they cannot all be found. Needs `git`. Run
+//! with `cargo test -p orchester-runner --features test-agent --test codex_repository_settings
+//! codex_repository_settings`.
 
 mod support;
 
@@ -156,9 +157,40 @@ async fn codex_repository_settings_skills_follow_repository_agent_files() {
     .join("skills")
     .join("deploy")
     .join("SKILL.md");
+  // Disabled by its path in the worktree, and by its resolved path where that differs.
   let disabled = format!(
-    "skills.config=[{{path={},enabled=false}}]",
+    "{{path={},enabled=false}}",
     serde_json::to_string(&skill.to_string_lossy()).expect("quoted")
   );
+  assert!(argv.contains("skills.config=[{path="), "{argv}");
   assert!(argv.contains(&disabled), "{argv}\n{disabled}");
+}
+
+/// A search for the skills to disable that passes its bounds stops the agent before Codex starts, and says why by
+/// where the cause lies in the worktree.
+#[tokio::test(flavor = "multi_thread")]
+async fn codex_repository_settings_skills_past_the_bounds_refuse_the_start() {
+  let project = project(&Setup::new("Say hello."));
+  let root = project.repo.path();
+  commit(root, &[(".agents/skills/a/b/c/d/e/f/g/h/i/notes.md", "deep\n")]);
+  ProjectDb::open(root)
+    .expect("open")
+    .save_repository_agent_files(RepositoryAgentFiles::Off)
+    .expect("save the setting");
+  let run = run_until(root, project.task, |status| {
+    matches!(status, RunStatus::WaitingForPerson(Stuck::BrokeAgain(_)))
+  })
+  .await;
+  let db = ProjectDb::open(root).expect("open");
+  assert!(reported(&db, run, "argv: ").is_empty(), "Codex never starts");
+  let refusal = "Repository agent files are off, but `.agents/skills/a/b/c/d/e/f/g/h/i` lies more than 8 folders \
+                 deep in its skills folder, so Codex could load skills there that Orchester does not look for. Make \
+                 the skills folders smaller or turn the project's Repository agent files on.";
+  let problems = problems(&db, run);
+  assert!(
+    problems.contains(&RunnerProblem::CouldNotStart {
+      detail: refusal.to_owned()
+    }),
+    "{problems:?}"
+  );
 }

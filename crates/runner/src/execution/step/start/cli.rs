@@ -9,6 +9,7 @@ use std::{
 };
 
 use orchester_core::{
+  agent_files::skills::RepositorySkills,
   command::Command,
   connection::{
     AgentConnection, AgentProvider,
@@ -30,7 +31,6 @@ use super::{
     mcp::{ClaudeServers, McpSetup},
     orchester_tools::{CodexTools, ToolHost},
     relay::Listening,
-    skills::repository_skills,
   },
   NATIVE_NOT_AVAILABLE, problem,
 };
@@ -89,7 +89,10 @@ impl RunTask {
       .repository_agent_files()
       .map_err(|error| problem(error.to_string()))?;
     Ok(match (agent_files.is_on(), provider) {
-      (false, AgentProvider::CodexCli) => Some(repository_skills(worktree)?),
+      (false, AgentProvider::CodexCli) => {
+        let skills = RepositorySkills::find(worktree).map_err(|error| problem(error.refusal_while_off()))?;
+        Some(skills.codex_paths())
+      }
       _ => None,
     })
   }

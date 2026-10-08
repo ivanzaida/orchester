@@ -10,7 +10,7 @@ use std::{collections::BTreeSet, fs, io, num::NonZeroU32, path::Path, sync::Arc}
 
 use orchester_agent::{AnthropicClient, Endpoint, FileTools, WireQuirks};
 use orchester_core::{
-  agent_files::{AgentFilesMechanism, frontmatter},
+  agent_files::{AgentFilesMechanism, skills::native::native_skills},
   code_index::RipgrepFallback,
   command::SecretVariable,
   connection::{
@@ -42,7 +42,7 @@ use super::{
     super::{codebase_index::IndexTold, connection_check, run::RunTask},
     Continuation, Occasion,
     native::{CommandHost, NativeSession},
-    skills::{PlacedSkill, repository_skills},
+    skills::PlacedSkill,
   },
   AgentIndex, AgentStart, Launch, NATIVE_NOT_AVAILABLE, PromptParts, StepAgent, problem, reasoning_effort,
 };
@@ -225,23 +225,13 @@ impl RunTask {
     if setting.mechanism(connection.provider()) != AgentFilesMechanism::OrchesterLoads {
       return Ok(None);
     }
-    for document in repository_skills(worktree)? {
-      let text = fs::read_to_string(&document)
-        .map_err(|error| problem(format!("cannot read {}: {error}", document.display())))?;
-      let markdown = frontmatter::parse(&text);
-      let folder = document.parent().and_then(Path::file_name);
-      let name = markdown
-        .name
-        .or_else(|| folder.map(|name| name.to_string_lossy().into_owned()))
-        .unwrap_or_default();
-      let path = document.strip_prefix(worktree).unwrap_or(&document);
-      skills.push(PlacedSkill {
-        name,
-        description: markdown.description.unwrap_or_default(),
-        path: path.to_string_lossy().replace('\\', "/"),
-        files: Vec::new(),
-      });
-    }
+    let found = native_skills(worktree).map_err(|error| problem(error.to_string()))?;
+    skills.extend(found.into_iter().map(|skill| PlacedSkill {
+      name: skill.name,
+      description: skill.description,
+      path: skill.path,
+      files: Vec::new(),
+    }));
     match fs::read_to_string(worktree.join("AGENTS.md")) {
       Ok(text) => Ok(Some(text)),
       Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
