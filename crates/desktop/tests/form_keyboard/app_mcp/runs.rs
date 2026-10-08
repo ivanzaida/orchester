@@ -2,7 +2,7 @@
 //! queued and run, a second run is refused while one is active, the run is read, paused at its
 //! checkpoint and resumed through its runner; a cancelled task runs again, a finished one does not.
 
-use std::path::Path;
+use std::{fs, path::Path};
 
 use orchester_core::{
   run::{Run, RunStatus},
@@ -73,7 +73,9 @@ fn app_mcp_runs_a_task_and_pauses_and_resumes_its_run() {
   let mut desktop = Desktop::with_runner_and_app_mcp(runner, init_repository, |repo| seed(repo, &fake, true));
   let repo = desktop.repo().to_path_buf();
   let mut agent = agent(&desktop);
-  let run = create_and_run(&mut agent, "Say hello", "Work slowly.");
+  // Implement holds until released: a pause lets the active step finish, so one landing after
+  // Implement would fall into Review, the last step, and the run would succeed instead.
+  let run = create_and_run(&mut agent, "Say hello", "Wait for release.");
   let active = refused(&mut agent, "run_task", &json!({"project": "Kontur", "key": "KON-1"}));
   assert_eq!(active["code"], "run_active");
 
@@ -88,6 +90,7 @@ fn app_mcp_runs_a_task_and_pauses_and_resumes_its_run() {
   assert_eq!(by_number["id"], run.as_str());
 
   ok(&mut agent, "pause_run", &in_run(&run));
+  fs::write(repo.join(".orchester").join("fake-release"), "go").expect("release the agent");
   desktop.wait_until("the run paused at its checkpoint", |_| {
     run_is(&repo, "KON-1", |status| matches!(status, RunStatus::Paused(_)))
   });
