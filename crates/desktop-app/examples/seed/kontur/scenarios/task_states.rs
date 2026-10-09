@@ -2,7 +2,7 @@
 //! as listed below (KON-1 is a draft ready to queue, KON-18 a draft that misses details); runs use Feature
 //! delivery, so their steps are those of the design's KON-12. The seed prints which key is which state.
 
-use orchester_core::run::RunLimit;
+use orchester_core::{run::RunLimit, time::Timestamp};
 
 use crate::kontur::{
   Kontur, SeedError,
@@ -105,9 +105,14 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   for (index, (title, brief, shape)) in STATES.into_iter().enumerate() {
     let hours = i64::try_from(STATES.len() - index).expect("a short list") * 60;
-    // The daily budget's stop is today's, so it is today's budget that is used up.
-    let minutes = if shape == DAILY_BUDGET { 40 } else { hours };
-    let (created, started) = (kontur.ago(minutes + 30), kontur.ago(minutes));
+    // The daily budget's stop is today's, so it is today's budget that is used up: its run starts today
+    // even when the seed runs just after midnight.
+    let started = if shape == DAILY_BUDGET {
+      kontur.today_ago(40)
+    } else {
+      kontur.ago(hours)
+    };
+    let created = Timestamp::from_unix_millis(started.unix_millis() - 30 * 60_000);
     let (criteria, pipeline): (&[&str], _) = if shape == Shape::Draft {
       (&[], None)
     } else {

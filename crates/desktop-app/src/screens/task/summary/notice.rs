@@ -154,7 +154,7 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
     return Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation());
   }
   let planned = run.run.awaiting_plan().first().copied()?;
-  let (step, agent) = step_words(ctx, run.step_of(planned));
+  let (_, agent) = step_words(ctx, run.step_of(planned));
   let version = run
     .plans
     .iter()
@@ -172,16 +172,12 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
         "summary.notice.planBodyNext",
         [
           ("agent", agent.as_str()),
-          ("step", step.as_str()),
           ("next", format!("{:02} {next_name}", next.number).as_str()),
           ("nextAgent", next_agent.as_str()),
         ],
       )
     }
-    None => ctx.t_args(
-      "summary.notice.planBody",
-      [("agent", agent.as_str()), ("step", step.as_str())],
-    ),
+    None => ctx.t_args("summary.notice.planBody", [("agent", agent.as_str())]),
   };
   let text = (
     ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),

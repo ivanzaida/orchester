@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod decisions;
 mod fonts;
 mod form;
 mod markdown;
@@ -31,6 +32,7 @@ use lurq::{
 };
 
 pub use self::{
+  decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   settings::{SettingsSpacing, SettingsText},
@@ -60,6 +62,7 @@ pub fn install(app: &mut App, mode: Mode) {
   startup::install(theme);
   settings::install(theme);
   task::install(theme);
+  decisions::install(theme);
   task_form::install(theme);
   tasks::install(theme);
   shell::install(theme);

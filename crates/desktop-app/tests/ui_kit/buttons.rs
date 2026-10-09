@@ -156,6 +156,30 @@ fn a_reason_line_is_a_lock_and_the_words_6_apart() {
 }
 
 #[test]
+fn a_reason_line_wraps_within_its_column() {
+  let mut kit = Kit::show(|_| {
+    Column::new()
+      .width(Dimension::Px(200.0))
+      .child(reason_line(
+        "offline",
+        "The runner is not connected; the run's controls return once it is online.",
+      ))
+      .into()
+  });
+  let (line, words) = (kit.bounds("offline"), kit.bounds("offline-text"));
+  assert_close(line.width, 200.0, "the line is as wide as its column");
+  assert!(
+    words.x + words.width <= line.x + line.width + 0.5,
+    "the words end inside the column"
+  );
+  assert!(
+    words.height > 20.0,
+    "the words wrap onto a second line: {}",
+    words.height
+  );
+}
+
+#[test]
 fn icon_buttons_are_28_or_24_square_and_say_what_they_do_on_hover() {
   let (presses, press) = counter();
   let mut kit = Kit::show(move |ctx| {

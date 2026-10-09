@@ -15,8 +15,9 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Row, Select, SelectOption},
+  components::{Row, Select, SelectOption, Text, TextOverflow},
   core::{Signal, signal::SignalValue},
+  layout::Alignment,
   node::{
     Element, SelectCheckmarkPosition, SelectIcon, SelectPartStyle, SelectStyle, dimension::Dimension, padding::Padding,
   },
@@ -24,7 +25,7 @@ use lurq::{
 
 use crate::{
   theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
-  ui::icon::Icon,
+  ui::icon::{Icon, icon},
 };
 
 /// The most an open menu grows to, nine options, before it scrolls.
@@ -97,6 +98,7 @@ pub struct SelectField<T: SignalValue> {
   options: Vec<SelectOption<T>>,
   placeholder: Option<Arc<str>>,
   width: Dimension,
+  leading: Option<Icon>,
 }
 
 impl<T> SelectField<T>
@@ -119,6 +121,7 @@ where
       options,
       placeholder: None,
       width: Dimension::Pct(100.0),
+      leading: None,
     }
   }
 
@@ -133,6 +136,13 @@ where
     self
   }
 
+  /// A 13 `text_secondary` glyph before the chosen option's label (`history` in `Picker` `ZQd2D`). The
+  /// box then draws its own chevron, which does not turn while the menu is open.
+  pub fn leading(mut self, glyph: Icon) -> Self {
+    self.leading = Some(glyph);
+    self
+  }
+
   pub fn render(self, ctx: &Ctx) -> Element {
     let mut select = Select::new(self.value)
       .name(self.name.clone())
@@ -143,6 +153,10 @@ where
     if let Some(placeholder) = self.placeholder {
       select = select.placeholder(placeholder);
     }
+    if let Some(glyph) = self.leading {
+      let id = self.id.clone();
+      select = select.trigger(move |state| leading_trigger(&id, glyph, state.label.as_deref().unwrap_or_default()));
+    }
     // lurq's select takes no accessible name of its own; tools read it from the select's row.
     Row::new()
       .width(self.width)
@@ -150,4 +164,26 @@ where
       .child(Element::from(select).id(self.id.to_string()))
       .into()
   }
+}
+
+/// The chosen option's `label` (element id `<id>-label`) after `glyph`, cut with an ellipsis where the box runs out of
+/// room (its menu lists the whole label), and the chevron at the end.
+fn leading_trigger(id: &str, glyph: Icon, label: &str) -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .child(
+      Text::new(label)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextPrimary)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted).flex_shrink(0.0))
+    .into()
 }

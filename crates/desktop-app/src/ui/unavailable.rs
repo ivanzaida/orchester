@@ -7,21 +7,29 @@ use lurq::{
   app::theme::{PaletteColor, TypographyStyle},
   components::{Column, Row, Text},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 
 use super::icon::{Icon, icon};
 use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
 
-/// The lock and `reason` on a line of their own, with the element id `id`.
+/// The lock and `reason` on a line of their own, with the element id `id`: as wide as its parent, the
+/// words wrapping there and the lock staying with the first line; the words' element id is `<id>-text`.
 pub fn reason_line(id: &str, reason: &str) -> Row {
   Row::new()
     .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
+    .align_items(Alignment::Start)
     .describe("role", "unavailable-reason")
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
-    .child(Text::new(reason).variant(ExtraTypography::Note.role()))
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(
+      Text::new(reason)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Note.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
 }
 
 /// `actions` with `reason` under them, both at their end; the reason's element id is `id`.
