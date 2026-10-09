@@ -112,12 +112,18 @@
       "declined": "denied · not an allowed command",
       "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
       "error": "The agent CLI reported an error",
+      "exit": "exit {{code}}",
+      "exitTook": "exit {{code}} · {{took}}",
+      "failed": "failed",
+      "failedTook": "failed · {{took}}",
       "file": "{{status}}  {{path}}",
       "fileAdded": "A",
       "fileDeleted": "D",
       "fileModified": "M",
       "mcpCall": "{{server}} MCP tool",
       "mcpCallFailed": "failed",
+      "noExitCode": "no exit code",
+      "noExitCodeTook": "no exit code · {{took}}",
       "notSignedIn": "The agent CLI is not signed in",
       "notSignedInDetail": "Sign in to the CLI in your own terminal, check the connection again in Connections, then run the task again. Orchester never signs in for you.",
       "openInChanges": "open in Changes ↗",
@@ -127,6 +133,10 @@
       "reasoning": "Reasoning summary",
       "running": "running",
       "stderrLine": "stderr  {{line}}",
+      "stopped": "stopped",
+      "timedOut": "timed out",
+      "timedOutTook": "timed out · {{took}}",
+      "unfinished": "no end recorded",
       "unparsed": {
         "one": "1 unparsed line",
         "other": "{{count}} unparsed lines"
@@ -136,7 +146,8 @@
     },
     "failed": {
       "openLog": "Open runner log",
-      "text": "{{reason}} Nothing in the run changed; its agents keep working.",
+      "text": "{{reason}} Nothing in the run changed.",
+      "textLive": "{{reason}} Nothing in the run changed; its agents keep working.",
       "title": "Couldn’t load the activity of Run {{run}}"
     },
     "fold": {
@@ -193,7 +204,8 @@
       "searched": {
         "one": "searched once",
         "other": "searched {{count}} times"
-      }
+      },
+      "unfinished": "{{command}} without an end"
     },
     "jump": "Jump to latest",
     "jumpNew": "Jump to latest · {{count}} new",
@@ -257,6 +269,7 @@
       "searched": "{{tool}} · {{matches}} matches in {{files}} files",
       "searchedIn": "{{tool}} · {{scope}} · {{matches}} matches in {{files}} files",
       "similar": "approve similar",
+      "unfinished": "{{tool}} · no end recorded",
       "waited": "{{how}} · waited {{duration}}",
       "withShell": "{{meta}} · shell · {{shell}}",
       "written": {
@@ -377,6 +390,8 @@
     "unreadable": "Nothing this run did can be shown until its record can be read. Summary lists the task’s runs.",
     "working": "{{agent}} is working · last event {{elapsed}} ago",
     "workingStarted": "{{agent}} is starting",
+    "workingStartedUnnamed": "The agent is starting",
+    "workingUnnamed": "The agent is working · last event {{elapsed}} ago",
     "you": "You"
   }
 }

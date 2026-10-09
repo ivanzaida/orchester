@@ -38,6 +38,8 @@ pub(super) enum RunState {
   },
   /// The task has no run yet.
   NoRun,
+  /// Its latest run cannot be read: where it stands is unknown.
+  Unreadable,
   Queued,
   /// A question, a plan or a tool request waits for the person.
   Waiting,
@@ -55,6 +57,9 @@ impl RunState {
   /// The state of `conversation`, the task `detail`'s; `asking`: an agent waits in its turn for the answer
   /// to its question.
   pub(super) fn of(conversation: &Conversation, detail: &TaskDetail, asking: bool) -> Self {
+    if detail.latest_unreadable.is_some() {
+      return Self::Unreadable;
+    }
     match conversation.state {
       PanelState::NotStarted if detail.run.is_some() || detail.phase() == TaskPhase::Queued => Self::Queued,
       PanelState::NotStarted => Self::NoRun,
@@ -80,13 +85,14 @@ impl RunState {
     }
   }
 
-  /// The chip's icon, its color and its words; `None` when there is no run to say anything of.
+  /// The chip's icon, its color and its words; `None` when there is no run to say anything of, or it cannot
+  /// be read.
   fn look(self) -> Option<(Icon, PaletteColor, &'static str)> {
     let muted = PaletteColor::TextMuted;
     Some(match self {
       Self::Live { following: true } => (Icon::Radio, PaletteColor::Success, "conversation.state.following"),
       Self::Live { following: false } => (Icon::Pause, muted, "conversation.state.notFollowing"),
-      Self::NoRun => return None,
+      Self::NoRun | Self::Unreadable => return None,
       Self::Queued => (Icon::Clock, muted, "conversation.state.queued"),
       Self::Waiting => (Icon::Hand, PaletteColor::Warning, "conversation.state.waiting"),
       Self::Deciding => (Icon::Hand, PaletteColor::Warning, "conversation.state.deciding"),
@@ -106,6 +112,7 @@ impl RunState {
       Self::Live { following: true } => "following",
       Self::Live { following: false } => "not-following",
       Self::NoRun => "no-run",
+      Self::Unreadable => "unreadable",
       Self::Queued => "queued",
       Self::Waiting => "waiting",
       Self::Deciding => "deciding",

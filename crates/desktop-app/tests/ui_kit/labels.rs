@@ -69,6 +69,8 @@ fn every_status_has_an_icon_and_a_word_and_failures_read_at_a_glance() {
   );
   assert_eq!(Status::of_phase(TaskPhase::Waiting), Status::NeedsInput);
   assert_eq!(Status::of_phase(TaskPhase::Succeeded), Status::Completed);
+  assert_eq!(Status::of_run(TaskPhase::Succeeded), Status::ReadyForReview);
+  assert_eq!(Status::of_run(TaskPhase::Merged), Status::Merged);
   assert_eq!(Status::of_phase(TaskPhase::Cancelled), Status::Canceled);
 }
 

@@ -1,8 +1,9 @@
 //! Following the run live (`docs/design/orchester-workspace.md`, "Following live (ORC-36)"): the chat keeps
-//! its newest row in view while its end is in view, or the card that waits for the person until the person
-//! scrolls; scrolling up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30
-//! pill on `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from
-//! its sides, over a 0 4 16 shadow), centered under the chat; pressing it goes to the end and follows again.
+//! its newest row in view while it follows, or the card that waits for the person until the person scrolls;
+//! any scroll up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30 pill on
+//! `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from its
+//! sides, over a 0 4 16 shadow), centered under the chat, *N* counting what arrived since; pressing it, or
+//! sending a message ([`Follow::follow_again`]), goes to the end and follows again.
 
 use std::sync::Arc;
 
@@ -33,16 +34,12 @@ use crate::{
   },
 };
 
-/// *Jump to latest*'s height (`tvvRD`), and how close to the end still counts as at the end.
+/// *Jump to latest*'s height (`tvvRD`).
 const JUMP_HEIGHT: f32 = 30.0;
+/// How close to the end a scroll down counts as back at the end.
 const FOLLOW_SLACK: f32 = 24.0;
-/// How far from the end a following chat may sit before it goes to the end again.
+/// How far from the end a following chat may sit, or its content grow, before it goes to the end again.
 const AT_END: f32 = 0.5;
-/// The list's reach beyond its view while it measures its rows: all of them.
-const MEASURE_ALL: f32 = f32::MAX;
-/// The layouts that measure every row once the list shows rows: a first batch to learn their size, then
-/// every row.
-const MEASURING_LAYOUTS: u8 = 2;
 
 /// The card the chat reveals, and whether the person has scrolled since the tab opened.
 #[derive(Default)]
@@ -51,16 +48,20 @@ struct Reveal {
   scrolled: bool,
 }
 
-/// Whether the chat follows the run, and what it needs to: its scroll, how many rows it showed when it
-/// stopped following (for *N new*), whether it has shown rows yet, whether it has measured all of them, and
-/// the card it reveals instead of its end.
+/// Whether the chat follows the run, and what it needs to: its scroll, what had arrived when it stopped
+/// following (for *N new*) and at the last render, whether it has shown rows yet, whether it is going to the
+/// end after something arrived, how tall its content was at the last layout, and the card it reveals instead
+/// of its end. Only arrivals move a following chat: a row the person opens or folds leaves it where it is.
 #[derive(Clone)]
 pub(in super::super) struct Follow {
   pub(in super::super) following: Signal<bool>,
   scroll: ScrollState,
   left_at: Arc<Mutex<Option<usize>>>,
+  seen: Arc<Mutex<usize>>,
   started: Arc<Mutex<bool>>,
-  measured: Signal<bool>,
+  /// Set when it goes to the end, until a layout no longer grows its content.
+  to_end: Arc<Mutex<bool>>,
+  height: Arc<Mutex<f32>>,
   reveal: Arc<Mutex<Reveal>>,
 }
 
@@ -79,17 +80,35 @@ impl Follow {
       following: ctx.signal(true),
       scroll: ScrollState::new(),
       left_at: Arc::default(),
+      seen: Arc::default(),
       started: Arc::default(),
-      measured: ctx.signal(false),
+      to_end: Arc::default(),
+      height: Arc::default(),
       reveal: Arc::default(),
     }
   }
 
-  /// Keeps the end of the chat in view while following: the tab renders again whenever what it shows
-  /// changes, so every render with rows goes to the end. The first time, the chat starts at the end; until the
+  /// Goes to the end of the chat and follows it again: *Jump to latest*, and a message the person sent.
+  pub(in crate::screens::task::conversation) fn follow_again(&self) {
+    *self.reveal.lock() = Reveal {
+      key: None,
+      scrolled: true,
+    };
+    self.to_end();
+    self.following.set(true);
+  }
+
+  fn to_end(&self) {
+    self.scroll.scroll_to_bottom_pending();
+    *self.to_end.lock() = true;
+  }
+
+  /// Keeps the end of the chat in view while following: a render after something arrived (`arrived` counts
+  /// what the run brought so far) goes to the end. The first time, the chat starts at the end; until the
   /// person scrolls, the first card that waits for them is revealed instead, for as long as it waits.
-  pub(super) fn follow(&self, shown: &Shown, items: &[Item]) -> Option<String> {
+  pub(super) fn follow(&self, shown: &Shown, items: &[Item], arrived: usize) -> Option<String> {
     let rows = shown.rows.len();
+    let came = std::mem::replace(&mut *self.seen.lock(), arrived) != arrived;
     let mut started = self.started.lock();
     let mut reveal = self.reveal.lock();
     if !reveal.scrolled {
@@ -98,28 +117,23 @@ impl Follow {
         .find(|item| timeline::waits_for_you(item))
         .map(|item| item.key.to_string());
     }
-    if (reveal.key.is_none() || !*started) && self.following.get_untracked() && rows > 0 {
-      self.scroll.scroll_to_bottom_pending();
+    // The first rows start at the end; later, only an arrival moves the chat, unless a card holds it.
+    let goes = !*started || (reveal.key.is_none() && came);
+    if goes && self.following.get_untracked() && rows > 0 {
+      self.to_end();
     }
     *started |= rows > 0;
     reveal.key.clone()
   }
 
-  /// `list`, the chat's `count` rows, scrolled as it follows: scrolling up stops following, back at the end
-  /// follows again.
+  /// `list`, scrolled as it follows: any scroll up stops following, a scroll down back to the end follows
+  /// again. `arrived` counts what the run has brought so far, for *N new*.
   pub(super) fn list<'a>(
     &self,
     list: VirtualizedList<'a, RowProps>,
-    count: usize,
+    arrived: usize,
     reveal: Option<String>,
   ) -> VirtualizedList<'a, RowProps> {
-    // Until it has laid out every row once, the list sizes the rows it has not laid out by an estimate; laid
-    // out at once, while it shows its end, no row is left to estimate but the ones that arrive under the view.
-    let list = if self.measured.get() {
-      list
-    } else {
-      list.overscan_px(MEASURE_ALL)
-    };
     let (scroll, following, left_at, revealed) = (
       self.scroll.clone(),
       self.following.clone(),
@@ -135,48 +149,40 @@ impl Follow {
           key: None,
           scrolled: true,
         };
-        // The handler runs before the wheel moves the list, which moves by the opposite of the delta.
+        // The handler runs before the wheel moves the list, which moves by the opposite of the delta: a
+        // positive delta scrolls toward the start.
         let end = (scroll.content_height() - scroll.viewport_height()).max(0.0);
-        let at_end = scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
+        let at_end = event.delta_y <= 0.0 && scroll.scroll_y() - event.delta_y >= end - FOLLOW_SLACK;
         if at_end != following.get_untracked() {
-          if !at_end {
-            *left_at.lock() = Some(count);
-          }
+          *left_at.lock() = (!at_end).then_some(arrived);
           following.set(at_end);
         }
       })
   }
 
-  /// *Jump to latest · N new*: only the rows that arrived since the chat stopped following are new.
-  pub(super) fn jump(&self, ctx: &Ctx, rows: usize) -> Element {
+  /// *Jump to latest · N new*: what arrived since the chat stopped following.
+  pub(super) fn jump(&self, ctx: &Ctx, arrived: usize) -> Element {
     let new = {
       let mut left_at = self.left_at.lock();
-      rows.saturating_sub(*left_at.get_or_insert(rows))
+      arrived.saturating_sub(*left_at.get_or_insert(arrived))
     };
     let label = if new == 0 {
       ctx.t("conversation.jump")
     } else {
       ctx.t_args("conversation.jumpNew", [("count", new.to_string().as_str())])
     };
-    let (scroll, following, reveal) = (self.scroll.clone(), self.following.clone(), self.reveal.clone());
-    let button = pressable(move || {
-      *reveal.lock() = Reveal {
-        key: None,
-        scrolled: true,
-      };
-      scroll.scroll_to_bottom_pending();
-      following.set(true);
-    })
-    .id("conversation-jump")
-    .height(Dimension::Px(JUMP_HEIGHT))
-    .padding_horizontal(SpacingSize::Md)
-    .spacing(ExtraSpacing::Snug.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-    .rounded(ExtraRadius::Full.role())
-    .box_shadow(ConversationShadow::Jump.role())
-    .child(icon(Icon::ArrowDown, IconSize::Base, PaletteColor::TextSecondary))
-    .child(Text::new(&label).variant(TypographyStyle::Label).nowrap());
+    let follow = self.clone();
+    let button = pressable(move || follow.follow_again())
+      .id("conversation-jump")
+      .height(Dimension::Px(JUMP_HEIGHT))
+      .padding_horizontal(SpacingSize::Md)
+      .spacing(ExtraSpacing::Snug.role())
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .rounded(ExtraRadius::Full.role())
+      .box_shadow(ConversationShadow::Jump.role())
+      .child(icon(Icon::ArrowDown, IconSize::Base, PaletteColor::TextSecondary))
+      .child(Text::new(&label).variant(TypographyStyle::Label).nowrap());
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding_vertical(SpacingSize::Sm)
@@ -191,14 +197,26 @@ impl Follow {
     ctx.mount_keyed::<FollowEnd>("conversation-follow-end", self.clone())
   }
 
-  /// A chat that follows and has come short of its end goes to it at once, before the next frame is laid
-  /// out: as rows arrive, the list puts the row it anchored back where it was, which leaves the newest rows
-  /// under the view.
+  /// A chat going to its end after an arrival, whose content grew since the last layout, goes there at once,
+  /// before the next frame: the list puts the row it anchored back where it was, which leaves the newest rows
+  /// under the view. A layout that did not grow the content ends that; a row the person opened never starts
+  /// it, so the scroll stays as the person left it.
   fn keep_at_end(&self) {
-    if !self.following.get_untracked() || !*self.started.lock() || self.reveal.lock().key.is_some() {
+    let height = self.scroll.content_height();
+    let grew = {
+      let mut last = self.height.lock();
+      let grew = height > *last + AT_END;
+      *last = height;
+      grew
+    };
+    let mut to_end = self.to_end.lock();
+    if !grew {
+      *to_end = false;
+    }
+    if !*to_end || !self.following.get_untracked() || self.reveal.lock().key.is_some() {
       return;
     }
-    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
+    let end = (height - self.scroll.viewport_height()).max(0.0);
     if self.scroll.scroll_y() < end - AT_END {
       self.scroll.set_scroll(0.0, end);
       // Rows the next layout measures taller than the list estimated them move the end further.
@@ -207,11 +225,9 @@ impl Follow {
   }
 }
 
-/// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the
-/// scroll. It counts the layouts the list measures every row in.
+/// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the scroll.
 pub(super) struct FollowEnd {
   follow: Mutex<Option<Follow>>,
-  layouts: Mutex<u8>,
 }
 
 impl Component for FollowEnd {
@@ -220,22 +236,12 @@ impl Component for FollowEnd {
   fn create(_ctx: &mut Ctx) -> Self {
     Self {
       follow: Mutex::new(None),
-      layouts: Mutex::new(0),
     }
   }
 
   fn after_layout(&self) {
-    let Some(follow) = &*self.follow.lock() else {
-      return;
-    };
-    follow.keep_at_end();
-    if follow.measured.get_untracked() {
-      return;
-    }
-    let mut layouts = self.layouts.lock();
-    *layouts += 1;
-    if *layouts >= MEASURING_LAYOUTS {
-      follow.measured.set(true);
+    if let Some(follow) = &*self.follow.lock() {
+      follow.keep_at_end();
     }
   }
 

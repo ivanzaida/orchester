@@ -2,7 +2,10 @@
 //! to, the send button's words, the line over the box and the quiet line under it; *Attach* unavailable; and
 //! a lock with the reason once no agent of the run reads messages.
 
-use std::time::{Duration, Instant};
+use std::{
+  process::Command,
+  time::{Duration, Instant},
+};
 
 use orchester_app::ui::tooltip::TOOLTIP_DELAY;
 use orchester_core::{store::WorktreeStore, time::Timestamp};
@@ -231,6 +234,15 @@ fn composer_a_run_whose_worktree_was_removed_is_locked_with_the_reason() {
   let (mut window, seeded) = seeded();
   let key = key_of(&seeded, "Show the signed-in account");
   let run = detail(&seeded, &key).run.expect("the task ran").id();
+  // Removed as Remove worktree removes it: the folder goes, and the removal is recorded.
+  let worktree = seeded.repo.join(".orchester").join("worktrees").join(run.to_string());
+  let removed = Command::new("git")
+    .current_dir(&seeded.repo)
+    .args(["worktree", "remove", "--force"])
+    .arg(&worktree)
+    .status()
+    .expect("git runs");
+  assert!(removed.success(), "git worktree remove: {removed}");
   ProjectDb::open(&seeded.repo)
     .expect("the project database opens")
     .save_worktree_removal(run, Timestamp::now())

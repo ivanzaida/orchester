@@ -17,7 +17,8 @@ use super::{native, shown::Shown};
 use crate::ui::icon::Icon;
 
 /// The row of a Codex MCP call: the tool, and how it was decided or which server it belongs to.
-pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
+/// `works`: its agent works now, so a call without an end still runs.
+pub(super) fn call(ctx: &Ctx, call: &McpToolEntry, works: bool) -> Shown {
   let failed = matches!(call.status, Some(CommandStatus::Failed | CommandStatus::Declined));
   let refused = call
     .mark
@@ -29,7 +30,7 @@ pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
     && !failed
     && !refused
   {
-    return native::requested(ctx, (native.tool, input), (call.status, "", call.mark.as_ref()));
+    return native::requested(ctx, (native.tool, input), (call.status, "", call.mark.as_ref()), works);
   }
   let mark = call.mark.as_ref().map(|mark| mark_text(ctx, mark));
   let meta = if failed {
@@ -40,6 +41,7 @@ pub(super) fn call(ctx: &Ctx, call: &McpToolEntry) -> Shown {
   let glyph = if failed { Icon::CircleAlert } else { Icon::Plug };
   let told = denial_told(ctx, call.mark.as_ref());
   Shown {
+    code: true,
     failed,
     ..Shown::plain(glyph, call.tool.clone(), meta, told).marked(mark)
   }

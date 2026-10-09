@@ -24,13 +24,14 @@ use super::{
 };
 use crate::ui::{icon::Icon, message::message_text};
 
-/// The row of native call `entry`, which did what `call` says.
-pub(super) fn call(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall) -> Shown {
+/// The row of native call `entry`, which did what `call` says; `works`: its agent works now, so a call
+/// without an end still runs.
+pub(super) fn call(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall, works: bool) -> Shown {
   if let Some(declined) = &call.declined {
     return declined_command(ctx, entry, call, declined.by, &declined.result);
   }
   if call.tool == ToolName::RunCommand {
-    let mut shown = shown::command(ctx, entry);
+    let mut shown = shown::command(ctx, entry, works);
     if let Some(CallDetail::Command { shell: Some(shell) }) = &call.detail {
       shown.meta = ctx.t_args(
         "conversation.native.withShell",
@@ -41,13 +42,14 @@ pub(super) fn call(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall) -> Shown 
   }
   match &call.input {
     // A CLI's failed or refused call shows its error as any command of it does.
-    Some(_) if failed(entry) => shown::command(ctx, entry),
+    Some(_) if failed(entry) => shown::command(ctx, entry, works),
     Some(input) => requested(
       ctx,
       (call.tool, input),
       (entry.status, &entry.output, entry.mark.as_ref()),
+      works,
     ),
-    None => file_tool(ctx, entry, call),
+    None => file_tool(ctx, entry, call, works),
   }
 }
 
@@ -63,10 +65,11 @@ pub(super) fn requested(
   ctx: &Ctx,
   (tool, input): (ToolName, &CallInput),
   (status, output, mark): (Option<CommandStatus>, &str, Option<&CommandMark>),
+  works: bool,
 ) -> Shown {
   let name = tool.as_str();
   let meta = match (status, input.change()) {
-    (None, _) => ctx.t_args("conversation.native.running", [("tool", name)]),
+    (None, _) => unfinished(ctx, name, works),
     (Some(_), Some(change)) => change_meta(ctx, tool, change),
     (Some(_), None) => match input.scope() {
       Some(scope) => ctx.t_args("conversation.native.searchScope", [("tool", name), ("scope", scope)]),
@@ -87,6 +90,7 @@ pub(super) fn requested(
     _ => lines(output),
   };
   Shown {
+    code: true,
     collapsible: change.is_some() || !output.is_empty(),
     output,
     change,
@@ -101,6 +105,16 @@ const fn tool_glyph(tool: ToolName) -> Icon {
     ToolName::Search => Icon::Search,
     _ => Icon::FilePenLine,
   }
+}
+
+/// A call of `tool` without an end: running while its agent works, else without an end.
+fn unfinished(ctx: &Ctx, tool: &str, works: bool) -> Arc<str> {
+  let key = if works {
+    "conversation.native.running"
+  } else {
+    "conversation.native.unfinished"
+  };
+  ctx.t_args(key, [("tool", tool)])
 }
 
 /// What an edit or a write changed, after the tool's name.
@@ -133,11 +147,11 @@ fn change_meta(ctx: &Ctx, tool: ToolName, change: &CallChange) -> Arc<str> {
 
 /// A file tool's row: its target, what it read, found or changed, and its output while open; a change
 /// opens the file in the Changes tab.
-fn file_tool(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall) -> Shown {
+fn file_tool(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall, works: bool) -> Shown {
   let tool = call.tool.as_str();
   let target = target(&entry.command, call.tool);
   let meta = match (entry.status, &call.detail) {
-    (None, _) => ctx.t_args("conversation.native.running", [("tool", tool)]),
+    (None, _) => unfinished(ctx, tool, works),
     (Some(CommandStatus::Completed), Some(detail)) => detail_meta(ctx, tool, detail),
     _ => ctx.t_args("conversation.native.failed", [("tool", tool)]),
   };
@@ -148,6 +162,7 @@ fn file_tool(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall) -> Shown {
   let changed =
     entry.status == Some(CommandStatus::Completed) && matches!(call.detail, Some(CallDetail::Changed { .. }));
   Shown {
+    code: true,
     failed: entry.status == Some(CommandStatus::Failed),
     collapsible: !changed,
     opens: changed.then(|| target.clone()),
@@ -258,6 +273,7 @@ fn declined_command(ctx: &Ctx, entry: &CommandEntry, call: &NativeCall, by: Decl
       }
     }
     DeclinedBy::Orchester => Shown {
+      code: true,
       failed: true,
       output: output(None),
       collapsible: true,

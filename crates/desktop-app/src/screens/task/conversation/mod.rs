@@ -6,9 +6,11 @@
 //! chip ([`toolbar`]); before the run can be shown, why not ([`states`]): loading, couldn't load, queued,
 //! no run yet, unreadable. Under it the composer ([`composer`]).
 //!
-//! The task page (P1) loads the task and hands it here ([`tab`]); the transcript and the run's requests
-//! are read here ([`read`]), again as the runner reports changes. The step rail, *Show*, the search and
-//! Details are not part of this build (D4): the chat shows every step.
+//! The task page (P1) reads the task and hands it here ([`tab`]); the transcript and the run's requests are
+//! read here ([`read`]), again as the runner reports changes of the project's runs (the feed counts them per
+//! project, not per run). What the person opened and how far they scrolled are the run's: another run of
+//! the task starts the tab afresh. The step rail, *Show*, the search and Details are not part of this
+//! build (D4): the chat shows every step.
 
 mod composer;
 mod read;
@@ -24,14 +26,15 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{integration::Leftovers, project::TaskKey, run::RunStatus};
+use orchester_core::{id::InvocationId, run::RunStatus};
 use orchester_workspace::{
-  runner::state::RunnerState,
+  messages::Message,
   tasks::{
     conversation::{Conversation, PanelState},
-    detail::{RunView, TaskDetail},
+    detail::RunView,
     timeline::{
       self as items, Sources,
+      load::Loaded,
       view::{self, Choice},
     },
   },
@@ -42,32 +45,19 @@ use self::{
   timeline::{Follow, Timeline, Toggles},
   toolbar::RunState,
 };
-use crate::{
-  project::{ShownProject, TasksState},
-  services::Services,
-  ui::markdown::plain,
-};
+use super::TaskContext;
+use crate::{project::TasksState, services::Services, ui::markdown::plain};
 
-/// The tab's content for `detail`, the task `key` of `project`, as the task page loaded it.
-pub fn tab(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, detail: Arc<TaskDetail>) -> Element {
-  ctx.mount_keyed::<ConversationTab>(
-    &format!("task-conversation-{key}"),
-    ConversationProps {
-      project: project.clone(),
-      key: key.clone(),
-      detail,
-    },
-  )
+/// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new
+/// run starts with nothing opened and following its end.
+pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  let run = task
+    .detail
+    .run
+    .as_ref()
+    .map_or_else(|| "none".to_owned(), |run| run.id().to_string());
+  ctx.mount_keyed::<ConversationTab>(&format!("task-conversation-{}-{run}", task.key), task.clone())
 }
-
-#[derive(Clone, PartialEq)]
-struct ConversationProps {
-  project: ShownProject,
-  key: TaskKey,
-  detail: Arc<TaskDetail>,
-}
-
-impl lurq::app::component::DevtoolsInspectable for ConversationProps {}
 
 struct ConversationTab {
   composer: composer::ComposerLink,
@@ -78,7 +68,7 @@ struct ConversationTab {
 }
 
 impl Component for ConversationTab {
-  type Props = ConversationProps;
+  type Props = TaskContext;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -91,32 +81,26 @@ impl Component for ConversationTab {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<ConversationProps>().clone();
-    let online = props
-      .project
-      .feed
-      .status
-      .get()
-      .is_some_and(|status| *status.state() == RunnerState::Online);
-    let detail = &props.detail;
-    // A run whose worktree was removed keeps nothing an agent could continue in: no agent reads messages.
-    let removed = detail
+    let task = ctx.props::<TaskContext>().clone();
+    let detail = &task.detail;
+    // What the latest run left once it ended, as last read: a removed worktree closes the conversation.
+    let leftovers = detail
       .run
       .as_ref()
-      .and_then(|run| run.worktree_removed)
-      .map(|_| Leftovers::default());
-    let conversation = Conversation::of(detail, detail.lost_its_runner(online), removed.as_ref());
-    let composer = composer::dock(ctx, &self.composer, (&props.project, &props.key, detail), &conversation);
-    let body = match &detail.run {
-      Some(run) => self.run_body(ctx, &props, run, &conversation),
+      .and_then(|run| task.left.as_read(run.id()))
+      .and_then(Result::ok);
+    let conversation = Conversation::of(detail, task.lost(), leftovers.as_ref());
+    let composer = composer::dock(ctx, (&self.composer, &self.follow), &task, &conversation);
+    let (body, state) = match &detail.run {
+      Some(run) => self.run_body(ctx, &task, run, &conversation),
       None => (states::without_run(ctx, detail, &conversation), None),
     };
-    let (body, state) = body;
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
     Column::new()
       .id("conversation")
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
       .child(toolbar::toolbar(ctx, state))
       .child(
         Column::new()
@@ -134,12 +118,59 @@ impl ConversationTab {
   fn run_body(
     &self,
     ctx: &mut Ctx,
-    props: &ConversationProps,
+    task: &TaskContext,
     run: &RunView,
     conversation: &Conversation,
   ) -> (Element, Option<RunState>) {
-    let feed = &props.project.feed;
-    let repo_root: PathBuf = props.project.open.repo_root.clone();
+    let live = conversation.state == PanelState::Live;
+    let loaded = match self.read(ctx, task, run) {
+      Ok(loaded) => loaded,
+      Err(Some(error)) => {
+        let root = &task.project.open.repo_root;
+        return (states::failed(ctx, (run, live), &error, (root, &self.retry)), None);
+      }
+      Err(None) => return (states::loading(ctx, run), None),
+    };
+    let items = items::build(&Sources {
+      run,
+      entries: &loaded.entries,
+      conversation,
+      pending: &loaded.pending,
+      decided: &loaded.decided,
+      questions: &loaded.questions,
+      merge: task.detail.merge.as_ref(),
+    });
+    let open = |key: &str, default: bool| self.toggles.is_open(key, default);
+    let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
+    // An agent that waits in its turn for the answer to its question does not work: the run waits for the
+    // person (C·15), so there is no working line and the chip says so.
+    let asking = live && !run.waiting_questions.is_empty();
+    let following = self.follow.following.get();
+    let state = RunState::of(conversation, &task.detail, asking).following(following);
+    if shown.rows.is_empty() {
+      return (states::nothing_yet(ctx, run), Some(state));
+    }
+    ctx.provide(Timeline {
+      project: task.project.open.project.id(),
+      key: task.key.clone(),
+      detail: task.detail.clone(),
+      toggles: self.toggles.clone(),
+      working: working_invocations(run, live),
+    });
+    let working = (live && !asking && run.run.status() == &RunStatus::Running).then(|| timeline::Working {
+      agent: run.current_step().and_then(|step| step.agent.clone()),
+      last: loaded.entries.last().map(|entry| entry.at),
+    });
+    let arrived = loaded.entries.len() + conversation.entries.len();
+    let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
+    (chat, Some(state))
+  }
+
+  /// The run's transcript with its requests; while they are not read, why not: being read (`None`), or the
+  /// reading failed.
+  fn read(&self, ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Result<Loaded, Option<Message>> {
+    let feed = &task.project.feed;
+    let repo_root: PathBuf = task.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
     let retry = self.retry.get();
     // The run's events and the runner's transcript changes both move the transcript on.
@@ -152,51 +183,23 @@ impl ConversationTab {
       TasksState::Loading | TasksState::Failed(_) => None,
     };
     let entries = read.data.as_ref().map(|Transcript(entries)| entries.clone());
-    let sources = with_requests(ctx, (repo_root.clone(), run.id(), hold), (entries, waiting, retry));
-    let loaded = match (sources.data.flatten(), read.error.or(sources.error)) {
-      (Some(loaded), _) => loaded,
-      (None, Some(error)) => {
-        let failed = states::failed(ctx, run, &error, (&repo_root, &self.retry));
-        return (failed, None);
-      }
-      (None, None) => return (states::loading(ctx, run), None),
-    };
-    let items = items::build(&Sources {
-      run,
-      entries: &loaded.entries,
-      conversation,
-      pending: &loaded.pending,
-      decided: &loaded.decided,
-      questions: &loaded.questions,
-      merge: props.detail.merge.as_ref(),
-    });
-    let open = |key: &str, default: bool| self.toggles.is_open(key, default);
-    let shown = view::shown(&items, &Choice::default(), &open, &plain::rendered);
-    // An agent that waits in its turn for the answer to its question does not work: the run waits for the
-    // person (C·15), so there is no working line and the chip says so.
-    let asking = conversation.state == PanelState::Live && !run.waiting_questions.is_empty();
-    let following = self.follow.following.get();
-    let state = RunState::of(conversation, &props.detail, asking).following(following);
-    if shown.rows.is_empty() {
-      return (states::nothing_yet(ctx, run), Some(state));
+    let sources = with_requests(ctx, (repo_root, run.id(), hold), (entries, waiting, retry));
+    match (sources.data.flatten(), read.error.or(sources.error)) {
+      (Some(loaded), _) => Ok(loaded),
+      (None, error) => Err(error),
     }
-    ctx.provide(Timeline {
-      project: props.project.open.project.id(),
-      key: props.key.clone(),
-      detail: props.detail.clone(),
-      toggles: self.toggles.clone(),
-    });
-    let working =
-      (conversation.state == PanelState::Live && !asking && run.run.status() == &RunStatus::Running).then(|| {
-        timeline::Working {
-          agent: run
-            .current_step()
-            .and_then(|step| step.agent.clone())
-            .unwrap_or_else(|| "".into()),
-          last: loaded.entries.last().map(|entry| entry.at),
-        }
-      });
-    let chat = timeline::chat(ctx, &self.follow, (&shown, &items), working);
-    (chat, Some(state))
   }
+}
+
+/// The invocations of `run` whose agent works now; none while no agent works (`live` false).
+fn working_invocations(run: &RunView, live: bool) -> Arc<[InvocationId]> {
+  if !live {
+    return Arc::from([]);
+  }
+  run
+    .invocations
+    .iter()
+    .filter(|invocation| invocation.ended_at.is_none())
+    .map(|invocation| invocation.id)
+    .collect()
 }

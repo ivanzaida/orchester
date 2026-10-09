@@ -11,6 +11,7 @@
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod long;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
@@ -156,8 +157,9 @@ fn timeline_chips_summarize_tool_groups_and_mark_a_failed_command() {
     Some(vec!["exit 101".to_owned()]),
     "the first failed command's exit, in {failed}"
   );
-  // The group whose command still runs says so.
-  assert!(text.contains("running cargo test -p webhooks jitter"), "{text}");
+  // No agent works (the window has no runner): the last command has no end, and never reads as running.
+  assert!(text.contains("cargo test -p webhooks jitter without an end"), "{text}");
+  assert!(!text.contains("running"), "{text}");
 }
 
 #[test]
@@ -187,11 +189,17 @@ fn timeline_an_open_group_lists_seven_rows_then_shows_more() {
     listed > 7,
     "all of the group's rows once Show more was pressed: {listed}"
   );
-  // A command's row opens to its output.
-  let row = with_text(&mut window, "conversation-entry-", "sed -n 1,60p");
+  // A command's row opens to its output: the group's last command, which the chat shows.
+  let row = ids(&mut window, "conversation-entry-")
+    .into_iter()
+    .filter(|id| id.ends_with("-title"))
+    .rfind(|id| {
+      window
+        .texts(id)
+        .is_some_and(|texts| texts.concat().starts_with("sed -n"))
+    })
+    .expect("the group's last command");
   let row = row.trim_end_matches("-title").to_owned();
-  // The row may sit at the chat's top edge, partly out of view: it is pressed in full view.
-  wheel(&mut window, 100.0);
   click(&mut window, &format!("{row}-toggle"));
   window.until("the command's output", |window| {
     window.texts(&format!("{row}-output")).is_some()
@@ -249,7 +257,7 @@ fn timeline_shows_the_persons_message_with_its_delivery_line() {
 }
 
 #[test]
-fn timeline_follows_the_end_until_scrolled_up_then_jumps_to_latest() {
+fn timeline_any_scroll_up_stops_following_and_jump_to_latest_counts_arrivals_only() {
   let (mut window, _) = retry_webhooks();
   assert!(
     window.tree.get_element_by_id("conversation-jump").is_none(),
@@ -264,8 +272,36 @@ fn timeline_follows_the_end_until_scrolled_up_then_jumps_to_latest() {
     Some(vec!["Jump to latest".to_owned()]),
     "no row arrived since it stopped following"
   );
+  // Steps opened while scrolled up are no arrivals.
+  to_start(&mut window);
+  let fold = with_text(&mut window, "conversation-fold-", "4 steps done");
+  click(&mut window, &format!("{fold}-link"));
+  window.until("the folded steps' dividers", |window| {
+    all_text(window).contains("01 Research")
+  });
+  assert_eq!(
+    window.texts("conversation-jump"),
+    Some(vec!["Jump to latest".to_owned()]),
+    "rows the person opened are not new"
+  );
   click(&mut window, "conversation-jump");
   window.until("following again", |window| {
     window.tree.get_element_by_id("conversation-jump").is_none()
   });
+}
+
+#[test]
+fn timeline_a_touchpad_nudge_up_stops_following_and_stays() {
+  let (mut window, _) = retry_webhooks();
+  wheel(&mut window, 5.0);
+  window.until("Jump to latest", |window| {
+    window.tree.get_element_by_id("conversation-jump").is_some()
+  });
+  for _ in 0..5 {
+    window.pass();
+  }
+  assert!(
+    window.tree.get_element_by_id("conversation-jump").is_some(),
+    "the chat stays where the nudge left it"
+  );
 }

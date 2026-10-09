@@ -56,6 +56,7 @@ use self::{
   controls::{Bar, Sending},
   send::{Outgoing, PlanAction, SendAction, plan_action, send_action},
 };
+use super::{TaskContext, timeline::Follow};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -96,10 +97,12 @@ impl ComposerLink {
   }
 }
 
-/// What the composer and the chat's messages act on: the task `key` of `project` as the tab shows it.
+/// What the composer and the chat's messages act on: the task `key` of `project` as the tab shows it, and
+/// the chat, which follows a message the person sent.
 #[derive(Clone)]
 pub(super) struct Composing {
   link: ComposerLink,
+  follow: Follow,
   project: ShownProject,
   key: TaskKey,
   detail: Arc<TaskDetail>,
@@ -117,23 +120,25 @@ impl Composing {
   }
 }
 
-/// The composer for the task `key` of `project`, `detail` as the tab loaded it and `conversation` as it
-/// reads it; it also lets the chat's messages reach the composer, so the tab calls it before the chat.
+/// The composer for `task` as the page read it and `conversation` as the tab reads it, under the chat that
+/// `follow` keeps at its end; it also lets the chat's messages reach the composer, so the tab calls it
+/// before the chat.
 pub(super) fn dock(
   ctx: &mut Ctx,
-  link: &ComposerLink,
-  (project, key, detail): (&ShownProject, &TaskKey, &Arc<TaskDetail>),
+  (link, follow): (&ComposerLink, &Follow),
+  task: &TaskContext,
   conversation: &Conversation,
 ) -> Element {
   let composing = Composing {
     link: link.clone(),
-    project: project.clone(),
-    key: key.clone(),
-    detail: detail.clone(),
+    follow: follow.clone(),
+    project: task.project.clone(),
+    key: task.key.clone(),
+    detail: task.detail.clone(),
   };
   ctx.provide(composing.clone());
   ctx.mount_keyed::<Composer>(
-    &format!("composer-{key}"),
+    &format!("composer-{}", task.key),
     DockProps {
       composing,
       conversation: Arc::new(conversation.clone()),
@@ -218,6 +223,7 @@ impl Component for Composer {
       key.clone(),
       last.clone(),
     );
+    let follow = props.composing.follow.clone();
     ctx.watch(&sending.state(), move |state| {
       let Some(stored) = state.data.as_ref().filter(|_| !state.is_pending()) else {
         return;
@@ -232,6 +238,7 @@ impl Component for Composer {
       }
       renewed.set(DraftKey(IdempotencyKey::generate()));
       feed.saved();
+      follow.follow_again();
       // The message waits for the raised limit, which the person sets on the Summary.
       if *stored == Sent::AwaitsLimit {
         summary();
