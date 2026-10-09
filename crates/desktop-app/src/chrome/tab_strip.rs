@@ -47,8 +47,17 @@ const NEW_TAB_WIDTH: f32 = 26.0;
 
 pub struct TabStrip {
   scroll: ScrollState,
-  /// The active tab the strip last brought into view.
-  revealed: Mutex<Option<TabId>>,
+  /// What the strip last brought into view.
+  revealed: Mutex<Option<Revealed>>,
+}
+
+/// The active tab as the strip last brought it into view: which tab, at which route (which decides its
+/// width), and whether the strip scrolled.
+#[derive(PartialEq)]
+struct Revealed {
+  tab: TabId,
+  route: Route,
+  scrolling: bool,
 }
 
 impl Component for TabStrip {
@@ -84,6 +93,7 @@ impl Component for TabStrip {
       .align_items(Alignment::Center)
       .child(
         ScrollHorizontal::new(strip)
+          .id("tab-scroll")
           .with_scroll_state(self.scroll.clone())
           .scrollbar(ScrollBarStyle::hidden())
           .flex_shrink(1.0)
@@ -108,14 +118,23 @@ impl Component for TabStrip {
 }
 
 impl TabStrip {
-  /// Brings the active tab into view when it is another than last time.
+  /// Brings the active tab into view when it, its route or the strip's fit changed since last time:
+  /// a new tab, another place in the same tab (its width may change), or a strip that starts to scroll.
+  /// The offset is queued even when it is the current one, so it holds against lurq keeping a strip
+  /// that was scrolled to its end at the end while a tab is inserted.
   fn reveal(&self, tabs: &TabSet, fit: Fit) {
-    let active = tabs.active().id();
+    let active = tabs.active();
+    let now = Revealed {
+      tab: active.id(),
+      route: active.route().clone(),
+      scrolling: matches!(fit, Fit::Scrolling(_)),
+    };
     let mut revealed = self.revealed.lock();
-    if *revealed == Some(active) {
+    if revealed.as_ref() == Some(&now) {
       return;
     }
-    *revealed = Some(active);
+    *revealed = Some(now);
+    let active = active.id();
     let Fit::Scrolling(room) = fit else {
       self.scroll.scroll_to_left_pending();
       return;
@@ -126,11 +145,8 @@ impl TabStrip {
     let viewport = Some(self.scroll.viewport_width())
       .filter(|width| *width > 0.0)
       .unwrap_or(room);
-    let current = self.scroll.scroll_x();
-    let target = tab_fit::reveal(current, viewport, tab_fit::span(tabs, index));
-    if target != current {
-      self.scroll.set_scroll_pending(target, 0.0);
-    }
+    let target = tab_fit::reveal(self.scroll.scroll_x(), viewport, tab_fit::span(tabs, index));
+    self.scroll.set_scroll_pending(target, 0.0);
   }
 }
 
