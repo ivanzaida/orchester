@@ -1,10 +1,19 @@
 //! One run of the application in the session log (`docs/architecture/storage.md`,
-//! "Lifecycle"): started when the window opens, ended when it closes normally.
+//! "Lifecycle"): started when the window opens, ended when it closes normally. A session holds its
+//! data folder's lock (`orchester_store::location::AppLock`) from before it opens the application
+//! database until it ends, so one app at a time records sessions, migrates the database and starts
+//! runners there.
 
-use std::path::{Path, PathBuf};
+use std::{
+  io,
+  path::{Path, PathBuf},
+};
 
 use orchester_core::time::Timestamp;
-use orchester_store::{AppDb, PreviousSession, SessionEnd, SessionId, StoreError};
+use orchester_store::{
+  AppDb, PreviousSession, SessionEnd, SessionId, StoreError,
+  location::{AppLock, AppLockError, LockHolder},
+};
 use thiserror::Error;
 
 use crate::{
@@ -16,7 +25,20 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum StartupError {
   #[error("cannot locate the Orchester executable: {0}")]
-  ExecutableLocation(#[source] std::io::Error),
+  ExecutableLocation(#[source] io::Error),
+  /// Another Orchester app has the data folder open; `holder` is which process, when it is known.
+  #[error("another Orchester app has the data folder {folder} open")]
+  InUse {
+    folder: PathBuf,
+    holder: Option<LockHolder>,
+  },
+  /// The data folder's lock cannot be written: the folder is missing or not writable.
+  #[error("cannot write to the data folder {folder}: {source}")]
+  DataFolder {
+    folder: PathBuf,
+    #[source]
+    source: io::Error,
+  },
   #[error("cannot open the application database {path}: {source}")]
   Database {
     path: PathBuf,
@@ -25,19 +47,31 @@ pub enum StartupError {
   },
 }
 
+impl From<AppLockError> for StartupError {
+  fn from(error: AppLockError) -> Self {
+    match error {
+      AppLockError::InUse { folder, holder } => Self::InUse { folder, holder },
+      AppLockError::Io { folder, source } => Self::DataFolder { folder, source },
+    }
+  }
+}
+
 impl StartupError {
   /// What to tell the user; the error itself goes to the log.
   pub fn message(&self) -> Message {
     match self {
       Self::ExecutableLocation(_) => Message::new("errors.executableLocation"),
+      Self::InUse { .. } => Message::new("errors.dataFolderInUse"),
+      Self::DataFolder { .. } => Message::new("errors.dataFolderNotWritable"),
       Self::Database { source, .. } => messages::store_error(source),
     }
   }
 
-  /// The database file involved, if the failure got that far.
+  /// The database file or the data folder involved, if the failure got that far.
   pub fn path(&self) -> Option<&Path> {
     match self {
       Self::ExecutableLocation(_) => None,
+      Self::InUse { folder, .. } | Self::DataFolder { folder, .. } => Some(folder),
       Self::Database { path, .. } => Some(path),
     }
   }
@@ -48,6 +82,8 @@ pub struct AppSession {
   id: SessionId,
   started_at: Timestamp,
   previous: PreviousSession,
+  /// Held until the session ends; dropped after the end is recorded.
+  lock: AppLock,
 }
 
 impl AppSession {
@@ -58,13 +94,16 @@ impl AppSession {
     Self::start_at(&path)
   }
 
+  /// Takes the lock of the data folder that holds the application database `path`, then opens it
+  /// and records a new session. Another app that has the folder open leaves the database untouched.
   pub fn start_at(path: &Path) -> Result<Self, StartupError> {
+    let started_at = Timestamp::now();
+    let lock = AppLock::acquire(path, LockHolder::running(std::process::id(), started_at))?;
     let database_error = |source| StartupError::Database {
       path: path.to_path_buf(),
       source,
     };
     let workspace = Workspace::new(AppDb::open(path).map_err(database_error)?);
-    let started_at = Timestamp::now();
     let (id, previous) = workspace.start_session(started_at).map_err(database_error)?;
     if matches!(
       previous,
@@ -77,6 +116,7 @@ impl AppSession {
       id,
       started_at,
       previous,
+      lock,
     })
   }
 
@@ -103,6 +143,14 @@ impl AppSession {
       PreviousSession::Ended(SessionEnd::RunsPaused) => orchester_ipc::SessionEnd::RunsPaused,
       PreviousSession::Ended(SessionEnd::QuitNow) => orchester_ipc::SessionEnd::QuitNow,
       PreviousSession::Crashed => orchester_ipc::SessionEnd::Crashed,
+    }
+  }
+
+  /// The window closed and the session is ending: an app that starts meanwhile is told this one is
+  /// closing, not that it is stuck. Losing the mark only words that app's screen less precisely.
+  pub fn mark_closing(&mut self) {
+    if let Err(error) = self.lock.mark_closing() {
+      tracing::warn!(%error, "cannot mark the data folder's lock as closing");
     }
   }
 

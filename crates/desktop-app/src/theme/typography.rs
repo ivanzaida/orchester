@@ -180,13 +180,17 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       palette.get(ExtraColor::AccentText.role()),
     ),
     mono: mono(style(12.0, FontWeight::Normal, 1.5, 0.0, primary)),
-    extra: extras.chain(icons).collect(),
+    extra: extras
+      .chain(icons)
+      .chain(super::startup::typography(palette))
+      .chain(super::shell::typography(palette))
+      .collect(),
   }
 }
 
 /// `sans` in Geist Mono without ligatures: a command, a key or a figure shows each character as typed
 /// (Geist Mono would join `--` and `->`).
-fn mono(sans: TextStyle) -> TextStyle {
+pub(super) fn mono(sans: TextStyle) -> TextStyle {
   TextStyle {
     font_family: Arc::from(MONO),
     font_features: FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]),
@@ -194,7 +198,13 @@ fn mono(sans: TextStyle) -> TextStyle {
   }
 }
 
-fn style(font_size: f32, weight: FontWeight, line_height: f32, letter_spacing: f32, color: Color) -> TextStyle {
+pub(super) fn style(
+  font_size: f32,
+  weight: FontWeight,
+  line_height: f32,
+  letter_spacing: f32,
+  color: Color,
+) -> TextStyle {
   TextStyle {
     font_family: Arc::from(SANS),
     font_size,

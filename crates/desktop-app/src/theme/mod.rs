@@ -15,6 +15,8 @@ mod markdown;
 mod metrics;
 mod palette;
 mod shadow;
+mod shell;
+mod startup;
 mod typography;
 
 use std::time::Duration;
@@ -28,6 +30,8 @@ pub use self::{
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   shadow::ExtraShadow,
+  shell::ShellText,
+  startup::{StartupSpacing, StartupText},
   typography::{ExtraTypography, IconSize},
 };
 
@@ -45,6 +49,7 @@ pub fn install(app: &mut App, mode: Mode) {
   let theme = app.theme();
   apply(theme, mode);
   metrics::install(theme);
+  startup::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

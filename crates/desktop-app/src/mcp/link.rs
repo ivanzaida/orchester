@@ -3,21 +3,58 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use super::tools::ToolError;
-use crate::navigation::Navigation;
+use crate::{navigation::Navigation, project::Projects};
 
-/// The window's navigation for the app's MCP tools, which are registered before the window's root
-/// creates it; the root attaches it once.
+/// What the window is, for the app's MCP tools, which are registered before the window's root exists:
+/// a started session's window attaches its navigation and the projects its tabs show, a window without
+/// a session the name of the startup screen it shows. Each attaches once.
 #[derive(Clone, Default)]
-pub struct WindowLink(Arc<Mutex<Option<Navigation>>>);
+pub struct WindowLink(Arc<Mutex<Option<Linked>>>);
+
+#[derive(Clone)]
+enum Linked {
+  Session {
+    navigation: Navigation,
+    projects: Projects,
+  },
+  /// The startup screen the window shows, by its `app_state` name.
+  Startup(&'static str),
+}
 
 impl WindowLink {
-  pub fn attach(&self, navigation: Navigation) {
-    *self.0.lock() = Some(navigation);
+  pub fn attach(&self, navigation: Navigation, projects: Projects) {
+    *self.0.lock() = Some(Linked::Session { navigation, projects });
   }
 
-  /// The navigation, or [`ToolError::NotReady`] before the root attached it.
+  pub fn attach_startup(&self, screen: &'static str) {
+    *self.0.lock() = Some(Linked::Startup(screen));
+  }
+
+  /// The navigation; [`ToolError::NotReady`] before the window attached it, [`ToolError::NoSession`]
+  /// on a startup screen.
   pub fn navigation(&self) -> Result<Navigation, ToolError> {
-    self.0.lock().clone().ok_or(ToolError::NotReady)
+    self.session().map(|(navigation, _)| navigation)
+  }
+
+  /// The projects the tabs show, like [`navigation`](Self::navigation).
+  pub fn projects(&self) -> Result<Projects, ToolError> {
+    self.session().map(|(_, projects)| projects)
+  }
+
+  /// The startup screen the window shows, if it shows one.
+  pub fn startup(&self) -> Option<&'static str> {
+    match *self.0.lock() {
+      Some(Linked::Startup(screen)) => Some(screen),
+      Some(Linked::Session { .. }) | None => None,
+    }
+  }
+
+  fn session(&self) -> Result<(Navigation, Projects), ToolError> {
+    match self.0.lock().clone() {
+      Some(Linked::Session { navigation, projects }) => Ok((navigation, projects)),
+      Some(Linked::Startup(_)) => Err(ToolError::NoSession),
+      None => Err(ToolError::NotReady),
+    }
   }
 }
 

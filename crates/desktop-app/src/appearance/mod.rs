@@ -1,6 +1,6 @@
 //! Which colors the window uses: dark, light, or the operating system's choice ([`ThemeSetting`], kept
-//! in the app's settings), and the mode that resolved to. The setting can change while the app runs;
-//! nothing in the window offers it yet, the app's MCP server does (`set_theme`).
+//! in the application database through the session's workspace), and the mode that resolved to. The setting can change
+//! while the app runs; nothing in the window offers it yet, the app's MCP server does (`set_theme`).
 //!
 //! `System` uses the appearance the operating system had when the app started ([`system::mode`]):
 //! lurq reports no later change of it, so the window keeps that mode until the app starts again.
@@ -12,12 +12,10 @@ use std::sync::{Arc, OnceLock};
 use lurq::app::theme::Theme;
 pub use orchester_core::appearance::ThemeSetting;
 use orchester_store::StoreError;
+use orchester_workspace::workspace::Workspace;
 use parking_lot::Mutex;
 
-use crate::{
-  settings::AppSettings,
-  theme::{self, Mode},
-};
+use crate::theme::{self, Mode};
 
 /// Why a theme was not chosen.
 #[derive(Debug, thiserror::Error)]
@@ -35,13 +33,14 @@ pub struct Appearance {
   current: Arc<Mutex<(ThemeSetting, Mode)>>,
   /// The operating system's appearance, once it has been read at start; never when it cannot be.
   system: Arc<OnceLock<Mode>>,
-  settings: Option<AppSettings>,
+  /// Where the setting is kept: the session's workspace, when the session started.
+  settings: Option<Workspace>,
 }
 
 impl Appearance {
   /// `setting`, resolved with the operating system's appearance `system` (filled in when it has been
   /// read); later choices are kept in `settings` when there are any.
-  pub fn new(setting: ThemeSetting, system: Arc<OnceLock<Mode>>, settings: Option<AppSettings>) -> Self {
+  pub fn new(setting: ThemeSetting, system: Arc<OnceLock<Mode>>, settings: Option<Workspace>) -> Self {
     Self {
       current: Arc::new(Mutex::new((setting, resolve(setting, system.get().copied())))),
       system,

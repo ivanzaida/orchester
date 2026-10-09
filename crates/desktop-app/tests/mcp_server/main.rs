@@ -5,6 +5,8 @@
 //! own, never the user's.
 
 mod http;
+#[path = "../support/mod.rs"]
+mod support;
 
 use std::{fs, path::Path, sync::Arc, thread, time::Duration};
 
@@ -14,13 +16,16 @@ use orchester_app::{
   i18n,
   mcp::{self, AppMcp, BearerToken, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
+  startup::Launch,
   theme::{self, Mode},
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
-use tokio::runtime::Runtime;
 
-use self::http::{Response, post};
+use self::{
+  http::{Response, post},
+  support::Data,
+};
 
 /// A window without a screen whose root tree hosts the tools of the app's MCP server.
 struct Served {
@@ -30,7 +35,8 @@ struct Served {
   folder: TempDir,
   port: u16,
   token: String,
-  _runtime: Runtime,
+  _launch: Launch,
+  _data: Data,
 }
 
 impl Served {
@@ -39,17 +45,26 @@ impl Served {
   }
 
   fn start_in(folder: TempDir, window_control: bool) -> Self {
-    let runtime = Runtime::new().expect("a runtime");
+    let data = Data::new();
+    let launch = data.launch();
+    let runtime = data.runtime.handle();
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let mut app = App::new();
+    app.set_tokio_handle(runtime.clone());
     theme::install(&mut app, Mode::Dark);
     i18n::install(&app).expect("bundled locales load");
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
-    let config = mcp::config(McpSettings::with_window_control(window_control), &link, &appearance);
+    let hold = launch.services().map(|services| services.hold.clone());
+    let config = mcp::config(
+      McpSettings::with_window_control(window_control),
+      &link,
+      &appearance,
+      hold,
+    );
     let at = DiscoveryFolder::At(folder.path().to_path_buf());
-    let server = AppMcp::start(&mut tree, runtime.handle(), &at, config).expect("the server listens");
+    let server = AppMcp::start(&mut tree, runtime, &at, config).expect("the server listens");
     let discovery = read_json(server.discovery_path());
     let token = discovery["token"]
       .as_str()
@@ -57,7 +72,8 @@ impl Served {
       .to_owned();
     let port = server.port().get();
     let mcp = McpStatus::of(Some(&server), McpSettings::with_window_control(window_control));
-    tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
+    let start = launch.start();
+    tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
     tree.pass_headless(&mut app);
     Self {
       app,
@@ -66,7 +82,8 @@ impl Served {
       folder,
       port,
       token,
-      _runtime: runtime,
+      _launch: launch,
+      _data: data,
     }
   }
 

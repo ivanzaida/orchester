@@ -1,6 +1,6 @@
 //! The status bar (`Status bar` `sMpGe`): what the app knows about itself on the right, the app's MCP
-//! server and its version. The project, branch, runner, agents, waiting runs, tokens and plan usage of
-//! the design come with their data; until then they are not shown.
+//! server and its version. A startup screen's status bar has the version only. The project, branch, runner, agents,
+//! waiting runs, tokens and plan usage of the design come with their data; until then they are not shown.
 
 use lurq::{
   app::{
@@ -68,6 +68,20 @@ impl Component for StatusBar {
       .child(item("status-mcp", Icon::RadioTower, &mcp))
       .child(item("status-version", Icon::Sparkles, &version))
   }
+}
+
+/// The status bar of a startup screen (`Status bar` `xmswq` of `N0Lpc`): the version only.
+pub fn version_only(ctx: &mut Ctx) -> Element {
+  let version = ctx.t_args("shell.status.version", [("version", env!("CARGO_PKG_VERSION"))]);
+  Row::new()
+    .id("status-bar")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(STATUS_BAR_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .align_items(Alignment::Center)
+    .child(Row::new().flex(1.0))
+    .child(item("status-version", Icon::Sparkles, &version))
+    .into()
 }
 
 /// A status item (`Status item` `wnnsD`): icon and label.

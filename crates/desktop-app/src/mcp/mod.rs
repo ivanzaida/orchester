@@ -1,7 +1,7 @@
 //! The app's MCP server: agents look at and drive the running window the way browser-use drives a
 //! browser, through one server owned by the app. It hosts lurq's window tools (`lurq_*`: screenshots,
 //! the element tree, clicking and typing, logs) in-process (`McpConfig::hosted`) beside the app's own
-//! (`tools`: `app_state`, `navigate`, `set_theme`), which lurq's registry serves and which run on the
+//! (`tools`: `app_state`, `navigate`, `set_theme`, `hold_reads`), which lurq's registry serves and which run on the
 //! event-loop thread with the window's state. What agents may do is [`McpSettings`].
 //!
 //! It listens on `127.0.0.1` on a port the OS picks and requires its own bearer token on every request
@@ -30,7 +30,7 @@ pub use self::{
   server::{BearerToken, endpoint},
   settings::{McpSettings, WindowControlSource},
 };
-use crate::appearance::Appearance;
+use crate::{appearance::Appearance, project::hold::ReadHold};
 
 /// The name in the discovery file and the server's info, apart from the deprecated desktop's
 /// `orchester`.
@@ -38,8 +38,9 @@ pub const APP_NAME: &str = "orchester-app";
 
 const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding agents per project. `app_state` \
   tells where its window is (route, tabs, theme, size); `navigate` takes the active tab to a route by name; \
-  `set_theme` switches dark, light or system colors and keeps the choice. The `lurq_*` tools look at and drive \
-  the window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
+  `set_theme` switches dark, light or system colors and keeps the choice; debug builds add `hold_reads`, which \
+  holds the reads of project data so a loading state can be captured. The `lurq_*` tools look at and drive the \
+  window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
   release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on.";
 
 /// Whether the server listens, decided once at startup.
@@ -65,9 +66,10 @@ impl McpStatus {
   }
 }
 
-/// lurq's tools for `settings` and the app's tools on `link` and `appearance`.
-pub fn config(settings: McpSettings, link: &WindowLink, appearance: &Appearance) -> McpConfig {
-  tools::all(link, appearance, settings).into_iter().fold(
+/// lurq's tools for `settings` and the app's tools on `link` and `appearance`, with `hold_reads` on
+/// `hold` in debug builds of a started session.
+pub fn config(settings: McpSettings, link: &WindowLink, appearance: &Appearance, hold: Option<ReadHold>) -> McpConfig {
+  tools::all(link, appearance, settings, hold).into_iter().fold(
     McpConfig::new()
       .app_name(APP_NAME)
       .instructions(INSTRUCTIONS)

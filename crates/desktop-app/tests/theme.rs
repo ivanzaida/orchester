@@ -16,12 +16,13 @@ use orchester_app::{
     Appearance, AppearanceError, ThemeSetting,
     system::{macos_mode, windows_mode},
   },
-  settings::AppSettings,
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY,
+    IconSize, Mode, SHORTCUT_OPACITY, ShellText, StartupSpacing, StartupText,
   },
 };
+use orchester_store::AppDb;
+use orchester_workspace::workspace::Workspace;
 
 fn themed(mode: Mode) -> App {
   let mut app = App::new();
@@ -198,6 +199,40 @@ fn spacing_radii_and_borders_follow_the_design() {
 }
 
 #[test]
+fn area_roles_follow_the_startup_screens_and_the_switcher() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let check = |role: TypographyStyle, (size, line_height): (f32, f32), weight: FontWeight, family: &str| {
+    let style = theme.typography_style(role);
+    assert_eq!(
+      (style.font_size, style.line_height, style.weight, &*style.font_family),
+      (size, line_height, weight, family),
+      "{role:?}"
+    );
+  };
+  check(StartupText::TileIcon.role(), (20.0, 1.0), FontWeight::Normal, "lucide");
+  check(
+    ShellText::SwitcherInitial.role(),
+    (12.0, 1.35),
+    FontWeight::SemiBold,
+    "Geist",
+  );
+  check(
+    ShellText::SwitcherPath.role(),
+    (10.5, 1.35),
+    FontWeight::Normal,
+    "Geist Mono",
+  );
+  let color = |role: TypographyStyle| theme.typography_style(role).color;
+  assert_eq!(color(ShellText::SwitcherInitial.role()), Color::from_hex("#B3B3BA"));
+  assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
+  for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {
+    assert_eq!(spacing.value(), value, "{spacing:?}");
+    assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
+  }
+}
+
+#[test]
 fn switching_the_mode_recolors_the_palette_and_the_text() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
@@ -226,7 +261,7 @@ fn switching_the_mode_recolors_the_palette_and_the_text() {
 fn the_appearance_setting_switches_the_theme_and_is_kept() {
   let dir = tempfile::tempdir().expect("a temporary folder");
   let database = dir.path().join("orchester.db");
-  let settings = AppSettings::open(&database).expect("the settings open");
+  let settings = Workspace::new(AppDb::open(&database).expect("the settings open"));
   let appearance = Appearance::new(
     ThemeSetting::Dark,
     Arc::new(OnceLock::from(Mode::Light)),
@@ -249,7 +284,7 @@ fn the_appearance_setting_switches_the_theme_and_is_kept() {
     app.theme().palette_color(PaletteColor::TextPrimary),
     Color::from_hex("#18181B")
   );
-  let reopened = AppSettings::open(&database).expect("the settings open again");
+  let reopened = AppDb::open(&database).expect("the settings open again");
   assert_eq!(reopened.theme().expect("the theme is stored"), ThemeSetting::System);
 }
 

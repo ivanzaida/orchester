@@ -11,11 +11,12 @@ use orchester_app::{
   brand, i18n,
   mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
-  settings::AppSettings,
+  startup::Launch,
   system_icon, theme,
   ui::loader,
 };
 use orchester_store::StoreError;
+use orchester_workspace::workspace::Workspace;
 use tokio::runtime::Runtime;
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -23,14 +24,16 @@ use tokio::runtime::Runtime;
 const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCUS";
 
 fn main() {
-  app_log::install();
+  let log = app_log::install();
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
-  let settings = AppSettings::open_app_database()
-    .inspect_err(|error| tracing::error!(%error, "the app runs without its settings; nothing it changes is kept"))
-    .ok();
-  let appearance = appearance(&runtime, settings.as_ref());
+  // Started before the window exists: the data folder's lock, the session, the runners' client and
+  // where the window opens, or why there is no session.
+  let launch = Launch::begin(runtime.handle(), log);
+  let workspace = launch.workspace();
+  let appearance = appearance(&runtime, workspace);
   let mut app = App::new();
+  app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, appearance.mode());
   i18n::install(&app).expect("the bundled locale files are valid JSON; covered by tests/i18n.rs");
 
@@ -38,7 +41,7 @@ fn main() {
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);
   let link = WindowLink::default();
-  let window_control = stored(settings.as_ref(), AppSettings::mcp_window_control, "window control").flatten();
+  let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
   let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
   tracing::info!(
     window_control = mcp_settings.window_control(),
@@ -46,10 +49,12 @@ fn main() {
     "agents' control of the window"
   );
   // Started before the root mounts, so the status bar shows its port from the first frame.
-  let config = mcp::config(mcp_settings, &link, &appearance);
+  let hold = launch.services().map(|services| services.hold.clone());
+  let config = mcp::config(mcp_settings, &link, &appearance, hold);
   let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
   let mcp = McpStatus::of(server.as_ref(), mcp_settings);
-  tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
+  let start = launch.start();
+  tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
 
   #[cfg(feature = "devtools")]
   {
@@ -82,15 +87,17 @@ fn main() {
     .with_corner_radius(WindowCornerRadius::Rounded)
     .run();
 
-  // `run` returns once the window has closed: the server stops and its discovery file goes.
+  // `run` returns once the window has closed: the server stops and its discovery file goes, then the
+  // runners stop and the session records its end.
   drop(server);
+  launch.end();
 }
 
 /// The stored theme. The operating system's appearance is read on the runtime's blocking pool, never
 /// on the UI thread; startup waits for it only when the stored theme is System, before the window
 /// exists. Otherwise it arrives in the background, for a later choice of System.
-fn appearance(runtime: &Runtime, settings: Option<&AppSettings>) -> Appearance {
-  let theme = stored(settings, AppSettings::theme, "theme").unwrap_or_default();
+fn appearance(runtime: &Runtime, workspace: Option<&Workspace>) -> Appearance {
+  let theme = stored(workspace, Workspace::theme, "theme").unwrap_or_default();
   let system = Arc::new(OnceLock::new());
   let read = {
     let system = Arc::clone(&system);
@@ -106,16 +113,17 @@ fn appearance(runtime: &Runtime, settings: Option<&AppSettings>) -> Appearance {
   {
     tracing::error!(%error, "reading the system appearance failed");
   }
-  Appearance::new(theme, system, settings.cloned())
+  Appearance::new(theme, system, workspace.cloned())
 }
 
-/// What `read` finds in the settings; `None`, logged, when they are not open or cannot be read.
+/// What `read` finds in the application database; `None`, logged, when there is no session or it
+/// cannot be read.
 fn stored<T>(
-  settings: Option<&AppSettings>,
-  read: impl Fn(&AppSettings) -> Result<T, StoreError>,
+  workspace: Option<&Workspace>,
+  read: impl Fn(&Workspace) -> Result<T, StoreError>,
   what: &str,
 ) -> Option<T> {
-  read(settings?)
+  read(workspace?)
     .inspect_err(|error| tracing::error!(%error, setting = what, "cannot read a setting; using its default"))
     .ok()
 }

@@ -114,15 +114,20 @@ impl lurq::app::component::DevtoolsInspectable for TabSet {}
 impl Default for TabSet {
   /// One tab, at All projects.
   fn default() -> Self {
-    Self {
-      tabs: vec![Tab::new(TabId(1), Route::AllProjects)],
-      active: 0,
-      next_id: 2,
-    }
+    Self::at(Route::AllProjects)
   }
 }
 
 impl TabSet {
+  /// One tab, at `route`: where a session opens.
+  pub fn at(route: Route) -> Self {
+    Self {
+      tabs: vec![Tab::new(TabId(1), route)],
+      active: 0,
+      next_id: 2,
+    }
+  }
+
   pub fn tabs(&self) -> &[Tab] {
     &self.tabs
   }

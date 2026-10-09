@@ -99,10 +99,14 @@ impl Component for AppMenu {
 }
 
 impl AppMenu {
+  /// The menu's rows; a window without tabs (a startup screen) offers Quit only.
   fn menu(&self, ctx: &mut Ctx) -> Column {
-    let navigation = Navigation::of(ctx);
+    let navigation = ctx.use_context::<Navigation>();
     let window = ctx.window();
-    ENTRIES.iter().fold(
+    let entries = ENTRIES
+      .iter()
+      .filter(|entry| navigation.is_some() || matches!(entry, Some((_, _, _, Command::Quit))));
+    entries.fold(
       menu_panel("app-menu-list").width(Dimension::Px(MENU_WIDTH)),
       |menu, entry| {
         let Some((id, glyph, label_key, command)) = *entry else {
@@ -110,11 +114,13 @@ impl AppMenu {
         };
         let label = ctx.t(label_key);
         let (navigation, window) = (navigation.clone(), window.clone());
-        let item = MenuItem::new(id, label, move || match command {
-          Command::NewTab => navigation.open_tab(),
-          Command::AllProjects => navigation.go(Route::AllProjects),
-          Command::Settings => navigation.go(Route::Settings),
-          Command::Quit => window.request_close(),
+        let item = MenuItem::new(id, label, move || match (command, &navigation) {
+          (Command::NewTab, Some(navigation)) => navigation.open_tab(),
+          (Command::AllProjects, Some(navigation)) => navigation.go(Route::AllProjects),
+          (Command::Settings, Some(navigation)) => navigation.go(Route::Settings),
+          (Command::Quit, _) => window.request_close(),
+          // Only Quit is listed without tabs.
+          (Command::NewTab | Command::AllProjects | Command::Settings, None) => {}
         });
         menu.child(item.icon(glyph).render(ctx, &self.open))
       },

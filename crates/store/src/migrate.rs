@@ -103,9 +103,13 @@ fn apply(connection: &mut Connection, migrations: &[&str]) -> Result<(), StoreEr
   for migration in &migrations[found as usize..] {
     transaction.execute_batch(migration)?;
   }
-  let violations: i64 = transaction.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))?;
-  if violations > 0 {
-    return Err(StoreError::MigrationBrokeReferences(violations));
+  let references: i64 = transaction.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| row.get(0))?;
+  if references > 0 {
+    return Err(StoreError::MigrationBrokeReferences {
+      references,
+      found,
+      supported,
+    });
   }
   transaction.pragma_update(None, "user_version", supported)?;
   transaction.commit()?;
