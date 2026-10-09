@@ -26,14 +26,16 @@ pub(super) fn allowed(services: &Services, mut reasons: Vec<Message>) -> Result<
   Err(ToolError::refused("person_only", reasons))
 }
 
-/// What `profile` widens beyond the latest published version of profile `id`, or, before its first
-/// version, beyond the most restrictive permissions `provider` enforces here and no MCP server.
-pub(super) fn of_profile(
+/// Refused unless a person lets automation take what `profile` widens beyond the latest published version
+/// of profile `id` (before its first version: the most restrictive permissions `provider` enforces here and
+/// no MCP server). Approving automatically answers requests in a person's place, so it also needs *Let
+/// automation answer approvals*, as auto mode does.
+pub(super) fn check_profile(
+  services: &Services,
   db: &ProjectDb,
-  id: Option<ResourceId>,
-  profile: &AgentProfile,
+  (id, profile): (Option<ResourceId>, &AgentProfile),
   provider: AgentProvider,
-) -> Result<Vec<Message>, ToolError> {
+) -> Result<(), ToolError> {
   let latest = match id {
     Some(id) => db.latest_version::<AgentProfile>(id)?,
     None => None,
@@ -50,12 +52,8 @@ pub(super) fn of_profile(
       (body.permissions().clone(), body.mcp_servers().ids().to_vec())
     },
   );
-  let mut reasons: Vec<Message> = profile
-    .permissions()
-    .widenings_from(&base)
-    .into_iter()
-    .map(message)
-    .collect();
+  let widenings = profile.permissions().widenings_from(&base);
+  let mut reasons: Vec<Message> = widenings.iter().copied().map(message).collect();
   if profile
     .mcp_servers()
     .ids()
@@ -64,7 +62,14 @@ pub(super) fn of_profile(
   {
     reasons.push(Message::new("appMcp.widens.mcpServers"));
   }
-  Ok(reasons)
+  allowed(services, reasons)?;
+  if widenings.contains(&Widening::AutoApprove) && !services.workspace.automation_answers_approvals()? {
+    return Err(ToolError::refused(
+      "automation_not_allowed",
+      vec![Message::new("appMcp.errors.autoApproveNeedsAnswers")],
+    ));
+  }
+  Ok(())
 }
 
 fn message(widening: Widening) -> Message {

@@ -128,8 +128,8 @@ const SPECS: &[Spec] = &[
                   restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
                   person turned on Let automation change agent permissions in Settings › What automation may do: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
-                  tool calls, approving automatically. Left out, a new profile gets the most restrictive \
-                  permissions. Publish it with publish_profile.",
+                  tool calls, approving automatically (which also needs Let automation answer approvals). Left \
+                  out, a new profile gets the most restrictive permissions. Publish it with publish_profile.",
     schema: schema_for_type::<profile_input::SaveProfileDraft>,
     read_only: false,
   },
@@ -137,8 +137,9 @@ const SPECS: &[Spec] = &[
     name: "publish_profile",
     description: "Publishes an agent profile's draft as its next version, as Publish does, so pipeline steps can run \
                   it. Refused for a draft started from an older version than the latest, a connection that is gone \
-                  or does not run agents, permissions its CLI cannot enforce, or, as person_only, a draft broader \
-                  than the latest version while Let automation change agent permissions is off.",
+                  or does not run agents, permissions its CLI cannot enforce, as person_only a draft broader than \
+                  the latest version while Let automation change agent permissions is off, and as draft_changed a \
+                  draft that changed while it was checked.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: false,
   },

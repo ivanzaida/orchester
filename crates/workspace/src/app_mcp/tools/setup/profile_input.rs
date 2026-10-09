@@ -149,10 +149,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
     let servers = mcp_servers(&db, &args.mcp_servers)?;
     let profile = form(&args, &connection, &permissions, &servers)?;
     let id = existing.map(|entry| entry.id);
-    widening::allowed(
-      &services,
-      widening::of_profile(&db, id, &profile, connection.provider())?,
-    )?;
+    widening::check_profile(&services, &db, (id, &profile), connection.provider())?;
     let change = match existing {
       Some(entry) => ProfileChange::SaveDraft(entry.id, profile),
       None => ProfileChange::Create(profile),

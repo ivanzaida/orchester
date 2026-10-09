@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use super::{super::projects::InProject, connections::agent_by_id, widening};
 use crate::{
   agents::{
-    data::{ProfileChange, ProfileEntry, ProjectAgents, VersionState, apply_in},
+    data::{ProfileEntry, ProjectAgents, VersionState, publish_checked_in},
     form::stored_effort,
   },
   app_mcp::{
@@ -87,12 +87,10 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
         ));
       }
       let db = ProjectDb::open(&open.repo_root)?;
-      widening::allowed(
-        &services,
-        widening::of_profile(&db, Some(id), &entry.profile, connection.provider())?,
-      )?;
+      widening::check_profile(&services, &db, (Some(id), &entry.profile), connection.provider())?;
     }
-    apply_in(&open.repo_root, ProfileChange::Publish(id)).map_err(|error| publish_error(&error))?;
+    // Published only while the draft is the one just checked.
+    publish_checked_in(&open.repo_root, id, &entry.profile).map_err(|error| publish_error(&error))?;
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = agents
       .profile(id)
@@ -187,6 +185,7 @@ fn publish_error(error: &StoreError) -> ToolError {
   let code = match error {
     StoreError::NoDraft(_) => return no_draft(),
     StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
+    StoreError::DraftChanged(_) => "draft_changed",
     StoreError::Publish(PublishError::ConnectionMissing) => "connection_missing",
     StoreError::Publish(PublishError::Permissions(_)) => "permissions_not_enforced",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",

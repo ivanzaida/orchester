@@ -76,6 +76,16 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   auto["profile"] = json!("Builder 2");
   assert_person_only(&served.refused("save_profile_draft", &auto));
   served.let_automation_widen(true);
+  let answers = served.refused("save_profile_draft", &auto);
+  assert_eq!(
+    answers["code"], "automation_not_allowed",
+    "approving automatically needs both switches"
+  );
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("a person lets automation answer approvals");
   served.ok("save_profile_draft", &auto);
   served.let_automation_widen(false);
   assert_person_only(&served.refused(
