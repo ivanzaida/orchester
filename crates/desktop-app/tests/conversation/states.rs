@@ -163,3 +163,26 @@ fn drop_append_only(database: &Connection) {
       .expect("the trigger is dropped");
   }
 }
+
+#[test]
+fn timeline_an_agent_that_waits_for_the_person_says_so_without_a_spinner() {
+  let (mut window, seeded) = seeded("task-states");
+  for (title, waits) in [
+    ("Sync contacts with HubSpot", "waits for your answer · since "),
+    (
+      "Rate-limit messages from GitHub",
+      "waits for your decision on the plan · since ",
+    ),
+  ] {
+    let key = key_of(&seeded, title);
+    open(&mut window, &seeded, &key, "conversation-chat");
+    window.until("the waiting line", |window| {
+      window
+        .texts("conversation-working")
+        .is_some_and(|texts| texts.iter().any(|text| text.contains(waits)))
+    });
+    let line = window.texts("conversation-working").expect("the line").join(" ");
+    assert!(line.ends_with("its active time stopped"), "{title}: {line}");
+    assert!(!line.contains("is working"), "{title}: {line}");
+  }
+}
