@@ -159,11 +159,10 @@ impl ConversationTab {
       detail: task.detail.clone(),
       toggles: self.toggles.clone(),
       working: working_invocations(run, live),
+      pending: loaded.pending.clone(),
+      decided: loaded.decided.clone(),
     });
-    let working = (live && !asking && run.run.status() == &RunStatus::Running).then(|| timeline::Working {
-      agent: run.current_step().and_then(|step| step.agent.clone()),
-      last: loaded.entries.last().map(|entry| entry.at),
-    });
+    let working = working_line(run, conversation, (&items, &loaded.entries), asking);
     let arrived = arrivals(&items, &loaded.entries);
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
     (
@@ -217,6 +216,32 @@ fn arrivals(items: &[Item], entries: &[Entry]) -> usize {
     .filter(|entry| !matches!(entry.kind, EntryKind::Usage(_)))
     .count();
   visible + items.iter().filter(|item| !from_transcript(item)).count()
+}
+
+/// The line under the chat while the run goes on: its agent waits for the person since the first request
+/// that waits for them (no spinner), or works, while the run runs and no agent waits in its turn.
+fn working_line(
+  run: &RunView,
+  conversation: &Conversation,
+  (items, entries): (&[Item], &[Entry]),
+  asking: bool,
+) -> Option<timeline::Working> {
+  let agent = run.current_step().and_then(|step| step.agent.clone());
+  let goes_on = matches!(conversation.state, PanelState::Live | PanelState::Waiting);
+  let waits = items
+    .iter()
+    .find(|item| items::waits_for_you(item))
+    .filter(|_| goes_on)
+    .map(|item| timeline::Wait {
+      since: item.at,
+      plan: matches!(item.kind, ItemKind::Plan(_)),
+    });
+  let works = conversation.state == PanelState::Live && !asking && run.run.status() == &RunStatus::Running;
+  (waits.is_some() || works).then(|| timeline::Working {
+    agent,
+    last: entries.last().map(|entry| entry.at),
+    waits,
+  })
 }
 
 /// The invocations of `run` whose agent works now; none while no agent works (`live` false).

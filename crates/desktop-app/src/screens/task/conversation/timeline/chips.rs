@@ -50,19 +50,40 @@ pub(super) fn groups(ctx: &mut Ctx, timeline: &Timeline, chips: &[Chip]) -> Vec<
   out
 }
 
+/// Where a group's command without an end stands.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Unfinished {
+  /// Its agent works: it runs.
+  Runs,
+  /// A request to run it waits for the person: it has not started.
+  AwaitsApproval,
+  /// No agent works on it: it has no end.
+  Ended,
+}
+
+impl Unfinished {
+  fn of(timeline: &Timeline, group: &ToolGroup) -> Self {
+    let (Some(command), Some(entry)) = (&group.summary.running, group.entries.last()) else {
+      return Self::Ended;
+    };
+    if timeline.awaits_approval(entry.invocation, command) {
+      Self::AwaitsApproval
+    } else if timeline.works(entry.invocation) {
+      Self::Runs
+    } else {
+      Self::Ended
+    }
+  }
+}
+
 /// The chip; pressed, it opens or folds its group.
 fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
   let summary = &chip.group.summary;
-  // Its command still runs only while its agent works; otherwise it has no end.
-  let works = chip
-    .group
-    .entries
-    .last()
-    .is_some_and(|entry| timeline.works(entry.invocation));
-  let glyph = if summary.running.is_some() && works {
-    Icon::LoaderCircle
-  } else {
-    Icon::Wrench
+  let unfinished = Unfinished::of(timeline, &chip.group);
+  let glyph = match (&summary.running, unfinished) {
+    (Some(_), Unfinished::Runs) => Icon::LoaderCircle,
+    (Some(_), Unfinished::AwaitsApproval) => Icon::Hand,
+    _ => Icon::Wrench,
   };
   let failure = summary.failure().map(|failure| {
     Text::new(&message_text(ctx, &failure))
@@ -85,7 +106,7 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
     .child(
-      Text::new(&summary_text(ctx, &chip.group, works))
+      Text::new(&summary_text(ctx, &chip.group, unfinished))
         .id("conversation-group-summary")
         .variant(ExtraTypography::Note.role())
         .color(PaletteColor::TextSecondary)
@@ -151,7 +172,7 @@ fn rows(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip) -> Element {
 }
 
 /// *Read 3 files · searched 2 times · ran pnpm test*, in the fixed order of its kinds.
-fn summary_text(ctx: &Ctx, group: &ToolGroup, works: bool) -> String {
+fn summary_text(ctx: &Ctx, group: &ToolGroup, unfinished: Unfinished) -> String {
   let summary = &group.summary;
   let count = |(one, other): (&str, &str), count: usize| {
     if count == 1 {
@@ -190,10 +211,10 @@ fn summary_text(ctx: &Ctx, group: &ToolGroup, works: bool) -> String {
     ));
   }
   if let Some(running) = &summary.running {
-    let key = if works {
-      "conversation.group.running"
-    } else {
-      "conversation.group.unfinished"
+    let key = match unfinished {
+      Unfinished::Runs => "conversation.group.running",
+      Unfinished::AwaitsApproval => "conversation.group.awaitsApproval",
+      Unfinished::Ended => "conversation.group.unfinished",
     };
     parts.push(ctx.t_args(key, [("command", &**running)]));
   }

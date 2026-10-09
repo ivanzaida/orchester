@@ -8,6 +8,7 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, QuestionRefusal, RunnerProblem},
+  run::DecidedBy,
   tokens::compact_tokens,
 };
 use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
@@ -16,12 +17,13 @@ use super::{mcp::subject_key, native, shown::Shown};
 use crate::ui::icon::Icon;
 
 /// A problem row that reads better titled than as its transcript entry: a command denied (`agent` was told
-/// why), a request that ended without a decision, a question Orchester did not put to the person.
-pub(super) fn titled(ctx: &Ctx, entry: &Entry, agent: &str) -> Option<Shown> {
+/// why; `answered`: who denied the run's request to run it, when one did), a request that ended without a
+/// decision, a question Orchester did not put to the person.
+pub(super) fn titled(ctx: &Ctx, entry: &Entry, (agent, answered): (&str, Option<DecidedBy>)) -> Option<Shown> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => Some(match &command.native {
       Some(call) => native::call(ctx, command, call, false),
-      None => denied_command(ctx, command, agent),
+      None => denied_command(ctx, command, (agent, answered)),
     }),
     EntryKind::Problem(found @ (RunnerProblem::DecisionInterrupted { .. } | RunnerProblem::QuestionRefused { .. })) => {
       let (title, body) = text(ctx, found);
@@ -31,8 +33,9 @@ pub(super) fn titled(ctx: &Ctx, entry: &Entry, agent: &str) -> Option<Shown> {
   }
 }
 
-/// *Command denied · cargo publish --dry-run*: who denied it and what `agent` was told.
-fn denied_command(ctx: &Ctx, command: &CommandEntry, agent: &str) -> Shown {
+/// *Command denied · cargo publish --dry-run*: who denied it, as its mark or the run's `answered` request
+/// says, and what `agent` was told; without either, the run's permissions did.
+fn denied_command(ctx: &Ctx, command: &CommandEntry, (agent, answered): (&str, Option<DecidedBy>)) -> Shown {
   let decided = match &command.mark {
     Some(CommandMark::Decided(mark)) => Some(mark),
     _ => None,
@@ -50,9 +53,10 @@ fn denied_command(ctx: &Ctx, command: &CommandEntry, agent: &str) -> Shown {
   };
   let denial = decided.filter(|_| command.mark.as_ref().is_some_and(CommandMark::is_denial));
   let told = denial.and_then(|mark| mark.decision.told.as_deref());
-  let body = match (denial, told) {
+  let denied_by = denial.map(|mark| mark.decision.decided_by).or(answered);
+  let body = match (denied_by, told) {
     (Some(_), Some(told)) => ctx.t_args("conversation.problem.told", [("agent", agent), ("message", told)]),
-    (Some(mark), None) if mark.decision.decided_by.by_automation() => ctx.t("conversation.problem.deniedByAutomation"),
+    (Some(by), None) if by.by_automation() => ctx.t("conversation.problem.deniedByAutomation"),
     (Some(_), None) => ctx.t("conversation.problem.deniedByYou"),
     (None, _) => ctx.t("conversation.problem.notAllowed"),
   };

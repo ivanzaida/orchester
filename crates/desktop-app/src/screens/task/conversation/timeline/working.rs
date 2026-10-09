@@ -24,12 +24,22 @@ use crate::{
 
 const TICK: Duration = Duration::from_secs(1);
 
-/// Who works, and when the newest entry arrived; `None` before the first.
+/// Who works, and when the newest entry arrived (`None` before the first); or what it waits for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in super::super) struct Working {
   /// The agent's role; `None` once its profile is gone.
   pub(in super::super) agent: Option<Arc<str>>,
   pub(in super::super) last: Option<Timestamp>,
+  /// The agent waits for the person instead of working.
+  pub(in super::super) waits: Option<Wait>,
+}
+
+/// What an agent waits for, since its request: an answer (a question, a tool request) or a decision on its
+/// plan. Its active time is stopped meanwhile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in super::super) struct Wait {
+  pub(in super::super) since: Timestamp,
+  pub(in super::super) plan: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Working {}
@@ -54,6 +64,9 @@ impl Component for WorkingLine {
     // Read so every tick renders the elapsed time again.
     self.tick.get();
     let working = ctx.props::<Working>().clone();
+    if let Some(wait) = working.waits {
+      return line(Icon::Hand, &waits_text(ctx, working.agent.as_deref(), wait));
+    }
     let text = match (working.last, working.agent.as_deref()) {
       (Some(last), agent) => {
         // A clock set back since the entry arrived reads as just now.
@@ -67,11 +80,29 @@ impl Component for WorkingLine {
       (None, Some(agent)) => ctx.t_args("conversation.workingStarted", [("agent", agent)]),
       (None, None) => ctx.t("conversation.workingStartedUnnamed"),
     };
-    Row::new()
-      .id("conversation-working")
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::TextMuted))
-      .child(Text::new(&text).variant(ExtraTypography::Note.role()))
+    line(Icon::LoaderCircle, &text)
   }
+}
+
+/// *Builder waits for your answer · since 16:44, its active time stopped* (under `Approval card · waiting` in
+/// `YhiGC`).
+fn waits_text(ctx: &Ctx, agent: Option<&str>, wait: Wait) -> Arc<str> {
+  let since = display::clock(wait.since);
+  let key = match (agent.is_some(), wait.plan) {
+    (true, false) => "conversation.waitsAnswer",
+    (true, true) => "conversation.waitsDecision",
+    (false, false) => "conversation.waitsAnswerUnnamed",
+    (false, true) => "conversation.waitsDecisionUnnamed",
+  };
+  ctx.t_args(key, [("agent", agent.unwrap_or_default()), ("since", since.as_str())])
+}
+
+/// The line: `glyph` (a loader turns) and `text`.
+fn line(glyph: Icon, text: &str) -> Row {
+  Row::new()
+    .id("conversation-working")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(Text::new(text).variant(ExtraTypography::Note.role()))
 }

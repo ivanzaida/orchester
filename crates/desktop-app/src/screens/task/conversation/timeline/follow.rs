@@ -2,8 +2,8 @@
 //! its newest row in view while it follows, or the card that waits for the person until the person scrolls;
 //! any scroll up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30 pill on
 //! `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from its
-//! sides, over a 0 4 16 shadow), centered under the chat, *N* counting what arrived since; pressing it, or
-//! sending a message ([`Follow::follow_again`]), goes to the end and follows again.
+//! sides, over a 0 4 16 shadow), floating centered over the chat's foot, *N* counting what arrived since; pressing it,
+//! or sending a message ([`Follow::follow_again`]), goes to the end and follows again.
 
 use std::sync::Arc;
 
@@ -16,10 +16,7 @@ use lurq::{
   },
   components::{Column, Row, Text, VirtualizedList},
   core::Signal,
-  layout::{
-    Alignment,
-    layout_kind::{Justify, ScrollState},
-  },
+  layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::tasks::timeline::{self, Item, view::Shown};
@@ -199,13 +196,7 @@ impl Follow {
       .box_shadow(ConversationShadow::Jump.role())
       .child(icon(Icon::ArrowDown, IconSize::Base, PaletteColor::TextSecondary))
       .child(Text::new(&label).variant(TypographyStyle::Label).nowrap());
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding_vertical(SpacingSize::Sm)
-      .justify(Justify::Center)
-      .align_items(Alignment::Center)
-      .child(button)
-      .into()
+    Row::new().padding_bottom(SpacingSize::Sm).child(button).into()
   }
 
   /// What holds a following chat at its end, mounted after the list ([`FollowEnd`]).
