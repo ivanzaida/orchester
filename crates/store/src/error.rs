@@ -138,6 +138,19 @@ pub enum StoreError {
 }
 
 impl StoreError {
+  /// Whether the database file is damaged or is not a database at all, as opposed to one that is busy,
+  /// refused or cannot be reached: what it holds cannot be trusted.
+  pub fn is_damaged(&self) -> bool {
+    match self {
+      Self::Corrupt { .. } => true,
+      Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _)) => matches!(
+        failure.code,
+        rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase
+      ),
+      _ => false,
+    }
+  }
+
   pub(crate) fn io(path: impl Into<PathBuf>) -> impl FnOnce(io::Error) -> Self {
     let path = path.into();
     move |source| Self::Io { path, source }
