@@ -31,17 +31,43 @@ fn reply(result: Result<Value, ToolError>) -> Result<Value, String> {
   result.map_err(|error| error.to_json().to_string())
 }
 
-/// A route as the tools show it: its screen's name, its path and the parameters `navigate` takes.
+/// A route as the tools show it: its screen's name, its path and the parameters `navigate` takes, a tab
+/// always and the others when the route has them.
 pub fn route_json(route: &Route) -> Value {
   let mut params = Map::new();
-  if let Some(project) = route.project() {
+  if let Route::Project(project, page) = route {
     params.insert("project".to_owned(), json!(project.to_string()));
-  }
-  if let Route::Project(_, ProjectPage::Task(key, tab)) = route {
-    params.insert("key".to_owned(), json!(key.to_string()));
-    params.insert("tab".to_owned(), json!(tab.name()));
+    page_params(page, &mut params);
   }
   json!({ "name": route.screen().name(), "path": route.path(), "params": params })
+}
+
+fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
+  let mut insert = |name: &str, value: &str| {
+    params.insert(name.to_owned(), json!(value));
+  };
+  match page {
+    ProjectPage::Overview(tab) => insert("tab", tab.name()),
+    ProjectPage::Tasks(list) => {
+      insert("tab", list.tab().name());
+      if let Some(text) = list.search() {
+        insert("q", text);
+      }
+      if let Some(key) = list.highlight() {
+        insert("highlight", &key.to_string());
+      }
+    }
+    ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::Task(key, view) => {
+      insert("key", &key.to_string());
+      insert("tab", view.tab().name());
+      if let Some(file) = view.file() {
+        insert("file", file.path());
+        insert("from", file.source().name());
+      }
+    }
+    _ => {}
+  }
 }
 
 /// The string argument `name`, if given.

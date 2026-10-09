@@ -22,6 +22,9 @@
       "settings": "Settings",
       "overview": "Overview",
       "tasks": "Tasks",
+      "newTask": "New task",
+      "editTask": "Edit task",
+      "editTaskOf": "Edit {{key}}",
       "task": "Task",
       "taskTab": "{{key}} · {{tab}}",
       "pullRequests": "Pull requests",
@@ -40,7 +43,11 @@
     },
     "notFound": {
       "title": "Nothing here",
-      "body": "No screen has the address {{path}}."
+      "noScreen": "No screen has the address {{path}}.",
+      "projectId": "{{value}} in {{path}} is not a project id.",
+      "taskKey": "{{value}} in {{path}} is not a task key.",
+      "unexpectedParam": "The screen at {{path}} does not take {{param}} as given.",
+      "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
       "mcpListening": "MCP on :{{port}}",

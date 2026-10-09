@@ -39,8 +39,10 @@ icons! {
   KeyRound => '\u{e4a3}',
   LayoutDashboard => '\u{e1c1}',
   ListChecks => '\u{e1d0}',
+  ListPlus => '\u{e23f}',
   LogOut => '\u{e10e}',
   Minus => '\u{e11c}',
+  Pencil => '\u{e1f9}',
   Plug => '\u{e37f}',
   Plus => '\u{e13d}',
   RadioTower => '\u{e404}',
@@ -61,13 +63,16 @@ pub fn glyph(icon: Icon) -> String {
   icon.glyph().to_string()
 }
 
-/// The icon of a screen in the sidebar, the tabs and its placeholder (`Nav · *` in `q9mf0k`).
+/// The icon of a screen in the sidebar, the tabs and its placeholder (`Nav · *` in `q9mf0k`; the tabs of
+/// New task and Edit task in `s7jKkA` and `Qp1B0`).
 pub const fn screen_icon(screen: Screen) -> Icon {
   match screen {
     Screen::AllProjects => Icon::Folders,
     Screen::Settings => Icon::Settings,
     Screen::Overview => Icon::LayoutDashboard,
     Screen::Tasks | Screen::Task => Icon::ListChecks,
+    Screen::NewTask => Icon::ListPlus,
+    Screen::EditTask => Icon::Pencil,
     Screen::PullRequests => Icon::GitPullRequest,
     Screen::Usage => Icon::ChartColumn,
     Screen::Pipelines => Icon::Workflow,

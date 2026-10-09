@@ -42,7 +42,8 @@ impl Component for Sidebar {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let route = Route::parse(&ctx.route_path());
+    // A path that names no route selects nothing; the screen says why it names none.
+    let route = Route::parse(&ctx.route_path()).ok();
     let navigation = Navigation::of(ctx);
     let selected = route.as_ref().map(Route::nav_screen);
     let project = route.as_ref().and_then(Route::project);

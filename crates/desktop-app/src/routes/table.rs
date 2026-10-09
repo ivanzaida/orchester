@@ -1,5 +1,6 @@
 //! The router's table: every screen's patterns inside the shell, and a fallback inside the shell for
-//! paths that name nothing.
+//! paths that name nothing. Every entry shows `screens::screen`, which reads the whole path, query
+//! included, as a route or as why it names none.
 
 use lurq::router::Routes;
 
@@ -12,6 +13,6 @@ pub fn routes() -> Routes {
       .into_iter()
       .flat_map(Screen::patterns)
       .fold(routes, |routes, pattern| routes.route(&pattern, screens::screen))
-      .fallback(screens::not_found)
+      .fallback(screens::screen)
   })
 }

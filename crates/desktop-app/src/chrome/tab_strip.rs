@@ -207,8 +207,8 @@ fn close_button(navigation: Navigation, tab: &Tab) -> Element {
     .into()
 }
 
-/// The tab's label: `<project> · <screen>`, a task by its key, the app's settings by name; `None` for
-/// All projects, which shows its icon alone.
+/// The tab's label: `<project> · <screen>`, a task by its key and its Edit task as `Edit <key>`
+/// (`Qp1B0`), the app's settings by name; `None` for All projects, which shows its icon alone.
 fn label(ctx: &mut Ctx, route: &Route) -> Option<String> {
   let (project, page) = match route {
     Route::AllProjects => return None,
@@ -217,6 +217,9 @@ fn label(ctx: &mut Ctx, route: &Route) -> Option<String> {
   };
   let page = match page {
     ProjectPage::Task(key, _) => key.to_string(),
+    ProjectPage::EditTask(key) => ctx
+      .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
+      .to_string(),
     page => ctx.t(page.screen().title_key()).to_string(),
   };
   Some(
