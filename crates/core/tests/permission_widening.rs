@@ -84,7 +84,7 @@ fn widening_names_every_broader_setting() {
   let mut asked = base.clone();
   asked.set_interactive_tool_approvals(true);
   assert_eq!(base.widenings_from(&asked), [Widening::ToolCallsUnasked]);
-  let mut auto = base.clone();
+  let mut auto = base;
   auto.set_auto_approve(true);
   assert!(
     auto.widenings_from(&auto).is_empty(),
