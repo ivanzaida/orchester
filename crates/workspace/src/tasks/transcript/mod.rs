@@ -12,6 +12,7 @@
 mod ended;
 mod mcp;
 mod native;
+mod text;
 
 use std::sync::Arc;
 
@@ -25,7 +26,11 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::{mcp::McpToolEntry, native::ApprovalEntry};
+pub use self::{
+  mcp::McpToolEntry,
+  native::ApprovalEntry,
+  text::{command_preview, in_worktree},
+};
 
 /// What one transcript entry shows.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -24,7 +24,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::{ProjectId, StepExecutionId},
+  id::{InvocationId, ProjectId, StepExecutionId},
   project::TaskKey,
 };
 use orchester_workspace::tasks::{
@@ -33,6 +33,7 @@ use orchester_workspace::tasks::{
     Item, ItemKind,
     view::{Row, Shown},
   },
+  transcript::{Entry, EntryKind},
 };
 
 pub(super) use self::{divider::step_label, follow::Follow, message::person_message, working::Working};
@@ -50,9 +51,17 @@ pub(super) struct Timeline {
   /// The task, for the names and numbers of its run's steps.
   pub(super) detail: Arc<TaskDetail>,
   pub(super) toggles: Toggles,
+  /// The run's invocations whose agent works now: only their unfinished calls run. While no agent works
+  /// (the run waits, paused or was interrupted), it is empty, and an unfinished call has no end.
+  pub(super) working: Arc<[InvocationId]>,
 }
 
 impl Timeline {
+  /// Whether invocation `invocation` works now.
+  fn works(&self, invocation: InvocationId) -> bool {
+    self.working.contains(&invocation)
+  }
+
   fn of(ctx: &mut Ctx) -> Self {
     ctx
       .use_context::<Self>()
@@ -141,14 +150,15 @@ impl RowProps {
 }
 
 /// The chat of `shown`, the rows of the timeline `items`, then `working`, the working line while an agent
-/// works; *Jump to latest* under it while it does not follow the run.
+/// works; *Jump to latest* under it while it does not follow the run, with what arrived since (`arrived`
+/// counts the transcript's entries and the conversation's messages so far).
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
   (shown, items): (&Shown, &[Item]),
-  working: Option<Working>,
+  (working, arrived): (Option<Working>, usize),
 ) -> Element {
-  let reveal = follow.follow(shown, items);
+  let reveal = follow.follow(shown, items, arrived);
   let rows: Arc<Vec<RowProps>> = Arc::new(
     shown
       .rows
@@ -158,13 +168,13 @@ pub(super) fn chat(
       .map(|line| RowProps { line })
       .collect(),
   );
-  let list = follow.list(VirtualizedList::new_shared(ctx, rows), shown.rows.len(), reveal);
+  let list = follow.list(VirtualizedList::new_shared(ctx, rows), arrived, reveal);
   let list = list
     .list_key("conversation-timeline")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .mount_keyed::<RowView, _, _, _>(|row| row.key().to_string(), Clone::clone);
-  let jump = (!follow.following.get()).then(|| follow.jump(ctx, shown.rows.len()));
+  let jump = (!follow.following.get()).then(|| follow.jump(ctx, arrived));
   Column::new()
     .id("conversation-chat")
     .width(Dimension::Pct(100.0))
@@ -175,6 +185,25 @@ pub(super) fn chat(
     .child(follow.end(ctx))
     .with_children(jump)
     .into()
+}
+
+/// `shown` without the tool groups that only report a turn's token usage: the step's divider carries its
+/// tokens. An agent's row left with neither a message nor a group goes too.
+pub(super) fn without_usage(mut shown: Shown) -> Shown {
+  for row in &mut shown.rows {
+    if let Row::Agent(agent) = row {
+      agent.chips.retain(|chip| !only_usage(&chip.group.entries));
+    }
+  }
+  shown
+    .rows
+    .retain(|row| !matches!(row, Row::Agent(agent) if agent.text.is_none() && agent.chips.is_empty()));
+  shown
+}
+
+/// Whether `entries` only report token usage.
+fn only_usage(entries: &[Entry]) -> bool {
+  entries.iter().all(|entry| matches!(entry.kind, EntryKind::Usage(_)))
 }
 
 struct RowView;

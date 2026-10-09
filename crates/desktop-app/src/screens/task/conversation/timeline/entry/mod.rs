@@ -48,7 +48,7 @@ const OUTPUT_LINES: usize = 200;
 
 /// `entry`'s row in an open tool group; `key` keeps whether a person opened it.
 pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &Entry) -> Element {
-  let shown = shown::shown(ctx, entry);
+  let shown = shown::shown(ctx, entry, timeline.works(entry.invocation));
   let id = format!("conversation-{key}");
   let open = shown.collapsible && shown.has_details() && timeline.toggles.is_open(key, false);
   let line = Row::new()
@@ -61,7 +61,11 @@ pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry
     .child(
       Text::new(&shown.title)
         .id(format!("{id}-title"))
-        .variant(TypographyStyle::Mono)
+        .variant(if shown.code {
+          TypographyStyle::Mono
+        } else {
+          TypographyStyle::Description
+        })
         .color(PaletteColor::TextSecondary)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
@@ -155,7 +159,8 @@ pub(super) fn problem_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, en
     .and_then(|run| run.step_of(entry.execution))
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| "".into());
-  let shown = problem::titled(ctx, entry, &agent).unwrap_or_else(|| shown::shown(ctx, entry));
+  let shown =
+    problem::titled(ctx, entry, &agent).unwrap_or_else(|| shown::shown(ctx, entry, timeline.works(entry.invocation)));
   let id = format!("conversation-problem-{key}");
   let explained = shown
     .body

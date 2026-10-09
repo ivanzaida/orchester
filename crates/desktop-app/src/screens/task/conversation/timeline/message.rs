@@ -152,7 +152,7 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element 
   bubble_column(
     ctx,
     &format!("conversation-message-{}", entry.id),
-    (&entry.body, entry.at),
+    (&entry.body, Some(entry.at)),
     Some(delivery),
   )
   .describe("delivery", delivery_name(&entry.state))
@@ -161,11 +161,16 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element 
 
 /// A note the person returned the work with, as their message, without a delivery line.
 pub(super) fn person_note(ctx: &mut Ctx, id: &str, note: &Arc<str>, at: Option<Timestamp>) -> Element {
-  let at = at.unwrap_or_else(Timestamp::now);
   bubble_column(ctx, id, (note, at), None).into()
 }
 
-fn bubble_column(ctx: &mut Ctx, id: &str, (body, at): (&Arc<str>, Timestamp), delivery: Option<Element>) -> Column {
+/// *You*, the time when it is known, the bubble and `delivery`.
+fn bubble_column(
+  ctx: &mut Ctx,
+  id: &str,
+  (body, at): (&Arc<str>, Option<Timestamp>),
+  delivery: Option<Element>,
+) -> Column {
   let head = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -174,11 +179,11 @@ fn bubble_column(ctx: &mut Ctx, id: &str, (body, at): (&Arc<str>, Timestamp), de
         .variant(TypographyStyle::FieldLabel)
         .nowrap(),
     )
-    .child(
+    .with_children(at.map(|at| {
       Text::new(&display::clock(at))
         .variant(TypographyStyle::Caption)
-        .nowrap(),
-    );
+        .nowrap()
+    }));
   let said = text(ctx, &format!("{id}-text"), body);
   let bubble = Column::new()
     .id(format!("{id}-bubble"))

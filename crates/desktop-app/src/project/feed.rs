@@ -54,7 +54,8 @@ pub struct ProjectFeed {
   /// Counts the changes automation made to the project through Orchester's MCP server, by kind: the
   /// screens that show what changed read it again in place.
   pub outside: Signal<OutsideCounts>,
-  /// The project's merge and worktree-removal operations, which outlive a task page.
+  /// The project's merge and worktree-removal operations, which outlive a task page: its part of the
+  /// session's registry (`Services::jobs`), so what a page or automation started shows here.
   pub jobs: IntegrationJobs,
   /// How those operations stand.
   pub job_state: Signal<ProjectJobState>,
@@ -69,8 +70,8 @@ impl PartialEq for ProjectFeed {
 impl lurq::app::component::DevtoolsInspectable for ProjectFeed {}
 
 impl ProjectFeed {
-  pub(super) fn new() -> Self {
-    let jobs = IntegrationJobs::default();
+  /// An empty feed that follows `jobs`, the project's operations in the session's registry.
+  pub(super) fn new(jobs: IntegrationJobs) -> Self {
     Self {
       tasks: Signal::new(TasksState::Loading),
       stale: Signal::new(None),
