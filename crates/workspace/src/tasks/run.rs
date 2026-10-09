@@ -68,7 +68,7 @@ impl QueueFailure {
       Self::Claim(refusal) => vec![refusal.message()],
       Self::Preflight(problems) => problems.iter().map(preflight_message).collect(),
       Self::Queue(_) => vec![Message::new("runs.start.incomplete")],
-      Self::Changed => vec![Message::new("tasks.conflict.changedMeanwhile")],
+      Self::Changed => vec![messages::task_changed_meanwhile()],
     }
   }
 }

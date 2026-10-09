@@ -95,6 +95,7 @@ pub struct SelectField<T: SignalValue> {
   name: Arc<str>,
   value: Signal<T>,
   options: Vec<SelectOption<T>>,
+  placeholder: Option<Arc<str>>,
   width: Dimension,
 }
 
@@ -116,8 +117,15 @@ where
       name: name.into(),
       value,
       options,
+      placeholder: None,
       width: Dimension::Pct(100.0),
     }
+  }
+
+  /// What the box says while no option is chosen: `value` holds none of the options.
+  pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
+    self.placeholder = Some(placeholder.into());
+    self
   }
 
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
@@ -126,12 +134,15 @@ where
   }
 
   pub fn render(self, ctx: &Ctx) -> Element {
-    let select = Select::new(self.value)
+    let mut select = Select::new(self.value)
       .name(self.name.clone())
       .options(self.options)
       .width(self.width)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .style(select_style(ctx));
+    if let Some(placeholder) = self.placeholder {
+      select = select.placeholder(placeholder);
+    }
     // lurq's select takes no accessible name of its own; tools read it from the select's row.
     Row::new()
       .width(self.width)

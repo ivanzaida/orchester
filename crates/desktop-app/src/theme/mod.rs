@@ -17,6 +17,8 @@ mod palette;
 mod shadow;
 mod shell;
 mod startup;
+mod task;
+mod task_form;
 mod tasks;
 mod typography;
 
@@ -33,6 +35,8 @@ pub use self::{
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
+  task::{TaskSpacing, TaskText},
+  task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
   tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
@@ -52,6 +56,8 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  task::install(theme);
+  task_form::install(theme);
   tasks::install(theme);
   shell::install(theme);
   theme.set_shadows(shadow::shadows());

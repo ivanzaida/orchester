@@ -161,3 +161,16 @@ fn feed_hold_reads_keeps_the_first_reading_loading() {
   hold.set(false);
   wait_for_titles(&mut window, &feed, &[]);
 }
+
+#[test]
+fn feed_follows_the_operations_the_session_shares() {
+  let (mut window, feed) = kontur_tasks();
+  let services = window.launch.services().expect("the session started").clone();
+  let shared = services.jobs.of(project_id());
+  assert!(feed.jobs == shared, "the feed's operations are the session's registry");
+  // A removal automation made through Orchester's MCP server, as its tool counts it.
+  shared.count_outside_removal();
+  window.until("the feed to hear of the removal", |_| {
+    feed.job_state.get_untracked().removed_outside() == 1
+  });
+}

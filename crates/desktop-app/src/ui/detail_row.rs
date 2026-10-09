@@ -6,7 +6,7 @@ use lurq::{
   app::theme::{PaletteColor, SpacingSize, TypographyStyle},
   components::{Row, Text},
   layout::Alignment,
-  node::{dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use crate::theme::{ExtraSpacing, ExtraTypography};
@@ -29,6 +29,17 @@ pub fn detail_row(id: &str, key: &str, value: &str, kind: DetailValue) -> Row {
     DetailValue::Text => ExtraTypography::Prose.role(),
     DetailValue::Mono => TypographyStyle::Mono,
   };
+  let value = Text::new(value)
+    .id(id.to_owned())
+    .variant(typography)
+    .color(PaletteColor::TextPrimary)
+    .flex(1.0);
+  detail_row_of(id, key, value)
+}
+
+/// `key` beside a value of more than one line or style, e.g. a lead line over the value (`Detail ·
+/// Permissions` `Up8y8`); the key's element id is `<id>-key`, and `value` takes the rest of the row.
+pub fn detail_row_of(id: &str, key: &str, value: impl Into<Element>) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Pair.role()))
@@ -41,11 +52,5 @@ pub fn detail_row(id: &str, key: &str, value: &str, kind: DetailValue) -> Row {
         .color(PaletteColor::TextMuted)
         .width(Dimension::Px(KEY_WIDTH)),
     )
-    .child(
-      Text::new(value)
-        .id(id.to_owned())
-        .variant(typography)
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0),
-    )
+    .child(value)
 }
