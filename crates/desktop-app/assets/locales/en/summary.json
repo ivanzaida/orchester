@@ -19,8 +19,8 @@
       "pausingBody": "{{agent}} finishes what it is doing at {{step}}; the run then pauses with its work saved on {{branch}}.",
       "askingTitle": "{{agent}} asks you",
       "askingBody": "{{step}} waits for your answer in the conversation.",
-      "planTitle": "The plan of {{step}} waits for your review",
-      "planBody": "{{agent}} wrote a plan; the step goes on once you decide.",
+      "planTitle": "Your approval is needed · plan v{{version}}",
+      "planBody": "{{agent}} wrote a plan for {{step}}; the step goes on once you decide.",
       "approvalTitle": "{{agent}} asks for your approval",
       "approvalBody": "{{step}} waits since {{time}} for a request its profile does not allow. Answer it in the conversation.",
       "pausedTitle": "Paused at checkpoint {{checkpoint}}",
@@ -59,7 +59,10 @@
       "cancelledTitle": "Canceled",
       "cancelledBody": "Nothing runs any more; its committed work stays on {{branch}}.",
       "cancelledBeforeStartTitle": "Canceled before it started",
-      "cancelledBeforeStartBody": "No step ran."
+      "cancelledBeforeStartBody": "No step ran.",
+      "readyTitle": "Draft · ready to run",
+      "readyBody": "Run queues it and starts its first run.",
+      "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}"
     },
     "steps": {
       "title": "Steps",
@@ -130,7 +133,8 @@
         "cancel": "Cancel",
         "confirmOne": "Remove worktree",
         "confirmOther": "Remove worktrees"
-      }
+      },
+      "lost": "No runner is connected; the run continues once one is."
     },
     "thisRun": {
       "title": "This run",
@@ -170,10 +174,23 @@
       "networkOn": "Network on",
       "worktree": "Worktree",
       "worktreeRemoved": "Removed at {{time}}",
-      "notChosen": "Not chosen yet"
+      "notChosen": "Not chosen yet",
+      "noCheckpoint": "None yet"
     },
     "thisTask": {
       "title": "This task"
+    },
+    "runDetails": {
+      "title": "Run details",
+      "project": "Project",
+      "base": "Base revision",
+      "branch": "Working branch",
+      "duration": "Duration",
+      "durationValue": "{{minutes}} min · {{start}} – {{end}}",
+      "tokens": "Tokens used",
+      "tokensNoLimit": "{{used}} · no limit",
+      "tokensValue": "{{used}} of {{budget}}",
+      "agents": "Agents"
     }
   }
 }

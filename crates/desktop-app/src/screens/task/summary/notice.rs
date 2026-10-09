@@ -83,7 +83,12 @@ pub fn said(ctx: &Ctx, detail: &TaskDetail, runner: Option<&RunnerState>, approv
 /// A draft, or a queued task whose run did not start.
 fn without_run(ctx: &Ctx, detail: &TaskDetail) -> Said {
   if detail.task.status() == TaskStatus::Draft {
-    let text = (ctx.t("summary.notice.draftTitle"), ctx.t("summary.notice.draftBody"));
+    // Guidance only while something is missing; a draft with every detail is ready to run.
+    let text = if detail.task.details().missing().is_empty() {
+      (ctx.t("summary.notice.readyTitle"), ctx.t("summary.notice.readyBody"))
+    } else {
+      (ctx.t("summary.notice.draftTitle"), ctx.t("summary.notice.draftBody"))
+    };
     return Said::new(NoticeTone::Info, Icon::CircleDashed, text);
   }
   let text = (ctx.t("summary.notice.queuedTitle"), ctx.t("summary.notice.queuedBody"));
@@ -150,9 +155,19 @@ fn waiting(ctx: &Ctx, run: &RunView) -> Option<Said> {
   }
   let planned = run.run.awaiting_plan().first().copied()?;
   let (step, agent) = step_words(ctx, run.step_of(planned));
+  let version = run
+    .plans
+    .iter()
+    .filter(|plan| plan.execution == planned)
+    .map(|plan| plan.version.get())
+    .max()
+    .unwrap_or(1);
   let text = (
-    ctx.t_args("summary.notice.planTitle", [("step", step.as_str())]),
-    ctx.t_args("summary.notice.planBody", [("agent", agent.as_str())]),
+    ctx.t_args("summary.notice.planTitle", [("version", version.to_string())]),
+    ctx.t_args(
+      "summary.notice.planBody",
+      [("agent", agent.as_str()), ("step", step.as_str())],
+    ),
   );
   Some(Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation())
 }
@@ -208,6 +223,20 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
     )
   };
   let (title, body) = match limit {
+    RunLimit::Tokens if !checkpoint.is_empty() => (
+      ctx.t_args(
+        "summary.notice.tokenLimitCheckpointTitle",
+        [("checkpoint", checkpoint.as_str())],
+      ),
+      ctx.t_args(
+        "summary.notice.tokenLimitBody",
+        [
+          ("step", step.as_str()),
+          ("budget", &compact_tokens(run.run.budget().get())),
+          ("kept", &kept),
+        ],
+      ),
+    ),
     RunLimit::Tokens => (
       ctx.t("summary.notice.tokenLimitTitle"),
       ctx.t_args(

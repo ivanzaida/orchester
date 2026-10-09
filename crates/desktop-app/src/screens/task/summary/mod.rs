@@ -7,6 +7,7 @@
 mod brief;
 mod live;
 mod notice;
+mod run_details;
 pub(super) mod runs;
 mod steps;
 mod this_run;
@@ -20,7 +21,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
@@ -65,17 +66,16 @@ impl Component for TaskSummary {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
     let detail = &props.task.detail;
-    let removal = PageState::of(ctx).removal.get();
+    let state = PageState::of(ctx);
+    let removal = state.removal.get();
     let runs = runs::section(
       ctx,
       &Runs {
-        project: &props.task.project,
-        detail,
-        left: &props.task.left,
-        jobs: &props.task.jobs,
+        task: &props.task,
         removal,
       },
     );
+    let scroll = state.summary_scroll;
     if let Some(unreadable) = &detail.latest_unreadable {
       let notice = Notice::new(
         "task-notice",
@@ -85,12 +85,19 @@ impl Component for TaskSummary {
       .icon(Icon::FileWarning)
       .body(message_text(ctx, &unreadable.detail));
       let actions = reason_line("task-unreadable-actions", &message_text(ctx, &unreadable.actions()));
-      let parts = vec![notice.into(), actions.into()];
-      return layout(column(parts.into_iter().chain(runs).collect()), None);
+      // What the task asks for can still be read, and its other runs.
+      let brief = brief::sections(ctx, detail.task.details());
+      let parts = [notice.into(), actions.into()]
+        .into_iter()
+        .chain(brief)
+        .chain(runs)
+        .collect();
+      return layout(column(parts, scroll), None);
     }
     let parts = self.parts(ctx, &props, runs);
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
+      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run),
       Some(run) => this_run::this_run(ctx, run, &root, props.task.lost()),
       None => {
         let pipelines = match props.task.project.feed.tasks.get() {
@@ -100,7 +107,7 @@ impl Component for TaskSummary {
         this_run::this_task(ctx, detail, &pipelines)
       }
     };
-    layout(column(parts), Some(panel))
+    layout(column(parts, scroll), Some(panel))
   }
 }
 
@@ -116,7 +123,8 @@ impl TaskSummary {
       .status
       .get()
       .map(|status| status.state_for(&props.task.project.open.repo_root));
-    let approval = waiting_approval(&props.task.project, detail);
+    // A run without a runner waits for no one: nothing answers its requests until a runner is back.
+    let approval = waiting_approval(&props.task.project, detail).filter(|_| !lost);
     let said = notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref());
     let conversation = said.conversation;
     let mut notice = said.notice();
@@ -207,7 +215,7 @@ pub fn section_head(ctx: &Ctx, id: &str, title: &str, count: Option<usize>) -> E
 
 /// The Summary's column of `parts`, scrolling when it is taller than the window (`Summary column`
 /// `N3nD9i`).
-fn column(parts: Vec<Element>) -> Element {
+fn column(parts: Vec<Element>, scroll: ScrollState) -> Element {
   let content = Column::new()
     .id("task-summary-column")
     .width(Dimension::Pct(100.0))
@@ -222,6 +230,7 @@ fn column(parts: Vec<Element>) -> Element {
     .with_children(parts);
   ScrollVertical::new(content)
     .id("task-summary-scroll")
+    .with_scroll_state(scroll)
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()

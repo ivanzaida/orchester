@@ -17,36 +17,29 @@ use lurq::{
   components::Column,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::tasks::{detail::TaskDetail, integration_jobs::ProjectJobState};
+use orchester_core::run::TaskPhase;
 
 use self::row::{RowProps, RunRow};
 use super::section_head;
 use crate::{
-  project::ShownProject,
-  screens::task::{Removal, RemovalPlace, read::TaskLeftovers},
+  screens::task::{Removal, RemovalPlace, TaskContext},
   theme::ExtraSpacing,
 };
 
 /// What the section is drawn from.
 pub struct Runs<'a> {
-  pub project: &'a ShownProject,
-  pub detail: &'a TaskDetail,
-  pub left: &'a TaskLeftovers,
-  pub jobs: &'a ProjectJobState,
+  pub task: &'a TaskContext,
   pub removal: Removal,
 }
 
 /// The section; `None` for a task without runs.
 pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
-  let detail = runs.detail;
+  let detail = &runs.task.detail;
   if detail.history.is_empty() {
     return None;
   }
-  let shown = detail
-    .run
-    .as_ref()
-    .map(|run| run.id())
-    .or_else(|| detail.latest_unreadable.as_ref().map(|run| run.id));
+  let latest = detail.run.as_ref().map(|run| run.id());
+  let shown = latest.or_else(|| detail.latest_unreadable.as_ref().map(|run| run.id));
   let working = detail
     .history
     .iter()
@@ -54,32 +47,43 @@ pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
     .find(|run| run.status().has_live_work())
     .map(|run| run.number());
   let key: Arc<str> = detail.task.key().to_string().into();
+  let lost = runs.task.lost();
   let rows: Vec<Element> = detail
     .history
     .iter()
     .enumerate()
     .map(|(index, record)| {
+      let live = record.run.as_ref().is_some_and(|run| run.status().has_live_work());
+      let mut record = record.clone();
+      // Without a runner the run's agent is gone: it is interrupted, as the header and steps say.
+      if lost && live {
+        record.phase = record.phase.map(TaskPhase::without_runner);
+      }
       let props = RowProps {
-        project: runs.project.clone(),
+        project: runs.task.project.clone(),
         key: key.clone(),
-        record: record.clone(),
         left: runs
+          .task
           .left
           .as_read(record.id)
           .filter(|_| record.without_live_work().is_some()),
+        // The latest run's is in the header.
         removable: record
           .without_live_work()
-          .and(runs.left.of(record.id))
+          .filter(|_| Some(record.id) != latest)
+          .and(runs.task.left.of(record.id))
           .and_then(Result::ok)
           .filter(|left| !left.worktrees.is_empty()),
         this_run: Some(record.id) == shown,
-        job: runs.jobs.run(record.id),
+        job: runs.task.jobs.run(record.id),
         others_busy: detail
           .history
           .iter()
-          .any(|other| other.id != record.id && runs.jobs.run(other.id).busy()),
+          .any(|other| other.id != record.id && runs.task.jobs.run(other.id).busy()),
         working: working.filter(|number| Some(*number) != record.number),
         confirming: runs.removal.run == Some(record.id),
+        lost: lost && live,
+        record,
       };
       item(ctx, runs, props, index > 0)
     })

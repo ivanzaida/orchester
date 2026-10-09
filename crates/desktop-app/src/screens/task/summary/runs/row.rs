@@ -55,6 +55,8 @@ pub struct RowProps {
   pub working: Option<RunNumber>,
   /// Its removal's confirmation is open, in the row or under the header.
   pub confirming: bool,
+  /// The run is recorded as running, but no runner looks after it.
+  pub lost: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
@@ -82,10 +84,14 @@ impl Component for RunRow {
       .spacing(SpacingSize::Xs)
       .child(head(ctx, &props, status))
       .child(
-        Text::new(&message_text(ctx, &record.detail))
-          .id(format!("run-row-{}-what", record.id))
-          .variant(TypographyStyle::Description)
-          .width(Dimension::Pct(100.0)),
+        Text::new(&if props.lost {
+          ctx.t("summary.runs.lost")
+        } else {
+          message_text(ctx, &record.detail)
+        })
+        .id(format!("run-row-{}-what", record.id))
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0)),
       )
       .with_children(line(ctx, record, props.left.as_ref()).map(|line| worktree_line(&line)))
       .with_children(failed.as_ref().filter(|_| !props.confirming).map(|error| {
@@ -142,6 +148,8 @@ impl RunRow {
         .on_click(move || {
           jobs.clear_failed_removal();
           state.open_removal(run, RemovalPlace::Row);
+          // The confirmation opens under the row, at the Summary's end: it is scrolled into view.
+          state.summary_scroll.scroll_to_bottom_pending();
         })
         .into(),
     )
