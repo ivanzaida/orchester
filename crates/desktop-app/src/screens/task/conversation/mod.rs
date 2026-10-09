@@ -41,6 +41,7 @@ use self::{
   timeline::{Follow, Timeline, Toggles},
   toolbar::RunState,
 };
+use super::cards::Decisions;
 use crate::{
   project::{ShownProject, TasksState},
   services::Services,
@@ -70,6 +71,7 @@ struct ConversationProps {
 impl lurq::app::component::DevtoolsInspectable for ConversationProps {}
 
 struct ConversationTab {
+  decisions: Decisions,
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
@@ -81,6 +83,7 @@ impl Component for ConversationTab {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      decisions: Decisions::new(ctx),
       follow: Follow::new(ctx),
       toggles: Toggles::new(ctx),
       retry: ctx.signal(0),
@@ -171,6 +174,7 @@ impl ConversationTab {
     if shown.rows.is_empty() {
       return (states::nothing_yet(ctx, run), Some(state));
     }
+    ctx.provide(self.decisions.clone());
     ctx.provide(Timeline {
       project: props.project.open.project.id(),
       key: props.key.clone(),

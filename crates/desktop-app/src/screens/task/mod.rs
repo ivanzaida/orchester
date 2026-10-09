@@ -3,6 +3,7 @@
 //! tab, which shows through a temporary host ([`ConversationHost`]) until the page's frame (P1) loads the
 //! task and mounts the tab itself.
 
+pub mod cards;
 pub mod conversation;
 
 use std::{path::PathBuf, sync::Arc};

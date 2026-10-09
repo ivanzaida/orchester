@@ -1,0 +1,153 @@
+{
+  "cards": {
+    "state": {
+      "waitingAnswer": "Waiting for your answer",
+      "waitingApproval": "Waiting for approval",
+      "answered": "Answered",
+      "answeredAt": "Answered · {{time}}",
+      "ended": "Ended without an answer",
+      "approved": "Approved",
+      "approvedByAutomation": "Approved by automation",
+      "changesRequested": "Changes requested",
+      "changesRequestedByAutomation": "Changes requested by automation",
+      "earlier": "Earlier version"
+    },
+    "refused": {
+      "ended": "{{agent}} no longer waits for an answer: it ended without one.",
+      "answered": "It was answered already."
+    },
+    "question": {
+      "asks": "{{agent}} asks you",
+      "asksSeveral": "{{agent}} asks you {{count}} questions",
+      "waiting": "Asked at {{time}} · {{step}} · {{agent}}'s active time is stopped until you answer.",
+      "waitingNoStep": "Asked at {{time}} · {{agent}}'s active time is stopped until you answer.",
+      "answered": "Asked at {{time}} · {{step}} · the answer follows in the conversation",
+      "answeredNoStep": "Asked at {{time}} · the answer follows in the conversation",
+      "answer": "Answer",
+      "composerUnavailable": "Answering is not available here yet: the composer comes with a later build."
+    },
+    "choice": {
+      "number": "Question {{number}} of {{count}}",
+      "options": "{{agent}}'s options",
+      "optionsSeveral": "{{agent}}'s options · pick one or more",
+      "ownPlaceholder": "Or write your own answer…",
+      "ownName": "Your own answer",
+      "send": "Send answer",
+      "sent": "Sent: {{agent}} resumes with your answer.",
+      "waiting": "Asked at {{time}} · {{step}} · {{agent}} resumes at once with your answer",
+      "waitingNoStep": "Asked at {{time}} · {{agent}} resumes at once with your answer",
+      "missing": "Question {{number}} has no answer yet",
+      "own": "“{{text}}”",
+      "byYou": "Asked at {{asked}} · answered by you at {{time}} · the answer resumed {{agent}}",
+      "byAutomation": "Asked at {{asked}} · answered by automation through Orchester's MCP server at {{time}} · the answer resumed {{agent}}",
+      "interrupted": "Asked at {{asked}} · {{agent}} stopped waiting at {{time}}, before an answer reached it"
+    },
+    "plan": {
+      "title": "Plan v{{version}} · {{task}}",
+      "whole": "Show the whole plan · {{count}} lines",
+      "empty": "The agent left no text for this plan.",
+      "approve": "Approve plan & continue",
+      "youAsked": "You asked: {{note}}",
+      "automationAsked": "Automation asked: {{note}}",
+      "hint": {
+        "agent": "Starts {{step}} with {{agent}}. To ask for changes, write in the composer.",
+        "tool": "Starts {{step}}. To ask for changes, write in the composer.",
+        "last": "No step follows it: the run goes on. To ask for changes, write in the composer.",
+        "agentNoComposer": "Starts {{step}} with {{agent}}. Asking for changes is not available here yet.",
+        "toolNoComposer": "Starts {{step}}. Asking for changes is not available here yet.",
+        "lastNoComposer": "No step follows it: the run goes on. Asking for changes is not available here yet."
+      }
+    },
+    "approval": {
+      "commandTitle": "Approve command?",
+      "toolTitle": "Approve tool action?",
+      "waitingSince": "waiting since {{time}}",
+      "explain": {
+        "commandsAsk": "{{agent}} wants to run a command, and its profile asks before every command. It waits, with its active time stopped, until you answer.",
+        "notListed": "{{agent}} wants to run a command its profile does not allow. It waits, with its active time stopped, until you answer.",
+        "beyondSandbox": "{{agent}} wants to run a command outside its sandbox. It waits, with its active time stopped, until you answer.",
+        "command": "{{agent}} wants to run a command. It waits, with its active time stopped, until you answer.",
+        "tool": "{{agent}} wants to call a tool of the {{server}} MCP server. It waits, with its active time stopped, until you answer."
+      },
+      "policy": {
+        "commandsAsk": "Asks before commands · {{profile}} v{{version}}",
+        "notListed": "Not an allowed command · {{profile}} v{{version}}",
+        "beyondSandbox": "Asks to leave the sandbox · {{profile}} v{{version}}",
+        "mcpActions": "Asks before MCP actions · {{profile}} v{{version}}",
+        "profile": "{{profile}} v{{version}}"
+      },
+      "category": {
+        "readOnly": "Read-only",
+        "worktree": "Worktree",
+        "network": "Network",
+        "outsideWrite": "Outside write",
+        "unknown": "Unknown",
+        "historyDestructive": "History / destructive",
+        "credentialRead": "Credential read"
+      },
+      "reason": {
+        "unknown": "Orchester could not read it to the end.",
+        "installs": "Installs a package from the network: {{value}}",
+        "installsListed": "Installs the packages a file lists from the network: {{value}}",
+        "source": "{{registry}} · {{package}}",
+        "deletesOutside": "Deletes outside the worktree: {{value}}",
+        "rewritesHistory": "Rewrites or discards history: {{value}}",
+        "readsCredentials": "Reads credentials: {{value}}",
+        "writesOutside": "Writes outside the worktree: {{value}}",
+        "network": "Uses the network: {{value}}",
+        "worktree": "Changes the worktree: {{value}}",
+        "readOnly": "Only reads: {{value}}"
+      },
+      "reviewing": "Auto mode is reviewing it; you can still answer.",
+      "command": "Command",
+      "arguments": "Arguments",
+      "agent": "Agent",
+      "agentValue": "{{agent}} · {{step}} · Run {{run}} · {{task}}",
+      "cwd": "Working directory",
+      "target": "Target",
+      "note": "Agent's note",
+      "tool": "Tool",
+      "toolValue": "{{server}} · {{tool}}",
+      "denyTells": "Deny tells {{agent}}: “{{message}}”",
+      "denyTellsCodex": "Deny declines it, and Codex tells {{agent}}: “{{message}}”",
+      "deny": "Deny",
+      "approveOnce": "Approve once",
+      "denyWithMessage": "Deny with a message",
+      "denyWithMessageUnavailable": "Deny with a message is not available yet: the runner cannot add your words to a denial. Deny, then write to {{agent}} in the composer.",
+      "wider": "Or answer more widely",
+      "similar": "Approve similar in this run",
+      "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Packages and flags may differ. Approves this one too.",
+      "similarTool": "{{server}} {{tool}}, every call until Run {{run}} ends. Approves this one too.",
+      "similarUnavailable": {
+        "unknown": "Not available: Orchester can't tell which later commands would be alike. Approve once or deny.",
+        "severalAsk": "Not available: several parts of it ask. Approve once or deny.",
+        "destructive": "Not available for a command that rewrites history or deletes outside the worktree. Approve once or deny.",
+        "secrets": "Not available for a command that reads credentials. Approve once or deny."
+      },
+      "everything": "Approve everything in this run",
+      "everythingCovers": "Approves this one; then Run {{run}} answers its worktree commands and MCP calls itself. Network commands, writes outside the worktree, secrets, installs and destructive commands still ask you.",
+      "everythingOn": "On already: Run {{run}} answers its requests itself, and leaves this one to you, as it never answers a request like it.",
+      "everythingOnEarlier": "On already: Run {{run}} answers its new requests itself. This one came before it was on, so it waits for you.",
+      "always": "Always allow…",
+      "alwaysCommand": "Not available yet: adding a command to a profile from an approval is planned.",
+      "alwaysTool": "Not available yet: adding a tool to a server's list from an approval is planned.",
+      "unread": "Not available: what it would cover could not be read.",
+      "automationOnceOrDeny": "Automation through Orchester's MCP server may approve it once or deny it, and only while you let automation answer approvals.",
+      "automationDenyOnly": "Automation through Orchester's MCP server may only deny it: only a person approves a request like this.",
+      "decided": {
+        "once": "Approved once · by you at {{time}}",
+        "similar": "Approved similar in this run · by you at {{time}}",
+        "everything": "Approved everything in this run · by you at {{time}}",
+        "always": "Always allowed · by you at {{time}}",
+        "automation": "Approved once · by automation at {{time}}",
+        "reviewer": "Approved by auto mode at {{time}}",
+        "approved": "Approved at {{time}}",
+        "denied": "Denied · by you at {{time}}",
+        "deniedByAutomation": "Denied · by automation at {{time}}",
+        "ended": "Ended without an answer · {{agent}} stopped waiting at {{time}}",
+        "answered": "Answered already"
+      },
+      "firstLine": "{{line}} …"
+    }
+  }
+}
