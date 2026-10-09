@@ -5,11 +5,10 @@ use orchester_core::{
   id::ResourceId,
   name::{Name, NameError},
   task::{LimitsError, MissingDetail, TaskDetails, TaskLimits},
-  tokens::TokenBudget,
 };
 
 use crate::{
-  budget::{read_budget, read_minutes},
+  budget::{read_minutes, read_optional_budget},
   messages::Message,
 };
 
@@ -22,14 +21,12 @@ pub struct TaskForm<'a> {
   /// One entry per criterion row; blank rows are not saved.
   pub criteria: &'a [String],
   pub pipeline: Option<ResourceId>,
-  /// Whole tokens, grouped with `separator` or not, e.g. `1,400,000`.
+  /// Whole tokens, grouped with `separator` or not, e.g. `1,400,000`; empty for no budget.
   pub budget: &'a str,
-  /// Whole minutes of active agent time.
+  /// Whole minutes of active agent time; empty for no time limit.
   pub time_limit: &'a str,
   /// The locale's group separator.
   pub separator: &'a str,
-  /// The project's maximum run budget.
-  pub max_budget: TokenBudget,
 }
 
 /// Why the form cannot be saved yet, per place on the form.
@@ -80,51 +77,39 @@ impl TaskForm<'_> {
   }
 
   /// Details the task still needs before it can be queued, also while the title is not
-  /// valid yet. Limits that are entered but not valid are not listed: their error already
-  /// says what is wrong, and one problem gets one message.
+  /// valid yet. Limits are never missing: empty ones are no limit.
   pub fn missing(&self) -> Vec<MissingDetail> {
     let title = Name::new(self.title).unwrap_or_else(|_| {
       // `TaskDetails::missing` never looks at the title, so any valid name stands in for it.
       Name::new(UNTITLED).expect("the stand-in title is a valid name")
     });
-    let limits = self.limits();
-    let invalid_limits = limits.is_err();
     TaskDetails {
       title,
       brief: self.brief.to_owned(),
       acceptance_criteria: self.criteria.to_vec(),
       pipeline: self.pipeline,
-      limits: limits.ok().flatten(),
+      limits: TaskLimits::NONE,
     }
     .missing()
-    .into_iter()
-    .filter(|detail| !(invalid_limits && *detail == MissingDetail::Limits))
-    .collect()
   }
 
-  /// Limits are a pair: both empty leaves them missing, one alone is an error on the other.
-  fn limits(&self) -> Result<Option<TaskLimits>, (Option<Message>, Option<Message>)> {
-    let (budget, time_limit) = (self.budget.trim(), self.time_limit.trim());
-    if budget.is_empty() && time_limit.is_empty() {
-      return Ok(None);
-    }
-    let budget = if budget.is_empty() {
-      Err(Message::new("tokens.errors.empty"))
-    } else {
-      read_budget(budget, self.separator, self.max_budget)
-    };
-    let time_limit = if time_limit.is_empty() {
-      Err(Message::new("errors.timeLimitRequired"))
-    } else {
-      read_minutes(time_limit)
-    };
+  /// The budget and the time limit, each optional: an empty field is no limit.
+  fn limits(&self) -> Result<TaskLimits, (Option<Message>, Option<Message>)> {
+    let budget = read_optional_budget(self.budget, self.separator);
+    let time_limit = read_minutes(self.time_limit);
     let (budget, time_limit) = match (budget, time_limit) {
       (Ok(budget), Ok(time_limit)) => (budget, time_limit),
       (budget, time_limit) => return Err((budget.err(), time_limit.err())),
     };
-    TaskLimits::new(budget, time_limit)
-      .map(Some)
-      .map_err(|LimitsError::ZeroDuration| (None, Some(Message::new("errors.timeLimitZero"))))
+    TaskLimits::new(budget, time_limit).map_err(|error| {
+      let message = match error {
+        LimitsError::ZeroDuration => Message::new("errors.timeLimitZero"),
+        LimitsError::TooLong => {
+          Message::new("errors.timeLimitTooLong").with("max", crate::budget::MAX_STORED_MINUTES.to_string())
+        }
+      };
+      (None, Some(message))
+    })
   }
 }
 

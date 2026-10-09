@@ -22,18 +22,21 @@ fn draft(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: vec!["Lists repositories.".into()],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
 fn edited() -> TaskDetails {
-  let limits =
-    TaskLimits::new(TokenBudget::new(900_000).expect("above zero"), Duration::from_secs(600)).expect("positive limits");
+  let limits = TaskLimits::new(
+    Some(TokenBudget::new(900_000).expect("above zero")),
+    Some(Duration::from_secs(600)),
+  )
+  .expect("positive limits");
   TaskDetails {
     brief: "Let users switch repositories.".into(),
     acceptance_criteria: vec!["Remembers the choice.".into(), "Shows the branch.".into()],
     pipeline: Some(ResourceId::generate()),
-    limits: Some(limits),
+    limits,
     ..draft("Repository switcher")
   }
 }

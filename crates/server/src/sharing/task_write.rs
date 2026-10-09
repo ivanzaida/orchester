@@ -23,8 +23,12 @@ pub fn validate(content: &mut TaskContent) -> Result<(), ServerError> {
   }
   if let Some(limits) = &content.limits {
     TaskLimits::new(
-      TokenBudget::new(limits.budget_tokens).map_err(|_| ErrorCode::Invalid)?,
-      Duration::from_millis(limits.max_duration_ms),
+      limits
+        .budget_tokens
+        .map(TokenBudget::new)
+        .transpose()
+        .map_err(|_| ErrorCode::Invalid)?,
+      limits.max_duration_ms.map(Duration::from_millis),
     )
     .map_err(|_| ErrorCode::Invalid)?;
   }
@@ -38,12 +42,7 @@ pub fn validate(content: &mut TaskContent) -> Result<(), ServerError> {
 }
 
 pub fn missing(content: &TaskContent) -> Vec<MissingDetail> {
-  missing_details(
-    &content.brief,
-    &content.criteria,
-    content.pipeline.is_some(),
-    content.limits.is_some(),
-  )
+  missing_details(&content.brief, &content.criteria, content.pipeline.is_some())
 }
 
 fn missing_names(missing: Vec<MissingDetail>) -> Vec<String> {
@@ -54,7 +53,6 @@ fn missing_names(missing: Vec<MissingDetail>) -> Vec<String> {
         MissingDetail::Brief => "brief",
         MissingDetail::AcceptanceCriteria => "criteria",
         MissingDetail::Pipeline => "pipeline",
-        MissingDetail::Limits => "limits",
       }
       .into()
     })
@@ -105,7 +103,7 @@ pub fn insert(db: &Connection, project: ProjectId, user: UserId, task: &NewTask,
   let limits = task.content.limits.as_ref();
   db.execute("INSERT INTO tasks(id,project,number,former_key,title,brief,criteria,pipeline,budget_tokens,max_duration_ms,status,workflow,priority,blocked_reason,revision,has_run,created_by,created_at,updated_by,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL,1,?14,?15,?16,?15,?17)",
     params![task.id.to_string(),project.to_string(),task.number,task.former_key,task.content.title,task.content.brief,encode(&task.content.criteria)?,task.content.pipeline,
-      limits.map(|v|v.budget_tokens.to_string()),limits.map(|v|v.max_duration_ms.to_string()),status_name(task.status),encode(&orchester_core::task::organization::WorkflowStatus::Backlog)?,encode(&orchester_core::task::organization::Priority::None)?,task.has_run || task.claim,user.to_string(),task.created_at,now])?;
+      limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(task.status),encode(&orchester_core::task::organization::WorkflowStatus::Backlog)?,encode(&orchester_core::task::organization::Priority::None)?,task.has_run || task.claim,user.to_string(),task.created_at,now])?;
   Ok(())
 }
 
@@ -187,7 +185,7 @@ pub fn patch(
     )?;
   }
   let limits = content.limits.as_ref();
-  db.execute("UPDATE tasks SET title=?1,brief=?2,criteria=?3,pipeline=?4,budget_tokens=?5,max_duration_ms=?6,status=?7 WHERE id=?8",params![content.title,content.brief,encode(&content.criteria)?,content.pipeline,limits.map(|v|v.budget_tokens.to_string()),limits.map(|v|v.max_duration_ms.to_string()),status_name(status),task.to_string()])?;
+  db.execute("UPDATE tasks SET title=?1,brief=?2,criteria=?3,pipeline=?4,budget_tokens=?5,max_duration_ms=?6,status=?7 WHERE id=?8",params![content.title,content.brief,encode(&content.criteria)?,content.pipeline,limits.and_then(|v|v.budget_tokens).map(|v|v.to_string()),limits.and_then(|v|v.max_duration_ms).map(|v|v.to_string()),status_name(status),task.to_string()])?;
   organization::save(db, task, &to)?;
   bump(db, task, user, now)?;
   events::task(db, project, task, now)?;

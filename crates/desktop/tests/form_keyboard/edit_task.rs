@@ -33,7 +33,7 @@ fn draft(title: &str) -> TaskDetails {
     brief: "Let users sign in with GitHub.".into(),
     acceptance_criteria: vec!["A new user can sign in.".into(), "Email sign-in still works.".into()],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
@@ -227,7 +227,11 @@ fn seed_runnable_draft(repo: &Path, fake: &Path) {
   let db = ProjectDb::open(repo).expect("open the project");
   let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
   drop(db);
-  let limits = TaskLimits::new(TokenBudget::new(5_000).expect("budget"), Duration::from_secs(1_800)).expect("limits");
+  let limits = TaskLimits::new(
+    Some(TokenBudget::new(5_000).expect("budget")),
+    Some(Duration::from_secs(1_800)),
+  )
+  .expect("limits");
   save(
     repo,
     TaskDetails {
@@ -235,7 +239,7 @@ fn seed_runnable_draft(repo: &Path, fake: &Path) {
       brief: "Work in turns.".into(),
       acceptance_criteria: vec!["README.md ends with hello".into()],
       pipeline: Some(pipeline),
-      limits: Some(limits),
+      limits,
     },
   );
 }

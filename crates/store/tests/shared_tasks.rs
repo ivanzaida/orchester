@@ -19,7 +19,7 @@ use orchester_core::{
   sharing::{ClaimKind, MemberRole, TaskRevision},
   store::{ResourceStore, RunStore, TaskStore},
   task::{
-    TaskDetails, TaskStatus, TaskUpdate,
+    TaskDetails, TaskLimits, TaskStatus, TaskUpdate,
     organization::{ChangeActor, Priority, Tag, TaskOrganization, WorkflowStatus},
   },
 };
@@ -37,7 +37,7 @@ fn details(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 

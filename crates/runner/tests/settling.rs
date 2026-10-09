@@ -25,7 +25,7 @@ use self::support::{PATIENCE, Setup, hold::hold_first_settled, project, schedule
 async fn settling_a_raise_waits_for_the_task_that_stopped_the_run() {
   let hold = hold_first_settled();
   let project = project(&Setup {
-    budget: 5_000,
+    budget: Some(5_000),
     provider: AgentProvider::ClaudeCodeCli,
     ..Setup::new("Work in turns.")
   });
@@ -52,8 +52,8 @@ async fn settling_a_raise_waits_for_the_task_that_stopped_the_run() {
   assert!(scheduler.active_runs().is_empty());
 
   let limits = RaisedLimits {
-    budget: TokenBudget::new(2_000_000).expect("above zero"),
-    max_duration: Duration::from_secs(30 * 60),
+    budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+    max_duration: Some(Duration::from_secs(30 * 60)),
   };
   let raise = scheduler.raise_limit(id, limits);
   tokio::pin!(raise);

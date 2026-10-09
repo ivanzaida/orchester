@@ -219,7 +219,7 @@ impl Fixture {
       brief: String::new(),
       acceptance_criteria: Vec::new(),
       pipeline: None,
-      limits: Some(TaskLimits::new(budget(1_000_000), Duration::from_secs(1_800)).expect("limits")),
+      limits: TaskLimits::new(Some(budget(1_000_000)), Some(Duration::from_secs(1_800))).expect("limits"),
     };
     self
       .db
@@ -237,7 +237,7 @@ impl Fixture {
       brief: "Sign in with a password.".to_owned(),
       acceptance_criteria: vec!["A person can sign in".to_owned()],
       pipeline: Some(pinned.resource),
-      limits: Some(TaskLimits::new(budget(1_000_000), Duration::from_secs(1_800)).expect("limits")),
+      limits: TaskLimits::new(Some(budget(1_000_000)), Some(Duration::from_secs(1_800))).expect("limits"),
     };
     let mut task = self
       .db
@@ -263,8 +263,8 @@ impl Fixture {
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
       base: Revision::new(&"a".repeat(40)).expect("revision"),
       base_branch: None,
-      budget: budget(1_000_000),
-      max_duration: Duration::from_secs(1_800),
+      budget: Some(budget(1_000_000)),
+      max_duration: Some(Duration::from_secs(1_800)),
     };
     self.db.create_run(IdempotencyKey::generate(), new, now).expect("run")
   }

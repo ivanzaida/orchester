@@ -18,7 +18,7 @@ use lurq::{
 };
 use orchester_core::{
   task::{
-    TaskDetails,
+    TaskDetails, TaskLimits,
     content::{Choice, ContentField, FieldChange},
   },
   tokens::compact_tokens,
@@ -401,28 +401,41 @@ fn criteria_list(ctx: &Ctx, shown: &Shown<'_>, details: &TaskDetails) -> Element
 
 /// Run budget and time limit as they would be saved.
 fn limit_properties(ctx: &Ctx, details: &TaskDetails) -> Vec<Element> {
-  let Some(limits) = details.limits else {
+  let limits = details.limits;
+  if limits == TaskLimits::NONE {
     return vec![property(
       &ctx.t("tasks.conflict.fields.limits"),
       &ctx.t("tasks.conflict.noLimits"),
     )];
-  };
+  }
   vec![
-    property(
-      &ctx.t("tasks.new.budget"),
-      &ctx.t_args(
-        "tasks.conflict.budget",
-        [("tokens", compact_tokens(limits.budget().get()).as_str())],
-      ),
-    ),
-    property(
-      &ctx.t("tasks.new.timeLimit"),
-      &ctx.t_args(
-        "tasks.conflict.timeLimit",
-        [("minutes", minutes_text(limits.max_duration()).as_str())],
-      ),
-    ),
+    property(&ctx.t("tasks.new.budget"), &budget_text(ctx, limits)),
+    property(&ctx.t("tasks.new.timeLimit"), &time_text(ctx, limits)),
   ]
+}
+
+/// A task's budget as the conflict view shows it, or that it has no token limit.
+fn budget_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
+  limits.budget().map_or_else(
+    || ctx.t("tokens.noBudget"),
+    |budget| {
+      ctx.t_args(
+        "tasks.conflict.budget",
+        [("tokens", compact_tokens(budget.get()).as_str())],
+      )
+    },
+  )
+}
+
+/// A task's time limit as the conflict view shows it, or that it has no time limit.
+fn time_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
+  match limits.max_duration() {
+    Some(_) => ctx.t_args(
+      "tasks.conflict.timeLimit",
+      [("minutes", minutes_text(limits.max_duration()).as_str())],
+    ),
+    None => ctx.t("tokens.noTimeLimit"),
+  }
 }
 
 /// What `field` of `details` says, as text.
@@ -432,17 +445,16 @@ fn value_text(ctx: &Ctx, details: &TaskDetails, field: ContentField, pipelines: 
     ContentField::Brief => details.brief.clone(),
     ContentField::Criteria => details.acceptance_criteria.join("\n"),
     ContentField::Pipeline => pipeline_text(ctx, details, pipelines).to_string(),
-    ContentField::Limits => details.limits.map_or_else(String::new, |limits| {
-      ctx
-        .t_args(
-          "tasks.conflict.limits",
-          [
-            ("tokens", compact_tokens(limits.budget().get()).as_str()),
-            ("minutes", minutes_text(limits.max_duration()).as_str()),
-          ],
-        )
-        .to_string()
-    }),
+    ContentField::Limits if details.limits == TaskLimits::NONE => ctx.t("tasks.conflict.noLimits").to_string(),
+    ContentField::Limits => ctx
+      .t_args(
+        "tasks.conflict.limits",
+        [
+          ("budget", &*budget_text(ctx, details.limits)),
+          ("time", &*time_text(ctx, details.limits)),
+        ],
+      )
+      .to_string(),
   };
   if text.trim().is_empty() {
     ctx.t("tasks.conflict.empty").to_string()

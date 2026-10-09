@@ -20,10 +20,10 @@ use orchester_core::{
   resource::RepositoryAccess,
   run::{ActiveClock, RunStatus, StepStatus},
   task::TaskLimits,
-  tokens::{TokenBudget, compact_tokens},
+  tokens::compact_tokens,
 };
 use orchester_workspace::{
-  budget::{unbounded, whole_minutes},
+  budget::whole_minutes,
   display,
   tasks::{
     changes::run_worktree,
@@ -223,29 +223,27 @@ fn model(ctx: &Ctx, run: &RunView) -> Arc<str> {
 /// "412k / 1.4M tokens", that the limit is reached, or "No limit · 412k tokens used".
 fn budget(ctx: &Ctx, run: &RunView) -> Arc<str> {
   let used = compact_tokens(run.run.used().get());
-  if is_unlimited(run.run.budget()) {
+  let Some(budget) = run.run.budget() else {
     return ctx.t_args("summary.thisRun.budgetNoLimit", [("used", used)]);
-  }
+  };
   let key = if run.run.token_limit_reached() {
     "summary.thisRun.budgetReached"
   } else {
     "summary.thisRun.budgetValue"
   };
-  ctx.t_args(
-    key,
-    [("used", used), ("budget", compact_tokens(run.run.budget().get()))],
-  )
+  ctx.t_args(key, [("used", used), ("budget", compact_tokens(budget.get()))])
 }
 
-/// A budget without a limit is stored as the largest one (`budget::unbounded`).
-pub(super) fn is_unlimited(budget: TokenBudget) -> bool {
-  budget == unbounded()
-}
-
-fn time_limit(ctx: &Ctx, limit: std::time::Duration) -> Arc<str> {
-  ctx.t_args(
-    "summary.thisRun.minutes",
-    [("minutes", whole_minutes(limit).to_string())],
+/// "30 min", or "No limit".
+fn time_limit(ctx: &Ctx, limit: Option<std::time::Duration>) -> Arc<str> {
+  limit.map_or_else(
+    || ctx.t("summary.thisRun.noLimit"),
+    |limit| {
+      ctx.t_args(
+        "summary.thisRun.minutes",
+        [("minutes", whole_minutes(limit).to_string())],
+      )
+    },
   )
 }
 
@@ -349,27 +347,15 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
       },
     );
   let mut rows = vec![row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text)];
-  match details.limits {
-    Some(limits) => rows.extend(limit_rows(ctx, limits)),
-    None => rows.push(row(
-      ctx,
-      "summary.thisRun.budget",
-      &ctx.t("summary.thisRun.notChosen"),
-      DetailValue::Text,
-    )),
-  }
+  rows.extend(limit_rows(ctx, details.limits));
   panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, None)
 }
 
 fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {
-  let budget = if is_unlimited(limits.budget()) {
-    ctx.t("summary.thisRun.noLimit")
-  } else {
-    ctx.t_args(
-      "summary.thisRun.tokens",
-      [("budget", compact_tokens(limits.budget().get()))],
-    )
-  };
+  let budget = limits.budget().map_or_else(
+    || ctx.t("summary.thisRun.noLimit"),
+    |budget| ctx.t_args("summary.thisRun.tokens", [("budget", compact_tokens(budget.get()))]),
+  );
   [
     row(ctx, "summary.thisRun.budget", &budget, DetailValue::Text),
     row(

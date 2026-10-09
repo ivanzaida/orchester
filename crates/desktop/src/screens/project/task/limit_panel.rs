@@ -1,11 +1,12 @@
 //! Raise the limit to continue (02.L `ZUYM0`): each limit with what the run used and an input
 //! for the new limit with its read-back, what continuing does, and the one action that says the
 //! result ("Continue with 2M tokens"). The input of the limit that was hit is focused. The new
-//! limits apply to this run only; the budget is at most the project's maximum run budget.
+//! limits apply to this run only; there is no maximum, and an empty input lifts its limit (user
+//! decision 2026-10-09).
 //!
 //! After a step's budget the panel raises that step's budget instead (*Raise the step budget to
 //! continue*): what the stopped execution used of it and one token input. The published pipeline
-//! keeps its budget; the raised one is at most the project's maximum run budget too.
+//! keeps its budget.
 
 use std::{sync::Arc, time::Duration};
 
@@ -22,7 +23,6 @@ use lurq::{
 };
 use orchester_core::{
   id::RunId,
-  limits::ProjectLimits,
   run::{RaisedLimits, RunLimit},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed, compact_tokens, grouped},
@@ -62,11 +62,11 @@ pub struct RaiseLimitProps {
   number: u32,
   limit: RunLimit,
   /// Tokens used of, and the budget of, the run; after a step's budget, of that step's execution.
+  /// `None`: no limit.
   used: TokensUsed,
-  budget: TokenBudget,
-  max_duration: Duration,
+  budget: Option<TokenBudget>,
+  max_duration: Option<Duration>,
   active: Duration,
-  max_budget: TokenBudget,
   /// The step and agent stopped mid-step, if the run stopped in a step.
   stopped: Option<(Arc<str>, Arc<str>)>,
   checkpoint: Option<String>,
@@ -78,7 +78,7 @@ impl lurq::app::component::DevtoolsInspectable for RaiseLimitProps {}
 
 impl RaiseLimitProps {
   /// `None` for a stop at a step's budget when the step has none, which no runner records.
-  pub fn of(run: &RunView, limit: RunLimit, limits: ProjectLimits, blocked: bool) -> Option<Self> {
+  pub fn of(run: &RunView, limit: RunLimit, blocked: bool) -> Option<Self> {
     let (used, budget) = raise::budget_use(run, limit)?;
     Some(Self {
       run: run.id(),
@@ -88,7 +88,6 @@ impl RaiseLimitProps {
       budget,
       max_duration: run.run.max_duration(),
       active: run.active_time(Timestamp::now()),
-      max_budget: limits.max_run_budget(),
       stopped: run.stopped_step().map(|step| {
         let agent = step.agent.clone().unwrap_or_else(|| step.name.clone());
         (step.name.clone(), agent)
@@ -105,31 +104,35 @@ impl RaiseLimitProps {
     matches!(self.limit, RunLimit::StepBudget { .. })
   }
 
-  /// The budget offered to continue with: after a token stop half again the current one, within
-  /// the maximum; else unchanged.
-  fn suggested_budget(&self) -> u64 {
+  /// The budget offered to continue with: after a token stop half again the current one; else
+  /// unchanged, none when the run has none.
+  fn suggested_budget(&self) -> Option<u64> {
+    let budget = self.budget?.get();
     if self.limit == RunLimit::Time {
-      return self.budget.get();
+      return Some(budget);
     }
-    let raised = self.budget.get().saturating_add(self.budget.get() / 2);
-    let rounded = raised.div_ceil(SUGGESTION_STEP).saturating_mul(SUGGESTION_STEP);
-    rounded.min(self.max_budget.get()).max(self.budget.get())
+    let raised = budget.saturating_add(budget / 2);
+    Some(
+      raised
+        .div_ceil(SUGGESTION_STEP)
+        .saturating_mul(SUGGESTION_STEP)
+        .max(budget),
+    )
   }
 
   /// The time limit offered, in whole minutes above the active time: after a time stop half
-  /// again the current one, else unchanged.
-  fn suggested_time(&self) -> Duration {
+  /// again the current one, else unchanged, none when the run has none.
+  fn suggested_time(&self) -> Option<Duration> {
+    let current = self.max_duration?;
     let limit = match self.limit {
-      RunLimit::Time => self.max_duration + self.max_duration / 2,
-      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
-        self.max_duration
-      }
+      RunLimit::Time => current + current / 2,
+      RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => current,
     };
     let minutes = limit
       .as_secs()
       .div_ceil(MINUTE.as_secs())
       .max(whole_minutes(self.active) + 1);
-    MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX)
+    Some(MINUTE * u32::try_from(minutes).unwrap_or(u32::MAX))
   }
 }
 
@@ -221,7 +224,12 @@ impl RaiseLimitPanel {
       return;
     }
     self.seeded.set(true);
-    self.budget.set(grouped(props.suggested_budget(), separator));
+    self.budget.set(
+      props
+        .suggested_budget()
+        .map(|budget| grouped(budget, separator))
+        .unwrap_or_default(),
+    );
     self.minutes.set(minutes_text(props.suggested_time()));
     ctx.focus(match props.limit {
       RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::DailyBudget | RunLimit::StepBudget { .. } => {
@@ -231,16 +239,16 @@ impl RaiseLimitPanel {
     });
   }
 
-  fn read_budget(&self, props: &RaiseLimitProps, separator: &str) -> Result<TokenBudget, Message> {
-    let (text, limits) = (self.budget.get(), (props.used, props.max_budget));
+  fn read_budget(&self, props: &RaiseLimitProps, separator: &str) -> Result<Option<TokenBudget>, Message> {
+    let text = self.budget.get();
     if !props.raises_step_budget() {
-      return raise::run_budget(&text, separator, limits);
+      return raise::run_budget(&text, separator, props.used);
     }
     let step = props.stopped.as_ref().map(|(step, _)| &**step).unwrap_or_default();
-    raise::step_budget(&text, separator, limits, step)
+    raise::step_budget(&text, separator, props.used, step)
   }
 
-  fn read_time(&self, props: &RaiseLimitProps) -> Result<Duration, Message> {
+  fn read_time(&self, props: &RaiseLimitProps) -> Result<Option<Duration>, Message> {
     raise::time_limit(&self.minutes.get(), props.active)
   }
 
@@ -249,26 +257,32 @@ impl RaiseLimitPanel {
     &self,
     ctx: &Ctx,
     props: &RaiseLimitProps,
-    budget: &Result<TokenBudget, Message>,
+    budget: &Result<Option<TokenBudget>, Message>,
     separator: &Arc<str>,
   ) -> Element {
-    let (used, of) = (compact_tokens(props.used.get()), compact_tokens(props.budget.get()));
+    let used = compact_tokens(props.used.get());
     let stopped = props
       .stopped
       .as_ref()
       .filter(|_| props.limit == RunLimit::Tokens || props.raises_step_budget());
-    let current = match stopped {
-      Some((step, _)) => ctx.t_args(
+    let current = match (props.budget, stopped) {
+      (None, _) => ctx.t_args("runs.limit.tokensUsedNoLimit", [("used", used.as_str())]),
+      (Some(of), Some((step, _))) => ctx.t_args(
         "runs.limit.tokensUsedMidStep",
-        [("used", used.as_str()), ("limit", of.as_str()), ("step", step)],
+        [
+          ("used", used.as_str()),
+          ("limit", compact_tokens(of.get()).as_str()),
+          ("step", step),
+        ],
       ),
-      None => ctx.t_args(
+      (Some(of), None) => ctx.t_args(
         "runs.limit.tokensUsed",
-        [("used", used.as_str()), ("limit", of.as_str())],
+        [("used", used.as_str()), ("limit", compact_tokens(of.get()).as_str())],
       ),
     };
     let note = match budget {
-      Ok(new) => Ok(read_back(ctx, new.get(), props.budget.get())),
+      Ok(Some(new)) => Ok(read_back(ctx, new.get(), props.budget.map(TokenBudget::get))),
+      Ok(None) => Ok(ctx.t("tokens.noLimit")),
       Err(error) => Err(message_text(ctx, error)),
     };
     let input = UnitInput::new(
@@ -289,19 +303,21 @@ impl RaiseLimitPanel {
   }
 
   /// "Time limit · Used 24 of 30 min of active agent time" beside its input.
-  fn time_row(&self, ctx: &Ctx, props: &RaiseLimitProps, time: &Result<Duration, Message>) -> Element {
-    let (used, of) = (whole_minutes(props.active), whole_minutes(props.max_duration));
-    let (used, of) = (used.to_string(), of.to_string());
-    let current = match props.stopped.as_ref().filter(|_| props.limit == RunLimit::Time) {
-      Some((step, _)) => ctx.t_args(
+  fn time_row(&self, ctx: &Ctx, props: &RaiseLimitProps, time: &Result<Option<Duration>, Message>) -> Element {
+    let used = whole_minutes(props.active).to_string();
+    let stopped = props.stopped.as_ref().filter(|_| props.limit == RunLimit::Time);
+    let current = match (props.max_duration.map(|of| whole_minutes(of).to_string()), stopped) {
+      (None, _) => ctx.t_args("runs.limit.timeUsedNoLimit", [("used", used.as_str())]),
+      (Some(of), Some((step, _))) => ctx.t_args(
         "runs.limit.timeUsedMidStep",
         [("used", used.as_str()), ("limit", of.as_str()), ("step", step)],
       ),
-      None => ctx.t_args("runs.limit.timeUsed", [("used", used.as_str()), ("limit", of.as_str())]),
+      (Some(of), None) => ctx.t_args("runs.limit.timeUsed", [("used", used.as_str()), ("limit", of.as_str())]),
     };
     let note = match time {
+      Ok(None) => Ok(ctx.t("tokens.noLimit")),
       // Minutes left of the new limit, counted like the minutes used.
-      Ok(limit) => Ok(
+      Ok(Some(limit)) => Ok(
         ctx.t_args(
           "runs.limit.timeLeft",
           [(
@@ -327,9 +343,12 @@ impl RaiseLimitPanel {
   }
 }
 
-/// "= 2M tokens · 600k more than now".
-fn read_back(ctx: &Ctx, new: u64, now: u64) -> Arc<str> {
+/// "= 2M tokens · 600k more than now"; without a budget now, only the new one.
+fn read_back(ctx: &Ctx, new: u64, now: Option<u64>) -> Arc<str> {
   let count = compact_tokens(new);
+  let Some(now) = now else {
+    return ctx.t_args("tokens.readBack", [("count", count.as_str())]);
+  };
   match new.cmp(&now) {
     std::cmp::Ordering::Greater => ctx.t_args(
       "tokens.readBackMore",
@@ -418,16 +437,19 @@ fn explanation(ctx: &Ctx, props: &RaiseLimitProps) -> Arc<str> {
 fn continue_button(
   ctx: &Ctx,
   props: &RaiseLimitProps,
-  (budget, time): (Option<&TokenBudget>, Option<&Duration>),
+  (budget, time): (Option<&Option<TokenBudget>>, Option<&Option<Duration>>),
   (pending, submit): (bool, Submit),
 ) -> Element {
   let label = match (pending, props.limit, budget, time) {
     (true, ..) => ctx.t("runs.limit.continuing"),
-    (false, RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::StepBudget { .. }, Some(budget), _) => ctx.t_args(
-      "runs.limit.continueWith",
-      [("count", compact_tokens(budget.get()).as_str())],
-    ),
-    (false, RunLimit::Time, _, Some(time)) => {
+    (false, RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::StepBudget { .. }, Some(None), _)
+    | (false, RunLimit::Time, _, Some(None)) => ctx.t("runs.limit.continueNoLimit"),
+    (false, RunLimit::Tokens | RunLimit::GroupBudget | RunLimit::StepBudget { .. }, Some(Some(budget)), _) => ctx
+      .t_args(
+        "runs.limit.continueWith",
+        [("count", compact_tokens(budget.get()).as_str())],
+      ),
+    (false, RunLimit::Time, _, Some(Some(time))) => {
       let minutes = whole_minutes(*time);
       let key = if minutes == 1 {
         "runs.limit.continueWithMinutes.one"

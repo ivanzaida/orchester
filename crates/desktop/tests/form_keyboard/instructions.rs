@@ -76,9 +76,11 @@ fn seed(repo: &Path) {
     brief: "Users sign in with GitHub.".into(),
     acceptance_criteria: Vec::new(),
     pipeline: Some(delivery),
-    limits: Some(
-      TaskLimits::new(TokenBudget::new(1_000_000).expect("budget"), Duration::from_secs(1_800)).expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_000_000).expect("budget")),
+      Some(Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   };
   db.create_tasks(IdempotencyKey::generate(), vec![details], now)
     .expect("task");
@@ -118,8 +120,8 @@ fn seed_runs(repo: &Path) {
       branch: BranchName::new(&format!("orchester/orc-1-run-{number}")).expect("branch"),
       base: revision('a'),
       base_branch: None,
-      budget: TokenBudget::new(1_000_000).expect("budget"),
-      max_duration: Duration::from_secs(1_800),
+      budget: Some(TokenBudget::new(1_000_000).expect("budget")),
+      max_duration: Some(Duration::from_secs(1_800)),
     };
     let now = Timestamp::now();
     let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");

@@ -17,7 +17,7 @@ use orchester_core::{
   sharing::{MemberRole, TaskRevision},
   store::TaskStore,
   task::{
-    Task, TaskDetails, TaskStatus,
+    Task, TaskDetails, TaskLimits, TaskStatus,
     organization::{ChangeActor, Priority, Tag, TaskOrganization},
   },
 };
@@ -34,7 +34,7 @@ fn details(title: &str) -> TaskDetails {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   }
 }
 
@@ -96,7 +96,7 @@ fn server_task(id: TaskId, number: u32, title: &str, former: Option<&str>) -> Ca
     brief: String::new(),
     criteria: Vec::new(),
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
     status: TaskStatus::Draft,
     organization: TaskOrganization::default(),
     former_key: former.map(str::to_owned),

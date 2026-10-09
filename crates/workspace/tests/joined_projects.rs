@@ -325,8 +325,8 @@ fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
     criteria: read.details().acceptance_criteria.clone(),
     pipeline: Some("delivery".into()),
     limits: Some(orchester_api::SharedLimits {
-      budget_tokens: 1_000_000,
-      max_duration_ms: 1_800_000,
+      budget_tokens: Some(1_000_000),
+      max_duration_ms: Some(1_800_000),
     }),
     workflow: WorkflowStatus::InProgress,
     priority: Priority::None,

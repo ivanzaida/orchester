@@ -69,11 +69,15 @@ pub(super) fn fill_details(ctx: &Ctx, form: &NewTaskForm, details: &TaskDetails)
   }
   form.criteria.set(criteria);
   form.pipeline.set(PipelineSelection(details.pipeline));
-  if let Some(limits) = details.limits {
-    let separator = ctx.t("number.groupSeparator");
-    form.budget.set(grouped(limits.budget().get(), &separator));
-    form.time_limit.set(minutes_text(limits.max_duration()));
-  }
+  let separator = ctx.t("number.groupSeparator");
+  form.budget.set(
+    details
+      .limits
+      .budget()
+      .map(|budget| grouped(budget.get(), &separator))
+      .unwrap_or_default(),
+  );
+  form.time_limit.set(minutes_text(details.limits.max_duration()));
 }
 
 /// What leaving the form with changes that are not saved says (`kDmo9`).

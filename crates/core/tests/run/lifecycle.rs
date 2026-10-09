@@ -38,7 +38,7 @@ fn run_lifecycle_start_opens_attempt_one_with_every_step_pending() {
 #[test]
 fn run_lifecycle_create_rejects_a_zero_time_limit() {
   let mut new = new_run(Config::feature_delivery().snapshot());
-  new.max_duration = Duration::ZERO;
+  new.max_duration = Some(Duration::ZERO);
   let number = RunNumber::new(NonZeroU32::MIN);
   assert_eq!(
     Run::create(RunId::generate(), number, new, at(1)).map(|_| ()),

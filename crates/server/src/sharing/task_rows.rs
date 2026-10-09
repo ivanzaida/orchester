@@ -97,14 +97,10 @@ fn limits(row: &rusqlite::Row<'_>) -> Result<Option<SharedLimits>, ServerError> 
     .get::<_, Option<String>>(9)?
     .map(|value| value.parse::<u64>().map_err(|_| ServerError::StoredData))
     .transpose()?;
-  match (budget, duration) {
-    (Some(budget_tokens), Some(max_duration_ms)) => Ok(Some(SharedLimits {
-      budget_tokens,
-      max_duration_ms,
-    })),
-    (None, None) => Ok(None),
-    _ => Err(ServerError::StoredData),
-  }
+  Ok((budget.is_some() || duration.is_some()).then_some(SharedLimits {
+    budget_tokens: budget,
+    max_duration_ms: duration,
+  }))
 }
 
 pub fn claim(db: &Connection, task: TaskId) -> Result<Option<Claim>, ServerError> {

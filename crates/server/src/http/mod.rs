@@ -95,7 +95,8 @@ async fn info(State(server): State<Server>) -> Result<Json<ServerInfo>, ServerEr
     .await?;
   Ok(Json(ServerInfo {
     name: server.inner.config.name.clone(),
-    api_version: 1,
+    // 2: a task's limits are each optional (`SharedLimits`).
+    api_version: 2,
     needs_bootstrap,
   }))
 }

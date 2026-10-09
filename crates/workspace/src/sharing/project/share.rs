@@ -307,7 +307,7 @@ pub(super) fn upload_task(
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
     pipeline: convert::pipeline_slug(db, details.pipeline)?,
-    limits: details.limits.map(convert::shared_limits),
+    limits: convert::shared_limits(details.limits),
     workflow: organization.workflow,
     priority: organization.priority,
     tag_names: organization

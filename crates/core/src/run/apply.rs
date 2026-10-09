@@ -314,15 +314,15 @@ impl Run {
     }
   }
 
-  /// A raised limit applies to a run stopped at a limit of its own, and its budget is above what
-  /// the run used. The time limit is checked against active time by [`Run::continue_with_limits`],
-  /// which knows it.
-  fn check_raise(&self, kind: &RunEventKind, budget: TokenBudget) -> Result<(), RunError> {
+  /// A raised limit applies to a run stopped at a limit of its own, and its budget, if it has one,
+  /// is above what the run used. The time limit is checked against active time by
+  /// [`Run::continue_with_limits`], which knows it.
+  fn check_raise(&self, kind: &RunEventKind, budget: Option<TokenBudget>) -> Result<(), RunError> {
     self.expect_status(
       kind,
       matches!(self.status, RunStatus::Paused(PauseReason::LimitReached(limit)) if limit.is_run_limit()),
     )?;
-    if self.used.reached(budget) {
+    if budget.is_some_and(|budget| self.used.reached(budget)) {
       return Err(RunError::LimitNotAboveUsed(RunLimit::Tokens));
     }
     Ok(())

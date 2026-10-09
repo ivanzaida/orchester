@@ -36,15 +36,25 @@ pub fn model() -> ModelId {
 
 /// A project with a started run of a one-step pipeline.
 pub fn started_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
-  run_of_one_step(false)
+  run_of_one_step(false, limits())
 }
 
 /// [`started_run`] whose step waits for a plan decision when it finishes.
 pub fn started_gated_run() -> (TempDir, ProjectDb, Run, StepExecutionId) {
-  run_of_one_step(true)
+  run_of_one_step(true, limits())
 }
 
-fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecutionId) {
+/// [`started_run`] of a task, and so a run, without a token budget or a time limit.
+pub fn started_run_without_limits() -> (TempDir, ProjectDb, Run, StepExecutionId) {
+  run_of_one_step(false, TaskLimits::NONE)
+}
+
+/// 1M tokens and 30 minutes.
+fn limits() -> TaskLimits {
+  TaskLimits::new(Some(budget(1_000_000)), Some(Duration::from_secs(1_800))).expect("limits")
+}
+
+fn run_of_one_step(approval_gate: bool, limits: TaskLimits) -> (TempDir, ProjectDb, Run, StepExecutionId) {
   let repo = tempfile::tempdir().expect("temporary directory");
   fs::create_dir(repo.path().join(".git")).expect("create .git");
   let project = Project::new(
@@ -58,7 +68,7 @@ fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecuti
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: Some(TaskLimits::new(budget(1_000_000), Duration::from_secs(1_800)).expect("limits")),
+    limits,
   };
   let task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], at(1))
@@ -114,8 +124,8 @@ fn run_of_one_step(approval_gate: bool) -> (TempDir, ProjectDb, Run, StepExecuti
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: budget(1_000_000),
-    max_duration: Duration::from_secs(1_800),
+    budget: limits.budget(),
+    max_duration: limits.max_duration(),
   };
   let mut run = db.create_run(IdempotencyKey::generate(), new, at(6)).expect("run");
   let events = run.start(at(7)).expect("start");
@@ -129,7 +139,7 @@ pub fn budget(tokens: u64) -> TokenBudget {
 }
 
 /// A project database at schema version `version` in a repository of its own, holding the rows of
-/// `current` (a database at the latest schema) in the columns that version has.
+/// `current` (a database at the latest schema) in the columns both have.
 pub fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::TempDir {
   let repo = tempfile::tempdir().expect("temporary directory");
   std::fs::create_dir(repo.path().join(".git")).expect("create .git");
@@ -151,8 +161,11 @@ pub fn copied_at_version(current: &std::path::Path, version: u32) -> tempfile::T
     .collect::<Result<_, _>>()
     .expect("tables");
   for table in tables {
+    // The columns both versions have: a later migration may also have dropped one.
     let columns: Vec<String> = old
-      .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+      .prepare(&format!(
+        "SELECT name FROM pragma_table_info('{table}')          WHERE name IN (SELECT name FROM pragma_table_info('{table}', 'current'))"
+      ))
       .expect("columns")
       .query_map([], |row| row.get(0))
       .expect("columns")

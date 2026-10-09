@@ -94,8 +94,8 @@ pub(crate) fn started(db: &mut ProjectDb, (task, snapshot): (TaskId, &RunSnapsho
     branch: BranchName::new(&format!("orchester/kon-1-run-{number}")).expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: TokenBudget::new(1_000_000).expect("above zero"),
-    max_duration: Duration::from_secs(1_800),
+    budget: Some(TokenBudget::new(1_000_000).expect("above zero")),
+    max_duration: Some(Duration::from_secs(1_800)),
   };
   let mut run = db.create_run(IdempotencyKey::generate(), new, at(now)).expect("run");
   let events = run.start(at(now)).expect("start");
@@ -113,13 +113,11 @@ fn seed(repo: &Path) {
     brief: String::new(),
     acceptance_criteria: Vec::new(),
     pipeline: None,
-    limits: Some(
-      TaskLimits::new(
-        TokenBudget::new(1_000_000).expect("above zero"),
-        Duration::from_secs(1_800),
-      )
-      .expect("limits"),
-    ),
+    limits: TaskLimits::new(
+      Some(TokenBudget::new(1_000_000).expect("above zero")),
+      Some(Duration::from_secs(1_800)),
+    )
+    .expect("limits"),
   };
   let task = db
     .create_tasks(IdempotencyKey::generate(), vec![details], at(5))

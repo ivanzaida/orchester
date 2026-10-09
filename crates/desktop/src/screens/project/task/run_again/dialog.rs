@@ -16,6 +16,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::{Leftovers, WORKTREES_DIR},
+  task::TaskLimits,
   tokens::compact_tokens,
 };
 
@@ -121,10 +122,6 @@ fn properties(ctx: &Ctx, dialog: &Dialog) -> Element {
   let previous_version = run.version.to_string();
   let previous = run.run.number().get().to_string();
   let steps = next.steps.to_string();
-  let (budget, minutes) = (
-    compact_tokens(next.limits.budget().get()),
-    whole_minutes(next.limits.max_duration()).to_string(),
-  );
   let base = match &next.base {
     Some(base) => {
       let revision = display::short_revision(base.revision.as_str());
@@ -182,12 +179,39 @@ fn properties(ctx: &Ctx, dialog: &Dialog) -> Element {
     ))
     .child(property(
       &ctx.t("runs.runAgain.property.limits"),
-      &ctx.t_args(
-        "runs.runAgain.property.limitsValue",
-        [("budget", budget.as_str()), ("minutes", minutes.as_str())],
-      ),
+      &limits_text(ctx, next.limits),
     ))
     .into()
+}
+
+/// "1.4M tokens · 30 min · from the task", "no token limit" / "no time limit" for one the task does not
+/// have, or "No limits set" for neither.
+fn limits_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
+  if limits == TaskLimits::NONE {
+    return ctx.t("runs.summary.noLimits");
+  }
+  let budget = limits.budget().map_or_else(
+    || ctx.t("tokens.noBudget"),
+    |budget| {
+      ctx.t_args(
+        "runs.runAgain.property.budgetValue",
+        [("budget", compact_tokens(budget.get()).as_str())],
+      )
+    },
+  );
+  let time_limit = limits.max_duration().map_or_else(
+    || ctx.t("tokens.noTimeLimit"),
+    |limit| {
+      ctx.t_args(
+        "runs.runAgain.property.timeLimitValue",
+        [("minutes", whole_minutes(limit).to_string().as_str())],
+      )
+    },
+  );
+  ctx.t_args(
+    "runs.runAgain.property.limitsValue",
+    [("budget", &*budget), ("time", &*time_limit)],
+  )
 }
 
 /// *Remove the worktree of run #N* (`SmhER`), while the run before has worktrees.

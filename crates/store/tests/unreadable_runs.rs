@@ -77,7 +77,7 @@ fn start(db: &mut ProjectDb, first: &Run, number: u32, key: IdempotencyKey) -> R
     branch: BranchName::new(&format!("orchester/orc-1-run-{number}")).expect("branch"),
     base: Revision::new(&"b".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: budget(1_000_000),
+    budget: Some(budget(1_000_000)),
     max_duration: first.max_duration(),
   };
   let mut run = db.create_run(key, new, at(20)).expect("run");
@@ -197,7 +197,7 @@ fn unreadable_run_is_never_created_again_or_written_over() {
     branch: BranchName::new("orchester/orc-1-run-2").expect("branch"),
     base: Revision::new(&"b".repeat(40)).expect("revision"),
     base_branch: None,
-    budget: budget(1_000_000),
+    budget: Some(budget(1_000_000)),
     max_duration: first.max_duration(),
   };
   assert!(matches!(

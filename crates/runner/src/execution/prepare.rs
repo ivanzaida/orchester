@@ -114,7 +114,7 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
   let snapshot = RunSnapshot::build(pipeline_id, &pipeline, published.versions())
     .map_err(|error| failed("cannot pin the run's configuration", &error))?
     .with_sources(&project_sources, &task_sources);
-  let limits = task.details().limits.expect("a queued task has limits");
+  let limits = task.details().limits;
   let new = NewRun {
     task: task_id,
     snapshot,

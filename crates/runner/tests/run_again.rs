@@ -229,10 +229,9 @@ async fn run_again_waits_while_the_daily_budget_is_used() {
   let mut db = ProjectDb::open(root).expect("open");
   let budget = TokenBudget::new(5_000).expect("above zero");
   let tight = ProjectLimits::new(
-    TokenBudget::new(10_000_000).expect("above zero"),
-    TokenBudget::new(1_400_000).expect("above zero"),
+    Some(TokenBudget::new(1_400_000).expect("above zero")),
     budget,
-    Duration::from_secs(30 * 60),
+    Some(Duration::from_secs(30 * 60)),
   )
   .expect("limits");
   db.save_project_limits(&tight).expect("save limits");

@@ -3,7 +3,7 @@ use orchester_core::{
   name::Name,
   store::TaskStore,
   task::{
-    TaskDetails,
+    TaskDetails, TaskLimits,
     organization::{ChangeActor, TaskOrganization},
   },
   time::Timestamp,
@@ -21,7 +21,7 @@ fn seed(repo: &std::path::Path) {
     brief: String::new(),
     acceptance_criteria: vec![],
     pipeline: None,
-    limits: None,
+    limits: TaskLimits::NONE,
   };
   let tasks = db
     .create_tasks(
