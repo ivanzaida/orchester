@@ -76,7 +76,17 @@ const WRITE_RULES: [&str; 12] = [
 ];
 /// Claude Code's own file tools, which an invocation served Orchester's tools has on its disallowed list, after the
 /// ones its permissions deny.
-const OWN_FILE_TOOLS: [&str; 6] = ["Read", "Edit", "Write", "NotebookEdit", "Grep", "Glob"];
+const OWN_FILE_TOOLS: [&str; 9] = [
+  "Read",
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
+  "NotebookRead",
+  "Grep",
+  "Glob",
+  "LS",
+];
 /// The permission prompt's configuration file, for the invocations that ask a person.
 const APPROVALS: &str = "/tmp/approvals.json";
 
@@ -190,8 +200,11 @@ fn claude_invocation_read_only_without_commands_asks_about_every_command() {
           "WebFetch",
           "WebSearch",
           "Read",
+          "MultiEdit",
+          "NotebookRead",
           "Grep",
           "Glob",
+          "LS",
           "--allowedTools",
         ]
         .into_iter()
@@ -226,8 +239,11 @@ fn claude_invocation_read_only_runs_the_listed_commands_and_asks_for_others() {
           "Write",
           "NotebookEdit",
           "Read",
+          "MultiEdit",
+          "NotebookRead",
           "Grep",
           "Glob",
+          "LS",
           "--allowedTools",
           "Bash(git log:*)",
           "Bash(rg:*)",
@@ -265,10 +281,13 @@ fn claude_invocation_write_allows_the_listed_commands_and_asks_for_others() {
           "WebSearch",
           "Read",
           "Edit",
+          "MultiEdit",
           "Write",
           "NotebookEdit",
+          "NotebookRead",
           "Grep",
           "Glob",
+          "LS",
           "--allowedTools",
           "Bash(git:*)",
           "Bash(pnpm test:*)",

@@ -276,9 +276,9 @@ by `read_external_file` and `search_external_file`.
   --case-sensitive`, or the walk), at most 50 files; without the index it says so.
 - **Claude Code** gets the tools from the permission prompt's relay (`--claude-permission-prompt`), which lists them
   after `approve`; every tool that runs gets an allow rule (`mcp__Orchester__<tool>`), so the others reach the
-  prompt. Its own `Read`, `Edit`, `Write`, `NotebookEdit`, `Grep` and `Glob` are added to `--disallowedTools`
-  whenever it gets the relay (the user's decision of 2026-10-09: the prompt names Orchester's tools and the CLI's own are taken away; its
-  shell stays for builds, tests and git). Claude Code 2.1.286 removes only the prompt tool from the model's tools
+  prompt. Its own `Read`, `Edit`, `MultiEdit`, `Write`, `NotebookEdit`, `NotebookRead`, `Grep`, `Glob` and `LS` are
+  added to `--disallowedTools` whenever it gets the relay (the user's decision of 2026-10-09: the prompt names
+  Orchester's tools and the CLI's own are taken away; its shell stays for builds, tests and git). Claude Code 2.1.286 removes only the prompt tool from the model's tools
   (`permissionPromptToolName` is filtered by exact name). **Codex** gets the same relay (`orchester-runner
   --orchester-tools`, no `approve`) as the server `Orchester` of its configuration, the runner's address in `env`, the
   token through `env_vars` (kept out of the agent's shell commands) and a `tool_timeout_sec` long enough for a person's
