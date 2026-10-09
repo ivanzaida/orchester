@@ -9,6 +9,12 @@
 mod kontur;
 mod support;
 
+use std::{
+  path::{Path, PathBuf},
+  thread,
+  time::{Duration, Instant},
+};
+
 use lurq::{
   app::{App, events::MouseButton},
   layout::text_style::FontWeight,
@@ -16,6 +22,7 @@ use lurq::{
 };
 use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
+  startup::Launch,
   theme::{self, Mode, TaskSpacing, TaskText},
   ui::icon::Icon,
 };
@@ -33,12 +40,36 @@ struct Page {
 
 impl Page {
   fn seeded(scenario: &str) -> Self {
+    Self::with(scenario, None)
+  }
+
+  /// The `live` scenario, its Codex connection running `orchester-fake-codex`, with the runner beside the
+  /// test's own programs: both are built by `cargo build -p orchester-runner --features test-agent --bins`.
+  fn live() -> Self {
+    let programs = std::env::current_exe()
+      .expect("the test's path")
+      .parent()
+      .and_then(Path::parent)
+      .expect("the target folder")
+      .to_path_buf();
+    let program = |name: &str| programs.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    let (runner, codex) = (program("orchester-runner"), program("orchester-fake-codex"));
+    assert!(
+      runner.is_file() && codex.is_file(),
+      "build the runner and its fakes first: cargo build -p orchester-runner --features test-agent --bins"
+    );
+    Self::with("live", Some((runner, codex)))
+  }
+
+  /// `scenario` seeded, the window started with `programs` (the runner and the fake Codex) when given, or
+  /// a runner program that does not exist.
+  fn with(scenario: &str, programs: Option<(PathBuf, PathBuf)>) -> Self {
     let dir = TempDir::new().expect("a temporary folder");
     let request = kontur::SeedRequest {
       data_dir: dir.path().to_path_buf(),
       repo: dir.path().join(format!("repo-{scenario}")),
       scenario: kontur::scenarios::named(scenario).expect("a known scenario"),
-      fake_codex: None,
+      fake_codex: programs.as_ref().map(|(_, codex)| codex.clone()),
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
@@ -51,7 +82,10 @@ impl Page {
       data.database(),
       "the seed registers in the window's folder"
     );
-    let launch = data.launch();
+    let launch = match programs {
+      Some((runner, _)) => Launch::begin_at(&data.database(), runner, data.runtime.handle(), None),
+      None => data.launch(),
+    };
     let window = Window::of(data, launch);
     let tasks = seeded
       .tasks
@@ -96,6 +130,20 @@ impl Page {
         && (window.texts("task-notice-title").is_some() || window.texts("task-steps").is_some())
     });
     key
+  }
+
+  /// As the window's `until`, for work a real runner and agent do: up to a minute.
+  fn wait(&mut self, what: &str, mut done: impl FnMut(&mut Window) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+      self.window.tree.tick_futures();
+      self.window.pass();
+      if done(&mut self.window) {
+        return;
+      }
+      assert!(Instant::now() < deadline, "timed out waiting for {what}");
+      thread::sleep(Duration::from_millis(20));
+    }
   }
 
   fn text(&mut self, id: &str) -> String {
@@ -187,6 +235,10 @@ fn summary_notice_says_where_each_task_stands() {
     "Ready for review",
     "the run waits for review"
   );
+  page.open("plan v2 waiting");
+  assert_eq!(page.text("task-notice-title"), "Your approval is needed · plan v2");
+  let body = page.text("task-notice-text");
+  assert!(body.contains("Approving it starts 03 Implement with Builder"), "{body}");
   page.open("paused");
   assert!(page.text("task-notice-title").starts_with("Paused"), "paused");
   let key = page.open("latest run unreadable");
@@ -372,37 +424,65 @@ fn summary_an_older_runs_removal_confirms_in_its_row() {
 }
 
 #[test]
-fn summary_run_again_confirms_in_place_and_says_why_the_runner_refused() {
+fn summary_run_again_waits_for_a_runner() {
   let mut page = Page::seeded("tasks");
-  let key = page.open("failed");
+  page.open("failed");
   page
     .window
     .until("Run again", |window| window.texts("task-run-again").is_some());
-  assert!(!page.locked("task-run-again"), "the task can run again");
+  assert!(page.locked("task-run-again"), "without a runner it cannot start");
+  assert_eq!(page.text("task-action-reasons"), "Runner not connected");
+}
+
+#[test]
+fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
+  let mut page = Page::live();
+  let key = page.open_titled("Typed errors per module");
+  page.wait("the runner", |window| {
+    window
+      .tree
+      .get_element_by_id("task-run-icon")
+      .and_then(|icon| icon.text_content().map(str::to_owned))
+      .is_some_and(|glyph| glyph != Icon::Lock.glyph().to_string())
+  });
+  page.click("task-run");
+  page.wait("the agent at work", |window| window.texts("task-pause-run").is_some());
+  page.click("task-cancel-run");
+  page.wait("Run again", |window| {
+    window
+      .tree
+      .get_element_by_id("task-run-again-icon")
+      .and_then(|icon| icon.text_content().map(str::to_owned))
+      .is_some_and(|glyph| glyph == Icon::RotateCcw.glyph().to_string())
+  });
   page.click("task-run-again");
-  page.window.until("the confirmation", |window| {
+  page.wait("the confirmation", |window| {
     window.texts("task-run-again-confirm").is_some()
   });
   let title = page.text("task-run-again-title");
   assert!(title.starts_with(&format!("Run {key} again as run #")), "{title}");
-  assert_eq!(page.text("task-run-again-pipeline"), "Feature delivery v3");
-  assert_eq!(page.text("task-run-again-starts"), "Research · 6 steps");
-  assert_eq!(page.text("task-run-again-limits"), "500k tokens · 90 min");
-  page
-    .window
-    .until("the switch that removes the run before's worktree", |window| {
-      window.tree.get_element_by_id("task-run-again-remove").is_some()
-    });
+  assert_eq!(page.text("task-run-again-starts"), "Implement · its only step");
+  // Switching tabs keeps it open.
+  page.click("task-tab-conversation");
+  page.wait("the Conversation tab", |window| {
+    window.texts("task-conversation").is_some()
+  });
+  assert!(page.has("task-run-again-confirm"));
   page.click("task-run-again-start");
-  page.window.until("the refusal", |window| {
-    window
-      .texts("task-run-again-confirm")
-      .is_some_and(|texts| texts.iter().any(|text| text.contains("The runner is not connected")))
-  });
-  page.click("task-run-again-cancel");
-  page.window.until("the confirmation to close", |window| {
+  page.wait("the next run", |window| {
     window.texts("task-run-again-confirm").is_none()
+      && window
+        .texts("task-run-line")
+        .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Run ")))
   });
+  page.click("task-tab-summary");
+  page.wait("both runs", |window| {
+    window
+      .texts("task-runs-head")
+      .is_some_and(|texts| texts.join(" ") == "Runs of this task 2")
+  });
+  let services = page.window.launch.services().expect("the session started").clone();
+  services.runners.terminate();
 }
 
 #[test]
@@ -430,4 +510,37 @@ fn summary_roles_follow_the_task_page_design() {
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
+}
+
+#[test]
+fn summary_a_tool_request_waiting_reads_needs_input_everywhere() {
+  let mut page = Page::live();
+  page.open_titled("Add serde to the webhook payloads");
+  page.wait("the runner", |window| {
+    window
+      .tree
+      .get_element_by_id("task-run-icon")
+      .and_then(|icon| icon.text_content().map(str::to_owned))
+      .is_some_and(|glyph| glyph != Icon::Lock.glyph().to_string())
+  });
+  page.click("task-run");
+  page.wait("the agent's request", |window| {
+    window
+      .texts("task-notice-title")
+      .is_some_and(|texts| texts.iter().any(|text| text.ends_with("asks for your approval")))
+  });
+  let status = page.text("task-status-label");
+  assert!(status.starts_with("Needs input"), "{status}");
+  assert!(
+    !page.has("task-pause-run"),
+    "nothing works while the request waits: nothing pauses"
+  );
+  assert!(page.has("task-cancel-run"));
+  let rows = page.text("task-run-rows");
+  assert!(
+    rows.contains("Needs input") && rows.contains("waiting for your approval"),
+    "{rows}"
+  );
+  let services = page.window.launch.services().expect("the session started").clone();
+  services.runners.terminate();
 }
