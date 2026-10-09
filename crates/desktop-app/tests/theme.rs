@@ -1,6 +1,8 @@
 //! The theme's roles resolve to the variables and type roles of `data/orchester2.pen` (accent graphite),
 //! in dark and light mode, and the mode switches while the app runs.
 
+use std::sync::{Arc, OnceLock};
+
 use lurq::{
   app::{
     App,
@@ -86,6 +88,8 @@ fn every_extra_color_is_registered_with_its_design_value() {
     ExtraColor::CodeNumber => ("#C3A6F7", "#7A4CC2"),
     ExtraColor::DiffAdded => ("#3DB07A1F", "#15835414"),
     ExtraColor::DiffRemoved => ("#F0605A1F", "#D4342F14"),
+    ExtraColor::BrandTile => ("#18191D", "#18191D"),
+    ExtraColor::BrandMark => ("#F1F1F4", "#F1F1F4"),
   };
   let (dark, light) = (themed(Mode::Dark), themed(Mode::Light));
   for extra in ExtraColor::ALL {
@@ -220,7 +224,11 @@ fn the_appearance_setting_switches_the_theme_and_is_kept() {
   let dir = tempfile::tempdir().expect("a temporary folder");
   let database = dir.path().join("orchester.db");
   let settings = AppSettings::open(&database).expect("the settings open");
-  let appearance = Appearance::new(ThemeSetting::Dark, Some(Mode::Light), Some(settings));
+  let appearance = Appearance::new(
+    ThemeSetting::Dark,
+    Arc::new(OnceLock::from(Mode::Light)),
+    Some(settings),
+  );
   let app = themed(appearance.mode());
   let mode = appearance
     .set(app.theme(), ThemeSetting::System)
@@ -244,7 +252,7 @@ fn the_appearance_setting_switches_the_theme_and_is_kept() {
 
 #[test]
 fn without_settings_the_theme_does_not_change() {
-  let appearance = Appearance::new(ThemeSetting::Dark, None, None);
+  let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
   let app = themed(appearance.mode());
   assert!(matches!(
     appearance.set(app.theme(), ThemeSetting::Light),
@@ -258,7 +266,7 @@ fn without_settings_the_theme_does_not_change() {
     app.theme().palette_color(PaletteColor::TextPrimary),
     Color::from_hex("#EDEDF0")
   );
-  let unknown_system = Appearance::new(ThemeSetting::System, None, None);
+  let unknown_system = Appearance::new(ThemeSetting::System, Arc::default(), None);
   assert_eq!(
     unknown_system.mode(),
     Mode::Dark,

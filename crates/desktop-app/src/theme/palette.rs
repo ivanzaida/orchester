@@ -64,10 +64,14 @@ pub enum ExtraColor {
   DiffAdded,
   /// `diff_remove`: a removed line of a diff.
   DiffRemoved,
+  /// The Orchester mark's tile (`Brand / Orchester` `OLHng`), the same in both modes.
+  BrandTile,
+  /// The Orchester mark's bars, the same in both modes.
+  BrandMark,
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 17] = [
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -83,6 +87,8 @@ impl ExtraColor {
     Self::CodeNumber,
     Self::DiffAdded,
     Self::DiffRemoved,
+    Self::BrandTile,
+    Self::BrandMark,
   ];
 
   pub fn role(self) -> PaletteColor {
@@ -107,6 +113,8 @@ impl ExtraColor {
       Self::CodeNumber => "code_number",
       Self::DiffAdded => "diff_add",
       Self::DiffRemoved => "diff_remove",
+      Self::BrandTile => "brand_tile",
+      Self::BrandMark => "brand_mark",
     }
   }
 
@@ -127,6 +135,8 @@ impl ExtraColor {
       Self::CodeNumber => mode.pick("#C3A6F7", "#7A4CC2"),
       Self::DiffAdded => mode.pick("#3DB07A1F", "#15835414"),
       Self::DiffRemoved => mode.pick("#F0605A1F", "#D4342F14"),
+      Self::BrandTile => mode.pick("#18191D", "#18191D"),
+      Self::BrandMark => mode.pick("#F1F1F4", "#F1F1F4"),
     }
   }
 }

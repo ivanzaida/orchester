@@ -90,7 +90,7 @@ impl Listening {
     listener.set_nonblocking(true)?;
     let port = NonZeroU16::new(listener.local_addr()?.port()).ok_or_else(|| io::Error::other("the OS bound port 0"))?;
     let (stop, stopped) = oneshot::channel();
-    // The server stops when told to (`Drop`), finishing the requests under way.
+    // The server stops when told to (`Drop`): it cancels its sessions and drops the connections open.
     drop(runtime.spawn(serve(listener, tools, token, stopped)));
     Ok(Self { port, stop: Some(stop) })
   }

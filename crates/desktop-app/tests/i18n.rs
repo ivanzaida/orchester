@@ -124,10 +124,8 @@ fn every_key_named_in_code_exists() {
 fn locales_fill_their_placeholders() {
   let app = App::new();
   i18n::install(&app).expect("bundled locales load");
-  let label = app
-    .i18n()
-    .t_args("tabs.projectScreen", [("project", "kontur"), ("screen", "Tasks")]);
-  assert_eq!(&*label, "kontur · Tasks");
+  let title = app.i18n().t_args("app.windowTitle", [("tab", "Tasks")]);
+  assert_eq!(&*title, "Tasks — Orchester");
   assert_eq!(
     &*app.i18n().t_args("status.mcpListening", [("port", 52341)]),
     "MCP on :52341"

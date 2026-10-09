@@ -41,6 +41,7 @@ impl MenuItem<'_> {
       );
     pressable(handler)
       .id(self.id)
+      .describe("a11y_name", self.label)
       .width(Dimension::Pct(100.0))
       .rounded(RadiusSize::Sm)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))

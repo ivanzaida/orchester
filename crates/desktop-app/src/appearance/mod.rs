@@ -7,7 +7,7 @@
 
 pub mod system;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use lurq::app::theme::Theme;
 pub use orchester_core::appearance::ThemeSetting;
@@ -33,17 +33,17 @@ pub enum AppearanceError {
 #[derive(Clone)]
 pub struct Appearance {
   current: Arc<Mutex<(ThemeSetting, Mode)>>,
-  /// The operating system's appearance when the app started; `None` when it could not be read.
-  system: Option<Mode>,
+  /// The operating system's appearance, once it has been read at start; never when it cannot be.
+  system: Arc<OnceLock<Mode>>,
   settings: Option<AppSettings>,
 }
 
 impl Appearance {
-  /// `setting`, resolved with the operating system's appearance `system`; later choices are kept in
-  /// `settings` when there are any.
-  pub fn new(setting: ThemeSetting, system: Option<Mode>, settings: Option<AppSettings>) -> Self {
+  /// `setting`, resolved with the operating system's appearance `system` (filled in when it has been
+  /// read); later choices are kept in `settings` when there are any.
+  pub fn new(setting: ThemeSetting, system: Arc<OnceLock<Mode>>, settings: Option<AppSettings>) -> Self {
     Self {
-      current: Arc::new(Mutex::new((setting, resolve(setting, system)))),
+      current: Arc::new(Mutex::new((setting, resolve(setting, system.get().copied())))),
       system,
       settings,
     }
@@ -62,7 +62,7 @@ impl Appearance {
   pub fn set(&self, theme: &Theme, setting: ThemeSetting) -> Result<Mode, AppearanceError> {
     let settings = self.settings.as_ref().ok_or(AppearanceError::NoSettings)?;
     settings.set_theme(setting).map_err(AppearanceError::NotSaved)?;
-    let mode = resolve(setting, self.system);
+    let mode = resolve(setting, self.system.get().copied());
     *self.current.lock() = (setting, mode);
     theme::apply(theme, mode);
     Ok(mode)

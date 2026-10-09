@@ -28,7 +28,7 @@ pub use self::{
   discovery::DiscoveryFolder,
   link::WindowLink,
   server::{BearerToken, endpoint},
-  settings::McpSettings,
+  settings::{McpSettings, WindowControlSource},
 };
 use crate::appearance::Appearance;
 
@@ -47,6 +47,8 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
 pub enum McpStatus {
   Listening {
     port: NonZeroU16,
+    /// Whether agents may control the window, which the status bar shows while they may.
+    window_control: bool,
   },
   /// It did not start; the log says why.
   Unavailable,
@@ -55,14 +57,17 @@ pub enum McpStatus {
 impl lurq::app::component::DevtoolsInspectable for McpStatus {}
 
 impl McpStatus {
-  pub fn of(server: Option<&AppMcp>) -> Self {
-    server.map_or(Self::Unavailable, |server| Self::Listening { port: server.port() })
+  pub fn of(server: Option<&AppMcp>, settings: McpSettings) -> Self {
+    server.map_or(Self::Unavailable, |server| Self::Listening {
+      port: server.port(),
+      window_control: settings.window_control(),
+    })
   }
 }
 
 /// lurq's tools for `settings` and the app's tools on `link` and `appearance`.
 pub fn config(settings: McpSettings, link: &WindowLink, appearance: &Appearance) -> McpConfig {
-  tools::all(link, appearance).into_iter().fold(
+  tools::all(link, appearance, settings).into_iter().fold(
     McpConfig::new()
       .app_name(APP_NAME)
       .instructions(INSTRUCTIONS)
