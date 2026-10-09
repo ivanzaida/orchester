@@ -121,6 +121,7 @@ icons! {
   MessageSquareDashed => '\u{e40b}',
   MessageSquareText => '\u{e575}',
   Minus => '\u{e11c}',
+  MousePointerClick => '\u{e120}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',
   PanelRight => '\u{e431}',

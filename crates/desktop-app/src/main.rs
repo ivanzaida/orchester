@@ -2,10 +2,12 @@
 // program opens a console beside it. Debug builds keep the console and its log output.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
+use std::sync::{Arc, OnceLock};
+
 use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_app::{
   app_log,
-  appearance::{Appearance, system},
+  appearance::{Appearance, ThemeSetting, system},
   brand, i18n,
   mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
@@ -38,10 +40,15 @@ fn main() {
   let link = WindowLink::default();
   let window_control = stored(settings.as_ref(), AppSettings::mcp_window_control, "window control").flatten();
   let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
+  tracing::info!(
+    window_control = mcp_settings.window_control(),
+    source = mcp_settings.source().name(),
+    "agents' control of the window"
+  );
   // Started before the root mounts, so the status bar shows its port from the first frame.
   let config = mcp::config(mcp_settings, &link, &appearance);
   let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
-  let mcp = McpStatus::of(server.as_ref());
+  let mcp = McpStatus::of(server.as_ref(), mcp_settings);
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
 
   #[cfg(feature = "devtools")]
@@ -69,21 +76,26 @@ fn main() {
   drop(server);
 }
 
-/// The stored theme, resolved with the operating system's appearance, which is read on the runtime's
-/// blocking pool, never on the UI thread.
+/// The stored theme. The operating system's appearance is read on the runtime's blocking pool, never
+/// on the UI thread; startup waits for it only when the stored theme is System, before the window
+/// exists. Otherwise it arrives in the background, for a later choice of System.
 fn appearance(runtime: &Runtime, settings: Option<&AppSettings>) -> Appearance {
-  let system = match runtime.block_on(runtime.spawn_blocking(system::mode)) {
-    Ok(Ok(mode)) => Some(mode),
-    Ok(Err(error)) => {
-      tracing::warn!(%error, "cannot read the system appearance");
-      None
-    }
-    Err(error) => {
-      tracing::error!(%error, "reading the system appearance failed");
-      None
-    }
-  };
   let theme = stored(settings, AppSettings::theme, "theme").unwrap_or_default();
+  let system = Arc::new(OnceLock::new());
+  let read = {
+    let system = Arc::clone(&system);
+    runtime.spawn_blocking(move || match system::mode() {
+      Ok(mode) => {
+        system.get_or_init(|| mode);
+      }
+      Err(error) => tracing::warn!(%error, "cannot read the system appearance"),
+    })
+  };
+  if theme == ThemeSetting::System
+    && let Err(error) = runtime.block_on(read)
+  {
+    tracing::error!(%error, "reading the system appearance failed");
+  }
   Appearance::new(theme, system, settings.cloned())
 }
 

@@ -95,7 +95,7 @@ impl IconButton {
       .align_items(Alignment::Center)
       .justify(Justify::Center)
       .rounded(RadiusSize::Md)
-      .describe("label", self.label.clone())
+      .describe("a11y_name", self.label.clone())
       .child(icon(self.icon, size, color).id(format!("{}-icon", self.id)));
     let button = match self.action {
       Some(handler) => self

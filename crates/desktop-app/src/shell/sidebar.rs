@@ -65,11 +65,9 @@ impl Component for Sidebar {
         navigation: &navigation,
       };
       sidebar = sidebar
-        .child(
-          items
-            .group(ctx, &Screen::PROJECT_MAIN)
-            .padding(Padding::new().top(SpacingSize::Sm)),
-        )
+        // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
+        .child(Column::new().padding(Padding::new().top(SpacingSize::Sm)))
+        .child(items.group(ctx, &Screen::PROJECT_MAIN))
         .child(section_label(&ctx.t("nav.configure")))
         .child(items.group(ctx, &Screen::CONFIGURE));
       bottom.push(Screen::ProjectSettings);
@@ -143,12 +141,12 @@ fn section_label(label: &str) -> Row {
     )
 }
 
-/// The project switcher (`Project switcher` `i0xDK7`): the project of the route, named by its id until
-/// the app reads projects (then by name, with its initial in the tile), or that none is open. Projects are chosen in
-/// All projects, where it leads.
+/// The project switcher (`Project switcher` `i0xDK7`): that a project is open, or that none is.
+/// Projects are chosen in All projects, where it leads. The open project's name and its initial in the
+/// tile come with reading projects; its id is never shown.
 fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) -> Element {
   let (name, detail) = match project {
-    Some(project) => (project.to_string(), None),
+    Some(_) => (ctx.t("sidebar.project").to_string(), None),
     None => (
       ctx.t("sidebar.noProject").to_string(),
       Some(ctx.t("sidebar.chooseProject")),
@@ -171,6 +169,7 @@ fn switcher(ctx: &mut Ctx, project: Option<ProjectId>, navigation: &Navigation) 
   pressable(move || navigation.go(Route::AllProjects))
     .id("project-switcher")
     .describe("state", if project.is_some() { "project" } else { "no-project" })
+    .describe("a11y_name", name)
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(SWITCHER_HEIGHT))
     .padding(Padding::horizontal(SpacingSize::Sm).left(ExtraSpacing::Snug.role()))

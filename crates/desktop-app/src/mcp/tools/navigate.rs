@@ -11,7 +11,12 @@ use crate::{
   routes::{ProjectPage, Route, Screen, TaskTab},
 };
 
-const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects and   settings take no other argument; a task takes `project`, `key` and optionally `tab` (conversation, summary,   changes); every other screen takes `project`, the project's id (a UUID, as app_state reports it). Answers the   route the tab shows. Errors are JSON with a stable `code`: unknown_route (with the known names), missing_param,   unexpected_param, invalid_param, unknown_tab, not_a_string, not_an_object, not_ready (the window is starting).";
+const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
+  (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects and \
+  settings take no other argument; a task takes `project`, `key` and optionally `tab` (conversation, summary, \
+  changes); every other screen takes `project`, the project's id (a UUID, as app_state reports it). Answers the \
+  route the tab shows. Errors are JSON with a stable `code`: unknown_route (with the known names), missing_param, \
+  unexpected_param, invalid_param, unknown_tab, not_a_string, not_an_object, not_ready (the window is starting).";
 
 pub fn tool(link: WindowLink) -> McpTool {
   McpTool::new("navigate")

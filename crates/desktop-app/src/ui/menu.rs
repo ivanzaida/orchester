@@ -187,6 +187,7 @@ impl From<MenuItem> for Element {
     let surface = |button: Button| {
       button
         .id(item.id.clone())
+        .describe("a11y_name", item.label.clone())
         .width(Dimension::Pct(100.0))
         .rounded(RadiusSize::Sm)
         .describe("chosen", if item.chosen { "true" } else { "false" })

@@ -34,10 +34,14 @@ pub enum ExtraSpacing {
   Roomy,
   /// 56: above and below a loading line (`Reading` `O8pgq`).
   Loading,
+  /// 2.5: between the bars of the Orchester mark (`Logo` `Jbirl`).
+  BrandBars,
+  /// 2: the app menu below the button that opens it.
+  MenuOffset,
 }
 
 impl ExtraSpacing {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 15] = [
     Self::Hair,
     Self::Tight,
     Self::Fine,
@@ -51,6 +55,8 @@ impl ExtraSpacing {
     Self::Tabs,
     Self::Roomy,
     Self::Loading,
+    Self::BrandBars,
+    Self::MenuOffset,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -72,6 +78,8 @@ impl ExtraSpacing {
       Self::Tabs => "tabs",
       Self::Roomy => "roomy",
       Self::Loading => "loading",
+      Self::BrandBars => "brand_bars",
+      Self::MenuOffset => "menu_offset",
     }
   }
 
@@ -89,6 +97,8 @@ impl ExtraSpacing {
       Self::Tabs => 20.0,
       Self::Roomy => 28.0,
       Self::Loading => 56.0,
+      Self::BrandBars => 2.5,
+      Self::MenuOffset => 2.0,
     }
   }
 }
@@ -104,10 +114,14 @@ pub enum ExtraRadius {
   Window,
   /// `radius_full` 999: pills and round avatars.
   Full,
+  /// 5.4: the Orchester mark's tile.
+  BrandTile,
+  /// 1.75: the ends of the Orchester mark's bars, half their width.
+  BrandBar,
 }
 
 impl ExtraRadius {
-  pub const ALL: [Self; 3] = [Self::Tile, Self::Window, Self::Full];
+  pub const ALL: [Self; 5] = [Self::Tile, Self::Window, Self::Full, Self::BrandTile, Self::BrandBar];
 
   pub fn role(self) -> RadiusSize {
     RadiusSize::extra(self.name())
@@ -118,6 +132,8 @@ impl ExtraRadius {
       Self::Tile => "tile",
       Self::Window => "window",
       Self::Full => "full",
+      Self::BrandTile => "brand_tile",
+      Self::BrandBar => "brand_bar",
     }
   }
 
@@ -126,6 +142,8 @@ impl ExtraRadius {
       Self::Tile => 8.0,
       Self::Window => WINDOW_RADIUS,
       Self::Full => 999.0,
+      Self::BrandTile => 5.4,
+      Self::BrandBar => 1.75,
     }
   }
 }

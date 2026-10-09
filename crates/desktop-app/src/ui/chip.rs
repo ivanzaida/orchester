@@ -79,7 +79,7 @@ impl From<TagChip> for Element {
       .align_items(Alignment::Center)
       .focusable(false)
       .cursor(CursorIcon::Pointer)
-      .describe("label", label)
+      .describe("a11y_name", label)
       .on_click(move |event: MouseEvent| {
         event.stop_propagation();
         action();

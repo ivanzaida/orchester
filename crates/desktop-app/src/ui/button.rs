@@ -192,7 +192,7 @@ impl From<ActionButton> for Element {
       .rounded(RadiusSize::Md)
       .describe("kind", button.kind.name())
       .describe("state", button.press.name())
-      .describe("label", button.label.clone());
+      .describe("a11y_name", button.label.clone());
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
     }

@@ -45,8 +45,6 @@ lurq = { workspace = true, features = [
   "i18n",
   # `I18n::add_json` for the bundled locale files.
   "serde",
-  # The Orchester mark in the title bar.
-  "svg",
   # Text agents and people write, read as Markdown (`ui::markdown`).
   "markdown",
   # Copy beside a command or another long value (`ui::code_box`).

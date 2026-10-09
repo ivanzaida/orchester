@@ -87,7 +87,7 @@ impl From<PageTab> for Element {
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
           .opacity(UNAVAILABLE_TAB_OPACITY)
-          .describe("label", tab.label.clone())
+          .describe("a11y_name", tab.label.clone())
           .describe("state", "unavailable")
           .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", tab.id)))
           .child(
@@ -110,7 +110,7 @@ impl From<PageTab> for Element {
       .id(tab.id.clone())
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
-      .describe("label", tab.label.clone())
+      .describe("a11y_name", tab.label.clone())
       .describe("state", if tab.current { "current" } else { "enabled" })
       .child(
         Text::new(&tab.label)
@@ -202,7 +202,7 @@ impl Segment {
         let button = button
           .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .describe("label", label.clone())
+          .describe("a11y_name", label.clone())
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }
@@ -210,7 +210,7 @@ impl Segment {
         let button = button
           .width(Dimension::Px(ICON_SEGMENT_WIDTH))
           .height(Dimension::Pct(100.0))
-          .describe("label", label)
+          .describe("a11y_name", label)
           .child(icon(face, IconSize::Base, glyph).id(label_id));
         chosen_fill(button, self.chosen, ExtraColor::Hover.role())
       }
