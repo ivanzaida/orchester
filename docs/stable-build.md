@@ -211,10 +211,23 @@ variable can change what programs load, where they connect, what they trust or w
 configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
 *Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
-changes it, and window input cannot either: while its row is on screen, the server refuses every window-input
-tool of lurq's (clicks and keys by element or by coordinates, values, menus, resizing) with `person_only`,
-whatever window control allows, and the switch takes no change while an MCP client's input is being applied.
-`navigate` may still show Settings, and looking at the window stays allowed.
+changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
+call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
+tool of lurq's (clicks and keys by element or by coordinates, values, resizing) with `person_only`, whatever
+window control allows, and the switch takes no change that turns it on while an MCP client's input is being
+applied, nor any before it was shown for one pass; turning it off is always taken. `navigate` may still
+show Settings, and looking at the window stays allowed.
+
+Pipelines follow the same rule. With the setting off, `publish_pipeline` and `duplicate_pipeline` publish
+only a version provably no weaker than the pipeline's latest published one: the same steps, wiring,
+failure routes, profiles and tools, and each step's approval gate, asking about tool calls, write access,
+commands and network the same or stricter. A pipeline's first version and anything else need a person, so
+every version a task can run is one a person published, allowed, or could not object to.
+`duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
+
+What this protects against: an MCP client that holds the server's token and nothing else. Any program that
+runs as your user can still change `orchester.db` and the project's `.orchester` data directly; the switch is
+not a boundary against those.
 
 **Auto mode.** Modelled on Claude Code's auto mode, and not "approve everything": a separate reviewer
 model judges each request the rules leave to the person (rules of the run, Always allow and
