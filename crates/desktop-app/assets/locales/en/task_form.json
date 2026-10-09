@@ -1,0 +1,171 @@
+{
+  "task_form": {
+    "number": {
+      "groupSeparator": ","
+    },
+    "crumbs": {
+      "tasks": "Tasks",
+      "newTask": "New task",
+      "edit": "Edit"
+    },
+    "new": {
+      "title": "What would you like to build?",
+      "description": "A task is a brief with acceptance criteria. Its pipeline runs it step by step in a worktree of its own."
+    },
+    "edit": {
+      "title": "Edit task",
+      "description": "Changes apply to draft {{key}}. Nothing runs until you choose Create & run.",
+      "descriptionRan": "{{key}} already ran. Changes apply to future runs only; its runs keep the brief they started with."
+    },
+    "status": {
+      "notSaved": "Not saved yet",
+      "creating": "Creating the task…",
+      "saving": "Saving changes…",
+      "starting": "Starting the run…",
+      "notStarted": "Queued · run not started",
+      "unconfirmed": "Task saved · run status unconfirmed",
+      "saved": "Draft saved locally",
+      "savedRan": "Saved",
+      "unsaved": "Unsaved changes",
+      "kept": "Unsaved changes · kept from {{time}}"
+    },
+    "queued": {
+      "savedAs": "Saved as {{key}}.",
+      "description": "Saved as {{key}}. The fields stay locked while its run waits to start.",
+      "unconfirmedDescription": "Saved as {{key}}. The runner did not say whether its run started; Retry run never creates a second run.",
+      "lockedMeta": "Locked while queued",
+      "retryNote": "Retry run starts the run that is already queued. It never creates a second run.",
+      "retry": "Retry run"
+    },
+    "progress": {
+      "creatingForRun": "Saving the task. Its run is queued right after.",
+      "starting": "Waiting for the runner to start the run.",
+      "creatingDraft": "Saving a draft. Tasks opens next with the new task highlighted."
+    },
+    "kept": {
+      "note": "Your changes from {{time}} were kept on this computer. Save them, or discard them to return to what is saved."
+    },
+    "sections": {
+      "brief": "Brief",
+      "context": "Context",
+      "pipeline": "Pipeline",
+      "limits": "Limits",
+      "instructions": "Instructions"
+    },
+    "project": {
+      "label": "Project",
+      "description": "New tasks go to the current project."
+    },
+    "fields": {
+      "title": {
+        "label": "Task title",
+        "placeholder": "Name the outcome"
+      },
+      "brief": {
+        "label": "Describe the outcome",
+        "placeholder": "What should change, and why?"
+      },
+      "criteria": {
+        "label": "Acceptance criteria",
+        "description": "Reviewers check the result against each one.",
+        "placeholder": "A check the result must pass",
+        "add": "Add criterion",
+        "name": "Criterion {{number}}",
+        "remove": "Remove criterion {{number}}"
+      },
+      "pipeline": {
+        "label": "Pipeline",
+        "description": "Runs the task step by step. Only published pipelines are listed.",
+        "placeholder": "Choose a pipeline",
+        "none": "No published pipelines in this project",
+        "open": "Open Pipelines"
+      },
+      "budget": {
+        "label": "Run budget",
+        "description": "Tokens the run may use. Leave empty for no limit.",
+        "unit": "tokens",
+        "noLimit": "No limit",
+        "readBack": "= {{tokens}} tokens · input + output"
+      },
+      "timeLimit": {
+        "label": "Time limit",
+        "description": "Active agent time only. Leave empty for no limit.",
+        "unit": "minutes",
+        "noLimit": "No limit",
+        "readBack": {
+          "one": "= 1 minute of active agent time",
+          "other": "= {{count}} minutes of active agent time"
+        }
+      },
+      "context": {
+        "label": "Attach context",
+        "description": "Files, links and notes for the agents.",
+        "action": "Attach context",
+        "reason": "Attaching context is not available yet."
+      },
+      "instructions": {
+        "label": "Included instructions",
+        "description": "Project, agent and pipeline instructions are included automatically.",
+        "action": "Preview",
+        "reason": "Preview is not available yet."
+      }
+    },
+    "plan": {
+      "title": "Execution plan",
+      "choice": "{{name}} {{version}}",
+      "meta": "{{pipeline}} · {{steps}}",
+      "steps": {
+        "one": "1 step",
+        "other": "{{count}} steps"
+      },
+      "optionGates": "Published {{version}} · {{steps}} · approval at {{gates}}",
+      "optionNoGates": "Published {{version}} · {{steps}} · no approval gates",
+      "view": "View pipeline",
+      "gate": "waits for approval",
+      "gateSeparator": ", ",
+      "approval": "Approval is required for {{steps}}.",
+      "noGates": "This pipeline has no approval gates.",
+      "choose": "Choose a pipeline to see its execution plan."
+    },
+    "actions": {
+      "create": "Create",
+      "createAndRun": "Create & run",
+      "saveChanges": "Save changes",
+      "discard": "Discard changes",
+      "keepEditing": "Keep editing"
+    },
+    "reasons": {
+      "create": "Create unavailable: {{what}}.",
+      "run": "Run unavailable: {{what}}.",
+      "save": "Save changes unavailable: {{what}}.",
+      "nothingChanged": "Save changes unavailable: nothing has changed.",
+      "ranNoRun": "Create & run is not offered: this task already has a run.",
+      "list": {
+        "two": "{{first}} and {{second}}",
+        "more": "{{first}}, {{rest}}"
+      },
+      "need": {
+        "title": "add a task title",
+        "brief": "describe the outcome",
+        "criteria": "add an acceptance criterion",
+        "pipeline": "choose a pipeline",
+        "noPipelines": "no published pipeline in this project",
+        "limits": "set a run budget and a time limit (runs need both for now)",
+        "budget": "fix the run budget",
+        "timeLimit": "fix the time limit",
+        "keepComplete": "a task that ran keeps a brief, criteria, a pipeline and limits"
+      }
+    },
+    "discard": {
+      "question": "Discard your changes to {{key}}?",
+      "consequence": "The draft stays as it was last saved.",
+      "consequenceRan": "The task stays as it was last saved."
+    },
+    "load": {
+      "reading": "Reading the task…",
+      "failed": "The task cannot be read",
+      "notFound": "No task {{key}} in this project",
+      "notFoundBody": "It may have been removed, or its key changed when the project was shared."
+    }
+  }
+}
