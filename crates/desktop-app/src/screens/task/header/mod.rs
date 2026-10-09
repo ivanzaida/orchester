@@ -308,7 +308,7 @@ fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   if state.removal.get().run == Some(run.id()) {
     return Some(button.disabled());
   }
-  let job = Services::of(ctx).jobs.of(props.project.open.project.id()).of(run.id());
+  let job = props.project.feed.jobs.of(run.id());
   let id = run.id();
   Some(button.on_click(move || {
     job.clear_failed_removal();

@@ -32,7 +32,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
-use orchester_workspace::workspace::OpenProject;
+use orchester_workspace::{tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
 use parking_lot::Mutex;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
@@ -70,7 +70,10 @@ impl Component for ScreensRoot {
     Self {
       router,
       navigation,
-      projects: Projects::new(Some((project, ProjectState::Open(kontur(project))))),
+      projects: Projects::new(
+        Some((project, ProjectState::Open(kontur(project)))),
+        ProjectJobs::default(),
+      ),
     }
   }
 

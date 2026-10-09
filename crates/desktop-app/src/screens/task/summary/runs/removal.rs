@@ -63,7 +63,7 @@ pub fn confirm_for(ctx: &mut Ctx, runs: &Runs, run: RunId) -> Option<Element> {
     .filter_map(|record| record.run.as_ref())
     .find(|run| run.status().has_live_work())
     .map(|run| run.number());
-  let job = Services::of(ctx).jobs.of(runs.project.open.project.id()).of(run);
+  let job = runs.project.feed.jobs.of(run);
   let discard = PageState::of(ctx).discard;
   let key = detail.task.key().to_string();
   Some(confirmation(

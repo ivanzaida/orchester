@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{id::ProjectId, name::Name};
+use orchester_workspace::tasks::integration_jobs::ProjectJobs;
 use parking_lot::Mutex;
 
 use super::{ProjectFeed, ProjectState};
@@ -15,6 +16,8 @@ pub struct Projects {
   /// How often opening each project was asked for again ([`Projects::retry`]).
   attempts: Signal<Attempts>,
   feeds: Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>,
+  /// The session's merge and removal operations, which each project's feed follows.
+  jobs: ProjectJobs,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -38,11 +41,14 @@ impl lurq::app::component::DevtoolsInspectable for Projects {}
 
 impl Projects {
   /// No project known yet but `landed`, the project the session opened on, as opening it found it.
-  pub fn new(landed: Option<(ProjectId, ProjectState)>) -> Self {
+  /// Each project's feed follows its operations in `jobs`, the registry the task pages and Orchester's
+  /// MCP tools share (`Services::jobs`).
+  pub fn new(landed: Option<(ProjectId, ProjectState)>, jobs: ProjectJobs) -> Self {
     Self {
       states: Signal::new(KnownStates(Arc::new(landed.into_iter().collect()))),
       attempts: Signal::new(Attempts::default()),
       feeds: Arc::default(),
+      jobs,
     }
   }
 
@@ -76,7 +82,7 @@ impl Projects {
       .feeds
       .lock()
       .entry(project)
-      .or_insert_with(ProjectFeed::new)
+      .or_insert_with(|| ProjectFeed::new(self.jobs.of(project)))
       .clone()
   }
 

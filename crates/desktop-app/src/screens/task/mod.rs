@@ -259,7 +259,7 @@ impl Component for TaskFrame {
       TaskRead::Ready(detail, stale) => (detail, stale),
     };
     let services = Services::of(ctx);
-    let jobs = read::jobs(ctx, services.jobs.of(props.project.open.project.id()));
+    let jobs = feed.job_state.get();
     let separator = ctx.t("task.listSeparator");
     let left = read::leftovers(
       ctx,

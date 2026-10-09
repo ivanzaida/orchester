@@ -29,7 +29,6 @@ use super::line::{Line, day_and_clock, line};
 use crate::{
   project::ShownProject,
   screens::task::{PageState, RemovalPlace},
-  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -137,7 +136,7 @@ impl RunRow {
       return Some(button.disabled().into());
     }
     let (state, run) = (PageState::of(ctx), props.record.id);
-    let jobs = Services::of(ctx).jobs.of(props.project.open.project.id()).of(run);
+    let jobs = props.project.feed.jobs.of(run);
     Some(
       button
         .on_click(move || {
