@@ -4,6 +4,7 @@
 //! directly today, and a future server will share it.
 
 pub mod agent_files;
+pub mod appearance;
 pub mod blob;
 pub mod code_index;
 pub mod command;

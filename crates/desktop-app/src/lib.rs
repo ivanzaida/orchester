@@ -15,6 +15,7 @@ pub mod navigation;
 pub mod root;
 pub mod routes;
 mod screens;
+pub mod settings;
 mod shell;
 pub mod theme;
 mod ui;

@@ -7,9 +7,10 @@ use serde_json::{Value, json};
 use super::{ToolError, object, reply, string};
 use crate::appearance::{Appearance, ThemeSetting};
 
-const DESCRIPTION: &str = "Switch the Orchester window's colors: `theme` is dark, light or system (the operating \
-  system's appearance, read now). Answers the setting and the mode the window shows. Errors are JSON with a stable \
-  `code`: missing_param, unknown_theme (with the known names).";
+const DESCRIPTION: &str = "Switch the Orchester window's colors and keep the choice in the app's settings: `theme` \
+  is dark, light or system (the operating system's appearance when the app started). Answers the setting and the \
+  mode the window shows. Errors are JSON with a stable `code`: missing_param, unexpected_param, not_a_string, \
+  not_an_object, unknown_theme (with the known names), not_saved (nothing changed).";
 
 pub fn tool(appearance: Appearance) -> McpTool {
   McpTool::new("set_theme")
@@ -42,6 +43,8 @@ pub fn set_theme(appearance: &Appearance, theme: &Theme, args: &Value) -> Result
   }
   let name = string(&args, "theme")?.ok_or(ToolError::Missing { param: "theme" })?;
   let setting = ThemeSetting::from_name(name).ok_or_else(|| ToolError::UnknownTheme { name: name.to_owned() })?;
-  let mode = appearance.set(theme, setting);
+  let mode = appearance.set(theme, setting).map_err(|error| ToolError::NotSaved {
+    reason: error.to_string(),
+  })?;
   Ok(json!({ "setting": setting.name(), "mode": mode.name() }))
 }

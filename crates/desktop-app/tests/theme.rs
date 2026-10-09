@@ -11,9 +11,10 @@ use lurq::{
 };
 use orchester_app::{
   appearance::{
-    Appearance, ThemeSetting,
+    Appearance, AppearanceError, ThemeSetting,
     system::{macos_mode, windows_mode},
   },
+  settings::AppSettings,
   theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, Mode},
 };
 
@@ -216,20 +217,54 @@ fn switching_the_mode_recolors_the_palette_and_the_text() {
 }
 
 #[test]
-fn the_appearance_setting_switches_the_theme_while_the_app_runs() {
-  let appearance = Appearance::new(ThemeSetting::Dark);
+fn the_appearance_setting_switches_the_theme_and_is_kept() {
+  let dir = tempfile::tempdir().expect("a temporary folder");
+  let database = dir.path().join("orchester.db");
+  let settings = AppSettings::open(&database).expect("the settings open");
+  let appearance = Appearance::new(ThemeSetting::Dark, Some(Mode::Light), Some(settings));
   let app = themed(appearance.mode());
-  assert_eq!(appearance.set(app.theme(), ThemeSetting::Light), Mode::Light);
+  let mode = appearance
+    .set(app.theme(), ThemeSetting::System)
+    .expect("the choice is kept");
+  assert_eq!(
+    mode,
+    Mode::Light,
+    "system is the operating system's appearance at start"
+  );
   assert_eq!(
     (appearance.setting(), appearance.mode()),
-    (ThemeSetting::Light, Mode::Light)
+    (ThemeSetting::System, Mode::Light)
   );
   assert_eq!(
     app.theme().palette_color(PaletteColor::TextPrimary),
     Color::from_hex("#18181B")
   );
-  assert_eq!(ThemeSetting::from_name("system"), Some(ThemeSetting::System));
-  assert_eq!(ThemeSetting::from_name("sepia"), None);
+  let reopened = AppSettings::open(&database).expect("the settings open again");
+  assert_eq!(reopened.theme().expect("the theme is stored"), ThemeSetting::System);
+}
+
+#[test]
+fn without_settings_the_theme_does_not_change() {
+  let appearance = Appearance::new(ThemeSetting::Dark, None, None);
+  let app = themed(appearance.mode());
+  assert!(matches!(
+    appearance.set(app.theme(), ThemeSetting::Light),
+    Err(AppearanceError::NoSettings)
+  ));
+  assert_eq!(
+    (appearance.setting(), appearance.mode()),
+    (ThemeSetting::Dark, Mode::Dark)
+  );
+  assert_eq!(
+    app.theme().palette_color(PaletteColor::TextPrimary),
+    Color::from_hex("#EDEDF0")
+  );
+  let unknown_system = Appearance::new(ThemeSetting::System, None, None);
+  assert_eq!(
+    unknown_system.mode(),
+    Mode::Dark,
+    "an unknown system appearance shows dark"
+  );
 }
 
 #[test]

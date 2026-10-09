@@ -28,6 +28,10 @@ hyper.workspace = true
 hyper-util.workspace = true
 # Decodes the bundled PNG of the window icon.
 image.workspace = true
+# The theme setting, and the commands that read the system appearance.
+orchester-core.workspace = true
+# Runs the program that reads the system appearance with a hidden console (`appearance::system`).
+orchester-exec.workspace = true
 # The daily log file (`app_log`), shared with the deprecated desktop.
 orchester-ipc.workspace = true
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the

@@ -5,12 +5,14 @@
 use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
 use orchester_app::{
   app_log,
-  appearance::{Appearance, ThemeSetting},
+  appearance::{Appearance, system},
   brand, i18n,
   mcp::{self, AppMcp, DiscoveryFolder, McpSettings, McpStatus, WindowLink},
   root::{Root, RootProps},
+  settings::AppSettings,
   theme,
 };
+use orchester_store::StoreError;
 use tokio::runtime::Runtime;
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -21,7 +23,10 @@ fn main() {
   app_log::install();
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
-  let appearance = Appearance::new(ThemeSetting::Dark);
+  let settings = AppSettings::open_app_database()
+    .inspect_err(|error| tracing::error!(%error, "the app runs without its settings; nothing it changes is kept"))
+    .ok();
+  let appearance = appearance(&runtime, settings.as_ref());
   let mut app = App::new();
   theme::install(&mut app, appearance.mode());
   i18n::install(&app).expect("the bundled locale files are valid JSON; covered by tests/i18n.rs");
@@ -29,8 +34,10 @@ fn main() {
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let link = WindowLink::default();
+  let window_control = stored(settings.as_ref(), AppSettings::mcp_window_control, "window control").flatten();
+  let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
   // Started before the root mounts, so the status bar shows its port from the first frame.
-  let config = mcp::config(McpSettings::from_environment(), &link, &appearance);
+  let config = mcp::config(mcp_settings, &link, &appearance);
   let server = AppMcp::start(&mut tree, runtime.handle(), &DiscoveryFolder::User, config);
   let mcp = McpStatus::of(server.as_ref());
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp });
@@ -58,4 +65,33 @@ fn main() {
 
   // `run` returns once the window has closed: the server stops and its discovery file goes.
   drop(server);
+}
+
+/// The stored theme, resolved with the operating system's appearance, which is read on the runtime's
+/// blocking pool, never on the UI thread.
+fn appearance(runtime: &Runtime, settings: Option<&AppSettings>) -> Appearance {
+  let system = match runtime.block_on(runtime.spawn_blocking(system::mode)) {
+    Ok(Ok(mode)) => Some(mode),
+    Ok(Err(error)) => {
+      tracing::warn!(%error, "cannot read the system appearance");
+      None
+    }
+    Err(error) => {
+      tracing::error!(%error, "reading the system appearance failed");
+      None
+    }
+  };
+  let theme = stored(settings, AppSettings::theme, "theme").unwrap_or_default();
+  Appearance::new(theme, system, settings.cloned())
+}
+
+/// What `read` finds in the settings; `None`, logged, when they are not open or cannot be read.
+fn stored<T>(
+  settings: Option<&AppSettings>,
+  read: impl Fn(&AppSettings) -> Result<T, StoreError>,
+  what: &str,
+) -> Option<T> {
+  read(settings?)
+    .inspect_err(|error| tracing::error!(%error, setting = what, "cannot read a setting; using its default"))
+    .ok()
 }

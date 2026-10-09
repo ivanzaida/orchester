@@ -26,6 +26,8 @@ pub enum ToolError {
   UnknownTab { name: String },
   #[error("unknown theme `{name}`")]
   UnknownTheme { name: String },
+  #[error("{reason}")]
+  NotSaved { reason: String },
 }
 
 impl ToolError {
@@ -40,6 +42,7 @@ impl ToolError {
       Self::InvalidParam { .. } => "invalid_param",
       Self::UnknownTab { .. } => "unknown_tab",
       Self::UnknownTheme { .. } => "unknown_theme",
+      Self::NotSaved { .. } => "not_saved",
     }
   }
 

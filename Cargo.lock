@@ -2752,6 +2752,8 @@ dependencies = [
  "hyper-util",
  "image",
  "lurq",
+ "orchester-core",
+ "orchester-exec",
  "orchester-ipc",
  "orchester-store",
  "parking_lot",

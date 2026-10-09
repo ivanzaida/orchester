@@ -40,7 +40,7 @@ impl Served {
 
   fn start_in(folder: TempDir, window_control: bool) -> Self {
     let runtime = Runtime::new().expect("a runtime");
-    let appearance = Appearance::new(ThemeSetting::Dark);
+    let appearance = Appearance::new(ThemeSetting::Dark, None, None);
     let mut app = App::new();
     theme::install(&mut app, Mode::Dark);
     i18n::install(&app).expect("bundled locales load");

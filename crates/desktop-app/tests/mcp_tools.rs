@@ -12,6 +12,8 @@ use orchester_app::{
     settings::WINDOW_CONTROL_VARIABLE,
     tools::{ToolError, app_state, navigate, set_theme},
   },
+  settings::AppSettings,
+  theme::Mode,
 };
 use serde_json::{Value, json};
 use support::Window;
@@ -41,7 +43,7 @@ fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwi
 #[test]
 fn app_state_reports_route_tabs_theme_and_window_size() {
   let mut window = Window::open();
-  let appearance = Appearance::new(ThemeSetting::Dark);
+  let appearance = Appearance::new(ThemeSetting::Dark, None, None);
   let state = app_state(&window.navigation(), &appearance, &mut window.tree);
   assert_eq!(
     state,
@@ -75,7 +77,11 @@ fn navigate_takes_the_active_tab_to_a_named_route() {
     window.texts("screen-placeholder").map(|texts| texts[0].clone()),
     Some("KON-12 · Summary".to_owned())
   );
-  let state = app_state(&navigation, &Appearance::new(ThemeSetting::Dark), &mut window.tree);
+  let state = app_state(
+    &navigation,
+    &Appearance::new(ThemeSetting::Dark, None, None),
+    &mut window.tree,
+  );
   assert_eq!(state["route"], route);
   assert_eq!(state["history"], json!({ "can_back": true, "can_forward": false }));
   navigate(&navigation, &json!({ "route": "overview", "project": "atlas" })).expect("a valid route");
@@ -116,9 +122,11 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
 }
 
 #[test]
-fn set_theme_switches_the_colors_while_the_app_runs() {
+fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let window = Window::open();
-  let appearance = Appearance::new(ThemeSetting::Dark);
+  let dir = tempfile::tempdir().expect("a temporary folder");
+  let settings = AppSettings::open(&dir.path().join("orchester.db")).expect("the settings open");
+  let appearance = Appearance::new(ThemeSetting::Dark, Some(Mode::Dark), Some(settings.clone()));
   let theme = window.app.theme();
   let answer = set_theme(&appearance, theme, &json!({ "theme": "light" })).expect("a known theme");
   assert_eq!(answer, json!({ "setting": "light", "mode": "light" }));
@@ -126,10 +134,35 @@ fn set_theme_switches_the_colors_while_the_app_runs() {
     theme.palette_color(PaletteColor::SurfaceBase),
     Color::from_hex("#E4E4E8")
   );
+  assert_eq!(settings.theme().expect("stored"), ThemeSetting::Light);
   let error = set_theme(&appearance, theme, &json!({ "theme": "sepia" })).expect_err("an unknown theme");
   assert_eq!(error.code(), "unknown_theme");
   assert_eq!(error.to_json()["known"], json!(["dark", "light", "system"]));
   assert_eq!(appearance.setting(), ThemeSetting::Light, "a refusal keeps the theme");
+  let unsaved = Appearance::new(ThemeSetting::Dark, None, None);
+  let error = set_theme(&unsaved, theme, &json!({ "theme": "dark" })).expect_err("nowhere to keep it");
+  assert_eq!(error.code(), "not_saved");
+  assert_eq!(
+    theme.palette_color(PaletteColor::SurfaceBase),
+    Color::from_hex("#E4E4E8"),
+    "nothing changed"
+  );
+}
+
+#[test]
+fn window_control_follows_the_stored_setting_then_the_environment() {
+  let stored_off = McpSettings::with_window_control(true).with_stored(Some(false));
+  assert!(!stored_off.window_control());
+  assert_eq!(
+    McpSettings::of_build().with_stored(None),
+    McpSettings::of_build(),
+    "unset: the build decides"
+  );
+  let overridden = stored_off.overridden_by(|name| (name == WINDOW_CONTROL_VARIABLE).then(|| "on".to_owned()));
+  assert!(
+    overridden.window_control(),
+    "the environment overrides the stored value for one run"
+  );
 }
 
 #[test]

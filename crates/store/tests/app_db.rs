@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
+  appearance::ThemeSetting,
   id::{ProjectId, ServerId, UserId},
   name::Name,
   project::{Project, ProjectKey},
@@ -312,4 +313,31 @@ fn usage_warning_threshold_is_80_until_changed_and_kept_through_the_migration() 
   drop(db);
   let db = AppDb::open(&path).expect("reopen");
   assert_eq!(db.usage_warning_threshold().expect("read").percent(), 70);
+}
+
+#[test]
+fn the_apps_theme_and_window_control_start_unset_and_are_kept_through_the_migration() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, 5).expect("schema 5, before the app's settings");
+  raw
+    .execute("UPDATE app_settings SET usage_warning_threshold = 60", [])
+    .expect("a setting of schema 5");
+  drop(raw);
+  let mut db = AppDb::open(&path).expect("migrate");
+  assert_eq!(db.usage_warning_threshold().expect("kept").percent(), 60);
+  assert_eq!(db.theme().expect("read"), ThemeSetting::Dark);
+  assert_eq!(
+    db.mcp_window_control().expect("read"),
+    None,
+    "the build decides until it is set"
+  );
+  db.set_theme(ThemeSetting::System).expect("save");
+  db.set_mcp_window_control(Some(true)).expect("save");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert_eq!(db.theme().expect("read"), ThemeSetting::System);
+  assert_eq!(db.mcp_window_control().expect("read"), Some(true));
+  db.set_mcp_window_control(None).expect("back to the build's choice");
+  assert_eq!(db.mcp_window_control().expect("read"), None);
 }

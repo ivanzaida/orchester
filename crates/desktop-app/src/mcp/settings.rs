@@ -1,8 +1,9 @@
 //! What agents may do through the app's MCP server. Looking is always allowed: screenshots, the element
 //! tree and logs (lurq's Observe scope) and `app_state`. Window control is changing the window: clicking,
 //! typing, resizing (lurq's Interact scope), `navigate` and `set_theme`. It is on by default in debug
-//! builds, which design verification drives, and off by default in release builds. The app has no
-//! settings store yet, so `ORCHESTER_APP_MCP_WINDOW_CONTROL` (`on`/`off`) sets it for one run.
+//! builds, which design verification drives, and off by default in release builds; the app's settings
+//! (`orchester.db`) decide once they hold a value, and `ORCHESTER_APP_MCP_WINDOW_CONTROL` (`on`/`off`)
+//! overrides both for one run.
 //!
 //! lurq's Navigate scope (`lurq_navigate`) is never granted: it would move the router past the tabs'
 //! histories; `navigate` goes through them.
@@ -29,9 +30,25 @@ impl McpSettings {
     Self { window_control }
   }
 
-  /// The settings of this build, with what the environment says for this run.
-  pub fn from_environment() -> Self {
-    Self::of_build().overridden_by(|name| std::env::var(name).ok())
+  /// These settings with the stored value, when the app's settings hold one.
+  pub const fn with_stored(self, stored: Option<bool>) -> Self {
+    match stored {
+      Some(window_control) => Self::with_window_control(window_control),
+      None => self,
+    }
+  }
+
+  /// These settings with what the environment says for this run. A value that is not Unicode is
+  /// logged and ignored.
+  pub fn with_environment(self) -> Self {
+    self.overridden_by(|name| match std::env::var(name) {
+      Ok(value) => Some(value),
+      Err(std::env::VarError::NotPresent) => None,
+      Err(std::env::VarError::NotUnicode(_)) => {
+        tracing::warn!(variable = name, "not Unicode; window control stays as set");
+        None
+      }
+    })
   }
 
   /// These settings with the value `variable` finds for [`WINDOW_CONTROL_VARIABLE`] applied on top. A
