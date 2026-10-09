@@ -2,7 +2,8 @@
 //! apart, 12 in from both ends, each row on a 1 `border` line. The header is 32 high with its column
 //! headings in 10.5/500 `text_muted`, tracked 0.4 (the screen words them in capitals, as `TASK / TAGS`);
 //! a row is 44 high and takes the `hover` fill under the pointer. A row that opens something ends in a
-//! 14 `text_muted` chevron, and the header keeps its column. Rows are pointer-only.
+//! 14 `text_muted` chevron, and the header keeps its column. A highlighted row, e.g. the task a Create
+//! just added, is tinted `info_muted` (`Row · KON-37` in `t3oAOi`). Rows are pointer-only.
 
 use std::sync::Arc;
 
@@ -73,6 +74,7 @@ pub struct TableRow {
   open: Option<Arc<dyn Fn() + Send + Sync>>,
   /// The chevron's column stays, empty, in a table whose other rows open.
   open_column: bool,
+  highlighted: bool,
 }
 
 impl TableRow {
@@ -82,6 +84,7 @@ impl TableRow {
       cells: Vec::new(),
       open: None,
       open_column: false,
+      highlighted: false,
     }
   }
 
@@ -103,6 +106,12 @@ impl TableRow {
     self.open_column = true;
     self
   }
+
+  /// The row stands out in the `info_muted` tint, e.g. as the one a Create just added.
+  pub fn highlighted(mut self) -> Self {
+    self.highlighted = true;
+    self
+  }
 }
 
 impl From<TableRow> for Element {
@@ -112,6 +121,14 @@ impl From<TableRow> for Element {
       .into_iter()
       .map(|(width, content)| width.sized(Row::new()).align_items(Alignment::Center).child(content));
     let content = line(Row::new(), ROW_HEIGHT).with_children(cells);
+    let content = if row.highlighted {
+      content
+        .background(PaletteColor::InfoMuted)
+        .class("highlighted")
+        .describe("highlighted", "true")
+    } else {
+      content
+    };
     let Some(open) = row.open else {
       return content
         .id(row.id.to_string())
