@@ -51,7 +51,13 @@ const GLYPH_SIZE: f32 = 26.0;
 /// `Project switcher menu` width.
 const MENU_WIDTH: f32 = 320.0;
 
-type PickAction = FutureAction<Arc<str>, Option<PathBuf>, Message>;
+type PickAction = FutureAction<Arc<str>, Picked, Message>;
+
+/// The folder chosen in the system's folder picker; `None` when it was closed without one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picked(Option<PathBuf>);
+
+impl DevtoolsInspectable for Picked {}
 type CheckAction = FutureAction<PathBuf, Checked, Message>;
 
 /// What opening a chosen folder found.
@@ -93,7 +99,7 @@ impl Component for Switcher {
     let (opening, checking, step) = (open.clone(), check.clone(), folder.clone());
     // A folder was chosen: the menu opens again under the switcher while its project data is read.
     ctx.watch(&pick.state(), move |state| {
-      if let (false, Some(Some(chosen))) = (state.is_pending(), &state.data) {
+      if let (false, Some(Picked(Some(chosen)))) = (state.is_pending(), &state.data) {
         step.set(FolderStep::Checking(chosen.clone()));
         opening.set(true);
         checking.run(chosen.clone());
@@ -253,7 +259,7 @@ impl Switcher {
 /// without a folder.
 fn pick_action(ctx: &mut Ctx) -> PickAction {
   ctx.future_action(|title: Arc<str>| async move {
-    background::run(move || rfd::FileDialog::new().set_title(&*title).pick_folder()).await
+    background::run(move || Picked(rfd::FileDialog::new().set_title(&*title).pick_folder())).await
   })
 }
 

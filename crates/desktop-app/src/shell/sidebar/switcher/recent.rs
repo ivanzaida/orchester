@@ -41,13 +41,15 @@ pub fn rows(ctx: &mut Ctx, opening: u64, shown: Option<ProjectId>, open: &Signal
   let read = ctx.future(opening, move |_| {
     let workspace = workspace.clone();
     async move {
-      background::run(move || workspace.projects()).await?.map_err(|error| {
-        tracing::error!(%error, "cannot read the recent projects");
-        messages::store_error(&error)
-      })
+      background::run(move || workspace.projects().map(Recent))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the recent projects");
+          messages::store_error(&error)
+        })
     }
   });
-  let projects = read.state().get().data.unwrap_or_default();
+  let Recent(projects) = read.state().get().data.unwrap_or_default();
   projects
     .into_iter()
     .take(RECENT_LIMIT)
@@ -61,6 +63,12 @@ pub fn rows(ctx: &mut Ctx, opening: u64, shown: Option<ProjectId>, open: &Signal
     })
     .collect()
 }
+
+/// The projects of the workspace, most recently used first.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Recent(Vec<RegisteredProject>);
+
+impl DevtoolsInspectable for Recent {}
 
 #[derive(Clone)]
 struct RecentProps {
