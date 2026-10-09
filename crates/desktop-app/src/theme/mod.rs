@@ -20,6 +20,7 @@ mod shadow;
 mod shell;
 mod startup;
 mod task;
+mod tasks;
 mod typography;
 
 use std::time::Duration;
@@ -38,6 +39,7 @@ pub use self::{
   shell::ShellText,
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
+  tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
 
@@ -57,6 +59,7 @@ pub fn install(app: &mut App, mode: Mode) {
   metrics::install(theme);
   startup::install(theme);
   task::install(theme);
+  tasks::install(theme);
   conversation::install(theme);
   cards::install(theme);
   theme.set_shadows(shadow::shadows());

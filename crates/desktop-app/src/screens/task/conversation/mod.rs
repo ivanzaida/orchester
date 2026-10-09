@@ -32,10 +32,11 @@ use orchester_workspace::{
     conversation::{Conversation, PanelState},
     detail::RunView,
     timeline::{
-      self as items, Sources,
+      self as items, Item, ItemKind, Sources,
       load::Loaded,
       view::{self, Choice},
     },
+    transcript::{Entry, EntryKind},
   },
 };
 
@@ -75,10 +76,11 @@ impl Component for ConversationTab {
   type Props = TaskContext;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let follow = Follow::new(ctx);
     Self {
       decisions: Decisions::new(ctx),
-      follow: Follow::new(ctx),
-      toggles: Toggles::new(ctx),
+      toggles: Toggles::new(ctx, follow.clone()),
+      follow,
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
     }
@@ -126,8 +128,8 @@ impl ConversationTab {
     conversation: &Conversation,
   ) -> (Element, Option<RunState>) {
     let live = conversation.state == PanelState::Live;
-    let loaded = match self.read(ctx, task, run) {
-      Ok(loaded) => loaded,
+    let (loaded, stale) = match self.read(ctx, task, run) {
+      Ok(read) => read,
       Err(Some(error)) => {
         let root = &task.project.open.repo_root;
         return (states::failed(ctx, (run, live), &error, (root, &self.retry)), None);
@@ -165,14 +167,22 @@ impl ConversationTab {
       agent: run.current_step().and_then(|step| step.agent.clone()),
       last: loaded.entries.last().map(|entry| entry.at),
     });
-    let arrived = loaded.entries.len() + conversation.entries.len();
+    let arrived = arrivals(&items, &loaded.entries);
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
-    (chat, Some(state))
+    (
+      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
+      Some(state),
+    )
   }
 
-  /// The run's transcript with its requests; while they are not read, why not: being read (`None`), or the
-  /// reading failed.
-  fn read(&self, ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Result<Loaded, Option<Message>> {
+  /// The run's transcript with its requests, and why reading them again failed while they show as last read;
+  /// while they were never read, why not: being read (`None`), or the reading failed.
+  fn read(
+    &self,
+    ctx: &mut Ctx,
+    task: &TaskContext,
+    run: &RunView,
+  ) -> Result<(Loaded, Option<Message>), Option<Message>> {
     let feed = &task.project.feed;
     let repo_root: PathBuf = task.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
@@ -189,10 +199,27 @@ impl ConversationTab {
     let entries = read.data.as_ref().map(|Transcript(entries)| entries.clone());
     let sources = with_requests(ctx, (repo_root, run.id(), hold), (entries, waiting, retry));
     match (sources.data.flatten(), read.error.or(sources.error)) {
-      (Some(loaded), _) => Ok(loaded),
+      (Some(loaded), stale) => Ok((loaded, stale)),
       (None, error) => Err(error),
     }
   }
+}
+
+/// What the person can see arrive, counted: the transcript's entries but usage reports, which the chat leaves
+/// out, and the timeline's own items (steps, returns, messages, cards, results, the run's end). Anything new at
+/// the end moves a following chat, and *N new* counts it.
+fn arrivals(items: &[Item], entries: &[Entry]) -> usize {
+  let from_transcript = |item: &&Item| {
+    matches!(
+      item.kind,
+      ItemKind::AgentMessage { .. } | ItemKind::Tools(_) | ItemKind::Problem(_)
+    )
+  };
+  let visible = entries
+    .iter()
+    .filter(|entry| !matches!(entry.kind, EntryKind::Usage(_)))
+    .count();
+  visible + items.iter().filter(|item| !from_transcript(item)).count()
 }
 
 /// The invocations of `run` whose agent works now; none while no agent works (`live` false).

@@ -179,6 +179,8 @@ fn timeline_an_open_group_lists_seven_rows_then_shows_more() {
   let label = window.texts(&more).expect("Show N more").join(" ");
   assert!(label.starts_with("Show "), "{label}");
   assert!(label.contains("reads"), "what it leaves out, by kind: {label}");
+  // The opened group stays where it was; its rows run on under the view.
+  wheel(&mut window, -5000.0);
   click(&mut window, &more);
   window.until("every row", |window| window.texts(&more).is_none());
   let listed = ids(&mut window, "conversation-entry-")
@@ -189,6 +191,7 @@ fn timeline_an_open_group_lists_seven_rows_then_shows_more() {
     listed > 7,
     "all of the group's rows once Show more was pressed: {listed}"
   );
+  wheel(&mut window, -5000.0);
   // A command's row opens to its output: the group's last command, which the chat shows.
   let row = ids(&mut window, "conversation-entry-")
     .into_iter()
@@ -303,5 +306,70 @@ fn timeline_a_touchpad_nudge_up_stops_following_and_stays() {
   assert!(
     window.tree.get_element_by_id("conversation-jump").is_some(),
     "the chat stays where the nudge left it"
+  );
+}
+
+#[test]
+fn timeline_a_command_without_an_end_is_not_one_the_group_ran() {
+  let (mut window, _) = retry_webhooks();
+  let text = all_text(&mut window);
+  assert!(
+    text.contains("Read 12 files · edited 2 files · cargo test -p webhooks jitter without an end"),
+    "{text}"
+  );
+  assert!(!text.contains("ran cargo test -p webhooks jitter"), "{text}");
+}
+
+#[test]
+fn timeline_the_persons_bubble_hugs_its_words() {
+  let (mut window, _) = retry_webhooks();
+  let message = with_text(
+    &mut window,
+    "conversation-message-",
+    "Please keep the retry budget configurable",
+  );
+  let width = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .map(|bounds| bounds.width)
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (bubble, row) = (
+    width(&mut window, &format!("{message}-bubble")),
+    width(&mut window, &message),
+  );
+  assert!(
+    bubble < row * 0.6,
+    "a short message's bubble is as wide as its words: {bubble} of {row}"
+  );
+}
+
+#[test]
+fn timeline_opening_a_group_while_following_keeps_it_in_place() {
+  let (mut window, _) = retry_webhooks();
+  let chip = with_text(&mut window, "conversation-group-tools-", "Read 12 files");
+  let top = |window: &mut Window| {
+    window
+      .tree
+      .get_element_by_id_mut(&chip)
+      .and_then(|element| element.bounds())
+      .map(|bounds| bounds.y)
+      .expect("the chip is laid out")
+  };
+  let before = top(&mut window);
+  click(&mut window, &chip);
+  for _ in 0..5 {
+    window.pass();
+  }
+  let after = top(&mut window);
+  assert!(
+    (after - before).abs() < 1.0,
+    "the chip stays under the pointer: {before} → {after}"
+  );
+  assert!(
+    window.tree.get_element_by_id("conversation-jump").is_some(),
+    "the chat no longer follows"
   );
 }

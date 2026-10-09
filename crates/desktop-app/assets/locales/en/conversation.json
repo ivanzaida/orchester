@@ -355,10 +355,12 @@
       "step": "{{step}} · {{agent}}",
       "summary": "Summary ↗",
       "toolMeta": "{{took}} · tool step, no tokens",
+      "toolStep": "{{step}} · Tool",
       "withReport": "{{reported}} · {{meta}}"
     },
     "separator": " · ",
     "span": "{{start}}–{{end}}",
+    "staleTitle": "Conversation shown as last read",
     "state": {
       "cancelled": "Canceled",
       "deciding": "Waits for your decision",

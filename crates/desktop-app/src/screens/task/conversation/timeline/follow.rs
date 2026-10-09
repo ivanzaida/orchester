@@ -98,6 +98,19 @@ impl Follow {
     self.following.set(true);
   }
 
+  /// A row the person opens or folds: the chat stays where it is, its scroll held over the content changing
+  /// under it, and stops following, so nothing moves under the pointer.
+  pub(super) fn hold_in_place(&self) {
+    self
+      .scroll
+      .set_scroll_pending(self.scroll.scroll_x(), self.scroll.scroll_y());
+    *self.to_end.lock() = false;
+    if self.following.get_untracked() {
+      *self.left_at.lock() = Some(*self.seen.lock());
+      self.following.set(false);
+    }
+  }
+
   fn to_end(&self) {
     self.scroll.scroll_to_bottom_pending();
     *self.to_end.lock() = true;
@@ -111,6 +124,7 @@ impl Follow {
     let came = std::mem::replace(&mut *self.seen.lock(), arrived) != arrived;
     let mut started = self.started.lock();
     let mut reveal = self.reveal.lock();
+    let held = reveal.key.is_some();
     if !reveal.scrolled {
       reveal.key = items
         .iter()
@@ -118,7 +132,9 @@ impl Follow {
         .map(|item| item.key.to_string());
     }
     // The first rows start at the end; later, only an arrival moves the chat, unless a card holds it.
-    let goes = !*started || (reveal.key.is_none() && came);
+    // A card the chat held stopped waiting before the person scrolled: the chat goes on to the end.
+    let released = held && reveal.key.is_none();
+    let goes = !*started || (reveal.key.is_none() && (came || released));
     if goes && self.following.get_untracked() && rows > 0 {
       self.to_end();
     }

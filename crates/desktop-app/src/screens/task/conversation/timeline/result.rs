@@ -43,9 +43,11 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Ele
     (false, _) => "conversation.result.failed",
   };
   let step = step_label(ctx, card.number, &card.step);
-  let step = match &card.agent {
-    Some(agent) => ctx.t_args("conversation.result.step", [("step", &*step), ("agent", &**agent)]),
-    None => step,
+  // A command tool runs a tool step: the card says so rather than repeat the step's name (`hep0l`).
+  let step = match (&card.agent, card.tool_step) {
+    (_, true) => ctx.t_args("conversation.result.toolStep", [("step", &*step)]),
+    (Some(agent), false) => ctx.t_args("conversation.result.step", [("step", &*step), ("agent", &**agent)]),
+    (None, false) => step,
   };
   let head = Row::new()
     .width(Dimension::Pct(100.0))
