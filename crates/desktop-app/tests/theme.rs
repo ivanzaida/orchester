@@ -440,9 +440,12 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
   let theme = app.theme();
   let ring = theme.shadow_style(ExtraShadow::FocusRing.role());
   assert_eq!(
-    ring.iter().map(|shadow| shadow.spread).collect::<Vec<_>>(),
-    [2.0, 4.0],
-    "a 2 gap, then 2 of ring"
+    ring
+      .iter()
+      .map(|shadow| (shadow.spread, shadow.inset))
+      .collect::<Vec<_>>(),
+    [(2.0, true)],
+    "2 inside the control's edge, where no parent clips it"
   );
   for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
     theme::apply(theme, mode);

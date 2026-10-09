@@ -34,8 +34,8 @@ pub enum Focus {
   /// With the pointer only: never a Tab stop, no focus ring.
   #[default]
   Pointer,
-  /// A form control: a Tab stop that Enter or Space presses, with the focus ring while focused. The
-  /// ring is a shadow outside the control, so its parents must leave it room. lurq 0.42 has no
+  /// A form control: a Tab stop that Enter or Space presses, with the focus ring inside its edge while
+  /// focused. lurq 0.42 has no
   /// keyboard-only focus state, so a pointer press that focuses the control shows the ring too.
   Form,
 }

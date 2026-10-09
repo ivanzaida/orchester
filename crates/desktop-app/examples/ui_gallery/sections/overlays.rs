@@ -65,6 +65,13 @@ fn pipeline_menu(ctx: &mut Ctx, state: &State) -> Row {
       .icon(Icon::Plus)
       .shortcut("Ctrl N")
       .render(ctx, &state.menu_open),
+    MenuItem::new(
+      "g-menu-long",
+      "Release with a review after every step, a docs pass and a changelog",
+      choose("Release"),
+    )
+    .icon(Icon::Workflow)
+    .render(ctx, &state.menu_open),
     MenuItem::unavailable("g-menu-import", "Import a pipeline", "Importing pipelines is planned.")
       .icon(Icon::Download)
       .render(ctx, &state.menu_open),

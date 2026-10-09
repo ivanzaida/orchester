@@ -39,6 +39,11 @@ const KEY: f32 = 52.0;
 const PIPELINE: f32 = 128.0;
 const RUN: f32 = 168.0;
 
+/// A title longer than its cell, and the cell.
+const LONG_TITLE: &str =
+  "Explain an expired GitHub token in the connection inspector, offer to sign in again and say which tasks wait for it";
+const CUT: f32 = 240.0;
+
 const PLAN: &str = "## Approach\n\n1. Wrap `send()` in a retry loop: exponential backoff from 500 ms, at most 5 attempts.\n2. Honor **Retry-After** for 429 and 503.\n3. Record each attempt in `webhook_attempts`.\n\n> Ask before adding a dependency.\n\nSee [the retry notes](https://example.test/retry).";
 
 pub fn section(ctx: &mut Ctx, state: &State) -> Element {
@@ -64,6 +69,14 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
       wide_cell("Empty project · LeIOm", HALF, empty(press("New task"))),
       wide_cell("Reading · O8pgq", HALF, loading("g-loading", "Reading Kontur's tasks…")),
     ])
+    .into(),
+    line([wide_cell(
+      "Cut title · rest on it: the whole title in a tooltip that wraps",
+      CUT,
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .child(Truncated::new("g-cut-title", LONG_TITLE, ExtraTypography::Strong.role()).render(ctx)),
+    )])
     .into(),
     line([wide_cell(
       "Notice · Tasks cannot be read · kXWCj",

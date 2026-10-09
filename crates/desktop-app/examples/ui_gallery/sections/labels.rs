@@ -28,6 +28,8 @@ use crate::gallery::State;
 /// The tabs' cell, as wide as the Tasks screen's content at 1440.
 const TABS: f32 = 720.0;
 const DETAILS: f32 = 340.0;
+/// A cell narrower than its crumbs.
+const CUT: f32 = 260.0;
 
 pub fn section(ctx: &mut Ctx, state: &State) -> Element {
   stack([
@@ -62,6 +64,12 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
       ),
       wide_cell("Detail row · paUqV", DETAILS, details()),
     ])
+    .into(),
+    line([wide_cell(
+      "Crumbs cut to a narrow cell · rest on one",
+      CUT,
+      cut_crumbs(ctx, state),
+    )])
     .into(),
   ])
 }
@@ -257,6 +265,16 @@ fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> 
     CrumbSeparator::Chevron => Crumb::here("New task"),
   });
   breadcrumb(ctx, id, separator, crumbs)
+}
+
+/// Crumbs longer than their cell: each is cut with an ellipsis and says the whole in its tooltip.
+fn cut_crumbs(ctx: &mut Ctx, state: &State) -> Row {
+  let pressed = state.pressed.clone();
+  let crumbs = vec![
+    Crumb::link("Kontur platform and billing", move || pressed.set("Kontur".to_owned())),
+    Crumb::here("KON-123 Explain an expired GitHub token in the connection inspector"),
+  ];
+  breadcrumb(ctx, "g-crumbs-cut", CrumbSeparator::Slash, crumbs)
 }
 
 fn details() -> Column {

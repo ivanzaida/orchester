@@ -51,6 +51,8 @@ pub struct FieldInput {
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
+  /// The error sits at the box's end, as a number field's read-back does (`UQFos`).
+  error_at_end: bool,
   /// Groups the digits of a whole number while it is typed.
   group_separator: Option<Arc<str>>,
   width: Dimension,
@@ -68,6 +70,7 @@ impl PartialEq for FieldInput {
       && self.mono == other.mono
       && self.name == other.name
       && self.error == other.error
+      && self.error_at_end == other.error_at_end
       && self.group_separator == other.group_separator
       && self.width == other.width
   }
@@ -89,6 +92,7 @@ impl FieldInput {
       mono: false,
       name: name.into(),
       error: None,
+      error_at_end: false,
       group_separator: None,
       width: Dimension::Pct(100.0),
     }
@@ -132,6 +136,12 @@ impl FieldInput {
   /// A whole number whose digits are grouped with `separator` while they are typed (`1,400,000`).
   pub fn grouped(mut self, separator: impl Into<Arc<str>>) -> Self {
     self.group_separator = Some(separator.into());
+    self
+  }
+
+  /// The error at the box's end rather than its start.
+  pub(super) fn error_at_end(mut self) -> Self {
+    self.error_at_end = true;
     self
   }
 
@@ -214,9 +224,13 @@ impl Component for FieldBox {
     let Some(error) = &props.error else {
       return Column::new().width(props.width).child(frame);
     };
-    Column::new()
-      .width(props.width)
-      .spacing(ExtraSpacing::Snug.role())
+    let column = Column::new().spacing(ExtraSpacing::Snug.role());
+    let column = if props.error_at_end {
+      column.align_items(Alignment::End)
+    } else {
+      column.width(props.width)
+    };
+    column
       .child(frame)
       .child(field_error(&format!("{}-note", props.id), error))
   }

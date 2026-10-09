@@ -83,6 +83,7 @@ impl Crumb {
           .render(ctx);
         pressable(move || open())
           .id(id)
+          .flex_shrink(1.0)
           .min_width(Dimension::Px(0.0))
           .describe("a11y_name", name)
           .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
@@ -100,6 +101,8 @@ pub fn breadcrumb(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, crumbs: Ve
   let count = crumbs.len();
   let mut row = Row::new()
     .id(id.to_owned())
+    .max_width(Dimension::Pct(100.0))
+    .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
   for (index, crumb) in crumbs.into_iter().enumerate() {

@@ -156,6 +156,12 @@ fn a_token_count_is_grouped_while_it_is_typed() {
 fn a_number_field_that_is_not_accepted_says_why_in_place_of_its_read_back() {
   let mut kit = number(&Signal::new("0".to_owned()), Some("A budget is at least 1 token."));
   assert!(!kit.exists("budget-read-back"));
+  let (frame, note) = (kit.bounds("budget-box"), kit.bounds("budget-note"));
+  assert_close(
+    frame.x + frame.width,
+    note.x + note.width,
+    "the error at the box's end (`UQFos`)",
+  );
   assert_eq!(
     kit.texts("budget-note"),
     ["\u{e077}".to_owned(), "A budget is at least 1 token.".to_owned()]

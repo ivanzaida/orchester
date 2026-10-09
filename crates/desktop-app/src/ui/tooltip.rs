@@ -12,7 +12,7 @@ use lurq::{
     ctx::{Ctx, Timeout},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Placement, Popup, Row, Text, TextOverflow},
+  components::{CollisionStrategy, Placement, Popup, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
@@ -168,7 +168,7 @@ const CUT_TOLERANCE: f32 = 0.5;
 
 impl TooltipHost {
   /// The cut text in `anchor`, which gives up room when its row runs out of it, and, while the pointer
-  /// rests on it, an unseen whole copy that measures it.
+  /// rests on it, an unseen whole copy in an overlay that measures it without moving the row.
   fn cut_text(&self, anchor: Row, tooltip: &Tooltip, cut: &CutText) -> Row {
     let text = |text: Text| match cut.color.clone() {
       Some(color) => text.variant(cut.typography).color(color).nowrap(),
@@ -185,12 +185,18 @@ impl TooltipHost {
           .max_width(Dimension::Pct(100.0))
           .text_overflow(TextOverflow::Elipsis),
       )
+      // The copy is an overlay, out of the row's flow and out of its name: laid out whole, unseen.
       .with_children(self.resting.get().then(|| {
-        text(Text::new(&tooltip.text))
+        let whole = text(Text::new(&tooltip.text))
           .ref_element(self.whole.clone())
-          .absolute_position(0.0, 0.0)
-          .opacity(0.0)
+          .opacity(0.0);
+        Popup::new(self.anchor.clone(), whole)
+          .open_when(true)
+          .placement(Placement::BottomStart)
+          .collision(CollisionStrategy::None)
           .hit_test(HitTestBehavior::None)
+          .dismiss_on_outside_click(false)
+          .dismiss_on_escape(false)
       }))
   }
 }

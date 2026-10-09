@@ -17,6 +17,7 @@ use orchester_app::{
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
+    chip::TagChip,
     code_box::CodeBox,
     icon::Icon,
     markdown::MarkdownView,
@@ -349,6 +350,7 @@ fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
     Column::new()
       .child(
         Row::new()
+          .id("cell")
           .width(Dimension::Px(200.0))
           .child(Truncated::new("title", title, ExtraTypography::Strong.role()).render(ctx)),
       )
@@ -361,6 +363,11 @@ fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
   assert!(!kit.exists("short-tooltip"), "text that fits gets no tooltip");
   kit.rest_on("title");
   assert_eq!(kit.texts("title-tooltip"), [title]);
+  assert_eq!(
+    kit.texts("cell"),
+    [title],
+    "the row says the title once, also while it is measured"
+  );
   let panel = kit.bounds("title-tooltip");
   assert!(
     panel.width <= 400.0 + 16.0 + 0.5,
@@ -368,4 +375,20 @@ fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
     panel.width
   );
   assert!(panel.height > 30.0, "its words wrap onto more lines: {}", panel.height);
+}
+
+#[test]
+fn resting_on_cut_text_does_not_move_its_row() {
+  let mut kit = Kit::show(|ctx| {
+    Row::new()
+      .width(Dimension::Px(900.0))
+      .spacing(SpacingSize::Sm)
+      .child(Truncated::new("fits", "Add retry to webhook sender", ExtraTypography::Strong.role()).render(ctx))
+      .child(TagChip::new("tag", "webhooks"))
+      .into()
+  });
+  let before = kit.bounds("tag");
+  kit.rest_on("fits");
+  assert_eq!(kit.bounds("tag"), before, "the tag stays where it was");
+  assert!(!kit.exists("fits-tooltip"));
 }

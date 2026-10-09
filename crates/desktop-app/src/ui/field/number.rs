@@ -41,6 +41,7 @@ impl NumberField {
       input: FieldInput::new(id.clone(), name, value)
         .unit(unit)
         .mono()
+        .error_at_end()
         .width(Dimension::Px(NUMBER_FIELD_WIDTH)),
       id,
       read_back: read_back.into(),
