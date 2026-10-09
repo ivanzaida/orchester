@@ -130,6 +130,7 @@ fn widening_takes_only_a_short_list_of_harmless_variables() {
     "LANG",
     "LC_ALL",
     "lc_time",
+    "LC_CTYPE",
   ] {
     assert!(harmless_variable(name), "{name} changes nothing agents may do");
   }
@@ -156,6 +157,7 @@ fn widening_takes_only_a_short_list_of_harmless_variables() {
     "SYSTEMROOT",
     "TEMP",
     "DATABASE_NAME",
+    "LC_EVIL",
   ] {
     assert!(!harmless_variable(name), "{name} is a person's decision");
   }

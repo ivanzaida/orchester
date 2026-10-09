@@ -83,14 +83,18 @@ const HARMLESS_NAMES: &[&str] = &[
   "CI",
   "FORCE_COLOR",
   "LANG",
+  "LC_ALL",
+  "LC_COLLATE",
+  "LC_CTYPE",
+  "LC_MESSAGES",
+  "LC_MONETARY",
+  "LC_NUMERIC",
+  "LC_TIME",
   "NO_COLOR",
   "RUST_BACKTRACE",
   "RUST_LOG",
   "TZ",
 ];
-
-/// Prefixes of harmless variable families: the locale's categories (`LC_ALL`, `LC_TIME`…).
-const HARMLESS_PREFIXES: &[&str] = &["LC_"];
 
 /// Whether setting or removing the environment variable `name` cannot change what agents and command
 /// tools may do. Any other variable may: it can change which programs load, where they connect, what they
@@ -98,5 +102,5 @@ const HARMLESS_PREFIXES: &[&str] = &["LC_"];
 /// widen as well, so it is a person's decision. The list is short on purpose: what it leaves out is refused.
 pub fn harmless_variable(name: &str) -> bool {
   let name = name.trim().to_ascii_uppercase();
-  HARMLESS_NAMES.contains(&name.as_str()) || HARMLESS_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+  HARMLESS_NAMES.contains(&name.as_str())
 }

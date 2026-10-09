@@ -50,7 +50,8 @@ const SPECS: &[Spec] = &[
                   start, as Project settings › Environment does: names are letters, digits and _ (not starting with \
                   a digit), each name once ignoring case. They are stored and shown in plain text, so never put a \
                   secret in one. Adding, changing or removing any variable but RUST_LOG, RUST_BACKTRACE, CI, \
-                  NO_COLOR, FORCE_COLOR, TZ, LANG and LC_* is refused as person_only unless a person turned on Let \
+                  NO_COLOR, FORCE_COLOR, TZ, LANG, LC_ALL, LC_CTYPE, LC_COLLATE, LC_MESSAGES, LC_MONETARY, \
+                  LC_NUMERIC and LC_TIME is refused as person_only unless a person turned on Let \
                   automation change agent permissions: a variable can change what programs load, where they \
                   connect, what they trust or where tools keep their configuration. An empty list removes them all. \
                   Returns the variables as saved.",

@@ -205,7 +205,8 @@ CLI enforces and no MCP server) on save or publish, which covers write access, w
 commands, network access, no longer asking before tool calls and approving automatically; an agent CLI
 whose program is not a copy found on the search path, refused before it runs; any change to the project's
 environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`,
-`FORCE_COLOR`, `TZ`, `LANG` and `LC_*` (`orchester_core::permission::widening::harmless_variable`), since a
+`FORCE_COLOR`, `TZ`, `LANG` and the standard `LC_ALL`, `LC_CTYPE`, `LC_COLLATE`, `LC_MESSAGES`, `LC_MONETARY`,
+`LC_NUMERIC` and `LC_TIME` (`orchester_core::permission::widening::harmless_variable`), since a
 variable can change what programs load, where they connect, what they trust or where tools keep their
 configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
 *Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
