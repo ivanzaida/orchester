@@ -4,7 +4,9 @@
 //! 12 `text_muted` unit after it (`Limit field` `eesXH`); a text area is 84 high at least, 7 over and
 //! under its lines (`IBFli`). The box takes the `border_focus` stroke while its input has the focus
 //! (`QWfRV` in `C0Qk5`) and the `danger` stroke while its value is not accepted (`wbLGz` in `CqBFL`).
-//! It types each key once: the input writes into the value itself.
+//! It types each key once: the input writes into the value itself. A locked field shows its value in
+//! `text_secondary` on `surface_panel` and takes no input or focus (`Bzakf` in New task · queued
+//! `H8GYVZ`).
 
 use std::sync::Arc;
 
@@ -56,6 +58,7 @@ pub struct FieldInput {
   /// Groups the digits of a whole number while it is typed.
   group_separator: Option<Arc<str>>,
   width: Dimension,
+  locked: bool,
 }
 
 /// Compared by what it shows; the value by its signal.
@@ -73,6 +76,7 @@ impl PartialEq for FieldInput {
       && self.error_at_end == other.error_at_end
       && self.group_separator == other.group_separator
       && self.width == other.width
+      && self.locked == other.locked
   }
 }
 
@@ -95,6 +99,7 @@ impl FieldInput {
       error_at_end: false,
       group_separator: None,
       width: Dimension::Pct(100.0),
+      locked: false,
     }
   }
 
@@ -150,6 +155,13 @@ impl FieldInput {
     self
   }
 
+  /// The value cannot be changed now: it shows on `surface_panel` in `text_secondary`, and the input
+  /// takes neither keys nor the focus.
+  pub fn locked(mut self) -> Self {
+    self.locked = true;
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("field-{}", self.id);
     ctx.mount_keyed::<FieldBox>(&key, self)
@@ -182,11 +194,16 @@ impl Component for FieldBox {
     let dress = |frame: Row| {
       frame
         .width(props.width)
-        .background(PaletteColor::SurfaceInput)
+        .background(if props.locked {
+          PaletteColor::SurfacePanel
+        } else {
+          PaletteColor::SurfaceInput
+        })
         .border(Border::inside(BorderSize::Sm, stroke.clone()))
         .rounded(RadiusSize::Md)
         .describe("state", if props.error.is_some() { "invalid" } else { "valid" })
         .describe("focused", if self.focused.get() { "true" } else { "false" })
+        .describe("locked", if props.locked { "true" } else { "false" })
     };
     let frame = match props.lines {
       Lines::One => dress(
@@ -246,7 +263,12 @@ impl FieldBox {
       TypographyStyle::Description
     };
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
-    let mut input = TextInput::styled(props.value.clone(), resolve(value, PaletteColor::TextPrimary))
+    let color = if props.locked {
+      PaletteColor::TextSecondary
+    } else {
+      PaletteColor::TextPrimary
+    };
+    let mut input = TextInput::styled(props.value.clone(), resolve(value, color))
       .placeholder_style(resolve(TypographyStyle::Description, PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id(props.id.to_string())
@@ -258,7 +280,11 @@ impl FieldBox {
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);
     }
-    if let Some(separator) = props.group_separator.clone() {
+    if props.locked {
+      input = input
+        .on_input(|event: TextInputEvent| event.prevent_default())
+        .focusable(false);
+    } else if let Some(separator) = props.group_separator.clone() {
       input = input.on_input(group_while_typing(props.value.clone(), separator));
     }
     match props.lines {

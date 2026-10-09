@@ -61,6 +61,12 @@ impl NumberField {
     self
   }
 
+  /// The value cannot be changed now ([`FieldInput::locked`]).
+  pub fn locked(mut self) -> Self {
+    self.input = self.input.locked();
+    self
+  }
+
   /// Why the value is not accepted, said in place of the read-back.
   pub fn error(mut self, error: impl Into<Arc<str>>) -> Self {
     self.refused = true;
