@@ -32,7 +32,7 @@ try {
     }
 
     # UI code styles through lurq theme roles and shows text through i18n keys. Design
-    # values live only in crates/desktop/src/theme/. See .claude/skills/orchester-ui.
+    # values live only in each app's src/theme/. See .claude/skills/orchester-ui.
     Write-Output "== ui literals (theme roles and i18n only)"
     $uiRules = @(
         @{ Rule = "hex color literal"; Pattern = '"#[0-9A-Fa-f]{3,8}"' },
@@ -41,10 +41,12 @@ try {
         @{ Rule = "hardcoded user-facing text"; Pattern = '\b(Text|Button)::new\(\s*"|\.(placeholder|with_title|tooltip|label)\(\s*"' },
         @{ Rule = "numeric spacing/radius/border"; Pattern = '\.(padding\w*|spacing|gap|rounded|corner_radius\w*|border\w*)\(\s*-?[0-9]' }
     )
-    $uiRoot = Join-Path $repositoryRoot "crates\desktop\src"
-    $themeRoot = Join-Path $uiRoot "theme"
-    $violations = Get-ChildItem -Path $uiRoot -Recurse -Filter *.rs -File |
-        Where-Object { -not $_.FullName.StartsWith($themeRoot) } |
+    $uiRoots = @("crates\desktop\src", "crates\desktop-app\src") | ForEach-Object { Join-Path $repositoryRoot $_ }
+    $violations = $uiRoots | ForEach-Object {
+        $themeRoot = Join-Path $_ "theme"
+        Get-ChildItem -Path $_ -Recurse -Filter *.rs -File |
+            Where-Object { -not $_.FullName.StartsWith($themeRoot) }
+    } |
         ForEach-Object {
             $file = $_
             foreach ($rule in $uiRules) {
