@@ -12,7 +12,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   display,
-  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry},
+  tasks::transcript::{CommandEntry, Entry, EntryKind, ToolCommandEntry, command_preview, in_worktree},
 };
 
 use super::{mcp, native, problem};
@@ -244,25 +244,6 @@ fn unparsed(ctx: &Ctx, lines: &[(OutputStream, Arc<str>)]) -> Shown {
   }
 }
 
-/// A single-line preview: every run of whitespace that holds a line break, with the indentation after it,
-/// reads as one space.
-pub(super) fn command_preview(command: &str) -> Cow<'_, str> {
-  if !command.contains(['\r', '\n']) {
-    return Cow::Borrowed(command);
-  }
-  let mut preview = String::with_capacity(command.len());
-  let mut rest = command;
-  while let Some(start) = rest.find(char::is_whitespace) {
-    preview.push_str(&rest[..start]);
-    let run = &rest[start..];
-    let (space, tail) = run.split_at(run.find(|c: char| !c.is_whitespace()).unwrap_or(run.len()));
-    preview.push_str(if space.contains(['\r', '\n']) { " " } else { space });
-    rest = tail;
-  }
-  preview.push_str(rest);
-  Cow::Owned(preview)
-}
-
 /// The row's one-line title, sharing the command itself when it already is one line.
 pub(super) fn preview_title(command: &Arc<str>) -> Arc<str> {
   match command_preview(command) {
@@ -274,15 +255,4 @@ pub(super) fn preview_title(command: &Arc<str>) -> Arc<str> {
 /// The command whole, when its title had to put it on one line.
 fn whole(command: &Arc<str>) -> Option<Arc<str>> {
   matches!(command_preview(command), Cow::Owned(_)).then(|| command.clone())
-}
-
-/// A path the CLI reported inside the run's worktree, relative to the worktree
-/// (`<repo>/.orchester/worktrees/<run>/src/a.rs` reads `src/a.rs`); `None` for other paths. The run's
-/// worktree is the innermost one: the repository itself may lie in another project's worktree.
-pub(super) fn in_worktree(path: &str) -> Option<&str> {
-  const WORKTREES: &str = ".orchester/worktrees/";
-  // Both separators are one byte: the offsets in the copy are the path's.
-  let start = path.replace('\\', "/").rfind(WORKTREES)? + WORKTREES.len();
-  let rest = &path[start..];
-  rest.find(['\\', '/']).map(|separator| &rest[separator + 1..])
 }

@@ -10,12 +10,12 @@ use orchester_core::{
   connection::stream::{CommandStatus, MemoryNotSavedReason, QuestionRefusal, RunnerProblem},
   tokens::compact_tokens,
 };
-use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind};
+use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
 
 use super::{
   mcp::subject_key,
   native,
-  shown::{Shown, command_preview},
+  shown::Shown,
 };
 use crate::ui::icon::Icon;
 
