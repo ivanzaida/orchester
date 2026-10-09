@@ -1,7 +1,7 @@
 //! The crate holds no UI: lurq is an optional dependency for the empty markers of `src/inspect.rs`
 //! only, and nothing else names it.
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::Command};
 
 fn rust_sources(dir: &Path, out: &mut Vec<(String, String)>) {
   for entry in fs::read_dir(dir).expect("source directory is readable") {
@@ -29,25 +29,44 @@ fn only_the_markers_name_lurq() {
   assert!(naming.is_empty(), "sources that name lurq: {naming:?}");
 }
 
-#[test]
-fn lurq_is_optional_and_behind_the_markers_feature() {
-  let manifest = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).expect("manifest");
-  let manifest: toml::Table = manifest.parse().expect("manifest is TOML");
-  let lurq = &manifest["dependencies"]["lurq"];
-  assert_eq!(lurq.get("optional").and_then(toml::Value::as_bool), Some(true));
-  let feature = manifest["features"]["devtools-inspect"]
-    .as_array()
-    .expect("the markers' feature lists what it enables");
-  assert_eq!(feature, &vec![toml::Value::from("dep:lurq")]);
-  for (name, value) in manifest["features"].as_table().expect("features") {
-    let enables_lurq = value.as_array().is_some_and(|enabled| {
-      enabled
-        .iter()
-        .any(|entry| entry.as_str().is_some_and(|entry| entry.contains("lurq")))
-    });
-    assert!(
-      name == "devtools-inspect" || !enables_lurq,
-      "feature `{name}` enables lurq"
-    );
+/// The packages the crate builds with, on every target, with `features`: what Cargo resolves,
+/// whatever a dependency is renamed to, which target it is for or what it re-exports.
+fn resolved(features: &[&str]) -> Vec<String> {
+  let mut tree = Command::new(env!("CARGO"));
+  tree
+    .current_dir(env!("CARGO_MANIFEST_DIR"))
+    .args([
+      "tree",
+      "-p",
+      "orchester-workspace",
+      "--edges",
+      "normal,build",
+      "--target",
+      "all",
+    ])
+    .args(["--prefix", "none", "--format", "{p}"]);
+  if !features.is_empty() {
+    tree.args(["--features", &features.join(",")]);
   }
+  let output = tree.output().expect("cargo runs");
+  assert!(
+    output.status.success(),
+    "cargo tree failed: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
+  String::from_utf8(output.stdout)
+    .expect("cargo tree prints UTF-8")
+    .lines()
+    .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
+    .collect()
+}
+
+#[test]
+fn lurq_is_reachable_only_through_the_markers_feature() {
+  let lurq = |packages: &[String]| packages.iter().any(|name| name.starts_with("lurq"));
+  assert!(!lurq(&resolved(&[])), "lurq builds without `devtools-inspect`");
+  assert!(
+    lurq(&resolved(&["devtools-inspect"])),
+    "`devtools-inspect` no longer brings the markers' lurq"
+  );
 }
