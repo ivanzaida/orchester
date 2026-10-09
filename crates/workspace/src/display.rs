@@ -131,6 +131,15 @@ pub fn weekday(at: Timestamp) -> usize {
   local.weekday().num_days_from_monday() as usize
 }
 
+/// The local month of `at`, as a [`MONTH_KEYS`] index, and its day of the month.
+pub fn month_day(at: Timestamp) -> (usize, u32) {
+  use chrono::Datelike;
+  // As in `clock`: stored times are after 1970.
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  let local = chrono::DateTime::<chrono::Local>::from(UNIX_EPOCH + Duration::from_millis(millis));
+  (local.month0() as usize, local.day())
+}
+
 /// The i18n keys of the weekdays' short names, Monday first.
 pub const WEEKDAY_KEYS: [&str; 7] = [
   "time.weekday.mon",
