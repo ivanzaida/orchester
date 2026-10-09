@@ -162,10 +162,8 @@ fn a_number_field_that_is_not_accepted_says_why_in_place_of_its_read_back() {
     note.x + note.width,
     "the error at the box's end (`UQFos`)",
   );
-  assert_eq!(
-    kit.texts("budget-note"),
-    ["\u{e077}".to_owned(), "A budget is at least 1 token.".to_owned()]
-  );
+  // Only the words, in `danger`, as the design draws them (`Aqupm` in `i4Y9hL`): no alert mark.
+  assert_eq!(kit.texts("budget-note"), ["A budget is at least 1 token.".to_owned()]);
 }
 
 #[test]
