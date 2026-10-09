@@ -29,6 +29,7 @@ use crate::{
     field::{FieldInput, field_error},
     icon::Icon,
     message::message_text,
+    unavailable::reason_line,
   },
 };
 
@@ -47,11 +48,20 @@ pub struct DecisionBar<'a> {
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Choice>>,
   pub action: &'a DecisionAction<Choice>,
+  /// The project's runner is online: deciding needs it.
+  pub online: bool,
+  /// The card shows an earlier version than the one that waits.
+  pub earlier: bool,
 }
 
 impl DecisionBar<'_> {
   pub fn render(&self, ctx: &mut Ctx) -> Element {
     let (pending, refused) = state(self.action, self.asked.get());
+    let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
+    // A note goes only with *Request changes*: while one is typed, approving would drop it. Approving
+    // decides the version that waits, so it waits until that one is shown.
+    let noted = !self.note.get().trim().is_empty();
+    let held = noted || self.earlier;
     let next = self.review.waiting().version.get().saturating_add(1).to_string();
     let note = FieldInput::new("plan-review-note", ctx.t("decisions.plan.noteName"), self.note.clone())
       .leading(Icon::PencilLine)
@@ -62,8 +72,16 @@ impl DecisionBar<'_> {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .child(Column::new().flex(1.0).child(note))
-      .child(self.request_changes(ctx, pending))
-      .child(self.approve(ctx, pending));
+      .child(self.request_changes(ctx, pending, offline.clone()))
+      .child(self.approve(ctx, (pending, offline.clone()), held));
+    let approve_hint = if self.earlier {
+      let version = self.review.waiting().version.to_string();
+      ctx.t_args("decisions.plan.switchToApprove", [("version", version.as_str())])
+    } else if noted {
+      ctx.t("decisions.plan.clearToApprove")
+    } else {
+      approve_hint(ctx, self.run, self.review)
+    };
     let hints = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -78,7 +96,7 @@ impl DecisionBar<'_> {
         .flex(1.0),
       )
       .child(
-        Text::new(&approve_hint(ctx, self.run, self.review))
+        Text::new(&approve_hint)
           .id("plan-review-approve-hint")
           .variant(ExtraTypography::Note.role())
           .nowrap(),
@@ -98,11 +116,12 @@ impl DecisionBar<'_> {
       .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(row)
       .child(hints)
+      .with_children(offline.map(|reason| reason_line("plan-review-offline", &reason)))
       .with_children(refused.map(|refused| field_error("plan-review-refused", &message_text(ctx, &refused))))
       .into()
   }
 
-  fn request_changes(&self, ctx: &Ctx, pending: Option<Choice>) -> ActionButton {
+  fn request_changes(&self, ctx: &Ctx, pending: Option<Choice>, offline: Option<Arc<str>>) -> ActionButton {
     let button = ActionButton::new(
       "plan-request-changes",
       ButtonKind::Secondary,
@@ -110,6 +129,9 @@ impl DecisionBar<'_> {
     )
     .icon(Icon::Undo2)
     .in_form();
+    if let Some(reason) = offline {
+      return button.unavailable(reason);
+    }
     if pending == Some(Choice::RequestChanges) {
       return button.loading();
     }
@@ -124,14 +146,17 @@ impl DecisionBar<'_> {
     button.on_click(move || decide())
   }
 
-  fn approve(&self, ctx: &Ctx, pending: Option<Choice>) -> ActionButton {
+  /// *Approve plan & continue*; `held` while a note is typed or an earlier version is shown.
+  fn approve(&self, ctx: &Ctx, (pending, offline): (Option<Choice>, Option<Arc<str>>), held: bool) -> ActionButton {
     let button = ActionButton::new("plan-approve", ButtonKind::Primary, ctx.t("decisions.plan.approve"))
       .icon(Icon::Check)
       .in_form();
-    match pending {
-      Some(Choice::Approve) => button.loading(),
-      Some(Choice::RequestChanges) => button.disabled(),
-      None => {
+    match (offline, pending) {
+      (Some(reason), _) => button.unavailable(reason),
+      (None, Some(Choice::Approve)) => button.loading(),
+      (None, Some(Choice::RequestChanges)) => button.disabled(),
+      (None, None) if held => button.disabled(),
+      (None, None) => {
         let decide = self.decide(Choice::Approve, PlanDecision::Approved);
         button.on_click(move || decide())
       }
@@ -150,6 +175,10 @@ impl DecisionBar<'_> {
     };
     let (action, asked) = (self.action.clone(), self.asked.clone());
     Arc::new(move || {
+      // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
+      if action.state().get_untracked().is_pending() {
+        return;
+      }
       asked.set(Some(choice));
       action.run((choice, command.clone()));
     })

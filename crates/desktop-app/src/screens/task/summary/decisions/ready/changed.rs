@@ -82,9 +82,10 @@ pub fn read(ctx: &mut Ctx, task: &TaskContext) -> Option<Result<Checkpointed, Me
     }
   });
   let state = load.state().get();
+  // A reading that failed keeps the data read before it: the failure is what stands.
   match (state.data, state.error) {
-    (Some(Read(read)), _) => Some(Ok(read)),
-    (None, Some(error)) => Some(Err(error)),
+    (_, Some(error)) => Some(Err(error)),
+    (Some(Read(read)), None) => Some(Ok(read)),
     (None, None) => None,
   }
 }

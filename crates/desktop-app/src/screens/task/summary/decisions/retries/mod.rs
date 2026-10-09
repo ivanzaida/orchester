@@ -16,12 +16,13 @@ use lurq::{
 };
 use orchester_core::{
   resource::StepKey,
-  run::{RunStatus, StuckDecision},
+  run::{RunStatus, Stuck, StuckDecision},
 };
+use orchester_workspace::tasks::detail::RunView;
 
 use self::decide::DecideCard;
-use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
-use crate::services::Services;
+use super::{TaskContext, action::decision_action, arranged, stages::stages, step_label, task_notice, this_run_panel};
+use crate::{services::Services, ui::notice::Notice};
 
 /// Which decision was asked for, for the button that shows it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +49,37 @@ impl Deciding {
 pub struct Target(Option<StepKey>);
 
 impl lurq::app::component::DevtoolsInspectable for Target {}
+
+/// Where the task stands; after used-up retries, how often and where the step sent the work back
+/// (`Notice · Review still fails after 2 retries` in `DVuXu`).
+fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notice {
+  let mut said = task_notice(ctx, props);
+  let Stuck::RetriesExhausted(step) = stuck else {
+    return said.notice();
+  };
+  let view = |key: &StepKey| run.steps.iter().find(|view| view.key == *key);
+  let (Some(failed), Some(target)) = (view(step), run.run.retry_from().and_then(view)) else {
+    return said.notice();
+  };
+  let count = run.run.automatic_retries_taken(step);
+  let args = [
+    ("step", failed.name.to_string()),
+    ("label", step_label(ctx, failed).to_string()),
+    ("target", target.name.to_string()),
+    ("count", count.to_string()),
+  ];
+  let (title, body) = if count == 1 {
+    ("decisions.retries.noticeTitle.one", "decisions.retries.noticeBody.one")
+  } else {
+    (
+      "decisions.retries.noticeTitle.other",
+      "decisions.retries.noticeBody.other",
+    )
+  };
+  said.title = ctx.t_args(title, args.clone());
+  said.body = ctx.t_args(body, args);
+  said.notice()
+}
 
 pub struct RetryDecision {
   target: Signal<Target>,
@@ -94,9 +126,10 @@ impl Component for RetryDecision {
       note: &self.note,
       asked: &self.asked,
       action: &action,
+      offline: (!props.online).then(|| ctx.t("task.controls.offline")),
     }
     .render(ctx);
-    let parts: Vec<Element> = std::iter::once(task_notice(ctx, &props).into())
+    let parts: Vec<Element> = std::iter::once(notice(ctx, &props, run, stuck).into())
       .chain(std::iter::once(stages(run, Some(stuck.step().as_str()), now)))
       .chain(evidence::sections(ctx, &props, run, stuck.step(), now))
       .collect();

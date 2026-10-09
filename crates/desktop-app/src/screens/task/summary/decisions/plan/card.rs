@@ -92,6 +92,7 @@ impl PlanCard<'_> {
       .child(Text::new(&label).variant(ExtraTypography::Note.role()).nowrap())
       .child(
         SelectField::new("plan-review-version", label.clone(), shown.clone(), self.versions(ctx))
+          .leading(Icon::History)
           .width(Dimension::Px(VERSION_WIDTH))
           .render(ctx),
       )

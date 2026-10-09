@@ -19,8 +19,8 @@ use support::{Data, Window};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-/// What the runner says when it is not there.
-const NOT_CONNECTED: &str = "The runner is not connected. Try again once it is online.";
+/// Why a decision waits: no runner is connected to carry it out (the header's own words).
+const OFFLINE: &str = "The runner is not connected; the run's controls return once it is online.";
 
 /// The window on a seeded scenario's project, and the seeded tasks: key and state.
 struct Page {
@@ -191,13 +191,22 @@ fn decision_plan_review_lists_versions_and_request_changes_needs_a_note() {
     page.text("plan-review-changed"),
     "This is v1, an earlier plan. Plan v2 waits for your decision."
   );
-  page.click("plan-request-changes");
-  assert!(!page.has("plan-review-refused"), "without a note nothing is asked");
+  assert_eq!(
+    page.text("plan-review-approve-hint"),
+    "Switch to v2 to approve.",
+    "approving decides the version that waits"
+  );
+  page.choose("plan-review-version", "v2 · latest");
+  page.until_says("plan-review-title", "Plan v2");
   page.set("plan-review-note", "Show how many messages wait.");
-  page.click("plan-request-changes");
-  page.until_says("plan-review-refused", NOT_CONNECTED);
-  page.click("plan-approve");
-  page.until_says("plan-review-refused", NOT_CONNECTED);
+  assert_eq!(
+    page.text("plan-review-approve-hint"),
+    "Clear the note to approve, or request changes."
+  );
+  // Deciding needs the runner, which is not connected here: both wait, and say why.
+  assert!(page.locked("plan-approve"));
+  assert!(page.locked("plan-request-changes"));
+  assert_eq!(page.text("plan-review-offline"), OFFLINE);
   page.open("plan v1 waiting", "plan-review");
   assert_eq!(page.options("plan-review-version"), ["v1 · latest"]);
   assert!(!page.has("plan-review-changed"));
@@ -221,24 +230,28 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
     page.text("raise-limit-field-hint"),
     "= 800k tokens · 300k more than now"
   );
-  assert_eq!(page.text("raise-limit-continue-label"), "Continue with 800k");
+  assert_eq!(page.text("raise-limit-continue-label"), "Continue with 800k tokens");
   page.set("raise-limit-input", "400,000");
   page.until_says(
     "raise-limit-input-note",
     "Enter more than the 500k tokens this run already used.",
   );
-  page.click("raise-limit-continue");
-  assert!(
-    !page.has("raise-limit-refused"),
-    "a budget below what was used is not asked for"
-  );
-  // No maximum: far above any project's maximum is read as it is.
+  // No maximum: far above any project's maximum is read as it is, up to what the project database holds.
   page.set("raise-limit-input", "90,000,000");
   page.until_says("raise-limit-field-hint", "= 90M tokens · 89.5M more than now");
-  page.click("raise-limit-continue");
-  page.until_says("raise-limit-refused", NOT_CONNECTED);
-  page.click("raise-limit-remove");
-  page.until_says("raise-limit-refused", NOT_CONNECTED);
+  page.set("raise-limit-input", "10,000,000,000,000,000,000");
+  page.until_says(
+    "raise-limit-input-note",
+    "Enter a smaller number: a budget can be at most 9,223,372,036,854,775,807 tokens.",
+  );
+  assert!(page.locked("raise-limit-continue"), "continuing waits for a runner");
+  assert_eq!(page.text("raise-limit-offline"), OFFLINE);
+  assert!(page.locked("raise-limit-remove"), "run limits cannot be empty yet");
+  let remove = page.text("raise-limit-remove-reason");
+  assert!(
+    remove.starts_with("Remove the limit needs optional run limits"),
+    "{remove}"
+  );
   assert!(page.has("raise-limit-tokens-by-step"));
   assert_eq!(page.text("raise-limit-step-research"), "40k tokens · Explorer");
 }
@@ -273,15 +286,18 @@ fn decision_after_retries_allows_a_retry_returns_with_a_note_and_stops() {
   assert!(page.has("task-retry-attempt"), "the latest attempt's steps");
   let options = page.options("task-return-step");
   assert!(options.contains(&"03 Implement · default".to_owned()), "{options:?}");
-  page.click("task-return-with-note");
-  assert!(!page.has("task-retry-refused"), "returning the work needs a note");
+  let title = page.text("task-notice-title");
+  assert!(
+    title.starts_with("Review still fails after ") && (title.ends_with(" retries") || title.ends_with(" retry")),
+    "{title}"
+  );
+  assert!(page.text("task-notice").contains("sent the work back to Implement"));
+  // Each decision goes to the runner, which is not connected here: they wait, and say why.
   page.set("task-return-note", "Sample more than ten delays.");
-  page.click("task-return-with-note");
-  page.until_says("task-retry-refused", NOT_CONNECTED);
-  page.click("task-allow-retry");
-  page.until_says("task-retry-refused", NOT_CONNECTED);
-  page.click("task-stop-run");
-  page.until_says("task-retry-refused", NOT_CONNECTED);
+  for button in ["task-allow-retry", "task-return-with-note", "task-stop-run"] {
+    assert!(page.locked(button), "{button}");
+  }
+  assert_eq!(page.text("task-retry-offline"), OFFLINE);
 }
 
 #[test]

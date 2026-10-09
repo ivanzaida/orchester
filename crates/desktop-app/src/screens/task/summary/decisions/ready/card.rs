@@ -43,8 +43,8 @@ use crate::{
 const FILE_ROW_HEIGHT: f32 = 30.0;
 
 /// The Ready card of a run that is not merged.
-pub fn ready(ctx: &mut Ctx, task: &TaskContext) -> Element {
-  let (actions, reasons) = actions(ctx, task);
+pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
+  let (actions, reasons) = actions(ctx, task, run);
   let text = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Fine.role())
@@ -95,6 +95,7 @@ pub fn merged(ctx: &Ctx, task: &TaskContext, merge: &RunMerge) -> Element {
   let left = task
     .left
     .as_read(merge.run)
+    // Why what the run left could not be read is said in its row of *Runs of this task*.
     .and_then(Result::ok)
     .map(|left| left_behind(ctx, &left));
   let body = match left {
@@ -134,24 +135,26 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
   }
 }
 
-/// *Not merged into main* with why, the files that conflicted, and the actions to merge again.
-pub fn not_merged(ctx: &mut Ctx, task: &TaskContext, problem: &Message, conflicts: &[String]) -> Vec<Element> {
-  let branch = task
-    .detail
-    .run
-    .as_ref()
-    .and_then(|run| run.run.base_branch())
-    .map(|branch| branch.as_str().to_owned())
-    .unwrap_or_default();
-  let notice = Notice::new(
-    "task-notice",
-    NoticeTone::Warning,
-    ctx.t_args("decisions.ready.notMergedTitle", [("branch", branch.as_str())]),
-  )
-  .icon(Icon::TriangleAlert)
-  .body(message_text(ctx, problem));
+/// Why the last merge did not stand: *Not merged into main* with why and the files that conflicted, or
+/// that git merged the run (`made`) but the merge could not be recorded; then the actions to merge again,
+/// which records a merge git made.
+pub fn not_merged(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (problem, made): (&Message, Option<&RunMerge>),
+  conflicts: &[String],
+) -> Vec<Element> {
+  let title = match (made, run.run.base_branch()) {
+    (Some(made), _) => ctx.t_args("decisions.ready.notRecordedTitle", [("branch", made.into.as_str())]),
+    (None, Some(branch)) => ctx.t_args("decisions.ready.notMergedTitle", [("branch", branch.as_str())]),
+    (None, None) => ctx.t("decisions.ready.notMergedNoBranch"),
+  };
+  let notice = Notice::new("task-notice", NoticeTone::Warning, title)
+    .icon(Icon::TriangleAlert)
+    .body(message_text(ctx, problem));
   let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
-  let (actions, reasons) = actions(ctx, task);
+  let (actions, reasons) = actions(ctx, task, run);
   let actions = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
@@ -193,8 +196,8 @@ fn conflicting(ctx: &mut Ctx, files: &[String]) -> Element {
 
 /// *Merge into main*, *Ask agent* and *Review PR* (`XKJdW`), and why the ones that cannot be used now
 /// are unavailable.
-fn actions(ctx: &mut Ctx, task: &TaskContext) -> (Element, Vec<Element>) {
-  let (merge, merge_reason) = merge_button(ctx, task);
+fn actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (Element, Vec<Element>) {
+  let (merge, merge_reason) = merge_button(ctx, task, run);
   let ask_reason = ctx.t("decisions.ready.askUnavailable");
   let review_reason = ctx.t("decisions.ready.reviewUnavailable");
   let ask = ActionButton::new("task-ask-agent", ButtonKind::Secondary, ctx.t("decisions.ready.ask"))
@@ -226,13 +229,10 @@ fn actions(ctx: &mut Ctx, task: &TaskContext) -> (Element, Vec<Element>) {
   (row.into(), reasons)
 }
 
-/// *Merge into main*: under way while git merges, waiting while the run's worktree is removed, and
-/// unavailable with why when the run did not record the branch it started from.
-fn merge_button(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) {
-  let Some(run) = task.detail.run.as_ref() else {
-    let label = ctx.t("decisions.ready.mergeUnknown");
-    return (ActionButton::new("task-merge", ButtonKind::Primary, label), None);
-  };
+/// *Merge into main*: under way while git merges, waiting while the run's worktree is removed or another
+/// run of the project merges, and unavailable with why when the run did not record the branch it started
+/// from.
+fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButton, Option<Arc<str>>) {
   let Some(branch) = run.run.base_branch() else {
     let reason = ctx.t("decisions.ready.mergeNoBranch");
     let button = ActionButton::new("task-merge", ButtonKind::Primary, ctx.t("decisions.ready.mergeUnknown"))
@@ -243,9 +243,11 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<
   let job = task.jobs.run(run.id());
   let label = ctx.t_args("decisions.ready.merge", [("branch", branch.as_str())]);
   let button = ActionButton::new("task-merge", ButtonKind::Primary, label).icon(Icon::GitMerge);
-  // A merge that succeeded shows under way until the task is read again with it.
-  if matches!(job.merge, JobState::Running | JobState::Succeeded) {
+  if job.merge == JobState::Running {
     return (button.loading(), None);
+  }
+  if task.jobs.merging().is_some_and(|other| other != run.id()) {
+    return (button.disabled(), Some(ctx.t("decisions.ready.anotherMerge")));
   }
   if job.busy() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));

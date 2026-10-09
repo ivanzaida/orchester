@@ -154,7 +154,8 @@ fn summary_notice_says_where_each_task_stands() {
     ("interrupted", "Interrupted at Implement"),
     ("failed", "Failed at Run checks"),
     ("cancelled", "Canceled"),
-    ("waits after retries", "Run checks still fails after its retries"),
+    // The decision after retries words how often the step sent the work back (`DVuXu`).
+    ("waits after retries", "Run checks still fails after 2 retries"),
     ("ready for review", "Ready for your review"),
     ("merged", "Merged into main"),
   ];

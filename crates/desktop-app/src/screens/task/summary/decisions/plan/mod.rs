@@ -78,7 +78,7 @@ impl Component for PlanDecision {
       on_link: &self.on_link,
     };
     let parts: Vec<Element> = vec![
-      task_notice(ctx, &props).into(),
+      task_notice(ctx, &props).notice().into(),
       stages(run, gated.as_deref(), now),
       plan.render(ctx, &self.shown),
     ];
@@ -88,6 +88,8 @@ impl Component for PlanDecision {
       note: &self.note,
       asked: &self.asked,
       action: &action,
+      online: props.online,
+      earlier: shown.version != review.waiting().version,
     }
     .render(ctx);
     let side = this_run_panel(ctx, &props, None);

@@ -48,6 +48,8 @@ pub struct RaiseCard<'a> {
   pub asked: &'a Signal<Option<Raising>>,
   pub action: &'a DecisionAction<Raising>,
   pub separator: &'a str,
+  /// The project's runner is online: continuing needs it.
+  pub online: bool,
 }
 
 impl RaiseCard<'_> {
@@ -57,14 +59,25 @@ impl RaiseCard<'_> {
       .child(head(ctx, self.stop.limit))
       .child(self.used(ctx));
     let (Some(unit), Some(read)) = (self.stop.field(), self.stop.read(&self.text.get(), self.separator)) else {
-      let reason = ctx.t("decisions.limit.groupReason");
+      let reason = match self.stop.limit {
+        RunLimit::StepBudget { .. } => ctx.t("decisions.limit.stepNoBudget"),
+        _ => ctx.t("decisions.limit.groupReason"),
+      };
       return card.child(reason_line("raise-limit-unavailable", &reason)).into();
     };
     let (pending, refused) = state(self.action, self.asked.get());
+    let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
+    let remove = ctx.t("decisions.limit.removeUnavailable");
+    let reasons = offline
+      .iter()
+      .map(|reason| ("raise-limit-offline", reason.clone()))
+      .chain([("raise-limit-remove-reason", remove)])
+      .map(|(id, reason)| -> Element { reason_line(id, &reason).into() });
     card
       .child(divider())
       .child(self.input_row(ctx, unit, read.as_ref()))
-      .child(self.actions(ctx, unit, read.ok(), pending))
+      .child(self.actions(ctx, unit, read.ok(), (pending, offline.clone())))
+      .with_children(reasons.collect::<Vec<_>>())
       .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))))
       .into()
   }
@@ -129,20 +142,20 @@ impl RaiseCard<'_> {
   /// The new limit's field and its read-back, beside what continuing does.
   fn input_row(&self, ctx: &mut Ctx, unit: Unit, read: Result<&Raise, &Message>) -> Element {
     let stop = self.stop;
-    let (label, unit_word) = match (unit, stop.limit) {
-      (Unit::Minutes, _) => (ctx.t("decisions.limit.newTime"), ctx.t("decisions.limit.minutes")),
+    let label = match (unit, stop.limit) {
+      (Unit::Minutes, _) => ctx.t("decisions.limit.newTime"),
       (Unit::Tokens, RunLimit::StepBudget { .. }) => {
         let step = stop.stopped.map(|step| step.name.to_string()).unwrap_or_default();
-        (
-          ctx.t_args("decisions.limit.newStepBudget", [("step", step.as_str())]),
-          ctx.t("decisions.limit.tokensUnit"),
-        )
+        ctx.t_args("decisions.limit.newStepBudget", [("step", step.as_str())])
       }
-      (Unit::Tokens, _) => (ctx.t("decisions.limit.newBudget"), ctx.t("decisions.limit.tokensUnit")),
+      (Unit::Tokens, _) => ctx.t("decisions.limit.newBudget"),
     };
-    let input = FieldInput::new("raise-limit-input", label.clone(), self.text.clone())
-      .mono()
-      .unit(unit_word);
+    // The token field reads as tokens by its label and read-back (`C0Qk5`); minutes say their unit.
+    let input = FieldInput::new("raise-limit-input", label.clone(), self.text.clone()).mono();
+    let input = match unit {
+      Unit::Minutes => input.unit(ctx.t("decisions.limit.minutes")),
+      Unit::Tokens => input,
+    };
     let (input, hint) = match read {
       Ok(raise) => (input, Some(self.read_back(ctx, *raise))),
       Err(error) => (input.error(message_text(ctx, error)), None),
@@ -231,38 +244,40 @@ impl RaiseCard<'_> {
     }
   }
 
-  /// *Continue with …*, *Remove the limit* and what removing does.
-  fn actions(&self, ctx: &Ctx, unit: Unit, raise: Option<Raise>, pending: Option<Raising>) -> Element {
+  /// *Continue with …*, which needs the runner, and *Remove the limit*, which needs optional limits.
+  fn actions(
+    &self,
+    ctx: &Ctx,
+    unit: Unit,
+    raise: Option<Raise>,
+    (pending, offline): (Option<Raising>, Option<Arc<str>>),
+  ) -> Element {
     let label = match raise.map(|raise| self.new_value(unit, raise)) {
-      Some(value) => ctx.t_args("decisions.limit.continueWith", [("value", value.as_str())]),
+      Some(value) => ctx.t_args(
+        match unit {
+          Unit::Tokens => "decisions.limit.continueWithTokens",
+          Unit::Minutes => "decisions.limit.continueWithMinutes",
+        },
+        [("value", value.as_str())],
+      ),
       None => ctx.t("decisions.limit.continue"),
     };
     let go = ActionButton::new("raise-limit-continue", ButtonKind::Primary, label)
       .icon(Icon::Play)
       .in_form();
+    let go = match (offline, pending, raise) {
+      (Some(reason), ..) => go.unavailable(reason),
+      (None, Some(Raising), _) => go.loading(),
+      (None, None, Some(raise)) => self.press(go, raise),
+      (None, None, None) => go.disabled(),
+    };
     let remove = ActionButton::new(
       "raise-limit-remove",
       ButtonKind::Secondary,
       ctx.t("decisions.limit.remove"),
     )
     .icon(Icon::Infinity)
-    .in_form();
-    let (go, remove) = match pending {
-      Some(Raising::Continue) => (go.loading(), remove.disabled()),
-      Some(Raising::Remove) => (go.disabled(), remove.loading()),
-      None => (
-        match raise {
-          Some(raise) => self.press(go, Raising::Continue, raise),
-          None => go.disabled(),
-        },
-        self.press(remove, Raising::Remove, self.stop.removed()),
-      ),
-    };
-    let hint = match (unit, self.stop.limit) {
-      (Unit::Minutes, _) => ctx.t("decisions.limit.removeTime"),
-      (Unit::Tokens, RunLimit::StepBudget { .. }) => ctx.t("decisions.limit.removeStepBudget"),
-      (Unit::Tokens, _) => ctx.t("decisions.limit.removeTokens"),
-    };
+    .unavailable(ctx.t("decisions.limit.removeUnavailable"));
     Row::new()
       .id("raise-limit-actions")
       .width(Dimension::Pct(100.0))
@@ -270,12 +285,6 @@ impl RaiseCard<'_> {
       .align_items(Alignment::Center)
       .child(go)
       .child(remove)
-      .child(
-        Text::new(&hint)
-          .id("raise-limit-remove-hint")
-          .variant(ExtraTypography::Note.role())
-          .flex(1.0),
-      )
       .into()
   }
 
@@ -288,11 +297,15 @@ impl RaiseCard<'_> {
     }
   }
 
-  fn press(&self, button: ActionButton, raising: Raising, raise: Raise) -> ActionButton {
+  fn press(&self, button: ActionButton, raise: Raise) -> ActionButton {
     let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.stop.run.id());
     button.on_click(move || {
-      asked.set(Some(raising));
-      action.run((raising, raise.command(run)));
+      // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
+      if action.state().get_untracked().is_pending() {
+        return;
+      }
+      asked.set(Some(Raising));
+      action.run((Raising, raise.command(run)));
     })
   }
 }

@@ -24,7 +24,8 @@ use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{detail::StepView, plan::PlanReview};
 
 use super::{
-  column, layout, notice,
+  column, layout,
+  notice::{self, Said},
   runs::{self, Runs},
   this_run, waiting_approval,
 };
@@ -33,7 +34,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task::{PageState, TaskContext},
   theme::DecisionText,
-  ui::{notice::Notice, pressable::pressable},
+  ui::pressable::pressable,
 };
 
 /// A divider's thickness.
@@ -50,7 +51,8 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
   let id = run.id();
   if let Some(review) = PlanReview::of(run) {
     // A new version is a new review: its note starts empty.
-    let key = format!("decision-plan-{id}-{}", review.waiting().version);
+    let waiting = review.waiting();
+    let key = format!("decision-plan-{id}-{}-{}", waiting.execution, waiting.version);
     return Some(ctx.mount_keyed::<plan::PlanDecision>(&key, props.clone()));
   }
   match run.run.status() {
@@ -70,8 +72,8 @@ pub fn decisions(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
 }
 
 /// Where the task stands, as the usual Summary says it, without its actions: the decision below is
-/// where the person acts.
-fn task_notice(ctx: &Ctx, props: &TaskContext) -> Notice {
+/// where the person acts. A decision may word it closer to its own design before it is shown.
+fn task_notice(ctx: &Ctx, props: &TaskContext) -> Said {
   let detail = &props.detail;
   let lost = props.lost();
   let runner = props
@@ -81,7 +83,7 @@ fn task_notice(ctx: &Ctx, props: &TaskContext) -> Notice {
     .get()
     .map(|status| status.state_for(&props.project.open.repo_root));
   let approval = waiting_approval(&props.project, detail);
-  notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref()).notice()
+  notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref())
 }
 
 /// *This run* beside the decision, `lead` above it.

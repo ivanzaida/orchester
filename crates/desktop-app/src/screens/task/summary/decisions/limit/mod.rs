@@ -2,13 +2,15 @@
 //! the run's stages, *Raise the limit* ([`card`]): what the run used of the limit that stopped it, a field
 //! for the new limit in whole numbers with what it reads as, what continuing does, *Continue with …*, and
 //! *Remove the limit*; then the tokens each step used ([`by_step`]). The new limit applies to this run
-//! only. Limits have no maximum (the person's decision of 2026-10-09): any whole number above what was used
-//! is taken, and a runner that still holds a project maximum says so when it refuses.
+//! only. Limits have no maximum of their own (the person's decision of 2026-10-09): any whole number above
+//! what was used is taken, up to what the project database holds (`budget::largest_stored`,
+//! `budget::MAX_STORED_MINUTES`); a runner that still holds a project maximum says so when it refuses.
 //!
-//! Today's run limits are never empty, so *Remove the limit* raises the limit that stopped the run to
-//! the largest one, which the app shows as no limit (`budget::unbounded`); once run limits are optional in
-//! core (task LIM) it sends no limit instead. A stop at a task group's budget is not lifted by the run's
-//! own limits: it says why, and offers nothing to press.
+//! A run's limits cannot be empty in this version, so *Remove the limit* is unavailable and says why; once
+//! run limits are optional in core (task LIM) it sends no limit (`None`). Every request needs the
+//! project's runner: without one the actions are unavailable with the header's reason. A stop at a task
+//! group's budget, or at a step's budget that was not recorded, is not raised here: it says why, and
+//! offers nothing to press.
 
 mod by_step;
 mod card;
@@ -27,7 +29,8 @@ use orchester_core::{
   tokens::{TokenBudget, TokensUsed, grouped},
 };
 use orchester_workspace::{
-  budget::{minutes_text, unbounded, whole_minutes},
+  budget::{largest_stored, minutes_text, whole_minutes},
+  display,
   messages::Message,
   tasks::{
     detail::{RunView, StepView},
@@ -37,18 +40,15 @@ use orchester_workspace::{
 
 use self::card::RaiseCard;
 use super::{TaskContext, action::decision_action, arranged, stages::stages, task_notice, this_run_panel};
-use crate::services::Services;
+use crate::{services::Services, ui::notice::Notice};
 
 /// A suggested budget is the current one and half again, rounded up to this.
 const SUGGESTION_STEP: u64 = 100_000;
 const MINUTE: Duration = Duration::from_secs(60);
 
-/// Which button asked the runner, for the one that shows it under way.
+/// The request to continue with a raised limit, for its button to show it under way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Raising {
-  Continue,
-  Remove,
-}
+pub struct Raising;
 
 impl lurq::app::component::DevtoolsInspectable for Raising {}
 
@@ -118,32 +118,39 @@ impl<'a> Stop<'a> {
       (Unit::Tokens, _, None) => return None,
       (Unit::Tokens, RunLimit::StepBudget { .. }, Some((used, _))) => {
         let step = self.stopped.map(|step| &*step.name).unwrap_or_default();
-        raise::step_budget(text, separator, (used, unbounded()), step).map(Raise::StepBudget)
+        raise::step_budget(text, separator, (used, largest_stored()), step).map(Raise::StepBudget)
       }
-      (Unit::Tokens, _, Some((used, _))) => raise::run_budget(text, separator, (used, unbounded())).map(|budget| {
-        Raise::Limits(RaisedLimits {
-          budget,
-          max_duration: run.max_duration(),
+      (Unit::Tokens, _, Some((used, _))) => {
+        raise::run_budget(text, separator, (used, largest_stored())).map(|budget| {
+          Raise::Limits(RaisedLimits {
+            budget,
+            max_duration: run.max_duration(),
+          })
         })
-      }),
+      }
     })
   }
+}
 
-  /// No limit in place of the one that stopped the run.
-  pub fn removed(&self) -> Raise {
-    let run = &self.run.run;
-    match self.limit {
-      RunLimit::Time => Raise::Limits(RaisedLimits {
-        budget: run.budget(),
-        max_duration: Duration::MAX,
-      }),
-      RunLimit::StepBudget { .. } => Raise::StepBudget(unbounded()),
-      _ => Raise::Limits(RaisedLimits {
-        budget: unbounded(),
-        max_duration: run.max_duration(),
-      }),
-    }
+/// Where the task stands; after a token or time limit with the checkpoint its work was saved at
+/// (`Notice · Stopped at the token limit · checkpoint 7c1e9f2` in `oTzJZ`).
+fn notice(ctx: &Ctx, props: &TaskContext, stop: &Stop<'_>) -> Notice {
+  let mut said = task_notice(ctx, props);
+  let checkpoint = stop
+    .run
+    .run
+    .last_checkpoint()
+    .filter(|_| stop.run.saved_at_pause && !props.lost())
+    .map(|checkpoint| display::short_revision(checkpoint.revision().as_str()).to_owned());
+  let key = match stop.limit {
+    RunLimit::Tokens => Some("decisions.limit.noticeTokens"),
+    RunLimit::Time => Some("decisions.limit.noticeTime"),
+    _ => None,
+  };
+  if let (Some(key), Some(checkpoint)) = (key, checkpoint) {
+    said.title = ctx.t_args(key, [("checkpoint", checkpoint)]);
   }
+  said.notice()
 }
 
 /// What the field holds.
@@ -193,10 +200,11 @@ impl Component for RaiseLimit {
       asked: &self.asked,
       action: &action,
       separator: &separator,
+      online: props.online,
     }
     .render(ctx);
     let parts: Vec<Element> = vec![
-      task_notice(ctx, &props).into(),
+      notice(ctx, &props, &stop).into(),
       stages(run, focus.as_deref(), now),
       raise,
     ]

@@ -38,14 +38,19 @@ impl Component for ReadyForReview {
     };
     let now = Services::of(ctx).clock.now();
     let job = props.jobs.run(run.id());
-    let parts: Vec<Element> = match (&props.detail.merge, &job.merge) {
+    // A merge git made shows as soon as it is made, also while the task is not read again with it.
+    let made = props.detail.merge.as_ref().or(job.merged.as_ref());
+    let parts: Vec<Element> = match (made, &job.merge) {
+      (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
+        card::not_merged(ctx, &props, run, (problem, Some(merge)), &job.conflicts)
+      }
       (Some(merge), _) => vec![card::merged(ctx, &props, merge), stages(run, None, now)]
         .into_iter()
         .chain(runs_section(ctx, &props))
         .collect(),
-      (None, JobState::Failed(problem)) => card::not_merged(ctx, &props, problem, &job.conflicts),
+      (None, JobState::Failed(problem)) => card::not_merged(ctx, &props, run, (problem, None), &job.conflicts),
       (None, _) => vec![
-        card::ready(ctx, &props),
+        card::ready(ctx, &props, run),
         stages(run, None, now),
         changed::columns(ctx, &props, read.as_ref()),
       ]

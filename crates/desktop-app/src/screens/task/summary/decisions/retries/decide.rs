@@ -36,6 +36,7 @@ use crate::{
     field::{FieldInput, SelectField, field, field_error},
     icon::Icon,
     message::message_text,
+    unavailable::reason_line,
   },
 };
 
@@ -46,6 +47,8 @@ pub struct DecideCard<'a> {
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Deciding>>,
   pub action: &'a DecisionAction<Deciding>,
+  /// Why nothing can be decided now: no runner is connected to carry it out.
+  pub offline: Option<Arc<str>>,
 }
 
 impl DecideCard<'_> {
@@ -90,6 +93,12 @@ impl DecideCard<'_> {
       )
       .with_children(self.returning(ctx, pending))
       .child(divider())
+      .with_children(
+        self
+          .offline
+          .as_ref()
+          .map(|reason| reason_line("task-retry-offline", reason)),
+      )
       .with_children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
       .child(stop)
       .into()
@@ -185,8 +194,11 @@ impl DecideCard<'_> {
       .map(|(step, note)| StuckDecision::ReturnTo { step, note });
     let returning = match decision {
       Some(decision) => self.button(returning, decision, pending),
-      None if pending == Some(Deciding::Return) => returning.loading(),
-      None => returning.disabled(),
+      None => match &self.offline {
+        Some(reason) => returning.unavailable(reason.clone()),
+        None if pending == Some(Deciding::Return) => returning.loading(),
+        None => returning.disabled(),
+      },
     };
     vec![
       divider(),
@@ -199,12 +211,19 @@ impl DecideCard<'_> {
   /// `button` asking for `decision`: under way while it is, waiting while another is.
   fn button(&self, button: ActionButton, decision: StuckDecision, pending: Option<Deciding>) -> ActionButton {
     let deciding = Deciding::of(&decision);
+    if let Some(reason) = &self.offline {
+      return button.unavailable(reason.clone());
+    }
     match pending {
       Some(asked) if asked == deciding => button.loading(),
       Some(_) => button.disabled(),
       None => {
         let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.run.id());
         button.on_click(move || {
+          // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
+          if action.state().get_untracked().is_pending() {
+            return;
+          }
           asked.set(Some(deciding));
           action.run((
             deciding,
