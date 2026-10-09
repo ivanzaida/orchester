@@ -5,10 +5,11 @@
 //! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another takes
 //! the current entry's place in the tab's history.
 //!
-//! The task page frame takes it with three lines: [`ChangesReads::new`] in its `create`;
-//! [`ChangesReads::read`] with [`Follow::of`] on every render, whose [`RunChanges::file_count`] it shows on
-//! the tab's label through [`tab_label`], so the count is of the files listed here; and [`ChangesTab`]
-//! with [`ChangesProps`] in its Changes slot. Until it does, `host` stands in for it.
+//! The task page's frame owns the reads ([`ChangesReads::new`] in its `create`, provided to its parts
+//! with `ctx.provide`); its page tabs show [`count`] through [`tab_label`] (`Changes 6`, `Changes 4+`),
+//! which reads the changes on every render, and its Changes slot mounts [`tab`], which shows what was read
+//! last, so the count is of the files listed here and nothing is read twice. Until the frame takes it,
+//! `host` stands in for it.
 
 mod diff;
 mod files;
@@ -44,36 +45,67 @@ use self::{
   diff::{DiffView, DiffViewProps},
   files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
   listed::{FileListing, ListKeys, Listed},
+  load::{CheckpointedRead, Follow},
   toolbar::toolbar,
 };
 pub use self::{
   host::screen,
-  load::{ChangesReads, CheckpointedRead, Follow, RunChanges, tab_label},
+  load::{ChangesReads, FileCount, tab_label},
 };
 use crate::{
   navigation::Navigation,
-  routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
+  project::ShownProject,
+  routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
 };
+
+/// How many files the Changes tab lists, for its label; `None` while that is not known. Reads the changes
+/// of `detail`'s latest run with the page's [`ChangesReads`]: call it on every render of the page's tabs.
+pub fn count(ctx: &mut Ctx, project: &ShownProject, detail: &TaskDetail, online: bool) -> Option<FileCount> {
+  let tab = route_view(ctx).map_or(TaskTab::Summary, |view| view.tab());
+  let reads = ChangesReads::of(ctx);
+  let follow = Follow::of(detail, online, tab);
+  reads
+    .read(ctx, &project.open.repo_root, detail, follow)
+    .and_then(|changes| changes.file_count())
+}
+
+/// The Changes tab of `detail`'s page, on the file the path names: what [`count`] read last.
+pub fn tab(ctx: &mut Ctx, project: &ShownProject, detail: &Arc<TaskDetail>, online: bool) -> Element {
+  let file = route_view(ctx).and_then(|view| view.file().cloned());
+  let props = ChangesProps {
+    project: project.open.project.id(),
+    detail: detail.clone(),
+    file,
+    agent_at_work: Follow::of(detail, online, TaskTab::Changes).agent_at_work,
+    reads: ChangesReads::of(ctx),
+  };
+  ctx.mount_keyed::<ChangesTab>("task-changes-tab", props)
+}
+
+/// The task page's view the window's path names.
+fn route_view(ctx: &mut Ctx) -> Option<TaskView> {
+  match Route::parse(&ctx.route_path()) {
+    Ok(Route::Project(_, ProjectPage::Task(_, view))) => Some(view),
+    _ => None,
+  }
+}
 
 /// What the Changes tab shows.
 #[derive(Clone)]
-pub struct ChangesProps {
-  pub project: ProjectId,
-  pub detail: Arc<TaskDetail>,
-  /// The latest run's changes as read; `None` without a run.
-  pub changes: Option<RunChanges>,
+struct ChangesProps {
+  project: ProjectId,
+  detail: Arc<TaskDetail>,
   /// The file the path names.
-  pub file: Option<ChangedFile>,
+  file: Option<ChangedFile>,
   /// An agent works on the run: the worktree is read again while it does.
-  pub agent_at_work: bool,
-  pub reads: ChangesReads,
+  agent_at_work: bool,
+  reads: ChangesReads,
 }
 
 impl PartialEq for ChangesProps {
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project
       && self.detail == other.detail
-      && self.changes == other.changes
       && self.file == other.file
       && self.agent_at_work == other.agent_at_work
   }
@@ -85,7 +117,7 @@ impl lurq::app::component::DevtoolsInspectable for ChangesProps {}
 type ItemsKey = (ListKeys, usize, Option<WorktreeNote>);
 type KeptItems = Option<(ItemsKey, Arc<Vec<FileItem>>)>;
 
-pub struct ChangesTab {
+struct ChangesTab {
   navigation: Navigation,
   /// The list of the diffs on screen and its items, kept while they stay, so the list sees the same
   /// items.
@@ -107,8 +139,12 @@ impl Component for ChangesTab {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ChangesProps>().clone();
     let column = Column::new().id("task-changes").width(Dimension::Pct(100.0)).flex(1.0);
-    let (Some(run), Some(changes)) = (props.detail.run.as_ref(), props.changes.as_ref()) else {
+    let changes = props.reads.latest();
+    let Some(run) = props.detail.run.as_ref() else {
       return column.child(states::no_run(ctx));
+    };
+    let Some(changes) = changes.as_ref() else {
+      return column.child(states::reading(ctx));
     };
     let checkpointed = match &changes.checkpointed {
       CheckpointedRead::Loading => return column.child(states::reading(ctx)),

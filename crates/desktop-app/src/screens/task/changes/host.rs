@@ -2,7 +2,7 @@
 //! shows the page tabs with the Changes tab's count, and mounts the Changes tab in the frame's slot. The
 //! frame takes this over as the parent module says; this module then goes.
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -10,13 +10,10 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::{ProjectId, TaskId},
-  project::TaskKey,
-};
+use orchester_core::{id::TaskId, project::TaskKey};
 use orchester_workspace::{background, messages, runner::state::RunnerState, tasks::detail::TaskDetail};
 
-use super::{ChangesProps, ChangesReads, ChangesTab, Follow, RunChanges, tab_label};
+use super::{ChangesReads, FileCount, count, tab_label};
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
@@ -48,8 +45,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskV
   ctx.mount_keyed::<Host>(
     &format!("task-host-{task}"),
     HostProps {
-      project: project.open.project.id(),
-      repo_root: project.open.repo_root.clone(),
+      project: project.clone(),
       task,
       changed: (project.feed.changes.get(), project.feed.revision.get()),
       online,
@@ -74,8 +70,7 @@ impl lurq::app::component::DevtoolsInspectable for LoadedTask {}
 
 #[derive(Clone, PartialEq)]
 struct HostProps {
-  project: ProjectId,
-  repo_root: PathBuf,
+  project: ShownProject,
   task: TaskId,
   /// How often the project's runs and tasks changed: the task is read again after each.
   changed: (u64, u64),
@@ -105,7 +100,9 @@ impl Component for Host {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<HostProps>().clone();
-    let deps = (props.repo_root.clone(), props.task, props.changed, self.reload.get());
+    ctx.provide(self.reads.clone());
+    let repo_root = props.project.open.repo_root.clone();
+    let deps = (repo_root, props.task, props.changed, self.reload.get());
     let load = ctx.future(deps, |(repo_root, task, ..)| async move {
       background::run(move || TaskDetail::load_in(&repo_root, task))
         .await?
@@ -134,22 +131,11 @@ impl Component for Host {
         .child(shown);
     };
     let tab = props.view.tab();
-    let follow = Follow::of(&detail, props.online, tab);
-    let changes = self.reads.read(ctx, &props.repo_root, &detail, follow);
-    let tabs = self.tabs(ctx, &props, detail.task.key(), changes.as_ref());
-    let content = match &props.view {
-      TaskView::Changes(file) => ctx.mount_keyed::<ChangesTab>(
-        "task-changes-tab",
-        ChangesProps {
-          project: props.project,
-          detail: detail.clone(),
-          changes,
-          file: file.clone(),
-          agent_at_work: follow.agent_at_work,
-          reads: self.reads.clone(),
-        },
-      ),
-      TaskView::Summary | TaskView::Conversation => titled(ctx, Screen::Task, &ctx.t(tab.title_key())),
+    let count = count(ctx, &props.project, &detail, props.online);
+    let tabs = self.tabs(ctx, &props, detail.task.key(), count);
+    let content = match tab {
+      TaskTab::Changes => super::tab(ctx, &props.project, &detail, props.online),
+      TaskTab::Summary | TaskTab::Conversation => titled(ctx, Screen::Task, &ctx.t(tab.title_key())),
     };
     Column::new()
       .id("screen-task")
@@ -167,8 +153,7 @@ impl Component for Host {
 
 impl Host {
   /// The page tabs, Changes with the count of the files it lists once that is known.
-  fn tabs(&self, ctx: &mut Ctx, props: &HostProps, key: &TaskKey, changes: Option<&RunChanges>) -> Element {
-    let count = changes.and_then(RunChanges::file_count);
+  fn tabs(&self, ctx: &mut Ctx, props: &HostProps, key: &TaskKey, count: Option<FileCount>) -> Element {
     let current = props.view.tab();
     let tabs: Vec<PageTab> = TaskTab::ALL
       .into_iter()
@@ -178,7 +163,7 @@ impl Host {
           TaskTab::Changes => tab_label(ctx, &name, count),
           TaskTab::Summary | TaskTab::Conversation => name,
         };
-        let (navigation, project, key) = (self.navigation.clone(), props.project, key.clone());
+        let (navigation, project, key) = (self.navigation.clone(), props.project.open.project.id(), key.clone());
         PageTab::new(format!("task-tab-{}", tab.name()), label, tab == current, move || {
           navigation.go(Route::Project(
             project,

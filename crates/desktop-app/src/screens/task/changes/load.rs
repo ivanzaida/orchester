@@ -134,15 +134,19 @@ impl Follow {
   }
 }
 
-/// The reads of one task page: it creates them once, in its `create`, and reads with them on every render
-/// ([`ChangesReads::read`]). The worktree is read again on each tick of an interval of the page's own,
-/// which lurq does not run while the page's window tab is offstage.
+/// The reads of one task page: it creates them once, in its `create`, and provides them to its parts
+/// (`ctx.provide`); the part that shows the tab's count reads with them on every render
+/// ([`ChangesReads::read`]) and the Changes tab shows what was read last ([`ChangesReads::latest`]), so
+/// the two never disagree and nothing is read twice. The worktree is read again on each tick of an
+/// interval of the page's own, which lurq does not run while the page's window tab is offstage.
 #[derive(Clone)]
 pub struct ChangesReads {
   refresh: Arc<Refresh>,
   /// Counts Try again: the changes are read again after they could not be read.
   retry: Signal<u64>,
   last_read: LastRead,
+  /// What was read last; `None` without a run.
+  latest: Signal<Option<RunChanges>>,
 }
 
 impl ChangesReads {
@@ -153,7 +157,20 @@ impl ChangesReads {
       refresh: Arc::new(refresh),
       retry: ctx.signal(0),
       last_read: LastRead::default(),
+      latest: ctx.signal(None),
     }
+  }
+
+  /// The reads the task page provides to its parts.
+  pub fn of(ctx: &mut Ctx) -> Self {
+    ctx
+      .use_context::<Self>()
+      .expect("the task page provides its ChangesReads before mounting its parts")
+  }
+
+  /// What was read last; the caller renders again when it changes.
+  pub(super) fn latest(&self) -> Option<RunChanges> {
+    self.latest.get()
   }
 
   /// The changes of `detail`'s latest run in the repository at `repo_root`; `None` without a run. Call it
@@ -163,7 +180,11 @@ impl ChangesReads {
     let run = detail.run.as_ref();
     let checkpointed = self.checkpointed(ctx, repo_root, run, retry);
     let worktree = self.not_checkpointed(ctx, repo_root, run, (follow, retry));
-    run.map(|_| RunChanges { checkpointed, worktree })
+    let changes = run.map(|_| RunChanges { checkpointed, worktree });
+    if self.latest.get_untracked() != changes {
+      self.latest.set(changes.clone());
+    }
+    changes
   }
 
   pub(super) fn retry(&self) {
