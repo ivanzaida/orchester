@@ -12,6 +12,7 @@
 //! Every method blocks on file I/O and, for `list_files` and `search`, on ripgrep; the runner calls
 //! them off its async threads. Reads may run together (§4.10).
 
+#[doc(hidden)]
 pub mod entry;
 mod glob;
 mod limits;

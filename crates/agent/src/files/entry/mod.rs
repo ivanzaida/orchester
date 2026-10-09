@@ -41,21 +41,29 @@ impl From<io::Error> for EntryError {
 
 /// Deletes the entry at `path`, inside the folder `root` (both resolved, `path`'s last name not followed).
 ///
+/// Public only so the tests can put a link in place before the entry is reached; callers must check the step's scope
+/// first, as `FileTools::delete_file` does: this only refuses what changed since that check.
+///
 /// # Errors
 ///
 /// [`EntryError::Moved`] when a link or junction on the way leads elsewhere than `path`, [`EntryError::Folder`] for a
 /// folder, [`EntryError::Io`] when the system refuses.
+#[doc(hidden)]
 pub fn remove(root: &Path, path: &Path) -> Result<(), EntryError> {
   platform::remove(root, path)
 }
 
 /// Renames the entry at `from` to `to`, where no entry may be; all inside `root` and resolved but their last names.
 ///
+/// Public only so the tests can put a link in place before the target's folder is opened; callers must check the step's
+/// scope first, as `FileTools::move_file` does: this only refuses what changed since that check.
+///
 /// # Errors
 ///
 /// [`EntryError::Moved`] when a link or junction on the way to either leads elsewhere, the target's folder included,
 /// [`EntryError::Folder`] for a folder, [`EntryError::Exists`] when an entry is at `to`, [`EntryError::Io`] when the
 /// system refuses.
+#[doc(hidden)]
 pub fn rename(root: &Path, from: &Path, to: &Path) -> Result<(), EntryError> {
   platform::rename(root, from, to)
 }
