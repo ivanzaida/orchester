@@ -271,7 +271,9 @@ fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> 
 fn cut_crumbs(ctx: &mut Ctx, state: &State) -> Row {
   let pressed = state.pressed.clone();
   let crumbs = vec![
-    Crumb::link("Kontur platform and billing", move || pressed.set("Kontur".to_owned())),
+    Crumb::link("Kontur platform, billing and the partner portal", move || {
+      pressed.set("Kontur".to_owned())
+    }),
     Crumb::here("KON-123 Explain an expired GitHub token in the connection inspector"),
   ];
   breadcrumb(ctx, "g-crumbs-cut", CrumbSeparator::Slash, crumbs)

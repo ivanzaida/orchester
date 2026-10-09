@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use lurq::{
-  app::theme::{ShadowStyle, ThemeShadows},
+  app::theme::{PaletteColor, ShadowStyle, ThemeShadows},
   node::box_shadow::BoxShadow,
 };
 
@@ -10,10 +10,9 @@ use super::ExtraColor;
 /// Shadows without a built-in lurq role, registered as `ShadowStyle::Extra`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtraShadow {
-  /// The ring of a focused form control: 2 of `selection` blue inside the control's edge, so no parent
-  /// clips it, it never moves layout, and it reads on a primary button's `accent` and on dark and light
-  /// surfaces alike. The design draws no focus state; the handover asks for a ring distinct from hover,
-  /// pressed and selected (`docs/design/kontur-handover.md` §5.5).
+  /// The ring of a focused form control: 2 of `border_focus` inside the control's edge, as the design
+  /// draws a focused button (`pWR5E`, `iFzXa`); a focused field takes the same color as its stroke. Inside
+  /// the edge no parent clips it and it never moves layout; `selection` stays for what is selected.
   FocusRing,
 }
 
@@ -32,7 +31,7 @@ impl ExtraShadow {
 
   fn shadows(self) -> Arc<[BoxShadow]> {
     match self {
-      Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, ExtraColor::Selection.role())
+      Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus)
         .spread(FOCUS_RING_WIDTH)
         .inset()]),
     }

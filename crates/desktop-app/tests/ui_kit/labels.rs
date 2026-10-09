@@ -178,3 +178,38 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
   assert_eq!(key.width, 108.0, "the key column");
   assert_close(gap_after(key, value), 12.0, "key to value");
 }
+
+#[test]
+fn ancestor_crumbs_keep_their_room_and_the_page_crumb_is_cut() {
+  let mut kit = Kit::show(|ctx| {
+    let crumbs = breadcrumb(
+      ctx,
+      "cut",
+      CrumbSeparator::Slash,
+      vec![
+        Crumb::link("Kontur platform, billing and the partner portal", || {}),
+        Crumb::here("KON-123 Explain an expired GitHub token in the connection inspector"),
+      ],
+    );
+    Row::new()
+      .width(lurq::node::dimension::Dimension::Px(260.0))
+      .child(crumbs)
+      .into()
+  });
+  let (ancestor, page) = (kit.bounds("cut-0-label"), kit.bounds("cut-1"));
+  assert!(
+    ancestor.width >= 100.0,
+    "the ancestor keeps its room: {}",
+    ancestor.width
+  );
+  assert!(ancestor.width <= 160.0, "and is cut at most there: {}", ancestor.width);
+  assert!(
+    page.width > 0.0 && page.x + page.width <= 260.5,
+    "the page's crumb takes what is left"
+  );
+  kit.rest_on("cut-0-label");
+  assert_eq!(
+    kit.texts("cut-0-label-tooltip"),
+    ["Kontur platform, billing and the partner portal"]
+  );
+}

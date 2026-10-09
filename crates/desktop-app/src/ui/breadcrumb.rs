@@ -22,6 +22,10 @@ use super::{
 };
 use crate::theme::{ExtraSpacing, IconSize};
 
+/// The most room an ancestor crumb takes: a longer name is cut there with an ellipsis. Ancestors keep
+/// their room and the page's own crumb gives up what the row lacks, so no crumb is squeezed away.
+const ANCESTOR_MAX_WIDTH: f32 = 160.0;
+
 /// The task page's separator: a mark, the same in every language.
 const SLASH: &str = "/";
 
@@ -83,8 +87,8 @@ impl Crumb {
           .render(ctx);
         pressable(move || open())
           .id(id)
-          .flex_shrink(1.0)
-          .min_width(Dimension::Px(0.0))
+          .flex_shrink(0.0)
+          .max_width(Dimension::Px(ANCESTOR_MAX_WIDTH))
           .describe("a11y_name", name)
           .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
           .child(text)

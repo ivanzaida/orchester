@@ -447,6 +447,11 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
     [(2.0, true)],
     "2 inside the control's edge, where no parent clips it"
   );
+  assert_eq!(
+    ring[0].color,
+    lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus),
+    "in `border_focus`, as the design draws focus"
+  );
   for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
     theme::apply(theme, mode);
     let markdown = theme.markdown().clone();
