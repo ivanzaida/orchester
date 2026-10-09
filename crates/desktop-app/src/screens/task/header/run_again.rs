@@ -179,7 +179,8 @@ pub fn button(
   (open, remove): (&Signal<Confirming>, &Signal<bool>),
   busy: bool,
 ) -> Option<(ActionButton, Option<Arc<str>>)> {
-  let button = ActionButton::new("task-run-again", ButtonKind::Secondary, ctx.t("task.runAgain.action")).icon(Icon::RotateCcw);
+  let button =
+    ActionButton::new("task-run-again", ButtonKind::Secondary, ctx.t("task.runAgain.action")).icon(Icon::RotateCcw);
   let blocked = match check? {
     Err(error) => message_text(ctx, error),
     Ok(check) => match &check.next {
@@ -255,7 +256,11 @@ fn explanation(ctx: &Ctx, confirm: &Confirmation) -> Arc<str> {
   match confirm.next.base.as_ref().and_then(|base| base.branch.as_ref()) {
     Some(branch) => ctx.t_args(
       "task.runAgain.explanation.branch",
-      [("run", next.as_str()), ("base", branch.as_str()), ("previous", previous.as_str())],
+      [
+        ("run", next.as_str()),
+        ("base", branch.as_str()),
+        ("previous", previous.as_str()),
+      ],
     ),
     None => ctx.t_args(
       "task.runAgain.explanation.head",
@@ -271,24 +276,15 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
   let previous_version = run.version.to_string();
   let previous = run.run.number().get().to_string();
   let steps = next.steps.to_string();
-  let base = match &next.base {
-    Some(base) => {
-      let revision = display::short_revision(base.revision.as_str());
-      match &base.branch {
-        Some(branch) => ctx.t_args(
-          "task.runAgain.baseValue",
-          [("branch", branch.as_str()), ("revision", revision)],
-        ),
-        None => ctx.t_args("task.runAgain.baseDetached", [("revision", revision)]),
-      }
-    }
-    None => ctx.t("task.runAgain.baseUnknown"),
-  };
+  let base = base(ctx, next);
   let limits = ctx.t_args(
     "task.runAgain.limitsValue",
     [
       ("budget", compact_tokens(next.limits.budget().get()).as_str()),
-      ("minutes", whole_minutes(next.limits.max_duration()).to_string().as_str()),
+      (
+        "minutes",
+        whole_minutes(next.limits.max_duration()).to_string().as_str(),
+      ),
     ],
   );
   let pipeline = &*confirm.check.pipeline;
@@ -298,7 +294,10 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
     .child(detail_row(
       "task-run-again-pipeline",
       &ctx.t("task.runAgain.pipeline"),
-      &ctx.t_args("task.runAgain.pipelineValue", [("pipeline", pipeline), ("version", version.as_str())]),
+      &ctx.t_args(
+        "task.runAgain.pipelineValue",
+        [("pipeline", pipeline), ("version", version.as_str())],
+      ),
       DetailValue::Text,
     ))
     .child(detail_row(
@@ -319,7 +318,12 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
       ),
       DetailValue::Text,
     ))
-    .child(detail_row("task-run-again-base", &ctx.t("task.runAgain.base"), &base, DetailValue::Mono))
+    .child(detail_row(
+      "task-run-again-base",
+      &ctx.t("task.runAgain.base"),
+      &base,
+      DetailValue::Mono,
+    ))
     .child(detail_row(
       "task-run-again-branch",
       &ctx.t("task.runAgain.branch"),
@@ -339,6 +343,22 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
       DetailValue::Text,
     ))
     .into()
+}
+
+/// Where the next run starts: the checkout's branch at its `HEAD`, a detached `HEAD`, or read when the run
+/// starts when git could not tell.
+fn base(ctx: &Ctx, next: &NextRun) -> Arc<str> {
+  let Some(base) = &next.base else {
+    return ctx.t("task.runAgain.baseUnknown");
+  };
+  let revision = display::short_revision(base.revision.as_str());
+  match &base.branch {
+    Some(branch) => ctx.t_args(
+      "task.runAgain.baseValue",
+      [("branch", branch.as_str()), ("revision", revision)],
+    ),
+    None => ctx.t_args("task.runAgain.baseDetached", [("revision", revision)]),
+  }
 }
 
 /// *Remove the worktree of run #N*, while the run before has worktrees, and what removing it does.
@@ -388,7 +408,12 @@ fn option(ctx: &Ctx, confirm: &Confirmation) -> Option<Element> {
 
 fn actions(ctx: &Ctx, confirm: &Confirmation, pending: bool) -> Element {
   let close = confirm.open.clone();
-  let cancel = ActionButton::new("task-run-again-cancel", ButtonKind::Secondary, ctx.t("task.runAgain.cancel")).in_form();
+  let cancel = ActionButton::new(
+    "task-run-again-cancel",
+    ButtonKind::Secondary,
+    ctx.t("task.runAgain.cancel"),
+  )
+  .in_form();
   let cancel = if pending {
     cancel.disabled()
   } else {
@@ -428,4 +453,3 @@ fn actions(ctx: &Ctx, confirm: &Confirmation, pending: bool) -> Element {
     .child(start)
     .into()
 }
-

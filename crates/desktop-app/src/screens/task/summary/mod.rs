@@ -81,9 +81,13 @@ impl Component for TaskSummary {
       },
     );
     if let Some(unreadable) = &detail.latest_unreadable {
-      let notice = Notice::new("task-notice", NoticeTone::Danger, message_text(ctx, &unreadable.title()))
-        .icon(Icon::FileWarning)
-        .body(message_text(ctx, &unreadable.detail));
+      let notice = Notice::new(
+        "task-notice",
+        NoticeTone::Danger,
+        message_text(ctx, &unreadable.title()),
+      )
+      .icon(Icon::FileWarning)
+      .body(message_text(ctx, &unreadable.detail));
       let actions = reason_line("task-unreadable-actions", &message_text(ctx, &unreadable.actions()));
       let parts = vec![notice.into(), actions.into()];
       return layout(column(parts.into_iter().chain(runs).collect()), None);
@@ -176,9 +180,13 @@ fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
     props.project.open.project.id(),
     ProjectPage::Task(props.detail.task.key().clone(), TaskView::of(TaskTab::Conversation)),
   );
-  ActionButton::new("task-open-conversation", ButtonKind::Secondary, ctx.t("summary.openConversation"))
-    .icon(Icon::MessageSquare)
-    .on_click(move || navigation.go(route.clone()))
+  ActionButton::new(
+    "task-open-conversation",
+    ButtonKind::Secondary,
+    ctx.t("summary.openConversation"),
+  )
+  .icon(Icon::MessageSquare)
+  .on_click(move || navigation.go(route.clone()))
 }
 
 /// A section's title with its count (`Head · Steps` `P4Q0cn`).
@@ -228,4 +236,3 @@ fn layout(column: Element, panel: Option<Element>) -> Element {
     .with_children(panel)
     .into()
 }
-

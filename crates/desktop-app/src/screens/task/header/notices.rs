@@ -13,11 +13,20 @@ use crate::ui::{
   notice::{Notice, NoticeTone},
 };
 
-pub fn notices(ctx: &Ctx, detail: &TaskDetail, stale: Option<&Message>, refused: Option<(RunControl, Message)>) -> Vec<Element> {
+pub fn notices(
+  ctx: &Ctx,
+  detail: &TaskDetail,
+  stale: Option<&Message>,
+  refused: Option<(RunControl, Message)>,
+) -> Vec<Element> {
   let stale = stale.map(|reason| {
-    Notice::new("task-read-again-failed", NoticeTone::Warning, ctx.t("task.notices.staleTitle"))
-      .body(message_text(ctx, reason))
-      .into()
+    Notice::new(
+      "task-read-again-failed",
+      NoticeTone::Warning,
+      ctx.t("task.notices.staleTitle"),
+    )
+    .body(message_text(ctx, reason))
+    .into()
   });
   let refused = refused.map(|(control, reason)| {
     Notice::new("task-control-refused", NoticeTone::Danger, ctx.t(control.refused_key()))
@@ -25,10 +34,14 @@ pub fn notices(ctx: &Ctx, detail: &TaskDetail, stale: Option<&Message>, refused:
       .into()
   });
   let unreadable = detail.earlier_unreadable.iter().map(|run| {
-    Notice::new(format!("task-unreadable-{}", run.id), NoticeTone::Danger, message_text(ctx, &run.title()))
-      .icon(Icon::FileWarning)
-      .body(message_text(ctx, &run.detail))
-      .into()
+    Notice::new(
+      format!("task-unreadable-{}", run.id),
+      NoticeTone::Danger,
+      message_text(ctx, &run.title()),
+    )
+    .icon(Icon::FileWarning)
+    .body(message_text(ctx, &run.detail))
+    .into()
   });
   stale
     .into_iter()
@@ -52,7 +65,10 @@ fn blocked(ctx: &Ctx, detail: &TaskDetail) -> Option<Element> {
     let waiting = ctx.t_args("task.notices.blockedBy", [("tasks", tasks.as_str())]);
     match reason {
       Some(reason) => ctx
-        .t_args("task.notices.blockedReason", [("reason", reason), ("waiting", &waiting)])
+        .t_args(
+          "task.notices.blockedReason",
+          [("reason", reason), ("waiting", &waiting)],
+        )
         .to_string(),
       None => waiting.to_string(),
     }

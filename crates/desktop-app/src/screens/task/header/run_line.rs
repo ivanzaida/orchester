@@ -71,7 +71,10 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
 fn step_label(ctx: &Ctx, step: &StepView) -> Arc<str> {
   ctx.t_args(
     "task.status.step",
-    [("number", format!("{:02}", step.number)), ("step", step.name.to_string())],
+    [
+      ("number", format!("{:02}", step.number)),
+      ("step", step.name.to_string()),
+    ],
   )
 }
 

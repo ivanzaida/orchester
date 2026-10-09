@@ -63,7 +63,10 @@ pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
         project: runs.project.clone(),
         key: key.clone(),
         record: record.clone(),
-        left: runs.left.as_read(record.id).filter(|_| record.without_live_work().is_some()),
+        left: runs
+          .left
+          .as_read(record.id)
+          .filter(|_| record.without_live_work().is_some()),
         removable: record
           .without_live_work()
           .and(runs.left.of(record.id))
@@ -86,7 +89,12 @@ pub fn section(ctx: &mut Ctx, runs: &Runs) -> Option<Element> {
       .id("task-runs")
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Loose.role())
-      .child(section_head(ctx, "task-runs-head", "summary.runs.title", Some(detail.history.len())))
+      .child(section_head(
+        ctx,
+        "task-runs-head",
+        "summary.runs.title",
+        Some(detail.history.len()),
+      ))
       .child(
         Column::new()
           .id("task-run-rows")
@@ -126,7 +134,9 @@ fn item(ctx: &mut Ctx, runs: &Runs, props: RowProps, divided: bool) -> Element {
     .child(row)
     .with_children(confirmation);
   if divided {
-    item.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)).into()
+    item
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .into()
   } else {
     item.into()
   }

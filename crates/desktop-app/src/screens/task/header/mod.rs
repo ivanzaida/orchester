@@ -135,7 +135,10 @@ impl TaskHeader {
     &self,
     ctx: &mut Ctx,
     props: &HeaderProps,
-    (action, check): (&ControlAction, Option<&Result<orchester_workspace::tasks::run_again::RunAgainCheck, Message>>),
+    (action, check): (
+      &ControlAction,
+      Option<&Result<orchester_workspace::tasks::run_again::RunAgainCheck, Message>>,
+    ),
   ) -> (Element, Option<(RunControl, Message)>) {
     let detail = &props.detail;
     let state = action.state().get();
@@ -287,14 +290,24 @@ fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   if left.worktrees.is_empty() {
     return None;
   }
-  let button = ActionButton::new("task-remove-worktree", ButtonKind::Ghost, ctx.t("task.removeWorktree")).icon(Icon::FolderX);
+  let button =
+    ActionButton::new("task-remove-worktree", ButtonKind::Ghost, ctx.t("task.removeWorktree")).icon(Icon::FolderX);
   if props.jobs.run(run.id()).removing() {
     return Some(button.loading());
   }
-  if props.detail.history.iter().any(|record| props.jobs.run(record.id).busy()) {
+  if props
+    .detail
+    .history
+    .iter()
+    .any(|record| props.jobs.run(record.id).busy())
+  {
     return Some(button.disabled());
   }
   let state = PageState::of(ctx);
+  // Its confirmation is open already.
+  if state.removal.get().run == Some(run.id()) {
+    return Some(button.disabled());
+  }
   let job = Services::of(ctx).jobs.of(props.project.open.project.id()).of(run.id());
   let id = run.id();
   Some(button.on_click(move || {
@@ -340,8 +353,16 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     tab(ctx, TaskTab::Summary),
     tab(ctx, TaskTab::Conversation),
     tab(ctx, TaskTab::Changes),
-    PageTab::unavailable("task-tab-artifacts", ctx.t("task.tabs.artifacts"), ctx.t("task.tabs.artifactsReason")),
-    PageTab::unavailable("task-tab-memory", ctx.t("task.tabs.memory"), ctx.t("task.tabs.memoryReason")),
+    PageTab::unavailable(
+      "task-tab-artifacts",
+      ctx.t("task.tabs.artifacts"),
+      ctx.t("task.tabs.artifactsReason"),
+    ),
+    PageTab::unavailable(
+      "task-tab-memory",
+      ctx.t("task.tabs.memory"),
+      ctx.t("task.tabs.memoryReason"),
+    ),
   ];
   page_tabs(ctx, "task-tabs", tabs).into()
 }

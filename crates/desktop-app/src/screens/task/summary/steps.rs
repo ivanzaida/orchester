@@ -65,7 +65,12 @@ pub fn section(ctx: &mut Ctx, run: &RunView, lost: bool, waiting: &[(Arc<str>, T
     .id("task-steps")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
-    .child(section_head(ctx, "task-steps-head", "summary.steps.title", Some(rows.len())))
+    .child(section_head(
+      ctx,
+      "task-steps-head",
+      "summary.steps.title",
+      Some(rows.len()),
+    ))
     .child(ctx.mount_keyed::<LiveSteps>("task-steps-rows", StepsProps { rows }))
     .into()
 }
@@ -103,7 +108,12 @@ impl Component for LiveSteps {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .clip()
-      .with_children(rows.iter().enumerate().map(|(index, row)| step_row(ctx, row, index > 0, now)))
+      .with_children(
+        rows
+          .iter()
+          .enumerate()
+          .map(|(index, row)| step_row(ctx, row, index > 0, now)),
+      )
   }
 }
 
@@ -141,7 +151,9 @@ fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) -> Element 
         .nowrap(),
     );
   if divided {
-    line.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)).into()
+    line
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .into()
   } else {
     line.into()
   }
@@ -199,7 +211,11 @@ fn detail(ctx: &Ctx, row: &StepRow, now: Timestamp) -> Arc<str> {
     // A tool step's command uses no tokens.
     None => ctx.t_args(
       "summary.steps.commandDetail",
-      [("state", &*state), ("attempt", attempt.as_str()), ("duration", &*duration)],
+      [
+        ("state", &*state),
+        ("attempt", attempt.as_str()),
+        ("duration", &*duration),
+      ],
     ),
   }
 }
@@ -232,4 +248,3 @@ const fn failure_key(failure: Option<StepFailure>) -> &'static str {
     Some(StepFailure::CommandFailed) => "summary.steps.failure.commandFailed",
   }
 }
-

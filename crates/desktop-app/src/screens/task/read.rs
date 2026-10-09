@@ -130,7 +130,10 @@ pub fn leftovers(
     let (programs, runs, separator) = (programs.clone(), runs.clone(), separator.clone());
     async move {
       if runs.is_empty() {
-        return Ok(Read { at, left: Arc::from([]) });
+        return Ok(Read {
+          at,
+          left: Arc::from([]),
+        });
       }
       background::run(move || leftovers_in(&root, &programs, &runs))
         .await?

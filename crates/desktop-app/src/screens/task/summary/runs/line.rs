@@ -119,6 +119,10 @@ pub fn day_and_clock(ctx: &Ctx, at: Timestamp) -> Arc<str> {
   let month = ctx.t_ns(NAMESPACE, MONTH_KEYS[month]);
   ctx.t_args(
     "summary.runs.when",
-    [("month", month.to_string()), ("day", day.to_string()), ("time", display::clock(at))],
+    [
+      ("month", month.to_string()),
+      ("day", day.to_string()),
+      ("time", display::clock(at)),
+    ],
   )
 }

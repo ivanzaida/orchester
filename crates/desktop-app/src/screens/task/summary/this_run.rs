@@ -56,7 +56,11 @@ fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
     .child(
       Column::new()
         .padding(Padding::new().bottom(ExtraSpacing::Snug.role()))
-        .child(Text::new(title).id(format!("{id}-title")).variant(TaskText::SectionTitle.role())),
+        .child(
+          Text::new(title)
+            .id(format!("{id}-title"))
+            .variant(TaskText::SectionTitle.role()),
+        ),
     )
     .with_children(rows);
   Column::new()
@@ -78,7 +82,10 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
   let base = match run.run.base_branch() {
     Some(branch) => ctx.t_args(
       "summary.thisRun.baseValue",
-      [("branch", branch.as_str()), ("revision", display::short_revision(run.run.base().as_str()))],
+      [
+        ("branch", branch.as_str()),
+        ("revision", display::short_revision(run.run.base().as_str())),
+      ],
     ),
     None => Arc::from(display::short_revision(run.run.base().as_str())),
   };
@@ -86,14 +93,22 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
     ctx.t_args(
       "summary.thisRun.checkpointValue",
       [
-        ("revision", display::short_revision(checkpoint.revision().as_str()).to_owned()),
+        (
+          "revision",
+          display::short_revision(checkpoint.revision().as_str()).to_owned(),
+        ),
         ("time", display::clock(checkpoint.created_at())),
       ],
     )
   });
   let mut rows: Vec<Element> = vec![
     row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text),
-    row(ctx, "summary.thisRun.branch", run.run.branch().as_str(), DetailValue::Mono),
+    row(
+      ctx,
+      "summary.thisRun.branch",
+      run.run.branch().as_str(),
+      DetailValue::Mono,
+    ),
     row(ctx, "summary.thisRun.base", &base, DetailValue::Mono),
   ];
   rows.extend(checkpoint.map(|value| row(ctx, "summary.thisRun.checkpoint", &value, DetailValue::Mono)));
@@ -104,7 +119,12 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
     [("count", compact_tokens(run.usage().cached_input))],
   );
   rows.push(row(ctx, "summary.thisRun.cached", &cached, DetailValue::Text));
-  rows.push(row(ctx, "summary.thisRun.timeLimit", &time_limit(ctx, run.run.max_duration()), DetailValue::Text));
+  rows.push(row(
+    ctx,
+    "summary.thisRun.timeLimit",
+    &time_limit(ctx, run.run.max_duration()),
+    DetailValue::Text,
+  ));
   let active = run.active_clock(&run.invocations, Services::of(ctx).clock.now(), lost);
   rows.push(ctx.mount_keyed::<ActiveTime>("task-active-time", ActiveProps { active }));
   rows.extend(permissions(ctx, run));
@@ -165,7 +185,10 @@ fn budget(ctx: &Ctx, run: &RunView) -> Arc<str> {
   } else {
     "summary.thisRun.budgetValue"
   };
-  ctx.t_args(key, [("used", used), ("budget", compact_tokens(run.run.budget().get()))])
+  ctx.t_args(
+    key,
+    [("used", used), ("budget", compact_tokens(run.run.budget().get()))],
+  )
 }
 
 /// A budget without a limit is stored as the largest one (`budget::unbounded`).
@@ -174,7 +197,10 @@ fn is_unlimited(budget: TokenBudget) -> bool {
 }
 
 fn time_limit(ctx: &Ctx, limit: std::time::Duration) -> Arc<str> {
-  ctx.t_args("summary.thisRun.minutes", [("minutes", whole_minutes(limit).to_string())])
+  ctx.t_args(
+    "summary.thisRun.minutes",
+    [("minutes", whole_minutes(limit).to_string())],
+  )
 }
 
 /// What the current step's agent may do: "Running with · Builder" over "Edit files · 3 commands ·
@@ -199,7 +225,14 @@ fn permissions(ctx: &Ctx, run: &RunView) -> Option<Element> {
         .variant(ExtraTypography::Prose.role())
         .color(PaletteColor::TextPrimary),
     );
-  Some(detail_row_of("task-this-run-permissions-row", &ctx.t("summary.thisRun.permissions"), value).into())
+  Some(
+    detail_row_of(
+      "task-this-run-permissions-row",
+      &ctx.t("summary.thisRun.permissions"),
+      value,
+    )
+    .into(),
+  )
 }
 
 fn permission_words(ctx: &Ctx, permissions: &AgentPermissions, mcp_asks: bool) -> Arc<str> {
@@ -209,9 +242,10 @@ fn permission_words(ctx: &Ctx, permissions: &AgentPermissions, mcp_asks: bool) -
   };
   let commands = match permissions.commands() {
     CommandPermission::AskBefore => ctx.t("summary.thisRun.commandsAsk"),
-    CommandPermission::Allowed(listed) => {
-      ctx.t_args("summary.thisRun.commandsListed", [("count", listed.entries().len().to_string())])
-    }
+    CommandPermission::Allowed(listed) => ctx.t_args(
+      "summary.thisRun.commandsListed",
+      [("count", listed.entries().len().to_string())],
+    ),
     CommandPermission::AnyInWorktree => ctx.t("summary.thisRun.commandsAny"),
   };
   let network = match permissions.network() {
@@ -251,14 +285,22 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
       |pipeline| {
         ctx.t_args(
           "summary.thisRun.pipelineValue",
-          [("pipeline", &*pipeline.name), ("version", pipeline.version.to_string().as_str())],
+          [
+            ("pipeline", &*pipeline.name),
+            ("version", pipeline.version.to_string().as_str()),
+          ],
         )
       },
     );
   let mut rows = vec![row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text)];
   match details.limits {
     Some(limits) => rows.extend(limit_rows(ctx, limits)),
-    None => rows.push(row(ctx, "summary.thisRun.budget", &ctx.t("summary.thisRun.notChosen"), DetailValue::Text)),
+    None => rows.push(row(
+      ctx,
+      "summary.thisRun.budget",
+      &ctx.t("summary.thisRun.notChosen"),
+      DetailValue::Text,
+    )),
   }
   panel("task-this-task", &ctx.t("summary.thisTask.title"), rows)
 }
@@ -267,11 +309,19 @@ fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {
   let budget = if is_unlimited(limits.budget()) {
     ctx.t("summary.thisRun.noLimit")
   } else {
-    ctx.t_args("summary.thisRun.tokens", [("budget", compact_tokens(limits.budget().get()))])
+    ctx.t_args(
+      "summary.thisRun.tokens",
+      [("budget", compact_tokens(limits.budget().get()))],
+    )
   };
   [
     row(ctx, "summary.thisRun.budget", &budget, DetailValue::Text),
-    row(ctx, "summary.thisRun.timeLimit", &time_limit(ctx, limits.max_duration()), DetailValue::Text),
+    row(
+      ctx,
+      "summary.thisRun.timeLimit",
+      &time_limit(ctx, limits.max_duration()),
+      DetailValue::Text,
+    ),
   ]
 }
 

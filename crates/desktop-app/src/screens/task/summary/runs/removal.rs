@@ -173,7 +173,10 @@ fn note(glyph: Icon, text: &str) -> Element {
 /// "Run #3 · 2 files not committed" or a step's own worktree, its uncommitted files under it.
 fn worktree_line(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str) -> Element {
   let owner = match worktree.owner {
-    WorktreeOwner::Run => ctx.t_args("summary.runs.remove.runOwner", [("run", run.number().get().to_string())]),
+    WorktreeOwner::Run => ctx.t_args(
+      "summary.runs.remove.runOwner",
+      [("run", run.number().get().to_string())],
+    ),
     WorktreeOwner::Step(execution) => {
       let step = run
         .execution(execution)

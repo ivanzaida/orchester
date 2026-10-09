@@ -104,7 +104,10 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
   let branch = run.run.branch().as_str();
   let args = [("step", step.as_str()), ("agent", agent.as_str()), ("branch", branch)];
   if run.run.pause_requested() {
-    let text = (ctx.t("summary.notice.pausingTitle"), ctx.t_args("summary.notice.pausingBody", args));
+    let text = (
+      ctx.t("summary.notice.pausingTitle"),
+      ctx.t_args("summary.notice.pausingBody", args),
+    );
     return Said::new(NoticeTone::Info, Icon::CirclePause, text);
   }
   if let Some(said) = waiting(ctx, run) {
@@ -120,7 +123,10 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
     let steps = working.join(&ctx.t("task.listSeparator"));
     ctx.t_args("summary.notice.runningTogetherTitle", [("steps", steps.as_str())])
   } else {
-    ctx.t_args("summary.notice.runningTitle", [("step", step.as_str()), ("attempt", attempt.as_str())])
+    ctx.t_args(
+      "summary.notice.runningTitle",
+      [("step", step.as_str()), ("attempt", attempt.as_str())],
+    )
   };
   let body = ctx.t_args("summary.notice.runningBody", args);
   Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body)).in_conversation()
@@ -155,8 +161,14 @@ fn waits_for_approval(ctx: &Ctx, run: &RunView, approval: &ShownApproval) -> Sai
   let (step, _) = step_words(ctx, run.step_of(approval.approval.execution));
   let time = display::clock(approval.approval.requested_at);
   let text = (
-    ctx.t_args("summary.notice.approvalTitle", [("agent", approval.approval.agent.as_str())]),
-    ctx.t_args("summary.notice.approvalBody", [("step", step.as_str()), ("time", time.as_str())]),
+    ctx.t_args(
+      "summary.notice.approvalTitle",
+      [("agent", approval.approval.agent.as_str())],
+    ),
+    ctx.t_args(
+      "summary.notice.approvalBody",
+      [("step", step.as_str()), ("time", time.as_str())],
+    ),
   );
   Said::new(NoticeTone::Warning, Icon::Hand, text).in_conversation()
 }
@@ -189,7 +201,10 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
   } else {
     ctx.t_args(
       "summary.notice.stoppedKept",
-      [("checkpoint", checkpoint.as_str()), ("branch", run.run.branch().as_str())],
+      [
+        ("checkpoint", checkpoint.as_str()),
+        ("branch", run.run.branch().as_str()),
+      ],
     )
   };
   let (title, body) = match limit {
@@ -197,16 +212,26 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
       ctx.t("summary.notice.tokenLimitTitle"),
       ctx.t_args(
         "summary.notice.tokenLimitBody",
-        [("step", step.as_str()), ("budget", &compact_tokens(run.run.budget().get())), ("kept", &kept)],
+        [
+          ("step", step.as_str()),
+          ("budget", &compact_tokens(run.run.budget().get())),
+          ("kept", &kept),
+        ],
       ),
     ),
     RunLimit::Time => (
       ctx.t("summary.notice.timeLimitTitle"),
-      ctx.t_args("summary.notice.timeLimitBody", [("step", step.as_str()), ("kept", &*kept)]),
+      ctx.t_args(
+        "summary.notice.timeLimitBody",
+        [("step", step.as_str()), ("kept", &*kept)],
+      ),
     ),
     RunLimit::StepBudget { .. } => (
       ctx.t_args("summary.notice.stepBudgetTitle", [("step", step.as_str())]),
-      ctx.t_args("summary.notice.stepBudgetBody", [("step", step.as_str()), ("kept", &*kept)]),
+      ctx.t_args(
+        "summary.notice.stepBudgetBody",
+        [("step", step.as_str()), ("kept", &*kept)],
+      ),
     ),
     RunLimit::GroupBudget => (
       ctx.t("summary.notice.groupBudgetTitle"),
@@ -214,7 +239,10 @@ fn stopped(ctx: &Ctx, run: &RunView, limit: RunLimit) -> Said {
     ),
     RunLimit::DailyBudget => (
       ctx.t("summary.notice.dailyBudgetTitle"),
-      ctx.t_args("summary.notice.dailyBudgetBody", [("agent", agent.as_str()), ("kept", &*kept)]),
+      ctx.t_args(
+        "summary.notice.dailyBudgetBody",
+        [("agent", agent.as_str()), ("kept", &*kept)],
+      ),
     ),
   };
   Said::new(NoticeTone::Warning, Icon::Gauge, (title, body))
@@ -228,7 +256,10 @@ fn interrupted(ctx: &Ctx, run: &RunView) -> Said {
     let time = display::clock(removed);
     let text = (
       ctx.t_args("summary.notice.cantContinueTitle", [("run", number.as_str())]),
-      ctx.t_args("summary.notice.cantContinueBody", [("time", time.as_str()), ("branch", branch)]),
+      ctx.t_args(
+        "summary.notice.cantContinueBody",
+        [("time", time.as_str()), ("branch", branch)],
+      ),
     );
     return Said::new(NoticeTone::Warning, Icon::FolderX, text);
   }
@@ -297,7 +328,10 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
     RunStatus::Cancelled if run.run.current_attempt().is_none() => Said::new(
       NoticeTone::Info,
       Icon::CircleSlash,
-      text("summary.notice.cancelledBeforeStartTitle", "summary.notice.cancelledBeforeStartBody"),
+      text(
+        "summary.notice.cancelledBeforeStartTitle",
+        "summary.notice.cancelledBeforeStartBody",
+      ),
     ),
     _ => Said::new(
       NoticeTone::Info,

@@ -26,11 +26,7 @@ use orchester_core::{
   id::{RunId, TaskId},
   project::TaskKey,
 };
-use orchester_workspace::{
-  messages::Message,
-  runner::state::RunnerState,
-  tasks::detail::TaskDetail,
-};
+use orchester_workspace::{messages::Message, runner::state::RunnerState, tasks::detail::TaskDetail};
 
 use self::{
   header::{HeaderProps, TaskHeader},
@@ -84,7 +80,11 @@ impl Component for TaskPage {
     let found = match props.project.feed.tasks.get() {
       TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
-      TasksState::Ready(tasks) => tasks.tasks.iter().find(|task| *task.key() == props.key).map(|task| task.id()),
+      TasksState::Ready(tasks) => tasks
+        .tasks
+        .iter()
+        .find(|task| *task.key() == props.key)
+        .map(|task| task.id()),
     };
     let Some(task) = found else {
       return page(not_found(ctx, &props));
@@ -114,13 +114,17 @@ fn not_found(ctx: &mut Ctx, props: &PageProps) -> Element {
   let tasks = ctx.t("task.page.toTasks");
   let navigation = Navigation::of(ctx);
   let project = props.project.open.project.id();
-  let back = crate::ui::button::ActionButton::new("task-not-found-tasks", crate::ui::button::ButtonKind::Secondary, tasks)
-    .on_click(move || navigation.go(Route::Project(project, ProjectPage::Tasks(Default::default()))));
+  let back =
+    crate::ui::button::ActionButton::new("task-not-found-tasks", crate::ui::button::ButtonKind::Secondary, tasks)
+      .on_click(move || navigation.go(Route::Project(project, ProjectPage::Tasks(Default::default()))));
   let name = props.project.open.project.name().as_str().to_owned();
   let card = EmptyState::new(
     "task-not-found",
     Icon::CircleHelp,
-    ctx.t_args("task.page.notFound", [("task", key.as_str()), ("project", name.as_str())]),
+    ctx.t_args(
+      "task.page.notFound",
+      [("task", key.as_str()), ("project", name.as_str())],
+    ),
     ctx.t("task.page.notFoundBody"),
   )
   .action(back);
@@ -293,7 +297,10 @@ impl TaskFrame {
     ctx: &mut Ctx,
     props: &FrameProps,
     (detail, online): (&Arc<TaskDetail>, bool),
-    (left, jobs): (TaskLeftovers, orchester_workspace::tasks::integration_jobs::ProjectJobState),
+    (left, jobs): (
+      TaskLeftovers,
+      orchester_workspace::tasks::integration_jobs::ProjectJobState,
+    ),
   ) -> Element {
     match props.tab {
       TaskTab::Summary => ctx.mount_keyed::<TaskSummary>(

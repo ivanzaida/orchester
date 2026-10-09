@@ -40,7 +40,12 @@ pub fn sections(ctx: &mut Ctx, details: &TaskDetails) -> Vec<Element> {
       .id("task-criteria")
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
-      .child(section_head(ctx, "task-criteria-head", "summary.criteria", Some(criteria.len())))
+      .child(section_head(
+        ctx,
+        "task-criteria-head",
+        "summary.criteria",
+        Some(criteria.len()),
+      ))
       .with_children((1..).zip(criteria).map(|(number, text)| criterion(number, text)))
       .into()
   });

@@ -93,7 +93,11 @@ pub fn control_action(
   })
 }
 
-async fn carry_out(project: &OpenProject, (runners, task): (&Runners, TaskId), control: RunControl) -> Result<(), Message> {
+async fn carry_out(
+  project: &OpenProject,
+  (runners, task): (&Runners, TaskId),
+  control: RunControl,
+) -> Result<(), Message> {
   let result = match control {
     RunControl::Start(task) => runners
       .start_run_in(project, task.first_run_key(), task)
@@ -137,7 +141,12 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> (Vec<ActionButton>, Vec<Arc<s
   }
   let Some(run) = &detail.run else {
     if detail.task.status() == TaskStatus::Queued {
-      let start = button(ctx, "task-start-run", ButtonKind::Primary, ("task.controls.retry", Icon::Play));
+      let start = button(
+        ctx,
+        "task-start-run",
+        ButtonKind::Primary,
+        ("task.controls.retry", Icon::Play),
+      );
       shown.offer(ctx, controls, start, RunControl::Start(detail.task.id()), Gate::Work);
     }
     return shown.into_parts();
@@ -150,7 +159,13 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> (Vec<ActionButton>, Vec<Arc<s
   } else if let Some((start, control, gate)) = primary(ctx, controls, run) {
     shown.offer(ctx, controls, start, control, gate);
   }
-  shown.offer(ctx, controls, cancel_button(ctx), RunControl::Cancel(run.id()), Gate::Runner);
+  shown.offer(
+    ctx,
+    controls,
+    cancel_button(ctx),
+    RunControl::Cancel(run.id()),
+    Gate::Runner,
+  );
   shown.into_parts()
 }
 
@@ -211,21 +226,43 @@ impl Shown {
 /// Start, Pause, Resume or Continue for `run`, which has not ended, when one applies.
 fn primary(ctx: &Ctx, controls: &Controls, run: &RunView) -> Option<(ActionButton, RunControl, Gate)> {
   let id = run.id();
-  let resume = || button(ctx, "task-resume-run", ButtonKind::Primary, ("task.controls.resume", Icon::Play));
+  let resume = || {
+    button(
+      ctx,
+      "task-resume-run",
+      ButtonKind::Primary,
+      ("task.controls.resume", Icon::Play),
+    )
+  };
   match run.run.status() {
     RunStatus::Pending if run.first_run => Some((
-      button(ctx, "task-start-run", ButtonKind::Primary, ("task.controls.start", Icon::Play)),
+      button(
+        ctx,
+        "task-start-run",
+        ButtonKind::Primary,
+        ("task.controls.start", Icon::Play),
+      ),
       RunControl::Start(run.run.task()),
       Gate::Work,
     )),
     RunStatus::Running if run.run.pause_requested() => {
-      let pausing = button(ctx, "task-pause-run", ButtonKind::Secondary, ("task.controls.pausing", Icon::CirclePause));
+      let pausing = button(
+        ctx,
+        "task-pause-run",
+        ButtonKind::Secondary,
+        ("task.controls.pausing", Icon::CirclePause),
+      );
       Some((pausing.loading(), RunControl::Pause(id), Gate::Runner))
     }
     // Nothing works while the run only waits for a person: there is nothing to pause.
     RunStatus::Running if run.run.waits_for_a_person() && !controls.detail.lost_its_runner(controls.online) => None,
     RunStatus::Running => Some((
-      button(ctx, "task-pause-run", ButtonKind::Secondary, ("task.controls.pause", Icon::CirclePause)),
+      button(
+        ctx,
+        "task-pause-run",
+        ButtonKind::Secondary,
+        ("task.controls.pause", Icon::CirclePause),
+      ),
       RunControl::Pause(id),
       Gate::Runner,
     )),
@@ -233,7 +270,12 @@ fn primary(ctx: &Ctx, controls: &Controls, run: &RunView) -> Option<(ActionButto
       Some((resume(), RunControl::Resume(id), Gate::Work))
     }
     RunStatus::Interrupted(_) => Some((
-      button(ctx, "task-continue-run", ButtonKind::Primary, ("task.controls.continue", Icon::Play)),
+      button(
+        ctx,
+        "task-continue-run",
+        ButtonKind::Primary,
+        ("task.controls.continue", Icon::Play),
+      ),
       RunControl::Continue(id),
       Gate::Work,
     )),
@@ -246,7 +288,12 @@ fn button(ctx: &Ctx, id: &str, kind: ButtonKind, (label, glyph): (&str, Icon)) -
 }
 
 fn cancel_button(ctx: &Ctx) -> ActionButton {
-  button(ctx, "task-cancel-run", ButtonKind::Ghost, ("task.controls.cancel", Icon::CircleStop))
+  button(
+    ctx,
+    "task-cancel-run",
+    ButtonKind::Ghost,
+    ("task.controls.cancel", Icon::CircleStop),
+  )
 }
 
 /// Continue run of an interrupted run whose worktree was removed: it stays in its place, unavailable,
@@ -258,6 +305,11 @@ fn continue_removed(ctx: &Ctx, run: &RunView) -> Option<(ActionButton, Arc<str>)
   run.worktree_removed?;
   let number = run.run.number().get().to_string();
   let reason = ctx.t_args("task.controls.worktreeRemoved", [("run", number.as_str())]);
-  let continue_run = button(ctx, "task-continue-run", ButtonKind::Primary, ("task.controls.continue", Icon::Play));
+  let continue_run = button(
+    ctx,
+    "task-continue-run",
+    ButtonKind::Primary,
+    ("task.controls.continue", Icon::Play),
+  );
   Some((continue_run, reason))
 }
