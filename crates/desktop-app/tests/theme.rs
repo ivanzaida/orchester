@@ -19,7 +19,7 @@ use orchester_app::{
   settings::AppSettings,
   theme::{
     self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
-    IconSize, Mode, SHORTCUT_OPACITY, UNAVAILABLE_TAB_OPACITY,
+    IconSize, Mode, SHORTCUT_OPACITY,
   },
 };
 
@@ -306,7 +306,7 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
     let (dark_muted, light_muted) = ("#8A8A92", "#6B6B74");
     Some(match role {
       T::Display => return None,
-      T::Strong => (13.0, FontWeight::Medium, 1.5, "Geist", (dark_primary, light_primary)),
+      T::Strong => (13.0, FontWeight::Medium, 1.3, "Geist", (dark_primary, light_primary)),
       T::Note => (11.5, FontWeight::Normal, 1.4, "Geist", (dark_muted, light_muted)),
       T::NoteStrong => (11.5, FontWeight::Medium, 1.4, "Geist", (dark_primary, light_primary)),
       T::Prose => (
@@ -398,10 +398,7 @@ fn theme_kit_spacing_radii_and_sizes_follow_the_design() {
     IconSize::ALL.map(IconSize::size),
     [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]
   );
-  assert_eq!(
-    (DISABLED_OPACITY, UNAVAILABLE_TAB_OPACITY, SHORTCUT_OPACITY),
-    (0.5, 0.75, 0.6)
-  );
+  assert_eq!((DISABLED_OPACITY, SHORTCUT_OPACITY), (0.5, 0.6));
 }
 
 /// A field's value and placeholder are 12 (`JQkW2`, `X75zC`) and its error 11.5 `danger` (`rCoJS`), in
@@ -442,8 +439,11 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
   let ring = theme.shadow_style(ExtraShadow::FocusRing.role());
-  assert_eq!(ring.len(), 1);
-  assert_eq!(ring[0].spread, 2.0, "two outside the control");
+  assert_eq!(
+    ring.iter().map(|shadow| shadow.spread).collect::<Vec<_>>(),
+    [2.0, 4.0],
+    "a 2 gap, then 2 of ring"
+  );
   for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
     theme::apply(theme, mode);
     let markdown = theme.markdown().clone();

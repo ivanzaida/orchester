@@ -10,9 +10,10 @@ use super::ExtraColor;
 /// Shadows without a built-in lurq role, registered as `ShadowStyle::Extra`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtraShadow {
-  /// The ring around a focused form control: 2 of `border_focus` all round, outside the control, so it
-  /// never moves layout. The design draws no focus state; the handover asks for a ring distinct from
-  /// hover, pressed and selected (`docs/design/kontur-handover.md` §5.5).
+  /// The ring around a focused form control: a 2 gap in the panel's color, then 2 of `text_primary`,
+  /// outside the control, so it never moves layout and reads on a primary button's `accent` too. The
+  /// design draws no focus state; the handover asks for a ring distinct from hover, pressed and selected
+  /// (`docs/design/kontur-handover.md` §5.5).
   FocusRing,
 }
 
@@ -31,12 +32,16 @@ impl ExtraShadow {
 
   fn shadows(self) -> Arc<[BoxShadow]> {
     match self {
-      Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus).spread(FOCUS_RING_WIDTH)]),
+      Self::FocusRing => Arc::from([
+        BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::SurfacePanel).spread(FOCUS_RING_GAP),
+        BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::TextPrimary).spread(FOCUS_RING_GAP + FOCUS_RING_WIDTH),
+      ]),
     }
   }
 }
 
-/// How far the focus ring reaches past its control.
+/// The focus ring's gap from its control, and its own width.
+const FOCUS_RING_GAP: f32 = 2.0;
 const FOCUS_RING_WIDTH: f32 = 2.0;
 
 /// Elevations of the design: `sm` controls, `md` menus, tooltips and popovers, `lg` dialogs and toasts

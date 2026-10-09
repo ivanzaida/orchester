@@ -46,8 +46,8 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
 - The UI kit (`crates/desktop-app/src/ui/`, Kontur's shared components `ASNYj`/`DMMLd`) comes first on the reuse
   ladder: buttons, fields, selects, menus, popovers, tabs, toggles, status/priority labels, chips, notices, cards,
   tables, empty/loading/error states, Markdown, code box, tooltips and cut text, avatars, breadcrumbs, the
-  unavailable reason. Its own words are in `en/ui.json` (`ui.*`); extra roles add `ExtraShadow`, `ControlHeight` and the
-  `DISABLED_OPACITY`/`UNAVAILABLE_TAB_OPACITY` faders. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
+  unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
+  `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
   every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
 
 ## Text through i18n

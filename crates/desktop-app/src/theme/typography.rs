@@ -16,8 +16,8 @@ use super::{
 pub enum ExtraTypography {
   /// `type/display` 28/600, tracking -0.5: the largest headline of a screen.
   Display,
-  /// 13/500 `text_primary`: an active page tab (`loUWZ`), a notice's title (`OswfE`), a table row's
-  /// title (`LJ8gd`).
+  /// 13/500 `text_primary`, 1.3 (the design's own line, 17): an active page tab (`loUWZ`), a notice's
+  /// title (`OswfE`), a table row's title (`LJ8gd`).
   Strong,
   /// 11.5 `text_muted`, 1.4: why a control is unavailable (`Cvxzc` in `QR1ER`), a field's error
   /// (`rCoJS`, in `danger`), a run line (`v9xIKo`).
@@ -81,7 +81,7 @@ impl ExtraTypography {
     let mono = |size, color| mono(style(size, FontWeight::Normal, 1.4, 0.0, color));
     match self {
       Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.text_primary),
-      Self::Strong => sans(13.0, FontWeight::Medium, 1.5, palette.text_primary),
+      Self::Strong => sans(13.0, FontWeight::Medium, 1.3, palette.text_primary),
       Self::Note => sans(11.5, FontWeight::Normal, 1.4, palette.text_muted),
       Self::NoteStrong => sans(11.5, FontWeight::Medium, 1.4, palette.text_primary),
       Self::Prose => sans(12.0, FontWeight::Normal, 1.45, palette.text_secondary),
