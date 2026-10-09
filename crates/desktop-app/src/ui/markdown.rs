@@ -2,7 +2,10 @@
 //! in a chat message's 13/1.5 `text_primary` (`D8JGX4` in `Agent message` `dcd0m`). It is selectable,
 //! and what a link press does is the screen's: the kit never opens anything by itself. It is laid out
 //! again only when what it shows changes; the link handler counts by identity, so a screen keeps it in
-//! its state rather than making a new one on every render.
+//! its state rather than making a new one on every render. What it reads as once rendered, as plain text, is
+//! [`plain`]'s.
+
+pub mod plain;
 
 use std::sync::Arc;
 
