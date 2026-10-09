@@ -103,9 +103,8 @@ impl Profiles {
         CommandPermission::AnyInWorktree,
         NetworkAccess::Off,
       ));
-      let version = publish(db, role, vec![body], now)?;
-      let id = version.0;
-      versions.insert(id, version.1);
+      let (id, version) = publish(db, role, vec![body], now)?;
+      versions.insert(id, version);
       Ok(id)
     };
     let explorer = profile(
@@ -139,7 +138,7 @@ impl Profiles {
 }
 
 /// Creates `name`'s resource with the first of `bodies` and publishes each in turn: version N is the Nth.
-fn publish<B: ResourceBody + Clone>(
+fn publish<B: ResourceBody>(
   db: &mut ProjectDb,
   name_text: &str,
   bodies: Vec<B>,

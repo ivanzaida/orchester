@@ -20,8 +20,9 @@ use orchester_core::{
     Diff,
     git::{RevisionChanges, WorktreeRead, read_revision_diff, read_worktree_changes},
   },
+  id::ResourceId,
   integration::WORKTREES_DIR,
-  resource::{AgentProfile, Pipeline, ResourceKind},
+  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Version},
   run::{PreflightInput, Run, TaskPhase, preflight},
   store::{
     ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
@@ -458,11 +459,30 @@ fn seed_unreadable_db_fails_with_schema_too_new() {
   );
 }
 
+/// `live`, its fake Codex given as a relative path. The seed only stores the program: any file stands in.
+fn live() -> (Seed, PathBuf) {
+  let relative = PathBuf::from("Cargo.toml");
+  (
+    Seed::with("live", Some(relative.clone())).expect("live seeds"),
+    relative,
+  )
+}
+
+/// The latest published version of every resource of kind `B`, by name.
+fn published<B: ResourceBody>(db: &ProjectDb) -> BTreeMap<String, (ResourceId, Version<B>)> {
+  db.resources(B::KIND)
+    .expect("resources")
+    .iter()
+    .map(|resource| {
+      let version = db.latest_version::<B>(resource.id()).expect("read").expect("published");
+      (resource.name().as_str().to_owned(), (resource.id(), version))
+    })
+    .collect()
+}
+
 #[test]
 fn seed_live_runs_the_fake_codex_by_its_absolute_path() {
-  // The seed only stores the program: any file stands in for it, and a relative path is made absolute.
-  let relative = PathBuf::from("Cargo.toml");
-  let seed = Seed::with("live", Some(relative.clone())).expect("live seeds");
+  let (seed, relative) = live();
   let db = seed.db();
   let [connection] = db
     .connections()
@@ -474,31 +494,25 @@ fn seed_live_runs_the_fake_codex_by_its_absolute_path() {
   assert!(program.is_absolute());
   assert_eq!(program, std::path::absolute(&relative).expect("absolute"));
   assert_eq!(connection.status(), ConnectionStatus::Connected);
-  let profiles: Vec<String> = db
-    .resources(ResourceKind::AgentProfile)
-    .expect("profiles")
-    .iter()
-    .map(|resource| resource.name().as_str().to_owned())
-    .collect();
-  assert_eq!(profiles, ["Builder", "Explorer", "Planner", "Reviewer"]);
-  for resource in db.resources(ResourceKind::AgentProfile).expect("profiles") {
-    let profile = db
-      .latest_version::<AgentProfile>(resource.id())
-      .expect("read")
-      .expect("published");
-    assert_eq!(profile.body().connection(), connection.id());
-  }
-  let feature = db
-    .resources(ResourceKind::Pipeline)
-    .expect("pipelines")
-    .into_iter()
-    .find(|resource| resource.name().as_str() == "Feature delivery")
-    .expect("Feature delivery");
-  let pipeline = db
-    .latest_version::<Pipeline>(feature.id())
-    .expect("read")
-    .expect("published");
-  let gated: Vec<&str> = pipeline
+  let profiles = published::<AgentProfile>(&db);
+  assert_eq!(
+    profiles.keys().collect::<Vec<_>>(),
+    ["Builder", "Explorer", "Planner", "Reviewer"]
+  );
+  assert!(
+    profiles
+      .values()
+      .all(|(_, profile)| profile.body().connection() == connection.id())
+  );
+}
+
+#[test]
+fn seed_live_pipelines_pass_the_run_preflight_and_its_drafts_are_ready() {
+  let (seed, _) = live();
+  let db = seed.db();
+  let pipelines = published::<Pipeline>(&db);
+  let gated: Vec<&str> = pipelines["Feature delivery"]
+    .1
     .body()
     .steps()
     .iter()
@@ -506,35 +520,16 @@ fn seed_live_runs_the_fake_codex_by_its_absolute_path() {
     .map(|step| step.key.as_str())
     .collect();
   assert_eq!(gated, ["plan"]);
-  let profiles: BTreeMap<_, _> = db
-    .resources(ResourceKind::AgentProfile)
-    .expect("profiles")
-    .iter()
-    .map(|resource| {
-      let version = db
-        .latest_version::<AgentProfile>(resource.id())
-        .expect("read")
-        .expect("published");
-      (resource.id(), version)
-    })
-    .collect();
+  let profiles = published::<AgentProfile>(&db).into_values().collect();
   let connections = db.connections().expect("connections");
-  for resource in db.resources(ResourceKind::Pipeline).expect("pipelines") {
-    let version = db
-      .latest_version::<Pipeline>(resource.id())
-      .expect("read")
-      .expect("published");
+  for (name, (_, version)) in &pipelines {
     let problems = preflight(PreflightInput {
       pipeline: Some(version.body()),
       profiles: &profiles,
       tools: &BTreeMap::new(),
       connections: &connections,
     });
-    assert!(
-      problems.is_empty(),
-      "{} can run: {problems:?}",
-      resource.name().as_str()
-    );
+    assert!(problems.is_empty(), "{name} can run: {problems:?}");
   }
   let tasks = db.tasks().expect("tasks");
   assert_eq!(tasks.len(), 6);
