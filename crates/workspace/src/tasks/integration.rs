@@ -46,6 +46,11 @@ pub enum IntegrationProblem {
     path: String,
     detail: String,
   },
+  /// Git merged the run, but the merge could not be recorded (`problem`); merging again records it.
+  NotRecorded {
+    merge: RunMerge,
+    problem: Message,
+  },
 }
 
 impl From<StoreError> for IntegrationProblem {
@@ -65,14 +70,18 @@ impl IntegrationProblem {
   pub fn end(&self, running: Running, not_done: Message) {
     let could_not_run = matches!(
       self,
-      Self::Store(_) | Self::Read(_) | Self::Merge(MergeError::Git(_)) | Self::Cleanup(CleanupError::Git(_))
+      Self::Store(_)
+        | Self::NotRecorded { .. }
+        | Self::Read(_)
+        | Self::Merge(MergeError::Git(_))
+        | Self::Cleanup(CleanupError::Git(_))
     );
     if !could_not_run {
       running.finish_as(not_done);
       return;
     }
     let reason = match self {
-      Self::Store(message) => message.clone(),
+      Self::Store(message) | Self::NotRecorded { problem: message, .. } => message.clone(),
       Self::Read(GitError::Run(CommandError::NotFound))
       | Self::Merge(MergeError::Git(GitError::Run(CommandError::NotFound)))
       | Self::Cleanup(CleanupError::Git(GitError::Run(CommandError::NotFound))) => {
@@ -92,6 +101,9 @@ impl IntegrationProblem {
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
       Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", short_path(path)),
+      Self::NotRecorded { merge, .. } => {
+        Message::new("runs.merge.failure.notRecorded").with("branch", merge.into.to_string())
+      }
       Self::NotRemoved { path, detail } => Message::new("runs.worktree.failure.notRemoved")
         .with("path", short_path(path))
         .with("detail", short_reason(detail, path)),
@@ -226,7 +238,13 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     .map_err(IntegrationProblem::Merge)?;
   // Should recording fail after git merged, merging again finds the work on the branch already
   // and records it then (`MergeKind::AlreadyMerged`).
-  db.save_run_merge(&merge)?;
+  if let Err(error) = db.save_run_merge(&merge) {
+    return Err(match IntegrationProblem::from(error) {
+      IntegrationProblem::Store(problem) => IntegrationProblem::NotRecorded { merge, problem },
+      // Another window recorded the merge first: it stands as recorded.
+      other => other,
+    });
+  }
   let cleanup = clear(&mut db, programs, repo_root, &run, None);
   if let Err(problem) = &cleanup {
     tracing::warn!(?problem, "the run was merged, but what it left could not be cleared");

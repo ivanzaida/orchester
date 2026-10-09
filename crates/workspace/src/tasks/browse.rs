@@ -14,7 +14,7 @@ use orchester_core::{
 use super::{
   data::ProjectTasks,
   group::hold_row_message,
-  list::{self, TaskRow, TaskTab},
+  list::{self, ReadinessKind, TaskRow, TaskTab},
 };
 use crate::messages::Message;
 
@@ -97,10 +97,14 @@ pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort)
         && data.grouped.contains(&row.id)
       {
         row.detail = hold_row_message(&GroupHold::Canceled);
+        row.readiness = ReadinessKind::Held(GroupHold::Canceled);
         return row;
       }
       match (data.group_holds.get(&row.id), row.phase) {
-        (Some(hold), Some(TaskPhase::Queued)) => row.detail = hold_row_message(hold),
+        (Some(hold), Some(TaskPhase::Queued)) => {
+          row.detail = hold_row_message(hold);
+          row.readiness = ReadinessKind::Held(hold.clone());
+        }
         (Some(GroupHold::GroupCap), Some(TaskPhase::StoppedAtLimit)) => {
           row.detail = Message::new("tasks.bulk.stoppedGroup");
         }

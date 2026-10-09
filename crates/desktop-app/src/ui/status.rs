@@ -5,9 +5,9 @@
 //!
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
-//! Interrupted · can't continue `circle-pause`, Completed and Complete `circle-check`, Merged
-//! `git-merge`, Failed `circle-x`, Unreadable `file-warning`, Waiting `clock`, Not started
-//! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
+//! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
+//! `git-merge`, Not merged `triangle-alert` (`kxMAN`), Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`,
+//! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
 //! Skipped or Urgent: they take `circle-slash`, `skip-forward` and `circle-alert` (`warning`). A status
@@ -46,6 +46,11 @@ pub enum Status {
   StoppedAtLimit,
   Interrupted,
   Completed,
+  /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
+  /// (`F2LtFn`); task lists say Completed.
+  ReadyForReview,
+  /// A run ready for review whose merge failed and left its base branch as it was.
+  NotMerged,
   Merged,
   Failed,
   Canceled,
@@ -82,7 +87,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 21] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -91,6 +96,8 @@ impl Status {
     Self::StoppedAtLimit,
     Self::Interrupted,
     Self::Completed,
+    Self::ReadyForReview,
+    Self::NotMerged,
     Self::Merged,
     Self::Failed,
     Self::Canceled,
@@ -122,6 +129,15 @@ impl Status {
     }
   }
 
+  /// The label of a run in `phase` on its task's page: as [`Self::of_phase`], but a run whose every step
+  /// passed waits for review (`Ready for review` in `F2LtFn`).
+  pub const fn of_run(phase: TaskPhase) -> Self {
+    match phase {
+      TaskPhase::Succeeded => Self::ReadyForReview,
+      phase => Self::of_phase(phase),
+    }
+  }
+
   pub const fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
@@ -130,11 +146,14 @@ impl Status {
       Self::NeedsInput => Icon::Hand,
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit => Icon::Gauge,
-      Self::Completed | Self::Complete => Icon::CircleCheck,
+      Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
       Self::Merged => Icon::GitMerge,
+      Self::NotMerged => Icon::TriangleAlert,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
-      Self::Unreadable => Icon::FileWarning,
+      // The boards name `file-warning`, which Pencil has no glyph for and draws as `circle-help`; the
+      // design shows `circle-help` (`Run icon` in `XEQuo` rows of `C2E5Po`).
+      Self::Unreadable => Icon::CircleHelp,
       Self::Skipped => Icon::SkipForward,
       Self::Blocked => Icon::Ban,
     }
@@ -144,8 +163,13 @@ impl Status {
     match self {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
       Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
-      Self::NeedsInput | Self::Paused | Self::StoppedAtLimit | Self::Interrupted | Self::CantContinue => Tone::Warning,
-      Self::Completed | Self::Complete => Tone::Success,
+      Self::NeedsInput
+      | Self::Paused
+      | Self::StoppedAtLimit
+      | Self::Interrupted
+      | Self::CantContinue
+      | Self::NotMerged => Tone::Warning,
+      Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
   }
@@ -166,6 +190,8 @@ impl Status {
       Self::StoppedAtLimit => "ui.status.stoppedAtLimit",
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
+      Self::ReadyForReview => "ui.status.readyForReview",
+      Self::NotMerged => "ui.status.notMerged",
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",
       Self::Canceled => "ui.status.canceled",

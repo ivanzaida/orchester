@@ -13,6 +13,8 @@
       "stoppedAtLimit": "Stopped at limit",
       "interrupted": "Interrupted",
       "completed": "Completed",
+      "readyForReview": "Ready for review",
+      "notMerged": "Not merged",
       "merged": "Merged",
       "failed": "Failed",
       "canceled": "Canceled",

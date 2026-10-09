@@ -6,7 +6,10 @@ use lurq::{
   core::Signal,
   node::dimension::Dimension,
 };
-use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field};
+use orchester_app::ui::{
+  field::{FieldInput, NumberField, SelectField, field, field_error},
+  icon::Icon,
+};
 
 use crate::harness::{Kit, assert_close, gap_after, gap_under};
 
@@ -162,10 +165,8 @@ fn a_number_field_that_is_not_accepted_says_why_in_place_of_its_read_back() {
     note.x + note.width,
     "the error at the box's end (`UQFos`)",
   );
-  assert_eq!(
-    kit.texts("budget-note"),
-    ["\u{e077}".to_owned(), "A budget is at least 1 token.".to_owned()]
-  );
+  // Only the words, in `danger`, as the design draws them (`Aqupm` in `i4Y9hL`): no alert mark.
+  assert_eq!(kit.texts("budget-note"), ["A budget is at least 1 token.".to_owned()]);
 }
 
 #[test]
@@ -192,3 +193,87 @@ fn a_select_is_a_28_high_field() {
   assert_eq!((select.width, select.height), (160.0, 28.0));
   assert!(kit.texts("sort").contains(&"Manual order".to_owned()));
 }
+
+#[test]
+fn a_select_with_a_glyph_cuts_a_long_label_before_its_chevron() {
+  let chosen = Signal::new("v1");
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .child(
+        SelectField::new(
+          "version",
+          "Plan version",
+          chosen.clone(),
+          vec![
+            SelectOption::new("v2", "v2 · latest"),
+            SelectOption::new("v1", "v1 · changes requested, a long while ago"),
+          ],
+        )
+        .leading(Icon::History)
+        .width(Dimension::Px(170.0))
+        .render(ctx),
+      )
+      .into()
+  });
+  let select = kit.bounds("version");
+  assert_eq!((select.width, select.height), (170.0, 28.0));
+  let label = kit.bounds("version-label");
+  assert!(
+    label.x + label.width <= select.x + select.width,
+    "the label stays inside the box: {label:?}"
+  );
+}
+
+#[test]
+fn a_clearable_search_ends_in_a_cross_while_it_holds_text_and_the_cross_clears_it() {
+  let value = Signal::new("retry budget".to_owned());
+  let shown = value.clone();
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .child(
+        FieldInput::new("search", "Search", shown.clone())
+          .search()
+          .clearable("Clear search")
+          .width(lurq::node::dimension::Dimension::Px(300.0))
+          .render(ctx),
+      )
+      .into()
+  });
+  let (frame, cross) = (kit.bounds("search-box"), kit.bounds("search-clear"));
+  assert_close(
+    frame.x + frame.width - (cross.x + cross.width),
+    10.0,
+    "the cross 10 from the end",
+  );
+  assert_close(cross.width, 13.0, "a 13 cross");
+  kit.click("search-clear");
+  assert_eq!(value.get(), "");
+  assert!(!kit.exists("search-clear"), "an empty search has no cross");
+}
+
+#[test]
+fn a_field_error_wraps_within_its_column() {
+  let mut kit = Kit::show(|_ctx| {
+    Column::new()
+      .width(Dimension::Px(NARROW))
+      .child(field_error(
+        "refused",
+        "The runner is not connected. Try again once it is online, then decide again.",
+      ))
+      .into()
+  });
+  let (error, text) = (kit.bounds("refused"), kit.bounds("refused-text"));
+  assert_close(error.width, NARROW, "the error is as wide as its column");
+  assert!(
+    text.x + text.width <= error.x + error.width + 0.5,
+    "the words end inside the column"
+  );
+  assert!(text.height > 20.0, "the words wrap onto a second line: {}", text.height);
+  assert_eq!(
+    kit.texts("refused-text"),
+    ["The runner is not connected. Try again once it is online, then decide again."]
+  );
+}
+
+/// A narrow column, as the retries panel's card is (`j7DjNG`, 288 inside).
+const NARROW: f32 = 200.0;

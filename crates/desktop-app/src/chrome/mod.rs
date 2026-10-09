@@ -23,6 +23,7 @@ use lurq::{
   node::{Element, HitTestBehavior, TextColor, dimension::Dimension},
 };
 
+pub use self::tab_strip::PillRef;
 use crate::{
   theme::{ExtraColor, ExtraRadius, IconSize},
   ui::icon::{Icon, glyph as icon_glyph},

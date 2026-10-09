@@ -9,6 +9,7 @@
 //! selection, scrim, conversation, code and diff colors, `display` type, `radius_full`): the screens
 //! that need them come next and must find them here rather than add near-duplicates.
 
+mod decisions;
 mod fonts;
 mod form;
 mod markdown;
@@ -17,6 +18,9 @@ mod palette;
 mod shadow;
 mod shell;
 mod startup;
+mod task;
+mod task_form;
+mod tasks;
 mod typography;
 
 use std::time::Duration;
@@ -27,11 +31,15 @@ use lurq::{
 };
 
 pub use self::{
+  decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
   shadow::ExtraShadow,
-  shell::ShellText,
+  shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
+  task::{TaskSpacing, TaskText},
+  task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
+  tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
 
@@ -50,6 +58,11 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  task::install(theme);
+  decisions::install(theme);
+  task_form::install(theme);
+  tasks::install(theme);
+  shell::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

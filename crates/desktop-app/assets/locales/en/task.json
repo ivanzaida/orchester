@@ -3,7 +3,125 @@
     "tabs": {
       "conversation": "Conversation",
       "summary": "Summary",
-      "changes": "Changes"
+      "changes": "Changes",
+      "artifacts": "Artifacts",
+      "artifactsReason": "Artifacts are planned · not available yet",
+      "memory": "Memory",
+      "memoryReason": "Memory is planned · not available yet"
+    },
+    "listSeparator": ", ",
+    "page": {
+      "loading": "Reading the task…",
+      "loadFailed": "The task couldn't be read",
+      "notFound": "No task {{task}} in {{project}}",
+      "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
+      "toTasks": "Open the task list",
+      "tabNotBuilt": "This tab isn't built yet."
+    },
+    "crumbs": {
+      "tasks": "Tasks"
+    },
+    "edit": "Edit",
+    "removeWorktree": "Remove worktree",
+    "status": {
+      "step": "{{number}} {{step}}",
+      "retriesUsed": "retries used",
+      "conflict": "conflict"
+    },
+    "runLine": {
+      "run": "Run {{run}} · {{pipeline}} {{version}}",
+      "attempt": "Run {{run}} · attempt {{attempt}} · {{pipeline}} {{version}}",
+      "when": "Run {{run}} · {{pipeline}} {{version}} · {{when}}",
+      "attemptWhen": "Run {{run}} · attempt {{attempt}} · {{pipeline}} {{version}} · {{when}}",
+      "started": "started {{time}}",
+      "paused": "paused {{time}}",
+      "stopped": "stopped {{time}}",
+      "finished": "finished at {{time}}",
+      "draft": "Draft · not run yet",
+      "queued": "Queued · its run has not started",
+      "unreadable": "Run {{run}} · could not be read",
+      "unreadableUnnumbered": "Its latest run could not be read"
+    },
+    "controls": {
+      "start": "Start run",
+      "retry": "Retry run",
+      "pause": "Pause run",
+      "pausing": "Pausing…",
+      "resume": "Resume run",
+      "continue": "Continue run",
+      "cancel": "Cancel run",
+      "offline": "The runner is not connected; the run's controls return once it is online.",
+      "blocked": {
+        "one": "Unavailable until {{tasks}} finishes.",
+        "other": "Unavailable until {{tasks}} finish."
+      },
+      "worktreeRemoved": "Continue is unavailable: run #{{run}}'s worktree was removed, so its agent has nothing to continue from. Run again starts a new run.",
+      "refused": {
+        "start": "The runner didn't start the run",
+        "pause": "The runner didn't pause the run",
+        "resume": "The runner didn't resume the run",
+        "continue": "The runner didn't continue the run",
+        "cancel": "The run wasn't canceled",
+        "run": "The task wasn't run"
+      },
+      "run": "Run"
+    },
+    "notices": {
+      "staleTitle": "The task couldn't be read again; it shows as last read",
+      "blockedTitle": "Blocked",
+      "blockedBy": {
+        "one": "The run neither starts nor goes on until {{tasks}} finishes.",
+        "other": "The run neither starts nor goes on until {{tasks}} finish."
+      },
+      "blockedReason": "{{reason}} · {{waiting}}"
+    },
+    "runAgain": {
+      "action": "Run again",
+      "title": "Run {{task}} again as run #{{run}}",
+      "explanation": {
+        "branch": "Run #{{run}} starts from {{base}}, the checkout's branch, in a worktree of its own. Run #{{previous}} stays as it is.",
+        "head": "Run #{{run}} starts from the checkout's HEAD, in a worktree of its own. Run #{{previous}} stays as it is."
+      },
+      "pipeline": "Pipeline",
+      "pipelineValue": "{{pipeline}} {{version}}",
+      "previous": "Run #{{run}} ran on",
+      "startsFrom": "Starts with",
+      "startsFromValue": {
+        "one": "{{step}} · its only step",
+        "other": "{{step}} · {{count}} steps"
+      },
+      "base": "Starts from",
+      "baseValue": "{{branch}} · {{revision}}",
+      "baseDetached": "detached · {{revision}}",
+      "baseUnknown": "Read when the run starts",
+      "branch": "New branch",
+      "worktree": "Worktree",
+      "worktreeValue": "A new one in {{folder}}",
+      "limits": "Limits",
+      "limitsValue": "{{budget}} tokens · {{minutes}} min",
+      "remove": {
+        "title": "Remove the worktrees of run #{{run}}",
+        "clean": "Nothing in them is uncommitted; {{branch}} keeps their committed work.",
+        "uncommitted": {
+          "one": "Discards 1 uncommitted file: {{files}}",
+          "other": "Discards {{count}} uncommitted files: {{files}}"
+        }
+      },
+      "cancel": "Cancel",
+      "start": "Start run #{{run}}"
+    },
+    "reasons": {
+      "join": " · ",
+      "offline": "Runner not connected",
+      "blocked": "Blocked by {{tasks}}",
+      "worktreeRemoved": "Worktree removed",
+      "unreadable": "This run can't be read",
+      "runAgainUnknown": "Run again: couldn't check",
+      "runAgainBlocked": "Blocked by unfinished tasks",
+      "runAgainChanged": "The latest run changed",
+      "runAgainActive": "Run #{{run}} is active",
+      "runAgainUnpublished": "{{pipeline}} isn't published",
+      "runAgainDailyBudget": "Today's token budget is used"
     }
   }
 }
