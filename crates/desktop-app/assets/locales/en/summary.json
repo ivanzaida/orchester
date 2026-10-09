@@ -19,7 +19,7 @@
       "askingTitle": "{{agent}} asks you",
       "askingBody": "{{step}} waits for your answer in the conversation.",
       "planTitle": "Your approval is needed · plan v{{version}}",
-      "planBody": "{{agent}} wrote a plan for {{step}}. Approving it finishes {{step}}.",
+      "planBody": "{{agent}} wrote a plan. Approving it lets the run go on; nothing runs until you decide.",
       "approvalTitle": "{{agent}} asks for your approval",
       "approvalBody": "{{step}} waits since {{time}} for a request its profile does not allow. Answer it in the conversation.",
       "pausedTitle": "Paused at checkpoint {{checkpoint}}",
@@ -62,7 +62,7 @@
       "readyTitle": "Draft · ready to run",
       "readyBody": "Run queues it and starts its first run.",
       "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}",
-      "planBodyNext": "{{agent}} wrote a plan for {{step}}. Approving it starts {{next}} with {{nextAgent}}; nothing runs until you decide."
+      "planBodyNext": "{{agent}} wrote a plan. Approving it starts {{next}} with {{nextAgent}}; nothing runs until you decide."
     },
     "steps": {
       "title": "Steps",
