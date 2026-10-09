@@ -28,9 +28,16 @@ pub enum StoreError {
   /// A database opened only to read it has not been migrated to this build's schema yet.
   #[error("database schema version {found} is older than this build's ({supported}) and was not migrated")]
   SchemaTooOld { found: u32, supported: u32 },
-  /// A migration left rows referring to rows that do not exist; nothing was changed.
-  #[error("migrating the database would leave {0} broken references; it was left unchanged")]
-  MigrationBrokeReferences(i64),
+  /// Migrating from schema version `found` to `supported` left `references` rows referring to rows
+  /// that do not exist; nothing was changed.
+  #[error(
+    "migrating the database from version {found} to {supported} would leave {references} broken references; it was      left unchanged"
+  )]
+  MigrationBrokeReferences {
+    references: i64,
+    found: u32,
+    supported: u32,
+  },
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
