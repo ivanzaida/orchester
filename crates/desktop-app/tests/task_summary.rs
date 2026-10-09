@@ -67,14 +67,28 @@ impl Page {
 
   /// Opens the Summary of the task left in `state`, once it shows; its key.
   fn open(&mut self, state: &str) -> String {
-    let (key, title, _) = self
+    let title = self
       .tasks
       .iter()
       .find(|(_, _, seeded)| *seeded == state)
       .unwrap_or_else(|| panic!("a task {state}"))
+      .1
+      .clone();
+    self.open_titled(&title)
+  }
+
+  /// Opens the Summary of the task titled `title`, once it shows; its key.
+  fn open_titled(&mut self, title: &str) -> String {
+    let key = self
+      .tasks
+      .iter()
+      .find(|(_, seeded, _)| seeded == title)
+      .unwrap_or_else(|| panic!("a task {title}"))
+      .0
       .clone();
     let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::of(TaskTab::Summary));
     self.window.navigation().go(Route::Project(self.project, page));
+    let title = title.to_owned();
     self.window.until(&format!("the Summary of {key}"), |window| {
       window
         .texts("task-title-row")
@@ -145,11 +159,11 @@ fn ids_in(element: ElementRef<'_>, prefix: &str, into: &mut Vec<String>) {
 fn summary_notice_says_where_each_task_stands() {
   let mut page = Page::seeded("task-states");
   let cases = [
-    ("draft, ready to queue", "Draft · not run yet"),
+    ("draft, ready to queue", "Draft · ready to run"),
+    ("draft, missing details", "Draft · not run yet"),
     ("queued, run not started", "Queued · its run has not started"),
     // No runner is connected: a run recorded as running is interrupted until one is.
     ("running", "Interrupted at Implement"),
-    ("stopped at its token limit", "Stopped at the token limit"),
     ("stopped by the daily budget", "Stopped at the daily token budget"),
     ("interrupted", "Interrupted at Implement"),
     ("failed", "Failed at Run checks"),
@@ -162,6 +176,11 @@ fn summary_notice_says_where_each_task_stands() {
     page.open(state);
     assert_eq!(page.text("task-notice-title"), title, "{state}");
   }
+  page.open("stopped at its token limit");
+  let limit = page.text("task-notice-title");
+  assert!(limit.starts_with("Stopped at the token limit"), "{limit}");
+  page.open("waits after retries");
+  assert_eq!(page.text("task-status-label"), "Needs input · retries used");
   page.open("ready for review");
   assert_eq!(
     page.text("task-status-label"),
@@ -179,7 +198,18 @@ fn summary_notice_says_where_each_task_stands() {
 }
 
 #[test]
-fn summary_steps_and_this_run_show_the_run() {
+fn summary_a_run_without_a_runner_reads_interrupted_everywhere() {
+  let mut page = Page::seeded("task-states");
+  page.open("running, approval waiting");
+  assert_eq!(page.text("task-status-label"), "Interrupted · 03 Implement");
+  assert!(page.text("task-step-implement-state").starts_with("Interrupted"));
+  let rows = page.text("task-run-rows");
+  assert!(rows.contains("Interrupted") && !rows.contains("Running"), "{rows}");
+  assert!(rows.contains("No runner is connected"), "{rows}");
+}
+
+#[test]
+fn summary_steps_and_the_panels_show_the_run() {
   let mut page = Page::seeded("task-states");
   page.open("failed");
   let rows = page.ids("task-step-rows", "task-step-");
@@ -189,10 +219,17 @@ fn summary_steps_and_this_run_show_the_run() {
   let checks = page.text("task-step-run-checks-state");
   assert!(checks.starts_with("Command failed · attempt 3 · "), "{checks}");
   assert_eq!(page.text("task-step-review-state"), "Skipped");
+  // A run that ended has its details, not *This run*.
+  assert_eq!(page.text("task-run-details-title"), "Run details");
+  assert_eq!(page.text("task-this-run-project"), "Kontur");
+  assert!(page.text("task-this-run-tokens").ends_with(" of 500k"));
+  assert!(!page.has("task-this-run"));
+  page.open("stopped at its token limit");
+  assert_eq!(page.text("task-this-run-title"), "This run");
   assert_eq!(page.text("task-this-run-pipeline"), "Feature delivery v3");
   assert_eq!(page.text("task-this-run-timeLimit"), "90 min");
-  page.open("stopped at its token limit");
   assert_eq!(page.text("task-this-run-budget"), "500k / 500k tokens · limit reached");
+  assert!(page.text("task-this-run-permissions-lead").starts_with("Last ran with"));
   assert_eq!(
     page.text("task-brief-text"),
     "Say in the status bar when the GitHub token expired."
@@ -209,23 +246,20 @@ fn summary_controls_say_why_they_are_unavailable() {
   page.open("paused");
   assert!(page.locked("task-resume-run"), "Resume waits for a runner");
   assert!(page.locked("task-cancel-run"), "Cancel waits for a runner");
-  assert_eq!(
-    page.text("task-action-reason-0"),
-    "The runner is not connected; the run's controls return once it is online."
-  );
+  assert_eq!(page.text("task-action-reasons"), "Runner not connected");
   page.open("queued, run not started");
   assert!(page.locked("task-start-run"), "Retry run waits for a runner");
+  page.open("draft, ready to queue");
+  assert!(page.locked("task-run"), "a ready draft runs once a runner is connected");
+  page.open("draft, missing details");
+  assert!(!page.has("task-run"), "a draft that misses details has nothing to run");
   page.open("failed");
   assert!(!page.has("task-cancel-run"), "a run that ended has nothing to cancel");
   page
     .window
     .until("Run again", |window| window.texts("task-run-again").is_some());
   assert!(page.locked("task-run-again"), "the day's budget is used");
-  let reason = page.text("task-action-reason-0");
-  assert!(
-    reason.starts_with("Run again is unavailable: the daily token budget is used"),
-    "{reason}"
-  );
+  assert_eq!(page.text("task-action-reasons"), "Today's token budget is used");
   page.open("latest run unreadable");
   assert!(
     page.locked("task-cancel-run"),
@@ -233,77 +267,61 @@ fn summary_controls_say_why_they_are_unavailable() {
   );
   let lock = page.text("task-unreadable-actions");
   assert!(lock.contains("are unavailable for run #"), "{lock}");
-  assert_eq!(page.text("task-action-reason-0"), lock);
+  assert!(!page.has("task-action-reasons"), "the Summary says it once");
+  assert!(page.has("task-brief-text"), "what the task asks for can still be read");
 }
 
 #[test]
-fn summary_tabs_keep_the_frame_and_lock_what_is_not_built() {
+fn summary_a_blocked_task_says_what_blocks_it() {
+  let mut page = Page::seeded("tasks");
+  page.open_titled("Verify webhook signatures on receive");
+  assert!(page.locked("task-run"), "a blocked draft does not run");
+  let blocker = page
+    .tasks
+    .iter()
+    .find(|(_, title, _)| title == "Webhook signing secrets per endpoint")
+    .map(|(key, ..)| key.clone())
+    .expect("the blocking task");
+  assert_eq!(page.text("task-action-reasons"), format!("Blocked by {blocker}"));
+  let notice = page.text("task-blocked");
+  assert!(notice.starts_with("Blocked "), "{notice}");
+  assert!(notice.contains(&format!("until {blocker} finish")), "{notice}");
+}
+
+#[test]
+fn summary_remove_worktree_from_the_header_and_then_continue_is_unavailable() {
   let mut page = Page::seeded("task-states");
-  let key = page.open("cancelled");
-  assert!(page.locked("task-tab-artifacts"));
-  assert!(page.locked("task-tab-memory"));
+  let key = page.open("interrupted");
+  let branch = format!("orchester/{}-run-1", key.to_lowercase());
+  page.window.until("Remove worktree", |window| {
+    window.texts("task-remove-worktree").is_some()
+  });
+  assert!(
+    page.ids("task-run-rows", "run-remove-worktree-").is_empty(),
+    "not twice"
+  );
+  page.click("task-remove-worktree");
+  let confirm = page.ids("task-header", "run-remove-confirm-");
+  let [confirm] = confirm.as_slice() else {
+    panic!("one confirmation under the header: {confirm:?}");
+  };
+  let confirm = confirm.clone();
+  let said = page.text(&confirm);
+  assert!(
+    said.contains("was interrupted: without its worktree it can never continue"),
+    "{said}"
+  );
+  // It stays open as the tabs switch.
   page.click("task-tab-conversation");
   page.window.until("the Conversation tab", |window| {
     window.texts("task-conversation").is_some()
   });
-  assert_eq!(
-    page.text("task-conversation"),
-    "Conversation This tab isn't built yet.",
-    "{key}"
-  );
-  assert!(page.has("task-header"), "the frame stays");
+  assert!(page.has(&confirm), "the confirmation stays open");
   page.click("task-tab-summary");
   page
     .window
-    .until("the Summary again", |window| window.texts("task-notice").is_some());
-}
-
-#[test]
-fn summary_runs_of_this_task_remove_a_worktree_in_place() {
-  let mut page = Page::seeded("task-states");
-  // Tall enough for the runs and the confirmation without scrolling the Summary.
-  page.window.tree.resize(1440, 1800);
-  let key = page.open("cancelled");
-  let branch = format!("orchester/{}-run-1", key.to_lowercase());
-  page.window.until("what the run left", |window| {
-    window.texts("task-run-rows").is_some_and(|texts| {
-      texts
-        .iter()
-        .any(|text| text.starts_with("Worktree · no uncommitted changes"))
-    })
-  });
-  let rows = page.text("task-run-rows");
-  assert!(
-    rows.contains("this run") && rows.contains("Canceled at Implement"),
-    "{rows}"
-  );
-  assert!(
-    rows.contains(&format!("Worktree · no uncommitted changes · {branch}")),
-    "{rows}"
-  );
-  let button = page.ids("task-run-rows", "run-remove-worktree-");
-  let [button] = button.as_slice() else {
-    panic!("one Remove worktree: {button:?}");
-  };
-  let number = button.trim_start_matches("run-remove-worktree-").to_owned();
-  page.click(button);
-  let confirm = format!("run-remove-confirm-{number}");
-  page
-    .window
-    .until("the confirmation in the row", |window| window.texts(&confirm).is_some());
-  let said = page.text(&confirm);
-  assert!(
-    said.contains(&format!("Removes the worktree of run #{number}")),
-    "{said}"
-  );
-  assert!(
-    said.contains(&format!("{branch} · deleted, its commits are merged")),
-    "{said}"
-  );
-  assert!(
-    page.window.texts("task-remove-worktree").is_some(),
-    "the header's Remove worktree stays"
-  );
+    .until("the Summary", |window| window.texts("task-notice").is_some());
+  let number = confirm.trim_start_matches("run-remove-confirm-").to_owned();
   page.click(&format!("run-remove-start-{number}"));
   page.window.until("the worktree to go", |window| {
     window.texts(&confirm).is_none()
@@ -311,8 +329,46 @@ fn summary_runs_of_this_task_remove_a_worktree_in_place() {
         .texts("task-run-rows")
         .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Worktree removed")))
   });
-  assert!(!page.has("task-remove-worktree"), "nothing is left to remove");
-  assert!(page.ids("task-run-rows", "run-remove-worktree-").is_empty());
+  assert!(page.text("task-run-rows").contains(&branch));
+  assert!(page.locked("task-continue-run"), "nothing is left to continue from");
+  assert_eq!(
+    page.text("task-action-reasons"),
+    "Worktree removed · Runner not connected · Today's token budget is used"
+  );
+  assert_eq!(page.text("task-notice-title"), format!("Run #{number} can't continue"));
+}
+
+#[test]
+fn summary_an_older_runs_removal_confirms_in_its_row() {
+  let mut page = Page::seeded("tasks");
+  // Tall enough for the runs and the confirmation without scrolling the Summary.
+  page.window.tree.resize(1440, 2000);
+  page.open("running, approval waiting");
+  page.window.until("what the runs left", |window| {
+    window
+      .texts("task-run-rows")
+      .is_some_and(|texts| texts.iter().any(|text| text.contains("files not committed")))
+  });
+  let buttons = page.ids("task-run-rows", "run-remove-worktree-");
+  let [button] = buttons.as_slice() else {
+    panic!("the canceled run's Remove worktree: {buttons:?}");
+  };
+  let number = button.trim_start_matches("run-remove-worktree-").to_owned();
+  page.click(button);
+  let confirm = format!("run-remove-confirm-{number}");
+  page
+    .window
+    .until("the confirmation in the row", |window| window.texts(&confirm).is_some());
+  assert!(page.ids("task-run-rows", "run-remove-confirm-").contains(&confirm));
+  // Files would be lost: Remove waits for the switch that agrees to discard them.
+  let start = format!("run-remove-start-{number}");
+  page.click(&start);
+  assert!(page.has(&confirm), "nothing is removed before discarding is agreed to");
+  page.click(&format!("run-remove-discard-{number}"));
+  page.click(&format!("run-remove-cancel-{number}"));
+  page
+    .window
+    .until("the confirmation to close", |window| window.texts(&confirm).is_none());
 }
 
 #[test]
