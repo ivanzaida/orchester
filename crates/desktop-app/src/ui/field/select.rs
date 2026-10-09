@@ -15,7 +15,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Row, Select, SelectOption, Text},
+  components::{Row, Select, SelectOption, Text, TextOverflow},
   core::{Signal, signal::SignalValue},
   layout::Alignment,
   node::{
@@ -143,7 +143,8 @@ where
       .height(Dimension::Px(ControlHeight::Md.value()))
       .style(select_style(ctx));
     if let Some(glyph) = self.leading {
-      select = select.trigger(move |state| leading_trigger(glyph, state.label.as_deref().unwrap_or_default()));
+      let id = self.id.clone();
+      select = select.trigger(move |state| leading_trigger(&id, glyph, state.label.as_deref().unwrap_or_default()));
     }
     // lurq's select takes no accessible name of its own; tools read it from the select's row.
     Row::new()
@@ -154,21 +155,24 @@ where
   }
 }
 
-/// The chosen option's `label` after `glyph`, and the chevron at the end.
-fn leading_trigger(glyph: Icon, label: &str) -> Element {
+/// The chosen option's `label` (element id `<id>-label`) after `glyph`, cut with an ellipsis where the box runs out of
+/// room (its menu lists the whole label), and the chevron at the end.
+fn leading_trigger(id: &str, glyph: Icon, label: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0))
     .child(
       Text::new(label)
+        .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextPrimary)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .nowrap(),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
-    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted).flex_shrink(0.0))
     .into()
 }

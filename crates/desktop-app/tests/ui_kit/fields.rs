@@ -6,7 +6,10 @@ use lurq::{
   core::Signal,
   node::dimension::Dimension,
 };
-use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field, field_error};
+use orchester_app::ui::{
+  field::{FieldInput, NumberField, SelectField, field, field_error},
+  icon::Icon,
+};
 
 use crate::harness::{Kit, assert_close, gap_after, gap_under};
 
@@ -191,6 +194,36 @@ fn a_select_is_a_28_high_field() {
   let select = kit.bounds("sort");
   assert_eq!((select.width, select.height), (160.0, 28.0));
   assert!(kit.texts("sort").contains(&"Manual order".to_owned()));
+}
+
+#[test]
+fn a_select_with_a_glyph_cuts_a_long_label_before_its_chevron() {
+  let chosen = Signal::new("v1");
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .child(
+        SelectField::new(
+          "version",
+          "Plan version",
+          chosen.clone(),
+          vec![
+            SelectOption::new("v2", "v2 · latest"),
+            SelectOption::new("v1", "v1 · changes requested, a long while ago"),
+          ],
+        )
+        .leading(Icon::History)
+        .width(Dimension::Px(170.0))
+        .render(ctx),
+      )
+      .into()
+  });
+  let select = kit.bounds("version");
+  assert_eq!((select.width, select.height), (170.0, 28.0));
+  let label = kit.bounds("version-label");
+  assert!(
+    label.x + label.width <= select.x + select.width,
+    "the label stays inside the box: {label:?}"
+  );
 }
 
 #[test]
