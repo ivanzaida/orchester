@@ -37,8 +37,12 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
     `task.summary.*`. New task and Edit task are `task_form.json`.
 - Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
   `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
-  `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. A structural size (a sidebar width, a tab
+  `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. Shared roles belong to the UI kit; a value
+  only one area uses goes in that area's own `theme/<area>.rs` (`startup.rs`, `shell.rs`), registered
+  with one line in `theme/mod.rs` and `typography.rs`. A structural size (a sidebar width, a tab
   height) is a named constant next to the component that owns it, with its Pencil node id.
+- A `Message` of `orchester-workspace` is shown with `ui::message::message_text`, which reads its key in
+  the `workspace` namespace; never `ctx.t` with its key.
 - Tests: `cargo test -p orchester-app --test i18n -- locales area every_key` (load, parity per area, own
   keys only, every key the code names has its area's file and exists) and
   `cargo test -p orchester-app --test theme -- roles extra_color spacing`.
