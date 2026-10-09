@@ -49,6 +49,8 @@ fn kept(db: &ProjectDb) -> Result<Kept, StoreError> {
 pub struct PipelineStepChoice {
   pub name: Arc<str>,
   pub executor: UiMessage,
+  /// A tool runs the step, not an agent.
+  pub tool: bool,
   pub approval_gate: bool,
 }
 
@@ -416,6 +418,7 @@ fn step_choices(steps: &[Step], assignables: &Assignables) -> Vec<PipelineStepCh
     .map(|step| PipelineStepChoice {
       name: step.name.as_str().into(),
       executor: describe::executor_line(step, assignables),
+      tool: matches!(step.kind, orchester_core::resource::StepKind::Tool { .. }),
       approval_gate: step.approval_gate,
     })
     .collect()

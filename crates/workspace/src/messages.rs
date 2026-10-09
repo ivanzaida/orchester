@@ -150,6 +150,11 @@ pub fn interrupted() -> Message {
   Message::new("errors.interrupted")
 }
 
+/// A task was changed since it was read, so a change made on what was read was not saved.
+pub fn task_changed_meanwhile() -> Message {
+  Message::new("tasks.conflict.changedMeanwhile")
+}
+
 pub fn runner_failure(failure: &RunnerFailure) -> Message {
   match failure {
     RunnerFailure::MissingExecutable { path } => {
