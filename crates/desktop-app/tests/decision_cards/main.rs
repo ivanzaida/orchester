@@ -2,11 +2,11 @@
 //! question its step waits on, questions with suggested answers (waiting, several answers, answered by the
 //! person and by automation, ended before an answer), a command waiting for approval and the ways one ends
 //! (approved once, denied, approved by automation, ended without an answer), and plans. The window's runner
-//! program does not exist: an answer reaches no runner, and the card says why; and a run recorded at work is
-//! interrupted, so what its agent asked in its turn (an approval, a question with suggested answers) no
-//! longer waits. Those cards waiting are QA's, on live runs (`qa-app.ps1 -Scenario live -FakeAgents`).
-//! Needs `git`.
+//! program does not exist: an answer reaches no runner, and the card says why ([`answering`]); a run recorded
+//! at work is interrupted, so what its agent asked in its turn no longer waits, unless the seed holds its step
+//! waiting for the person. Needs `git`.
 
+mod answering;
 #[allow(
   dead_code,
   reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"
@@ -23,7 +23,7 @@ use orchester_app::{
   routes::{ProjectPage, Route, TaskView},
   ui::icon::Icon,
 };
-use orchester_core::{project::TaskKey, time::Timestamp};
+use orchester_core::{id::ProjectId, project::TaskKey, time::Timestamp};
 use support::{Data, Window};
 
 /// A window on the `cards` scenario, seeded in the window's own data folder.
@@ -44,6 +44,12 @@ fn seeded() -> (Window, Seeded) {
 /// The conversation of the seeded task titled `title`, once a card with an id starting with `prefix` shows;
 /// that card's id.
 fn card_of(title: &str, prefix: &str) -> (Window, String) {
+  let (window, id, _) = opened(title, prefix);
+  (window, id)
+}
+
+/// [`card_of`], with the seeded project.
+fn opened(title: &str, prefix: &str) -> (Window, String, ProjectId) {
   let (mut window, seeded) = seeded();
   let task = seeded
     .tasks
@@ -59,7 +65,7 @@ fn card_of(title: &str, prefix: &str) -> (Window, String) {
     cards(window, prefix).into_iter().any(|id| id.matches('-').count() >= 2)
   });
   let id = card_id(&mut window, prefix);
-  (window, id)
+  (window, id, seeded.project)
 }
 
 /// The id of the one card whose id starts with `prefix`, without its parts' ids.
@@ -119,6 +125,13 @@ fn click(window: &mut Window, id: &str) {
   window.tree.mouse_up(x, y, MouseButton::Left);
   window.pass();
   window.pass();
+}
+
+/// The id of the card of plan version `version`: `cards-plan-<execution>-<version>`, not one of its parts.
+fn version(window: &mut Window, version: &str) -> Option<String> {
+  cards(window, "cards-plan-")
+    .into_iter()
+    .find(|id| id.rsplit('-').next() == Some(version) && id.matches('-').count() == 7)
 }
 
 fn locked(window: &mut Window, id: &str) -> bool {
@@ -191,7 +204,7 @@ fn card_plan_shows_its_first_lines_the_whole_plan_and_approve() {
   let hint = text(&mut window, &format!("{card}-hint"));
   assert_eq!(
     hint,
-    "Starts Implement with Builder. Asking for changes is not available here yet."
+    "Starts 03 Implement with Builder. Asking for changes is not available here yet."
   );
   assert_eq!(text(&mut window, &format!("{card}-approve")), "Approve plan & continue");
   click(&mut window, &format!("{card}-approve"));
@@ -203,14 +216,18 @@ fn card_plan_shows_its_first_lines_the_whole_plan_and_approve() {
 #[test]
 fn card_plan_versions_say_which_waits_and_what_was_asked() {
   let (mut window, _) = card_of("Back off when GitHub rate-limits the sync", "cards-plan-");
-  window.until("both versions", |window| cards(window, "cards-plan-plan-").len() >= 2);
-  let first = text(&mut window, "cards-plan-plan-1");
+  window.until("both versions", |window| {
+    version(window, "1").is_some() && version(window, "2").is_some()
+  });
+  let first = version(&mut window, "1").expect("plan v1");
+  let first = text(&mut window, &first);
   assert!(first.contains("Changes requested"), "{first}");
   assert!(
     first.contains("You asked: Don't drop messages while we wait: queue them and show how many wait."),
     "{first}"
   );
-  let second = text(&mut window, "cards-plan-plan-2");
+  let second = version(&mut window, "2").expect("plan v2");
+  let second = text(&mut window, &second);
   assert!(second.contains("Waiting for approval"), "{second}");
 }
 
@@ -250,9 +267,8 @@ fn card_requests_of_a_run_that_lost_its_runner_no_longer_wait() {
   // The window has no runner: a run recorded at work is interrupted, and so is what its agent asked in its
   // turn. Nothing reads as waiting or can be answered.
   for (title, prefix, gone) in [
-    ("Pick where the docs button goes", "cards-choice-", "-send"),
-    ("Choose the export formats", "cards-choice-", "-send"),
-    ("Add serde to the webhook payloads", "cards-approval-", "-approve"),
+    ("Pick the retry header", "cards-choice-", "-send"),
+    ("Add jitter to the retries", "cards-approval-", "-approve"),
   ] {
     let (mut window, card) = card_of(title, prefix);
     let shown = text(&mut window, &card);
@@ -263,19 +279,16 @@ fn card_requests_of_a_run_that_lost_its_runner_no_longer_wait() {
       "{title} cannot be answered"
     );
   }
-  let (mut window, card) = card_of("Pick where the docs button goes", "cards-choice-");
+  let (mut window, card) = card_of("Pick the retry header", "cards-choice-");
   let context = text(&mut window, &format!("{card}-context"));
   assert!(
     context.contains("the run was interrupted before an answer reached Builder"),
     "{context}"
   );
-  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
+  let (mut window, card) = card_of("Add jitter to the retries", "cards-approval-");
   assert_eq!(
     text(&mut window, &format!("{card}-decided")),
     "Interrupted · Builder no longer waits for an answer"
   );
-  assert_eq!(
-    text(&mut window, &format!("{card}-asked")),
-    "cargo add serde --features derive"
-  );
+  assert_eq!(text(&mut window, &format!("{card}-asked")), "cargo add rand");
 }

@@ -129,9 +129,11 @@ fn facts(
   (place, request): (&Place, &PendingToolApproval),
   shown: Option<&ShownApproval>,
 ) -> Element {
-  let step = shown
-    .and_then(|shown| shown.step.clone())
-    .or_else(|| place.step.clone())
+  // "03 Implement" as the chat names the step (`zZoFw` in `YDJsC`), else its name.
+  let step = place
+    .step
+    .clone()
+    .or_else(|| shown.and_then(|shown| shown.step.clone()))
     .unwrap_or_default();
   let run = place.run_number().to_string();
   let task = place.detail.task.key().to_string();
