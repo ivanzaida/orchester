@@ -16,7 +16,7 @@ use crate::{
   messages::Message,
   programs::Programs,
   tasks::{
-    changes::{NotCheckpointed, Refresh, checkpointed_in, listed_files, not_checkpointed_in},
+    changes::{NotCheckpointed, Refresh, RunStage, checkpointed_in, listed_files, not_checkpointed_in},
     detail::RunView,
   },
 };
@@ -102,7 +102,7 @@ pub(in super::super) fn not_checkpointed(
     .run
     .last_checkpoint()
     .map(|checkpoint| checkpoint.revision().clone());
-  let read_at = (run.id(), run.run.status().is_terminal());
+  let read_at = (run.id(), RunStage::of(run.run.status()));
   let deps = (repo_root.to_path_buf(), read_at, head, live, tab_open);
   let reads = ctx.stream(
     deps,

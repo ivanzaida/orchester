@@ -1,5 +1,5 @@
-//! The count of files the Changes tab lists, shown on its label and in the Conversation, and the
-//! worktree reads that follow a page only while it is there.
+//! The count of files the Changes tab lists, shown on its label and in the Conversation, the worktree
+//! reads that follow a page only while it is there, and what a missing worktree means.
 
 use std::{
   sync::{
@@ -11,11 +11,15 @@ use std::{
 
 use orchester_core::{
   diff::{Changes, Diff},
+  id::RunId,
   revision::Revision,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::{
   messages::Message,
-  tasks::changes::{Checkpointed, NotCheckpointed, ReadChanges, Refresh, listed_files},
+  tasks::changes::{
+    ChangesError, Checkpointed, NotCheckpointed, ReadChanges, Refresh, RunStage, listed_files, not_checkpointed_in,
+  },
 };
 
 const HEAD: &str = "1111111111111111111111111111111111111111";
@@ -204,4 +208,16 @@ fn worktree_is_read_once_while_no_agent_works() {
   refresh.ticker()();
   std::thread::sleep(Duration::from_millis(50));
   assert_eq!(reads.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_missing_worktree_is_not_made_yet_removed_or_an_error_by_the_runs_stage() {
+  let repo = tempfile::tempdir().expect("a temporary folder");
+  let programs = Programs::processes();
+  let read = |stage| not_checkpointed_in(repo.path(), &programs, (RunId::generate(), stage));
+  assert!(matches!(read(RunStage::NotStarted), Ok(NotCheckpointed::Clean)));
+  assert!(matches!(read(RunStage::Ended), Ok(NotCheckpointed::Removed)));
+  let missing = read(RunStage::Started).expect_err("a started run's worktree is there");
+  assert!(matches!(missing, ChangesError::WorktreeMissing(_)), "{missing}");
+  assert_eq!(missing.message().key, "runs.changes.failure.worktreeMissing");
 }

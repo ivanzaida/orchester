@@ -19,6 +19,7 @@ use orchester_core::{
   id::RunId,
   integration::WORKTREES_DIR,
   revision::Revision,
+  run::RunStatus,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -89,6 +90,27 @@ pub enum NotCheckpointed {
   },
 }
 
+/// Where a run is, for what its missing worktree means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RunStage {
+  /// Not started: its worktree is made when it starts.
+  NotStarted,
+  /// Started and not ended, interrupted or not: its worktree should be there.
+  Started,
+  /// Ended: its worktree may have been removed.
+  Ended,
+}
+
+impl RunStage {
+  pub const fn of(status: &RunStatus) -> Self {
+    match status {
+      RunStatus::Pending => Self::NotStarted,
+      _ if status.is_terminal() => Self::Ended,
+      _ => Self::Started,
+    }
+  }
+}
+
 #[derive(Debug, Error)]
 pub enum ChangesError {
   #[error(transparent)]
@@ -97,6 +119,8 @@ pub enum ChangesError {
   Git(#[from] GitDiffError),
   #[error("git's diff is not a unified diff: {0}")]
   Diff(#[from] DiffParseError),
+  #[error("the worktree {0} of a run that has not ended is missing")]
+  WorktreeMissing(PathBuf),
 }
 
 impl From<RevisionDiffError<StoreError>> for ChangesError {
@@ -114,6 +138,7 @@ impl ChangesError {
       Self::Store(error) => crate::messages::store_error(error),
       Self::Git(GitDiffError::Run(CommandError::NotFound)) => Message::new("runs.changes.failure.gitMissing"),
       Self::Git(_) | Self::Diff(_) => Message::new("runs.changes.failure.git"),
+      Self::WorktreeMissing(_) => Message::new("runs.changes.failure.worktreeMissing"),
     }
   }
 }
@@ -153,20 +178,20 @@ pub fn checkpointed_in(
   })
 }
 
-/// What the worktree of `run` holds beyond its commit; `ended` when the run ended, so a missing
-/// worktree was removed rather than not created yet.
+/// What the worktree of `run` holds beyond its commit. A missing worktree was not made yet before the run
+/// started, was removed after it ended, and is an error in between.
 pub fn not_checkpointed_in(
   repo_root: &Path,
   programs: &Programs,
-  (run, ended): (RunId, bool),
+  (run, stage): (RunId, RunStage),
 ) -> Result<NotCheckpointed, ChangesError> {
   let worktree = run_worktree(repo_root, run);
   if !worktree.is_dir() {
-    return Ok(if ended {
-      NotCheckpointed::Removed
-    } else {
-      NotCheckpointed::Clean
-    });
+    return match stage {
+      RunStage::NotStarted => Ok(NotCheckpointed::Clean),
+      RunStage::Ended => Ok(NotCheckpointed::Removed),
+      RunStage::Started => Err(ChangesError::WorktreeMissing(worktree)),
+    };
   }
   let read = read_worktree_changes(&programs.runner(), Path::new(GIT), &worktree)?;
   Ok(match read.read {

@@ -16,7 +16,7 @@ use orchester_workspace::{
   background,
   messages::Message,
   tasks::{
-    changes::{Checkpointed, NotCheckpointed, Refresh, checkpointed_in, listed_files, not_checkpointed_in},
+    changes::{Checkpointed, NotCheckpointed, Refresh, RunStage, checkpointed_in, listed_files, not_checkpointed_in},
     detail::{RunView, TaskDetail},
   },
 };
@@ -245,7 +245,7 @@ impl ChangesReads {
         .run
         .last_checkpoint()
         .map(|checkpoint| checkpoint.revision().clone());
-      ((run.id(), run.run.status().is_terminal()), head)
+      ((run.id(), RunStage::of(run.run.status())), head)
     });
     let deps = (repo_root.to_path_buf(), at, follow, retry);
     let reads = ctx.stream(
