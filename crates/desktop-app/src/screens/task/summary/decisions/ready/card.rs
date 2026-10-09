@@ -256,7 +256,12 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
     Services::of(ctx).jobs.of(task.project.open.project.id()).of(run.id()),
     merge_args(ctx, task, run, branch.as_str()),
   );
-  (button.on_click(move || jobs.start_merge(args.clone())), None)
+  // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which
+  // the card shows, as it is.
+  let start = move || {
+    jobs.start_merge(args.clone());
+  };
+  (button.on_click(start), None)
 }
 
 /// The merge of `run` into `branch`, reported in the status bar; once it ends the task is read again.

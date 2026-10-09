@@ -1,8 +1,9 @@
 //! The step's Orchester tools (`orchester_core::orchester_tools`), served over the invocation's relay
-//! ([`super::relay`]) and run by the runner: the native agent's file tools ([`super::tool_files`]), git in
-//! the worktree, pinned to its own git folder, a read outside it, and the step's skills ([`StepSkills`]). A call runs
-//! off the async workers, in the worktree, with the environment the agent's own programs get; its output is read as it
-//! comes and kept within its cap, and its answer has the invocation's secret values removed.
+//! ([`super::relay`]) and run by the runner: the worktree's file tools ([`super::tool_files`]), a read or a search
+//! outside it, the step's skills ([`StepSkills`]), its checks ([`super::checks`]) and the run's records
+//! ([`super::run_records`]). A call runs off the async workers, in the worktree, with the
+//! environment the agent's own programs get; its output is read as it comes and kept within its cap, and its answer has
+//! the invocation's secret values removed.
 //!
 //! A call of a tool that asks runs only once approved, which the runner holds itself: an approval given
 //! through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
@@ -10,8 +11,7 @@
 //! and a call that finds none is asked about by the runner before it runs ([`super::relay`]). Codex runs
 //! every tool without asking, so the runner asks for it.
 //!
-//! The Tools library's command tools are offered to no agent: the library has no setting that offers a tool
-//! to agents, and its access rules were made for pipeline steps (`docs/plan.md`, M8).
+//! A check is offered to a step whose run pinned it and whose access rules let the step call it.
 
 use std::{
   ffi::OsString,
@@ -27,21 +27,25 @@ use orchester_core::{
     invocation::{CodexOrchester, Platform},
     stream::RunnerProblem,
   },
+  id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult, ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext, ToolResult,
+    ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
+  source::ResolvedSources,
 };
 use orchester_exec::run_capped;
 use parking_lot::Mutex;
 use serde_json::Value;
 
 use super::{
-  super::run::RunTask,
+  super::{handoff::provenance, run::RunTask},
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
   relay::{Listening, Served, bind},
+  run_records::RunRecords,
   start::problem,
   tool_files::ToolFiles,
 };
@@ -51,7 +55,7 @@ use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
 #[derive(Clone, Copy)]
 pub(in super::super) struct ToolFolders<'a> {
   pub(in super::super) worktree: &'a Path,
-  /// The extra writable folders the step is granted.
+  /// The extra writable folders the step is granted, which `edit_file` and `create_file` may change.
   pub(in super::super) writable: &'a [ResolvedFolder],
   /// The code index of the run's base revision, read-only, when the agent gets it.
   pub(in super::super) code_index: Option<&'a Path>,
@@ -74,7 +78,7 @@ impl<'a> ToolFolders<'a> {
   }
 }
 
-/// The hooks folder git gets, empty, among the project's private files.
+/// The hooks folder git gets when it lists the worktree's changes, empty, among the project's private files.
 const NO_HOOKS: &str = "no-hooks";
 
 /// What the calls of one step run with.
@@ -90,6 +94,12 @@ pub(in super::super) struct ToolHost {
   files: ToolFiles,
   /// The skills `list_skills` and `read_skill` serve.
   skills: StepSkills,
+  /// The run's sources, resolved: a call outside the worktree that stays in one runs without asking.
+  sources: ResolvedSources,
+  /// The checks `run_check` runs.
+  checks: Vec<ProjectTool>,
+  /// The run's records `get_task`, `save_memory` and `report_progress` read and keep.
+  records: RunRecords,
   /// The invocation's secret values, removed from every answer.
   secrets: Vec<SecretVariable>,
   /// Tools a person or a rule approved one call of, through the CLI's own prompt, not called yet.
@@ -99,6 +109,11 @@ pub(in super::super) struct ToolHost {
 impl ToolHost {
   pub(super) const fn tools(&self) -> &StepTools {
     &self.tools
+  }
+
+  /// The checks `run_check` runs.
+  pub(super) fn checks(&self) -> &[ProjectTool] {
+    &self.checks
   }
 
   pub(super) fn secrets(&self) -> &[SecretVariable] {
@@ -122,9 +137,31 @@ impl ToolHost {
     ToolCall::parse(name, arguments, &self.tools)
   }
 
-  /// Whether a call of `tool` needs an approval before it runs.
-  pub(super) fn asks(&self, tool: OrchesterTool) -> bool {
-    self.tools.asks(tool.as_str())
+  /// What `call` needs before it runs, read off the async workers (a call outside the worktree resolves its path):
+  /// whether a person or a rule approves it first, and what its approval names. Why the call is refused, when its
+  /// path is one the tools never reach.
+  pub(super) async fn look(self: &Arc<Self>, call: &ToolCall) -> Result<Looked, String> {
+    let (host, call) = (Arc::clone(self), call.clone());
+    tokio::task::spawn_blocking(move || host.look_blocking(&call))
+      .await
+      .map_err(|error| format!("the call could not be checked: {error}"))?
+  }
+
+  fn look_blocking(&self, call: &ToolCall) -> Result<Looked, String> {
+    let reach = call
+      .external_reach(&self.outside)
+      .transpose()
+      .map_err(|error| ToolCallError::from(error).to_string())?;
+    let in_sources = reach.as_ref().is_some_and(|reach| self.sources.covers(&reach.path));
+    let target = match (call, reach) {
+      (_, Some(reach)) => Some(reach.folder.display().to_string()),
+      (ToolCall::RunCheck { name }, None) => Some(name.clone()),
+      _ => None,
+    };
+    Ok(Looked {
+      asks: self.tools.call_asks(call) && !in_sources,
+      target,
+    })
   }
 
   /// One approved call of `tool` with `arguments`, given through the CLI's own prompt.
@@ -165,20 +202,33 @@ impl ToolHost {
       inherited: &self.inherited,
       project: &self.project,
       outside: &self.outside,
-      project_tools: &[],
+      project_tools: &self.checks,
       platform: Platform::current(),
       git_dir: &self.git_dir,
       hooks: &self.hooks,
     };
     match call.work(&context) {
       Ok(ToolWork::Done(result)) => result,
-      Ok(ToolWork::Files(input)) => self.files.run(&input, &context),
+      Ok(ToolWork::Files(call)) => self.files.run(&call, &context),
+      Ok(ToolWork::SearchExternal { folder, term }) => self.files.search_external(&folder, &term, &self.outside),
+      Ok(ToolWork::References(name)) => self.files.references(&name, &context),
+      Ok(ToolWork::Task) => self.records.task(),
+      Ok(ToolWork::Memory(note)) => self.records.save_memory(&note),
+      Ok(ToolWork::Progress(progress)) => self.records.report_progress(&progress, &self.secrets),
       Ok(ToolWork::Symbols(query)) => self.files.symbols(&query, &context),
       Ok(ToolWork::Skill(call)) => self.skills.run(&call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
     }
   }
+}
+
+/// What a call needs before it runs ([`ToolHost::look`]).
+pub(super) struct Looked {
+  /// A person or a rule approves it first: its tool or check asks, and it does not stay in the run's sources.
+  pub(super) asks: bool,
+  /// What its approval names: the folder a call outside the worktree reads in, the check `run_check` runs.
+  pub(super) target: Option<String>,
 }
 
 /// `arguments` as a call names them: none is an empty object.
@@ -197,28 +247,28 @@ pub(in super::super) struct CodexTools {
 }
 
 impl RunTask {
-  /// The Orchester tools of a step with `permissions`, the MCP servers of `setup` and `skills`, for invocation
-  /// `invocation` working in `worktree` with the extra writable folders `writable` and the project's
-  /// `environment`; and Claude Code's permission prompt, whose relay serves them to a Claude Code agent.
+  /// The Orchester tools of step execution `execution` with `permissions`, the MCP servers of `setup` and `skills`,
+  /// for invocation `invocation` working in `folders` with the project's `environment`; and Claude Code's permission
+  /// prompt, whose relay serves them to a Claude Code agent.
   pub(super) fn step_tools(
     &self,
     (permissions, setup, skills): (&AgentPermissions, &McpSetup, StepSkills),
-    (invocation, folders): (orchester_core::id::InvocationId, ToolFolders<'_>),
+    (execution, invocation, folders): (StepExecutionId, InvocationId, ToolFolders<'_>),
     environment: &CommandEnvironment,
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
-    let host = self.tool_host((permissions, skills), folders, environment)?;
+    let host = self.tool_host((permissions, skills), (execution, folders), environment)?;
     let tools = Arc::new(host.with_secrets(setup.secrets()));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }
 
-  /// The Orchester tools of a step with `permissions` that offers `skills`, working in `folders` with the
-  /// project's `environment`.
+  /// The Orchester tools of step execution `execution` with `permissions` that offers `skills`, working in `folders`
+  /// with the project's `environment`.
   fn tool_host(
     &self,
     (permissions, skills): (&AgentPermissions, StepSkills),
-    folders: ToolFolders<'_>,
+    (execution, folders): (StepExecutionId, ToolFolders<'_>),
     environment: &CommandEnvironment,
   ) -> Result<ToolHost, RunnerProblem> {
     let worktree = folders.worktree;
@@ -236,7 +286,14 @@ impl RunTask {
     let mut refused = vec![private_file::root()];
     refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
-    let mut tools = StepTools::for_step(permissions, &[]);
+    let sources = self.run.snapshot().sources();
+    let step = self
+      .run
+      .execution(execution)
+      .map(|execution| execution.step().clone())
+      .ok_or_else(|| problem("the step execution is not the run's".to_owned()))?;
+    let checks = self.offered_checks(&step)?;
+    let mut tools = StepTools::for_step(permissions, &checks).with_sources(sources);
     if files.indexed() {
       tools = tools.with_code_index();
     }
@@ -253,6 +310,16 @@ impl RunTask {
       outside: OutsideReads::new(CommandScope::on_host(worktree, writable), &refused),
       files,
       skills,
+      sources: ResolvedSources::resolve(sources),
+      checks,
+      records: RunRecords {
+        root: self.root.clone(),
+        run: self.run.id(),
+        task: self.run.task(),
+        execution,
+        provenance: provenance(&self.run, execution),
+        vault: Arc::clone(&self.vault),
+      },
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
     })

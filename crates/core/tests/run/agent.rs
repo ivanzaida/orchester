@@ -219,6 +219,56 @@ fn preflight_reports_steps_whose_permissions_codex_cannot_enforce() {
 }
 
 #[test]
+fn preflight_refuses_a_command_list_on_a_profile_that_asks() {
+  let config = Config::feature_delivery();
+  let mut steps = config.pipeline_version.body().steps().to_vec();
+  let StepKind::Agent { permissions, .. } = &mut steps[0].kind else {
+    panic!("research is an agent step");
+  };
+  permissions.commands = StepCommands::Only(
+    AllowedCommands::new(vec![CommandPrefix::new("git log").expect("valid command")]).expect("valid list"),
+  );
+  let pipeline = Pipeline::new(steps).expect("valid pipeline");
+  let claude = connection(AgentProvider::ClaudeCodeCli, SignIn::SignedIn);
+  let with_commands = |commands: CommandPermission| {
+    let mut profiles = config.profiles.clone();
+    for published in profiles.values_mut() {
+      let body = published.body();
+      let moved = AgentProfile::new(
+        body.role().clone(),
+        String::new(),
+        body.instructions().clone(),
+        claude.id(),
+        body.model().clone(),
+        ProviderSettings::default(),
+      )
+      .with_permissions(AgentPermissions::new(
+        RepositoryAccess::ReadOnly,
+        commands.clone(),
+        NetworkAccess::On,
+      ));
+      *published = version(published.number().get(), moved);
+    }
+    preflight(PreflightInput {
+      pipeline: Some(&pipeline),
+      profiles: &profiles,
+      tools: &BTreeMap::new(),
+      connections: std::slice::from_ref(&claude),
+    })
+  };
+  let asking = with_commands(CommandPermission::AskBefore);
+  assert_eq!(
+    asking,
+    [PreflightProblem::CommandListNotOffered { step: key("research") }],
+    "a list on a profile that asks would let asking offer what the list leaves out"
+  );
+  let listed = with_commands(CommandPermission::Allowed(
+    AllowedCommands::new(vec![CommandPrefix::new("git log").expect("valid command")]).expect("valid list"),
+  ));
+  assert!(listed.is_empty(), "{listed:?}");
+}
+
+#[test]
 fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
   let config = Config::feature_delivery();
   let mut steps = config.pipeline_version.body().steps().to_vec();

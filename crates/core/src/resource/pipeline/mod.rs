@@ -17,12 +17,16 @@ use crate::{id::ResourceId, name::Name, permission::StepPermissions, tokens::Tok
 mod budget;
 mod changes;
 mod edit;
+mod sources;
 mod starter;
+mod strictness;
 
 pub use self::{
   changes::{PipelineChange, StepChange, changes},
   edit::{EditProblem, PipelineEdit},
+  sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
+  strictness::{Weaker, weaker_than},
 };
 
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so
@@ -153,6 +157,9 @@ pub struct Pipeline {
   /// What the pipeline is for, as the user wrote it; may be empty.
   #[serde(default, skip_serializing_if = "String::is_empty")]
   description: String,
+  /// The sources the pipeline and its steps list; versions saved before sources existed have none.
+  #[serde(default, skip_serializing_if = "PipelineSources::is_empty")]
+  sources: PipelineSources,
   steps: Vec<Step>,
 }
 
@@ -160,14 +167,29 @@ pub struct Pipeline {
 struct PipelineFields {
   #[serde(default)]
   description: String,
+  #[serde(default)]
+  sources: PipelineSources,
   steps: Vec<Step>,
 }
 
-impl TryFrom<PipelineFields> for Pipeline {
-  type Error = PipelineError;
+/// Why a stored pipeline body is not a pipeline.
+#[derive(Debug, Error)]
+enum PipelineFieldsError {
+  #[error(transparent)]
+  Pipeline(#[from] PipelineError),
+  #[error(transparent)]
+  Sources(#[from] PipelineSourcesError),
+}
 
-  fn try_from(fields: PipelineFields) -> Result<Self, PipelineError> {
-    Ok(Self::new(fields.steps)?.with_description(fields.description))
+impl TryFrom<PipelineFields> for Pipeline {
+  type Error = PipelineFieldsError;
+
+  fn try_from(fields: PipelineFields) -> Result<Self, PipelineFieldsError> {
+    Ok(
+      Self::new(fields.steps)?
+        .with_description(fields.description)
+        .with_sources(fields.sources)?,
+    )
   }
 }
 
@@ -179,6 +201,7 @@ impl Pipeline {
     }
     Ok(Self {
       description: String::new(),
+      sources: PipelineSources::default(),
       steps,
     })
   }
@@ -189,8 +212,22 @@ impl Pipeline {
     self
   }
 
+  /// This pipeline listing `sources`, whose steps must be its steps.
+  pub fn with_sources(mut self, sources: PipelineSources) -> Result<Self, PipelineSourcesError> {
+    if let Some(key) = sources.step_keys().find(|key| self.step(key).is_none()) {
+      return Err(PipelineSourcesError::UnknownStep(key.clone()));
+    }
+    self.sources = sources;
+    Ok(self)
+  }
+
   pub fn description(&self) -> &str {
     &self.description
+  }
+
+  /// The sources the pipeline and its steps list.
+  pub fn sources(&self) -> &PipelineSources {
+    &self.sources
   }
 
   /// Steps in the order the user arranged them.

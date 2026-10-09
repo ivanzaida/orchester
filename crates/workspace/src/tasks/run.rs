@@ -289,6 +289,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }
+    PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
   }

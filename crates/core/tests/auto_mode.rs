@@ -15,7 +15,7 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, category::CommandScope},
   resource::ModelId,
   run::{
-    ApprovalSubject, PendingToolApproval,
+    ApprovalSubject, PendingToolApproval, ToolReach,
     review::{
       DATA_END, DATA_START, HoldRules, PushFacts, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, RequestReviewer, Review,
       ReviewError, ReviewFailure, ReviewHold, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, ReviewedRequest,
@@ -251,7 +251,8 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
   }
   let project_program = ApprovalSubject::McpTool {
     server: SERVER.to_owned(),
-    tool: "run_project_tool".to_owned(),
+    tool: "run_check".to_owned(),
+    reach: ToolReach::Any,
   };
   assert_eq!(
     review_hold(&project_program, &rules(Some(&writing))),
@@ -260,6 +261,7 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
   let other_tool = ApprovalSubject::McpTool {
     server: "pencil".to_owned(),
     tool: "batch_design".to_owned(),
+    reach: ToolReach::Any,
   };
   assert_eq!(review_hold(&other_tool, &rules(Some(&writing))), None);
 }

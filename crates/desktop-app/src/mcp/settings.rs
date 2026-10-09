@@ -1,5 +1,7 @@
 //! What agents may do through the app's MCP server. Looking is always allowed: screenshots, the element
-//! tree and logs (lurq's Observe scope) and `app_state`. Window control is changing the window: clicking,
+//! tree and logs (lurq's Observe scope), `app_state` and the domain tools that read project data. So is
+//! changing project data through the domain tools (`domain::DATA_SCOPE`), which follow the rules of the
+//! app's screens. Window control is changing the window: clicking,
 //! typing, resizing (lurq's Interact scope), `navigate` and `set_theme`. It is on by default in debug
 //! builds, which design verification drives, and off by default in release builds; the app's settings
 //! (`orchester.db`) decide once they hold a value, and `ORCHESTER_APP_MCP_WINDOW_CONTROL` (`on`/`off`)
@@ -9,6 +11,8 @@
 //! histories; `navigate` goes through them.
 
 use lurq::mcp::Scope;
+
+use super::domain::DATA_SCOPE;
 
 /// The environment variable that turns window control on or off for one run.
 pub const WINDOW_CONTROL_VARIABLE: &str = "ORCHESTER_APP_MCP_WINDOW_CONTROL";
@@ -110,12 +114,12 @@ impl McpSettings {
     self.source
   }
 
-  /// lurq's scopes for these settings; the app's tools use the same two.
+  /// lurq's scopes for these settings, which the app's tools use too; the domain tools' data scope always.
   pub fn scopes(self) -> Vec<Scope> {
     if self.window_control {
-      vec![Scope::Observe, Scope::Interact]
+      vec![Scope::Observe, Scope::custom(DATA_SCOPE), Scope::Interact]
     } else {
-      vec![Scope::Observe]
+      vec![Scope::Observe, Scope::custom(DATA_SCOPE)]
     }
   }
 }

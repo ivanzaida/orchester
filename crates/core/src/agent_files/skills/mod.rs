@@ -91,7 +91,7 @@ pub struct RepositorySkills {
 impl RepositorySkills {
   /// Every `SKILL.md` under the [`CODEX_SKILL_FOLDERS`] of `worktree`; none from a folder that does not exist.
   pub fn find(worktree: &Path) -> Result<Self, RepositorySkillsError> {
-    let root = fs::canonicalize(worktree).map_err(|error| RepositorySkillsError::Unreadable {
+    let root = canonical::canonicalize(worktree).map_err(|error| RepositorySkillsError::Unreadable {
       path: ".".to_owned(),
       error: error.to_string(),
     })?;
@@ -159,7 +159,7 @@ struct Search<'a> {
 impl Search<'_> {
   /// Collects the `SKILL.md` files of the folder at `found`, `depth` below its skills folder.
   fn folder(&mut self, found: &Path, depth: usize) -> Result<(), RepositorySkillsError> {
-    let resolved = match fs::canonicalize(found) {
+    let resolved = match canonical::canonicalize(found) {
       Ok(resolved) => canonical::plain(resolved),
       // A missing skills folder, or a link to nothing, holds no skill.
       Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
@@ -197,7 +197,7 @@ impl Search<'_> {
     }
     let child = found.join(name);
     let target = resolved.join(name);
-    let metadata = match fs::metadata(&target) {
+    let metadata = match canonical::metadata(&target) {
       Ok(metadata) => metadata,
       Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
       Err(error) => return Err(self.unreadable(&child, &error)),
@@ -213,7 +213,7 @@ impl Search<'_> {
 
   /// Collects the `SKILL.md` at `found`, whose links `target` leads through, unless it resolves out of the worktree.
   fn document(&mut self, found: PathBuf, target: &Path) -> Result<(), RepositorySkillsError> {
-    let resolved = fs::canonicalize(target).map_err(|error| self.unreadable(&found, &error))?;
+    let resolved = canonical::canonicalize(target).map_err(|error| self.unreadable(&found, &error))?;
     let resolved = canonical::plain(resolved);
     if !resolved.starts_with(&self.root) {
       return Err(RepositorySkillsError::LeadsOut(shown_in_worktree(

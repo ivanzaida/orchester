@@ -43,7 +43,7 @@ impl Told {
 }
 
 /// Whether the file change of call `item` is shown by the row of the call that made it: a native edit's,
-/// or that of Orchester's `edit_file` or `write_file`, a command for Claude Code and an MCP call for Codex.
+/// or that of Orchester's `edit_file` or `create_file`, a command for Claude Code and an MCP call for Codex.
 /// Only those calls report a change after a row of their own.
 pub(super) fn shown_by_call(entries: &[Entry], stored: &ActivityEntry, item: &str) -> bool {
   entries.iter().rev().any(|entry| {

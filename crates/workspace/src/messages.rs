@@ -75,6 +75,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
     StoreError::NotShared => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
+    StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }

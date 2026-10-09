@@ -56,15 +56,15 @@ impl Served {
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
-    let hold = launch.services().map(|services| services.hold.clone());
     let config = mcp::config(
       McpSettings::with_window_control(window_control),
       &link,
       &appearance,
-      hold,
+      launch.services(),
+      app.i18n(),
     );
     let at = DiscoveryFolder::At(folder.path().to_path_buf());
-    let server = AppMcp::start(&mut tree, runtime, &at, config).expect("the server listens");
+    let server = AppMcp::start(&mut tree, runtime, &at, config, &link.input_gate()).expect("the server listens");
     let discovery = read_json(server.discovery_path());
     let token = discovery["token"]
       .as_str()
@@ -222,6 +222,19 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
     !names.iter().any(|name| name == "lurq_navigate"),
     "only `navigate` moves the router"
   );
+}
+
+#[test]
+fn every_lurq_tool_is_known_as_looking_or_input() {
+  use orchester_app::mcp::input_gate::{INPUT, LOOKING};
+  let served = Served::start(true);
+  let names = served.tool_names(&served.session());
+  for name in names.iter().filter(|name| name.starts_with("lurq_")) {
+    assert!(
+      LOOKING.contains(&name.as_str()) || INPUT.contains(&name.as_str()),
+      "{name} is neither known to only look nor to send input: classify it in mcp::input_gate"
+    );
+  }
 }
 
 #[test]

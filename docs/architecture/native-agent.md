@@ -582,7 +582,9 @@ as unavailable. A guarantee is never assumed.
 - writable folders.
 
 The writable scope is the worktree, only when repository access is *Edit files in the task worktree*, plus the
-granted writable folders (`WritableFolders::resolve` rules unchanged).
+granted writable folders (`WritableFolders::resolve` rules unchanged). A writable folder on a network share is granted
+by its UNC path (`\\server\share\…`) only: a drive letter mapped to a share (`Z:\`) is refused, as is any path on it
+and any link that leads to one (user decision 2026-10-10; `permission::link_targets`, `permission::remote_drive`).
 
 **Protected paths, never writable:**
 - `.git` (file or folder) at any depth;

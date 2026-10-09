@@ -121,7 +121,7 @@ impl Keeper<'_> {
 }
 
 /// The agent that worked on `execution`: its profile, run, step and execution.
-fn provenance(run: &Run, execution: StepExecutionId) -> Option<AgentProvenance> {
+pub(super) fn provenance(run: &Run, execution: StepExecutionId) -> Option<AgentProvenance> {
   let step = run.execution(execution)?.step().clone();
   let StepExecutor::Agent { profile, .. } = run.snapshot().step(&step)?.executor() else {
     return None;

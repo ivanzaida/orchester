@@ -87,12 +87,13 @@ impl ScopeState {
 }
 
 /// The panel of `shown`'s Approve similar, the last of the details, right above the tile it explains;
-/// `None` when the request does not offer it.
+/// `None` when the request does not offer it, or offers it for a folder or a check, which the tile names in full.
 pub(super) fn panel(ctx: &Ctx, shown: &ShownApproval) -> Option<Element> {
   let run = shown.run.map(|run| run.get().to_string()).unwrap_or_default();
   let scope = match shown.choices.similar.as_ref().ok()? {
     SimilarShown::Tool { server, tool } => tool_scope(ctx, (server, tool), &run),
     SimilarShown::Command { words, category } => command_scope(ctx, (words, &ctx.t(category_key(*category))), &run),
+    SimilarShown::Folder { .. } | SimilarShown::Check { .. } => return None,
   };
   let heading = Row::new()
     .spacing(SpacingSize::Sm)

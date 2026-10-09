@@ -1,4 +1,4 @@
-//! The change a CLI's call of Orchester's `edit_file` or `write_file` asked for, as the lines its transcript row
+//! The change a CLI's call of Orchester's `edit_file` or `create_file` asked for, as the lines its transcript row
 //! shows: each edit a hunk of its own, with what its `old` and `new` share at their start and end as context
 //! (compared without their line breaks, so a line that only gains a break stays context), what it removes and what it
 //! adds; a write's content as added lines. The lines are the edit's own text, not the file's: they carry no line

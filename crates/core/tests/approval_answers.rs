@@ -10,7 +10,8 @@ use orchester_core::{
   run::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
     AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, PendingToolApproval, RuleScope, SimilarUnavailable,
-    allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, denial_message,
+    ToolReach, allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict,
+    denial_message,
   },
   time::Timestamp,
 };
@@ -43,6 +44,7 @@ fn mcp(server: &str, tool: &str) -> ApprovalSubject {
   ApprovalSubject::McpTool {
     server: server.to_owned(),
     tool: tool.to_owned(),
+    reach: ToolReach::Any,
   }
 }
 
@@ -138,6 +140,58 @@ fn approval_answers_similar_mcp_tool_is_server_and_tool() {
   assert!(answering(&rules, &mcp("docs", "batch_design")).is_none());
   rules[0].revoked_at = Some(Timestamp::from_unix_millis(1));
   assert!(answering(&rules, &mcp("pencil", "batch_design")).is_none());
+}
+
+/// Approve similar of one of Orchester's calls outside the worktree covers its reads and searches in the folder the
+/// call read in and below it, nowhere else. The folder comes from the request's target, and only for those tools.
+#[test]
+fn approval_answers_similar_external_read_keeps_to_its_folder() {
+  let read_in = |folder: &str| {
+    let mut request = approval(false, "Orchester", "read_external_file");
+    request.target = Some(folder.to_owned());
+    ApprovalSubject::of(&request, &Fixture::new().scope)
+  };
+  let deps = std::path::Path::new("deps").join("serde");
+  let text = |path: &std::path::Path| path.to_string_lossy().into_owned();
+  let first = read_in(&text(&deps));
+  assert_eq!(
+    first,
+    ApprovalSubject::McpTool {
+      server: "Orchester".to_owned(),
+      tool: "read_external_file".to_owned(),
+      reach: ToolReach::Folder {
+        folder: text(&deps),
+        broad: false
+      },
+    }
+  );
+  let rules = vec![rule(3, RuleScope::similar(&first).expect("similar"))];
+  assert!(answering(&rules, &read_in(&text(&deps))).is_some());
+  assert!(answering(&rules, &read_in(&text(&deps.join("src")))).is_some());
+  assert!(
+    answering(
+      &rules,
+      &read_in(&text(&std::path::Path::new("deps").join("serde_json")))
+    )
+    .is_none()
+  );
+  assert!(answering(&rules, &read_in("elsewhere")).is_none());
+  let mut search = approval(false, "Orchester", "search_external_file");
+  search.target = Some(text(&deps));
+  assert!(answering(&rules, &ApprovalSubject::of(&search, &Fixture::new().scope)).is_some());
+  assert!(answering(&rules, &mcp("Orchester", "read_external_file")).is_none());
+  // Another server's target is the file it names, never a folder a rule keeps to.
+  let mut pencil = approval(false, "pencil", "batch_design");
+  pencil.target = Some("design.pen".to_owned());
+  assert_eq!(
+    ApprovalSubject::of(&pencil, &Fixture::new().scope),
+    mcp("pencil", "batch_design")
+  );
+  // A rule made before folders were kept covers every call of its tool.
+  let stored: RuleScope =
+    serde_json::from_str(r#"{"kind":"similar_mcp_tool","server":"Orchester","tool":"read_external_file"}"#)
+      .expect("an earlier rule reads");
+  assert!(answering(&[rule(4, stored)], &read_in("anywhere")).is_some());
 }
 
 #[test]

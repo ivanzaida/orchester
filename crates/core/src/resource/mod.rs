@@ -26,8 +26,9 @@ pub use self::{
     Draft, DraftSaved, PublishError, Resource, ResourceKind, Slug, SlugError, Version, VersionNumber, publish,
   },
   pipeline::{
-    EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, RepositoryAccess,
-    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, changes, feature_delivery,
+    EditProblem, FailureRoute, Pipeline, PipelineChange, PipelineEdit, PipelineError, PipelineSources,
+    PipelineSourcesError, RepositoryAccess, StarterAssignments, StarterStep, StarterStepText, Step, StepChange,
+    StepKey, StepKind, Weaker, changes, feature_delivery, weaker_than,
   },
   prompt::{PromptError, PromptText, Rendered},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},

@@ -1,8 +1,8 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built (`BUILT`). A path that names nothing shows `screen-not-found`, which says why. The paths go
-//! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
-//! too. The project the paths name is known to be open; what the window does until a project opens,
-//! and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
+//! screen is built (`BUILT`; Settings, built in part, is `tests/settings.rs`). A path that names nothing shows
+//! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
+//! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
+//! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
 //! services, from a data folder of the test's own.
 
 mod support;
@@ -180,10 +180,8 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
-  let mut all = vec![
-    (Route::AllProjects, placeholder("All projects")),
-    (Route::Settings, placeholder("Settings")),
-  ];
+  // Settings is built in part; `tests/settings.rs` shows it.
+  let mut all = vec![(Route::AllProjects, placeholder("All projects"))];
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
@@ -221,7 +219,7 @@ fn screens_each_route_mounts_its_own_placeholder() {
   let routes = every_screen();
   for screen in Screen::ALL {
     assert!(
-      routes.iter().any(|(route, _)| route.screen() == screen),
+      screen == Screen::Settings || routes.iter().any(|(route, _)| route.screen() == screen),
       "{screen:?} is covered"
     );
   }

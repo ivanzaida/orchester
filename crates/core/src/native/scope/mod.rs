@@ -20,7 +20,7 @@ mod unix;
 mod windows;
 
 use std::{
-  fs, io,
+  io,
   path::{Component, Path, PathBuf},
 };
 
@@ -191,7 +191,7 @@ impl FileScope {
     {
       return false;
     }
-    match fs::canonicalize(workdir.join(arg)) {
+    match canonical::canonicalize(&workdir.join(arg)) {
       Ok(found) => {
         let found = canonical::plain(found);
         within(&found, &self.worktree)
@@ -230,6 +230,12 @@ pub fn resolve_local(path: &str) -> Result<PathBuf, ScopeError> {
   canonical_root(Path::new(path))
 }
 
+/// Whether `path` is spelled as a local path: no network path (`\\server\share\…`), device path or other spelling
+/// the file tools refuse. Reads nothing, so it reaches no network.
+pub fn is_local_path(path: &str) -> bool {
+  matches!(platform::path_form(path), Ok(PathForm::Local))
+}
+
 /// Whether `path` is a `.git` entry or lies in one, at any depth, as the platform opens names.
 pub fn in_git_folder(path: &Path) -> bool {
   path.components().any(|component| match component {
@@ -238,9 +244,10 @@ pub fn in_git_folder(path: &Path) -> bool {
   })
 }
 
-/// A root folder, which must exist, with links resolved.
+/// A root folder, which must exist, with links resolved; refused before it is resolved when a link on the way leads to
+/// another machine ([`crate::permission::link_targets`]).
 fn canonical_root(path: &Path) -> Result<PathBuf, ScopeError> {
-  fs::canonicalize(path)
+  canonical::canonicalize(path)
     .map(canonical::plain)
     .map_err(|error| ScopeError::Unresolved {
       path: path.to_path_buf(),

@@ -13,6 +13,7 @@ use crate::{
     AgentProfile, Exclusion, Instruction, InstructionTarget, ModelId, Pipeline, Skill, Step, StepKey, StepKind, Tool,
     Version, VersionNumber,
   },
+  source::{RunSources, SourceOrigin, SourcePath},
 };
 
 /// A published version a run is bound to.
@@ -89,8 +90,8 @@ pub struct PublishedVersions<'a> {
   pub skills: &'a BTreeMap<ResourceId, Version<Skill>>,
 }
 
-/// Everything a run pins: pipeline, per-step executors, and the instructions, tools and skills that
-/// apply to it.
+/// Everything a run pins: pipeline, per-step executors, the instructions, tools and skills that
+/// apply to it, and the sources its agents may read outside the worktree without asking.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "SnapshotFields")]
 pub struct RunSnapshot {
@@ -100,6 +101,8 @@ pub struct RunSnapshot {
   instructions: Vec<PinnedVersion>,
   tools: Vec<PinnedVersion>,
   skills: Vec<PinnedVersion>,
+  #[serde(default, skip_serializing_if = "RunSources::is_empty")]
+  sources: RunSources,
 }
 
 #[derive(Deserialize)]
@@ -112,6 +115,9 @@ struct SnapshotFields {
   /// Runs created before skills existed pinned none.
   #[serde(default)]
   skills: Vec<PinnedVersion>,
+  /// Runs created before sources existed snapshotted none.
+  #[serde(default)]
+  sources: RunSources,
 }
 
 impl TryFrom<SnapshotFields> for RunSnapshot {
@@ -131,6 +137,7 @@ impl TryFrom<SnapshotFields> for RunSnapshot {
       instructions: fields.instructions,
       tools: fields.tools,
       skills: fields.skills,
+      sources: fields.sources,
     })
   }
 }
@@ -197,7 +204,36 @@ impl RunSnapshot {
       instructions,
       tools,
       skills,
+      sources: RunSources::default(),
     })
+  }
+
+  /// This snapshot with the run's sources: the union of the project's (`project`), the task's (`task`), the pinned
+  /// pipeline's and its steps', as they are when the run starts.
+  #[must_use]
+  pub fn with_sources(mut self, project: &[SourcePath], task: &[SourcePath]) -> Self {
+    let listed = self.body.sources();
+    let steps = self.body.steps().iter().flat_map(|step| {
+      listed
+        .step(&step.key)
+        .iter()
+        .map(|path| (path, SourceOrigin::Step { step: step.key.clone() }))
+    });
+    let sources = RunSources::union(
+      project
+        .iter()
+        .map(|path| (path, SourceOrigin::Project))
+        .chain(task.iter().map(|path| (path, SourceOrigin::Task)))
+        .chain(listed.pipeline().iter().map(|path| (path, SourceOrigin::Pipeline)))
+        .chain(steps),
+    );
+    self.sources = sources;
+    self
+  }
+
+  /// The folders and files every agent of the run may read outside its worktree without asking.
+  pub const fn sources(&self) -> &RunSources {
+    &self.sources
   }
 
   pub const fn pipeline(&self) -> PinnedVersion {

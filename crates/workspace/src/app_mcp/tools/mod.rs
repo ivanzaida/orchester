@@ -14,6 +14,7 @@ mod questions;
 mod return_to_draft;
 mod run_task;
 mod runs;
+pub mod setup;
 mod task_write;
 mod tasks;
 mod wire;
@@ -76,13 +77,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum.",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit.",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },
@@ -199,7 +200,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "duplicate_pipeline",
-    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. Refusals name why.",
+    description: "Copies a pipeline's latest published version into a new pipeline under a new name, optionally giving agent steps other published profiles, and publishes it as v1. A copy that is not the same as its source (other profiles included) is refused as person_only unless a person turned on Let automation change agent permissions. Refusals name why.",
     schema: schema_for_type::<pipeline_copy::DuplicatePipeline>,
     read_only: false,
   },
@@ -213,13 +214,13 @@ const SPECS: &[Spec] = &[
 
 /// Every tool, as `tools/list` answers.
 pub fn listed() -> Vec<Tool> {
-  SPECS
-    .iter()
-    .map(|spec| {
-      Tool::new(spec.name, spec.description, (spec.schema)())
-        .with_annotations(ToolAnnotations::new().read_only(spec.read_only).open_world(false))
-    })
-    .collect()
+  SPECS.iter().map(tool).collect()
+}
+
+/// `spec` as clients list it.
+fn tool(spec: &Spec) -> Tool {
+  Tool::new(spec.name, spec.description, (spec.schema)())
+    .with_annotations(ToolAnnotations::new().read_only(spec.read_only).open_world(false))
 }
 
 /// Calls tool `name` with `arguments`; `None` when there is no such tool.

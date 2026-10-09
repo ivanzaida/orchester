@@ -97,6 +97,9 @@ pub enum StoreError {
   DuplicateSlug { kind: ResourceKind, slug: String },
   #[error("resource {0} has no draft to publish")]
   NoDraft(ResourceId),
+  /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
+  #[error("the draft of resource {0} changed since it was read")]
+  DraftChanged(ResourceId),
   #[error(transparent)]
   Publish(#[from] PublishError),
   #[error(transparent)]

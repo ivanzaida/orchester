@@ -2,14 +2,18 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use super::tools::ToolError;
+use super::{input_gate::InputGate, tools::ToolError};
 use crate::{navigation::Navigation, project::Projects};
 
 /// What the window is, for the app's MCP tools, which are registered before the window's root exists:
 /// a started session's window attaches its navigation and the projects its tabs show, a window without
 /// a session the name of the startup screen it shows. Each attaches once.
 #[derive(Clone, Default)]
-pub struct WindowLink(Arc<Mutex<Option<Linked>>>);
+pub struct WindowLink {
+  linked: Arc<Mutex<Option<Linked>>>,
+  /// Keeps MCP clients' window input from the window's person-only controls.
+  gate: InputGate,
+}
 
 #[derive(Clone)]
 enum Linked {
@@ -23,11 +27,11 @@ enum Linked {
 
 impl WindowLink {
   pub fn attach(&self, navigation: Navigation, projects: Projects) {
-    *self.0.lock() = Some(Linked::Session { navigation, projects });
+    *self.linked.lock() = Some(Linked::Session { navigation, projects });
   }
 
   pub fn attach_startup(&self, screen: &'static str) {
-    *self.0.lock() = Some(Linked::Startup(screen));
+    *self.linked.lock() = Some(Linked::Startup(screen));
   }
 
   /// The navigation; [`ToolError::NotReady`] before the window attached it, [`ToolError::NoSession`]
@@ -41,16 +45,21 @@ impl WindowLink {
     self.session().map(|(_, projects)| projects)
   }
 
+  /// The gate the window's person-only controls and the MCP server share.
+  pub fn input_gate(&self) -> InputGate {
+    self.gate.clone()
+  }
+
   /// The startup screen the window shows, if it shows one.
   pub fn startup(&self) -> Option<&'static str> {
-    match *self.0.lock() {
+    match *self.linked.lock() {
       Some(Linked::Startup(screen)) => Some(screen),
       Some(Linked::Session { .. }) | None => None,
     }
   }
 
   fn session(&self) -> Result<(Navigation, Projects), ToolError> {
-    match self.0.lock().clone() {
+    match self.linked.lock().clone() {
       Some(Linked::Session { navigation, projects }) => Ok((navigation, projects)),
       Some(Linked::Startup(_)) => Err(ToolError::NoSession),
       None => Err(ToolError::NotReady),
@@ -61,6 +70,6 @@ impl WindowLink {
 /// Links are compared by identity: the root's props hold the one link of the window.
 impl PartialEq for WindowLink {
   fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
+    Arc::ptr_eq(&self.linked, &other.linked)
   }
 }

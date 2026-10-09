@@ -164,8 +164,9 @@ struct ToolContext {
   target: Option<String>,
   /// Codex asked for approval of the call.
   asked: bool,
-  /// The file the call changes when it succeeds: a call of Orchester's `edit_file` or `write_file`.
-  changes: Option<FileChange>,
+  /// The files the call changes when it succeeds: a call of Orchester's `edit_file`, `create_file`, `delete_file` or
+  /// `move_file`.
+  changes: Vec<FileChange>,
   /// What a call of one of Orchester's file tools asked, for its row.
   call: Option<NativeCall>,
 }
@@ -429,7 +430,7 @@ impl AppServerStream {
           let own = (server == ORCHESTER)
             .then(|| OrchesterTool::from_name(&action))
             .flatten();
-          let changes = own.and_then(|tool| tool.changed_file(arguments));
+          let changes = own.map_or_else(Vec::new, |tool| tool.changed_files(arguments));
           let call = own.and_then(|tool| tool.shown_call(arguments));
           let context = ToolContext {
             thread,

@@ -4,7 +4,10 @@
 
 use std::path::Path;
 
-use orchester_agent::FileTools;
+use orchester_agent::{
+  FileTools,
+  files::entry::{self, EntryError},
+};
 use orchester_core::permission::RepositoryAccess;
 
 use crate::{Layout, failed, list_input, ok, read_input, ripgrep, search_input, write_input};
@@ -48,4 +51,57 @@ fn files_links_out_of_the_worktree_are_refused() {
   assert!(!listed.contains("secret.txt"), "{listed}");
   let found = ok(ripgrep.search(&search_input("secret", None, None, None)));
   assert!(found.starts_with("no matches"), "{found}");
+}
+
+/// `delete_file` and `move_file` change a link itself, never its target; a link out of the worktree, a path through
+/// one and the extra writable folders are refused.
+#[test]
+fn files_delete_and_move_change_a_link_itself() {
+  let layout = Layout::temporary();
+  link_folder(
+    &layout.worktree.join("inner"),
+    &layout.worktree.join("src").join("nested"),
+  );
+  link_folder(&layout.worktree.join("escape"), &layout.outside);
+  let tools = layout.tools();
+  ok(tools.move_file("inner", "moved-link"));
+  assert!(layout.worktree.join("moved-link").symlink_metadata().is_ok());
+  ok(tools.delete_file("moved-link"));
+  assert!(layout.worktree.join("moved-link").symlink_metadata().is_err());
+  assert!(
+    layout.worktree.join("src").join("nested").join("lib.rs").exists(),
+    "the target stays"
+  );
+  for refused in [
+    failed(tools.delete_file("escape")),
+    failed(tools.delete_file("escape/secret.txt")),
+    failed(tools.move_file("escape/secret.txt", "secret.txt")),
+  ] {
+    assert!(refused.contains("outside the folders"), "{refused}");
+  }
+  assert!(layout.outside.join("secret.txt").exists());
+  std::fs::write(layout.cache.join("kept.txt"), "x").expect("a file");
+  let cached = layout.cache.join("kept.txt").display().to_string();
+  assert!(failed(tools.delete_file(&cached)).contains("not in the worktree"));
+  assert!(layout.cache.join("kept.txt").exists());
+}
+
+/// A move into a folder that is a link or junction by the time it is opened (swapped in after the check) is refused,
+/// and nothing lands where the link leads: the folder must be the plain folder that was checked, and the new name is
+/// given relative to it. The review's proof of concept moved 27 of 20,000 files out of the worktree this way.
+#[test]
+fn files_move_into_a_link_swapped_in_is_refused() {
+  let layout = Layout::temporary();
+  // Resolved, as the tools pass it: separators as the platform writes them.
+  let worktree = std::path::absolute(&layout.worktree).expect("an absolute path");
+  link_folder(&worktree.join("landing"), &layout.outside);
+  let file = worktree.join("planted.txt");
+  std::fs::write(&file, "x").expect("a file");
+  let moved = entry::rename(&worktree, &file, &worktree.join("landing").join("planted.txt"));
+  assert!(matches!(moved, Err(EntryError::Moved)), "{moved:?}");
+  assert!(!layout.outside.join("planted.txt").exists());
+  assert!(file.exists());
+  std::fs::create_dir(worktree.join("plain")).expect("a folder");
+  entry::rename(&worktree, &file, &worktree.join("plain").join("kept.txt")).expect("moved");
+  assert!(worktree.join("plain").join("kept.txt").exists());
 }

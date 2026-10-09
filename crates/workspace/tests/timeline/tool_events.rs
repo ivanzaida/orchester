@@ -112,7 +112,27 @@ fn timeline_a_group_counts_by_kind_and_names_a_failed_command() {
       command: "pnpm test".into(),
     }],
   );
-  assert_eq!(GroupSummary::of(&growing).running, Some("pnpm test".into()));
+  let growing = GroupSummary::of(&growing);
+  assert_eq!(growing.running, Some("pnpm test".into()));
+  assert_eq!(
+    (growing.commands, growing.named.len()),
+    (0, 0),
+    "a command without an end is not one the group ran"
+  );
+  // Named wherever it sits, also before a note the agent wrote after it.
+  let noted = transcript(
+    execution,
+    vec![
+      AgentEvent::CommandStarted {
+        item: "10".into(),
+        command: "pnpm build".into(),
+      },
+      AgentEvent::Reasoning {
+        text: "Waiting for the build.".into(),
+      },
+    ],
+  );
+  assert_eq!(GroupSummary::of(&noted).running, Some("pnpm build".into()));
 }
 
 #[test]
@@ -186,7 +206,7 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
   events.push(AgentEvent::McpToolFinished {
     item: "mcp-1".into(),
     server: "Orchester".into(),
-    tool: "write_file".into(),
+    tool: "create_file".into(),
     status: CommandStatus::Completed,
     asked: false,
   });
@@ -214,7 +234,7 @@ fn timeline_shows_the_change_of_orchester_s_edit_tool_by_its_call_s_row() {
 #[test]
 fn timeline_a_cli_s_orchester_edit_carries_its_change_and_counts_as_an_edit() {
   let execution = StepExecutionId::generate();
-  let input = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
+  let input = json!({"filename": "README.md", "start_line": 1, "end_line": 1, "expected": "hi", "content": "hi there"});
   // Settled, as the runner stores it.
   let mut settled = AgentEvent::NativeCall {
     item: String::new(),

@@ -216,9 +216,11 @@ impl RunJobs {
     self.update(|state| state.active = Active::Idle);
   }
 
-  pub fn start_merge(&self, args: MergeArgs) {
+  /// Starts merging the run on a thread of its own; whether it began, which it does not while another
+  /// operation of the run works or once its merge succeeded.
+  pub fn start_merge(&self, args: MergeArgs) -> bool {
     if !self.begin(Active::Merge) {
-      return;
+      return false;
     }
     self.update(|state| {
       state.merge = JobState::Running;
@@ -234,6 +236,7 @@ impl RunJobs {
       self.update(|state| state.merge = JobState::Failed(messages::interrupted()));
       self.finish();
     }
+    true
   }
 
   fn merge_now(&self, args: MergeArgs) {

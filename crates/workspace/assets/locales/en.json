@@ -370,7 +370,8 @@
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
-      "noCommits": "The repository has no commit to start the run from."
+      "noCommits": "The repository has no commit to start the run from.",
+      "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step."
     },
     "start": {
       "incomplete": "Add the missing details before running the task.",
@@ -672,7 +673,8 @@
       "one": "Enter more than the {{used}} minute this run already used.",
       "other": "Enter more than the {{used}} minutes this run already used."
     },
-    "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet."
+    "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
+    "draftChanged": "The draft changed since it was read. Read it again before publishing."
   },
   "number": {
     "bytes": "{{count}} bytes",
@@ -767,6 +769,38 @@
       "failureRoute": "{{step}} · when changes are requested changed",
       "maxRetries": "{{step}} · maximum retries {{from}} → {{to}}",
       "budget": "{{step}} · step budget {{from}} → {{to}} tokens"
+    },
+    "starter": {
+      "research": {
+        "name": "Research",
+        "uses": "Explorer",
+        "instructions": "Study the repository and the task brief. Report the code involved, the constraints and the risks, and anything the brief leaves open."
+      },
+      "plan": {
+        "name": "Plan",
+        "uses": "Planner",
+        "instructions": "Propose a plan for the task: the changes to make, their order and how each acceptance criterion will be checked. Wait for approval before anything is implemented."
+      },
+      "implement": {
+        "name": "Implement",
+        "uses": "Builder",
+        "instructions": "Implement the approved plan with tests. Keep changes within the task’s scope and explain anything that differs from the plan."
+      },
+      "runChecks": {
+        "name": "Run checks",
+        "uses": "Run test suite",
+        "instructions": "Run the project’s tests, linters and other checks against the implementation."
+      },
+      "review": {
+        "name": "Review",
+        "uses": "Reviewer",
+        "instructions": "Review the implementation against the task’s acceptance criteria. Check correctness, edge cases and maintainability, and link each finding to the relevant code."
+      },
+      "createPullRequest": {
+        "name": "Create pull request",
+        "uses": "Create pull request",
+        "instructions": "Open a pull request with a summary of the changes and the evidence that each acceptance criterion is met."
+      }
     }
   },
   "tools": {
@@ -838,7 +872,60 @@
       "approveNeedsVersion": "Approving names the plan version it is for, as get_run shows it waiting with its whole text, so only a plan read in full is approved.",
       "planVersionChanged": "Plan v{{asked}} no longer waits for a decision; plan v{{version}} of {{step}} waits now.",
       "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
-      "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note."
+      "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
+      "folderNotAbsolute": "Name the project’s folder by its absolute path.",
+      "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
+      "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
+      "checkFound": "The check found: {{status}}.",
+      "connectionRunsNoAgents": "This profile’s connection does not run agents in this version, so it cannot be published. Choose another connection.",
+      "noDraft": "There is no draft to publish: the latest version is current. Save a draft first.",
+      "effortNotOffered": "{{model}} does not list the effort {{effort}}. list_models gives the efforts each model takes.",
+      "commandsNeedAllowed": "Allowed commands are listed only with the commands choice allowed.",
+      "foldersNeedWrite": "Extra writable folders apply only with write access to the repository.",
+      "nativeNoSwitches": "On a connection whose agents Orchester runs itself, the approval switches and MCP servers are not offered in this version.",
+      "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
+      "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
+      "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",
+      "inStep": "Step {{step}}:",
+      "stepKeyInvalid": "{{key}} is not a step key: use small letters, digits and -, starting with a letter or digit.",
+      "profileOrTool": "A step runs an agent profile or a tool, not both.",
+      "toolStepOptions": "A tool step takes no repository access, model or narrowed permissions; those are an agent step’s.",
+      "toolNotPublished": "No published tool is named {{tool}}. A step calls a tool once it is published.",
+      "toolNotRunnable": "{{tool}} cannot run as a step in this version.",
+      "profileNotPublished": "No published agent profile is named {{profile}}. A step runs a profile once it is published.",
+      "stepCannotWrite": "Write access needs a profile that writes to the repository; a step cannot allow more than its profile.",
+      "narrowNeedsProfile": "Choose the step’s agent profile before narrowing its permissions.",
+      "narrowCommandsNotOffered": "Commands can be narrowed only where the profile allows a list of commands that its CLI enforces.",
+      "commandNotInProfile": "{{command}} is not among the profile’s allowed commands; a step can only keep some of them.",
+      "networkOffNotOffered": "Network off can be chosen only where the profile has network access and its CLI can block it.",
+      "nameNotEditable": "An instruction keeps the name it was made with; leave out the name to change it.",
+      "unknownRole": "No agent profile of the project has the role {{role}}.",
+      "runNotReady": "Only a run that is ready for review can be merged.",
+      "noBaseBranch": "The run did not start from a branch, so there is no branch to merge it into.",
+      "alreadyMerged": "The run was merged already.",
+      "notLatestRun": "Only the task’s latest run can be merged.",
+      "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
+      "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
+      "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window."
+    },
+    "githubConnectionName": "GitHub · {{host}}",
+    "widens": {
+      "repository": "Write access to the repository, which the latest version does not give.",
+      "writableFolder": "A writable folder outside the worktree that the latest version does not give.",
+      "commands": "Commands the latest version does not let run.",
+      "network": "Network access, which the latest version does not give.",
+      "toolCallsUnasked": "Tool calls no longer asked about, which the latest version asks about.",
+      "autoApprove": "Approving automatically, where the latest version asks a person.",
+      "mcpServers": "MCP servers the latest version does not give its agents.",
+      "program": "{{program}} is not a copy of the CLI found on the search path.",
+      "variable": "{{name}} would change: a variable can change what programs load, where they connect, what they trust or where tools keep their configuration.",
+      "approvalGate": "Step {{step}} would no longer wait for a person's approval.",
+      "stepToolCalls": "Step {{step}} would no longer ask a person about its tool calls.",
+      "firstPipelineVersion": "A pipeline's first version has nothing to be compared with, so a person publishes it.",
+      "pipelineSteps": "The steps differ from the latest published version: some were added or removed.",
+      "pipelineStep": "Step {{step}} is not provably as strict as in the latest published version: same wiring, profile or tool, approvals and narrowing, or stricter.",
+      "taskPipeline": "A person changes a task's pipeline: another pipeline runs it with other steps, profiles and approvals.",
+      "pipelineSources": "The sources the pipeline or its steps list differ from the latest published version."
     }
   },
   "statusBar": {

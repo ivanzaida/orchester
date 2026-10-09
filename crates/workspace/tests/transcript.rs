@@ -405,3 +405,45 @@ fn transcript_marks_answered_requests_on_their_calls() {
   assert!(entries[2].is_failure());
   assert!(!entries[0].is_failure());
 }
+
+#[test]
+fn transcript_ends_a_call_by_its_item_when_its_end_names_another_command() {
+  // A declined escalation: the CLI ends the call under other words than it started with.
+  let activity = stored(vec![
+    AgentEvent::CommandStarted {
+      item: "escalation-1".into(),
+      command: "cargo add serde".into(),
+    },
+    AgentEvent::ToolDecided {
+      item: "escalation-1".into(),
+      server: "command".into(),
+      action: "cargo add serde".into(),
+      decision: ToolDecision {
+        decided_by: DecidedBy::PersonDeny,
+        category: Some(CommandCategory::Network),
+        secrets: false,
+        told: None,
+        waited_ms: None,
+        review: None,
+      },
+    },
+    AgentEvent::CommandFinished {
+      item: "escalation-1".into(),
+      command: "escalated".into(),
+      output: String::new(),
+      exit_code: None,
+      status: CommandStatus::Declined,
+    },
+  ]);
+  let entries = entries(&activity);
+  assert_eq!(entries.len(), 1, "one call, ended: {entries:?}");
+  let EntryKind::Command(command) = &entries[0].kind else {
+    panic!("a command: {entries:?}");
+  };
+  assert_eq!(&*command.command, "cargo add serde", "the command it was asked about");
+  assert_eq!(command.status, Some(CommandStatus::Declined));
+  assert!(
+    command.mark.as_ref().is_some_and(CommandMark::is_denial),
+    "the person's denial stays on it"
+  );
+}

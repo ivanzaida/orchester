@@ -10,7 +10,7 @@ use orchester_core::{
   store::{ResourceStore, SettingsStore},
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb};
 use serde_json::{Value, json};
 
 use super::{agent, ok, refused};
@@ -63,6 +63,17 @@ fn copy(changes: &Value, name: &str) -> Value {
 fn app_mcp_duplicates_a_pipeline_with_another_profile_and_publishes_it() {
   let desktop = seeded();
   let mut agent = agent(&desktop);
+  let other_profile = copy(&json!({"Review": "reviewer"}), "Delivery with a reviewer");
+  assert_eq!(
+    refused(&mut agent, "duplicate_pipeline", &other_profile)["code"],
+    "person_only",
+    "another profile on a step is a person's decision"
+  );
+  // A person lets automation change agent permissions, which the app's settings keep.
+  AppDb::open(&desktop.repo().parent().expect("the test folder").join("orchester.db"))
+    .expect("open")
+    .set_automation_changes_permissions(true)
+    .expect("a person lets automation change agent permissions");
   let copied = ok(
     &mut agent,
     "duplicate_pipeline",
