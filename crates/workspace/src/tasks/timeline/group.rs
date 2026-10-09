@@ -323,9 +323,12 @@ fn edited_path(entry: &Entry) -> Option<&str> {
   (status == Some(CommandStatus::Completed) && input.change().is_some()).then_some(input.target())
 }
 
-/// A command entry's command, whether it failed, and its exit code.
+/// An ended command entry's command, whether it failed, and its exit code; `None` for a command without an
+/// end, which a group names as running (or, once nothing works, as without an end) rather than as run.
 fn command_of(entry: &Entry) -> Option<(Arc<str>, bool, Option<i64>)> {
   match &entry.kind {
+    EntryKind::Command(command) if command.status.is_none() => None,
+    EntryKind::ToolCommand(command) if command.result.is_none() => None,
     EntryKind::Command(command) => Some((
       command.command.clone(),
       command.status == Some(CommandStatus::Failed),
