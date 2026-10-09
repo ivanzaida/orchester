@@ -1,0 +1,70 @@
+{
+  "tasks": {
+    "title": "Tasks",
+    "description": "Workflow status describes your work. Run labels describe the agent.",
+    "newTask": "New task",
+    "createMultiple": "Create multiple",
+    "createMultipleReason": "Creating several tasks at once is planned.",
+    "tabs": {
+      "all": "All",
+      "needsYou": "Needs you",
+      "backlog": "Backlog",
+      "todo": "Todo",
+      "inProgress": "In progress",
+      "inReview": "In review",
+      "done": "Done",
+      "unknownCount": "—"
+    },
+    "query": {
+      "search": "Search",
+      "searchPlaceholder": "Search title, key or brief",
+      "pipeline": "Pipeline",
+      "allPipelines": "All pipelines",
+      "sort": "Sort",
+      "sortNote": "Sorting never changes the run queue."
+    },
+    "sort": {
+      "manual": "Manual order",
+      "newest": "Newest first",
+      "title": "Title",
+      "status": "Workflow status",
+      "priority": "Priority"
+    },
+    "columns": {
+      "key": "ID",
+      "task": "TASK / TAGS",
+      "pipeline": "PIPELINE",
+      "priority": "PRIORITY",
+      "workflow": "WORKFLOW / RUN",
+      "readiness": "DEPENDENCY / READINESS"
+    },
+    "moreTags": "+{{count}}",
+    "listSeparator": ", ",
+    "newBadge": "New",
+    "blocked": "Blocked",
+    "loading": "Reading {{project}}'s tasks…",
+    "loadError": {
+      "title": "Tasks cannot be read",
+      "body": "Reading the task list from the project database failed. {{reason}} No task was changed. The list appears once it can be read."
+    },
+    "empty": {
+      "title": "No tasks yet",
+      "detail": "Describe what agents should build as a task. Drafts can be saved before every detail is known."
+    },
+    "noMatches": {
+      "title": "No tasks in this tab match the search or pipeline filter.",
+      "inTab": {
+        "one": "{{tab}} has {{count}} task. Search looks at titles, keys and briefs.",
+        "other": "{{tab}} has {{count}} tasks. Search looks at titles, keys and briefs."
+      },
+      "clear": "Clear search and filter"
+    },
+    "emptyTab": {
+      "title": "No tasks in this tab.",
+      "detail": "A task shows here once its workflow status is {{tab}}."
+    },
+    "emptyNeedsYou": {
+      "detail": "A task shows here while its run waits for an answer, an approval or a decision."
+    }
+  }
+}
