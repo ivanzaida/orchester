@@ -307,6 +307,13 @@ fn timeline_a_touchpad_nudge_up_stops_following_and_stays() {
     window.tree.get_element_by_id("conversation-jump").is_some(),
     "the chat stays where the nudge left it"
   );
+  assert!(
+    window
+      .tree
+      .get_element_by_id("conversation-row:conversation-jump-room")
+      .is_some(),
+    "the last row can scroll clear of the floating pill"
+  );
 }
 
 #[test]
