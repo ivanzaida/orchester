@@ -6,6 +6,7 @@
 mod answer;
 mod app_server;
 mod approval;
+mod checks;
 mod claude_approval;
 mod cli_version;
 mod end;
@@ -15,6 +16,7 @@ mod native;
 mod orchester_tools;
 pub(super) mod question;
 mod relay;
+mod run_records;
 mod skills;
 mod start;
 mod stderr;

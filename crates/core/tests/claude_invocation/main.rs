@@ -49,19 +49,29 @@ fn enforced(
 
 /// The Orchester tools that run without asking in a step that only reads, and `ask_question` (it waits for an
 /// answer, not an approval), each with its allow rule after the step's other allowed tools.
-const READ_RULES: [&str; 4] = [
+const READ_RULES: [&str; 8] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search_file",
+  "mcp__Orchester__find_references",
+  "mcp__Orchester__get_task",
+  "mcp__Orchester__save_memory",
+  "mcp__Orchester__report_progress",
   "mcp__Orchester__ask_question",
 ];
 /// And in a step that may write.
-const WRITE_RULES: [&str; 6] = [
+const WRITE_RULES: [&str; 12] = [
   "mcp__Orchester__read_file",
   "mcp__Orchester__list_files",
   "mcp__Orchester__search_file",
   "mcp__Orchester__edit_file",
   "mcp__Orchester__create_file",
+  "mcp__Orchester__delete_file",
+  "mcp__Orchester__move_file",
+  "mcp__Orchester__find_references",
+  "mcp__Orchester__get_task",
+  "mcp__Orchester__save_memory",
+  "mcp__Orchester__report_progress",
   "mcp__Orchester__ask_question",
 ];
 /// Claude Code's own file tools, which an invocation served Orchester's tools has on its disallowed list, after the
@@ -85,6 +95,7 @@ fn invocation(permissions: &EnforcedPermissions) -> ClaudeInvocation<'_> {
     skills: None,
     code_index: None,
     approvals: asks.then_some(Path::new(APPROVALS)),
+    checks: &[],
   }
 }
 

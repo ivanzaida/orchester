@@ -8,8 +8,7 @@ use crate::connection::stream::{AgentEvent, CommandStatus, FileChange, FileChang
 
 /// The end of the MCP call `item`, started as `started`, as its activity: what a successful call of one of
 /// Orchester's file tools asked (its row reads as the native agent's call of the tool, an edit's with its diff), what
-/// it called and whether Codex asked first, then the change a successful call of Orchester's `edit_file` or
-/// `create_file` made. A call
+/// it called and whether Codex asked first, then the changes a successful call of Orchester's file tools made. A call
 /// fails when Codex says so, or when its answer is marked as an error (`result.isError`) where Codex passes that on.
 pub(super) fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> Vec<Update> {
   let (Some(id), Some(server), Some(tool)) = (
@@ -35,15 +34,15 @@ pub(super) fn mcp_tool_finished(item: &Value, started: Option<ToolContext>) -> V
     .and_then(|result| result.get("isError"))
     .and_then(Value::as_bool)
     == Some(true);
-  let (asked, changes, call) = started.map_or((false, None, None), |tool| (tool.asked, tool.changes, tool.call));
+  let (asked, changes, call) = started.map_or((false, Vec::new(), None), |tool| (tool.asked, tool.changes, tool.call));
   let succeeded = status == CommandStatus::Completed && !answered_error;
   let told = call
     .filter(|_| succeeded)
     .map(|call| Update::Activity(AgentEvent::NativeCall { item: id.clone(), call }));
-  let changed = changes.filter(|_| succeeded).map(|change| {
+  let changed = (succeeded && !changes.is_empty()).then(|| {
     Update::Activity(AgentEvent::FileChanged {
       item: id.clone(),
-      changes: vec![change],
+      changes,
     })
   });
   let finished = Update::Activity(AgentEvent::McpToolFinished {

@@ -10,7 +10,7 @@
 //! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
 //! Where its output goes is checked all the same. A Codex escalation (a command outside its sandbox)
 //! always goes to the person. Orchester's
-//! `run_project_tool` (a project program outside every sandbox) and a request too long to be reviewed
+//! `run_check` (a project program outside every sandbox) and a request too long to be reviewed
 //! whole go to the person too.
 
 use serde::{Deserialize, Serialize};
@@ -132,7 +132,7 @@ pub fn unread_parts(subject: &ApprovalSubject) -> usize {
   }
 }
 
-/// The hard rule for a call of an MCP tool: Orchester's `run_project_tool` never goes to the reviewer.
+/// The hard rule for a call of an MCP tool: Orchester's `run_check` never goes to the reviewer.
 fn tool_hold(subject: &ApprovalSubject, permissions: Option<&AgentPermissions>) -> Option<ReviewHold> {
   match subject {
     ApprovalSubject::McpTool { server, tool, .. } if !auto_approvable(server, tool) => Some(ReviewHold::ProjectProgram),

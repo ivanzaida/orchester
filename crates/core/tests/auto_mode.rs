@@ -251,7 +251,7 @@ fn auto_mode_hard_rules_win_over_any_reviewer() {
   }
   let project_program = ApprovalSubject::McpTool {
     server: SERVER.to_owned(),
-    tool: "run_project_tool".to_owned(),
+    tool: "run_check".to_owned(),
     folder: None,
   };
   assert_eq!(

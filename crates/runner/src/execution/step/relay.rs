@@ -351,9 +351,9 @@ impl Relay {
   }
 
   /// The decision on permission prompt call `arguments`: a person's, a refusal of what the step does not leave to
-  /// one, or, for a call of Orchester's tools outside the worktree, an approval when it stays in the run's sources
-  /// and a refusal when it reaches where it may not; `None` when the relay closed its connection while the call
-  /// waited. An approved call of one of Orchester's tools leaves a grant for that call.
+  /// one, or, for a call of Orchester's tools, an approval when it needs none (it stays in the run's sources, or a
+  /// check asks nobody) and a refusal when it is invalid or reaches where it may not; `None` when the relay closed its
+  /// connection while the call waited. An approved call of one of Orchester's tools leaves a grant for that call.
   async fn decide(&self, arguments: &Value, lines: &mut Lines<BufReader<OwnedReadHalf>>) -> Option<String> {
     let asked = self.served.prompt.as_ref().map(|scope| scope.classify(arguments));
     let Some(ClaudeAsk::Person(request)) = asked else {
@@ -363,16 +363,16 @@ impl Relay {
       .then(|| OrchesterTool::from_name(request.action()))
       .flatten();
     let input = arguments.get("input").unwrap_or(&Value::Null);
-    let answer = match tool.map(|tool| self.prompt_outside(tool, input)) {
-      // A call that stays in the run's sources runs without asking.
-      Some(Ok(Some(outside))) if outside.in_sources => PromptAnswer::Allow,
+    let answer = match tool.map(|tool| self.prompt_call(tool, input)) {
+      // A call that stays in the run's sources, or a check that asks nobody, runs without asking.
+      Some(Ok((false, _))) => PromptAnswer::Allow,
       // The call would be refused: it is denied with why, and nobody is asked.
       Some(Err(refused)) => PromptAnswer::Deny(refused),
-      Some(Ok(Some(outside))) => {
+      Some(Ok((true, Some(outside)))) => {
         let request = request.with_target(outside.folder);
         return self.ask_prompt(request, (tool, input), lines).await;
       }
-      Some(Ok(None)) | None => return self.ask_prompt(request, (tool, input), lines).await,
+      Some(Ok((true, None))) | None => return self.ask_prompt(request, (tool, input), lines).await,
     };
     if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
       self.served.tools.grant(tool, input);
@@ -396,15 +396,13 @@ impl Relay {
     Some(answer.result())
   }
 
-  /// How a permission prompt call of Orchester's `tool` with `input` reaches outside the worktree, for a tool that
-  /// reads there; why the call would be refused, when its input or its path is.
-  fn prompt_outside(&self, tool: OrchesterTool, input: &Value) -> Result<Option<Outside>, String> {
-    if !tool.reads_outside() {
-      return Ok(None);
-    }
+  /// Whether a permission prompt call of Orchester's `tool` with `input` needs an approval, and how it reaches
+  /// outside the worktree for a tool that reads there; why the call would be refused, when its input or its path is.
+  fn prompt_call(&self, tool: OrchesterTool, input: &Value) -> Result<(bool, Option<Outside>), String> {
     let tools = &self.served.tools;
     let call = tools.parse(tool.as_str(), input).map_err(|error| error.to_string())?;
-    tools.outside(&call).transpose().map_err(|error| error.to_string())
+    let outside = tools.outside(&call).transpose().map_err(|error| error.to_string())?;
+    Ok((tools.needs_approval(&call, outside.as_ref()), outside))
   }
 
   /// The answer to a call of Orchester's tool `name`: refused when it is not valid, not offered or reaches where it
@@ -427,8 +425,7 @@ impl Relay {
       // A path the call may not reach is refused before anybody is asked.
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    let in_sources = outside.as_ref().is_some_and(|outside| outside.in_sources);
-    if tools.asks(call.tool()) && !in_sources && !tools.take_grant(call.tool(), arguments) {
+    if tools.needs_approval(&call, outside.as_ref()) && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());

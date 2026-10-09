@@ -138,7 +138,8 @@ fn orchester_tools_file_tools_follow_the_step() {
       "Use the shell for builds, tests and git, not to read or search files. Read and search files outside the \
        worktree with mcp__Orchester__read_external_file and mcp__Orchester__search_external_file of the Orchester \
        MCP server: in the run's sources they run at once, elsewhere a person is asked first. The server also has \
-       mcp__Orchester__find_symbol."
+       mcp__Orchester__find_symbol, mcp__Orchester__find_references, mcp__Orchester__get_task, \
+       mcp__Orchester__save_memory, mcp__Orchester__report_progress."
     )
   );
   let listed = StepTools::for_step(

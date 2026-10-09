@@ -106,3 +106,27 @@ fn files_search_outside_keeps_only_what_the_caller_lets_through() {
     assert!(found.contains("[1 files with matches left out"), "{found}");
   }
 }
+
+/// `find_references` looks for a name as a whole word in exactly its case, with ripgrep and without.
+#[test]
+fn files_search_word_finds_a_name_as_a_whole_word() {
+  let layout = Layout::temporary();
+  fs::remove_dir_all(layout.worktree.join("target")).expect("removed");
+  fs::write(
+    layout.worktree.join("src/uses.rs"),
+    "hello();\nhello_world();\nsay_hello();\nHello::new();\nlet x = hello;\n",
+  )
+  .expect("file");
+  for tools in both(&layout) {
+    let found = ok(tools.search_word("hello", 20));
+    assert!(
+      found.contains("src/uses.rs\n     1: hello();\n     5: let x = hello;\n"),
+      "{found}"
+    );
+    assert!(
+      !found.contains("hello_world") && !found.contains("say_hello") && !found.contains("Hello::new"),
+      "{found}"
+    );
+    assert!(found.contains("     1: pub fn hello() {}"), "{found}");
+  }
+}

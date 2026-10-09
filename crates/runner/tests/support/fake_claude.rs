@@ -200,6 +200,9 @@ impl Fake {
     if prompt.contains("Use the file tools") {
       return self.use_file_tools(worktree, (args, permission_prompt), step);
     }
+    if prompt.contains("Use the run tools") {
+      return self.use_run_tools(worktree, (args, permission_prompt), step);
+    }
     if prompt.contains("Use the skill tools") {
       return self.use_skill_tools(worktree, (args, permission_prompt), step);
     }

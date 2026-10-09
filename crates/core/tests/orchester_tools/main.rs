@@ -8,6 +8,7 @@ mod lines;
 mod outside;
 mod policy;
 mod programs;
+mod run_tools;
 mod skill_list;
 mod skill_reads;
 mod skills;
@@ -111,7 +112,7 @@ pub fn text(path: &Path) -> String {
 pub fn project_tool(name: &str, program: &str) -> ProjectTool {
   let args = ["--quiet", "a; rm -rf /"].map(|arg| CommandArg::new(arg).expect("an argument"));
   let action = CommandAction::new(CommandProgram::new(program).expect("a program"), args.to_vec());
-  ProjectTool::new(name, "runs the tests", action)
+  ProjectTool::new(name, "runs the tests", action, true)
 }
 
 pub fn context<'a>(worktree: &'a Path, reads: &'a OutsideReads, tools: &'a [ProjectTool]) -> ToolContext<'a> {

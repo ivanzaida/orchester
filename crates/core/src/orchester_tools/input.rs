@@ -7,7 +7,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{FileCall, FindSymbol, OrchesterTool, SkillCall, StepTools, ToolCallError, files::term};
-use crate::resource::{SKILL_FILE, SkillFilePath};
+use crate::{
+  memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
+  resource::{SKILL_FILE, SkillFilePath},
+  run::StepProgress,
+};
 
 /// Lines a read returns when the call gives no `length` or `limit`.
 pub(super) const DEFAULT_READ_LINES: u32 = 2000;
@@ -58,10 +62,17 @@ pub enum ToolCall {
     base_directory: String,
     term: String,
   },
-  RunProjectTool {
+  /// `find_references`: where a name is used, with its definitions from the code index.
+  FindReferences {
+    name: String,
+  },
+  RunCheck {
     name: String,
   },
   Skill(SkillCall),
+  GetTask,
+  SaveMemory(Box<MemoryNote>),
+  ReportProgress(StepProgress),
 }
 
 #[derive(Deserialize)]
@@ -87,8 +98,29 @@ struct ExternalSearchInput {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ProjectInput {
+struct NameInput {
   name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MemoryInput {
+  kind: String,
+  text: String,
+  #[serde(default)]
+  key: Option<String>,
+  #[serde(default)]
+  tags: Option<Vec<String>>,
+  #[serde(default)]
+  importance: Option<String>,
+  #[serde(default)]
+  scope: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProgressInput {
+  text: String,
 }
 
 #[derive(Deserialize)]
@@ -117,10 +149,10 @@ impl ToolCall {
       arguments.clone()
     };
     let call = read(tool, arguments).map_err(|message| ToolCallError::Invalid { tool, message })?;
-    if let Self::RunProjectTool { name } = &call
-      && !step.offers_project_tool(name)
+    if let Self::RunCheck { name } = &call
+      && !step.offers_check(name)
     {
-      return Err(ToolCallError::UnknownProjectTool(name.clone()));
+      return Err(ToolCallError::UnknownCheck(name.clone()));
     }
     Ok(call)
   }
@@ -131,9 +163,13 @@ impl ToolCall {
       Self::FindSymbol(_) => OrchesterTool::FindSymbol,
       Self::ReadExternal { .. } => OrchesterTool::ReadExternalFile,
       Self::SearchExternal { .. } => OrchesterTool::SearchExternalFile,
-      Self::RunProjectTool { .. } => OrchesterTool::RunProjectTool,
+      Self::FindReferences { .. } => OrchesterTool::FindReferences,
+      Self::RunCheck { .. } => OrchesterTool::RunCheck,
       Self::Skill(SkillCall::List) => OrchesterTool::ListSkills,
       Self::Skill(SkillCall::Read { .. }) => OrchesterTool::ReadSkill,
+      Self::GetTask => OrchesterTool::GetTask,
+      Self::SaveMemory(_) => OrchesterTool::SaveMemory,
+      Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
   }
 }
@@ -172,16 +208,74 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
       ToolCall::Skill(SkillCall::List)
     }
     OrchesterTool::ReadSkill => read_skill(&serde_json::from_value(arguments).map_err(invalid)?)?,
-    OrchesterTool::RunProjectTool => {
-      let input: ProjectInput = serde_json::from_value(arguments).map_err(invalid)?;
-      ToolCall::RunProjectTool { name: input.name }
+    OrchesterTool::RunCheck => {
+      let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::RunCheck { name: input.name }
+    }
+    OrchesterTool::FindReferences => {
+      let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::FindReferences {
+        name: reference_name(&input.name)?,
+      }
+    }
+    OrchesterTool::GetTask => {
+      serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
+      ToolCall::GetTask
+    }
+    OrchesterTool::SaveMemory => memory_note(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::ReportProgress => {
+      let input: ProgressInput = serde_json::from_value(arguments).map_err(invalid)?;
+      ToolCall::ReportProgress(StepProgress::new(&input.text).map_err(|error| error.to_string())?)
     }
     OrchesterTool::ReadFile
     | OrchesterTool::ListFiles
     | OrchesterTool::SearchFile
     | OrchesterTool::EditFile
-    | OrchesterTool::CreateFile => unreachable!("the file tools are read by FileCall::read"),
+    | OrchesterTool::CreateFile
+    | OrchesterTool::DeleteFile
+    | OrchesterTool::MoveFile => unreachable!("the file tools are read by FileCall::read"),
   })
+}
+
+/// A name `find_references` looks for: an identifier, as code writes it.
+fn reference_name(value: &str) -> Result<String, String> {
+  let mut chars = value.chars();
+  let identifier = chars.next().is_some_and(|first| first.is_alphabetic() || first == '_')
+    && chars.all(|c| c.is_alphanumeric() || c == '_')
+    && value.chars().count() <= MAX_SKILL_NAME_CHARS;
+  if identifier {
+    Ok(value.to_owned())
+  } else {
+    Err(format!(
+      "`{value}` is not a name: letters, digits and `_`, not starting with a digit"
+    ))
+  }
+}
+
+/// A `save_memory` call: its content as a person's record would hold it, for the task (the default) or the project.
+fn memory_note(input: &MemoryInput) -> Result<ToolCall, String> {
+  let kind = MemoryKind::from_name(&input.kind).ok_or_else(|| {
+    let kinds: Vec<&str> = MemoryKind::ALL.iter().map(|kind| kind.name()).collect();
+    format!("`{}` is not a kind of memory: {}", input.kind, kinds.join(", "))
+  })?;
+  let mut content = MemoryContent::new(kind, &input.text).map_err(|error| error.to_string())?;
+  if let Some(key) = input.key.as_deref() {
+    content = content.with_key(MemoryKey::new(key).map_err(|error| error.to_string())?);
+  }
+  if let Some(tags) = &input.tags {
+    content = content.with_tags(Tags::new(tags.iter().map(String::as_str)).map_err(|error| error.to_string())?);
+  }
+  if let Some(importance) = input.importance.as_deref() {
+    let importance =
+      Importance::from_name(importance).ok_or_else(|| format!("`{importance}` is not low, normal or high"))?;
+    content = content.with_importance(importance);
+  }
+  let scope = match input.scope.as_deref() {
+    None | Some("task") => NoteScope::Task,
+    Some("project") => NoteScope::Project,
+    Some(other) => return Err(format!("`{other}` is not a memory scope: task or project")),
+  };
+  Ok(ToolCall::SaveMemory(Box::new(MemoryNote::new(scope, content))))
 }
 
 /// A path outside the worktree as a call gives it: not blank, at most [`MAX_PATH_CHARS`].

@@ -1,5 +1,6 @@
 //! Orchester's own typed tools for agents (`docs/interactive-tool-approvals.md`, "Orchester's tools"): the worktree's
-//! files, files outside it, the step's skills and the Tools library's command tools. An agent CLI cannot tell what a
+//! files, files outside it, the step's skills, the Tools library's command tools offered to the step (checks), the
+//! run's task, the task's and the project's memory, and the step's progress line. An agent CLI cannot tell what a
 //! shell line does, so every such line outside its allowed commands asks a person; a typed tool says exactly what it
 //! does, so Orchester decides here whether a call runs, asks or is not offered at all ([`decide`]).
 //!
@@ -28,6 +29,7 @@ mod output;
 mod outside;
 mod policy;
 mod skills;
+mod task_view;
 mod work;
 
 use serde_json::Value;
@@ -43,6 +45,7 @@ pub use self::{
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
+  task_view::TaskView,
   work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 use crate::connection::stream::{FileChange, FileChangeKind, NativeCall};
@@ -58,12 +61,18 @@ pub enum OrchesterTool {
   SearchFile,
   EditFile,
   CreateFile,
+  DeleteFile,
+  MoveFile,
   FindSymbol,
+  FindReferences,
   SearchExternalFile,
   ReadExternalFile,
-  RunProjectTool,
+  RunCheck,
   ListSkills,
   ReadSkill,
+  GetTask,
+  SaveMemory,
+  ReportProgress,
 }
 
 /// What a tool may touch, which decides whether its calls ask ([`decide`]).
@@ -75,21 +84,29 @@ pub enum AccessClass {
   WritesWorktree,
   /// Reaches outside the worktree, or may: another folder, the network, a program the project chose.
   Outside,
+  /// Keeps something with the run or the project (memory, the step's progress line); changes no file.
+  Records,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 17] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
     Self::EditFile,
     Self::CreateFile,
+    Self::DeleteFile,
+    Self::MoveFile,
     Self::FindSymbol,
+    Self::FindReferences,
     Self::SearchExternalFile,
     Self::ReadExternalFile,
-    Self::RunProjectTool,
+    Self::RunCheck,
     Self::ListSkills,
     Self::ReadSkill,
+    Self::GetTask,
+    Self::SaveMemory,
+    Self::ReportProgress,
   ];
 
   /// The name the agent calls the tool by.
@@ -100,12 +117,18 @@ impl OrchesterTool {
       Self::SearchFile => "search_file",
       Self::EditFile => "edit_file",
       Self::CreateFile => "create_file",
+      Self::DeleteFile => "delete_file",
+      Self::MoveFile => "move_file",
       Self::FindSymbol => "find_symbol",
+      Self::FindReferences => "find_references",
       Self::SearchExternalFile => "search_external_file",
       Self::ReadExternalFile => "read_external_file",
-      Self::RunProjectTool => "run_project_tool",
+      Self::RunCheck => "run_check",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
+      Self::GetTask => "get_task",
+      Self::SaveMemory => "save_memory",
+      Self::ReportProgress => "report_progress",
     }
   }
 
@@ -131,7 +154,13 @@ impl OrchesterTool {
   pub const fn is_file_tool(self) -> bool {
     matches!(
       self,
-      Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::EditFile | Self::CreateFile
+      Self::ReadFile
+        | Self::ListFiles
+        | Self::SearchFile
+        | Self::EditFile
+        | Self::CreateFile
+        | Self::DeleteFile
+        | Self::MoveFile
     )
   }
 
@@ -141,19 +170,23 @@ impl OrchesterTool {
     matches!(self, Self::SearchExternalFile | Self::ReadExternalFile)
   }
 
-  /// The file a call with `input` changed once it succeeded, at the path the agent gave: `edit_file` modifies the
-  /// file at its `filename`, `create_file` adds one there. First-edit tracking reads only the path
-  /// (`crate::run::FirstEditTracker`), and the transcript shows the call's own row.
-  pub fn changed_file(self, input: &Value) -> Option<FileChange> {
-    let kind = match self {
-      Self::EditFile => FileChangeKind::Modified,
-      Self::CreateFile => FileChangeKind::Added,
-      _ => return None,
+  /// The files a call with `input` changed once it succeeded, at the paths the agent gave: `edit_file` modifies the
+  /// file at its `filename`, `create_file` adds one there, `delete_file` deletes it, `move_file` deletes `from` and
+  /// adds `to`. First-edit tracking reads only the paths (`crate::run::FirstEditTracker`), and the transcript shows
+  /// the call's own row.
+  pub fn changed_files(self, input: &Value) -> Vec<FileChange> {
+    let at = |field: &str, kind: FileChangeKind| {
+      let path = input.get(field)?.as_str()?.to_owned();
+      Some(FileChange { path, kind })
     };
-    Some(FileChange {
-      path: input.get("filename")?.as_str()?.to_owned(),
-      kind,
-    })
+    let changes = match self {
+      Self::EditFile => vec![at("filename", FileChangeKind::Modified)],
+      Self::CreateFile => vec![at("filename", FileChangeKind::Added)],
+      Self::DeleteFile => vec![at("filename", FileChangeKind::Deleted)],
+      Self::MoveFile => vec![at("from", FileChangeKind::Deleted), at("to", FileChangeKind::Added)],
+      _ => Vec::new(),
+    };
+    changes.into_iter().flatten().collect()
   }
 
   /// How an agent CLI's call of this tool with `input` reads in the transcript: as the native agent's call of the
@@ -169,6 +202,7 @@ impl OrchesterTool {
       FileCall::Search(_) => NativeTool::Search,
       FileCall::Edit(_) => NativeTool::EditFile,
       FileCall::Create(_) => NativeTool::WriteFile,
+      FileCall::Delete(_) | FileCall::Move { .. } => return None,
     };
     Some(NativeCall {
       tool,
@@ -180,10 +214,13 @@ impl OrchesterTool {
 
   pub const fn access(self) -> AccessClass {
     match self {
-      Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::FindSymbol => AccessClass::ReadOnly,
-      Self::ListSkills | Self::ReadSkill => AccessClass::ReadOnly,
-      Self::EditFile | Self::CreateFile => AccessClass::WritesWorktree,
-      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunProjectTool => AccessClass::Outside,
+      Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::FindSymbol | Self::FindReferences => {
+        AccessClass::ReadOnly
+      }
+      Self::ListSkills | Self::ReadSkill | Self::GetTask => AccessClass::ReadOnly,
+      Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
+      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck => AccessClass::Outside,
+      Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
     }
   }
 }
@@ -197,9 +234,9 @@ pub enum ToolCallError {
   NotOffered(OrchesterTool),
   #[error("invalid input for `{tool}`: {message}", tool = .tool.as_str())]
   Invalid { tool: OrchesterTool, message: String },
-  #[error("the project offers no tool named `{0}` to this step")]
-  UnknownProjectTool(String),
-  #[error("the program `{0}` of the project tool was not found")]
+  #[error("the project offers no check named `{0}` to this step")]
+  UnknownCheck(String),
+  #[error("the program `{0}` of the check was not found")]
   ProgramNotFound(String),
   #[error(transparent)]
   Outside(#[from] OutsideReadError),

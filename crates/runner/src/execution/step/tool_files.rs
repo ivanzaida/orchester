@@ -8,7 +8,8 @@
 //! definitions up in it, `search_file` for a name lists its definitions before the files that hold it, and
 //! `list_files` answers from the index's file list and the files changed in the worktree since the base
 //! revision. A definition in a changed file is marked, as its line may have moved. The index holds no file
-//! contents, so `read_file` always reads the file on disk.
+//! contents, so `read_file` always reads the file on disk. `find_references` lists a name's definitions from the
+//! index, then the worktree's files that use it as a whole word, and says when the index is off.
 
 use std::{
   collections::HashSet,
@@ -36,6 +37,10 @@ use orchester_exec::{
 
 use super::{orchester_tools::ToolFolders, start::problem};
 
+/// What `find_references` says without the code index.
+const NO_INDEX: &str = "[the code index is off for this run: definitions are not told apart from uses]";
+/// The most files `find_references` lists.
+const REFERENCE_FILES: u32 = 50;
 /// What a definition list says when the files changed since the index are unknown.
 const UNKNOWN_CHANGES: &str = "[the files changed since the index could not be read: any line may have moved]";
 /// The most bytes of git's list of changed files read.
@@ -91,6 +96,8 @@ impl ToolFiles {
       FileCall::Search(input) => return self.search(input, context),
       FileCall::Edit(input) => self.files.edit_lines(input),
       FileCall::Create(input) => self.files.create_file(input),
+      FileCall::Delete(filename) => self.files.delete_file(filename),
+      FileCall::Move { from, to } => self.files.move_file(from, to),
     };
     answer(outcome)
   }
@@ -114,6 +121,28 @@ impl ToolFiles {
       Ok(hits) => ToolResult::of_file_tool(marked(&hits, changed(base, context).as_ref()), false),
       Err(error) => ToolResult::unavailable(&format!("the code index cannot be read: {error}")),
     }
+  }
+
+  /// `find_references`: the definitions of `name` the code index lists, marked when their file changed since the
+  /// index, then the worktree's files that use it as a whole word.
+  pub(super) fn references(&self, name: &str, context: &ToolContext<'_>) -> ToolResult {
+    let uses = self.files.search_word(name, REFERENCE_FILES);
+    if uses.is_error {
+      return answer(uses);
+    }
+    let definitions = match &self.index {
+      // An index that cannot be read says so; the uses still answer.
+      Some((index, base)) => match index.find(&FindSymbol::definitions_of(name), true) {
+        Ok(hits) if hits.is_empty() => format!("no definition of {name} in the code index\n"),
+        Ok(hits) => marked(&hits, changed(base, context).as_ref()),
+        Err(error) => format!("[the code index cannot be read: {error}]\n"),
+      },
+      None => format!("{NO_INDEX}\n"),
+    };
+    ToolResult::of_file_tool(
+      format!("Definitions (code index):\n{definitions}\nUses:\n{}", uses.content),
+      false,
+    )
   }
 
   /// `list_files`, from the code index's file list and the files changed since when the agent gets it.

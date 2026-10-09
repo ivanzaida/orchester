@@ -61,7 +61,7 @@ async fn orchester_file_tools_serve_claude_code_in_a_writing_step() {
   let id = run.id();
   let listed = reported(&db, id, "orchester-tools: ").pop().expect("listed");
   assert!(
-    listed.starts_with("approve,read_file,list_files,search_file,edit_file,create_file,search_external_file"),
+    listed.starts_with("approve,read_file,list_files,search_file,edit_file,create_file,delete_file,move_file"),
     "{listed}"
   );
   let permissions = reported(&db, id, "orchester-permission: ");
@@ -153,7 +153,8 @@ async fn orchester_file_tools_refuse_changes_in_a_read_only_step() {
   let listed = reported(&db, run.id(), "orchester-tools: ").pop().expect("listed");
   assert_eq!(
     listed,
-    "read_file,list_files,search_file,search_external_file,read_external_file"
+    "read_file,list_files,search_file,find_references,search_external_file,read_external_file,get_task,save_memory,\
+     report_progress"
   );
   assert_eq!(
     reported(&db, run.id(), "orchester-call: "),
@@ -192,10 +193,7 @@ async fn orchester_file_tools_use_the_code_index() {
   let (run, db) = finished(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let listed = reported(&db, run.id(), "orchester-tools: ").pop().expect("listed");
-  assert!(
-    listed.contains("create_file,find_symbol,search_external_file"),
-    "{listed}"
-  );
+  assert!(listed.contains("move_file,find_symbol,find_references"), "{listed}");
   let calls = reported(&db, run.id(), "orchester-call: ");
   assert_eq!(
     calls,

@@ -1,6 +1,7 @@
-//! The worktree file tools' input: `read_file`, `search_file`, `edit_file` and `create_file` (`list_files` keeps the
-//! native agent's input), each read strictly (unknown fields refused) into a type that holds only valid values. A path
-//! is checked against the step's folders by the executor, which resolves it (`crate::native::scope::FileScope`).
+//! The worktree file tools' input: `read_file`, `search_file`, `edit_file`, `create_file`, `delete_file` and
+//! `move_file` (`list_files` keeps the native agent's input), each read strictly (unknown fields refused) into a type
+//! that holds only valid values. A path is checked against the step's folders by the executor, which resolves it
+//! (`crate::native::scope::FileScope`).
 
 use std::num::NonZeroU32;
 
@@ -30,6 +31,13 @@ pub enum FileCall {
   Search(SearchTerm),
   Edit(LineEdit),
   Create(NewFile),
+  /// `delete_file`: the file at this path goes.
+  Delete(String),
+  /// `move_file`: the file at `from` moves to `to`, where no file is.
+  Move {
+    from: String,
+    to: String,
+  },
 }
 
 /// `read_file`: lines of a file, from `start_line`, at most `length` of them.
@@ -156,6 +164,19 @@ struct CreateInput {
   content: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeleteInput {
+  filename: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MoveInput {
+  from: String,
+  to: String,
+}
+
 impl FileCall {
   /// `arguments` read as worktree file tool `tool`'s input, or why they are not; `None` for another tool.
   pub fn read(tool: OrchesterTool, arguments: &Value) -> Option<Result<Self, String>> {
@@ -168,6 +189,10 @@ impl FileCall {
         .and_then(search_term),
       OrchesterTool::EditFile => EditInput::deserialize(arguments).map_err(invalid).and_then(line_edit),
       OrchesterTool::CreateFile => CreateInput::deserialize(arguments).map_err(invalid).and_then(new_file),
+      OrchesterTool::DeleteFile => DeleteInput::deserialize(arguments)
+        .map_err(invalid)
+        .and_then(|input| Ok(Self::Delete(filename(input.filename)?))),
+      OrchesterTool::MoveFile => MoveInput::deserialize(arguments).map_err(invalid).and_then(moved),
       _ => return None,
     })
   }
@@ -179,10 +204,13 @@ impl FileCall {
       Self::Search(_) => OrchesterTool::SearchFile,
       Self::Edit(_) => OrchesterTool::EditFile,
       Self::Create(_) => OrchesterTool::CreateFile,
+      Self::Delete(_) => OrchesterTool::DeleteFile,
+      Self::Move { .. } => OrchesterTool::MoveFile,
     }
   }
 
-  /// What the call asked, as the native agent's row of the same kind shows it (04.H10).
+  /// What the call asked, as the native agent's row of the same kind shows it (04.H10); `None` for a deletion or a
+  /// move, which no native tool makes: their rows are the calls they are.
   pub fn call_input(&self) -> Option<CallInput> {
     Some(match self {
       Self::Read(read) => CallInput::requested(read.filename(), None, None),
@@ -197,6 +225,7 @@ impl FileCall {
         None,
         Some(Requested::Content(create.content().to_owned())),
       ),
+      Self::Delete(_) | Self::Move { .. } => return None,
     })
   }
 }
@@ -255,6 +284,16 @@ fn line_edit(input: EditInput) -> Result<FileCall, String> {
     expected: input.expected,
     content: input.content,
   }))
+}
+
+fn moved(input: MoveInput) -> Result<FileCall, String> {
+  if input.from == input.to {
+    return Err("from and to are the same file".to_owned());
+  }
+  Ok(FileCall::Move {
+    from: filename(input.from)?,
+    to: filename(input.to)?,
+  })
 }
 
 fn new_file(input: CreateInput) -> Result<FileCall, String> {

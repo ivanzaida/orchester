@@ -155,3 +155,50 @@ fn files_line_tools_stay_in_the_steps_folders() {
   let error = failed(tools.edit_lines(&edit(&index, (1, 1), "hello\tsrc/nested/lib.rs\t1\tfunction\t", "x")));
   assert!(error.contains("protected"), "{error}");
 }
+
+/// A deletion removes one file; a move renames one to a path where no file is, making its folders, and the moved file
+/// is read again before an edit; both stay in the step's folders.
+#[test]
+fn files_delete_and_move_stay_in_the_steps_folders() {
+  let layout = Layout::temporary();
+  let tools = layout.tools();
+  let deleted = tools.delete_file("README.md");
+  assert_eq!(deleted.changes[0].kind, FileChangeKind::Deleted);
+  ok(deleted);
+  assert!(!layout.worktree.join("README.md").exists());
+  assert!(failed(tools.delete_file("README.md")).contains("does not exist"));
+  assert!(failed(tools.delete_file("src")).contains("folder"));
+  ok(tools.read_lines(&read("src/main.rs")));
+  let moved = tools.move_file("src/main.rs", "src/bin/main.rs");
+  let kinds: Vec<(&str, FileChangeKind)> = moved
+    .changes
+    .iter()
+    .map(|change| (change.path.as_str(), change.kind))
+    .collect();
+  assert_eq!(
+    kinds,
+    [
+      ("src/main.rs", FileChangeKind::Deleted),
+      ("src/bin/main.rs", FileChangeKind::Added)
+    ]
+  );
+  ok(moved);
+  assert!(layout.read("src/bin/main.rs").starts_with("fn main()"));
+  let unread = failed(tools.edit_lines(&edit("src/bin/main.rs", (1, 1), "fn main() {", "fn run() {")));
+  assert!(unread.contains("has not been read"), "{unread}");
+  let taken = failed(tools.move_file("src/nested/lib.rs", "src/bin/main.rs"));
+  assert!(taken.contains("already exists"), "{taken}");
+  for (from, to) in [
+    ("src/nested/lib.rs", "../../outside/lib.rs"),
+    ("src/nested/lib.rs", ".git/lib.rs"),
+    ("../../outside/secret.txt", "secret.txt"),
+  ] {
+    let error = failed(tools.move_file(from, to));
+    assert!(
+      error.contains("outside the folders") || error.contains("protected"),
+      "{from} -> {to}: {error}"
+    );
+  }
+  assert!(failed(tools.delete_file(".git")).contains("protected"));
+  assert!(layout.root.join("outside").join("secret.txt").exists());
+}

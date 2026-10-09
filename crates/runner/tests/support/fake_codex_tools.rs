@@ -50,6 +50,9 @@ fn calls(prompt: &str, worktree: &Path) -> Vec<(&'static str, Value)> {
   if prompt.contains("Use the file tools") {
     return named(fake_tool_calls::files(true));
   }
+  if prompt.contains("Use the run tools") {
+    return named(fake_tool_calls::run_tools());
+  }
   named(fake_tool_calls::external(worktree))
 }
 

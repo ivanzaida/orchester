@@ -84,8 +84,8 @@ struct Call {
   command: String,
   /// The file an edit tool changes.
   file: Option<String>,
-  /// The file Orchester's edit tool changes, reported after the call's end.
-  changes: Option<FileChange>,
+  /// The files a call of Orchester's file tools changes, reported after the call's end.
+  changes: Vec<FileChange>,
 }
 
 impl ClaudeStream {
@@ -210,7 +210,7 @@ impl ClaudeStream {
     let input = block.get("input").unwrap_or(&Value::Null);
     let command = describe(&tool, input);
     let file = EDIT_TOOLS.contains(&tool.as_str()).then(|| file_path(input)).flatten();
-    let changes = OrchesterTool::from_claude_name(&tool).and_then(|own| own.changed_file(input));
+    let changes = OrchesterTool::from_claude_name(&tool).map_or_else(Vec::new, |own| own.changed_files(input));
     let started = file.is_none().then(|| AgentEvent::CommandStarted {
       item: item.clone(),
       command: command.clone(),
@@ -283,9 +283,9 @@ impl ClaudeStream {
         changes: vec![FileChange { path, kind }],
       }]);
     }
-    let changed = call.changes.filter(|_| !failed).map(|change| AgentEvent::FileChanged {
+    let changed = (!failed && !call.changes.is_empty()).then(|| AgentEvent::FileChanged {
       item: item.clone(),
-      changes: vec![change],
+      changes: call.changes,
     });
     let finished = AgentEvent::CommandFinished {
       item,

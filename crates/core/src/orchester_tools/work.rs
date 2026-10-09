@@ -16,24 +16,34 @@ use super::{
 use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
+  memory::MemoryNote,
   resource::{CommandAction, CommandEnvironment, ExitCodes},
+  run::StepProgress,
 };
 
-/// A command tool of the project's Tools library offered to the step, as the run pinned it.
+/// A check: a command tool of the project's Tools library offered to the step, as the run pinned it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectTool {
   name: String,
   description: String,
   action: CommandAction,
+  asks: bool,
 }
 
 impl ProjectTool {
-  pub fn new(name: &str, description: &str, action: CommandAction) -> Self {
+  /// The check `name` running `action`, which a person approves before each call when it `asks`.
+  pub fn new(name: &str, description: &str, action: CommandAction, asks: bool) -> Self {
     Self {
       name: name.to_owned(),
       description: description.to_owned(),
       action,
+      asks,
     }
+  }
+
+  /// Whether a call of it runs only once approved.
+  pub const fn asks(&self) -> bool {
+    self.asks
   }
 
   pub fn name(&self) -> &str {
@@ -138,6 +148,14 @@ pub enum ToolWork {
   /// A call of `list_skills` or `read_skill`, which the caller answers from the skills it offers
   /// ([`super::StepSkills::run`]).
   Skill(SkillCall),
+  /// `find_references` of this name, which the caller answers from the code index and the worktree.
+  References(String),
+  /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
+  Task,
+  /// `save_memory`, which the caller keeps as the project's memory setting says.
+  Memory(Box<MemoryNote>),
+  /// `report_progress`, which the caller keeps as the step's progress line.
+  Progress(StepProgress),
 }
 
 impl ToolCall {
@@ -157,10 +175,14 @@ impl ToolCall {
         folder: context.outside.check_folder(base_directory)?,
         term: term.clone(),
       }),
-      Self::RunProjectTool { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
+      Self::RunCheck { name } => Ok(ToolWork::Run(Box::new(project_program(name, context)?))),
       Self::File(call) => Ok(ToolWork::Files(call.clone())),
       Self::FindSymbol(query) => Ok(ToolWork::Symbols(query.clone())),
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
+      Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),
+      Self::GetTask => Ok(ToolWork::Task),
+      Self::SaveMemory(note) => Ok(ToolWork::Memory(note.clone())),
+      Self::ReportProgress(progress) => Ok(ToolWork::Progress(progress.clone())),
     }
   }
 }
@@ -194,13 +216,13 @@ impl ToolCall {
   }
 }
 
-/// The program of project tool `name`, found as a tool step finds it.
+/// The program of check `name`, found as a tool step finds it.
 fn project_program(name: &str, context: &ToolContext<'_>) -> Result<ToolProgram, ToolCallError> {
   let tool = context
     .project_tools
     .iter()
     .find(|tool| tool.name == name)
-    .ok_or_else(|| ToolCallError::UnknownProjectTool(name.to_owned()))?;
+    .ok_or_else(|| ToolCallError::UnknownCheck(name.to_owned()))?;
   let action = &tool.action;
   let inherited_path = context
     .inherited

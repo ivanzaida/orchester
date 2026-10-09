@@ -122,8 +122,8 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
     [
-      "approve,read_file,list_files,search_file,edit_file,create_file,search_external_file,read_external_file,\
-       ask_question"
+      "approve,read_file,list_files,search_file,edit_file,create_file,delete_file,move_file,find_references,\
+       search_external_file,read_external_file,get_task,save_memory,report_progress,ask_question"
     ]
   );
   let decisions = reported(&db, id, "orchester-permission: ");
@@ -183,7 +183,10 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   let id = run.id();
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
-    ["read_file,list_files,search_file,search_external_file,read_external_file"]
+    [
+      "read_file,list_files,search_file,find_references,search_external_file,read_external_file,get_task,save_memory,\
+      report_progress"
+    ]
   );
   let calls = reported(&db, id, "orchester-call: ");
   assert_eq!(calls.len(), 4, "{calls:#?}");

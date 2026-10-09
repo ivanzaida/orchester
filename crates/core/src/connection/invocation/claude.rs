@@ -71,7 +71,7 @@ use crate::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
     mcp::{InvocationExemptions, McpServerName},
   },
-  orchester_tools::StepTools,
+  orchester_tools::{ProjectTool, StepTools},
   permission::{
     capability::{EnforcedPermissions, Mechanism, PermissionSetting},
     claude::{PermissionFolders, edits_allowed_by_rule, permission_args},
@@ -144,6 +144,8 @@ pub struct ClaudeInvocation<'a> {
   pub code_index: Option<&'a Path>,
   /// The configuration file of the permission prompt relay, for permissions that ask a person.
   pub approvals: Option<&'a Path>,
+  /// The checks the step is offered (`run_check`), whose access rules decide whether it asks.
+  pub checks: &'a [ProjectTool],
 }
 
 impl ClaudeInvocation<'_> {
@@ -224,11 +226,11 @@ impl ClaudeInvocation<'_> {
   }
 
   /// The allow rules of the Orchester tools that run: only those get one, so the others reach the permission
-  /// prompt. They follow from the permissions, `find_symbol` from the code index the agent gets, and `list_skills`
-  /// and `read_skill` from its skills folder: Claude Code loads no repository skill, so the skills it is offered are
-  /// the ones placed there.
+  /// prompt. They follow from the permissions and the step's checks, `find_symbol` from the code index the agent gets,
+  /// and `list_skills` and `read_skill` from its skills folder: Claude Code loads no repository skill, so the skills
+  /// it is offered are the ones placed there.
   fn orchester_rules(&self) -> Vec<String> {
-    let mut tools = StepTools::for_step(self.permissions.permissions(), &[]);
+    let mut tools = StepTools::for_step(self.permissions.permissions(), self.checks);
     if self.code_index.is_some() {
       tools = tools.with_code_index();
     }

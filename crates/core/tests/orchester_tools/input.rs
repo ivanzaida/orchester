@@ -89,8 +89,8 @@ fn orchester_tools_read_their_input_strictly() {
     Err(ToolCallError::NotOffered(OrchesterTool::CreateFile))
   );
   assert_eq!(
-    parse("run_project_tool", &json!({"name": "Run tests"})),
-    Err(ToolCallError::NotOffered(OrchesterTool::RunProjectTool))
+    parse("run_check", &json!({"name": "Run tests"})),
+    Err(ToolCallError::NotOffered(OrchesterTool::RunCheck))
   );
 }
 
@@ -127,7 +127,8 @@ fn orchester_tools_file_calls_read_as_native_rows() {
   assert_eq!(edited.tool, ToolName::EditFile);
   assert_eq!(edited.input.as_ref().map(|input| input.target()), Some("src/main.rs"));
   let change = OrchesterTool::EditFile
-    .changed_file(&edit(2, 2, "old line", "new line"))
+    .changed_files(&edit(2, 2, "old line", "new line"))
+    .pop()
     .expect("a change");
   assert_eq!(
     (change.path.as_str(), change.kind),
@@ -138,11 +139,32 @@ fn orchester_tools_file_calls_read_as_native_rows() {
     OrchesterTool::CreateFile.shown_call(&created).map(|call| call.tool),
     Some(ToolName::WriteFile)
   );
+  let kinds = |tool: OrchesterTool, input: &Value| -> Vec<(String, FileChangeKind)> {
+    tool
+      .changed_files(input)
+      .into_iter()
+      .map(|change| (change.path, change.kind))
+      .collect()
+  };
   assert_eq!(
-    OrchesterTool::CreateFile
-      .changed_file(&created)
-      .map(|change| change.kind),
-    Some(FileChangeKind::Added)
+    kinds(OrchesterTool::CreateFile, &created),
+    [("notes/new.md".to_owned(), FileChangeKind::Added)]
+  );
+  assert_eq!(
+    kinds(OrchesterTool::DeleteFile, &json!({"filename": "old.md"})),
+    [("old.md".to_owned(), FileChangeKind::Deleted)]
+  );
+  assert_eq!(
+    kinds(OrchesterTool::MoveFile, &json!({"from": "a.md", "to": "docs/a.md"})),
+    [
+      ("a.md".to_owned(), FileChangeKind::Deleted),
+      ("docs/a.md".to_owned(), FileChangeKind::Added)
+    ]
+  );
+  assert!(
+    OrchesterTool::DeleteFile
+      .shown_call(&json!({"filename": "old.md"}))
+      .is_none()
   );
   let searched = OrchesterTool::SearchFile
     .shown_call(&json!({"term": "parse_config"}))

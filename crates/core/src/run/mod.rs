@@ -21,6 +21,7 @@ mod permissions;
 mod phase;
 mod plan;
 mod preflight;
+mod progress;
 mod prompt;
 mod recovery;
 mod result;
@@ -60,6 +61,7 @@ pub use self::{
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
   preflight::{PreflightInput, PreflightProblem, preflight},
+  progress::{ProgressError, StepProgress},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,

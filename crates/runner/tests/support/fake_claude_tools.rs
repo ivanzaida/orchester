@@ -51,6 +51,19 @@ impl Fake {
     self.finish(worktree, "hello", step)
   }
 
+  /// "Use the run tools": the calls of [`fake_tool_calls::run_tools`].
+  pub fn use_run_tools(&self, worktree: &Path, (args, opened): (&[String], Option<Prompt>), step: &str) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+    for (call, tool, input) in fake_tool_calls::run_tools() {
+      self.use_tool(args, &mut server, (call, tool, &input));
+    }
+    self.finish(worktree, "hello", step)
+  }
+
   /// "Ask with options": lists the tools, then calls `ask_question` with three options (several allowed when the
   /// prompt says "several allowed"; only once `fake-release` exists next to the worktrees when it says "after
   /// release") and reports the answer it gets back (`orchester-answer: <ok|error> <text, lines joined by ' | '>`),

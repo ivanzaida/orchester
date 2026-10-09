@@ -23,10 +23,10 @@ fn orchester_tools_answers_are_bounded_and_carry_the_exit_code() {
     Vec::new(),
   )
   .with_output_limit(OutputLimit::from_kib(1).expect("a limit"));
-  let tools = [ProjectTool::new("Long", "prints a lot", limited)];
+  let tools = [ProjectTool::new("Long", "prints a lot", limited, true)];
   let context = context(&folders.worktree, &reads, &tools);
   let program = program_of(
-    &ToolCall::RunProjectTool {
+    &ToolCall::RunCheck {
       name: "Long".to_owned(),
     },
     &context,
@@ -58,7 +58,7 @@ fn orchester_tools_answers_are_bounded_and_carry_the_exit_code() {
   assert!(stopped.text().contains("did not finish within 600 seconds"));
 }
 #[test]
-fn orchester_tools_run_project_tools_with_their_fixed_arguments() {
+fn orchester_tools_run_checks_with_their_fixed_arguments() {
   let folders = Folders::new();
   let reads = folders.reads();
   let exe = text(&std::env::current_exe().expect("exe"));
@@ -67,14 +67,14 @@ fn orchester_tools_run_project_tools_with_their_fixed_arguments() {
   let mut online = permissions(RepositoryAccess::Write);
   online.set_network(NetworkAccess::On);
   let step = StepTools::for_step(&online, &tools);
-  let call = ToolCall::parse("run_project_tool", &json!({"name": "Run tests"}), &step).expect("offered");
+  let call = ToolCall::parse("run_check", &json!({"name": "Run tests"}), &step).expect("offered");
   let program = program_of(&call, &context);
   assert_eq!(program.command().program(), Path::new(&exe));
   assert_eq!(program.command().args(), ["--quiet", "a; rm -rf /"]);
   assert_eq!(program.command().current_dir(), Some(folders.worktree.as_path()));
   assert_eq!(
-    ToolCall::parse("run_project_tool", &json!({"name": "Deploy"}), &step),
-    Err(ToolCallError::UnknownProjectTool("Deploy".to_owned()))
+    ToolCall::parse("run_check", &json!({"name": "Deploy"}), &step),
+    Err(ToolCallError::UnknownCheck("Deploy".to_owned()))
   );
   let missing = [project_tool("Gone", "no-such-program-for-orchester-tests")];
   let context = ToolContext {
@@ -82,7 +82,7 @@ fn orchester_tools_run_project_tools_with_their_fixed_arguments() {
     ..context
   };
   assert_eq!(
-    ToolCall::RunProjectTool {
+    ToolCall::RunCheck {
       name: "Gone".to_owned()
     }
     .work(&context),
@@ -101,7 +101,7 @@ fn orchester_tools_answers_count_what_the_runner_left_out() {
   let tools = [project_tool("Run tests", &exe)];
   let context = context(&folders.worktree, &reads, &tools);
   let program = program_of(
-    &ToolCall::RunProjectTool {
+    &ToolCall::RunCheck {
       name: "Run tests".to_owned(),
     },
     &context,

@@ -39,6 +39,7 @@ mod shared_tasks;
 mod sharing;
 mod sources;
 mod step_outputs;
+mod step_progress;
 mod tags;
 mod task_groups;
 mod tasks;

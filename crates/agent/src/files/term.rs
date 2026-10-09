@@ -1,9 +1,10 @@
-//! Orchester's `search_file` and `search_external_file` for agent CLIs: the files under a folder that hold a term as
-//! literal text, in path order, each with its matching lines, at most a number of files. ripgrep searches with an
-//! argument vector Orchester builds (`--fixed-strings`, `--smart-case`: a term in lower case matches any case), which
-//! respects `.gitignore` and skips hidden entries; without it the folder is walked and each file searched for the
-//! term. A search outside the worktree keeps only the files its caller lets through, which the answer counts without
-//! naming them.
+//! Orchester's `search_file`, `search_external_file` and the uses `find_references` lists, for agent CLIs: the files
+//! under a folder that hold a term as literal text, in path order, each with its matching lines, at most a number of
+//! files. ripgrep searches with an argument vector Orchester builds (`--fixed-strings`, then `--smart-case`: a term in
+//! lower case matches any case; or `--word-regexp --case-sensitive` for a name as a whole word), which respects
+//! `.gitignore` and skips hidden entries; without it the folder is walked and each file searched for the term. A
+//! search outside the worktree keeps only the files its caller lets through, which the answer counts without naming
+//! them.
 
 use std::{
   path::{Path, PathBuf},
@@ -33,6 +34,15 @@ const MAX_BYTES: usize = MAX_ANSWER_BYTES - 4 * 1024;
 const MAX_LINE_CHARS: usize = 400;
 const NO_RIPGREP: &str =
   "[ripgrep was not found: the files were walked without .gitignore rules, hidden ones left out]";
+
+/// How a term matches a line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Matching {
+  /// As text anywhere in the line; a term in lower case in any case.
+  Text,
+  /// As a whole word, in exactly its case: a name as code uses it.
+  Word,
+}
 
 /// One file's matching lines.
 #[derive(Debug)]
@@ -148,19 +158,29 @@ impl FileTools {
   /// Orchester's `search_file`: the worktree's files that hold the call's term.
   pub fn search_term(&self, input: &SearchTerm) -> ToolOutcome {
     let worktree = self.scope.worktree().to_path_buf();
-    outcome(self.term_in(&worktree, (input.term(), input.limit_files()), &|_| true))
+    outcome(
+      self.term_in(&worktree, (input.term(), input.limit_files(), Matching::Text), &|_| {
+        true
+      }),
+    )
+  }
+
+  /// The worktree's files that use `name` as a whole word, at most `limit` of them, for `find_references`.
+  pub fn search_word(&self, name: &str, limit: u32) -> ToolOutcome {
+    let worktree = self.scope.worktree().to_path_buf();
+    outcome(self.term_in(&worktree, (name, limit, Matching::Word), &|_| true))
   }
 
   /// Orchester's `search_external_file`: the files under `folder` (outside the worktree, checked and resolved by the
   /// caller) that hold `term`, at most `limit` of them, keeping only those `keep` lets through.
   pub fn search_outside(&self, folder: &Path, (term, limit): (&str, u32), keep: &dyn Fn(&Path) -> bool) -> ToolOutcome {
-    outcome(self.term_in(folder, (term, limit), keep))
+    outcome(self.term_in(folder, (term, limit, Matching::Text), keep))
   }
 
   fn term_in(
     &self,
     folder: &Path,
-    (term, limit): (&str, u32),
+    (term, limit, matching): (&str, u32, Matching),
     keep: &dyn Fn(&Path) -> bool,
   ) -> Result<ToolOutcome, FileError> {
     if !folder.is_dir() {
@@ -179,9 +199,9 @@ impl FileTools {
       notes: Vec::new(),
     };
     match &self.ripgrep {
-      Some(program) => self.term_with_ripgrep(program, folder, term, &mut found)?,
+      Some(program) => self.term_with_ripgrep(program, folder, (term, matching), &mut found)?,
       None => {
-        self.term_walking(folder, term, &mut found);
+        self.term_walking(folder, (term, matching), &mut found);
         found.notes.push(NO_RIPGREP.to_owned());
       }
     }
@@ -199,7 +219,7 @@ impl FileTools {
     &self,
     program: &Path,
     folder: &Path,
-    term: &str,
+    (term, matching): (&str, Matching),
     found: &mut Found<'_>,
   ) -> Result<(), FileError> {
     let per_file = (MAX_LINES_PER_FILE + 1).to_string();
@@ -212,7 +232,6 @@ impl FileTools {
       "--color",
       "never",
       "--fixed-strings",
-      "--smart-case",
       "--sort",
       "path",
       "--max-count",
@@ -223,6 +242,10 @@ impl FileTools {
     ]
     .map(str::to_owned)
     .to_vec();
+    match matching {
+      Matching::Text => args.push("--smart-case".to_owned()),
+      Matching::Word => args.extend(["--word-regexp".to_owned(), "--case-sensitive".to_owned()]),
+    }
     args.extend([
       "--regexp".to_owned(),
       term.to_owned(),
@@ -257,14 +280,17 @@ impl FileTools {
     found.line((&self.shown(&real), &real), number, text)
   }
 
-  /// The search without ripgrep: each file under `folder`, in path order, searched for `term` as `--smart-case`
-  /// would.
-  fn term_walking(&self, folder: &Path, term: &str, found: &mut Found<'_>) {
+  /// The search without ripgrep: each file under `folder`, in path order, searched for `term` as ripgrep would.
+  fn term_walking(&self, folder: &Path, (term, matching): (&str, Matching), found: &mut Found<'_>) {
     let deadline = Instant::now() + WALK_TIMEOUT;
     let (files, stopped) = walk::files(folder, deadline);
-    let any_case = !term.chars().any(char::is_uppercase);
+    let any_case = matching == Matching::Text && !term.chars().any(char::is_uppercase);
     let fold = |text: &str| if any_case { text.to_lowercase() } else { text.to_owned() };
     let needle = fold(term);
+    let holds = |line: &str| match matching {
+      Matching::Text => fold(line).contains(&needle),
+      Matching::Word => holds_word(line, term),
+    };
     for file in files {
       if Instant::now() > deadline {
         break;
@@ -274,7 +300,7 @@ impl FileTools {
       };
       let shown = self.shown(&file);
       for (number, line) in (1_u64..).zip(text.lines()) {
-        if fold(line).contains(&needle) && found.line((&shown, &file), number, line) == Want::Enough {
+        if holds(line) && found.line((&shown, &file), number, line) == Want::Enough {
           return;
         }
       }
@@ -286,4 +312,14 @@ impl FileTools {
       ));
     }
   }
+}
+
+/// Whether `line` holds `word` with no word character right before or after it, as ripgrep's `--word-regexp` reads it.
+fn holds_word(line: &str, word: &str) -> bool {
+  let is_word = |c: char| c.is_alphanumeric() || c == '_';
+  line.match_indices(word).any(|(at, _)| {
+    let before = line[..at].chars().next_back();
+    let after = line[at + word.len()..].chars().next();
+    !before.is_some_and(is_word) && !after.is_some_and(is_word)
+  })
 }

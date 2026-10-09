@@ -162,12 +162,18 @@ by `read_external_file` and `search_external_file`.
 | `search_file` | `term` (literal, one line, ≤ 1000 characters), `limit_files?` (≤ 200, 20) | read-only | runs | runs |
 | `edit_file` | `filename`, `start_line`, `end_line`, `expected`, `content` | writes the worktree | runs | not offered |
 | `create_file` | `filename`, `content` | writes the worktree | runs | not offered |
+| `delete_file` | `filename` | writes the worktree | runs | not offered |
+| `move_file` | `from`, `to` | writes the worktree | runs | not offered |
+| `find_references` | `name` (an identifier) | read-only | runs | runs |
 | `find_symbol` (with the code index) | `name`, `kind?`, `include_tests?`, `include_consts?` | read-only | runs | runs |
 | `search_external_file` | `base_directory` (absolute), `term` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
 | `read_external_file` | `filename` (absolute), `start_line?`, `length?` | outside | asks; runs in the run's sources | asks; runs in the run's sources |
-| `run_project_tool` | `name` | outside, network | asks (network on only) | asks (network on only) |
+| `run_check` (with checks) | `name` (one of the step's checks) | outside, network | by the check's access rules (network on only) | as a writing step |
 | `list_skills` (with skills) | none | read-only | runs | runs |
 | `read_skill` (with skills) | `name`, `file?` (a skill file path; none or `SKILL.md` for the skill's own), `offset?`, `limit?` (≤ 10 000, 2000) | read-only | runs | runs |
+| `get_task` | none | read-only | runs | runs |
+| `save_memory` | `kind`, `text`, `key?`, `tags?`, `importance?`, `scope?` (`task`, the default, or `project`) | records | runs | runs |
+| `report_progress` | `text` (one line, ≤ 200 characters) | records | runs | runs |
 
 - **Schemas** are strict (`additionalProperties: false`, each property typed and bounded); a call is read into its
   type with unknown fields refused, and an invalid call is answered with an error result that says why.
@@ -228,9 +234,30 @@ by `read_external_file` and `search_external_file`.
   To list the files changed since the code index, git is pinned to the worktree and its own git folder (`--git-dir`,
   read from the repository, `--work-tree`), with the native agent's hardening, an absolute empty hooks folder the
   runner owns and submodules off.
-- **`run_project_tool`** is built in core but offered to no agent: the Tools library has no *offered to agents*
-  setting and no typed parameters, and its access rules were made for pipeline steps. When offered, it is not offered
-  without network (the program runs outside every sandbox) and always asks.
+- **`run_check`** (formerly `run_project_tool`) runs a check: a command tool of the Tools library that the run pinned
+  and whose access rules let the run's pipeline and the step call it (`AccessPolicy::allows`), named by its slug, with
+  its fixed arguments, in the worktree; the answer is its exit code and the end of its output within the tool's own
+  limits. A check whose rules approve no call (`ApprovalMode::Never`) runs without asking; any other asks before each
+  call (`StepTools::call_asks`), and Claude Code gets an allow rule for `run_check` only when no check asks. It is not
+  offered without network (the program runs outside every sandbox), and auto-approval never runs one. No free-form
+  command: the checks have no typed parameters.
+- **The run's records.** `get_task` answers the run's task as the run started it (title, brief, acceptance
+  criteria), the plans approved in the run, and the person's decisions and notes there (changes requested on a plan,
+  answers to the agents' questions, the person's messages to the run). `save_memory` keeps a record in the task's
+  memory (or the project's, with `scope: "project"`, an addition to the plan's signature), active or proposed as the
+  project's memory setting says for that scope, with the agent's provenance; a `key` replaces the active record with
+  that key once the note is active; a note that holds a project secret's value is refused whole (`SecretScreen`).
+  `report_progress` keeps one line per step execution (`step_progress`, migration; the latest replaces the one
+  before), the invocation's secret values removed; the Summary that shows it is not built. `write_artifact` is not
+  built: the project database has no `artifacts` table yet (`docs/architecture/storage.md` lists one: run, name,
+  blob, and the Artifacts design wants the step execution and revision it was made at too).
+- **Deletions and moves.** `delete_file` removes one file of the step's folders, `move_file` renames one to a path
+  where none is (making its folders); both show in the run's changes (the transcript reports the deletion, and the
+  move as a deletion and an addition). The moved file is read again before it is edited. A file that appears at the
+  target between the check and the rename is replaced.
+- **`find_references`** lists a name's definitions from the code index (marked when their file changed since the
+  index), then the worktree's files that use it as a whole word in exactly its case (ripgrep `--word-regexp
+  --case-sensitive`, or the walk), at most 50 files; without the index it says so.
 - **Claude Code** gets the tools from the permission prompt's relay (`--claude-permission-prompt`), which lists them
   after `approve`; every tool that runs gets an allow rule (`mcp__Orchester__<tool>`), so the others reach the
   prompt. Its own `Read`, `Edit`, `Write`, `Grep` and `Glob` are added to `--disallowedTools` whenever it gets the
@@ -286,7 +313,7 @@ by `read_external_file` and `search_external_file`.
   tools (Claude Code without its permission prompt, the native agent) still gets each `SKILL.md`'s path.
 - **Checked** with the fake CLIs only (`cargo test -p orchester-runner --features test-agent --test orchester_tools
   orchester_tools`, `--test orchester_file_tools orchester_file_tools`, `--test orchester_skill_tools
-  orchester_skill_tools`); sources also with `cargo test -p orchester-core --test run sources` and `cargo test -p
+  orchester_skill_tools`, `--test orchester_run_tools orchester_run_tools`); sources also with `cargo test -p orchester-core --test run sources` and `cargo test -p
   orchester-store --test sources sources`. Not checked with the real CLIs: whether Claude Code and Codex call each tool as the prompt
   asks, how often Codex still reads or edits through its shell, and how large answers fare against Claude Code's MCP
   output limit (`MAX_MCP_OUTPUT_TOKENS`).

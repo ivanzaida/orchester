@@ -146,7 +146,7 @@ async fn orchester_skill_tools_serve_codex_pinned_and_repository_skills() {
   let (id, db) = finished(&project).await;
   let listed = reported(&db, id, "orchester-tools: ").pop().expect("listed");
   assert!(
-    listed.ends_with(",read_external_file,list_skills,read_skill"),
+    listed.ends_with(",read_external_file,get_task,save_memory,report_progress,list_skills,read_skill"),
     "{listed}"
   );
   assert_calls(

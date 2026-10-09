@@ -3,9 +3,12 @@
 //! - "Use Orchester's tools" ([`external`]): outside the worktree, in the repository's `deps-a` and `deps-b` folders
 //!   next to its `.orchester` folder: a search and a read in `deps-a`, a read in `deps-b`, and a read of the
 //!   repository's `.git/config`, which is refused before anybody is asked.
-//! - "Use the file tools" ([`writing`], [`reading`]): in the worktree, each refusal included: an edit before the file
-//!   is read, then after; an edit whose expected lines are stale; a new file and one that exists; a search; reads and
-//!   creates that leave the worktree or reach protected folders; a read of a file larger than an answer holds.
+//! - "Use the run tools" ([`run_tools`]): the run's task, a progress line, a memory record, the references of `hi`, a
+//!   file made, moved and deleted, and the check `checks`.
+//! - "Use the file tools" ([`files`]): in the worktree, each refusal included: an edit before the file is read, then
+//!   after; an edit whose expected lines are stale; a new file and one that exists; a search; reads and creates that
+//!   leave the worktree or reach protected folders; a read of a file larger than an answer holds. In a read-only step:
+//!   a read, then an edit and a create, which it is not offered.
 
 use std::path::{Path, PathBuf};
 
@@ -100,5 +103,35 @@ pub fn files(read_only: bool) -> Vec<(&'static str, &'static str, Value)> {
       json!({"filename": ".orchester/x.txt", "content": "x"}),
     ),
     ("toolu_wide", "read_file", json!({"filename": "wide.txt"})),
+  ]
+}
+
+/// Each call of "Use the run tools", in a writing step.
+pub fn run_tools() -> Vec<(&'static str, &'static str, Value)> {
+  vec![
+    ("toolu_task", "get_task", json!({})),
+    (
+      "toolu_progress",
+      "report_progress",
+      json!({"text": "checking the tools"}),
+    ),
+    (
+      "toolu_memory",
+      "save_memory",
+      json!({"kind": "fact", "text": "The README greets.", "key": "readme", "tags": ["docs"]}),
+    ),
+    ("toolu_references", "find_references", json!({"name": "hi"})),
+    (
+      "toolu_create",
+      "create_file",
+      json!({"filename": "notes/a.md", "content": "a\n"}),
+    ),
+    (
+      "toolu_move",
+      "move_file",
+      json!({"from": "notes/a.md", "to": "notes/b.md"}),
+    ),
+    ("toolu_delete", "delete_file", json!({"filename": "notes/b.md"})),
+    ("toolu_check", "run_check", json!({"name": "checks"})),
   ]
 }

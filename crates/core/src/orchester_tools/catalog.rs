@@ -1,6 +1,6 @@
 //! What an agent is told about each tool: its description and input schema. Schemas are strict: no
 //! property besides the listed ones, each typed and bounded; optional ones may be left out or `null`.
-//! `run_project_tool`'s schema names the project tools the step is offered, so it is built per step.
+//! `run_check`'s schema names the checks the step is offered, so it is built per step.
 
 use serde_json::{Value, json};
 
@@ -28,6 +28,32 @@ const EDIT_FILE: &str = r#"{"type":"object","properties":{
   "content":{"type":"string","description":"The lines that replace them; empty removes them."}
 },"required":["filename","start_line","end_line","expected","content"],"additionalProperties":false}"#;
 
+const DELETE_FILE: &str = r#"{"type":"object","properties":{
+  "filename":{"type":"string","description":"The file to delete, relative to the worktree root."}
+},"required":["filename"],"additionalProperties":false}"#;
+
+const MOVE_FILE: &str = r#"{"type":"object","properties":{
+  "from":{"type":"string","description":"The file to move, relative to the worktree root."},
+  "to":{"type":"string","description":"Where it goes, relative to the worktree root; no file may be there. Missing folders are made."}
+},"required":["from","to"],"additionalProperties":false}"#;
+
+const FIND_REFERENCES: &str = r#"{"type":"object","properties":{
+  "name":{"type":"string","description":"The name of a type, function, method or other item, exactly as code writes it."}
+},"required":["name"],"additionalProperties":false}"#;
+
+const SAVE_MEMORY: &str = r#"{"type":"object","properties":{
+  "kind":{"type":"string","enum":["fact","decision","observation","artifact","handoff","todo","warning","summary"],"description":"What the record holds."},
+  "text":{"type":"string","description":"What to remember, in a few sentences. Never a secret."},
+  "key":{"type":["string","null"],"description":"A short name; a record with the same key in the same memory is replaced. Null for none."},
+  "tags":{"type":["array","null"],"items":{"type":"string"},"description":"Words to find it by, one word each; null for none."},
+  "importance":{"type":["string","null"],"enum":["low","normal","high",null],"description":"Null for normal."},
+  "scope":{"type":["string","null"],"enum":["task","project",null],"description":"The task's memory, or the project's for every task; null for the task's."}
+},"required":["kind","text"],"additionalProperties":false}"#;
+
+const REPORT_PROGRESS: &str = r#"{"type":"object","properties":{
+  "text":{"type":"string","maxLength":200,"description":"One short line on what the step is doing now."}
+},"required":["text"],"additionalProperties":false}"#;
+
 const CREATE_FILE: &str = r#"{"type":"object","properties":{
   "filename":{"type":"string","description":"Path of the new file, relative to the worktree root; missing folders are made."},
   "content":{"type":"string","description":"The file's whole content."}
@@ -54,6 +80,26 @@ impl OrchesterTool {
       Self::CreateFile => {
         "Create a new file with the given content. It is refused when the file exists: use edit_file."
       }
+      Self::DeleteFile => "Delete a file of the worktree. The deletion shows in the run's changes.",
+      Self::MoveFile => {
+        "Move or rename a file of the worktree to a path where no file is. The move shows in the run's changes."
+      }
+      Self::FindReferences => {
+        "Find where a name is used in the worktree: its definitions from the code index first, then every file \
+         that uses it as a whole word, with the lines. Says when the code index is off or out of date."
+      }
+      Self::GetTask => {
+        "The run's task: its title, brief and acceptance criteria, the plans approved in this run, and the \
+         person's decisions and notes (requested changes, answers to questions, messages)."
+      }
+      Self::SaveMemory => {
+        "Keep a record in the task's memory, or the project's, for later steps and runs. It is active at once or \
+         waits for a person's approval, as the project's memory setting says."
+      }
+      Self::ReportProgress => {
+        "Say in one short line what the step is doing now; the run's summary shows it. It replaces your earlier \
+         line."
+      }
       Self::FindSymbol => {
         "Find where a type, function, method, constant or other item is defined, from the code index: path:line, \
          kind and signature, best matches first. Faster than searching file contents for a definition."
@@ -66,9 +112,9 @@ impl OrchesterTool {
         "Read a text file outside the worktree, such as a dependency's source, by absolute path. Runs at once in \
          the run's sources; elsewhere a person is asked first. Credential locations are refused."
       }
-      Self::RunProjectTool => {
-        "Run one of the project's command tools by name, with its fixed arguments, in the worktree. A person may \
-         be asked first."
+      Self::RunCheck => {
+        "Run one of the checks the project offers this step (tests, lint, build) by name, with its fixed \
+         arguments, in the worktree: its exit code and the end of its output. A person may be asked first."
       }
       Self::ListSkills => {
         "List the skills this step has, Orchester's and the repository's, each with its source, description and \
@@ -83,13 +129,21 @@ impl OrchesterTool {
 
   /// Whether the tool changes nothing, as MCP annotates it (`readOnlyHint`).
   pub const fn read_only(self) -> bool {
-    !matches!(self, Self::EditFile | Self::CreateFile | Self::RunProjectTool)
+    !matches!(
+      self,
+      Self::EditFile
+        | Self::CreateFile
+        | Self::DeleteFile
+        | Self::MoveFile
+        | Self::RunCheck
+        | Self::SaveMemory
+        | Self::ReportProgress
+    )
   }
 }
 
-/// The input schema of `tool`; `projects` are the names and descriptions of the project tools
-/// `run_project_tool` may run.
-pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -> Value {
+/// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run.
+pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, bool)]) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   let read_lines = |path: &str| {
     json!({"type":"object","properties":{
@@ -111,6 +165,12 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
     },"required":["term"],"additionalProperties":false}),
     OrchesterTool::EditFile => fixed(EDIT_FILE),
     OrchesterTool::CreateFile => fixed(CREATE_FILE),
+    OrchesterTool::DeleteFile => fixed(DELETE_FILE),
+    OrchesterTool::MoveFile => fixed(MOVE_FILE),
+    OrchesterTool::FindReferences => fixed(FIND_REFERENCES),
+    OrchesterTool::GetTask => fixed(NO_INPUT),
+    OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
+    OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),
     OrchesterTool::SearchExternalFile => json!({"type":"object","properties":{
       "base_directory":{"type":"string","description":"Absolute path of the folder to search in."},
@@ -126,8 +186,8 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
       "limit":{"type":["integer","null"],"minimum":1,"maximum":MAX_READ_LINES,
         "description":format!("Number of lines; null for {DEFAULT_READ_LINES}.")}
     },"required":["name"],"additionalProperties":false}),
-    OrchesterTool::RunProjectTool => {
-      let names: Vec<&str> = projects.iter().map(|(name, _)| name.as_str()).collect();
+    OrchesterTool::RunCheck => {
+      let names: Vec<&str> = projects.iter().map(|(name, ..)| name.as_str()).collect();
       json!({"type":"object","properties":{
         "name":{"type":"string","enum":names,"description":project_list(projects)}
       },"required":["name"],"additionalProperties":false})
@@ -135,10 +195,10 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String)]) -
   }
 }
 
-/// The project tools, one per line with what each does, for the description of `name`.
-fn project_list(projects: &[(String, String)]) -> String {
-  let mut text = "The project tool to run:".to_owned();
-  for (name, description) in projects {
+/// The checks, one per line with what each does, for the description of `name`.
+fn project_list(projects: &[(String, String, bool)]) -> String {
+  let mut text = "The check to run:".to_owned();
+  for (name, description, _) in projects {
     text.push_str("\n- ");
     text.push_str(name);
     if !description.is_empty() {

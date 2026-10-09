@@ -26,6 +26,7 @@ mod reviewer_usage;
 mod sharing;
 mod sources;
 mod steering;
+mod step_progress;
 mod stuck_runs;
 mod task_edits;
 mod task_groups;
@@ -530,4 +531,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   questions::MIGRATION,
   plan_decided_by::MIGRATION,
   sources::MIGRATION,
+  step_progress::MIGRATION,
 ];
