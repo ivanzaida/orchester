@@ -1,5 +1,5 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built. A path that names nothing shows `screen-not-found`, which says why. The paths go
+//! screen is built (`BUILT`). A path that names nothing shows `screen-not-found`, which says why. The paths go
 //! straight to the router, as a tab's history would hand them over, so a path no route prints is shown
 //! too. The project the paths name is known to be open; what the window does until a project opens,
 //! and for one that cannot, is `tests/projects.rs`.
@@ -37,6 +37,11 @@ use parking_lot::Mutex;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
+/// The screens that show their own content, which their own tests check, in place of the placeholder.
+const BUILT: &[Screen] = &[
+  // One per line, sorted, so each screen's task adds a line of its own.
+  Screen::Tasks,
+];
 
 /// Where the test root leaves its router.
 #[derive(Clone, Default)]
@@ -192,7 +197,9 @@ fn screens_each_route_mounts_its_own_placeholder() {
     let texts = screens
       .show(&route.path(), &id)
       .unwrap_or_else(|| panic!("{} shows {id}", route.path()));
-    assert_eq!(texts, [title, NOT_BUILT], "{}", route.path());
+    if !BUILT.contains(&route.screen()) {
+      assert_eq!(texts, [title, NOT_BUILT], "{}", route.path());
+    }
     assert!(
       screens.tree.get_element_by_id("screen-not-found").is_none(),
       "{}",

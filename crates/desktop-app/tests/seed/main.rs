@@ -168,6 +168,7 @@ fn seed_names_every_scenario_once() {
       "changes",
       "interrupted",
       "unreadable-db",
+      "tasks-unreadable",
       "live"
     ]
   );
@@ -463,5 +464,16 @@ fn seed_unreadable_db_fails_with_schema_too_new() {
     matches!(opened, Err(StoreError::SchemaTooNew { found, supported }) if found == supported + 1),
     "{:?}",
     opened.err()
+  );
+}
+
+#[test]
+fn seed_tasks_unreadable_opens_but_its_task_list_cannot_be_read() {
+  let seed = Seed::of("tasks-unreadable");
+  let db = seed.db();
+  assert!(
+    matches!(db.tasks(), Err(StoreError::Corrupt { .. })),
+    "{:?}",
+    db.tasks().err()
   );
 }
