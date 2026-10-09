@@ -39,9 +39,13 @@ use crate::{
   ui::{
     detail_row::{DetailValue, detail_row, detail_row_of},
     message::message_text,
-    tooltip::Truncated,
+    tooltip::Tooltip,
   },
 };
+
+/// Characters of the worktree's path in *This run*'s value column before its middle gives way to an
+/// ellipsis: what Geist Mono 12 fits in the column's 180 (`DFATr`).
+const PATH_CHARS: usize = 25;
 
 /// The panel's width (`W73m1n`).
 const PANEL_WIDTH: f32 = 340.0;
@@ -303,11 +307,15 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
     let value = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
     return row(ctx, "summary.thisRun.worktree", &value, DetailValue::Text);
   }
-  // One line, cut at its end; the whole path in its tooltip.
-  let path = run_worktree(root, run.id()).display().to_string();
-  let value = Truncated::new("task-this-run-worktree", path, TypographyStyle::Mono)
+  // One line that keeps the folder's start and its own name, the middle given way to an ellipsis
+  // (`DFATr`); the whole path in its tooltip.
+  let path = run_worktree(root, run.id());
+  let shown = Text::new(&display::shorten_path(&path, PATH_CHARS))
+    .id("task-this-run-worktree")
+    .variant(TypographyStyle::Mono)
     .color(PaletteColor::TextPrimary)
-    .render(ctx);
+    .nowrap();
+  let value = Tooltip::new("task-this-run-worktree-tooltip", path.display().to_string()).wrap(ctx, shown);
   let value = Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value);
   detail_row_of("task-this-run-worktree", &ctx.t("summary.thisRun.worktree"), value).into()
 }
