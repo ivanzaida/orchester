@@ -98,10 +98,10 @@ impl Component for ChangePermissions {
       switch
     };
     let blocked = self.blocked.get().then(|| {
-      Text::new(&ctx.t("settings.automation.changePermissions.blocked"))
-        .id("settings-change-permissions-blocked")
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0))
+      field_error(
+        "settings-change-permissions-blocked",
+        &ctx.t("settings.automation.changePermissions.blocked"),
+      )
     });
     Column::new()
       .id("settings-automation")
