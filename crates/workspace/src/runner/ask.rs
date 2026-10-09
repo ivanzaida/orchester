@@ -75,6 +75,24 @@ impl Runners {
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }
 
+  /// [`Runners::run_again`] for `project`, whichever tab shows it, removing `remove_worktrees`, what
+  /// `after` left, first.
+  pub async fn run_again_removing_in(
+    &self,
+    project: &OpenProject,
+    key: IdempotencyKey,
+    (task, after): (TaskId, RunId),
+    remove_worktrees: Option<Leftovers>,
+  ) -> Result<RunId, RunRequestError> {
+    let command = Command::RunAgain {
+      key,
+      task,
+      after,
+      remove_worktrees,
+    };
+    run_started(self.ask_project(project, command).await?, "RunAgain")
+  }
+
   /// Asks the displayed project's runner to pause, resume or cancel a run, or to raise its
   /// limits (`command`); returns once the runner has carried it out.
   pub async fn control_run(&self, command: Command) -> Result<(), RunRequestError> {

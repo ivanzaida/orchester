@@ -38,12 +38,14 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
-use orchester_workspace::workspace::OpenProject;
+use orchester_workspace::{tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
 use parking_lot::Mutex;
 use support::Data;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const NOT_BUILT: &str = "This screen isn't built yet.";
+/// What a task's page shows while the project's tasks are read; nothing reads them here.
+const READING_TASK: &str = "Reading the task…";
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
@@ -80,7 +82,10 @@ impl Component for ScreensRoot {
     Self {
       router,
       navigation,
-      projects: Projects::new(Some((project, ProjectState::Open(kontur(project))))),
+      projects: Projects::new(
+        Some((project, ProjectState::Open(kontur(project)))),
+        ProjectJobs::default(),
+      ),
     }
   }
 
@@ -166,39 +171,44 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
   key.parse().expect("a task key")
 }
 
-/// A route of every screen, with the title its placeholder shows.
-fn every_screen() -> Vec<(Route, &'static str)> {
+/// A route of every screen, with what it shows: a placeholder's title and that it is not built, or what
+/// a built screen shows first.
+fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let changes = TaskView::Changes(Some(
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
-  let mut all = vec![(Route::AllProjects, "All projects"), (Route::Settings, "Settings")];
+  let placeholder = |title| vec![title, NOT_BUILT];
+  let mut all = vec![
+    (Route::AllProjects, placeholder("All projects")),
+    (Route::Settings, placeholder("Settings")),
+  ];
   all.extend([
-    (at(ProjectPage::Overview(OverviewTab::Failed)), "Overview"),
+    (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
       at(ProjectPage::Tasks(
         TaskList::new(TaskListTab::Done)
           .with_search("retry & jitter")
           .with_highlight(key("KON-13")),
       )),
-      "Tasks",
+      placeholder("Tasks"),
     ),
-    (at(ProjectPage::NewTask), "New task"),
-    (at(ProjectPage::EditTask(key("KON-7"))), "Edit KON-7"),
+    (at(ProjectPage::NewTask), placeholder("New task")),
+    (at(ProjectPage::EditTask(key("KON-7"))), placeholder("Edit KON-7")),
     (
       at(ProjectPage::Task(key("KON-12"), TaskView::of(TaskTab::Summary))),
-      "KON-12 · Summary",
+      vec![READING_TASK],
     ),
-    (at(ProjectPage::Task(key("KON-12"), changes)), "KON-12 · Changes"),
-    (at(ProjectPage::PullRequests), "Pull requests"),
-    (at(ProjectPage::Usage), "Usage"),
-    (at(ProjectPage::Pipelines), "Pipelines"),
-    (at(ProjectPage::Agents), "Agents"),
-    (at(ProjectPage::Instructions), "Instructions"),
-    (at(ProjectPage::Skills), "Skills"),
-    (at(ProjectPage::Tools), "Tools"),
-    (at(ProjectPage::Secrets), "Secrets"),
-    (at(ProjectPage::Connections), "Connections"),
-    (at(ProjectPage::Settings), "Project settings"),
+    (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
+    (at(ProjectPage::PullRequests), placeholder("Pull requests")),
+    (at(ProjectPage::Usage), placeholder("Usage")),
+    (at(ProjectPage::Pipelines), placeholder("Pipelines")),
+    (at(ProjectPage::Agents), placeholder("Agents")),
+    (at(ProjectPage::Instructions), placeholder("Instructions")),
+    (at(ProjectPage::Skills), placeholder("Skills")),
+    (at(ProjectPage::Tools), placeholder("Tools")),
+    (at(ProjectPage::Secrets), placeholder("Secrets")),
+    (at(ProjectPage::Connections), placeholder("Connections")),
+    (at(ProjectPage::Settings), placeholder("Project settings")),
   ]);
   all
 }
@@ -213,13 +223,13 @@ fn screens_each_route_mounts_its_own_placeholder() {
       "{screen:?} is covered"
     );
   }
-  for (route, title) in routes {
+  for (route, expected) in routes {
     let id = format!("screen-{}", route.screen().name());
     let texts = screens
       .show(&route.path(), &id)
       .unwrap_or_else(|| panic!("{} shows {id}", route.path()));
     if !BUILT.contains(&route.screen()) {
-      assert_eq!(texts, [title, NOT_BUILT], "{}", route.path());
+      assert_eq!(texts, expected, "{}", route.path());
     }
     assert!(
       screens.tree.get_element_by_id("screen-not-found").is_none(),
