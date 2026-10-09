@@ -185,7 +185,8 @@
         "newer": "Written by a newer Orchester",
         "newerBody": "Its project data has version {{found}}; this build reads up to version {{supported}}. Nothing was changed.",
         "unreadable": "This folder can't be read",
-        "another": "Choose another folder…"
+        "another": "Choose another folder…",
+        "pickFailed": "The folder picker couldn't open"
       }
     },
     "operations": {

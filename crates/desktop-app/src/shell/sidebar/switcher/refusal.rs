@@ -17,6 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
+use orchester_workspace::messages::Message;
 
 use super::{CheckAction, FolderRefusal, PickAction};
 use crate::{
@@ -39,6 +40,8 @@ pub enum FolderStep {
   Checking(PathBuf),
   /// The chosen folder does not open as a project, and why.
   Refused(PathBuf, FolderRefusal),
+  /// The system's folder picker could not be shown, and why.
+  PickFailed(Message),
 }
 
 impl lurq::app::component::DevtoolsInspectable for FolderStep {}
@@ -77,7 +80,7 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
   let (folder, glyph, title, body, actions) = match step {
     FolderStep::Idle => return None,
     FolderStep::Checking(folder) => (
-      folder,
+      Some(folder),
       Icon::LoaderCircle,
       ctx.t("shell.switcher.folder.checking"),
       Some(ctx.t("shell.switcher.folder.checkingBody").to_string()),
@@ -85,19 +88,32 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
     ),
     FolderStep::Refused(folder, refusal) => {
       let (title, body) = words(ctx, refusal);
-      (folder, Icon::Info, title, body, actions(ctx, refusal, picks))
+      (
+        Some(folder),
+        Icon::Info,
+        title,
+        body,
+        actions(ctx, Some(refusal), picks),
+      )
     }
+    FolderStep::PickFailed(reason) => (
+      None,
+      Icon::Info,
+      ctx.t("shell.switcher.folder.pickFailed"),
+      Some(message_text(ctx, reason).to_string()),
+      actions(ctx, None, picks),
+    ),
   };
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Fine.role())
     .child(Text::new(&title).variant(ShellText::FolderTitle.role()))
-    .child(
+    .with_children(folder.map(|folder| {
       Text::new(&folder.display().to_string())
         .id("switcher-folder-path")
-        .variant(ExtraTypography::MonoNote.role()),
-    )
+        .variant(ExtraTypography::MonoNote.role())
+    }))
     .with_children(body.map(|body| Text::new(&body).variant(ShellText::FolderBody.role())));
   let head = Row::new()
     .width(Dimension::Pct(100.0))
@@ -107,6 +123,7 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
     .child(text);
   let state = match step {
     FolderStep::Checking(_) => "checking",
+    FolderStep::PickFailed(_) => "pick-failed",
     _ => "refused",
   };
   let mut block = Column::new()
@@ -167,12 +184,12 @@ fn words(ctx: &Ctx, refusal: &FolderRefusal) -> (Arc<str>, Option<String>) {
   }
 }
 
-/// What the person can do about `refusal`; another folder always.
-fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element> {
+/// What the person can do about `refusal` (none when the picker failed); another folder always.
+fn actions(ctx: &mut Ctx, refusal: Option<&FolderRefusal>, picks: &Picks) -> Vec<Element> {
   let mut buttons: Vec<Element> = Vec::new();
   let mut extra: Option<Element> = None;
   match refusal {
-    FolderRefusal::NotRepository => {
+    Some(FolderRefusal::NotRepository) => {
       extra = Some(
         CodeBox::new(
           "switcher-folder-command",
@@ -182,7 +199,7 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
         .render(ctx),
       );
     }
-    FolderRefusal::NotTopFolder { top } => {
+    Some(FolderRefusal::NotTopFolder { top }) => {
       let (picks, top) = (picks.clone(), top.clone());
       let label = ctx.t_args("shell.switcher.folder.openTop", [("top", top.display().to_string())]);
       buttons.push(
@@ -193,7 +210,7 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
           .into(),
       );
     }
-    FolderRefusal::NoProject => {
+    Some(FolderRefusal::NoProject) => {
       let reason = ctx.t("shell.switcher.addProjectUnavailable");
       buttons.push(
         with_reason(
@@ -209,7 +226,7 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
         .into(),
       );
     }
-    FolderRefusal::Newer { .. } | FolderRefusal::Unreadable(_) => {}
+    Some(FolderRefusal::Newer { .. } | FolderRefusal::Unreadable(_)) | None => {}
   }
   let another = picks.clone();
   buttons.push(

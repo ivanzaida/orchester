@@ -1,6 +1,7 @@
 //! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
-//! left the project and its folder, the runner, then the waiting requests, the activity slot and the runs
-//! that auto-approve; on the right the project's counts and tokens, the app's MCP server and the version.
+//! left the project and its folder, the runner and the activity slot; on the right the project's counts
+//! and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
+//! the app's MCP server and the version.
 //! Every item shows only measured data. A screen outside a project shows the activity and the app's items
 //! only, its events named by their project. A startup screen's bar has the version only.
 //!
@@ -34,7 +35,7 @@ use orchester_workspace::activity::{
 
 pub use self::facts::{BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping};
 use self::{
-  act::StopAction,
+  act::Stopper,
   item::{cut, give_way, glyph, item, label},
 };
 use crate::{
@@ -50,19 +51,21 @@ const STATUS_BAR_HEIGHT: f32 = 28.0;
 
 /// The window's status bar.
 pub struct StatusBar {
-  stop: StopAction,
+  stopper: Stopper,
 }
 
 impl Component for StatusBar {
   type Props = ();
 
-  fn create(ctx: &mut Ctx) -> Self {
+  fn create(_ctx: &mut Ctx) -> Self {
     Self {
-      stop: act::stop_action(ctx),
+      stopper: Stopper::default(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // First, before the render's streams: lurq keeps a component's futures by the order it asks for them.
+    let stop = self.stopper.action(ctx);
     let services = Services::of(ctx);
     let mcp = ctx
       .use_context::<McpStatus>()
@@ -76,13 +79,15 @@ impl Component for StatusBar {
     let folder_and_feed = shown
       .as_ref()
       .map(|(facts, feed)| (facts.repo_root.clone(), feed.clone()));
-    let dispatch = act::dispatch(ctx, &services, folder_and_feed, &self.stop);
-    let stop = self.stop.state().get();
-    let stopping = match (stop.is_pending(), stop.error) {
-      (true, _) => Stopping::Busy,
-      (false, Some(reason)) => Stopping::Failed(reason),
-      (false, None) => Stopping::Idle,
-    };
+    let dispatch = act::dispatch(ctx, &services, folder_and_feed, (&stop, &self.stopper));
+    let stopping = shown.as_ref().map_or(Stopping::Idle, |(facts, _)| {
+      let runs: Vec<_> = facts
+        .tasks
+        .as_ref()
+        .map(|tasks| tasks.auto_approving.iter().map(|run| run.run).collect())
+        .unwrap_or_default();
+      self.stopper.stopping(&stop, &facts.repo_root, &runs)
+    });
     let facts = BarFacts {
       project: shown.map(|(facts, _)| facts),
       log,
@@ -182,7 +187,6 @@ impl Component for StatusBarView {
     // A run that waits for the person's decision keeps its item beside the waiting requests; any other
     // activity gives way to them.
     let beside = waiting.is_empty() || slot.beside_approvals();
-    left.extend(waiting);
     // Tasks that could not be read are the project's own unresolved failure: they take the slot until a
     // reading succeeds.
     let unread = project.and_then(|project| project.read_failure.as_ref());
@@ -194,8 +198,10 @@ impl Component for StatusBarView {
       }
       (None, ActivitySlot::Activity(_)) => {}
     }
+    // The requests and the runs that answer their own follow Tokens today (`xommZ`).
+    right.extend(waiting);
     if let Some(tasks) = project.and_then(|project| project.tasks.as_ref()) {
-      left.extend(approvals::auto_approving(
+      right.extend(approvals::auto_approving(
         ctx,
         &tasks.auto_approving,
         &facts.stopping,

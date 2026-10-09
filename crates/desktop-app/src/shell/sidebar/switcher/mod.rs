@@ -29,6 +29,7 @@ use orchester_workspace::{
   messages::Message,
   workspace::{OpenProject, Workspace},
 };
+use parking_lot::Mutex;
 
 pub use self::folder::{FolderRefusal, open_folder};
 use self::refusal::{FolderStep, Picks};
@@ -83,44 +84,87 @@ pub struct Switcher {
   /// Counts the menu's openings: *RECENT* is read again each time.
   openings: Signal<u64>,
   folder: Signal<FolderStep>,
-  pick: PickAction,
-  check: CheckAction,
+  /// Whether the folder picker's and the reading's ends are followed already; once per switcher.
+  followed: Mutex<bool>,
 }
 
 impl Component for Switcher {
   type Props = SwitcherProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      anchor: ctx.element_ref(),
+      open: ctx.signal(false),
+      openings: ctx.signal(0),
+      folder: ctx.signal(FolderStep::Idle),
+      followed: Mutex::new(false),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // First in every render: lurq keeps a component's futures by the order it asks for them.
     let workspace = Services::of(ctx).workspace;
-    let navigation = Navigation::of(ctx);
-    let (open, folder) = (ctx.signal(false), ctx.signal(FolderStep::Idle));
     let check = check_action(ctx, workspace);
     let pick = pick_action(ctx);
-    let (opening, checking, step) = (open.clone(), check.clone(), folder.clone());
-    // A folder was chosen: the menu opens again under the switcher while its project data is read.
+    self.follow(ctx, &pick, &check);
+    let picks = Picks {
+      pick,
+      check,
+      step: self.folder.clone(),
+      title: ctx.t("shell.switcher.pickTitle"),
+    };
+    let project = ctx.props::<SwitcherProps>().project;
+    let button = self.button(ctx, project);
+    let mut switcher = Column::new().width(Dimension::Pct(100.0)).child(button);
+    if self.open.get() {
+      let panel = self.panel(ctx, project, &picks);
+      switcher = switcher.child(menu(self.anchor.clone(), self.open.clone(), panel));
+    }
+    switcher
+  }
+}
+
+impl Switcher {
+  /// Follows the ends of the folder picker and of a folder's reading, once: a chosen folder is read with
+  /// the menu open again under the switcher; a project folder opens; anything else, and a picker or a
+  /// reading that failed, is said in the menu. The reason stays until the menu closes or the next folder
+  /// is chosen.
+  fn follow(&self, ctx: &mut Ctx, pick: &PickAction, check: &CheckAction) {
+    let mut followed = self.followed.lock();
+    if *followed {
+      return;
+    }
+    *followed = true;
+    let navigation = Navigation::of(ctx);
+    let (opening, checking, step) = (self.open.clone(), check.clone(), self.folder.clone());
     ctx.watch(&pick.state(), move |state| {
       if state.is_pending() {
         return;
       }
-      if let Some(error) = &state.error {
-        tracing::error!(?error, "the folder picker failed");
-      }
-      if let Some(Picked(Some(chosen))) = &state.data {
+      // A failed run keeps the data of the run before it: only a fulfilled one chose a folder.
+      if let (true, Some(reason)) = (state.is_rejected(), &state.error) {
+        tracing::error!(?reason, "the folder picker failed");
+        step.set(FolderStep::PickFailed(reason.clone()));
+        opening.set(true);
+      } else if let (true, Some(Picked(Some(chosen)))) = (state.is_fulfilled(), &state.data) {
         opening.set(true);
         refusal::check(&step, &checking, chosen.clone());
       }
     });
-    let (opened, step) = (open.clone(), folder.clone());
+    let (opened, step) = (self.open.clone(), self.folder.clone());
     ctx.watch(&check.state(), move |state| {
       if state.is_pending() {
         return;
       }
-      // Opening the folder itself went wrong: it is refused as unreadable, never left checking.
-      if let (Some(reason), FolderStep::Checking(folder)) = (&state.error, step.get_untracked()) {
-        step.set(FolderStep::Refused(folder, FolderRefusal::Unreadable(reason.clone())));
+      // Opening the folder itself went wrong: it is refused as unreadable, never left checking. A failed
+      // run keeps the data of the run before it, which must not open that folder again.
+      if state.is_rejected() {
+        if let (Some(reason), FolderStep::Checking(folder)) = (&state.error, step.get_untracked()) {
+          step.set(FolderStep::Refused(folder, FolderRefusal::Unreadable(reason.clone())));
+        }
         return;
       }
-      let Some(checked) = &state.data else {
+      let (true, Some(checked)) = (state.is_fulfilled(), &state.data) else {
         return;
       };
       match &checked.opened {
@@ -135,36 +179,19 @@ impl Component for Switcher {
         Err(refusal) => step.set(FolderStep::Refused(checked.folder.clone(), refusal.clone())),
       }
     });
-    // The reason stays until the menu closes or the next folder is chosen.
-    let step = folder.clone();
-    ctx.watch(&open, move |open| {
-      if !open && matches!(step.get_untracked(), FolderStep::Refused(..)) {
+    let step = self.folder.clone();
+    ctx.watch(&self.open, move |open| {
+      if !open
+        && matches!(
+          step.get_untracked(),
+          FolderStep::Refused(..) | FolderStep::PickFailed(_)
+        )
+      {
         step.set(FolderStep::Idle);
       }
     });
-    Self {
-      anchor: ctx.element_ref(),
-      open,
-      openings: ctx.signal(0),
-      folder,
-      pick,
-      check,
-    }
   }
 
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let project = ctx.props::<SwitcherProps>().project;
-    let button = self.button(ctx, project);
-    let mut switcher = Column::new().width(Dimension::Pct(100.0)).child(button);
-    if self.open.get() {
-      let panel = self.panel(ctx, project);
-      switcher = switcher.child(menu(self.anchor.clone(), self.open.clone(), panel));
-    }
-    switcher
-  }
-}
-
-impl Switcher {
   /// The switcher itself: the shown project's initial, name and folder, or that none is open.
   fn button(&self, ctx: &mut Ctx, project: Option<ProjectId>) -> Element {
     let known = project.and_then(|project| Projects::of(ctx).state(project));
@@ -226,7 +253,7 @@ impl Switcher {
   }
 
   /// The menu: *RECENT*, then All projects, Open folder… with what it found, and Add project.
-  fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>) -> Element {
+  fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>, picks: &Picks) -> Element {
     let recent = recent::rows(ctx, self.openings.get(), project, &self.open);
     let navigation = Navigation::of(ctx);
     let all = MenuItem::new("switcher-all-projects", ctx.t("shell.screens.allProjects"), move || {
@@ -235,12 +262,6 @@ impl Switcher {
     .icon(Icon::Folders)
     .detail(ctx.t("shell.switcher.allProjectsDetail"))
     .render(ctx, &self.open);
-    let picks = Picks {
-      pick: self.pick.clone(),
-      check: self.check.clone(),
-      step: self.folder.clone(),
-      title: ctx.t("shell.switcher.pickTitle"),
-    };
     let pick = picks.clone();
     let open_folder = MenuItem::new("switcher-open-folder", ctx.t("shell.switcher.openFolder"), move || {
       pick.pick();
@@ -248,7 +269,7 @@ impl Switcher {
     .icon(Icon::FolderOpen)
     .detail(ctx.t("shell.switcher.openFolderDetail"))
     .render(ctx, &self.open);
-    let found = refusal::block(ctx, &self.folder.get(), &picks);
+    let found = refusal::block(ctx, &self.folder.get(), picks);
     let add = MenuItem::unavailable(
       "switcher-add-project",
       ctx.t("shell.switcher.addProject"),

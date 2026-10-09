@@ -43,6 +43,15 @@ use parking_lot::Mutex;
 mod activity;
 mod give_way;
 mod items;
+#[path = "../../examples/seed/kontur/mod.rs"]
+#[allow(
+  dead_code,
+  reason = "the seed reports what it wrote; these tests read the window instead"
+)]
+mod kontur;
+#[path = "../support/mod.rs"]
+mod support;
+mod window;
 
 const ROOT: &str = "H:/projects/kontur";
 
