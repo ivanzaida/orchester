@@ -60,6 +60,16 @@ pub fn detect_agent(provider: AgentProvider) -> Vec<PathBuf> {
     .collect()
 }
 
+/// The copy among `found` (installed copies, as [`detect_agent`] lists them) that `program` names, as
+/// the file system resolves both: through links, a junction or another spelling of the same path.
+pub fn found_copy<'a>(found: &'a [PathBuf], program: &Path) -> Option<&'a Path> {
+  let program = program.canonicalize().ok()?;
+  found
+    .iter()
+    .find(|copy| copy.canonicalize().is_ok_and(|copy| copy == program))
+    .map(PathBuf::as_path)
+}
+
 /// Installed copies of `program` (see `ConnectionKind::program_name`) found on the search path
 /// (the `PATH`, and on macOS the usual install folders: `orchester_exec::search_path`), in search
 /// order.

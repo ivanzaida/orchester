@@ -3,7 +3,7 @@
 //! first, saved only when it answers as the expected CLI), checked again, and the models the profile
 //! editor offers for one. No secret, nor its value, is listed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
@@ -130,11 +130,16 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
       ));
     }
     // A program of automation's own choosing would run as the project's agent: a person's decision,
-    // made before anything runs it.
-    if !found.iter().any(|candidate| same_file(candidate, &program)) {
-      let reason = Message::new("appMcp.widens.program").with("program", program.display().to_string());
-      widening::allowed(&services, vec![reason])?;
-    }
+    // made before anything runs it. A copy found on the search path is saved as the search path names it,
+    // never as the client named it: a link the client chose could be pointed elsewhere later.
+    let program = match probe::found_copy(&found, &program) {
+      Some(copy) => copy.to_path_buf(),
+      None => {
+        let reason = Message::new("appMcp.widens.program").with("program", program.display().to_string());
+        widening::allowed(&services, vec![reason])?;
+        program
+      }
+    };
     let check = probe::check(provider, &program).expect("an agent CLI is checked by running it");
     let draft = ConnectionDraft {
       id: None,
@@ -191,14 +196,6 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
     }))
   })
   .await
-}
-
-/// Whether `left` and `right` name the same file, as the file system resolves them.
-fn same_file(left: &Path, right: &Path) -> bool {
-  match (left.canonicalize(), right.canonicalize()) {
-    (Ok(left), Ok(right)) => left == right,
-    _ => left == right,
-  }
 }
 
 /// The project's connection named by `named`: its id or, ignoring case, its name.
