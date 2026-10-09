@@ -179,7 +179,7 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
     .to_string();
   let updates = jobs.subscribe();
   let (changes, project) = (services.changes.clone(), open.project.id());
-  jobs.of(run.id()).start_merge(MergeArgs {
+  let started = jobs.of(run.id()).start_merge(MergeArgs {
     open: open.clone(),
     task: task.id(),
     key: task.key().to_string(),
@@ -191,6 +191,10 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
     separator,
     changed: Arc::new(move || changes.record(project, Outside::Tasks)),
   });
+  // Another merge or removal of the run took it between the check above and now.
+  if !started {
+    return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
+  }
   Ok((updates, run.id(), open.repo_root))
 }
 
@@ -206,7 +210,11 @@ fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
     .runs_of_task(run.task())
     .map_err(run_store_error)?
     .iter()
-    .filter_map(|listed| listed.as_ref().ok().map(|listed| listed.number().get()))
+    // A later run that cannot be read is still a later run.
+    .filter_map(|listed| match listed {
+      Ok(listed) => Some(listed.number().get()),
+      Err(unreadable) => unreadable.number.map(|number| number.get()),
+    })
     .max();
   if latest != Some(run.number().get()) {
     return Err(refused("not_latest_run", "appMcp.errors.notLatestRun"));

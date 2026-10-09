@@ -13,7 +13,7 @@ use orchester_core::{
     AllowedCommands, CommandPermission, NetworkAccess, StepCommands, StepNetwork, StepPermissions,
     capability::{PermissionOption, support},
   },
-  resource::{DraftSaved, FailureRoute, ModelId, Pipeline, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{DraftSaved, FailureRoute, ModelId, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
   tokens::{BudgetInputError, TokenBudget},
 };
 use orchester_store::ProjectDb;
@@ -38,7 +38,7 @@ use crate::{
   pipelines::{
     data::{Assignables, ProfileChoice},
     fields::{parse_instructions, parse_name},
-    problems::rule_message,
+    problems::{problem_view, rule_message},
   },
   tasks::outside::Outside,
 };
@@ -119,6 +119,7 @@ pub async fn save_pipeline_draft(
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   let services = services.clone();
+  let then = translate.text(&Message::new("pipelines.flow.then"));
   let (opened, saved) = blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
@@ -132,12 +133,21 @@ pub async fn save_pipeline_draft(
     let description = args
       .description
       .unwrap_or_else(|| current.body.description().to_owned());
-    let body = Pipeline::new(steps)
-      .map_err(|error| {
-        let unnamed = PipelineEdit::new(Pipeline::new(Vec::new()).expect("a pipeline without steps is valid"));
-        ToolError::refused("invalid_pipeline", vec![rule_message(&unnamed, &error)])
-      })?
-      .with_description(description);
+    let edit = PipelineEdit::from_steps(&description, steps);
+    // The editor keeps no draft whose steps break a rule; steps without a profile or tool only wait to
+    // be published.
+    let broken: Vec<Message> = edit
+      .problems()
+      .iter()
+      .filter(|problem| problem.blocks_saving())
+      .map(|problem| problem_view(&edit, problem, &then).message)
+      .collect();
+    if !broken.is_empty() {
+      return Err(ToolError::refused("invalid_pipeline", broken));
+    }
+    let body = edit
+      .validate()
+      .map_err(|error| ToolError::refused("invalid_pipeline", vec![rule_message(&edit, &error)]))?;
     let saved = save_draft_in(&open.repo_root, id, body)?;
     services.changes.record(open.project.id(), Outside::Pipelines);
     Ok((opened(&ProjectDb::open(&open.repo_root)?, id, &args.pipeline)?, saved))

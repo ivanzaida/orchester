@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
+  permission::widening::changes_loading,
   repository::Detection,
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
@@ -15,7 +16,10 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::super::{Translate, limits::limits_json, projects::InProject};
+use super::{
+  super::{Translate, limits::limits_json, projects::InProject},
+  widening,
+};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -161,6 +165,20 @@ pub async fn set_environment(services: &Services, args: SetProjectEnvironment) -
     let open = services.project(&args.project)?;
     let environment = environment(args.variables)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
+    let current = db.project_environment()?;
+    // Setting a variable that changes what programs load, where they connect or where tools keep their
+    // configuration is a person's decision; removing one is not.
+    let widened = environment
+      .iter()
+      .filter(|(name, value)| {
+        changes_loading(name.as_str())
+          && current
+            .iter()
+            .all(|(old, old_value)| old != *name || old_value != *value)
+      })
+      .map(|(name, _)| Message::new("appMcp.widens.variable").with("name", name.to_string()))
+      .collect();
+    widening::allowed(&services, widened)?;
     db.save_project_environment(&environment)?;
     Ok(json!({ "environment": environment_json(&db.project_environment()?) }))
   })

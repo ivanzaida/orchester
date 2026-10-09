@@ -899,9 +899,21 @@
       "noBaseBranch": "The run did not start from a branch, so there is no branch to merge it into.",
       "alreadyMerged": "The run was merged already.",
       "notLatestRun": "Only the task’s latest run can be merged.",
-      "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands."
+      "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
+      "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › Automation."
     },
-    "githubConnectionName": "GitHub · {{host}}"
+    "githubConnectionName": "GitHub · {{host}}",
+    "widens": {
+      "repository": "Write access to the repository, which the latest version does not give.",
+      "writableFolder": "A writable folder outside the worktree that the latest version does not give.",
+      "commands": "Commands the latest version does not let run.",
+      "network": "Network access, which the latest version does not give.",
+      "toolCallsUnasked": "Tool calls no longer asked about, which the latest version asks about.",
+      "autoApprove": "Approving automatically, where the latest version asks a person.",
+      "mcpServers": "MCP servers the latest version does not give its agents.",
+      "program": "{{program}} is not a copy of the CLI found on the search path.",
+      "variable": "{{name}} changes what programs load, where they connect or where tools keep their configuration."
+    }
   },
   "statusBar": {
     "activity": {

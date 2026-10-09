@@ -24,6 +24,7 @@ pub enum Missing {
   Connection,
   Instruction,
   Tool,
+  McpServer,
 }
 
 impl Missing {
@@ -40,6 +41,7 @@ impl Missing {
       Self::Connection => "connection_not_found",
       Self::Instruction => "instruction_not_found",
       Self::Tool => "tool_not_found",
+      Self::McpServer => "mcp_server_not_found",
     }
   }
 }

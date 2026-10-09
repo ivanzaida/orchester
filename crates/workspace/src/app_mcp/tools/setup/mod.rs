@@ -12,6 +12,7 @@ mod pipelines;
 mod profile_input;
 mod profiles;
 mod project;
+mod widening;
 
 use rmcp::{
   handler::server::common::schema_for_type,
@@ -48,7 +49,10 @@ const SPECS: &[Spec] = &[
     description: "Replaces the environment variables the project adds to every agent CLI and command tool its runs \
                   start, as Project settings › Environment does: names are letters, digits and _ (not starting with \
                   a digit), each name once ignoring case. They are stored and shown in plain text, so never put a \
-                  secret in one. An empty list removes them all. Returns the variables as saved.",
+                  secret in one. Setting a variable that changes what programs load, where they connect or where \
+                  tools keep their configuration (PATH, NODE_OPTIONS, *_BASE_URL, *_PROXY, *_HOME, LD_*, DYLD_*, \
+                  GIT_CONFIG*, …) is refused as person_only unless a person turned on Let automation change agent \
+                  permissions; removing one is not. An empty list removes them all. Returns the variables as saved.",
     schema: schema_for_type::<project::SetProjectEnvironment>,
     read_only: false,
   },
@@ -72,7 +76,9 @@ const SPECS: &[Spec] = &[
     name: "add_cli_connection",
     description: "Adds a connection to an agent CLI, as Connections › Add connection does: `kind` codex or claude, \
                   a unique `name`, and the CLI's `program` as an absolute path (left out: the newest copy found on \
-                  the search path). The CLI is checked first with read-only commands (its version, whether it is \
+                  the search path). A program that is not a copy found on the search path is refused as \
+                  person_only, before it runs, unless a person turned on Let automation change agent permissions. \
+                  The CLI is checked first with read-only commands (its version, whether it is \
                   signed in, its models); it is saved only when it answers as the expected CLI, and the check \
                   comes back either way. A CLI that is not signed in is saved and reads sign_in_required.",
     schema: schema_for_type::<connections::AddCliConnection>,
@@ -116,8 +122,13 @@ const SPECS: &[Spec] = &[
                   required; role instructions may use {{variables}}; permissions must be ones the connection's CLI \
                   enforces on this computer (repository read_only or write; commands ask_before, allowed with a \
                   list of command prefixes, or any_in_worktree; network off or on; extra writable folders only with \
-                  write access); MCP servers are the project's (list_connections). Approve automatically needs a \
-                  person to have turned on Let automation answer approvals. Publish it with publish_profile.",
+                  write access); MCP servers are the project's (list_connections). Narrowing is always taken. \
+                  Anything broader than the profile's latest published version (a new profile: the most \
+                  restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
+                  person turned on Let automation change agent permissions in Settings › Automation: write \
+                  access, writable folders, broader commands, network on, MCP servers, no longer asking before \
+                  tool calls, approving automatically. Left out, a new profile gets the most restrictive \
+                  permissions. Publish it with publish_profile.",
     schema: schema_for_type::<profile_input::SaveProfileDraft>,
     read_only: false,
   },
@@ -125,7 +136,8 @@ const SPECS: &[Spec] = &[
     name: "publish_profile",
     description: "Publishes an agent profile's draft as its next version, as Publish does, so pipeline steps can run \
                   it. Refused for a draft started from an older version than the latest, a connection that is gone \
-                  or does not run agents, or permissions its CLI cannot enforce.",
+                  or does not run agents, permissions its CLI cannot enforce, or, as person_only, a draft broader \
+                  than the latest version while Let automation change agent permissions is off.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: false,
   },

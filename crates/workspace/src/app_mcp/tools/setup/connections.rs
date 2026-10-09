@@ -3,7 +3,7 @@
 //! first, saved only when it answers as the expected CLI), checked again, and the models the profile
 //! editor offers for one. No secret, nor its value, is listed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
@@ -17,7 +17,10 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::super::{projects::InProject, wire};
+use super::{
+  super::{projects::InProject, wire},
+  widening,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -109,9 +112,10 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
     let open = services.project(&args.project)?;
     let provider = args.kind.provider();
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
+    let found = probe::detect_agent(provider);
     let program = match args.program {
       Some(program) => PathBuf::from(program),
-      None => probe::detect_agent(provider).into_iter().next().ok_or_else(|| {
+      None => found.first().cloned().ok_or_else(|| {
         let program = provider.program_name().unwrap_or_default();
         refused(
           "program_not_found",
@@ -124,6 +128,12 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
         "program_not_absolute",
         Message::new("errors.executableNotAbsolute"),
       ));
+    }
+    // A program of automation's own choosing would run as the project's agent: a person's decision,
+    // made before anything runs it.
+    if !found.iter().any(|candidate| same_file(candidate, &program)) {
+      let reason = Message::new("appMcp.widens.program").with("program", program.display().to_string());
+      widening::allowed(&services, vec![reason])?;
     }
     let check = probe::check(provider, &program).expect("an agent CLI is checked by running it");
     let draft = ConnectionDraft {
@@ -181,6 +191,14 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
     }))
   })
   .await
+}
+
+/// Whether `left` and `right` name the same file, as the file system resolves them.
+fn same_file(left: &Path, right: &Path) -> bool {
+  match (left.canonicalize(), right.canonicalize()) {
+    (Ok(left), Ok(right)) => left == right,
+    _ => left == right,
+  }
 }
 
 /// The project's connection named by `named`: its id or, ignoring case, its name.

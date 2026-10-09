@@ -2,8 +2,9 @@
 //! checked as the editor checks it (`agents::form`, `agents::permissions`, `agents::folders`), and only
 //! what the editor offers is taken: permissions the connection's CLI enforces on this computer, the
 //! project's MCP servers, an effort the model lists, and no approval switches or MCP servers on a
-//! connection whose agents Orchester runs itself. Approving automatically answers requests in a
-//! person's place, so it needs *Let automation answer approvals*, as auto mode does.
+//! connection whose agents Orchester runs itself. Permissions and MCP servers broader than the profile's
+//! latest published version (before its first: the most restrictive its CLI enforces, no server) are a
+//! person's decision ([`widening`]); narrowing them is always taken.
 
 use std::path::Path;
 
@@ -22,6 +23,7 @@ use serde_json::{Value, json};
 use super::{
   connections::agent_named,
   profiles::{profile_json, profile_named},
+  widening,
 };
 use crate::{
   agents::{
@@ -144,14 +146,13 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       ),
     };
     offered(&connection, &permissions, &args)?;
-    if permissions.auto_approve() && !services.workspace.automation_answers_approvals()? {
-      return Err(refused(
-        "automation_not_allowed",
-        Message::new("appMcp.errors.automationNotAllowed"),
-      ));
-    }
     let servers = mcp_servers(&db, &args.mcp_servers)?;
     let profile = form(&args, &connection, &permissions, &servers)?;
+    let id = existing.map(|entry| entry.id);
+    widening::allowed(
+      &services,
+      widening::of_profile(&db, id, &profile, connection.provider())?,
+    )?;
     let change = match existing {
       Some(entry) => ProfileChange::SaveDraft(entry.id, profile),
       None => ProfileChange::Create(profile),
@@ -268,9 +269,11 @@ fn mcp_servers(db: &ProjectDb, named: &[String]) -> Result<McpServerSelection, T
     .map(|name| {
       servers
         .iter()
-        .find(|server| server.id().to_string() == *name || server.name().to_string() == *name)
+        .find(|server| {
+          server.id().to_string() == *name || server.name().to_string().to_lowercase() == name.to_lowercase()
+        })
         .map(|server| server.id())
-        .ok_or_else(|| ToolError::not_found(Missing::Connection, name))
+        .ok_or_else(|| ToolError::not_found(Missing::McpServer, name))
     })
     .collect::<Result<Vec<ConnectionId>, _>>()?;
   McpServerSelection::new(ids).map_err(|_| {

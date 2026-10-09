@@ -7,12 +7,12 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission},
   resource::PublishError,
 };
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{super::projects::InProject, connections::agent_by_id};
+use super::{super::projects::InProject, connections::agent_by_id, widening};
 use crate::{
   agents::{
     data::{ProfileChange, ProfileEntry, ProjectAgents, VersionState, apply_in},
@@ -77,16 +77,21 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let open = services.project(&args.project)?;
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = profile_named(&agents, &args.profile)?;
-    // The editor offers no Publish on a connection that runs no agents.
-    if agent_by_id(&agents.connections, entry.profile.connection())
-      .is_some_and(|connection| !connection.provider().runs_agents())
-    {
-      return Err(ToolError::refused(
-        "connection_runs_no_agents",
-        vec![Message::new("appMcp.errors.connectionRunsNoAgents")],
-      ));
-    }
     let id = entry.id;
+    if let Some(connection) = agent_by_id(&agents.connections, entry.profile.connection()) {
+      // The editor offers no Publish on a connection that runs no agents.
+      if !connection.provider().runs_agents() {
+        return Err(ToolError::refused(
+          "connection_runs_no_agents",
+          vec![Message::new("appMcp.errors.connectionRunsNoAgents")],
+        ));
+      }
+      let db = ProjectDb::open(&open.repo_root)?;
+      widening::allowed(
+        &services,
+        widening::of_profile(&db, Some(id), &entry.profile, connection.provider())?,
+      )?;
+    }
     apply_in(&open.repo_root, ProfileChange::Publish(id)).map_err(|error| publish_error(&error))?;
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = agents
