@@ -5,6 +5,7 @@
 //! ([`states`]). The window's runner program does not exist, so a run recorded as running reads as
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
+mod denied;
 #[allow(
   dead_code,
   reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"
@@ -306,6 +307,13 @@ fn timeline_a_touchpad_nudge_up_stops_following_and_stays() {
   assert!(
     window.tree.get_element_by_id("conversation-jump").is_some(),
     "the chat stays where the nudge left it"
+  );
+  assert!(
+    window
+      .tree
+      .get_element_by_id("conversation-row:conversation-jump-room")
+      .is_some(),
+    "the last row can scroll clear of the floating pill"
   );
 }
 

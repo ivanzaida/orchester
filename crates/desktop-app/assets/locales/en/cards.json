@@ -73,14 +73,18 @@
         "notListed": "{{agent}} wants to run a command its profile does not allow. It waits, with its active time stopped, until you answer.",
         "beyondSandbox": "{{agent}} wants to run a command outside its sandbox. It waits, with its active time stopped, until you answer.",
         "command": "{{agent}} wants to run a command. It waits, with its active time stopped, until you answer.",
-        "tool": "{{agent}} wants to call a tool of the {{server}} MCP server. It waits, with its active time stopped, until you answer."
+        "tool": "{{agent}} wants to call a tool of the {{server}} MCP server. It waits, with its active time stopped, until you answer.",
+        "readsOutside": "{{agent}} wants to read outside the worktree, in a folder the run's sources do not hold. It waits, with its active time stopped, until you answer.",
+        "runsCheck": "{{agent}} wants to run a check. It waits, with its active time stopped, until you answer."
       },
       "policy": {
         "commandsAsk": "Asks before commands · {{profile}} {{version}}",
         "notListed": "Not an allowed command · {{profile}} {{version}}",
         "beyondSandbox": "Asks to leave the sandbox · {{profile}} {{version}}",
         "mcpActions": "Asks before MCP actions · {{profile}} {{version}}",
-        "profile": "{{profile}} {{version}}"
+        "profile": "{{profile}} {{version}}",
+        "readsOutside": "Reads outside the worktree · {{profile}} {{version}}",
+        "runsCheck": "Runs a check · {{profile}} {{version}}"
       },
       "category": {
         "readOnly": "Read-only",
@@ -102,7 +106,9 @@
         "writesOutside": "Writes outside the worktree: {{value}}",
         "network": "Uses the network: {{value}}",
         "worktree": "Changes the worktree: {{value}}",
-        "readOnly": "Only reads: {{value}}"
+        "readOnly": "Only reads: {{value}}",
+        "readsOutside": "Reads outside the worktree: {{value}}",
+        "runsCheck": "Runs the check {{value}}"
       },
       "reviewing": "Auto mode is reviewing it; you can still answer.",
       "command": "Command",
@@ -127,7 +133,9 @@
         "unknown": "Not available: Orchester can't tell which later commands would be alike. Approve once or deny.",
         "severalAsk": "Not available: several parts of it ask. Approve once or deny.",
         "destructive": "Not available for a command that rewrites history or deletes outside the worktree. Approve once or deny.",
-        "secrets": "Not available for a command that reads credentials. Approve once or deny."
+        "secrets": "Not available for a command that reads credentials. Approve once or deny.",
+        "broadFolder": "Not available for a drive root, a home folder or a folder less than two levels below one: approve each read.",
+        "everyCall": "Not available: this check's access rules ask before every call."
       },
       "everything": "Approve everything in this run",
       "everythingCovers": "Approves this one; then Run {{run}} answers its worktree commands and MCP calls itself. Network commands, writes outside the worktree, secrets, installs and destructive commands still ask you.",
@@ -158,7 +166,9 @@
         "approvedUntimed": "Approved"
       },
       "firstLine": "{{line}} …",
-      "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:"
+      "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:",
+      "similarFolder": "Reads and searches outside the worktree in {{folder}} and below it, until Run {{run}} ends. Approves this one too.",
+      "similarCheck": "The check {{check}}, every call until Run {{run}} ends. Approves this one too."
     },
     "held": "Another answer is on its way to the runner; this one can be given once it arrives."
   }

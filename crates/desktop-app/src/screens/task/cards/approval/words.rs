@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
+  orchester_tools::{self, OrchesterTool},
   permission::category::{CommandCategory, CommandReason},
-  run::SimilarUnavailable,
+  run::{PendingToolApproval, SimilarUnavailable},
 };
 use orchester_workspace::tasks::approvals::{AskingSetting, ShownApproval};
 
@@ -27,14 +28,64 @@ pub(super) const fn subject_key(category: CommandCategory, secrets: bool) -> &'s
   }
 }
 
-/// What the request asks and what waiting does, by the setting it asks under.
-pub(super) fn explanation(
-  ctx: &Ctx,
-  shown: Option<&ShownApproval>,
-  (agent, server, command): (&str, &str, bool),
-) -> Arc<str> {
-  if !command {
-    return ctx.t_args("cards.approval.explain.tool", [("agent", agent), ("server", server)]);
+/// What made one of Orchester's own tools ask: it reads outside the worktree, in a folder the run's sources
+/// do not hold, or it runs a check. Other MCP calls ask under the profile's setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum OwnReach<'a> {
+  Outside(&'a str),
+  Check(&'a str),
+}
+
+/// What made `request` ask, when it is a call of one of Orchester's own tools that reaches outside the
+/// worktree, as core reads it.
+pub(super) fn own_reach(request: &PendingToolApproval) -> Option<OwnReach<'_>> {
+  if request.command || request.server != orchester_tools::SERVER {
+    return None;
+  }
+  let tool = OrchesterTool::from_name(&request.action)?;
+  match (tool, request.target.as_deref()) {
+    (tool, Some(folder)) if tool.reads_outside() => Some(OwnReach::Outside(folder)),
+    (OrchesterTool::RunCheck, Some(name)) => Some(OwnReach::Check(name)),
+    _ => None,
+  }
+}
+
+/// Why one of Orchester's own tools asks, the folder or check named (*Reads outside the worktree:
+/// H:\projects\kontur-docs*).
+pub(super) fn own_reason(ctx: &Ctx, reach: OwnReach<'_>) -> Arc<str> {
+  match reach {
+    OwnReach::Outside(folder) => ctx.t_args(
+      "cards.approval.reason.readsOutside",
+      [("value", platform_path(folder).as_str())],
+    ),
+    OwnReach::Check(name) => ctx.t_args("cards.approval.reason.runsCheck", [("value", name)]),
+  }
+}
+
+/// `folder` with the platform's separator between its parts, however it was recorded (an agent may mix `/`
+/// into a Windows path).
+pub(super) fn platform_path(folder: &str) -> String {
+  std::path::Path::new(folder)
+    .components()
+    .collect::<std::path::PathBuf>()
+    .display()
+    .to_string()
+}
+
+/// What the request asks and what waiting does, by the setting it asks under, or by what one of Orchester's
+/// own tools reaches.
+pub(super) fn explanation(ctx: &Ctx, shown: Option<&ShownApproval>, request: &PendingToolApproval) -> Arc<str> {
+  let agent = request.agent.as_str();
+  match own_reach(request) {
+    Some(OwnReach::Outside(_)) => return ctx.t_args("cards.approval.explain.readsOutside", [("agent", agent)]),
+    Some(OwnReach::Check(_)) => return ctx.t_args("cards.approval.explain.runsCheck", [("agent", agent)]),
+    None => {}
+  }
+  if !request.command {
+    return ctx.t_args(
+      "cards.approval.explain.tool",
+      [("agent", agent), ("server", request.server.as_str())],
+    );
   }
   let key = match shown.and_then(|shown| shown.asking.as_ref()?.setting) {
     Some(AskingSetting::CommandsAsk) => "cards.approval.explain.commandsAsk",
@@ -45,15 +96,20 @@ pub(super) fn explanation(
   ctx.t_args(key, [("agent", agent)])
 }
 
-/// The asking profile's setting at the run's version (*Not an allowed command · Builder v3*).
+/// The asking profile's setting at the run's version (*Not an allowed command · Builder v3*); for one of
+/// Orchester's own tools, what it reaches, which is what made it ask.
 pub(super) fn policy(ctx: &Ctx, shown: &ShownApproval) -> Option<Arc<str>> {
   let asking = shown.asking.as_ref()?;
-  let key = match asking.setting {
-    Some(AskingSetting::CommandsAsk) => "cards.approval.policy.commandsAsk",
-    Some(AskingSetting::NotListed) => "cards.approval.policy.notListed",
-    Some(AskingSetting::BeyondSandbox) => "cards.approval.policy.beyondSandbox",
-    Some(AskingSetting::McpActions) => "cards.approval.policy.mcpActions",
-    None => "cards.approval.policy.profile",
+  let key = match (own_reach(&shown.approval), asking.setting) {
+    (Some(OwnReach::Outside(_)), _) => "cards.approval.policy.readsOutside",
+    (Some(OwnReach::Check(_)), _) => "cards.approval.policy.runsCheck",
+    (None, setting) => match setting {
+      Some(AskingSetting::CommandsAsk) => "cards.approval.policy.commandsAsk",
+      Some(AskingSetting::NotListed) => "cards.approval.policy.notListed",
+      Some(AskingSetting::BeyondSandbox) => "cards.approval.policy.beyondSandbox",
+      Some(AskingSetting::McpActions) => "cards.approval.policy.mcpActions",
+      None => "cards.approval.policy.profile",
+    },
   };
   let version = asking.version.to_string();
   Some(ctx.t_args(key, [("profile", &*asking.profile), ("version", version.as_str())]))
@@ -108,5 +164,7 @@ pub(super) const fn similar_unavailable(unavailable: SimilarUnavailable) -> &'st
     SimilarUnavailable::SeveralAsk => "cards.approval.similarUnavailable.severalAsk",
     SimilarUnavailable::Destructive => "cards.approval.similarUnavailable.destructive",
     SimilarUnavailable::Secrets => "cards.approval.similarUnavailable.secrets",
+    SimilarUnavailable::BroadFolder => "cards.approval.similarUnavailable.broadFolder",
+    SimilarUnavailable::EveryCall => "cards.approval.similarUnavailable.everyCall",
   }
 }

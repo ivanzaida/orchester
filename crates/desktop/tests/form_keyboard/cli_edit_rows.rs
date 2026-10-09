@@ -1,11 +1,15 @@
 //! Edits an agent CLI makes through Orchester's file tools, as the runner records them: Claude Code's call of
-//! `mcp__Orchester__edit_file` and Codex's call of `write_file` of the MCP server `Orchester` read as the native
+//! `mcp__Orchester__edit_file` and Codex's call of `create_file` of the MCP server `Orchester` read as the native
 //! agent's rows for those tools, and open to the change each made; a failed, denied or unfinished call shows no
-//! change; an empty write says so and does not open; an edit that replaces every occurrence says so instead of counts;
-//! the change each call reports after it is not shown again.
+//! change; an empty write says so and does not open; an edit that replaces every occurrence (a call the native
+//! agent's `edit_file` input describes) says so instead of counts; the change each call reports after it is not shown
+//! again.
 
 use orchester_core::{
-  connection::stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind, MAX_CHANGE_LINES},
+  connection::stream::{
+    AgentEvent, CallInput, CommandStatus, FileChange, FileChangeKind, MAX_CHANGE_LINES, NativeCall,
+  },
+  native::tools::{ToolName, parse_call},
   orchester_tools::OrchesterTool,
   store::ActivityStore,
   time::Timestamp,
@@ -32,8 +36,28 @@ fn told(item: &str, tool: OrchesterTool, input: &Value) -> AgentEvent {
   event
 }
 
-fn edit_input(path: &str, old: &str, new: &str, replace_all: bool) -> Value {
-  json!({"path": path, "edits": [{"old": old, "new": new, "replace_all": replace_all}]})
+/// An `edit_file` call of `path` whose first lines, `old`, become `new`.
+fn edit_input(path: &str, old: &str, new: &str) -> Value {
+  let lines = old.lines().count();
+  json!({"filename": path, "start_line": 1, "end_line": lines, "expected": old, "content": new})
+}
+
+/// What a call asked that replaces every occurrence of `old` in `path`, as the native agent's `edit_file` input
+/// says it: Orchester's own `edit_file` replaces lines, never every occurrence.
+fn every_occurrence(item: &str, path: &str, (old, new): (&str, &str)) -> AgentEvent {
+  let input = json!({"path": path, "edits": [{"old": old, "new": new, "replace_all": true}]});
+  let native = parse_call("edit_file", &input).expect("a native edit");
+  let mut event = AgentEvent::NativeCall {
+    item: item.to_owned(),
+    call: NativeCall {
+      tool: ToolName::EditFile,
+      detail: None,
+      declined: None,
+      input: CallInput::of(&native),
+    },
+  };
+  event.settle();
+  event
 }
 
 fn started(item: &str, command: &str) -> AgentEvent {
@@ -82,7 +106,7 @@ fn claude_call(
 /// its edit that never ended (23–24), its write one line over what a change keeps (25–27) and its edit that only
 /// removes the final line break (28–30). The rest is in [`later_calls`].
 fn transcript() -> Vec<AgentEvent> {
-  let edit = edit_input("README.md", "# Orchester\nhi\n", "# Orchester\nhi there\n", false);
+  let edit = edit_input("README.md", "# Orchester\nhi\n", "# Orchester\nhi there\n");
   let done = ("done", CommandStatus::Completed);
   let mut events = Vec::new();
   events.extend(claude_call("toolu_edit", (OrchesterTool::EditFile, EDIT), &edit, done));
@@ -90,19 +114,19 @@ fn transcript() -> Vec<AgentEvent> {
   events.extend(claude_call(
     "toolu_unread",
     (OrchesterTool::EditFile, UNREAD),
-    &edit_input("src/lib.rs", "a", "b", false),
+    &edit_input("src/lib.rs", "a", "b"),
     (NOT_READ, CommandStatus::Failed),
   ));
   events.extend([
     told(
       "mcp-1",
-      OrchesterTool::WriteFile,
+      OrchesterTool::CreateFile,
       &write("docs/notes.md", "first note\nsecond note\n"),
     ),
     AgentEvent::McpToolFinished {
       item: "mcp-1".to_owned(),
       server: "Orchester".to_owned(),
-      tool: "write_file".to_owned(),
+      tool: "create_file".to_owned(),
       status: CommandStatus::Completed,
       asked: false,
     },
@@ -111,7 +135,7 @@ fn transcript() -> Vec<AgentEvent> {
     told(
       "toolu_denied",
       OrchesterTool::EditFile,
-      &edit_input("secret.rs", "a", "b", false),
+      &edit_input("secret.rs", "a", "b"),
     ),
     AgentEvent::PermissionDenied {
       item: "toolu_denied".to_owned(),
@@ -123,33 +147,31 @@ fn transcript() -> Vec<AgentEvent> {
 }
 
 fn write(path: &str, content: &str) -> Value {
-  json!({"path": path, "content": content})
+  json!({"filename": path, "content": content})
 }
 
 /// The calls after the denied one, from sequence 14: see [`transcript`]; then an edit whose lines are 5, 10, 15 and 40
-/// characters long (31–33), and Codex's search in `src` (34–35).
+/// characters long (31–33), and Codex's search (34–35).
 fn later_calls() -> Vec<AgentEvent> {
   let done = ("done", CommandStatus::Completed);
   let mut events = Vec::new();
-  let empty = "mcp__Orchester__write_file empty.txt";
+  let empty = "mcp__Orchester__create_file empty.txt";
   events.extend(claude_call(
     "toolu_empty",
-    (OrchesterTool::WriteFile, empty),
+    (OrchesterTool::CreateFile, empty),
     &write("empty.txt", ""),
     done,
   ));
   let every = "mcp__Orchester__edit_file every.rs";
-  let replace = edit_input("every.rs", "use a;", "use b;", true);
-  events.extend(claude_call(
-    "toolu_every",
-    (OrchesterTool::EditFile, every),
-    &replace,
-    done,
-  ));
-  let one = "mcp__Orchester__write_file one.txt";
+  events.extend([
+    started("toolu_every", every),
+    every_occurrence("toolu_every", "every.rs", ("use a;", "use b;")),
+    finished("toolu_every", every, done.0, done.1),
+  ]);
+  let one = "mcp__Orchester__create_file one.txt";
   events.extend(claude_call(
     "toolu_one",
-    (OrchesterTool::WriteFile, one),
+    (OrchesterTool::CreateFile, one),
     &write("one.txt", "only\n"),
     done,
   ));
@@ -158,18 +180,18 @@ fn later_calls() -> Vec<AgentEvent> {
   events.push(told(
     "toolu_running",
     OrchesterTool::EditFile,
-    &edit_input("running.rs", "a", "b", false),
+    &edit_input("running.rs", "a", "b"),
   ));
   let long: String = (0..=MAX_CHANGE_LINES).map(|line| format!("line {line}\n")).collect();
-  let wide = "mcp__Orchester__write_file long.txt";
+  let wide = "mcp__Orchester__create_file long.txt";
   events.extend(claude_call(
     "toolu_long",
-    (OrchesterTool::WriteFile, wide),
+    (OrchesterTool::CreateFile, wide),
     &write("long.txt", &long),
     done,
   ));
   let unbroken = "mcp__Orchester__edit_file end.txt";
-  let input = edit_input("end.txt", "last\n", "last", false);
+  let input = edit_input("end.txt", "last\n", "last");
   events.extend(claude_call(
     "toolu_end",
     (OrchesterTool::EditFile, unbroken),
@@ -178,19 +200,19 @@ fn later_calls() -> Vec<AgentEvent> {
   ));
   let widths = "mcp__Orchester__edit_file widths.txt";
   let lines = WIDTHS.map(|width| "w".repeat(width)).join("\n");
-  let input = edit_input("widths.txt", "a\n", &lines, false);
+  let input = edit_input("widths.txt", "a\n", &lines);
   events.extend(claude_call(
     "toolu_widths",
     (OrchesterTool::EditFile, widths),
     &input,
     done,
   ));
-  let search = json!({"pattern": "useKeymap", "path": "src", "glob": null, "case_insensitive": null, "context": null});
-  events.push(told("mcp-search", OrchesterTool::Search, &search));
+  let search = json!({"term": "useKeymap", "limit_files": null});
+  events.push(told("mcp-search", OrchesterTool::SearchFile, &search));
   events.push(AgentEvent::McpToolFinished {
     item: "mcp-search".to_owned(),
     server: "Orchester".to_owned(),
-    tool: "search".to_owned(),
+    tool: "search_file".to_owned(),
     status: CommandStatus::Completed,
     asked: false,
   });
@@ -351,9 +373,8 @@ fn cli_edit_rows_keep_each_line_of_a_change_on_one_line() {
 }
 
 #[test]
-fn cli_edit_rows_name_where_a_codex_search_looks() {
+fn cli_edit_rows_name_what_a_codex_search_looks_for() {
   let mut desktop = seeded();
   tools_view(&mut desktop);
   assert!(shows(&mut desktop, "conversation", "“useKeymap”"));
-  assert!(shows(&mut desktop, "conversation", "search · src"));
 }

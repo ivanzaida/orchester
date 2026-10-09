@@ -419,6 +419,20 @@ fn permissions_steps_only_narrow() {
     permissions(RepositoryAccess::ReadOnly, allowed(&["curl"]), NetworkAccess::Off),
     "write access and network stay off; a list narrows any command"
   );
+  let asking = permissions(
+    RepositoryAccess::Write,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  );
+  let listed = StepPermissions {
+    commands: StepCommands::Only(commands(&["cargo test"])),
+    ..StepPermissions::default()
+  };
+  assert_eq!(
+    asking.narrowed(RepositoryAccess::Write, &listed).commands(),
+    &CommandPermission::AskBefore,
+    "a list never stops a step from asking a person where its profile asks"
+  );
 }
 
 #[test]

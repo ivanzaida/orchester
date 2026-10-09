@@ -320,6 +320,7 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       skills: None,
       code_index: None,
       approvals: Some(Path::new("/tmp/approvals.json")),
+      checks: &[],
     };
     let args = args(&invocation).join(" ");
     assert!(
@@ -333,10 +334,11 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
     assert!(!args.contains("mcp__docs"), "{args}");
     assert!(
       args.ends_with(
-        "--allowedTools mcp__Orchester__read_file mcp__Orchester__list_files mcp__Orchester__search \
-         mcp__Orchester__edit_file mcp__Orchester__write_file mcp__Orchester__git_status mcp__Orchester__git_diff \
-         mcp__Orchester__git_log mcp__Orchester__git_show mcp__Orchester__git_add mcp__Orchester__git_commit \
-         mcp__Orchester__ask_question --resume s"
+        "--allowedTools mcp__Orchester__read_file mcp__Orchester__list_files mcp__Orchester__search_file \
+         mcp__Orchester__edit_file mcp__Orchester__create_file mcp__Orchester__delete_file mcp__Orchester__move_file \
+         mcp__Orchester__find_references mcp__Orchester__get_task mcp__Orchester__save_memory \
+         mcp__Orchester__report_progress mcp__Orchester__ask_question --disallowedTools Read Edit MultiEdit Write \
+         NotebookEdit NotebookRead Grep Glob LS --resume s"
       ),
       "{args}"
     );
@@ -556,6 +558,7 @@ fn claude_approvals_keep_the_code_index_read_only_beside_the_ask_rule() {
     skills: None,
     code_index: Some(Path::new("/repo/.orchester/index/abc")),
     approvals: Some(Path::new("/tmp/approvals.json")),
+    checks: &[],
   };
   let args = args(&invocation);
   let at = |flag: &str| args.iter().position(|arg| arg == flag).expect(flag);

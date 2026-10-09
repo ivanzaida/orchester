@@ -340,6 +340,8 @@ fn approval_choices_revoke_ends_a_similar_rule() {
       &RuleScope::SimilarMcpTool {
         server: "pencil".to_owned(),
         tool: "batch_design".to_owned(),
+        folder: None,
+        check: None,
       },
       at(30),
     )

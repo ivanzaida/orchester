@@ -240,3 +240,30 @@ fn card_question_keeps_what_was_picked_and_typed_as_the_tabs_switch() {
     "the own answer is kept"
   );
 }
+
+#[test]
+fn card_orchesters_own_read_outside_says_why_it_asks() {
+  let (mut window, card) = card_of("Read the docs of the sibling project", "cards-approval-");
+  window.until("the request's choices", |window| {
+    window.tree.get_element_by_id(&format!("{card}-similar")).is_some()
+  });
+  assert_eq!(text(&mut window, &format!("{card}-title")), "Approve tool action?");
+  let explain = text(&mut window, &format!("{card}-explain"));
+  assert!(
+    explain.starts_with("Builder wants to read outside the worktree"),
+    "{explain}"
+  );
+  let folder = std::path::Path::new("kontur-docs").join("specs").display().to_string();
+  let reason = text(&mut window, &format!("{card}-reason"));
+  assert!(
+    reason.starts_with("Reads outside the worktree: ") && reason.ends_with(&folder),
+    "{reason}"
+  );
+  let subject = text(&mut window, &format!("{card}-subject"));
+  assert!(!subject.contains("Asks before MCP actions"), "{subject}");
+  let similar = text(&mut window, &format!("{card}-similar"));
+  assert!(
+    similar.starts_with("Approve similar in this run Reads and searches outside the worktree in "),
+    "{similar}"
+  );
+}

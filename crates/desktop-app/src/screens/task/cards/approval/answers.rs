@@ -184,6 +184,14 @@ fn wider(ctx: &Ctx, answering: &Answering<'_>) -> Element {
       "cards.approval.similarTool",
       [("server", &**server), ("tool", &**tool), ("run", run.as_str())],
     )),
+    Some(Ok(SimilarShown::Folder { folder })) => Ok(ctx.t_args(
+      "cards.approval.similarFolder",
+      [("folder", words::platform_path(folder).as_str()), ("run", run.as_str())],
+    )),
+    Some(Ok(SimilarShown::Check { name })) => Ok(ctx.t_args(
+      "cards.approval.similarCheck",
+      [("check", &**name), ("run", run.as_str())],
+    )),
     Some(Err(unavailable)) => Err(ctx.t(words::similar_unavailable(*unavailable))),
     None => Err(ctx.t("cards.approval.unread")),
   };

@@ -149,9 +149,9 @@ impl ConversationTab {
     });
     let open = |key: &str, default: bool| self.toggles.is_open(key, default);
     let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
-    // An agent that waits in its turn for the answer to its question does not work: the run waits for the
-    // person (C·15), so there is no working line and the chip says so.
-    let asking = live && !run.waiting_questions.is_empty();
+    // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
+    // does not work: the run waits for the person, so the line under the chat and the chip say so.
+    let asking = live && items.iter().any(items::waits_for_you);
     let following = self.follow.following.get();
     let state = RunState::of(conversation, &task.detail, asking).following(following);
     if shown.rows.is_empty() {

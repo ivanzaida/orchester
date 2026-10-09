@@ -122,3 +122,35 @@ fn native_scope_windows_aliases_of_protected_folders() {
     );
   }
 }
+
+/// A link to a network path is read, never followed: the path through it is refused before anything resolves it, so
+/// the server it names is not contacted (which would hand it the user's credentials). Only a symbolic link can lead
+/// there (Windows makes no junction to another machine), and making one needs Developer Mode or a privilege; without
+/// it the test says so and checks nothing.
+#[test]
+#[allow(
+  clippy::print_stderr,
+  reason = "says that nothing was checked where no symbolic link can be made"
+)]
+fn native_scope_windows_links_to_the_network_are_not_followed() {
+  let layout = Layout::new();
+  let link = layout.worktree.join("share");
+  if let Err(error) = std::os::windows::fs::symlink_dir(r"\\127.0.0.1\orchester-no-share", &link) {
+    eprintln!("no symbolic link can be made here ({error}); nothing checked");
+    return;
+  }
+  let scope = layout.scope(RepositoryAccess::Write);
+  let outside = orchester_core::native::scope::resolve_local(&text(&link.join("x.txt")));
+  for refused in [scope.readable("share/x.txt"), scope.writable("share/x.txt"), outside] {
+    assert!(
+      matches!(
+        refused,
+        Err(ScopeError::Unresolved {
+          kind: std::io::ErrorKind::PermissionDenied,
+          ..
+        })
+      ),
+      "{refused:?}"
+    );
+  }
+}

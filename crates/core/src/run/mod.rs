@@ -21,6 +21,7 @@ mod permissions;
 mod phase;
 mod plan;
 mod preflight;
+mod progress;
 mod prompt;
 mod recovery;
 mod result;
@@ -42,9 +43,9 @@ pub use self::{
   again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
-    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, UnknownAnswer,
-    allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, codex_denial,
-    denial_message, listing, permitted,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, ToolReach,
+    UnknownAnswer, allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict,
+    codex_denial, denial_message, listing, permitted,
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
@@ -60,6 +61,7 @@ pub use self::{
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
   preflight::{PreflightInput, PreflightProblem, preflight},
+  progress::{ProgressError, StepProgress},
   prompt::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,

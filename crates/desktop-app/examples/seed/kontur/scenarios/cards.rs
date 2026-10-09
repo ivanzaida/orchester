@@ -12,6 +12,7 @@
 //! work, so they read interrupted. Live runs (`live`) show them as the runner keeps them.
 
 use orchester_core::{
+  orchester_tools::{self, OrchesterTool},
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
   run::{Answerer, DecidedBy, Invocation, PendingToolApproval, Run, ToolApprovalDecision, WaitReason},
   store::{ActivityStore, RunStore},
@@ -47,6 +48,8 @@ enum Card {
   Command(&'static str, Option<Decision>, bool),
   /// Plan proposes a plan, which waits for a decision.
   Plan(&'static str),
+  /// Orchester's own `read_external_file` asks to read in a folder beside the repository, held waiting.
+  OutsideRead,
 }
 
 /// How a question with suggested answers ended.
@@ -64,7 +67,7 @@ enum Decision {
   Ended,
 }
 
-const CARDS: [(&str, Card, &str); 15] = [
+const CARDS: [(&str, Card, &str); 16] = [
   (
     "Sync contacts with HubSpot",
     Card::Shape(Shape::Question("implement")),
@@ -164,6 +167,11 @@ const CARDS: [(&str, Card, &str); 15] = [
   ),
   ("Add retry to webhook sender", Card::Plan(LONG_PLAN), "plan v1 waiting"),
   (
+    "Read the docs of the sibling project",
+    Card::OutsideRead,
+    "Orchester's read outside the worktree waiting for approval",
+  ),
+  (
     "Back off when GitHub rate-limits the sync",
     Card::Shape(Shape::PlanRevised),
     "plan v2 waiting",
@@ -197,6 +205,10 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         Card::Command(command, ends, held) => {
           approval(kontur, (&run, &invocation), command, (ends, at))?;
           hold(kontur, run, (&invocation, held))?;
+        }
+        Card::OutsideRead => {
+          outside_read(kontur, (&run, &invocation), at)?;
+          hold(kontur, run, (&invocation, true))?;
         }
         Card::Shape(_) | Card::Plan(_) => {}
       }
@@ -305,6 +317,32 @@ fn choice(
       kontur.db.end_waiting_question(run.id(), &id)?;
     }
   }
+  Ok(())
+}
+
+/// Orchester's own `read_external_file` asks, at `at`, to read in `kontur-docs/specs` beside the repository.
+fn outside_read(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Timestamp) -> Result<(), SeedError> {
+  let folder = kontur
+    .repo
+    .parent()
+    .ok_or(SeedError::NotAtWork)?
+    .join("kontur-docs")
+    .join("specs");
+  let request = PendingToolApproval {
+    id: format!("{}:read_1", invocation.id),
+    run: run.id(),
+    execution: invocation.execution,
+    invocation: invocation.id,
+    agent: AGENT.to_owned(),
+    command: false,
+    scope: Some(r#"{"path":"README.md"}"#.to_owned()),
+    server: orchester_tools::SERVER.to_owned(),
+    action: OrchesterTool::ReadExternalFile.as_str().to_owned(),
+    target: Some(folder.display().to_string()),
+    requested_at: at,
+    native: None,
+  };
+  kontur.db.request_tool_approval(&request)?;
   Ok(())
 }
 

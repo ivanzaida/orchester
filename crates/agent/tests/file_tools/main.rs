@@ -1,14 +1,16 @@
 //! The file and search tool executors on real file systems (`docs/architecture/native-agent.md` §8,
 //! layer 3): temporary worktrees, links that lead out, protected folders, line endings, stale read
-//! stamps and atomic writes.
+//! stamps and atomic writes; and Orchester's line edits and term searches for agent CLIs.
 //!
 //! `cargo test -p orchester-agent --test file_tools files_`
 
 mod edit;
+mod line_edits;
 mod links;
 mod listing;
 mod read;
 mod search;
+mod terms;
 
 use std::{
   fs,

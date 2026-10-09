@@ -1089,6 +1089,8 @@
         "similarTitle": "Approved as similar in this run",
         "alwaysTitle": "Always allowed during this run",
         "toolRule": "{{server}} · {{tool}}",
+        "folderRule": "{{server}} · reads and searches in {{folder}}",
+        "checkRule": "{{server}} · check {{check}}",
         "commandRule": "{{words}} … · {{category}}",
         "revoked": "revoked at {{time}} · approved {{count}} before",
         "revoke": "Revoke",
@@ -1540,6 +1542,8 @@
         "heading": "Or answer more widely",
         "similar": "Approve similar in this run",
         "similarTool": "{{server}} {{tool}}, every call until Run {{run}} ends. Starts now, for this invocation too.",
+        "similarFolder": "Reads and searches outside the worktree in {{folder}} and below it, until Run {{run}} ends. Starts now, for this invocation too.",
+        "similarCheck": "The check {{check}}, every call until Run {{run}} ends. Starts now, for this invocation too.",
         "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Flags and packages may differ; another subcommand or category still asks.",
         "always": "Always allow…",
         "alwaysTool": "Add {{tool}} to {{server}}’s tools that run without asking, for every profile that uses {{server}}.",
@@ -1560,6 +1564,8 @@
         "missing": "The step’s profile or the server can no longer be read.",
         "orchesterTool": "Orchester’s own tools have no list of tools that run without asking yet. Approve similar covers this run.",
         "similarUnknown": "Unavailable: Orchester can’t tell which later commands would be alike.",
+        "similarBroadFolder": "Unavailable for a drive root, a home folder or a folder less than two levels below one: approve each read.",
+        "similarEveryCall": "Unavailable: this check’s access rules ask before every call.",
         "alwaysUnknown": "Unavailable for an Unknown command."
       },
       "similarScope": {

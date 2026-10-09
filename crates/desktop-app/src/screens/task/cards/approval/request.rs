@@ -64,7 +64,7 @@ pub(super) fn body(
   (place, request): (&Place, &PendingToolApproval),
   (shown, reviewing): (Option<&ShownApproval>, bool),
 ) -> Vec<Element> {
-  let explain = words::explanation(ctx, shown, (&request.agent, &request.server, request.command));
+  let explain = words::explanation(ctx, shown, request);
   let mut body: Vec<Element> = vec![
     Text::new(&explain)
       .id(format!("{id}-explain"))
@@ -73,9 +73,14 @@ pub(super) fn body(
       .into(),
     subject(ctx, id, request, shown),
   ];
-  let reason = shown.and_then(|shown| shown.choices.reason.as_ref());
+  let reason = match words::own_reach(request) {
+    Some(reach) => Some(words::own_reason(ctx, reach)),
+    None => shown
+      .and_then(|shown| shown.choices.reason.as_ref())
+      .map(|reason| words::reason(ctx, reason)),
+  };
   body.extend(reason.map(|reason| {
-    Text::new(&words::reason(ctx, reason))
+    Text::new(&reason)
       .id(format!("{id}-reason"))
       .variant(ExtraTypography::Lead.role())
       .color(PaletteColor::TextPrimary)
@@ -154,7 +159,14 @@ fn facts(
       .target
       .as_deref()
       .or_else(|| shown.and_then(|shown| shown.cwd.as_deref()));
-    rows.extend(folder.map(|folder| row("cwd", "cards.approval.cwd", &platform_path(folder), DetailValue::Mono)));
+    rows.extend(folder.map(|folder| {
+      row(
+        "cwd",
+        "cards.approval.cwd",
+        &words::platform_path(folder),
+        DetailValue::Mono,
+      )
+    }));
     rows.extend(
       request
         .scope
@@ -215,14 +227,4 @@ fn deny_tells(ctx: &Ctx, id: &str, request: &PendingToolApproval, shown: Option<
       .into()
     }
   }
-}
-
-/// `folder` with the platform's separator between its parts, however it was recorded (an agent may mix `/`
-/// into a Windows path).
-fn platform_path(folder: &str) -> String {
-  std::path::Path::new(folder)
-    .components()
-    .collect::<std::path::PathBuf>()
-    .display()
-    .to_string()
 }

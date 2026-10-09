@@ -1,5 +1,7 @@
 //! `read_file` (`docs/architecture/native-agent.md` §4.1): numbered lines from a 1-based offset, each
-//! cut at 2000 characters; a binary file (a NUL byte in its first 8 KiB) is named with its size only.
+//! cut at 2000 characters; a binary file (a NUL byte in its first 8 KiB) is named with its size only. Orchester's own
+//! `read_file` for agent CLIs reads the same way, naming its fields `start_line` and `length`
+//! ([`FileTools::read_lines`]).
 
 use std::{
   fs,
@@ -10,6 +12,7 @@ use std::{
 use orchester_core::{
   connection::stream::CallDetail,
   native::{session::ToolOutcome, tools::ReadFile},
+  orchester_tools::ReadLines,
 };
 
 use super::{
@@ -30,11 +33,18 @@ const NOTE_ROOM: usize = 256;
 
 impl FileTools {
   pub fn read_file(&self, input: &ReadFile) -> ToolOutcome {
-    outcome(self.read(input))
+    outcome(self.read(input.path(), (input.offset(), input.limit()), "offset"))
   }
 
-  fn read(&self, input: &ReadFile) -> Result<ToolOutcome, FileError> {
-    let path = self.scope.readable(input.path())?;
+  /// Orchester's `read_file`: as the native agent's, its note naming `start_line` to read on.
+  pub fn read_lines(&self, input: &ReadLines) -> ToolOutcome {
+    outcome(self.read(input.filename(), (input.start_line(), input.length()), "start_line"))
+  }
+
+  /// Lines `offset..offset + limit` of the file at `requested`, its read stamped; a cut answer names the field
+  /// `on` to read on with.
+  fn read(&self, requested: &str, (offset, limit): (u32, u32), on: &str) -> Result<ToolOutcome, FileError> {
+    let path = self.scope.readable(requested)?;
     let shown = self.shown(&path);
     let metadata = fs::metadata(&path).map_err(|error| self.io_error(&path, "read", &error))?;
     if metadata.is_dir() {
@@ -59,7 +69,7 @@ impl FileTools {
       activity,
       first,
       last,
-    } = numbered(text, input.offset(), input.limit());
+    } = numbered(text, (offset, limit), on);
     let detail = CallDetail::Read {
       first,
       last,
@@ -108,8 +118,8 @@ impl FileTools {
   }
 }
 
-/// Lines `offset..offset + limit` of `text`, numbered, with a note when more follow.
-fn numbered(text: &str, offset: u32, limit: u32) -> Numbered {
+/// Lines `offset..offset + limit` of `text`, numbered, with a note naming the field `on` when more follow.
+fn numbered(text: &str, (offset, limit): (u32, u32), on: &str) -> Numbered {
   let none = |content: String, activity: String| Numbered {
     content,
     activity,
@@ -123,7 +133,7 @@ fn numbered(text: &str, offset: u32, limit: u32) -> Numbered {
   }
   let first = usize::try_from(offset).unwrap_or(usize::MAX);
   if first > total {
-    let text = format!("the file has {total} lines; offset {offset} is past its end");
+    let text = format!("the file has {total} lines; {on} {offset} is past its end");
     return none(text.clone(), text);
   }
   let wanted = usize::try_from(limit).unwrap_or(usize::MAX);
@@ -139,7 +149,7 @@ fn numbered(text: &str, offset: u32, limit: u32) -> Numbered {
   }
   if last < total {
     out.push_str(&format!(
-      "[truncated: showing lines {first}–{last} of {total}; call read_file with offset {} to read on]",
+      "[truncated: showing lines {first}–{last} of {total}; call read_file with {on} {} to read on]",
       last + 1
     ));
   }
