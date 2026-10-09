@@ -230,6 +230,12 @@ pub fn resolve_local(path: &str) -> Result<PathBuf, ScopeError> {
   canonical_root(Path::new(path))
 }
 
+/// Whether `path` is spelled as a local path: no network path (`\\server\share\…`), device path or other spelling
+/// the file tools refuse. Reads nothing, so it reaches no network.
+pub fn is_local_path(path: &str) -> bool {
+  matches!(platform::path_form(path), Ok(PathForm::Local))
+}
+
 /// Whether `path` is a `.git` entry or lies in one, at any depth, as the platform opens names.
 pub fn in_git_folder(path: &Path) -> bool {
   path.components().any(|component| match component {

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{permission::canonical::existing, resource::StepKey};
+use crate::{native::scope::is_local_path, permission::canonical::existing, resource::StepKey};
 
 /// Why a path is no source.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -23,10 +23,13 @@ pub enum SourceError {
   ControlCharacter,
   #[error("`{0}` is not an absolute path")]
   NotAbsolute(String),
+  #[error("`{0}` is a network or device path: a source is a local folder or file")]
+  NotLocal(String),
 }
 
-/// The absolute path of a folder or file outside the worktree, as a person wrote it. Whether it exists is not
-/// checked: it is resolved again whenever an agent starts ([`ResolvedSources::resolve`]).
+/// The absolute local path of a folder or file outside the worktree, as a person wrote it. Whether it exists is not
+/// checked: it is resolved again whenever an agent starts ([`ResolvedSources::resolve`]). A network path is refused,
+/// so resolving the sources never reaches the network.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct SourcePath(String);
@@ -47,6 +50,9 @@ impl SourcePath {
     }
     if !Path::new(value).is_absolute() {
       return Err(SourceError::NotAbsolute(value.to_owned()));
+    }
+    if !is_local_path(value) {
+      return Err(SourceError::NotLocal(value.to_owned()));
     }
     Ok(Self(value.to_owned()))
   }

@@ -42,6 +42,25 @@ fn sources_are_absolute_paths() {
   assert!(stored.is_err());
 }
 
+/// A network or device path is no source: resolving the sources when an agent starts must not reach the network.
+#[cfg(windows)]
+#[test]
+fn sources_are_local_paths() {
+  for path in [
+    r"\\server\share\deps",
+    "//server/share/deps",
+    r"\\?\UNC\server\share",
+    r"\\?\C:\deps",
+  ] {
+    assert_eq!(
+      SourcePath::new(path),
+      Err(SourceError::NotLocal(path.to_owned())),
+      "{path}"
+    );
+  }
+  assert!(SourcePath::new(r"C:\deps").is_ok());
+}
+
 /// A pipeline lists its own sources and its steps' in its versions; a step it does not have is refused, and a version
 /// saved before sources read as listing none.
 #[test]
