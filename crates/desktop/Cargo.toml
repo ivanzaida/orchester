@@ -61,8 +61,9 @@ orchester-store.workspace = true
 orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
 parking_lot.workspace = true
 rfd.workspace = true
-# Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it.
-rmcp.workspace = true
+# Orchester's own MCP server (`app_mcp`): automation controls tasks, runs and approvals through it,
+# over its streamable HTTP transport.
+rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 # Checks that an MCP call's arguments are JSON, without building them, before the approval dialog
 # lays them out for reading.
 serde.workspace = true

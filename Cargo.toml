@@ -83,10 +83,11 @@ lurq = { version = "0.42.0", default-features = false }
 parking_lot = "0.12"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
-# The MCP protocol of Orchester's own MCP server in the desktop (`orchester_desktop::app_mcp`): its
-# streamable HTTP transport and tool handler. Already built, with these features, for lurq's embedded
-# MCP server, so it adds no crate; the protocol and its sessions are not a few lines of code.
-rmcp = { version = "3.4", default-features = false, features = ["server", "transport-streamable-http-server"] }
+# The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
+# the desktop that serves them, its streamable HTTP transport (`transport-streamable-http-server`).
+# Already built, with these features, for lurq's embedded MCP server, so it adds no crate; the protocol
+# and its sessions are not a few lines of code.
+rmcp = { version = "3.4", default-features = false, features = ["server"] }
 # The shared server's HTTP client, behind `orchester-api`'s `client` feature (`docs/architecture/server.md`,
 # "Dependencies"): rustls with the operating system's trust store (`rustls-platform-verifier`) on Windows
 # and macOS, no OpenSSL. A TLS-capable HTTP client is not a few lines of code; hyper is already built

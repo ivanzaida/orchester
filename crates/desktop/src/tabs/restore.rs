@@ -44,7 +44,6 @@ pub fn opening(workspace: &Workspace, places: &Places) -> Result<Opening, StoreE
   Ok(Opening { set, shown_project })
 }
 
-/// The saved tabs with every project they show opened; `None` when they hold no tab.
 /// The tabs the last session saved; `None` when it saved none or they cannot be read, which the log
 /// says.
 fn saved_tabs(workspace: &Workspace) -> Result<Option<SavedTabs>, StoreError> {
@@ -58,6 +57,7 @@ fn saved_tabs(workspace: &Workspace) -> Result<Option<SavedTabs>, StoreError> {
   Ok(saved)
 }
 
+/// The saved tabs with every project they show opened; `None` when they hold no tab.
 fn restore(workspace: &Workspace, places: &Places, saved: &SavedTabs) -> Result<Option<TabSet>, StoreError> {
   let projects = workspace.projects()?;
   // The start screen for a location that no longer applies: All projects, or the first-launch

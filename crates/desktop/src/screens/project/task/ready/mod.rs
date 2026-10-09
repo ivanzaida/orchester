@@ -170,7 +170,7 @@ impl Component for ReadyForReview {
   }
 
   fn after_layout(&self) {
-    if matches!(self.integration.merge().get_untracked(), JobState::Running) || !self.merge_ref.is_attached() {
+    if self.integration.state_now().merge == JobState::Running || !self.merge_ref.is_attached() {
       return;
     }
     let width = self.merge_ref.width();

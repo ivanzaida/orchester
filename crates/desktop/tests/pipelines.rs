@@ -307,14 +307,16 @@ fn every_pipeline_message_key_exists() {
       serde_json::from_str(fallback).expect("locale is JSON")
     })
     .collect();
-  let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+  let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
   let mut missing = Vec::new();
   for dir in [
-    "pipelines",
-    "screens/project/pipelines",
-    "screens/project/pipelines/editor",
+    "desktop/src/pipelines",
+    "desktop/src/screens/project/pipelines",
+    "desktop/src/screens/project/pipelines/editor",
+    // The pipelines' data and wording moved to the workspace.
+    "workspace/src/pipelines",
   ] {
-    for entry in fs::read_dir(root.join(dir)).expect("source directory") {
+    for entry in fs::read_dir(crates.join(dir)).expect("source directory") {
       let path = entry.expect("entry").path();
       if path.extension().is_none_or(|ext| ext != "rs") {
         continue;
