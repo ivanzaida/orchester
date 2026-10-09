@@ -1,8 +1,9 @@
 //! The task page's Changes tab headless at 1440 × 900 on the seed's `changes` scenario (`examples/seed`): the
 //! run's checkpointed files and what its worktree holds beyond them with their counts, the diff's line
-//! numbers and token colors, choosing a file, the count on the tab's label, and every designed state: no
-//! checkpoint yet, too large, worktree removed, a line shortened, a worktree read again and one that could
-//! not be read. The project's runner program does not exist, so no agent is at work. Needs `git`.
+//! numbers and painted token colors, choosing a file, the count on the tab's label, and every designed
+//! state (`states`): no checkpoint yet, too large, worktree removed, a line shortened, a file in both
+//! groups, a worktree read again, and changes that could not be read until Try again. The project's runner
+//! program does not exist, so no agent is at work. Needs `git`.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -10,20 +11,21 @@
   reason = "the seed is shared with its own tests, which read what this binary does not"
 )]
 mod kontur;
+mod states;
 #[path = "../support/mod.rs"]
 mod support;
 
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use kontur::{SeedRequest, scenarios};
 use lurq::{
-  app::{App, events::MouseButton, theme::PaletteColor},
-  layout::text_style::FontWeight,
+  app::{App, events::MouseButton},
+  layout::{quad::QuadContent, text_style::FontWeight},
   node::color::Color,
 };
 use orchester_app::{
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
-  theme::{self, CodeText, ExtraColor, Mode, token_color},
+  theme::{self, CodeText, Mode},
 };
 use orchester_core::{
   id::ProjectId,
@@ -32,7 +34,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::highlight::TokenKind;
 use support::{Data, Window};
 
 /// The window on the `changes` scenario, and where it was seeded.
@@ -70,6 +71,13 @@ impl Page {
   fn go(&mut self, path: &str) {
     let route = Route::parse(&format!("/project/{}/tasks/{path}", self.project)).expect("a task's route");
     self.window.navigation().go(route);
+  }
+
+  /// `key`'s Changes tab on `path`, its change from `source`.
+  fn open_file(&mut self, key: &str, path: &str, source: ChangeSource) {
+    let file = ChangedFile::new(path, source).expect("a path");
+    let page = ProjectPage::Task(key.parse().expect("a task key"), TaskView::Changes(Some(file)));
+    self.window.navigation().go(Route::Project(self.project, page));
   }
 
   /// Opens `key`'s Changes tab and waits until `id` shows.
@@ -111,6 +119,32 @@ impl Page {
     self.window.pass();
   }
 
+  /// The color the text `text` is painted in, as the last layout paints it.
+  fn painted(&self, text: &str) -> Option<Color> {
+    self
+      .window
+      .tree
+      .painted_quads()
+      .into_iter()
+      .find_map(|quad| match quad.content {
+        QuadContent::Text {
+          text: painted, style, ..
+        } if painted == text => Some(style.color),
+        _ => None,
+      })
+  }
+
+  /// The texts of the tokens of class `class`.
+  fn tokens(&mut self, class: &str) -> Vec<String> {
+    self
+      .window
+      .tree
+      .get_elements_by_class_name(class)
+      .iter()
+      .filter_map(|element| element.text_content().map(str::to_owned))
+      .collect()
+  }
+
   /// The worktree of `key`'s latest run.
   fn worktree(&self, key: &str) -> PathBuf {
     let db = ProjectDb::open(&self.repo).expect("the project database opens");
@@ -132,7 +166,7 @@ impl Page {
 }
 
 #[test]
-fn changes_lists_both_groups_with_counts_line_numbers_and_token_colors() {
+fn changes_lists_both_groups_with_counts_line_numbers_and_a_chosen_file() {
   let mut page = Page::open();
   page.go("KON-12/changes");
   page.wait_for("task-tab-changes");
@@ -144,7 +178,6 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_token_colors() {
   let worktree = page.texts("changes-group-worktree");
   assert_eq!(worktree[..2], ["NOT CHECKPOINTED", "2"]);
   assert!(worktree[2].starts_with("In the worktree after "), "{worktree:?}");
-  // A file in both groups counts once; KON-12 lists 6 distinct files.
   assert_eq!(page.tab_label(), "Changes 6");
   let toolbar = page.texts("changes-toolbar");
   assert!(toolbar.iter().any(|text| text == "Checkpointed"), "{toolbar:?}");
@@ -165,22 +198,14 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_token_colors() {
     !row.iter().any(|text| text.starts_with('−')),
     "an added file has no removed count: {row:?}"
   );
-  // The first file shows: an added migration, its lines numbered on the new side only.
+  // The first file of the checkpointed group, in git's order, shows: an added migration, its lines
+  // numbered on the new side only, its long path cut in the middle so its name stays.
   let line = page.texts("changes-diff-line");
   assert_eq!(line[..2], ["1", "+"], "no old number, new number 1: {line:?}");
-  page.window.until("highlighted keywords", |window| {
-    !window.tree.get_elements_by_class_name("code-keyword").is_empty()
-  });
-  for (kind, color) in [
-    (TokenKind::Keyword, ExtraColor::CodeKeyword.role()),
-    (TokenKind::String, ExtraColor::CodeString.role()),
-    (TokenKind::Constant, ExtraColor::CodeNumber.role()),
-    (TokenKind::Comment, PaletteColor::TextMuted),
-    (TokenKind::Plain, PaletteColor::TextPrimary),
-    (TokenKind::Function, PaletteColor::TextPrimary),
-  ] {
-    assert_eq!(token_color(kind), color, "{kind:?}");
-  }
+  let migration = page
+    .texts("changes-file:migrations/0042_delivery_attempts.sql-path")
+    .concat();
+  assert!(migration.ends_with("…0042_delivery_attempts.sql"), "{migration}");
   // Choosing a worktree file puts it in the path, in place of the current entry.
   page.click("changes-worktree-file:src/webhooks/log.rs");
   page.window.until("the worktree file", |window| {
@@ -200,73 +225,43 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_token_colors() {
 }
 
 #[test]
-fn changes_states_no_checkpoint_too_large_removed_and_line_shortened() {
+fn changes_paints_keywords_and_numbers_and_leaves_operators_plain() {
   let mut page = Page::open();
-  page.changes("KON-16", "changes-no-checkpoint");
-  assert_eq!(page.tab_label(), "Changes", "no count before the first checkpoint");
-  assert!(page.texts("changes-toolbar").contains(&"no checkpoint yet".to_owned()));
-
-  page.changes("KON-25", "changes-too-large");
-  let too_large = page.texts("changes-too-large").concat();
-  assert!(too_large.contains("Too large to show here"), "{too_large}");
-  assert!(too_large.contains("20,001"), "measured, not shown: {too_large}");
-  assert!(!page.shows("changes-files"));
-  assert_eq!(page.tab_label(), "Changes 1", "the files measured");
-
-  page.changes("KON-26", "changes-notice");
-  let notice = page.texts("changes-notice").concat();
-  assert!(notice.contains("too large to show"), "{notice}");
-  assert!(
-    page.shows("changes-group-checkpointed"),
-    "the checkpointed files still show"
-  );
-  assert_eq!(page.tab_label(), "Changes");
-
-  page.changes("KON-1", "changes-notice");
-  assert!(page.texts("changes-notice").concat().contains("worktree was removed"));
-  page.wait_for("changes-group-checkpointed");
-  assert!(!page.shows("changes-group-worktree"));
-
-  let file = ChangedFile::new("src/webhooks/format.rs", ChangeSource::Worktree).expect("a path");
-  let key = "KON-27".parse().expect("a task key");
-  let page_route = ProjectPage::Task(key, TaskView::Changes(Some(file)));
-  page.window.navigation().go(Route::Project(page.project, page_route));
-  page.wait_for("changes-line-cut");
-  assert_eq!(page.texts("changes-line-cut"), ["Line shortened"]);
-  assert!(
-    !page.shows("changes-group-checkpointed"),
-    "no checkpoint: only the worktree's group"
-  );
-}
-
-#[test]
-fn changes_reads_the_worktree_again_and_says_when_it_cannot() {
-  let mut page = Page::open();
-  page.changes("KON-12", "changes-group-worktree");
-  page.wait_for("changes-worktree-file:tests/webhooks/jitter.rs");
-  let worktree = page.worktree("KON-12");
-  fs::write(worktree.join("notes.md"), "draft\n").expect("write into the worktree");
-  // Leaving the tab and coming back reads the worktree again.
-  page.go("KON-12/summary");
-  page.wait_for("screen-task");
-  page.changes("KON-12", "changes-worktree-file:notes.md");
-  assert_eq!(page.texts("changes-group-worktree")[1], "3");
-  page.window.until("the count of 7", |window| {
-    window
-      .texts("task-tab-changes-label")
-      .is_some_and(|texts| texts.concat() == "Changes 7")
+  page.open_file("KON-12", "src/webhooks/sender.rs", ChangeSource::Checkpoint);
+  page.wait_for("changes-diff-line");
+  page.window.until("highlighted lines", |window| {
+    !window.tree.get_elements_by_class_name("code-keyword").is_empty()
   });
-
-  // A worktree git cannot read: a notice with Try again, the checkpointed files, and no count.
-  fs::write(worktree.join(".git"), "gitdir: missing\n").expect("break the worktree's link");
-  page.go("KON-12/summary");
-  page.wait_for("screen-task");
-  page.changes("KON-12", "changes-notice");
-  let notice = page.texts("changes-notice").concat();
-  assert!(notice.contains("Couldn't read what the worktree holds"), "{notice}");
-  assert!(page.shows("changes-worktree-try-again"));
-  assert!(page.shows("changes-group-checkpointed"));
-  assert_eq!(page.tab_label(), "Changes");
+  let keywords = page.tokens("code-keyword");
+  for keyword in ["let", "self", "await", "loop"] {
+    assert!(
+      keywords.iter().any(|token| token == keyword),
+      "{keyword} in {keywords:?}"
+    );
+    assert_eq!(
+      page.painted(keyword),
+      Some(Color::from_hex("#8AB4F8")),
+      "{keyword} in code_keyword"
+    );
+  }
+  assert!(page.tokens("code-constant").iter().any(|token| token == "0"));
+  assert_eq!(
+    page.painted("0"),
+    Some(Color::from_hex("#C3A6F7")),
+    "a number in code_number"
+  );
+  let plain = page.tokens("code-plain");
+  for operator in [" = ", "+=", "&&", "=>"] {
+    let token = plain
+      .iter()
+      .find(|text| text.contains(operator))
+      .unwrap_or_else(|| panic!("{operator} is in a plain token: {plain:?}"));
+    assert_eq!(
+      page.painted(token),
+      Some(Color::from_hex("#EDEDF0")),
+      "{token:?} in text_primary"
+    );
+  }
 }
 
 #[test]

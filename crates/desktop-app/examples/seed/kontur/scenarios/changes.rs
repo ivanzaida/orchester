@@ -2,8 +2,9 @@
 //! form. From `tasks`: KON-12's checkpoint (4 files) and the work in its worktree since (2 files, one of them
 //! new), KON-16 before its first checkpoint with a clean worktree, KON-9 ready for review with its worktree,
 //! and KON-1 merged with its worktree removed. Added here: KON-25 whose checkpoint is too large to show,
-//! KON-26 whose uncommitted work is, and KON-27 with uncommitted work and no checkpoint, one of its lines
-//! too long to show whole.
+//! KON-26 whose uncommitted work is, KON-27 with uncommitted work and no checkpoint, one of its lines too
+//! long to show whole, and KON-28 whose worktree changed a checkpointed file again, so the file is in both
+//! groups and counts once.
 
 use orchester_core::task::organization::{Priority, WorkflowStatus};
 
@@ -55,6 +56,22 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         "pub mod format;\npub mod log;\npub mod sender;\npub mod settings;\n".to_owned(),
       ),
     ])?;
+    Ok(())
+  })?;
+  let again = ("Log every delivery attempt", "a checkpointed file changed again");
+  variant(kontur, feature, again, |drive| {
+    drive
+      .checkpoint(
+        "implement",
+        &[("src/webhooks/attempts.rs", "pub struct Attempt;\n".to_owned())],
+      )?
+      .uncommitted(&[
+        (
+          "src/webhooks/attempts.rs",
+          "pub struct Attempt {\n  pub number: u32,\n}\n".to_owned(),
+        ),
+        ("src/webhooks/attempts_log.rs", "pub fn record() {}\n".to_owned()),
+      ])?;
     Ok(())
   })
 }
