@@ -34,6 +34,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -137,6 +138,46 @@ pub(super) fn failed(
     (&title, Some(&text)),
     actions,
   )
+}
+
+/// `chat`, under a notice while it shows the transcript as last read because reading it again failed for
+/// `stale`; *Try again* bumps `retry`. A reading that succeeds clears it.
+pub(super) fn shown_as_last_read(ctx: &Ctx, chat: Element, stale: Option<&Message>, retry: &Signal<u64>) -> Element {
+  let Some(reason) = stale else {
+    return chat;
+  };
+  let retry = retry.clone();
+  let again = ActionButton::new(
+    "conversation-stale-retry",
+    ButtonKind::Secondary,
+    ctx.t("common.tryAgain"),
+  )
+  .icon(Icon::RotateCcw)
+  .on_click(move || retry.update(|attempt| *attempt += 1));
+  let notice = Notice::new(
+    "conversation-stale",
+    NoticeTone::Warning,
+    ctx.t("conversation.staleTitle"),
+  )
+  .body(message_text(ctx, reason))
+  .action(again);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(SpacingSize::Section, SpacingSize::Sm))
+        .child(notice),
+    )
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(chat),
+    )
+    .into()
 }
 
 /// `run` has shown nothing yet: queued with its steps (`r4KFPL`), starting, or it ended without a report.

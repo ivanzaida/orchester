@@ -106,6 +106,8 @@ fn populated() -> (TempDir, Asked) {
   let scope = RuleScope::SimilarMcpTool {
     server: "pencil".to_owned(),
     tool: "batch_design".to_owned(),
+    folder: None,
+    check: None,
   };
   let rule = db.add_approval_rule(run.id(), &scope, at(10)).expect("rule");
   let direct = NativeCommandAsk {

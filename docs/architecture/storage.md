@@ -445,6 +445,8 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `task_dependencies` | task, prerequisite, condition (`ready_for_review`, `merged`) |
 | `run_groups` | mode (parallel with limit / sequential with gate), budget cap, failure policy, scheduling paused, pinned versions |
 | `run_group_items` | group, task, position |
+| `project_sources` | position, path — the project's sources (M12): absolute paths of folders and files outside the worktree its agents may read without asking; this machine's, never shared |
+| `task_sources` | task, position, path — a task's sources, as `project_sources`; a pipeline's and its steps' are in its versions, and a run keeps the union it started with in its version snapshot |
 
 ### Execution (written by the runner)
 
@@ -457,6 +459,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |
 | `step_executions` | attempt, pipeline step, agent profile version, effective model, status, failure reason (agent failed, reported failed, not started, merge conflict, checkpoint failed, command failed; step budget only in records of earlier versions) |
+| `step_progress` | step execution, text, reported at — the one line an agent last reported on what its step is doing (`report_progress`); the latest replaces the one before |
 | `step_outputs` | step execution, run, step, outcome (done, failed, or none when the final message was not a structured result), text — what the step left for the steps after it, read into their prompts with its source; append-only |
 | `plans` | run, step, version (per run and step, from 1), step execution, text, created; decision (none while proposed, approved, changes requested with the reviewer's note), who decided (the person or automation through Orchester's MCP server; decisions recorded before it was kept count as the person's) and when — written with the run events that propose or decide it; the text never changes and a plan is decided once |
 | `checkpoints` | run, step execution, revision, agent state blob |

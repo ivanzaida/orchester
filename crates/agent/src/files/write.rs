@@ -22,7 +22,7 @@ use orchester_core::{
 use super::{FileError, FileTools, done, outcome, stamp::ReadStamp};
 
 /// What a transcript row says of a change.
-const fn changed_lines(change: FileChangeKind, lines: LineChanges) -> CallDetail {
+pub(super) const fn changed_lines(change: FileChangeKind, lines: LineChanges) -> CallDetail {
   CallDetail::Changed {
     change,
     added: lines.added,
@@ -89,7 +89,7 @@ impl FileTools {
   }
 
   /// The metadata of the file at `path`; `None` when there is none.
-  fn existing(&self, path: &Path) -> Result<Option<fs::Metadata>, FileError> {
+  pub(super) fn existing(&self, path: &Path) -> Result<Option<fs::Metadata>, FileError> {
     match fs::metadata(path) {
       Ok(metadata) if metadata.is_dir() => Err(FileError::Folder(self.shown(path))),
       Ok(metadata) if !metadata.is_file() => Err(FileError::NotRegular(self.shown(path))),
@@ -112,7 +112,7 @@ impl FileTools {
 
   /// Puts `bytes` at `path` atomically and stamps the result; `requested` is the path as the call gave
   /// it, resolved again here.
-  fn replace(
+  pub(super) fn replace(
     &self,
     path: &Path,
     requested: &str,

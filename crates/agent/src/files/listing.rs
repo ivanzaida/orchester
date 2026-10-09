@@ -28,9 +28,9 @@ const MAX_ENTRIES: usize = 1000;
 pub(super) const NO_RIPGREP: &str = "[ripgrep was not found: folders were walked without .gitignore rules]";
 
 /// Files found, and whether more were left out.
-struct Found {
-  paths: Vec<PathBuf>,
-  more: bool,
+pub(super) struct Found {
+  pub(super) paths: Vec<PathBuf>,
+  pub(super) more: bool,
 }
 
 impl FileTools {
@@ -105,7 +105,7 @@ impl FileTools {
 }
 
 /// The files `rg --files` lists under `folder`.
-fn listed(program: &Path, folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
+pub(super) fn listed(program: &Path, folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
   let mut args = vec!["--files".to_owned()];
   if let Some(pattern) = pattern {
     args.extend(["--glob".to_owned(), pattern.to_owned()]);
@@ -130,7 +130,7 @@ fn listed(program: &Path, folder: &Path, pattern: Option<&str>) -> Result<Found,
 }
 
 /// The files under `folder` that match `pattern`, walked.
-fn walked(folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
+pub(super) fn walked(folder: &Path, pattern: Option<&str>) -> Result<Found, FileError> {
   let deadline = Instant::now() + WALK_TIMEOUT;
   let (files, mut more) = walk::files(folder, deadline);
   let glob = pattern.map(Glob::new).transpose()?;

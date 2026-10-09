@@ -19,24 +19,32 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
-  components::{Column, VirtualizedList},
+  components::{Column, Stack, VirtualizedList},
   core::Signal,
+  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   id::{InvocationId, ProjectId, StepExecutionId},
   project::TaskKey,
+  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
   detail::TaskDetail,
   timeline::{
     Item, ItemKind,
+    group::unwrapped,
     view::{Row, Shown},
   },
   transcript::{Entry, EntryKind},
 };
 
-pub(super) use self::{divider::step_label, follow::Follow, message::person_message, working::Working};
+pub(super) use self::{
+  divider::step_label,
+  follow::Follow,
+  message::person_message,
+  working::{Wait, Working},
+};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskView},
@@ -54,9 +62,33 @@ pub(super) struct Timeline {
   /// The run's invocations whose agent works now: only their unfinished calls run. While no agent works
   /// (the run waits, paused or was interrupted), it is empty, and an unfinished call has no end.
   pub(super) working: Arc<[InvocationId]>,
+  /// The run's tool requests that wait for the person, and those decided.
+  pub(super) pending: Arc<Vec<PendingToolApproval>>,
+  pub(super) decided: Arc<Vec<DecidedToolApproval>>,
 }
 
 impl Timeline {
+  /// Whether a request of `invocation` to run `command` (its first line, as a group names it) waits for the
+  /// person: the command has not started.
+  fn awaits_approval(&self, invocation: InvocationId, command: &str) -> bool {
+    self.pending.iter().any(|request| {
+      request.invocation == invocation
+        && request.command
+        && unwrapped(&request.action).lines().next().unwrap_or_default() == command
+    })
+  }
+
+  /// How a person or automation answered `invocation`'s request to run `command`, when one denied it.
+  fn denied_by(&self, invocation: InvocationId, command: &str) -> Option<DecidedBy> {
+    self
+      .decided
+      .iter()
+      .filter(|decided| decided.request.invocation == invocation && decided.request.command)
+      .filter(|decided| decided.decision == Some(ToolApprovalDecision::Denied))
+      .find(|decided| unwrapped(&decided.request.action) == unwrapped(command))
+      .and_then(|decided| decided.decided_by)
+  }
+
   /// Whether invocation `invocation` works now.
   fn works(&self, invocation: InvocationId) -> bool {
     self.working.contains(&invocation)
@@ -95,20 +127,28 @@ impl lurq::app::component::DevtoolsInspectable for OpenRows {}
 
 /// Open or folded per row key, where a person changed how the row starts.
 #[derive(Clone)]
-pub(super) struct Toggles(Signal<OpenRows>);
+pub(super) struct Toggles {
+  rows: Signal<OpenRows>,
+  /// A row the person opens or folds stays where it is: the chat stops following.
+  follow: Follow,
+}
 
 impl Toggles {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
-    Self(ctx.signal(OpenRows::default()))
+  pub(super) fn new(ctx: &mut Ctx, follow: Follow) -> Self {
+    Self {
+      rows: ctx.signal(OpenRows::default()),
+      follow,
+    }
   }
 
   pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
-    self.0.get().0.get(key).copied().unwrap_or(default)
+    self.rows.get().0.get(key).copied().unwrap_or(default)
   }
 
   /// Opens every row of `keys`, as *Show them* does for the steps of a fold.
   fn open_all(&self, keys: Vec<Arc<str>>) {
-    self.0.update(move |rows| {
+    self.follow.hold_in_place();
+    self.rows.update(move |rows| {
       for key in keys {
         rows.0.insert(key, true);
       }
@@ -116,8 +156,9 @@ impl Toggles {
   }
 
   fn flip(&self, key: &Arc<str>, default: bool) {
+    self.follow.hold_in_place();
     let key = key.clone();
-    self.0.update(move |rows| {
+    self.rows.update(move |rows| {
       let open = rows.0.get(&key).copied().unwrap_or(default);
       rows.0.insert(key, !open);
     });
@@ -130,6 +171,9 @@ enum Line {
   Row(Box<Row>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
   Working(Working),
+  /// Room under the last row while *Jump to latest* floats over the chat's foot, so the row can scroll clear
+  /// of it.
+  JumpRoom,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -145,6 +189,7 @@ impl RowProps {
     match &self.line {
       Line::Row(row) => row.key(),
       Line::Working(_) => "conversation-working",
+      Line::JumpRoom => "conversation-jump-room",
     }
   }
 }
@@ -165,6 +210,7 @@ pub(super) fn chat(
       .iter()
       .map(|row| Line::Row(Box::new(row.clone())))
       .chain(working.map(Line::Working))
+      .chain((!follow.following.get()).then_some(Line::JumpRoom))
       .map(|line| RowProps { line })
       .collect(),
   );
@@ -174,15 +220,21 @@ pub(super) fn chat(
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .mount_keyed::<RowView, _, _, _>(|row| row.key().to_string(), Clone::clone);
+  // Floats over the chat's foot (`Lqg8j` in `B67XdS`): it takes no room from the rows.
   let jump = (!follow.following.get()).then(|| follow.jump(ctx, arrived));
-  Column::new()
-    .id("conversation-chat")
+  let rows = Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .padding_top(SpacingSize::Sm)
     .padding_bottom(SpacingSize::Xs)
     .child(list)
-    .child(follow.end(ctx))
+    .child(follow.end(ctx));
+  Stack::new()
+    .id("conversation-chat")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .stack_align(StackAlignment::BottomCenter)
+    .child(rows)
     .with_children(jump)
     .into()
 }
@@ -220,6 +272,7 @@ impl Component for RowView {
     let id = format!("conversation-row:{}", props.key());
     let content = match &props.line {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
+      Line::JumpRoom => follow::jump_room(),
       Line::Row(row) => row_content(ctx, row),
     };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).

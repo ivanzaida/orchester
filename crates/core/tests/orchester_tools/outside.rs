@@ -1,5 +1,5 @@
-//! Reads outside the worktree: refused credential locations and Orchester's own state, numbered lines, and a
-//! file read as it comes, never held whole.
+//! Reads and searches outside the worktree: refused credential locations and Orchester's own state, numbered lines,
+//! a file read as it comes, never held whole, and the folder a call reads in.
 
 use std::fs;
 
@@ -80,11 +80,11 @@ fn orchester_tools_read_outside_returns_numbered_lines_and_where_to_go_on() {
   let file = text(&folders.dependency.join("src").join("lib.rs"));
   assert_eq!(
     reads.read(&file, 2, 2).expect("readable"),
-    "     2\tline 2\n     3\tline 3\n[the file goes on: read on from offset 4]\n"
+    "     2\tline 2\n     3\tline 3\n[the file goes on: read on from start_line 4]\n"
   );
   assert_eq!(reads.read(&file, 4, 10).expect("readable"), "     4\tline 4\n");
   let context = context(&folders.worktree, &reads, &[]);
-  let call = parse("read_outside_file", &json!({"path": file, "offset": 3})).expect("valid");
+  let call = parse("read_external_file", &json!({"filename": file, "start_line": 3})).expect("valid");
   let Ok(ToolWork::Done(result)) = call.work(&context) else {
     panic!("a read is answered at once");
   };
@@ -140,13 +140,13 @@ fn orchester_tools_read_outside_stops_at_its_caps() {
   let read = reads.read(&text(&many), 2, 10_000).expect("readable");
   assert!(read.len() <= MAX_READ_BYTES + 30_000, "{}", read.len());
   assert!(
-    read.ends_with("[the file goes on: read on from offset 575]\n"),
+    read.ends_with("[the file goes on: read on from start_line 575]\n"),
     "{}",
     &read[read.len() - 80..]
   );
   let call = parse(
-    "read_outside_file",
-    &json!({"path": text(&many), "offset": 60_000, "limit": 1}),
+    "read_external_file",
+    &json!({"filename": text(&many), "start_line": 60_000, "length": 1}),
   )
   .expect("valid");
   let context = context(&folders.worktree, &reads, &[]);
@@ -196,4 +196,52 @@ fn orchester_tools_read_outside_refuses_a_nul_before_the_offset() {
     reads.read(&text(&file), 2, 10),
     Err(OutsideReadError::Binary(_))
   ));
+}
+
+/// A search outside the worktree names a folder that is checked as a read is; a read's folder is its file's. Both are
+/// what an approval shows and Approve similar keeps its rule to.
+#[test]
+fn orchester_tools_external_calls_name_the_folder_they_read_in() {
+  let folders = Folders::new();
+  let reads = folders.reads();
+  let source = folders.dependency.join("src");
+  let resolved = |path: &std::path::Path| fs::canonicalize(path).expect("a folder");
+  let search = parse(
+    "search_external_file",
+    &json!({"base_directory": text(&source), "term": "line"}),
+  )
+  .expect("valid");
+  let reach = search.external_reach(&reads).expect("outside").expect("allowed");
+  assert_eq!(resolved(&reach.folder), resolved(&source));
+  assert_eq!(reach.path, reach.folder);
+  let context = context(&folders.worktree, &reads, &[]);
+  let Ok(ToolWork::SearchExternal { folder, term }) = search.work(&context) else {
+    panic!("a search is the caller's to run");
+  };
+  assert_eq!((resolved(&folder), term.as_str()), (resolved(&source), "line"));
+  let read = parse("read_external_file", &json!({"filename": text(&source.join("lib.rs"))})).expect("valid");
+  let reach = read.external_reach(&reads).expect("outside").expect("allowed");
+  assert_eq!(resolved(&reach.folder), resolved(&source));
+  assert_eq!(resolved(&reach.path), resolved(&source.join("lib.rs")));
+  for (base, refused) in [
+    (folders.home.join(".ssh"), "credential"),
+    (folders.dependency.join(".git"), "protected"),
+    (source.join("lib.rs"), "not a folder"),
+  ] {
+    let call = parse(
+      "search_external_file",
+      &json!({"base_directory": text(&base), "term": "x"}),
+    )
+    .expect("valid");
+    let error = call.external_reach(&reads).expect("outside").expect_err("refused");
+    assert!(error.to_string().contains(refused), "{error}");
+    assert!(call.work(&context).is_err());
+  }
+  let relative = parse("search_external_file", &json!({"base_directory": "deps", "term": "x"})).expect("valid");
+  assert!(matches!(
+    relative.external_reach(&reads),
+    Some(Err(OutsideReadError::NotAbsolute(_)))
+  ));
+  let worktree = parse("read_file", &json!({"filename": "README.md"})).expect("valid");
+  assert!(worktree.external_reach(&reads).is_none());
 }

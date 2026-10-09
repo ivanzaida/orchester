@@ -195,6 +195,15 @@ impl Workspace {
     self.db.lock().set_ui_state(key, text)
   }
 
+  pub fn remove_ui_state(&self, key: &str) -> Result<(), StoreError> {
+    self.db.lock().remove_ui_state(key)
+  }
+
+  /// The keys of the window's state that start with `prefix`.
+  pub fn ui_state_keys(&self, prefix: &str) -> Result<Vec<String>, StoreError> {
+    self.db.lock().ui_state_keys(prefix)
+  }
+
   /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
   /// automation answer approvals*); off until a person turns it on.
   pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {
@@ -203,6 +212,16 @@ impl Workspace {
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
     self.db.lock().set_automation_answers_approvals(allowed)
+  }
+
+  /// Whether automation may widen what agents may do through Orchester's MCP server (*Let automation
+  /// change agent permissions*); off until a person turns it on in the window, and no tool changes it.
+  pub fn automation_changes_permissions(&self) -> Result<bool, StoreError> {
+    self.db.lock().automation_changes_permissions()
+  }
+
+  pub fn set_automation_changes_permissions(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_automation_changes_permissions(allowed)
   }
 
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.

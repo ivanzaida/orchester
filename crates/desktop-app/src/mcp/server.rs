@@ -26,7 +26,7 @@ use lurq::mcp::{
 };
 use tokio::{runtime::Handle, sync::oneshot, task::JoinSet};
 
-use super::guard;
+use super::{guard, input_gate::InputGate};
 
 /// The only address the server listens on.
 const LOOPBACK: Ipv4Addr = Ipv4Addr::LOCALHOST;
@@ -85,13 +85,13 @@ pub struct Listening {
 impl Listening {
   /// Binds a loopback port and serves the sessions of `tools` on `runtime` to clients presenting
   /// `token`.
-  pub fn start(runtime: &Handle, tools: McpHandle, token: BearerToken) -> io::Result<Self> {
+  pub fn start(runtime: &Handle, gate: InputGate, tools: McpHandle, token: BearerToken) -> io::Result<Self> {
     let listener = TcpListener::bind((LOOPBACK, 0))?;
     listener.set_nonblocking(true)?;
     let port = NonZeroU16::new(listener.local_addr()?.port()).ok_or_else(|| io::Error::other("the OS bound port 0"))?;
     let (stop, stopped) = oneshot::channel();
     // The server stops when told to (`Drop`): it cancels its sessions and drops the connections open.
-    drop(runtime.spawn(serve(listener, tools, token, stopped)));
+    drop(runtime.spawn(serve(listener, (gate, tools), token, stopped)));
     Ok(Self { port, stop: Some(stop) })
   }
 
@@ -110,7 +110,12 @@ impl Drop for Listening {
   }
 }
 
-async fn serve(listener: TcpListener, tools: McpHandle, token: BearerToken, mut stopped: oneshot::Receiver<()>) {
+async fn serve(
+  listener: TcpListener,
+  (gate, tools): (InputGate, McpHandle),
+  token: BearerToken,
+  mut stopped: oneshot::Receiver<()>,
+) {
   let listener = match tokio::net::TcpListener::from_std(listener) {
     Ok(listener) => listener,
     Err(error) => {
@@ -122,7 +127,7 @@ async fn serve(listener: TcpListener, tools: McpHandle, token: BearerToken, mut 
   let sessions = config.cancellation_token.clone();
   // One service per client session: input a client holds is released when its session ends.
   let service = StreamableHttpService::new(
-    move || Ok(tools.service()),
+    move || Ok(gate.guard(tools.service())),
     Arc::new(LocalSessionManager::default()),
     config,
   );

@@ -59,21 +59,25 @@ impl WorkingTools {
   pub(super) fn text(self) -> String {
     let files = match (self.cli, self.edits) {
       (Cli::ClaudeCode, true) => {
-        "Read, search and change files with Orchester's file tools: mcp__Orchester__read_file, \
-         mcp__Orchester__list_files, mcp__Orchester__search, mcp__Orchester__edit_file (after reading the file) and \
-         mcp__Orchester__write_file. Never through the shell: no `cat`, `sed`, `awk` or heredocs."
+        "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
+         mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the \
+         file: give the lines to replace and, as expected, exactly what they hold now) and mcp__Orchester__create_file \
+         (new files only). Claude Code's own Read, Edit, Write, NotebookEdit, Grep and Glob are not available. Never read or change \
+         files through the shell: no `cat`, `sed`, `awk` or heredocs."
       }
       (Cli::ClaudeCode, false) => {
-        "Read and search files with Orchester's file tools: mcp__Orchester__read_file, mcp__Orchester__list_files \
-         and mcp__Orchester__search, not through the shell (`cat`, `sed`, `awk`)."
+        "Read and search files only with Orchester's file tools: mcp__Orchester__read_file, \
+         mcp__Orchester__list_files and mcp__Orchester__search_file. Claude Code's own Read, Grep and Glob are not \
+         available; do not read files through the shell (`cat`, `sed`, `awk`)."
       }
       (Cli::Codex, true) => {
-        "Read, search and change files with the read_file, list_files, search, edit_file (after read_file) and \
-         write_file tools of the Orchester MCP server, not through the shell (`cat`, `sed -i`, heredocs, `>`)."
+        "Read, search and change files with the read_file, list_files, search_file, edit_file (after read_file: give \
+         the lines to replace and, as expected, exactly what they hold now) and create_file (new files only) tools \
+         of the Orchester MCP server, not through the shell (`cat`, `rg`, `sed -i`, heredocs, `>`)."
       }
       (Cli::Codex, false) => {
-        "Read and search files with the read_file, list_files and search tools of the Orchester MCP server, not \
-         through the shell (`cat`, `sed`, `awk`)."
+        "Read and search files with the read_file, list_files and search_file tools of the Orchester MCP server, not \
+         through the shell (`cat`, `rg`, `sed`, `awk`)."
       }
     };
     let commands = match self.commands {

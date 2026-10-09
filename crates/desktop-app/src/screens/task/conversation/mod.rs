@@ -33,10 +33,11 @@ use orchester_workspace::{
     conversation::{Conversation, PanelState},
     detail::RunView,
     timeline::{
-      self as items, Sources,
+      self as items, Item, ItemKind, Sources,
       load::Loaded,
       view::{self, Choice},
     },
+    transcript::{Entry, EntryKind},
   },
 };
 
@@ -71,9 +72,10 @@ impl Component for ConversationTab {
   type Props = TaskContext;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let follow = Follow::new(ctx);
     Self {
-      follow: Follow::new(ctx),
-      toggles: Toggles::new(ctx),
+      toggles: Toggles::new(ctx, follow.clone()),
+      follow,
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
     }
@@ -122,8 +124,8 @@ impl ConversationTab {
     conversation: &Conversation,
   ) -> (Element, Option<RunState>) {
     let live = conversation.state == PanelState::Live;
-    let loaded = match self.read(ctx, task, run) {
-      Ok(loaded) => loaded,
+    let (loaded, stale) = match self.read(ctx, task, run) {
+      Ok(read) => read,
       Err(Some(error)) => {
         let root = &task.project.open.repo_root;
         return (states::failed(ctx, (run, live), &error, (root, &self.retry)), None);
@@ -141,9 +143,9 @@ impl ConversationTab {
     });
     let open = |key: &str, default: bool| self.toggles.is_open(key, default);
     let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
-    // An agent that waits in its turn for the answer to its question does not work: the run waits for the
-    // person (C·15), so there is no working line and the chip says so.
-    let asking = live && !run.waiting_questions.is_empty();
+    // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
+    // does not work: the run waits for the person, so the line under the chat and the chip say so.
+    let asking = live && items.iter().any(items::waits_for_you);
     let following = self.follow.following.get();
     let state = RunState::of(conversation, &task.detail, asking).following(following);
     if shown.rows.is_empty() {
@@ -155,19 +157,26 @@ impl ConversationTab {
       detail: task.detail.clone(),
       toggles: self.toggles.clone(),
       working: working_invocations(run, live),
+      pending: loaded.pending.clone(),
+      decided: loaded.decided.clone(),
     });
-    let working = (live && !asking && run.run.status() == &RunStatus::Running).then(|| timeline::Working {
-      agent: run.current_step().and_then(|step| step.agent.clone()),
-      last: loaded.entries.last().map(|entry| entry.at),
-    });
-    let arrived = loaded.entries.len() + conversation.entries.len();
+    let working = working_line(run, conversation, (&items, &loaded.entries), asking);
+    let arrived = arrivals(&items, &loaded.entries);
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
-    (chat, Some(state))
+    (
+      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
+      Some(state),
+    )
   }
 
-  /// The run's transcript with its requests; while they are not read, why not: being read (`None`), or the
-  /// reading failed.
-  fn read(&self, ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Result<Loaded, Option<Message>> {
+  /// The run's transcript with its requests, and why reading them again failed while they show as last read;
+  /// while they were never read, why not: being read (`None`), or the reading failed.
+  fn read(
+    &self,
+    ctx: &mut Ctx,
+    task: &TaskContext,
+    run: &RunView,
+  ) -> Result<(Loaded, Option<Message>), Option<Message>> {
     let feed = &task.project.feed;
     let repo_root: PathBuf = task.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
@@ -184,10 +193,53 @@ impl ConversationTab {
     let entries = read.data.as_ref().map(|Transcript(entries)| entries.clone());
     let sources = with_requests(ctx, (repo_root, run.id(), hold), (entries, waiting, retry));
     match (sources.data.flatten(), read.error.or(sources.error)) {
-      (Some(loaded), _) => Ok(loaded),
+      (Some(loaded), stale) => Ok((loaded, stale)),
       (None, error) => Err(error),
     }
   }
+}
+
+/// What the person can see arrive, counted: the transcript's entries but usage reports, which the chat leaves
+/// out, and the timeline's own items (steps, returns, messages, cards, results, the run's end). Anything new at
+/// the end moves a following chat, and *N new* counts it.
+fn arrivals(items: &[Item], entries: &[Entry]) -> usize {
+  let from_transcript = |item: &&Item| {
+    matches!(
+      item.kind,
+      ItemKind::AgentMessage { .. } | ItemKind::Tools(_) | ItemKind::Problem(_)
+    )
+  };
+  let visible = entries
+    .iter()
+    .filter(|entry| !matches!(entry.kind, EntryKind::Usage(_)))
+    .count();
+  visible + items.iter().filter(|item| !from_transcript(item)).count()
+}
+
+/// The line under the chat while the run goes on: its agent waits for the person since the first request
+/// that waits for them (no spinner), or works, while the run runs and no agent waits in its turn.
+fn working_line(
+  run: &RunView,
+  conversation: &Conversation,
+  (items, entries): (&[Item], &[Entry]),
+  asking: bool,
+) -> Option<timeline::Working> {
+  let agent = run.current_step().and_then(|step| step.agent.clone());
+  let goes_on = matches!(conversation.state, PanelState::Live | PanelState::Waiting);
+  let waits = items
+    .iter()
+    .find(|item| items::waits_for_you(item))
+    .filter(|_| goes_on)
+    .map(|item| timeline::Wait {
+      since: item.at,
+      plan: matches!(item.kind, ItemKind::Plan(_)),
+    });
+  let works = conversation.state == PanelState::Live && !asking && run.run.status() == &RunStatus::Running;
+  (waits.is_some() || works).then(|| timeline::Working {
+    agent,
+    last: entries.last().map(|entry| entry.at),
+    waits,
+  })
 }
 
 /// The invocations of `run` whose agent works now; none while no agent works (`live` false).

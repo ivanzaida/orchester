@@ -26,7 +26,10 @@ use lurq::{
 };
 use orchester_workspace::{
   display,
-  tasks::transcript::{Entry, EntryKind},
+  tasks::{
+    timeline::group::unwrapped,
+    transcript::{Entry, EntryKind},
+  },
 };
 
 use self::shown::Shown;
@@ -48,7 +51,18 @@ const OUTPUT_LINES: usize = 200;
 
 /// `entry`'s row in an open tool group; `key` keeps whether a person opened it.
 pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &Entry) -> Element {
-  let shown = shown::shown(ctx, entry, timeline.works(entry.invocation));
+  let mut shown = shown::shown(ctx, entry, timeline.works(entry.invocation));
+  // A command whose request to run waits for the person has not started.
+  if let EntryKind::Command(command) = &entry.kind
+    && command.status.is_none()
+    && timeline.awaits_approval(
+      entry.invocation,
+      unwrapped(&command.command).lines().next().unwrap_or_default(),
+    )
+  {
+    shown.glyph = Icon::Hand;
+    shown.meta = ctx.t("conversation.entry.awaitsApproval");
+  }
   let id = format!("conversation-{key}");
   let open = shown.collapsible && shown.has_details() && timeline.toggles.is_open(key, false);
   let line = Row::new()
@@ -159,8 +173,12 @@ pub(super) fn problem_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, en
     .and_then(|run| run.step_of(entry.execution))
     .and_then(|step| step.agent.clone())
     .unwrap_or_else(|| "".into());
-  let shown =
-    problem::titled(ctx, entry, &agent).unwrap_or_else(|| shown::shown(ctx, entry, timeline.works(entry.invocation)));
+  let answered = match &entry.kind {
+    EntryKind::Command(command) => timeline.denied_by(entry.invocation, &command.command),
+    _ => None,
+  };
+  let shown = problem::titled(ctx, entry, (&agent, answered))
+    .unwrap_or_else(|| shown::shown(ctx, entry, timeline.works(entry.invocation)));
   let id = format!("conversation-problem-{key}");
   let explained = shown
     .body

@@ -69,7 +69,7 @@ impl QueueFailure {
       Self::Claim(refusal) => vec![refusal.message()],
       Self::Preflight(problems) => problems.iter().map(preflight_message).collect(),
       Self::Queue(_) => vec![Message::new("runs.start.incomplete")],
-      Self::Changed => vec![Message::new("tasks.conflict.changedMeanwhile")],
+      Self::Changed => vec![messages::task_changed_meanwhile()],
     }
   }
 }
@@ -290,6 +290,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }
+    PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
   }

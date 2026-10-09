@@ -38,7 +38,7 @@ const MAX_WALKED_ENTRIES: usize = 5000;
 impl StepSkills {
   /// Offers the skills found under `folder`, a skills folder of `worktree` such as `<worktree>/.agents/skills`.
   pub fn add_repository(&mut self, folder: &Path, worktree: &Path) {
-    let Ok(root) = fs::canonicalize(worktree).map(canonical::plain) else {
+    let Ok(root) = canonical::canonicalize(worktree).map(canonical::plain) else {
       self
         .left_out
         .push("the repository's skills: the worktree cannot be read".to_owned());
@@ -73,7 +73,7 @@ struct Search<'a> {
 impl Search<'_> {
   /// Looks for skills in the folder at `found`, `depth` below the skills folder.
   fn folder(&mut self, found: &Path, depth: usize) {
-    let resolved = match fs::canonicalize(found) {
+    let resolved = match canonical::canonicalize(found) {
       Ok(resolved) => canonical::plain(resolved),
       Err(error) if error.kind() == io::ErrorKind::NotFound => return,
       Err(_) => return self.left_out(found, "cannot be read"),
@@ -104,7 +104,7 @@ impl Search<'_> {
       }
       if name == SKILL_FILE {
         self.document(&child, &resolved);
-      } else if fs::metadata(resolved.join(&name)).is_ok_and(|metadata| metadata.is_dir()) {
+      } else if canonical::metadata(&resolved.join(&name)).is_ok_and(|metadata| metadata.is_dir()) {
         self.folder(&child, depth + 1);
       }
     }
@@ -115,7 +115,7 @@ impl Search<'_> {
     if self.offered >= MAX_REPOSITORY_SKILLS {
       return self.stop();
     }
-    let Ok(resolved) = fs::canonicalize(found).map(canonical::plain) else {
+    let Ok(resolved) = canonical::canonicalize(found).map(canonical::plain) else {
       return self.left_out(found, "cannot be read");
     };
     let mut skill = OfferedSkill {
@@ -215,11 +215,11 @@ impl FileWalk<'_> {
         return;
       }
       let path = entry.path();
-      let Ok(resolved) = fs::canonicalize(&path).map(canonical::plain) else {
+      let Ok(resolved) = canonical::canonicalize(&path).map(canonical::plain) else {
         continue;
       };
       if resolved.is_dir() {
-        let own_skill = resolved.join(SKILL_FILE).exists();
+        let own_skill = canonical::metadata(&resolved.join(SKILL_FILE)).is_ok();
         let fresh = self.visited.insert(resolved.clone());
         if fresh && depth < MAX_FILE_DEPTH && !own_skill && belongs(&resolved, self.skill) {
           self.folder(&path, depth + 1);

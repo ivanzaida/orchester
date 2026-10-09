@@ -11,15 +11,18 @@
 
 mod composer;
 mod conversation;
+mod decisions;
 mod fonts;
 mod form;
 mod markdown;
 mod metrics;
 mod palette;
+mod settings;
 mod shadow;
 mod shell;
 mod startup;
 mod task;
+mod task_form;
 mod tasks;
 mod typography;
 
@@ -33,12 +36,15 @@ use lurq::{
 pub use self::{
   composer::{ComposerColor, ComposerRadius, ComposerText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
+  decisions::{DecisionSpacing, DecisionText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   palette::{ExtraColor, Mode},
+  settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
+  task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
   tasks::TasksSpacing,
   typography::{ExtraTypography, IconSize},
 };
@@ -58,11 +64,14 @@ pub fn install(app: &mut App, mode: Mode) {
   apply(theme, mode);
   metrics::install(theme);
   startup::install(theme);
+  settings::install(theme);
   task::install(theme);
-  conversation::install(theme);
-  composer::install(theme);
+  decisions::install(theme);
+  task_form::install(theme);
   tasks::install(theme);
   shell::install(theme);
+  conversation::install(theme);
+  composer::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

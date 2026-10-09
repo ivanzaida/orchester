@@ -75,16 +75,7 @@ fn timeline_a_transcript_that_cannot_be_read_offers_try_again() {
   let key = key_of(&seeded, "Paginate the events API");
   let database = seeded.repo.join(".orchester").join("orchester.db");
   let damaged = Connection::open(&database).expect("the database file opens");
-  // Damage from outside Orchester, which its append-only triggers do not stop.
-  let triggers: Vec<String> = damaged
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'agent_events'")
-    .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
-    .expect("the triggers are listed");
-  for trigger in triggers {
-    damaged
-      .execute(&format!("DROP TRIGGER \"{trigger}\""), [])
-      .expect("the trigger is dropped");
-  }
+  drop_append_only(&damaged);
   damaged
     .execute("UPDATE agent_events SET payload = '{'", [])
     .expect("the events are damaged");
@@ -113,4 +104,85 @@ fn timeline_a_card_that_waits_says_answering_here_is_not_available_yet() {
   let text = all_text(&mut window);
   assert!(text.contains("asks to run a command"), "{text}");
   assert!(text.contains("Waiting for approval"), "{text}");
+}
+
+#[test]
+fn timeline_a_tool_steps_result_card_names_the_tool_step() {
+  let (mut window, seeded) = seeded("task-states");
+  let key = key_of(&seeded, "Export invoices as PDF");
+  open(&mut window, &seeded, &key, "conversation-chat");
+  window.until("the Run checks result", |window| {
+    all_text(window).contains("Run checks failed")
+  });
+  let text = all_text(&mut window);
+  assert!(text.contains("04 Run checks · Tool"), "{text}");
+}
+
+#[test]
+fn timeline_a_transcript_that_cannot_be_read_again_shows_as_last_read() {
+  let (mut window, seeded) = seeded("task-states");
+  let key = key_of(&seeded, "Paginate the events API");
+  open(&mut window, &seeded, &key, "conversation-chat");
+  let damaged = Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the database file opens");
+  drop_append_only(&damaged);
+  damaged
+    .execute("UPDATE agent_events SET payload = '{'", [])
+    .expect("the events are damaged");
+  // A change of the run reads the transcript again.
+  window
+    .projects()
+    .feed(seeded.project)
+    .changes
+    .update(|count| *count += 1);
+  window.until("the notice", |window| {
+    window.tree.get_element_by_id("conversation-stale").is_some()
+  });
+  assert!(
+    window.tree.get_element_by_id("conversation-chat").is_some(),
+    "the chat shows as last read"
+  );
+  assert!(all_text(&mut window).contains("Conversation shown as last read"));
+  damaged
+    .execute("DELETE FROM agent_events", [])
+    .expect("the damaged events are removed");
+  click(&mut window, "conversation-stale-retry");
+  window.until("the notice gone", |window| {
+    window.tree.get_element_by_id("conversation-stale").is_none()
+  });
+}
+
+/// Lets the transcript be damaged from outside Orchester, which its append-only triggers do not stop.
+fn drop_append_only(database: &Connection) {
+  let triggers: Vec<String> = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'agent_events'")
+    .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
+    .expect("the triggers are listed");
+  for trigger in triggers {
+    database
+      .execute(&format!("DROP TRIGGER \"{trigger}\""), [])
+      .expect("the trigger is dropped");
+  }
+}
+
+#[test]
+fn timeline_an_agent_that_waits_for_the_person_says_so_without_a_spinner() {
+  let (mut window, seeded) = seeded("task-states");
+  for (title, waits) in [
+    ("Sync contacts with HubSpot", "waits for your answer · since "),
+    (
+      "Rate-limit messages from GitHub",
+      "waits for your decision on the plan · since ",
+    ),
+  ] {
+    let key = key_of(&seeded, title);
+    open(&mut window, &seeded, &key, "conversation-chat");
+    window.until("the waiting line", |window| {
+      window
+        .texts("conversation-working")
+        .is_some_and(|texts| texts.iter().any(|text| text.contains(waits)))
+    });
+    let line = window.texts("conversation-working").expect("the line").join(" ");
+    assert!(line.ends_with("its active time stopped"), "{title}: {line}");
+    assert!(!line.contains("is working"), "{title}: {line}");
+  }
 }

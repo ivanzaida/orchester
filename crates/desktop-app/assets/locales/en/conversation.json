@@ -109,6 +109,7 @@
     "engineNative": "{{engine}} · native",
     "entry": {
       "agentMessage": "agent message",
+      "awaitsApproval": "waiting for approval",
       "declined": "denied · not an allowed command",
       "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
       "error": "The agent CLI reported an error",
@@ -157,6 +158,7 @@
       "showThem": "Show them"
     },
     "group": {
+      "awaitsApproval": "{{command}} · waiting for approval",
       "edited": {
         "one": "edited 1 file",
         "other": "edited {{count}} files"
@@ -367,10 +369,12 @@
       "step": "{{step}} · {{agent}}",
       "summary": "Summary ↗",
       "toolMeta": "{{took}} · tool step, no tokens",
+      "toolStep": "{{step}} · Tool",
       "withReport": "{{reported}} · {{meta}}"
     },
     "separator": " · ",
     "span": "{{start}}–{{end}}",
+    "staleTitle": "Conversation shown as last read",
     "state": {
       "cancelled": "Canceled",
       "deciding": "Waits for your decision",
@@ -388,6 +392,10 @@
     "stepLabel": "{{number}} {{step}}",
     "toolMeta": "tool · {{time}}",
     "unreadable": "Nothing this run did can be shown until its record can be read. Summary lists the task’s runs.",
+    "waitsAnswer": "{{agent}} waits for your answer · since {{since}}, its active time stopped",
+    "waitsAnswerUnnamed": "The agent waits for your answer · since {{since}}, its active time stopped",
+    "waitsDecision": "{{agent}} waits for your decision on the plan · since {{since}}, its active time stopped",
+    "waitsDecisionUnnamed": "The agent waits for your decision on the plan · since {{since}}, its active time stopped",
     "working": "{{agent}} is working · last event {{elapsed}} ago",
     "workingStarted": "{{agent}} is starting",
     "workingStartedUnnamed": "The agent is starting",

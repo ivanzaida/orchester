@@ -45,6 +45,7 @@ CREATE TABLE ui_state (
   settings::MIGRATION,
   settings::THRESHOLD_MIGRATION,
   settings::APPEARANCE_MIGRATION,
+  settings::AUTOMATION_PERMISSIONS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
@@ -213,6 +214,23 @@ impl AppDb {
       params![key, value],
     )?;
     Ok(())
+  }
+
+  /// Removes what was stored under `key`; nothing happens when nothing was.
+  pub fn remove_ui_state(&mut self, key: &str) -> Result<(), StoreError> {
+    self.connection.execute("DELETE FROM ui_state WHERE key = ?1", [key])?;
+    Ok(())
+  }
+
+  /// The keys window state is stored under that start with `prefix`, in order.
+  pub fn ui_state_keys(&self, prefix: &str) -> Result<Vec<String>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT key FROM ui_state WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key")?;
+    let keys = statement
+      .query_map([prefix], |row| row.get(0))?
+      .collect::<Result<Vec<String>, _>>()?;
+    Ok(keys)
   }
 
   pub fn end_session(&mut self, session: SessionId, end: SessionEnd, now: Timestamp) -> Result<(), StoreError> {

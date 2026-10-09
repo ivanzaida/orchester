@@ -2,10 +2,10 @@
 //! stroke, radius 6, a 13 glyph in `text_secondary`), 10 from who wrote it (12/600) with its step and time
 //! (11 `text_muted`) and under them, 3 apart, what it wrote at 13/1.5, read as Markdown; then its tool groups
 //! ([`super::chips`]) at the chat's edge. A person's (`Your message` `mr4lC`): at the right, *You* and the
-//! time, the message in a bubble (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and its
-//! delivery line (a 12 icon and 11 `text_muted`, 5 apart): sending now, queued and until when, delivered
-//! mid-turn or at the end of a turn (`check-check` in `success`), or not delivered, kept, with the composer's
-//! actions under it (`composer::undelivered`).
+//! time, the message as written in a bubble that hugs it up to 80 % of the chat (`own_message` in a `border`
+//! stroke, radius 10, 8 by 12 inside) and its delivery line (a 12 icon and 11 `text_muted`, 5 apart): sending
+//! now, queued and until when, delivered mid-turn or at the end of a turn (`check-check` in `success`), or not
+//! delivered, kept, with the composer's actions under it (`composer::undelivered`).
 
 use std::sync::{Arc, LazyLock};
 
@@ -187,7 +187,12 @@ fn bubble_column(
         .variant(TypographyStyle::Caption)
         .nowrap()
     }));
-  let said = text(ctx, &format!("{id}-text"), body);
+  // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
+  // fills its parent's width.
+  let said = Text::new(body)
+    .id(format!("{id}-text"))
+    .variant(TypographyStyle::Body)
+    .selectable(true);
   let bubble = Column::new()
     .id(format!("{id}-bubble"))
     .max_width(Dimension::Pct(BUBBLE_WIDTH))

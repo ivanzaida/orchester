@@ -12,6 +12,7 @@ mod approval;
 mod content;
 mod handoff;
 mod next;
+mod note;
 mod query;
 mod recall;
 mod record;
@@ -28,6 +29,7 @@ pub use self::{
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
   handoff::{FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, MemoryChanges, StepFate, split_handoff},
   next::{StepContext, next_invocation_memory},
+  note::{MemoryNote, NoteScope, NoteWrite},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, estimated_tokens, recall},
   record::{AgentWrite, Memory, MemoryError, StoredMemory, StoredMemoryError},

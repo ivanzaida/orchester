@@ -80,12 +80,14 @@ fn lines(change: &CallChange) -> Vec<Vec<(LineKind, &str)>> {
     .collect()
 }
 
-fn edit(path: &str, edits: &Value) -> String {
+/// An `edit_file` call of `path` that replaces its first lines, `expected`, with `content`.
+fn edit(path: &str, expected: &str, content: &str) -> String {
+  let lines = expected.lines().count();
   tool_use(
     "msg_1",
     "toolu_edit",
     "mcp__Orchester__edit_file",
-    &json!({"path": path, "edits": edits}),
+    &json!({"filename": path, "start_line": 1, "end_line": lines, "expected": expected, "content": content}),
   )
 }
 
@@ -93,19 +95,20 @@ fn write(content: &str) -> String {
   tool_use(
     "msg_1",
     "toolu_write",
-    "mcp__Orchester__write_file",
-    &json!({"path": "notes/new.md", "content": content}),
+    "mcp__Orchester__create_file",
+    &json!({"filename": "notes/new.md", "content": content}),
   )
 }
 
 #[test]
 fn cli_file_calls_claude_tells_an_edit_s_diff_right_after_its_start() {
   let events = claude(&[
-    edit(
-      "src/lib.rs",
-      &json!([{"old": "fn a() {\n  1\n}\n", "new": "fn a() {\n  2\n  3\n}\n", "replace_all": null}]),
+    edit("src/lib.rs", "fn a() {\n  1\n}\n", "fn a() {\n  2\n  3\n}\n"),
+    tool_result(
+      "toolu_edit",
+      "edited src/lib.rs: lines 1–4 now hold the 4 new lines",
+      false,
     ),
-    tool_result("toolu_edit", "edited src/lib.rs: 1 edit(s) applied", false),
   ]);
   assert!(matches!(&events[0], AgentEvent::CommandStarted { item, .. } if item == "toolu_edit"));
   assert!(matches!(&events[1], AgentEvent::NativeCall { item, .. } if item == "toolu_edit"));
@@ -137,19 +140,13 @@ fn cli_file_calls_claude_tells_an_edit_s_diff_right_after_its_start() {
 fn cli_file_calls_an_edit_shows_shared_lines_as_context_and_a_line_ending_change() {
   use LineKind::{Added, Context};
   // The last shared line only gains its line break.
-  let events = claude(&[edit(
-    "a.txt",
-    &json!([{"old": "a\nb", "new": "a\nb\nc", "replace_all": null}]),
-  )]);
+  let events = claude(&[edit("a.txt", "a\nb", "a\nb\nc")]);
   let change = only_call(&events).2.expect("change");
   assert_eq!(lines(change), [vec![(Context, "a"), (Context, "b"), (Added, "c")]]);
   assert_eq!(change.counts(), Some(LineChanges { added: 1, removed: 0 }));
   assert_eq!(change.hunks()[0].breaks(), Breaks::default());
 
-  let events = claude(&[edit(
-    "a.txt",
-    &json!([{"old": "a\r\nb\r\n", "new": "a\nb\n", "replace_all": null}]),
-  )]);
+  let events = claude(&[edit("a.txt", "a\r\nb\r\n", "a\nb\n")]);
   let change = only_call(&events).2.expect("change");
   assert_eq!(lines(change), [vec![(Context, "a"), (Context, "b")]]);
   assert!(
@@ -166,7 +163,7 @@ fn cli_file_calls_an_edit_shows_shared_lines_as_context_and_a_line_ending_change
 #[test]
 fn cli_file_calls_an_edit_says_it_adds_or_removes_the_final_line_break() {
   for (old, new, final_break) in [("x\n", "x", FinalBreak::Removed), ("a\nx", "a\nx\n", FinalBreak::Added)] {
-    let events = claude(&[edit("a.txt", &json!([{"old": old, "new": new, "replace_all": null}]))]);
+    let events = claude(&[edit("a.txt", old, new)]);
     let change = only_call(&events).2.expect("change");
     assert!(
       lines(change)[0].iter().all(|(kind, _)| *kind == LineKind::Context),
@@ -182,21 +179,6 @@ fn cli_file_calls_an_edit_says_it_adds_or_removes_the_final_line_break() {
 }
 
 #[test]
-fn cli_file_calls_an_edit_that_replaces_every_occurrence_counts_nothing() {
-  let events = claude(&[edit(
-    "a.rs",
-    &json!([
-      {"old": "x", "new": "y", "replace_all": false},
-      {"old": "use a;", "new": "use b;", "replace_all": true},
-    ]),
-  )]);
-  let change = only_call(&events).2.expect("change");
-  assert_eq!(change.counts(), None, "how many it replaced the input does not say");
-  let every: Vec<bool> = change.hunks().iter().map(|hunk| hunk.every()).collect();
-  assert_eq!(every, [false, true]);
-}
-
-#[test]
 fn cli_file_calls_claude_tells_a_write_s_content_and_what_a_read_or_search_is_about() {
   let events = claude(&[
     write("# Notes\r\n\r\nfirst\n"),
@@ -204,13 +186,13 @@ fn cli_file_calls_claude_tells_a_write_s_content_and_what_a_read_or_search_is_ab
       "msg_2",
       "toolu_read",
       "mcp__Orchester__read_file",
-      &json!({"path": "README.md", "offset": null, "limit": null}),
+      &json!({"filename": "README.md", "start_line": null, "length": null}),
     ),
     tool_use(
       "msg_3",
       "toolu_search",
-      "mcp__Orchester__search",
-      &json!({"pattern": "useKeymap", "path": "src", "glob": null, "case_insensitive": null, "context": null}),
+      "mcp__Orchester__search_file",
+      &json!({"term": "useKeymap", "limit_files": 5}),
     ),
     tool_use(
       "msg_4",
@@ -239,7 +221,11 @@ fn cli_file_calls_claude_tells_a_write_s_content_and_what_a_read_or_search_is_ab
     .into_iter()
     .map(|(_, call)| call.input.as_ref().and_then(|input| input.scope()))
     .collect();
-  assert_eq!(scopes, [None, None, Some("src"), None], "a search names where it looks");
+  assert_eq!(
+    scopes,
+    [None, None, None, None],
+    "a search of the worktree names no folder"
+  );
   let written = told(&events)[0]
     .1
     .input
@@ -263,16 +249,22 @@ fn cli_file_calls_claude_tells_a_write_s_content_and_what_a_read_or_search_is_ab
 #[test]
 fn cli_file_calls_tell_nothing_for_refused_input_or_another_server_s_tool() {
   let events = claude(&[
-    // `edits` must hold an edit: the call fails with that error, which its row shows.
-    edit("a.rs", &json!([])),
+    // An edit that changes nothing is refused: the call fails with that error, which its row shows.
+    edit("a.rs", "a", "a"),
     tool_result("toolu_edit", "invalid input for `edit_file`", true),
     tool_use(
       "msg_2",
       "toolu_other",
       "mcp__files__edit_file",
-      &json!({"path": "a.rs", "edits": [{"old": "a", "new": "b", "replace_all": null}]}),
+      &json!({"filename": "a.rs", "start_line": 1, "end_line": 1, "expected": "a", "content": "b"}),
     ),
     tool_use("msg_3", "toolu_git", "mcp__Orchester__git_status", &json!({})),
+    tool_use(
+      "msg_4",
+      "toolu_old",
+      "mcp__Orchester__write_file",
+      &json!({"path": "a.rs", "content": "b"}),
+    ),
   ]);
   assert!(told(&events).is_empty(), "{events:#?}");
 }
@@ -319,10 +311,7 @@ fn cli_file_calls_find_a_secret_over_several_lines_or_past_the_cut() {
 
   // The token starts 10 characters before the cut: cut first, its start would no longer match.
   let line = format!("{}{token}", "y".repeat(MAX_LINE_CHARS - 10));
-  let events = claude_redacted(
-    &[edit("a.txt", &json!([{"old": "a", "new": line, "replace_all": null}]))],
-    redact,
-  );
+  let events = claude_redacted(&[edit("a.txt", "a", &line)], redact);
   let change = only_call(&events).2.expect("an edit's change");
   let added = &change.hunks()[0].lines()[1];
   assert!(added.text().ends_with("[secret]"), "{}", added.text());
@@ -380,7 +369,7 @@ fn mcp_call(id: &str, arguments: &Value, completed: &Value) -> [Value; 2] {
 
 #[test]
 fn cli_file_calls_codex_tells_a_successful_edit_s_diff_before_its_end() {
-  let input = json!({"path": "README.md", "edits": [{"old": "hi", "new": "hi there", "replace_all": null}]});
+  let input = json!({"filename": "README.md", "start_line": 1, "end_line": 1, "expected": "hi", "content": "hi there"});
   let mut sent = Vec::new();
   sent.extend(mcp_call("mcp-1", &input, &json!({"status": "completed"})));
   sent.extend(mcp_call("mcp-failed", &input, &json!({"status": "failed"})));
