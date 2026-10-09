@@ -18,9 +18,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Writes `$OUT_DIR/locales.rs`: `LOCALES`, every `assets/locales/<locale>/<area>.json` included, sorted
-/// by name. A new area or locale is a new file, with no list to edit beside it.
+/// by name. A new area or locale is a new file, with no list to edit beside it. Hidden entries and
+/// editors' leftovers are passed over; anything else that is not a locale folder or an area's file stops
+/// the build with its path.
 mod locales {
-  use std::{env, error::Error, fmt::Write as _, fs, path::Path};
+  use std::{
+    env,
+    error::Error,
+    fmt::Write as _,
+    fs,
+    path::{Path, PathBuf},
+  };
 
   const ROOT: &str = "assets/locales";
 
@@ -29,11 +37,18 @@ mod locales {
     let mut code = String::from("/// Every shipped locale with its areas' files, listed by `build.rs`.\n");
     code.push_str("pub const LOCALES: &[Locale] = &[\n");
     for (locale, folder) in entries(Path::new(ROOT))? {
+      if !folder.is_dir() {
+        return Err(
+          format!(
+            "{}: the locales folder holds only a folder per locale",
+            folder.display()
+          )
+          .into(),
+        );
+      }
       writeln!(code, "  Locale {{ name: {locale:?}, areas: &[")?;
       for (file, path) in entries(&folder)? {
-        let area = file
-          .strip_suffix(".json")
-          .ok_or_else(|| format!("{} is not a locale file (`<area>.json`)", path.display()))?;
+        let area = area(&file, &path)?;
         let included = format!("/{ROOT}/{locale}/{file}");
         writeln!(
           code,
@@ -43,24 +58,53 @@ mod locales {
       code.push_str("  ] },\n");
     }
     code.push_str("];\n");
-    fs::write(Path::new(&env::var("OUT_DIR")?).join("locales.rs"), code)?;
+    let out = Path::new(&env::var("OUT_DIR")?).join("locales.rs");
+    fs::write(&out, code).map_err(|error| format!("{}: {error}", out.display()))?;
     Ok(())
   }
 
-  /// The entries of `folder` by name, sorted so the list does not depend on the file system's order.
-  fn entries(folder: &Path) -> Result<Vec<(String, std::path::PathBuf)>, Box<dyn Error>> {
+  /// The area the locale file `file` at `path` holds: a plain file `<area>.json`, the area in lowercase
+  /// letters and `_`, as a key's first segment is.
+  fn area<'a>(file: &'a str, path: &Path) -> Result<&'a str, String> {
+    file
+      .strip_suffix(".json")
+      .filter(|area| !area.is_empty() && area.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'_'))
+      .filter(|_| path.is_file())
+      .ok_or_else(|| {
+        format!(
+          "{}: a locale folder holds only `<area>.json` files, the area in lowercase letters and `_`",
+          path.display()
+        )
+      })
+  }
+
+  /// The entries of `folder` by name, sorted so the list does not depend on the file system's order,
+  /// without hidden entries and editors' leftovers.
+  fn entries(folder: &Path) -> Result<Vec<(String, PathBuf)>, String> {
+    let unreadable = |error: std::io::Error| format!("{}: {error}", folder.display());
     let mut entries = Vec::new();
-    for entry in fs::read_dir(folder)? {
-      let path = entry?.path();
+    for entry in fs::read_dir(folder).map_err(unreadable)? {
+      let path = entry.map_err(unreadable)?.path();
       let name = path
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| format!("{} has no UTF-8 name", path.display()))?
+        .ok_or_else(|| format!("{}: the name is not UTF-8", path.display()))?
         .to_owned();
-      entries.push((name, path));
+      if !is_leftover(&name) {
+        entries.push((name, path));
+      }
     }
     entries.sort();
     Ok(entries)
+  }
+
+  /// A hidden entry (`.DS_Store`, vim's `.shell.json.swp`) or an editor's backup or autosave
+  /// (`shell.json~`, `#shell.json#`, `shell.json.bak`).
+  fn is_leftover(name: &str) -> bool {
+    name.starts_with(['.', '#'])
+      || [".bak", ".swo", ".swp", ".tmp", "~"]
+        .iter()
+        .any(|end| name.ends_with(end))
   }
 }
 
