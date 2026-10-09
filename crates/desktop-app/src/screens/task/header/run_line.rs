@@ -25,7 +25,10 @@ use crate::{
 pub fn status_row(ctx: &mut Ctx, detail: &TaskDetail, lost: bool) -> Element {
   let (status, step) = status(detail, lost);
   let mut chip = StatusChip::new("task-status", status);
-  if let Some(step) = step {
+  // A run whose step used up its retries says so, as the design's chip does ("retries used").
+  if !lost && detail.phase() == TaskPhase::Stuck {
+    chip = chip.detail(ctx.t("task.status.retriesUsed"));
+  } else if let Some(step) = step {
     chip = chip.detail(step_label(ctx, step));
   }
   Row::new()
@@ -58,7 +61,6 @@ fn status(detail: &TaskDetail, lost: bool) -> (Status, Option<&StepView>) {
     phase,
     TaskPhase::Running
       | TaskPhase::Waiting
-      | TaskPhase::Stuck
       | TaskPhase::Paused
       | TaskPhase::StoppedAtLimit
       | TaskPhase::Interrupted

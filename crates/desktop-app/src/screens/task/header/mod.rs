@@ -1,32 +1,30 @@
-//! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with Edit,
-//! *Remove worktree*, the run controls and Run again at its right, the status and run line, the frame's
-//! notices, Run again's confirmation in place, and the page tabs (`Page tabs` `L9OIIZ`), Artifacts and
+//! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with its
+//! actions (`actions`), the status and run line, the frame's notices, Run again's and the latest run's
+//! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`), Artifacts and
 //! Memory locked (`Smb4t`). It is the same component on every tab, so a request under way or an open
 //! confirmation stays as the tabs switch.
 
+mod actions;
 mod controls;
 mod notices;
+mod refusal;
 mod run_again;
 mod run_line;
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
+  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  components::Column,
   core::Signal,
-  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::project::TaskKey;
-use orchester_workspace::messages::Message;
+use orchester_workspace::{messages::Message, tasks::run_again::RunAgainCheck};
 
 use self::{
-  controls::{ControlAction, Controls, RunControl, control_action, controls},
+  controls::{Controls, Requested, control_action, controls},
+  refusal::Refusals,
   run_again::{Confirmation, Confirming, StartAction},
 };
 use super::{
@@ -40,10 +38,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
-    button::{ActionButton, ButtonKind},
-    icon::Icon,
     tabs::{PageTab, counted, page_tabs},
-    tooltip::Truncated,
   },
 };
 
@@ -58,8 +53,9 @@ pub struct HeaderProps {
 impl lurq::app::component::DevtoolsInspectable for HeaderProps {}
 
 pub struct TaskHeader {
-  /// The control last requested; under way while the control action is pending.
-  requested: Signal<Option<RunControl>>,
+  /// The control last pressed; under way while the control action is pending.
+  requested: Signal<Option<Requested>>,
+  refusals: Refusals,
   /// Run again's confirmation.
   confirming: Signal<Confirming>,
   /// Its switch that removes the worktrees of the run before, off each time it opens.
@@ -72,6 +68,7 @@ impl Component for TaskHeader {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       requested: ctx.signal(None),
+      refusals: Refusals::new(ctx),
       confirming: ctx.signal(Confirming::default()),
       remove: ctx.signal(false),
     }
@@ -84,15 +81,46 @@ impl Component for TaskHeader {
     let detail = props.task.detail.clone();
     let runners = (services.runners.clone(), services.servers.clone());
     let action = control_action(ctx, (open.clone(), detail.task.id()), runners.clone());
-    let saves = feed.revision.get() + feed.outside.get().tasks;
-    let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, saves);
-    let start = run_again::start_action(ctx, runners, (open.repo_root, feed), self.confirming.clone());
-    let (title_row, refused) = self.title_row(ctx, &props, (&action, check.as_ref()));
-    let lost = props.task.lost();
+    let again = (
+      feed.revision.get() + feed.outside.get().tasks,
+      feed.changes.get(),
+      feed.outside.get().limits,
+    );
+    let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, again);
+    let start = run_again::start_action(ctx, runners, (open, feed), self.confirming.clone());
+    let state = action.state().get();
+    let requested = self.requested.get();
+    let pending = state
+      .is_pending()
+      .then_some(requested)
+      .flatten()
+      .map(|requested| requested.control);
+    let refused = self.refusals.shown(&state, requested, &detail);
+    let mut shown = controls(
+      ctx,
+      &Controls {
+        detail: &detail,
+        online: props.task.online,
+        action: &action,
+        pending,
+        requested: &self.requested,
+      },
+    );
+    let latest_busy = detail
+      .run
+      .as_ref()
+      .is_some_and(|run| props.task.jobs.run(run.id()).busy());
+    shown.extend(run_again::button(
+      ctx,
+      check.as_ref(),
+      (&self.confirming, &self.remove),
+      latest_busy,
+    ));
+    let title_row = actions::title_row(ctx, &props, shown);
     let confirmation = check
       .as_ref()
       .and_then(|check| check.as_ref().ok())
-      .and_then(|check| self.confirmation(ctx, &props, check, &start));
+      .and_then(|check| self.confirmation(ctx, &props, check, (&start, latest_busy)));
     Column::new()
       .id("task-header")
       .width(Dimension::Pct(100.0))
@@ -105,7 +133,7 @@ impl Component for TaskHeader {
       .spacing(SpacingSize::Sm)
       .child(crumbs(ctx, &props))
       .child(title_row)
-      .child(run_line::status_row(ctx, &detail, lost))
+      .child(run_line::status_row(ctx, &detail, props.task.lost()))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)
       .with_children(removal(ctx, &props))
@@ -119,90 +147,14 @@ impl Component for TaskHeader {
 }
 
 impl TaskHeader {
-  /// The title and its actions with, under them, why the ones that cannot be used now are
-  /// unavailable; and the control the runner last refused, with why.
-  fn title_row(
-    &self,
-    ctx: &mut Ctx,
-    props: &HeaderProps,
-    (action, check): (
-      &ControlAction,
-      Option<&Result<orchester_workspace::tasks::run_again::RunAgainCheck, Message>>,
-    ),
-  ) -> (Element, Option<(RunControl, Message)>) {
-    let detail = &props.task.detail;
-    let state = action.state().get();
-    let requested = self.requested.get();
-    let pending = if state.is_pending() { requested } else { None };
-    let refused = match (state.is_pending(), requested, state.error) {
-      (false, Some(control), Some(error)) => Some((control, error)),
-      _ => None,
-    };
-    let (buttons, mut reasons) = controls(
-      ctx,
-      &Controls {
-        detail,
-        online: props.task.online,
-        action,
-        pending,
-        requested: &self.requested,
-      },
-    );
-    let latest_busy = detail
-      .run
-      .as_ref()
-      .is_some_and(|run| props.task.jobs.run(run.id()).busy());
-    let again = run_again::button(ctx, check, (&self.confirming, &self.remove), latest_busy);
-    if let Some(reason) = again.as_ref().and_then(|(_, reason)| reason.clone()) {
-      reasons.push(reason);
-    }
-    let actions: Vec<Element> = edit_button(ctx, props)
-      .into_iter()
-      .chain(remove_button(ctx, props))
-      .chain(buttons)
-      .chain(again.map(|(button, _)| button))
-      .map(Element::from)
-      .collect();
-    let title = Truncated::new(
-      "task-title",
-      detail.task.details().title.as_str().to_owned(),
-      TypographyStyle::Heading,
-    )
-    .render(ctx);
-    let row = Row::new()
-      .id("task-title-row")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Start)
-      .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(title))
-      .child(
-        Column::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::End)
-          .child(
-            Row::new()
-              .id("task-actions")
-              .spacing(SpacingSize::Sm)
-              .align_items(Alignment::Center)
-              .with_children(actions),
-          )
-          .with_children(reasons.iter().enumerate().map(|(index, reason)| {
-            Text::new(reason)
-              .id(format!("task-action-reason-{index}"))
-              .variant(TypographyStyle::Caption)
-              .describe("role", "unavailable-reason")
-          })),
-      );
-    (row.into(), refused)
-  }
-
-  /// Run again's confirmation, while it is open and the task can run again.
+  /// Run again's confirmation, while it is open and the task can run again. `busy`: git removes or
+  /// merges the latest run's worktrees.
   fn confirmation(
     &self,
     ctx: &mut Ctx,
     props: &HeaderProps,
-    check: &orchester_workspace::tasks::run_again::RunAgainCheck,
-    start: &StartAction,
+    check: &RunAgainCheck,
+    (start, busy): (&StartAction, bool),
   ) -> Option<Element> {
     let Confirming(Some(key)) = self.confirming.get() else {
       return None;
@@ -221,6 +173,7 @@ impl TaskHeader {
         remove: &self.remove,
         open: &self.confirming,
         action: start,
+        busy,
       },
     ))
   }
@@ -256,60 +209,6 @@ fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   .into()
 }
 
-/// Edit, while the task can be edited.
-fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  if !props.task.detail.editable() {
-    return None;
-  }
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    props.task.project.open.project.id(),
-    ProjectPage::EditTask(props.task.detail.task.key().clone()),
-  );
-  Some(
-    ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
-      .icon(Icon::Pencil)
-      .on_click(move || navigation.go(route.clone())),
-  )
-}
-
-/// *Remove worktree* of the latest run, once it has no live work and still has worktrees: it opens the
-/// confirmation in the run's row on the Summary.
-fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
-  let run = props.task.detail.run.as_ref()?;
-  let record = props.task.detail.history.iter().find(|record| record.id == run.id())?;
-  record.without_live_work()?;
-  let left = props.task.left.of(run.id())?.ok()?;
-  if left.worktrees.is_empty() {
-    return None;
-  }
-  let button =
-    ActionButton::new("task-remove-worktree", ButtonKind::Ghost, ctx.t("task.removeWorktree")).icon(Icon::FolderX);
-  if props.task.jobs.run(run.id()).removing() {
-    return Some(button.loading());
-  }
-  if props
-    .task
-    .detail
-    .history
-    .iter()
-    .any(|record| props.task.jobs.run(record.id).busy())
-  {
-    return Some(button.disabled());
-  }
-  let state = PageState::of(ctx);
-  // Its confirmation is open already.
-  if state.removal.get().run == Some(run.id()) {
-    return Some(button.disabled());
-  }
-  let job = props.task.project.feed.jobs.of(run.id());
-  let id = run.id();
-  Some(button.on_click(move || {
-    job.clear_failed_removal();
-    state.open_removal(id, RemovalPlace::Header);
-  }))
-}
-
 /// The latest run's *Remove worktree* confirmation, while the header's button opened it.
 fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   let run = props.task.detail.run.as_ref()?.id();
@@ -318,16 +217,14 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
     return None;
   }
   let runs = Runs {
-    project: &props.task.project,
-    detail: &props.task.detail,
-    left: &props.task.left,
-    jobs: &props.task.jobs,
+    task: &props.task,
     removal,
   };
   confirm_for(ctx, &runs, run)
 }
 
-/// Summary, Conversation and Changes, then Artifacts and Memory, which are not built yet.
+/// Summary, Conversation and Changes with the count of the files it lists, then Artifacts and Memory,
+/// which are not built yet.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let open = |tab: TaskTab| {
