@@ -30,7 +30,7 @@ pub struct Tooltip {
   text: Arc<str>,
   shortcut: Option<Arc<str>>,
   placement: Placement,
-  grow: bool,
+  shrink: bool,
 }
 
 impl DevtoolsInspectable for Tooltip {}
@@ -43,7 +43,7 @@ impl Tooltip {
       text: text.into(),
       shortcut: None,
       placement: Placement::BottomStart,
-      grow: false,
+      shrink: false,
     }
   }
 
@@ -59,9 +59,9 @@ impl Tooltip {
     self
   }
 
-  /// The anchor takes the room its row leaves, as a flexible cell does.
-  pub fn grow(mut self) -> Self {
-    self.grow = true;
+  /// The anchor gives up room when its row runs out of it, as text cut to its room does.
+  pub fn shrink(mut self) -> Self {
+    self.shrink = true;
     self
   }
 
@@ -130,8 +130,8 @@ impl Component for TooltipHost {
         hide.set(false);
       })
       .with_children(ctx.children().iter().cloned());
-    if tooltip.grow {
-      anchor = anchor.flex(1.0).min_width(Dimension::Px(0.0));
+    if tooltip.shrink {
+      anchor = anchor.flex_shrink(1.0).min_width(Dimension::Px(0.0));
     }
     if !self.shown.get() {
       return anchor;
@@ -172,7 +172,8 @@ impl Truncated {
     self
   }
 
-  /// A fixed room, e.g. a table column's width; without one the text takes the room its row leaves.
+  /// A fixed room, e.g. a table column's width; without one the text is as wide as it is, and cut where
+  /// its row runs out of room.
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
     self.width = Some(width.into());
     self
@@ -190,8 +191,8 @@ impl Truncated {
     }
     let tooltip = Tooltip::new(self.id.clone(), self.text.clone());
     match self.width {
-      Some(width) => Row::new().width(width).child(tooltip.grow().wrap(ctx, text)).into(),
-      None => tooltip.grow().wrap(ctx, text),
+      Some(width) => Row::new().width(width).child(tooltip.shrink().wrap(ctx, text)).into(),
+      None => tooltip.shrink().wrap(ctx, text),
     }
   }
 }

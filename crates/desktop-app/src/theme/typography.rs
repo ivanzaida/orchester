@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{ThemePalette, ThemeTypography, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::color::Color,
 };
 
@@ -78,10 +78,7 @@ impl ExtraTypography {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     let sans = |size, weight, line_height, color| style(size, weight, line_height, 0.0, color);
-    let mono = |size, color| TextStyle {
-      font_family: Arc::from(MONO),
-      ..style(size, FontWeight::Normal, 1.4, 0.0, color)
-    };
+    let mono = |size, color| mono(style(size, FontWeight::Normal, 1.4, 0.0, color));
     match self {
       Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.text_primary),
       Self::Strong => sans(13.0, FontWeight::Medium, 1.5, palette.text_primary),
@@ -182,11 +179,18 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       0.0,
       palette.get(ExtraColor::AccentText.role()),
     ),
-    mono: TextStyle {
-      font_family: Arc::from(MONO),
-      ..style(12.0, FontWeight::Normal, 1.5, 0.0, primary)
-    },
+    mono: mono(style(12.0, FontWeight::Normal, 1.5, 0.0, primary)),
     extra: extras.chain(icons).collect(),
+  }
+}
+
+/// `sans` in Geist Mono without ligatures: a command, a key or a figure shows each character as typed
+/// (Geist Mono would join `--` and `->`).
+fn mono(sans: TextStyle) -> TextStyle {
+  TextStyle {
+    font_family: Arc::from(MONO),
+    font_features: FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]),
+    ..sans
   }
 }
 

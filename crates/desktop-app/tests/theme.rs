@@ -6,7 +6,7 @@ use lurq::{
     App,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, Theme, TypographyStyle},
   },
-  layout::text_style::FontWeight,
+  layout::text_style::{FontFeature, FontFeatures, FontWeight},
   node::{color::Color, dimension::Dimension},
 };
 use orchester_app::{
@@ -348,6 +348,19 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
       0.4,
       "column headings are tracked"
     );
+    let no_ligatures = FontFeatures::from([FontFeature::disable(*b"liga"), FontFeature::disable(*b"calt")]);
+    for role in [
+      TypographyStyle::Mono,
+      T::MonoKey.role(),
+      T::MonoNote.role(),
+      T::MonoSmall.role(),
+    ] {
+      assert_eq!(
+        app.theme().typography_style(role.clone()).font_features,
+        no_ligatures,
+        "{role:?} shows `--` as typed"
+      );
+    }
   }
 }
 

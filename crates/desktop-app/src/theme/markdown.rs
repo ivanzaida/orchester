@@ -20,6 +20,9 @@ const CODE_RADIUS: f32 = 6.0;
 const CODE_PADDING: f32 = 8.0;
 const BLOCK_SPACING: f32 = 8.0;
 const ITEM_SPACING: f32 = 2.0;
+/// The room before a list item's text: a numeral with its period, a bullet.
+const ORDERED_MARKER: f32 = 20.0;
+const BULLET_MARKER: f32 = 12.0;
 
 fn inline(configure: impl FnOnce(&mut MarkdownInlineStyle)) -> MarkdownInlineStyle {
   let mut style = MarkdownInlineStyle::new();
@@ -80,7 +83,9 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
     nested_block_spacing: ITEM_SPACING,
     code_block_spacing: BLOCK_SPACING,
     blockquote_gap: BLOCK_SPACING,
-    list_marker_gap: BLOCK_SPACING,
+    list_marker_gap: ITEM_SPACING,
+    ordered_list_marker_width: ORDERED_MARKER,
+    unordered_list_marker_width: BULLET_MARKER,
     heading: heading(1.0, palette.text_primary),
     heading_1: heading(1.15, palette.text_primary),
     heading_2: heading(1.08, palette.text_primary),
