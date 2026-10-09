@@ -108,3 +108,38 @@ fn task_bulk_organization_filters_and_sorts_combine_with_the_search() {
     .is_empty()
   );
 }
+
+#[test]
+fn task_rows_say_what_their_readiness_is_about_wherever_its_words_are_chosen() {
+  use std::collections::{BTreeMap, HashMap};
+
+  use orchester_core::{run::TaskPhase, task_group::GroupHold};
+  use orchester_workspace::tasks::list::ReadinessKind;
+
+  let tasks = stored_tasks();
+  let (incomplete, queued) = (tasks[0].id(), tasks[1].id());
+  let data = ProjectTasks {
+    tasks: Arc::new(tasks),
+    ..ProjectTasks::default()
+  };
+  let none = TaskFilter::default();
+  let kinds = |data: &ProjectTasks| -> Vec<ReadinessKind> {
+    query(data, TaskTab::All, ("", PipelineFilter(None), &none), TaskSort::Manual)
+      .into_iter()
+      .map(|row| row.readiness)
+      .collect()
+  };
+  assert_eq!(
+    kinds(&data),
+    [ReadinessKind::Missing, ReadinessKind::Run(TaskPhase::Queued)]
+  );
+  let held = ProjectTasks {
+    group_holds: Arc::new(BTreeMap::from([(queued, GroupHold::FailedTask)])),
+    blocking: Arc::new(HashMap::from([(incomplete, vec![queued])])),
+    ..data.clone()
+  };
+  assert_eq!(
+    kinds(&held),
+    [ReadinessKind::Blocked, ReadinessKind::Held(GroupHold::FailedTask)]
+  );
+}

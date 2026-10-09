@@ -12,6 +12,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
+pub use super::standing::{CurrentStep, ReadinessKind};
 use crate::{
   display,
   messages::Message,
@@ -88,6 +89,8 @@ pub struct LatestRun {
   pub question: Option<AwaitedQuestion>,
   /// The decision it waits for after its retries ran out or its step broke again, if it does.
   pub decision: Option<AwaitedDecision>,
+  /// The step its agent is on, or the one it stopped at.
+  pub step: Option<CurrentStep>,
 }
 
 /// What a run waiting for a person's decision stopped at (02.B6 `Np9kc`): the step, by name, and
@@ -186,6 +189,7 @@ impl LatestRun {
       plan: awaited.plan,
       question: awaited.question,
       decision: AwaitedDecision::of(run),
+      step: CurrentStep::of(run),
     }
   }
 
@@ -258,6 +262,15 @@ impl Latest {
     }
   }
 
+  /// What [`Latest::message`] is about.
+  pub const fn readiness(&self) -> ReadinessKind {
+    match self {
+      Self::Run(latest) if matches!(latest.phase, TaskPhase::Draft) => ReadinessKind::Ready,
+      Self::Run(latest) => ReadinessKind::Run(latest.phase),
+      Self::Unreadable(_) => ReadinessKind::Unreadable,
+    }
+  }
+
   /// The latest run while no runner is connected ([`LatestRun::without_runner`]); a run that
   /// cannot be read stays as it is.
   #[must_use]
@@ -291,6 +304,13 @@ impl Readiness {
       Self::Ready
     } else {
       Self::Missing(missing)
+    }
+  }
+
+  pub const fn kind(&self) -> ReadinessKind {
+    match self {
+      Self::Ready => ReadinessKind::Ready,
+      Self::Missing(_) => ReadinessKind::Missing,
     }
   }
 
@@ -382,6 +402,10 @@ pub struct TaskRow {
   pub former_key: Option<Arc<str>>,
   /// Kept *Not shared* when the project joined: read-only, shown behind the filter only.
   pub not_shared: bool,
+  /// What `detail` is about, set wherever `detail` is chosen.
+  pub readiness: ReadinessKind,
+  /// The step its latest run is on, or stopped at.
+  pub step: Option<CurrentStep>,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -397,10 +421,16 @@ pub(super) fn phase_of(task: &Task, phases: &Phases) -> Option<TaskPhase> {
 impl TaskRow {
   pub fn new(task: &Task, published: &[PipelineChoice], latest: Option<&Latest>) -> Self {
     let phase = latest.map_or_else(|| Some(TaskPhase::of(task, None, None)), Latest::phase);
-    let detail = match (latest, task.status()) {
-      (Some(latest), _) => latest.message(),
-      (None, TaskStatus::Queued) => Message::new("tasks.progress.queued"),
-      (None, TaskStatus::Draft) => Readiness::of(task).message(),
+    let (detail, readiness) = match (latest, task.status()) {
+      (Some(latest), _) => (latest.message(), latest.readiness()),
+      (None, TaskStatus::Queued) => (
+        Message::new("tasks.progress.queued"),
+        ReadinessKind::Run(TaskPhase::Queued),
+      ),
+      (None, TaskStatus::Draft) => {
+        let readiness = Readiness::of(task);
+        (readiness.message(), readiness.kind())
+      }
     };
     let latest = latest.and_then(Latest::run);
     Self {
@@ -418,6 +448,8 @@ impl TaskRow {
       created_at: task.created_at(),
       former_key: None,
       not_shared: false,
+      readiness,
+      step: latest.and_then(|latest| latest.step.clone()),
     }
   }
 }
