@@ -158,6 +158,30 @@ fn a_table_has_a_32_header_and_44_rows_12_in_their_cells_12_apart() {
 }
 
 #[test]
+fn a_highlighted_row_is_tinted_and_keeps_its_cells_where_they_were() {
+  let mut kit = Kit::show(|_| {
+    let row = |id: &str, key: &str| {
+      TableRow::new(id)
+        .cell(ColumnWidth::Fixed(52.0), Text::new(key).id(format!("{id}-key")))
+        .cell(ColumnWidth::Fill, Text::new("Show token spend per step"))
+        .on_open(|| {})
+    };
+    Column::new()
+      .width(Dimension::Px(CONTENT))
+      .child(row("new", "KON-37").highlighted())
+      .child(row("old", "KON-36"))
+      .into()
+  });
+  let tinted = |kit: &mut Kit, id: &str| {
+    let element = kit.tree.get_element_by_id(id).expect("the row is shown");
+    element.children().iter().any(|child| child.has_class("highlighted"))
+  };
+  assert!(tinted(&mut kit, "new"));
+  assert!(!tinted(&mut kit, "old"));
+  assert_eq!(kit.bounds("new-key").x, kit.bounds("old-key").x);
+}
+
+#[test]
 fn empty_loading_and_failed_states_never_look_alike() {
   let retried = Arc::new(AtomicUsize::new(0));
   let retry = retried.clone();
