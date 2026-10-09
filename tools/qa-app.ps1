@@ -11,12 +11,18 @@
 # 4. Starts the copied app with ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1 and window control on, and
 #    prints its pid and its MCP discovery file. Stop it by that pid when done.
 #
-# .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped.
-# Nothing outside .tmp/qa/ is written: never the user's install (E:\projects\orchester) nor a real
-# repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
+# .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
+# and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
+# only cargo's target folder and the app's MCP discovery file in the user's discovery folder: never the
+# user's install (E:\projects\orchester) nor a real repository. The app's console output goes to
+# .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
-    [Parameter(Mandatory = $true)][string]$Scenario,
+    # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
+    # anything under .tmp/qa/<task>/ is replaced.
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("empty", "tasks", "task-states", "conversation", "changes", "interrupted", "unreadable-db", "live")]
+    [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner
 )
@@ -37,18 +43,24 @@ $qa = Join-Path $qaRoot $Name
 $bin = Join-Path $qa "bin"
 $repo = Join-Path $qa "repo-$Scenario"
 
-# Only .tmp/qa/<task>/ of this checkout: never the user's install or their own repositories.
-$forbidden = @("E:\projects\orchester", "H:\projects\orchester") | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+# Only .tmp/qa/<task>/ of this checkout, and never inside the user's install.
+$install = [System.IO.Path]::GetFullPath("E:\projects\orchester")
 foreach ($path in @($qa, $bin, $repo)) {
     $full = [System.IO.Path]::GetFullPath($path)
     if (-not $full.StartsWith($qaRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "refusing ${full}: QA data stays under $qaRoot"
     }
-    foreach ($place in $forbidden) {
-        if ($full.Equals($place, [System.StringComparison]::OrdinalIgnoreCase) -or
-            ($place -like "E:*" -and $full.StartsWith($place, [System.StringComparison]::OrdinalIgnoreCase))) {
-            throw "refusing ${full}: it is the user's install or repository"
-        }
+    if ($full.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "refusing ${full}: it is inside the user's install"
+    }
+}
+
+# A junction or link on the way would send the removal and the copies somewhere else.
+$tmp = Join-Path $repositoryRoot ".tmp"
+foreach ($folder in @($repositoryRoot, $tmp, $qaRoot, $qa, $bin, $repo)) {
+    $item = Get-Item -Force -LiteralPath $folder -ErrorAction SilentlyContinue
+    if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "refusing ${folder}: it is a junction or a link"
     }
 }
 
