@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
   connection::{AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform},
   id::{ConnectionId, ResourceId},
-  permission::capability::PermissionProblem,
+  permission::{CommandPermission, StepCommands, capability::PermissionProblem},
   resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
 };
 
@@ -50,6 +50,10 @@ pub enum PreflightProblem {
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
   /// platform; a step never runs with permissions that are not enforced.
   PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
+  /// The step lists the commands it may run, but its profile asks a person about commands now (it was
+  /// republished so): asking would offer commands outside the list for approval, and running the list
+  /// unasked would skip the profile's asking, so a person updates the step.
+  CommandListNotOffered { step: StepKey },
   /// The project folder is not a git repository the runner can branch from.
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
@@ -100,6 +104,9 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
       problems.push(PreflightProblem::ProfileNotPublished { step: key() });
       continue;
     };
+    if lists_commands_on_an_asking_profile(step, profile.body()) {
+      problems.push(PreflightProblem::CommandListNotOffered { step: key() });
+    }
     match usable_provider(&connections, profile.body().connection(), key()) {
       Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
       Err(problem) => problems.push(problem),
@@ -120,6 +127,15 @@ fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> 
     });
   }
   tool.access().map(|_| PreflightProblem::ToolAccessRules { step })
+}
+
+/// Whether the step narrows its commands to a list while its profile asks a person about commands: the
+/// editor offers a list only on a profile that allows one.
+fn lists_commands_on_an_asking_profile(step: &Step, profile: &AgentProfile) -> bool {
+  matches!(
+    &step.kind,
+    StepKind::Agent { permissions, .. } if matches!(permissions.commands, StepCommands::Only(_))
+  ) && matches!(profile.permissions().commands(), CommandPermission::AskBefore)
 }
 
 /// Whether `provider`'s CLI enforces the step's effective permissions on this platform. Only

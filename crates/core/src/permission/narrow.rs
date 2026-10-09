@@ -63,8 +63,8 @@ impl AgentPermissions {
       }
       (CommandPermission::AnyInWorktree, StepCommands::Only(step)) => CommandPermission::Allowed(step.clone()),
       // A list would let its commands run without asking where the profile asks a person; the step keeps
-      // asking. Commands outside the list still ask rather than being denied: the asking mode has no list
-      // of its own, and asking a person is within the profile's ceiling.
+      // asking. The asking mode has no list of its own, so such a step does not start at all: preflight
+      // refuses it (`PreflightProblem::CommandListNotOffered`) until a person updates the step.
       (CommandPermission::AskBefore, StepCommands::Only(_)) => CommandPermission::AskBefore,
     };
     let network = match (self.network, step.network) {
