@@ -85,7 +85,7 @@ fn open(path: &Path, access: u32, share: u32) -> io::Result<Handle> {
 fn reached(handle: &Handle) -> io::Result<PathBuf> {
   let mut buffer = vec![0_u16; 1024];
   loop {
-    let capacity = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+    let capacity = u32::try_from(buffer.len()).map_err(|_| io::Error::other("a path longer than Windows reports"))?;
     // SAFETY: `handle.0` is open and `buffer` holds `capacity` wide characters for the call to write.
     let length = unsafe {
       GetFinalPathNameByHandleW(
