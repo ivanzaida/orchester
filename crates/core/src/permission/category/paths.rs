@@ -101,6 +101,11 @@ impl CommandScope {
     &self.worktree
   }
 
+  /// Whether `folder` is too broad for a rule to cover what lies in it ([`super::broad::is_broad`]), once resolved.
+  pub fn is_broad_folder(&self, folder: &Path) -> bool {
+    super::broad::is_broad(&resolved(folder), &self.homes)
+  }
+
   /// Whether `path`, as an agent named a file it changed (absolute, or relative to the worktree), names a
   /// file in the worktree once resolved.
   pub fn is_worktree_file(&self, path: &str) -> bool {

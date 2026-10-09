@@ -123,6 +123,12 @@ impl FieldInput {
     self
   }
 
+  /// A glyph before the value that says what the field is for (`pencil-line` in the plan's note `c2mWh`).
+  pub fn leading(mut self, glyph: Icon) -> Self {
+    self.leading = Some(glyph);
+    self
+  }
+
   /// While it holds text, the box ends in a cross that clears it; `label` names the cross for tools.
   pub fn clearable(mut self, label: impl Into<Arc<str>>) -> Self {
     self.clear = Some(label.into());

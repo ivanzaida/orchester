@@ -47,15 +47,24 @@ use crate::{
 /// ellipsis: what Geist Mono 12 fits in the column's 180 (`DFATr`).
 const PATH_CHARS: usize = 25;
 
-/// The panel's width (`W73m1n`).
+/// The panel's width (`W73m1n`), and with a decision above it (`This run` `dbKXP` in `DVuXu`).
 const PANEL_WIDTH: f32 = 340.0;
+const WITH_LEAD_WIDTH: f32 = 360.0;
 
-/// The panel around `rows`, scrolling when they are taller than the window.
-pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
+/// The panel around `rows`, `lead` above its title, scrolling when they are taller than the window.
+pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>, lead: Option<Element>) -> Element {
+  let width = if lead.is_some() { WITH_LEAD_WIDTH } else { PANEL_WIDTH };
+  let lead = lead.map(|lead| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().bottom(ExtraSpacing::Inset.role()))
+      .child(lead)
+  });
   let content = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(TaskSpacing::Panel.role())
     .spacing(ExtraSpacing::Tight.role())
+    .with_children(lead)
     .child(
       Column::new()
         .padding(Padding::new().bottom(ExtraSpacing::Snug.role()))
@@ -68,15 +77,16 @@ pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>) -> Element {
     .with_children(rows);
   Column::new()
     .id(id.to_owned())
-    .width(Dimension::Px(PANEL_WIDTH))
+    .width(Dimension::Px(width))
     .height(Dimension::Pct(100.0))
     .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(ScrollVertical::new(content).width(Dimension::Pct(100.0)).flex(1.0))
     .into()
 }
 
-/// *This run* of `run`, its active agent time counting on while the run has a runner (not `lost`).
-pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Element {
+/// *This run* of `run`, its active agent time counting on while the run has a runner (not `lost`); `lead`
+/// above it is the decision the run waits for.
+pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool, lead: Option<Element>) -> Element {
   let version = run.version.to_string();
   let pipeline = ctx.t_args(
     "summary.thisRun.pipelineValue",
@@ -106,7 +116,7 @@ pub fn this_run(ctx: &mut Ctx, run: &RunView, root: &Path, lost: bool) -> Elemen
   rows.push(ctx.mount_keyed::<ActiveTime>("task-active-time", ActiveProps { active }));
   rows.extend(permissions(ctx, run));
   rows.push(worktree(ctx, run, root));
-  panel("task-this-run", &ctx.t("summary.thisRun.title"), rows)
+  panel("task-this-run", &ctx.t("summary.thisRun.title"), rows, lead)
 }
 
 /// "main · 4d2b8e0": the branch the run started from at the revision it started at.
@@ -348,7 +358,7 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
       DetailValue::Text,
     )),
   }
-  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows)
+  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, None)
 }
 
 fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {

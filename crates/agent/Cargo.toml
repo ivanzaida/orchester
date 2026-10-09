@@ -35,6 +35,16 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, optional = true }
 
+# `delete_file` and `move_file` change the entry they checked through folders opened without following links
+# (`openat`, `unlinkat`, `renameat` with no-replace); std has no calls relative to an open folder.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
+# `delete_file` and `move_file` delete and rename through a handle opened without following a link and checked with
+# `GetFinalPathNameByHandleW`; std deletes and renames by path only.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO"] }
+
 [dev-dependencies]
 # The fake model server's state, shared by its connections.
 parking_lot.workspace = true

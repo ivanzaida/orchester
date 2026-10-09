@@ -2,6 +2,7 @@
 
 mod changes;
 mod conversation;
+mod decisions;
 mod empty;
 mod interrupted;
 mod live;
@@ -53,12 +54,13 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 9] = [
+pub const ALL: [Scenario; 10] = [
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("changes", changes::seed),
+  Scenario::of("decisions", decisions::seed),
   Scenario::of("interrupted", interrupted::seed),
   Scenario::of("unreadable-db", unreadable_db::seed),
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),

@@ -70,7 +70,9 @@ async fn claude_runs_a_step_and_commits_its_changes() {
   assert!(
     argv.contains(
       " --permission-prompt-tool mcp__Orchester__approve --tools Read,Glob,Grep,TodoWrite,Edit,Write,NotebookEdit,Bash \
-       --permission-mode default --disallowedTools WebFetch WebSearch --allowedTools Bash(git:*) Edit(//"
+       --permission-mode default --disallowedTools WebFetch WebSearch Read Edit MultiEdit Write NotebookEdit NotebookRead Grep Glob LS \
+       --allowedTools \
+       Bash(git:*) Edit(//"
     ),
     "{argv}"
   );

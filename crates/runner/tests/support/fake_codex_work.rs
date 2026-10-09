@@ -130,6 +130,8 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   if [
     "Use Orchester's tools",
     "Use the file tools",
+    "Use the run tools",
+    "Run the check twice",
     "Use the index tools",
     "Use the skill tools",
   ]
