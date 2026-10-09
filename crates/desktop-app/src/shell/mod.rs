@@ -2,7 +2,9 @@
 //! `Tasks · dark` `jn2IT`): the sidebar, the rounded inset content panel that hosts the routed screen,
 //! and the status bar. The title bar belongs to the window chrome (`crate::chrome`).
 
-mod sidebar;
+mod clock;
+pub mod needs_you;
+pub mod sidebar;
 pub mod status_bar;
 
 use lurq::{

@@ -16,12 +16,16 @@
     },
     "tabs": {
       "close": "Close tab",
-      "inProject": "{{project}} · {{label}}"
+      "inProject": "{{project}} · {{label}}",
+      "attention": "{{project}} · {{waiting}}",
+      "runnerOffline": "runner offline",
+      "tasksUnread": "tasks couldn't be read"
     },
     "sidebar": {
       "project": "Project",
       "noProject": "No project open",
-      "chooseProject": "Choose one in All projects"
+      "chooseProject": "Choose one in All projects",
+      "unknownCount": "—"
     },
     "nav": {
       "configure": "Configure"
@@ -59,10 +63,142 @@
       "invalidParam": "{{value}} is not a value of {{param}} in {{path}}."
     },
     "status": {
+      "project": "{{name}} · {{folder}}",
+      "runner": {
+        "starting": "Runner starting",
+        "online": "Runner online",
+        "reconnecting": "Reconnecting to runner",
+        "attempting": "· attempt {{attempt}} of {{limit}} · connecting…",
+        "nextAttempt": "· attempt {{attempt}} of {{limit}} · next in {{seconds}} s",
+        "stopping": "Stopping runner…",
+        "stopped": "Runner stopped",
+        "offline": "Runner offline",
+        "alreadyServed": "· another Orchester app has this project open",
+        "missing": "· the runner program is missing",
+        "notStarted": "· did not start",
+        "attemptsSince": {
+          "one": "· {{attempts}} attempt since {{time}}",
+          "other": "· {{attempts}} attempts since {{time}}"
+        },
+        "attempts": {
+          "one": "· {{attempts}} attempt",
+          "other": "· {{attempts}} attempts"
+        },
+        "restart": "Restart runner",
+        "openLog": "Open runner log"
+      },
+      "interrupted": {
+        "reconnecting": {
+          "one": "1 run interrupted · it continues from its last checkpoint",
+          "other": "{{count}} runs interrupted · they continue from their last checkpoint"
+        },
+        "offline": {
+          "one": "1 run interrupted · nothing runs until the runner starts",
+          "other": "{{count}} runs interrupted · nothing runs until the runner starts"
+        }
+      },
+      "approvals": {
+        "waiting": {
+          "one": "approval waiting",
+          "other": "approvals waiting"
+        },
+        "asksCommand": "· {{agent}} asks to run {{command}} · {{task}}",
+        "asksTool": "· {{agent}} asks to use {{server}} {{tool}} · {{task}}",
+        "firstLineMore": "{{line}} …",
+        "review": "Review",
+        "auto": "Auto-approving",
+        "autoOne": "· Run {{run}} · {{task}}",
+        "autoOther": "· {{count}} runs",
+        "stop": "Stop",
+        "stopping": "Stopping…",
+        "stopFailed": "Couldn't stop auto-approving · {{reason}}"
+      },
+      "activity": {
+        "running": "{{title}}…",
+        "several": "{{count}} operations · {{title}}…",
+        "failure": "{{title}} · {{reason}}",
+        "inProject": "{{project}} · {{text}}"
+      },
+      "open": {
+        "task": "Open task",
+        "decision": "Open",
+        "other": "Open"
+      },
+      "dismiss": "Dismiss",
+      "agents": "Agents",
+      "queued": "Queued",
+      "needsYou": {
+        "one": "needs you",
+        "other": "need you"
+      },
+      "tokens": "{{used}} / {{budget}} today",
+      "unknown": "—",
       "mcpListening": "MCP on :{{port}}",
       "mcpUnavailable": "MCP unavailable",
+      "windowControl": "Agents can control this window",
       "version": "v{{version}}",
-      "windowControl": "Agents can control this window"
+      "unread": {
+        "first": "Tasks couldn't be read · {{reason}}",
+        "again": "Tasks shown as last read · {{reason}}",
+        "tryAgain": "Try again"
+      }
+    },
+    "needsYou": {
+      "one": "{{count}} needs you",
+      "other": "{{count}} need you",
+      "inProject": "{{project}} {{count}}",
+      "separator": " · "
+    },
+    "running": {
+      "title": "Running",
+      "all": "All running tasks",
+      "step": "{{key}} · {{step}}",
+      "stopped": "{{key}} · stopped",
+      "noTime": "—"
+    },
+    "time": {
+      "seconds": "{{count}}s",
+      "minutes": "{{count}}m",
+      "hours": "{{count}}h"
+    },
+    "switcher": {
+      "recent": "RECENT",
+      "allProjectsDetail": "Every project Orchester knows on this computer",
+      "openFolder": "Open folder…",
+      "openFolderDetail": "A folder that already has an Orchester project",
+      "pickTitle": "Open a folder that has an Orchester project",
+      "addProject": "Add project",
+      "addProjectUnavailable": "Not in this app yet: set up new projects in the previous Orchester app.",
+      "openInNewTab": "Open in new tab",
+      "folder": {
+        "checking": "Opening folder…",
+        "checkingBody": "Reading its project data.",
+        "notRepository": "Not a git repository",
+        "notRepositoryBody": "An Orchester project lives in a git repository, in its .orchester folder. Choose the repository's top folder, or make this folder a repository first:",
+        "command": "Run in a terminal",
+        "notTop": "Not the top folder of its repository",
+        "notTopBody": "The repository starts at {{top}}.",
+        "openTop": "Open {{top}}",
+        "noProject": "No Orchester project here yet",
+        "noProjectBody": "It is a git repository that Orchester hasn't set up. Nothing was changed.",
+        "setUp": "Set it up",
+        "newer": "Written by a newer Orchester",
+        "newerBody": "Its project data has version {{found}}; this build reads up to version {{supported}}. Nothing was changed.",
+        "unreadable": "This folder can't be read",
+        "another": "Choose another folder…",
+        "pickFailed": "The folder picker couldn't open"
+      }
+    },
+    "operations": {
+      "count": "{{count}} operations",
+      "separator": "·",
+      "title": "Background operations",
+      "running": "{{count}} running",
+      "close": "Close",
+      "runningSection": "RUNNING",
+      "recent": "RECENT",
+      "where": "{{project}} · {{place}}",
+      "escCloses": "Esc closes"
     }
   }
 }

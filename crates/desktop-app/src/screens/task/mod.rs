@@ -20,6 +20,7 @@ use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::Column,
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -208,6 +209,8 @@ pub struct PageState {
   pub removal: Signal<Removal>,
   /// The open removal's switch that agrees to discard uncommitted changes; off each time one opens.
   pub discard: Signal<bool>,
+  /// Where the Summary's column is scrolled, kept as the tabs switch.
+  pub summary_scroll: ScrollState,
 }
 
 impl PageState {
@@ -227,6 +230,8 @@ impl PageState {
 /// One task's frame and its current tab.
 struct TaskFrame {
   retries: Signal<u64>,
+  /// Why the task could not be read again, kept while it is read again until a reading succeeds.
+  stale: Signal<StaleRead>,
   state: PageState,
 }
 
@@ -236,9 +241,11 @@ impl Component for TaskFrame {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       retries: ctx.signal(0),
+      stale: ctx.signal(StaleRead(None)),
       state: PageState {
         removal: ctx.signal(Removal::closed()),
         discard: ctx.signal(false),
+        summary_scroll: ScrollState::new(),
       },
     }
   }
@@ -257,7 +264,7 @@ impl Component for TaskFrame {
     let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
       TaskRead::Loading => return loading("task-loading", &ctx.t("task.page.loading")).into(),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
-      TaskRead::Ready(detail, stale) => (detail, stale),
+      TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };
     let services = Services::of(ctx);
     let jobs = feed.job_state.get();
@@ -299,6 +306,27 @@ impl Component for TaskFrame {
       .into()
   }
 }
+
+impl TaskFrame {
+  /// Why the task could not be read again: `failed` now, else what failed before while the task is
+  /// read again (`pending`), so the notice does not flicker; nothing once a reading succeeded.
+  fn stale(&self, failed: Option<Message>, pending: bool) -> Option<Message> {
+    let kept = match failed {
+      Some(reason) => Some(reason),
+      None if pending => self.stale.get_untracked().0,
+      None => None,
+    };
+    if self.stale.get_untracked().0 != kept {
+      self.stale.set(StaleRead(kept.clone()));
+    }
+    kept
+  }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct StaleRead(Option<Message>);
+
+impl lurq::app::component::DevtoolsInspectable for StaleRead {}
 
 /// The Conversation tab's mount point: its timeline (C1), with the composer (C2) and the decision cards (C3)
 /// inside it.
