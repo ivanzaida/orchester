@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 use self::{
   diff::{DiffView, DiffViewProps},
-  files::{FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
+  files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
   listed::{FileListing, ListKeys, Listed},
   toolbar::toolbar,
 };
@@ -54,9 +54,6 @@ use crate::{
   navigation::Navigation,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
 };
-
-/// Width of the file list (`qT0kd`).
-const FILE_LIST_WIDTH: f32 = 320.0;
 
 /// What the Changes tab shows.
 #[derive(Clone)]

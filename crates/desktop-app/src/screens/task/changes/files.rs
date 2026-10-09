@@ -27,12 +27,23 @@ use super::{listed::Listed, load::LastRead};
 use crate::{
   routes::ChangeSource,
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{pressable::pressable, tooltip::Truncated},
+  ui::{pressable::pressable, tooltip::Tooltip},
 };
 
-/// Height of a file row (`dAwTi`) and width of its change's letter (`F1t7T`).
+/// Width of the file list (`qT0kd`), height of a file row (`dAwTi`) and width of its change's letter
+/// (`F1t7T`).
+pub const FILE_LIST_WIDTH: f32 = 320.0;
 const FILE_HEIGHT: f32 = 30.0;
 const LETTER_WIDTH: f32 = 12.0;
+/// What a file row leaves its path of the list's width besides the counts: the list's padding (2 × 8),
+/// the row's (2 × 10), the letter (12) and the gaps after the letter and the path (2 × 8).
+const ROW_BESIDES_PATH: f32 = 64.0;
+/// A count's gap before it (8), and the advances of Geist Mono at 12 (a path) and 11 (a count): 0.6 em.
+const COUNT_GAP: f32 = 8.0;
+const PATH_CHAR_WIDTH: f32 = 7.2;
+const COUNT_CHAR_WIDTH: f32 = 6.6;
+/// The fewest characters a cut path keeps of its start.
+const CUT_HEAD: usize = 4;
 /// How often the line saying when the worktree was read is brought up to date.
 const AGE_TICK: Duration = Duration::from_secs(1);
 
@@ -71,23 +82,23 @@ impl FileSummary {
   /// The added lines in `success` and the removed ones in `danger`, each only when there are some
   /// (`dXDtc`, `zcx5G`); a binary file has neither.
   pub fn counts(&self, ctx: &Ctx, typography: TypographyStyle) -> Vec<Element> {
+    self
+      .count_texts(ctx)
+      .into_iter()
+      .zip([PaletteColor::Success, PaletteColor::Danger].into_iter().cycle())
+      .map(|(text, color)| Text::new(&text).variant(typography).color(color).nowrap().into())
+      .collect()
+  }
+
+  fn count_texts(&self, ctx: &Ctx) -> Vec<Arc<str>> {
     if self.binary {
       return Vec::new();
     }
-    [
-      (self.additions, "changes.added", PaletteColor::Success),
-      (self.deletions, "changes.removed", PaletteColor::Danger),
-    ]
-    .into_iter()
-    .filter(|(count, ..)| *count > 0)
-    .map(|(count, key, color)| {
-      Text::new(&ctx.t_args(key, [("count", count.to_string())]))
-        .variant(typography)
-        .color(color)
-        .nowrap()
-        .into()
-    })
-    .collect()
+    [(self.additions, "changes.added"), (self.deletions, "changes.removed")]
+      .into_iter()
+      .filter(|(count, _)| *count > 0)
+      .map(|(count, key)| ctx.t_args(key, [("count", count.to_string())]))
+      .collect()
   }
 }
 
@@ -265,7 +276,7 @@ fn file_row(ctx: &mut Ctx, listed: &Listed, summary: &FileSummary, selected: boo
   };
   let id = format!("{prefix}:{}", listed.path);
   let (letter, color) = change_letter(ctx, &summary.change);
-  let path = Truncated::new(format!("{id}-path"), listed.path.clone(), TypographyStyle::Mono).render(ctx);
+  let path = path_text(ctx, &format!("{id}-path"), &listed.path, summary);
   let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
@@ -298,6 +309,56 @@ fn file_row(ctx: &mut Ctx, listed: &Listed, summary: &FileSummary, selected: boo
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .into()
   }
+}
+
+/// The path in the room its row leaves it, cut in the middle so its file name stays
+/// (`migrations/0042_…_attempts.sql` in `qT0kd`); while it is cut, its whole path shows in a tooltip.
+fn path_text(ctx: &mut Ctx, id: &str, path: &str, summary: &FileSummary) -> Element {
+  let counts: f32 = summary
+    .count_texts(ctx)
+    .iter()
+    .map(|count| COUNT_GAP + chars(count) * COUNT_CHAR_WIDTH)
+    .sum();
+  let room = (FILE_LIST_WIDTH - ROW_BESIDES_PATH - counts) / PATH_CHAR_WIDTH;
+  #[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a row's room is a few dozen characters, never negative after `max`"
+  )]
+  let room = room.floor().max(0.0) as usize;
+  let shown = middle_cut(path, room);
+  let text = Text::new(&shown)
+    .id(id.to_owned())
+    .variant(TypographyStyle::Mono)
+    .nowrap();
+  if shown == path {
+    return text.into();
+  }
+  Tooltip::new(format!("{id}-tooltip"), path.to_owned()).wrap(ctx, text)
+}
+
+#[allow(
+  clippy::cast_precision_loss,
+  reason = "a count holds a few characters, far inside f32's exact range"
+)]
+fn chars(text: &str) -> f32 {
+  text.chars().count() as f32
+}
+
+/// `path` in at most `room` characters: whole when it fits, otherwise its start, `…` and its end, the
+/// end long enough for its file name when there is room for that.
+pub fn middle_cut(path: &str, room: usize) -> String {
+  let characters: Vec<char> = path.chars().collect();
+  if characters.len() <= room || room <= CUT_HEAD + 1 {
+    return path.to_owned();
+  }
+  let name = path.rsplit('/').next().unwrap_or(path).chars().count();
+  let tail = name.max((room - 1) / 2).min(room - 1 - CUT_HEAD);
+  let head = room - 1 - tail;
+  let mut cut: String = characters[..head].iter().collect();
+  cut.push('…');
+  cut.extend(&characters[characters.len() - tail..]);
+  cut
 }
 
 #[derive(Clone, PartialEq)]
