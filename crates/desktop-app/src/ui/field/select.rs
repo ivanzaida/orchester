@@ -4,8 +4,9 @@
 //! radius 8, 4 inside and 2 between options (`ClKqz`); an option is 28 high at least, 8 at its sides,
 //! radius 4, its label 12 `text_primary` and its detail under it in 11 `text_muted` (`Menu item/detail`
 //! `j6ZUhL`); the pointer's and the keyboard's option take the `hover` fill (`wzx2E`), and a 14 check
-//! marks the chosen one at the end (`s3Dp0`). lurq's options carry no icon, so the design's option
-//! icons (`F0qLML`) are not drawn.
+//! marks the chosen one at the end (`s3Dp0`). lurq 0.42's options carry no icon and center their check
+//! on an option with a detail, so the design's option icons (`F0qLML`) are not drawn and the check is
+//! not at the top.
 
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
-  components::{Select, SelectOption},
+  components::{Row, Select, SelectOption},
   core::{Signal, signal::SignalValue},
   node::{
     Element, SelectCheckmarkPosition, SelectIcon, SelectPartStyle, SelectStyle, dimension::Dimension, padding::Padding,
@@ -26,8 +27,6 @@ use crate::{
   ui::icon::Icon,
 };
 
-/// Space between a select and its open menu (`FpAul`).
-const MENU_GAP: f32 = 6.0;
 /// The most an open menu grows to, nine options, before it scrolls.
 const MENU_MAX_HEIGHT: f32 = 280.0;
 
@@ -65,7 +64,7 @@ pub fn select_style(ctx: &Ctx) -> SelectStyle {
         .box_shadow(ShadowStyle::Md),
     )
     .max_menu_height(MENU_MAX_HEIGHT)
-    .menu_gap(MENU_GAP)
+    .menu_gap(ExtraSpacing::Snug.value())
     .option(
       SelectPartStyle::new()
         .min_height(ControlHeight::Md.value())
@@ -93,6 +92,7 @@ pub fn select_style(ctx: &Ctx) -> SelectStyle {
 
 pub struct SelectField<T: SignalValue> {
   id: Arc<str>,
+  name: Arc<str>,
   value: Signal<T>,
   options: Vec<SelectOption<T>>,
   width: Dimension,
@@ -103,10 +103,17 @@ where
   T: Clone + PartialEq + Send + Sync + 'static + SignalValue,
   Vec<T>: SignalValue,
 {
-  /// A select of `options` bound to `value`; its element id is `id`.
-  pub fn new(id: impl Into<Arc<str>>, value: Signal<T>, options: Vec<SelectOption<T>>) -> Self {
+  /// A select of `options` bound to `value`, named `name` for tools (its field's label); its element id
+  /// is `id`.
+  pub fn new(
+    id: impl Into<Arc<str>>,
+    name: impl Into<Arc<str>>,
+    value: Signal<T>,
+    options: Vec<SelectOption<T>>,
+  ) -> Self {
     Self {
       id: id.into(),
+      name: name.into(),
       value,
       options,
       width: Dimension::Pct(100.0),
@@ -120,10 +127,16 @@ where
 
   pub fn render(self, ctx: &Ctx) -> Element {
     let select = Select::new(self.value)
+      .name(self.name.clone())
       .options(self.options)
       .width(self.width)
       .height(Dimension::Px(ControlHeight::Md.value()))
       .style(select_style(ctx));
-    Element::from(select).id(self.id.to_string())
+    // lurq's select takes no accessible name of its own; tools read it from the select's row.
+    Row::new()
+      .width(self.width)
+      .describe("a11y_name", self.name)
+      .child(Element::from(select).id(self.id.to_string()))
+      .into()
   }
 }

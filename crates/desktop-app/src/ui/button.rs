@@ -88,27 +88,15 @@ impl ButtonKind {
   }
 }
 
-/// What a press does, or why there is none.
-#[derive(Clone)]
-enum Press {
-  Action(Arc<dyn Fn() + Send + Sync>),
+/// Why a button cannot be pressed now. It wins over a handler given in any order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Hold {
   /// The request it made is under way.
   Loading,
   /// It cannot be pressed now, e.g. while the input is incomplete.
   Disabled,
-  /// Its feature is not built or not allowed.
-  Unavailable,
-}
-
-impl Press {
-  const fn name(&self) -> &'static str {
-    match self {
-      Self::Action(_) => "enabled",
-      Self::Loading => "loading",
-      Self::Disabled => "disabled",
-      Self::Unavailable => "unavailable",
-    }
-  }
+  /// Its feature is not built or not allowed, for this reason.
+  Unavailable(Arc<str>),
 }
 
 pub struct ActionButton {
@@ -116,7 +104,8 @@ pub struct ActionButton {
   label: Arc<str>,
   icon: Option<Icon>,
   kind: ButtonKind,
-  press: Press,
+  action: Option<Arc<dyn Fn() + Send + Sync>>,
+  hold: Option<Hold>,
   focus: Focus,
 }
 
@@ -128,7 +117,8 @@ impl ActionButton {
       label: label.into(),
       icon: None,
       kind,
-      press: Press::Disabled,
+      action: None,
+      hold: None,
       focus: Focus::Pointer,
     }
   }
@@ -138,28 +128,29 @@ impl ActionButton {
     self
   }
 
+  /// What a press does, unless the button is loading, disabled or unavailable.
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.press = Press::Action(Arc::new(handler));
+    self.action = Some(Arc::new(handler));
     self
   }
 
   /// The request the button made is under way: the loader turns in place of its icon and it cannot be
   /// pressed again.
   pub fn loading(mut self) -> Self {
-    self.press = Press::Loading;
+    self.hold = Some(Hold::Loading);
     self
   }
 
   /// It cannot be pressed now; the caller says why where it matters.
   pub fn disabled(mut self) -> Self {
-    self.press = Press::Disabled;
+    self.hold = Some(Hold::Disabled);
     self
   }
 
-  /// Its feature is not built or not allowed: a lock in place of its icon. Say why beside it with
-  /// [`super::unavailable::with_reason`].
-  pub fn unavailable(mut self) -> Self {
-    self.press = Press::Unavailable;
+  /// Its feature is not built or not allowed, for `reason`: a lock in place of its icon, and the reason
+  /// for tools. Show the reason beside it with [`super::unavailable::with_reason`].
+  pub fn unavailable(mut self, reason: impl Into<Arc<str>>) -> Self {
+    self.hold = Some(Hold::Unavailable(reason.into()));
     self
   }
 
@@ -169,12 +160,21 @@ impl ActionButton {
     self
   }
 
+  const fn state(&self) -> &'static str {
+    match (&self.hold, &self.action) {
+      (Some(Hold::Loading), _) => "loading",
+      (Some(Hold::Unavailable(_)), _) => "unavailable",
+      (Some(Hold::Disabled), _) | (None, None) => "disabled",
+      (None, Some(_)) => "enabled",
+    }
+  }
+
   /// The icon shown before the label: the loader or the lock replace the button's own.
   fn lead(&self) -> Option<Icon> {
-    match self.press {
-      Press::Loading => Some(Icon::LoaderCircle),
-      Press::Unavailable => Some(Icon::Lock),
-      Press::Action(_) | Press::Disabled => self.icon,
+    match self.hold {
+      Some(Hold::Loading) => Some(Icon::LoaderCircle),
+      Some(Hold::Unavailable(_)) => Some(Icon::Lock),
+      Some(Hold::Disabled) | None => self.icon,
     }
   }
 }
@@ -191,7 +191,7 @@ impl From<ActionButton> for Element {
       .justify(Justify::Center)
       .rounded(RadiusSize::Md)
       .describe("kind", button.kind.name())
-      .describe("state", button.press.name())
+      .describe("state", button.state())
       .describe("a11y_name", button.label.clone());
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, IconSize::Md, color.clone()).id(format!("{}-icon", button.id)));
@@ -203,8 +203,11 @@ impl From<ActionButton> for Element {
         .color(color)
         .nowrap(),
     );
-    match button.press {
-      Press::Action(handler) => button
+    if let Some(Hold::Unavailable(reason)) = &button.hold {
+      frame = frame.describe("reason", reason.clone());
+    }
+    match (button.hold, button.action) {
+      (None, Some(handler)) => button
         .focus
         .apply(button.kind.interactive(frame))
         .cursor(CursorIcon::Pointer)
@@ -214,8 +217,8 @@ impl From<ActionButton> for Element {
           handler();
         })
         .into(),
-      Press::Loading => inert(frame).cursor(CursorIcon::Progress).into(),
-      Press::Disabled | Press::Unavailable => inert(frame).opacity(DISABLED_OPACITY).into(),
+      (Some(Hold::Loading), _) => inert(frame).cursor(CursorIcon::Progress).into(),
+      _ => inert(frame).opacity(DISABLED_OPACITY).into(),
     }
   }
 }

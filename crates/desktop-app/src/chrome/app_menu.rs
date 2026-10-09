@@ -109,16 +109,14 @@ impl AppMenu {
           return menu.child(separator(ctx));
         };
         let label = ctx.t(label_key);
-        let (open, navigation, window) = (self.open.clone(), navigation.clone(), window.clone());
-        menu.child(MenuItem::new(id, label).icon(glyph).on_click(move || {
-          open.set(false);
-          match command {
-            Command::NewTab => navigation.open_tab(),
-            Command::AllProjects => navigation.go(Route::AllProjects),
-            Command::Settings => navigation.go(Route::Settings),
-            Command::Quit => window.request_close(),
-          }
-        }))
+        let (navigation, window) = (navigation.clone(), window.clone());
+        let item = MenuItem::new(id, label, move || match command {
+          Command::NewTab => navigation.open_tab(),
+          Command::AllProjects => navigation.go(Route::AllProjects),
+          Command::Settings => navigation.go(Route::Settings),
+          Command::Quit => window.request_close(),
+        });
+        menu.child(item.icon(glyph).render(ctx, &self.open))
       },
     )
   }

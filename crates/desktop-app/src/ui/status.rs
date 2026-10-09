@@ -7,10 +7,11 @@
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed and Complete `circle-check`, Merged
 //! `git-merge`, Failed `circle-x`, Unreadable `file-warning`, Waiting `clock`, Not started
-//! `circle-dashed`, Blocked `ban`; Todo `circle-dashed`, In progress `circle-dot-dashed`, In review
-//! `eye`, Done `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no
-//! Paused, Canceled, Skipped, Backlog or Urgent: they take `circle-pause` (neutral, a pause the person
-//! asked for), `circle-slash`, `skip-forward`, `inbox` and `circle-alert` (`warning`).
+//! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
+//! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
+//! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
+//! Skipped or Urgent: they take `circle-slash`, `skip-forward` and `circle-alert` (`warning`). A status
+//! with a detail is cut to its row's room, its whole words in a tooltip.
 
 use std::sync::Arc;
 
@@ -21,14 +22,17 @@ use lurq::{
   },
   components::{Row, Text},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   run::TaskPhase,
   task::organization::{Priority, WorkflowStatus},
 };
 
-use super::icon::{Icon, icon};
+use super::{
+  icon::{Icon, icon},
+  tooltip::Truncated,
+};
 use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
 
 /// What a run or one of its steps is doing, and the Blocked flag.
@@ -139,8 +143,8 @@ impl Status {
   const fn tone(self) -> Tone {
     match self {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
-      Self::Running | Self::Paused | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
-      Self::NeedsInput | Self::StoppedAtLimit | Self::Interrupted | Self::CantContinue => Tone::Warning,
+      Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
+      Self::NeedsInput | Self::Paused | Self::StoppedAtLimit | Self::Interrupted | Self::CantContinue => Tone::Warning,
       Self::Completed | Self::Complete => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
@@ -179,7 +183,7 @@ impl Status {
 
 /// How large a label is drawn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum StatusSize {
+enum StatusSize {
   /// 13 icon, 12/500 word.
   #[default]
   Regular,
@@ -216,7 +220,7 @@ impl StatusChip {
     self
   }
 
-  pub fn render(self, ctx: &Ctx) -> Element {
+  pub fn render(self, ctx: &mut Ctx) -> Element {
     let word = ctx.t(self.status.key());
     let text = match &self.detail {
       Some(detail) => ctx.t_args("ui.status.withDetail", [("status", word), ("detail", detail.clone())]),
@@ -226,15 +230,20 @@ impl StatusChip {
       StatusSize::Regular => (IconSize::Base, TypographyStyle::Label),
       StatusSize::Compact => (IconSize::Sm, ExtraTypography::NoteStrong.role()),
     };
-    labelled(
-      &self.id,
-      (self.status.icon(), icon_size),
-      &text,
-      typography,
-      self.status.color(),
-    )
-    .describe("status", self.status.key())
-    .into()
+    let color = self.status.color();
+    Row::new()
+      .id(self.id.to_string())
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Pair.role())
+      .align_items(Alignment::Center)
+      .describe("status", self.status.key())
+      .child(icon(self.status.icon(), icon_size, color.clone()).id(format!("{}-icon", self.id)))
+      .child(
+        Truncated::new(format!("{}-label", self.id), text, typography)
+          .color(color)
+          .render(ctx),
+      )
+      .into()
   }
 }
 
@@ -260,8 +269,8 @@ pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
 /// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
 pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
   let (glyph, key, tone) = match status {
-    WorkflowStatus::Backlog => (Icon::Inbox, "ui.workflow.backlog", PaletteColor::TextMuted),
-    WorkflowStatus::Todo => (Icon::CircleDashed, "ui.workflow.todo", PaletteColor::TextSecondary),
+    WorkflowStatus::Backlog => (Icon::CircleDashed, "ui.workflow.backlog", PaletteColor::TextMuted),
+    WorkflowStatus::Todo => (Icon::Circle, "ui.workflow.todo", PaletteColor::TextSecondary),
     WorkflowStatus::InProgress => (
       Icon::CircleDotDashed,
       "ui.workflow.inProgress",

@@ -16,7 +16,7 @@ use orchester_app::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
     chip::TagChip,
-    code_box::CodeBox,
+    code_box::{CodeBox, Copier},
     detail_row::{DetailValue, detail_row},
     icon::Icon,
     markdown::MarkdownView,
@@ -83,17 +83,23 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
       wide_cell(
         "Command · MOPAN",
         HALF,
-        CodeBox::new("g-command", "Command", "cargo add backoff@0.4 --features tokio").render(ctx),
+        CodeBox::new("g-command", "Command", "cargo add backoff@0.4 --features tokio")
+          // The gallery leaves the person's clipboard alone: it says what Copy would put there.
+          .copy_with(Copier::other({
+            let pressed = state.pressed.clone();
+            move |text: &str| {
+              pressed.set(format!("copy {text}"));
+              true
+            }
+          }))
+          .render(ctx),
       ),
       wide_cell(
         "Markdown · plan text (Q5J0r)",
         HALF,
-        MarkdownView::new("g-markdown", PLAN, {
-          let pressed = state.pressed.clone();
-          move |link: &str| pressed.set(format!("link {link}"))
-        })
-        .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
-        .render(ctx),
+        MarkdownView::new("g-markdown", PLAN, state.link.clone())
+          .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
+          .render(ctx),
       ),
     ])
     .into(),

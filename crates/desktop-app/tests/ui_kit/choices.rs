@@ -24,19 +24,11 @@ fn toggles_are_their_design_size_8_from_their_label_and_ask_for_the_other_value(
     };
     Row::new()
       .spacing(SpacingSize::Lg)
-      .child(
-        Toggle::new("check", ToggleKind::Checkbox, false)
-          .label("Also save")
-          .on_change(hear("check")),
-      )
-      .child(
-        Toggle::new("radio", ToggleKind::Radio, true)
-          .label("Selected")
-          .on_change(hear("radio")),
-      )
-      .child(Toggle::new("switch", ToggleKind::Switch, false).on_change(hear("switch")))
-      .child(Toggle::new("on", ToggleKind::Switch, true).on_change(hear("on")))
-      .child(Toggle::new("fixed", ToggleKind::Checkbox, true).label("From the profile"))
+      .child(Toggle::new("check", ToggleKind::Checkbox, false, "Also save").on_change(hear("check")))
+      .child(Toggle::new("radio", ToggleKind::Radio, true, "Selected").on_change(hear("radio")))
+      .child(Toggle::new("switch", ToggleKind::Switch, false, "Network").on_change(hear("switch")))
+      .child(Toggle::new("on", ToggleKind::Switch, true, "Ask before MCP actions").on_change(hear("on")))
+      .child(Toggle::new("fixed", ToggleKind::Checkbox, true, "From the profile"))
       .into()
   });
   for (id, size) in [
@@ -80,15 +72,12 @@ fn page_tabs_are_34_high_20_apart_with_counts_and_a_locked_tab_that_cannot_open(
       let heard = heard.clone();
       move || heard.update(|opened| opened.push(name))
     };
-    page_tabs(
-      "tabs",
-      [
-        PageTab::new("tab-all", counted(ctx, "All", 24), true, open("all")),
-        PageTab::new("tab-review", counted(ctx, "In review", 2), false, open("review")),
-        PageTab::unavailable("tab-artifacts", "Artifacts"),
-      ],
-    )
-    .into()
+    let tabs = [
+      PageTab::new("tab-all", counted(ctx, "All", 24), true, open("all")),
+      PageTab::new("tab-review", counted(ctx, "In review", 2), false, open("review")),
+      PageTab::unavailable("tab-artifacts", "Artifacts", "Artifacts are planned."),
+    ];
+    page_tabs(ctx, "tabs", tabs).into()
   });
   let (all, review, artifacts) = (
     kit.bounds("tab-all"),
@@ -96,22 +85,35 @@ fn page_tabs_are_34_high_20_apart_with_counts_and_a_locked_tab_that_cannot_open(
     kit.bounds("tab-artifacts"),
   );
   assert_eq!(all.height, 34.0);
+  let (tabs, line) = (kit.bounds("tabs"), kit.bounds("tabs-line"));
+  assert_eq!(
+    (line.x, line.y, line.width, line.height),
+    (tabs.x, all.y + 33.0, tabs.width, 1.0),
+    "the line under the tabs, under the current tab's underline"
+  );
   assert_close(gap_after(all, review), 20.0, "between tabs");
   assert_close(gap_after(review, artifacts), 20.0, "before the locked tab");
   assert_close(kit.bounds("tab-all-label").x - all.x, 2.0, "a tab's side");
   assert_eq!(kit.texts("tab-all"), ["All 24"]);
   assert_eq!(
     kit.texts("tab-artifacts"),
-    [Icon::Lock.glyph().to_string(), "Artifacts".to_owned()]
+    ["Artifacts".to_owned(), Icon::Lock.glyph().to_string()],
+    "the label, then the lock (`Smb4t`)"
   );
   assert_close(
-    gap_after(kit.bounds("tab-artifacts-icon"), kit.bounds("tab-artifacts-label")),
+    gap_after(kit.bounds("tab-artifacts-label"), kit.bounds("tab-artifacts-icon")),
     5.0,
-    "lock to label",
+    "label to lock",
   );
   kit.click("tab-review");
   kit.click("tab-artifacts");
   assert_eq!(opened.get(), ["review"]);
+  kit.rest_on("tab-artifacts");
+  assert_eq!(
+    kit.texts("tab-artifacts-tooltip"),
+    ["Artifacts are planned."],
+    "why, on hover"
+  );
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::{routes::Screen, theme::IconSize};
 /// Defines [`Icon`] and the code point of each glyph in `lucide.ttf`, one line per icon, so the list
 /// and the table cannot drift apart. The font names some glyphs as lucide did before its renames:
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
-/// `circle-check` its `check-circle-2`, `file-pen` its `file-edit`, `file-warning` its
+/// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
 /// `message-circle-question` its `message-circle-question-mark`, `square-plus` its `plus-square` and
 /// `triangle-alert` its `alert-triangle`.
@@ -52,6 +52,7 @@ icons! {
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
   ChevronsUpDown => '\u{e211}',
+  Circle => '\u{e076}',
   CircleAlert => '\u{e077}',
   CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
@@ -99,7 +100,6 @@ icons! {
   History => '\u{e1f5}',
   Hourglass => '\u{e296}',
   House => '\u{e0f5}',
-  Inbox => '\u{e0f7}',
   Infinity => '\u{e1e7}',
   Info => '\u{e0f9}',
   KeyRound => '\u{e4a3}',

@@ -34,9 +34,6 @@ pub use self::{
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
 /// multiple` `Q9aeZ`, `Attach context` `p6caAv`).
 pub const DISABLED_OPACITY: f32 = 0.5;
-/// A page tab that is not built yet, faded with its lock (`Page tab · Artifacts · unavailable`
-/// `W4QYDM`).
-pub const UNAVAILABLE_TAB_OPACITY: f32 = 0.75;
 /// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).
 pub const SHORTCUT_OPACITY: f32 = 0.6;
 /// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.

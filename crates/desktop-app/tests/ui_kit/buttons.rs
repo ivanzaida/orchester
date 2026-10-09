@@ -7,13 +7,17 @@ use std::sync::{
 
 use lurq::{
   app::theme::{RadiusSize, SpacingSize},
-  components::Row,
-  node::Element,
+  components::{Column, Row},
+  node::{Element, dimension::Dimension},
 };
 use orchester_app::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
   icon_button::IconButton,
+  pressable::Focus,
+  table::{ColumnWidth, TableRow},
+  tabs::{Segment, SegmentFace, segmented},
+  toggle::{Toggle, ToggleKind},
   unavailable::{reason_line, with_reason},
 };
 
@@ -106,7 +110,7 @@ fn an_unavailable_action_shows_its_lock_and_says_why_under_the_actions() {
       .child(
         ActionButton::new("multiple", ButtonKind::Secondary, "Create multiple")
           .icon(Icon::Plus)
-          .unavailable(),
+          .unavailable("Creating several tasks at once is planned."),
       )
       .child(
         ActionButton::new("new", ButtonKind::Primary, "New task")
@@ -179,4 +183,75 @@ fn icon_buttons_are_28_or_24_square_and_say_what_they_do_on_hover() {
   assert_eq!(presses.load(Ordering::SeqCst), 1);
   kit.rest_on("remove");
   assert_eq!(kit.texts("remove-tooltip"), ["Remove criterion"]);
+}
+
+#[test]
+fn a_busy_button_stays_busy_whatever_the_order_it_is_built_in() {
+  let (presses, press) = counter();
+  let mut kit = Kit::show(move |_| {
+    Row::new()
+      .child(
+        ActionButton::new("loading", ButtonKind::Primary, "Create & run")
+          .loading()
+          .on_click(press.clone()),
+      )
+      .child(
+        ActionButton::new("disabled", ButtonKind::Secondary, "Save")
+          .disabled()
+          .on_click(press.clone()),
+      )
+      .child(
+        ActionButton::new("unavailable", ButtonKind::Secondary, "Review PR")
+          .unavailable("Review PR needs a pull request.")
+          .on_click(press.clone()),
+      )
+      .into()
+  });
+  for id in ["loading", "disabled", "unavailable"] {
+    kit.click(id);
+  }
+  assert_eq!(
+    presses.load(Ordering::SeqCst),
+    0,
+    "a hold wins over a handler given after it"
+  );
+  assert!(kit.texts("loading").contains(&Icon::LoaderCircle.glyph().to_string()));
+  assert!(kit.texts("unavailable").contains(&Icon::Lock.glyph().to_string()));
+}
+
+#[test]
+fn controls_that_cannot_be_pressed_or_flip_do_not_open_the_row_around_them() {
+  let (opened, open) = counter();
+  let (flips, flip) = counter();
+  let mut kit = Kit::show(move |ctx| {
+    let flip = flip.clone();
+    let controls = Row::new()
+      .spacing(SpacingSize::Sm)
+      .child(ActionButton::new("busy", ButtonKind::Primary, "Run").loading())
+      .child(ActionButton::new("off", ButtonKind::Secondary, "Save").disabled())
+      .child(ActionButton::new("locked", ButtonKind::Secondary, "Review PR").unavailable("No pull request yet."))
+      .child(IconButton::new("remove", Icon::X, "Remove").small().render(ctx))
+      .child(Toggle::new("fixed", ToggleKind::Checkbox, true, "From the profile"))
+      .child(Toggle::new("flip", ToggleKind::Switch, false, "Network").on_change(move |_| flip()))
+      .child(segmented(
+        "view",
+        [Segment::new("all", SegmentFace::Text("All".into()), true, || {})],
+        Focus::Pointer,
+      ));
+    Column::new()
+      .width(Dimension::Px(1000.0))
+      .child(
+        TableRow::new("row")
+          .cell(ColumnWidth::Fill, controls)
+          .on_open(open.clone()),
+      )
+      .into()
+  });
+  for id in ["busy", "off", "locked", "remove", "fixed", "flip", "all"] {
+    kit.click(id);
+  }
+  assert_eq!(flips.load(Ordering::SeqCst), 1, "the switch flips");
+  assert_eq!(opened.load(Ordering::SeqCst), 0, "no press inside reaches the row");
+  kit.click("row");
+  assert_eq!(opened.load(Ordering::SeqCst), 1, "a press on the row itself opens it");
 }

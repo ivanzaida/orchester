@@ -2,7 +2,7 @@
 //! their unit and read-back (`Limit field` `UQFos`) and selects (`Field/select` `pV2IA`).
 
 use lurq::{app::ctx::Ctx, components::SelectOption, node::Element};
-use orchester_app::ui::field::{FieldInput, FieldNote, NumberField, SelectField, field};
+use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field};
 
 use super::{line, stack, wide_cell};
 use crate::gallery::State;
@@ -12,18 +12,18 @@ const FIELD: f32 = 320.0;
 const SELECT: f32 = 200.0;
 
 pub fn section(ctx: &mut Ctx, state: &State) -> Element {
-  let title = FieldInput::new("g-title", state.title.clone())
+  let title = FieldInput::new("g-title", "Task title", state.title.clone())
     .placeholder("Add a task title")
     .render(ctx);
-  let empty = FieldInput::new("g-empty", state.outcome.clone())
+  let empty = FieldInput::new("g-empty", "Brief", state.outcome.clone())
     .placeholder("What should the run do?")
-    .invalid(true)
+    .error("Write what the run should do.")
     .render(ctx);
-  let outcome = FieldInput::new("g-outcome", state.outcome.clone())
+  let outcome = FieldInput::new("g-outcome", "Describe the outcome", state.outcome.clone())
     .text_area()
     .placeholder("Describe the outcome")
     .render(ctx);
-  let search = FieldInput::new("g-search", state.search.clone())
+  let search = FieldInput::new("g-search", "Search tasks", state.search.clone())
     .search()
     .placeholder("Search title, key or brief")
     .render(ctx);
@@ -35,30 +35,20 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
         "g-title-field",
         Some("Task title"),
         title,
-        &FieldNote::Hint("Shown in lists and tabs.".into()),
+        Some("Shown in lists and tabs."),
       ),
     ),
     wide_cell(
       "error · CqBFL",
       FIELD,
-      field(
-        "g-empty-field",
-        Some("Brief"),
-        empty,
-        &FieldNote::Error("Write what the run should do.".into()),
-      ),
+      field("g-empty-field", Some("Brief"), empty, None),
     ),
     wide_cell("Field/search · Z7mGr2", FIELD, search),
   ];
   let areas = [wide_cell(
     "Field/textarea · s72p3L",
     FIELD,
-    field(
-      "g-outcome-field",
-      Some("Describe the outcome"),
-      outcome,
-      &FieldNote::None,
-    ),
+    field("g-outcome-field", Some("Describe the outcome"), outcome, None),
   )];
   stack([
     line(texts).into(),
@@ -71,6 +61,7 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
 fn numbers(ctx: &mut Ctx, state: &State) -> [lurq::components::Column; 3] {
   let budget = NumberField::new(
     "g-budget",
+    "Run budget",
     state.budget.clone(),
     "tokens",
     "= 1.4M tokens · input + output",
@@ -80,13 +71,14 @@ fn numbers(ctx: &mut Ctx, state: &State) -> [lurq::components::Column; 3] {
   .render(ctx);
   let minutes = NumberField::new(
     "g-minutes",
+    "Time limit",
     state.minutes.clone(),
     "minutes",
     "No limit · the run takes the time it needs",
   )
   .placeholder("No limit")
   .render(ctx);
-  let refused = NumberField::new("g-refused", state.minutes.clone(), "tokens", "")
+  let refused = NumberField::new("g-refused", "Run budget", state.minutes.clone(), "tokens", "")
     .placeholder("0")
     .error("A budget is at least 1 token.")
     .render(ctx);
@@ -100,6 +92,7 @@ fn numbers(ctx: &mut Ctx, state: &State) -> [lurq::components::Column; 3] {
 fn selects(ctx: &Ctx, state: &State) -> [lurq::components::Column; 2] {
   let sort = SelectField::new(
     "g-sort",
+    "Sort",
     state.sort.clone(),
     vec![
       SelectOption::new("manual", "Manual order"),
@@ -111,6 +104,7 @@ fn selects(ctx: &Ctx, state: &State) -> [lurq::components::Column; 2] {
   .render(ctx);
   let pipeline = SelectField::new(
     "g-pipeline",
+    "Pipeline",
     state.pipeline.clone(),
     vec![
       SelectOption::new("feature", "Feature delivery v3").detail("Published v3 · 6 steps · approval at Plan"),

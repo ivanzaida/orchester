@@ -7,7 +7,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Row, Text},
+  components::{Column, Row, Text},
   node::Element,
 };
 use orchester_app::{
@@ -16,7 +16,7 @@ use orchester_app::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     menu::{MenuItem, menu, menu_panel, separator},
-    popover::{popover, popover_panel},
+    popover::{PopoverSide, popover, popover_panel},
     toggle::{Toggle, ToggleKind},
     tooltip::Tooltip,
   },
@@ -42,43 +42,36 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
   .into()])
 }
 
-fn pipeline_menu(ctx: &Ctx, state: &State) -> Row {
+fn pipeline_menu(ctx: &mut Ctx, state: &State) -> Row {
   let open = state.menu_open.clone();
   let toggle = open.clone();
+  // The menu closes itself on a choice.
   let choose = |what: &'static str| {
-    let (pressed, open) = (state.pressed.clone(), open.clone());
-    move || {
-      pressed.set(what.to_owned());
-      open.set(false);
-    }
+    let pressed = state.pressed.clone();
+    move || pressed.set(what.to_owned())
   };
+  let items = [
+    MenuItem::new("g-menu-feature", "Feature delivery v3", choose("Feature delivery v3"))
+      .icon(Icon::Workflow)
+      .detail("Published v3 · 6 steps · approval at Plan")
+      .chosen(true)
+      .render(ctx, &state.menu_open),
+    MenuItem::new("g-menu-quick", "Quick fix v2", choose("Quick fix v2"))
+      .icon(Icon::Workflow)
+      .detail("Published v2 · 3 steps · no approval gates")
+      .render(ctx, &state.menu_open),
+    separator(ctx),
+    MenuItem::new("g-menu-new", "New pipeline", choose("New pipeline"))
+      .icon(Icon::Plus)
+      .shortcut("Ctrl N")
+      .render(ctx, &state.menu_open),
+    MenuItem::unavailable("g-menu-import", "Import a pipeline", "Importing pipelines is planned.")
+      .icon(Icon::Download)
+      .render(ctx, &state.menu_open),
+  ];
   let panel = menu_panel("g-menu")
     .width(lurq::node::dimension::Dimension::Px(MENU_WIDTH))
-    .child(
-      MenuItem::new("g-menu-feature", "Feature delivery v3")
-        .icon(Icon::Workflow)
-        .detail("Published v3 · 6 steps · approval at Plan")
-        .chosen(true)
-        .on_click(choose("Feature delivery v3")),
-    )
-    .child(
-      MenuItem::new("g-menu-quick", "Quick fix v2")
-        .icon(Icon::Workflow)
-        .detail("Published v2 · 3 steps · no approval gates")
-        .on_click(choose("Quick fix v2")),
-    )
-    .child(separator(ctx))
-    .child(
-      MenuItem::new("g-menu-new", "New pipeline")
-        .icon(Icon::Plus)
-        .shortcut("Ctrl N")
-        .on_click(choose("New pipeline")),
-    )
-    .child(
-      MenuItem::new("g-menu-import", "Import a pipeline")
-        .icon(Icon::Download)
-        .unavailable("Importing pipelines is planned."),
-    );
+    .with_children(items);
   Row::new()
     .child(
       Row::new().ref_element(state.menu_anchor.clone()).child(
@@ -106,9 +99,7 @@ fn permissions(state: &State) -> Row {
       Column::new()
         .spacing(SpacingSize::Sm)
         .child(
-          Toggle::new("g-popover-network", ToggleKind::Switch, switched)
-            .label("Network")
-            .on_change(move |on| flip.set(on)),
+          Toggle::new("g-popover-network", ToggleKind::Switch, switched, "Network").on_change(move |on| flip.set(on)),
         )
         .child(Text::new("Changes apply from the next agent invocation.").variant(TypographyStyle::Caption)),
     );
@@ -124,12 +115,7 @@ fn permissions(state: &State) -> Row {
         .on_click(move || toggle.update(|open| *open = !*open)),
       ),
     )
-    .child(popover(
-      state.popover_anchor.clone(),
-      open,
-      Placement::BottomStart,
-      panel,
-    ))
+    .child(popover(state.popover_anchor.clone(), open, PopoverSide::Below, panel))
 }
 
 fn tooltip(ctx: &mut Ctx, state: &State) -> Element {

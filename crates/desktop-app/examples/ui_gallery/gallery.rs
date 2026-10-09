@@ -1,6 +1,8 @@
 //! The gallery's window: a title, Dark and Light, the sections' page tabs and the open section, which
 //! scrolls. It keeps the state the controls change, and says in its header what was last pressed.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -15,6 +17,7 @@ use lurq::{
 use orchester_app::{
   theme::{self, Mode},
   ui::{
+    markdown::LinkHandler,
     pressable::Focus,
     tabs::{PageTab, Segment, SegmentFace, page_tabs, segmented},
   },
@@ -76,6 +79,8 @@ pub struct State {
   pub menu_anchor: ElementRef,
   pub popover_open: Signal<bool>,
   pub popover_anchor: ElementRef,
+  /// What a press on a Markdown link does: says so in the header. Kept here so it stays the same handler.
+  pub link: LinkHandler,
 }
 
 pub struct Gallery {
@@ -88,8 +93,10 @@ impl Component for Gallery {
   type Props = ();
 
   fn create(ctx: &mut Ctx) -> Self {
+    let pressed = ctx.signal(String::new());
+    let link_pressed = pressed.clone();
     let state = State {
-      pressed: ctx.signal(String::new()),
+      pressed,
       title: ctx.signal("Add a delivery log for webhooks".to_owned()),
       outcome: ctx.signal(String::new()),
       search: ctx.signal(String::new()),
@@ -106,6 +113,7 @@ impl Component for Gallery {
       menu_anchor: ctx.element_ref(),
       popover_open: ctx.signal(false),
       popover_anchor: ctx.element_ref(),
+      link: Arc::new(move |link: &str| link_pressed.set(format!("link {link}"))),
     };
     Self {
       section: ctx.signal(Section::Actions),
@@ -123,6 +131,7 @@ impl Component for Gallery {
       })
     });
     let body = sections::section(ctx, current, &self.state);
+    let tabs = page_tabs(ctx, "gallery-tabs", tabs);
     Column::new()
       .id("gallery")
       .width(Dimension::Pct(100.0))
@@ -131,7 +140,7 @@ impl Component for Gallery {
       .spacing(SpacingSize::Md)
       .background(PaletteColor::SurfacePanel)
       .child(self.header(ctx))
-      .child(page_tabs("gallery-tabs", tabs))
+      .child(tabs)
       .child(
         ScrollVertical::new(
           Column::new()

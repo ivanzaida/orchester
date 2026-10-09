@@ -24,11 +24,9 @@ use lurq::{
 use super::{
   icon::{Icon, icon},
   pressable::{inert, pressable},
+  tooltip::Truncated,
 };
 use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
-
-/// Space between a control and the menu it opens (`FpAul`).
-const MENU_GAP: f32 = 6.0;
 
 /// The panel of a menu with the element id `id`; add its rows as children.
 pub fn menu_panel(id: &str) -> Column {
@@ -42,12 +40,13 @@ pub fn menu_panel(id: &str) -> Column {
     .box_shadow(ShadowStyle::Md)
 }
 
-/// `panel` opened under `anchor` at its start while `open` holds; a press outside or Esc closes it.
+/// `panel` opened 6 under `anchor` at its start while `open` holds (`FpAul`); a choice (its rows close
+/// it, [`MenuItem::render`]), a press outside or Esc closes it.
 pub fn menu(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
   Popup::new(anchor, panel)
     .open(open)
     .placement(Placement::BottomStart)
-    .offset(0.0, MENU_GAP)
+    .offset(0.0, ExtraSpacing::Snug.value())
 }
 
 /// The line between groups of rows.
@@ -67,8 +66,8 @@ pub fn separator(ctx: &Ctx) -> Element {
 
 enum Choice {
   Action(Arc<dyn Fn() + Send + Sync>),
-  /// It cannot be chosen, and why when the caller says.
-  Unavailable(Option<Arc<str>>),
+  /// It cannot be chosen now, for this reason.
+  Unavailable(Arc<str>),
 }
 
 pub struct MenuItem {
@@ -82,16 +81,25 @@ pub struct MenuItem {
 }
 
 impl MenuItem {
-  /// A row saying `label`; until [`Self::on_click`] it cannot be chosen and shows the lock.
-  pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+  /// A row saying `label` that runs `choose` when chosen.
+  pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, choose: impl Fn() + Send + Sync + 'static) -> Self {
+    Self::with_choice(id.into(), label.into(), Choice::Action(Arc::new(choose)))
+  }
+
+  /// A row that cannot be chosen now, for `reason`: faded, ending in a lock, the reason as its detail.
+  pub fn unavailable(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, reason: impl Into<Arc<str>>) -> Self {
+    Self::with_choice(id.into(), label.into(), Choice::Unavailable(reason.into()))
+  }
+
+  const fn with_choice(id: Arc<str>, label: Arc<str>, choice: Choice) -> Self {
     Self {
-      id: id.into(),
-      label: label.into(),
+      id,
+      label,
       icon: None,
       shortcut: None,
       detail: None,
       chosen: false,
-      choice: Choice::Unavailable(None),
+      choice,
     }
   }
 
@@ -118,27 +126,20 @@ impl MenuItem {
     self
   }
 
-  pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.choice = Choice::Action(Arc::new(handler));
-    self
-  }
-
-  /// The row cannot be chosen now, for `reason`, which it says in place of its detail.
-  pub fn unavailable(mut self, reason: impl Into<Arc<str>>) -> Self {
-    self.choice = Choice::Unavailable(Some(reason.into()));
-    self
-  }
-
-  fn text(&self, detail: Option<&str>) -> Column {
+  /// The label, cut to the row's room with its whole words in a tooltip, and the detail under it.
+  fn text(&self, ctx: &mut Ctx, detail: Option<&str>) -> Column {
     Column::new()
       .flex(1.0)
+      .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
       .child(
-        Text::new(&self.label)
-          .id(format!("{}-label", self.id))
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
-          .nowrap(),
+        Truncated::new(
+          format!("{}-label", self.id),
+          self.label.clone(),
+          TypographyStyle::Description,
+        )
+        .color(PaletteColor::TextPrimary)
+        .render(ctx),
       )
       .with_children(detail.map(|detail| Text::new(detail).variant(TypographyStyle::Caption)))
   }
@@ -156,13 +157,12 @@ impl MenuItem {
       (_, false, None) => None,
     }
   }
-}
 
-impl From<MenuItem> for Element {
-  fn from(item: MenuItem) -> Self {
-    let detail = match &item.choice {
-      Choice::Unavailable(Some(reason)) => Some(reason.clone()),
-      _ => item.detail.clone(),
+  /// The row of the menu that `open` shows: a choice closes it.
+  pub fn render(self, ctx: &mut Ctx, open: &Signal<bool>) -> Element {
+    let detail = match &self.choice {
+      Choice::Unavailable(reason) => Some(reason.clone()),
+      Choice::Action(_) => self.detail.clone(),
     };
     let row = Row::new()
       .width(Dimension::Pct(100.0))
@@ -178,27 +178,39 @@ impl From<MenuItem> for Element {
         Alignment::Center
       })
       .with_children(
-        item
+        self
           .icon
-          .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextSecondary).id(format!("{}-icon", item.id))),
+          .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextSecondary).id(format!("{}-icon", self.id))),
       )
-      .child(item.text(detail.as_deref()))
-      .with_children(item.trailing());
-    let surface = |button: Button| {
-      button
-        .id(item.id.clone())
-        .describe("a11y_name", item.label.clone())
+      .child(self.text(ctx, detail.as_deref()))
+      .with_children(self.trailing());
+    let surface = |row: Row| {
+      Button::empty()
+        .id(self.id.clone())
+        .describe("a11y_name", self.label.clone())
         .width(Dimension::Pct(100.0))
         .rounded(RadiusSize::Sm)
-        .describe("chosen", if item.chosen { "true" } else { "false" })
+        .align_items(Alignment::Center)
         .child(row)
     };
-    match item.choice {
-      Choice::Action(handler) => surface(pressable(move || handler()))
+    match self.choice {
+      Choice::Action(choose) => {
+        let open = open.clone();
+        pressable(move || {
+          open.set(false);
+          choose();
+        })
+        .id(self.id.clone())
+        .describe("a11y_name", self.label.clone())
+        .width(Dimension::Pct(100.0))
+        .rounded(RadiusSize::Sm)
+        .describe("chosen", if self.chosen { "true" } else { "false" })
+        .child(row)
         .describe("state", "enabled")
         .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-        .into(),
-      Choice::Unavailable(_) => surface(inert(Button::empty()))
+        .into()
+      }
+      Choice::Unavailable(_) => inert(surface(row))
         .describe("state", "unavailable")
         .opacity(DISABLED_OPACITY)
         .into(),

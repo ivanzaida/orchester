@@ -6,7 +6,7 @@ use lurq::{
   core::Signal,
   node::dimension::Dimension,
 };
-use orchester_app::ui::field::{FieldInput, FieldNote, NumberField, SelectField, field};
+use orchester_app::ui::field::{FieldInput, NumberField, SelectField, field};
 
 use crate::harness::{Kit, assert_close, gap_after, gap_under};
 
@@ -16,27 +16,19 @@ const COLUMN: f32 = 400.0;
 fn form(value: &Signal<String>, area: &Signal<String>, search: &Signal<String>) -> Kit {
   let (value, area, search) = (value.clone(), area.clone(), search.clone());
   Kit::show(move |ctx| {
-    let title = FieldInput::new("title", value.clone())
+    let title = FieldInput::new("title", "Task title", value.clone())
       .placeholder("Add a task title")
       .render(ctx);
-    let outcome = FieldInput::new("outcome", area.clone()).text_area().render(ctx);
+    let outcome = FieldInput::new("outcome", "Describe the outcome", area.clone())
+      .text_area()
+      .render(ctx);
     Column::new()
       .width(Dimension::Px(COLUMN))
       .spacing(SpacingSize::Lg)
-      .child(field(
-        "title-field",
-        Some("Task title"),
-        title,
-        &FieldNote::Hint("Shown in lists".into()),
-      ))
-      .child(field(
-        "outcome-field",
-        Some("Describe the outcome"),
-        outcome,
-        &FieldNote::None,
-      ))
+      .child(field("title-field", Some("Task title"), title, Some("Shown in lists")))
+      .child(field("outcome-field", Some("Describe the outcome"), outcome, None))
       .child(
-        FieldInput::new("search", search.clone())
+        FieldInput::new("search", "Search tasks", search.clone())
           .search()
           .placeholder("Search")
           .render(ctx),
@@ -53,14 +45,14 @@ fn a_text_field_is_a_28_high_box_10_in_with_its_label_and_hint_6_away() {
     kit.bounds("title-field-label"),
     kit.bounds("title-box"),
     kit.bounds("title"),
-    kit.bounds("title-field-note"),
+    kit.bounds("title-field-hint"),
   );
   assert_close(frame.height, 28.0, "box height");
   assert_close(frame.width, COLUMN, "the box fills its column");
   assert_close(input.x - frame.x, 10.0, "value inset");
   assert_close(gap_under(label, frame), 6.0, "label to box");
   assert_close(gap_under(frame, hint), 6.0, "box to hint");
-  assert_eq!(kit.texts("title-field-note"), ["Shown in lists"]);
+  assert_eq!(kit.texts("title-field-hint"), ["Shown in lists"]);
 }
 
 #[test]
@@ -115,9 +107,15 @@ fn a_field_typed_into_keeps_each_key_once() {
 fn number(value: &Signal<String>, error: Option<&str>) -> Kit {
   let (value, error) = (value.clone(), error.map(str::to_owned));
   Kit::show(move |ctx| {
-    let mut budget = NumberField::new("budget", value.clone(), "tokens", "= 1.4M tokens · input + output")
-      .placeholder("No limit")
-      .grouped(",");
+    let mut budget = NumberField::new(
+      "budget",
+      "Run budget",
+      value.clone(),
+      "tokens",
+      "= 1.4M tokens · input + output",
+    )
+    .placeholder("No limit")
+    .grouped(",");
     if let Some(error) = &error {
       budget = budget.error(error.clone());
     }
@@ -172,6 +170,7 @@ fn a_select_is_a_28_high_field() {
       .child(
         SelectField::new(
           "sort",
+          "Sort",
           chosen.clone(),
           vec![
             SelectOption::new("manual", "Manual order"),

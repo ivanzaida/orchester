@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use super::{field_error, input::FieldInput};
+use super::input::FieldInput;
 use crate::theme::ExtraSpacing;
 
 /// The box's width (`eesXH` in `UQFos`).
@@ -23,27 +23,28 @@ pub struct NumberField {
   input: FieldInput,
   id: Arc<str>,
   read_back: Arc<str>,
-  error: Option<Arc<str>>,
+  refused: bool,
 }
 
 impl NumberField {
-  /// A field typing a number of `unit` into `value`, saying `read_back` under it; its input's element
-  /// id is `id`, the read-back's `<id>-read-back`.
+  /// A field typing a number of `unit` into `value`, named `name` for tools, saying `read_back` under
+  /// it; its input's element id is `id`, the read-back's `<id>-read-back`.
   pub fn new(
     id: impl Into<Arc<str>>,
+    name: impl Into<Arc<str>>,
     value: Signal<String>,
     unit: impl Into<Arc<str>>,
     read_back: impl Into<Arc<str>>,
   ) -> Self {
     let id = id.into();
     Self {
-      input: FieldInput::new(id.clone(), value)
+      input: FieldInput::new(id.clone(), name, value)
         .unit(unit)
         .mono()
         .width(Dimension::Px(NUMBER_FIELD_WIDTH)),
       id,
       read_back: read_back.into(),
-      error: None,
+      refused: false,
     }
   }
 
@@ -61,24 +62,22 @@ impl NumberField {
 
   /// Why the value is not accepted, said in place of the read-back.
   pub fn error(mut self, error: impl Into<Arc<str>>) -> Self {
-    self.error = Some(error.into());
-    self.input = self.input.invalid(true);
+    self.refused = true;
+    self.input = self.input.error(error);
     self
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let below: Element = match &self.error {
-      Some(error) => field_error(&format!("{}-note", self.id), error).into(),
-      None => Text::new(&self.read_back)
+    let read_back = (!self.refused).then(|| {
+      Text::new(&self.read_back)
         .id(format!("{}-read-back", self.id))
         .variant(TypographyStyle::Caption)
-        .into(),
-    };
+    });
     Column::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::End)
       .child(self.input.render(ctx))
-      .child(below)
+      .with_children(read_back)
       .into()
   }
 }

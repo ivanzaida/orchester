@@ -134,20 +134,22 @@ fn a_tag_is_a_pill_2_over_and_8_beside_its_name_and_a_badge_3_and_8() {
 
 #[test]
 fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
-  let mut kit = Kit::show(|_| {
+  let mut kit = Kit::show(|ctx| {
+    let crumbs = breadcrumb(
+      ctx,
+      "crumbs",
+      CrumbSeparator::Slash,
+      vec![
+        Crumb::link("Kontur", || {}),
+        Crumb::link("Tasks", || {}),
+        Crumb::here("KON-12").mono(),
+      ],
+    );
     Column::new()
       .spacing(SpacingSize::Sm)
       .child(person_avatar("person", &initials("Ada Lovelace")))
       .child(agent_avatar("agent", Icon::Hammer))
-      .child(breadcrumb(
-        "crumbs",
-        CrumbSeparator::Slash,
-        vec![
-          Crumb::link("Kontur", || {}),
-          Crumb::link("Tasks", || {}),
-          Crumb::here("KON-12").mono(),
-        ],
-      ))
+      .child(crumbs)
       .child(Element::from(
         Row::new()
           .width(lurq::node::dimension::Dimension::Px(300.0))

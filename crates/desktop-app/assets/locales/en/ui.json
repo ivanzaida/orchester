@@ -1,9 +1,7 @@
 {
   "ui": {
-    "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
-    "tryAgain": "Try again",
     "tabCount": "{{label}} {{count}}",
     "status": {
       "withDetail": "{{status}} · {{detail}}",

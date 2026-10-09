@@ -134,7 +134,7 @@ fn unavailable_actions(new_task: impl Fn() + Send + Sync + 'static) -> Element {
     .child(
       ActionButton::new("g-multiple", ButtonKind::Secondary, "Create multiple")
         .icon(Icon::Plus)
-        .unavailable(),
+        .unavailable("Creating several tasks at once is planned."),
     )
     .child(
       ActionButton::new("g-new-task", ButtonKind::Primary, "New task")

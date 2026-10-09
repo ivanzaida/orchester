@@ -1,7 +1,8 @@
 //! Tooltip (`Tooltip` `b6q3OZ`): a short label in 11/500 `text_inverse` on `text_primary`, radius 4, 4
 //! over and under it and 8 at its sides, an optional shortcut 8 after it in Geist Mono 10 at 60 %. It
-//! shows while the pointer rests on its anchor and lets the pointer through. [`Truncated`] is text cut
-//! to one line with an ellipsis that keeps its full value in a tooltip (handover §5.3).
+//! shows while the pointer rests on its anchor and lets the pointer through; a long one wraps. [`Truncated`]
+//! is text cut to one line with an ellipsis that keeps its full value in a tooltip, shown only while the
+//! text is cut (handover §5.3).
 
 use std::{sync::Arc, time::Duration};
 
@@ -21,16 +22,23 @@ use crate::theme::{ExtraSpacing, ExtraTypography, SHORTCUT_OPACITY};
 
 /// How long the pointer rests on the anchor before the tooltip shows.
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
-/// The widest a tooltip gets before its text wraps.
-const MAX_WIDTH: f32 = 420.0;
+/// The widest a tooltip's words run before they wrap.
+const TEXT_MAX_WIDTH: f32 = 400.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tooltip {
   id: Arc<str>,
   text: Arc<str>,
   shortcut: Option<Arc<str>>,
-  placement: Placement,
-  shrink: bool,
+  /// The anchor is this text, cut to its room: the tooltip shows only while it is cut.
+  cut: Option<CutText>,
+}
+
+/// How a cut text is set.
+#[derive(Clone, Debug, PartialEq)]
+struct CutText {
+  typography: TypographyStyle,
+  color: Option<PaletteColor>,
 }
 
 impl DevtoolsInspectable for Tooltip {}
@@ -42,20 +50,13 @@ impl Tooltip {
       id: id.into(),
       text: text.into(),
       shortcut: None,
-      placement: Placement::BottomStart,
-      shrink: false,
+      cut: None,
     }
   }
 
   /// The keys that do the same, after the label.
   pub fn shortcut(mut self, keys: impl Into<Arc<str>>) -> Self {
     self.shortcut = Some(keys.into());
-    self
-  }
-
-  /// The anchor gives up room when its row runs out of it, as text cut to its room does.
-  pub fn shrink(mut self) -> Self {
-    self.shrink = true;
     self
   }
 
@@ -68,7 +69,6 @@ impl Tooltip {
   fn panel(&self) -> Row {
     let mut panel = Row::new()
       .id(format!("{}-tooltip", self.id))
-      .max_width(Dimension::Px(MAX_WIDTH))
       .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
@@ -77,7 +77,8 @@ impl Tooltip {
       .child(
         Text::new(&self.text)
           .variant(TypographyStyle::FieldLabel)
-          .color(PaletteColor::TextInverse),
+          .color(PaletteColor::TextInverse)
+          .max_width(Dimension::Px(TEXT_MAX_WIDTH)),
       );
     if let Some(keys) = &self.shortcut {
       panel = panel.child(
@@ -94,8 +95,13 @@ impl Tooltip {
 
 struct TooltipHost {
   shown: Signal<bool>,
+  /// The pointer rests on the anchor: a cut text's whole copy is laid out to measure it.
+  resting: Signal<bool>,
   timer: Timeout,
   anchor: ElementRef,
+  /// A cut text as it is laid out, and as wide as it would be whole.
+  cut: ElementRef,
+  whole: ElementRef,
 }
 
 impl Component for TooltipHost {
@@ -103,80 +109,127 @@ impl Component for TooltipHost {
 
   fn create(ctx: &mut Ctx) -> Self {
     let shown = ctx.signal(false);
-    let show = shown.clone();
-    let timer = ctx.create_timeout(TOOLTIP_DELAY, move || show.set(true));
+    let (cut, whole) = (ctx.element_ref(), ctx.element_ref());
+    let (show, measured, unmeasured) = (shown.clone(), cut.clone(), whole.clone());
+    let timer = ctx.create_timeout(TOOLTIP_DELAY, move || {
+      // Text that fits says all it has: only a cut one gets the tooltip. Without a cut text the copy
+      // that measures it is not laid out.
+      if !unmeasured.is_attached() || unmeasured.width() > measured.width() + CUT_TOLERANCE {
+        show.set(true);
+      }
+    });
     Self {
       shown,
+      resting: ctx.signal(false),
       timer,
       anchor: ctx.element_ref(),
+      cut,
+      whole,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let tooltip = ctx.props::<Tooltip>().clone();
     let (rest, leave, hide) = (self.timer.clone(), self.timer.clone(), self.shown.clone());
-    let mut anchor = Row::new()
+    let (resting, left) = (self.resting.clone(), self.resting.clone());
+    let anchor = Row::new()
       .ref_element(self.anchor.clone())
       .align_items(Alignment::Center)
-      .on_mouse_enter(move || rest.restart())
+      .on_mouse_enter(move || {
+        resting.set(true);
+        rest.restart();
+      })
       .on_mouse_leave(move || {
         leave.cancel();
+        left.set(false);
         hide.set(false);
-      })
-      .with_children(ctx.children().iter().cloned());
-    if tooltip.shrink {
-      anchor = anchor.flex_shrink(1.0).min_width(Dimension::Px(0.0));
+      });
+    let mut anchor = match &tooltip.cut {
+      Some(cut) => self.cut_text(anchor, &tooltip, cut),
+      None => anchor.with_children(ctx.children().iter().cloned()),
+    };
+    if self.shown.get() {
+      anchor = anchor.child(
+        Popup::new(self.anchor.clone(), tooltip.panel())
+          .open_when(true)
+          .placement(Placement::BottomStart)
+          .offset(0.0, ExtraSpacing::Snug.value())
+          .hit_test(HitTestBehavior::None)
+          .dismiss_on_outside_click(false)
+          .dismiss_on_escape(false),
+      );
     }
-    if !self.shown.get() {
-      return anchor;
-    }
-    let popup = Popup::new(self.anchor.clone(), tooltip.panel())
-      .open_when(true)
-      .placement(tooltip.placement)
-      .offset(0.0, ExtraSpacing::Snug.value())
-      .hit_test(HitTestBehavior::None)
-      .dismiss_on_outside_click(false)
-      .dismiss_on_escape(false);
-    anchor.child(popup)
+    anchor
   }
 }
 
-/// Text on one line, cut with an ellipsis where its room ends, its full value in a tooltip.
+/// How much wider than its room a text must be to count as cut, for rounding.
+const CUT_TOLERANCE: f32 = 0.5;
+
+impl TooltipHost {
+  /// The cut text in `anchor`, which gives up room when its row runs out of it, and, while the pointer
+  /// rests on it, an unseen whole copy that measures it.
+  fn cut_text(&self, anchor: Row, tooltip: &Tooltip, cut: &CutText) -> Row {
+    let text = |text: Text| match cut.color.clone() {
+      Some(color) => text.variant(cut.typography).color(color).nowrap(),
+      None => text.variant(cut.typography).nowrap(),
+    };
+    anchor
+      .flex_shrink(1.0)
+      .min_width(Dimension::Px(0.0))
+      .child(
+        text(Text::new(&tooltip.text))
+          .id(tooltip.id.to_string())
+          .describe("a11y_name", tooltip.text.clone())
+          .ref_element(self.cut.clone())
+          .max_width(Dimension::Pct(100.0))
+          .text_overflow(TextOverflow::Elipsis),
+      )
+      .with_children(self.resting.get().then(|| {
+        text(Text::new(&tooltip.text))
+          .ref_element(self.whole.clone())
+          .absolute_position(0.0, 0.0)
+          .opacity(0.0)
+          .hit_test(HitTestBehavior::None)
+      }))
+  }
+}
+
+/// Text on one line, cut with an ellipsis where its row runs out of room; while it is cut, its full
+/// value shows in a tooltip.
 pub struct Truncated {
   id: Arc<str>,
   text: Arc<str>,
   typography: TypographyStyle,
-  width: Option<Dimension>,
+  color: Option<PaletteColor>,
 }
 
 impl Truncated {
+  /// The text's element id is `id`, its tooltip's `<id>-tooltip`.
   pub fn new(id: impl Into<Arc<str>>, text: impl Into<Arc<str>>, typography: TypographyStyle) -> Self {
     Self {
       id: id.into(),
       text: text.into(),
       typography,
-      width: None,
+      color: None,
     }
   }
 
-  /// A fixed room, e.g. a table column's width; without one the text is as wide as it is, and cut where
-  /// its row runs out of room.
-  pub fn width(mut self, width: impl Into<Dimension>) -> Self {
-    self.width = Some(width.into());
+  /// The text's color, where it is not its style's.
+  pub fn color(mut self, color: impl Into<PaletteColor>) -> Self {
+    self.color = Some(color.into());
     self
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let text = Text::new(&self.text)
-      .id(self.id.to_string())
-      .variant(self.typography)
-      .nowrap()
-      .max_width(Dimension::Pct(100.0))
-      .text_overflow(TextOverflow::Elipsis);
-    let tooltip = Tooltip::new(self.id.clone(), self.text.clone());
-    match self.width {
-      Some(width) => Row::new().width(width).child(tooltip.shrink().wrap(ctx, text)).into(),
-      None => tooltip.shrink().wrap(ctx, text),
-    }
+    let key = format!("tooltip-{}", self.id);
+    let tooltip = Tooltip {
+      cut: Some(CutText {
+        typography: self.typography,
+        color: self.color,
+      }),
+      ..Tooltip::new(self.id, self.text)
+    };
+    ctx.mount_keyed::<TooltipHost>(&key, tooltip)
   }
 }

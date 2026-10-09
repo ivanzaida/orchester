@@ -6,7 +6,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row},
+  components::{Column, Row, Stack},
   node::Element,
 };
 use orchester_app::ui::{
@@ -54,11 +54,11 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
     line([
       cell(
         "Crumbs · A7q3o (task page)",
-        crumbs("g-crumbs-task", CrumbSeparator::Slash, state),
+        crumbs(ctx, "g-crumbs-task", CrumbSeparator::Slash, state),
       ),
       cell(
         "Crumbs · VpX0E (New task)",
-        crumbs("g-crumbs-new", CrumbSeparator::Chevron, state),
+        crumbs(ctx, "g-crumbs-new", CrumbSeparator::Chevron, state),
       ),
       wide_cell("Detail row · paUqV", DETAILS, details()),
     ])
@@ -72,17 +72,19 @@ fn toggles(state: &State) -> [Column; 3] {
   let checkboxes = Column::new()
     .spacing(SpacingSize::Sm)
     .child(
-      Toggle::new("g-checkbox", ToggleKind::Checkbox, checked)
-        .label("Also save to the profile")
+      Toggle::new("g-checkbox", ToggleKind::Checkbox, checked, "Also save to the profile")
         .on_change(move |on| check.set(on)),
     )
-    .child(Toggle::new("g-checkbox-fixed", ToggleKind::Checkbox, true).label("From the profile · fixed"));
+    .child(Toggle::new(
+      "g-checkbox-fixed",
+      ToggleKind::Checkbox,
+      true,
+      "From the profile · fixed",
+    ));
   let chosen = state.radio.get();
   let radio = |id: &'static str, value: &'static str, label: &'static str| {
     let set = state.radio.clone();
-    Toggle::new(id, ToggleKind::Radio, chosen == value)
-      .label(label)
-      .on_change(move |_| set.set(value))
+    Toggle::new(id, ToggleKind::Radio, chosen == value, label).on_change(move |_| set.set(value))
   };
   let radios = Column::new()
     .spacing(SpacingSize::Sm)
@@ -92,12 +94,8 @@ fn toggles(state: &State) -> [Column; 3] {
   let flip = state.switched.clone();
   let switches = Row::new()
     .spacing(SpacingSize::Lg)
-    .child(
-      Toggle::new("g-switch", ToggleKind::Switch, switched)
-        .label("Network")
-        .on_change(move |on| flip.set(on)),
-    )
-    .child(Toggle::new("g-switch-fixed", ToggleKind::Switch, true).label("Fixed"));
+    .child(Toggle::new("g-switch", ToggleKind::Switch, switched, "Network").on_change(move |on| flip.set(on)))
+    .child(Toggle::new("g-switch-fixed", ToggleKind::Switch, true, "Fixed"));
   [
     cell("Checkbox/* · q3JN1, Una0j", checkboxes),
     cell("Radio/* · RchTU, vsbEb", radios),
@@ -105,7 +103,7 @@ fn toggles(state: &State) -> [Column; 3] {
   ]
 }
 
-fn tabs(ctx: &Ctx, state: &State) -> Row {
+fn tabs(ctx: &mut Ctx, state: &State) -> Stack {
   let current = state.tab.get();
   let tab = |id: &'static str, label: &str, count: usize| {
     let set = state.tab.clone();
@@ -116,15 +114,13 @@ fn tabs(ctx: &Ctx, state: &State) -> Row {
       move || set.set(id),
     )
   };
-  page_tabs(
-    "g-tabs",
-    [
-      tab("all", "All", 24),
-      tab("needs", "Needs you", 4),
-      tab("review", "In review", 2),
-      PageTab::unavailable("g-tab-artifacts", "Artifacts"),
-    ],
-  )
+  let tabs = [
+    tab("all", "All", 24),
+    tab("needs", "Needs you", 4),
+    tab("review", "In review", 2),
+    PageTab::unavailable("g-tab-artifacts", "Artifacts", "Artifacts are planned."),
+  ];
+  page_tabs(ctx, "g-tabs", tabs)
 }
 
 fn segments(state: &State) -> Row {
@@ -167,7 +163,7 @@ fn views(state: &State) -> Row {
   )
 }
 
-fn statuses(ctx: &Ctx) -> Column {
+fn statuses(ctx: &mut Ctx) -> Column {
   Status::ALL
     .chunks(7)
     .enumerate()
@@ -183,7 +179,7 @@ fn statuses(ctx: &Ctx) -> Column {
     })
 }
 
-fn compact(ctx: &Ctx) -> Column {
+fn compact(ctx: &mut Ctx) -> Column {
   Column::new()
     .spacing(SpacingSize::Sm)
     .child(
@@ -246,7 +242,7 @@ fn avatars() -> Row {
     .child(agent_avatar("g-agent", Icon::Hammer))
 }
 
-fn crumbs(id: &str, separator: CrumbSeparator, state: &State) -> Row {
+fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> Row {
   let link = |label: &'static str| {
     let pressed = state.pressed.clone();
     Crumb::link(label, move || pressed.set(label.to_owned()))
@@ -260,7 +256,7 @@ fn crumbs(id: &str, separator: CrumbSeparator, state: &State) -> Row {
     CrumbSeparator::Slash => Crumb::here("KON-12").mono(),
     CrumbSeparator::Chevron => Crumb::here("New task"),
   });
-  breadcrumb(id, separator, crumbs)
+  breadcrumb(ctx, id, separator, crumbs)
 }
 
 fn details() -> Column {

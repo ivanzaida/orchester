@@ -8,7 +8,7 @@ use std::sync::{
 
 use lurq::{
   app::theme::{RadiusSize, SpacingSize},
-  components::{Column, Placement, Row, Text},
+  components::{Column, Row, Text},
   core::Signal,
   node::dimension::Dimension,
 };
@@ -22,7 +22,7 @@ use orchester_app::{
     markdown::MarkdownView,
     menu::{MenuItem, menu, menu_panel},
     notice::{Notice, NoticeTone},
-    popover::{popover, popover_panel},
+    popover::{PopoverSide, popover, popover_panel},
     state::{EmptyState, load_error, loading},
     table::{ColumnWidth, TableRow, table_header},
     tooltip::Truncated,
@@ -115,12 +115,26 @@ fn a_table_has_a_32_header_and_44_rows_12_in_their_cells_12_apart() {
       .on_open(move || {
         open.fetch_add(1, Ordering::SeqCst);
       });
+    let still = TableRow::new("still")
+      .cell(ColumnWidth::Fixed(52.0), Text::new("KON-13"))
+      .cell(ColumnWidth::Fill, Text::new("Unreadable run"))
+      .cell(
+        ColumnWidth::Fixed(128.0),
+        Text::new("Quick fix v2").id("still-pipeline"),
+      )
+      .in_openable_table();
     Column::new()
       .width(Dimension::Px(CONTENT))
       .child(table_header("header", &columns, true))
       .child(row)
+      .child(still)
       .into()
   });
+  assert_eq!(
+    kit.bounds("still-pipeline").x,
+    kit.bounds("pipeline").x,
+    "a row that does not open keeps the chevron's column, so its cells line up"
+  );
   let (header, row) = (kit.bounds("header"), kit.bounds("row"));
   assert_eq!((header.height, row.height), (32.0, 44.0));
   assert_eq!(row.width, CONTENT);
@@ -228,7 +242,7 @@ fn markdown_reads_headings_lists_and_links() {
         MarkdownView::new(
           "plan",
           "## Approach\n\n1. Wrap `send()` in a retry loop\n2. Record each attempt\n\nSee [the docs](https://example.test/retry).",
-          |_| {},
+          Arc::new(|_: &str| {}),
         )
         .render(ctx),
       )
@@ -241,34 +255,30 @@ fn markdown_reads_headings_lists_and_links() {
 }
 
 #[test]
-fn a_menu_row_is_28_high_8_in_and_an_unavailable_row_says_why() {
+fn a_menu_row_is_28_high_8_in_an_unavailable_row_says_why_and_a_choice_closes_it() {
   let open = Signal::new(true);
+  let shown = open.clone();
   let chosen = Arc::new(AtomicUsize::new(0));
   let choose = chosen.clone();
   let mut kit = Kit::show(move |ctx| {
     let anchor = ctx.element_ref();
     let choose = choose.clone();
-    let panel = menu_panel("menu")
-      .width(Dimension::Px(300.0))
-      .child(
-        MenuItem::new("feature", "Feature delivery v3")
-          .icon(Icon::Workflow)
-          .chosen(true)
-          .on_click(move || {
-            choose.fetch_add(1, Ordering::SeqCst);
-          }),
-      )
-      .child(
-        MenuItem::new("quick", "Quick fix v2")
-          .icon(Icon::Workflow)
-          .shortcut("Ctrl 2")
-          .on_click(|| {}),
-      )
-      .child(
-        MenuItem::new("draft", "Release v1")
-          .icon(Icon::Workflow)
-          .unavailable("Not published yet"),
-      );
+    let rows = [
+      MenuItem::new("feature", "Feature delivery v3", move || {
+        choose.fetch_add(1, Ordering::SeqCst);
+      })
+      .icon(Icon::Workflow)
+      .chosen(true)
+      .render(ctx, &shown),
+      MenuItem::new("quick", "Quick fix v2", || {})
+        .icon(Icon::Workflow)
+        .shortcut("Ctrl 2")
+        .render(ctx, &shown),
+      MenuItem::unavailable("draft", "Release v1", "Not published yet")
+        .icon(Icon::Workflow)
+        .render(ctx, &shown),
+    ];
+    let panel = menu_panel("menu").width(Dimension::Px(300.0)).with_children(rows);
     Row::new()
       .child(
         Row::new()
@@ -276,7 +286,7 @@ fn a_menu_row_is_28_high_8_in_and_an_unavailable_row_says_why() {
           .ref_element(anchor.clone())
           .child(Text::new("Pipeline")),
       )
-      .child(menu(anchor, open.clone(), panel))
+      .child(menu(anchor, shown.clone(), panel))
       .into()
   });
   let (panel, feature, quick) = (kit.bounds("menu"), kit.bounds("feature"), kit.bounds("quick"));
@@ -296,8 +306,10 @@ fn a_menu_row_is_28_high_8_in_and_an_unavailable_row_says_why() {
   assert!(kit.texts("quick").contains(&"Ctrl 2".to_owned()));
   let draft = kit.texts("draft");
   assert!(draft.contains(&Icon::Lock.glyph().to_string()) && draft.contains(&"Not published yet".to_owned()));
-  kit.click("feature");
   kit.click("draft");
+  assert!(open.get(), "an unavailable row keeps the menu open");
+  kit.click("feature");
+  assert!(!open.get(), "a choice closes the menu");
   assert_eq!(chosen.load(Ordering::SeqCst), 1, "only an available row is chosen");
   assert_eq!(kit.radius(ExtraRadius::Tile.role()), 8.0, "a menu's radius");
 }
@@ -315,7 +327,7 @@ fn a_popover_opens_6_under_its_control_14_over_and_16_beside_its_content() {
           .ref_element(anchor.clone())
           .child(Text::new("Edit files")),
       )
-      .child(popover(anchor, open.clone(), Placement::BottomStart, panel))
+      .child(popover(anchor, open.clone(), PopoverSide::Below, panel))
       .into()
   });
   let (chip, panel, title) = (
@@ -330,16 +342,30 @@ fn a_popover_opens_6_under_its_control_14_over_and_16_beside_its_content() {
 }
 
 #[test]
-fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip() {
-  let title = "Explain an expired GitHub token in the connection inspector and offer to sign in again";
+fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
+  let title =
+    "Explain an expired GitHub token in the connection inspector, offer to sign in again and say what changed";
   let mut kit = Kit::show(move |ctx| {
-    Row::new()
-      .width(Dimension::Px(200.0))
-      .child(Truncated::new("title", title, ExtraTypography::Strong.role()).render(ctx))
+    Column::new()
+      .child(
+        Row::new()
+          .width(Dimension::Px(200.0))
+          .child(Truncated::new("title", title, ExtraTypography::Strong.role()).render(ctx)),
+      )
+      .child(Truncated::new("short", "Import contacts", ExtraTypography::Strong.role()).render(ctx))
       .into()
   });
   assert!(kit.bounds("title").width <= 200.0, "the text stays in its room");
   assert!(!kit.exists("title-tooltip"));
+  kit.rest_on("short");
+  assert!(!kit.exists("short-tooltip"), "text that fits gets no tooltip");
   kit.rest_on("title");
   assert_eq!(kit.texts("title-tooltip"), [title]);
+  let panel = kit.bounds("title-tooltip");
+  assert!(
+    panel.width <= 400.0 + 16.0 + 0.5,
+    "the tooltip keeps to its width: {}",
+    panel.width
+  );
+  assert!(panel.height > 30.0, "its words wrap onto more lines: {}", panel.height);
 }

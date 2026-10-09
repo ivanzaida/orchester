@@ -1,5 +1,7 @@
 {
   "common": {
-    "newTab": "New tab"
+    "newTab": "New tab",
+    "copy": "Copy",
+    "tryAgain": "Try again"
   }
 }

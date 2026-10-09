@@ -1,7 +1,8 @@
 //! Popover: a panel of settings or details that opens anchored to the control that opens it and closes
 //! on a press outside or Esc (`Run permissions popover` `ojhrZ`): `surface_raised` inside a
 //! `border_strong` stroke, radius 10, 14 over and under its content and 16 at its sides, its parts 12
-//! apart, lifted by the `lg` shadow. It opens 6 from its control.
+//! apart, lifted by the `lg` shadow. It opens 6 under its control, or over it where the design puts it
+//! above.
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
@@ -12,8 +13,12 @@ use lurq::{
 
 use crate::theme::ExtraSpacing;
 
-/// Space between a control and the popover it opens.
-const POPOVER_GAP: f32 = 6.0;
+/// Where a popover opens: under its control or over it, from the control's start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PopoverSide {
+  Below,
+  Above,
+}
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
 pub fn popover_panel(id: &str, width: f32) -> Column {
@@ -28,14 +33,15 @@ pub fn popover_panel(id: &str, width: f32) -> Column {
     .box_shadow(ShadowStyle::Lg)
 }
 
-/// `panel` opened at `placement` of `anchor` while `open` holds; a press outside or Esc closes it.
-pub fn popover(anchor: ElementRef, open: Signal<bool>, placement: Placement, panel: impl Into<Element>) -> Popup {
-  let gap = match placement {
-    Placement::TopStart | Placement::Top | Placement::TopEnd => -POPOVER_GAP,
-    _ => POPOVER_GAP,
+/// `panel` opened on `side` of `anchor` while `open` holds; a press outside or Esc closes it.
+pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
+  let gap = ExtraSpacing::Snug.value();
+  let (placement, offset) = match side {
+    PopoverSide::Below => (Placement::BottomStart, gap),
+    PopoverSide::Above => (Placement::TopStart, -gap),
   };
   Popup::new(anchor, panel)
     .open(open)
     .placement(placement)
-    .offset(0.0, gap)
+    .offset(0.0, offset)
 }

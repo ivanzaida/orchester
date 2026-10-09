@@ -22,6 +22,7 @@ use lurq::{
 };
 use orchester_core::tokens::regroup;
 
+use super::field_error;
 use crate::{
   theme::{ControlHeight, ExtraSpacing, IconSize},
   ui::icon::{Icon, icon},
@@ -47,7 +48,9 @@ pub struct FieldInput {
   unit: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
-  invalid: bool,
+  name: Arc<str>,
+  /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
+  error: Option<Arc<str>>,
   /// Groups the digits of a whole number while it is typed.
   group_separator: Option<Arc<str>>,
   width: Dimension,
@@ -63,7 +66,8 @@ impl PartialEq for FieldInput {
       && self.unit == other.unit
       && self.lines == other.lines
       && self.mono == other.mono
-      && self.invalid == other.invalid
+      && self.name == other.name
+      && self.error == other.error
       && self.group_separator == other.group_separator
       && self.width == other.width
   }
@@ -72,8 +76,9 @@ impl PartialEq for FieldInput {
 impl DevtoolsInspectable for FieldInput {}
 
 impl FieldInput {
-  /// A single-line field typing into `value`; its input's element id is `id`.
-  pub fn new(id: impl Into<Arc<str>>, value: Signal<String>) -> Self {
+  /// A single-line field typing into `value`, named `name` for tools (its label); its input's element
+  /// id is `id`, its box's `<id>-box` and its error's `<id>-note`.
+  pub fn new(id: impl Into<Arc<str>>, name: impl Into<Arc<str>>, value: Signal<String>) -> Self {
     Self {
       id: id.into(),
       value,
@@ -82,7 +87,8 @@ impl FieldInput {
       unit: None,
       lines: Lines::One,
       mono: false,
-      invalid: false,
+      name: name.into(),
+      error: None,
       group_separator: None,
       width: Dimension::Pct(100.0),
     }
@@ -117,8 +123,9 @@ impl FieldInput {
     self
   }
 
-  pub fn invalid(mut self, invalid: bool) -> Self {
-    self.invalid = invalid;
+  /// Why the value is not accepted: said under the box, whose stroke turns `danger`.
+  pub fn error(mut self, error: impl Into<Arc<str>>) -> Self {
+    self.error = Some(error.into());
     self
   }
 
@@ -155,7 +162,7 @@ impl Component for FieldBox {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FieldInput>().clone();
     let input = self.input(ctx, &props);
-    let stroke = if props.invalid {
+    let stroke = if props.error.is_some() {
       PaletteColor::Danger
     } else if self.focused.get() {
       PaletteColor::BorderFocus
@@ -168,10 +175,10 @@ impl Component for FieldBox {
         .background(PaletteColor::SurfaceInput)
         .border(Border::inside(BorderSize::Sm, stroke.clone()))
         .rounded(RadiusSize::Md)
-        .describe("state", if props.invalid { "invalid" } else { "valid" })
+        .describe("state", if props.error.is_some() { "invalid" } else { "valid" })
         .describe("focused", if self.focused.get() { "true" } else { "false" })
     };
-    match props.lines {
+    let frame = match props.lines {
       Lines::One => dress(
         Row::new()
           .id(format!("{}-box", props.id))
@@ -203,7 +210,15 @@ impl Component for FieldBox {
           .align_items(Alignment::Start),
       )
       .child(Column::new().flex(1.0).child(input)),
-    }
+    };
+    let Some(error) = &props.error else {
+      return Column::new().width(props.width).child(frame);
+    };
+    Column::new()
+      .width(props.width)
+      .spacing(ExtraSpacing::Snug.role())
+      .child(frame)
+      .child(field_error(&format!("{}-note", props.id), error))
   }
 }
 
@@ -221,6 +236,7 @@ impl FieldBox {
       .placeholder_style(resolve(TypographyStyle::Description, PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id(props.id.to_string())
+      .describe("a11y_name", props.name.clone())
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .on_focus(move || gained.set(true))

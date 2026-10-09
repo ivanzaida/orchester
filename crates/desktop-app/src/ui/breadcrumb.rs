@@ -6,15 +6,19 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, TypographyStyle},
+  },
   components::{Row, Text},
   layout::Alignment,
-  node::{Element, Style, border::Border},
+  node::{Element, Style, border::Border, dimension::Dimension},
 };
 
 use super::{
   icon::{Icon, icon},
   pressable::pressable,
+  tooltip::Truncated,
 };
 use crate::theme::{ExtraSpacing, IconSize};
 
@@ -59,7 +63,8 @@ impl Crumb {
     self
   }
 
-  fn render(self, id: String, last: bool) -> Element {
+  /// The crumb, cut to its room with its whole label in a tooltip; a link's label is `<id>-label`.
+  fn render(self, ctx: &mut Ctx, id: String, last: bool) -> Element {
     let typography = if self.mono {
       TypographyStyle::Mono
     } else {
@@ -70,21 +75,28 @@ impl Crumb {
     } else {
       PaletteColor::TextMuted
     };
-    let text = Text::new(&self.label).variant(typography).color(color).nowrap();
     match self.open {
-      Some(open) => pressable(move || open())
-        .id(id)
-        .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
-        .child(text)
-        .into(),
-      None => text.id(id).into(),
+      Some(open) => {
+        let name = self.label.clone();
+        let text = Truncated::new(format!("{id}-label"), self.label, typography)
+          .color(color)
+          .render(ctx);
+        pressable(move || open())
+          .id(id)
+          .min_width(Dimension::Px(0.0))
+          .describe("a11y_name", name)
+          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
+          .child(text)
+          .into()
+      }
+      None => Truncated::new(id, self.label, typography).color(color).render(ctx),
     }
   }
 }
 
 /// `crumbs` in order, the page itself last; crumb `n` has the element id `<id>-<n>`, the separator
 /// before it `<id>-separator-<n>`.
-pub fn breadcrumb(id: &str, separator: CrumbSeparator, crumbs: Vec<Crumb>) -> Row {
+pub fn breadcrumb(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, crumbs: Vec<Crumb>) -> Row {
   let count = crumbs.len();
   let mut row = Row::new()
     .id(id.to_owned())
@@ -100,7 +112,7 @@ pub fn breadcrumb(id: &str, separator: CrumbSeparator, crumbs: Vec<Crumb>) -> Ro
       };
       row = row.child(mark.id(format!("{id}-separator-{index}")));
     }
-    row = row.child(crumb.render(format!("{id}-{index}"), index + 1 == count));
+    row = row.child(crumb.render(ctx, format!("{id}-{index}"), index + 1 == count));
   }
   row
 }

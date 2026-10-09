@@ -71,6 +71,8 @@ pub struct TableRow {
   id: Arc<str>,
   cells: Vec<(ColumnWidth, Element)>,
   open: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// The chevron's column stays, empty, in a table whose other rows open.
+  open_column: bool,
 }
 
 impl TableRow {
@@ -79,6 +81,7 @@ impl TableRow {
       id: id.into(),
       cells: Vec::new(),
       open: None,
+      open_column: false,
     }
   }
 
@@ -93,6 +96,13 @@ impl TableRow {
     self.open = Some(Arc::new(open));
     self
   }
+
+  /// A row that does not open, in a table whose other rows do: its chevron's column stays empty, so its
+  /// cells line up with theirs.
+  pub fn in_openable_table(mut self) -> Self {
+    self.open_column = true;
+    self
+  }
 }
 
 impl From<TableRow> for Element {
@@ -103,7 +113,10 @@ impl From<TableRow> for Element {
       .map(|(width, content)| width.sized(Row::new()).align_items(Alignment::Center).child(content));
     let content = line(Row::new(), ROW_HEIGHT).with_children(cells);
     let Some(open) = row.open else {
-      return content.id(row.id.to_string()).into();
+      return content
+        .id(row.id.to_string())
+        .with_children(row.open_column.then(|| Row::new().width(Dimension::Px(OPEN_COLUMN))))
+        .into();
     };
     pressable(move || open())
       .id(row.id)

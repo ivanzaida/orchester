@@ -1,8 +1,8 @@
 //! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): 34 high, 2 at their sides, 20
 //! apart, on a 1 `border` line (`Workflow tabs` `bxhee`). The current tab's label is 13/500
 //! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`; a count follows the label
-//! in its words (`All 24`). A tab not built yet is an 11 lock and its label in 13 `text_muted`, 5
-//! apart, faded to 75 % (`Page tab · Artifacts · unavailable` `W4QYDM`). Tabs are pointer-only.
+//! in its words (`All 24`). A tab not built yet is its label in 13 `text_muted` and an 11 `text_muted`
+//! lock, 5 apart, with why in its tooltip (`Page tab/locked` `Smb4t`). Tabs are pointer-only.
 //!
 //! Segmented control (`Segmented/text` `S5Fsve`, `Segmented` `C9VsTA`): 26 high, `surface_input` inside
 //! a `border` stroke, radius 6, 2 inside and between segments. The chosen segment is filled with
@@ -17,16 +17,17 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
-  components::{Button, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
+  components::{Button, Row, Stack, Text},
+  layout::{Alignment, StackAlignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, pressable},
+  pressable::{Focus, inert, pressable},
+  tooltip::Tooltip,
 };
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, UNAVAILABLE_TAB_OPACITY};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 /// `Page tab/*` height.
 const TAB_HEIGHT: f32 = 34.0;
@@ -38,7 +39,8 @@ const ICON_SEGMENT_WIDTH: f32 = 28.0;
 #[derive(Clone)]
 enum TabState {
   Open(Arc<dyn Fn() + Send + Sync>),
-  Unavailable,
+  /// Not built yet, for this reason.
+  Unavailable(Arc<str>),
 }
 
 pub struct PageTab {
@@ -65,61 +67,60 @@ impl PageTab {
     }
   }
 
-  /// A tab whose page is not built yet: a lock before its label, faded, and it cannot be opened.
-  pub fn unavailable(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+  /// A tab whose page is not built yet: its label and a lock, and `reason` in its tooltip; it cannot be
+  /// opened.
+  pub fn unavailable(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, reason: impl Into<Arc<str>>) -> Self {
     Self {
       id: id.into(),
       label: label.into(),
       current: false,
-      state: TabState::Unavailable,
+      state: TabState::Unavailable(reason.into()),
     }
   }
-}
 
-impl From<PageTab> for Element {
-  fn from(tab: PageTab) -> Self {
-    let open = match tab.state {
-      TabState::Unavailable => {
-        return Row::new()
-          .id(tab.id.clone())
+  fn render(self, ctx: &mut Ctx) -> Element {
+    let open = match self.state {
+      TabState::Unavailable(reason) => {
+        let tab = inert(Button::empty())
+          .id(self.id.clone())
           .height(Dimension::Px(TAB_HEIGHT))
           .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
-          .opacity(UNAVAILABLE_TAB_OPACITY)
-          .describe("a11y_name", tab.label.clone())
+          .describe("a11y_name", self.label.clone())
           .describe("state", "unavailable")
-          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", tab.id)))
+          .describe("reason", reason.clone())
           .child(
-            Text::new(&tab.label)
-              .id(format!("{}-label", tab.id))
+            Text::new(&self.label)
+              .id(format!("{}-label", self.id))
               .variant(TypographyStyle::Body)
               .color(PaletteColor::TextMuted)
               .nowrap(),
           )
-          .into();
+          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", self.id)));
+        return Tooltip::new(self.id, reason).wrap(ctx, tab);
       }
       TabState::Open(open) => open,
     };
-    let (typography, color) = if tab.current {
+    let (typography, color) = if self.current {
       (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
     } else {
       (TypographyStyle::Body, PaletteColor::TextSecondary)
     };
     let button = pressable(move || open())
-      .id(tab.id.clone())
+      .id(self.id.clone())
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
-      .describe("a11y_name", tab.label.clone())
-      .describe("state", if tab.current { "current" } else { "enabled" })
+      .describe("a11y_name", self.label.clone())
+      .describe("state", if self.current { "current" } else { "enabled" })
       .child(
-        Text::new(&tab.label)
-          .id(format!("{}-label", tab.id))
+        Text::new(&self.label)
+          .id(format!("{}-label", self.id))
           .variant(typography)
           .color(color)
           .nowrap(),
       );
-    if tab.current {
+    if self.current {
       button
         .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
         .into()
@@ -137,15 +138,29 @@ pub fn counted(ctx: &Ctx, label: &str, count: usize) -> Arc<str> {
   )
 }
 
-/// The row of page tabs on its line, as wide as its parent.
-pub fn page_tabs(id: &str, tabs: impl IntoIterator<Item = PageTab>) -> Row {
-  Row::new()
+/// The row of page tabs on its line, as wide as its parent. The line is drawn under the tabs, so the
+/// current tab's underline covers it (`BzK1B`).
+pub fn page_tabs(ctx: &mut Ctx, id: &str, tabs: impl IntoIterator<Item = PageTab>) -> Stack {
+  let line = ctx.theme().border_size_value(BorderSize::Sm);
+  let tabs: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
+  Stack::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Tabs.role())
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(tabs.into_iter().map(Element::from))
+    .stack_align(StackAlignment::BottomStart)
+    .child(
+      Row::new()
+        .id(format!("{id}-line"))
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(line))
+        .background(PaletteColor::Border),
+    )
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Tabs.role())
+        .align_items(Alignment::Center)
+        .with_children(tabs),
+    )
 }
 
 /// What a segment shows.

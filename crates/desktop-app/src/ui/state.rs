@@ -141,7 +141,7 @@ pub fn load_error(
   (title, body): (&str, &str),
   retry: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let again = ActionButton::new(format!("{id}-retry"), ButtonKind::Primary, ctx.t("ui.tryAgain"))
+  let again = ActionButton::new(format!("{id}-retry"), ButtonKind::Primary, ctx.t("common.tryAgain"))
     .icon(Icon::RotateCcw)
     .on_click(retry);
   Notice::new(id, NoticeTone::Danger, title)

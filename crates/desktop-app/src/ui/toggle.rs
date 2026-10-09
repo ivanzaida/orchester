@@ -54,23 +54,30 @@ pub struct Toggle {
   id: Arc<str>,
   kind: ToggleKind,
   on: bool,
-  label: Option<Arc<str>>,
+  /// What the control sets: its label beside it and its name for tools.
+  label: Arc<str>,
+  label_shown: bool,
   change: Option<Arc<dyn Fn(bool) + Send + Sync>>,
 }
 
 impl Toggle {
-  pub fn new(id: impl Into<Arc<str>>, kind: ToggleKind, on: bool) -> Self {
+  /// A control of `kind` that is `on`, setting what `label` says; the label shows beside it and names it
+  /// for tools.
+  pub fn new(id: impl Into<Arc<str>>, kind: ToggleKind, on: bool, label: impl Into<Arc<str>>) -> Self {
     Self {
       id: id.into(),
       kind,
       on,
-      label: None,
+      label: label.into(),
+      label_shown: true,
       change: None,
     }
   }
 
-  pub fn label(mut self, label: impl Into<Arc<str>>) -> Self {
-    self.label = Some(label.into());
+  /// The label is said elsewhere, e.g. a setting's name at the row's start (`Inspector row/switch`
+  /// `i4BnK6`): only tools read it here.
+  pub fn hide_label(mut self) -> Self {
+    self.label_shown = false;
     self
   }
 
@@ -135,8 +142,8 @@ impl Toggle {
 impl From<Toggle> for Element {
   fn from(toggle: Toggle) -> Self {
     let mark = toggle.mark().id(format!("{}-mark", toggle.id));
-    let label = toggle.label.clone().map(|label| {
-      Text::new(&label)
+    let label = toggle.label_shown.then(|| {
+      Text::new(&toggle.label)
         .id(format!("{}-label", toggle.id))
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextPrimary)
@@ -157,6 +164,7 @@ impl From<Toggle> for Element {
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Sm)
       .describe("kind", toggle.kind.name())
+      .describe("a11y_name", toggle.label.clone())
       .describe("checked", if toggle.on { "true" } else { "false" })
       .child(mark)
       .with_children(label)
