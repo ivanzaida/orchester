@@ -439,7 +439,9 @@
       "invalidRecovery": "This message cannot continue a run. Refresh the task and try again.",
       "notUndelivered": "This message was sent again or delivered meanwhile. The conversation shows where it stands now.",
       "notLatestRun": "Messages go to the task’s latest run, #{{run}}.",
-      "noSecondWay": "In the run’s state a message is sent one way only."
+      "noSecondWay": "In the run’s state a message is sent one way only.",
+      "notReadable": "Its run has ended or is no longer the task’s latest, so no agent reads this message any more.",
+      "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."
     }
   },
   "pullRequests": {

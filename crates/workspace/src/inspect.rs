@@ -77,6 +77,7 @@ impl DevtoolsInspectable for crate::tasks::changes::NotCheckpointed {}
 impl DevtoolsInspectable for crate::tasks::conflict::EditConflict {}
 impl DevtoolsInspectable for crate::tasks::conversation::Conversation {}
 impl DevtoolsInspectable for crate::tasks::conversation::follow::Sent {}
+impl DevtoolsInspectable for crate::tasks::conversation::outgoing::Context {}
 impl DevtoolsInspectable for crate::tasks::data::ProjectTasks {}
 impl DevtoolsInspectable for crate::tasks::detail::TaskDetail {}
 impl DevtoolsInspectable for crate::tasks::integration::IntegrationProblem {}

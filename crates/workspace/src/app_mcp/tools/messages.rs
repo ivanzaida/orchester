@@ -69,13 +69,13 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
     let project = reading.project(&project)?;
     let named = find_run(&orchester_store::ProjectDb::open(&project.repo_root)?, &run)?;
     // Automation reads the run as stored: the runner it asks starts if the project has none.
-    let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, false)).map_err(refusal)?;
+    let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
     Ok((project, prepared))
   })
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
-    let command = plan_changes(&prepared, &args.text, Answerer::Automation).map_err(refusal)?;
+    let command = plan_changes(&prepared, &args.text, (Answerer::Automation, None)).map_err(refusal)?;
     services
       .runners
       .control_run_in(&project, command)
@@ -123,9 +123,10 @@ fn refusal(error: OutgoingError) -> ToolError {
     OutgoingError::NotLatestRun(_) => ToolError::refused("not_latest_run", vec![reason]),
     OutgoingError::Closed(_) => ToolError::refused("no_agent_reads", vec![reason]),
     OutgoingError::Send(SendError::Blank) => ToolError::refused("blank_message", vec![reason]),
-    OutgoingError::NoSecondWay
+    OutgoingError::Changed
+    | OutgoingError::NoSecondWay
     | OutgoingError::NoPlan
-    | OutgoingError::Send(SendError::InvalidRecovery | SendError::NotUndelivered) => {
+    | OutgoingError::Send(SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable) => {
       ToolError::refused("not_sent", vec![reason])
     }
   }
