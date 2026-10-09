@@ -5,6 +5,7 @@
 //!   repository's `.git/config`, which is refused before anybody is asked.
 //! - "Use the run tools" ([`run_tools`]): the run's task, a progress line, a memory record, the references of `hi`, a
 //!   file made, moved and deleted, and the check `checks`.
+//! - "Run the check twice" ([`check_twice`]): the check `checks`, twice.
 //! - "Use the file tools" ([`files`]): in the worktree, each refusal included: an edit before the file is read, then
 //!   after; an edit whose expected lines are stale; a new file and one that exists; a search; reads and creates that
 //!   leave the worktree or reach protected folders; a read of a file larger than an answer holds. In a read-only step:
@@ -104,6 +105,14 @@ pub fn files(read_only: bool) -> Vec<(&'static str, &'static str, Value)> {
     ),
     ("toolu_wide", "read_file", json!({"filename": "wide.txt"})),
   ]
+}
+
+/// Each call of "Run the check twice".
+#[allow(dead_code, reason = "only the fake Codex runs the check twice")]
+pub fn check_twice() -> Vec<(&'static str, &'static str, Value)> {
+  ["toolu_check_1", "toolu_check_2"]
+    .map(|call| (call, "run_check", json!({"name": "checks"})))
+    .to_vec()
 }
 
 /// Each call of "Use the run tools", in a writing step.

@@ -23,6 +23,7 @@ fn mcp_rule(tool: &str) -> RuleScope {
     server: "pencil".to_owned(),
     tool: tool.to_owned(),
     folder: None,
+    check: None,
   }
 }
 

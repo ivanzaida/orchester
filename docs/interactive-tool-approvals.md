@@ -225,8 +225,12 @@ by `read_external_file` and `search_external_file`.
   never runs a project's program. A request for a call outside the worktree names, as its target, the folder the call
   reads in (a read's file's folder, a search's folder, resolved), and *Approve similar* keeps its rule to that folder:
   it answers every later read and search there and below it (`RuleScope::SimilarMcpTool` with a `folder`; rules made
-  before keep covering their tool everywhere). *Always allow* is unavailable (*Orchester's own tools have no list of
-  tools that run without asking yet*).
+  before keep covering their tool everywhere). The approval tile and the Summary's rule name that folder and say the
+  rule covers reads and searches. It is unavailable for a folder too broad to approve as a whole
+  (`CommandScope::is_broad_folder`, paths resolved and compared without case): a drive or file system root, a folder
+  fewer than two levels below one, a home folder, a folder that holds one, or one fewer than two levels below one.
+  *Always allow* is unavailable (*Orchester's own tools have no list of tools that run without asking yet*). A call
+  that asks nobody (a read in the sources, a check whose rules approve no call) runs without leaving a grant.
 - **Execution.** The runner runs every call off its async workers, in the run's worktree with the environment the
   agent's own programs get (no secret); a project tool is a program and its arguments, never a shell line, its output
   read as it comes and kept within its own limits; the answer has the invocation's MCP secrets removed and stays within
@@ -237,8 +241,12 @@ by `read_external_file` and `search_external_file`.
 - **`run_check`** (formerly `run_project_tool`) runs a check: a command tool of the Tools library that the run pinned
   and whose access rules let the run's pipeline and the step call it (`AccessPolicy::allows`), named by its slug, with
   its fixed arguments, in the worktree; the answer is its exit code and the end of its output within the tool's own
-  limits. A check whose rules approve no call (`ApprovalMode::Never`) runs without asking; any other asks before each
-  call (`StepTools::call_asks`), and Claude Code gets an allow rule for `run_check` only when no check asks. It is not
+  limits. A check whose rules approve no call (`ApprovalMode::Never`) runs without asking; any other asks
+  (`StepTools::call_asks`), and Claude Code gets an allow rule for `run_check` only when no check asks. A request
+  names the check, and *Approve similar* keeps its rule to that check (`RuleScope::SimilarMcpTool` with a `check`). A
+  check approved once per run (`ApprovalMode::OncePerRun`) asks at its first call; *Approve once* then also adds
+  that rule, so its later calls in the run are answered by it. For a check approved before every call
+  (`ApprovalMode::EveryCall`), or one the step is not offered, *Approve similar* is unavailable. It is not
   offered without network (the program runs outside every sandbox), and auto-approval never runs one. No free-form
   command: the checks have no typed parameters.
 - **The run's records.** `get_task` answers the run's task as the run started it (title, brief, acceptance

@@ -21,7 +21,7 @@ use orchester_core::{
     AlwaysUnavailable, Answerer, ApprovalSubject, AutoVerdict, PendingToolApproval, RuleScope, SimilarUnavailable,
     always_prefixes, auto_verdict, codex_denial, denial_message,
   },
-  store::{McpServerStore, ResourceStore},
+  store::{McpServerStore, ResourceStore, RunStore},
 };
 use orchester_store::ProjectDb;
 
@@ -36,6 +36,14 @@ pub enum SimilarShown {
   Tool {
     server: Arc<str>,
     tool: Arc<str>,
+  },
+  /// Orchester's reads and searches outside the worktree in `folder` and below it.
+  Folder {
+    folder: Arc<str>,
+  },
+  /// The calls of one check of `run_check`.
+  Check {
+    name: Arc<str>,
   },
 }
 
@@ -108,12 +116,17 @@ impl ApprovalChoices {
     (profile, pinned): (Option<ResourceId>, Option<VersionNumber>),
     (worktree, writable, codex): (&Path, &[PathBuf], bool),
   ) -> Self {
-    let subject = ApprovalSubject::of(approval, &CommandScope::on_host(worktree, writable));
+    let subject =
+      ApprovalSubject::of(approval, &CommandScope::on_host(worktree, writable)).with_checks(&run_checks(db, approval));
     let similar = RuleScope::similar(&subject).and_then(|scope| match scope {
       RuleScope::SimilarCommand { command } => Ok(SimilarShown::Command {
         words: command.words().into(),
         category: command.category(),
       }),
+      RuleScope::SimilarMcpTool {
+        folder: Some(folder), ..
+      } => Ok(SimilarShown::Folder { folder: folder.into() }),
+      RuleScope::SimilarMcpTool { check: Some(name), .. } => Ok(SimilarShown::Check { name: name.into() }),
       RuleScope::SimilarMcpTool { server, tool, .. } => Ok(SimilarShown::Tool {
         server: server.into(),
         tool: tool.into(),
@@ -161,6 +174,25 @@ impl ApprovalChoices {
       },
     }
   }
+}
+
+/// The checks the step of `approval` is offered, for a `run_check` call; none for any other. A run or a list that
+/// cannot be read leaves the check unknown, so Approve similar is unavailable for it, the safe side.
+fn run_checks(db: &ProjectDb, approval: &PendingToolApproval) -> Vec<orchester_tools::ProjectTool> {
+  if approval.server != orchester_tools::SERVER || approval.action != orchester_tools::OrchesterTool::RunCheck.as_str()
+  {
+    return Vec::new();
+  }
+  let Ok(Some(run)) = db.run(approval.run) else {
+    return Vec::new();
+  };
+  let Some(step) = run
+    .execution(approval.execution)
+    .map(|execution| execution.step().clone())
+  else {
+    return Vec::new();
+  };
+  db.run_checks(run.snapshot(), &step).unwrap_or_default()
 }
 
 /// A profile as Always allow of a command adds to it: its latest version and whether it has a draft.

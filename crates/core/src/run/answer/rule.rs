@@ -1,7 +1,9 @@
 //! Rules a run keeps from its wider answers (design `k4cz1C`, "Approval choices and waiting requests"):
 //! Approve similar makes one for the same program and subcommand in the same category, reaching outside
 //! the worktree only where the approved command did, or for one tool of one MCP server (for Orchester's tools that
-//! read outside the worktree: reads and searches in the folder the approved call read in and below); no rule ever
+//! read outside the worktree: reads and searches in the folder the approved call read in and below, never a root, a
+//! home folder or a folder close below one; for `run_check`: the one check, never one whose access rules ask before
+//! every call); no rule ever
 //! covers a command part that rewrites history, deletes outside the worktree, reads a credential or was
 //! not read to the end; Always allow of a command makes one for its prefix, so the run keeps allowing it
 //! although it started with the profile version before. Rules live with the run, end with it, never
@@ -12,7 +14,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::subject::ApprovalSubject;
+use super::subject::{ApprovalSubject, ToolReach};
 use crate::{
   id::RunId,
   permission::{
@@ -44,13 +46,15 @@ pub enum RuleScope {
   /// Commands whose asking part has this program and subcommand in this category.
   SimilarCommand { command: SimilarCommand },
   /// Any call of `tool` of MCP server `server`, whatever its arguments. With a `folder` (Orchester's tools that read
-  /// outside the worktree), any call of those tools that reads in it or below it. Rules made before folders were kept
-  /// have none.
+  /// outside the worktree), any call of those tools that reads in it or below it; with a `check` (`run_check`), the
+  /// calls of that check. Rules made before folders were kept have neither.
   SimilarMcpTool {
     server: String,
     tool: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     folder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    check: Option<String>,
   },
   /// Commands this prefix allows, added to the profile's Allowed commands by Always allow.
   AlwaysCommand { prefix: CommandPrefix },
@@ -68,6 +72,11 @@ pub enum SimilarUnavailable {
   Destructive,
   /// It reads a credential location or store: a person answers each.
   Secrets,
+  /// It reads outside the worktree in a drive or file system root, a home folder, or a folder fewer than two levels
+  /// below one: a rule would reach too much.
+  BroadFolder,
+  /// It runs a check whose access rules ask before every call.
+  EveryCall,
 }
 
 impl RuleScope {
@@ -75,11 +84,21 @@ impl RuleScope {
   /// call's server and tool.
   pub fn similar(subject: &ApprovalSubject) -> Result<Self, SimilarUnavailable> {
     match subject {
-      ApprovalSubject::McpTool { server, tool, folder } => Ok(Self::SimilarMcpTool {
-        server: server.clone(),
-        tool: tool.clone(),
-        folder: folder.clone(),
-      }),
+      ApprovalSubject::McpTool { server, tool, reach } => {
+        let (folder, check) = match reach {
+          ToolReach::Any => (None, None),
+          ToolReach::Folder { broad: true, .. } => return Err(SimilarUnavailable::BroadFolder),
+          ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
+          ToolReach::Check { every_call: true, .. } => return Err(SimilarUnavailable::EveryCall),
+          ToolReach::Check { name, .. } => (None, Some(name.clone())),
+        };
+        Ok(Self::SimilarMcpTool {
+          server: server.clone(),
+          tool: tool.clone(),
+          folder,
+          check,
+        })
+      }
       ApprovalSubject::Command(command) => similar_command(command).map(|command| Self::SimilarCommand { command }),
     }
   }
@@ -156,23 +175,34 @@ impl ApprovalRule {
 pub fn answering<'a>(rules: &'a [ApprovalRule], subject: &ApprovalSubject) -> Option<&'a ApprovalRule> {
   let mut active = rules.iter().filter(|rule| rule.is_active());
   match subject {
-    ApprovalSubject::McpTool { server, tool, folder } => active.find(|rule| match &rule.scope {
-      RuleScope::SimilarMcpTool {
-        server: s,
-        tool: t,
-        folder: None,
-      } => s == server && t == tool,
+    ApprovalSubject::McpTool { server, tool, reach } => active.find(|rule| match (&rule.scope, reach) {
+      (
+        RuleScope::SimilarMcpTool {
+          server: s,
+          tool: t,
+          folder: None,
+          check: None,
+        },
+        _,
+      ) => s == server && t == tool,
       // Only Orchester's calls outside the worktree name a folder: such a rule covers each of them that reads there.
-      RuleScope::SimilarMcpTool {
-        server: s,
-        folder: Some(within),
-        ..
-      } => {
-        s == server
-          && folder
-            .as_deref()
-            .is_some_and(|folder| Path::new(folder).starts_with(within))
-      }
+      (
+        RuleScope::SimilarMcpTool {
+          server: s,
+          folder: Some(within),
+          ..
+        },
+        ToolReach::Folder { folder, .. },
+      ) => s == server && Path::new(folder).starts_with(within),
+      (
+        RuleScope::SimilarMcpTool {
+          server: s,
+          tool: t,
+          check: Some(check),
+          ..
+        },
+        ToolReach::Check { name, .. },
+      ) => s == server && t == tool && check == name,
       _ => false,
     }),
     ApprovalSubject::Command(command) => {

@@ -24,7 +24,7 @@ use orchester_core::{
     OutsideReads, ProjectTool, StepTools, ToolCall, ToolCallError, ToolContext, ToolProgram, ToolWork,
   },
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, category::CommandScope},
-  resource::{CommandAction, CommandArg, CommandEnvironment, CommandProgram, RepositoryAccess},
+  resource::{ApprovalMode, CommandAction, CommandArg, CommandEnvironment, CommandProgram, RepositoryAccess},
 };
 use serde_json::Value;
 use tempfile::TempDir;
@@ -112,7 +112,7 @@ pub fn text(path: &Path) -> String {
 pub fn project_tool(name: &str, program: &str) -> ProjectTool {
   let args = ["--quiet", "a; rm -rf /"].map(|arg| CommandArg::new(arg).expect("an argument"));
   let action = CommandAction::new(CommandProgram::new(program).expect("a program"), args.to_vec());
-  ProjectTool::new(name, "runs the tests", action, true)
+  ProjectTool::new(name, "runs the tests", action, ApprovalMode::EveryCall)
 }
 
 pub fn context<'a>(worktree: &'a Path, reads: &'a OutsideReads, tools: &'a [ProjectTool]) -> ToolContext<'a> {

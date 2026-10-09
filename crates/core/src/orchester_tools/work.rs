@@ -17,7 +17,7 @@ use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
   memory::MemoryNote,
-  resource::{CommandAction, CommandEnvironment, ExitCodes},
+  resource::{ApprovalMode, CommandAction, CommandEnvironment, ExitCodes},
   run::StepProgress,
 };
 
@@ -27,23 +27,29 @@ pub struct ProjectTool {
   name: String,
   description: String,
   action: CommandAction,
-  asks: bool,
+  approval: ApprovalMode,
 }
 
 impl ProjectTool {
-  /// The check `name` running `action`, which a person approves before each call when it `asks`.
-  pub fn new(name: &str, description: &str, action: CommandAction, asks: bool) -> Self {
+  /// The check `name` running `action`, approved as its access rules' `approval` says: never asked, asked once per
+  /// run, or asked before every call.
+  pub fn new(name: &str, description: &str, action: CommandAction, approval: ApprovalMode) -> Self {
     Self {
       name: name.to_owned(),
       description: description.to_owned(),
       action,
-      asks,
+      approval,
     }
   }
 
   /// Whether a call of it runs only once approved.
-  pub const fn asks(&self) -> bool {
-    self.asks
+  pub fn asks(&self) -> bool {
+    self.approval != ApprovalMode::Never
+  }
+
+  /// How its access rules approve its calls.
+  pub const fn approval(&self) -> ApprovalMode {
+    self.approval
   }
 
   pub fn name(&self) -> &str {

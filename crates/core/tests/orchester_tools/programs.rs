@@ -6,7 +6,7 @@ use orchester_core::{
   command::CommandError,
   orchester_tools::{OutputKept, ProgramOutput, ProjectTool, StepTools, ToolCall, ToolCallError, ToolContext},
   permission::NetworkAccess,
-  resource::{CommandAction, CommandProgram, OutputLimit, RepositoryAccess},
+  resource::{ApprovalMode, CommandAction, CommandProgram, OutputLimit, RepositoryAccess},
 };
 use serde_json::json;
 
@@ -23,7 +23,12 @@ fn orchester_tools_answers_are_bounded_and_carry_the_exit_code() {
     Vec::new(),
   )
   .with_output_limit(OutputLimit::from_kib(1).expect("a limit"));
-  let tools = [ProjectTool::new("Long", "prints a lot", limited, true)];
+  let tools = [ProjectTool::new(
+    "Long",
+    "prints a lot",
+    limited,
+    ApprovalMode::EveryCall,
+  )];
   let context = context(&folders.worktree, &reads, &tools);
   let program = program_of(
     &ToolCall::RunCheck {

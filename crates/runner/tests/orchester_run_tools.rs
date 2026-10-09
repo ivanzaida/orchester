@@ -1,13 +1,13 @@
 //! Orchester's tools besides the files end to end through the relay, with the fake CLIs: `get_task` answers the run's
 //! task, `report_progress` keeps the step's line, `save_memory` keeps a task memory record, `find_references` lists
 //! where a name is used and says the code index is off, `delete_file` and `move_file` change the worktree, and
-//! `run_check` runs the command tool whose access rules offer it to the step, without asking as its rules say. Needs
-//! `git`. Run with `cargo test -p orchester-runner --features test-agent --test orchester_run_tools
-//! orchester_run_tools`.
+//! `run_check` runs the command tool whose access rules offer it to the step, asking as its rules say: never, once
+//! per run (the approval covers the check's later calls) or before every call (no Approve similar). Needs `git`. Run
+//! with `cargo test -p orchester-runner --features test-agent --test orchester_run_tools orchester_run_tools`.
 
 mod support;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -19,17 +19,20 @@ use orchester_core::{
     AccessPolicy, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram, DeniedBehavior,
     Slug, Tool, ToolAction,
   },
-  run::{Run, RunStatus},
+  run::{Answerer, ApprovalAnswer, PendingToolApproval, RuleScope, Run, RunStatus},
   store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
+use orchester_ipc::{Event, Rejection};
+use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
 
-use self::support::{Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
+use self::support::{PATIENCE, Setup, TestProject, project, reported, scheduler_with, tools::TEST_COMMAND, wait_for};
 
 /// Publishes the check `checks`: the test command printing three lines, offered to every step of the task's
-/// pipeline, approving no call.
-fn offer_check(project: &TestProject) {
+/// pipeline, asking as `approval` says.
+fn offer_check(project: &TestProject, approval: ApprovalMode) {
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   let pipeline = db
     .task(project.task)
@@ -45,7 +48,7 @@ fn offer_check(project: &TestProject) {
   let access = AccessPolicy::new(
     BTreeMap::from([(pipeline, AllowedSteps::All)]),
     Name::new("Local").expect("a name"),
-    ApprovalMode::Never,
+    approval,
     AccessWindow::UntilStepEnds,
     DeniedBehavior::FailStep,
   )
@@ -119,7 +122,7 @@ async fn orchester_run_tools_serve_claude_code() {
     permissions: Some(permissions(CommandPermission::Allowed(AllowedCommands::default()))),
     ..Setup::new("Use the run tools.")
   });
-  offer_check(&project);
+  offer_check(&project, ApprovalMode::Never);
   let (run, db) = finished(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let id = run.id();
@@ -169,7 +172,7 @@ async fn orchester_run_tools_serve_codex() {
     permissions: Some(permissions(CommandPermission::AnyInWorktree)),
     ..Setup::new("Use the run tools.")
   });
-  offer_check(&project);
+  offer_check(&project, ApprovalMode::Never);
   let (run, db) = finished(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let id = run.id();
@@ -203,4 +206,94 @@ async fn orchester_run_tools_serve_codex() {
     assert!(answers.iter().any(|line| line.contains(told)), "{told}: {answers:#?}");
   }
   assert_records(&project, &run, &db);
+}
+
+/// A run of "Run the check twice" with `checks` asking as `approval` says, started.
+async fn check_twice(approval: ApprovalMode) -> (TestProject, Scheduler, mpsc::UnboundedReceiver<Event>, RunId) {
+  let project = project(&Setup {
+    permissions: Some(permissions(CommandPermission::AnyInWorktree)),
+    ..Setup::new("Run the check twice.")
+  });
+  offer_check(&project, approval);
+  let (scheduler, events) = scheduler_with(project.repo.path(), project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  (project, scheduler, events, id)
+}
+
+/// The run's first waiting request, a call of the check.
+async fn pending(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, id: RunId) -> PendingToolApproval {
+  let request = tokio::time::timeout(PATIENCE, async {
+    loop {
+      if let Some(request) = ProjectDb::open(root)
+        .expect("open")
+        .pending_tool_approvals(id)
+        .expect("requests")
+        .first()
+      {
+        return request.clone();
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("an approval arrives");
+  assert_eq!(request.action, "run_check", "{request:#?}");
+  request
+}
+
+fn check_calls(root: &Path, id: RunId) -> Vec<String> {
+  reported(&ProjectDb::open(root).expect("open"), id, "orchester-call: ")
+}
+
+/// A check its rules approve once per run asks at its first call; that approval answers its second call.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_ask_once_per_run_for_a_check() {
+  let (project, scheduler, mut events, id) = check_twice(ApprovalMode::OncePerRun).await;
+  let root = project.repo.path();
+  let request = pending(root, &mut events, id).await;
+  scheduler
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("answered");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let calls = check_calls(root, id);
+  assert_eq!(calls.len(), 2, "{calls:#?}");
+  assert!(calls.iter().all(|call| call.starts_with("run_check ok")), "{calls:#?}");
+  let rules = ProjectDb::open(root).expect("open").approval_rules(id).expect("rules");
+  assert!(
+    matches!(&rules[..], [rule] if matches!(&rule.scope, RuleScope::SimilarMcpTool { check: Some(name), .. } if name == "checks")),
+    "{rules:#?}"
+  );
+}
+
+/// A check its rules approve before every call asks at each, and Approve similar is not available for it.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_run_tools_ask_every_call_of_a_check() {
+  let (project, scheduler, mut events, id) = check_twice(ApprovalMode::EveryCall).await;
+  let root = project.repo.path();
+  for _ in 0..2 {
+    let request = pending(root, &mut events, id).await;
+    let similar = scheduler
+      .decide_tool_approval(id, request.id.clone(), ApprovalAnswer::Similar, Answerer::Person)
+      .await;
+    assert!(matches!(similar, Err(Rejection::Failed { .. })), "{similar:?}");
+    scheduler
+      .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+      .await
+      .expect("answered");
+  }
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(check_calls(root, id).len(), 2);
+  assert!(
+    ProjectDb::open(root)
+      .expect("open")
+      .approval_rules(id)
+      .expect("rules")
+      .is_empty()
+  );
 }

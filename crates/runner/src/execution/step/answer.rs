@@ -13,10 +13,11 @@ use orchester_core::{
   native::session::DENIED,
   orchester_tools::auto_approvable,
   permission::category::CommandCategory,
+  resource::ApprovalMode,
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
-    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, allowing_tool, answering, auto_approves,
-    auto_verdict, codex_denial, denial_message, permitted, review::Review,
+    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, allowing_tool, answering,
+    auto_approves, auto_verdict, codex_denial, denial_message, permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -63,7 +64,7 @@ impl Worker {
     watch: &Watch,
     approval: &PendingToolApproval,
   ) -> Result<Option<Settled>, StoreError> {
-    let subject = ApprovalSubject::of(approval, &self.scope);
+    let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let category = category_of(&subject);
     if self.listed_since_start(watch, approval)? {
       return Ok(Some(Settled::by(DecidedBy::AlwaysAllowed, None)));
@@ -128,7 +129,7 @@ impl Worker {
     approval: &PendingToolApproval,
     (answer, by): (&ApprovalAnswer, Answerer),
   ) -> Result<Result<Settled, Rejection>, StoreError> {
-    let subject = ApprovalSubject::of(approval, &self.scope);
+    let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let decided_by = match answer.given_by(by, &subject) {
       Ok(decided_by) => decided_by,
       Err(AutomationAnswerError::Wider) => return Ok(Err(Rejection::AutomationWider)),
@@ -141,6 +142,12 @@ impl Worker {
     };
     let now = Timestamp::now();
     match answer {
+      // A check its access rules approve once per run: this approval covers its later calls in the run.
+      ApprovalAnswer::Once if self.once_per_run(&subject) => {
+        if let Ok(scope) = RuleScope::similar(&subject) {
+          watch.db.add_approval_rule(approval.run, &scope, now)?;
+        }
+      }
       ApprovalAnswer::Once => {}
       ApprovalAnswer::Deny => {
         // Claude Code hands the agent Orchester's message; Codex tells it in its own words; a native
@@ -169,6 +176,21 @@ impl Worker {
       }
     }
     Ok(Ok(settled))
+  }
+
+  /// Whether `subject` runs a check its access rules approve once per run.
+  fn once_per_run(&self, subject: &ApprovalSubject) -> bool {
+    let ApprovalSubject::McpTool {
+      reach: ToolReach::Check { name, .. },
+      ..
+    } = subject
+    else {
+      return false;
+    };
+    self
+      .checks
+      .iter()
+      .any(|check| check.name() == name && check.approval() == ApprovalMode::OncePerRun)
   }
 
   /// Always allow: a command's prefix is published in its profile and kept by the run; an MCP tool is

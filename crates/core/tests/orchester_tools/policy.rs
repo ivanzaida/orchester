@@ -108,7 +108,7 @@ fn orchester_tools_checks_ask_by_their_access_rules() {
       orchester_core::resource::CommandProgram::new("/bin/true").expect("a program"),
       Vec::new(),
     ),
-    false,
+    orchester_core::resource::ApprovalMode::Never,
   );
   let only_quiet = StepTools::for_step(&online, std::slice::from_ref(&quiet));
   assert_eq!(only_quiet.policy(OrchesterTool::RunCheck), Some(ToolPolicy::Runs));

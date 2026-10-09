@@ -10,7 +10,8 @@ use orchester_core::{
   run::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
     AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, PendingToolApproval, RuleScope, SimilarUnavailable,
-    allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict, denial_message,
+    ToolReach, allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict,
+    denial_message,
   },
   time::Timestamp,
 };
@@ -43,7 +44,7 @@ fn mcp(server: &str, tool: &str) -> ApprovalSubject {
   ApprovalSubject::McpTool {
     server: server.to_owned(),
     tool: tool.to_owned(),
-    folder: None,
+    reach: ToolReach::Any,
   }
 }
 
@@ -158,7 +159,10 @@ fn approval_answers_similar_external_read_keeps_to_its_folder() {
     ApprovalSubject::McpTool {
       server: "Orchester".to_owned(),
       tool: "read_external_file".to_owned(),
-      folder: Some(text(&deps)),
+      reach: ToolReach::Folder {
+        folder: text(&deps),
+        broad: false
+      },
     }
   );
   let rules = vec![rule(3, RuleScope::similar(&first).expect("similar"))];

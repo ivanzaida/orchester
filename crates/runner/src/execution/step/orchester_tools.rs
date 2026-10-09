@@ -137,24 +137,31 @@ impl ToolHost {
     ToolCall::parse(name, arguments, &self.tools)
   }
 
-  /// Whether `call`, reaching `outside` as [`Self::outside`] says, runs only once approved: its tool or check asks,
-  /// and it does not stay in the run's sources.
-  pub(super) fn needs_approval(&self, call: &ToolCall, outside: Option<&Outside>) -> bool {
-    self.tools.call_asks(call) && !outside.is_some_and(|outside| outside.in_sources)
+  /// What `call` needs before it runs, read off the async workers (a call outside the worktree resolves its path):
+  /// whether a person or a rule approves it first, and what its approval names. Why the call is refused, when its
+  /// path is one the tools never reach.
+  pub(super) async fn look(self: &Arc<Self>, call: &ToolCall) -> Result<Looked, String> {
+    let (host, call) = (Arc::clone(self), call.clone());
+    tokio::task::spawn_blocking(move || host.look_blocking(&call))
+      .await
+      .map_err(|error| format!("the call could not be checked: {error}"))?
   }
 
-  /// How `call` reaches outside the worktree; `None` for any other call. A path the call may not reach is the call's
-  /// refusal.
-  pub(super) fn outside(&self, call: &ToolCall) -> Option<Result<Outside, ToolCallError>> {
-    let reach = call.external_reach(&self.outside)?;
-    Some(
-      reach
-        .map(|reach| Outside {
-          in_sources: self.sources.covers(&reach.path),
-          folder: reach.folder.display().to_string(),
-        })
-        .map_err(ToolCallError::from),
-    )
+  fn look_blocking(&self, call: &ToolCall) -> Result<Looked, String> {
+    let reach = call
+      .external_reach(&self.outside)
+      .transpose()
+      .map_err(|error| ToolCallError::from(error).to_string())?;
+    let in_sources = reach.as_ref().is_some_and(|reach| self.sources.covers(&reach.path));
+    let target = match (call, reach) {
+      (_, Some(reach)) => Some(reach.folder.display().to_string()),
+      (ToolCall::RunCheck { name }, None) => Some(name.clone()),
+      _ => None,
+    };
+    Ok(Looked {
+      asks: self.tools.call_asks(call) && !in_sources,
+      target,
+    })
   }
 
   /// One approved call of `tool` with `arguments`, given through the CLI's own prompt.
@@ -216,12 +223,12 @@ impl ToolHost {
   }
 }
 
-/// Where a call outside the worktree reads.
-pub(super) struct Outside {
-  /// The folder it reads in, as its approval shows it.
-  pub(super) folder: String,
-  /// It stays in the run's sources, so it runs without asking.
-  pub(super) in_sources: bool,
+/// What a call needs before it runs ([`ToolHost::look`]).
+pub(super) struct Looked {
+  /// A person or a rule approves it first: its tool or check asks, and it does not stay in the run's sources.
+  pub(super) asks: bool,
+  /// What its approval names: the folder a call outside the worktree reads in, the check `run_check` runs.
+  pub(super) target: Option<String>,
 }
 
 /// `arguments` as a call names them: none is an empty object.

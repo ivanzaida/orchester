@@ -158,6 +158,22 @@ fn section(ctx: &Ctx, title: &str, rules: Vec<Element>) -> Option<Element> {
 /// What a rule answers: an MCP tool by its server and name, a command by its words and category.
 fn scope_text(ctx: &Ctx, scope: &RuleScope) -> Arc<str> {
   match scope {
+    RuleScope::SimilarMcpTool {
+      server,
+      folder: Some(folder),
+      ..
+    } => ctx.t_args(
+      "runs.summary.approvals.folderRule",
+      [("server", server.as_str()), ("folder", folder.as_str())],
+    ),
+    RuleScope::SimilarMcpTool {
+      server,
+      check: Some(check),
+      ..
+    } => ctx.t_args(
+      "runs.summary.approvals.checkRule",
+      [("server", server.as_str()), ("check", check.as_str())],
+    ),
     RuleScope::SimilarMcpTool { server, tool, .. } => ctx.t_args(
       "runs.summary.approvals.toolRule",
       [("server", server.as_str()), ("tool", tool.as_str())],

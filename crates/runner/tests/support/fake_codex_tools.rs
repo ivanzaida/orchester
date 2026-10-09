@@ -53,6 +53,9 @@ fn calls(prompt: &str, worktree: &Path) -> Vec<(&'static str, Value)> {
   if prompt.contains("Use the run tools") {
     return named(fake_tool_calls::run_tools());
   }
+  if prompt.contains("Run the check twice") {
+    return named(fake_tool_calls::check_twice());
+  }
   named(fake_tool_calls::external(worktree))
 }
 

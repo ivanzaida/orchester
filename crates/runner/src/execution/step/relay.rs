@@ -51,7 +51,7 @@ use tokio::{
 
 use super::{
   claude_approval::{Asked, AskedBy, PromptAnswer},
-  orchester_tools::{Outside, ToolHost},
+  orchester_tools::{Looked, ToolHost},
   question::AskedQuestion,
 };
 
@@ -363,21 +363,24 @@ impl Relay {
       .then(|| OrchesterTool::from_name(request.action()))
       .flatten();
     let input = arguments.get("input").unwrap_or(&Value::Null);
-    let answer = match tool.map(|tool| self.prompt_call(tool, input)) {
-      // A call that stays in the run's sources, or a check that asks nobody, runs without asking.
-      Some(Ok((false, _))) => PromptAnswer::Allow,
-      // The call would be refused: it is denied with why, and nobody is asked.
-      Some(Err(refused)) => PromptAnswer::Deny(refused),
-      Some(Ok((true, Some(outside)))) => {
-        let request = request.with_target(outside.folder);
-        return self.ask_prompt(request, (tool, input), lines).await;
-      }
-      Some(Ok((true, None))) | None => return self.ask_prompt(request, (tool, input), lines).await,
+    let looked = match tool {
+      Some(tool) => Some(self.prompt_call(tool, input).await),
+      None => None,
     };
-    if let (Some(tool), PromptAnswer::Allow) = (tool, &answer) {
-      self.served.tools.grant(tool, input);
+    match looked {
+      // A call that stays in the run's sources, or a check that asks nobody, runs without asking; its call needs no
+      // grant, so none is left.
+      Some(Ok(Looked { asks: false, .. })) => Some(PromptAnswer::Allow.result()),
+      // The call would be refused: it is denied with why, and nobody is asked.
+      Some(Err(refused)) => Some(PromptAnswer::Deny(refused).result()),
+      Some(Ok(Looked {
+        target: Some(target), ..
+      })) => {
+        let request = request.with_target(target);
+        self.ask_prompt(request, (tool, input), lines).await
+      }
+      Some(Ok(_)) | None => self.ask_prompt(request, (tool, input), lines).await,
     }
-    Some(answer.result())
   }
 
   /// A person's answer on the permission prompt call `request` of `tool` with `input`, as the prompt's result; an
@@ -396,13 +399,12 @@ impl Relay {
     Some(answer.result())
   }
 
-  /// Whether a permission prompt call of Orchester's `tool` with `input` needs an approval, and how it reaches
-  /// outside the worktree for a tool that reads there; why the call would be refused, when its input or its path is.
-  fn prompt_call(&self, tool: OrchesterTool, input: &Value) -> Result<(bool, Option<Outside>), String> {
+  /// What a permission prompt call of Orchester's `tool` with `input` needs before it runs; why the call would be
+  /// refused, when its input or its path is.
+  async fn prompt_call(&self, tool: OrchesterTool, input: &Value) -> Result<Looked, String> {
     let tools = &self.served.tools;
     let call = tools.parse(tool.as_str(), input).map_err(|error| error.to_string())?;
-    let outside = tools.outside(&call).transpose().map_err(|error| error.to_string())?;
-    Ok((tools.needs_approval(&call, outside.as_ref()), outside))
+    tools.look(&call).await
   }
 
   /// The answer to a call of Orchester's tool `name`: refused when it is not valid, not offered or reaches where it
@@ -420,17 +422,17 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::refused(&error)),
     };
-    let outside = match tools.outside(&call).transpose() {
-      Ok(outside) => outside,
+    let looked = match tools.look(&call).await {
+      Ok(looked) => looked,
       // A path the call may not reach is refused before anybody is asked.
-      Err(error) => return Some(ToolResult::refused(&error)),
+      Err(refused) => return Some(ToolResult::unavailable(&refused)),
     };
-    if tools.needs_approval(&call, outside.as_ref()) && !tools.take_grant(call.tool(), arguments) {
+    if looked.asks && !tools.take_grant(call.tool(), arguments) {
       let number = self.asked.fetch_add(1, Ordering::Relaxed);
       let request =
         ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
-      let request = match outside {
-        Some(outside) => request.with_target(outside.folder),
+      let request = match looked.target {
+        Some(target) => request.with_target(target),
         None => request,
       };
       match self.ask(request, AskedBy::ToolCall, lines).await? {
