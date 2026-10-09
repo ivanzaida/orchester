@@ -184,10 +184,14 @@ fn properties(ctx: &Ctx, dialog: &Dialog) -> Element {
     .into()
 }
 
-/// "1.4M tokens · 30 min · from the task", each limit or that the task has none.
+/// "1.4M tokens · 30 min · from the task", "no token limit" / "no time limit" for one the task does not
+/// have, or "No limits set" for neither.
 fn limits_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
+  if limits == TaskLimits::NONE {
+    return ctx.t("runs.summary.noLimits");
+  }
   let budget = limits.budget().map_or_else(
-    || ctx.t("tokens.noLimit"),
+    || ctx.t("tokens.noBudget"),
     |budget| {
       ctx.t_args(
         "runs.runAgain.property.budgetValue",
@@ -196,7 +200,7 @@ fn limits_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
     },
   );
   let time_limit = limits.max_duration().map_or_else(
-    || ctx.t("tokens.noLimit"),
+    || ctx.t("tokens.noTimeLimit"),
     |limit| {
       ctx.t_args(
         "runs.runAgain.property.timeLimitValue",

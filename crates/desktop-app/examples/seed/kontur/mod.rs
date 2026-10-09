@@ -172,6 +172,14 @@ impl Kontur {
     Timestamp::from_unix_millis(self.now.unix_millis() - minutes * 60_000)
   }
 
+  /// `minutes` before the seed's now, but no earlier than a minute into today (local time): what must be
+  /// today's stays today's when the seed runs just after midnight. Then what follows it may be stamped
+  /// a little after now.
+  fn today_ago(&self, minutes: i64) -> Timestamp {
+    let first = self.now.local_day_start().unix_millis() + 60_000;
+    Timestamp::from_unix_millis(self.ago(minutes).unix_millis().max(first))
+  }
+
   /// A draft titled `title`; without `pipeline` and with an empty `brief` it misses details.
   fn task(
     &mut self,

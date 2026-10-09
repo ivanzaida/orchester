@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{AgentSlots, ProjectLimits, ProjectLimitsError},
+  limits::{AgentSlots, LONGEST_TIME_LIMIT, ProjectLimits, ProjectLimitsError},
   tokens::{BudgetInputError, TokenBudget, grouped, parse_budget, parse_optional_budget},
 };
 
@@ -24,7 +24,9 @@ pub fn budget_error(error: BudgetInputError, separator: &str) -> Message {
       Message::new("tokens.errors.digits").with("example", grouped(EXAMPLE_BUDGET, separator))
     }
     BudgetInputError::Zero => Message::new("tokens.errors.zero"),
-    BudgetInputError::TooLarge => Message::new("tokens.errors.tooLarge"),
+    BudgetInputError::TooLarge => {
+      Message::new("tokens.errors.tooLarge").with("max", grouped(TokenBudget::LARGEST, separator))
+    }
   }
 }
 
@@ -45,14 +47,31 @@ pub fn read_minutes(text: &str) -> Result<Option<Duration>, Message> {
   if text.is_empty() {
     return Ok(None);
   }
-  let minutes: u64 = text.parse().map_err(|_| Message::new("errors.timeLimitInvalid"))?;
+  let minutes: u64 = text.parse().map_err(|_| {
+    // Digits only, but more than any number of minutes: too long rather than not minutes.
+    if text.bytes().all(|byte| byte.is_ascii_digit()) {
+      too_long()
+    } else {
+      Message::new("errors.timeLimitInvalid")
+    }
+  })?;
   time_limit(minutes).map(Some)
 }
 
-/// A time limit of `minutes` whole minutes, above zero.
+/// The longest time limit, [`LONGEST_TIME_LIMIT`], in whole minutes.
+pub const MAX_STORED_MINUTES: u64 = LONGEST_TIME_LIMIT.as_secs() / SECONDS_PER_MINUTE;
+
+fn too_long() -> Message {
+  Message::new("errors.timeLimitTooLong").with("max", MAX_STORED_MINUTES.to_string())
+}
+
+/// A time limit of `minutes` whole minutes, above zero and at most [`MAX_STORED_MINUTES`].
 pub fn time_limit(minutes: u64) -> Result<Duration, Message> {
   if minutes == 0 {
     return Err(Message::new("errors.timeLimitZero"));
+  }
+  if minutes > MAX_STORED_MINUTES {
+    return Err(too_long());
   }
   minutes
     .checked_mul(SECONDS_PER_MINUTE)
@@ -160,9 +179,13 @@ impl ReadLimits {
         agent_slots: self.agent_slots.err(),
       }));
     };
-    let limits = ProjectLimits::new(*default, *daily, *time).map_err(|ProjectLimitsError::ZeroTimeLimit| {
+    let limits = ProjectLimits::new(*default, *daily, *time).map_err(|error| {
+      let message = match error {
+        ProjectLimitsError::ZeroTimeLimit => Message::new("errors.timeLimitZero"),
+        ProjectLimitsError::TimeLimitTooLong => too_long(),
+      };
       Box::new(LimitsErrors {
-        default_time_limit: Some(Message::new("errors.timeLimitZero")),
+        default_time_limit: Some(message),
         ..LimitsErrors::default()
       })
     })?;

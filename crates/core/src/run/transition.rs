@@ -90,6 +90,9 @@ impl Run {
     if limits.max_duration.is_some_and(|limit| limit <= active) {
       return Err(RunError::LimitNotAboveUsed(RunLimit::Time));
     }
+    if crate::limits::too_long(limits.max_duration) {
+      return Err(RunError::TimeLimitTooLong);
+    }
     self.transition(now, |transition| {
       transition.record(RunEventKind::LimitRaised {
         budget: limits.budget,

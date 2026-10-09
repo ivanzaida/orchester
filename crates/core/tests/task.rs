@@ -68,6 +68,13 @@ fn a_task_without_limits_is_complete_and_queues() {
   assert_eq!(only_budget.max_duration(), None);
   let only_time = TaskLimits::new(None, Some(Duration::from_secs(60))).expect("limits");
   assert_eq!(only_time.budget(), None);
+  // Longer than a store keeps is refused, here as when a run starts or is raised.
+  let longest = orchester_core::limits::LONGEST_TIME_LIMIT;
+  assert!(TaskLimits::new(None, Some(longest)).is_ok());
+  assert_eq!(
+    TaskLimits::new(None, Some(longest + Duration::from_millis(1))),
+    Err(LimitsError::TooLong)
+  );
 }
 
 #[test]

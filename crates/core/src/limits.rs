@@ -14,6 +14,17 @@ use crate::tokens::{TokenBudget, TokensUsed};
 pub enum ProjectLimitsError {
   #[error("the default time limit must be greater than zero")]
   ZeroTimeLimit,
+  #[error("the default time limit can be at most {} milliseconds", LONGEST_TIME_LIMIT.as_millis())]
+  TimeLimitTooLong,
+}
+
+/// The longest time limit a task, a run or a project default can have: what a store keeps as whole
+/// milliseconds in a signed 64-bit integer, far beyond any run. Not a limit a person sets.
+pub const LONGEST_TIME_LIMIT: Duration = Duration::from_millis(i64::MAX.unsigned_abs());
+
+/// Whether `limit` is longer than any time limit can be ([`LONGEST_TIME_LIMIT`]).
+pub(crate) fn too_long(limit: Option<Duration>) -> bool {
+  limit.is_some_and(|limit| limit > LONGEST_TIME_LIMIT)
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
@@ -81,6 +92,9 @@ impl ProjectLimits {
   ) -> Result<Self, ProjectLimitsError> {
     if default_time_limit.is_some_and(|limit| limit.is_zero()) {
       return Err(ProjectLimitsError::ZeroTimeLimit);
+    }
+    if too_long(default_time_limit) {
+      return Err(ProjectLimitsError::TimeLimitTooLong);
     }
     Ok(Self {
       default_run_budget,

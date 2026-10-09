@@ -42,9 +42,12 @@ pub enum StoreError {
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
-  /// A value cannot be represented in the database, e.g. a non-UTF-8 path.
+  /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),
+  /// A path cannot be represented in the database: it is not UTF-8.
+  #[error("{0} cannot be stored: the path is not UTF-8")]
+  UnrepresentablePath(&'static str),
   #[error("task {0} does not exist")]
   TaskNotFound(TaskId),
   /// The task can no longer be edited; nothing was changed.

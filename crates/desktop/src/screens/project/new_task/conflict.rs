@@ -414,10 +414,10 @@ fn limit_properties(ctx: &Ctx, details: &TaskDetails) -> Vec<Element> {
   ]
 }
 
-/// A task's budget as the conflict view shows it, or that it has none.
+/// A task's budget as the conflict view shows it, or that it has no token limit.
 fn budget_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
   limits.budget().map_or_else(
-    || ctx.t("tokens.noLimit"),
+    || ctx.t("tokens.noBudget"),
     |budget| {
       ctx.t_args(
         "tasks.conflict.budget",
@@ -427,14 +427,14 @@ fn budget_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
   )
 }
 
-/// A task's time limit as the conflict view shows it, or that it has none.
+/// A task's time limit as the conflict view shows it, or that it has no time limit.
 fn time_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
   match limits.max_duration() {
     Some(_) => ctx.t_args(
       "tasks.conflict.timeLimit",
       [("minutes", minutes_text(limits.max_duration()).as_str())],
     ),
-    None => ctx.t("tokens.noLimit"),
+    None => ctx.t("tokens.noTimeLimit"),
   }
 }
 

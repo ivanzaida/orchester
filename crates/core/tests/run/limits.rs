@@ -147,6 +147,19 @@ fn run_limits_raise_must_exceed_what_was_used_with_no_maximum() {
 }
 
 #[test]
+fn run_limits_raise_refuses_a_time_limit_longer_than_any() {
+  let mut logged = stopped_at_token_limit();
+  let too_long = RaisedLimits {
+    budget: None,
+    max_duration: Some(orchester_core::limits::LONGEST_TIME_LIMIT + Duration::from_millis(1)),
+  };
+  assert_eq!(
+    logged.run.continue_with_limits(too_long, MINUTE, at(20)),
+    Err(RunError::TimeLimitTooLong)
+  );
+}
+
+#[test]
 fn run_limits_raise_can_lift_a_limit() {
   let mut logged = stopped_at_token_limit();
   let lifted = RaisedLimits {

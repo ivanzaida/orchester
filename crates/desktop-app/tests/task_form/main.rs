@@ -86,6 +86,12 @@ fn form_limits_read_back_and_refuse_only_what_is_not_a_number() {
     form.text("task-form-budget-input-read-back"),
     "= 50B tokens · input + output"
   );
+  // More minutes than a time limit can hold is refused in the field, not when the task is saved.
+  form.set("task-form-time-limit-input", "307445734561825860");
+  assert_eq!(
+    form.text("task-form-time-limit-input-note"),
+    "A time limit can be at most 153722867280912 minutes."
+  );
   form.set("task-form-budget-input", "1,000");
   form.set("task-form-time-limit-input", "0");
   assert_eq!(

@@ -5375,6 +5375,8 @@
     "unit": "tokens",
     "readBack": "= {{count}} tokens",
     "noLimit": "No limit",
+    "noBudget": "no token limit",
+    "noTimeLimit": "no time limit",
     "readBackRun": "= {{count}} tokens · input + output",
     "readBackMore": "= {{count}} tokens · {{difference}} more than now",
     "readBackLess": "= {{count}} tokens · {{difference}} less than now",

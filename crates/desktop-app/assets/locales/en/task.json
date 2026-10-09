@@ -101,7 +101,9 @@
       "limitsValue": "{{budget}} · {{time}}",
       "budgetValue": "{{budget}} tokens",
       "timeValue": "{{minutes}} min",
-      "noLimit": "No limit",
+      "noBudget": "no token limit",
+      "noTimeLimit": "no time limit",
+      "noLimits": "No limits",
       "remove": {
         "title": "Remove the worktrees of run #{{run}}",
         "clean": "Nothing in them is uncommitted; {{branch}} keeps their committed work.",

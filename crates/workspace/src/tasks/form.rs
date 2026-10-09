@@ -101,8 +101,15 @@ impl TaskForm<'_> {
       (Ok(budget), Ok(time_limit)) => (budget, time_limit),
       (budget, time_limit) => return Err((budget.err(), time_limit.err())),
     };
-    TaskLimits::new(budget, time_limit)
-      .map_err(|LimitsError::ZeroDuration| (None, Some(Message::new("errors.timeLimitZero"))))
+    TaskLimits::new(budget, time_limit).map_err(|error| {
+      let message = match error {
+        LimitsError::ZeroDuration => Message::new("errors.timeLimitZero"),
+        LimitsError::TooLong => {
+          Message::new("errors.timeLimitTooLong").with("max", crate::budget::MAX_STORED_MINUTES.to_string())
+        }
+      };
+      (None, Some(message))
+    })
   }
 }
 

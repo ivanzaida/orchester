@@ -50,6 +50,8 @@ pub enum RunError {
   NeedsExplicitContinue(InterruptCause),
   #[error("the time limit must be greater than zero")]
   ZeroDuration,
+  #[error("a time limit can be at most {} milliseconds", crate::limits::LONGEST_TIME_LIMIT.as_millis())]
+  TimeLimitTooLong,
   #[error("the run stopped at its {0:?} limit and continues only with a raised limit")]
   LimitNotRaised(RunLimit),
   #[error("the new {0:?} limit must be above what the run already used")]

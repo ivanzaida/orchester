@@ -22,6 +22,8 @@ use crate::{
 pub enum LimitsError {
   #[error("run time limit must be greater than zero")]
   ZeroDuration,
+  #[error("run time limit can be at most {} milliseconds", crate::limits::LONGEST_TIME_LIMIT.as_millis())]
+  TooLong,
 }
 
 /// Per-task token budget and time limit on active agent time; each run of the task starts with
@@ -42,6 +44,9 @@ impl TaskLimits {
   pub fn new(budget: Option<TokenBudget>, max_duration: Option<Duration>) -> Result<Self, LimitsError> {
     if max_duration.is_some_and(|limit| limit.is_zero()) {
       return Err(LimitsError::ZeroDuration);
+    }
+    if crate::limits::too_long(max_duration) {
+      return Err(LimitsError::TooLong);
     }
     Ok(Self { budget, max_duration })
   }

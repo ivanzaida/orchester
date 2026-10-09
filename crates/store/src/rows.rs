@@ -72,7 +72,7 @@ pub(crate) fn optional_duration_value(what: &'static str, millis: Option<i64>) -
 }
 
 pub(crate) fn path_text<'a>(what: &'static str, path: &'a Path) -> Result<&'a str, StoreError> {
-  path.to_str().ok_or(StoreError::Unrepresentable(what))
+  path.to_str().ok_or(StoreError::UnrepresentablePath(what))
 }
 
 /// Stores a JSON value as `{"schema": n, "body": …}` so its shape can evolve without a table

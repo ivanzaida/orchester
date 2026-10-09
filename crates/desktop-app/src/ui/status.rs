@@ -6,8 +6,8 @@
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
-//! and Not merged `git-merge`, Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`, Not started
-//! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
+//! `git-merge`, Not merged `triangle-alert` (`kxMAN`), Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`,
+//! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
 //! Skipped or Urgent: they take `circle-slash`, `skip-forward` and `circle-alert` (`warning`). A status
@@ -147,7 +147,8 @@ impl Status {
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit => Icon::Gauge,
       Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
-      Self::Merged | Self::NotMerged => Icon::GitMerge,
+      Self::Merged => Icon::GitMerge,
+      Self::NotMerged => Icon::TriangleAlert,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
       // The boards name `file-warning`, which Pencil has no glyph for and draws as `circle-help`; the

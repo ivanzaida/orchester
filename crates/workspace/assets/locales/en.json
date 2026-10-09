@@ -325,6 +325,8 @@
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
+        "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
+        "notRecorded": "Git merged the run into {{branch}}, but Orchester couldn’t record the merge. Merge again to record it.",
         "git": "Git failed: {{detail}}",
         "gitStopped": "Git did not finish. Check the repository with git status before you try again.",
         "brief": {
@@ -628,6 +630,7 @@
     "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
+    "unstorableValue": "A value is too large to be stored. The log has the details.",
     "storage": "The data could not be read or written. The log has the details.",
     "alwaysAllow": "Always allow can no longer add this to the profile. Answer the request again.",
     "interrupted": "The operation stopped unexpectedly. The log has the details.",
@@ -641,6 +644,7 @@
     "titleRequired": "Enter a title to save the task.",
     "timeLimitInvalid": "Enter whole minutes, such as 30.",
     "timeLimitZero": "The time limit must be at least one minute.",
+    "timeLimitTooLong": "A time limit can be at most {{max}} minutes.",
     "connectionNameTaken": "Another connection of this project already has this name.",
     "connectionNotVerified": "The program was not recognized as the chosen CLI, so the connection cannot be saved.",
     "nativeNotAvailable": "Native agents are not available in this version yet.",
@@ -1100,7 +1104,7 @@
       "empty": "Enter a token budget.",
       "digits": "Use digits only, for example {{example}}.",
       "zero": "Enter a budget above 0 tokens.",
-      "tooLarge": "This number is too large for a token budget.",
+      "tooLarge": "Enter a smaller number: a budget can be at most {{max}} tokens.",
       "notAboveUsed": "Enter more than the {{used}} tokens this run already used.",
       "stepNotAboveUsed": "Enter more than the {{used}} tokens {{step}} already used."
     }

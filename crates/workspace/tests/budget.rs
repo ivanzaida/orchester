@@ -7,8 +7,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_workspace::budget::{
-  LimitsForm, TIME_LIMIT_CHOICES, budget_error, read_agent_slots, read_budget, read_minutes, read_optional_budget,
-  time_limit_choices,
+  LimitsForm, MAX_STORED_MINUTES, TIME_LIMIT_CHOICES, budget_error, read_agent_slots, read_budget, read_minutes,
+  read_optional_budget, time_limit_choices,
 };
 
 fn limits<'a>(default: &'a str, daily: &'a str, time: &'a str) -> LimitsForm<'a> {
@@ -58,6 +58,22 @@ fn budget_minutes_are_whole_and_above_zero_or_empty_for_no_limit() {
     read_minutes("0").map_err(|error| error.key),
     Err("errors.timeLimitZero")
   );
+}
+
+#[test]
+fn budget_minutes_and_budgets_beyond_what_is_stored_are_too_large() {
+  let longest = MAX_STORED_MINUTES.to_string();
+  assert_eq!(MAX_STORED_MINUTES, 153_722_867_280_912);
+  assert!(read_minutes(&longest).is_ok_and(|limit| limit.is_some()));
+  // Above what is stored, within u64 seconds, and beyond u64 altogether: the same message.
+  for text in ["153722867280913", "307445734561825860", "99999999999999999999999"] {
+    let error = read_minutes(text).expect_err("too long");
+    assert_eq!(error.key, "errors.timeLimitTooLong", "{text}");
+    assert_eq!(error.args, [("max", longest.clone())], "{text}");
+  }
+  let error = read_budget("9223372036854775808", ",").expect_err("too large");
+  assert_eq!(error.key, "tokens.errors.tooLarge");
+  assert_eq!(error.args, [("max", "9,223,372,036,854,775,807".to_owned())]);
 }
 
 #[test]

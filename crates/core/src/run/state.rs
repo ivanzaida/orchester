@@ -102,6 +102,9 @@ impl Run {
     if zero(created.max_duration) {
       return Err(RunError::ZeroDuration);
     }
+    if crate::limits::too_long(created.max_duration) {
+      return Err(RunError::TimeLimitTooLong);
+    }
     Ok(Self {
       id,
       budget: created.budget,

@@ -22,6 +22,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::{Leftovers, WORKTREES_DIR},
   run::{RunAgainBlock, can_run_again_after},
+  task::TaskLimits,
   tokens::compact_tokens,
 };
 use orchester_exec::programs::Programs;
@@ -323,6 +324,27 @@ fn explanation(ctx: &Ctx, confirm: &Confirmation) -> Arc<str> {
   }
 }
 
+/// "1.4M tokens · 30 min", one of them "no token limit" / "no time limit", or "No limits".
+fn limits_text(ctx: &Ctx, limits: TaskLimits) -> Arc<str> {
+  if limits == TaskLimits::NONE {
+    return ctx.t("task.runAgain.noLimits");
+  }
+  let budget = limits.budget().map_or_else(
+    || ctx.t("task.runAgain.noBudget"),
+    |budget| ctx.t_args("task.runAgain.budgetValue", [("budget", compact_tokens(budget.get()))]),
+  );
+  let time = limits.max_duration().map_or_else(
+    || ctx.t("task.runAgain.noTimeLimit"),
+    |limit| {
+      ctx.t_args(
+        "task.runAgain.timeValue",
+        [("minutes", whole_minutes(limit).to_string())],
+      )
+    },
+  );
+  ctx.t_args("task.runAgain.limitsValue", [("budget", &*budget), ("time", &*time)])
+}
+
 /// What the new run uses.
 fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
   let (next, run) = (confirm.next, confirm.run);
@@ -331,20 +353,7 @@ fn properties(ctx: &Ctx, confirm: &Confirmation) -> Element {
   let previous = run.run.number().get().to_string();
   let steps = next.steps.to_string();
   let base = base(ctx, next);
-  let budget = next.limits.budget().map_or_else(
-    || ctx.t("task.runAgain.noLimit"),
-    |budget| ctx.t_args("task.runAgain.budgetValue", [("budget", compact_tokens(budget.get()))]),
-  );
-  let time = next.limits.max_duration().map_or_else(
-    || ctx.t("task.runAgain.noLimit"),
-    |limit| {
-      ctx.t_args(
-        "task.runAgain.timeValue",
-        [("minutes", whole_minutes(limit).to_string())],
-      )
-    },
-  );
-  let limits = ctx.t_args("task.runAgain.limitsValue", [("budget", &*budget), ("time", &*time)]);
+  let limits = limits_text(ctx, next.limits);
   let pipeline = &*confirm.check.pipeline;
   Column::new()
     .id("task-run-again-properties")

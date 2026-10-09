@@ -95,3 +95,14 @@ pub fn time_limit(text: &str, active: Duration) -> Result<Option<Duration>, Mess
   }
   Ok(limit)
 }
+
+/// Why an empty budget field names no new limit where one is needed (the raise panel's *Continue with
+/// …*, beside which *Remove the limit* continues without one).
+pub fn budget_needed() -> Message {
+  Message::new("tokens.errors.empty")
+}
+
+/// Why an empty time limit field names no new limit where one is needed.
+pub fn minutes_needed() -> Message {
+  Message::new("errors.timeLimitInvalid")
+}

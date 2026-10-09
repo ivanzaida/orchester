@@ -347,17 +347,18 @@ fn value_text(ctx: &Ctx, field: ContentField, details: &TaskDetails, pipelines: 
   }
 }
 
-/// "1.4M tokens · 30 minutes", either one "No limit", or "No limits" for a task without either.
+/// "1.4M tokens · 30 minutes", one of them "no token limit" / "no time limit", or "No limits" for a task
+/// without either.
 fn limits_text(ctx: &Ctx, limits: TaskLimits) -> String {
   if limits == TaskLimits::NONE {
     return ctx.t("task_form.conflict.noLimits").to_string();
   }
   let budget = limits.budget().map_or_else(
-    || ctx.t("task_form.conflict.noLimit"),
+    || ctx.t("task_form.conflict.noBudget"),
     |budget| ctx.t_args("task_form.conflict.budget", [("tokens", compact_tokens(budget.get()))]),
   );
   let time = limits.max_duration().map_or_else(
-    || ctx.t("task_form.conflict.noLimit"),
+    || ctx.t("task_form.conflict.noTimeLimit"),
     |limit| {
       ctx.t_args(
         "task_form.conflict.timeLimit",
