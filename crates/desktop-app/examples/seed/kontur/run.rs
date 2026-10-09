@@ -44,6 +44,26 @@ impl<'k> Drive<'k> {
   /// Starts a run of `task`, queued on `pipeline`, at `at`, in a new worktree from the repository's first
   /// commit on `main`.
   pub fn start(kontur: &'k mut Kontur, task: &Task, pipeline: &Published, at: Timestamp) -> Result<Self, SeedError> {
+    let main = BranchName::new(MAIN).expect("main is a valid branch name");
+    Self::start_from(kontur, (task, pipeline), at, Some(main))
+  }
+
+  /// [`Drive::start`] from a checkout with a detached HEAD: the run records no branch to merge into.
+  pub fn start_detached(
+    kontur: &'k mut Kontur,
+    task: &Task,
+    pipeline: &Published,
+    at: Timestamp,
+  ) -> Result<Self, SeedError> {
+    Self::start_from(kontur, (task, pipeline), at, None)
+  }
+
+  fn start_from(
+    kontur: &'k mut Kontur,
+    (task, pipeline): (&Task, &Published),
+    at: Timestamp,
+    base_branch: Option<BranchName>,
+  ) -> Result<Self, SeedError> {
     let earlier = kontur.db.runs_of_task(task.id())?.len();
     let limits = task.details().limits.ok_or(SeedError::NoLimits)?;
     let new = NewRun {
@@ -51,7 +71,7 @@ impl<'k> Drive<'k> {
       snapshot: pipeline.snapshot().clone(),
       branch: BranchName::for_next_run(task.key(), earlier),
       base: kontur.base.clone(),
-      base_branch: Some(BranchName::new(MAIN).expect("main is a valid branch name")),
+      base_branch,
       budget: limits.budget(),
       max_duration: limits.max_duration(),
     };
