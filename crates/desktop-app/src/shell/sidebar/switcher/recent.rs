@@ -115,7 +115,11 @@ impl Component for RecentRow {
     let trailing = if self.hovered.get() {
       Some(new_tab(ctx, &id, (navigation.clone(), route.clone()), open.clone()))
     } else {
-      current.then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into())
+      current.then(|| {
+        icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)
+          .id(format!("{id}-current"))
+          .into()
+      })
     };
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     pressable(move || {

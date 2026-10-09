@@ -4,7 +4,7 @@
 
 mod clock;
 pub mod needs_you;
-mod sidebar;
+pub mod sidebar;
 pub mod status_bar;
 
 use lurq::{

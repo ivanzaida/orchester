@@ -3,7 +3,7 @@
 //! bottom. Tasks shows how many tasks the project has, a dash while they are read. Outside a project
 //! (All projects, Settings) only the switcher and the bottom group show.
 
-mod running;
+pub mod running;
 pub mod switcher;
 
 use lurq::{
