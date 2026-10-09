@@ -47,6 +47,10 @@ lurq = { workspace = true, features = [
   "serde",
   # The Orchester mark in the title bar.
   "svg",
+  # Text agents and people write, read as Markdown (`ui::markdown`).
+  "markdown",
+  # Copy beside a command or another long value (`ui::code_box`).
+  "clipboard",
   # The app's MCP server: lurq's window tools and the app's own (`mcp`), in every build.
   "mcp",
 ] }

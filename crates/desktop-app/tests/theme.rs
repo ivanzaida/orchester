@@ -15,7 +15,10 @@ use orchester_app::{
     system::{macos_mode, windows_mode},
   },
   settings::AppSettings,
-  theme::{self, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, Mode},
+  theme::{
+    self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography,
+    IconSize, Mode, SHORTCUT_OPACITY, UNAVAILABLE_TAB_OPACITY,
+  },
 };
 
 fn themed(mode: Mode) -> App {
@@ -281,4 +284,159 @@ fn the_system_appearance_reads_from_each_platforms_answer() {
   );
   assert_eq!(macos_mode(true, "Dark\n"), Mode::Dark);
   assert_eq!(macos_mode(false, ""), Mode::Light);
+}
+
+/// The kit's type roles (`ASNYj`, `DMMLd`, the dogfood boards): size, weight, line height, family and
+/// color in each mode.
+#[test]
+fn theme_kit_type_roles_follow_the_design_in_both_modes() {
+  use ExtraTypography as T;
+  type Expected = (f32, FontWeight, f32, &'static str, (&'static str, &'static str));
+  let expected = |role: ExtraTypography| -> Option<Expected> {
+    let (dark_primary, light_primary) = ("#EDEDF0", "#18181B");
+    let (dark_secondary, light_secondary) = ("#B3B3BA", "#45454D");
+    let (dark_muted, light_muted) = ("#8A8A92", "#6B6B74");
+    Some(match role {
+      T::Display => return None,
+      T::Strong => (13.0, FontWeight::Medium, 1.5, "Geist", (dark_primary, light_primary)),
+      T::Note => (11.5, FontWeight::Normal, 1.4, "Geist", (dark_muted, light_muted)),
+      T::NoteStrong => (11.5, FontWeight::Medium, 1.4, "Geist", (dark_primary, light_primary)),
+      T::Prose => (
+        12.0,
+        FontWeight::Normal,
+        1.45,
+        "Geist",
+        (dark_secondary, light_secondary),
+      ),
+      T::Lead => (
+        12.5,
+        FontWeight::Normal,
+        1.5,
+        "Geist",
+        (dark_secondary, light_secondary),
+      ),
+      T::ColumnHeading => (10.5, FontWeight::Medium, 1.35, "Geist", (dark_muted, light_muted)),
+      T::MonoKey => (11.5, FontWeight::Normal, 1.4, "Geist Mono", (dark_muted, light_muted)),
+      T::MonoNote => (11.0, FontWeight::Normal, 1.4, "Geist Mono", (dark_muted, light_muted)),
+      T::MonoSmall => (
+        10.0,
+        FontWeight::Normal,
+        1.4,
+        "Geist Mono",
+        (dark_secondary, light_secondary),
+      ),
+      T::Initials => (9.0, FontWeight::SemiBold, 1.0, "Geist", (dark_primary, light_primary)),
+    })
+  };
+  for mode in [Mode::Dark, Mode::Light] {
+    let app = themed(mode);
+    for role in ExtraTypography::ALL {
+      let Some((size, weight, line_height, family, (dark, light))) = expected(role) else {
+        continue;
+      };
+      let style = app.theme().typography_style(role.role());
+      assert_eq!(
+        (style.font_size, style.weight, style.line_height, &*style.font_family),
+        (size, weight, line_height, family),
+        "{role:?}"
+      );
+      let color = if mode == Mode::Dark { dark } else { light };
+      assert_eq!(style.color, Color::from_hex(color), "{role:?} in {}", mode.name());
+    }
+    assert_eq!(
+      app.theme().typography_style(T::ColumnHeading.role()).letter_spacing,
+      0.4,
+      "column headings are tracked"
+    );
+  }
+}
+
+/// The kit's gaps, paddings, radii, control heights and icon sizes.
+#[test]
+fn theme_kit_spacing_radii_and_sizes_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (extra, value) in [
+    (ExtraSpacing::Fine, 3.0),
+    (ExtraSpacing::Pair, 5.0),
+    (ExtraSpacing::TextArea, 7.0),
+    (ExtraSpacing::Inset, 14.0),
+    (ExtraSpacing::Tabs, 20.0),
+    (ExtraSpacing::Roomy, 28.0),
+    (ExtraSpacing::Loading, 56.0),
+  ] {
+    assert_eq!(theme.spacing_value(extra.role()), Dimension::Px(value), "{extra:?}");
+  }
+  assert_eq!(theme.radius_value(ExtraRadius::Tile.role()), 8.0, "menus and tiles");
+  assert_eq!(
+    [ControlHeight::Sm, ControlHeight::Md].map(ControlHeight::value),
+    [24.0, 28.0],
+    "control_height_sm and control_height_md"
+  );
+  assert_eq!(
+    IconSize::ALL.map(IconSize::size),
+    [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]
+  );
+  assert_eq!(
+    (DISABLED_OPACITY, UNAVAILABLE_TAB_OPACITY, SHORTCUT_OPACITY),
+    (0.5, 0.75, 0.6)
+  );
+}
+
+/// A field's value and placeholder are 12 (`JQkW2`, `X75zC`) and its error 11.5 `danger` (`rCoJS`), in
+/// both modes.
+#[test]
+fn theme_fields_read_at_12_in_both_modes() {
+  for (mode, text, muted, danger) in [
+    (Mode::Dark, "#EDEDF0", "#8A8A92", "#F0605A"),
+    (Mode::Light, "#18181B", "#6B6B74", "#D4342F"),
+  ] {
+    let app = themed(mode);
+    let theme = app.theme();
+    let form = theme.form().clone();
+    let resolve = |role: lurq::app::theme::FormTextRole| role.resolve(&theme.typography(), &theme.palette());
+    let (value, placeholder, error) = (
+      resolve(form.input.text.clone()),
+      resolve(form.input.placeholder.clone()),
+      resolve(form.field.error.clone()),
+    );
+    assert_eq!(
+      (value.font_size, value.color),
+      (12.0, Color::from_hex(text)),
+      "{}",
+      mode.name()
+    );
+    assert_eq!(
+      (placeholder.font_size, placeholder.color),
+      (12.0, Color::from_hex(muted))
+    );
+    assert_eq!((error.font_size, error.color), (11.5, Color::from_hex(danger)));
+    assert_eq!(form.input.height, Dimension::Px(28.0));
+  }
+}
+
+/// The focus ring and the Markdown colors follow the mode the theme switches to.
+#[test]
+fn theme_focus_ring_and_markdown_follow_the_mode() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let ring = theme.shadow_style(ExtraShadow::FocusRing.role());
+  assert_eq!(ring.len(), 1);
+  assert_eq!(ring[0].spread, 2.0, "two outside the control");
+  for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
+    theme::apply(theme, mode);
+    let markdown = theme.markdown().clone();
+    assert_eq!(
+      markdown.code_block_box.background,
+      Some(Color::from_hex(code)),
+      "code on code_bg in {}",
+      mode.name()
+    );
+    assert_eq!(
+      markdown.link.text.color,
+      Some(Color::from_hex(link)),
+      "links in accent_text"
+    );
+    assert_eq!(markdown.link.text.weight, Some(FontWeight::Medium));
+  }
 }
