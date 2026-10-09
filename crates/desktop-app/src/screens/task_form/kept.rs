@@ -58,18 +58,28 @@ pub struct KeptEdits {
 
 struct Inner {
   project: ProjectId,
-  /// The form that writes: a form removes only what it kept itself, so two tabs on one task do not
-  /// remove each other's edits.
+  /// The form that writes. When its edits come back to what is stored, it removes them only if it
+  /// kept them itself, so a tab whose edits were undone does not remove another tab's.
   owner: Arc<str>,
   key: Mutex<Arc<str>>,
   workspace: Workspace,
   runtime: Handle,
-  /// The write asked for last that is not done yet: its key, and the text to keep or `None` to remove.
-  pending: Mutex<Option<(Arc<str>, Option<String>)>>,
+  /// The write asked for last that is not done yet, and its key.
+  pending: Mutex<Option<(Arc<str>, Write)>>,
   /// Counts the writes asked for, so a pause that ends after a newer one writes nothing.
   asked: AtomicU64,
   /// A write runs; it takes the pending one after it.
   writing: AtomicBool,
+}
+
+/// What a write does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Write {
+  Keep(String),
+  /// Removes what is kept, if this form kept it: its edits came back to what is stored.
+  Undone,
+  /// Removes what is kept whoever kept it: it was saved, discarded, or cannot be saved any more.
+  Remove,
 }
 
 impl KeptEdits {
@@ -129,12 +139,27 @@ impl KeptEdits {
     }
   }
 
-  /// Keeps `values`, made on `base`, as of `at`, or removes what is kept when `None`, once the typing
-  /// pauses.
+  /// Keeps `values`, made on `base`, as of `at`, or, with `None`, removes what this form kept: its edits
+  /// came back to what is stored. Once the typing pauses.
   pub fn write(&self, values: Option<(&Values, &KeptBase, Timestamp)>) {
-    let text = values.map(|(values, base, at)| encode(values, base, (at, &self.inner.owner)).to_string());
+    let write = values.map_or(Write::Undone, |(values, base, at)| {
+      Write::Keep(encode(values, base, (at, &self.inner.owner)).to_string())
+    });
+    self.ask(write);
+  }
+
+  /// Removes what is kept, whoever kept it, at once: the edits were saved or discarded, or the task
+  /// cannot take them.
+  pub fn remove(&self) {
     let key = self.inner.key.lock().clone();
-    *self.inner.pending.lock() = Some((key, text));
+    *self.inner.pending.lock() = Some((key, Write::Remove));
+    self.inner.asked.fetch_add(1, Ordering::SeqCst);
+    self.flush();
+  }
+
+  fn ask(&self, write: Write) {
+    let key = self.inner.key.lock().clone();
+    *self.inner.pending.lock() = Some((key, write));
     let asked = self.inner.asked.fetch_add(1, Ordering::SeqCst) + 1;
     let edits = self.clone();
     self.inner.runtime.spawn(async move {
@@ -147,8 +172,7 @@ impl KeptEdits {
 
   /// Removes what is kept now and keeps the form's edits under `task` from here: New task created it.
   pub fn move_to(&self, task: TaskId) {
-    self.write(None);
-    self.flush();
+    self.remove();
     *self.inner.key.lock() = key(self.inner.project, Some(task));
   }
 
@@ -161,8 +185,8 @@ impl KeptEdits {
     self.inner.runtime.spawn_blocking(move || {
       loop {
         let next = inner.pending.lock().take();
-        if let Some((key, text)) = next {
-          persist(&inner, &key, text.as_deref());
+        if let Some((key, write)) = next {
+          persist(&inner, &key, &write);
           continue;
         }
         inner.writing.store(false, Ordering::SeqCst);
@@ -176,12 +200,12 @@ impl KeptEdits {
   }
 }
 
-fn persist(inner: &Inner, key: &str, text: Option<&str>) {
+fn persist(inner: &Inner, key: &str, write: &Write) {
   let workspace = &inner.workspace;
-  let done = match text {
-    Some(text) => workspace.set_ui_state(key, text),
-    None if kept_by_another(workspace, key, &inner.owner) => return,
-    None => workspace.remove_ui_state(key),
+  let done = match write {
+    Write::Keep(text) => workspace.set_ui_state(key, text),
+    Write::Undone if kept_by_another(workspace, key, &inner.owner) => return,
+    Write::Undone | Write::Remove => workspace.remove_ui_state(key),
   };
   if let Err(error) = done {
     tracing::warn!(%error, %key, "cannot keep the form's edits");

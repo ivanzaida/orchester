@@ -15,7 +15,7 @@ use orchester_workspace::tasks::data::SaveTarget;
 use super::{
   actions::{RunAction, RunArgs, SaveAction, SaveArgs, SaveOutcome, Saved, Started},
   bar::{Handler, Handlers},
-  base::{Base, Written},
+  base::{Base, Newer, Written},
   conflict::{Choices, Conflict},
   form::{FormProps, TaskForm},
   state::{Phase, View},
@@ -132,8 +132,11 @@ impl TaskForm {
   fn discard_handler(&self) -> Handler {
     let (fields, base) = (self.fields.clone(), self.base.clone());
     let (kept_at, confirming) = (self.kept_at.clone(), self.confirming_discard.clone());
+    let (kept, written) = (self.kept.clone(), self.written.clone());
     Arc::new(move || {
       let values = base.get_untracked().map_or_else(Values::default, |base| base.values);
+      kept.remove();
+      *written.lock() = Written::Nothing;
       fields.fill(&values);
       kept_at.set(None);
       confirming.set(false);
@@ -166,6 +169,8 @@ impl TaskForm {
       feed.saved();
       let task = match outcome {
         SaveOutcome::Conflict(met) => {
+          // The newer version is known: leaving the choice does not meet it again until the next save.
+          newer.set(Some(Newer(met.current.clone())));
           choices.set(Choices::default());
           conflict.set(Some(Conflict(met)));
           return;
@@ -178,6 +183,8 @@ impl TaskForm {
         return;
       }
       let stored = Base::of(&task, &separator);
+      kept.remove();
+      *written.lock() = Written::Nothing;
       fields.fill(&stored.values);
       base.set(Some(stored));
       dismissed.set(true);

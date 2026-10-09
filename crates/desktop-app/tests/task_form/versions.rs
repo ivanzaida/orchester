@@ -188,3 +188,36 @@ fn form_backspace_removes_the_only_criterion() {
     "Reviewers check the result against each one."
   );
 }
+
+#[test]
+fn form_a_queued_task_removes_edits_kept_for_it() {
+  let mut form = Form::seeded("tasks");
+  let task = form.task("KON-18").expect("KON-18").id();
+  form.keep_earlier("KON-18", "Edits that cannot be saved");
+  form.until_kept(Some(task), "the earlier edits are there", |kept| kept.is_some());
+  form.edit("KON-18");
+  assert_eq!(form.status(), "Queued · run not started");
+  form.until_kept(Some(task), "opening the queued task removes them", |kept| {
+    kept.is_none()
+  });
+}
+
+#[test]
+fn form_a_save_removes_edits_an_earlier_visit_kept() {
+  let mut form = Form::seeded("live");
+  let task = form.task("KON-1").expect("KON-1").id();
+  form.keep_earlier("KON-1", "Title kept by an earlier visit");
+  form.edit("KON-1");
+  assert_eq!(form.value("task-form-title-input"), "Title kept by an earlier visit");
+  assert!(
+    form.status().starts_with("Unsaved changes · kept from "),
+    "{}",
+    form.status()
+  );
+  form.click("task-form-save");
+  form.until_kept(Some(task), "the save removes them", |kept| kept.is_none());
+  assert_eq!(
+    form.task("KON-1").expect("KON-1").details().title.as_str(),
+    "Title kept by an earlier visit"
+  );
+}

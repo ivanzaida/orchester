@@ -192,6 +192,52 @@ impl Form {
     self.window.pass();
   }
 
+  /// Changes the task `key` in the project's database without telling the window, as another app on
+  /// the same project would: the form learns of it when it saves.
+  pub fn change_unseen(&mut self, key: &str, change: impl FnOnce(&mut TaskDetails)) {
+    let task = self.task(key).expect("the task is stored");
+    let mut details = task.details().clone();
+    change(&mut details);
+    let _saved = self
+      .db()
+      .update_task(task.id(), task.revision(), details)
+      .expect("the change is stored")
+      .saved()
+      .expect("no conflict");
+  }
+
+  /// Edits of the task `key` with the title `title`, kept by a form of an earlier visit, made on the
+  /// task as it is stored now.
+  pub fn keep_earlier(&self, key: &str, title: &str) {
+    let task = self.task(key).expect("the task is stored");
+    let details = task.details();
+    let values = |title: &str| {
+      serde_json::json!({
+        "title": title,
+        "brief": details.brief,
+        "criteria": details.acceptance_criteria,
+        "pipeline": details.pipeline.map(|pipeline| pipeline.to_string()),
+        "budget": details.limits.map(|limits| limits.budget().get().to_string()).unwrap_or_default(),
+        "time_limit": details
+          .limits
+          .map(|limits| (limits.max_duration().as_secs() / 60).to_string())
+          .unwrap_or_default(),
+      })
+    };
+    let kept = serde_json::json!({
+      "at": orchester_core::time::Timestamp::now().unix_millis(),
+      "owner": "a form of an earlier visit",
+      "values": values(title),
+      "base_revision": task.revision().get(),
+      "base": values(details.title.as_str()),
+    });
+    let key = format!("orchester-app.task_form.kept.{}.{}", self.project, task.id());
+    let workspace = self.window.launch.workspace().expect("the session started");
+    workspace
+      .set_ui_state(&key, &kept.to_string())
+      .expect("the edits are kept");
+  }
+
   /// Waits until what is kept for `task` satisfies `done`.
   pub fn until_kept(&mut self, task: Option<TaskId>, what: &str, done: impl Fn(Option<&str>) -> bool) {
     let (project, key) = (

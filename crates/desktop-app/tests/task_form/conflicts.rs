@@ -102,3 +102,27 @@ fn form_back_to_editing_keeps_my_edits() {
     "Their title"
   );
 }
+
+#[test]
+fn form_back_to_editing_leaves_a_conflict_met_by_a_save_at_the_first_press() {
+  let mut form = Form::seeded("live");
+  form.edit("KON-2");
+  form.set("task-form-title-input", "My title");
+  form.change_unseen("KON-2", |details| {
+    details.title = Name::new("Their title").expect("a title")
+  });
+  form.click("task-form-save");
+  form.window.until("the fields to choose", |window| {
+    window.tree.get_element_by_id("task-form-conflict-fields").is_some()
+  });
+  form.click("task-form-back-to-editing");
+  // The tasks read again after the refused save bring the newer version; it must not reopen the choice.
+  for _ in 0..20 {
+    form.window.tree.tick_futures();
+    form.window.pass();
+    std::thread::sleep(std::time::Duration::from_millis(10));
+  }
+  assert!(!form.exists("task-form-conflict-fields"), "one press leaves the choice");
+  assert_eq!(form.value("task-form-title-input"), "My title");
+  assert_eq!(form.status(), "Newer version saved");
+}

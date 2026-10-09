@@ -122,7 +122,7 @@ impl TaskForm {
     if let Some(task) = props.subject.task().filter(|_| props.subject.awaits_first_run()) {
       // A queued task's details are locked: edits kept for it from an earlier visit cannot be saved.
       if kept.is_some() {
-        self.kept.write(None);
+        self.kept.remove();
       }
       self.queued.set(Some(QueuedTask {
         task: task.id(),
@@ -255,7 +255,7 @@ impl TaskForm {
 
   /// Removes the kept edits once the form created its task or queued it: they are stored now.
   pub(super) fn forget_kept(kept: &KeptEdits, written: &Mutex<Written>) {
-    kept.write(None);
+    kept.remove();
     *written.lock() = Written::Finished;
   }
 }

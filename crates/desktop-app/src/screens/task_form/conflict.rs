@@ -294,7 +294,9 @@ fn card(card: &Card, choose: impl Fn() + Send + Sync + Clone + 'static) -> Eleme
   } else {
     (PaletteColor::SurfaceInput, PaletteColor::Border)
   };
-  Focus::Form
+  // The card is pressed with the pointer; its radio is the keyboard's stop, so the chosen card has one
+  // outline, never a focus ring beside it.
+  Focus::Pointer
     .apply(pressable(choose))
     .id(card.id.clone())
     .flex(1.0)
