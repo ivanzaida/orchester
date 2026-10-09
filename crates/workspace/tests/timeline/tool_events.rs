@@ -119,6 +119,20 @@ fn timeline_a_group_counts_by_kind_and_names_a_failed_command() {
     (0, 0),
     "a command without an end is not one the group ran"
   );
+  // Named wherever it sits, also before a note the agent wrote after it.
+  let noted = transcript(
+    execution,
+    vec![
+      AgentEvent::CommandStarted {
+        item: "10".into(),
+        command: "pnpm build".into(),
+      },
+      AgentEvent::Reasoning {
+        text: "Waiting for the build.".into(),
+      },
+    ],
+  );
+  assert_eq!(GroupSummary::of(&noted).running, Some("pnpm build".into()));
 }
 
 #[test]
