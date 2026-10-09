@@ -86,9 +86,9 @@ pub async fn create_pipeline(
     let mut db = ProjectDb::open(&open.repo_root)?;
     let name = Name::new(&args.name).map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
     let id = match (args.from, &args.copy_of) {
-      (Start::Copy, Some(source)) => {
-        let source = pipeline_named(&db, source)?;
-        let body = opened(&db, source, &args.name)?.body;
+      (Start::Copy, Some(named)) => {
+        let source = pipeline_named(&db, named)?;
+        let body = opened(&db, source, named)?.body;
         create_with(&mut db, name, &body, Timestamp::now())
       }
       (Start::Copy, None) => {

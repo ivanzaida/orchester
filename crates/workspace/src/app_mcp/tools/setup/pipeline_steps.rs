@@ -13,7 +13,7 @@ use orchester_core::{
     AllowedCommands, CommandPermission, NetworkAccess, StepCommands, StepNetwork, StepPermissions,
     capability::{PermissionOption, support},
   },
-  resource::{FailureRoute, ModelId, Pipeline, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
+  resource::{DraftSaved, FailureRoute, ModelId, Pipeline, PipelineEdit, RepositoryAccess, Step, StepKey, StepKind},
   tokens::{BudgetInputError, TokenBudget},
 };
 use orchester_store::ProjectDb;
@@ -144,7 +144,7 @@ pub async fn save_pipeline_draft(
   })
   .await?;
   let mut value = pipeline_json(&opened, translate);
-  value["draft_kept"] = json!(saved == orchester_core::resource::DraftSaved::Stored);
+  value["draft_kept"] = json!(saved == DraftSaved::Stored);
   Ok(json!({ "pipeline": value }))
 }
 

@@ -5,11 +5,13 @@
 //! connection whose agents Orchester runs itself. Approving automatically answers requests in a
 //! person's place, so it needs *Let automation answer approvals*, as auto mode does.
 
+use std::path::Path;
+
 use orchester_core::{
   connection::{AgentConnection, invocation::Platform, mcp::McpServerSelection},
   id::ConnectionId,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders},
-  resource::{ModelId, RepositoryAccess},
+  resource::{AgentProfile, ModelId, RepositoryAccess},
   store::McpServerStore,
 };
 use orchester_store::ProjectDb;
@@ -170,7 +172,7 @@ fn form(
   connection: &AgentConnection,
   permissions: &AgentPermissions,
   servers: &McpServerSelection,
-) -> Result<orchester_core::resource::AgentProfile, ToolError> {
+) -> Result<AgentProfile, ToolError> {
   let model = args.model.trim();
   let listed = ModelId::new(model)
     .ok()
@@ -203,7 +205,7 @@ fn form(
 }
 
 /// The permissions given, each command and folder checked as the editor adds it.
-fn permissions(given: &Permissions, root: &std::path::Path) -> Result<AgentPermissions, ToolError> {
+fn permissions(given: &Permissions, root: &Path) -> Result<AgentPermissions, ToolError> {
   let invalid = |reason| refused("invalid_permissions", reason);
   let commands = match given.commands {
     Commands::AskBefore => CommandPermission::AskBefore,

@@ -219,7 +219,7 @@ fn domain_automation_cannot_approve_a_network_request() {
     "decide_approval",
     &json!({ "project": "Kontur", "approval": id, "decision": "approve_once" }),
   );
-  assert_ne!(approve["code"], "automation_not_allowed", "{approve}");
+  assert_eq!(approve["code"], "person_only", "{approve}");
   let still = served.ok("list_approvals", &json!({ "project": "Kontur" }));
   assert_eq!(still["approvals"][0]["id"], id, "the request still waits for a person");
   served.ok(

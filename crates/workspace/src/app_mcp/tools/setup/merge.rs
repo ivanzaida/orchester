@@ -22,7 +22,7 @@ use super::super::{
 };
 use crate::{
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   messages::Message,
@@ -172,7 +172,7 @@ fn start(services: &Services, args: &InRun, separator: Arc<str>) -> Result<Start
   }
   let task = db
     .task(run.task())?
-    .ok_or_else(|| refused("task_not_found", "appMcp.errors.runNotReady"))?;
+    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
   let branch = run
     .base_branch()
     .ok_or_else(|| refused("no_base_branch", "appMcp.errors.noBaseBranch"))?
