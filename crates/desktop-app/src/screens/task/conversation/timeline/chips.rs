@@ -210,6 +210,8 @@ fn summary_text(ctx: &Ctx, group: &ToolGroup, unfinished: Unfinished) -> String 
       summary.mcp,
     ));
   }
+  // A summary that starts with a command keeps the command as written: only words start a sentence.
+  let starts_with_command = parts.is_empty() && summary.running.is_some();
   if let Some(running) = &summary.running {
     let key = match unfinished {
       Unfinished::Runs => "conversation.group.running",
@@ -226,7 +228,11 @@ fn summary_text(ctx: &Ctx, group: &ToolGroup, unfinished: Unfinished) -> String 
     .map(|part| &**part)
     .collect::<Vec<_>>()
     .join(&ctx.t("conversation.separator"));
-  capitalized(&joined)
+  if starts_with_command {
+    joined
+  } else {
+    capitalized(&joined)
+  }
 }
 
 /// *ran pnpm test*, *ran cargo fmt and cargo test*, or *ran 5 commands*.

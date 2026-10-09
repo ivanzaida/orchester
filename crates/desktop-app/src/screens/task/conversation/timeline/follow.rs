@@ -232,6 +232,12 @@ impl Follow {
   }
 }
 
+/// The room *Jump to latest* takes over the chat's foot, under the last row while it shows: the pill's height
+/// (the row's own padding adds the gap).
+pub(super) fn jump_room() -> Element {
+  Column::new().height(Dimension::Px(JUMP_HEIGHT)).into()
+}
+
 /// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the scroll.
 pub(super) struct FollowEnd {
   follow: Mutex<Option<Follow>>,

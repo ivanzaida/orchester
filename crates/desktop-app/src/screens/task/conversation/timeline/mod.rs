@@ -171,6 +171,9 @@ enum Line {
   Row(Box<Row>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
   Working(Working),
+  /// Room under the last row while *Jump to latest* floats over the chat's foot, so the row can scroll clear
+  /// of it.
+  JumpRoom,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -186,6 +189,7 @@ impl RowProps {
     match &self.line {
       Line::Row(row) => row.key(),
       Line::Working(_) => "conversation-working",
+      Line::JumpRoom => "conversation-jump-room",
     }
   }
 }
@@ -206,6 +210,7 @@ pub(super) fn chat(
       .iter()
       .map(|row| Line::Row(Box::new(row.clone())))
       .chain(working.map(Line::Working))
+      .chain((!follow.following.get()).then_some(Line::JumpRoom))
       .map(|line| RowProps { line })
       .collect(),
   );
@@ -267,6 +272,7 @@ impl Component for RowView {
     let id = format!("conversation-row:{}", props.key());
     let content = match &props.line {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
+      Line::JumpRoom => follow::jump_room(),
       Line::Row(row) => row_content(ctx, row),
     };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).
