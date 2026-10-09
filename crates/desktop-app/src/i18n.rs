@@ -3,7 +3,7 @@
 //! nothing else (`tasks.json` is `{"tasks": {…}}`), so no key is in two files and each area's strings
 //! have one owner; `tests/i18n.rs` checks it. `build.rs` lists the files, so an area is added by adding
 //! its file. Every area merges into lurq's default namespace, where code names a key in full
-//! (`ctx.t("tasks.newTask")`). See the `orchester-ui` skill for key naming and locale rules.
+//! (`ctx.t("shell.screens.tasks")`). See the `orchester-ui` skill for key naming and locale rules.
 
 use lurq::app::{App, i18n::LoadJsonError};
 

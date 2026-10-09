@@ -73,24 +73,88 @@ fn rust_sources(dir: &Path, out: &mut Vec<String>) {
   }
 }
 
-/// Every string literal in `source` that starts with an area's name and a dot (`"shell.screens.tasks"`),
-/// wherever it is written: in a `t(...)` call, a table of menu rows, a `match`.
-fn keys_in(source: &str, areas: &[&str]) -> Vec<String> {
-  let mut keys = Vec::new();
-  for area in areas {
-    let opening = format!("\"{area}.");
-    for part in source.split(opening.as_str()).skip(1) {
-      if let Some((rest, _)) = part.split_once('"') {
-        keys.push(format!("{area}.{rest}"));
+/// What a dotted literal ends in when it names a file rather than a key (`"reg.exe"`, `"orchester.db"`).
+const FILE_EXTENSIONS: [&str; 14] = [
+  "db", "exe", "ico", "json", "lock", "log", "md", "png", "rc", "rs", "svg", "toml", "ttf", "txt",
+];
+
+/// The string literals of `source` outside line comments, wherever they are written: a `t(...)` call, a
+/// `*_key` table, a menu row. Char literals (`'"'`) do not open a string; a raw string is read like a
+/// plain one, which is enough for the keys.
+fn string_literals(source: &str) -> Vec<String> {
+  let chars: Vec<char> = source.chars().collect();
+  let mut literals = Vec::new();
+  let mut at = 0;
+  while at < chars.len() {
+    at = match (chars[at], chars.get(at + 1), chars.get(at + 2)) {
+      ('/', Some('/'), _) => skip_to(&chars, at, '\n'),
+      ('\'', Some('\\'), _) => skip_to(&chars, at + 2, '\''),
+      ('\'', _, Some('\'')) => at + 2,
+      ('"', ..) => {
+        let (literal, end) = read_string(&chars, at + 1);
+        literals.push(literal);
+        end
       }
-    }
+      _ => at,
+    } + 1;
   }
-  keys.retain(|key| {
-    key
-      .bytes()
-      .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_'))
-  });
+  literals
+}
+
+/// The index of the first `end` at or after `from`, or the end of `chars`.
+fn skip_to(chars: &[char], from: usize, end: char) -> usize {
+  chars[from..]
+    .iter()
+    .position(|c| *c == end)
+    .map_or(chars.len(), |offset| from + offset)
+}
+
+/// The string that starts at `from`, escapes kept as the character they escape, and the index of its
+/// closing quote.
+fn read_string(chars: &[char], from: usize) -> (String, usize) {
+  let mut literal = String::new();
+  let mut at = from;
+  while at < chars.len() && chars[at] != '"' {
+    if chars[at] == '\\' {
+      at += 1;
+    }
+    literal.extend(chars.get(at));
+    at += 1;
+  }
+  (literal, at)
+}
+
+/// A literal that reads as a key: a first segment of lowercase letters and `_` (an area's name), then
+/// segments of letters, digits and `_`, and not a file name.
+fn is_key_shaped(literal: &str) -> bool {
+  let Some((area, rest)) = literal.split_once('.') else {
+    return false;
+  };
+  let segment = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+  let last = rest.rsplit('.').next().unwrap_or(rest);
+  !area.is_empty()
+    && area.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'_')
+    && rest.split('.').all(segment)
+    && !FILE_EXTENSIONS.contains(&last)
+}
+
+/// Every key-shaped literal in the crate's sources.
+fn keys_named_in_code() -> BTreeSet<String> {
+  let mut sources = Vec::new();
+  rust_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
+  sources
+    .iter()
+    .flat_map(|source| string_literals(source))
+    .filter(|literal| is_key_shaped(literal))
+    .collect()
+}
+
+/// The keys of `keys` whose area, their first segment, is not one of `areas`.
+fn without_area<'a>(keys: &'a BTreeSet<String>, areas: &[&str]) -> Vec<&'a String> {
   keys
+    .iter()
+    .filter(|key| !key.split('.').next().is_some_and(|area| areas.contains(&area)))
+    .collect()
 }
 
 #[test]
@@ -150,19 +214,46 @@ fn locales_have_the_areas_keys_and_placeholders_of_the_fallback() {
 }
 
 #[test]
-fn every_key_named_in_code_exists() {
+fn every_key_named_in_code_has_its_area_file_and_exists() {
   let known = known_keys();
   let areas: Vec<&str> = fallback().areas.iter().map(|area| area.name).collect();
-  let mut sources = Vec::new();
-  rust_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
-  let named: BTreeSet<String> = sources.iter().flat_map(|source| keys_in(source, &areas)).collect();
+  let named = keys_named_in_code();
   for scanned in ["shell.screens.overview", "task.tabs.summary", "common.newTab"] {
     assert!(named.contains(scanned), "the scan finds the keys the code names");
   }
+  let orphans = without_area(&named, &areas);
+  assert!(
+    orphans.is_empty(),
+    "keys whose area has no file in {FALLBACK_LOCALE}/: {orphans:?}"
+  );
   let missing: Vec<&String> = named.iter().filter(|key| !known.contains_key(*key)).collect();
   assert!(
     missing.is_empty(),
     "keys missing from the {FALLBACK_LOCALE} files: {missing:?}"
+  );
+}
+
+#[test]
+fn every_key_scan_reads_code_literals_and_flags_a_missing_area() {
+  let source = r#"
+    let title = ctx.t("tasks.title"); // ctx.t("notes.title") is a comment
+    const QUOTE: char = '"';
+    let label = ctx.t_args("shell.tabs.projectScreen", [("project", name)]);
+    let program = "reg.exe"; let font = "lucide.ttf"; let address = "127.0.0.1";
+    const ENTRIES: [&str; 1] = ["common.newTab"];
+  "#;
+  let keys: BTreeSet<String> = string_literals(source)
+    .into_iter()
+    .filter(|literal| is_key_shaped(literal))
+    .collect();
+  assert_eq!(
+    keys.iter().map(String::as_str).collect::<Vec<_>>(),
+    ["common.newTab", "shell.tabs.projectScreen", "tasks.title"]
+  );
+  assert_eq!(
+    without_area(&keys, &["common", "shell"]),
+    [&"tasks.title".to_owned()],
+    "a key of an area without a file is caught"
   );
 }
 
