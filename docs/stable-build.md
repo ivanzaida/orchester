@@ -229,6 +229,10 @@ an existing task to another pipeline (`update_task`) is a person's decision, ref
 the setting is off; a task without a pipeline may get any published one.
 `duplicate_pipeline` is shared with the deprecated desktop's server, which follows the rule too.
 
+Today only this switch is protected from window input. Person-only actions in editors still to come (a
+profile's or a pipeline's Publish, approvals) must likewise refuse synthetic input from MCP clients; lurq
+0.43 adds a way to tell it apart from a person's.
+
 What this protects against: an MCP client that holds the server's token and nothing else. Any program that
 runs as your user can still change `orchester.db` and the project's `.orchester` data directly; the switch is
 not a boundary against those.
