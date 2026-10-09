@@ -203,10 +203,12 @@ tools only narrow what agents may do unless a person allows more. Widening it is
 servers broader than its latest published version (a new profile: the most restrictive permissions its
 CLI enforces and no MCP server) on save or publish, which covers write access, writable folders, broader
 commands, network access, no longer asking before tool calls and approving automatically; an agent CLI
-whose program is not a copy found on the search path, refused before it runs; and a project environment
-variable that changes what programs load, where they connect or where tools keep their configuration
-(`PATH`, `NODE_OPTIONS`, `*_BASE_URL`, `*_PROXY`, `*_HOME`, `LD_*`, `DYLD_*`, `GIT_CONFIG*` and the
-others `orchester_core::permission::widening` lists). Narrowing is always taken. The setting is off by
+whose program is not a copy found on the search path, refused before it runs; any change to the project's
+environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`,
+`FORCE_COLOR`, `TZ`, `LANG` and `LC_*` (`orchester_core::permission::widening::harmless_variable`), since a
+variable can change what programs load, where they connect, what they trust or where tools keep their
+configuration, and removing a person's (a proxy, say) can widen too; approving automatically, which also needs
+*Let automation answer approvals*; and removing or weakening a pipeline step's approval gate. Narrowing is always taken. The setting is off by
 default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
 changes it, and window input cannot either: while its row is on screen, the server refuses every window-input
 tool of lurq's (clicks and keys by element or by coordinates, values, menus, resizing) with `person_only`,
