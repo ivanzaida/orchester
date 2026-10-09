@@ -62,7 +62,7 @@ fn changes_reads_the_worktree_again_and_recovers_with_try_again() {
   fs::write(worktree.join("notes.md"), "draft\n").expect("write into the worktree");
   // Leaving the tab and coming back reads the worktree again.
   page.go("KON-12/summary");
-  page.wait_for("screen-task");
+  page.wait_for("task-summary");
   page.changes("KON-12", "changes-worktree-file:notes.md");
   assert_eq!(page.texts("changes-group-worktree")[1], "3");
   page.window.until("the count of 7", |window| {
@@ -75,7 +75,7 @@ fn changes_reads_the_worktree_again_and_recovers_with_try_again() {
   let link = fs::read_to_string(worktree.join(".git")).expect("the worktree's link");
   fs::write(worktree.join(".git"), "gitdir: missing\n").expect("break the worktree's link");
   page.go("KON-12/summary");
-  page.wait_for("screen-task");
+  page.wait_for("task-summary");
   page.changes("KON-12", "changes-notice");
   let notice = page.texts("changes-notice").concat();
   assert!(notice.contains("Couldn't read what the worktree holds"), "{notice}");

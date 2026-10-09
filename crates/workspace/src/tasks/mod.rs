@@ -30,6 +30,7 @@ pub mod raise;
 pub mod run;
 pub mod run_again;
 pub mod run_approvals;
+pub mod standing;
 pub mod timeline;
 pub mod transcript;
 pub mod unreadable;

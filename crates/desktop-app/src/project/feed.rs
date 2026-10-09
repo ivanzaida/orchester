@@ -22,7 +22,7 @@ use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  runner::{RunnerStatus, Runners},
+  runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
@@ -54,7 +54,8 @@ pub struct ProjectFeed {
   /// Counts the changes automation made to the project through Orchester's MCP server, by kind: the
   /// screens that show what changed read it again in place.
   pub outside: Signal<OutsideCounts>,
-  /// The project's merge and worktree-removal operations, which outlive a task page.
+  /// The project's merge and worktree-removal operations, which outlive a task page: its part of the
+  /// session's registry (`Services::jobs`), so what a page or automation started shows here.
   pub jobs: IntegrationJobs,
   /// How those operations stand.
   pub job_state: Signal<ProjectJobState>,
@@ -69,8 +70,8 @@ impl PartialEq for ProjectFeed {
 impl lurq::app::component::DevtoolsInspectable for ProjectFeed {}
 
 impl ProjectFeed {
-  pub(super) fn new() -> Self {
-    let jobs = IntegrationJobs::default();
+  /// An empty feed that follows `jobs`, the project's operations in the session's registry.
+  pub(super) fn new(jobs: IntegrationJobs) -> Self {
     Self {
       tasks: Signal::new(TasksState::Loading),
       stale: Signal::new(None),
@@ -87,6 +88,25 @@ impl ProjectFeed {
   /// A screen saved the project's tasks: they are read again, in every tab of the project.
   pub fn saved(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
+  /// that changes.
+  pub fn runner_online(&self, repo_root: &Path) -> bool {
+    self
+      .status
+      .with(|status| status.as_ref().map(|status| status.state_for(repo_root)) == Some(RunnerState::Online))
+  }
+
+  /// The tasks of the project at `repo_root` as they stand with its runner: while none serves the
+  /// project, a run recorded as running has lost its agent and is interrupted
+  /// (`ProjectTasks::without_runner`). Reading it in a render re-renders it when either changes.
+  pub fn tasks_with_runner(&self, repo_root: &Path) -> TasksState {
+    let online = self.runner_online(repo_root);
+    match self.tasks.get() {
+      TasksState::Ready(tasks) if !online => TasksState::Ready(tasks.without_runner()),
+      state => state,
+    }
   }
 }
 

@@ -6,14 +6,13 @@
 //! the current entry's place in the tab's history.
 //!
 //! The task page's frame owns the reads ([`ChangesReads::new`] in its `create`, provided to its parts
-//! with `ctx.provide`); its page tabs show [`count`] through [`tab_label`] (`Changes 6`, `Changes 4+`),
-//! which reads the changes on every render, and its Changes slot mounts [`tab`], which shows what was read
-//! last, so the count is of the files listed here and nothing is read twice. Until the frame takes it,
-//! `host` stands in for it.
+//! with `ctx.provide`) and reads with them on every render ([`ChangesReads::read`] with [`Follow::of`]);
+//! its page tabs show [`count`] through [`tab_label`] (`Changes 6`, `Changes 4+`) and its Changes slot
+//! mounts [`tab`], both what was read last, so the count is of the files listed here and nothing is read
+//! twice.
 
 mod diff;
 mod files;
-mod host;
 mod listed;
 mod load;
 mod states;
@@ -41,42 +40,35 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+pub use self::load::{ChangesReads, FileCount, Follow, tab_label};
 use self::{
   diff::{DiffView, DiffViewProps},
   files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
   listed::{FileListing, ListKeys, Listed},
-  load::{CheckpointedRead, Follow},
+  load::CheckpointedRead,
   toolbar::toolbar,
 };
-pub use self::{
-  host::screen,
-  load::{ChangesReads, FileCount, tab_label},
-};
+use super::TaskContext;
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
 };
 
-/// How many files the Changes tab lists, for its label; `None` while that is not known. Reads the changes
-/// of `detail`'s latest run with the page's [`ChangesReads`]: call it on every render of the page's tabs.
-pub fn count(ctx: &mut Ctx, project: &ShownProject, detail: &TaskDetail, online: bool) -> Option<FileCount> {
-  let tab = route_view(ctx).map_or(TaskTab::Summary, |view| view.tab());
-  let reads = ChangesReads::of(ctx);
-  let follow = Follow::of(detail, online, tab);
-  reads
-    .read(ctx, &project.open.repo_root, detail, follow)
-    .and_then(|changes| changes.file_count())
+/// How many files the Changes tab lists, for its label; `None` while that is not known: what the page's
+/// [`ChangesReads`] read last.
+pub fn count(ctx: &mut Ctx) -> Option<FileCount> {
+  ChangesReads::of(ctx).latest().and_then(|changes| changes.file_count())
 }
 
-/// The Changes tab of `detail`'s page, on the file the path names: what [`count`] read last.
-pub fn tab(ctx: &mut Ctx, project: &ShownProject, detail: &Arc<TaskDetail>, online: bool) -> Element {
+/// The Changes tab of `task`'s page, on the file the path names: what the page's [`ChangesReads`] read
+/// last.
+pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
   let file = route_view(ctx).and_then(|view| view.file().cloned());
   let props = ChangesProps {
-    project: project.open.project.id(),
-    detail: detail.clone(),
+    project: task.project.open.project.id(),
+    detail: task.detail.clone(),
     file,
-    agent_at_work: Follow::of(detail, online, TaskTab::Changes).agent_at_work,
+    agent_at_work: Follow::of(&task.detail, task.online, TaskTab::Changes).agent_at_work,
     reads: ChangesReads::of(ctx),
   };
   ctx.mount_keyed::<ChangesTab>("task-changes-tab", props)

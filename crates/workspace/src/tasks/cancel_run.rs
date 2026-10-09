@@ -11,6 +11,7 @@ use crate::{
   background,
   messages::{self, Message},
   runner::Runners,
+  workspace::OpenProject,
 };
 
 /// Whether the person confirmed stopping a run for Canceled, and which run the confirmation
@@ -56,17 +57,41 @@ impl StopRefused {
 /// Stops `task`'s active run when it is the run the person confirmed stopping; without an active
 /// run there is nothing to stop. A run the confirmation did not show started after it opened.
 pub async fn stop_named_run(root: &Path, task: TaskId, stop: Stop, runners: &Runners) -> Result<(), StopRefused> {
+  match active_run(root, task, stop).await? {
+    None => Ok(()),
+    Some(run) => runners
+      .control_run(Command::CancelRun { run })
+      .await
+      .map_err(|error| StopRefused::Failed(crate::tasks::run::control_message(&error))),
+  }
+}
+
+/// `task`'s active run when it is the one `stop` confirmed; `None` without an active run.
+async fn active_run(root: &Path, task: TaskId, stop: Stop) -> Result<Option<RunId>, StopRefused> {
   let root = root.to_path_buf();
   let active = background::run(move || ProjectDb::open(&root).and_then(|db| db.active_task_run(task)))
     .await
     .map_err(StopRefused::Failed)?
     .map_err(|error| StopRefused::Failed(messages::store_error(&error)))?;
   match (active, stop) {
-    (None, _) => Ok(()),
+    (None, _) => Ok(None),
     (Some(run), Stop::Unconfirmed) => Err(StopRefused::Unconfirmed(run)),
     (Some(run), Stop::Confirmed(shown)) if shown != Some(run) => Err(StopRefused::StartedSince(run)),
-    (Some(run), Stop::Confirmed(_)) => runners
-      .control_run(Command::CancelRun { run })
+    (Some(run), Stop::Confirmed(_)) => Ok(Some(run)),
+  }
+}
+
+/// [`stop_named_run`] in `project`, asking its own runner whichever tab shows it.
+pub async fn stop_named_run_in(
+  project: &OpenProject,
+  task: TaskId,
+  stop: Stop,
+  runners: &Runners,
+) -> Result<(), StopRefused> {
+  match active_run(&project.repo_root, task, stop).await? {
+    None => Ok(()),
+    Some(run) => runners
+      .control_run_in(project, Command::CancelRun { run })
       .await
       .map_err(|error| StopRefused::Failed(crate::tasks::run::control_message(&error))),
   }
