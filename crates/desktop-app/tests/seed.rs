@@ -22,7 +22,7 @@ use orchester_core::{
   },
   integration::WORKTREES_DIR,
   resource::{AgentProfile, Pipeline, ResourceKind},
-  run::{Run, TaskPhase},
+  run::{PreflightInput, Run, TaskPhase, preflight},
   store::{
     ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
   },
@@ -506,6 +506,36 @@ fn seed_live_runs_the_fake_codex_by_its_absolute_path() {
     .map(|step| step.key.as_str())
     .collect();
   assert_eq!(gated, ["plan"]);
+  let profiles: BTreeMap<_, _> = db
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .iter()
+    .map(|resource| {
+      let version = db
+        .latest_version::<AgentProfile>(resource.id())
+        .expect("read")
+        .expect("published");
+      (resource.id(), version)
+    })
+    .collect();
+  let connections = db.connections().expect("connections");
+  for resource in db.resources(ResourceKind::Pipeline).expect("pipelines") {
+    let version = db
+      .latest_version::<Pipeline>(resource.id())
+      .expect("read")
+      .expect("published");
+    let problems = preflight(PreflightInput {
+      pipeline: Some(version.body()),
+      profiles: &profiles,
+      tools: &BTreeMap::new(),
+      connections: &connections,
+    });
+    assert!(
+      problems.is_empty(),
+      "{} can run: {problems:?}",
+      resource.name().as_str()
+    );
+  }
   let tasks = db.tasks().expect("tasks");
   assert_eq!(tasks.len(), 6);
   assert!(

@@ -72,7 +72,7 @@ fn report(seeded: &Seeded) -> io::Result<()> {
   writeln!(out, "repo {}", seeded.repo.display())?;
   writeln!(out, "app database {}", seeded.app_database.display())?;
   for task in &seeded.tasks {
-    writeln!(out, "{:<7} {:<36} {}", task.key, task.state, task.title)?;
+    writeln!(out, "{:<7} {} · {}", task.key, task.title, task.state)?;
   }
   Ok(())
 }

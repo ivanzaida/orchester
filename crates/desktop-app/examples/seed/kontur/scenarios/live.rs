@@ -1,8 +1,8 @@
 //! `live`: drafts ready to run with `orchester-fake-codex`, whose briefs say what the fake does in its turn
 //! (`crates/runner/tests/support/fake_codex_work.rs`): ask to approve a command (Escalate), ask a question
-//! with options, keep working until it is ended, fail the turn, or do the work and finish. Feature delivery
-//! stops at its plan for a decision (`Plan` has plan approval); Quick fix is one Implement step, so a brief
-//! that makes the fake ask asks once.
+//! with options, keep working until it is ended, fail its turn (the step restarts once, then the run waits for
+//! a person), or do the work and finish. Feature delivery stops at its plan for a decision (`Plan` has plan
+//! approval); Quick fix is one Implement step, so a brief that makes the fake ask asks once.
 
 use crate::kontur::{Kontur, SeedError};
 
@@ -48,7 +48,7 @@ const TASKS: [(&str, &str, Pipe, &str); 6] = [
     "Export invoices as PDF",
     "Export a month of invoices as one PDF per customer. Please fail.",
     Pipe::QuickFix,
-    "draft; a run fails its turn",
+    "draft; a run's turn fails twice, then it waits for a person",
   ),
 ];
 
