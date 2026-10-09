@@ -35,7 +35,7 @@ use self::{
 };
 use super::{ProjectNav, page};
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   agents::data::{ProfileChange, ProfileEntry, ProjectAgents, apply_in},
   background,
   messages::{self, Message},
@@ -237,7 +237,7 @@ fn empty(ctx: &Ctx, agents: &ProjectAgents, nav: &ProjectNav) -> Element {
 }
 
 fn change_action(ctx: &mut Ctx) -> ChangeAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let open = ctx.props::<OpenProject>().clone();
   ctx.future_action(move |(repo_root, change): (PathBuf, ProfileChange)| {
     let (activity, spec) = (activity.clone(), operations::profile_change(&open, &change));

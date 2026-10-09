@@ -14,7 +14,7 @@ use orchester_core::{
 };
 
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   messages::Message,
   repository::{DetectTarget, detect, refresh_in},
@@ -82,7 +82,7 @@ pub fn detected_connection(ctx: &Ctx, detection: &Detection, id: ConnectionId) -
 /// connection (added for github.com when missing) and the link is refreshed when the
 /// linked repository was read.
 pub fn detect_action(ctx: &mut Ctx, project: Option<OpenProject>) -> DetectAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let name = connection_name(ctx);
   ctx.future_action(move |target: DetectTarget| {
     let (activity, project, name) = (activity.clone(), project.clone(), name.clone());
@@ -108,7 +108,7 @@ pub fn detect_action(ctx: &mut Ctx, project: Option<OpenProject>) -> DetectActio
 
 /// The native file dialog for `gh` (gh not found).
 pub fn program_action(ctx: &mut Ctx) -> ProgramAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |title: Arc<str>| {
     let activity = activity.clone();
     async move {

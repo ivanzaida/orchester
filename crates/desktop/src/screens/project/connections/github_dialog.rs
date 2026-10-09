@@ -26,7 +26,7 @@ use super::{
   form,
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   connections::{
     github::{GitHubDraft, save_github_in},
@@ -273,7 +273,7 @@ impl GitHubDialog {
     let executable = picked.or_else(|| found.first().cloned());
     let host = self.chosen_host();
     let deps = (host.clone().ok(), executable.clone(), self.attempt.get());
-    let (activity, project) = (Activity::of(ctx), self.context.project.clone());
+    let (activity, project) = (crate::activity::of(ctx), self.context.project.clone());
     let check = ctx.future(deps, move |(host, executable, _)| {
       let (activity, spec) = (activity.clone(), operations::gh_check(&project));
       async move {
@@ -357,7 +357,7 @@ fn suggested_name(ctx: &Ctx, context: &DialogContext, host: &str) -> String {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let project = ctx
     .use_context::<DialogContext>()
     .expect("the connections screen provides the dialog context")

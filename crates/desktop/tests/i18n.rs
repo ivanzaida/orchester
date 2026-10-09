@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use lurq::app::App;
 use orchester_desktop::i18n::{self, FALLBACK_LOCALE, LOCALES};
+use orchester_workspace::i18n as workspace;
 use serde_json::Value;
 
 /// Leaf key → sorted `{{placeholder}}` names.
@@ -88,10 +89,32 @@ fn locales_have_identical_keys_and_placeholders() {
   }
 }
 
+/// The workspace's words are loaded into the default namespace too (`i18n::install`), so the two
+/// files must not name one key twice.
+#[test]
+fn locales_share_no_key_with_the_workspace() {
+  let (_, fallback) = LOCALES.iter().find(|(locale, _)| *locale == FALLBACK_LOCALE).unwrap();
+  let (_, shared) = workspace::LOCALES
+    .iter()
+    .find(|(locale, _)| *locale == FALLBACK_LOCALE)
+    .unwrap();
+  let own = locale_leaves(fallback);
+  let both: Vec<String> = locale_leaves(shared)
+    .into_keys()
+    .filter(|key| own.contains_key(key))
+    .collect();
+  assert!(both.is_empty(), "keys in both locale files: {both:?}");
+}
+
 #[test]
 fn every_key_used_in_code_exists() {
   let (_, fallback) = LOCALES.iter().find(|(locale, _)| *locale == FALLBACK_LOCALE).unwrap();
-  let known = locale_leaves(fallback);
+  let (_, shared) = workspace::LOCALES
+    .iter()
+    .find(|(locale, _)| *locale == FALLBACK_LOCALE)
+    .unwrap();
+  let mut known = locale_leaves(fallback);
+  known.extend(locale_leaves(shared));
   let mut sources = Vec::new();
   rust_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
   let missing: Vec<String> = sources
@@ -101,7 +124,7 @@ fn every_key_used_in_code_exists() {
     .collect();
   assert!(
     missing.is_empty(),
-    "keys missing from {FALLBACK_LOCALE}.json: {missing:?}"
+    "keys missing from both {FALLBACK_LOCALE}.json files: {missing:?}"
   );
 }
 

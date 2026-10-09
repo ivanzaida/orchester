@@ -29,11 +29,10 @@ use self::dialog::{Dialog, dialog};
 pub(super) use self::read::{TaskLeftovers, task_leftovers};
 use super::super::{ProjectNav, page};
 use crate::{
-  activity::Activity,
   programs::Programs,
   tasks::{
     detail::TaskDetail,
-    integration_jobs::{JobState, RemoveArgs, Remover, RunIntegration},
+    integration_jobs::{JobState, RemoveArgs, RunIntegration},
   },
   ui::{button::ActionButton, icon::Icon},
   workspace::OpenProject,
@@ -174,8 +173,10 @@ impl Component for RemoveWorktree {
       .id(id)
       .height(Dimension::Px(height))
       .on_click(move || {
-        let waits = others.iter().any(|run| nav.integration(*run).busy());
-        if open.busy() || waits || matches!(open.remove().get_untracked(), JobState::Succeeded) {
+        // The job decides, not the view, which may be a frame behind it.
+        let waits = others.iter().any(|run| nav.integration(*run).state_now().busy());
+        let now = open.state_now();
+        if now.busy() || waits || now.remove == JobState::Succeeded {
           return;
         }
         open.open_remove();
@@ -245,11 +246,12 @@ fn remove_args(ctx: &mut Ctx, props: &RemoveWorktreeProps) -> RemoveArgs {
   let programs = ctx
     .use_context::<Programs>()
     .expect("the root provides Programs before mounting screens");
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let separator = ctx.t("common.listSeparator");
   let nav = ctx
     .use_context::<ProjectNav>()
     .expect("the project shell provides ProjectNav");
+  let by = nav.integration(props.run.id()).person();
   RemoveArgs {
     open: props.open.clone(),
     task: props.task,
@@ -261,6 +263,6 @@ fn remove_args(ctx: &mut Ctx, props: &RemoveWorktreeProps) -> RemoveArgs {
     activity,
     separator,
     changed: Arc::new(move || nav.tasks_changed()),
-    by: Remover::Person,
+    by,
   }
 }

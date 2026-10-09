@@ -7,7 +7,7 @@
 //! disables and enables them; Sign out forgets the token, and the connection is checked when the
 //! application starts.
 
-#[path = "../server_support/mod.rs"]
+#[path = "../../../workspace/tests/server_support/mod.rs"]
 pub(crate) mod server_support;
 
 use std::{

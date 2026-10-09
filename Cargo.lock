@@ -2799,19 +2799,15 @@ dependencies = [
  "orchester-ipc",
  "orchester-server",
  "orchester-store",
- "orchester-vault",
+ "orchester-workspace",
  "parking_lot",
  "rfd",
  "rmcp",
  "rusqlite",
- "rustix 1.1.5",
  "serde",
  "serde_json",
- "syntect",
  "tempfile",
- "thiserror 2.0.20",
  "tokio",
- "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -2940,6 +2936,35 @@ dependencies = [
  "orchester-core",
  "windows-native-keyring-store",
  "zeroize",
+]
+
+[[package]]
+name = "orchester-workspace"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "lurq",
+ "orchester-api",
+ "orchester-core",
+ "orchester-exec",
+ "orchester-index",
+ "orchester-ipc",
+ "orchester-server",
+ "orchester-store",
+ "orchester-vault",
+ "parking_lot",
+ "rmcp",
+ "rusqlite",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "syntect",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

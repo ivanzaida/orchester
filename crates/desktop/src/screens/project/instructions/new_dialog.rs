@@ -23,7 +23,7 @@ use orchester_core::{
 
 use super::super::ProjectNav;
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   instructions::{
     data::{NewInstruction, ProjectInstructions, create_in},
@@ -307,7 +307,7 @@ fn actions(ctx: &Ctx, open: &Signal<bool>, submit: Submit, error: Option<Message
 }
 
 fn create_action(ctx: &mut Ctx) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, new, tab, spec): CreateArgs| {
     let activity = activity.clone();
     async move {

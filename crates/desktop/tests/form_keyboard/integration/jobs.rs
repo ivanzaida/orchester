@@ -1,10 +1,9 @@
-//! Run integration operations retained by the project feed while UI controls unmount or race.
+//! Run integration operations retained by the project's registry while UI controls unmount or race.
 
 use orchester_desktop::{
-  tabs::feed::ProjectFeeds,
   tasks::{
     integration::leftovers_in,
-    integration_jobs::{JobState, MergeArgs, RemoveArgs, Remover},
+    integration_jobs::{IntegrationJobs, JobState, MergeArgs, RemoveArgs, Remover},
   },
   workspace::OpenProject,
 };
@@ -22,7 +21,7 @@ fn final_merge_state_is_published_before_the_operation_unlocks() {
     project: db.project().clone(),
     repo_root: desktop.repo().to_path_buf(),
   };
-  let jobs = ProjectFeeds::default().of(open.project.id()).integration;
+  let jobs = IntegrationJobs::default();
   let job = jobs.of(run.id());
   let args = MergeArgs {
     open,
@@ -46,10 +45,10 @@ fn final_merge_state_is_published_before_the_operation_unlocks() {
   let retry_attempts = attempts.clone();
   let retries = thread::spawn(move || {
     while !stop_retry.load(Ordering::SeqCst) {
-      let state = retry.merge().get_untracked();
+      let state = retry.state().merge;
       if state == JobState::Running && !retry.busy() {
         assert_ne!(
-          retry.merge().get_untracked(),
+          retry.state().merge,
           JobState::Running,
           "a running merge must retain its operation guard"
         );
@@ -63,7 +62,7 @@ fn final_merge_state_is_published_before_the_operation_unlocks() {
     attempts.load(Ordering::SeqCst) > 0
   });
   gate.release();
-  desktop.wait_until("merge finishes", |_| job.merge().get_untracked() == JobState::Succeeded);
+  desktop.wait_until("merge finishes", |_| job.state().merge == JobState::Succeeded);
   stop.store(true, Ordering::SeqCst);
   retries.join().expect("retry thread");
   job.start_merge(after_completion);
@@ -88,7 +87,7 @@ fn removing_worktree_stays_pending_after_its_control_unmounts() {
     .expect("leftovers")
     .0;
   let (_, confirmed) = left.pop().expect("what the run left");
-  let jobs = ProjectFeeds::default().of(open.project.id()).integration;
+  let jobs = IntegrationJobs::default();
   let job = jobs.of(run.id());
   let args = RemoveArgs {
     open,
@@ -101,17 +100,17 @@ fn removing_worktree_stays_pending_after_its_control_unmounts() {
     activity: desktop.activity.clone(),
     separator: Arc::from(", "),
     changed: Arc::new(|| {}),
-    by: Remover::Person,
+    by: Remover::Person(Arc::new(|| {})),
   };
   job.start_remove(args.clone());
   desktop.wait_until("worktree removal starts", |_| gate.entered.load(Ordering::SeqCst));
   drop(job);
   let remounted = jobs.of(run.id());
-  assert_eq!(remounted.remove().get_untracked(), JobState::Running);
+  assert_eq!(remounted.state().remove, JobState::Running);
   remounted.start_remove(args);
   gate.release();
   desktop.wait_until("worktree removal completes", |_| {
-    remounted.remove().get_untracked() == JobState::Succeeded
+    remounted.state().remove == JobState::Succeeded
   });
   assert_eq!(
     gate.calls.load(Ordering::SeqCst),

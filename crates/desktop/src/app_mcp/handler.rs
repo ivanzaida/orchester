@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use orchester_workspace::app_mcp::{Services, Translate, call, listed};
 use rmcp::{
   ErrorData as McpError, RoleServer, ServerHandler,
   model::{
@@ -10,11 +11,6 @@ use rmcp::{
     ServerCapabilities, ServerConfig,
   },
   service::RequestContext,
-};
-
-use super::{
-  services::Services,
-  tools::{self, Translate},
 };
 
 /// What clients are told about the server.
@@ -55,7 +51,7 @@ impl ServerHandler for Handler {
     _context: RequestContext<RoleServer>,
   ) -> Result<ListToolsResult, McpError> {
     Ok(ListToolsResult {
-      tools: tools::listed(),
+      tools: listed(),
       ..Default::default()
     })
   }
@@ -67,7 +63,7 @@ impl ServerHandler for Handler {
   ) -> Result<CallToolResponse, McpError> {
     let name = request.name.to_string();
     let arguments = request.arguments.unwrap_or_default();
-    let Some(result) = tools::call(&self.services, &self.translate, &name, arguments).await else {
+    let Some(result) = call(&self.services, &self.translate, &name, arguments).await else {
       return Err(McpError::invalid_params(format!("unknown tool: {name}"), None));
     };
     let result = match result {

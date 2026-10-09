@@ -7,7 +7,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tokio::runtime::Handle;
 
-use super::model::TabSet;
+use super::model::{TABS_KEY, TabSet};
 use crate::workspace::Workspace;
 
 pub(super) struct Saver {
@@ -66,7 +66,7 @@ fn write_pending(workspace: &Workspace, state: &Mutex<State>) {
       text
     };
     // Tabs that cannot be saved are only not restored next time; the log says why.
-    if let Err(error) = workspace.save_tabs(&text) {
+    if let Err(error) = workspace.set_ui_state(TABS_KEY, &text) {
       tracing::error!(%error, "cannot save the window's tabs");
     }
   }

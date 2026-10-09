@@ -38,7 +38,7 @@ use crate::{
   screens::project::TasksState,
   tasks::{
     data::ProjectTasks,
-    integration_jobs::{IntegrationJobs, ProjectJobs},
+    integration_jobs::{IntegrationJobs, ProjectJobState, ProjectJobs, RunIntegrations},
     outside::{OutsideChanges, OutsideCounts},
     usage::ProjectUsage,
   },
@@ -70,7 +70,7 @@ pub struct ProjectFeed {
   /// it is local.
   pub sharing: Signal<Option<crate::sharing::project::state::ProjectSharing>>,
   /// Merge and cleanup operations that outlive a task page and are shared by its tabs.
-  pub integration: IntegrationJobs,
+  pub integration: RunIntegrations,
   /// Tasks this window's New task form queued in this session: until a run of one is recorded, its
   /// page gives way to the locked form with *Retry run* (02.09F).
   pub queued_by_form: Arc<Mutex<HashSet<TaskId>>>,
@@ -118,7 +118,7 @@ impl ProjectFeeds {
         stale: Signal::new(None),
         resources: Signal::new(0),
         sharing: Signal::new(None),
-        integration: self.1.of(project),
+        integration: RunIntegrations::new(self.1.of(project)),
         queued_by_form: Arc::default(),
       })
       .clone()
@@ -177,6 +177,9 @@ impl Component for FeedLoader {
     publish(&self.feed.connections, connections(ctx, (root.clone(), resources)));
     let outside = outside(ctx, project);
     publish(&self.feed.outside, outside);
+    if let Some(jobs) = jobs(ctx, self.feed.integration.jobs().clone()) {
+      self.feed.integration.publish(&jobs);
+    }
     // Tasks automation saved count as the screens' own saves.
     let saved = revision + outside.tasks;
     let (tasks, stale) = tasks(ctx, (root.clone(), saved + shared, states));
@@ -192,7 +195,10 @@ impl Component for FeedLoader {
 }
 
 /// Sets `signal` to `value` unless it holds it already, so its readers render only for a change.
-fn publish<T: Clone + PartialEq + Send + Sync + lurq::core::SignalValue + 'static>(signal: &Signal<T>, value: T) {
+pub(crate) fn publish<T: Clone + PartialEq + Send + Sync + lurq::core::SignalValue + 'static>(
+  signal: &Signal<T>,
+  value: T,
+) {
   if signal.get_untracked() != value {
     signal.set(value);
   }
@@ -278,6 +284,20 @@ fn outside(ctx: &mut Ctx, project: ProjectId) -> OutsideCounts {
     },
   );
   count.state().get().data.unwrap_or_default()
+}
+
+/// The project's merge and removal operations whenever they change, which the task pages show.
+fn jobs(ctx: &mut Ctx, jobs: IntegrationJobs) -> Option<ProjectJobState> {
+  let state = ctx.stream(jobs, |jobs, emitter: StreamEmitter<ProjectJobState, ()>| async move {
+    let mut updates = jobs.subscribe();
+    loop {
+      let state = updates.borrow_and_update().clone();
+      if !emitter.emit(state) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  state.state().get().data
 }
 
 /// The project's runner status whenever it changes; the runners' reports of other projects wake
@@ -425,7 +445,7 @@ impl Component for WindowFeedLoader {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let feed = WindowFeed::of(ctx);
-    let activity = Activity::of(ctx);
+    let activity = crate::activity::of(ctx);
     let log = ctx.stream(
       activity,
       |activity, emitter: StreamEmitter<ActivityLog, ()>| async move {

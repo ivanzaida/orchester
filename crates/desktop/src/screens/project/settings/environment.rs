@@ -21,7 +21,7 @@ use orchester_core::resource::CommandEnvironment;
 
 use super::{SettingsSave, general::CONTENT_WIDTH};
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   environment::{load_in, save_in},
   messages::{self, Message},
@@ -214,7 +214,7 @@ impl EnvironmentTab {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let open = ctx.props::<EnvironmentProps>().open.clone();
   ctx.future_action(move |(repo_root, variables): (PathBuf, CommandEnvironment)| {
     let (activity, spec) = (activity.clone(), operations::project_environment(&open));

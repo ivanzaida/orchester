@@ -25,7 +25,7 @@ use super::{
   starter_text,
 };
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{OperationSpec, operations},
   background,
   messages::{self, Message},
   pipelines::{
@@ -349,7 +349,7 @@ impl Library {
 }
 
 fn create_starter_action(ctx: &mut Ctx) -> CreateAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, name, starter, spec): CreateArgs| {
     let activity = activity.clone();
     async move {

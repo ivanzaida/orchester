@@ -34,7 +34,7 @@ use super::{
   status::short_key,
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::operations,
   background,
   connections::{
     model_uses::{keep_used, of_connection},
@@ -435,7 +435,7 @@ fn suggested_name(ctx: &Ctx, context: &DialogContext, provider: AgentProvider) -
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   let project = ctx
     .use_context::<DialogContext>()
     .expect("the connections screen provides the dialog context")

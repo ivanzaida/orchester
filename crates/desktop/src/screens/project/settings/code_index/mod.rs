@@ -34,7 +34,7 @@ use super::{
   outside::{OutsideSettings, Reading},
 };
 use crate::{
-  activity::{Activity, OperationSpec, code_index_operations},
+  activity::{OperationSpec, code_index_operations},
   background,
   code_index::{self, IndexList, RipgrepCheck},
   messages::{self, Message},
@@ -354,7 +354,7 @@ fn heading(ctx: &Ctx) -> Element {
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(
     move |(repo_root, setting, spec): (PathBuf, CodeIndexSetting, OperationSpec)| {
       let activity = activity.clone();
@@ -375,7 +375,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 }
 
 fn rebuild_action(ctx: &mut Ctx) -> RebuildAction {
-  let activity = Activity::of(ctx);
+  let activity = crate::activity::of(ctx);
   ctx.future_action(move |(repo_root, revision, spec): (PathBuf, Revision, OperationSpec)| {
     let activity = activity.clone();
     async move {

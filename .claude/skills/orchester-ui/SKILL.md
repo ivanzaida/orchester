@@ -50,8 +50,12 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
 
 - Strings: `crates/desktop/assets/locales/<locale>.json` (nested JSON, flattened by lurq to
   dotted keys). Today only `en.json` ships.
+- Keys that `orchester-workspace` names (its `Message`s, statuses, months, units) live in
+  `crates/workspace/assets/locales/<locale>.json` instead, never in both files. An app loads them
+  under the namespace `workspace` (`orchester_workspace::i18n::NAMESPACE`); the old app also loads
+  them into its default namespace, so its screens read them with `ctx.t`.
 - Loading: `crates/desktop/src/i18n.rs` (`LOCALES`, `install`). A new locale is one new
-  file plus one `LOCALES` entry.
+  file plus one `LOCALES` entry, in both crates.
 - In components: `ctx.t("tasks.newTask")`, `ctx.t_args("runs.finishedAgo", [("time", t)])`.
   Outside a component (window title, menus): `app.i18n().t(...)`.
 
