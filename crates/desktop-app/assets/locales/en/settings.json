@@ -6,7 +6,8 @@
         "title": "Let automation change agent permissions",
         "description": "Clients may widen what agents may do: broader profile permissions or MCP servers, a CLI program they choose, environment variables that change what programs load. Narrowing never needs it. Off until you turn it on.",
         "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}"
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by an MCP client's input was not taken: only you turn this on, here in the window."
       }
     }
   }

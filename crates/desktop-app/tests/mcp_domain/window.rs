@@ -2,11 +2,14 @@
 //! permissions*: while its row is mounted, window input is refused as `person_only`, by element, by
 //! coordinates and by keys, and the setting stays off. Without the row, input works again.
 
+use std::{thread, time::Duration};
+
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
 use super::{
   Served,
+  http::post,
   kontur::{self, SeedRequest, scenarios},
 };
 
@@ -84,4 +87,43 @@ fn domain_window_input_cannot_flip_the_person_only_switch() {
     served.tree.get_element_by_id(SWITCH).is_none()
   });
   served.ok("lurq_interact", &json!({ "action": "move", "x": x, "y": y }));
+}
+
+#[test]
+fn domain_a_click_queued_behind_navigate_cannot_flip_the_switch() {
+  let mut served = controlled();
+  served.ok("navigate", &json!({ "route": "settings" }));
+  served.until("the switch to show", |served| {
+    served.tree.get_element_by_id(SWITCH).is_some()
+  });
+  let (x, y) = served.middle(SWITCH);
+  served.ok("navigate", &json!({ "route": "all_projects" }));
+  served.until("the switch to go", |served| {
+    served.tree.get_element_by_id(SWITCH).is_none()
+  });
+  // Both calls reach the event loop's queue before it runs either: the click passes the server's check,
+  // since no protected row is mounted when it arrives.
+  // Each call has a session of its own, as two clients would: one session's requests wait for each other.
+  let send = |served: &Served, tool: &str, arguments: Value| {
+    let (port, bearer) = (served.port, served.bearer());
+    let session = served.open_session(&bearer);
+    let body = json!({
+      "jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": { "name": tool, "arguments": arguments },
+    });
+    thread::spawn(move || post(port, &[("Authorization", &bearer), ("Mcp-Session-Id", &session)], &body))
+  };
+  let navigate = send(&served, "navigate", json!({ "route": "settings" }));
+  thread::sleep(Duration::from_millis(200));
+  let click = send(&served, "lurq_interact", json!({ "action": "click", "x": x, "y": y }));
+  thread::sleep(Duration::from_millis(200));
+  while !(navigate.is_finished() && click.is_finished()) {
+    served.pass();
+    thread::sleep(Duration::from_millis(5));
+  }
+  for _ in 0..20 {
+    served.pass();
+    thread::sleep(Duration::from_millis(10));
+  }
+  assert!(served.tree.get_element_by_id(SWITCH).is_some(), "Settings shows");
+  assert!(!served.changes_permissions(), "the setting stays off");
 }

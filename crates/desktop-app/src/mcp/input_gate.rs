@@ -1,12 +1,16 @@
 //! Keeps MCP clients' window input away from a person-only control (*Let automation change agent
 //! permissions*). lurq's synthetic input reaches the same handlers as a person's, so the control cannot
-//! tell them apart; the app's server can, because every synthetic input arrives as a call of one of lurq's
-//! input tools. Two locks, together complete:
+//! tell them apart; the app can, because every synthetic input arrives as a call of one of lurq's input
+//! tools. Three locks:
 //!
-//! - While a protected control is mounted, the server refuses every window-input tool (any `lurq_*` tool but those that
-//!   only look) with `person_only`, whatever its target: an element, coordinates, or keys sent to the focused control.
-//! - While such a call is in flight (lurq applies its input on the event loop before it answers), a protected control
-//!   takes no change: an input call checked just before the control mounted cannot flip it either.
+//! - While a protected control is mounted, lurq itself denies its input tools ([`INPUT`]), checked on the event loop
+//!   when a call runs: a call queued before the control mounted, or one whose answer timed out and runs later, is
+//!   refused there too. The control denies them as it is created and allows them again when it is dropped.
+//! - The app's server refuses every `lurq_*` tool but those that only look ([`LOOKING`]) with `person_only` while a
+//!   protected control is mounted, whatever its target (an element, coordinates, keys to the focused control), so a
+//!   client reads why; a lurq tool this list does not know counts as input.
+//! - While a forwarded input call is in flight, a protected control takes no change that widens (turning its switch
+//!   off, which narrows, is always taken), and it takes none before it lived through one pass.
 //!
 //! Looking stays allowed, and so do the app's own tools: `navigate` can show Settings, but nothing can
 //! press its switch.
@@ -17,7 +21,7 @@ use std::sync::{
 };
 
 use lurq::mcp::{
-  McpService,
+  McpHandle, McpService,
   rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler,
     model::{
@@ -27,15 +31,17 @@ use lurq::mcp::{
     service::RequestContext,
   },
 };
+use parking_lot::Mutex;
 
 /// lurq's tools that only look at the window; every other `lurq_*` tool sends it input or changes it.
-const LOOKING: &[&str] = &[
+pub const LOOKING: &[&str] = &[
   "lurq_file_dialogs",
   "lurq_find",
   "lurq_find_by_class",
   "lurq_find_by_id",
   "lurq_inspect",
   "lurq_logs",
+  "lurq_menu",
   "lurq_profile_end",
   "lurq_profile_read",
   "lurq_profile_start",
@@ -49,6 +55,17 @@ const REFUSAL: &str = "A person changes this setting in the window: while Settin
   permissions, window input from MCP clients (clicks, keys, values, resizing, menus) is refused. Looking at the window \
   and the app's own tools stay available.";
 
+/// lurq's tools that send the window input or change it, which lurq denies while a protected control is
+/// mounted. `tests/mcp_tools.rs` checks that every lurq tool is in this list or in [`LOOKING`].
+pub const INPUT: &[&str] = &[
+  "lurq_act",
+  "lurq_file_dialog_respond",
+  "lurq_interact",
+  "lurq_navigate",
+  "lurq_resize",
+  "lurq_set_value",
+];
+
 /// Whether `tool` sends the window input or changes it, so a protected control could be reached through it.
 pub fn sends_input(tool: &str) -> bool {
   tool.starts_with("lurq_") && !LOOKING.contains(&tool)
@@ -60,6 +77,8 @@ struct Counts {
   protected: AtomicUsize,
   /// Window-input calls the server forwarded that have not answered.
   in_flight: AtomicUsize,
+  /// lurq's control of its tools, once the server started.
+  tools: Mutex<Option<McpHandle>>,
 }
 
 /// Shared between the app's MCP server and the window. Clones share the same counts.
@@ -76,8 +95,21 @@ impl lurq::app::component::DevtoolsInspectable for InputGate {}
 
 impl InputGate {
   /// Marks a protected control as mounted until the returned guard is dropped.
+  /// Lets the gate deny lurq's input tools through `tools` while a protected control is mounted.
+  pub fn attach(&self, tools: McpHandle) {
+    *self.0.tools.lock() = Some(tools);
+  }
+
+  /// Marks a protected control as mounted until the returned guard is dropped; the first one makes lurq
+  /// deny its input tools. Called on the event loop, which runs lurq's tool calls.
   pub fn protect(&self) -> Protected {
-    self.0.protected.fetch_add(1, Ordering::SeqCst);
+    if self.0.protected.fetch_add(1, Ordering::SeqCst) == 0
+      && let Some(tools) = self.0.tools.lock().as_ref()
+    {
+      for tool in INPUT {
+        tools.deny_tool(*tool);
+      }
+    }
     Protected(self.clone())
   }
 
@@ -106,7 +138,13 @@ pub struct Protected(InputGate);
 
 impl Drop for Protected {
   fn drop(&mut self) {
-    self.0.0.protected.fetch_sub(1, Ordering::SeqCst);
+    if self.0.0.protected.fetch_sub(1, Ordering::SeqCst) == 1
+      && let Some(tools) = self.0.0.tools.lock().as_ref()
+    {
+      for tool in INPUT {
+        tools.allow_tool(tool);
+      }
+    }
   }
 }
 
@@ -147,13 +185,14 @@ impl ServerHandler for GuardedTools {
     if !sends_input(&request.name) {
       return self.tools.call_tool(request, context).await;
     }
-    self.gate.0.in_flight.fetch_add(1, Ordering::SeqCst);
-    let _in_flight = InFlight(self.gate.clone());
     if self.gate.protecting() {
       tracing::info!(tool = %request.name, "window input refused while a person-only control shows");
       let refusal = serde_json::json!({ "code": "person_only", "message": REFUSAL });
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
+    // Only calls that go on to the window count, so refused calls cannot keep a person's change out.
+    self.gate.0.in_flight.fetch_add(1, Ordering::SeqCst);
+    let _in_flight = InFlight(self.gate.clone());
     self.tools.call_tool(request, context).await
   }
 }

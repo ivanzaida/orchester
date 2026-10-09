@@ -125,6 +125,7 @@ impl AppMcp {
     gate: &InputGate,
   ) -> Option<Self> {
     let tools = tree.enable_mcp(config.hosted());
+    gate.attach(tools.clone());
     let folder = folder.path()?;
     let token = BearerToken::generate();
     let listening = match Listening::start(runtime, gate.clone(), tools, token.clone()) {

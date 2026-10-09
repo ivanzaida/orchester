@@ -225,6 +225,19 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
 }
 
 #[test]
+fn every_lurq_tool_is_known_as_looking_or_input() {
+  use orchester_app::mcp::input_gate::{INPUT, LOOKING};
+  let served = Served::start(true);
+  let names = served.tool_names(&served.session());
+  for name in names.iter().filter(|name| name.starts_with("lurq_")) {
+    assert!(
+      LOOKING.contains(&name.as_str()) || INPUT.contains(&name.as_str()),
+      "{name} is neither known to only look nor to send input: classify it in mcp::input_gate"
+    );
+  }
+}
+
+#[test]
 fn without_window_control_agents_only_look() {
   let mut served = Served::start(false);
   let session = served.session();

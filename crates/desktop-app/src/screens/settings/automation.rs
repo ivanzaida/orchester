@@ -46,6 +46,8 @@ type SaveAction = FutureAction<bool, bool, Message>;
 pub struct ChangePermissions {
   /// The setting as the person last chose it; `None` until they do.
   saved: Signal<Option<bool>>,
+  /// A change the row did not take because an MCP client's input brought it.
+  blocked: Signal<bool>,
   gate: InputGate,
   /// While the row is mounted, the MCP server refuses window input.
   _protected: Protected,
@@ -60,6 +62,7 @@ impl Component for ChangePermissions {
       .expect("the session's window provides the MCP input gate");
     Self {
       saved: ctx.signal(None),
+      blocked: ctx.signal(false),
       _protected: gate.protect(),
       gate,
     }
@@ -77,33 +80,29 @@ impl Component for ChangePermissions {
       (None, Some(chosen)) => Some(chosen),
       _ => read.data,
     };
-    let problem = match (&read.error, &state.error) {
-      (Some(reason), _) => Some(("settings.automation.changePermissions.unreadable", reason)),
-      (None, Some(reason)) => Some(("settings.automation.changePermissions.notSaved", reason)),
-      (None, None) => None,
-    };
-    let problem = problem.map(|(key, reason)| {
-      let reason = message_text(ctx, reason);
-      field_error(
-        "settings-change-permissions-error",
-        &ctx.t_args(key, [("reason", &*reason)]),
-      )
-    });
+    let problem = problem(ctx, &read.error, &state.error);
+    // The row takes no change before it lived through one pass after mounting: an input meant for what
+    // the window showed before cannot land on it.
+    let armed = ctx
+      .future((), |()| async { Ok::<(), Message>(()) })
+      .state()
+      .get()
+      .data
+      .is_some();
     let title = ctx.t("settings.automation.changePermissions.title");
-    let mut switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
+    let switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
     // Until the stored value is known, and while it is read or saved, the switch stays as it is.
-    if shown.is_some() && !fixed {
-      let (saved, gate) = (self.saved.clone(), self.gate.clone());
-      switch = switch.on_change(move |chosen| {
-        // An MCP client's synthetic input reaches the switch like a person's; only a person flips it.
-        if gate.input_in_flight() {
-          tracing::warn!("an MCP client's window input reached Let automation change agent permissions; ignored");
-          return;
-        }
-        saved.set(Some(chosen));
-        save.run(chosen);
-      });
-    }
+    let switch = if shown.is_some() && !fixed && armed {
+      self.listen(switch, save)
+    } else {
+      switch
+    };
+    let blocked = self.blocked.get().then(|| {
+      Text::new(&ctx.t("settings.automation.changePermissions.blocked"))
+        .id("settings-change-permissions-blocked")
+        .variant(ExtraTypography::Note.role())
+        .width(Dimension::Pct(100.0))
+    });
     Column::new()
       .id("settings-automation")
       .width(Dimension::Pct(100.0))
@@ -126,11 +125,44 @@ impl Component for ChangePermissions {
                   .variant(ExtraTypography::Prose.role())
                   .width(Dimension::Pct(100.0)),
               )
-              .with_children(problem),
+              .with_children(problem)
+              .with_children(blocked),
           )
           .child(switch),
       )
   }
+}
+
+impl ChangePermissions {
+  /// `switch`, saving what a person chooses. Turning it on while an MCP client's input is applied is not
+  /// taken, and the row says so; turning it off narrows what automation may do and is always taken.
+  fn listen(&self, switch: Toggle, save: SaveAction) -> Toggle {
+    let (saved, blocked, gate) = (self.saved.clone(), self.blocked.clone(), self.gate.clone());
+    switch.on_change(move |chosen| {
+      if chosen && gate.input_in_flight() {
+        tracing::warn!("an MCP client's window input reached Let automation change agent permissions; not taken");
+        blocked.set(true);
+        return;
+      }
+      blocked.set(false);
+      saved.set(Some(chosen));
+      save.run(chosen);
+    })
+  }
+}
+
+/// Why the setting cannot be read or was not saved, under the row's description.
+fn problem(ctx: &Ctx, read: &Option<Message>, save: &Option<Message>) -> Option<Row> {
+  let (key, reason) = match (read, save) {
+    (Some(reason), _) => ("settings.automation.changePermissions.unreadable", reason),
+    (None, Some(reason)) => ("settings.automation.changePermissions.notSaved", reason),
+    (None, None) => return None,
+  };
+  let reason = message_text(ctx, reason);
+  Some(field_error(
+    "settings-change-permissions-error",
+    &ctx.t_args(key, [("reason", &*reason)]),
+  ))
 }
 
 /// A form section's title over its line.
