@@ -10,7 +10,7 @@ use orchester_app::{
     shortcuts::{Keys, Shortcut, shortcut},
     tabs::{HISTORY_LIMIT, TabSet},
   },
-  routes::{ProjectPage, Route, TaskTab},
+  routes::{OverviewTab, ProjectPage, Route, TaskList, TaskTab, TaskView},
 };
 use support::Window;
 
@@ -21,7 +21,10 @@ fn project(page: ProjectPage) -> Route {
 }
 
 fn task(tab: TaskTab) -> Route {
-  project(ProjectPage::Task("KON-12".parse().expect("a task key"), tab))
+  project(ProjectPage::Task(
+    "KON-12".parse().expect("a task key"),
+    TaskView::of(tab),
+  ))
 }
 
 #[test]
@@ -38,11 +41,17 @@ fn a_new_window_has_one_tab_at_all_projects_that_cannot_close() {
 #[test]
 fn going_somewhere_is_history_that_back_and_forward_walk() {
   let mut tabs = TabSet::default();
-  assert!(tabs.go(project(ProjectPage::Overview)));
-  assert!(tabs.go(project(ProjectPage::Tasks)));
-  assert!(!tabs.go(project(ProjectPage::Tasks)), "the tab is there already");
+  assert!(tabs.go(project(ProjectPage::Overview(OverviewTab::Running))));
+  assert!(tabs.go(project(ProjectPage::Tasks(TaskList::default()))));
+  assert!(
+    !tabs.go(project(ProjectPage::Tasks(TaskList::default()))),
+    "the tab is there already"
+  );
   assert!(tabs.back());
-  assert_eq!(*tabs.active().route(), project(ProjectPage::Overview));
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running))
+  );
   assert!(tabs.back());
   assert_eq!(*tabs.active().route(), Route::AllProjects);
   assert!(!tabs.back());
@@ -50,7 +59,54 @@ fn going_somewhere_is_history_that_back_and_forward_walk() {
   assert!(tabs.go(Route::Settings), "going from the middle drops what was ahead");
   assert!(!tabs.active().can_forward());
   assert!(tabs.back());
-  assert_eq!(*tabs.active().route(), project(ProjectPage::Overview));
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running))
+  );
+}
+
+fn searched(text: &str) -> Route {
+  project(ProjectPage::Tasks(TaskList::default().with_search(text)))
+}
+
+#[test]
+fn replacing_takes_the_current_place_without_a_history_entry_and_keeps_the_places_ahead() {
+  let mut tabs = TabSet::default();
+  tabs.go(project(ProjectPage::Overview(OverviewTab::Running)));
+  tabs.go(searched("r"));
+  tabs.go(project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.replace(searched("re")));
+  assert!(tabs.replace(searched("retry")));
+  assert!(!tabs.replace(searched("retry")), "the tab is there already");
+  assert_eq!(*tabs.active().route(), searched("retry"));
+  assert!(tabs.forward(), "the places ahead stay");
+  assert_eq!(*tabs.active().route(), project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.back());
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running)),
+    "the replaced places left no entries"
+  );
+}
+
+#[test]
+fn the_window_shows_a_replaced_route_and_back_leaves_the_screen() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  navigation.go(project(ProjectPage::Tasks(TaskList::default())));
+  navigation.replace(searched("retry jitter"));
+  window.pass();
+  assert!(window.texts("screen-tasks").is_some());
+  assert_eq!(
+    navigation.route_now().path(),
+    format!("/project/{PROJECT}/tasks?q=retry%20jitter")
+  );
+  navigation.back();
+  window.pass();
+  assert_eq!(navigation.route_now(), Route::AllProjects);
+  assert!(window.texts("screen-all_projects").is_some());
 }
 
 #[test]
@@ -126,7 +182,7 @@ fn the_window_shows_the_active_tabs_route() {
   let mut window = Window::open();
   let navigation = window.navigation();
   assert_eq!(
-    window.texts("screen-placeholder"),
+    window.texts("screen-all_projects"),
     Some(vec![
       "All projects".to_owned(),
       "This screen isn't built yet.".to_owned()
@@ -136,7 +192,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.go(task(TaskTab::Changes));
   window.pass();
   assert_eq!(
-    window.texts("screen-placeholder"),
+    window.texts("screen-task"),
     Some(vec![
       "KON-12 · Changes".to_owned(),
       "This screen isn't built yet.".to_owned()
@@ -152,7 +208,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.open_tab();
   window.pass();
   assert_eq!(
-    window.texts("screen-placeholder").map(|texts| texts[0].clone()),
+    window.texts("screen-all_projects").map(|texts| texts[0].clone()),
     Some("All projects".to_owned())
   );
   navigation.cycle(-1);
@@ -302,7 +358,7 @@ fn a_tab_remembers_its_last_places_only() {
 fn task_number(number: usize) -> Route {
   project(ProjectPage::Task(
     format!("KON-{number}").parse().expect("a task key"),
-    TaskTab::Conversation,
+    TaskView::Conversation,
   ))
 }
 
@@ -321,8 +377,8 @@ fn crowded_window() -> (Window, orchester_app::navigation::Navigation) {
   window.tree.resize(960, 640);
   let navigation = window.navigation();
   for screen in [
-    ProjectPage::Overview,
-    ProjectPage::Tasks,
+    ProjectPage::Overview(OverviewTab::Running),
+    ProjectPage::Tasks(TaskList::default()),
     ProjectPage::Pipelines,
     ProjectPage::Secrets,
   ] {

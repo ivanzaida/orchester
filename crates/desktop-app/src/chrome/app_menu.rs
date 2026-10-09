@@ -55,7 +55,7 @@ const ENTRIES: [Option<(&str, Icon, &str, Command)>; 5] = [
     Command::Settings,
   )),
   None,
-  Some(("menu-quit", Icon::LogOut, "menu.quit", Command::Quit)),
+  Some(("menu-quit", Icon::LogOut, "shell.menu.quit", Command::Quit)),
 ];
 
 pub struct AppMenu {
@@ -77,7 +77,7 @@ impl Component for AppMenu {
     let open = self.open.clone();
     let mut button = pressable(move || open.update(|open| *open = !*open))
       .id("app-menu")
-      .describe("a11y_name", ctx.t("menu.label"))
+      .describe("a11y_name", ctx.t("shell.menu.label"))
       .describe("state", if self.open.get() { "open" } else { "closed" })
       .ref_element(self.anchor.clone())
       .height(Dimension::Px(BUTTON_HEIGHT))

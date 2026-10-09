@@ -1,62 +1,60 @@
-//! The screens the router shows inside the shell. None is built yet: every route shows an honest
-//! placeholder that names its screen, and an address that names no screen says so. No content is made
-//! up.
+//! The screens the router shows inside the shell, one module per screen. Every route of the router's
+//! table comes here: the path is read as a [`Route`] once, and its screen gets what the route names.
+//! None is built yet: each shows an honest placeholder (`placeholder`), and a path that names nothing
+//! says why (`not_found`).
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, dimension::Dimension},
-};
+mod agents;
+mod all_projects;
+mod connections;
+mod instructions;
+mod not_found;
+mod overview;
+mod pipelines;
+mod placeholder;
+mod project_settings;
+mod pull_requests;
+mod secrets;
+mod settings;
+mod skills;
+mod task;
+mod task_form;
+mod tasks;
+mod tools;
+mod usage;
 
-use crate::{
-  routes::{ProjectPage, Route},
-  theme::IconSize,
-  ui::icon::{Icon, icon, screen_icon},
-};
+use lurq::{app::ctx::Ctx, node::Element};
+use orchester_core::id::ProjectId;
+
+use crate::routes::{ProjectPage, Route};
 
 /// The screen at the router's path.
 pub fn screen(ctx: &mut Ctx) -> Element {
-  match Route::parse(&ctx.route_path()) {
-    Some(route) => placeholder(ctx, &route),
-    None => not_found(ctx),
+  let path = ctx.route_path();
+  match Route::parse(&path) {
+    Ok(Route::AllProjects) => all_projects::screen(ctx),
+    Ok(Route::Settings) => settings::screen(ctx),
+    Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
+    Err(error) => not_found::screen(ctx, &path, &error),
   }
 }
 
-/// A path that names no screen, or names one with an identifier no route can hold.
-pub fn not_found(ctx: &mut Ctx) -> Element {
-  let path = ctx.route_path();
-  let title = ctx.t("notFound.title");
-  let body = ctx.t_args("notFound.body", [("path", path)]);
-  centered(Icon::CircleHelp, &title, &body).id("screen-not-found").into()
-}
-
-fn placeholder(ctx: &mut Ctx, route: &Route) -> Element {
-  let title = match route {
-    Route::Project(_, ProjectPage::Task(key, tab)) => {
-      let tab = ctx.t(tab.title_key());
-      ctx.t_args("screens.taskTab", [("key", key.to_string()), ("tab", tab.to_string())])
-    }
-    route => ctx.t(route.screen().title_key()),
-  };
-  let body = ctx.t("placeholder.notBuilt");
-  centered(screen_icon(route.screen()), &title, &body)
-    .id("screen-placeholder")
-    .describe("screen", route.screen().name())
-    .into()
-}
-
-fn centered(glyph: Icon, title: &str, body: &str) -> Column {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .spacing(SpacingSize::Sm)
-    .child(icon(glyph, IconSize::Lg, PaletteColor::TextMuted))
-    .child(Text::new(title).variant(TypographyStyle::Title))
-    .child(Text::new(body).variant(TypographyStyle::Description))
+/// The screen of `project` that `page` names.
+fn project_screen(ctx: &mut Ctx, project: ProjectId, page: &ProjectPage) -> Element {
+  match page {
+    ProjectPage::Overview(tab) => overview::screen(ctx, project, *tab),
+    ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
+    ProjectPage::NewTask => task_form::new_task(ctx, project),
+    ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
+    ProjectPage::Task(key, view) => task::screen(ctx, project, key, view),
+    ProjectPage::PullRequests => pull_requests::screen(ctx, project),
+    ProjectPage::Usage => usage::screen(ctx, project),
+    ProjectPage::Pipelines => pipelines::screen(ctx, project),
+    ProjectPage::Agents => agents::screen(ctx, project),
+    ProjectPage::Instructions => instructions::screen(ctx, project),
+    ProjectPage::Skills => skills::screen(ctx, project),
+    ProjectPage::Tools => tools::screen(ctx, project),
+    ProjectPage::Secrets => secrets::screen(ctx, project),
+    ProjectPage::Connections => connections::screen(ctx, project),
+    ProjectPage::Settings => project_settings::screen(ctx, project),
+  }
 }
