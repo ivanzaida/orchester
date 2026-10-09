@@ -63,8 +63,8 @@ impl Context {
 pub enum Action {
   /// To the agent at work, at its next tool call.
   SendNow,
-  /// Stored for the runner to deliver at the run's next boundary, or when its run starts.
-  Deliver,
+  /// Stored for the runner to deliver to `0` at the run's next boundary, or when its run starts.
+  Deliver(Recipient),
   /// The answer to the question.
   Answer(MessageId),
   /// The changes plan `0` needs.
@@ -82,8 +82,8 @@ pub enum Action {
 }
 
 impl Action {
-  /// What sending `way` does in `mode`; `None` where it sends nothing.
-  pub fn of(mode: &ComposerMode, way: Way) -> Option<Self> {
+  /// What sending `way` to `to` does in `mode`; `None` where it sends nothing.
+  pub fn of(mode: &ComposerMode, way: Way, to: Recipient) -> Option<Self> {
     let then = match way {
       Way::Primary => mode.then(),
       Way::Second => mode.then_later(),
@@ -95,7 +95,7 @@ impl Action {
       (ComposerMode::FollowUp, Way::Primary) => Self::FollowUp,
       (ComposerMode::Continue, Way::Primary) => Self::Continue,
       _ => match then? {
-        Then::Deliver => Self::Deliver,
+        Then::Deliver => Self::Deliver(to),
         Then::Resume => Self::Resume,
         Then::ContinueInterrupted => Self::ContinueInterrupted,
         Then::RaiseLimit => Self::RaiseLimit,
@@ -191,7 +191,7 @@ impl Prepared {
 
   /// Refuses sending `way` unless it does what the person pressed, `expected`.
   pub fn check(&self, way: Way, expected: Action) -> Result<(), OutgoingError> {
-    if Action::of(&self.mode, way) == Some(expected) {
+    if Action::of(&self.mode, way, self.recipient) == Some(expected) {
       return Ok(());
     }
     Err(OutgoingError::Changed)
@@ -239,7 +239,7 @@ pub fn store_in(
     (None, Way::Second) => return Err(OutgoingError::NoSecondWay),
     (None, Way::Primary) => return Err(OutgoingError::Closed(prepared.conversation.state)),
   };
-  let timing = match Action::of(&prepared.mode, way) {
+  let timing = match Action::of(&prepared.mode, way, prepared.recipient) {
     Some(Action::SendNow) => Timing::Now,
     _ => Timing::AfterTurn,
   };

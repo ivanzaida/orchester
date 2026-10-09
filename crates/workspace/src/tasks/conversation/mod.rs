@@ -242,7 +242,9 @@ impl Conversation {
       recipients: run.map(recipients).unwrap_or_else(|| vec![orchestrator()]),
       next_agent: run.and_then(|run| next_agent(run, state)),
       working,
-      first_agent: run.and_then(|run| run.steps.iter().find_map(|step| step.agent.clone())),
+      first_agent: run
+        .and_then(|run| run.steps.iter().find_map(|step| step.agent.clone()))
+        .or_else(|| detail.first_agent.clone()),
     }
   }
 

@@ -71,8 +71,8 @@ fn outgoing_a_send_pressed_before_a_plan_arrived_does_not_request_its_changes() 
   let mut run = fixture.started_run(task, at(20));
   let root = fixture.repo.path().to_path_buf();
   let before = prepare_in(&root, (task, Some(run.id())), (false, None)).expect("prepared");
-  let pressed = Action::of(&before.mode, Way::Primary).expect("Send does something");
-  assert_eq!(pressed, Action::Deliver, "{:?}", before.mode);
+  let pressed = Action::of(&before.mode, Way::Primary, before.recipient).expect("Send does something");
+  assert_eq!(pressed, Action::Deliver(before.recipient), "{:?}", before.mode);
   fixture.propose(&mut run, "1. Replace sign-in.", at(30));
   let now = prepare_in(&root, (task, Some(run.id())), (false, None)).expect("prepared");
   assert!(matches!(now.mode, ComposerMode::PlanChanges { .. }));
@@ -86,7 +86,7 @@ fn outgoing_a_send_pressed_before_the_run_was_canceled_does_not_run_it_again() {
   let mut run = fixture.started_run(task, at(20));
   let root = fixture.repo.path().to_path_buf();
   let before = prepare_in(&root, (task, Some(run.id())), (false, None)).expect("prepared");
-  let pressed = Action::of(&before.mode, Way::Primary).expect("Send does something");
+  let pressed = Action::of(&before.mode, Way::Primary, before.recipient).expect("Send does something");
   let events = run.cancel(at(30)).expect("canceled");
   fixture.record(&run, &events);
   let now = prepare_in(&root, (task, Some(run.id())), (false, None)).expect("prepared");
@@ -157,4 +157,14 @@ fn outgoing_a_message_of_an_ended_run_is_not_sent_after_the_turn() {
     send_after_turn_in(&root, task, refused.id()),
     Err(SendError::NotReadable)
   ));
+}
+
+#[test]
+fn outgoing_before_a_run_the_message_is_for_the_first_agent_of_the_pipeline() {
+  let mut fixture = Fixture::new();
+  let task = fixture.queued_task("Add login", at(10));
+  let root = fixture.repo.path().to_path_buf();
+  let prepared = prepare_in(&root, (task, None), (false, None)).expect("prepared");
+  assert_eq!(prepared.mode, ComposerMode::NotStarted);
+  assert_eq!(prepared.conversation.first_agent.as_deref(), Some("Builder"));
 }
