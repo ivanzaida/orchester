@@ -389,3 +389,22 @@ fn cli_file_calls_codex_tells_a_successful_edit_s_diff_before_its_end() {
   assert!(matches!(&events[0], AgentEvent::NativeCall { item, .. } if item == "mcp-1"));
   assert!(matches!(&events[1], AgentEvent::McpToolFinished { item, .. } if item == "mcp-1"));
 }
+
+/// A call is recorded under the name of the file tool the CLI called; a record made under the native agent's older
+/// names still reads.
+#[test]
+fn cli_file_calls_are_recorded_under_the_tools_current_names() {
+  for (tool, name, old) in [
+    (ToolName::Search, "search_file", "search"),
+    (ToolName::WriteFile, "create_file", "write_file"),
+  ] {
+    assert_eq!(serde_json::to_value(tool).expect("serialized"), json!(name));
+    for stored in [name, old] {
+      assert_eq!(serde_json::from_value::<ToolName>(json!(stored)).expect("read"), tool);
+    }
+  }
+  assert_eq!(
+    serde_json::to_value(ToolName::EditFile).expect("serialized"),
+    json!("edit_file")
+  );
+}

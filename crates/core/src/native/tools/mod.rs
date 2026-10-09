@@ -18,14 +18,18 @@ pub use self::{
 };
 use crate::run::StepResult;
 
-/// The tools a native agent can call.
+/// The tools a native agent can call. Recorded under the names of Orchester's file tools a CLI calls
+/// (`search_file`, `create_file`), which the native agent's `search` and `write_file` are; records made before read
+/// under either name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolName {
   ReadFile,
   ListFiles,
+  #[serde(rename = "search_file", alias = "search")]
   Search,
   EditFile,
+  #[serde(rename = "create_file", alias = "write_file")]
   WriteFile,
   RunCommand,
   FinishStep,
