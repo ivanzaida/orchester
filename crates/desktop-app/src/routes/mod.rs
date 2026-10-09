@@ -9,6 +9,10 @@
 //! (`?file=` a changed file, `&from=worktree` for its change that is not checkpointed) for its other tabs
 //! and `/edit` for Edit task. A tab or source left out of the query is the one the screen opens on.
 //!
+//! Another screen or another tab (`tab`, a task's tab segment) is a new entry of the tab's history
+//! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
+//! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it.
+//!
 //! A project is named by its id (`orchester_core::id::ProjectId`), not its key or name: the id never
 //! changes, so a path a tab keeps still finds its project after a rename or a new key. A task is named
 //! by its key (`orchester_core::project::TaskKey`), as people read it. A path that names no route reads

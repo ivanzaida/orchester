@@ -65,6 +65,50 @@ fn going_somewhere_is_history_that_back_and_forward_walk() {
   );
 }
 
+fn searched(text: &str) -> Route {
+  project(ProjectPage::Tasks(TaskList::default().with_search(text)))
+}
+
+#[test]
+fn replacing_takes_the_current_place_without_a_history_entry_and_keeps_the_places_ahead() {
+  let mut tabs = TabSet::default();
+  tabs.go(project(ProjectPage::Overview(OverviewTab::Running)));
+  tabs.go(searched("r"));
+  tabs.go(project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.replace(searched("re")));
+  assert!(tabs.replace(searched("retry")));
+  assert!(!tabs.replace(searched("retry")), "the tab is there already");
+  assert_eq!(*tabs.active().route(), searched("retry"));
+  assert!(tabs.forward(), "the places ahead stay");
+  assert_eq!(*tabs.active().route(), project(ProjectPage::Usage));
+  assert!(tabs.back());
+  assert!(tabs.back());
+  assert_eq!(
+    *tabs.active().route(),
+    project(ProjectPage::Overview(OverviewTab::Running)),
+    "the replaced places left no entries"
+  );
+}
+
+#[test]
+fn the_window_shows_a_replaced_route_and_back_leaves_the_screen() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  navigation.go(project(ProjectPage::Tasks(TaskList::default())));
+  navigation.replace(searched("retry jitter"));
+  window.pass();
+  assert!(window.texts("screen-tasks").is_some());
+  assert_eq!(
+    navigation.route_now().path(),
+    format!("/project/{PROJECT}/tasks?q=retry%20jitter")
+  );
+  navigation.back();
+  window.pass();
+  assert_eq!(navigation.route_now(), Route::AllProjects);
+  assert!(window.texts("screen-all_projects").is_some());
+}
+
 #[test]
 fn each_tab_keeps_its_own_history() {
   let mut tabs = TabSet::default();
