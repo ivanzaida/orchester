@@ -300,7 +300,11 @@ impl FieldBox {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .on_focus(move || gained.set(true))
-      .on_blur(move || lost.set(false));
+      .on_blur(regroup_on_leave(
+        lost,
+        props.value.clone(),
+        props.group_separator.clone(),
+      ));
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);
     }
@@ -339,6 +343,25 @@ fn clear_button(props: &FieldInput) -> Option<Button> {
       })
       .child(icon(Icon::X, IconSize::Base, PaletteColor::TextMuted)),
   )
+}
+
+/// Leaving the field ends its focus and, for a whole number, groups its digits once more: a value set
+/// without typing (pasted all at once, or by a tool) reads like a typed one.
+fn regroup_on_leave(
+  focused: Signal<bool>,
+  value: Signal<String>,
+  separator: Option<Arc<str>>,
+) -> impl Fn() + Send + Sync {
+  move || {
+    focused.set(false);
+    let Some(separator) = &separator else {
+      return;
+    };
+    let text = value.get_untracked();
+    if let Some(grouped) = regroup(&text, separator).filter(|grouped| *grouped != text) {
+      value.set(grouped);
+    }
+  }
 }
 
 /// Regroups a whole number as it is typed (`1400000` → `1,400,000`). Text that is not a whole number
