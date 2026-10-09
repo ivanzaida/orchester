@@ -76,7 +76,7 @@ impl Component for TabStrip {
     let window = ctx.window();
     let fit = tab_fit::fit(window.info().logical_width(), &tabs);
     let active = label(ctx, tabs.active().route());
-    window.set_title(ctx.t_args("app.windowTitle", [("tab", active)]).to_string());
+    window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", active)]).to_string());
     self.reveal(&tabs, fit);
     let strip = tabs.tabs().iter().fold(
       Row::new()
@@ -242,7 +242,7 @@ fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
   let id = tab.id();
   Button::empty()
     .id(format!("tab-{id}-close"))
-    .describe("a11y_name", ctx.t("tabs.close"))
+    .describe("a11y_name", ctx.t("shell.tabs.close"))
     .focusable(false)
     .cursor(CursorIcon::Pointer)
     .align_items(Alignment::Center)
@@ -256,10 +256,13 @@ fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
     .into()
 }
 
-/// The tab's label: its screen's name, a task by its key.
+/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`).
 fn label(ctx: &mut Ctx, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
+    Route::Project(_, ProjectPage::EditTask(key)) => ctx
+      .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
+      .to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),
   }
 }

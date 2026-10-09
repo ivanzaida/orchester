@@ -50,9 +50,18 @@ impl Navigation {
     self.tabs.with_untracked(|tabs| tabs.active().route().clone())
   }
 
-  /// Goes to `route` in the active tab, as a new history entry.
+  /// Goes to `route` in the active tab, as a new history entry: another screen, or another tab of one
+  /// (the Tasks list's or the Overview's workflow tab, a task's Summary, Conversation or Changes).
   pub fn go(&self, route: Route) {
     self.change(|tabs| tabs.go(route));
+  }
+
+  /// Shows `route` in place of the active tab's current place, without a history entry and keeping the
+  /// places ahead: for what a screen refines while it stays on its tab, so Back leaves the screen rather
+  /// than stepping through it (the Tasks list's search `q` as it is typed and its `highlight`, the file
+  /// the Changes tab shows).
+  pub fn replace(&self, route: Route) {
+    self.change(|tabs| tabs.replace(route));
   }
 
   pub fn back(&self) {

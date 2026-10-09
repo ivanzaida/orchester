@@ -73,6 +73,16 @@ impl Tab {
     true
   }
 
+  /// Puts `route` in place of the current entry, keeping the entries behind and ahead of it; `false`
+  /// when the tab is there already.
+  fn replace(&mut self, route: Route) -> bool {
+    if *self.route() == route {
+      return false;
+    }
+    self.history[self.at] = route;
+    true
+  }
+
   fn back(&mut self) -> bool {
     if !self.can_back() {
       return false;
@@ -124,6 +134,12 @@ impl TabSet {
   /// Goes to `route` in the active tab; `false` when it is there already.
   pub fn go(&mut self, route: Route) -> bool {
     self.tabs[self.active].go(route)
+  }
+
+  /// Puts `route` in place of the active tab's current place, without a history entry and keeping
+  /// the places ahead; `false` when the tab is there already.
+  pub fn replace(&mut self, route: Route) -> bool {
+    self.tabs[self.active].replace(route)
   }
 
   pub fn back(&mut self) -> bool {
