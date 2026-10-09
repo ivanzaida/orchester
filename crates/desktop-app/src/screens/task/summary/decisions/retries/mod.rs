@@ -134,6 +134,6 @@ impl Component for RetryDecision {
       .chain(evidence::sections(ctx, &props, run, stuck.step(), now))
       .collect();
     let side = this_run_panel(ctx, &props, Some(decide));
-    arranged(parts, None, side)
+    arranged(ctx, parts, None, side)
   }
 }

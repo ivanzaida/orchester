@@ -138,23 +138,6 @@
       "commit": "commit {{revision}}",
       "noChecks": "No step ran after the work was made.",
       "passed": "Passed"
-    },
-    "details": {
-      "title": "Run details",
-      "project": "Project",
-      "base": "Base revision",
-      "baseValue": "{{branch}} · {{revision}}",
-      "branch": "Working branch",
-      "checkpoint": "Last checkpoint",
-      "checkpointValue": "{{revision}} · {{time}}",
-      "duration": "Duration",
-      "durationValue": "{{duration}} · {{start}} – {{end}}",
-      "tokens": "Tokens used",
-      "tokensValue": "{{used}} of {{budget}}",
-      "tokensNoLimit": "{{used}} · no limit",
-      "cached": "Cached input",
-      "cachedValue": "{{count}} · not counted",
-      "agents": "Agents"
     }
   }
 }

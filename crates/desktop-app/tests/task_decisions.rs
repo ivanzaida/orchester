@@ -270,10 +270,7 @@ fn decision_daily_budget_allows_only_resume() {
   assert!(!page.has("raise-limit-continue"));
   assert!(page.has("task-steps"), "the usual Summary");
   assert!(page.locked("task-resume-run"), "Resume waits for a runner");
-  assert_eq!(
-    page.text("task-action-reason-0"),
-    "The runner is not connected; the run's controls return once it is online."
-  );
+  assert_eq!(page.text("task-action-reasons"), "Runner not connected");
 }
 
 #[test]

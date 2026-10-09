@@ -93,6 +93,6 @@ impl Component for PlanDecision {
     }
     .render(ctx);
     let side = this_run_panel(ctx, &props, None);
-    arranged(parts, Some(bar), side)
+    arranged(ctx, parts, Some(bar), side)
   }
 }

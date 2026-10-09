@@ -1,7 +1,7 @@
 //! Ready for review (`Task · Summary · ready for review` `F2LtFn`) and what merging makes of it (`Task ·
 //! Summary · merge states` `kxMAN`). A run whose every step passed shows the Ready card ([`card`]) with
 //! *Merge into main*, *Ask agent* and *Review PR*, then its stages, what changed and what verified it
-//! ([`changed`]) and *Runs of this task*; beside them its details ([`details`]). Merging runs on the
+//! ([`changed`]) and *Runs of this task*; beside them *Run details*. Merging runs on the
 //! project's shared operations (`ProjectJobs`, which Orchester's MCP server uses too), so it goes on
 //! when the page closes: the button shows it under way. A merge that did not happen says why in place
 //! of the Ready card, with the files that conflicted, and offers to merge again; a merged run says where
@@ -9,7 +9,6 @@
 
 mod card;
 mod changed;
-mod details;
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
@@ -18,7 +17,7 @@ use lurq::{
 };
 use orchester_workspace::tasks::integration_jobs::JobState;
 
-use super::{TaskContext, arranged, runs_section, stages::stages};
+use super::{super::run_details::run_details, TaskContext, arranged, runs_section, stages::stages};
 use crate::services::Services;
 
 pub struct ReadyForReview;
@@ -58,7 +57,7 @@ impl Component for ReadyForReview {
       .chain(runs_section(ctx, &props))
       .collect(),
     };
-    let side = details::run_details(ctx, &props, run, now);
-    arranged(parts, None, Some(side))
+    let side = run_details(ctx, &props, run);
+    arranged(ctx, parts, None, Some(side))
   }
 }

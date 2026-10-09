@@ -1,5 +1,5 @@
 //! A sidebar navigation item (`Nav item/active` `q8fWpF`, `Nav item/default` `RAsOv`): icon and label,
-//! the selected screen's item filled with `hover`.
+//! and at its end a count in 11 `text_muted` (`Meta`), the selected screen's item filled with `hover`.
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
@@ -21,6 +21,8 @@ pub struct NavItem<'a> {
   pub id: String,
   pub icon: Icon,
   pub label: &'a str,
+  /// What the item counts, at its end (`24`, or `—` while it is not known yet).
+  pub count: Option<&'a str>,
   pub selected: bool,
 }
 
@@ -44,6 +46,11 @@ impl NavItem<'_> {
           .color(color)
           .nowrap()
           .flex(1.0),
+      )
+      .with_children(
+        self
+          .count
+          .map(|count| Text::new(count).variant(TypographyStyle::Caption).nowrap()),
       );
     let item = pressable(handler)
       .id(self.id)

@@ -65,6 +65,7 @@ pub fn section(ctx: &mut Ctx, run: &RunView, lost: bool, waiting: &[(Arc<str>, T
 pub(super) fn rows(run: &RunView, lost: bool, waiting: &[(Arc<str>, Timestamp)], now: Timestamp) -> Vec<StepRow> {
   progress(run, lost, now)
     .into_iter()
+    .map(|progress| without_runner(progress, lost))
     .map(|progress| StepRow {
       number: run
         .steps
@@ -169,6 +170,15 @@ pub(super) fn step_row(ctx: &Ctx, row: &StepRow, divided: bool, now: Timestamp) 
   } else {
     line.into()
   }
+}
+
+/// A step of a run without a runner (`lost`) that was at work or waited for the person is interrupted:
+/// nothing works for it and nothing waits on it until a runner is back.
+fn without_runner(mut row: ProgressRow, lost: bool) -> ProgressRow {
+  if lost && matches!(row.state, ProgressState::Working | ProgressState::NeedsYou) {
+    row.state = ProgressState::Interrupted;
+  }
+  row
 }
 
 /// The label a step's state reads as.

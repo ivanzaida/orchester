@@ -1,16 +1,17 @@
 //! The Summary tab (`Body` `ZhoTU` in `lUXff`): in its column, where the task stands (`notice`), the
 //! run's steps (`steps`), the brief and the acceptance criteria (`brief`) and *Runs of this task*
-//! (`runs`); beside it *This run* (`this_run`). While the run waits for a decision (its plan, a raised
-//! limit, how it goes on after its retries, its merge), the Summary is that decision's ([`decisions`]):
-//! those designs draw the run's stages in place of its steps, leave the brief out, pin a decision bar
-//! or put the decision above *This run*. A task whose latest run cannot be read shows why, that the
-//! run's actions are unavailable, and its runs. The organization history comes later (agreed deviation
-//! D4).
+//! (`runs`); beside it *This run* (`this_run`), or *Run details* once the run ended (`run_details`). While
+//! the run waits for a decision (its plan, a raised limit, how it goes on after its retries, its merge),
+//! the Summary is that decision's ([`decisions`]): those designs draw the run's stages in place of its
+//! steps, leave the brief out, pin a decision bar or put the decision above *This run*. A task whose
+//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. The
+//! organization history comes later (agreed deviation D4).
 
 mod brief;
 mod decisions;
 mod live;
 mod notice;
+mod run_details;
 pub(super) mod runs;
 mod steps;
 mod this_run;
@@ -24,18 +25,16 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::time::Timestamp;
-use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail};
 
 pub use self::decisions::decisions;
 use self::runs::Runs;
 use super::{PageState, TaskContext};
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   services::Services,
   theme::{TaskSpacing, TaskText},
@@ -70,17 +69,16 @@ impl Component for TaskSummary {
       return decision;
     }
     let detail = &props.task.detail;
-    let removal = PageState::of(ctx).removal.get();
+    let state = PageState::of(ctx);
+    let removal = state.removal.get();
     let runs = runs::section(
       ctx,
       &Runs {
-        project: &props.task.project,
-        detail,
-        left: &props.task.left,
-        jobs: &props.task.jobs,
+        task: &props.task,
         removal,
       },
     );
+    let scroll = state.summary_scroll;
     if let Some(unreadable) = &detail.latest_unreadable {
       let notice = Notice::new(
         "task-notice",
@@ -90,12 +88,19 @@ impl Component for TaskSummary {
       .icon(Icon::FileWarning)
       .body(message_text(ctx, &unreadable.detail));
       let actions = reason_line("task-unreadable-actions", &message_text(ctx, &unreadable.actions()));
-      let parts = vec![notice.into(), actions.into()];
-      return layout(column(parts.into_iter().chain(runs).collect()), None);
+      // What the task asks for can still be read, and its other runs.
+      let brief = brief::sections(ctx, detail.task.details());
+      let parts = [notice.into(), actions.into()]
+        .into_iter()
+        .chain(brief)
+        .chain(runs)
+        .collect();
+      return layout(column(parts, scroll), None);
     }
     let parts = self.parts(ctx, &props, runs);
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
+      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run),
       Some(run) => this_run::this_run(ctx, run, &root, props.task.lost(), None),
       None => {
         let pipelines = match props.task.project.feed.tasks.get() {
@@ -105,7 +110,7 @@ impl Component for TaskSummary {
         this_run::this_task(ctx, detail, &pipelines)
       }
     };
-    layout(column(parts), Some(panel))
+    layout(column(parts, scroll), Some(panel))
   }
 }
 
@@ -121,7 +126,7 @@ impl TaskSummary {
       .status
       .get()
       .map(|status| status.state_for(&props.task.project.open.repo_root));
-    let approval = waiting_approval(&props.task.project, detail);
+    let approval = props.task.waiting_approval();
     let said = notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref());
     let conversation = said.conversation;
     let mut notice = said.notice();
@@ -144,19 +149,6 @@ impl TaskSummary {
       .chain(brief::sections(ctx, details))
       .chain(runs)
       .collect()
-  }
-}
-
-/// A tool request of the task's run that waits for the person, the oldest first.
-fn waiting_approval(project: &ShownProject, detail: &TaskDetail) -> Option<ShownApproval> {
-  let run = detail.run.as_ref()?.id();
-  match project.feed.tasks.get() {
-    crate::project::TasksState::Ready(tasks) => tasks
-      .pending_tool_approvals
-      .iter()
-      .find(|shown| shown.approval.run == run)
-      .cloned(),
-    _ => None,
   }
 }
 
@@ -195,7 +187,7 @@ pub fn section_head(ctx: &Ctx, id: &str, title: &str, count: Option<usize>) -> E
 
 /// The Summary's column of `parts`, scrolling when it is taller than the window (`Summary column`
 /// `N3nD9i`).
-fn column(parts: Vec<Element>) -> Element {
+fn column(parts: Vec<Element>, scroll: ScrollState) -> Element {
   let content = Column::new()
     .id("task-summary-column")
     .width(Dimension::Pct(100.0))
@@ -210,6 +202,7 @@ fn column(parts: Vec<Element>) -> Element {
     .with_children(parts);
   ScrollVertical::new(content)
     .id("task-summary-scroll")
+    .with_scroll_state(scroll)
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()

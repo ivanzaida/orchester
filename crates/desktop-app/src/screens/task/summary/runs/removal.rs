@@ -48,11 +48,11 @@ use crate::{
 
 /// The confirmation of `run`'s removal, while it has worktrees and no live work.
 pub fn confirm_for(ctx: &mut Ctx, runs: &Runs, run: RunId) -> Option<Element> {
-  let detail = runs.detail;
+  let detail = &runs.task.detail;
   let record = detail.history.iter().find(|record| record.id == run)?;
   let ended = record.without_live_work()?;
-  let leftovers = runs.left.of(run)?.ok().filter(|left| !left.worktrees.is_empty())?;
-  let state = runs.jobs.run(run);
+  let leftovers = runs.task.left.of(run)?.ok().filter(|left| !left.worktrees.is_empty())?;
+  let state = runs.task.jobs.run(run);
   let failed = match &state.remove {
     JobState::Failed(error) => Some(error.clone()),
     _ => None,
@@ -63,13 +63,13 @@ pub fn confirm_for(ctx: &mut Ctx, runs: &Runs, run: RunId) -> Option<Element> {
     .filter_map(|record| record.run.as_ref())
     .find(|run| run.status().has_live_work())
     .map(|run| run.number());
-  let job = runs.project.feed.jobs.of(run);
+  let job = runs.task.project.feed.jobs.of(run);
   let discard = PageState::of(ctx).discard;
   let key = detail.task.key().to_string();
   Some(confirmation(
     ctx,
     &Confirm {
-      project: runs.project,
+      project: &runs.task.project,
       key: &key,
       run: ended,
       leftovers: &leftovers,
@@ -78,7 +78,7 @@ pub fn confirm_for(ctx: &mut Ctx, runs: &Runs, run: RunId) -> Option<Element> {
       waits: detail
         .history
         .iter()
-        .any(|other| other.id != run && runs.jobs.run(other.id).busy()),
+        .any(|other| other.id != run && runs.task.jobs.run(other.id).busy()),
       working,
       discard,
       job,

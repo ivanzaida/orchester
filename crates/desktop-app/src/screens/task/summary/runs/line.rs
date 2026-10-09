@@ -113,8 +113,12 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
   Line::muted(Icon::Folder, text)
 }
 
-/// Local date and time of `at`, e.g. "Oct 3, 16:08".
+/// Local date and time of `at`, e.g. "Oct 3, 16:08", or the time alone today ("16:20").
 pub fn day_and_clock(ctx: &Ctx, at: Timestamp) -> Arc<str> {
+  // Today's times go without the date.
+  if at.local_day_start() == Timestamp::now().local_day_start() {
+    return Arc::from(display::clock(at));
+  }
   let (month, day) = display::month_day(at);
   let month = ctx.t_ns(NAMESPACE, MONTH_KEYS[month]);
   ctx.t_args(

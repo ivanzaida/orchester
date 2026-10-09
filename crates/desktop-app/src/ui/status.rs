@@ -6,7 +6,7 @@
 //! The vocabulary and its icons come from the boards: Draft `circle-dashed`, Queued `clock`, Running and
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed, Complete and Ready for review `circle-check`, Merged
-//! `git-merge`, Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`, Not started
+//! and Not merged `git-merge`, Failed `circle-x`, Unreadable `circle-help`, Waiting `clock`, Not started
 //! `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
@@ -49,6 +49,8 @@ pub enum Status {
   /// A run whose every step passed, as its own page and its row in *Runs of this task* name it
   /// (`F2LtFn`); task lists say Completed.
   ReadyForReview,
+  /// A run ready for review whose merge failed and left its base branch as it was.
+  NotMerged,
   Merged,
   Failed,
   Canceled,
@@ -85,7 +87,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 21] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -95,6 +97,7 @@ impl Status {
     Self::Interrupted,
     Self::Completed,
     Self::ReadyForReview,
+    Self::NotMerged,
     Self::Merged,
     Self::Failed,
     Self::Canceled,
@@ -144,7 +147,7 @@ impl Status {
       Self::Paused | Self::Interrupted | Self::CantContinue => Icon::CirclePause,
       Self::StoppedAtLimit => Icon::Gauge,
       Self::Completed | Self::Complete | Self::ReadyForReview => Icon::CircleCheck,
-      Self::Merged => Icon::GitMerge,
+      Self::Merged | Self::NotMerged => Icon::GitMerge,
       Self::Failed => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
       // The boards name `file-warning`, which Pencil has no glyph for and draws as `circle-help`; the
@@ -159,7 +162,12 @@ impl Status {
     match self {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
       Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
-      Self::NeedsInput | Self::Paused | Self::StoppedAtLimit | Self::Interrupted | Self::CantContinue => Tone::Warning,
+      Self::NeedsInput
+      | Self::Paused
+      | Self::StoppedAtLimit
+      | Self::Interrupted
+      | Self::CantContinue
+      | Self::NotMerged => Tone::Warning,
       Self::Completed | Self::Complete | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
@@ -182,6 +190,7 @@ impl Status {
       Self::Interrupted => "ui.status.interrupted",
       Self::Completed => "ui.status.completed",
       Self::ReadyForReview => "ui.status.readyForReview",
+      Self::NotMerged => "ui.status.notMerged",
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",
       Self::Canceled => "ui.status.canceled",

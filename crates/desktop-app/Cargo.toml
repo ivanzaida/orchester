@@ -59,6 +59,8 @@ lurq = { workspace = true, features = [
   "tokio",
 ] }
 parking_lot.workspace = true
+# The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
+rfd.workspace = true
 # Arguments and results of the app's MCP tools.
 serde_json.workspace = true
 thiserror.workspace = true

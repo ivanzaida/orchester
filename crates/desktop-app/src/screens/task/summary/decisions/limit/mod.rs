@@ -212,6 +212,6 @@ impl Component for RaiseLimit {
     .chain(by_step::section(ctx, &stop, now))
     .collect();
     let side = this_run_panel(ctx, &props, None);
-    arranged(parts, None, side)
+    arranged(ctx, parts, None, side)
   }
 }

@@ -27,7 +27,7 @@ use super::{
   column, layout,
   notice::{self, Said},
   runs::{self, Runs},
-  this_run, waiting_approval,
+  this_run,
 };
 use crate::{
   navigation::Navigation,
@@ -82,7 +82,7 @@ fn task_notice(ctx: &Ctx, props: &TaskContext) -> Said {
     .status
     .get()
     .map(|status| status.state_for(&props.project.open.repo_root));
-  let approval = waiting_approval(&props.project, detail);
+  let approval = props.waiting_approval();
   notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref())
 }
 
@@ -96,16 +96,7 @@ fn this_run_panel(ctx: &mut Ctx, props: &TaskContext, lead: Option<Element>) -> 
 /// *Runs of this task*, as the usual Summary ends.
 fn runs_section(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
   let removal = PageState::of(ctx).removal.get();
-  runs::section(
-    ctx,
-    &Runs {
-      project: &props.project,
-      detail: &props.detail,
-      left: &props.left,
-      jobs: &props.jobs,
-      removal,
-    },
-  )
+  runs::section(ctx, &Runs { task: props, removal })
 }
 
 /// "03 Implement": a step's number in the pipeline and its name.
@@ -143,8 +134,8 @@ fn divider() -> Element {
 
 /// The Summary's column of `parts` with `side` beside it; `bar` stays under the column while the column
 /// scrolls (`Decision bar` `G5378f`).
-fn arranged(parts: Vec<Element>, bar: Option<Element>, side: Option<Element>) -> Element {
-  let scrolled = column(parts);
+fn arranged(ctx: &mut Ctx, parts: Vec<Element>, bar: Option<Element>, side: Option<Element>) -> Element {
+  let scrolled = column(parts, PageState::of(ctx).summary_scroll);
   let Some(bar) = bar else {
     return layout(scrolled, side);
   };
