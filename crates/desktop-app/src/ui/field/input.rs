@@ -53,12 +53,14 @@ pub struct FieldInput {
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
-  /// The error sits at the box's end, as a number field's read-back does (`UQFos`).
-  error_at_end: bool,
   /// Groups the digits of a whole number while it is typed.
   group_separator: Option<Arc<str>>,
   width: Dimension,
   locked: bool,
+  /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
+  trailing: Option<Icon>,
+  /// The value is not accepted, and something else says why: only the stroke turns `danger`.
+  invalid: bool,
 }
 
 /// Compared by what it shows; the value by its signal.
@@ -73,10 +75,11 @@ impl PartialEq for FieldInput {
       && self.mono == other.mono
       && self.name == other.name
       && self.error == other.error
-      && self.error_at_end == other.error_at_end
       && self.group_separator == other.group_separator
       && self.width == other.width
       && self.locked == other.locked
+      && self.trailing == other.trailing
+      && self.invalid == other.invalid
   }
 }
 
@@ -96,10 +99,11 @@ impl FieldInput {
       mono: false,
       name: name.into(),
       error: None,
-      error_at_end: false,
       group_separator: None,
       width: Dimension::Pct(100.0),
       locked: false,
+      trailing: None,
+      invalid: false,
     }
   }
 
@@ -144,12 +148,6 @@ impl FieldInput {
     self
   }
 
-  /// The error at the box's end rather than its start.
-  pub(super) fn error_at_end(mut self) -> Self {
-    self.error_at_end = true;
-    self
-  }
-
   pub fn width(mut self, width: impl Into<Dimension>) -> Self {
     self.width = width.into();
     self
@@ -159,6 +157,18 @@ impl FieldInput {
   /// takes neither keys nor the focus.
   pub fn locked(mut self) -> Self {
     self.locked = true;
+    self
+  }
+
+  /// A glyph at the box's end.
+  pub fn trailing(mut self, glyph: Icon) -> Self {
+    self.trailing = Some(glyph);
+    self
+  }
+
+  /// The value is not accepted and the caller says why: the stroke turns `danger`, no note is added.
+  pub(super) fn invalid(mut self) -> Self {
+    self.invalid = true;
     self
   }
 
@@ -184,7 +194,8 @@ impl Component for FieldBox {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FieldInput>().clone();
     let input = self.input(ctx, &props);
-    let stroke = if props.error.is_some() {
+    let refused = props.error.is_some() || props.invalid;
+    let stroke = if refused {
       PaletteColor::Danger
     } else if self.focused.get() {
       PaletteColor::BorderFocus
@@ -201,7 +212,7 @@ impl Component for FieldBox {
         })
         .border(Border::inside(BorderSize::Sm, stroke.clone()))
         .rounded(RadiusSize::Md)
-        .describe("state", if props.error.is_some() { "invalid" } else { "valid" })
+        .describe("state", if refused { "invalid" } else { "valid" })
         .describe("focused", if self.focused.get() { "true" } else { "false" })
         .describe("locked", if props.locked { "true" } else { "false" })
     };
@@ -225,7 +236,12 @@ impl Component for FieldBox {
           .variant(TypographyStyle::Description)
           .color(PaletteColor::TextMuted)
           .nowrap()
-      })),
+      }))
+      .with_children(
+        props
+          .trailing
+          .map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted).id(format!("{}-trailing", props.id))),
+      ),
       Lines::Many => dress(
         Row::new()
           .id(format!("{}-box", props.id))
@@ -241,13 +257,9 @@ impl Component for FieldBox {
     let Some(error) = &props.error else {
       return Column::new().width(props.width).child(frame);
     };
-    let column = Column::new().spacing(ExtraSpacing::Snug.role());
-    let column = if props.error_at_end {
-      column.align_items(Alignment::End)
-    } else {
-      column.width(props.width)
-    };
-    column
+    Column::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .width(props.width)
       .child(frame)
       .child(field_error(&format!("{}-note", props.id), error))
   }
