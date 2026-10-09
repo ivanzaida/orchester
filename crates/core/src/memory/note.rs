@@ -1,11 +1,13 @@
 //! A record an agent keeps with Orchester's `save_memory` tool (`docs/plan.md`, M12): task memory, or the project's,
 //! kept active or proposed as the project's memory setting says for that scope ([`super::Memory::by_agent`]). A note
 //! with a key replaces the active record of its scope that has that key: once the note is active it supersedes it,
-//! and while it waits for approval the old record stays. A note that holds a secret's value is refused as a whole.
+//! and while it waits for approval the old record stays. A note that would replace a person's record or a pinned one
+//! always waits for a person's approval, whatever the setting, so no agent takes over a person's record or a pin on
+//! its own. A note that holds a secret's value is refused as a whole.
 
 use super::{
-  AgentProvenance, AgentWrite, Confidence, ContainsSecret, Memory, MemoryChanges, MemoryContent, MemoryScope,
-  MemorySettings, MemoryStatus, SecretScreen,
+  AgentProvenance, AgentWrite, Confidence, ContainsSecret, Memory, MemoryAuthor, MemoryChanges, MemoryContent,
+  MemoryScope, MemorySettings, MemoryStatus, SecretScreen, WritePolicy,
 };
 use crate::{id::TaskId, time::Timestamp};
 
@@ -65,8 +67,17 @@ impl MemoryNote {
     let mut changes = MemoryChanges::default();
     let note = match replaced {
       Some(old) => {
+        // A person's record, or a pinned one, is never replaced by an agent alone: the note waits for approval.
+        let guarded = matches!(old.author(), MemoryAuthor::Person) || old.is_pinned();
+        let after_approval = MemorySettings {
+          task_writes: WritePolicy::AfterApproval,
+          project_writes: WritePolicy::AfterApproval,
+          ..*write.settings
+        };
+        let settings = if guarded { &after_approval } else { write.settings };
         let mut note =
-          Memory::replacing(old, agent, content, write.settings, write.now).expect("the record a key names is active");
+          Memory::replacing(old, agent, content, settings, write.now).expect("the record a key names is active");
+        // Only an unpinned agent's record is superseded at once, so no pin passes to the note.
         if note.status() == MemoryStatus::Active {
           let mut old = old.clone();
           old

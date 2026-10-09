@@ -121,3 +121,42 @@ fn notes_with_a_secret_value_are_refused() {
     .expect_err("a secret");
   assert_eq!(refused.secret, secret_name("DEPLOY_TOKEN"));
 }
+
+/// A note never takes over a person's record or a pinned one on its own: it waits for approval whatever the setting,
+/// and the old record keeps its pin.
+#[test]
+fn notes_never_replace_a_persons_or_a_pinned_record_alone() {
+  let task = TaskId::generate();
+  let agent = provenance(ResourceId::generate());
+  let screen = SecretScreen::new(Vec::new());
+  let keyed = || {
+    SecretScreen::new(Vec::new())
+      .check(content(MemoryKind::Fact, "Port 8080.").with_key(MemoryKey::new("port").expect("a key")))
+      .expect("no secret")
+  };
+  let person = Memory::by_person(MemoryScope::Task(task), keyed(), at(1));
+  let mut pinned = Memory::by_agent(
+    MemoryScope::Task(task),
+    write(ResourceId::generate()),
+    keyed(),
+    &MemorySettings::default(),
+    at(1),
+  );
+  pinned.set_pinned(true, at(2)).expect("pinned");
+  let settings = MemorySettings::default();
+  let write = NoteWrite {
+    task,
+    provenance: &agent,
+    settings: &settings,
+    screen: &screen,
+    now: at(9),
+  };
+  for old in [person, pinned] {
+    let (changes, kept) = note(NoteScope::Task, Some("port"), "Port 9090.")
+      .changes(&write, std::slice::from_ref(&old))
+      .expect("no secret");
+    assert_eq!(kept.status(), MemoryStatus::Proposed);
+    assert!(!kept.is_pinned());
+    assert!(changes.changed.is_empty(), "the old record stays as it is");
+  }
+}
