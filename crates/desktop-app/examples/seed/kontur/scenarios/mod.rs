@@ -1,5 +1,6 @@
 //! The scenarios the seed writes, one file each, and their registry ([`ALL`]): one line per scenario.
 
+mod cards;
 mod changes;
 mod conversation;
 mod empty;
@@ -52,12 +53,13 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 8] = [
+pub const ALL: [Scenario; 9] = [
   Scenario::of("empty", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("changes", changes::seed),
+  Scenario::of("cards", cards::seed),
   Scenario::of("interrupted", interrupted::seed),
   Scenario::of("unreadable-db", unreadable_db::seed),
   Scenario::with_fake_codex("live", live::seed),
