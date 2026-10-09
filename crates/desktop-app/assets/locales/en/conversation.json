@@ -1,0 +1,408 @@
+{
+  "conversation": {
+    "agentMeta": "{{step}} · {{time}}",
+    "card": {
+      "answered": "Answered",
+      "approved": "Approved",
+      "asks": "{{agent}} asks you",
+      "asksCommand": "{{agent}} asks to run a command",
+      "asksTool": "{{agent}} asks to use an MCP tool",
+      "changesRequested": "Changes requested",
+      "denied": "Denied",
+      "ended": "Ended without an answer",
+      "plan": "Plan v{{version}}",
+      "superseded": "Earlier version",
+      "unavailable": "Answering in the chat is not available in this version yet.",
+      "waitingAnswer": "Waiting for your answer",
+      "waitingApproval": "Waiting for approval"
+    },
+    "change": {
+      "every": "Replaces every occurrence; the lines show one",
+      "finalBreakAdded": "Adds the final line break",
+      "finalBreakRemoved": "Removes the final line break",
+      "lineCut": "Line shortened",
+      "lineEndings": "Line endings change in the lines it keeps",
+      "markAdded": "+",
+      "markRemoved": "−",
+      "trimmed": {
+        "one": "1 more line of the change is not shown",
+        "other": "{{count}} more lines of the change are not shown"
+      }
+    },
+    "composer": {
+      "unavailable": "Writing to the run’s agents from this tab is not available in this version yet."
+    },
+    "decision": {
+      "aCommand": "command",
+      "alwaysAllowed": "always allowed · {{subject}}",
+      "approvedAlwaysAdded": "approved by you · {{subject}} · always allowed",
+      "approvedByAutoMode": "approved by auto mode · {{subject}}",
+      "approvedByAutomation": "approved by automation · {{subject}}",
+      "approvedByYou": "approved by you · {{server}}",
+      "approvedByYouOnce": "approved by you · {{subject}}",
+      "approvedRunAdded": "approved by you · {{subject}} · auto-approving this run",
+      "approvedSimilarAdded": "approved by you · {{subject}} · similar rule added",
+      "askedYou": "asked you · {{server}}",
+      "autoApproved": "auto-approved · {{subject}}",
+      "bySimilarRule": "approved by similar rule · {{subject}}",
+      "category": {
+        "credentialRead": "Credential read",
+        "historyDestructive": "History / destructive",
+        "network": "Network",
+        "outsideWrite": "Outside write",
+        "readOnly": "Read-only",
+        "unknown": "Unknown",
+        "worktree": "Worktree"
+      },
+      "declinedUnasked": "declined, not asked · {{server}} asked for approval, and this step doesn’t ask before MCP actions",
+      "deniedByAutomation": "denied by automation · the agent continued",
+      "deniedByYou": "denied by you · the agent continued",
+      "exemptionNotApplied": "{{tool}} of {{server}} asks after all",
+      "exemptionNotAppliedDetail": "It is listed to run without asking, but Claude Code names it mcp__{{server}}__{{tool}}, which could also be a tool of {{other}}. Rename one of the two servers to let it run without asking.",
+      "notAskedExempt": "not asked · exempt tool of {{server}}",
+      "permissions": "allowed by the profile · {{subject}}",
+      "told": "Told the agent: {{message}}",
+      "tool": "{{server}} {{tool}}"
+    },
+    "delivery": {
+      "afterTurn": "Queued · {{agent}} reads it when its turn ends",
+      "answered": "Question · answered",
+      "delivered": "Delivered to {{agent}} · {{time}}",
+      "midTurn": "Delivered mid-turn to {{agent}} · {{time}}",
+      "notDelivered": "Could not deliver to {{agent}}: {{reason}}. Your message is kept here.",
+      "notDeliveredEnded": "Not delivered · the run has ended",
+      "notDeliveredWorktree": "Not delivered · the run’s worktree was removed",
+      "question": "Question · waiting for your answer",
+      "queued": "Queued · waiting for the next checkpoint",
+      "queuedAgentNextTurn": "Queued · waiting for {{agent}}’s next turn",
+      "queuedNextRun": "Queued · waiting for the task’s next run",
+      "queuedRunContinue": "Queued · delivered when the run continues",
+      "queuedRunContinueBy": "Queued · {{agent}} reads it when the run continues",
+      "queuedRunResume": "Queued · delivered before the next action on resume",
+      "queuedRunResumeBy": "Queued · {{agent}} reads it before its next action on resume",
+      "queuedRunStart": "Queued · waiting for the run to start",
+      "refused": "its CLI refused to add it to the running turn",
+      "reply": "Reply · {{step}}",
+      "sendingNow": "Sending now · {{agent}} gets it at its next tool call",
+      "turnEnd": "Delivered at end of turn to {{agent}} · {{time}}",
+      "turnEndedFirst": "Delivered at end of turn to {{agent}} · {{time}} · its turn ended before another tool call",
+      "unwritable": "its CLI did not take its input"
+    },
+    "divider": {
+      "agent": "{{step}} · {{agent}} · {{engine}} · {{time}}",
+      "engineAttempt": "{{engine}} · attempt {{attempt}}",
+      "started": "started {{start}}",
+      "tokens": "{{text}} · {{tokens}} tokens",
+      "tool": "{{step}} · tool · {{time}}"
+    },
+    "empty": {
+      "none": "The run’s agents reported nothing.",
+      "queued": "{{steps}}. Run {{run}} is queued: nothing has run yet.",
+      "queuedTask": "The task is queued: nothing has run yet. The conversation starts with its run’s first agent.",
+      "starting": "Entries appear here as soon as the first agent reports.",
+      "title": "Nothing in this conversation yet"
+    },
+    "end": {
+      "cancelled": "Run {{run}} was canceled · {{time}}",
+      "failed": "Run {{run}} failed at {{step}} · {{time}}",
+      "merged": "Run {{run}} was merged into {{branch}} · {{time}}",
+      "ready": "Run {{run}} is ready for your review · {{time}}"
+    },
+    "engine": "{{provider}} / {{model}}",
+    "engineNative": "{{engine}} · native",
+    "entry": {
+      "agentMessage": "agent message",
+      "awaitsApproval": "waiting for approval",
+      "declined": "denied · not an allowed command",
+      "declinedDetail": "Blocked by this run’s permissions. The agent was told and continued without it.",
+      "error": "The agent CLI reported an error",
+      "exit": "exit {{code}}",
+      "exitTook": "exit {{code}} · {{took}}",
+      "failed": "failed",
+      "failedTook": "failed · {{took}}",
+      "file": "{{status}}  {{path}}",
+      "fileAdded": "A",
+      "fileDeleted": "D",
+      "fileModified": "M",
+      "mcpCall": "{{server}} MCP tool",
+      "mcpCallFailed": "failed",
+      "noExitCode": "no exit code",
+      "noExitCodeTook": "no exit code · {{took}}",
+      "notSignedIn": "The agent CLI is not signed in",
+      "notSignedInDetail": "Sign in to the CLI in your own terminal, check the connection again in Connections, then run the task again. Orchester never signs in for you.",
+      "openInChanges": "open in Changes ↗",
+      "outputOmitted": "{{size}} of earlier output was not kept",
+      "outputTrimmed": "{{count}} earlier lines are not shown",
+      "rawOutput": "raw output",
+      "reasoning": "Reasoning summary",
+      "running": "running",
+      "stderrLine": "stderr  {{line}}",
+      "stopped": "stopped",
+      "timedOut": "timed out",
+      "timedOutTook": "timed out · {{took}}",
+      "unfinished": "no end recorded",
+      "unparsed": {
+        "one": "1 unparsed line",
+        "other": "{{count}} unparsed lines"
+      },
+      "usage": "Usage reported",
+      "usageMeta": "in {{input}} · out {{output}} · cached {{cached}} not counted"
+    },
+    "failed": {
+      "openLog": "Open runner log",
+      "text": "{{reason}} Nothing in the run changed.",
+      "textLive": "{{reason}} Nothing in the run changed; its agents keep working.",
+      "title": "Couldn’t load the activity of Run {{run}}"
+    },
+    "fold": {
+      "one": "{{steps}} · 1 step done · {{time}}",
+      "other": "{{steps}} · {{count}} steps done · {{time}}",
+      "showIt": "Show it",
+      "showThem": "Show them"
+    },
+    "group": {
+      "awaitsApproval": "{{command}} · waiting for approval",
+      "edited": {
+        "one": "edited 1 file",
+        "other": "edited {{count}} files"
+      },
+      "kinds": {
+        "commands": {
+          "one": "1 command",
+          "other": "{{count}} commands"
+        },
+        "edits": {
+          "one": "1 edit",
+          "other": "{{count}} edits"
+        },
+        "mcp": {
+          "one": "1 MCP call",
+          "other": "{{count}} MCP calls"
+        },
+        "notes": {
+          "one": "1 note",
+          "other": "{{count}} notes"
+        },
+        "reads": {
+          "one": "1 read",
+          "other": "{{count}} reads"
+        },
+        "searches": {
+          "one": "1 search",
+          "other": "{{count}} searches"
+        }
+      },
+      "mcp": {
+        "one": "1 MCP call",
+        "other": "{{count}} MCP calls"
+      },
+      "memory": "searched memory",
+      "more": "Show {{count}} more · {{kinds}}",
+      "ranMany": "ran {{count}} commands",
+      "ranOne": "ran {{command}}",
+      "ranTwo": "ran {{first}} and {{second}}",
+      "read": {
+        "one": "read 1 file",
+        "other": "read {{count}} files"
+      },
+      "running": "running {{command}}",
+      "searched": {
+        "one": "searched once",
+        "other": "searched {{count}} times"
+      },
+      "unfinished": "{{command}} without an end"
+    },
+    "jump": "Jump to latest",
+    "jumpNew": "Jump to latest · {{count}} new",
+    "list": {
+      "and": "{{rest}} and {{last}}",
+      "separator": ", "
+    },
+    "loading": "Loading activity for Run {{run}}…",
+    "mark": {
+      "restarted": "Restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
+      "restartedByYou": "You restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
+      "returned": "{{failed}} returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "returnedByYou": "{{failed}} failed; you returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "returnedWithNote": "You returned the work to {{step}} · attempt {{attempt}} · {{time}}"
+    },
+    "mcp": {
+      "disabled": "The server is turned off in Connections.",
+      "failedToStart": "The agent’s CLI reported that the server did not start.",
+      "missing": "The profile chooses a server this project no longer has.",
+      "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it.",
+      "notUnicode": "A path of the server is not valid Unicode.",
+      "programNotFound": "{{program}} was not found on the PATH or in the worktree.",
+      "reservedVariable": "{{variable}} is a variable Codex itself needs, so a secret cannot be handed over in it.",
+      "scriptArgument": "Argument {{position}} would be changed by cmd.exe on its way through the server’s command script.",
+      "secretArchived": "A variable takes its value from {{secret}}, which is archived.",
+      "secretMissing": "A variable takes its value from a secret this project no longer has.",
+      "secretUnreadable": "The system keychain did not give the value of {{secret}}. The runner log says why.",
+      "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
+      "title": "Working without MCP server {{server}}",
+      "titleUnnamed": "Working without an MCP server",
+      "toolRelaysMissing": "Codex reached Orchester’s tools {{reached}} of the {{started}} times it starts them; the agent may have worked without them.",
+      "workingDirectory": "Claude Code starts every MCP server in the worktree, and this one is set to start in another folder."
+    },
+    "native": {
+      "allowedByProfile": "Allowed by the profile · {{command}}",
+      "always": "always allow",
+      "alwaysAllowed": "Always allowed · {{command}}",
+      "approvedByAutoMode": "Approved by auto mode · {{command}}",
+      "approvedByAutomation": "Approved by automation · {{command}}",
+      "approvedByYou": "Approved by you · {{command}}",
+      "autoApproved": "Auto-approved · {{command}}",
+      "bySimilarRule": "Approved by a similar rule · {{command}}",
+      "changed": "{{tool}} · {{status}} · +{{added}} −{{removed}} · open in Changes",
+      "denied": "Denied by a person · the agent continues",
+      "deniedByAutomation": "Denied by automation · the agent continues",
+      "deniedCommand": "Denied by you · {{command}}",
+      "edited": "{{tool}} · {{status}} · +{{added}} −{{removed}}",
+      "editedEvery": "{{tool}} · {{status}} · replaces every occurrence",
+      "emptyWritten": "{{tool}} · empty file written",
+      "failed": "{{tool}} · failed",
+      "given": "Given to the agent as the command’s result:",
+      "listed": "{{tool}} · {{count}} files",
+      "once": "approve once",
+      "readLines": "{{tool}} · lines {{first}}–{{last}} · {{size}}",
+      "readSize": "{{tool}} · {{size}}",
+      "refused": "refused by Orchester · the agent continues",
+      "run": "approve everything in this run",
+      "running": "{{tool}} · running",
+      "searchScope": "{{tool}} · {{scope}}",
+      "searchTitle": "“{{pattern}}”",
+      "searched": "{{tool}} · {{matches}} matches in {{files}} files",
+      "searchedIn": "{{tool}} · {{scope}} · {{matches}} matches in {{files}} files",
+      "similar": "approve similar",
+      "unfinished": "{{tool}} · no end recorded",
+      "waited": "{{how}} · waited {{duration}}",
+      "withShell": "{{meta}} · shell · {{shell}}",
+      "written": {
+        "one": "{{tool}} · 1 line written",
+        "other": "{{tool}} · {{count}} lines written"
+      }
+    },
+    "noRun": {
+      "text": "The conversation appears here once the task’s run starts its first agent.",
+      "title": "This task has not run yet"
+    },
+    "notStarted": {
+      "one": "{{steps}} did not start",
+      "other": "{{steps}} did not start"
+    },
+    "preset": {
+      "custom": "Custom",
+      "deepseek": "DeepSeek",
+      "official": "Official"
+    },
+    "problem": {
+      "categoryDenied": "{{subject}} denied · {{command}}",
+      "checkpointFailed": "The step’s changes could not be committed",
+      "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
+      "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
+      "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
+      "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
+      "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
+      "commandDenied": "Command denied · {{command}}",
+      "contextCompacted": "The conversation was shortened to fit the model’s context window",
+      "contextCompactedDetail": "A summary replaced the earlier turns: about {{before}} tokens became about {{after}}. The agent reads files again before it changes them.",
+      "couldNotStart": "The step could not start",
+      "decisionInterrupted": "Request ended without your decision",
+      "deniedByAutomation": "Automation denied it through Orchester’s MCP server. The agent was told and continued.",
+      "deniedByYou": "You denied it. The agent was told and continued.",
+      "memoryContainsSecret": "It contains the value of the secret {{secret}}. Secret values are never kept in memory.",
+      "memoryKeychainUnavailable": "The system keychain could not be read to check it for the value of the secret {{secret}}.",
+      "memoryNotSaved": "The step’s handoff was not saved to task memory",
+      "memoryScanFailed": "Task memory could not be checked for unreadable records; the agent started all the same",
+      "memoryStorageFailed": "The project database could not store it: {{detail}}",
+      "memoryUnreadable": {
+        "one": "{{count}} memory record could not be read",
+        "other": "{{count}} memory records could not be read"
+      },
+      "memoryUnreadableDetail": "Agents get the other records. The unreadable ones stay in the project database as they are.",
+      "mergeConflict": "The step’s changes conflict with the run’s branch; they stay on {{branch}}",
+      "modelRetrying": "The model request failed; Orchester sends it again in {{seconds}} s (attempt {{attempt}})",
+      "notAllowed": "This run’s permissions do not allow it. The agent was told and continued without it.",
+      "programNotFound": "{{program}} was not found",
+      "programNotFoundDetail": "A command tool’s program is looked up in the folders of the PATH, or in the worktree when it is a relative path. Install the program or change the tool.",
+      "promptUnreachable": "Orchester approvals were unavailable to Claude Code",
+      "promptUnreachableDetail": "Its permission prompt never reached the runner, so every action it asked about was denied without asking you. Nothing was approved.",
+      "questionWithoutOptions": "Asked a question without options: {{question}}",
+      "questionWithoutOptionsDetail": "Orchester shows a question card only with at least two different suggested answers, so the question was declined and the agent was told to ask again with options or to end its turn with the question.",
+      "ripgrepFallback": {
+        "gitGrep": "Codex has no code index either; it searches the files with git grep.",
+        "indexWithGitGrep": "Codex still gets the code index; it searches the index and the files with git grep.",
+        "indexWithOwnTools": "Claude Code still gets the code index; it searches with its own search tools.",
+        "ownTools": "Claude Code has no code index either; it searches with its own search tools.",
+        "unknown": "The agent searched without it."
+      },
+      "ripgrepNotFound": "ripgrep was not found",
+      "ripgrepUnavailable": "ripgrep could not be given to the agent",
+      "ripgrepUnavailableDetail": "{{fallback}}",
+      "runnerFailed": "The runner could not record this run, so it was interrupted",
+      "runnerFailedDetail": "Nothing after the last checkpoint counts as done. Continue the run from it, or cancel it.",
+      "secretQuestion": "Asked for a secret: {{question}}",
+      "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Secrets and grant it to this run; the agent can then use it without seeing it in the chat.",
+      "stderrLeftOut": {
+        "one": "{{count}} more line of the agent’s standard error left out",
+        "other": "{{count}} more lines of the agent’s standard error left out"
+      },
+      "stderrLeftOutDetail": "The activity keeps the first 1000 lines (256 KiB) of each agent start.",
+      "stepBudgetReached": "The step used its budget of {{budget}} tokens and was stopped",
+      "thinkingStripped": "The model API refused the agent’s earlier reasoning",
+      "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results.",
+      "told": "{{agent}} was told: “{{message}}”",
+      "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run"
+    },
+    "provider": {
+      "anthropicApi": "Anthropic API",
+      "claude": "Claude",
+      "codex": "Codex",
+      "openaiApi": "OpenAI API"
+    },
+    "range": "{{first}}–{{last}}",
+    "result": {
+      "changes": "Changes ↗",
+      "done": "{{step}} done",
+      "failed": "{{step}} failed",
+      "meta": "{{took}} · {{tokens}} tokens",
+      "passed": "{{step}} passed",
+      "reportedFailed": "{{agent}} reported failed",
+      "reportedPassed": "{{agent}} reported passed",
+      "step": "{{step}} · {{agent}}",
+      "summary": "Summary ↗",
+      "toolMeta": "{{took}} · tool step, no tokens",
+      "toolStep": "{{step}} · Tool",
+      "withReport": "{{reported}} · {{meta}}"
+    },
+    "separator": " · ",
+    "span": "{{start}}–{{end}}",
+    "staleTitle": "Conversation shown as last read",
+    "state": {
+      "cancelled": "Canceled",
+      "deciding": "Waits for your decision",
+      "failed": "Failed",
+      "following": "Following live",
+      "interrupted": "Interrupted",
+      "merged": "Merged",
+      "notFollowing": "Not following",
+      "paused": "Paused",
+      "queued": "Queued",
+      "ready": "Ready for review",
+      "stopped": "Stopped at limit",
+      "waiting": "Waiting for you"
+    },
+    "stepLabel": "{{number}} {{step}}",
+    "toolMeta": "tool · {{time}}",
+    "unreadable": "Nothing this run did can be shown until its record can be read. Summary lists the task’s runs.",
+    "waitsAnswer": "{{agent}} waits for your answer · since {{since}}, its active time stopped",
+    "waitsAnswerUnnamed": "The agent waits for your answer · since {{since}}, its active time stopped",
+    "waitsDecision": "{{agent}} waits for your decision on the plan · since {{since}}, its active time stopped",
+    "waitsDecisionUnnamed": "The agent waits for your decision on the plan · since {{since}}, its active time stopped",
+    "working": "{{agent}} is working · last event {{elapsed}} ago",
+    "workingStarted": "{{agent}} is starting",
+    "workingStartedUnnamed": "The agent is starting",
+    "workingUnnamed": "The agent is working · last event {{elapsed}} ago",
+    "you": "You"
+  }
+}
