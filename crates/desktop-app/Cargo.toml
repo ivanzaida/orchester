@@ -45,8 +45,6 @@ lurq = { workspace = true, features = [
   "i18n",
   # `I18n::add_json` for the bundled locale files.
   "serde",
-  # The Orchester mark in the title bar.
-  "svg",
   # The app's MCP server: lurq's window tools and the app's own (`mcp`), in every build.
   "mcp",
 ] }

@@ -25,8 +25,6 @@ use crate::{
   },
 };
 
-/// The mark in the button (`Logo` `Jbirl`).
-const LOGO_SIZE: f32 = 24.0;
 /// The button (`App menu / Orchester`).
 const BUTTON_HEIGHT: f32 = 28.0;
 /// The menu, as wide as a `Menu item` with the menu's padding.
@@ -79,6 +77,7 @@ impl Component for AppMenu {
     let open = self.open.clone();
     let mut button = pressable(move || open.update(|open| *open = !*open))
       .id("app-menu")
+      .describe("a11y_name", ctx.t("menu.label"))
       .describe("state", if self.open.get() { "open" } else { "closed" })
       .ref_element(self.anchor.clone())
       .height(Dimension::Px(BUTTON_HEIGHT))
@@ -86,7 +85,7 @@ impl Component for AppMenu {
       .spacing(SpacingSize::Xs)
       .rounded(RadiusSize::Md)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(mark(LOGO_SIZE))
+      .child(mark())
       .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
     if self.open.get() {
       button = button.background(ExtraColor::Hover.role());
@@ -94,7 +93,7 @@ impl Component for AppMenu {
     let menu = Popup::new(self.anchor.clone(), self.menu(ctx))
       .open(self.open.clone())
       .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::Tight.value());
+      .offset(0.0, ExtraSpacing::MenuOffset.value());
     Row::new().child(button).child(menu)
   }
 }

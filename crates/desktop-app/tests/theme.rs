@@ -86,6 +86,8 @@ fn every_extra_color_is_registered_with_its_design_value() {
     ExtraColor::CodeNumber => ("#C3A6F7", "#7A4CC2"),
     ExtraColor::DiffAdded => ("#3DB07A1F", "#15835414"),
     ExtraColor::DiffRemoved => ("#F0605A1F", "#D4342F14"),
+    ExtraColor::BrandTile => ("#18191D", "#18191D"),
+    ExtraColor::BrandMark => ("#F1F1F4", "#F1F1F4"),
   };
   let (dark, light) = (themed(Mode::Dark), themed(Mode::Light));
   for extra in ExtraColor::ALL {

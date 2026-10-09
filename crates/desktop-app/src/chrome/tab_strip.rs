@@ -1,33 +1,39 @@
 //! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at All projects
 //! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
-//! icon and `<project> · <screen>` (`Tab · Kontur · Overview` `P6KocQ`, `Tab/active`, `Tab/inactive`). The
+//! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key. The design's `<project> · <screen>`
+//! needs the project's name, which comes with reading projects; a project's id is never shown. The
 //! active tab is filled with `hover` and has a close button; a middle click closes any tab that can be
 //! closed. The OS window title is the active tab's label and the app's name. The design's
 //! unsaved-changes dot comes with editing.
 //!
-//! The strip sits in the title bar's flexible middle. As more tabs open their labels shrink, down to
-//! [`LABEL_MIN_WIDTH`]; past that the tabs scroll sideways, and *New tab* and at least
-//! [`MIN_DRAG_WIDTH`] of drag area stay visible before the window controls (`docs/design/
-//! orchester-workspace.md`, "Tabs" › "Overflow").
+//! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; once it
+//! scrolls, the active tab is brought into view whenever it changes, the mouse wheel scrolls it
+//! sideways, and it shows no scrollbar.
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    events::{MouseButton, MouseEvent},
+    events::{MouseButton, MouseEvent, ScrollEvent},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Row, ScrollHorizontal, Text, TextOverflow},
-  layout::{Alignment, layout_kind::Justify},
+  layout::{
+    Alignment,
+    layout_kind::{Justify, ScrollState},
+    scrollbar::ScrollBarStyle,
+  },
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
+use parking_lot::Mutex;
 
+use super::tab_fit::{self, Fit, ICON_TAB_WIDTH, MIN_DRAG_WIDTH, TAB_MIN_WIDTH};
 use crate::{
   navigation::{
     Navigation,
-    tabs::{Tab, TabSet},
+    tabs::{Tab, TabId, TabSet},
   },
-  routes::{ProjectPage, Route, Screen},
+  routes::{ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon, screen_icon},
@@ -37,44 +43,40 @@ use crate::{
 
 /// Tabs and the new tab button (`Tab/*`, `New tab` `w204x`).
 const TAB_HEIGHT: f32 = 26.0;
-/// An All projects tab (`All projects tab`) and the new tab button are square-ish icons.
-const ICON_TAB_WIDTH: f32 = 28.0;
 const NEW_TAB_WIDTH: f32 = 26.0;
-/// The drag area that always stays between *New tab* and the window controls.
-pub const MIN_DRAG_WIDTH: f32 = 48.0;
-/// The widest and the narrowest a tab's label gets as tabs open.
-const LABEL_MAX_WIDTH: f32 = 160.0;
-pub const LABEL_MIN_WIDTH: f32 = 56.0;
-/// What a labelled tab adds around its label: padding, icon, gaps and close button.
-const TAB_CHROME_WIDTH: f32 = 48.0;
-/// What the title bar takes besides the tabs: the app menu and divider (61), the strip's start (8),
-/// *New tab* with its gaps (30), the drag area and the Windows controls (138).
-const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + 138.0;
 
-pub struct TabStrip;
+pub struct TabStrip {
+  scroll: ScrollState,
+  /// The active tab the strip last brought into view.
+  revealed: Mutex<Option<TabId>>,
+}
 
 impl Component for TabStrip {
   type Props = ();
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self
+    Self {
+      scroll: ScrollState::new(),
+      revealed: Mutex::new(None),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let navigation = Navigation::of(ctx);
     let tabs = navigation.tabs();
     let window = ctx.window();
-    let label_width = label_width(window.info().logical_width(), tabs.tabs().len());
-    let active =
-      label(ctx, tabs.active().route()).unwrap_or_else(|| ctx.t(Screen::AllProjects.title_key()).to_string());
+    let fit = tab_fit::fit(window.info().logical_width(), &tabs);
+    let active = label(ctx, tabs.active().route());
     window.set_title(ctx.t_args("app.windowTitle", [("tab", active)]).to_string());
+    self.reveal(&tabs, fit);
     let strip = tabs.tabs().iter().fold(
       Row::new()
         .id("tab-strip")
         .spacing(ExtraSpacing::Tight.role())
         .align_items(Alignment::Center),
-      |strip, tab| strip.child(tab_button(ctx, &navigation, &tabs, tab, label_width)),
+      |strip, tab| strip.child(tab_button(ctx, &navigation, &tabs, tab, fit)),
     );
+    let wheel = self.scroll.clone();
     Row::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::new().left(SpacingSize::Sm))
@@ -82,8 +84,16 @@ impl Component for TabStrip {
       .align_items(Alignment::Center)
       .child(
         ScrollHorizontal::new(strip)
+          .with_scroll_state(self.scroll.clone())
+          .scrollbar(ScrollBarStyle::hidden())
           .flex_shrink(1.0)
-          .min_width(Dimension::Px(0.0)),
+          .min_width(Dimension::Px(0.0))
+          .on_scroll(move |event: ScrollEvent| {
+            if event.delta_x == 0.0 && event.delta_y != 0.0 {
+              wheel.scroll_by(-event.delta_y, 0.0);
+              event.prevent_default();
+            }
+          }),
       )
       .child(new_tab(ctx, navigation))
       // The drag area: the 48 that always stay, then whatever the tabs leave.
@@ -97,22 +107,44 @@ impl Component for TabStrip {
   }
 }
 
-/// The widest a tab's label may be: the room the window leaves for tabs shared among `count` of them,
-/// between [`LABEL_MIN_WIDTH`] and [`LABEL_MAX_WIDTH`].
-fn label_width(window_width: f32, count: usize) -> f32 {
-  let share = (window_width - TITLE_BAR_RESERVE) / count.max(1) as f32;
-  (share - TAB_CHROME_WIDTH).clamp(LABEL_MIN_WIDTH, LABEL_MAX_WIDTH)
+impl TabStrip {
+  /// Brings the active tab into view when it is another than last time.
+  fn reveal(&self, tabs: &TabSet, fit: Fit) {
+    let active = tabs.active().id();
+    let mut revealed = self.revealed.lock();
+    if *revealed == Some(active) {
+      return;
+    }
+    *revealed = Some(active);
+    let Fit::Scrolling(room) = fit else {
+      self.scroll.scroll_to_left_pending();
+      return;
+    };
+    let Some(index) = tabs.tabs().iter().position(|tab| tab.id() == active) else {
+      return;
+    };
+    let viewport = Some(self.scroll.viewport_width())
+      .filter(|width| *width > 0.0)
+      .unwrap_or(room);
+    let current = self.scroll.scroll_x();
+    let target = tab_fit::reveal(current, viewport, tab_fit::span(tabs, index));
+    if target != current {
+      self.scroll.set_scroll_pending(target, 0.0);
+    }
+  }
 }
 
-fn tab_button(ctx: &mut Ctx, navigation: &Navigation, tabs: &TabSet, tab: &Tab, label_width: f32) -> Element {
+fn tab_button(ctx: &mut Ctx, navigation: &Navigation, tabs: &TabSet, tab: &Tab, fit: Fit) -> Element {
   let active = tab.id() == tabs.active().id();
   let id = tab.id();
   let (select, close) = (navigation.clone(), navigation.clone());
   let closable = tabs.can_close(id);
+  let label = label(ctx, tab.route());
   let button = pressable(move || select.select(id))
     .id(format!("tab-{id}"))
     .describe("state", if active { "active" } else { "inactive" })
     .describe("route", tab.route().screen().name())
+    .describe("a11y_name", label.clone())
     .height(Dimension::Px(TAB_HEIGHT))
     .rounded(RadiusSize::Md)
     .on_mouse_up(move |event: MouseEvent| {
@@ -126,33 +158,28 @@ fn tab_button(ctx: &mut Ctx, navigation: &Navigation, tabs: &TabSet, tab: &Tab, 
   } else {
     button.hovered_style(Style::new().background(ExtraColor::Hover.role()))
   };
-  match label(ctx, tab.route()) {
-    None => all_projects_tab(ctx, button, active),
-    Some(label) => labelled_tab(
-      button,
-      tab,
-      (&label, label_width),
-      active.then(|| close_button(navigation.clone(), tab)),
-    ),
+  if tab_fit::is_icon(tab) {
+    return all_projects_tab(button, active);
   }
+  let close = active.then(|| close_button(ctx, navigation.clone(), tab));
+  labelled_tab(button, tab, (&label, fit), close)
 }
 
-/// A tab at All projects: the folders icon, named for agents.
-fn all_projects_tab(ctx: &mut Ctx, button: Button, active: bool) -> Element {
+/// A tab at All projects: the folders icon.
+fn all_projects_tab(button: Button, active: bool) -> Element {
   let color = if active {
     PaletteColor::TextPrimary
   } else {
     PaletteColor::TextSecondary
   };
   button
-    .describe("a11y_name", ctx.t(Screen::AllProjects.title_key()))
     .width(Dimension::Px(ICON_TAB_WIDTH))
     .justify(Justify::Center)
     .child(icon(Icon::Folders, IconSize::Md, color))
     .into()
 }
 
-fn labelled_tab(button: Button, tab: &Tab, (label, width): (&str, f32), close: Option<Element>) -> Element {
+fn labelled_tab(button: Button, tab: &Tab, (label, fit): (&str, Fit), close: Option<Element>) -> Element {
   let (glyph, text, style) = if close.is_some() {
     (
       PaletteColor::TextSecondary,
@@ -172,28 +199,34 @@ fn labelled_tab(button: Button, tab: &Tab, (label, width): (&str, f32), close: O
   } else {
     padding
   };
+  let text = Text::new(label)
+    .variant(style)
+    .color(text)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis);
+  let (button, text) = match fit {
+    Fit::Shrunk(label_width) => (button, text.max_width(Dimension::Px(label_width))),
+    Fit::Scrolling(_) => (
+      button.width(Dimension::Px(TAB_MIN_WIDTH)),
+      text.flex(1.0).min_width(Dimension::Px(0.0)),
+    ),
+  };
   button
     .padding(padding)
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
-    .child(
-      Text::new(label)
-        .variant(style)
-        .color(text)
-        .nowrap()
-        .max_width(Dimension::Px(width))
-        .text_overflow(TextOverflow::Elipsis),
-    )
+    .child(text)
     .with_children(close)
     .into()
 }
 
 /// The active tab's close button (`Close` `hfcCG`). A tab with a label is never the only tab at All
 /// projects, so it can always be closed.
-fn close_button(navigation: Navigation, tab: &Tab) -> Element {
+fn close_button(ctx: &mut Ctx, navigation: Navigation, tab: &Tab) -> Element {
   let id = tab.id();
   Button::empty()
     .id(format!("tab-{id}-close"))
+    .describe("a11y_name", ctx.t("tabs.close"))
     .focusable(false)
     .cursor(CursorIcon::Pointer)
     .align_items(Alignment::Center)
@@ -207,26 +240,12 @@ fn close_button(navigation: Navigation, tab: &Tab) -> Element {
     .into()
 }
 
-/// The tab's label: `<project> · <screen>`, a task by its key, the app's settings by name; `None` for
-/// All projects, which shows its icon alone.
-fn label(ctx: &mut Ctx, route: &Route) -> Option<String> {
-  let (project, page) = match route {
-    Route::AllProjects => return None,
-    Route::Settings => return Some(ctx.t(route.screen().title_key()).to_string()),
-    Route::Project(project, page) => (project, page),
-  };
-  let page = match page {
-    ProjectPage::Task(key, _) => key.to_string(),
-    page => ctx.t(page.screen().title_key()).to_string(),
-  };
-  Some(
-    ctx
-      .t_args(
-        "tabs.projectScreen",
-        [("project", project.to_string()), ("screen", page)],
-      )
-      .to_string(),
-  )
+/// The tab's label: its screen's name, a task by its key.
+fn label(ctx: &mut Ctx, route: &Route) -> String {
+  match route {
+    Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
+    route => ctx.t(route.screen().title_key()).to_string(),
+  }
 }
 
 /// *New tab* (`New tab` `w204x`): a tab at All projects, right of the active one.

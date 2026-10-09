@@ -142,8 +142,12 @@ fn the_window_shows_the_active_tabs_route() {
       "This screen isn't built yet.".to_owned()
     ])
   );
-  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
-  assert_eq!(window.texts("project-switcher"), Some(vec![PROJECT.to_owned()]));
+  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
+  assert_eq!(
+    window.texts("project-switcher"),
+    Some(vec!["Project".to_owned()]),
+    "a project's id is never shown"
+  );
   assert_eq!(window.texts("nav-tasks"), Some(vec!["Tasks".to_owned()]));
   navigation.open_tab();
   window.pass();
@@ -158,7 +162,7 @@ fn the_window_shows_the_active_tabs_route() {
   navigation.forward();
   window.pass();
   assert_eq!(navigation.route_now(), task(TaskTab::Changes));
-  assert_eq!(window.texts("tab-1"), Some(vec![format!("{PROJECT} · KON-12")]));
+  assert_eq!(window.texts("tab-1"), Some(vec!["KON-12".to_owned()]));
 }
 
 /// Presses and releases `button` over the middle of the element `id`.
@@ -311,8 +315,8 @@ fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
     .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
-#[test]
-fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
+/// A window 960 wide with 12 labelled tabs after the first, at All projects: more than fit.
+fn crowded_window() -> (Window, orchester_app::navigation::Navigation) {
   let mut window = Window::open();
   window.tree.resize(960, 640);
   let navigation = window.navigation();
@@ -332,17 +336,60 @@ fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
     }
   }
   window.pass();
+  window.pass();
+  (window, navigation)
+}
+
+/// Where the window controls begin: the laid-out minimize control on Windows. lurq's macOS traffic
+/// lights carry no ids; there they take the row's last 8 and three 20.
+fn controls_left(window: &mut Window) -> f32 {
+  if cfg!(target_os = "macos") {
+    960.0 - 68.0
+  } else {
+    bounds(window, "window-minimize").x
+  }
+}
+
+#[test]
+fn many_tabs_leave_new_tab_and_drag_area_before_the_window_controls() {
+  let (mut window, _navigation) = crowded_window();
   let (new_tab, drag) = (bounds(&mut window, "new-tab"), bounds(&mut window, "title-bar-drag"));
-  // The Windows controls take 3 × 46 at the right edge.
+  let controls = controls_left(&mut window);
   assert!(drag.width >= 48.0 - 0.5, "the drag area keeps 48: {drag:?}");
   assert!(
-    drag.x + drag.width <= 960.0 - 138.0 + 0.5,
-    "the controls stay in the window: {drag:?}"
+    drag.x + drag.width <= controls + 0.5,
+    "the drag area ends before the controls at {controls}: {drag:?}"
   );
   assert!(
     new_tab.x + new_tab.width <= drag.x + 0.5,
     "New tab stays visible: {new_tab:?}"
   );
+}
+
+#[test]
+fn the_active_tab_is_scrolled_into_view() {
+  let (mut window, navigation) = crowded_window();
+  let in_view = |window: &mut Window, id: &str| {
+    let (tab, new_tab, menu) = (
+      bounds(window, id),
+      bounds(window, "new-tab"),
+      bounds(window, "app-menu"),
+    );
+    tab.x >= menu.x + menu.width - 0.5 && tab.x + tab.width <= new_tab.x + 0.5
+  };
+  let last = format!("tab-{}", navigation.tabs_now().active().id());
+  assert!(in_view(&mut window, &last), "the newest tab shows");
+  navigation.cycle(1);
+  window.pass();
+  window.pass();
+  assert!(
+    in_view(&mut window, "tab-1"),
+    "going round to the first tab scrolls back to it"
+  );
+  navigation.cycle(-1);
+  window.pass();
+  window.pass();
+  assert!(in_view(&mut window, &last), "and to the last again");
 }
 
 #[test]

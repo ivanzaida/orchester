@@ -15,16 +15,22 @@ pub enum ExtraSpacing {
   Loose,
   /// 14: above a sidebar section's label (`Section label`).
   Section,
+  /// 2.5: between the bars of the Orchester mark (`Logo` `Jbirl`).
+  BrandBars,
+  /// 2: a menu below the button that opens it.
+  MenuOffset,
 }
 
 impl ExtraSpacing {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 8] = [
     Self::Hair,
     Self::Tight,
     Self::Snug,
     Self::Inline,
     Self::Loose,
     Self::Section,
+    Self::BrandBars,
+    Self::MenuOffset,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -39,6 +45,8 @@ impl ExtraSpacing {
       Self::Inline => "inline",
       Self::Loose => "loose",
       Self::Section => "section_label",
+      Self::BrandBars => "brand_bars",
+      Self::MenuOffset => "menu_offset",
     }
   }
 
@@ -50,6 +58,8 @@ impl ExtraSpacing {
       Self::Inline => 9.0,
       Self::Loose => 10.0,
       Self::Section => 14.0,
+      Self::BrandBars => 2.5,
+      Self::MenuOffset => 2.0,
     }
   }
 }
@@ -64,10 +74,14 @@ pub enum ExtraRadius {
   Window,
   /// `radius_full` 999: pills and round avatars.
   Full,
+  /// 5.4: the Orchester mark's tile.
+  BrandTile,
+  /// 1.75: the ends of the Orchester mark's bars, half their width.
+  BrandBar,
 }
 
 impl ExtraRadius {
-  pub const ALL: [Self; 3] = [Self::Tile, Self::Window, Self::Full];
+  pub const ALL: [Self; 5] = [Self::Tile, Self::Window, Self::Full, Self::BrandTile, Self::BrandBar];
 
   pub fn role(self) -> RadiusSize {
     RadiusSize::extra(self.name())
@@ -78,6 +92,8 @@ impl ExtraRadius {
       Self::Tile => "tile",
       Self::Window => "window",
       Self::Full => "full",
+      Self::BrandTile => "brand_tile",
+      Self::BrandBar => "brand_bar",
     }
   }
 
@@ -86,6 +102,8 @@ impl ExtraRadius {
       Self::Tile => 8.0,
       Self::Window => WINDOW_RADIUS,
       Self::Full => 999.0,
+      Self::BrandTile => 5.4,
+      Self::BrandBar => 1.75,
     }
   }
 }

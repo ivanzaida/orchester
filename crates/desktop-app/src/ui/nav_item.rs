@@ -47,6 +47,7 @@ impl NavItem<'_> {
       );
     let item = pressable(handler)
       .id(self.id)
+      .describe("a11y_name", self.label)
       .describe("state", if self.selected { "selected" } else { "enabled" })
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(NAV_ITEM_HEIGHT))
