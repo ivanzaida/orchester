@@ -96,17 +96,24 @@ pub(super) fn loading(ctx: &Ctx, run: &RunView) -> Element {
   )
 }
 
-/// The transcript of `run` could not be read, and why (`YGnwp`): the run itself goes on. *Try again* bumps
+/// The transcript of `run` could not be read, and why (`YGnwp`): the run is unaffected, and its agents keep
+/// working while it is `live`. *Try again* bumps
 /// `retry`; *Open runner log* opens the log of the runner of `repo_root`.
 pub(super) fn failed(
   ctx: &mut Ctx,
-  run: &RunView,
+  (run, live): (&RunView, bool),
   error: &Message,
   (repo_root, retry): (&Path, &Signal<u64>),
 ) -> Element {
   tracing::debug!(?error, "the conversation could not be read");
   let title = ctx.t_args("conversation.failed.title", [("run", number(run).as_str())]);
-  let text = ctx.t_args("conversation.failed.text", [("reason", &*message_text(ctx, error))]);
+  // Reading the transcript changes nothing in the run; its agents work on only while it is live.
+  let key = if live {
+    "conversation.failed.textLive"
+  } else {
+    "conversation.failed.text"
+  };
+  let text = ctx.t_args(key, [("reason", &*message_text(ctx, error))]);
   let runners = Services::of(ctx).runners;
   let root = repo_root.to_path_buf();
   let retry = retry.clone();

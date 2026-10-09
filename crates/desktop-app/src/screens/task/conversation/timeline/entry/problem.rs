@@ -12,11 +12,7 @@ use orchester_core::{
 };
 use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
 
-use super::{
-  mcp::subject_key,
-  native,
-  shown::Shown,
-};
+use super::{mcp::subject_key, native, shown::Shown};
 use crate::ui::icon::Icon;
 
 /// A problem row that reads better titled than as its transcript entry: a command denied (`agent` was told
@@ -24,7 +20,7 @@ use crate::ui::icon::Icon;
 pub(super) fn titled(ctx: &Ctx, entry: &Entry, agent: &str) -> Option<Shown> {
   match &entry.kind {
     EntryKind::Command(command) if command.status == Some(CommandStatus::Declined) => Some(match &command.native {
-      Some(call) => native::call(ctx, command, call),
+      Some(call) => native::call(ctx, command, call, false),
       None => denied_command(ctx, command, agent),
     }),
     EntryKind::Problem(found @ (RunnerProblem::DecisionInterrupted { .. } | RunnerProblem::QuestionRefused { .. })) => {

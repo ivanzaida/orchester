@@ -3,7 +3,7 @@
 //! file in the Changes tab), reasoning, usage, an error, unparsed lines; a native agent's call
 //! ([`super::native`]), an MCP call or server ([`super::mcp`]) and a runner problem ([`super::problem`]).
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
@@ -22,6 +22,8 @@ use crate::ui::{icon::Icon, message::message_text};
 pub(super) struct Shown {
   pub(super) glyph: Icon,
   pub(super) title: Arc<str>,
+  /// The title is a command, a path or a tool's name, set in mono; words are set in sans.
+  pub(super) code: bool,
   /// How it ended, or what it is, after the title.
   pub(super) meta: Arc<str>,
   /// It failed: its meta is in `danger`.
@@ -51,6 +53,7 @@ impl Shown {
     Self {
       glyph,
       title,
+      code: false,
       meta,
       failed: false,
       mark: None,
@@ -81,7 +84,8 @@ pub(super) fn lines(text: &str) -> Vec<Arc<str>> {
   text.lines().map(Arc::from).collect()
 }
 
-pub(super) fn shown(ctx: &Ctx, entry: &Entry) -> Shown {
+/// `works`: the entry's agent works now, so a call without an end still runs.
+pub(super) fn shown(ctx: &Ctx, entry: &Entry, works: bool) -> Shown {
   let plain = Shown::plain;
   match &entry.kind {
     EntryKind::Message(text) => plain(
@@ -100,8 +104,8 @@ pub(super) fn shown(ctx: &Ctx, entry: &Entry) -> Shown {
       )
     },
     EntryKind::Command(command) => match &command.native {
-      Some(call) => native::call(ctx, command, call),
-      None => self::command(ctx, command),
+      Some(call) => native::call(ctx, command, call, works),
+      None => self::command(ctx, command, works),
     },
     EntryKind::Approval(approval) => native::approval(ctx, approval),
     EntryKind::FileChange(change) => file_change(ctx, &change.path, change.kind),
@@ -137,8 +141,8 @@ pub(super) fn shown(ctx: &Ctx, entry: &Entry) -> Shown {
     }
     EntryKind::McpServer(server, found) => mcp::server(ctx, server.as_deref(), found),
     EntryKind::Raw(lines) => unparsed(ctx, lines),
-    EntryKind::ToolCommand(command) => tool_command(ctx, command),
-    EntryKind::McpTool(call) => mcp::call(ctx, call),
+    EntryKind::ToolCommand(command) => tool_command(ctx, command, works),
+    EntryKind::McpTool(call) => mcp::call(ctx, call, works),
     EntryKind::ExemptionNotApplied { server, tool, other } => mcp::exemption_not_applied(ctx, (server, tool, other)),
   }
 }
@@ -153,6 +157,7 @@ fn file_change(ctx: &Ctx, path: &str, kind: FileChangeKind) -> Shown {
     [("status", &*ctx.t(status)), ("path", &*path)],
   );
   Shown {
+    code: true,
     opens: Some(path),
     ..Shown::plain(glyph, title, ctx.t("conversation.entry.openInChanges"), None)
   }
@@ -168,26 +173,25 @@ pub(super) const fn file_change_kind(kind: FileChangeKind) -> (Icon, &'static st
 }
 
 /// An agent's command: how it ended, how its request was answered, its output while open.
-pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
+pub(super) fn command(ctx: &Ctx, entry: &CommandEntry, works: bool) -> Shown {
   let (glyph, meta, body) = match entry.status {
-    None => (Icon::Terminal, ctx.t("conversation.entry.running"), None),
+    None => (Icon::Terminal, unfinished(ctx, works), None),
     Some(CommandStatus::Declined) => (
       Icon::CircleAlert,
       ctx.t("conversation.entry.declined"),
       Some(ctx.t("conversation.entry.declinedDetail")),
     ),
     // A command that completed with neither an exit code nor a duration has nothing to say of its end.
-    Some(CommandStatus::Completed | CommandStatus::Failed) => (
+    Some(status @ (CommandStatus::Completed | CommandStatus::Failed)) => (
       Icon::Terminal,
-      entry
-        .ended()
-        .map_or_else(|| Arc::from(""), |ended| message_text(ctx, &ended)),
+      ended(ctx, (status == CommandStatus::Failed, entry.exit_code, entry.duration)),
       None,
     ),
   };
   // A person's Deny: what the agent was told says why the command did not run.
   let body = mcp::denial_told(ctx, entry.mark.as_ref()).or(body);
   Shown {
+    code: true,
     failed: entry.status == Some(CommandStatus::Failed),
     mark: entry.mark.as_ref().map(|mark| mcp::mark_text(ctx, mark)),
     output: lines(&entry.output),
@@ -198,16 +202,17 @@ pub(super) fn command(ctx: &Ctx, entry: &CommandEntry) -> Shown {
 }
 
 /// A tool step's command: its command line, how it ended and the output its tool kept.
-pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
-  let meta = match entry.ended() {
-    Some(ended) => message_text(ctx, &ended),
-    None => ctx.t("conversation.entry.running"),
+pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry, works: bool) -> Shown {
+  let meta = match entry.result {
+    Some(result) => tool_ended(ctx, result, (entry.exit_code, entry.duration)),
+    None => unfinished(ctx, works),
   };
   let omitted = (entry.omitted_bytes > 0).then(|| {
     let size = message_text(ctx, &display::byte_size(entry.omitted_bytes));
     ctx.t_args("conversation.entry.outputOmitted", [("size", &*size)])
   });
   Shown {
+    code: true,
     failed: matches!(
       entry.result,
       Some(ToolCommandResult::Failed | ToolCommandResult::TimedOut)
@@ -217,6 +222,54 @@ pub(super) fn tool_command(ctx: &Ctx, entry: &ToolCommandEntry) -> Shown {
     command: whole(&entry.command),
     collapsible: true,
     ..Shown::plain(Icon::Terminal, preview_title(&entry.command), meta, None)
+  }
+}
+
+/// How long a command took, from its start to its end: *9 s*, *2 min*.
+fn took(ctx: &Ctx, millis: i64) -> Arc<str> {
+  // A clock set back while it ran reads as no time, never as a negative one.
+  let millis = u64::try_from(millis).unwrap_or_default();
+  message_text(ctx, &display::duration(Duration::from_millis(millis)))
+}
+
+/// How an agent's command ended: its exit code and how long it took (*exit 1 · 9 s*), or that it failed
+/// when its CLI reported no code; empty when it completed with neither a code nor a time to show.
+fn ended(ctx: &Ctx, (failed, code, millis): (bool, Option<i64>, Option<i64>)) -> Arc<str> {
+  let took = millis.map(|millis| took(ctx, millis));
+  match (code, failed, took) {
+    (Some(code), _, Some(took)) => ctx.t_args(
+      "conversation.entry.exitTook",
+      [("code", code.to_string().as_str()), ("took", &*took)],
+    ),
+    (Some(code), _, None) => ctx.t_args("conversation.entry.exit", [("code", code.to_string().as_str())]),
+    (None, true, Some(took)) => ctx.t_args("conversation.entry.failedTook", [("took", &*took)]),
+    (None, true, None) => ctx.t("conversation.entry.failed"),
+    (None, false, Some(took)) => took,
+    (None, false, None) => "".into(),
+  }
+}
+
+/// How a tool step's command ended: stopped, timed out, or its exit code (*no exit code* without one), with
+/// how long it took when its start and end were seen.
+fn tool_ended(ctx: &Ctx, result: ToolCommandResult, (code, millis): (Option<i64>, Option<i64>)) -> Arc<str> {
+  let took = millis.map(|millis| took(ctx, millis));
+  match (result, code, took) {
+    (ToolCommandResult::Stopped, ..) => ctx.t("conversation.entry.stopped"),
+    (ToolCommandResult::TimedOut, _, Some(took)) => ctx.t_args("conversation.entry.timedOutTook", [("took", &*took)]),
+    (ToolCommandResult::TimedOut, _, None) => ctx.t("conversation.entry.timedOut"),
+    (_, Some(code), took) => ended(ctx, (false, Some(code), millis.filter(|_| took.is_some()))),
+    (_, None, Some(took)) => ctx.t_args("conversation.entry.noExitCodeTook", [("took", &*took)]),
+    (_, None, None) => ctx.t("conversation.entry.noExitCode"),
+  }
+}
+
+/// A command without an end: running while its agent works, else without an end (the run waits, was paused
+/// or interrupted): never progress of its own.
+fn unfinished(ctx: &Ctx, works: bool) -> Arc<str> {
+  if works {
+    ctx.t("conversation.entry.running")
+  } else {
+    ctx.t("conversation.entry.unfinished")
   }
 }
 

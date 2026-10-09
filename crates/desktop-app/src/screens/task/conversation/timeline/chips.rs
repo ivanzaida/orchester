@@ -53,7 +53,13 @@ pub(super) fn groups(ctx: &mut Ctx, timeline: &Timeline, chips: &[Chip]) -> Vec<
 /// The chip; pressed, it opens or folds its group.
 fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
   let summary = &chip.group.summary;
-  let glyph = if summary.running.is_some() {
+  // Its command still runs only while its agent works; otherwise it has no end.
+  let works = chip
+    .group
+    .entries
+    .last()
+    .is_some_and(|entry| timeline.works(entry.invocation));
+  let glyph = if summary.running.is_some() && works {
     Icon::LoaderCircle
   } else {
     Icon::Wrench
@@ -79,7 +85,7 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
     .child(
-      Text::new(&summary_text(ctx, &chip.group))
+      Text::new(&summary_text(ctx, &chip.group, works))
         .id("conversation-group-summary")
         .variant(ExtraTypography::Note.role())
         .color(PaletteColor::TextSecondary)
@@ -95,7 +101,13 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
 
 /// The open group's rows: the first seven, or all once *Show N more* was pressed.
 fn rows(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip) -> Element {
-  let entries = &chip.shown;
+  // A turn's usage is its step divider's, not a row of its own.
+  let entries: Vec<Entry> = chip
+    .shown
+    .iter()
+    .filter(|entry| !matches!(entry.kind, EntryKind::Usage(_)))
+    .cloned()
+    .collect();
   let all_key: Arc<str> = format!("{}-all", chip.key).into();
   let everything = timeline.toggles.is_open(&all_key, false);
   let (listed, rest) = if everything || entries.len() <= FIRST_ROWS {
@@ -139,7 +151,7 @@ fn rows(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip) -> Element {
 }
 
 /// *Read 3 files · searched 2 times · ran pnpm test*, in the fixed order of its kinds.
-fn summary_text(ctx: &Ctx, group: &ToolGroup) -> String {
+fn summary_text(ctx: &Ctx, group: &ToolGroup, works: bool) -> String {
   let summary = &group.summary;
   let count = |(one, other): (&str, &str), count: usize| {
     if count == 1 {
@@ -178,7 +190,12 @@ fn summary_text(ctx: &Ctx, group: &ToolGroup) -> String {
     ));
   }
   if let Some(running) = &summary.running {
-    parts.push(ctx.t_args("conversation.group.running", [("command", &**running)]));
+    let key = if works {
+      "conversation.group.running"
+    } else {
+      "conversation.group.unfinished"
+    };
+    parts.push(ctx.t_args(key, [("command", &**running)]));
   }
   if parts.is_empty() {
     parts.push(notes(ctx, &group.entries));

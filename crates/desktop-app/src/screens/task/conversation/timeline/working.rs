@@ -27,7 +27,8 @@ const TICK: Duration = Duration::from_secs(1);
 /// Who works, and when the newest entry arrived; `None` before the first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in super::super) struct Working {
-  pub(in super::super) agent: Arc<str>,
+  /// The agent's role; `None` once its profile is gone.
+  pub(in super::super) agent: Option<Arc<str>>,
   pub(in super::super) last: Option<Timestamp>,
 }
 
@@ -53,17 +54,18 @@ impl Component for WorkingLine {
     // Read so every tick renders the elapsed time again.
     self.tick.get();
     let working = ctx.props::<Working>().clone();
-    let text = match working.last {
-      Some(last) => {
+    let text = match (working.last, working.agent.as_deref()) {
+      (Some(last), agent) => {
         // A clock set back since the entry arrived reads as just now.
         let millis = u64::try_from(Timestamp::now().unix_millis() - last.unix_millis()).unwrap_or_default();
         let elapsed = message_text(ctx, &display::duration(Duration::from_millis(millis)));
-        ctx.t_args(
-          "conversation.working",
-          [("agent", &*working.agent), ("elapsed", &*elapsed)],
-        )
+        match agent {
+          Some(agent) => ctx.t_args("conversation.working", [("agent", agent), ("elapsed", &*elapsed)]),
+          None => ctx.t_args("conversation.workingUnnamed", [("elapsed", &*elapsed)]),
+        }
       }
-      None => ctx.t_args("conversation.workingStarted", [("agent", &*working.agent)]),
+      (None, Some(agent)) => ctx.t_args("conversation.workingStarted", [("agent", agent)]),
+      (None, None) => ctx.t("conversation.workingStartedUnnamed"),
     };
     Row::new()
       .id("conversation-working")
