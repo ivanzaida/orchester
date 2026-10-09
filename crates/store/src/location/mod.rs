@@ -4,8 +4,10 @@
 //! The application database and the log folder are next to the executable on Windows, where the stable
 //! install relies on it, and for every build that is not inside an app bundle (development builds on
 //! macOS). A macOS app bundle cannot write beside its executable, so a bundled build keeps them in the
-//! user's Library instead (see [`macos`]).
+//! user's Library instead (see [`macos`]). Beside the database, the app that has it open holds the data
+//! folder's lock ([`AppLock`]): one app at a time.
 
+mod lock;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
@@ -13,6 +15,8 @@ use std::{
   env, fs, io,
   path::{Path, PathBuf},
 };
+
+pub use self::lock::{AppLock, AppLockError, LockHolder};
 
 pub(crate) const APP_DATABASE: &str = "orchester.db";
 const LOG_DIR: &str = "logs";
