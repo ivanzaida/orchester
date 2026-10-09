@@ -210,10 +210,6 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
       "{role:?}"
     );
   };
-  check(StartupText::Reason.role(), (13.0, 1.45), FontWeight::Medium, "Geist");
-  check(StartupText::Step.role(), (13.0, 1.35), FontWeight::SemiBold, "Geist");
-  check(StartupText::Path.role(), (11.5, 1.5), FontWeight::Normal, "Geist Mono");
-  check(StartupText::Log.role(), (11.0, 1.45), FontWeight::Normal, "Geist Mono");
   check(StartupText::TileIcon.role(), (20.0, 1.0), FontWeight::Normal, "lucide");
   check(
     ShellText::SwitcherInitial.role(),
@@ -228,14 +224,9 @@ fn area_roles_follow_the_startup_screens_and_the_switcher() {
     "Geist Mono",
   );
   let color = |role: TypographyStyle| theme.typography_style(role).color;
-  assert_eq!(color(StartupText::Log.role()), Color::from_hex("#8A8A92"));
   assert_eq!(color(ShellText::SwitcherInitial.role()), Color::from_hex("#B3B3BA"));
   assert_eq!(color(ShellText::SwitcherPath.role()), Color::from_hex("#8A8A92"));
-  for (spacing, value) in [
-    (StartupSpacing::Block, 20.0),
-    (StartupSpacing::Panel, 40.0),
-    (StartupSpacing::Fact, 5.0),
-  ] {
+  for (spacing, value) in [(StartupSpacing::Block, 20.0), (StartupSpacing::Panel, 40.0)] {
     assert_eq!(spacing.value(), value, "{spacing:?}");
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

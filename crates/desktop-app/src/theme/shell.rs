@@ -7,7 +7,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::{fonts::MONO, typography::style};
+use super::typography::{mono, style};
 
 /// Text of the shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,10 +35,7 @@ impl ShellText {
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
       Self::SwitcherInitial => style(12.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_secondary),
-      Self::SwitcherPath => TextStyle {
-        font_family: Arc::from(MONO),
-        ..style(10.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)
-      },
+      Self::SwitcherPath => mono(style(10.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
     }
   }
 }

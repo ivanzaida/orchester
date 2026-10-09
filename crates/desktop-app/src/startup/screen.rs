@@ -23,13 +23,18 @@ use orchester_workspace::display;
 use super::{
   Failure, Problem, StartupProblem,
   front::{self, Front},
-  parts::{self, Look},
+  parts,
 };
 use crate::{
   chrome,
   shell::status_bar,
   theme::{ExtraColor, StartupSpacing},
-  ui::icon::Icon,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    code_box::CodeBox,
+    detail_row::{DetailValue, detail_row},
+    icon::Icon,
+  },
 };
 
 /// The width of a startup screen (`Startup · Orchester is already open` `g0Kj1`).
@@ -122,12 +127,18 @@ impl StartupScreen {
     };
     let facts = Column::new()
       .width(Dimension::Pct(100.0))
-      .child(parts::fact(
+      .child(detail_row(
+        "startup-data-folder",
         &ctx.t("startup.dataFolder"),
         &folder.display().to_string(),
-        true,
+        DetailValue::Mono,
       ))
-      .child(parts::fact(&ctx.t("startup.alreadyOpen.otherWindow"), &other, false));
+      .child(detail_row(
+        "startup-other-window",
+        &ctx.t("startup.alreadyOpen.otherWindow"),
+        &other,
+        DetailValue::Text,
+      ));
     let step = no_answer.then(|| {
       parts::step(
         &ctx.t("startup.noAnswer.step"),
@@ -160,29 +171,29 @@ impl StartupScreen {
     }
     let window = ctx.window();
     let no_answer = self.no_answer.clone();
-    let button = parts::button(
+    let button = ActionButton::new(
       "startup-switch",
-      Some(Icon::AppWindow),
-      &ctx.t("startup.alreadyOpen.switch"),
-      Look::Primary,
-      move || match front::bring_to_front(holder.pid) {
-        Front::Brought => window.request_close(),
-        Front::NoAnswer => no_answer.set(true),
-      },
-    );
-    (Some(button), ctx.t("startup.alreadyOpen.footnote"))
+      ButtonKind::Primary,
+      ctx.t("startup.alreadyOpen.switch"),
+    )
+    .icon(Icon::AppWindow)
+    .on_click(move || match front::bring_to_front(holder.pid) {
+      Front::Brought => window.request_close(),
+      Front::NoAnswer => no_answer.set(true),
+    });
+    (Some(button.into()), ctx.t("startup.alreadyOpen.footnote"))
   }
 }
 
 fn close_button(ctx: &mut Ctx) -> Element {
   let window = ctx.window();
-  parts::button(
+  ActionButton::new(
     "startup-close",
-    None,
-    &ctx.t("startup.alreadyOpen.close"),
-    Look::Secondary,
-    move || window.request_close(),
+    ButtonKind::Secondary,
+    ctx.t("startup.alreadyOpen.close"),
   )
+  .on_click(move || window.request_close())
+  .into()
 }
 
 /// What a failure screen says, and the file and folder it shows.
@@ -314,36 +325,28 @@ fn versions(ctx: &Ctx, key: &str, (found, supported): (u32, u32)) -> Arc<str> {
 fn failure_screen(ctx: &mut Ctx, failure: &Texts, log: Option<&Path>) -> Element {
   let open_log = log.map(|log| {
     let log = log.to_path_buf();
-    parts::button(
-      "startup-open-log",
-      Some(Icon::FileText),
-      &ctx.t("startup.openLog"),
-      Look::Secondary,
-      move || parts::open(log.clone()),
-    )
+    ActionButton::new("startup-open-log", ButtonKind::Secondary, ctx.t("startup.openLog"))
+      .icon(Icon::FileText)
+      .on_click(move || parts::open(log.clone()))
+      .into()
   });
   let show_folder = failure.folder.as_ref().map(|(label, folder)| {
     let folder = folder.clone();
-    parts::button(
-      "startup-show-folder",
-      Some(Icon::FolderOpen),
-      label,
-      Look::Secondary,
-      move || parts::open(folder.clone()),
-    )
+    ActionButton::new("startup-show-folder", ButtonKind::Secondary, label.clone())
+      .icon(Icon::FolderOpen)
+      .on_click(move || parts::open(folder.clone()))
+      .into()
   });
-  let copy = ctx.t("startup.copy");
+  let path = failure
+    .path
+    .as_ref()
+    .map(|(label, path)| CodeBox::new("startup-path", label.clone(), path.as_str()).render(ctx));
   let footnote = log.map(|log| ctx.t_args("startup.log", [("path", log.display().to_string())]));
   let words = &failure.words;
   screen_column(words.id)
     .child(parts::tile(Icon::CircleAlert, true))
     .child(parts::heading(&words.title, Some(&words.reason), &words.description))
-    .with_children(
-      failure
-        .path
-        .as_ref()
-        .map(|(label, path)| parts::path_box(label, path, &copy)),
-    )
+    .with_children(path)
     .child(parts::step(&ctx.t("startup.keepWorking"), &words.step))
     .child(parts::actions(open_log.into_iter().chain(show_folder).collect()))
     .with_children(footnote.map(|footnote| parts::footnote(&footnote, true)))

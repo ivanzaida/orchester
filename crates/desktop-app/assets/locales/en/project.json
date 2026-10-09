@@ -1,5 +1,6 @@
 {
   "project": {
+    "folder": "Folder",
     "unknown": {
       "title": "No such project",
       "body": "No project in your list has this address. It may have been removed from the list."

@@ -1,21 +1,22 @@
 //! A project screen whose project cannot be opened says why, in place of the screen: no project in the
 //! list has the id, its folder is gone, or its data cannot be read. The design has no board for these
-//! yet; they use the placeholder's layout. Going to All projects and back opens the project again, after
-//! its folder is back.
+//! yet; they are the UI kit's empty state (`Empty project` `LeIOm`) with the project's folder under it.
+//! Going to All projects and back opens the project again, once its folder is back.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::Text,
-  node::Element,
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::Column,
+  node::{Element, dimension::Dimension},
 };
 
-use super::placeholder::centered;
 use crate::{
   project::Unavailable,
-  ui::{icon::Icon, message::message_text},
+  ui::{
+    detail_row::{DetailValue, detail_row},
+    icon::Icon,
+    message::message_text,
+    state::EmptyState,
+  },
 };
 
 pub fn screen(ctx: &mut Ctx, unavailable: &Unavailable) -> Element {
@@ -45,11 +46,18 @@ pub fn screen(ctx: &mut Ctx, unavailable: &Unavailable) -> Element {
       message_text(ctx, reason),
     ),
   };
-  let path = unavailable.repo_root().map(|root| {
-    Text::new(&root.display().to_string())
-      .variant(TypographyStyle::Mono)
-      .color(PaletteColor::TextMuted)
-      .selectable(true)
-  });
-  centered(glyph, &title, &body).with_children(path).id(id).into()
+  let mut card = EmptyState::new(id, glyph, title, body);
+  if let Some(root) = unavailable.repo_root() {
+    card = card.child(detail_row(
+      &format!("{id}-folder"),
+      &ctx.t("project.folder"),
+      &root.display().to_string(),
+      DetailValue::Mono,
+    ));
+  }
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Section)
+    .child(card)
+    .into()
 }
