@@ -37,8 +37,10 @@ use crate::{
   },
 };
 
-/// *Attach*'s square (`hprBf`), the split button's chevron (`ZFD5V`) and the line before it (`KkfI8`).
+/// *Attach*'s square (`hprBf`), the split button's chevron (`ZFD5V`) and the line before it (`KkfI8`); the
+/// send menu's width, which the design does not draw (the old app's `ru504`).
 const ATTACH_SIZE: f32 = 26.0;
+const MENU_WIDTH: f32 = 320.0;
 const OPTIONS_WIDTH: f32 = 20.0;
 const DIVIDER_HEIGHT: f32 = 16.0;
 
@@ -251,7 +253,10 @@ fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Elem
       .render(ctx, bar.menu),
     _ => item("composer-send-second", second, None).render(ctx, bar.menu),
   };
-  let panel = menu_panel("composer-send-menu").child(first).child(second);
+  let panel = menu_panel("composer-send-menu")
+    .width(Dimension::Px(MENU_WIDTH))
+    .child(first)
+    .child(second);
   Popup::new(bar.anchor.clone(), panel)
     .open(bar.menu.clone())
     .placement(Placement::TopEnd)

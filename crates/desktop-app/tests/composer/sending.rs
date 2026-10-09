@@ -225,3 +225,28 @@ fn not_delivered(
     .expect("the delivery is stored");
   message.id()
 }
+
+#[test]
+fn composer_a_paused_run_offers_its_second_way_in_the_send_menu() {
+  let (mut window, seeded) = seeded();
+  open(&mut window, &seeded, "Paginate the events API");
+  write(&mut window, "Wait");
+  click(&mut window, "composer-send-options");
+  window.until("the send menu", |window| {
+    window.tree.get_element_by_id("composer-send-menu").is_some()
+  });
+  let menu = text(&mut window, "composer-send-menu");
+  assert!(menu.starts_with("Resume and send"), "{menu}");
+  assert!(
+    menu.contains("Send without resuming") && menu.contains("Waits until you resume the run"),
+    "{menu}"
+  );
+  assert!(menu.contains("Ctrl+Enter"), "{menu}");
+  let width = window
+    .tree
+    .get_element_by_id_mut("composer-send-menu")
+    .and_then(|element| element.bounds())
+    .expect("the menu is laid out")
+    .width;
+  assert!((width - 320.0).abs() < 0.5, "the menu keeps its width: {width}");
+}
