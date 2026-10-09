@@ -50,7 +50,7 @@ impl StepPermissions {
 impl AgentPermissions {
   /// The permissions of a step that runs with these profile permissions, `repository` access and
   /// the `step` narrowing: each setting is the stricter of the two. Commands a step lists that the
-  /// profile does not allow are dropped.
+  /// profile does not allow are dropped, and a profile that asks a person about commands keeps asking.
   pub fn narrowed(&self, repository: RepositoryAccess, step: &StepPermissions) -> Self {
     let repository = match (self.repository, repository) {
       (RepositoryAccess::Write, RepositoryAccess::Write) => RepositoryAccess::Write,
@@ -61,9 +61,11 @@ impl AgentPermissions {
       (CommandPermission::Allowed(profile), StepCommands::Only(step)) => {
         CommandPermission::Allowed(step.within(profile))
       }
-      (CommandPermission::AnyInWorktree | CommandPermission::AskBefore, StepCommands::Only(step)) => {
-        CommandPermission::Allowed(step.clone())
-      }
+      (CommandPermission::AnyInWorktree, StepCommands::Only(step)) => CommandPermission::Allowed(step.clone()),
+      // A list would let its commands run without asking where the profile asks a person; the step keeps
+      // asking. Commands outside the list still ask rather than being denied: the asking mode has no list
+      // of its own, and asking a person is within the profile's ceiling.
+      (CommandPermission::AskBefore, StepCommands::Only(_)) => CommandPermission::AskBefore,
     };
     let network = match (self.network, step.network) {
       (NetworkAccess::On, StepNetwork::AsProfile) => NetworkAccess::On,
