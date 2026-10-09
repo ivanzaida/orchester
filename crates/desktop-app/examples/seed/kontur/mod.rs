@@ -21,11 +21,12 @@ use orchester_core::{
   connection::ConnectionError,
   id::{IdempotencyKey, ProjectId, RunId, TagId, TaskId},
   integration::MergeError,
+  limits::ProjectLimits,
   name::Name,
   project::{Project, ProjectKey},
   revision::Revision,
   run::{RunError, SnapshotError},
-  store::TaskStore,
+  store::{ActivityStore, SettingsStore, TaskStore},
   task::{
     QueueError, Task, TaskDetails, TaskLimits,
     organization::{BlockingTask, ChangeActor, DependencyGate, Priority, TaskOrganization, WorkflowStatus},
@@ -79,6 +80,8 @@ pub struct SeededTask {
 pub enum SeedError {
   #[error("{0} exists and is not empty; the seed only makes new repositories")]
   RepoNotEmpty(PathBuf),
+  #[error("{0} exists; the seed only registers projects in a new application database")]
+  AppDatabaseExists(PathBuf),
   #[error("the live scenario runs `orchester-fake-codex`: pass --fake-codex <path>")]
   FakeCodexRequired,
   #[error("{0} is not a program file")]
@@ -240,8 +243,29 @@ impl Kontur {
 
   /// Damages the stored record of `run` the way an edit outside Orchester would: it cannot be read back.
   fn damage(&self, run: RunId) -> Result<(), SeedError> {
-    rusqlite::Connection::open(self.database())?
+    let changed = rusqlite::Connection::open(self.database())?
       .execute("UPDATE runs SET snapshot = 'not json' WHERE id = ?1", [run.to_string()])?;
+    if changed != 1 {
+      return Err(SeedError::Invalid(format!("damaging run {run} changed {changed} rows")));
+    }
+    Ok(())
+  }
+
+  /// Sets the project's daily budget to what its runs used today, so the budget is used up.
+  fn spend_daily_budget(&mut self) -> Result<(), SeedError> {
+    let used = self.db.tokens_used_since(self.now.local_day_start())?;
+    let budget = TokenBudget::new(used.get())
+      .map_err(|_| SeedError::Invalid("no run used tokens today to spend the daily budget with".to_owned()))?;
+    let limits = self.db.project_limits()?;
+    let spent = ProjectLimits::new(
+      limits.max_run_budget(),
+      limits.default_run_budget(),
+      budget,
+      limits.default_time_limit(),
+    )
+    .map_err(|error| SeedError::Invalid(error.to_string()))?
+    .with_agent_slots(limits.agent_slots());
+    self.db.save_project_limits(&spent)?;
     Ok(())
   }
 
@@ -267,9 +291,14 @@ pub fn seed(request: &SeedRequest) -> Result<Seeded, SeedError> {
   if request.scenario.needs_fake_codex() && fake_codex.is_none() {
     return Err(SeedError::FakeCodexRequired);
   }
+  let data_dir = absolute(&request.data_dir)?;
+  let app_database = location::app_database_beside(&data_dir.join(APP_PROGRAM));
+  // Never another app's database: a mistaken data folder must not migrate or change an install's.
+  if app_database.try_exists().map_err(io_error(&app_database))? {
+    return Err(SeedError::AppDatabaseExists(app_database));
+  }
   let repo = absolute(&request.repo)?;
   new_folder(&repo)?;
-  let data_dir = absolute(&request.data_dir)?;
   fs::create_dir_all(&data_dir).map_err(io_error(&data_dir))?;
   let base = git::init(&repo, &files::initial())?;
   let project = Project::new(
@@ -283,7 +312,7 @@ pub fn seed(request: &SeedRequest) -> Result<Seeded, SeedError> {
     base,
     now: request.now,
     fake_codex,
-    app_database: location::app_database_beside(&data_dir.join(APP_PROGRAM)),
+    app_database,
     tags: BTreeMap::new(),
     seeded: Vec::new(),
   };

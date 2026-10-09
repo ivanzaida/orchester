@@ -38,7 +38,7 @@ const STATES: [(&str, &str, Shape); 18] = [
   (
     "Retry failed exports nightly",
     "Retry exports that failed during the day once at night.",
-    Shape::AtLimit("implement", RunLimit::DailyBudget),
+    DAILY_BUDGET,
   ),
   (
     "Import contacts from CSV",
@@ -98,13 +98,16 @@ const STATES: [(&str, &str, Shape); 18] = [
   ("Docs: connecting GitHub", "", Shape::Draft),
 ];
 
+const DAILY_BUDGET: Shape = Shape::AtLimit("implement", RunLimit::DailyBudget);
 const CRITERIA: [&str; 2] = ["The change is covered by tests.", "Nothing changes for existing users."];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   for (index, (title, brief, shape)) in STATES.into_iter().enumerate() {
     let hours = i64::try_from(STATES.len() - index).expect("a short list") * 60;
-    let (created, started) = (kontur.ago(hours + 30), kontur.ago(hours));
+    // The daily budget's stop is today's, so it is today's budget that is used up.
+    let minutes = if shape == DAILY_BUDGET { 40 } else { hours };
+    let (created, started) = (kontur.ago(minutes + 30), kontur.ago(minutes));
     let (criteria, pipeline): (&[&str], _) = if shape == Shape::Draft {
       (&[], None)
     } else {
@@ -113,5 +116,5 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     let mut task = kontur.task((title, brief, criteria), pipeline, created)?;
     shapes::apply(kontur, &mut task, pipeline, shape, started)?;
   }
-  Ok(())
+  kontur.spend_daily_budget()
 }

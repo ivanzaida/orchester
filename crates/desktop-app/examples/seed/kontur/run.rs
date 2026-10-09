@@ -159,9 +159,7 @@ impl<'k> Drive<'k> {
 
   /// Ends the open invocation of `step` as `outcome`, after `events`.
   fn end(&mut self, step: &str, events: Vec<AgentEvent>, outcome: InvocationOutcome) -> Result<(), SeedError> {
-    let Some(mut invocation) = self.open.remove(&Self::key(step)) else {
-      return Ok(());
-    };
+    let mut invocation = self.open.remove(&Self::key(step)).ok_or(SeedError::NotAtWork)?;
     let at = self.tick();
     let usage = match (&invocation.kind, &outcome) {
       (InvocationKind::Agent { .. }, InvocationOutcome::Completed) => usage_of(step),
@@ -204,11 +202,7 @@ impl<'k> Drive<'k> {
   /// approved by the person.
   pub fn pass(&mut self, step: &str) -> Result<&mut Self, SeedError> {
     let attempt = self.run.current_attempt().map_or(1, |attempt| attempt.number().get());
-    let note = format!(
-      "{}: {step}, attempt {attempt}
-",
-      self.task.details().title.as_str()
-    );
+    let note = format!("{}: {step}, attempt {attempt}\n", self.task.details().title.as_str());
     let notes = self.notes();
     self.pass_with(step, &[(notes.as_str(), note)])
   }
@@ -285,8 +279,7 @@ impl<'k> Drive<'k> {
     }
     let attempt = self.run.current_attempt().map_or(1, |attempt| attempt.number().get());
     let note = format!(
-      "{}: {step} so far, attempt {attempt}
-",
+      "{}: {step} so far, attempt {attempt}\n",
       self.task.details().title.as_str()
     );
     let notes = self.notes();
