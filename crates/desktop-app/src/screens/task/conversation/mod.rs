@@ -4,12 +4,13 @@
 //! cards that wait for a decision (C3's, `timeline::cards`) and while an agent works the working line;
 //! following it live, or *Jump to latest* once the person scrolled up. Over it the toolbar's run state
 //! chip ([`toolbar`]); before the run can be shown, why not ([`states`]): loading, couldn't load, queued,
-//! no run yet, unreadable. Under it the composer's place (C2).
+//! no run yet, unreadable. Under it the composer ([`composer`]).
 //!
 //! The task page (P1) loads the task and hands it here ([`tab`]); the transcript and the run's requests
 //! are read here ([`read`]), again as the runner reports changes. The step rail, *Show*, the search and
 //! Details are not part of this build (D4): the chat shows every step.
 
+mod composer;
 mod read;
 mod states;
 mod timeline;
@@ -18,12 +19,12 @@ mod toolbar;
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx},
   components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{project::TaskKey, run::RunStatus};
+use orchester_core::{integration::Leftovers, project::TaskKey, run::RunStatus};
 use orchester_workspace::{
   runner::state::RunnerState,
   tasks::{
@@ -44,8 +45,7 @@ use self::{
 use crate::{
   project::{ShownProject, TasksState},
   services::Services,
-  theme::ExtraSpacing,
-  ui::{markdown::plain, unavailable::reason_line},
+  ui::markdown::plain,
 };
 
 /// The tab's content for `detail`, the task `key` of `project`, as the task page loaded it.
@@ -70,6 +70,7 @@ struct ConversationProps {
 impl lurq::app::component::DevtoolsInspectable for ConversationProps {}
 
 struct ConversationTab {
+  composer: composer::ComposerLink,
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
@@ -81,6 +82,7 @@ impl Component for ConversationTab {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
+      composer: composer::ComposerLink::new(ctx),
       follow: Follow::new(ctx),
       toggles: Toggles::new(ctx),
       retry: ctx.signal(0),
@@ -97,7 +99,14 @@ impl Component for ConversationTab {
       .get()
       .is_some_and(|status| *status.state() == RunnerState::Online);
     let detail = &props.detail;
-    let conversation = Conversation::of(detail, detail.lost_its_runner(online), None);
+    // A run whose worktree was removed keeps nothing an agent could continue in: no agent reads messages.
+    let removed = detail
+      .run
+      .as_ref()
+      .and_then(|run| run.worktree_removed)
+      .map(|_| Leftovers::default());
+    let conversation = Conversation::of(detail, detail.lost_its_runner(online), removed.as_ref());
+    let composer = composer::dock(ctx, &self.composer, (&props.project, &props.key, detail), &conversation);
     let body = match &detail.run {
       Some(run) => self.run_body(ctx, &props, run, &conversation),
       None => (states::without_run(ctx, detail, &conversation), None),
@@ -116,7 +125,7 @@ impl Component for ConversationTab {
           .min_height(Dimension::Px(0.0))
           .child(body),
       )
-      .child(composer_place(ctx))
+      .child(composer)
   }
 }
 
@@ -190,19 +199,4 @@ impl ConversationTab {
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items), working);
     (chat, Some(state))
   }
-}
-
-/// Where the composer goes (C2). Until it is built, the chat says writing to the run's agents is not
-/// available here.
-fn composer_place(ctx: &Ctx) -> Element {
-  Column::new()
-    .id("conversation-composer-place")
-    .width(Dimension::Pct(100.0))
-    .padding_horizontal(SpacingSize::Section)
-    .padding_bottom(ExtraSpacing::Inset.role())
-    .child(reason_line(
-      "conversation-composer-unavailable",
-      &ctx.t("conversation.composer.unavailable"),
-    ))
-    .into()
 }

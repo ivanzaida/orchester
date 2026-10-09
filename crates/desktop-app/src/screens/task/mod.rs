@@ -73,7 +73,8 @@ impl Component for ConversationHost {
       project.open.repo_root.clone(),
       key.clone(),
       tasks,
-      project.feed.changes.get(),
+      // The runner's changes, and a screen's saves: a message the composer stored.
+      project.feed.changes.get() + project.feed.revision.get(),
     );
     let load = ctx.future(
       deps,

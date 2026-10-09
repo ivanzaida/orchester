@@ -4,7 +4,8 @@
 //! ([`super::chips`]) at the chat's edge. A person's (`Your message` `mr4lC`): at the right, *You* and the
 //! time, the message in a bubble (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and its
 //! delivery line (a 12 icon and 11 `text_muted`, 5 apart): sending now, queued and until when, delivered
-//! mid-turn or at the end of a turn (`check-check` in `success`), or not delivered, kept.
+//! mid-turn or at the end of a turn (`check-check` in `success`), or not delivered, kept, with the composer's
+//! actions under it (`composer::undelivered`).
 
 use std::sync::{Arc, LazyLock};
 
@@ -149,12 +150,14 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
 /// A person's message (`mr4lC`) at the right: *You*, its time, the bubble and its delivery line.
 pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element {
   let delivery = delivery_line(ctx, &entry.state);
+  let undelivered = super::super::composer::undelivered(ctx, entry);
   bubble_column(
     ctx,
     &format!("conversation-message-{}", entry.id),
     (&entry.body, entry.at),
     Some(delivery),
   )
+  .with_children(undelivered)
   .describe("delivery", delivery_name(&entry.state))
   .into()
 }
