@@ -99,15 +99,28 @@ impl Component for Switcher {
     let (opening, checking, step) = (open.clone(), check.clone(), folder.clone());
     // A folder was chosen: the menu opens again under the switcher while its project data is read.
     ctx.watch(&pick.state(), move |state| {
-      if let (false, Some(Picked(Some(chosen)))) = (state.is_pending(), &state.data) {
-        step.set(FolderStep::Checking(chosen.clone()));
+      if state.is_pending() {
+        return;
+      }
+      if let Some(error) = &state.error {
+        tracing::error!(?error, "the folder picker failed");
+      }
+      if let Some(Picked(Some(chosen))) = &state.data {
         opening.set(true);
-        checking.run(chosen.clone());
+        refusal::check(&step, &checking, chosen.clone());
       }
     });
     let (opened, step) = (open.clone(), folder.clone());
     ctx.watch(&check.state(), move |state| {
-      let (false, Some(checked)) = (state.is_pending(), &state.data) else {
+      if state.is_pending() {
+        return;
+      }
+      // Opening the folder itself went wrong: it is refused as unreadable, never left checking.
+      if let (Some(reason), FolderStep::Checking(folder)) = (&state.error, step.get_untracked()) {
+        step.set(FolderStep::Refused(folder, FolderRefusal::Unreadable(reason.clone())));
+        return;
+      }
+      let Some(checked) = &state.data else {
         return;
       };
       match &checked.opened {
@@ -225,6 +238,7 @@ impl Switcher {
     let picks = Picks {
       pick: self.pick.clone(),
       check: self.check.clone(),
+      step: self.folder.clone(),
       title: ctx.t("shell.switcher.pickTitle"),
     };
     let pick = picks.clone();

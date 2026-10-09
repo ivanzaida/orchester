@@ -13,6 +13,7 @@ use lurq::{
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -47,17 +48,28 @@ impl lurq::app::component::DevtoolsInspectable for FolderStep {}
 pub struct Picks {
   pub pick: PickAction,
   pub check: CheckAction,
+  /// Where *Open folder…* is.
+  pub step: Signal<FolderStep>,
   /// The folder picker's title.
   pub title: Arc<str>,
 }
 
 impl Picks {
-  /// Opens the system's folder picker, unless it is open already.
+  /// Opens the system's folder picker, unless it or a folder's reading is under way.
   pub fn pick(&self) {
-    if !self.pick.state().get_untracked().is_pending() {
+    if !self.pick.state().get_untracked().is_pending() && !self.check.state().get_untracked().is_pending() {
       self.pick.run(self.title.clone());
     }
   }
+}
+
+/// Reads the project data of `folder`, saying so meanwhile, unless a reading is under way.
+pub fn check(step: &Signal<FolderStep>, check: &CheckAction, folder: PathBuf) {
+  if check.state().get_untracked().is_pending() {
+    return;
+  }
+  step.set(FolderStep::Checking(folder.clone()));
+  check.run(folder);
 }
 
 /// The block for `step`; nothing while no folder was chosen.
@@ -171,13 +183,13 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
       );
     }
     FolderRefusal::NotTopFolder { top } => {
-      let (check, top) = (picks.check.clone(), top.clone());
+      let (picks, top) = (picks.clone(), top.clone());
       let label = ctx.t_args("shell.switcher.folder.openTop", [("top", top.display().to_string())]);
       buttons.push(
         ActionButton::new("switcher-folder-open-top", ButtonKind::Primary, label)
           .icon(Icon::FolderOpen)
           .in_form()
-          .on_click(move || check.run(top.clone()))
+          .on_click(move || check(&picks.step, &picks.check, top.clone()))
           .into(),
       );
     }
@@ -199,7 +211,7 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
     }
     FolderRefusal::Newer { .. } | FolderRefusal::Unreadable(_) => {}
   }
-  let picks = picks.clone();
+  let another = picks.clone();
   buttons.push(
     ActionButton::new(
       "switcher-folder-another",
@@ -207,7 +219,7 @@ fn actions(ctx: &mut Ctx, refusal: &FolderRefusal, picks: &Picks) -> Vec<Element
       ctx.t("shell.switcher.folder.another"),
     )
     .in_form()
-    .on_click(move || picks.pick())
+    .on_click(move || another.pick())
     .into(),
   );
   let row = Row::new()

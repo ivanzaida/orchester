@@ -88,12 +88,14 @@ impl Component for Sidebar {
   }
 }
 
-/// How many tasks `project` has, a dash while they are read; nothing when they cannot be read or the
-/// project is not open.
+/// How many tasks `project` has, a dash while they are read; nothing when it has none, when they cannot
+/// be read or the project is not open.
 fn tasks_count(ctx: &mut Ctx, project: ProjectId) -> Option<String> {
   let projects = Projects::of(ctx);
   projects.state(project)?.open()?;
   match projects.feed(project).tasks.get() {
+    // A project without tasks shows no count (`a5CcQx`).
+    TasksState::Ready(tasks) if tasks.tasks.is_empty() => None,
     TasksState::Ready(tasks) => Some(tasks.tasks.len().to_string()),
     TasksState::Loading => Some(ctx.t("shell.sidebar.unknownCount").to_string()),
     TasksState::Failed(_) => None,
