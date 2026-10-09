@@ -14,6 +14,7 @@ pub mod known_safe;
 mod launch;
 pub mod mcp;
 mod narrow;
+pub mod widening;
 pub mod writable;
 
 use std::fmt;
